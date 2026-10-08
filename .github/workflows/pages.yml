@@ -21,6 +21,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/jekyll-build-pages@v1
+      # docs/ keeps the Jekyll layout; the landing itself is the standalone
+      # site in web/, so its files replace the generated root pages here.
+      - name: Overlay web/ as the site root
+        run: |
+          rm -f _site/index.html _site/index.zh-CN.html
+          cp -r web/. _site/
       - uses: actions/upload-pages-artifact@v3
 
   deploy:

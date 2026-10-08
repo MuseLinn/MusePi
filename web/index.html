@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MusePi — 你的 AI 搭档，不止写代码，还能按你的流程改造</title>
+  <meta name="description" content="MusePi 是一台自成一体的 AI 代理平台：桌面应用、命令行与移动伴侣共享同一批会话与设置，换界面不换上下文。它会动手——写代码、跑命令、开浏览器；也能按你的工作流重新组装——模型、工具、界面皆可替换。60+ 模型提供商，本地运行，端到端加密协作。免费测试中，社区版永久免费。" />
+  <meta name="theme-color" content="#0d0d0f" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="MusePi — 你的 AI 搭档，不止写代码，还能按你的流程改造" />
+  <meta property="og:description" content="会动手的 AI 搭档：写代码、跑命令、开浏览器，还能按你的工作流重新组装。桌面 · 命令行 · 手机共享同一批会话，60+ 提供商，本地运行。免费测试，社区版永久免费。" />
+  <link rel="alternate" hreflang="zh-CN" href="./index.html" />
+  <link rel="alternate" hreflang="en" href="./index.html?lang=en" />
+  <link rel="icon" type="image/svg+xml" href="./assets/musepi-mark.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="mp-skip" href="#home" data-i18n="a11y.skip">跳到主要内容</a>
+
+  <!-- ===== 顶部导航 ===== -->
+  <header class="mp-topbar" id="topbar">
+    <div class="mp-topbar-inner">
+      <a class="mp-brand" href="#home" aria-label="MusePi" data-i18n-aria="brand.aria">
+        <img class="mp-brand-mark" src="./assets/musepi-mark.svg" alt="" width="26" height="26" />
+        <span class="mp-brand-word">MusePi</span>
+        <span class="mp-brand-ver" data-release-version>v0.5.4</span>
+      </a>
+
+      <nav class="mp-nav" id="mp-nav" aria-label="主导航" data-i18n-aria="nav.aria">
+        <a href="#preview" class="mp-nav-link" data-i18n="nav.preview">界面预览</a>
+        <a href="#features" class="mp-nav-link" data-i18n="nav.features">核心功能</a>
+        <a href="#momentum" class="mp-nav-link" data-i18n="nav.momentum">迭代进行时</a>
+        <a href="#pricing" class="mp-nav-link" data-i18n="nav.pricing">价格</a>
+        <a href="#faq" class="mp-nav-link" data-i18n="nav.faq">常见问题</a>
+      </nav>
+
+      <div class="mp-topbar-actions">
+        <div class="mp-lang" role="group" aria-label="语言" data-i18n-aria="lang.aria">
+          <button class="mp-lang-opt is-active" type="button" data-lang="zh" lang="zh-CN">中</button>
+          <span class="mp-lang-sep" aria-hidden="true"></span>
+          <button class="mp-lang-opt" type="button" data-lang="en" lang="en">EN</button>
+        </div>
+        <a class="mp-topbar-gh" href="https://github.com/MuseLinn/MusePi" target="_blank" rel="noopener" aria-label="GitHub 仓库" data-i18n-aria="nav.gh.aria">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M8 .2a8 8 0 0 0-2.5 15.6c.4.07.55-.17.55-.38v-1.3c-2.25.5-2.72-1.08-2.72-1.08-.37-.94-.9-1.19-.9-1.19-.73-.5.06-.49.06-.49.82.06 1.25.84 1.25.84.73 1.25 1.9.89 2.37.68.07-.53.29-.89.52-1.1-1.8-.2-3.7-.9-3.7-4 0-.88.31-1.6.83-2.16-.08-.2-.36-1.02.08-2.12 0 0 .68-.22 2.23.83a7.7 7.7 0 0 1 4.05 0c1.54-1.05 2.22-.83 2.22-.83.45 1.1.16 1.92.08 2.13.52.56.83 1.27.83 2.16 0 3.11-1.9 3.8-3.7 4 .29.25.55.75.55 1.51v2.24c0 .21.15.46.55.38A8 8 0 0 0 8 .2z"/></svg>
+          <span class="mp-topbar-gh-word">GitHub</span>
+        </a>
+        <button class="mp-btn mp-btn--primary mp-btn--sm" type="button" data-open-demo data-i18n="nav.cta">体验 MusePi</button>
+        <button class="mp-nav-toggle" type="button" id="nav-toggle" aria-label="菜单" data-i18n-aria="menu.aria" aria-controls="mp-nav" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ===== 首屏产品介绍 ===== -->
+    <section class="mp-hero" id="home">
+      <div class="mp-hero-glow" aria-hidden="true"></div>
+      <div class="mp-container mp-hero-inner">
+        <p class="mp-badge">
+          <span class="mp-pulse" aria-hidden="true"></span>
+          <span data-i18n="hero.phase">免费测试版</span>
+          <span class="mp-badge-sep" aria-hidden="true"></span>
+          <span data-release-version>v0.5.4</span>
+          <span class="mp-badge-sep" aria-hidden="true"></span>
+          macOS · Windows · Linux · Android · <span data-i18n="hero.term">终端</span>
+        </p>
+        <h1 class="mp-hero-title" data-i18n="hero.title">你的 <span class="mp-accent">AI 搭档</span>，<br />不止会写代码，<br class="mp-only-desktop" />还能按你的流程改造。</h1>
+        <p class="mp-hero-sub" data-i18n="hero.sub">
+          MusePi 是一位真正能动手的 AI 搭档：写代码、跑命令、查资料、开浏览器，样样上手。桌面应用、命令行、手机随时切换，会话与设置一路跟着你；模型、工具、界面都是可换的零件，按你的工作流重新组装——而不只是浏览器里又一个标签页。
+        </p>
+        <div class="mp-cta-row">
+          <button class="mp-btn mp-btn--primary" type="button" data-open-demo data-i18n="hero.cta.book">预约演示</button>
+          <span class="mp-dl">
+            <a class="mp-btn mp-btn--soft mp-dl-main" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="hero.cta.dl">下载桌面版</a>
+            <button class="mp-dl-caret" type="button" id="dl-caret" aria-haspopup="true" aria-expanded="false" aria-controls="dl-menu" aria-label="选择其他平台" data-i18n-aria="dl.aria">
+              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-dl-menu" id="dl-menu" role="menu" hidden>
+              <p class="mp-dl-group" data-i18n="dl.group.desktop">桌面</p>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-arm64.dmg">
+                <span class="mp-dl-item-os">macOS</span><span class="mp-dl-item-arch" data-i18n="dl.mac.arch">Apple 芯片 · .dmg</span>
+              </a>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-setup.exe">
+                <span class="mp-dl-item-os">Windows</span><span class="mp-dl-item-arch">x64 · .exe</span>
+              </a>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-arm64-setup.exe">
+                <span class="mp-dl-item-os">Windows</span><span class="mp-dl-item-arch">ARM64 · .exe</span>
+              </a>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-x86_64.AppImage">
+                <span class="mp-dl-item-os">Linux</span><span class="mp-dl-item-arch">x64 · .AppImage</span>
+              </a>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-amd64.deb">
+                <span class="mp-dl-item-os">Linux</span><span class="mp-dl-item-arch">x64 · .deb</span>
+              </a>
+              <p class="mp-dl-group" data-i18n="dl.group.mobile">移动与终端</p>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-app-debug.apk">
+                <span class="mp-dl-item-os">Android</span><span class="mp-dl-item-arch">arm64 · .apk</span>
+              </a>
+              <a class="mp-dl-item" role="menuitem" href="#install">
+                <span class="mp-dl-item-os" data-i18n="dl.tui.os">终端 TUI</span><span class="mp-dl-item-arch" data-i18n="dl.tui.arch">全平台 · 安装脚本</span>
+              </a>
+              <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener">
+                <span class="mp-dl-item-os" data-i18n="dl.all.os">全部安装包</span><span class="mp-dl-item-arch" data-i18n="dl.all.arch">含 ARM64 版本 · GitHub</span>
+              </a>
+            </div>
+          </span>
+          <a class="mp-btn mp-btn--ghost" href="#preview" data-i18n="hero.cta.look">先看看界面</a>
+        </div>
+        <div class="mp-hero-term" id="install" aria-label="安装命令" data-i18n-aria="hero.term.aria">
+          <span class="mp-hero-term-bar">
+            <i></i><i></i><i></i>
+            <span class="mp-hero-term-file">install</span>
+            <button class="mp-term-copy" type="button" data-copy aria-label="复制命令" data-i18n-aria="hero.term.copy">
+              <svg class="ico-copy" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none"><rect x="5.5" y="5.5" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5H4A1.5 1.5 0 0 0 2.5 5v6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              <svg class="ico-done" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none"><path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </span>
+          <span class="mp-term-tabs" role="tablist" aria-label="选择安装命令" data-i18n-aria="hero.term.tabs">
+            <button class="mp-term-tab is-active" type="button" role="tab" aria-selected="true" data-term="sh">macOS / Linux / WSL</button>
+            <button class="mp-term-tab" type="button" role="tab" aria-selected="false" data-term="ps">Windows PowerShell</button>
+          </span>
+          <code class="mp-term-line" data-term-line="sh"><span class="mp-cmd-prompt">$</span> curl -fsSL <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh</span> | sh</code>
+          <code class="mp-term-line" data-term-line="ps" hidden><span class="mp-cmd-prompt">&gt;</span> irm <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1</span> | iex</code>
+          <p class="mp-term-note" data-i18n="hero.term.note">需要 Node ≥ 22 或 Bun；装好后桌面版、终端 TUI 与移动伴侣共用同一批会话。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 产品界面预览：协作驾驶舱 ===== -->
+    <section class="mp-section" id="preview">
+      <div class="mp-container">
+        <header class="mp-section-head">
+          <p class="mp-kicker" data-i18n="preview.kicker">产品界面预览</p>
+          <h2 class="mp-h2" data-i18n="preview.h2">一块屏幕，看得见协作的每一步</h2>
+          <p class="mp-section-desc" data-i18n="preview.desc">独立浮动的玻璃卡片拼成一个驾驶舱：左边一棵可以走的会话树，中间是带实时工具行与用量环的对话，右边把长任务拆成分阶段清单、并用填充进度告诉你整体走到哪了。</p>
+        </header>
+
+        <div class="mp-app mp-reveal" role="img" data-i18n-aria="preview.mock.aria" aria-label="MusePi 桌面协作界面：左侧会话树、中间对话与工具行、底部命令输入框、右侧任务清单与进度">
+          <!-- 顶栏 -->
+          <div class="mp-app-chrome">
+            <span class="mp-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="mp-app-cr-title">MusePi</span>
+            <span class="mp-app-cr-proj"><b data-i18n="mock.project">musepi-omp</b><span class="mp-app-cr-branch">main</span></span>
+            <span class="mp-app-cr-right">
+              <span class="mp-app-cr-status"><span class="mp-dot-live" aria-hidden="true"></span><span data-i18n="mock.status.working">Working</span></span>
+              <span class="mp-app-cr-toggle" aria-hidden="true"></span>
+            </span>
+          </div>
+
+          <div class="mp-app-work">
+            <!-- 左：会话树 -->
+            <aside class="mp-pane mp-pane--side" aria-hidden="true">
+              <div class="mp-side-search"><span data-i18n="mock.search">Search sessions…</span></div>
+              <div class="mp-side-group"><span data-i18n="mock.byproject">By project</span></div>
+              <div class="mp-sess is-active">
+                <span class="mp-sess-sq is-work"></span>
+                <span class="mp-sess-txt"><b data-i18n="mock.s1">FilePane 自动保存</b><small data-i18n="mock.s1t">Just now</small></span>
+              </div>
+              <div class="mp-sess mp-sess--branch">
+                <span class="mp-sess-sq is-done"></span>
+                <span class="mp-sess-txt"><b data-i18n="mock.s2">回退到重构前</b><small data-i18n="mock.s2t">5m ago</small></span>
+                <span class="mp-sess-ico" title="Fork">⑂</span>
+              </div>
+              <div class="mp-sess">
+                <span class="mp-sess-sq is-done"></span>
+                <span class="mp-sess-txt"><b data-i18n="mock.s3">迁移到 flex column</b><small data-i18n="mock.s3t">1h ago</small></span>
+              </div>
+              <div class="mp-sess">
+                <span class="mp-sess-sq is-sub"></span>
+                <span class="mp-sess-txt"><b data-i18n="mock.s4">子代理 · 排查 tab 焦点</b><small data-i18n="mock.s4t">Yesterday</small></span>
+                <span class="mp-sess-ico" title="Subagent">◈</span>
+              </div>
+
+              <div class="mp-side-context">
+                <svg class="mp-ring" viewBox="0 0 36 36" width="30" height="30" aria-hidden="true"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle class="ring-fg" cx="18" cy="18" r="15.5"/></svg>
+                <span class="mp-side-context-txt"><b>72%</b><small data-i18n="mock.contextused">Context · 72% used</small></span>
+              </div>
+            </aside>
+
+            <!-- 中：对话 -->
+            <section class="mp-pane mp-pane--chat" aria-hidden="true">
+              <div class="mp-chat-head">
+                <span class="mp-chat-title" data-i18n="mock.chatTitle">重构 FilePane，加自动保存</span>
+                <span class="mp-chat-tools" aria-hidden="true"><i></i><i></i></span>
+              </div>
+              <div class="mp-chat-body">
+                <p class="mp-msg mp-msg--user" data-i18n="mock.msgUser">把 FilePane 重构成 flex column，并加上自动保存。</p>
+
+                <div class="mp-activity">
+                  <span class="mp-activity-ico" aria-hidden="true"></span>
+                  <span class="mp-activity-label"><b data-i18n="mock.activityTools">3 tools</b> · <span data-i18n="mock.activityFiles">2 files changed +96 −41</span></span>
+                </div>
+
+                <div class="mp-tool">
+                  <span class="mp-tool-dot is-ok" aria-hidden="true"></span>
+                  <span class="mp-tool-name">grep</span>
+                  <span class="mp-tool-sum">autosave · 14 match(es)</span>
+                  <span class="mp-tool-meta">Wall 0.4s</span>
+                </div>
+                <div class="mp-tool">
+                  <span class="mp-tool-dot is-ok" aria-hidden="true"></span>
+                  <span class="mp-tool-name">edit</span>
+                  <span class="mp-tool-sum">FilePane.tsx + autosave.ts</span>
+                  <span class="mp-tool-meta">+96 −41</span>
+                </div>
+                <div class="mp-tool mp-tool--run">
+                  <span class="mp-tool-spin" aria-hidden="true"></span>
+                  <span class="mp-tool-name">bash</span>
+                  <span class="mp-tool-sum">bun test FilePane</span>
+                  <span class="mp-tool-meta"><span data-i18n="mock.running">Running</span>…</span>
+                </div>
+
+                <p class="mp-msg mp-msg--ai" data-i18n="mock.msgAI">三个文件已改完：编辑器列保持 flex 链路；未保存修改现在会在 tab 上打点，切换或关闭前先确认。</p>
+              </div>
+
+              <div class="mp-composer">
+                <div class="mp-composer-input"><span data-i18n="mock.composerPh">Ask anything, / for commands, @ for context…</span></div>
+                <div class="mp-composer-bar">
+                  <span class="mp-chip mp-chip--model"><span class="mp-chip-key">deepseek</span><span class="mp-chip-div">/</span>v4-flash</span>
+                  <span class="mp-chip" data-i18n="mock.chipThinking">High</span>
+                  <span class="mp-chip mp-chip--mode" data-i18n="mock.chipPlan">Plan</span>
+                  <span class="mp-chip-ring">72%</span>
+                  <span class="mp-chip-send" aria-hidden="true">↑</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- 右：任务清单 + 进度 -->
+            <aside class="mp-pane mp-pane--todo" aria-hidden="true">
+              <div class="mp-todo-head">
+                <span data-i18n="mock.todoTitle">Todo progress</span>
+                <span class="mp-todo-count" data-i18n="mock.todoCount">2/5</span>
+              </div>
+              <div class="mp-progress-track"><span class="mp-progress-fill" style="--p:40%"></span></div>
+
+              <p class="mp-phase"><span class="mp-phase-mark">I.</span> <span data-i18n="mock.phase1">重构</span></p>
+              <div class="mp-todo is-done"><span class="mp-glyph" aria-hidden="true">●</span><span data-i18n="mock.t1">梳理 FilePane 现有布局</span></div>
+              <div class="mp-todo is-done"><span class="mp-glyph" aria-hidden="true">●</span><span data-i18n="mock.t2">拆出 autosave 模块</span></div>
+              <div class="mp-todo is-doing"><span class="mp-glyph" aria-hidden="true">◐</span><span data-i18n="mock.t3">接入 tab 脏标记</span></div>
+              <p class="mp-phase"><span class="mp-phase-mark">II.</span> <span data-i18n="mock.phase2">验证</span></p>
+              <div class="mp-todo"><span class="mp-glyph" aria-hidden="true">○</span><span data-i18n="mock.t4">补自动保存测试</span></div>
+              <div class="mp-todo"><span class="mp-glyph" aria-hidden="true">○</span><span data-i18n="mock.t5">更新 GUI 文档</span></div>
+
+              <div class="mp-todo-add"><span data-i18n="mock.todoAdd">Add a task…</span></div>
+            </aside>
+          </div>
+        </div>
+        <p class="mp-app-note" data-i18n="preview.note">预览为界面示意，用于呈现布局与信息层级，不代表某一真实会话的数据。</p>
+      </div>
+    </section>
+
+    <!-- ===== 三个核心功能 ===== -->
+    <section class="mp-section mp-section--tint" id="features">
+      <div class="mp-container">
+        <header class="mp-section-head">
+          <p class="mp-kicker" data-i18n="feat.kicker">为什么选 MusePi</p>
+          <h2 class="mp-h2" data-i18n="feat.h2">为你真实的工作方式而生</h2>
+        </header>
+
+        <div class="mp-features">
+          <article class="mp-feature mp-reveal">
+            <span class="mp-feature-idx">01</span>
+            <h3 class="mp-h3" data-i18n="feat.f1.title">会话即树，不是日志</h3>
+            <p data-i18n="feat.f1.body">每条消息都带着父节点，历史是一棵可以走的树——从任意节点分叉、回退、重新回答。上下文占用实时可见，长会话也不会迷失方向。</p>
+            <ul class="mp-feature-points">
+              <li data-i18n="feat.f1.p1">画布地图画出完整的会话 DAG</li>
+              <li data-i18n="feat.f1.p2">轨迹面板把同一棵树投影成时间线或分支视图</li>
+            </ul>
+          </article>
+          <article class="mp-feature mp-reveal">
+            <span class="mp-feature-idx">02</span>
+            <h3 class="mp-h3" data-i18n="feat.f2.title">桌面、终端、手机，同一个大脑</h3>
+            <p data-i18n="feat.f2.body">桌面应用、命令行和手机背后是同一个大脑：同一批会话、同一套设置、同一批正在运行的任务。这边发起的运行，那边接着推送；换了界面，不换了上下文。</p>
+            <ul class="mp-feature-points">
+              <li data-i18n="feat.f2.p1">Android 扫码经局域网配对，端到端加密</li>
+              <li data-i18n="feat.f2.p2">SSH 友好的终端，会话与桌面完全一致</li>
+            </ul>
+          </article>
+          <article class="mp-feature mp-reveal">
+            <span class="mp-feature-idx">03</span>
+            <h3 class="mp-h3" data-i18n="feat.f3.title">一台边飞边换零件的引擎</h3>
+            <p data-i18n="feat.f3.body">一切皆可插拔：模型提供商、工具、界面表面。它在后台盯着你的扩展目录，热重载随时生效——加能力不用重启，也不用等发版。</p>
+            <ul class="mp-feature-points">
+              <li data-i18n="feat.f3.p1">60+ LLM 提供商，图像与视频生成内置</li>
+              <li data-i18n="feat.f3.p2">浏览器 + computer-use、LSP/DAP、任务子代理</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 迭代进行时（替代客户评价） ===== -->
+    <section class="mp-section" id="momentum">
+      <div class="mp-container">
+        <header class="mp-section-head">
+          <p class="mp-kicker" data-i18n="mom.kicker">迭代进行时</p>
+          <h2 class="mp-h2" data-i18n="mom.h2">自成一体的平台，每时每刻都在往前</h2>
+          <p class="mp-section-desc" data-i18n="mom.desc">MusePi 起步时借用了开源项目 oh-my-pi 的 Agent 引擎，但桌面 GUI、共享后台、常驻桌宠、移动伴侣、扩展系统与协作面都是我们自己做的；这些年一路改下来，引擎本身也早已长成自己的形状。MusePi 就是 MusePi——独立演进，不再跟随任何上游。下面这些不是路线图上的承诺，是最近几个版本里已经发出去的东西。</p>
+        </header>
+
+        <div class="mp-stats mp-reveal">
+          <div class="mp-stat"><span class="mp-stat-num mp-stat-num--accent">60+</span><span class="mp-stat-label" data-i18n="mom.stat1">LLM 提供商</span></div>
+          <div class="mp-stat"><span class="mp-stat-num">5</span><span class="mp-stat-label" data-i18n="mom.stat2">支持的平台</span></div>
+          <div class="mp-stat"><span class="mp-stat-num">2</span><span class="mp-stat-label" data-i18n="mom.stat3">扩展中心</span></div>
+          <div class="mp-stat"><span class="mp-stat-num">1</span><span class="mp-stat-label" data-i18n="mom.stat4">共享后台</span></div>
+        </div>
+
+        <ul class="mp-log">
+          <li class="mp-log-item mp-reveal">
+            <span class="mp-log-tag" data-i18n="mom.log1.tag">插件</span>
+            <p data-i18n="mom.log1.body">直接拖入压缩包或本机文件夹即可安装自制插件；装完立刻告诉你依赖是否齐全，缺什么、缺在哪个落点，一次列清。</p>
+          </li>
+          <li class="mp-log-item mp-reveal">
+            <span class="mp-log-tag" data-i18n="mom.log2.tag">可靠性</span>
+            <p data-i18n="mom.log2.body">消息发出去、会话已空闲却既无回复也无报错时，输入框上方会亮起静默横幅——先按 0 / 10 / 30 秒重读三次再判定，绝不伪造一次"还在思考"。</p>
+          </li>
+          <li class="mp-log-item mp-reveal">
+            <span class="mp-log-tag" data-i18n="mom.log3.tag">用量</span>
+            <p data-i18n="mom.log3.body"><code>/usage</code> 升级成全屏用量面板：每个账户一栏、每条额度一行，回车在摘要与完整报告间切换，预付费余额在每一处视图都能看到。</p>
+          </li>
+        </ul>
+        <a class="mp-arrow-link mp-reveal" href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md" target="_blank" rel="noopener"><span data-i18n="mom.changelog">阅读完整更新日志</span>
+          <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===== 价格 ===== -->
+    <section class="mp-section mp-section--tint" id="pricing">
+      <div class="mp-container">
+        <header class="mp-section-head">
+          <p class="mp-kicker" data-i18n="price.kicker">价格</p>
+          <h2 class="mp-h2" data-i18n="price.h2">现在免费测试，社区版永久免费</h2>
+          <p class="mp-section-desc" data-i18n="price.desc">MusePi 正处于打磨功能的免费测试阶段，全部核心能力都开放使用、不限用量。社区版会一直免费；专业版与团队版是更远期、要等现有功能打磨成熟之后才考虑的事。下面的月付 / 年付切换已经就位，等付费档位真正开放即可一键查看——现在三档都指向免费的社区版。</p>
+        </header>
+
+        <div class="mp-billing" role="group" aria-label="计费周期切换" data-i18n-aria="price.billing.aria">
+          <span class="mp-billing-seg" data-billing aria-disabled="true">
+            <button class="mp-billing-opt is-active" type="button" data-billing-cycle="monthly" disabled data-i18n="price.monthly">月付</button>
+            <button class="mp-billing-opt" type="button" data-billing-cycle="yearly" disabled data-i18n="price.yearly">年付</button>
+          </span>
+          <span class="mp-billing-note" data-i18n="price.billingNote">付费档位暂未排期</span>
+        </div>
+
+        <div class="mp-plans">
+          <article class="mp-plan mp-plan--current mp-reveal">
+            <p class="mp-plan-tag mp-plan-tag--now" data-i18n="price.now">当前 · 永久免费</p>
+            <h3 class="mp-h3" data-i18n="price.p1name">社区版</h3>
+            <p class="mp-plan-price"><span class="mp-plan-cur">¥</span>0<span class="mp-plan-per" data-i18n="price.forever">/ 永久</span></p>
+            <p class="mp-plan-desc" data-i18n="price.p1desc">完整的 MusePi，不加锁、不限量。</p>
+            <ul class="mp-plan-feats">
+              <li data-i18n="price.p1f1">桌面 GUI · 终端 TUI · 移动伴侣</li>
+              <li data-i18n="price.p1f2">60+ 提供商，接你自己的 API 密钥</li>
+              <li data-i18n="price.p1f3">本地运行，会话与设置不上传</li>
+              <li data-i18n="price.p1f4">扩展热重载，两个扩展中心</li>
+              <li data-i18n="price.p1f5">应用内自动更新</li>
+            </ul>
+            <a class="mp-btn mp-btn--primary mp-btn--block" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="price.freeDl">免费下载</a>
+          </article>
+
+          <article class="mp-plan mp-plan--soon mp-reveal">
+            <p class="mp-plan-tag" data-i18n="price.soon">远期规划</p>
+            <h3 class="mp-h3" data-i18n="price.p2name">专业版</h3>
+            <p class="mp-plan-price mp-plan-price--soon" data-i18n="price.tbd">待定</p>
+            <p class="mp-plan-desc" data-i18n="price.p2desc">为重度使用者准备的进阶能力，功能打磨成熟后再谈。</p>
+            <ul class="mp-plan-feats mp-plan-feats--soon">
+              <li data-i18n="price.p2f1">优先接入新模型与实验特性</li>
+              <li data-i18n="price.p2f2">更高的后台任务并发</li>
+              <li data-i18n="price.p2f3">云端会话同步（可选）</li>
+              <li data-i18n="price.p2f4">邮件支持</li>
+            </ul>
+            <button class="mp-btn mp-btn--soft mp-btn--block" type="button" disabled data-i18n="price.notopen">暂未开放</button>
+          </article>
+
+          <article class="mp-plan mp-plan--soon mp-reveal">
+            <p class="mp-plan-tag" data-i18n="price.soon">远期规划</p>
+            <h3 class="mp-h3" data-i18n="price.p3name">团队版</h3>
+            <p class="mp-plan-price mp-plan-price--soon" data-i18n="price.tbd">待定</p>
+            <p class="mp-plan-desc" data-i18n="price.p3desc">给一起写代码的小队，同样在更远期的设想里。</p>
+            <ul class="mp-plan-feats mp-plan-feats--soon">
+              <li data-i18n="price.p3f1">共享扩展与预设</li>
+              <li data-i18n="price.p3f2">集中式的密钥与用量管理</li>
+              <li data-i18n="price.p3f3">端到端加密协作</li>
+              <li data-i18n="price.p3f4">席位与角色</li>
+            </ul>
+            <button class="mp-btn mp-btn--soft mp-btn--block" type="button" disabled data-i18n="price.notopen">暂未开放</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 常见问题 ===== -->
+    <section class="mp-section" id="faq">
+      <div class="mp-container mp-container--narrow">
+        <header class="mp-section-head">
+          <p class="mp-kicker" data-i18n="faq.kicker">常见问题</p>
+          <h2 class="mp-h2" data-i18n="faq.h2">你可能想先问的</h2>
+        </header>
+        <div class="mp-faq" id="faq-list">
+          <div class="mp-faq-item">
+            <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a1" id="faq-q1">
+              <span data-i18n="faq.q1">MusePi 收费吗？</span>
+              <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-faq-a" id="faq-a1" role="region" aria-labelledby="faq-q1"><div class="mp-faq-a-inner"><p data-i18n="faq.a1">现在是打磨功能阶段的免费测试，全部核心能力都开放使用，不限会话数、也不限消息数。社区版会永久免费；专业版、团队版是更远期、要等现有能力打磨成熟之后才会考虑的事——MusePi 不会悄悄把已经免费的功能变成收费墙。</p></div></div>
+          </div>
+          <div class="mp-faq-item">
+            <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a2" id="faq-q2">
+              <span data-i18n="faq.q2">支持哪些平台？</span>
+              <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-faq-a" id="faq-a2" role="region" aria-labelledby="faq-q2"><div class="mp-faq-a-inner"><p data-i18n="faq.a2">桌面版覆盖 macOS（Apple Silicon）、Windows 10/11（x64 与 ARM64）、Linux（.AppImage 与 .deb，x64 与 ARM64）；终端 TUI 三平台加 WSL 通用；移动伴侣提供 Android arm64 的 .apk。它们连的是同一个后台服务，会话与设置完全一致。</p></div></div>
+          </div>
+          <div class="mp-faq-item">
+            <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a3" id="faq-q3">
+              <span data-i18n="faq.q3">需要自己的模型 API 密钥吗？</span>
+              <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-faq-a" id="faq-a3" role="region" aria-labelledby="faq-q3"><div class="mp-faq-a-inner"><p data-i18n="faq.a3">是的。MusePi 支持 60+ 模型提供商，你在设置里填入自己的密钥即可使用，模型费用直接向你选定的供应商结算，MusePi 不做中转、不抽成。你也可以接本地模型。</p></div></div>
+          </div>
+          <div class="mp-faq-item">
+            <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a4" id="faq-q4">
+              <span data-i18n="faq.q4">我的代码和数据安全吗？</span>
+              <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-faq-a" id="faq-a4" role="region" aria-labelledby="faq-q4"><div class="mp-faq-a-inner"><p data-i18n="faq.a4">MusePi 在你自己的机器上运行，会话、设置与历史都存在本地，默认不上传。移动伴侣通过局域网扫码配对、远程控制全程端到端加密，不经过任何第三方服务器。唯一的对外网络请求，是你自己配置的那家模型提供商。</p></div></div>
+          </div>
+          <div class="mp-faq-item">
+            <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a5" id="faq-q5">
+              <span data-i18n="faq.q5">它和 oh-my-pi 是什么关系？</span>
+              <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-faq-a" id="faq-a5" role="region" aria-labelledby="faq-q5"><div class="mp-faq-a-inner"><p data-i18n="faq.a5">MusePi 是一个独立演进的 AI 代理平台。起步时借用了 oh-my-pi 的 Agent 引擎，但桌面 GUI、共享后台、常驻桌宠、移动伴侣、扩展系统与协作面都是我们自己做的；这些年改下来，引擎也早已长成自己的形状。MusePi 就是 MusePi——自己的上游，同样保持 MIT 许可。</p></div></div>
+          </div>
+          <div class="mp-faq-item">
+            <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a6" id="faq-q6">
+              <span data-i18n="faq.q6">怎么开始？</span>
+              <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="mp-faq-a" id="faq-a6" role="region" aria-labelledby="faq-q6"><div class="mp-faq-a-inner"><p data-i18n="faq.a6">一行命令装好后台服务、终端 TUI 与桌面应用：<code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code>（macOS / Linux / WSL），Windows 用 <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>。需要 Node ≥ 22 或 Bun。想直接上手图形界面，就在首屏的平台菜单里选你的系统，或去 Releases 看全部安装包。</p></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 开始使用 CTA ===== -->
+    <section class="mp-cta-band" id="download">
+      <div class="mp-container mp-cta-band-inner mp-reveal">
+        <div class="mp-cta-band-copy">
+          <h2 class="mp-h2" data-i18n="cta.h2">把它接到你手上的机器</h2>
+          <p data-i18n="cta.sub">一行命令装好后台服务与桌面应用，或在首屏的平台菜单里直接挑你的安装包。想先看我们走一遍，就约个演示。</p>
+        </div>
+        <div class="mp-cta-band-actions">
+          <button class="mp-btn mp-btn--primary" type="button" data-open-demo data-i18n="cta.book">预约演示</button>
+          <a class="mp-btn mp-btn--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="cta.dl">下载</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== 页脚 ===== -->
+  <footer class="mp-footer">
+    <div class="mp-container">
+      <div class="mp-footer-top">
+        <div class="mp-footer-brand">
+          <a class="mp-brand" href="#home" aria-label="MusePi" data-i18n-aria="brand.aria">
+            <img class="mp-brand-mark" src="./assets/musepi-mark.svg" alt="" width="24" height="24" />
+            <span class="mp-brand-word">MusePi</span>
+          </a>
+          <p class="mp-footer-tag" data-i18n="footer.tag">长在你工作流里的一台 AI 引擎：模型、工具、界面皆可替换，桌面、终端、手机共用一个大脑。</p>
+          <div class="mp-footer-platforms">
+            <span>macOS</span><span>Windows</span><span>Linux</span><span>Android</span><span data-i18n="footer.terminal">终端</span>
+          </div>
+        </div>
+        <nav class="mp-footer-cols" aria-label="页脚导航" data-i18n-aria="footer.aria">
+          <div class="mp-footer-col">
+            <span class="mp-footer-col-title" data-i18n="footer.colProduct">产品</span>
+            <a href="#preview" data-i18n="nav.preview">界面预览</a>
+            <a href="#features" data-i18n="nav.features">核心功能</a>
+            <a href="#pricing" data-i18n="nav.pricing">价格</a>
+            <a href="#download" data-i18n="footer.dl">下载</a>
+          </div>
+          <div class="mp-footer-col">
+            <span class="mp-footer-col-title" data-i18n="footer.colRes">资源</span>
+            <a href="https://github.com/MuseLinn/MusePi" target="_blank" rel="noopener" data-i18n="footer.gh">GitHub 源码</a>
+            <a href="https://github.com/MuseLinn/MusePi/tree/main/docs" target="_blank" rel="noopener" data-i18n="footer.docs">文档</a>
+            <a href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md" target="_blank" rel="noopener" data-i18n="footer.changelog">更新日志</a>
+            <a href="https://github.com/MuseLinn/MusePi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" data-i18n="footer.contrib">贡献指南</a>
+          </div>
+          <div class="mp-footer-col">
+            <span class="mp-footer-col-title" data-i18n="footer.colStart">开始</span>
+            <a href="#faq" data-i18n="footer.faq">常见问题</a>
+            <button class="mp-footer-linkbtn" type="button" data-open-demo data-i18n="cta.book">预约演示</button>
+            <a href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="footer.get">获取安装包</a>
+          </div>
+        </nav>
+      </div>
+      <div class="mp-footer-bottom">
+        <span>© <span data-year>2026</span> MusePi<span data-i18n="footer.rights"> · MIT 许可</span></span>
+        <span class="mp-footer-fine" data-i18n="footer.fine">自研引擎，本地运行，MIT 开源——你的代码与密钥始终留在自己的机器上。</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ===== 演示预约表单（模态） ===== -->
+  <div class="mp-modal" id="demo-modal" hidden>
+    <div class="mp-modal-backdrop" data-close-demo></div>
+    <div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="demo-title" aria-describedby="demo-desc">
+      <button class="mp-modal-x" type="button" data-close-demo aria-label="关闭" data-i18n-aria="demo.close">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+
+      <div class="mp-modal-head">
+        <p class="mp-kicker" data-i18n="demo.kicker">预约演示</p>
+        <h2 id="demo-title" class="mp-h3" data-i18n="demo.title">我们带你走一遍 MusePi</h2>
+        <p id="demo-desc" class="mp-modal-desc" data-i18n="demo.desc">留下几行信息，正式版会按你的场景准备一段 20 分钟的实地演示——从安装到多面协作。当前这一步还是原型：只做输入校验与提交结果展示，不联网。</p>
+      </div>
+
+      <form class="mp-form" id="demo-form" novalidate>
+        <div class="mp-field">
+          <label for="f-name" data-i18n="demo.name">称呼</label>
+          <input id="f-name" name="name" type="text" autocomplete="name" data-i18n-ph="demo.name.ph" placeholder="怎么称呼你" />
+          <p class="mp-field-err" data-err-for="name" role="alert"></p>
+        </div>
+        <div class="mp-field">
+          <label for="f-email" data-i18n="demo.email">邮箱</label>
+          <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" />
+          <p class="mp-field-err" data-err-for="email" role="alert"></p>
+        </div>
+        <div class="mp-field-row">
+          <div class="mp-field">
+            <label for="f-team" data-i18n="demo.team">团队规模</label>
+            <select id="f-team" name="team">
+              <option value="个人" data-i18n="demo.team.o1">个人 / 独立开发</option>
+              <option value="2-10 人" data-i18n="demo.team.o2">2–10 人</option>
+              <option value="11-50 人" data-i18n="demo.team.o3">11–50 人</option>
+              <option value="50 人以上" data-i18n="demo.team.o4">50 人以上</option>
+            </select>
+            <p class="mp-field-err" data-err-for="team" role="alert"></p>
+          </div>
+          <div class="mp-field">
+            <label for="f-platform" data-i18n="demo.platform">常用平台</label>
+            <select id="f-platform" name="platform">
+              <option value="macOS">macOS</option>
+              <option value="Windows">Windows</option>
+              <option value="Linux">Linux</option>
+              <option value="Android" data-i18n="demo.platform.o4">Android 移动伴侣</option>
+              <option value="终端 TUI" data-i18n="demo.platform.o5">终端 TUI</option>
+            </select>
+            <p class="mp-field-err" data-err-for="platform" role="alert"></p>
+          </div>
+        </div>
+        <div class="mp-field">
+          <label for="f-goal" data-i18n="demo.goal">最想解决的问题</label>
+          <textarea id="f-goal" name="goal" rows="3" data-i18n-ph="demo.goal.ph" placeholder="比如：想在多个终端会话里共享上下文，并接自己的模型密钥……"></textarea>
+          <p class="mp-field-err" data-err-for="goal" role="alert"></p>
+        </div>
+        <button class="mp-btn mp-btn--primary mp-btn--block" type="submit" data-i18n="demo.submit">提交演示申请</button>
+        <p class="mp-form-fine" data-i18n="demo.fine">原型表单：内容只留在你浏览器的这一页里，不上传、不发送，也不会给你发邮件。</p>
+      </form>
+
+      <div class="mp-form-done" id="demo-done" hidden>
+        <div class="mp-form-done-mark" aria-hidden="true">
+          <svg viewBox="0 0 44 44" width="44" height="44" fill="none"><circle cx="22" cy="22" r="20" stroke="currentColor" stroke-width="2"/><path d="M13 22.5l6 6 12-13" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3 class="mp-h3" data-i18n="demo.doneTitle">校验通过，信息如下</h3>
+        <p class="mp-form-done-lead"><span data-i18n="demo.doneLead">原型流程跑通了，</span><span class="mp-form-done-name">朋友</span><span data-i18n="demo.doneLead2">。下面这些只存在于你当前这个页面里：</span></p>
+        <dl class="mp-form-done-list" id="done-summary"></dl>
+        <p class="mp-form-done-note" data-i18n="demo.doneNote">没有邮件发出，也没有任何数据上传。接入后端后，这里会显示真实的预约编号与确认时间。</p>
+        <div class="mp-form-done-actions">
+          <button class="mp-btn mp-btn--soft" type="button" id="demo-reset" data-i18n="demo.reset">再填一份</button>
+          <button class="mp-btn mp-btn--primary" type="button" data-close-demo data-i18n="demo.finish">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./i18n.js" defer></script>
+  <script src="./main.js" defer></script>
+</body>
+</html>
