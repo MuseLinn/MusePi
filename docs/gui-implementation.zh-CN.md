@@ -767,3 +767,47 @@ useMemo，声明在读取它的搜索 effect **之前** —— biome 的 `noInva
 packages/desktop-app/test`（694）、`bun test packages/coding-agent/test/daemon`（328）。
 新增契约测试：会话作用域搜索（跨会话泄漏）、action-toast 的替换/堆叠/id 隔离。
 ⌘F 需要实机手动过一遍 —— 该查找栏由只存在于桌面壳里的窗口级快捷键驱动。
+
+## 46. 场景位移时的光束冻结（2026-10-09）
+
+输入框的 border beam（旋转彩色描边，`vendor/border-beam`）是遮罩锥形渐变的逐帧重绘
+——`@property` 角度动画 + `mask-composite`，不是合成器 transform。welcome↔session 场景
+FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身的 transform+blur 动画里，
+就是「空态输入框位移到会话态卡顿」的元凶。空态 placeholder 走马灯（WelcomeComposer 里
+4s 一次的 `setInterval`）排查过、不是原因——4 秒一次 setState 不产生逐帧成本，且它随场景
+一起卸载。
+
+- **两侧都冻结，只冻结位移这一程**：`.gui-scene--leaving .gui-border-beam`（离场侧的
+  composer，比如聚焦中的空态输入框）和 `.gui-scenes[data-scene-morph] .gui-border-beam`
+  （覆盖**进场侧**的 beam——会话态 composer 的 beam 由 `working` 驱动，聊天场景挂载时就
+  可能已在淡入）都对 wrapper、两个伪元素和 `[data-beam-bloom]` 钉
+  `animation-play-state: paused !important`（对齐 beam vendor 的 `pausedAnimationsRule`）。
+  beam 保持可见、定格在旋转中途——不能用 `display:none`，那会跳变。
+- **窗口标记**：`morphFrame` 在 `.gui-scenes` 上设 `data-scene-morph`，`flight.finished`
+  时清除；用模块级代际计数（`sceneMorphGeneration`）——快速来回切换会在旧 resolve 触发前
+  开出新一程位移，过期的 resolve 不能清掉新标记。
+- **beam 的显示窗口在源头同时收短**：WelcomeComposer 的两条提交路径（`sendText` 的普通
+  路径与 design rail 路径）发送时即 `setBeamOn(false)`——此前提交后 textarea 仍持有焦点，
+  beam 一直转到离场场景淡完为止。
+- **pulse 系列不动**：它们的呼吸本就走限帧的 `pulseDriver` rAF，且 `ApprovalCard` 的
+  beam 不在 `.gui-scenes` 里。
+
+## 47. 会话态专注形态：布局阶段钉帧 + 单一高度驱动（2026-10-09）
+
+会话态 composer 的专注模式形态（⌘⇧E，`ChatView` 的 `composerWrapRef` effect）有两个毛病：
+高度动画掉帧，以及 composer 先整体上移再放大。
+
+- **顺序错误（「整个输入框先上移然后才放大」）**：形态动画跑在被动 `useEffect` 里——
+  画的之后才执行。展开时同一个 commit 里转录区 wrapper 被卸载
+  （`focusMode ? "hidden" : flex-1`），浏览器先画出一整帧 commit 后的布局：剩下的 flex
+  列更高，底部锚定的 composer 在 WAAPI 高度动画还没开始前就已经跳到了新的底边。现在改成
+  `useLayoutEffect`，在首帧绘制前钉住起始高度并启动动画——composer 原地生长（与欢迎页
+  form 形态已用的布局阶段纪律一致；`WelcomeComposer` 里 flash→回弹→再生长的注释就是同一
+  个教训的出处）。
+- **帧率**：同一时刻有两个高度驱动——wrap 类自带的 `transition: height 280ms`（
+  `.gui-composer-wrap`）加上同一属性上的 WAAPI 动画，两条 280ms 曲线逐帧互抢。新增
+  `.gui-composer-wrap--morphing` 标记类（只钉住动画窗口，由同一个版本化的 finish/定时器
+  清理释放）对 wrap 及其 textarea/`.gui-composer-frame` 后代钉 `transition: none`
+  （textarea 自动的 `height 160ms` 过渡否则会以第二次布局追着逐帧布局跑）。与
+  gui-settings.css 的 `.gui-welcome-form.gui-morphing` 抑制同一套做法。
+- 尺寸无变化的切换现在立即释放钉住的高度，不再钉帧并播放 0px 动画。

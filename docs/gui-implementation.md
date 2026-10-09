@@ -834,3 +834,57 @@ packages/desktop-app/test` (694), `bun test packages/coding-agent/test/daemon` (
 contract tests: session-scoped search (cross-session leak), action-toast replace/stack/id
 isolation. `⌘F` needs a live manual pass — the bar is driven by a window-level shortcut that
 only exists in the desktop shell.
+
+## 46. Scene-morph beam freeze (2026-10-09)
+
+The composer's border beam (the rotating conic glow, `vendor/border-beam`) is a per-frame
+repaint of a masked conic gradient — it is `@property` angle animation + `mask-composite`,
+not a compositor transform. During the welcome↔session FLIP morph (`ChatView.morphFrame`)
+that repaint ran inside the flight's own transform+blur animation and was the reported
+stutter ("空态输入框位移形变到会话态输入框卡顿"). The placeholder-text carousel (4s
+`setInterval` in WelcomeComposer) was checked and is NOT the cause — a setState every 4s
+cannot contribute per-frame cost, and it unmounts with the scene anyway.
+
+- **Freeze, both sides, exactly the flight**: `.gui-scene--leaving .gui-border-beam` (the
+  outgoing composer, e.g. a focused welcome input) and
+  `.gui-scenes[data-scene-morph] .gui-border-beam` (covers the INCOMING scene's beam — the
+  session composer's beam is active from `working` and can already be fading in when the
+  chat scene mounts) both pin `animation-play-state: paused !important` on the wrapper, its
+  two pseudos and `[data-beam-bloom]` (mirrors `pausedAnimationsRule` in the beam vendor).
+  The beam stays visible, frozen mid-rotation — not `display:none`, which would pop.
+- **Window marker**: `morphFrame` sets `data-scene-morph` on `.gui-scenes` and clears it on
+  `flight.finished` via a module-scope generation counter (`sceneMorphGeneration`) — a quick
+  welcome⇄session round trip starts a new flight before the old resolve fires, and the
+  stale resolve must not clear the fresh marker.
+- **Beam display window also shortened at the source**: WelcomeComposer's submit paths
+  (`sendText`, both the plain and the design-rail branch) now `setBeamOn(false)` at send —
+  previously the beam kept running while the leaving scene faded because the textarea kept
+  focus through the submit.
+- **The pulse sizes stay untouched**: their breathing already runs on the fps-capped
+  `pulseDriver` rAF, and `ApprovalCard`'s beam is not inside `.gui-scenes`.
+
+## 47. Session focus-morph: layout-phase pin + single height driver (2026-10-09)
+
+The session composer's focus-mode morph (⌘⇧E, `ChatView`'s `composerWrapRef` effect) showed
+two defects: the height animation was frame-starved, and the composer visually jumped UP
+before growing.
+
+- **Wrong ordering ("the whole composer first moves up, then grows")**: the morph ran in a
+  passive `useEffect` — after paint. Opening unmounts the transcript wrapper
+  (`focusMode ? "hidden" : flex-1`) in the same commit, so the browser painted a whole
+  frame of the post-commit layout first: the remaining flex column is taller and the
+  composer (bottom-anchored) had already jumped to the new bottom edge before the WAAPI
+  height animation ever started. The morph is now a `useLayoutEffect` that pins the
+  from-height and starts the animation before that first paint — the composer grows in
+  place (same layout-phase discipline the welcome form's morph already used; that is also
+  where the flash→snap-back→grow note in `WelcomeComposer` comes from).
+- **Frame rate**: two height drivers ran at once — the wrap class's own
+  `transition: height 280ms` under `.gui-composer-wrap` PLUS the WAAPI animation on the
+  same property, two competing 280ms curves every frame. A new
+  `.gui-composer-wrap--morphing` marker (pinned for exactly the animation window, released
+  by the same versioned finish/timer cleanup) pins `transition: none` on the wrap and on
+  its textarea/`.gui-composer-frame` descendants (the textarea's autosize
+  `height 160ms` transition otherwise chases the per-frame layout with a second pass).
+  Mirrors the `.gui-welcome-form.gui-morphing` suppression in gui-settings.css.
+- Trivial no-change toggles now release the pinned height immediately instead of pinning
+  and animating 0px.
