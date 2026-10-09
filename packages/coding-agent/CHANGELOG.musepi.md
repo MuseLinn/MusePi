@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -15,8 +17,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 ### Fixed
 
-- **专注模式切换不再先跳后长**：会话里切专注模式时，输入框原先先整块跳到更高的底边再开始长高——顺序是反的；同时高度动画被两套过渡同时驱动，帧数明显不够。现在动画在首帧绘制前就钉好起点，输入框原地生长，且整个窗口期只由一条曲线驱动，切换顺滑了。
-  - EN: Focus-mode toggle no longer jumps before it grows. In a session, the composer used to leap to the taller bottom edge first and only then start growing — the order was backwards — while two competing height transitions fought per frame and dropped the frame rate. The starting height is now pinned before the first paint, the composer grows in place, and a single curve drives the whole window.
+- **供应商列表折叠展开不再卡死**：快速来回点「显示全部 / 折叠」时，上一次的展开动画还没结束新的就开始，网格会冻在半展开的高度（卡片被裁掉一截）。现在每次展开/收起都先清掉上一次动画残留的锁定，被打断的动画立即恢复正常布局。
+  - EN: The provider list no longer freezes mid-collapse. Clicking 显示全部/折叠 in quick succession started a new expansion before the old one settled, leaving the grid stuck at a half-open height with cards clipped. Every toggle now clears the previous animation's leftover lock first, and an interrupted animation restores natural layout immediately.
+- **专注模式切换不再先跳后长**：会话里切专注模式时，输入框原先先整块跳到更高的底边再开始长高——顺序是反的；同时高度动画被两套过渡同时驱动，帧数明显不够。现在动画从你切换前的真实位置出发，上下两条边一起沿曲线走到目标位置（正是"按上下边距比例放大"的观感），且整个窗口期只由一条曲线驱动；输入框聚焦时光束会在形变期间定格，不再叠加逐帧重绘。
+  - EN: Focus-mode toggle no longer jumps before it grows. The composer used to leap to its final position first and only then grow — the order was backwards — while two competing height transitions fought per frame and dropped the frame rate. The animation now starts from the composer's true pre-toggle position and carries both edges along one curve to the target (the proportional "grows along the margins" read), a single curve drives the whole window, and a focused beam freezes for the morph instead of repainting per frame on top of it.
 - **空态输入框飞向会话态不再卡顿**：输入框边缘的彩色旋转光束会在欢迎页与会话页之间的位移动画里逐帧重绘，叠在位移本身的缩放+模糊动画上就是卡顿感的来源。现在位移进行时光束定格、落地后恢复，空态发送消息的那一刻光束也立即熄灭，不再陪跑到场景淡出。
   - EN: The empty-state composer no longer stutters as it flies into the session layout. The composer's rotating color beam repaints every frame, and stacked on the flight's own scale+blur animation that repaint was the stutter. The beam now freezes for the flight and resumes on landing, and sending from the empty state turns the beam off at the send itself instead of letting it run until the scene fades out.
 - **登录弹窗取消后按钮不再卡死五分钟**：关闭登录弹窗（点遮罩或 Esc）只取消了界面，登录中的标记还挂在供应商上——期间该供应商的登录按钮一直是禁用态，要等 5 分钟 RPC 超时才恢复（「点了添加凭证后再点不弹」）。现在取消时同步清除标记，并通知 daemon 终止登录流程。
@@ -44,6 +48,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -57,6 +63,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -134,6 +142,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -239,6 +249,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -266,6 +278,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -344,6 +358,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -529,6 +545,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -554,6 +572,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -593,6 +613,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -606,6 +628,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -647,6 +671,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -752,6 +778,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -776,6 +804,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -831,6 +861,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -887,6 +919,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -926,6 +960,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -959,6 +995,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1128,6 +1166,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1147,6 +1187,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1177,6 +1219,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1208,6 +1252,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1238,6 +1284,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1266,6 +1314,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1358,6 +1408,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1387,6 +1439,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1439,6 +1493,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1468,6 +1524,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1503,6 +1561,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1557,6 +1617,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
@@ -1583,6 +1645,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件面板不再加载失败，官方插件也都有图标了**：插件自带的设置面板原先一律报「模块加载失败」——界面在组件还在下载时就回收了它的地址；现在加载完成后才释放。同时每个插件项都画出了自己的标识（插件声明的图标、内置单元的类别图标，或按包名生成的彩色字母标），状态改为标识角上的小圆点，不再和图标挤在一起。
+  - EN: Plugin panels no longer fail to load, and official plugins have icons too. A plugin's own settings panel always reported "module failed to load" — the UI released its address while the download was still in flight; it now waits for the load to finish. Every plugin also draws its own mark (a declared icon, a built-in unit's kind glyph, or a colored letter tile derived from the package name), and status moved to a corner badge instead of crowding the icon.
 - **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
   - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
