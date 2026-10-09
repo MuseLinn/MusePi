@@ -1696,6 +1696,19 @@
 	transition: none !important;
 }
 
+/* The focus beam freezes while the form's own focus-mode morph plays:
+ * the beam repaints a masked conic gradient every frame and stacking it
+ * on the morph's per-frame layout (height AND width here) is the stutter
+ * when toggling focus mode while the input is focused (the beam is on —
+ * it fades in with composer focus). Same freeze recipe as the scene
+ * morph in gui-chat.css; the beam stays visible, mid-rotation. */
+.gui-welcome-form.gui-morphing .gui-border-beam,
+.gui-welcome-form.gui-morphing .gui-border-beam::after,
+.gui-welcome-form.gui-morphing .gui-border-beam::before,
+.gui-welcome-form.gui-morphing .gui-border-beam [data-beam-bloom] {
+	animation-play-state: paused !important;
+}
+
 .gui-welcome[data-focused] form > .gui-border-beam {
 	flex: 1;
 	min-height: 0;
@@ -2228,8 +2241,15 @@
 	gap: 6px;
 	min-width: 0;
 }
+.gui-plugin-card-name {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--color-text);
+}
+
 .gui-plugin-card-desc {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--color-text-muted);
 	display: -webkit-box;
