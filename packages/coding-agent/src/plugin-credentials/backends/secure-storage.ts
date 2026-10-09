@@ -36,6 +36,7 @@ import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes }
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
+import { getConfigRootDir } from "@musepi/pi-utils";
 import {
 	accountToPluginCredentialId,
 	type PluginCredentialId,
@@ -83,7 +84,16 @@ export class SecureStorageBackend implements PluginCredentialBackend {
 	private salt: Buffer | null = null;
 
 	constructor(options: SecureStorageOptions = {}) {
-		this.directory = options.directory ?? join(homedir(), ".musepi");
+		// Default to the CONFIG ROOT (dirs resolver), not `homedir()/.musepi`:
+		// the credentials store must follow the active data root (PI_CONFIG_DIR
+		// dev isolation, XDG relocation) like every other config-root resource.
+		// Hardcoding the home put test runs and dev daemons on the developer's
+		// real store — a relocated run silently read (and corrupted-path
+		// handling then DELETED) another process's credentials, and one test
+		// suite's slots landed in production. The two other config-root
+		// resources hit by the same gap (crons.json, boards) moved to the
+		// resolver earlier; this is the third.
+		this.directory = options.directory ?? getConfigRootDir();
 		this.filePath = options.filePath ?? join(this.directory, "plugin-credentials.enc");
 	}
 

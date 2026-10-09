@@ -14,7 +14,12 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { loadExtensions } from "../src/extensibility/extensions/loader";
 import { resetPluginCredentialManager } from "../src/plugin-credentials";
-import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
+import {
+	isolateAgentDirForTest,
+	isolateConfigRootForTest,
+	restoreAgentDirForTest,
+	restoreConfigRootForTest,
+} from "./helpers/isolate-agent-dir";
 
 let probeOut = "";
 
@@ -44,14 +49,22 @@ async function run(entry: string, cwd: string): Promise<Record<string, unknown>>
 
 describe("pi.credentials 扩展密文槽位", () => {
 	let isolatedDir: string;
+	let isolatedConfigRoot: string;
 	let cwd: string;
 
 	beforeAll(async () => {
+		// The credentials store lives at the CONFIG ROOT, which setAgentDir
+		// does not move — without this redirect the suite's slots landed in
+		// the developer's real plugin-credentials.enc (third config-root
+		// victim; the store's default directory now follows the resolver,
+		// and this isolation is what makes the resolver point somewhere safe).
 		isolatedDir = await isolateAgentDirForTest("ext-cred-");
+		isolatedConfigRoot = await isolateConfigRootForTest("ext-cred-config-");
 		cwd = isolatedDir;
 	});
 
 	afterAll(async () => {
+		await restoreConfigRootForTest(isolatedConfigRoot);
 		await restoreAgentDirForTest(isolatedDir);
 	}, 30000);
 
