@@ -888,3 +888,35 @@ before growing.
   Mirrors the `.gui-welcome-form.gui-morphing` suppression in gui-settings.css.
 - Trivial no-change toggles now release the pinned height immediately instead of pinning
   and animating 0px.
+
+## 48. Focus morph position compensation + HeightMorph interrupt recovery (2026-10-09)
+
+Follow-up to §47 after live testing: the "moves up first" read survived the layout-phase
+pin, and the provider collapse froze mid-card.
+
+- **Position compensation, both composers**: a plain height animation paints frame 1 at the
+  morph-window layout position, which IS the steady-state position — the composer still
+  "jumped" (the jump had merely moved from the transcript unmount into the morph itself).
+  Both morphs now pin the TARGET size first, measure the seated layout top, and animate
+  `translateY(preTop − layoutTop) → none` alongside the size keyframes. Frame 1 = the true
+  pre-toggle rect, frame N = steady state, both edges travel the curve (the proportional
+  "grows along the margins" read). The pre-toggle top is captured during render
+  (`prevWrapTop` in ChatView, `prevSize.top` in WelcomeComposer) — the DOM still shows the
+  previous commit there.
+- **Transcript hides via `visibility`, not `display:none`** (`.gui-chat-body--focused-hidden`,
+  `height: 0; flex: 0 0 auto`): a display removal collapsed the body out of the flex column
+  and moved the composer's seat in one frame; kept in flow at 0 height the column geometry
+  is stable. The wrap pins `margin-top: auto` while focused
+  (`.gui-composer-wrap--bottom-anchor`) so the seated top is the column bottom minus the
+  pinned height.
+- **Beam freeze during composer morphs**: `.gui-composer-wrap--morphing` and
+  `.gui-welcome-form.gui-morphing` both pause the composer beam's animations for the morph
+  window — toggling focus mode with the input focused (beam spinning) stacked per-frame
+  conic repaints on the morph's per-frame layout and stuttered.
+- **HeightMorph interrupt recovery** (`HeightMorph.tsx`): a quick 显示全部 ⇄ 折叠 round trip
+  starts a new morph before the old transition settles; the old run's inline
+  `height + overflow: hidden` pin survived, so the new run measured `offsetHeight` through
+  the clip — the grid "animated" to the very clip that was stuck and froze mid-card. Every
+  run now clears the stale inline pin BEFORE measuring, and the cleanup function restores
+  natural layout when interrupted (React runs it on effect re-fire), so an interrupted
+  morph can never outlive its run.

@@ -811,3 +811,26 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
   （textarea 自动的 `height 160ms` 过渡否则会以第二次布局追着逐帧布局跑）。与
   gui-settings.css 的 `.gui-welcome-form.gui-morphing` 抑制同一套做法。
 - 尺寸无变化的切换现在立即释放钉住的高度，不再钉帧并播放 0px 动画。
+
+## 48. 专注形态位置补偿 + HeightMorph 中断恢复（2026-10-09）
+
+§47 落地后实测的跟进：「先上移」的观感在布局阶段钉帧后依然存在，供应商折叠卡在半路冻住。
+
+- **位置补偿，两个 composer 都改**：纯高度动画的第一帧画在 morph 窗口的布局位置上，而那
+  就是稳态位置——composer 还是「跳」（跳变只是从转录区卸载挪进了 morph 自身）。两个 morph
+  现在都先钉**目标**尺寸、量出落位后的布局 top，再把 `translateY(preTop − layoutTop) → none`
+  与尺寸关键帧一起动画。首帧 = 真实的切换前 rect，末帧 = 稳态，上下两条边都沿曲线走（
+  「按边距比例放大」的观感）。切换前的 top 在 render 阶段捕获（ChatView 的 `prevWrapTop`、
+  WelcomeComposer 的 `prevSize.top`）——那时 DOM 还是上一个 commit 的布局。
+- **转录区用 `visibility` 隐藏，不再 `display:none`**（`.gui-chat-body--focused-hidden`，
+  `height: 0; flex: 0 0 auto`）：display 移除会把 body 从 flex 列里抽掉，composer 的落位
+  在一帧内移动；留在布局流里以 0 高度存在，列几何保持稳定。聚焦期间 wrap 钉
+  `margin-top: auto`（`.gui-composer-wrap--bottom-anchor`），落位 top = 列底 − 钉住高度。
+- **composer morph 窗口内的 beam 冻结**：`.gui-composer-wrap--morphing` 与
+  `.gui-welcome-form.gui-morphing` 都在 morph 窗口内暂停 composer 光束的动画——输入框聚焦
+  时（beam 在转）切专注模式，逐帧锥形渐变重绘叠在 morph 的逐帧布局上就是卡顿。
+- **HeightMorph 中断恢复**（`HeightMorph.tsx`）：快速来回点 显示全部 ⇄ 折叠 会在旧过渡
+  未结束时启动新 morph；旧 run 留下的内联 `height + overflow: hidden` 钉帧还在，新 run 量
+  `offsetHeight` 量到的是裁剪盒——网格「动画」到那个卡死的裁剪上，半路冻住。现在每次 run
+  在测量前先清掉残留的内联钉帧，且清理函数在被打断时（React 重跑 effect 会先执行）恢复
+  自然布局——被打断的 morph 不可能活过自己的 run。
