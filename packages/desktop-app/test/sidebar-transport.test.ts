@@ -193,3 +193,177 @@ describe("callSidebar git.worktrees adaptation", () => {
 		expect(value).toEqual([]);
 	});
 });
+
+describe("callSidebar git.log adaptation", () => {
+	test("same-named route reshapes host commits into the sidebar's {all, latest, total}", async () => {
+		// The sidebar zod-parses {all:[{hash,date,message,refs,body,
+		// author_name,author_email,filesChanged,insertions,deletions,
+		// parents}],latest,total}; the host answers {commits:[{hash,
+		// shortHash,author,timestamp,refs:[{kind,name}],parents,subject}],
+		// hasMore}. A bare identity forward would leave every entry missing
+		// the fields the history list renders (message, date, author_name).
+		const { rpc, calls } = transport({
+			result: {
+				commits: [
+					{
+						hash: "a1b2c3",
+						shortHash: "a1b2c3d",
+						author: "Dev",
+						timestamp: 1_700_000_000_000,
+						refs: [
+							{ kind: "head", name: "main" },
+							{ kind: "tag", name: "v1" },
+						],
+						parents: ["p1"],
+						subject: "feat: the thing",
+					},
+					{
+						hash: "d4e5f6",
+						shortHash: "d4e5f6a",
+						author: "X",
+						timestamp: 0,
+						refs: [],
+						parents: [],
+						subject: "fix: other",
+					},
+				],
+				hasMore: true,
+			},
+		});
+		const value = await callSidebar<{ all: unknown[]; latest: unknown; total: number }>(rpc, "git.log", {
+			cwd: "/w",
+		});
+		expect(calls).toEqual([{ method: "git.log", params: { cwd: "/w" } }]);
+		expect(value.all).toHaveLength(2);
+		const first = value.all[0] as Record<string, unknown>;
+		expect(first.hash).toBe("a1b2c3");
+		expect(first.message).toBe("feat: the thing");
+		expect(first.author_name).toBe("Dev");
+		expect(first.refs).toBe("HEAD -> main, v1");
+		expect((first.parents as string[]).join()).toBe("p1");
+		// Count fields the host doesn't answer are filled (zod requires them),
+		// never undefined.
+		expect(first.filesChanged).toBe(0);
+		expect(first.body).toBe("");
+		expect(value.latest).toBe(value.all[0]);
+		expect(value.total).toBe(3); // 2 + hasMore
+	});
+
+	test("an empty log yields null latest", async () => {
+		const { rpc } = transport({ result: { commits: [], hasMore: false } });
+		const value = await callSidebar<{ all: unknown[]; latest: unknown; total: number }>(rpc, "git.log", {});
+		expect(value.all).toEqual([]);
+		expect(value.latest).toBeNull();
+		expect(value.total).toBe(0);
+	});
+});
+
+describe("callSidebar commit.files adaptation", () => {
+	const PATCH = [
+		"diff --git a/src/a.ts b/src/a.ts",
+		"index 111..222 100644",
+		"--- a/src/a.ts",
+		"+++ b/src/a.ts",
+		"@@ -1,2 +1,3 @@",
+		"-old line",
+		"+new line",
+		"+another new",
+		" context",
+		"diff --git a/img.png b/img.png",
+		"new file mode 100644",
+		"GIT binary patch",
+		"literal 10",
+	].join("\n");
+
+	test("parses the host's unified patch into the sidebar's per-file entries with counts", async () => {
+		// The sidebar fetches a commit's file list as {files:[{path,
+		// changeType, insertions, deletions, isBinary}]}; the host ships the
+		// whole patch inside git.show. A bare forward would give the list a
+		// `diff` string instead of `files` and render nothing.
+		const { rpc, calls } = transport({ result: { revision: "a1b2", diff: PATCH } });
+		const value = await callSidebar<{ files: Array<Record<string, unknown>> }>(rpc, "commit.files", { hash: "a1b2" });
+		expect(calls).toEqual([{ method: "git.show", params: { hash: "a1b2", maxLines: 1 } }]);
+		expect(value.files).toHaveLength(2);
+		const [tsFile, png] = value.files;
+		expect(tsFile.path).toBe("src/a.ts");
+		expect(tsFile.changeType).toBe("M");
+		expect(tsFile.insertions).toBe(2);
+		expect(tsFile.deletions).toBe(1);
+		expect(tsFile.isBinary).toBe(false);
+		expect(png.path).toBe("img.png");
+		expect(png.changeType).toBe("A");
+		expect(png.isBinary).toBe(true);
+	});
+
+	test("a rename surfaces previousPath and the R change type", async () => {
+		const renamePatch = [
+			"diff --git a/old.ts b/new.ts",
+			"similarity index 90%",
+			"rename from old.ts",
+			"rename to new.ts",
+			"--- a/old.ts",
+			"+++ b/new.ts",
+			"+added",
+		].join("\n");
+		const { rpc } = transport({ result: { revision: "r", diff: renamePatch } });
+		const value = await callSidebar<{ files: Array<Record<string, unknown>> }>(rpc, "commit.files", { hash: "r" });
+		expect(value.files[0].path).toBe("new.ts");
+		expect(value.files[0].previousPath).toBe("old.ts");
+		expect(value.files[0].changeType).toBe("R");
+	});
+});
+
+describe("callSidebar commit.fileDiff adaptation", () => {
+	const PATCH = [
+		"diff --git a/a.ts b/a.ts",
+		"--- a/a.ts",
+		"+++ b/a.ts",
+		"@@ -1,3 +1,3 @@",
+		"-removed",
+		"kept",
+		"+added",
+		"diff --git a/other.ts b/other.ts",
+		"--- a/other.ts",
+		"+++ b/other.ts",
+		"+unrelated",
+	].join("\n");
+
+	test("extracts the requested file's section and splits it into pre/post images", async () => {
+		// The sidebar wants {original, modified, isBinary} for ONE file and
+		// renders its own diff; the host ships every file's patch. The hunk
+		// split must keep context lines in BOTH images and stop at the next
+		// file's header — leaking other.ts's lines would corrupt the view.
+		const { rpc } = transport({ result: { revision: "h", diff: PATCH } });
+		const value = await callSidebar<{ original: string; modified: string; isBinary: boolean }>(
+			rpc,
+			"commit.fileDiff",
+			{ hash: "h", path: "a.ts" },
+		);
+		expect(value.isBinary).toBe(false);
+		expect(value.original.split("\n")).toEqual(["removed", "kept"]);
+		expect(value.modified.split("\n")).toEqual(["kept", "added"]);
+	});
+
+	test("a file absent from the commit yields empty images, not a throw", async () => {
+		const { rpc } = transport({ result: { revision: "h", diff: PATCH } });
+		const value = await callSidebar<{ original: string; isBinary: boolean }>(rpc, "commit.fileDiff", {
+			hash: "h",
+			path: "missing.ts",
+		});
+		expect(value.original).toBe("");
+		expect(value.isBinary).toBe(false);
+	});
+
+	test("a binary section reports isBinary with empty images", async () => {
+		const binPatch = ["diff --git a/img b/img", "GIT binary patch", "literal 5"].join("\n");
+		const { rpc } = transport({ result: { revision: "h", diff: binPatch } });
+		const value = await callSidebar<{ original: string; modified: string; isBinary: boolean }>(
+			rpc,
+			"commit.fileDiff",
+			{ hash: "h", path: "img" },
+		);
+		expect(value.isBinary).toBe(true);
+		expect(value.original).toBe("");
+		expect(value.modified).toBe("");
+	});
+});
