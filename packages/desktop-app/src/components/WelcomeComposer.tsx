@@ -1040,11 +1040,11 @@ export function WelcomeComposer({
 	// morph can start from the pre-toggle size. Reading it in the effect
 	// would already see the post-toggle layout (the inner column snaps to
 	// max-width:none) and the width animation would never play.
-	const prevSize = useRef<{ w: number; h: number } | null>(null);
+	const prevSize = useRef<{ w: number; h: number; top: number } | null>(null);
 	const formEl = formRef.current;
 	if (formEl) {
 		const r = formEl.getBoundingClientRect();
-		prevSize.current = { w: r.width, h: r.height };
+		prevSize.current = { w: r.width, h: r.height, top: r.top };
 	}
 	// Layout effect (not useEffect): the morph must pin the from-size and
 	// start the WAAPI animation BEFORE the browser paints the commit state.
@@ -1105,19 +1105,27 @@ export function WelcomeComposer({
 			form.style.height = "";
 			return;
 		}
-		form.style.height = `${fromH}px`;
-		form.style.width = `${fromW}px`;
-		void form.offsetHeight;
+		form.style.height = `${targetH}px`;
+		form.style.width = `${targetW}px`;
 		form.classList.add("gui-morphing");
+		void form.offsetHeight;
+		// The morph-window layout seats the form at its STEADY-STATE top
+		// (focused: the inner column top; closed: below the re-shown brand
+		// rows). A plain size animation would paint frame 1 there and read
+		// as "the composer jumps first, then grows". translateY(eases to 0)
+		// seats frame 1 at the true pre-toggle top (prevSize.top) — both
+		// edges travel the curve, the bottom gutter included.
+		const layoutTop = form.getBoundingClientRect().top;
+		const preTop = prev ? prev.top : null;
+		const dy = preTop !== null ? preTop - layoutTop : 0;
+		const fromTx = Math.abs(dy) >= 1 ? `translateY(${dy}px)` : "none";
 		const anim = form.animate(
 			[
-				{ height: `${fromH}px`, width: `${fromW}px` },
-				{ height: `${targetH}px`, width: `${targetW}px` },
+				{ height: `${fromH}px`, width: `${fromW}px`, transform: fromTx },
+				{ height: `${targetH}px`, width: `${targetW}px`, transform: "none" },
 			],
 			{ duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
 		);
-		form.style.height = `${targetH}px`;
-		form.style.width = `${targetW}px`;
 		// Release the pinned sizes once the morph settles. The finish event
 		// is unreliable (headless Chromium never dispatches it, and a
 		// cancelled animation won't fire it), so a versioned timer backs it

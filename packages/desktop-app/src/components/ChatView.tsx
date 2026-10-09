@@ -2203,6 +2203,17 @@ export function ChatView({
 	// competing 280ms curves fighting every frame (the frame-rate collapse).
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
 	const wrapMorphVer = useRef(0);
+	// Pre-toggle wrap top, captured during render (the DOM still shows the
+	// previous commit's layout). The morph animates translateY against it:
+	// the morph-window layout seats the wrap at its STEADY-STATE top, so a
+	// plain height animation would paint frame 1 at the final position and
+	// read as "the composer jumps first, then grows". First keyframe =
+	// layout position + translateY(preTop - layoutTop) = the true
+	// pre-toggle rect; the offset eases to 0 — both edges travel the
+	// curve, no jump in either direction.
+	const prevWrapTop = useRef<number | null>(null);
+	const wrapEl = composerWrapRef.current;
+	if (wrapEl) prevWrapTop.current = wrapEl.getBoundingClientRect().top;
 	useLayoutEffect(() => {
 		const el = composerWrapRef.current;
 		if (!el) return;
@@ -2224,14 +2235,26 @@ export function ChatView({
 			if (!focusMode) el.style.height = "";
 			return;
 		}
-		el.style.height = `${from}px`;
+		// Pin the TARGET height first: the layout then seats the wrap at
+		// its steady-state top (bottom-anchored via --bottom-anchor while
+		// focused), which is exactly the position the animation must land
+		// on. Measure that seat before starting the animation.
+		el.style.height = `${target}px`;
 		el.classList.add("gui-composer-wrap--morphing");
 		void el.offsetHeight;
-		const anim = el.animate([{ height: `${from}px` }, { height: `${target}px` }], {
-			duration: 280,
-			easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-		});
-		el.style.height = `${target}px`;
+		const layoutTop = el.getBoundingClientRect().top;
+		const dy = prevWrapTop.current !== null ? prevWrapTop.current - layoutTop : 0;
+		const fromTx = Math.abs(dy) >= 1 ? `translateY(${dy}px)` : "none";
+		const anim = el.animate(
+			[
+				{ height: `${from}px`, transform: fromTx },
+				{ height: `${target}px`, transform: "none" },
+			],
+			{
+				duration: 280,
+				easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+			},
+		);
 		// Release the pinned height once the morph settles (finish event is
 		// unreliable — cancelled animations never fire it, headless never
 		// advances — so a versioned timer backs it up). Open must stay

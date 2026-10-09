@@ -15,7 +15,7 @@ import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, type SlotComponent, SlotComponentMount } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
-import { PluginPackageIcon } from "./PluginPackageIcon";
+import { PluginIcon } from "./PluginIcon";
 import { type PluginPackageEntry, sourceLevelLabel } from "./UnifiedPluginsView";
 
 export function PluginPackageDialog({
@@ -62,7 +62,7 @@ export function PluginPackageDialog({
 			{pkg && (
 				<>
 					<div className="gui-dialog-head">
-						<PluginPackageIcon name={pkg.name} icon={pkg.icon} size={34} />
+						<PluginIcon name={pkg.name} icon={pkg.icon} size={34} status={pkg.enabled ? "active" : "off"} />
 						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{pkg.name}</span>
 						<span className="gui-ext-item-tag">{`v${pkg.version}`}</span>
 						<button
