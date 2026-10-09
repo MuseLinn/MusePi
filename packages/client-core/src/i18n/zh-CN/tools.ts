@@ -357,6 +357,7 @@ export const tools = {
 		"热加载的插件模块（~/.musepi/agent/extensions 与项目 .musepi/extensions）与内置插件单元（桌面外壳、主题、卡片渲染、魔术关键词等）都会汇总在此。",
 	"go to marketplace": "去插件市场",
 	"plugin package tag": "插件包",
+	"plugin uninstall confirm": "确定卸载插件「{name}」？其目录将被移除，相关配置保留。",
 	"no skills found": "未发现技能",
 	"load errors": "加载错误",
 	"skill warnings": "技能警告",

@@ -1,12 +1,14 @@
 import { t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { PluginDetailDialog } from "./PluginDetailDialog";
 import { PluginInstallDialog } from "./PluginInstallDialog";
+import { PluginPackageIcon } from "./PluginPackageIcon";
 
 /**
  * 插件 tab 的统一清单（ExtensionsCenter 与 CapabilityCenterPage 共用）：
@@ -337,8 +339,11 @@ export function UnifiedPluginsView({
 	const [detailId, setDetailId] = useState<string | null>(null);
 	// spec 安装弹层：marketplace 只覆盖已收录的包,自建/未发布的插件走这条。
 	const [installOpen, setInstallOpen] = useState(false);
+	// 卸载在途标记（卡片直卸 + 详情弹层卸载共用,一次一个）。
+	const [uninstallBusy, setUninstallBusy] = useState(false);
+	const { confirm } = useConfirm();
 	/**
-	 * Re-read the installed packages after a spec install.
+	 * Re-read the installed packages after a spec install or uninstall.
 	 *
 	 * The install ran on the daemon and the list this view renders came from the
 	 * parent, so a completed install would otherwise leave the new package
@@ -353,6 +358,43 @@ export function UnifiedPluginsView({
 			.then(res => onPackagesRefreshed?.(res?.packages ?? []))
 			.catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
 	}, [rpc, onError, onPackagesRefreshed]);
+
+	/** Uninstall one package (plugins.uninstall) and refresh the list. */
+	const uninstallPackage = useCallback(
+		async (p: PluginPackageEntry): Promise<void> => {
+			if (!rpc) return;
+			setUninstallBusy(true);
+			try {
+				await rpc.request("plugins.uninstall", { name: p.name });
+				onError(null);
+				refreshPackages();
+			} catch (err) {
+				onError(err instanceof Error ? err.message : String(err));
+			} finally {
+				setUninstallBusy(false);
+			}
+		},
+		[rpc, onError, refreshPackages],
+	);
+
+	/** 卸载是删除性的：先确认再执行。 */
+	const uninstallWithConfirm = useCallback(
+		(p: PluginPackageEntry): void => {
+			void confirm(t("plugin uninstall confirm", { name: p.name }), t("uninstall")).then(ok => {
+				if (ok) void uninstallPackage(p);
+			});
+		},
+		[confirm, uninstallPackage],
+	);
+	/**
+	 * Re-read the installed packages after a spec install.
+	 *
+	 * The install ran on the daemon and the list this view renders came from the
+	 * parent, so a completed install would otherwise leave the new package
+	 * invisible until the settings panel was reopened. The daemon broadcasts
+	 * `plugins.install.state`; this reads the authoritative list rather than
+	 * patching the parent's copy from the install's own view of the result.
+	 */
 	// 模块 lane：真实插件模块 + 内置插件单元（isPluginLaneEntry 单一权威，
 	// 与 ExtensionsCenter tab 计数同口径）。其余 kind（skill/tool/mcp/…）
 	// 在能力清单 tab 有完整 provider→kind→item 树，这里不重复。
@@ -473,9 +515,9 @@ export function UnifiedPluginsView({
 									{filteredPackages.map(p => (
 										<div key={p.path} className="gui-plugin-card">
 											<div className="gui-plugin-card-head">
-												<Icon name="plug" className="h-4 w-4 shrink-0 opacity-70" />
+												<PluginPackageIcon name={p.name} />
 												<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
-												<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
+												<span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{p.name}</span>
 												<button
 													type="button"
 													role="switch"
@@ -492,6 +534,18 @@ export function UnifiedPluginsView({
 												<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
 												<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
 												<span className="gui-ext-item-tag">{`v${p.version}`}</span>
+												<span style={{ marginLeft: "auto" }}>
+													<button
+														type="button"
+														className="gui-icon-btn"
+														disabled={uninstallBusy}
+														title={t("uninstall")}
+														aria-label={`${t("uninstall")} ${p.name}`}
+														onClick={() => uninstallWithConfirm(p)}
+													>
+														<Icon name="delete-bin" className="h-3.5 w-3.5" />
+													</button>
+												</span>
 											</div>
 										</div>
 									))}
@@ -532,10 +586,20 @@ export function UnifiedPluginsView({
 							{filteredPackages.map(p => (
 								<div key={p.path} className="gui-ext-provider">
 									<div className="gui-ext-provider-h">
-										<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-										<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
+										<PluginPackageIcon name={p.name} size={24} />
+										<span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{p.name}</span>
 										<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
 										<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
+										<button
+											type="button"
+											className="gui-icon-btn"
+											disabled={uninstallBusy}
+											title={t("uninstall")}
+											aria-label={`${t("uninstall")} ${p.name}`}
+											onClick={() => uninstallWithConfirm(p)}
+										>
+											<Icon name="delete-bin" className="h-3.5 w-3.5" />
+										</button>
 										<button
 											type="button"
 											role="switch"

@@ -2229,7 +2229,7 @@
 	min-width: 0;
 }
 .gui-plugin-card-desc {
-	font-size: 11px;
+	font-size: 12px;
 	line-height: 1.5;
 	color: var(--color-text-muted);
 	display: -webkit-box;

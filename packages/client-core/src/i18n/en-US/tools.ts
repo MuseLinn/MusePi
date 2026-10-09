@@ -368,6 +368,7 @@ export const tools = {
 		"Hot-loaded plugin modules (~/.musepi/agent/extensions and project .musepi/extensions) and built-in plugin units (desktop shell, themes, card renderers, magic keywords) are listed here too.",
 	"go to marketplace": "Open marketplace",
 	"plugin package tag": "Plugin package",
+	"plugin uninstall confirm": 'Uninstall plugin "{name}"? Its directory will be removed; its settings are kept.',
 	"no skills found": "No skills found",
 	"load errors": "Load errors",
 	"skill warnings": "Skill warnings",
