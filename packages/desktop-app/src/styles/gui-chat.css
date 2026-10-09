@@ -300,6 +300,32 @@
 	pointer-events: none;
 }
 
+/* The leaving scene's border-beam (the composer's rotating conic glow)
+ * must freeze during the welcome↔session FLIP morph: a spinning beam is
+ * a per-frame repaint of a masked conic gradient, and stacked on the
+ * morph's own transform+blur animation it was the stutter in the
+ * composer's flight. animation-play-state (not display:none) — the beam
+ * stays visible, frozen mid-rotation, and the fade-out above completes
+ * without the repaint tax. */
+.gui-scene--leaving .gui-border-beam,
+.gui-scene--leaving .gui-border-beam::after,
+.gui-scene--leaving .gui-border-beam::before,
+.gui-scene--leaving .gui-border-beam [data-beam-bloom] {
+	animation-play-state: paused !important;
+}
+
+/* The incoming scene's beam freezes too: the session composer's beam is
+ * active while the agent works, and it can be mid-fade-in when the morph
+ * mounts the chat scene — the fade alone would still leave one spinning
+ * gradient inside the flight. Set for exactly the flight via the
+ * data-scene-morph marker (see morphFrame in ChatView). */
+.gui-scenes[data-scene-morph] .gui-border-beam,
+.gui-scenes[data-scene-morph] .gui-border-beam::after,
+.gui-scenes[data-scene-morph] .gui-border-beam::before,
+.gui-scenes[data-scene-morph] .gui-border-beam [data-beam-bloom] {
+	animation-play-state: paused !important;
+}
+
 .gui-scene-chat {
 	animation: gui-scene-in 360ms ease;
 }
@@ -621,11 +647,54 @@ body.gui-resizing .gui-pane-resize-x::after {
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
+/* The transcript column hides via visibility (NOT display:none): a
+ * display removal would collapse it out of the flex column, the composer
+ * wrap (then the only child) snaps its TOP edge to the column top, and
+ * the height morph afterwards reads as "the whole composer first moves
+ * up, THEN grows" (reported twice). Kept in flow at height 0 the wrap
+ * stays bottom-anchored (margin-top:auto) — the morph grows its top edge
+ * upward while the bottom edge and the 12px gutter never move. The chat
+ * body's own margin must NOT flex: it would grow the gap in one frame
+ * for free, eating half the travel the morph is supposed to animate. */
+.gui-chat-body--focused-hidden {
+	visibility: hidden;
+	height: 0;
+	min-height: 0;
+	flex: 0 0 auto;
+	overflow: hidden;
+}
+
 .gui-composer--focused {
 	flex: 1;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
+}
+
+/* Bottom-anchored during the focus morph: with the transcript body at 0
+ * height the wrap would top-align to the column head; margin-top:auto
+ * keeps it glued to the bottom edge, so the animated growth moves the
+ * TOP edge up along the fixed bottom (the proportional "grows from its
+ * own position" read). */
+.gui-composer-wrap--bottom-anchor {
+	margin-top: auto;
+}
+
+/* During the focus morph the wrap's height is driven by the WAAPI
+ * animation in ChatView (pinned from-height → target, layout phase). The
+ * class's own `transition: height 280ms` would double-drive the same
+ * property — two competing 280ms curves fighting every frame (the
+ * frame-rate collapse on ⌘⇧E). The marker class is pinned for exactly
+ * the animation window. */
+.gui-composer-wrap--morphing {
+	transition: none !important;
+}
+/* The textarea's own autosize `height 160ms` transition chases the
+ * wrap's per-frame layout during the morph and adds a second layout pass
+ * per frame — suppress it for the window too. */
+.gui-composer-wrap--morphing textarea,
+.gui-composer-wrap--morphing .gui-composer-frame {
+	transition: none !important;
 }
 
 /* Hero mode wraps the frame in a BorderBeam — the beam must flex too, or

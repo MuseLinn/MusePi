@@ -1267,6 +1267,8 @@ export function WelcomeComposer({
 			setAttachments([]);
 			requestAnimationFrame(() => autosize(taRef.current));
 			sfxFor("first");
+			// Same beam drop as the plain submit path — see the note there.
+			setBeamOn(false);
 			void railRef.current
 				.submit(payload, {
 					thinkingLevel: thinking,
@@ -1292,6 +1294,13 @@ export function WelcomeComposer({
 		// Re-measure after the programmatic clear (onChange doesn't fire).
 		requestAnimationFrame(() => autosize(taRef.current));
 		sfxFor("first");
+		// Drop the focus beam the moment the prompt leaves: a focused Enter
+		// submit keeps the textarea focused, and the beam used to ride the
+		// welcome→session FLIP morph spinning — its per-frame conic repaints
+		// compete with the morph (the reported transition stutter). The
+		// leaving-scene freeze in gui-chat.css covers the overlap window;
+		// this makes the beam's display window end at send, not at unmount.
+		setBeamOn(false);
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
 		const applyGoal = goalArmed && trimmed.length > 0;

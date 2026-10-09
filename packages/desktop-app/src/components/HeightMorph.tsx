@@ -58,6 +58,15 @@ export function HeightMorph({
 		node.style.animation = "none";
 		void node.offsetHeight;
 		node.style.animation = FADE_ANIM;
+		// Release anything an INTERRUPTED morph pinned BEFORE measuring:
+		// a stale inline height makes offsetHeight read the clip, not the
+		// content, so the run would "animate" to the very clip that is
+		// stuck (observed as the provider grid frozen mid-card after a
+		// quick 显示全部 ⇄ 折叠 round trip).
+		node.style.transition = "none";
+		node.style.height = "";
+		node.style.overflow = "";
+		void node.offsetHeight;
 		const target = node.offsetHeight;
 		const delta = Math.abs(target - prevHeight.current);
 		// Height unchanged (fixed-height scroll containers like the
@@ -87,6 +96,14 @@ export function HeightMorph({
 		return () => {
 			clearTimeout(timer);
 			node.removeEventListener("transitionend", settle);
+			// Interrupted by a newer morph (or unmount): restore natural
+			// layout NOW — the next run's render-phase capture reads the
+			// mid-flight height as its from (the visual state), and its
+			// own measurement then sees an unpinned target. Without this
+			// a stale pin outlives the run and the content stays clipped.
+			node.style.height = "";
+			node.style.transition = "";
+			node.style.overflow = "";
 		};
 	}, [morphKey]);
 	return (
