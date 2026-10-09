@@ -8,6 +8,7 @@ import { Icon } from "../vendor/oc-icons";
 import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { PluginDetailDialog } from "./PluginDetailDialog";
 import { PluginInstallDialog } from "./PluginInstallDialog";
+import { PluginPackageDialog } from "./PluginPackageDialog";
 import { PluginPackageIcon } from "./PluginPackageIcon";
 
 /**
@@ -427,6 +428,44 @@ export function UnifiedPluginsView({
 	);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
+	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
+	// 唯一条目，模块收进包详情弹层的「包含的组件」。模块路径在包目录下即归
+	// 该包（module path = <pkg>/index.ts）。未归属任何已安装包的用户级模块
+	// 保留自己的行（裸加载的 extension 不经 node_modules）。
+	const packagedModules = useMemo(
+		() =>
+			installedModules.filter(e =>
+				filteredPackages.some(p => e.path.startsWith(`${p.path}\\`) || e.path.startsWith(`${p.path}/`)),
+			),
+		[installedModules, filteredPackages],
+	);
+	const standaloneModules = useMemo(() => {
+		const packaged = new Set(packagedModules.map(e => e.id));
+		return installedModules.filter(e => !packaged.has(e.id));
+	}, [installedModules, packagedModules]);
+	// 当前详情弹层打开的包 + 归属它的模块与设置组件。
+	const [packageDetail, setPackageDetail] = useState<PluginPackageEntry | null>(null);
+	const packageModules = useMemo(
+		() =>
+			packageDetail
+				? installedModules.filter(
+						e => e.path.startsWith(`${packageDetail.path}\\`) || e.path.startsWith(`${packageDetail.path}/`),
+					)
+				: [],
+		[packageDetail, installedModules],
+	);
+	const packageComponents = useMemo(
+		() =>
+			packageDetail
+				? (data?.components ?? []).filter(
+						c =>
+							c.extensionId.startsWith(`${packageDetail.path}\\`) ||
+							c.extensionId.startsWith(`${packageDetail.path}/`),
+					)
+				: [],
+		[packageDetail, data],
+	);
+
 	const toggleModule = (e: ExtensionItem): void => {
 		if (!rpc || busyId) return;
 		setBusyId(e.id);
@@ -476,7 +515,7 @@ export function UnifiedPluginsView({
 				</label>
 				<span className="gui-ext-plugins-toolbar-count">
 					{t("ext plugins official")} {official.length} · {t("ext plugins installed")}{" "}
-					{filteredPackages.length + installedModules.length}
+					{filteredPackages.length + standaloneModules.length}
 				</span>
 				<button type="button" className="gui-btn gui-btn--sm" onClick={onOpenMarketplace}>
 					<Icon name="add" className="h-3.5 w-3.5" />
@@ -492,7 +531,7 @@ export function UnifiedPluginsView({
 			{normalizedQuery.length > 0 &&
 				official.length === 0 &&
 				filteredPackages.length === 0 &&
-				installedModules.length === 0 && <div className="gui-ext-plugins-error">{t("no matches")}</div>}
+				standaloneModules.length === 0 && <div className="gui-ext-plugins-error">{t("no matches")}</div>}
 			{variant === "cards" ? (
 				<div className="gui-ext-list-scroll">
 					{official.length > 0 && (
@@ -507,15 +546,27 @@ export function UnifiedPluginsView({
 							</div>
 						</div>
 					)}
-					{(filteredPackages.length > 0 || installedModules.length > 0) && (
+					{(filteredPackages.length > 0 || standaloneModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins installed")} · {filteredPackages.length + installedModules.length}
+								{t("ext plugins installed")} · {filteredPackages.length + standaloneModules.length}
 							</div>
 							{filteredPackages.length > 0 && (
 								<div className="gui-plugin-cards">
 									{filteredPackages.map(p => (
-										<div key={p.path} className="gui-plugin-card">
+										<div
+											key={p.path}
+											className="gui-plugin-card"
+											role="button"
+											tabIndex={0}
+											onClick={() => setPackageDetail(p)}
+											onKeyDown={e => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault();
+													setPackageDetail(p);
+												}
+											}}
+										>
 											<div className="gui-plugin-card-head">
 												<PluginPackageIcon name={p.name} icon={p.icon} />
 												<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
@@ -526,7 +577,10 @@ export function UnifiedPluginsView({
 													aria-checked={p.enabled}
 													aria-label={`${t("plugin enable")} ${p.name}`}
 													className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
-													onClick={() => onTogglePackage(p)}
+													onClick={e => {
+														e.stopPropagation();
+														onTogglePackage(p);
+													}}
 												>
 													<span className="gui-toggle-knob" />
 												</button>
@@ -543,7 +597,10 @@ export function UnifiedPluginsView({
 														disabled={uninstallBusy}
 														title={t("uninstall")}
 														aria-label={`${t("uninstall")} ${p.name}`}
-														onClick={() => uninstallWithConfirm(p)}
+														onClick={e => {
+															e.stopPropagation();
+															uninstallWithConfirm(p);
+														}}
 													>
 														<Icon name="delete-bin" className="h-3.5 w-3.5" />
 													</button>
@@ -554,7 +611,7 @@ export function UnifiedPluginsView({
 								</div>
 							)}
 							<div className="gui-plugin-cards">
-								{installedModules.map(e => (
+								{standaloneModules.map(e => (
 									<ModuleCard key={e.id} e={e} onOpen={item => setDetailId(item.id)} />
 								))}
 							</div>
@@ -580,13 +637,25 @@ export function UnifiedPluginsView({
 							))}
 						</div>
 					)}
-					{(filteredPackages.length > 0 || installedModules.length > 0) && (
+					{(filteredPackages.length > 0 || standaloneModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins installed")} · {filteredPackages.length + installedModules.length}
+								{t("ext plugins installed")} · {filteredPackages.length + standaloneModules.length}
 							</div>
 							{filteredPackages.map(p => (
-								<div key={p.path} className="gui-ext-provider">
+								<div
+									key={p.path}
+									className="gui-ext-provider"
+									role="button"
+									tabIndex={0}
+									onClick={() => setPackageDetail(p)}
+									onKeyDown={e => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											setPackageDetail(p);
+										}
+									}}
+								>
 									<div className="gui-ext-provider-h">
 										<PluginPackageIcon name={p.name} icon={p.icon} size={24} />
 										<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
@@ -598,7 +667,10 @@ export function UnifiedPluginsView({
 											disabled={uninstallBusy}
 											title={t("uninstall")}
 											aria-label={`${t("uninstall")} ${p.name}`}
-											onClick={() => uninstallWithConfirm(p)}
+											onClick={e => {
+												e.stopPropagation();
+												uninstallWithConfirm(p);
+											}}
 										>
 											<Icon name="delete-bin" className="h-3.5 w-3.5" />
 										</button>
@@ -608,7 +680,10 @@ export function UnifiedPluginsView({
 											aria-checked={p.enabled}
 											aria-label={`${t("plugin enable")} ${p.name}`}
 											className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
-											onClick={() => onTogglePackage(p)}
+											onClick={e => {
+												e.stopPropagation();
+												onTogglePackage(p);
+											}}
 										>
 											{/* Knob span required: the thumb is a child element,
 											 * not a pseudo-element — empty buttons lose the dot. */}
@@ -624,7 +699,7 @@ export function UnifiedPluginsView({
 									{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
 								</div>
 							))}
-							{installedModules.map(e => (
+							{standaloneModules.map(e => (
 								<ModuleRow
 									key={e.id}
 									e={e}
@@ -650,6 +725,20 @@ export function UnifiedPluginsView({
 				open={installOpen}
 				onClose={() => setInstallOpen(false)}
 				onInstalled={refreshPackages}
+			/>
+			<PluginPackageDialog
+				open={packageDetail !== null}
+				onClose={() => setPackageDetail(null)}
+				pkg={packageDetail}
+				modules={packageModules}
+				components={packageComponents}
+				busy={busyId !== null}
+				uninstalling={uninstallBusy}
+				onUninstall={uninstallPackage}
+				onTogglePackage={onTogglePackage}
+				onToggleModule={toggleModule}
+				onError={onError}
+				rpc={rpc}
 			/>
 		</div>
 	);
