@@ -17,7 +17,7 @@ import {
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { HISTORY_PAGE_MESSAGES, loadAlignedHistoryBatch } from "../lib/history-batch";
@@ -221,7 +221,15 @@ function morphFrame(
 	// blur ramp (heavy while fast, clear on landing) fakes motion blur
 	// over the mid-scale shimmer.
 	const t = (k: number) => `translate(${dx * k}px, ${dy * k}px) scale(${1 + (sx - 1) * k}, ${1 + (sy - 1) * k})`;
-	to.animate(
+	// Mark the morph window on the scenes container: a spinning composer
+	// beam (focused welcome composer, or the session one while the agent
+	// works) repaints a masked conic gradient every frame, and stacked on
+	// the morph's own transform+blur animation that was the transition
+	// stutter. The CSS freezes beams inside the container for exactly the
+	// flight (both scenes host a beam — the fade alone misses the incoming
+	// side, whose beam is active from `working` before the flight ends).
+	const scenes = to.closest(".gui-scenes");
+	const flight = to.animate(
 		[
 			{ transform: t(1), transformOrigin: "top left", filter: "blur(7px)" },
 			{ transform: t(0.8), transformOrigin: "top left", filter: "blur(4px)" },
@@ -231,11 +239,31 @@ function morphFrame(
 		],
 		{ duration: 580, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
 	);
+	if (scenes instanceof HTMLElement) {
+		scenes.dataset.sceneMorph = "";
+		// Generation counter: a quick welcome⇄session round trip starts a
+		// new flight before the old one's `finished` resolves — that stale
+		// resolve must not clear the fresh flight's marker.
+		sceneMorphGeneration += 1;
+		const generation = sceneMorphGeneration;
+		flight.finished.then(
+			() => {
+				if (generation === sceneMorphGeneration) delete scenes.dataset.sceneMorph;
+			},
+			() => {
+				if (generation === sceneMorphGeneration) delete scenes.dataset.sceneMorph;
+			},
+		);
+	}
 }
 
 /** Last-seen session composer rect — the reverse morph (session → welcome)
  * needs it after the chat scene unmounted. */
 let lastSessionFrameRect: { left: number; top: number; width: number; height: number } | null = null;
+/** Monotonic flight id for the scene-morph beam freeze (data-scene-morph):
+ * each morphFrame bumps it, and only the latest flight's `finished` clears
+ * the marker. */
+let sceneMorphGeneration = 0;
 /** Last-seen welcome composer rect — symmetric warm cache for the
  * welcome → session morph: the welcome scene is mid-fade when the chat
  * scene mounts, so a live measure at that moment is unstable; the
@@ -2158,9 +2186,24 @@ export function ChatView({
 	// welcome form — current → parent height (open) or content height
 	// (closed); the inline height is set to the target immediately and the
 	// running animation overrides it visually until it finishes.
+	//
+	// Layout effect (not useEffect): the morph must pin the from-height and
+	// start the animation BEFORE the browser paints the commit state. As a
+	// passive effect it ran after paint, and opening painted a whole frame
+	// of the post-commit layout first — the transcript wrapper is already
+	// unmounted (`focusMode ? "hidden" : flex-1`) and the flex column
+	// reflows, which visually reads as "the whole composer jumps UP to the
+	// bottom of the now-taller remaining column, THEN grows" (the reported
+	// wrong ordering). Pinning in the layout phase makes the first painted
+	// frame the morph's own from-frame: the composer grows in place.
+	//
+	// gui-chat.css pins `transition: none` on the wrap for the morph window
+	// (`.gui-composer-wrap--morphing`): the class's own `transition: height
+	// 280ms` double-drove the WAAPI animation on the same property — two
+	// competing 280ms curves fighting every frame (the frame-rate collapse).
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
 	const wrapMorphVer = useRef(0);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const el = composerWrapRef.current;
 		if (!el) return;
 		const from = el.getBoundingClientRect().height;
@@ -2176,7 +2219,13 @@ export function ChatView({
 			target = el.getBoundingClientRect().height;
 			el.style.height = prev;
 		}
+		if (Math.abs(from - target) < 1) {
+			// No size change — release any pinned height so autosize flows.
+			if (!focusMode) el.style.height = "";
+			return;
+		}
 		el.style.height = `${from}px`;
+		el.classList.add("gui-composer-wrap--morphing");
 		void el.offsetHeight;
 		const anim = el.animate([{ height: `${from}px` }, { height: `${target}px` }], {
 			duration: 280,
@@ -2190,6 +2239,7 @@ export function ChatView({
 		const ver = ++wrapMorphVer.current;
 		const release = (): void => {
 			if (wrapMorphVer.current !== ver) return;
+			el.classList.remove("gui-composer-wrap--morphing");
 			if (!focusMode) el.style.height = "";
 		};
 		anim.addEventListener("finish", release);
@@ -2284,7 +2334,9 @@ export function ChatView({
 									<div
 										ref={chatBodyRef}
 										className={
-											focusMode ? "hidden" : "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
+											focusMode
+												? "gui-chat-body--focused-hidden"
+												: "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
 										}
 									>
 										{paused === true && (
@@ -2682,7 +2734,7 @@ export function ChatView({
 										ref={composerWrapRef}
 										className={
 											focusMode
-												? "gui-composer-wrap flex min-h-0 flex-col px-5 pb-3"
+												? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
 												: "gui-composer-wrap flex flex-shrink-0 flex-col px-5 pb-3"
 										}
 									>
