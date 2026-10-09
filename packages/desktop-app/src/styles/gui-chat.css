@@ -696,6 +696,16 @@ body.gui-resizing .gui-pane-resize-x::after {
 .gui-composer-wrap--morphing .gui-composer-frame {
 	transition: none !important;
 }
+/* The session composer's beam (active while the agent works) freezes for
+ * the morph window: a spinning conic gradient repaint stacked on the
+ * morph's per-frame layout was the ⌘⇧E stutter. Same recipe as the
+ * scene-morph freeze above; the beam stays visible, mid-rotation. */
+.gui-composer-wrap--morphing .gui-border-beam,
+.gui-composer-wrap--morphing .gui-border-beam::after,
+.gui-composer-wrap--morphing .gui-border-beam::before,
+.gui-composer-wrap--morphing .gui-border-beam [data-beam-bloom] {
+	animation-play-state: paused !important;
+}
 
 /* Hero mode wraps the frame in a BorderBeam — the beam must flex too, or
  * the frame's flex:1 hangs off a non-flex parent and the composer stays
