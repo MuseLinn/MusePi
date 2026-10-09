@@ -1,6 +1,6 @@
 /**
- * PluginPackageDialog — the installed-plugin-package detail surface (dsh's
- * plugin detail page shape): the big brand icon left, name + version +
+ * PluginPackageDialog — the installed-plugin-package detail surface: the big
+ * brand icon left, name + version +
  * description, status line, and 卸载 in the header. A package's extension
  * modules render inside here as 包含的组件 rows with their own toggles —
  * NOT as separate list rows (the package is the one list entry), and the

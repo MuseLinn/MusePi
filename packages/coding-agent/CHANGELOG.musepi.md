@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -42,6 +44,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -53,6 +57,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -128,6 +134,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -231,6 +239,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -256,6 +266,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -332,6 +344,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -515,6 +529,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -538,6 +554,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -575,6 +593,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -586,6 +606,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -625,6 +647,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -728,6 +752,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -750,6 +776,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -803,6 +831,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -857,6 +887,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -894,6 +926,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -925,6 +959,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1092,6 +1128,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1109,6 +1147,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1137,6 +1177,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1166,6 +1208,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1194,6 +1238,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1220,6 +1266,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1310,6 +1358,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1337,6 +1387,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1387,6 +1439,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1414,6 +1468,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1447,6 +1503,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1499,6 +1557,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
@@ -1523,6 +1583,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件详情弹窗补齐**：点击已安装插件打开详情弹窗——大图标、版本、状态与启用开关、头部卸载按钮；插件自带的组件收进弹窗「包含的组件」逐项开关（不再与插件包重复占列表行），插件的设置界面（如账号池管理）也挂载在弹窗内。
+  - EN: The plugin detail dialog completes the picture. Clicking an installed plugin opens a dialog with the large icon, version, status, enable toggle and an uninstall button in the header; the plugin's own modules collapse into per-item included-component toggles (no longer duplicated as separate list rows), and its settings surface (an account pool, for example) mounts inside the dialog.
 - **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
   - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
 - **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
