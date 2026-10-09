@@ -31,6 +31,9 @@ export interface PluginManifest {
 	version: string;
 	/** Human-readable description */
 	description?: string;
+	/** Icon shown in the plugins list: emoji, text glyph, or http(s)/file URI.
+	 *  Absent → the UI derives a deterministic mark from the package name. */
+	icon?: string;
 
 	/** Entry point for base tools (relative path from package root) */
 	tools?: string;

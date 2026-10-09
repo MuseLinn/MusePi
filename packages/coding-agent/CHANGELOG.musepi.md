@@ -7,6 +7,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Fixed
 
+- **专注模式切换不再先跳后长**：会话里切专注模式时，输入框原先先整块跳到更高的底边再开始长高——顺序是反的；同时高度动画被两套过渡同时驱动，帧数明显不够。现在动画在首帧绘制前就钉好起点，输入框原地生长，且整个窗口期只由一条曲线驱动，切换顺滑了。
+  - EN: Focus-mode toggle no longer jumps before it grows. In a session, the composer used to leap to the taller bottom edge first and only then start growing — the order was backwards — while two competing height transitions fought per frame and dropped the frame rate. The starting height is now pinned before the first paint, the composer grows in place, and a single curve drives the whole window.
+- **空态输入框飞向会话态不再卡顿**：输入框边缘的彩色旋转光束会在欢迎页与会话页之间的位移动画里逐帧重绘，叠在位移本身的缩放+模糊动画上就是卡顿感的来源。现在位移进行时光束定格、落地后恢复，空态发送消息的那一刻光束也立即熄灭，不再陪跑到场景淡出。
+  - EN: The empty-state composer no longer stutters as it flies into the session layout. The composer's rotating color beam repaints every frame, and stacked on the flight's own scale+blur animation that repaint was the stutter. The beam now freezes for the flight and resumes on landing, and sending from the empty state turns the beam off at the send itself instead of letting it run until the scene fades out.
 - **登录弹窗取消后按钮不再卡死五分钟**：关闭登录弹窗（点遮罩或 Esc）只取消了界面，登录中的标记还挂在供应商上——期间该供应商的登录按钮一直是禁用态，要等 5 分钟 RPC 超时才恢复（「点了添加凭证后再点不弹」）。现在取消时同步清除标记，并通知 daemon 终止登录流程。
   - EN: Cancelling the login dialog no longer bricks the buttons for five minutes. Closing the dialog (backdrop or Esc) only dismissed the UI — the in-flight marker stayed on the provider, keeping its login buttons disabled until the 5-minute RPC timeout. Cancel now clears the marker immediately and asks the daemon to abort the flow.
 - **首次配置引导的供应商列表合成一列**：订阅登录、已配置与 API key 导入此前是三段分组——「API 密钥导入」小标题把同一件事割成两个区域，行为还不一致。现在是一个列表：每行一个供应商，行尾动作只有一种（已配置 → 凭证菜单，OAuth 供应商 → 登录，纯 API 供应商 → 导入），排序、搜索、图标一致。
@@ -32,6 +36,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **插件页现在可以直接填包名、git 地址、压缩包或本机路径来安装插件**：以前只有市场能装已收录的包，自己做的、还没发布的插件没法进。新的入口在插件页工具栏「安装插件」——填入内容后立即开始，边装边显示输出，可以中途取消，失败后原样重试；**也可以把压缩包或插件文件夹直接拖进去**，自制的插件不用先发布给别人。取消或失败都会把插件目录还原回安装前的样子，不会留下装了一半的依赖。装完会告诉你这个插件能不能在当前环境跑：依赖对得上就标为可用，缺东西或者有界面找不到落点时，把缺的是什么一并列出来，不用等到加载失败才发现。
   - EN: The plugins page can now install from a package name, git address, archive, or local path. Only the marketplace could install before, so a plugin you built yourself — or one that was never published — had no way in. The new entry sits in the plugins toolbar: fill in the spec and it starts, shows output as it runs, can be cancelled mid-flight, and retries unchanged after a failure; **or drop an archive or plugin folder straight onto it**, so a hand-built plugin needs publishing to nobody first. A cancellation or a failure restores the plugin directory to its pre-install state, so no half-installed dependency is left behind. Once it finishes you are told whether the plugin can actually run here: matching dependencies mark it usable, and a missing runtime or a component with no mount point on this host is listed by name, instead of surfacing later as a load failure.
 
@@ -39,6 +47,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **外观新增「始终显示滚动条」开关**：打开后已经出现的滚动条不再自动淡出，会一直亮着；横向也能拖动了，此前只有纵向有把手。
   - EN: Appearance gains an "Always show scrollbars" switch — a scrollbar that has appeared stays lit instead of fading out; they are also draggable horizontally, which only the vertical axis supported before.
 - **左右并排的两个可滚动区域现在各有一条滚动条**：此前只有最后滚动的那一个区域有轨道，另一个区域的滚动状态完全看不到。滚动条槽位按容器分配，左右两栏、上下分栏互不抢占了。
@@ -110,6 +122,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **侧栏底部新增快捷键按钮 + 快捷键总览弹窗**：侧栏底部状态行多一个 ⌘ 图标按钮，弹窗按分组双栏列出全部快捷键，标题下一行说明，末尾两条提示。**弹窗的每一行都从 `lib/shortcut-registry.ts` 推导，因此弹窗**不可能**与按键处理器的实际行为不一致：重复维护的表会自信地列出一个用户早已改掉的键位。由此白得两个性质：`bindingLabel` 是平台感知的（⌘→Ctrl、↩→Enter、⎋→Esc）且读的是**生效绑定**；注册表在改键时派发 `SHORTCUTS_CHANGED_EVENT`，所以弹窗开着也能实时刷新（7 例契约测试钉住，含"注册表每一条都必须出现"和"改键后立即跟随"）。
   - EN: The sidebar footer gained a shortcuts button and a keyboard-shortcuts reference: a ⌘ icon button in the footer status row opens a two-column, grouped list of every shortcut, with a lede under the title and two tips at the tail. It is never a hand-maintained list. a hand-written list would inline 167 literals (its layout decisions live in that array); every row here is derived from `lib/shortcut-registry.ts`, so the dialog cannot disagree with what the keydown handlers actually do — a duplicated table ends up confidently listing a binding the user rebound months ago. Two properties fall out for free: `bindingLabel` is platform-aware (⌘→Ctrl, ↩→Enter, ⎋→Esc) and reads the EFFECTIVE binding, and the registry fires `SHORTCUTS_CHANGED_EVENT` on a rebind so a dialog left open updates in place (7 contract cases, including "every registry entry appears" and "follows a rebind immediately").
 - **快捷键弹窗的两处取舍**：① **每行不加图标** —— 快捷键注册表没有图标字段，为一个装饰性字段污染唯一真相源不值得；② **分组到栏位的分配手工维护** —— 贪心填充能保持两栏高度均衡，但会把阅读顺序打乱（读者会先看到"会话"再看到"布局"），而分组的意义就是阅读顺序；代价是新增分组时要在这里选栏位，已写在注释里。
@@ -209,6 +225,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **TUI `/extensions` 仪表盘补齐子系统插件面（组件开关 + 新 kind 分组）**：此前 TUI 仪表盘有两处实质缺口——① voice/terminal/browser/computer/lsp/file 六类子系统内置单元在 ALL 视图被 `kindOrder` 白名单整组丢弃（provider 页可见、ALL 页不可见）；② 插件「包含的组件」在 TUI 完全不可见不可操作（GUI 有组件开关行）。修复：kindOrder 补六类子系统 kind（各配图标与 i18n 分组标签）；列表在插件行下渲染组件子行（缩进 + 勾选态），Space/点击开关走 daemon 同一条 `componentDenyTarget` 映射（tool → tools.disabled、stt/tts 引擎 → voice.disabledEngines 带前缀、terminal/browser/file 后端 → 各自 disabledBackends）直写隐藏设置键，下个会话工具集/引擎过滤即消费——不是展示层；检视面补「包含的组件」段（每组件状态 + 已翻译说明）。TUI 独立进程无 daemon 标注组件态，`applyBuiltinMirrorState` 扩展为同时按隐藏黑名单重解析组件状态（fail-open 与 daemon 同口径）。daemon `setComponentEnabled` 重构复用同一 helper，消除两处映射漂移面。9 例新契约测试（映射分支/TUI 组件标注/fail-open/镜像正交/子行渲染/开关回调两态）。
   - EN: The TUI `/extensions` dashboard gains the subsystem plugin surface (component toggles + new kind groups). Two real gaps existed: ① the six subsystem builtin units (voice/terminal/browser/computer/lsp/file) were dropped entirely from the ALL view by the `kindOrder` whitelist (visible on provider tabs, invisible on ALL); ② plugin "included components" were completely invisible and non-toggleable in the TUI (the GUI has component toggle rows). Fix: kindOrder gains the six subsystem kinds (each with an icon and an i18n group label); the list renders component child rows under a plugin row (indented + checkbox state), and Space/click routes through the same `componentDenyTarget` mapping the daemon uses (tool → tools.disabled, stt/tts engines → voice.disabledEngines with prefix, terminal/browser/file backends → their disabledBackends keys), writing the hidden settings keys directly so the next session's tool set / engine filtering consumes them — not a display layer. The inspector gains a "Components" section (per-component state + translated description). TUI standalone has no daemon to annotate component state, so `applyBuiltinMirrorState` now also re-resolves component state from the hidden denylists (fail-open, same rule as the daemon). The daemon's `setComponentEnabled` refactors onto the same helper, removing the two-copy drift surface. 9 new contract tests (mapping branches / TUI component annotation / fail-open / mirror orthogonality / child-row rendering / toggle callbacks in both states).
 
@@ -230,6 +250,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **文件子系统插件化**：文件子系统从「散置的工具 + 索引」收编为一个内置插件单元——`read`（read 工具族：文件 / pdf / sqlite / archive 选择器）/ `write`（write / edit / ast_edit 写入编辑族）/ `search`（glob / grep / ast_grep 检索族）/ `index`（工作区文件内容索引扫描）四个真实后端组件独立启停。新增 file-backend deny 通道：组件开关写隐藏键 `file.disabledBackends`（settings-schema 登记、fail-soft 读取），消费哲学与 terminal/browser 组件一致——read/write/search 被禁后对应工具族不再进入会话工具集（tools/index.ts isToolAllowed 谓词消费，禁用是显式意图、不静默留桩），index 被禁后 daemon 停止后台扫描（server.ts index.scan 门消费；已有 FTS 数据的查询面仍由 index.setEnabled 总开关治理，不越权）。无总开关语义（不发明）：file 行只读展示，禁用粒度落到后端组件。extensions.list 组件面如实下发；组件名/描述/kind 标签 i18n 键 zh/en 同步。9 例新契约测试（注册表投影/名单写读/list 下发/谓词映射/扫描门）。
   - EN: File subsystem pluginization (builtin-plugin cut five: the musepi:file package). The file subsystem moves from scattered tools + index to one builtin plugin unit — four real backend components toggle independently: `read` (the read tool family: files / pdf / sqlite / archive selectors) / `write` (write / edit / ast_edit) / `search` (glob / grep / ast_grep) / `index` (the workspace file-content index scan). New file-backend deny channel: component toggles write the hidden key `file.disabledBackends` (settings-schema registered, fail-soft read), consumed with the same explicit-intent philosophy as the terminal/browser components — denied read/write/search families leave the session tool set (tools/index.ts isToolAllowed predicate; disabling is explicit intent, never a silent stub), and a denied `index` stops the daemon's background scan (server.ts index.scan gate; querying existing FTS data stays governed by the index.setEnabled master switch, no overreach). No master switch (not invented): the file row is read-only display, disable granularity lands on backend components. extensions.list reports the component plane truthfully; component name/description/kind label i18n keys registered zh/en. 9 new contract tests (registry projection / denylist write+read / list projection / predicate mapping / scan gate).
 
@@ -302,6 +326,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **顾问会话标识与只读保护**：`__advisor[.<slug>].jsonl` transcript 行在 `session.list`/`session.tree` 透出 `advisor` 标记（daemon 打标 + GUI 透传链），侧栏行尾渲染 sparkling 徽章（tooltip「顾问会话」，与子代理徽章同级）；打开顾问 transcript 时输入区整体替换为液态玻璃只读说明条（「顾问记录为只读，不能在顾问会话中发送消息」，zh/en），防止向顾问内部记录写入消息。新增 i18n 键两对（zh/en 同步）。
   - EN: Advisor session identity and read-only protection. `__advisor[.<slug>].jsonl` transcript rows expose an `advisor` flag through `session.list`/`session.tree` (daemon tagging + GUI passthrough chain); the sidebar renders a sparkling badge at row end (tooltip "Advisor session", sibling of the subagent badge); opening the advisor transcript replaces the input area with a liquid-glass read-only notice bar ("Advisor transcript is read-only — you can't send messages here", zh/en), preventing writes into the advisor's internal record. Two new i18n key pairs (zh/en in sync).
 - **会话右键「在迷你对话中打开」**：会话树任意行（含子会话）的右键菜单新增「在迷你对话中打开」——Electron 侧经 `mini-chat-open` IPC 把会话 id 深链进迷你窗（`?mini=1&session=<id>`，已开的迷你窗带新目标重载并聚焦）；mini 渲染端连接建立后一次性消费深链 id 打开目标会话（重连不会重复抢占）；非 Electron 环境（浏览器开发）回退为原地打开。托盘/顶栏原有的迷你窗入口不受影响（无参即欢迎态）。
@@ -481,6 +509,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **CredentialService 落地——连接器凭据托管，密钥不出 wire**：新增 L2 服务 key="credentials"，只认领 `credentials.list` / `credentials.set` / `credentials.delete` 三路由；`resolve` 是内部 async 方法，**不在 wire 上**——任何客户端都无法 RPC 拉明文密钥（契约测试深扫 wire 面 + 显式断言 routes 不含 resolve）。凭据种类 `token | basic | env`；wire 面只回 `CredentialMeta{id,label,kind,createdAt,updatedAt}`，UI 只见「已配置」。store 为 `~/.musepi/agent/credentials.json`：懒加载缓存 + tmp+rename 写穿、0o600 权限；损坏文件 fail-soft（logger.warn + 回空仓，set 可重建）；id 生成 `cred_` + base64url(12B)。决策点③落实：新建 L2 服务，散点（mcp/remote 配置里的明文位）留后续迁移，不复用。6 例契约测试（wire 深扫 / resolve 不在 routes / 跨实例持久化 / delete / 校验 / 损坏 fail-soft，store 指向隔离 temp）+ route-coverage 桩；daemon 全量 265 例全绿。
   - EN: CredentialService lands — connector credential custody, keys never cross the wire. A new L2 service keyed "credentials" claims exactly `credentials.list` / `credentials.set` / `credentials.delete`; `resolve` is an internal async method that is NOT on the wire — no client can RPC-pull a plaintext secret (a contract test deep-scans the wire surface and asserts routes exclude resolve). Kinds are `token | basic | env`; the wire only returns `CredentialMeta{id,label,kind,createdAt,updatedAt}`, so the UI sees "configured" and nothing more. The store is `~/.musepi/agent/credentials.json`: lazy-loaded cache + tmp+rename write-through, 0o600 perms; a corrupt file fails soft (logger.warn + empty map, `set` can rebuild); ids are `cred_` + base64url(12B). Decision point ③ honored: a brand-new L2 service; the scattered plaintext spots (mcp/remote configs) stay for later migration, not reused. Six contract tests (wire deep-scan / resolve-not-in-routes / cross-instance persistence / delete / validation / corrupt fail-soft, store pointed at an isolated temp dir) plus a route-coverage stub; all 265 daemon tests green.
 
@@ -500,6 +532,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **what's-new 结构化亮点卡**：更新弹窗不再倾倒 CHANGELOG markdown 原文——client-core 新增纯函数解析器 `parseChangelogHighlights`（行级状态机按 `## [x.y.z] - date` 切段，`[Unreleased]` 跳过；每版提取 ≤3 条「亮点」（`**` 开头 bullet，标题 + 中文主行第一句，`- EN:` 子行绝不进入）+ Added/Fixed/Changed/Removed 分类计数，11 例契约测试），daemon 零改动。卡面：桌宠「庆祝」sprite 头部 + 「更新到 v X.Y.Z」大标题；当前版 ≤3 张亮点卡（kind 图标 + 两行 clamp 描述）；「本次还有 N 项修复与改进」折叠行点开才挂完整 Markdown；旧版本折叠列表（版本号 + 日期 + 计数徽章）；主按钮「知道了」（Enter）+ 外链「查看完整日志」。解析为空回退原整段渲染不白屏；reward 庆祝票根分支原样保留；退场沿用 180ms 保持挂载模式；新文案入 `announcement` i18n 窄域（双语镜像）。遗留待实机：长 changelog 滚动锚点、motion-off 下桌宠整体隐藏（引擎无静态帧，按「无中间帧」约束取舍）。
   - EN: what's-new structured highlight cards (branding spec S1, first cut after the 4 decision points were approved): the update popup no longer dumps raw CHANGELOG markdown — client-core gains the pure-function parser `parseChangelogHighlights` (a line-level state machine splitting on `## [x.y.z] - date`, skipping `[Unreleased]`; ≤3 "highlights" per version (`**`-led bullets: title + first sentence of the Chinese line, `- EN:` children never enter) plus Added/Fixed/Changed/Removed counts, with 11 contract tests); zero daemon changes. The card: a celebrating-pet sprite header + "updated to v X.Y.Z" headline; ≤3 highlight cards for the current version (kind icon + two-line-clamped description); a "N more fixes and improvements" fold that mounts the full Markdown only when opened; a collapsible older-version list (version + date + count badge); primary "Got it" (Enter) + external "Full changelog" link. Empty parse falls back to the original full rendering (no blank card); the reward-ticket branch is preserved as-is; exit keeps the 180ms stay-mounted pattern; new copy lives in the `announcement` i18n domain (bilingual mirror). Leftovers for on-device pass: scroll anchoring on long changelogs; motion-off hides the pet entirely (the engine has no static frame — a deliberate trade under the no-intermediate-frames rule).
 
@@ -533,6 +569,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **素材策略行 + 高级折叠区 + 媒体 provider 内联**：欢迎页 design 模式的 composer 下方、设计体系 rail 之下新增「素材：◉ AI 生图 / ○ 色块占位」单选（对齐 WorkBuddy「素材不足时的处理策略」语义，默认 AI 生图），选中值随发送落 `projectMetadata.assetPolicy: "ai-image" | "placeholder"`（默认也落键，契约明确）；daemon metadata 校验值域放行、非法值（含 null）fail-fast 语义报错。其旁「高级 ▸」折叠区（展开态入创作草稿、切类型 chip 不丢）承载类型特有字段（平台/保真度/画幅/时长/音色，默认值沿用 M3.1 对表）——图片/视频/音频 chip 选中时区内内联媒体 provider 选择卡（数据源 `media.providers` RPC，未配置的 agnes-global 渲染为禁用），选中 provider 落 metadata。prompt 注入新增 asset-policy 区块（order 41，紧随设计体系简报 40 之后，每次 rebuildSystemPrompt 重解析）：ai-image = 产物引用处走 generate_image/agnes_video_gen 工具链；placeholder = 色块加文字标注占位、明确禁止调用两工具；无键/未知值不注入不炸。契约测试：assetPolicy 落 metadata 逐字段、非法值报错、prompt 三态注入、折叠态切 chip 不丢、视频 chip 选 agnes 端到端建会话。
   - EN: asset-policy row + advanced fold + inline media provider. Below the design-system rail under the welcome composer in design mode, a new "素材: ◉ AI 生图 / ○ 色块占位" single-select (WorkBuddy-style "asset strategy when material is scarce" semantics, defaulting to AI image generation) writes `projectMetadata.assetPolicy: "ai-image" | "placeholder"` on send (the default lands the key too — explicit contract); the daemon metadata validator admits the key with value-domain validation, failing fast on illegal values (including null). Beside it, an "高级 ▸" fold (open state in the creation draft, survives chip switches) carries type-specific fields (platform/fidelity/aspect/duration/voice, defaults per the M3.1 table) — with image/video/audio chips selected, a media-provider card is inlined (data source `media.providers` RPC; unconfigured agnes-global renders disabled), the chosen provider landing in metadata. Prompt injection gains an asset-policy section (order 41, right behind the design-system brief at 40, re-resolved on every rebuild): ai-image = route asset references through the generate_image/agnes_video_gen toolchain; placeholder = color-block placeholders with text labels and an explicit ban on both tools; missing/unknown values inject nothing and never throw. Contract tests: assetPolicy-in-metadata field-by-field, illegal-value errors, prompt three-state injection, fold state surviving chip switches, and an end-to-end video-chip-agnes session creation.
 - **设计体系「＋市场」卡 + 装包即见的宿主重放通路**：① 预览 rail 末尾追加「＋市场」从属卡（dashed 边框 + 加号，radiogroup 语义拆分保 a11y），点击经既有 host 事件 `omp-open-capability`（扩展 `detail.tab` 载荷）落地能力中心市场 tab（CapabilityCenterPage 新增 `initialTab`，旧调用方行为不变）。② 市场分发收敛为目录约定 + GUI 纯推导：client-core 新增 `hasDesignSystemContent()` 纯函数（市场条目 category/tags 声明 `design-system` 即命中，大小写/连字符同义），MarketplaceCard 渲染「设计体系」徽章，筛选复用既有 tag chip，零 wire 改动。③ 「装包即见」daemon 补齐：设计体系注册表此前只在会话引导时重放（宿主进程无会话则 welcome rail 只见内置五套）——现 DesignSystemsService.listDesignSystems 改为宿主级懒加载重放（经 ExtensionService 新 `getExtensionRuntimeLoad()` 同源加载，按 sourceId 先清再注册幂等重写，对已消失来源整源清除），marketplace.install/remove 补 `invalidateExtensionsCache` + `extensions.changed` 广播（失效序契约测试钉死），GUI 监听广播即重拉、装包返回 rail 即见新体系。契约测试 7 例（GUI）+ 6 例（daemon 宿主重放/幂等/失效序/事件名）。
@@ -540,6 +580,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **中文语音模型双档（中文优化 ASR + 中文 TTS）**：语音识别新增 SenseVoiceSmall 档（阿里 FunAudioLLM 出品、sherpa-onnx 分发 INT8 ≈239MB，中/英/日/韩/粤自动识别，中英混合是其主场；daemon sherpa-onnx 引擎新增 sense_voice 加载分支，repo/revision/字节数在加载时逐字核对）——语音设置里标注「中文优化·中英混合」，与既有 Fast/Balanced/Turbo/Parakeet 四档并存。TTS 新增 MeloTTS-zh 档（sherpa-onnx 官方 vits-melo-tts-zh_en，44.1kHz）——daemon TTS worker 加 sherpa-onnx 引擎分支与 Kokoro 并存，中文文本自动路由到中文模型（批量与流式逐段都路由），Kokoro 英文档不变。两档的下载/缓存/预热走既有管线。提醒：权重首次真实下载/推理在本机尚未实测（HF 直连不通的环境会在 worker 下载/加载处显性报错）。
   - EN: two Chinese speech model tiers (Chinese-optimized ASR + Chinese TTS): speech recognition gains a SenseVoiceSmall tier (Alibaba FunAudioLLM, sherpa-onnx distributed INT8 ≈239MB, auto zh/en/ja/ko/yue, with zh/en mixed speech as its home turf — the daemon sherpa-onnx engine gains a sense_voice loading branch, repo/revision/byte counts verified at load), labeled "中文优化 · 中英混合" in voice settings alongside the existing Fast/Balanced/Turbo/Parakeet tiers. TTS gains a MeloTTS-zh tier (sherpa-onnx official vits-melo-tts-zh_en, 44.1kHz) — the daemon TTS worker gains a sherpa-onnx engine branch coexisting with Kokoro, and Chinese text auto-routes to the Chinese model (both batch and streaming per-segment routing); the Kokoro English tier is unchanged. Both tiers ride the existing download/cache/preheat pipeline. Note: first real download/inference of the weights has not been exercised on this machine (in an HF-unreachable environment the worker fails loudly at download/load).
 - **朗读模型选择卡 + 测试语音模拟真实对话**：TTS 模型选择此前只有 TUI 有、GUI 缺失（始终锁在不能读中文的 Kokoro）——语音设置新增「朗读模型」单选项卡，与识别模型卡同构（STT/TTS 两卡共享同一 SpeechModelPicker：radio 行 + 徽章 + 人性化副文案 + 右侧下载/就绪按钮），写 `tts.localModel`；daemon 补 `tts.modelStatus`/`tts.modelDownload` RPC（与 STT 同款去重防重入契约，进度经事件流广播）。测试语音输入/输出改为模拟真实对话：听写结果渲染成一条模拟用户消息（消息流同款样式 + 重新录制），TTS 测试是一条内置中英混合示例 markdown 的模拟助手回复卡（点消息上的朗读按钮播放，体现 sanitize 清洗效果）。契约测试 `voice-settings.test.tsx`。
@@ -575,6 +619,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **图片预览一镜到底 morph + 附件提及 badge**：composer 附件图片 chip 点击预览时，图片从缩略图位置/尺寸连续变形到全屏舞台（FLIP + `--spring-liquid` 360ms，背板独立 160ms 淡入），关闭时反向飞回 chip 原位后才卸载——全程无整屏淡入淡出（M1.10 §3.3）；chip 在预览期间被删除/滚动则 rect 失效自动降级为 150ms 淡入淡出；`gui-motion-off`/`prefers-reduced-motion` 无中间帧；gallery ←→ 导航不走 morph。图片与文件 chip 带常显序号角标（图片 1/文件 1 同类独立编号），hover 新增「提及」按钮（@ 图标）：点击在输入框光标处插入序号 token `@图片N`/`@文件N`（textarea 单一输入面不动、draft 持久化天然存活；`@` 后连续非空白字符即候选，`@src/foo` 路径形态不算），highlight overlay 将其画成干净的 accent pill（水平 padding 负 margin 偿还，零字形推进，无 rim 噪音），pill 可 hover 出预览卡（缩略图/文件名+大小）、点击跳转光标；序号 token 按「同类第 N 个」解析——粘贴的多张截图同叫 image.png 也不会全部指向第一张（重名附件入列即自动 `-2`/`-3` 去重）；附件删除后 token 退化为 `@文件名` 形态回归普通文本（不 paint、发送不展开、文本原样保留）；发送时 token 展开——序号图片 → `[图片 N]`（第 N 张 wire 图片）、文件 → 现有 `[Attachment] 路径` 机制、旧 `@文件名` 形态照旧兼容。morph 几何抽为纯函数 `computeMorph`（client-core）并有契约测试；token 解析/展开/重编号同样纯函数全测。
   - EN: lightbox 一镜到底 morph for composer image previews + attachment mention badges. Clicking an image chip now flies the preview from the thumbnail's rect into the full-screen stage (FLIP + `--spring-liquid` 360ms, backdrop fading in independently over 160ms) and flies it back on close before unmount — no full-screen cross-fade anywhere (M1.10 §3.3); a chip deleted or scrolled away mid-preview degrades to the legacy 150ms fade, `gui-motion-off`/`prefers-reduced-motion` plays zero intermediate frames, and gallery ←→ navigation never morphs. Image and file chips carry an always-on numbered corner badge (images and files numbered independently) and gain a hover "mention" button (@ icon): clicking inserts an ordinal token `@图片N` / `@文件N` at the caret (the textarea stays the single input surface, draft persistence survives for free; an `@` plus a whitespace-free run is a candidate, path shapes like `@src/foo` never parse), the highlight overlay paints it as a clean accent pill (horizontal padding repaid by a negative margin — zero glyph advance, no rim noise), the pill shows a hover preview card (thumbnail / name + size) and click jumps the caret there; ordinal tokens resolve by "Nth of its kind", so multiple pasted screenshots all named image.png can no longer all point at the first one (duplicate chip names are `-2`/`-3`-suffixed on intake); once the attachment is removed the token degrades to its `@filename` form and reverts to plain text (unpainted, unexpanded on send, kept verbatim); on send tokens expand — ordinal images → `[图片 N]` (the Nth wire image), files → the existing `[Attachment] path` mechanism, and legacy `@filename` tokens keep working. The morph geometry is a pure `computeMorph` function (client-core) under contract tests; the token parse/expand/renumber are pure functions too, fully tested.
 
@@ -674,6 +722,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **技能卡片点击预览（信息先览，再决定安装）**：能力中心「发现」屏的卡片现在整卡可点，弹出液态玻璃预览弹窗——两个来源各取所长：skills.sh 由 daemon 从发布者仓库直读 `SKILL.md` 正文（其搜索接口不带描述，正文预览补上"看得到内容"的缺口）；SkillHub 走详情接口展示最新版本、文件清单与安全审计。底部安装键与卡片角标同一条来源感知路由。新增 `skills.marketplace.preview` RPC。
   - EN: skill cards are now clickable with a look-before-you-install preview: the whole card opens a liquid-glass dialog where each source plays to its strength — skills.sh previews stream the publisher repo's `SKILL.md` straight from the daemon (its search API carries no description, and the body preview closes that gap); SkillHub shows latest version, file manifest, and security audit via the detail endpoint. The footer install button rides the same source-aware route as the card badge. New `skills.marketplace.preview` RPC.
 
@@ -692,6 +744,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **语音输入首次使用引导**：点击麦克风时先经引导闸口查询 `stt.modelStatus`（新增 `defaultKey`/`defaultCached` 字段，由 daemon 解析设置里的默认识别档）——模型已在本地则直接进入听写；未下载则弹出液态玻璃引导卡（说明模型名称与体积、下载时长预期，稍后/前往安装两键），下载进度走既有的全局 `stt.download*` 事件流实时呈现，完成后自动开始本次听写，失败可重试；首次点击不再把 GB 级下载塞在 `stt.transcribe` RPC 里裸超时。桌面端为液态玻璃弹窗（`voice-setup.tsx` 闸口）；client-core（guest 网页/Android 壳共用）为同流程的引导卡（`Composer.tsx` 的 `setup` 态 + `VoiceSetupCard`，含设备端识别兜底入口），两端共用 wire 契约与全局下载事件流。
   - EN: voice input first-use guide: clicking the mic now passes through a setup gate that queries `stt.modelStatus` (new `defaultKey`/`defaultCached` fields — the daemon resolves the default recognition tier from settings) — cached models go straight into dictation; a missing one opens a liquid-glass guide card (model name and size, download-time expectation, Later / Install buttons), progress renders live over the existing global `stt.download*` event stream, the interrupted dictation auto-starts when the fetch completes, and failures offer retry; a first click no longer buries a GB-scale download inside a bare `stt.transcribe` RPC timeout. Desktop client first; the guest-client counterpart is follow-up (the wire contract is already shared).
 
@@ -741,6 +797,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **M1 轮渲染语义落地（ZCode 语义吸收）+ guest-client 归位 client-core**：会话消息渲染从消息级平铺改为轮级投影——与折叠/导航/轨迹同一 `isTurnStart` 口径，轮卡片承载用户请求、assistant 回复、工具调用与思考过程；guest-client（远程网页/安卓）渲染组件归位到共享的 `client-core`，与 desktop-app 同一套轮语义实现，不再各写一份。
   - EN: M1 turn-rendering semantics landed: session rendering moved from a flat message list to a turn-level projection — same `isTurnStart` caliber as folding/navigation/trajectory, with turn cards carrying the user request, assistant reply, tool calls and thinking; the guest-client (remote web / Android) rendering moved into the shared `client-core`, one turn-semantic implementation for both desktop-app and guest-client instead of two.
 - **轮级会话地图（TurnMapCanvas）**：9985 条消息级事件投影为轮级画布——164 轮 = 164 张玻璃节点卡，主线是垂直时间轴（金色流动渐变连线），重答/分叉轮横向开列（金→紫渐变支线），顾问轮薄荷青徽章；单击展开轮内事件泳道，双击跳回对话定位该轮；左侧迷你导航条 = 全轮次剪影（视口映射 + 点击跳转）。消息级画布（SessionTreeCanvas）降级为调试入口。附带修复全量历史补全后地图/轨迹只见尾窗的问题（entries 身份切换时重新适配视野）。
@@ -791,6 +851,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **IM 渠道打通回复链路：微信里发一句话，agent 的回答终于会回来**：此前渠道侧只有命令回显（/help 等），纯文本被送进会话后 agent 跑完就没有任何推送路径——用户看到的是"发出去石沉大海"，体感就是 bot 很慢/死了。现在会话结束时把最后一条 assistant 回复推回每个绑定的 IM 端；绑定按「渠道+发送者」记录并存盘，重启后照样路由。未绑定的第一条消息不再报错教育，而是自动新建会话并直接开始处理（对齐 Telegram DM：第一句话就有回应）。
   - EN: IM channels now actually answer back. Previously only command echoes existed — a plain text message reached the session and the agent's reply had no push path at all, so the bot looked dead/slow. The last assistant reply is now pushed to every bound IM peer when a turn ends, and bindings are keyed per channel+sender and persisted, so routing survives a restart. An unbound first message no longer returns an error lecture: it auto-creates a session and starts working (Telegram-DM parity — the first message already gets an answer).
 - **各渠道按自身原生能力适配**：微信接入 iLink 原生「对方正在输入」（getconfig 取 typing_ticket，5 秒心跳，回复时收尾）；Telegram 用 sendChatAction 输入状态 + HTML 富文本渲染（代码块/粗体/链接，解析失败自动回落纯文本）并接收文档与语音占位；Discord 用 REST typing 端点并把非图片附件标注出来；飞书首个分片以「引用回复」落到原消息下（群里看得出在答谁，飞书没有 bot 输入态接口，故不伪装）。所有渠道的长回复改为分片发送，不再静默截断丢尾；命令回复语言按渠道走（微信/飞书/lark/华为中文，Telegram/Discord 英文），/list 显示序号+短 id，手机上 `/switch 2` 就能绑定。
@@ -824,6 +888,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **桌宠状态轴原文级吸收 blobstudio：31 态运动 + 七类特效，导入 SVG 伙伴获得同一套系统**：放弃"语义相似"的自写渲染，从站点 bundle 反解出的引擎源码逐字吸收——运动表六处值（dash/bob/sway/pulse 的半径、周期、缩放）与源码字面量一致，dash 飞行是 Lissajous 8 字（cos r / sin 2r·0.44），身体飞行与轨迹尾巴焊在同一个逐入场时钟上（换持续相位钟头尾就会脱节）；七类粒子特效（轨迹双层遮挡、dots 三次脉冲、glyph 真 path、徽标等）为渲染函数逐帧移植，特效层是运动 rig 的**兄弟层**——继承身体 transform 会把 dash 头甩到两倍偏移。dots/glyph 特效直接驱动共享身体组做"让位消解"（SVG 与 HTML 双通道同一公式）。配套的状态判定（会话信号 → 31 态）、表情池与节奏表同步落地，`pet-state.test` 钉死全部字面量。
   - EN: The pet's state axis is a verbatim absorption of blobstudio: 31-state motion plus seven effect families, with imported SVG companions getting the same system. Semantic re-creation is out — the engine source recovered from the site bundle is absorbed literally: the six motion-table values (dash/bob/sway/pulse radius, period, scale) match the source word for word, the dash flight is the Lissajous figure-eight (cos r / sin 2r·0.44), and the body's flight and its trail share ONE per-entry clock (a persistent phase clock would leave head and tail at different loop points). The seven particle effects are per-frame ports of the render functions, and the effect layers are SIBLINGS of the motion rig — inheriting the body's transform flings the dash head to twice the flight offset. The dots/glyph effects drive the shared body group directly for the yield-dissolve (SVG and HTML channels, same formula). Session-signal state resolution, expression pools and cadence tables landed with it, and `pet-state.test` pins every literal.
 - **导入的 SVG 伙伴升级为完整伙伴**：`format:"svg"` 的 petdex 包此前退化到单帧 transform 行情；现在经 PetdexStateStage 渲染，吃满 31 态运动、七类特效与身体消解，全部按 face-unit（228.541 盒）归一——任意宿主尺寸下运动振幅与特效坐标保持源码比例。这正是源站自己的契约："上传的 logo 与内置圆球行为完全一致"。纯导入页的特效填充渐变缺 defs，overlay 内逐字补齐同名 fallback。
@@ -851,6 +919,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - 桌宠新增**交互反应轴**（戳弄 / 被抓包 / 入睡前）：除会话状态那条轴之外，新增第二条轴专管**用户主动触发的反应**——`startled`（戳一下的惊愕：瞪眼、视线收回正中、刻意不眨眼）、`delighted`（900ms 内补一下的开心：弯眼 + 弹跳）、`curious`（察觉时的偏头，视线明显偏出去）、`dozing`（入睡前的半睁眼，全系统最慢最深的呼吸）、`peek`（"被抓包"的假装没看你）。反应**叠在状态之上**而非常规替换：戳弄绝不写进会话状态、按自己的时钟释放（composer 与桌面桌宠同步），并且期间状态那层的材质（error 的红眼、hover 的增亮辉光）不会被重置——所以球在工作时被戳，仍会一边转圈一边惊一下。身体运动只在戳弄类反应里带过冲入场（全系统唯一允许"闹"的运动），约一秒内自解；同时补齐两个闲时桥段：进入 60s 睡眠闩锁前 40s 开始打瞌睡，以及每 12–26s 一次的偏头/"被抓包"。
   - EN: The pet gains an **interaction reaction axis** (poke / caught-looking / pre-sleep): beyond the session-state axis, a second axis now owns **user-initiated reactions** — `startled` (the gape on a poke: eyes fly wide, gaze snaps to centre, deliberately no blink), `delighted` (a follow-up within 900ms: pleased squint plus a bounce), `curious` (the head-tilt of noticing, gaze parked well off-centre), `dozing` (half-lidded pre-sleep, the slowest and deepest breath in the system), and `peek` (the "caught looking" pretence). Reactions LAYER on top of the mood rather than replacing it: a poke is never written to session state, releases on its own clock (identical on the composer pet and the desktop pet), and the mood's materials (error's red eye, hover's brightened glow) survive underneath — poke the orb while it works and it still startles *and* keeps spinning. The only loud body motion in the system lives on the poke reactions (an overshoot entrance that resolves in about a second); two new idle beats came with it — drowse starting 40s before the 60s sleep latch, and a peek/curious beat every 12–26s.
 
@@ -1014,6 +1086,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - `/design` 斜杠命令（别名 `/ds`）：会话内一键热切换到设计预设——补齐引导页承诺的第三把入口（欢迎页 chip、`--preset design`、`/design`），复用 modes v2 switcher 与现有提示文案，预设缺失时走既有报错而非静默无操作。
   - EN: A `/design` slash command (alias `/ds`) hot-switches the session to the design preset — completing the third entry the onboarding advertises (welcome chip, `--preset design`, `/design`). Reuses the modes-v2 switcher and existing copy; a missing preset surfaces the existing failure message instead of a silent no-op.
 - Artifact manifest 契约（`presets/artifact-manifest.ts`）：把设计模式的产物承诺固化成 schema + 校验——entry 相对路径（禁止绝对路径与 `..` 越出产物目录）、kind(page/component/poster/deck)、renderer(html/markdown/react-component/deck-html)、exports、可选 title/description。7 个测试覆盖越权路径拒绝与坏 JSON。设计预设模板同步点名 sidecar 文件名 `artifact.manifest.json`（模板修订 2→3，升级链支持跨版本逐级比对 v1→v2→v3，用户改过的预设仍永不覆盖）。
@@ -1027,6 +1103,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - 设计模式（预设 `design`，TUI 与 GUI 都可用）从「一条 persona」补成完整设计工作流：新增工作流、简报协议、产物契约、风格边界四个提示词区块——现在会先对齐简报（目标/平台/风格基准/参考/交付物）、先做结构与主导区域判断再谈视觉、产出物带 sidecar manifest 以便预览面板识别、需要落地实现代码时明确建议切回 work 模式。风格边界把设计规范接进了 agent 行为：圆角只用 `--radius-*` 阶梯、禁止字面 px，玻璃只用 `--glass-*` 四件套且只有背后有内容的悬浮层才允许。刻意不收窄工具白名单——设计要读代码库、看现有样式、改文件。
   - EN: The design mode (preset `design`, available in both TUI and GUI) grew from a single persona line into a complete design workflow: four new prompt sections cover workflow, brief protocol, artifact contract and style boundaries. It now aligns on a brief (goal / platform / style baseline / references / deliverable) before drawing, judges structure and the dominant region before picking colours, emits a sidecar manifest so the preview panel can recognise artifacts, and explicitly recommends switching back to work mode when implementation code is needed. The style-boundary section wires the design system into agent behaviour: radii come only from the `--radius-*` ladder (literal px banned), glass only from the `--glass-*` four-piece set, and only on floating layers that have content behind them. The tool whitelist is deliberately not narrowed — design needs to read the codebase, inspect existing styles and edit files.
 
@@ -1051,6 +1131,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - GUI 显示提示缓存命中率与本次会话花费：上下文环弹层与 GUI 原生 /context 卡片新增「缓存命中」与「会话花费」两行。命中率算法与 TUI 状态行的 `cache_hit` 段共用同一份实现（分母是整个 prompt：cacheRead + cacheWrite + input —— 只算已命中会恒为 ~100%，正好掩盖这个功能要暴露的回归），且完全没有缓存读取时留空而不显示误导性的 0%；花费仅在模型目录有价格时出现。此前 GUI 里唯一的缓存数据是轨迹检查器中的一个原始 ☍ token 计数。#8
   - EN: The GUI now shows prompt-cache hit rate and session spend, in the context-ring popover and the native /context card. The rate comes from the same helper the TUI `cache_hit` segment uses (the denominator is the whole prompt: cacheRead + cacheWrite + input — counting only hits would sit at ~100% and hide exactly the regression), and a session with no cache reads shows nothing rather than a misleading 0%; spend appears only when the catalog carries a price. The only cache number in the GUI used to be a raw ☍ token count in the trajectory inspector. #8
 - 会话内用自然语言创建定时 / 闲时任务：新增 `schedule_task` 工具（`action: create|list`，覆盖 once/daily/weekly/monthly/cron、一天多时间点、闲时窗口与时区；创建走写权限审批），会话流里渲染富卡片（任务名、调度摘要、闲时窗口、下次执行时间）并提供「前往任务中心」按钮直达并选中该任务。工具不直接写任务存储，而是经 daemon 注入的句柄写入——daemon 在内存持有任务列表并整体覆写文件，工具自行写盘会被静默吞掉。#11
@@ -1076,6 +1160,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - 文件面板内嵌文本编辑器：文本文件（≤2 MiB）在预览头 ✎ 进入编辑，⌘S / Ctrl+S 保存，未保存修改在 tab 上显示圆点，切换或关闭前确认丢弃；新建文件直接进入编辑器（取代旧的「无内置编辑器」提示）。
   - EN: Built-in text editor inside the file panel: text files (≤2 MiB) enter edit mode via ✎ in the preview header, ⌘S / Ctrl+S saves, unsaved changes show a dot on the tab, and switching or closing asks before discarding; a new file opens straight in the editor (replacing the old "no built-in editor" notice).
 - Office 文档预览（只读）：`.docx` 用 docx-preview 内嵌渲染，`.xlsx` / `.xls` / `.csv` 用 SheetJS 渲染为转义表格（1000 行上限 + sheet 切换），损坏文件自动回退系统默认应用。
@@ -1100,6 +1188,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - 语音设置成熟化：语音模型卡（名称 + SoTA/轻量 标签、体积、准确度/速度分档条、卡内下载进度）与可用的麦克风选择——所选设备对听写的所有入口生效。
   - EN: Voice settings maturity: speech model cards (name + SoTA/lightweight badge, download size, accuracy/speed tier bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
 - macOS：ad-hoc 签名构建的自动更新会静默失败，现在回退为手动下载安装包（dmg）并落盘更新日志。#5
@@ -1121,7 +1213,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [0.4.28] - 2026-09-16
 
 ### Added
-- **右侧面板改为 tab-primary:一条 tab 条承载全部视图(对齐 openchamber ContextPanel)**:面板顶部一条 tab 条承载所有已打开的视图 —— 多实例**文件 tab**、笔记、待办/计划、Git、浏览器、看板、扩展 `panel.tab.*` 槽 —— rail 降级为**启动器**(点 rail = 打开或聚焦该 surface 的 tab,不再排他切换面板体)。零 tab 时显示「从这里开始」空态导航页而非默认视图;tab 可拖拽排序、关闭激活邻居(先右后左);布局按 cwd 持久化(`musepi-gui-panel-tabs-{cwd}`),**只存标签与地址、恢复时重派生 id**,内容由所属 surface 重新物化;按 surface 分配 12 个 tab 配额,淘汰最久未触碰且非激活者(宁超预算不丢正在看的)。文件实例 tab 归面板条所有(FilePane 改受控:`activeFile` 装载 + `onOpenFile` 注册),不再有双层 tab;占位替换语义 —— rail 先开 `files::` 占位,首个真实文件打开时替换它。
+
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.- **右侧面板改为 tab-primary:一条 tab 条承载全部视图(对齐 openchamber ContextPanel)**:面板顶部一条 tab 条承载所有已打开的视图 —— 多实例**文件 tab**、笔记、待办/计划、Git、浏览器、看板、扩展 `panel.tab.*` 槽 —— rail 降级为**启动器**(点 rail = 打开或聚焦该 surface 的 tab,不再排他切换面板体)。零 tab 时显示「从这里开始」空态导航页而非默认视图;tab 可拖拽排序、关闭激活邻居(先右后左);布局按 cwd 持久化(`musepi-gui-panel-tabs-{cwd}`),**只存标签与地址、恢复时重派生 id**,内容由所属 surface 重新物化;按 surface 分配 12 个 tab 配额,淘汰最久未触碰且非激活者(宁超预算不丢正在看的)。文件实例 tab 归面板条所有(FilePane 改受控:`activeFile` 装载 + `onOpenFile` 注册),不再有双层 tab;占位替换语义 —— rail 先开 `files::` 占位,首个真实文件打开时替换它。
   - EN: The right panel becomes tab-primary — one tab strip hosts every open view (multi-instance file tabs, notes, todos/plans, git, browser, board, extension `panel.tab.*` slots) while the rail degrades to a launcher (a rail click opens or focuses that surface's tab instead of swapping the panel body). Zero tabs shows a start-here page instead of a default view; tabs drag-reorder, closing activates the neighbour (right then left), the layout persists per cwd (`musepi-gui-panel-tabs-{cwd}`) storing labels and addresses only — ids are re-derived on restore and content re-materialises from its surface — and each surface gets a 12-tab budget that spends the oldest non-active tab (one over budget beats losing the tab in use). File instances belong to the panel strip now (FilePane is controlled: `activeFile` loads, `onOpenFile` registers), so there are no double tab rows, and the placeholder contract holds: the rail opens a `files::` placeholder that the first real file replaces.
 - **审批卡备注(TUI ask 对话框 `✎ note` parity)**:审批卡新增多行备注框(Enter 换行、⌘/Ctrl+Enter 直接批准、超 5 行内部滚动),端到端打通 —— `tool.approve` / `tool.deny` 接受 `note`,`approval-bridge.resolve(requestId, approved, note)` 让 select 的 promise 携带 `{approved, note}`;**带备注的拒绝**以 `Tool call denied by user: <工具>\n\nUser note: <内容>` 抛出,wrapper 既有 catch 把它作为拒绝原因发出并 rethrow —— agent 在工具错误里读到「为什么被拒」,而不只是 denied by user。批准时保持标签契约(note 仅记录)。
   - EN: The approval card gains a multiline note field (Enter = newline, ⌘/Ctrl+Enter approves, >5 lines scroll internally), wired end to end: `tool.approve` / `tool.deny` accept `note`, `approval-bridge.resolve(requestId, approved, note)` makes the select promise carry `{approved, note}`, and a **noted denial** throws `Tool call denied by user: <tool>\n\nUser note: <text>` — the wrapper's existing catch emits that as the resolved reason and rethrows, so the agent reads *why* it was denied instead of a bare denial. Approvals keep the label contract (the note is recorded only).
@@ -1207,6 +1303,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **对话内联 widget 卡片新增「⋯」菜单:下载 / 复制 / 查看代码**:卡片源收在一处契约 `widgetSource`——`html` 面给自身标记(下载的 `.html` 可独立打开),其余类型给 `{type,title?,data}`(即 `widget` 工具的载荷,粘回对话即可让 agent 改卡);查看器、剪贴板与下载读同一份,不会漂移。「下载为图片」只在带光栅器的宿主(桌面端)出现,纯浏览器与 HTML 导出宿主不渲染该项而非点了没反应。
   - EN: The inline widget card gains a "⋯" menu — download, copy, view source. One source contract (`widgetSource`): an `html` face yields its own markup (the downloaded `.html` opens standalone), every other type yields the `{type,title?,data}` payload the `widget` tool was called with, so it pastes back into a prompt; viewer, clipboard and download read that one representation, so they cannot drift. "Download as image" appears only on hosts with a rasterizer (the desktop renderer); plain-browser and HTML-export hosts omit the item rather than offering a dead one.
 - **右侧面板浏览器设备预设补上真实视口模拟**:三档预设此前只换 UA、模拟视口从未下发,1440 桌面档因此在面板里仍按面板宽度布局。现由面板上报 `{preset, viewport}`,主进程按档下发 `Emulation.setDeviceMetricsOverride` + UA + 触摸,自适应档清空覆盖(手机档实测 `mobile=true` + 布局 393,桌面档 1440)。
@@ -1230,6 +1330,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **TUI `/pair` 命令:一条指令把手机端绑到这台机器**:绑定手机此前只能靠 `/collab lan`——它确实会出二维码,但语义是「分享会话」,找「怎么绑定 app」的人无从下手。新增 `/pair`:已在分享则直接出码,未分享则先起局域网分享再出码,并列出各网卡可达地址与「本机浏览器打开」提示;复用既有链接格式与终端 ANSI 二维码组件,手机端扫码即绑(或改用粘贴链接)。`/collab lan|tunnel` 的启动与展示逻辑同时抽成共享函数,两条命令不再各写一份。
   - EN: New TUI `/pair` command — one command to bind the mobile app to this machine. Pairing previously meant knowing that `/collab lan` was the QR path, which reads as session *sharing*, not device pairing. `/pair` shows the code immediately when a share is already running and starts the LAN share first when it is not, listing every reachable NIC address plus the host-machine browser link; it reuses the existing link format and the terminal ANSI QR component, so the phone scans and is bound (or pastes the link instead). The LAN/tunnel start-and-present logic is now shared with `/collab` rather than written twice.
 
@@ -1276,6 +1380,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **设置页模型列表显示能力图标**:设置 → 模型与供应商的模型列表现与输入框的模型选择器一致,逐行显示文本/图片理解/视频理解/图片生成/视频生成/推理图标(同一套图标与文案,tooltip 列出全部能力)。为此 `models.catalog` 随每个模型下发能力标志。
   - EN: The Models & Providers model list now shows the same capability icons as the composer's model picker — text / image understanding / video understanding / image generation / video generation / reasoning, per row, with a shared tooltip listing them. `models.catalog` carries the capability flags for every model to make this possible.
 
@@ -1299,6 +1407,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **内置 `musepi-contributing` 提交规范 skill**:按项目模板与 CONTRIBUTING
   规范帮用户起草/提交 issue、PR、commit 与 changelog(PR body 必含用户本人
   一句、别为自提工作开 issue、`musepi --version` 字段等),安装进用户技能列表。
@@ -1328,6 +1440,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **Agnes 3.0 Flash 上架并设为默认**(CN + 国际站):`agnes-3.0-flash` 已加入 agnes / agnes-global 内置目录(512K ctx、text+image、刊例价同 2.5-flash、当前 promo ¥0,规格来自 wiki.agnes-ai.cn 2026-09-08),两站默认模型从 `agnes-2.5-flash` 切到 `agnes-3.0-flash`。
   - EN: Agnes 3.0 Flash is now bundled and the default on both the CN and global providers — `agnes-3.0-flash` joins the agnes / agnes-global static catalogs (512K ctx, text+image, list pricing identical to 2.5-flash, currently ¥0 promo; specs per wiki.agnes-ai.cn 2026-09-08) and both descriptors default from `agnes-2.5-flash` to `agnes-3.0-flash`.
 
@@ -1376,6 +1492,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **轮次折叠头聚合更改条 + 一键回退**(ZCode 更改 chip parity):已完成的轮次折叠头在「时长 · 工具 · 命令」之后新增「更改 N 文件 +A −R」着色 chip——聚合该轮内全部 `edit`/`apply_patch` 结果的 diff 统计(多文件走 `perFileResults`,错误文件不计入),无编辑的轮次不出 chip;chip 尾部撤销按钮一键回退到该轮用户消息之前(复用 `session.branchAt` 分支回退,旧分支保留)。
   - EN: The completed-round fold header gains a ZCode-style aggregate chip ("更改 N 文件 +A −R") after the duration/tool/command counts — summing diff stats across every `edit`/`apply_patch` result in the round (multi-file via `perFileResults`, errored files excluded), omitted for rounds that edited nothing; a trailing undo button branches back to the round's user message (existing `session.branchAt` revert, old branch preserved).
 - **文件面板 Markdown 渲染预览与预览工具行**:Files 面板的 `.md` 预览头新增「渲染 | 源码」分段切换(默认渲染,与聊天内 Markdown 同源:表格/代码块/mermaid),HTML 预览原有切换不变;预览头统一补齐「复制路径」「用默认应用打开」两个工具按钮。
@@ -1396,6 +1516,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **插件列表支持一键卸载**：已安装插件卡片和列表行新增卸载按钮，确认后由守护进程移除插件目录并即时刷新列表；卸载失败时错误横幅提示且列表保持不变。
+  - EN: One-click uninstall in the plugin list. Installed plugin cards and rows gain an uninstall button; after a confirmation the daemon removes the plugin directory and refreshes the list immediately, and a failed uninstall shows an error banner while leaving the list untouched.
+- **插件图标可自定义**：插件可在清单里声明 `icon`（emoji、字符或图片 URL），列表立即采用；未声明时按包名生成确定的彩色字母标，同包同名同色。
+  - EN: Customizable plugin icons. A plugin can declare `icon` in its manifest (emoji, glyph, or an image URL) and the list adopts it; without one, a deterministic colored letter mark is derived from the package name — same package, same mark.
 - **`musepi update` 下载进度条**:二进制下载(直接更新与 shim takeover 两条路径)现在实时显示进度——`[████░░░] 47% 23.5MB/50.0MB` 单行原地刷新,33ms 节流;失败/成功时同样的 `downloadFile` 钩子被调用,进度条在成功时自动清除。
   - EN: `musepi update` binary downloads (both the direct-update and shim-takeover paths) now show real-time progress — `[████░░░] 47% 23.5MB/50.0MB` rewritten in place at 33ms throttle; the same `downloadFile` hook fires on both failure and success, with the progress bar clearing automatically on success.
 - **错误回复语义重试**(非 naive retry):重试 now obeys `retry.retryable` 而非硬编码清单;`context/retry.ts` 根据错误类型(`retry.retryable` / `retry.message`)判断是否重试,区分网络错误、速率限制、凭据失效等场景;`retry.failed` 状态在 daemon shell 内持久化,重试前恢复 daemon 状态机。

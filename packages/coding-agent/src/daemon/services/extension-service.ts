@@ -813,6 +813,7 @@ export class ExtensionService implements DaemonService {
 					scope: p.scope,
 					enabled: p.enabled,
 					description: p.manifest.description ?? null,
+					icon: typeof p.manifest.icon === "string" ? p.manifest.icon : null,
 					tools: p.manifest.tools ? 1 : 0,
 					commands: Array.isArray(p.manifest.commands) ? p.manifest.commands.length : p.manifest.commands ? 1 : 0,
 					handlers:

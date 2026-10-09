@@ -35,6 +35,8 @@ export interface PluginPackageEntry {
 	scope: "user" | "project";
 	enabled: boolean;
 	description: string | null;
+	/** Manifest-declared icon: emoji, text glyph, or http(s)/file URI. */
+	icon: string | null;
 	tools: number;
 	commands: number;
 	handlers: number;
@@ -515,9 +517,9 @@ export function UnifiedPluginsView({
 									{filteredPackages.map(p => (
 										<div key={p.path} className="gui-plugin-card">
 											<div className="gui-plugin-card-head">
-												<PluginPackageIcon name={p.name} />
+												<PluginPackageIcon name={p.name} icon={p.icon} />
 												<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
-												<span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{p.name}</span>
+												<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
 												<button
 													type="button"
 													role="switch"
@@ -586,8 +588,8 @@ export function UnifiedPluginsView({
 							{filteredPackages.map(p => (
 								<div key={p.path} className="gui-ext-provider">
 									<div className="gui-ext-provider-h">
-										<PluginPackageIcon name={p.name} size={24} />
-										<span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{p.name}</span>
+										<PluginPackageIcon name={p.name} icon={p.icon} size={24} />
+										<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
 										<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
 										<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
 										<button
