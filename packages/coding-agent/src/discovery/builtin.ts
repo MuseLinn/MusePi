@@ -562,6 +562,26 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		}
 	}
 
+	// Installed plugin packages (plugins tree, `musepi.extensions` manifest
+	// field). The runtime loader (discoverExtensionPaths step 3) mounts these
+	// factories, so a plugin's registerProvider already takes effect — but the
+	// management/list face read only the config dirs above, which split one
+	// plugin into two realities: its provider showed up logged-in while its
+	// module was invisible to the extension center, ext.call, and the slot
+	// component compiler (a plugin's RPC answered nothing and its settings
+	// panel never mounted). Feeding the same paths into this capability puts
+	// the management face and the runtime face on one list.
+	try {
+		const { getAllPluginExtensionPaths } = await import("../extensibility/plugins/loader");
+		for (const extPath of await getAllPluginExtensionPaths(ctx.cwd)) {
+			items.push(createExtensionModule(extPath, "user"));
+		}
+	} catch (error) {
+		// Fail-soft: a plugin tree problem must not take the whole extension
+		// center down with it — the config-dir modules above still list.
+		warnings.push(`Failed to discover plugin extension paths: ${String(error)}`);
+	}
+
 	return { items, warnings };
 }
 
