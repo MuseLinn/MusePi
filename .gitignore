@@ -144,3 +144,7 @@ packages/.desktop-build/
 
 # Browser-panel screenshots land here; they are verification artifacts, not sources.
 .openchamber/
+
+# Qoder site-builder state (its own siteId/deploymentId bookkeeping plus a
+# stale snapshot of web/). The real site sources are web/, which stays tracked.
+*.qoder.site
