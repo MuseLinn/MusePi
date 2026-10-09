@@ -6,6 +6,7 @@ import type { RpcClient } from "../lib/rpc";
 import type { ExtensionItem } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
+import { kindGlyph, PluginIcon } from "./PluginIcon";
 import {
 	hiddenTiersFromComponents,
 	SpeechModelPicker,
@@ -288,7 +289,20 @@ export function PluginDetailDialog({
 			{item && filteredItem && (
 				<>
 					<div className="gui-dialog-head">
-						<Icon name="code-box" className="h-4 w-4 opacity-70" />
+						<PluginIcon
+							name={builtinDisplayName(item)}
+							icon={kindGlyph(item.kind)}
+							size={30}
+							status={
+								item.loadError
+									? "error"
+									: item.state === "active"
+										? "active"
+										: item.state === "shadowed"
+											? "shadowed"
+											: "off"
+							}
+						/>
 						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{builtinDisplayName(item)}</span>
 						<span className="gui-ext-item-tag">{item.id}</span>
 						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>

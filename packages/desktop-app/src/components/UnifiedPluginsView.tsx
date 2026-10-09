@@ -7,9 +7,9 @@ import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { PluginDetailDialog } from "./PluginDetailDialog";
+import { kindGlyph, PluginIcon } from "./PluginIcon";
 import { PluginInstallDialog } from "./PluginInstallDialog";
 import { PluginPackageDialog } from "./PluginPackageDialog";
-import { PluginPackageIcon } from "./PluginPackageIcon";
 
 /**
  * 插件 tab 的统一清单（ExtensionsCenter 与 CapabilityCenterPage 共用）：
@@ -236,9 +236,13 @@ export function ModuleRow({
 			}}
 		>
 			<div className="gui-ext-provider-h">
-				<Icon name="code-box" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-				<span
-					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+				<PluginIcon
+					name={builtinDisplayName(e)}
+					icon={kindGlyph(e.kind)}
+					size={24}
+					status={
+						e.loadError ? "error" : e.state === "active" ? "active" : e.state === "shadowed" ? "shadowed" : "off"
+					}
 				/>
 				<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{builtinDisplayName(e)}</span>
 				<span className="gui-ext-item-tag">{kindTag(e.kind)}</span>
@@ -286,11 +290,14 @@ export function ModuleCard({ e, onOpen }: { e: ExtensionItem; onOpen(item: Exten
 			onClick={() => onOpen(e)}
 		>
 			<div className="gui-plugin-card-head">
-				<Icon name="code-box" className="h-4 w-4 shrink-0 opacity-70" />
-				<span
-					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+				<PluginIcon
+					name={builtinDisplayName(e)}
+					icon={kindGlyph(e.kind)}
+					status={
+						e.loadError ? "error" : e.state === "active" ? "active" : e.state === "shadowed" ? "shadowed" : "off"
+					}
 				/>
-				<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{builtinDisplayName(e)}</span>
+				<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{builtinDisplayName(e)}</span>
 				<Icon name="arrow-right-s" className="h-3.5 w-3.5 shrink-0 opacity-40" />
 			</div>
 			{builtinDescription(e) ? <div className="gui-plugin-card-desc">{builtinDescription(e)}</div> : null}
@@ -568,8 +575,7 @@ export function UnifiedPluginsView({
 											}}
 										>
 											<div className="gui-plugin-card-head">
-												<PluginPackageIcon name={p.name} icon={p.icon} />
-												<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
+												<PluginIcon name={p.name} icon={p.icon} status={p.enabled ? "active" : "off"} />
 												<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
 												<button
 													type="button"
@@ -657,7 +663,7 @@ export function UnifiedPluginsView({
 									}}
 								>
 									<div className="gui-ext-provider-h">
-										<PluginPackageIcon name={p.name} icon={p.icon} size={24} />
+										<PluginIcon name={p.name} icon={p.icon} size={24} status={p.enabled ? "active" : "off"} />
 										<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
 										<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
 										<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>

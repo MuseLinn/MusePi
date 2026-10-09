@@ -418,6 +418,12 @@ export function SlotComponentMount({
 	}, [item.css, item.extensionId, item.slot]);
 	useEffect(() => {
 		let alive = true;
+		// The blob URL must outlive the import: revoking it inside this
+		// effect's cleanup kills a fetch still in flight, and the registry
+		// hands out a new `item` object on every poll (and a StrictMode
+		// remount runs cleanup immediately) — so the revoke raced the
+		// import and the component failed with "Failed to fetch dynamically
+		// imported module". Revoke only once the import has settled.
 		let url: string | null = null;
 		// Daemon compile failure (item.error set + empty code): the blob
 		// import of "" would fail with a misleading "must export a default
@@ -449,11 +455,15 @@ export function SlotComponentMount({
 				setComp(() => Component);
 			} catch (e) {
 				if (alive) setError(String(e));
+			} finally {
+				// Settle first, then release — a revoked-in-flight fetch is
+				// unrecoverable and the failure message points at the wrong
+				// thing (the module's own code, which is fine).
+				if (url) URL.revokeObjectURL(url);
 			}
 		})();
 		return () => {
 			alive = false;
-			if (url) URL.revokeObjectURL(url);
 		};
 	}, [item]);
 	if (error) {
@@ -541,10 +551,12 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 				}
 			}
 			if (alive) registerExternalToolRenderers(registered);
+			// Same settle-then-release rule as the component loader: revoking
+			// a URL while its import is in flight fails the fetch.
+			for (const url of urls) URL.revokeObjectURL(url);
 		})();
 		return () => {
 			alive = false;
-			for (const url of urls) URL.revokeObjectURL(url);
 		};
 	}, [toolViews]);
 }

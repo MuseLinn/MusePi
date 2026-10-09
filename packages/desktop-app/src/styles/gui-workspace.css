@@ -2141,6 +2141,21 @@
 .gui-ext-dot--shadowed {
 	background: color-mix(in oklab, #fbbf24 85%, transparent);
 }
+/* Status badge riding the plugin icon's corner: the icon itself is now the
+ * status carrier, and a sibling dot overlapped wide emoji marks. */
+.gui-plugin-icon-badge {
+	border: 1.5px solid var(--color-surface);
+	box-sizing: border-box;
+}
+.gui-plugin-icon-badge--off {
+	background: var(--color-text-faint);
+}
+.gui-plugin-icon-badge--shadowed {
+	background: color-mix(in oklab, #fbbf24 85%, transparent);
+}
+.gui-plugin-icon-badge--error {
+	background: var(--color-danger, #f87171);
+}
 .gui-ext-provider-h {
 	display: flex;
 	align-items: center;

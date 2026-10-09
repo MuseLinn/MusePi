@@ -6,6 +6,7 @@ import type { RpcClient } from "../lib/rpc";
 import {
 	type ExtensionItem,
 	type ProviderInfo,
+	SETTINGS_EXTENSION_SLOT,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	type SlotComponent,
 	SlotComponentMount,
@@ -298,7 +299,13 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		const enabled = new Set((data?.extensions ?? []).filter(e => e.state === "active").map(e => e.path));
 		const byExt = new Map<string, SlotComponent[]>();
 		for (const c of data?.components ?? []) {
-			if (!c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX)) continue;
+			// settings.item.<extId> per-row cards AND the exact
+			// settings.extensions page slot: a plugin's own management panel
+			// (an account pool, for example) registers the latter, and until
+			// now nothing in the GUI hosted it — the component compiled and
+			// then sat unreferenced.
+			const isSettingsSurface = c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX) || c.slot === SETTINGS_EXTENSION_SLOT;
+			if (!isSettingsSurface) continue;
 			if (!enabled.has(c.extensionId)) continue;
 			const list = byExt.get(c.extensionId) ?? [];
 			list.push(c);
