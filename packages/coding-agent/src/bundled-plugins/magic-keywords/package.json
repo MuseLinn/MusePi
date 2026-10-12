@@ -1,0 +1,13 @@
+{
+	"name": "musepi-magic-keywords",
+	"version": "0.1.0",
+	"private": true,
+	"description": "MusePi first-party magic keywords: ultrathink, orchestrate, workflowz.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "✨",
+		"description": "First-party magic keywords: composer trigger words that append a hidden notice to the model.",
+		"extensions": ["./index.ts"]
+	}
+}

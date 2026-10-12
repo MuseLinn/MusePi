@@ -122,6 +122,12 @@ async function main(): Promise<void> {
 		await fs.cp(path.join(packageDir, "src/bundled-skills"), path.join(outDir, "bundled-skills"), {
 			recursive: true,
 		});
+		// Bundled plugin packages ship the same way: the bundled CLI discovers
+		// them from disk (src/bundled-plugins in dev, ./bundled-plugins in the
+		// bundled CLI), and each subdirectory is one loadable package.
+		await fs.cp(path.join(packageDir, "src/bundled-plugins"), path.join(outDir, "bundled-plugins"), {
+			recursive: true,
+		});
 	} finally {
 		await runCommand(["bun", "--cwd=../stats", "run", "gen:stats:reset"]);
 	}

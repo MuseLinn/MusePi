@@ -1,14 +1,20 @@
+import { containsMagicKeyword, listMagicKeywordHighlighters, listMagicKeywords } from "./magic-keyword-registry";
 import { containsOrchestrate, highlightOrchestrate } from "./orchestrate";
 import { containsUltrathink, highlightUltrathink } from "./ultrathink";
 import { containsWorkflow, highlightWorkflow } from "./workflow";
 
 /**
- * Gradient-highlight every magic keyword ("ultrathink", "orchestrate",
- * "workflowz") that appears as standalone prose, skipping any occurrence inside a
- * code block, inline code span, or XML/HTML section. Each highlighter paints its
- * own keyword with its own gradient, so chaining is order-independent — the
- * earlier passes only inject zero-width SGR escapes (no backticks or angle
- * brackets), which never confuse the later passes' markdown masking.
+ * Gradient-highlight every magic keyword that appears as standalone prose,
+ * skipping any occurrence inside a code block, inline code span, or XML/HTML
+ * section. Each highlighter paints its own keyword with its own gradient, so
+ * chaining is order-independent — the earlier passes only inject zero-width SGR
+ * escapes (no backticks or angle brackets), which never confuse the later
+ * passes' markdown masking.
+ *
+ * Two sources are painted: the three compiled-in keywords and every keyword an
+ * extension contributed through `pi.registerMagicKeyword`. An extension's
+ * keyword gets the same affordance, so a word that nudges the model also reads
+ * as active in the editor instead of sitting there as plain prose.
  *
  * `resetTo` is the SGR foreground sequence restored after each painted keyword;
  * pass the surrounding text color when decorating already-colored content (e.g.
@@ -21,22 +27,41 @@ import { containsWorkflow, highlightWorkflow } from "./workflow";
  * to keep the static gradient.
  */
 export function highlightMagicKeywords(text: string, resetTo?: string, phase?: number): string {
-	return highlightWorkflow(
+	const builtin = highlightWorkflow(
 		highlightOrchestrate(highlightUltrathink(text, resetTo, phase), resetTo, phase),
 		resetTo,
 		phase,
 	);
+	// Contribution highlighters chain over the built-ins, in registration order.
+	let painted = builtin;
+	for (const highlighter of listMagicKeywordHighlighters()) {
+		painted = highlighter(painted, resetTo, phase);
+	}
+	return painted;
 }
 
 /**
- * Cheap test for "does this text contain any magic keyword as standalone prose?".
- * Short-circuits on a substring probe before paying for the markdown-aware
- * prose check, so the common "no keyword in buffer" path is just three
- * `String#indexOf`s. Used by the live editor to gate the shimmer timer.
+ * Cheap test for "does this text contain any magic keyword as standalone
+ * prose?". Short-circuits on a substring probe before paying for the
+ * markdown-aware prose check, so the common "no keyword in buffer" path stays
+ * cheap. Used by the live editor to gate the shimmer timer.
+ *
+ * Reads the registry rather than a fixed list: an extension's keyword must gate
+ * the shimmer too, or it would silently never animate.
  */
 export function hasMagicKeyword(text: string): boolean {
-	if (!text.includes("ultrathink") && !text.includes("orchestrate") && !text.includes("workflowz")) {
+	const names = listMagicKeywords().map(keyword => keyword.name);
+	if (
+		!text.includes("ultrathink") &&
+		!text.includes("orchestrate") &&
+		!text.includes("workflowz") &&
+		!names.some(name => text.includes(name))
+	) {
 		return false;
 	}
-	return containsUltrathink(text) || containsOrchestrate(text) || containsWorkflow(text);
+	if (containsUltrathink(text) || containsOrchestrate(text) || containsWorkflow(text)) return true;
+	for (const keyword of listMagicKeywords()) {
+		if (containsMagicKeyword(keyword, text)) return true;
+	}
+	return false;
 }

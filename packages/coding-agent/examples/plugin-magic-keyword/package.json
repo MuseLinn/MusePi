@@ -1,0 +1,20 @@
+{
+	"name": "@musepi/example-plugin-magic-keyword",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Example MusePi plugin package: contributes a custom magic keyword plus its own settings panel.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "✨",
+		"description": "示例插件包：贡献一个自定义魔术关键词「deepdive」，并自带设置面板。",
+		"extensions": ["./index.ts"],
+		"components": [
+			{
+				"id": "deepdive",
+				"name": "Deepdive Keyword",
+				"description": "在输入框里单独输入 deepdive 即触发深度分析提示。"
+			}
+		]
+	}
+}

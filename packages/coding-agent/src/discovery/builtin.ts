@@ -582,7 +582,66 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		warnings.push(`Failed to discover plugin extension paths: ${String(error)}`);
 	}
 
+	// Bundled plugin packages (src/bundled-plugins, shipped as ./bundled-plugins
+	// in the bundled CLI): first-party units in plugin form. Each subdirectory
+	// with a package.json declaring `musepi.extensions` is one package. They run
+	// through the same module loader as any plugin — a bundled unit is a package
+	// the distribution ships, not a separate kind of thing.
+	try {
+		for (const extPath of await discoverBundledPluginPaths()) {
+			items.push(createExtensionModule(extPath, "user"));
+		}
+	} catch (error) {
+		// Fail-soft for the same reason: a malformed bundled package must not
+		// hide the user's own plugins.
+		warnings.push(`Failed to discover bundled plugin packages: ${String(error)}`);
+	}
+
 	return { items, warnings };
+}
+
+/**
+ * Extension entry paths from the bundled plugin packages.
+ *
+ * Dev resolves `src/bundled-plugins` next to this module; the bundled CLI
+ * resolves `./bundled-plugins` next to its entrypoint (bundle-dist copies the
+ * tree there). A directory with no readable `musepi.extensions` manifest is
+ * skipped — it is not a package, and reporting it would make every stray
+ * directory in the tree a plugin.
+ */
+export async function discoverBundledPluginPaths(): Promise<string[]> {
+	const roots = [
+		path.resolve(import.meta.dir, "..", "bundled-plugins"),
+		path.resolve(process.cwd(), "bundled-plugins"),
+	];
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const root of roots) {
+		// readDirEntries never throws (absent root reads as empty) and returns
+		// Dirents — only directories are packages; a stray file is not.
+		const entries = await readDirEntries(root);
+		for (const dirent of entries) {
+			if (!dirent.isDirectory()) continue;
+			const pkgDir = path.join(root, dirent.name);
+			const manifestPath = path.join(pkgDir, "package.json");
+			let manifest: { musepi?: { extensions?: unknown } };
+			try {
+				manifest = (await Bun.file(manifestPath).json()) as typeof manifest;
+			} catch {
+				continue;
+			}
+			const declared = manifest.musepi?.extensions;
+			if (!Array.isArray(declared)) continue;
+			for (const entry of declared) {
+				if (typeof entry !== "string" || entry.length === 0) continue;
+				const resolved = path.resolve(pkgDir, entry);
+				if (seen.has(resolved)) continue;
+				seen.add(resolved);
+				out.push(resolved);
+			}
+		}
+	}
+	return out;
 }
 
 registerProvider<ExtensionModule>(extensionModuleCapability.id, {

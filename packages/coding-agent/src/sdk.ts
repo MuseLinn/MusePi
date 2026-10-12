@@ -77,6 +77,7 @@ import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-tas
 import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
+import { ensureBundledPluginsLoaded } from "./bundled-plugins/loader";
 import { initializeWithSettings } from "./discovery";
 import { setInvocationConfiguredExtensions, withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
@@ -134,6 +135,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
+import { applyPendingMagicKeywords } from "./modes/magic-keyword-registry";
 import { applyAssetPolicySection } from "./presets/asset-policy";
 import { applyDesignSystemSection, registerExtensionDesignSystem } from "./presets/design-systems";
 import {
@@ -2529,6 +2531,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				registerExtensionDesignSystem(config, sourceId);
 			}
 			extensionsResult.runtime.pendingDesignSystemRegistrations = [];
+		}
+		// Magic keywords follow the same pending → registry replay lifecycle: an
+		// extension's keyword lands in the registry a session reads, and an unload
+		// (which clears this queue) is what removes it again. The first-party trio
+		// loads here too: they ship as a bundled plugin package, and this is the
+		// one site that must guarantee them regardless of discovery options.
+		await ensureBundledPluginsLoaded(cwd);
+		if (extensionsResult.runtime.pendingMagicKeywordRegistrations.length > 0) {
+			applyPendingMagicKeywords(extensionsResult.runtime.pendingMagicKeywordRegistrations);
+			extensionsResult.runtime.pendingMagicKeywordRegistrations = [];
 		}
 		// Hydrate cached runtime (extension) provider catalogs before model
 		// resolution. Dynamic-only providers have no synchronous registration side

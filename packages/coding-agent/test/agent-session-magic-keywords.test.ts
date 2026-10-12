@@ -14,6 +14,8 @@ import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
 import { removeWithRetries } from "@musepi/pi-utils";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "../src/bundled-plugins/loader";
+import { resetMagicKeywordRegistry } from "../src/modes/magic-keyword-registry";
 
 const mockTaskTool: AgentTool = {
 	name: "task",
@@ -39,6 +41,11 @@ async function createMagicKeywordSession(
 	settings: Settings;
 	authStorage: AuthStorage;
 }> {
+	// The session reads keywords from the process registry; the first-party
+	// trio ships as a bundled plugin package, and this test constructs
+	// AgentSession directly (no sdk bootstrap), so it loads the bundled
+	// packages itself — the same call createAgentSession makes.
+	await ensureBundledPluginsLoaded(root);
 	const model = getBundledModel("anthropic", "claude-sonnet-4-5");
 	if (!model) throw new Error("Expected bundled Claude Sonnet model");
 	const agent = new Agent({
@@ -70,6 +77,12 @@ describe("AgentSession magic keyword settings", () => {
 
 	beforeEach(async () => {
 		root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-magic-keywords-"));
+		// Other suites in this process reset the keyword registry in their own
+		// afterEach, and the bundled loader's one-shot flag is process-level:
+		// reset both so every test re-loads the first-party trio regardless of
+		// file order.
+		resetBundledPluginsLoaded();
+		resetMagicKeywordRegistry();
 	});
 
 	afterEach(async () => {

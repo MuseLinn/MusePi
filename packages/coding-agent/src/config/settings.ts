@@ -527,6 +527,22 @@ export class Settings {
 	}
 
 	/**
+	 * Read a dotted key that may or may not be in the schema.
+	 *
+	 * In-schema keys resolve through `get` (typed defaults apply — the caller
+	 * sees the same value the settings UI shows); keys outside the schema read
+	 * raw and return `undefined` when never written. This is the read-side twin
+	 * of the branch `set` already makes, and it exists because a keyword's
+	 * enablement is keyed by a NAME THE HOST DOES NOT CONTROL: built-in keys
+	 * (`magicKeywords.ultrathink`) carry schema defaults, extension-contributed
+	 * ones do not, and one reader must handle both without the caller knowing
+	 * which is which.
+	 */
+	getFlexible(path: string): unknown {
+		return path in SETTING_PATH_SEGMENTS ? this.get(path as SettingPath) : this.getRaw(path);
+	}
+
+	/**
 	 * Read an arbitrary dotted key (extension-contributed settings like
 	 * display.taskCardStyle are NOT in SETTINGS_SCHEMA, so `get()` would
 	 * crash on the missing path-segment table). Same dot-segment addressing

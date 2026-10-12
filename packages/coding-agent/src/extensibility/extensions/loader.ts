@@ -56,6 +56,7 @@ import type {
 	ExtensionCredential,
 	ExtensionCredentialStore,
 	ExtensionFactory,
+	ExtensionMagicKeyword,
 	ExtensionModeDefinition,
 	ExtensionNotificationMessage,
 	ExtensionPromptSection,
@@ -70,6 +71,7 @@ import type {
 	ProviderConfig,
 	RegisteredCommand,
 	RegisteredDesignSystem,
+	RegisteredMagicKeyword,
 	RegisteredMediaProvider,
 	ToolDefinition,
 	ToolInfo,
@@ -100,6 +102,13 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
 	pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
 	pendingDesignSystemRegistrations: RegisteredDesignSystem[] = [];
+	/**
+	 * Magic keywords registered by extensions, pending the host that consumes
+	 * them. A queue rather than a per-extension list because the consumer is a
+	 * session — several sessions may read the same registration, and an unload
+	 * must drop the keyword from all of them at once.
+	 */
+	pendingMagicKeywordRegistrations: RegisteredMagicKeyword[] = [];
 
 	registerProvider(name: string, config: ProviderConfig, sourceId: string): void {
 		this.pendingProviderRegistrations.push({ name, config, sourceId });
@@ -130,6 +139,17 @@ export class ExtensionRuntime implements IExtensionRuntime {
 			registration => registration.config.id !== id || registration.sourceId !== sourceId,
 		);
 		this.pendingDesignSystemRegistrations.splice(0, this.pendingDesignSystemRegistrations.length, ...remaining);
+	}
+
+	registerMagicKeyword(keyword: ExtensionMagicKeyword, sourceId: string): void {
+		this.pendingMagicKeywordRegistrations.push({ ...keyword, sourceId });
+	}
+
+	unregisterMagicKeyword(name: string, sourceId: string): void {
+		const remaining = this.pendingMagicKeywordRegistrations.filter(
+			registration => registration.name !== name || registration.sourceId !== sourceId,
+		);
+		this.pendingMagicKeywordRegistrations.splice(0, this.pendingMagicKeywordRegistrations.length, ...remaining);
 	}
 
 	sendMessage(): void {
@@ -275,6 +295,13 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	}> = [];
 	readonly pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
 	readonly pendingDesignSystemRegistrations: RegisteredDesignSystem[] = [];
+	/**
+	 * Mirrors the runtime's queue, as the other pending lists here do: the API
+	 * instance is per-extension, and the runtime queue is what a session drains.
+	 * Kept in step with `registerMagicKeyword` so `loadExtensions` can report a
+	 * factory's contributions without reaching into the runtime.
+	 */
+	readonly pendingMagicKeywordRegistrations: RegisteredMagicKeyword[] = [];
 
 	constructor(
 		public readonly pi: typeof PiCodingAgent,
@@ -442,6 +469,20 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			throw new TypeError("registerSkill: skill.name is required");
 		}
 		this.extension.skills.push(skill);
+	}
+
+	registerMagicKeyword(keyword: ExtensionMagicKeyword): void {
+		if (!keyword || typeof keyword.name !== "string" || keyword.name.length === 0) {
+			throw new TypeError("registerMagicKeyword: keyword.name is required");
+		}
+		if (typeof keyword.notice !== "string" || keyword.notice.trim().length === 0) {
+			throw new TypeError(`registerMagicKeyword: notice required for "${keyword.name}"`);
+		}
+		this.runtime.registerMagicKeyword(keyword, this.extension.path);
+	}
+
+	unregisterMagicKeyword(name: string): void {
+		this.runtime.unregisterMagicKeyword(name, this.extension.path);
 	}
 
 	registerToolView(tool: string, options: { moduleUrl: string; label?: string }): void {
@@ -746,6 +787,25 @@ interface ImportedExtensionModule {
 async function importExtensionModule(extensionPath: string, cwd: string): Promise<ImportedExtensionModule> {
 	const resolvedPath = resolvePath(extensionPath, cwd);
 	try {
+		// Bundled plugin packages load through a plain dynamic import. They ship
+		// with the host — same repo, same version, replaced as a whole on
+		// upgrade — so they never need the legacy source-graph snapshot (a
+		// file-by-file walk of the package's ENTIRE import graph, which for a
+		// package importing host modules means thousands of files read and
+		// parsed per load) nor its per-session cache-bust. Their module identity
+		// is the distribution itself.
+		if (isBundledPluginPath(resolvedPath)) {
+			const module = (await import(resolvedPath)) as LoadedExtensionModule;
+			const factory = getExtensionFactory(module);
+			if (typeof factory !== "function") {
+				return {
+					factory: null,
+					resolvedPath,
+					error: `Extension does not export a valid factory function: ${extensionPath}`,
+				};
+			}
+			return { factory, resolvedPath, error: null };
+		}
 		const module = (await withHostGuard(() => loadLegacyPiModule(resolvedPath))) as LoadedExtensionModule;
 		const factory = getExtensionFactory(module);
 
@@ -762,6 +822,12 @@ async function importExtensionModule(extensionPath: string, cwd: string): Promis
 		const message = err instanceof Error ? err.message : String(err);
 		return { factory: null, resolvedPath, error: `Failed to load extension: ${message}` };
 	}
+}
+
+/** Whether an extension entry lives under the host's bundled plugin tree. */
+function isBundledPluginPath(resolvedPath: string): boolean {
+	const normalized = resolvedPath.replaceAll("\\", "/");
+	return normalized.includes("/src/bundled-plugins/") || normalized.includes("/bundled-plugins/");
 }
 
 async function bindExtension(

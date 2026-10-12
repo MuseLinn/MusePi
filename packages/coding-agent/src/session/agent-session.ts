@@ -157,12 +157,10 @@ import type { IrcMessage } from "../irc/bus";
 import type { DaemonCompletionNotification } from "../launch/protocol";
 import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
-import { containsOrchestrate, renderOrchestrateNotice } from "../modes/orchestrate";
+import { containsMagicKeyword, listMagicKeywords } from "../modes/magic-keyword-registry";
 import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
-import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
 import { computeNonMessageTokens } from "../modes/utils/context-usage";
-import { containsWorkflow, renderWorkflowNotice } from "../modes/workflow";
 import { type PlanApprovalDetails, resolveApprovedPlan } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile } from "../plan-mode/plan-files";
 import type { PlanModeState } from "../plan-mode/state";
@@ -5682,41 +5680,38 @@ export class AgentSession {
 		const turnBudget = parseTurnBudget(text);
 		this.sessionManager.beginTurnBudget(turnBudget?.total ?? null, turnBudget?.hard ?? false);
 		const keywordNotices: CustomMessage[] = [];
-		if (this.#magicKeywordEnabled("ultrathink") && containsUltrathink(text)) {
-			keywordNotices.push({
-				role: "custom",
-				customType: "ultrathink-notice",
-				content: ULTRATHINK_NOTICE,
-				display: false,
-				attribution: "user",
-				timestamp,
-			});
-		}
-		if (this.#magicKeywordEnabled("orchestrate") && containsOrchestrate(text)) {
-			const activeToolNames = this.getActiveToolNames();
-			// The contract is entirely about `task` subagent dispatch; without the
-			// task tool the notice would demand an unavailable capability.
-			if (activeToolNames.includes("task")) {
+		// All keywords — the three first-party ones (contributed by the bundled
+		// magic-keywords package) and every extension's — go through the one
+		// registry. A keyword's per-turn fork (orchestrate needs the task tool,
+		// workflow the task+eval pair and the batch setting) lives in its own
+		// renderNotice hook; the host supplies the turn context and the hook
+		// decides whether it fires and what it says.
+		if (this.settings.get("magicKeywords.enabled")) {
+			const tools = this.getActiveToolNames();
+			const noticeContext = {
+				tools,
+				taskBatch: this.settings.get("task.batch"),
+				scoutAvailable: this.#isScoutAvailable(),
+			};
+			for (const keyword of listMagicKeywords()) {
+				// `getFlexible`, not `get`/`getRaw` alone: the three first-party
+				// keyword keys are in the schema (typed defaults apply), while an
+				// extension's key is not (never written → OFF — an extension must
+				// not start nudging the model just because nobody configured it).
+				if (this.settings.getFlexible(`magicKeywords.${keyword.name}`) !== true) continue;
+				if (!containsMagicKeyword(keyword, text)) continue;
+				// A renderNotice hook OWNS the decision when present: its
+				// `undefined` is a decline ("conditions not met this turn"), not a
+				// reason to fall back to the static text — the static text is the
+				// hook's own default rendering and must not fire when the hook
+				// says the turn does not warrant it. Only a keyword WITHOUT a hook
+				// falls back to its static notice.
+				const content = keyword.renderNotice !== undefined ? keyword.renderNotice(noticeContext) : keyword.notice;
+				if (content === undefined) continue;
 				keywordNotices.push({
 					role: "custom",
-					customType: "orchestrate-notice",
-					content: renderOrchestrateNotice({ tools: activeToolNames }),
-					display: false,
-					attribution: "user",
-					timestamp,
-				});
-			}
-		}
-		if (this.#magicKeywordEnabled("workflow") && containsWorkflow(text)) {
-			const activeToolNames = this.getActiveToolNames();
-			if (activeToolNames.includes("task") && activeToolNames.includes("eval")) {
-				keywordNotices.push({
-					role: "custom",
-					customType: "workflow-notice",
-					content: renderWorkflowNotice({
-						taskBatch: this.settings.get("task.batch"),
-						scoutAvailable: this.#isScoutAvailable(),
-					}),
+					customType: keyword.noticeType ?? `${keyword.name}-notice`,
+					content,
 					display: false,
 					attribution: "user",
 					timestamp,
