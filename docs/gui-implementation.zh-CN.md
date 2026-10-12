@@ -834,3 +834,27 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
   `offsetHeight` 量到的是裁剪盒——网格「动画」到那个卡死的裁剪上，半路冻住。现在每次 run
   在测量前先清掉残留的内联钉帧，且清理函数在被打断时（React 重跑 effect 会先执行）恢复
   自然布局——被打断的 morph 不可能活过自己的 run。
+
+
+## 49. 统一插件清单里的插件包归属（2026-10-10）
+
+统一插件清单（`UnifiedPluginsView`）合并了两条描述同一插件的链路，两端口径相反：
+
+- `plugins.packages` —— 每个已装包目录一条（`path` 由 `path.join` 拼出，Windows 下为反斜杠）；
+- `extensions.list` —— 包目录下的扩展模块，各自带着自己的入口路径。
+
+包是列表的唯一行；模块收进详情弹层的「包含的组件」，插件自己的设置组件挂载在弹层的
+设置段。归属判定由 `isPathInside(child, parent)` 决定。
+
+**契约**：`isPathInside` 比较 `path.relative(resolve(parent), resolve(child))` 并拒绝 `..`
+与绝对路径结果 —— 直接回答「是否在目录内」，而不是假定两侧拼写出同一个分隔符；同时它
+会拒绝只共享前缀的同级目录（`demo` 下的 `demo-extra`）。用例钉在
+`packages/desktop-app/test/plugin-path-scope.test.ts`。
+
+**设置界面**：`settings.item.<extId>` 卡片与精确槽位 `settings.extensions`（插件自带管理
+面板如账号池注册处）的组件，都由 `ExtensionsCenter` 按扩展分组渲染，并带上
+`settingsScope` 读写代理，使需要落盘设置的面板不会拿到空代理。
+
+**第三方插件要求**（见 `docs/extensions-dev.md` §6）：声明 `musepi.extensions`、声明
+`musepi.icon` 作为品牌标识，并把面板注册到 `settings.extensions`；**禁止
+`import from "react"`**（daemon 会把 `React` 标识符改写为 `window.MusePiReact`）。

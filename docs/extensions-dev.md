@@ -150,9 +150,17 @@ export default function (pi: ExtensionAPI): void {
 - `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
-- `panel.right` / `settings.extensions` — 旧保留槽(仍可用)
+- `panel.right` / `settings.extensions` — 旧保留槽(仍可用)。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载,见下):注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染,并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片(2026-08-17;2026-08-20 起展示于**扩展中心底部**,随插件 inventory):按扩展 id 派发一张卡片,组件经 `settingsScope` prop 读写设置键(见下)。
 - `settings.action.<id>` — 单行偏好槽(2026-08-20):组件挂到设置页"通用"分区末尾,功能插件贡献单行偏好(语言/外观/Enter 行为),无需整 tab 或整卡。
+
+**设置面板宿主**(2026-10-10):注册到 `settings.extensions` 的组件由**扩展控制中心**
+底部的「扩展设置」分区承载 —— 与 `settings.item.<extId>` 卡片同框,按 `extensionId`
+(扩展入口路径)分组,每组一张 `gui-ext-settings-card`。两者挂载时都拿到
+`settingsScope`(`{ get(keys), set(key, value) }`,经 daemon `settings.get`/`settings.set`),
+组件必须把它当**可选**处理(只挂在 RPC 桥上的宿主不传)。插件包详情弹层
+(`PluginPackageDialog`)同样挂载 slot 以 `settings.` 开头且 `extensionId` 位于包目录下的
+组件 —— 这就是第三方插件(如 musepi-auth-hub)设置界面的落点。
 
 **数据流**:daemon `bun.build` 把模块编译为自包含 ESM(react 绑定宿主实例)→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob: 动态 import 挂载。**信任模型**:扩展本就在 daemon 进程执行任意代码,渲染其组件不构成新提权。
 
@@ -225,7 +233,31 @@ pi.registerSkill({
 
 **边界**:虚拟技能**不进 agent 的 loadSkills 自动装载**(那是文件扫描路径)——技能中心可见 + 可读,但不会作为上下文注入 agent;需要注入的扩展请写真实 SKILL.md 文件。
 
-## 9. 扩展 per-tool 渲染器(registerToolView,2026-08-20)
+## 9. 扩展注册魔术关键词(registerMagicKeyword,2026-10-11)
+
+扩展贡献一个**魔术关键词**:输入框里单独出现的词,提交时向模型追加一条隐藏提示。
+
+```ts
+import deepdiveNotice from "./prompts/deepdive-notice.md" with { type: "text" };
+
+pi.registerMagicKeyword({
+	name: "deepdive",
+	description: "在输入框里单独输入 deepdive,即请求一次带证据链的深度分析",
+	notice: deepdiveNotice.trim(),
+	noticeType: "deepdive-notice", // 可选,默认 `<name>-notice`
+});
+```
+
+**契约**:
+- 匹配与内置关键词同规则:小写、散文边界(`keywordInProse`),因此 `deepdiving` / `Deepdive` / `deepdive.ts` / 行内代码里的 `deepdive` 都不触发;
+- 提示以 `role: "custom"`、`display: false`、`attribution: "user"` 追加 —— 模型可见,transcript 不显示;
+- 开关走 `magicKeywords.<name>` 设置键,并受总开关 `magicKeywords.enabled` 门控;**该键从未写入时按停用处理**(扩展不能因为没人配置就开始改模型行为);
+- 提示词正文放在 `.md` 文件里用 `with { type: "text" }` 导入(不内联拼字符串)。
+
+**生命周期**:注册进 loader 的 pending 队列,会话初始化时 replay 进 `modes/magic-keyword-registry`;扩展卸载/禁用时按 sourceId 移除 —— 关键词不会活过声明它的扩展。
+
+**可运行样板**:`examples/plugin-magic-keyword`(关键词 + 自带设置面板 + RPC 完整一套)。
+
 
 扩展为**指定工具名**贡献 transcript 渲染器,替换内置渲染器:
 

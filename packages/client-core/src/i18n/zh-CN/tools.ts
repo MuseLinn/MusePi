@@ -569,6 +569,28 @@ export const tools = {
 	"ext resources models": "需下载模型",
 	"ext plugins official": "官方",
 	"ext plugins installed": "已安装",
+	// bundle/profile 组合面（能力中心「组合」tab）
+	"bundle title": "组合",
+	"bundle profile": "Profile",
+	"bundle rows": "组合出 {count} 行",
+	"bundle disabled count": "已关闭 {count}",
+	"bundle conditional count": "条件启停 {count}",
+	"bundle unevaluated hint":
+		"有 {count} 处表达式未被求值：这些行的启停由表达式决定，本宿主不执行它们，状态如实标为未知。",
+	"bundle layers": "层",
+	"bundle layer rows": "{count} 行",
+	"bundle layer overrides": "覆盖 {count}",
+	"bundle layer unreadable": "未读 {count}",
+	"bundle group tag": "分组",
+	"bundle plugin missing": "插件未安装",
+	"bundle plugin disabled": "插件已停用",
+	"bundle conditional tag": "条件启停",
+	"bundle conditional hint": "该行的启停由一个表达式决定，本宿主不执行表达式，无法在此切换。",
+	"bundle no composition title": "当前 profile 没有声明组合",
+	"bundle no composition desc":
+		"组合由 profile 清单声明：在 profile 目录的 package.json 里写 dsh.profile.bundles 列出它叠了哪些 bundle，即可在这里看到组合结果与逐行启停。",
+	"bundle no rows title": "组合为空",
+	"bundle no rows desc": "这个 profile 叠的 bundle 没有插入任何行。",
 	"ext add plugin": "添加插件",
 	"ext plugin components": "包含的组件",
 	"ext plugin components desc":

@@ -920,3 +920,34 @@ pin, and the provider collapse froze mid-card.
   run now clears the stale inline pin BEFORE measuring, and the cleanup function restores
   natural layout when interrupted (React runs it on effect re-fire), so an interrupted
   morph can never outlive its run.
+
+
+## 49. Plugin package attribution in the unified plugin list (2026-10-10)
+
+The unified plugin list (`UnifiedPluginsView`) merges two chains that describe the same
+plugin from opposite ends:
+
+- `plugins.packages` — one entry per installed package directory (`path` built with
+  `path.join`, so backslashes on Windows);
+- `extensions.list` — the package's extension modules, each carrying its own entry path.
+
+A package is the single list row; its modules collapse into the detail dialog's
+**included components**, and the package's own settings component mounts in the dialog's
+settings section. Attribution is decided by `isPathInside(child, parent)`.
+
+**Contract:** `isPathInside` compares `path.relative(resolve(parent), resolve(child))`
+and rejects `..` / absolute results, so it answers containment directly instead of
+assuming both sides spell the separator the same way — and it rejects a sibling that
+merely shares a prefix (`demo-extra` under `demo`). Pinned in
+`packages/desktop-app/test/plugin-path-scope.test.ts`.
+
+**Settings surface:** both `settings.item.<extId>` cards and the exact
+`settings.extensions` page slot — where a plugin's own management panel (an account
+pool, for example) registers — are grouped per extension in `ExtensionsCenter` and
+mounted with the `settingsScope` read/write proxy, so a panel that persists settings
+never receives an empty proxy.
+
+**Third-party plugin requirements** (documented in `docs/extensions-dev.md` §6):
+declare `musepi.extensions`, declare `musepi.icon` for a brand mark, and register
+the panel into `settings.extensions` — no `import from "react"` (the daemon rewrites the
+`React` identifier to `window.MusePiReact`).

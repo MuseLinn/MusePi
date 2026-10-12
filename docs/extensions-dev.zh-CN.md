@@ -135,9 +135,17 @@ export default function (pi: ExtensionAPI): void {
 - `settings.tab.<id>` — 设置页左侧导航项：扩展声明一个设置页即出现在设置导航，内容区挂载组件。
 - `rail.<id>` — 右缘图标轨（前缀命名空间；`rail.right` 是保留的精确槽）
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端（list 语义，多扩展可同槽）
-- `panel.right` / `settings.extensions` — 旧保留槽（仍可用）
+- `panel.right` / `settings.extensions` — 旧保留槽（仍可用）。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载，见下）：注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染，并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片（2026-08-17；2026-08-20 起展示于**扩展中心底部**，随插件 inventory）：按扩展 id 派发一张卡片，组件经 `settingsScope` prop 读写设置键（见下）。
 - `settings.action.<id>` — 单行偏好槽（2026-08-20）：组件挂到设置页“通用”分区末尾，功能插件贡献单行偏好（语言/外观/Enter 行为），无需整 tab 或整卡。
+
+**设置面板宿主**（2026-10-10）：注册到 `settings.extensions` 的组件由**扩展控制中心**底部
+的「扩展设置」分区承载 —— 与 `settings.item.<extId>` 卡片同框，按 `extensionId`（扩展入口路径）
+分组，每组一张 `gui-ext-settings-card`。两者挂载时都拿到 `settingsScope`
+（`{ get(keys), set(key, value) }`，经 daemon `settings.get`/`settings.set`），组件必须把它当
+**可选**处理（只挂在 RPC 桥上的宿主不传）。插件包详情弹层（`PluginPackageDialog`）同样挂载
+slot 以 `settings.` 开头且 `extensionId` 位于包目录下的组件 —— 这就是第三方插件（如
+musepi-auth-hub）设置界面的落点。
 
 **数据流**：daemon `bun.build` 把模块编译为自包含 ESM（react 绑定宿主实例）→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob：动态 import 挂载。**信任模型**：扩展本就在 daemon 进程执行任意代码，渲染其组件不构成新提权。
 
@@ -212,7 +220,32 @@ pi.registerSkill({
 
 **边界**：虚拟技能**不进 agent 的 loadSkills 自动装载**（那是文件扫描路径）——技能中心可见 + 可读，但不会作为上下文注入 agent；需要注入的扩展请写真实 SKILL.md 文件。
 
-## 9. 扩展 per-tool 渲染器（registerToolView，2026-08-20）
+## 9. 扩展注册魔术关键词（registerMagicKeyword，2026-10-11）
+
+扩展贡献一个**魔术关键词**：输入框里单独出现的词，提交时向模型追加一条隐藏提示。
+
+```ts
+import deepdiveNotice from "./prompts/deepdive-notice.md" with { type: "text" };
+
+pi.registerMagicKeyword({
+	name: "deepdive",
+	description: "在输入框里单独输入 deepdive，即请求一次带证据链的深度分析",
+	notice: deepdiveNotice.trim(),
+	noticeType: "deepdive-notice", // 可选，默认 `<name>-notice`
+});
+```
+
+**契约**：
+- 匹配与内置关键词同规则：小写、散文边界（`keywordInProse`），因此 `deepdiving` / `Deepdive` / `deepdive.ts` / 行内代码里的 `deepdive` 都不触发；
+- 提示以 `role: "custom"`、`display: false`、`attribution: "user"` 追加 —— 模型可见，transcript 不显示；
+- 开关走 `magicKeywords.<name>` 设置键，并受总开关 `magicKeywords.enabled` 门控；**该键从未写入时按停用处理**（扩展不能因为没人配置就开始改模型行为）；
+- 提示词正文放在 `.md` 文件里用 `with { type: "text" }` 导入（不内联拼字符串）。
+
+**生命周期**：注册进 loader 的 pending 队列，会话初始化时 replay 进 `modes/magic-keyword-registry`；扩展卸载/禁用时按 sourceId 移除 —— 关键词不会活过声明它的扩展。
+
+**可运行样板**：`examples/plugin-magic-keyword`（关键词 + 自带设置面板 + RPC 完整一套）。
+
+## 10. 扩展 per-tool 渲染器（registerToolView，2026-08-20）
 
 扩展为**指定工具名**贡献 transcript 渲染器，替换内置渲染器：
 
@@ -230,7 +263,7 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 
 **参考实现**：`packages/client-core/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/desktop-app/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
 
-## 10. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
+## 11. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
 
 扩展为**指定节点 kind** 贡献 transcript 渲染器。对应 DSH `conversation.chat.node` 的单一“聊天节点 seat”槽：按节点 kind（entryKey）分发，命中即“拥有”该条目的渲染，未命中回退到内建渲染（fallback）。
 
@@ -257,7 +290,7 @@ pi.registerComponent({
 
 **参考实现**：`packages/client-core/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/desktop-app/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
 
-## 11. 桌面壳与 Shell 模式（desktop-shell, dsh-desktop parity, 2026-08-28）
+## 12. 桌面壳与 Shell 模式（desktop-shell, dsh-desktop parity, 2026-08-28）
 
 Electron 壳本身是**一等扩展**（`kind: "desktop-shell"`, id `desktop-shell:shell`, 内置注册表 `builtin-registry.ts`）：
 - `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳启用状态（`shell.enabled` 设置键）、DSH 三模式、daemon serve 的渲染器 origin。
@@ -271,7 +304,7 @@ Electron 壳本身是**一等扩展**（`kind: "desktop-shell"`, id `desktop-she
 
 **注册表契约**：daemon 注入脚本（`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`）blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`；guest-client 初始化注册表（`main.tsx`），`Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。
 
-## 12. 设计体系贡献（registerDesignSystem，M3 §3，2026-09-27）
+## 13. 设计体系贡献（registerDesignSystem，M3 §3，2026-09-27）
 
 扩展可注册命名设计体系（风格资产包），供 design 模式页的预览 rail 选择与引用：
 
@@ -296,7 +329,7 @@ pi.unregisterDesignSystem("my-brand");
 - 生命周期：随扩展加载注册、reload/unload 按来源整源清除，下一次 prompt 重建即生效。
 - 类型：`DesignSystemConfig` 见 `packages/coding-agent/src/extensibility/extensions/types.ts`。
 
-## 13. 插件清单配置（manifest config/resources + pi.config，dsh 插件管理页 parity，2026-09-30）
+## 14. 插件清单配置（manifest config/resources + pi.config，dsh 插件管理页 parity，2026-09-30）
 
 扩展的 package.json 可在 `musepi` 块下声明**配置字段表**与**资源占用卡**（`musepi` 为权威清单字段；旧上游的 `omp`/`pi` 块继续可读，新扩展一律写 `musepi`）：扩展中心详情页据此渲染 dsh 式管理视图（配置表单 + 资源卡），扩展运行时经 `pi.config` 读取同一份值。
 
@@ -338,7 +371,7 @@ export default async function (pi: ExtensionAPI) {
 
 契约与类型：`ConfigFieldDesc`/`PluginResources`/`coerceConfigValues` 见 `packages/wire/src/plugin-config.ts`；存储见 `packages/coding-agent/src/extensibility/extensions-center/plugin-config-store.ts`；运行时读取见 `ConcreteExtensionAPI.config`（loader.ts）。
 
-## 14. 插件安装（spec 安装与能力报告，2026-10-06）
+## 15. 插件安装（spec 安装与能力报告，2026-10-06）
 
 市场（`marketplace.*`）只覆盖已收录的包。自己做的、还没发布的插件走本节的 spec 安装面：插件页工具栏「安装插件」直接填包名、git 地址、压缩包或本机绝对路径。
 
@@ -401,7 +434,7 @@ export default async function (pi: ExtensionAPI) {
 
 **不测延迟、不做粘性回退**，理由与 DSH 的差异见 `docs/handoff-plugin-install.md` §4。
 
-## 15. 用户自定义扩展（现状核实，2026-10-06）
+## 16. 用户自定义扩展（现状核实，2026-10-06）
 
 对照 DSH 的用户 patch 层核实过两次（2026-10-06 修正）。**先纠正本文档早前的一处错误记录**：早前称「DSH 可以在 patch 里写 `insert: [{ id, name, config }]` 而不必有包」——**这是错的**。`insert` 的 `name` 必须是一个真实的、已安装的包名，Loader 靠它 import；`insert` 做的是**在 Loader 树里增加一行指向该包**，并可同时携带 `config` 与 `disabled` 条件（`vendor/include/src/index.ts:77-101`、`packages/bundle/web-app/cordis.patch.yml:44-63`）。它不是凭空造插件，配置里永远配着实现。
 
@@ -427,7 +460,7 @@ export default async function (pi: ExtensionAPI) {
 
 不必为此把 musepi 改成声明式 Loader 树：那会把「插件是运行时发现的」这个前提改掉，代价大于收益。
 
-## 16. Claude Code 兼容面（现状核实，2026-10-06）
+## 17. Claude Code 兼容面（现状核实，2026-10-06）
 
 对照 DSH 的 `hooks-claude-code` 核实过一次。DSH 的 Claude Code 兼容**只有一件事**：把 Claude Code `hooks.json` 的 command 型钩子桥到自己的扩展点，认 7 个事件（`SessionStart` / `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStart` / `SubagentStop`），`configPath` 必填、无自动发现，且不读 `.claude-plugin/plugin.json`、marketplace、commands、agents、skills、`.mcp.json`。
 

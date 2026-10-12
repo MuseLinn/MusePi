@@ -594,6 +594,29 @@ export const tools = {
 	"ext resources models": "Model downloads",
 	"ext plugins official": "Official",
 	"ext plugins installed": "Installed",
+	// bundle/profile composition surface (capability center "Composition" tab)
+	"bundle title": "Composition",
+	"bundle profile": "Profile",
+	"bundle rows": "{count} rows composed",
+	"bundle disabled count": "{count} off",
+	"bundle conditional count": "{count} conditional",
+	"bundle unevaluated hint":
+		"{count} expression(s) were not evaluated: those rows are gated by an expression this host does not run, so their state is reported as unknown rather than guessed.",
+	"bundle layers": "Layers",
+	"bundle layer rows": "{count} rows",
+	"bundle layer overrides": "{count} overrides",
+	"bundle layer unreadable": "{count} unreadable",
+	"bundle group tag": "Group",
+	"bundle plugin missing": "plugin not installed",
+	"bundle plugin disabled": "plugin disabled",
+	"bundle conditional tag": "Conditional",
+	"bundle conditional hint":
+		"This row's enablement comes from an expression this host does not evaluate, so it cannot be toggled here.",
+	"bundle no composition title": "This profile declares no composition",
+	"bundle no composition desc":
+		"A composition is declared by the profile manifest: list the bundles a profile stacks under dsh.profile.bundles in the profile directory's package.json, and the composed rows and their per-row toggles appear here.",
+	"bundle no rows title": "The composition is empty",
+	"bundle no rows desc": "The bundles this profile stacks insert no rows.",
 	"ext add plugin": "Add plugin",
 	"ext plugin components": "Included components",
 	"ext plugin components desc":
