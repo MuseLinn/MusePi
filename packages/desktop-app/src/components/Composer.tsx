@@ -1358,10 +1358,20 @@ export function Composer({
 				sfxFor("send");
 				return;
 			}
-			// GUI-native /autoresearch: experiment dashboard panel.
+			// GUI-native /autoresearch: bare command opens the experiment
+			// dashboard panel (TUI parity for the dashboard view). Arguments
+			// forward through session.slashCommand, which routes non-builtin
+			// /-commands to the session's extension handlers — "/autoresearch
+			// <goal>" arms the mode, "off"/"clear" disarm it, matching the
+			// TUI with the same input.
 			if (isAutoresearchCommand(trimmed)) {
-				openArPanel();
+				const args = trimmed.slice("/autoresearch".length).trim();
 				setText("");
+				if (args.length > 0) {
+					runSlash(trimmed);
+					return;
+				}
+				openArPanel();
 				sfxFor("send");
 				return;
 			}

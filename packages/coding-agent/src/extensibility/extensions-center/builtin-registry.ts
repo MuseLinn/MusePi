@@ -14,12 +14,13 @@
  *   一律以 `musepi-extensions` provider 的 builtin 项呈现,不扩大 native
  *   语义;native provider 本身保留给 ~/.musepi/agent 配置文件扫描项。
  *
- * 登记清单(0.5.0 M2.1,清单来源 = 代码事实,契约测试守交集):
+ * 登记清单(0.5.0 M2.1 起逐步迁移;现状):
  * - 样式/桌面壳(2,settingsMirror 可禁用);
  * - bundled skills(6,annotate-only:安装后由 native 扫描呈现为 skill 行,
  *   注册表只做"内置"标注,不产生重复行;禁走该行自身的 disabledExtensions,
  *   运行时 skills 装配确实消费);
- * - magic keywords(3,settingsMirror 镜像 magicKeywords.<kw>,可禁用);
+ * - magic keywords(3)已迁出:由 src/bundled-plugins/magic-keywords 插件包
+ *   经 pi.registerMagicKeyword 注册,以 extension-module 条目呈现;
  * - modes 主题包(1 包,只读展示,无禁用语义 —— 不发明);
  * - tool-render 卡片工具(1 包,只读展示,无禁用语义 —— 不发明)。
  *
@@ -231,31 +232,10 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		annotate: true as const,
 		raw: { name, kind: "bundled-skill" },
 	})),
-	// ── magic keywords(settingsMirror 镜像 magicKeywords.<kw>)─────────────
-	{
-		kind: "magic-keyword",
-		name: "ultrathink",
-		displayName: "Ultrathink Keyword",
-		description: "Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
-		settingsMirror: { key: "magicKeywords.ultrathink", on: true, off: false },
-		raw: { name: "ultrathink", trigger: "ultrathink", setting: "magicKeywords.ultrathink" },
-	},
-	{
-		kind: "magic-keyword",
-		name: "orchestrate",
-		displayName: "Orchestrate Keyword",
-		description: "Let standalone orchestrate append its hidden multi-agent orchestration notice",
-		settingsMirror: { key: "magicKeywords.orchestrate", on: true, off: false },
-		raw: { name: "orchestrate", trigger: "orchestrate", setting: "magicKeywords.orchestrate" },
-	},
-	{
-		kind: "magic-keyword",
-		name: "workflow",
-		displayName: "Workflow Keyword",
-		description: "Let standalone workflowz append its hidden eval workflow notice",
-		settingsMirror: { key: "magicKeywords.workflow", on: true, off: false },
-		raw: { name: "workflow", trigger: "workflowz", setting: "magicKeywords.workflow" },
-	},
+	// ── magic keywords:已迁为插件包(src/bundled-plugins/magic-keywords)────
+	// 三个关键词(ultrathink/orchestrate/workflow)现在由该包经
+	// pi.registerMagicKeyword 注册,经 extension-module 条目呈现与管理 ——
+	// 注册表不再重复声明(两处声明一张脸会漂移)。
 	// ── modes 主题包(只读展示;主题无禁用语义)─────────────────────────────
 	{
 		kind: "theme",
@@ -646,18 +626,29 @@ export function builtinMirrorDisabled(def: BuiltinExtensionDef, getRaw: (key: st
  * 给扫描出的条目打 builtin 标注(annotate 定义):同 id 的扫描行
  * (如已安装的 bundled skill)获得 builtin 标记与注册表描述,注册表
  * 不为它产生第二条记录。
+ *
+ * bundled 插件包(src/bundled-plugins,随发行版分发)的模块行同样标注:
+ * 它们的声明层已迁出注册表(如 magic-keywords),但"随产品自带"这个事实
+ * 不变 —— GUI/TUI 的官方/已安装分组以本标记为准,不各自拼路径判断。
  */
 export function annotateBuiltinExtensions(extensions: Extension[]): Extension[] {
 	const annotateDefs = BUILTIN_EXTENSIONS.filter(d => d.annotate);
-	if (annotateDefs.length === 0) return extensions;
 	const byId = new Map(annotateDefs.map(d => [makeExtensionId(d.kind, d.name), d]));
-	return extensions.map(ext => {
+	for (const ext of extensions) {
 		const def = byId.get(ext.id);
-		if (!def) return ext;
-		const annotated: Extension = { ...ext, builtin: true };
-		if (!annotated.description && def.description) annotated.description = def.description;
-		return annotated;
-	});
+		if (def) {
+			ext.builtin = true;
+			if (!ext.description && def.description) ext.description = def.description;
+			continue;
+		}
+		// Bundled plugin package entries: normalize both dev (src/bundled-plugins)
+		// and packaged (./bundled-plugins) layouts.
+		const normalized = ext.path.replaceAll("\\", "/");
+		if (normalized.includes("/bundled-plugins/")) {
+			ext.builtin = true;
+		}
+	}
+	return extensions;
 }
 
 /** 生成内置扩展条目(state 按 disabledExtensions 计算;镜像设置的项由

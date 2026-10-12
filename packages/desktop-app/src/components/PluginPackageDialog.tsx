@@ -12,7 +12,7 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
-import { type ExtensionItem, type SlotComponent, SlotComponentMount } from "../lib/slot-host";
+import { ConfigFormSlotMount, type ExtensionItem, type SlotComponent } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { PluginIcon } from "./PluginIcon";
@@ -49,6 +49,15 @@ export function PluginPackageDialog({
 }): ReactNode {
 	const { confirm } = useConfirm();
 	const settingsComponents = components.filter(c => c.slot.startsWith("settings."));
+	// A plugin's own panel persists through settingsScope — the same proxy the
+	// settings-page cards receive. Without it a panel that writes settings
+	// would see `undefined` where it expects a read/write object.
+	const settingsScope = rpc
+		? {
+				get: (keys: string[]) => rpc.request<Record<string, unknown>>("settings.get", { keys }),
+				set: (key: string, value: unknown) => rpc.request("settings.set", { key, value }) as Promise<void>,
+			}
+		: null;
 
 	const askUninstall = (): void => {
 		if (!pkg) return;
@@ -143,7 +152,12 @@ export function PluginPackageDialog({
 							<div className="gui-ext-detail-section">
 								<div className="gui-ext-detail-label">{t("plugin settings section")}</div>
 								{settingsComponents.map(item => (
-									<SlotComponentMount key={`${item.slot}:${item.extensionId}`} item={item} rpc={rpc} />
+									<ConfigFormSlotMount
+										key={`${item.slot}:${item.extensionId}`}
+										item={item}
+										rpc={rpc}
+										settingsScope={settingsScope}
+									/>
 								))}
 							</div>
 						)}

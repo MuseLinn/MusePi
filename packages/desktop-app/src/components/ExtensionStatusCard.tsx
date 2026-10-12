@@ -34,8 +34,12 @@ export function ExtensionStatusCard({ rpc }: { rpc: RpcClient | null }): ReactNo
 			</button>
 			{open ? (
 				<>
-					<div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-					<div className="absolute left-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--color-surface)] p-1 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+					<div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+					{/* bottom-full: the chip sits at the composer's bottom edge — the
+					    menu must open UPWARD, or the transcript containers above
+					    (which own higher stacking contexts) clip it. z-40 clears
+					    every sibling layer the composer row participates in. */}
+					<div className="absolute bottom-full left-0 z-40 mb-1.5 min-w-[240px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--color-surface)] p-1 shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
 						{items.map(ext => {
 							const name = (ext.displayName || ext.name || ext.id).replace(/^extension-module:/, "");
 							return (

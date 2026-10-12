@@ -90,6 +90,31 @@ export function pluginStateLabel(e: ExtensionItem): string {
 	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
 }
 
+/**
+ * Whether `child` lives inside the directory `parent`.
+ *
+ * The two sides come from different RPCs and therefore from different
+ * resolvers: `plugins.packages` returns a package directory built with
+ * `path.join`, `extensions.list` returns each module's own entry path. They
+ * currently agree on Windows, but the old literal `startsWith(parent + "/")`
+ * stops matching silently the moment either side changes spelling — and
+ * `startsWith` cannot tell a sibling that merely shares a prefix
+ * (`demo-extra` under `demo`) from a real child.
+ *
+ * Comparing normalized prefixes answers containment directly. Renderer code
+ * cannot import `node:path` (Electron gives the renderer no node integration),
+ * so normalization is done here instead.
+ */
+function normalizePathForCompare(p: string): string {
+	return p.replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase();
+}
+
+export function isPathInside(child: string, parent: string): boolean {
+	const base = normalizePathForCompare(parent);
+	const target = normalizePathForCompare(child);
+	return target.length > base.length && target.startsWith(`${base}/`);
+}
+
 /** i18n 键探测：命中返回译文，未命中返回 null（fallback 到 daemon 原文）。 */
 export function builtinText(key: string): string | null {
 	const label = t(key as Parameters<typeof t>[0]);
@@ -440,10 +465,7 @@ export function UnifiedPluginsView({
 	// 该包（module path = <pkg>/index.ts）。未归属任何已安装包的用户级模块
 	// 保留自己的行（裸加载的 extension 不经 node_modules）。
 	const packagedModules = useMemo(
-		() =>
-			installedModules.filter(e =>
-				filteredPackages.some(p => e.path.startsWith(`${p.path}\\`) || e.path.startsWith(`${p.path}/`)),
-			),
+		() => installedModules.filter(e => filteredPackages.some(p => isPathInside(e.path, p.path))),
 		[installedModules, filteredPackages],
 	);
 	const standaloneModules = useMemo(() => {
@@ -453,23 +475,12 @@ export function UnifiedPluginsView({
 	// 当前详情弹层打开的包 + 归属它的模块与设置组件。
 	const [packageDetail, setPackageDetail] = useState<PluginPackageEntry | null>(null);
 	const packageModules = useMemo(
-		() =>
-			packageDetail
-				? installedModules.filter(
-						e => e.path.startsWith(`${packageDetail.path}\\`) || e.path.startsWith(`${packageDetail.path}/`),
-					)
-				: [],
+		() => (packageDetail ? installedModules.filter(e => isPathInside(e.path, packageDetail.path)) : []),
 		[packageDetail, installedModules],
 	);
 	const packageComponents = useMemo(
 		() =>
-			packageDetail
-				? (data?.components ?? []).filter(
-						c =>
-							c.extensionId.startsWith(`${packageDetail.path}\\`) ||
-							c.extensionId.startsWith(`${packageDetail.path}/`),
-					)
-				: [],
+			packageDetail ? (data?.components ?? []).filter(c => isPathInside(c.extensionId, packageDetail.path)) : [],
 		[packageDetail, data],
 	);
 

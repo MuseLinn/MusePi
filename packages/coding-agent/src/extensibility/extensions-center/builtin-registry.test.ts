@@ -53,14 +53,24 @@ describe("builtin registry — M2.1 登记完整性(清单来源交集)", () => 
 		expect(emitted).toHaveLength(0);
 	});
 
-	it("magic keywords:三个关键词全部登记,且镜像键是 settings schema 的真实键", () => {
-		// Failure mode: setEnabled 写了不存在的设置键 —— 开关无声失效。
+	it("magic keywords:不再由注册表声明(已迁为 bundled 插件包)", () => {
+		// The trio moved to src/bundled-plugins/magic-keywords and registers
+		// through pi.registerMagicKeyword, surfacing as extension-module rows.
+		// A re-declaration here would be a second face of the same feature: the
+		// two lists drift (a renamed keyword, a changed gradient) and the
+		// extension center shows one keyword twice with different controls.
+		// The package↔registry parity is pinned in
+		// test/bundled-plugin-magic-keywords.test.ts instead.
 		const kwDefs = BUILTIN_EXTENSIONS.filter(d => d.kind === "magic-keyword");
-		expect(kwDefs.map(d => d.name).sort()).toEqual(["orchestrate", "ultrathink", "workflow"]);
-		for (const def of kwDefs) {
-			const key = def.settingsMirror?.key;
-			expect(key).toBeDefined();
-			expect(Object.keys(SETTINGS_SCHEMA)).toContain(key as string);
+		expect(kwDefs).toEqual([]);
+	});
+
+	it("magic keywords 的三个设置键仍是 settings schema 的真实键", () => {
+		// The registry no longer declares them, but the package's toggles write
+		// these keys and the schema is what gives them defaults — a renamed key
+		// would strand the package's switch on a setting that reads undefined.
+		for (const key of ["magicKeywords.ultrathink", "magicKeywords.orchestrate", "magicKeywords.workflow"]) {
+			expect(Object.keys(SETTINGS_SCHEMA)).toContain(key);
 		}
 	});
 
@@ -133,10 +143,9 @@ describe("builtin registry — settingsMirror 禁用判定", () => {
 		const shell = findBuiltinDef("desktop-shell:shell");
 		expect(builtinMirrorDisabled(shell!, () => false)).toBe(true);
 		expect(builtinMirrorDisabled(shell!, () => undefined)).toBe(false);
-
-		const kw = findBuiltinDef("magic-keyword:ultrathink");
-		expect(builtinMirrorDisabled(kw!, () => false)).toBe(true);
-		expect(builtinMirrorDisabled(kw!, () => true)).toBe(false);
+		// (The boolean mirror channel the magic-keyword entries used to cover is
+		// exercised by the shell above; those entries moved to the bundled
+		// plugin package and no longer sit in the registry.)
 	});
 });
 

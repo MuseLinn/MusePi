@@ -11,7 +11,7 @@ import type {
 } from "@musepi/pi-wire";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "./rpc";
 /**
  * Renderer-side component slots: extensions
@@ -62,6 +62,37 @@ export const GUI_SLOT_HOSTS = {
 		s => s as string,
 	) as unknown as typeof EXTENSION_SLOT_DECLARATION.prefixes,
 } as const;
+
+/**
+ * The config form a slot component receives, mirroring the daemon's
+ * `ConfigForm` over the RPC boundary.
+ *
+ * Shaped for a form: `getSnapshot` is synchronous (a form renders from it every
+ * frame), writes are async and report whether the revision fence held.
+ */
+export interface SlotConfigForm {
+	getSnapshot(): SlotConfigFormSnapshot;
+	subscribe(listener: () => void): () => void;
+	mutate(ops: readonly SlotConfigFieldOp[], expectedRevision?: number): Promise<boolean>;
+	set(field: string, value: unknown): Promise<boolean>;
+	unset(field: string): Promise<boolean>;
+}
+
+interface SlotConfigFormSnapshot {
+	status: "ready" | "readonly" | "unavailable";
+	/** Effective values: the manifest base with the user layer over it. */
+	value: Record<string, unknown> | undefined;
+	/** Manifest-declared defaults — what a cleared field returns to. */
+	base: Record<string, unknown> | undefined;
+	/** The user layer. Key PRESENCE marks an override, regardless of value. */
+	user: Record<string, unknown> | undefined;
+	revision: number | undefined;
+	writable: boolean;
+	mode: "host" | "memory";
+}
+
+/** One field edit; `unset` clears the user layer so the field re-inherits. */
+type SlotConfigFieldOp = { kind: "set"; field: string; value: unknown } | { kind: "unset"; field: string };
 
 export interface SlotComponent {
 	slot: string;
@@ -190,6 +221,115 @@ export interface ExtensionRegistryData {
 /** Props every extension component receives when mounted. Hosts pass what
  *  they have; a component must treat every field as optional — the same
  *  component may be mounted in different hosts (panel tab vs composer). */
+/**
+ * A namespace's config form, backed by the daemon's pluginConfig.* RPCs.
+ *
+ * Snapshot access is synchronous — a form renders from it every frame — so the
+ * snapshot is cached locally and refreshed after each write (and on mount).
+ * Writes report whether the revision fence held, which is the whole difference
+ * from `settingsScope`: a stale editor is told it lost instead of clobbering.
+ *
+ * Not exported: only `ConfigFormSlotMount` needs it, and a host wanting a form
+ * for its own namespace uses that component.
+ */
+function useConfigForm(rpc: RpcClient | null, namespace: string | undefined): SlotConfigForm | null {
+	const [snapshot, setSnapshot] = useState<SlotConfigFormSnapshot | null>(null);
+	const listenersRef = useRef(new Set<() => void>());
+
+	const publish = useCallback((next: SlotConfigFormSnapshot): void => {
+		setSnapshot(next);
+		for (const listener of listenersRef.current) listener();
+	}, []);
+
+	const refresh = useCallback(async (): Promise<void> => {
+		if (!rpc || !namespace) return;
+		try {
+			const view = await rpc.request<{ snapshot: SlotConfigFormSnapshot }>("pluginConfig.form", { namespace });
+			publish(view.snapshot);
+		} catch {
+			// A namespace with no form is not an error the component needs to
+			// render differently for — it simply gets no form.
+			publish({
+				status: "unavailable",
+				value: undefined,
+				base: undefined,
+				user: undefined,
+				revision: undefined,
+				writable: false,
+				mode: "memory",
+			});
+		}
+	}, [rpc, namespace, publish]);
+
+	useEffect(() => {
+		void refresh();
+	}, [refresh]);
+
+	// Wire the mutable form object once per namespace/rpc, so a component can
+	// hold it across renders without resubscribing.
+	return useMemo(() => {
+		if (!rpc || !namespace) return null;
+		const write = async (ops: readonly SlotConfigFieldOp[], expectedRevision?: number): Promise<boolean> => {
+			if (!ops || ops.length === 0) return true;
+			const result = await rpc.request<{ applied: boolean; revision: number | undefined }>("pluginConfig.mutate", {
+				namespace,
+				ops,
+				...(expectedRevision !== undefined ? { expectedRevision } : {}),
+			});
+			await refresh();
+			return result.applied === true;
+		};
+		const form: SlotConfigForm = {
+			getSnapshot: () =>
+				snapshot ?? {
+					status: "unavailable",
+					value: undefined,
+					base: undefined,
+					user: undefined,
+					revision: undefined,
+					writable: false,
+					mode: "memory",
+				},
+			subscribe: listener => {
+				listenersRef.current.add(listener);
+				return () => {
+					listenersRef.current.delete(listener);
+				};
+			},
+			mutate: write,
+			set: (field, value) => write([{ kind: "set", field, value }]),
+			unset: field => write([{ kind: "unset", field }]),
+		};
+		return form;
+	}, [rpc, namespace, snapshot, refresh]);
+}
+
+/**
+ * Mount a settings component with its namespace's config form.
+ *
+ * The form is built here rather than inside `SlotComponentMount` because the
+ * namespace belongs to the EXTENSION, not to one component: an extension may
+ * contribute several settings components and they all edit the same namespace
+ * values, so they share one form — and therefore one revision fence between
+ * them. Two editors on two components of one extension cannot clobber each
+ * other silently.
+ */
+export function ConfigFormSlotMount({
+	item,
+	rpc,
+	settingsScope,
+	namespace,
+}: {
+	item: SlotComponent;
+	rpc: RpcClient | null;
+	settingsScope?: SlotComponentProps["settingsScope"];
+	/** Namespace for the form; defaults to the component's extension id. */
+	namespace?: string;
+}): ReactNode {
+	const configForm = useConfigForm(rpc, namespace ?? item.extensionId);
+	return <SlotComponentMount item={item} rpc={rpc} settingsScope={settingsScope} configForm={configForm} />;
+}
+
 export interface SlotComponentProps {
 	/** Daemon RPC bridge (models.list / session.setModel / …). */
 	rpc?: RpcClient | null;
@@ -209,6 +349,16 @@ export interface SlotComponentProps {
 		get(keys: string[]): Promise<Record<string, unknown>>;
 		set(key: string, value: unknown): Promise<void>;
 	} | null;
+	/**
+	 * The namespace's config form — the settings contract a real form needs on
+	 * top of `settingsScope`: a revision fence (so a stale write is refused
+	 * rather than clobbering a newer one) and a base/user split (so "did the
+	 * user set this" is answerable, and a field can be reset to inherit).
+	 *
+	 * Absent when the host has no namespace for the component, the same as
+	 * `settingsScope`; a component that needs it must treat it as optional.
+	 */
+	configForm?: SlotConfigForm | null;
 	/** Daemon-side extension RPC bridge (registerRpc
 	 *  analogue): invoke a JSON-RPC method registered by THIS extension
 	 *  (ext.call RPC). Bound to the component's extensionId; absent when
@@ -391,6 +541,7 @@ export function SlotComponentMount({
 	settingsScope,
 	node,
 	turn,
+	configForm,
 }: {
 	item: SlotComponent;
 	rpc?: RpcClient | null;
@@ -403,9 +554,16 @@ export function SlotComponentMount({
 	node?: SlotComponentProps["node"];
 	/** turn 级上下文(DSH TurnTailOwnerProps 类比)。 */
 	turn?: SlotComponentProps["turn"];
+	/** 该组件的 config form(宿主从 pluginConfig.* 构造);缺省时本组件
+	 *  按 extensionId 自行构造一个。 */
+	configForm?: SlotConfigForm | null;
 }): ReactNode {
 	const [error, setError] = useState<string | null>(null);
 	const [Comp, setComp] = useState<ComponentType<SlotComponentProps> | null>(null);
+	// The form is always constructed (never conditionally) — a component with
+	// no namespace simply gets `null`, which is what "no form" means.
+	const ownConfigForm = useConfigForm(rpc ?? null, item.extensionId);
+	const resolvedConfigForm = configForm !== undefined ? configForm : ownConfigForm;
 	// Component-scoped CSS (daemon extracts it at compile time): inject a
 	// <style> beside the component and drop it on unmount.
 	useEffect(() => {
@@ -484,6 +642,7 @@ export function SlotComponentMount({
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,
+		configForm: resolvedConfigForm,
 		node,
 		turn,
 		// 扩展 RPC 桥(registerRpc):绑定当前

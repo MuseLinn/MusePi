@@ -4,12 +4,12 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import {
+	ConfigFormSlotMount,
 	type ExtensionItem,
 	type ProviderInfo,
 	SETTINGS_EXTENSION_SLOT,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	type SlotComponent,
-	SlotComponentMount,
 	useExtensionRegistry,
 	useUnhostedSlots,
 } from "../lib/slot-host";
@@ -299,11 +299,10 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		const enabled = new Set((data?.extensions ?? []).filter(e => e.state === "active").map(e => e.path));
 		const byExt = new Map<string, SlotComponent[]>();
 		for (const c of data?.components ?? []) {
-			// settings.item.<extId> per-row cards AND the exact
-			// settings.extensions page slot: a plugin's own management panel
-			// (an account pool, for example) registers the latter, and until
-			// now nothing in the GUI hosted it — the component compiled and
-			// then sat unreferenced.
+			// Both settings surfaces land here: `settings.item.<extId>` per-row
+			// cards AND the exact `settings.extensions` page slot, which is
+			// where a plugin's own management panel (an account pool, for
+			// example) registers.
 			const isSettingsSurface = c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX) || c.slot === SETTINGS_EXTENSION_SLOT;
 			if (!isSettingsSurface) continue;
 			if (!enabled.has(c.extensionId)) continue;
@@ -400,10 +399,20 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const togglePlugin = (p: PluginEntry): void => {
 		if (!rpc) return;
 		void rpc
-			.request("plugins.setEnabled", { name: p.name, enabled: !p.enabled })
-			.then(() => {
-				setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: !p.enabled } : x)));
-				setError(null);
+			// Same contract as CapabilityCenterPage: the daemon reports the real
+			// post-write load outcome; a failed load must not flip the toggle.
+			.request<{ ok: boolean; enabled: boolean; error?: string }>("plugins.setEnabled", {
+				name: p.name,
+				enabled: !p.enabled,
+			})
+			.then(res => {
+				if (res.ok) {
+					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: res.enabled } : x)));
+					setError(null);
+				} else {
+					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: false } : x)));
+					setError(`${p.name}: ${res.error ?? "load failed"}`);
+				}
 			})
 			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	};
@@ -937,9 +946,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					</div>
 					{extSettingCards.map(([extId, items]) => (
 						<div key={extId} className="gui-agent-card gui-ext-settings-card">
-							<div className="gui-ext-settings-card-label">{extId.split("/").pop()}</div>
+							<div className="gui-ext-settings-card-label">{extId.split(/[\\/]/).pop()}</div>
 							{items.map(item => (
-								<SlotComponentMount
+								<ConfigFormSlotMount
 									key={`${item.slot}:${item.extensionId}`}
 									item={item}
 									rpc={rpc}

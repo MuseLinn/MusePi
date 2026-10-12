@@ -210,8 +210,34 @@ let daemonQuitHandled = false;
 	// close the window when we're exiting. User close on non-darwin hides
 	// to tray instead.
 	let quitting = false;
+	// Active-session guard state: the tray poll refreshes lastActiveCount
+	// (≤5s stale), and quittingConfirmed passes the guard on the second
+	// before-quit round (Electron re-fires it after our teardown quit()).
+	let lastActiveCount = 0;
+	let quittingConfirmed = false;
 	app.on("before-quit", event => {
 		console.error("[main] before-quit");
+		// Active-session guard: quitting with agents mid-turn warns instead of
+		// silently killing them. A dialog-cancel aborts this quit attempt —
+		// the user keeps working. Runs before the daemon teardown holds the
+		// quit; the confirmed flag keeps the second pass (post app.quit())
+		// from asking again.
+		if (!quittingConfirmed && lastActiveCount > 0) {
+			const choice = dialog.showMessageBoxSync({
+				type: "warning",
+				buttons: ["仍然退出", "留在这里"],
+				defaultId: 1,
+				cancelId: 1,
+				// Main-process labels are Chinese-first (the pet menu precedent):
+				// the main process has no locale state.
+				message:
+					lastActiveCount === 1
+						? "还有 1 个会话正在运行——现在退出会中断它。确定要退出 MusePi 吗？"
+						: `还有 ${lastActiveCount} 个会话正在运行——现在退出会中断它们。确定要退出 MusePi 吗？`,
+			});
+			if (choice !== 0) return; // abort: no preventDefault, quit stops here
+			quittingConfirmed = true;
+		}
 		quitting = true;
 		if (daemonQuitHandled) return;
 		daemonQuitHandled = true;
@@ -1740,6 +1766,9 @@ function ensureTray() {
 						return;
 					}
 					if (frame && frame.id === "tray" && frame.result && typeof frame.result === "object") {
+						// The active-session quit guard reads this (≤5s stale).
+						const count = Number(frame.result.activeCount);
+						lastActiveCount = Number.isFinite(count) && count > 0 ? count : 0;
 						trayController.update(frame.result);
 					}
 				} catch {

@@ -3751,6 +3751,70 @@
 	color: var(--color-text-faint);
 }
 
+/* bundle/profile 组合面（能力中心「组合」tab）。
+ * 行复用 .gui-ext-provider 几何，这里只补组合特有的三件：未求值提示条、
+ * 层摘要行、以及行的状态点（enabled / disabled / conditional 三态）。 */
+.gui-ext-plugins-note {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	margin-bottom: 6px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+	color: var(--color-accent);
+	font-size: 11.5px;
+	line-height: 16px;
+}
+
+.gui-bundle-layer {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 2px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+.gui-bundle-layer-name {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 三态状态点：条件启停用强调色而不是「看起来像关闭」——该行的启停是未知
+ * 的，不是关着的；画成灰色会与 disabled 读成同一件事。 */
+.gui-bundle-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--color-text-faint);
+	opacity: 0.5;
+}
+.gui-bundle-dot[data-state="enabled"] {
+	background: color-mix(in oklab, #34d399 80%, transparent);
+	opacity: 1;
+}
+.gui-bundle-dot[data-state="disabled"] {
+	background: var(--color-text-faint);
+	opacity: 0.5;
+}
+.gui-bundle-dot[data-state="conditional"] {
+	background: var(--color-accent);
+	opacity: 1;
+}
+
+.gui-bundle-package {
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 /* dsh 面板搜索框：液态玻璃输入胶囊,收缩给计数与添加按钮让位。 */
 .gui-ext-plugins-search {
 	display: flex;
