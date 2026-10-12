@@ -1,4 +1,4 @@
-import { t, useArchivedSessions } from "@musepi/client-core";
+import { t, tLoose, useArchivedSessions } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
@@ -111,7 +111,7 @@ export function SessionSidebar({
 	onOpenCapability?(): void;
 	capabilityActive?: boolean;
 	/** 枢纽下拉直达 —— 落地能力中心的指定 tab。 */
-	onOpenCapabilityTab?(tab: "skills" | "plugins" | "marketplace"): void;
+	onOpenCapabilityTab?(tab: "skills" | "plugins" | "composition" | "marketplace"): void;
 	onOpenSettings(): void;
 	/** 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
@@ -664,8 +664,9 @@ export function SessionSidebar({
 										[
 											["skills", "sparkling", t("skills tab")],
 											["plugins", "plug", t("plugins")],
+											["composition", "stack", tLoose("bundle title")],
 											["marketplace", "plug-2", t("marketplace")],
-										] as ["skills" | "plugins" | "marketplace", string, string][]
+										] as ["skills" | "plugins" | "composition" | "marketplace", string, string][]
 									).map(([id, icon, label]) => (
 										<button
 											key={id}

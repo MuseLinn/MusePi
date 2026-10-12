@@ -126,26 +126,30 @@ describe("parseDshPatch", () => {
 		expect((config.description as { kind?: string }).kind).toBeUndefined();
 	});
 
-	it("reports an id-targeted patch instead of guessing which row it meant", () => {
-		// DSH's other forms override or disable a row an earlier layer created.
-		// Resolving them needs the layer stack this host does not build, and
-		// guessing would apply an override to whatever happened to share the id.
+	it("reads id-targeted patches as overrides instead of guessing which row they meant", () => {
+		// DSH's non-insert forms override or disable a row an earlier layer
+		// created. They are now READ as overrides; resolution against a real row
+		// happens in the composer (dsh-layers), which reports an id that matches
+		// nothing rather than applying it to whatever shared the id.
 		const source = ["- id: agent", "  disabled: true", "- id: tools", "  name: '@deepseek-ai/dsh-tools'"].join("\n");
 
-		const { rows, skipped } = parseDshPatch(source);
+		const { rows, skipped, overrides } = parseDshPatch(source);
 
 		expect(rows).toEqual([]);
-		expect(skipped.map(s => s.reason)).toEqual(["id-targeted patch", "id-targeted patch"]);
-		expect(skipped.map(s => s.droppedExpressions)).toEqual([0, 0]);
+		expect(skipped).toEqual([]);
+		expect(overrides).toEqual([
+			{ id: "agent", disabled: true },
+			{ id: "tools", name: "@deepseek-ai/dsh-tools" },
+		]);
 	});
 
 	it("counts the tagged expressions a skipped id-targeted patch carried", () => {
 		// The real headless bundle patches a row by id, and its config values are
-		// all tagged — they read the loader context that provides the task. Those
-		// expressions are dropped with the entry, and dropping them silently would
-		// make a file whose non-insert half carried all of its dynamic
-		// configuration parse "cleanly" while half of what it said was lost. The
-		// count is the caller's way to say what was not taken.
+		// all tagged — they read the loader context that provides the task. The
+		// patch is now READ as an override (2026-10-10, dsh-layers composition
+		// exists), and its tagged config survives as data: the expression is
+		// never evaluated, so the override carries it and the composer reports
+		// the row as conditional rather than silently dropping half the config.
 		const source = [
 			"- id: headless-runner",
 			"  name: '@deepseek-ai/dsh-headless'",
@@ -155,10 +159,16 @@ describe("parseDshPatch", () => {
 			"    json: !!js ctx.headlessStartup.json",
 		].join("\n");
 
-		const { rows, skipped } = parseDshPatch(source);
+		const { rows, skipped, overrides } = parseDshPatch(source);
 
 		expect(rows).toEqual([]);
-		expect(skipped).toEqual([{ index: 0, reason: "id-targeted patch", droppedExpressions: 3 }]);
+		expect(skipped).toEqual([]);
+		expect(overrides).toHaveLength(1);
+		expect(overrides[0]?.id).toBe("headless-runner");
+		// The tagged values come back tagged — still not evaluated, now visible
+		// to whoever reports what this host could not settle.
+		const config = overrides[0]?.config as Record<string, { kind: string }>;
+		expect(config.task?.kind).toBe("js-expr");
 	});
 
 	it("reads a group row without flattening the rows inside it", () => {
@@ -197,8 +207,40 @@ describe("parseDshPatch", () => {
 	});
 
 	it("reads an empty file as no rows", () => {
-		expect(parseDshPatch("")).toEqual({ rows: [], skipped: [] });
-		expect(parseDshPatch("# just a comment\n")).toEqual({ rows: [], skipped: [] });
+		expect(parseDshPatch("")).toEqual({ rows: [], skipped: [], overrides: [] });
+		expect(parseDshPatch("# just a comment\n")).toEqual({ rows: [], skipped: [], overrides: [] });
+	});
+
+	it("reads an id-targeted patch as an override rather than skipping it", () => {
+		// The non-insert form addresses a row some layer inserted. It used to be
+		// reported as "id-targeted patch" and dropped, which is why a profile
+		// could not reconfigure one row of a bundle; dsh-layers composes these.
+		const source = ["- id: terminal-bash", "  disabled: true", ""].join("\n");
+
+		const { rows, overrides, skipped } = parseDshPatch(source);
+
+		expect(rows).toEqual([]);
+		expect(skipped).toEqual([]);
+		expect(overrides).toEqual([{ id: "terminal-bash", disabled: true }]);
+	});
+
+	it("carries an id-targeted patch's config and name check through", () => {
+		const source = ["- id: tool-x", "  name: '@scope/tool-x/config'", "  config:", "    retries: 3", ""].join("\n");
+
+		const { overrides } = parseDshPatch(source);
+
+		expect(overrides).toHaveLength(1);
+		expect(overrides[0]?.id).toBe("tool-x");
+		expect(overrides[0]?.name).toBe("@scope/tool-x/config");
+		expect(overrides[0]?.config).toEqual({ retries: 3 });
+	});
+
+	it("still skips a non-insert entry that names no row to target", () => {
+		const { skipped, overrides } = parseDshPatch("- disabled: true\n");
+
+		expect(overrides).toEqual([]);
+		expect(skipped).toHaveLength(1);
+		expect(skipped[0]?.reason).toBe("no insert list and no id to target");
 	});
 });
 

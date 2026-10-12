@@ -754,7 +754,7 @@ function AppInner(): ReactNode {
 	// 这里，页面内部不再各自 useState(initialTab)——否则人在能力中心时经
 	// 侧边栏悬停菜单点另一个 tab 只更新了 state、组件不重挂载，永远不跳）。
 	// omp-open-capability 事件的可选 detail.tab 载荷与侧边栏悬停菜单都写这里。
-	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "marketplace">("skills");
+	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "composition" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "chat"): void => {});
 	useEffect(() => {

@@ -149,6 +149,7 @@
         "onnxruntime-node": "catalog:",
         "opencc-js": "^1.0.5",
         "puppeteer-core": "catalog:",
+        "yaml": "catalog:",
       },
       "devDependencies": {
         "@larksuiteoapi/node-sdk": "^1.73.0",
@@ -156,7 +157,7 @@
         "react": "19.2.7",
       },
       "optionalDependencies": {
-        "@huggingface/transformers": "catalog:",
+        "@huggingface/transformers": "^4.2.0",
         "sherpa-onnx-node": "1.13.2",
       },
     },
@@ -523,6 +524,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.1.4",
     "vite-plugin-solid": "^2.11.12",
+    "yaml": "^2.9.1",
   },
   "packages": {
     "@ant-design/colors": ["@ant-design/colors@8.0.1", "", { "dependencies": { "@ant-design/fast-color": "^3.0.0" } }, "sha512-foPVl0+SWIslGUtD/xBr1p9U4AKzPhNYEseXYRRo5QSzGACYZrQbe11AYJbYfAWnWSpGBx6JjBmSeugUsD9vqQ=="],

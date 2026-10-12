@@ -18,9 +18,11 @@
  * result only DSH could produce — can be refused without also refusing the row
  * they belong to.
  *
- * Only the `insert` form is read. DSH's other patch forms address rows by id to
- * override or disable them, and resolving those needs the full layer stack this
- * host does not have; accepting them would mean guessing which row they meant.
+ * Both patch forms are read: `insert` (rows this file adds) and the id-targeted
+ * form (an override of a row some layer inserted). Resolving an id needs the
+ * layer stack, so the parser hands overrides through as data and the layer
+ * composer decides whether an id matches a row — an id that matches nothing is
+ * reported there, never guessed at here.
  *
  * @module extensibility/plugins/dsh-patch
  */
@@ -81,6 +83,30 @@ export interface DshPatchDocument {
 		readonly reason: string;
 		readonly droppedExpressions: number;
 	}[];
+	/**
+	 * Id-targeted overrides — the patch form that names a row instead of
+	 * inserting one, read rather than skipped.
+	 *
+	 * These address an existing row by id and replace its fields, which is what
+	 * lets a profile reconfigure one row of a bundle without editing the bundle.
+	 * They were previously reported as skipped because nothing resolved ids yet;
+	 * the layer composer resolves them, so they travel as data from here.
+	 */
+	readonly overrides: readonly DshRowOverride[];
+}
+
+/**
+ * A patch that addresses an existing row by id.
+ *
+ * Declared here (rather than imported from dsh-layers) because the parser is
+ * the producer and the composer is the consumer — the dependency runs parser →
+ * composer, never back.
+ */
+export interface DshRowOverride {
+	readonly id: string;
+	readonly name?: string;
+	readonly disabled?: DshValue;
+	readonly config?: DshValue;
 }
 
 /**
@@ -188,12 +214,13 @@ function countTagged(value: unknown): number {
  */
 export function parseDshPatch(source: string): DshPatchDocument {
 	const parsed = YAML.parse(markJsExpressions(source)) as unknown;
-	if (parsed === null || parsed === undefined) return { rows: [], skipped: [] };
+	if (parsed === null || parsed === undefined) return { rows: [], skipped: [], overrides: [] };
 	if (!Array.isArray(parsed)) {
 		throw new Error(`a DSH patch file is a list of patch entries, got ${typeof parsed}`);
 	}
 
 	const rows: DshPatchRow[] = [];
+	const overrides: DshRowOverride[] = [];
 	const skipped: { index: number; reason: string; droppedExpressions: number }[] = [];
 	parsed.forEach((entry: unknown, index: number) => {
 		if (entry === null || typeof entry !== "object") {
@@ -203,12 +230,22 @@ export function parseDshPatch(source: string): DshPatchDocument {
 		const record = entry as Record<string, unknown>;
 		const insert = record.insert;
 		if (!Array.isArray(insert)) {
-			// Every other form DSH supports targets rows by id, which needs the
-			// layer stack this host does not build. Its tagged expressions are
-			// dropped with it, so the count travels with the skip.
+			// The id-targeted form: an override of a row some layer inserted.
+			// Read here, resolved in dsh-layers (an id that matches nothing
+			// there is reported, not guessed).
+			const id = record.id;
+			if (typeof id === "string" && id !== "") {
+				overrides.push({
+					id,
+					...(typeof record.name === "string" ? { name: record.name } : {}),
+					...(record.disabled === undefined ? {} : { disabled: revive(record.disabled) }),
+					...(record.config === undefined ? {} : { config: revive(record.config) }),
+				});
+				return;
+			}
 			skipped.push({
 				index,
-				reason: record.id === undefined ? "no insert list and no id to target" : "id-targeted patch",
+				reason: "no insert list and no id to target",
 				droppedExpressions: countTagged(revive(record)),
 			});
 			return;
@@ -242,5 +279,5 @@ export function parseDshPatch(source: string): DshPatchDocument {
 		}
 	});
 
-	return { rows, skipped };
+	return { rows, skipped, overrides };
 }

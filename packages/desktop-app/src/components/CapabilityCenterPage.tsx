@@ -1,8 +1,9 @@
-import { t } from "@musepi/client-core";
+import { t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { BundleView } from "./BundleView";
 import { CapabilityCenter } from "./CapabilityCenter";
 import { MarketplaceView } from "./MarketplaceView";
 import { SkillMarketView } from "./SkillMarketView";
@@ -23,7 +24,7 @@ import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./Un
  *   市场  — the remote marketplace catalog (marketplace.list / install).
  */
 
-type Tab = "skills" | "plugins" | "marketplace";
+type Tab = "skills" | "plugins" | "composition" | "marketplace";
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
 type SkillPane = "discover" | "installed";
 
@@ -95,10 +96,23 @@ export function CapabilityCenterPage({
 	const togglePlugin = (p: PluginEntry): void => {
 		if (!rpc) return;
 		void rpc
-			.request("plugins.setEnabled", { name: p.name, enabled: !p.enabled })
-			.then(() => {
-				setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: !p.enabled } : x)));
-				setPluginsError(null);
+			// The daemon re-loads the plugin's extension entries after the write
+			// and reports the real outcome (`ok: false` + reason when the load
+			// fails) — the toggle must reflect THAT, not the write intent, or a
+			// broken plugin shows "enabled" while nothing registered.
+			.request<{ ok: boolean; enabled: boolean; error?: string }>("plugins.setEnabled", {
+				name: p.name,
+				enabled: !p.enabled,
+			})
+			.then(res => {
+				if (res.ok) {
+					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: res.enabled } : x)));
+					setPluginsError(null);
+				} else {
+					// Load failed: leave the toggle where it was and surface why.
+					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: false } : x)));
+					setPluginsError(`${p.name}: ${res.error ?? "load failed"}`);
+				}
 			})
 			.catch((err: unknown) => setPluginsError(err instanceof Error ? err.message : String(err)));
 	};
@@ -108,6 +122,7 @@ export function CapabilityCenterPage({
 	const tabs: { id: Tab; label: string; icon: IconName }[] = [
 		{ id: "skills", label: t("skills tab"), icon: "sparkling" },
 		{ id: "plugins", label: t("plugins"), icon: "plug" },
+		{ id: "composition", label: tLoose("bundle title"), icon: "stack" },
 		{ id: "marketplace", label: t("marketplace"), icon: "plug-2" },
 	];
 
@@ -181,6 +196,11 @@ export function CapabilityCenterPage({
 						onOpenMarketplace={() => onTabChange("marketplace")}
 						onError={setPluginsError}
 					/>
+				</div>
+				<div className={`gui-capability-pane${tab === "composition" ? " gui-capability-pane--on" : ""}`}>
+					{/* profile/bundle 组合面：装上了，然后呢——这个 profile 叠了哪些
+					 * bundle、组合出哪些行、每行现在是什么状态、行的启停。 */}
+					<BundleView rpc={rpc} />
 				</div>
 				<div className={`gui-capability-pane${tab === "marketplace" ? " gui-capability-pane--on" : ""}`}>
 					<MarketplaceView rpc={rpc} />
