@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import type { PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
+import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
@@ -74,6 +74,18 @@ export interface ExtensionServiceDeps {
 	dynamicRuntime?(): Promise<CordisDynamicExtensionRuntime | undefined>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
+	/**
+	 * A namespace's declared config fields, when the caller can supply them
+	 * without a full extension scan (tests, or a host that already has the
+	 * manifest). Absent → the fields come from the scanned extension list.
+	 */
+	configFields?(namespace: string): Promise<ConfigFieldDesc[]> | ConfigFieldDesc[];
+	/**
+	 * Overrides the plugin-config store path (tests inject a temp file).
+	 * Absent → the host's own `<agentDir>/extensions/plugin-config.json`,
+	 * which is where a form's values belong.
+	 */
+	pluginConfigStorePath?(): string;
 }
 
 export class ExtensionService implements DaemonService {
@@ -91,6 +103,8 @@ export class ExtensionService implements DaemonService {
 		"plugins.list": "listPlugins",
 		"plugins.packages": "pluginPackages",
 		"plugins.setEnabled": "setPluginEnabled",
+		"pluginConfig.form": "configForm",
+		"pluginConfig.mutate": "configFormMutate",
 	} as const;
 
 	readonly #deps: ExtensionServiceDeps;
@@ -833,6 +847,14 @@ export class ExtensionService implements DaemonService {
 		// Enable/disable an installed plugin (settings → plugins tab
 		// toggle). Mirrors the TUI /plugins enable|disable command;
 		// busts the TTL cache so the next list reflects the change.
+		//
+		// The write is the INTENT, not the outcome: persisting `enabled` in
+		// the lockfile says nothing about whether the plugin's extension
+		// modules then load. Reporting `ok: true` unconditionally turned the
+		// GUI toggle into a lie — a plugin whose factory throws (or whose
+		// manifest points at a missing entry) flips to "enabled" in the UI
+		// while nothing is registered. So after the write, this re-loads the
+		// plugin's extension entries and reports what ACTUALLY happened.
 		const { PluginManager } = await import("../../extensibility/plugins/manager");
 		const p = (params ?? {}) as { name: string; enabled: boolean };
 		if (!p.name) throw new Error("plugins.setEnabled: name required");
@@ -840,7 +862,34 @@ export class ExtensionService implements DaemonService {
 		await manager.setPluginEnabled(p.name, Boolean(p.enabled));
 		this.#pluginPackagesCache = null;
 		this.#pluginsCache = null;
-		return { ok: true, enabled: Boolean(p.enabled) };
+
+		// Probe the real load outcome. Only an enable can newly fail (a
+		// disable cannot break a load that already succeeded), so the probe
+		// runs for enables; a disable reports without one.
+		if (!p.enabled) return { ok: true, enabled: false };
+		const { getAllPlugins, resolvePluginExtensionPaths } = await import("../../extensibility/plugins/loader");
+		const { loadExtensions } = await import("../../extensibility/extensions/loader");
+		const installed = await getAllPlugins(this.#deps.cwd());
+		const plugin = installed.find(x => x.name === p.name);
+		const probe = { loaded: 0, errors: [] as Array<{ path: string; error: string }> };
+		if (plugin) {
+			const paths = resolvePluginExtensionPaths(plugin);
+			if (paths.length > 0) {
+				const result = await loadExtensions(paths, this.#deps.cwd());
+				probe.loaded = result.extensions.length;
+				probe.errors = result.errors;
+			}
+		} else {
+			probe.errors.push({ path: p.name, error: "plugin not found in installed inventory after enabling" });
+		}
+		const ok = probe.errors.length === 0 && probe.loaded > 0;
+		return {
+			ok,
+			enabled: Boolean(p.enabled),
+			...(ok
+				? {}
+				: { error: probe.errors.map(e => `${e.path}: ${e.error}`).join("; ") || "no loadable extension entries" }),
+		};
 	}
 
 	/** 宿主 watcher（#scheduleExtensionReload）统一失效入口。 */
@@ -913,5 +962,105 @@ export class ExtensionService implements DaemonService {
 		this.invalidateExtensionsCache();
 		this.#deps.onChanged();
 		return { ok: true as const, restart: desc.restart ?? ("none" as const), values };
+	}
+
+	/**
+	 * RPC pluginConfig.form — one namespace's config form snapshot.
+	 *
+	 * `settingsScope` (bare get/set) cannot answer "did my write lose a race"
+	 * or "is this value mine or inherited", and a real settings form needs
+	 * both. The form carries a revision fence and a base/user split; see
+	 * `plugin-config-form.ts` for the contract.
+	 *
+	 * The base is the namespace's declared field defaults, so a form can show
+	 * what a cleared field returns to instead of guessing.
+	 */
+	async configForm(params: unknown): Promise<{
+		namespace: string;
+		snapshot: {
+			status: "ready" | "readonly" | "unavailable";
+			value: Record<string, unknown> | undefined;
+			base: Record<string, unknown> | undefined;
+			user: Record<string, unknown> | undefined;
+			revision: number | undefined;
+			writable: boolean;
+			mode: "host" | "memory";
+		};
+	}> {
+		const p = (params ?? {}) as { namespace?: unknown };
+		if (typeof p.namespace !== "string" || p.namespace === "") {
+			throw new Error("pluginConfig.form: namespace required");
+		}
+		const fields = await this.#configFieldsFor(p.namespace);
+		const { createPluginConfigForm } = await import("../../extensibility/extensions-center/plugin-config-form");
+		const form = await createPluginConfigForm(p.namespace, fields, this.#pluginConfigStorePath());
+		const snap = form.getSnapshot();
+		return {
+			namespace: p.namespace,
+			snapshot: {
+				status: snap.status,
+				value: snap.value,
+				base: snap.base,
+				user: snap.user,
+				revision: snap.revision,
+				writable: snap.writable,
+				mode: snap.mode,
+			},
+		};
+	}
+
+	/**
+	 * RPC pluginConfig.mutate — apply field edits under the revision fence.
+	 *
+	 * Returns `applied: false` when the caller's revision is stale, so a form
+	 * can tell "your edit lost" from "your edit failed" — the difference
+	 * decides whether to re-read or to show an error.
+	 */
+	async configFormMutate(params: unknown): Promise<{
+		applied: boolean;
+		revision: number | undefined;
+	}> {
+		const p = (params ?? {}) as {
+			namespace?: unknown;
+			ops?: unknown;
+			expectedRevision?: unknown;
+		};
+		if (typeof p.namespace !== "string" || p.namespace === "") {
+			throw new Error("pluginConfig.mutate: namespace required");
+		}
+		const ops = Array.isArray(p.ops) ? (p.ops as { kind?: unknown; field?: unknown; value?: unknown }[]) : [];
+		const parsed: Array<{ kind: "set"; field: string; value: unknown } | { kind: "unset"; field: string }> = [];
+		for (const op of ops) {
+			if (!op || typeof op !== "object") continue;
+			if (typeof op.field !== "string" || op.field === "") continue;
+			if (op.kind === "unset") parsed.push({ kind: "unset", field: op.field });
+			else parsed.push({ kind: "set", field: op.field, value: op.value });
+		}
+		const fields = await this.#configFieldsFor(p.namespace);
+		const { createPluginConfigForm } = await import("../../extensibility/extensions-center/plugin-config-form");
+		const form = await createPluginConfigForm(p.namespace, fields, this.#pluginConfigStorePath());
+		const applied = await form.mutate(
+			parsed,
+			typeof p.expectedRevision === "number" ? p.expectedRevision : undefined,
+		);
+		if (applied) {
+			this.invalidateExtensionsCache();
+			this.#deps.onChanged();
+		}
+		return { applied, revision: form.getSnapshot().revision };
+	}
+
+	/** The namespace's declared config fields, used as the form's base. */
+	async #configFieldsFor(namespace: string): Promise<ConfigFieldDesc[]> {
+		const injected = this.#deps.configFields?.(namespace);
+		if (injected) return await injected;
+		const extensions = await this.getExtensions();
+		return extensions.find(e => e.id === namespace)?.config ?? [];
+	}
+
+	/** Where a form's values are stored: the host's own config directory
+	 *  unless the caller injected one (tests isolate to a temp file). */
+	#pluginConfigStorePath(): string | undefined {
+		return this.#deps.pluginConfigStorePath?.();
 	}
 }

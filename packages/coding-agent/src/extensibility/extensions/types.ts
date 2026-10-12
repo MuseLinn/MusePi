@@ -1443,6 +1443,20 @@ export interface ExtensionAPI {
 	 *  backing SKILL.md file. */
 	registerSkill(skill: ExtensionSkillDeclaration): void;
 
+	/**
+	 * Declare a magic keyword: a standalone word typed in the composer that,
+	 * when submitted, appends a hidden notice nudging the model. The three
+	 * first-party keywords (ultrathink / orchestrate / workflow) are built in;
+	 * this is how an extension contributes one of its own on the same terms.
+	 *
+	 * Detection is prose-delimited and case-sensitive (lowercase), so
+	 * "planning", "Plan" or "plan.ts" never trigger it — the same boundary rule
+	 * the built-ins use. The keyword is disabled when the matching
+	 * `magicKeywords.<name>` setting is off, so it lands in the extension
+	 * center with a working toggle like any built-in keyword.
+	 */
+	registerMagicKeyword(keyword: ExtensionMagicKeyword): void;
+
 	/** Contribute a renderer-side per-tool view: the daemon compiles `moduleUrl` to ESM and serves it via
 	 *  extensions.list `toolViews`; the GUI transcript dispatches it by
 	 *  tool name, replacing the built-in renderer for that tool. The
@@ -1745,6 +1759,16 @@ export interface ProviderConfig {
 	 * when unauthenticated). Mutually exclusive with `models`.
 	 */
 	fetchDynamicModels?: (apiKey: string | undefined) => Promise<readonly ProviderModelConfig[]>;
+	/**
+	 * Cache lifetime for this provider's dynamic-model discovery, in ms.
+	 *
+	 * The default is the host's 24 h built-in TTL — right for providers whose
+	 * catalog is effectively static, too slow for one that serves per-model
+	 * PRICING through the same endpoint (a credit multiplier that changed
+	 * yesterday would keep showing in the selector all day). Jet-hub's own
+	 * cadence for a tiered catalog is 5 minutes; pass that here.
+	 */
+	discoveryTtlMs?: number;
 }
 
 /** Media generation backends an extension contributes via registerMediaProvider. */
@@ -2052,6 +2076,30 @@ export interface ExtensionDesignRegistryState {
 	unregisterDesignSystem(id: string, sourceId: string): void;
 }
 
+/**
+ * One magic keyword as held after registration — the declaration plus the
+ * extension that contributed it, so a keyword can be attributed and dropped.
+ */
+export interface RegisteredMagicKeyword extends ExtensionMagicKeyword {
+	/** Extension path that declared this keyword (identity for unload). */
+	sourceId: string;
+}
+
+/**
+ * Shared state created by loader (magic keyword registry seam).
+ *
+ * Keywords are queued during extension loading and read by the session that
+ * builds notices. A session reads the live list rather than a snapshot taken at
+ * load: an extension enabled or reloaded mid-life must start (or stop)
+ * contributing its keyword without a restart.
+ */
+export interface ExtensionMagicKeywordRegistryState {
+	/** Queued registrations, in registration order. */
+	pendingMagicKeywordRegistrations: RegisteredMagicKeyword[];
+	registerMagicKeyword(keyword: ExtensionMagicKeyword, sourceId: string): void;
+	unregisterMagicKeyword(name: string, sourceId: string): void;
+}
+
 /** Action implementations for ExtensionAPI methods. */
 export interface ExtensionActions {
 	sendMessage: SendMessageHandler;
@@ -2107,6 +2155,7 @@ export interface ExtensionRuntime
 	extends ExtensionRuntimeState,
 		ExtensionMediaRegistryState,
 		ExtensionDesignRegistryState,
+		ExtensionMagicKeywordRegistryState,
 		ExtensionActions {
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
@@ -2280,6 +2329,88 @@ export interface ExtensionSkillDeclaration {
 	content: string;
 	/** Hide from listings (mirrors SKILL.md frontmatter `hide`). */
 	hide?: boolean;
+}
+
+/**
+ * One magic keyword contributed by an extension (registerMagicKeyword).
+ *
+ * The notice is appended as a hidden custom message attributed to the user, the
+ * same shape the built-in keywords use, so the model sees it while the
+ * transcript does not.
+ */
+export interface ExtensionMagicKeyword {
+	/** The keyword's identity, lowercase (e.g. "deepdive"). Also its setting key:
+	 *  `magicKeywords.<name>`. This need not be the typed word — see `trigger`. */
+	name: string;
+	/**
+	 * The word the composer matches, lowercase. Defaults to `name`.
+	 *
+	 * Separated from `name` because a trigger word and its identity can differ:
+	 * the built-in `workflow` keyword triggers on the word "workflowz" (the
+	 * extra z keeps it from colliding with ordinary prose about workflows), and
+	 * its setting key stays `magicKeywords.workflow`.
+	 */
+	trigger?: string;
+	/** Human-readable one-liner, shown in the extension center. */
+	description: string;
+	/**
+	 * The static notice appended when the keyword fires.
+	 *
+	 * Used as-is unless `renderNotice` is also declared, in which case the
+	 * static text serves as the fallback when the hook declines to render.
+	 */
+	notice: string;
+	/** Custom message type carrying the notice (e.g. "deepdive-notice"). */
+	noticeType?: string;
+	/**
+	 * Per-submission notice rendering, for keywords whose notice depends on
+	 * turn context (the built-in orchestrate renders the active tool list,
+	 * workflow the task-batch setting).
+	 *
+	 * Return a string to use it as the notice; return `undefined` to DECLINE —
+	 * the keyword does not fire this turn (orchestrate declines when the task
+	 * tool is absent, because a notice demanding subagent dispatch would ask
+	 * for a capability the session does not have). Declining is how a keyword
+	 * expresses "conditions not met", distinct from an empty notice.
+	 */
+	renderNotice?: (ctx: MagicKeywordNoticeContext) => string | undefined;
+	/**
+	 * Editor gradient, the same affordance the built-in keywords have: typing
+	 * the word paints it with a swept hue so it reads as active, not as prose.
+	 *
+	 * A hue RANGE rather than a callback — an extension declaring a keyword
+	 * should not need to know the host's color-mode machinery, and a range
+	 * covers every gradient the built-ins use (ultrathink sweeps 0..330,
+	 * orchestrate 150..280, workflow 30..150).
+	 *
+	 * Absent → the keyword still works, it just is not painted. Omitting it is
+	 * a legitimate choice for a keyword that should stay visually quiet.
+	 */
+	highlight?: {
+		/** Hue in degrees at the first character. */
+		from: number;
+		/** Hue in degrees swept to by the last character. */
+		to: number;
+		/** Color stops across the sweep. Defaults to 14, as the built-ins use. */
+		stops?: number;
+	};
+}
+
+/**
+ * The turn context a keyword's `renderNotice` sees.
+ *
+ * Plain data on purpose: an extension rendering a notice does not need — and
+ * does not get — a live session handle. The fields are the ones the built-in
+ * keyword notices actually consume; the shape grows with a real consumer, not
+ * speculatively.
+ */
+export interface MagicKeywordNoticeContext {
+	/** Tool names available in the submitting session. */
+	tools: readonly string[];
+	/** Whether task calls are batched (the workflow notice's fork). */
+	taskBatch: boolean;
+	/** Whether the scout subagent is available (the workflow notice's fork). */
+	scoutAvailable: boolean;
 }
 
 /** One renderer-side per-tool view declared by an extension

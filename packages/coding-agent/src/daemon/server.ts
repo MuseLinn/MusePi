@@ -477,6 +477,7 @@ import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
+import { BundleService } from "./services/bundle-service";
 import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
 import { CredentialService } from "./services/credential-service";
@@ -736,6 +737,27 @@ export class DaemonServer {
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
 				onInstallOutput: payload => this.#services.get<EventService>("events").broadcast(payload),
+			}),
+		);
+		this.#services.register(
+			new BundleService({
+				cwd: () => this.#host.cwd(),
+				home: () => os.homedir(),
+				// The plugin inventory and the composition are the same fact read
+				// two ways (what is installed / what this profile stacks), so one
+				// watcher invalidation busts both — an edited patch file or a
+				// newly installed bundle shows up on the same tick.
+				invalidate: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
+				// A row toggle changes what should be mounted, so the extension
+				// scan is re-run and the change is broadcast — otherwise the
+				// profile patch says "on" while the runtime never heard about it.
+				refreshExtensions: async () => {
+					this.#services.get<ExtensionService>("extensions").invalidateCaches();
+					void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
+					this.#services.get<EventService>("events").broadcastExtensionsChanged();
+					this.#services.get<EventService>("events").broadcastModelsChanged();
+					this.#reloadChangedSessionExtensions();
+				},
 			}),
 		);
 		this.#services.register(
@@ -1129,7 +1151,15 @@ export class DaemonServer {
 			// 时一并失效,否则虚拟技能列表最多滞后 10s TTL。
 			this.#services.get<MarketplaceService>("marketplace").invalidateSkillsCache();
 			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
+			// bundle/profile 组合读的也是插件面（bundle 的 patch 文件、profile
+			// 的 bundles 清单），与插件清单同一批失效入口。
+			this.#services.get<BundleService>("bundles").invalidate();
 			this.#services.get<EventService>("events").broadcastExtensionsChanged();
+			// 扩展贡献的 provider(registerProvider → ModelRegistry)随重载重注册,
+			// 模型目录跟着变 —— 会话内的模型选择器常驻挂载且只认 models.changed
+			// (ModelSelector 订阅),只广播 extensions.changed 会让它停在旧列表,
+			// 插件新增/修改的模型要重进会话才可见。
+			this.#services.get<EventService>("events").broadcastModelsChanged();
 			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
 			// entry changed on disk. The watcher callback filename is
 			// unreliable (empty/short names on Windows recursive watch), so
@@ -2058,6 +2088,26 @@ export class DaemonServer {
 			case "plugins.setEnabled": {
 				return this.#services.get<ExtensionService>("extensions").setPluginEnabled(params ?? {});
 			}
+			case "bundles.composition": {
+				// profile 组合读面：这个 profile 叠了哪些 bundle、组合出哪些行、
+				// 每行的插件在这台机器上能不能用。只读——组合是从磁盘现算的派
+				// 生状态，没有可启停的东西（行的启停来自组合，包的启停走
+				// plugins.packages）。
+				return this.#services.get<BundleService>("bundles").composition();
+			}
+			case "bundles.profile": {
+				return this.#services.get<BundleService>("bundles").profile();
+			}
+			case "bundles.entries": {
+				// 组合能挂载的扩展入口文件路径：组合面回答「这个 profile 叠了什么」，
+				// 这一路回答「因此哪些模块文件会被装载」。
+				return this.#services.get<BundleService>("bundles").entries();
+			}
+			case "bundles.rows.setEnabled": {
+				// 行的启停写入 profile 自己的 patch（一条 id 定向 override），
+				// 然后重新组合并回报组合的真实状态——报组合而非报请求。
+				return this.#services.get<BundleService>("bundles").setRowEnabled(params ?? {});
+			}
 			case "plugins.install": {
 				// 插件安装走 PluginInstallService 的状态机：install 立即返回 installId，
 				// 进度/输出经 plugins.install.state / plugins.install.output 事件推送。
@@ -2188,6 +2238,14 @@ export class DaemonServer {
 			case "extensions.setVersionExemption": {
 				// 兼容性精确版本豁免的知情授予/撤销（回退保护②）。
 				return this.#services.get<ExtensionService>("extensions").setVersionExemption(params ?? {});
+			}
+			case "pluginConfig.form": {
+				// 插件设置表单快照：revision 栅栏 + base/user 分层，回答
+				// settingsScope 答不了的两个问题（写入是否输了竞争、值是否为用户所设）。
+				return this.#services.get<ExtensionService>("extensions").configForm(params ?? {});
+			}
+			case "pluginConfig.mutate": {
+				return this.#services.get<ExtensionService>("extensions").configFormMutate(params ?? {});
 			}
 			case "ext.call": {
 				return this.#services.get<ExtensionService>("extensions").call(params ?? {});
@@ -4792,6 +4850,30 @@ export class DaemonServer {
 					category: slashCommandCategory(c.name),
 					tuiOnly: typeof c.handle !== "function",
 				}));
+				// Inline extensions (pi.registerCommand at session bootstrap —
+				// autoresearch, task-card style) register into the SESSION's
+				// runtime, which a session-less RPC cannot see; their command
+				// surface is statically known, so the GUI-relevant ones are
+				// declared here. autoresearch runs through session.prompt, which
+				// the session routes to its own extension commands.
+				const inlineExtensionCommands: ReadonlyArray<{ name: string; description?: string }> = [
+					{
+						name: "autoresearch",
+						description: "Toggle builtin autoresearch mode, or pass off / clear, or a goal message.",
+					},
+				];
+				const seen = new Set(list.map(c => c.name));
+				for (const cmd of inlineExtensionCommands) {
+					if (seen.has(cmd.name)) continue;
+					seen.add(cmd.name);
+					list.push({
+						name: cmd.name,
+						description: cmd.description,
+						kind: "command",
+						category: slashCommandCategory(cmd.name),
+						tuiOnly: false,
+					});
+				}
 				for (const skill of await this.#services.get<MarketplaceService>("marketplace").getSkills()) {
 					list.push({
 						name: getSkillSlashCommandName({ name: skill.name }),
@@ -4875,6 +4957,17 @@ export class DaemonServer {
 					notifyConfigChanged: async () => {},
 				});
 				if (builtinResult === false) {
+					// Not a builtin: try extension commands (pi.registerCommand —
+					// autoresearch, task-card style). session.prompt routes
+					// /-commands to them first; a command that fully handles
+					// locally returns false. This is how a GUI session reaches
+					// the same toggle the TUI offers.
+					try {
+						const handled = await session.prompt(p.text, { expandPromptTemplates: false });
+						if (!handled) return { consumed: true, outputs };
+					} catch {
+						// Fall through to the unknown-command report below.
+					}
 					// Distinguish "known but terminal-only" (e.g. /login,
 					// /quit) from "no such command" so the GUI can word the
 					// message correctly.

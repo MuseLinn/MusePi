@@ -8,6 +8,7 @@ import { ApprovalService } from "./approval-service";
 import { ArchiveService } from "./archive-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
+import { BundleService } from "./bundle-service";
 import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { CredentialService } from "./credential-service";
@@ -172,6 +173,14 @@ function buildRegistry(): HostServices {
 			onChanged: () => {},
 			onInstallState: () => {},
 			onInstallOutput: () => {},
+		}),
+	);
+	// BundleService：只认领路由（本测试不读盘组合），stub 掉宿主访问。
+	services.register(
+		new BundleService({
+			cwd: () => "",
+			home: () => "",
+			invalidate: () => {},
 		}),
 	);
 	// ArchiveService：无宿主依赖（本测试不发起归档），仅需认领路由参与闭包。

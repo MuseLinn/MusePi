@@ -2241,7 +2241,10 @@ export class ModelRegistry {
 				providerId: providerName as Parameters<typeof createModelManager>[0]["providerId"],
 				staticModels: [],
 				cacheDbPath: this.#cacheDbPath,
-				cacheTtlMs: 24 * 60 * 60 * 1000,
+				// Per-provider override: a catalog that serves PRICING wants a
+				// short TTL (a changed multiplier must not linger all day);
+				// the 24 h default stays for effectively-static catalogs.
+				cacheTtlMs: config.discoveryTtlMs ?? 24 * 60 * 60 * 1000,
 				dynamicModelsAuthoritative: true,
 				fetchDynamicModels: async () => {
 					const apiKey = await this.#peekApiKeyForProvider(providerName);
@@ -2380,6 +2383,12 @@ export interface ProviderConfigInput {
 	fetchDynamicModels?: (
 		apiKey: string | undefined,
 	) => Promise<readonly NonNullable<ProviderConfigInput["models"]>[number][]>;
+	/**
+	 * Cache lifetime for this provider's dynamic-model discovery, in ms.
+	 * Default 24 h — see {@link ExtensionProviderConfigInput.discoveryTtlMs}
+	 * for when a shorter value is right.
+	 */
+	discoveryTtlMs?: number;
 	models?: Array<{
 		id: string;
 		name: string;
