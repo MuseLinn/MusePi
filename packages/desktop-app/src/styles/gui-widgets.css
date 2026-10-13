@@ -3673,6 +3673,14 @@
 .gui-obo-provider-name {
 	font-size: var(--ui-font-size-sm);
 	color: var(--fg);
+	/* Grow so the free space lands AFTER the name: the row is
+	 * `justify-content: space-between` and without this the name sits
+	 * auto-sized between two flex-none siblings, so the space splits into the
+	 * gaps on both of its sides and the text reads centered instead of
+	 * flush with its brand icon. */
+	flex: 1;
+	min-width: 0;
+	text-align: left;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;

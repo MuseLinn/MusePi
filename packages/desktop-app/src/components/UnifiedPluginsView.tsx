@@ -305,14 +305,35 @@ export function ModuleRow({
 }
 
 /** 插件模块卡片（cards variant / 设置插件分区共用）：图标 + 状态点 +
- *  显示名 + 描述 + 状态/id 脚注，点击打开详情弹层。 */
-export function ModuleCard({ e, onOpen }: { e: ExtensionItem; onOpen(item: ExtensionItem): void }): ReactNode {
+ *  显示名 + 描述 + 状态/id 脚注，点击打开详情弹层。
+ *  启停开关与插件包卡片同一口径——一张卡片若只读不可停，管理面就出现
+ *  「这一行管不了」的裂缝（只读展示项由 readonly 把关，不渲染死开关）。 */
+export function ModuleCard({
+	e,
+	rpc,
+	busy,
+	onOpen,
+	onToggle,
+}: {
+	e: ExtensionItem;
+	rpc: RpcClient | null;
+	busy: boolean;
+	onOpen(item: ExtensionItem): void;
+	onToggle(item: ExtensionItem): void;
+}): ReactNode {
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			className="gui-plugin-card"
 			aria-label={`${t("ext open plugin details")} · ${builtinDisplayName(e)}`}
 			onClick={() => onOpen(e)}
+			onKeyDown={ev => {
+				if (ev.key === "Enter" || ev.key === " ") {
+					ev.preventDefault();
+					onOpen(e);
+				}
+			}}
 		>
 			<div className="gui-plugin-card-head">
 				<PluginIcon
@@ -323,6 +344,24 @@ export function ModuleCard({ e, onOpen }: { e: ExtensionItem; onOpen(item: Exten
 					}
 				/>
 				<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{builtinDisplayName(e)}</span>
+				{!e.readonly && (
+					<button
+						type="button"
+						role="switch"
+						aria-checked={e.state === "active"}
+						aria-label={
+							e.state === "active" ? `${t("disable skill")} ${e.name}` : `${t("enable skill")} ${e.name}`
+						}
+						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+						disabled={!rpc || busy}
+						onClick={ev => {
+							ev.stopPropagation();
+							onToggle(e);
+						}}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				)}
 				<Icon name="arrow-right-s" className="h-3.5 w-3.5 shrink-0 opacity-40" />
 			</div>
 			{builtinDescription(e) ? <div className="gui-plugin-card-desc">{builtinDescription(e)}</div> : null}
@@ -333,7 +372,7 @@ export function ModuleCard({ e, onOpen }: { e: ExtensionItem; onOpen(item: Exten
 				<span className="gui-ext-item-tag">{pluginStateLabel(e)}</span>
 				<span className="gui-ext-item-tag">{e.id}</span>
 			</div>
-		</button>
+		</div>
 	);
 }
 
@@ -559,7 +598,14 @@ export function UnifiedPluginsView({
 							</div>
 							<div className="gui-plugin-cards">
 								{official.map(e => (
-									<ModuleCard key={e.id} e={e} onOpen={item => setDetailId(item.id)} />
+									<ModuleCard
+										key={e.id}
+										e={e}
+										rpc={rpc}
+										busy={busyId !== null}
+										onOpen={item => setDetailId(item.id)}
+										onToggle={toggleModule}
+									/>
 								))}
 							</div>
 						</div>
@@ -629,7 +675,14 @@ export function UnifiedPluginsView({
 							)}
 							<div className="gui-plugin-cards">
 								{standaloneModules.map(e => (
-									<ModuleCard key={e.id} e={e} onOpen={item => setDetailId(item.id)} />
+									<ModuleCard
+										key={e.id}
+										e={e}
+										rpc={rpc}
+										busy={busyId !== null}
+										onOpen={item => setDetailId(item.id)}
+										onToggle={toggleModule}
+									/>
 								))}
 							</div>
 						</div>

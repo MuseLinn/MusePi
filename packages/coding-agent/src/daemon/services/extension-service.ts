@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
@@ -842,7 +843,92 @@ export class ExtensionService implements DaemonService {
 		return this.#pluginPackagesCache;
 	}
 
-	/** RPC plugins.setEnabled：已装插件启停（TUI /plugins enable|disable parity）。 */
+	/**
+	 * 插件级启停的组件联动：包开关 = 该插件的总闸。
+	 *
+	 * 停用 = 从 cordis 运行时**卸载整个插件 fiber**（`unload`）：效果账本反
+	 * 向回收，插件注册的一切——组件、槽位、命令、provider、RPC——随 fiber
+	 * 生命周期一起消失。一个包的开关就是这个包的总闸：不存在「包已停用而它的
+	 * settings.tab 还在役」的死入口。
+	 *
+	 * 停用同时把这个插件的声明组件追加进 `disabledExtensionComponents` 黑名
+	 * 单，让「重启 daemon 后不自动回来」也是持久语义（fiber 卸载只影响当前
+	 * 进程）。启用 = 从黑名单摘除条目 + 重新装载该插件（fiber 重挂，槽位随
+	 * 之恢复）。
+	 *
+	 * best-effort 全程：runtime 缺席（未接 cordis fiber 的宿主/测试）或单步
+	 * 失败都只记日志，绝不阻塞插件包自身的启停。
+	 */
+	async #cascadePluginComponents(pluginName: string, enabled: boolean): Promise<void> {
+		const denylistKey = "disabledExtensionComponents" as Parameters<Settings["set"]>[0];
+		let settings = this.#deps.settings();
+		if (!settings) {
+			await this.#deps.ensureRegistry();
+			settings = this.#deps.settings();
+		}
+		// The declared component ids come from the scanned inventory: the
+		// manifest's `components` block rides the extension row's meta, so a
+		// package that declares none cascades nothing (no needless writes).
+		const declared = await this.#declaredComponentIds(pluginName);
+		if (settings && declared.length > 0) {
+			const denylist = [...((settings.get(denylistKey) ?? []) as string[])];
+			let changed = false;
+			for (const componentId of declared) {
+				const key = `${pluginName}/${componentId}`;
+				const i = denylist.indexOf(key);
+				if (enabled && i >= 0) {
+					denylist.splice(i, 1);
+					changed = true;
+				} else if (!enabled && i < 0) {
+					denylist.push(key);
+					changed = true;
+				}
+			}
+			if (changed) {
+				settings.set(denylistKey, denylist as never);
+				await settings.flush();
+			}
+		}
+		try {
+			const runtime = await this.#deps.dynamicRuntime?.();
+			if (!runtime) return;
+			if (enabled) {
+				// Re-mount the whole plugin: its slot components, commands and
+				// provider registrations come back with the fiber.
+				await runtime.reloadPlugin?.(pluginName);
+				return;
+			}
+			// Unload the plugin fiber outright — every registration it holds
+			// (slot components included) is reclaimed with it. A plugin with
+			// no fiber (never loaded / already gone) is a no-op here.
+			await runtime.unloadPlugin?.(pluginName);
+		} catch (err) {
+			logger.warn("plugins.setEnabled component cascade failed (package toggle stands)", {
+				plugin: pluginName,
+				enabled,
+				error: String(err),
+			});
+		}
+	}
+
+	/** 一个插件包声明的组件 id 清单（manifest `components`；扫描清单里读）。
+	 *  读不到（无声明/插件未装）返回空数组——空 = 无级联对象。 */
+	async #declaredComponentIds(pluginName: string): Promise<string[]> {
+		try {
+			const extensions = await this.getExtensions();
+			const row = extensions.find(e => e.kind === "extension-module" && e.name === pluginName);
+			return (row?.components ?? []).map(c => c.id);
+		} catch (err) {
+			logger.warn("declared component ids unreadable (cascade skipped)", { plugin: pluginName, error: String(err) });
+			return [];
+		}
+	}
+
+	/** RPC plugins.setEnabled：已装插件启停（TUI /plugins enable|disable parity）。
+	 *
+	 *  插件级开关是总闸：停用一个插件包同时停用它注册的全部组件——否则
+	 *  「插件已停用」与「它的 settings.tab / 面板组件还在役」并存，界面留下
+	 *  一个点进去就报错的死入口。 */
 	async setPluginEnabled(params: unknown) {
 		// Enable/disable an installed plugin (settings → plugins tab
 		// toggle). Mirrors the TUI /plugins enable|disable command;
@@ -862,6 +948,14 @@ export class ExtensionService implements DaemonService {
 		await manager.setPluginEnabled(p.name, Boolean(p.enabled));
 		this.#pluginPackagesCache = null;
 		this.#pluginsCache = null;
+
+		// Component cascade: the package toggle is the master switch, so a
+		// disable takes every component the plugin declares down with it —
+		// otherwise "the plugin is off" coexists with "its settings.tab /
+		// panel component is still in service", leaving a dead entry that
+		// errors when opened. Best-effort: a component whose fiber is
+		// already gone must not block the package toggle.
+		await this.#cascadePluginComponents(p.name, Boolean(p.enabled));
 
 		// Probe the real load outcome. Only an enable can newly fail (a
 		// disable cannot break a load that already succeeded), so the probe

@@ -824,6 +824,28 @@ export class CordisDynamicExtensionRuntime {
 		component.extension = undefined;
 	}
 
+	/** 插件 fiber 卸载与重挂（plugins.setEnabled 的总闸语义）：
+	 *  unload = 拆掉整个插件 fiber（效果账本反向回收，槽位组件/命令/provider
+	 *  登记随生命周期消失）；reload = 卸载后按当前磁盘状态重挂。
+	 *  未装载/已卸载的插件是幂等 no-op。 */
+	async unloadPlugin(pluginName: string): Promise<void> {
+		const record = this.#records.get(pluginName);
+		if (!record) return;
+		await this.#unloadRecord(record);
+	}
+
+	async reloadPlugin(pluginName: string): Promise<void> {
+		const record = this.#records.get(pluginName);
+		if (!record) return;
+		await this.#unloadRecord(record);
+		const target = await resolveExtensionTarget(record.sourcePath);
+		record.entryKey = target.entry;
+		record.status = "active";
+		record.error = undefined;
+		record.components = new Map();
+		await this.#mount(record, target);
+	}
+
 	/** 效果账本壳：register 类动词/on 每次登记 = ctx.effect 一条带标签 effect，
 	 *  dispose 即按 verb 撤销表反向回收；registerCommand 额外过跨扩展
 	 *  碰撞守卫（先加载者归属不被抢）。 */
