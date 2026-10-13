@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-13
+
 ### Fixed
 - **插件包开关现在同时启停它的全部组件**：一个插件包此前有两套互不知情的开关——包卡片写的是「包已停用」，它挂进设置页的面板与组件行写的却是另一处存储，两边可以各说各话：包显示已停用而面板还在役，点它的设置 tab 直接报加载错误，重新启用也只恢复一半。现在包开关是唯一权威，停用即卸载整个插件运行体，它注册的槽位组件、命令、供应商、RPC 全部随生命周期回收；启用则重新挂载、全部恢复；重启后两处存储保持一致，不再复活一半。
   - EN: A plugin package toggle now enables or disables everything it registered together. A package previously had two switches that wrote two stores and never reconciled: the package card recorded "package off" while its settings-page panel and component rows wrote elsewhere, so the two could disagree — the package read as disabled while its panel stayed in service, opening its settings tab raised a load error, and re-enabling restored only half. The package toggle is now the single authority: a disable unloads the plugin's whole runtime so every registration (slot components, commands, providers, RPC) is reclaimed with its lifetime, an enable re-mounts it and everything returns, and both stores agree across a restart instead of reviving half.
