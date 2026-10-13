@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-10-13
+
 ### Added
 - **Auth Hub 的模型选择器显示积分倍率**：CodeBuddy 与 Qoder 的每个模型名后面直接标出消耗倍率（如 Deepseek-V4.1-Flash · x0.11、Sonus · x8），有促销的显示为原价→促销价，倍率为零的显示「免费」，无倍率信息的模型保持原名——选模型时消耗一目了然，不用再查文档。OpenCode 的免费模型也标出「免费」（匿名通道可用的那批）。
   - EN: The Auth Hub model selector shows credit multipliers. Every CodeBuddy and Qoder model carries its rate right in the name (Deepseek-V4.1-Flash · x0.11, Sonus · x8), promotions render as base→promo, zero-rate models read 免费 (free), and models without rate info keep their plain name — the cost of a pick is visible at selection time instead of a doc lookup. OpenCode's free models are marked 免费 too (the batch the anonymous key serves).
