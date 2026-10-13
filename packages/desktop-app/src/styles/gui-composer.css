@@ -1205,6 +1205,16 @@ button.gui-stats-pill {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	/* Electron app-region: make the entire splash draggable so users can reposition
+	 * it while waiting for the daemon/SDK to finish loading (cold start ~3-4s). */
+	-webkit-app-region: drag;
+}
+
+/* Button and links inside the splash must be non-drag to avoid stealing focus
+ * from the window (user can click retry without dragging the window). */
+.gui-splash button,
+.gui-splash a {
+	-webkit-app-region: no-drag;
 }
 
 .gui-splash-inner {
