@@ -859,48 +859,84 @@ export class ExtensionService implements DaemonService {
 	 * best-effort 全程：runtime 缺席（未接 cordis fiber 的宿主/测试）或单步
 	 * 失败都只记日志，绝不阻塞插件包自身的启停。
 	 */
+	/**
+	 * 插件级启停的组件联动：包开关 = 该插件的总闸，且它是**唯一权威**。
+	 *
+	 * 一个插件包在此前有两套互不知情的开关：包卡片走本方法（lock 的
+	 * `enabled`），模块行走 `extensions.setEnabled`（settings 的
+	 * `disabledExtensions` 条目 id）。各写一半的状态互相打架——包显示已
+	 * 停用而它的组件还在役，或反之，重进 daemon 后按另一套存储复活。现在
+	 * 本方法同时维护两处：lock 的 enabled（PluginManager 已写）+ 条目 id 的
+	 * 去/留，并卸载/重挂插件 fiber（槽位组件、命令、provider、RPC 随生命周期
+	 * 走）。
+	 *
+	 * 组件黑名单 `disabledExtensionComponents` 只在该插件**确实声明了
+	 * components** 时才动——没有声明的插件（面板直接 registerComponent）没有
+	 * 组件键可写，它的全部取舍由 fiber 卸载与条目 id 承担。
+	 *
+	 * best-effort：任一子步骤失败只记日志，绝不阻塞包自身的启停。
+	 */
 	async #cascadePluginComponents(pluginName: string, enabled: boolean): Promise<void> {
-		const denylistKey = "disabledExtensionComponents" as Parameters<Settings["set"]>[0];
+		const extensionsKey = "disabledExtensions" as Parameters<Settings["set"]>[0];
+		const componentsKey = "disabledExtensionComponents" as Parameters<Settings["set"]>[0];
 		let settings = this.#deps.settings();
 		if (!settings) {
 			await this.#deps.ensureRegistry();
 			settings = this.#deps.settings();
 		}
-		// The declared component ids come from the scanned inventory: the
-		// manifest's `components` block rides the extension row's meta, so a
-		// package that declares none cascades nothing (no needless writes).
-		const declared = await this.#declaredComponentIds(pluginName);
-		if (settings && declared.length > 0) {
-			const denylist = [...((settings.get(denylistKey) ?? []) as string[])];
+		if (settings) {
+			// 1) The extension-module row id — the second switch's storage.
+			//    Keeping it in lockstep with the package flag is what makes the
+			//    package toggle authoritative: whichever surface the user
+			//    flipped, both stores agree afterwards.
+			const rowId = `extension-module:${pluginName}`;
+			const disabled = [...((settings.get(extensionsKey) ?? []) as string[])];
+			const i = disabled.indexOf(rowId);
 			let changed = false;
-			for (const componentId of declared) {
-				const key = `${pluginName}/${componentId}`;
-				const i = denylist.indexOf(key);
-				if (enabled && i >= 0) {
-					denylist.splice(i, 1);
-					changed = true;
-				} else if (!enabled && i < 0) {
-					denylist.push(key);
-					changed = true;
-				}
+			if (!enabled && i < 0) {
+				disabled.push(rowId);
+				changed = true;
+			} else if (enabled && i >= 0) {
+				disabled.splice(i, 1);
+				changed = true;
 			}
 			if (changed) {
-				settings.set(denylistKey, denylist as never);
+				settings.set(extensionsKey, disabled as never);
 				await settings.flush();
 			}
+			// 2) Declared components (manifest `components`): a plugin that
+			//    declares none has no component keys to write.
+			const declared = await this.#declaredComponentIds(pluginName);
+			if (declared.length > 0) {
+				const denylist = [...((settings.get(componentsKey) ?? []) as string[])];
+				let denylistChanged = false;
+				for (const componentId of declared) {
+					const key = `${pluginName}/${componentId}`;
+					const j = denylist.indexOf(key);
+					if (enabled && j >= 0) {
+						denylist.splice(j, 1);
+						denylistChanged = true;
+					} else if (!enabled && j < 0) {
+						denylist.push(key);
+						denylistChanged = true;
+					}
+				}
+				if (denylistChanged) {
+					settings.set(componentsKey, denylist as never);
+					await settings.flush();
+				}
+			}
 		}
+		// 3) Runtime: unload the plugin fiber on disable (every registration
+		//    it holds — slot components, commands, providers, RPC — is
+		//    reclaimed with its lifetime), re-mount it on enable.
 		try {
 			const runtime = await this.#deps.dynamicRuntime?.();
 			if (!runtime) return;
 			if (enabled) {
-				// Re-mount the whole plugin: its slot components, commands and
-				// provider registrations come back with the fiber.
 				await runtime.reloadPlugin?.(pluginName);
 				return;
 			}
-			// Unload the plugin fiber outright — every registration it holds
-			// (slot components included) is reclaimed with it. A plugin with
-			// no fiber (never loaded / already gone) is a no-op here.
 			await runtime.unloadPlugin?.(pluginName);
 		} catch (err) {
 			logger.warn("plugins.setEnabled component cascade failed (package toggle stands)", {
