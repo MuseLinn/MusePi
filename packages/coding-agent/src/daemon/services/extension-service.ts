@@ -650,13 +650,14 @@ export class ExtensionService implements DaemonService {
 				if (!runtime) {
 					throw new Error("extensions.setComponentEnabled: cordis dynamic runtime unavailable");
 				}
-				const toggle = (): Promise<unknown> => runtime.setComponentEnabled(pluginName, component, enabled);
-				try {
-					await toggle();
-				} catch {
-					await this.getExtensionRuntimeLoad();
-					await toggle();
-				}
+				// Reconcile FIRST, then toggle. The previous shape (toggle, and
+				// on failure reconcile + retry) raced the runtime's own
+				// unload/mount: a retry ran against component references the
+				// reconcile had just replaced, so the second toggle operated on
+				// a fiber handle that was already disposed. Reconciling up front
+				// makes the record the toggle sees the record that exists.
+				await this.getExtensionRuntimeLoad();
+				await runtime.setComponentEnabled(pluginName, component, enabled);
 				const denylist = [...((settings.get("disabledExtensionComponents") ?? []) as string[])];
 				const key = `${pluginName}/${p.component}`;
 				const i = denylist.indexOf(key);
@@ -879,6 +880,11 @@ export class ExtensionService implements DaemonService {
 	async #cascadePluginComponents(pluginName: string, enabled: boolean): Promise<void> {
 		const extensionsKey = "disabledExtensions" as Parameters<Settings["set"]>[0];
 		const componentsKey = "disabledExtensionComponents" as Parameters<Settings["set"]>[0];
+		// Read the declaration BEFORE writing the row id: discovery filters
+		// entries whose id is already in `disabledExtensions`, so a package we
+		// are about to disable would otherwise read back as "declares
+		// nothing" — exactly the components we must cascade to.
+		const declared = await this.#declaredComponentIds(pluginName);
 		let settings = this.#deps.settings();
 		if (!settings) {
 			await this.#deps.ensureRegistry();
@@ -906,7 +912,6 @@ export class ExtensionService implements DaemonService {
 			}
 			// 2) Declared components (manifest `components`): a plugin that
 			//    declares none has no component keys to write.
-			const declared = await this.#declaredComponentIds(pluginName);
 			if (declared.length > 0) {
 				const denylist = [...((settings.get(componentsKey) ?? []) as string[])];
 				let denylistChanged = false;
@@ -947,13 +952,45 @@ export class ExtensionService implements DaemonService {
 		}
 	}
 
-	/** 一个插件包声明的组件 id 清单（manifest `components`；扫描清单里读）。
-	 *  读不到（无声明/插件未装）返回空数组——空 = 无级联对象。 */
+	/**
+	 * 一个插件包声明的组件 id 清单（manifest `components`）。
+	 *
+	 * 走 `discoverExtensionPaths` 拿入口路径——它与装载链路同源，同时覆盖
+	 * 两种安装态（npm 装的 `node_modules/<pkg>` 与链接/手写的
+	 * `<agentDir>/extensions/<pkg>`），且**不经过任何 TTL 缓存**：级联不能
+	 * 为了读一份声明去清 `#extensionsCache`（那会把别的调用方正要用的扫描
+	 * 结果一起作废），也不能依赖 `getExtensions` 的行——那些行不带
+	 * components（该字段只在 `list()` 的后处理里为 GUI 填充）。
+	 *
+	 * 发现用的禁用集**排除目标插件自己的条目 id**：调用点（包开关）要回答的
+	 * 是「这个包声明过什么」，与它此刻是否已被标记禁用无关——一个刚被停用、
+	 * 条目 id 还在 `disabledExtensions` 里的包，其组件声明必须照样读得到，
+	 * 否则停用写入的键在启用时无人摘除。
+	 *
+	 * 读不到（未装/无声明）返回空数组 = 无级联对象。
+	 */
 	async #declaredComponentIds(pluginName: string): Promise<string[]> {
 		try {
-			const extensions = await this.getExtensions();
-			const row = extensions.find(e => e.kind === "extension-module" && e.name === pluginName);
-			return (row?.components ?? []).map(c => c.id);
+			const { discoverExtensionPaths } = await import("../../extensibility/extensions");
+			const { readExtensionPluginMeta } = await import("../../extensibility/extensions/plugin-manifest");
+			const { getExtensionNameFromPath } = await import("../../discovery/helpers");
+			const settings = this.#deps.settings();
+			const rowId = `extension-module:${pluginName}`;
+			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(id => id !== rowId);
+			const paths = await discoverExtensionPaths(
+				(settings?.get("extensions") ?? []) as string[],
+				this.#deps.cwd(),
+				disabledIds,
+				{ ambient: true },
+			);
+			const ids = new Set<string>();
+			for (const entry of paths) {
+				// 入口文件名 = 插件名（`<root>/<name>/index.ts` 的目录名）。
+				if (getExtensionNameFromPath(entry) !== pluginName) continue;
+				const meta = await readExtensionPluginMeta(entry);
+				for (const decl of meta?.components ?? []) ids.add(decl.id);
+			}
+			return [...ids];
 		} catch (err) {
 			logger.warn("declared component ids unreadable (cascade skipped)", { plugin: pluginName, error: String(err) });
 			return [];

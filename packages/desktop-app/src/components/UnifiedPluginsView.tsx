@@ -789,6 +789,8 @@ export function UnifiedPluginsView({
 				item={detailItem}
 				rpc={rpc}
 				onError={onError}
+				onToggle={toggleModule}
+				toggleBusy={busyId !== null}
 			/>
 			<PluginInstallDialog
 				rpc={rpc}

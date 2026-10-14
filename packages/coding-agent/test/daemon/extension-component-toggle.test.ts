@@ -25,6 +25,10 @@ import { ExtensionService } from "../../src/daemon/services/extension-service";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const PLUGIN = "svc-comps";
+/** 第二个 describe 的插件名必须与第一个不同：两个 suite 的项目目录各自
+ *  独立，但 `disabledExtensions` / 组件黑名单写在同一个 Settings 实例里，
+ *  同名条目会让一个 suite 的写入命中另一个 suite 的扫描行。 */
+const PKG_PLUGIN = "svc-comps-pkg";
 
 describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线）", () => {
 	let agentDir: string;
@@ -132,5 +136,118 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 		expect(error).toBeInstanceOf(Error);
 		expect((error as Error).message).toContain("nope");
 		expect(settings.get("disabledExtensionComponents") as string[]).toEqual(before);
+	});
+});
+
+describe("plugins.setEnabled 的组件联动（包开关 = 总闸）", () => {
+	let agentDir: string;
+	let projectDir: string;
+	let host: DaemonHostContext;
+	let dynamic: CordisDynamicExtensionRuntime;
+	let extService: ExtensionService;
+	let settings: Settings;
+
+	beforeAll(async () => {
+		agentDir = await isolateAgentDirForTest("package-toggle-");
+		projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "package-toggle-proj-"));
+		const pluginDir = path.join(getProjectAgentDir(projectDir), "extensions", PKG_PLUGIN);
+		fs.mkdirSync(pluginDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(pluginDir, "package.json"),
+			JSON.stringify({
+				name: PKG_PLUGIN,
+				version: "0.0.0",
+				musepi: {
+					extensions: ["./index.ts"],
+					components: [
+						{ id: "alpha", description: "Alpha unit", entry: "./alpha.ts" },
+						{ id: "beta", entry: "./beta.ts" },
+					],
+				},
+			}),
+		);
+		fs.writeFileSync(
+			path.join(pluginDir, "index.ts"),
+			`export default function (pi) { pi.registerCommand("${PKG_PLUGIN}-main", { handler: async () => "main" }); }\n`,
+		);
+		fs.writeFileSync(
+			path.join(pluginDir, "alpha.ts"),
+			`export default function (pi) { pi.registerCommand("${PKG_PLUGIN}-alpha", { handler: async () => "alpha" }); }\n`,
+		);
+		fs.writeFileSync(
+			path.join(pluginDir, "beta.ts"),
+			`export default function (pi) { pi.registerCommand("${PKG_PLUGIN}-beta", { handler: async () => "beta" }); }\n`,
+		);
+		host = new DaemonHostContext();
+		dynamic = new CordisDynamicExtensionRuntime(host);
+		settings = Settings.isolated();
+		extService = new ExtensionService({
+			settings: () => settings,
+			ensureRegistry: async () => ({}),
+			cwd: () => projectDir,
+			webUrl: () => null,
+			webPortFile: () => path.join(projectDir, "web.port"),
+			dynamicRuntime: () => Promise.resolve(dynamic),
+			onChanged: () => {},
+		});
+	}, 30_000);
+
+	afterAll(async () => {
+		await dynamic.dispose();
+		await host.dispose();
+		fs.rmSync(projectDir, { recursive: true, force: true });
+		// Settings.isolated() is a process-level singleton: the two deny keys
+		// this suite writes would leak into every later file in the same
+		// `bun test` process (a sibling suite's scan then reads our plugin as
+		// disabled). Clear them so the suite leaves no trace.
+		settings.set("disabledExtensions" as Parameters<Settings["set"]>[0], [] as never);
+		settings.set("disabledExtensionComponents" as Parameters<Settings["set"]>[0], [] as never);
+		await settings.flush();
+		await restoreAgentDirForTest(agentDir);
+	}, 30_000);
+
+	it("停用：条目 id 与组件黑名单同步落盘，fiber 卸载，但组件声明仍可检视", async () => {
+		// 先装载（首次 reconcile），否则 unload 无从谈起。
+		await extService.getExtensionRuntimeLoad();
+		const loaded = dynamic.inspect().find(r => r.name === PKG_PLUGIN);
+		expect(loaded?.status).toBe("active");
+		expect(loaded?.components.map(c => c.id).sort()).toEqual(["alpha", "beta"]);
+
+		await extService.setPluginEnabled({ name: PKG_PLUGIN, enabled: false });
+
+		// 1) 两套存储同步：条目 id 进 disabledExtensions，组件键进黑名单。
+		expect(settings.get("disabledExtensions") as string[]).toContain(`extension-module:${PKG_PLUGIN}`);
+		const denylist = settings.get("disabledExtensionComponents") as string[];
+		expect(denylist).toContain(`${PKG_PLUGIN}/alpha`);
+		expect(denylist).toContain(`${PKG_PLUGIN}/beta`);
+
+		// 2) fiber 真卸载：宿主命令面缺席（不是展示层）。
+		const unloaded = dynamic.inspect().find(r => r.name === PKG_PLUGIN);
+		expect(unloaded?.status).toBe("unloaded");
+
+		// 3) 组件声明仍在检视面——包开关是安装/卸载语义，管理界面必须继续
+		//    列出插件声明了什么（行读真实未挂载态），否则组件段随开关消失，
+		//    用户无从知道停用期间关掉了什么。
+		expect(unloaded?.components.map(c => c.id).sort()).toEqual(["alpha", "beta"]);
+		expect(unloaded?.components.every(c => c.status === "unloaded")).toBe(true);
+
+		// 4) list 组件面同样不消失（enabled=false 如实标，canToggle 保持）。
+		const { extensions } = await extService.list();
+		const entry = extensions.find(e => e.id === `extension-module:${PKG_PLUGIN}`);
+		expect(entry?.state).toBe("disabled");
+		expect(entry?.components?.map(c => c.id).sort()).toEqual(["alpha", "beta"]);
+		expect(entry?.components?.every(c => c.enabled === false)).toBe(true);
+		expect(entry?.components?.every(c => c.canToggle === true)).toBe(true);
+	});
+
+	it("重新启用：条目 id 与黑名单摘除，组件 fiber 重挂", async () => {
+		await extService.setPluginEnabled({ name: PKG_PLUGIN, enabled: true });
+		expect(settings.get("disabledExtensions") as string[]).not.toContain(`extension-module:${PKG_PLUGIN}`);
+		expect(settings.get("disabledExtensionComponents") as string[]).not.toContain(`${PKG_PLUGIN}/alpha`);
+
+		const record = dynamic.inspect().find(r => r.name === PKG_PLUGIN);
+		expect(record?.status).toBe("active");
+		expect(record?.components.find(c => c.id === "alpha")?.status).toBe("active");
+		expect(record?.components.find(c => c.id === "beta")?.status).toBe("active");
 	});
 });

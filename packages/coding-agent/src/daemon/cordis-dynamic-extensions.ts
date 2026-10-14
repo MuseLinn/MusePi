@@ -892,6 +892,13 @@ export class CordisDynamicExtensionRuntime {
 		record.fiber = undefined;
 		record.ctx = undefined;
 		record.extension = undefined;
+		// The component DECLARATIONS survive the unload: a package toggle is an
+		// install/uninstall of the whole plugin, and the management surface
+		// must keep listing what the plugin declares (with each row reading
+		// its real, not-mounted state) instead of the rows vanishing — a
+		// component list that disappears with the toggle cannot be managed.
+		// Only the per-component runtime references are dropped; the map keys
+		// are the manifest's declaration and stay put.
 		for (const component of record.components.values()) {
 			component.status = "unloaded";
 			component.fiber = undefined;

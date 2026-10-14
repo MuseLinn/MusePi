@@ -1212,7 +1212,12 @@ export class DaemonServer {
 	 * `agent_end` (AgentSession busy gate); idle sessions reload immediately.
 	 */
 	#reloadChangedSessionExtensions(): void {
-		for (const live of this.#host.allSessions()) {
+		// A host surface that cannot enumerate sessions (partial host in
+		// tests, or a host mid-teardown) means there is nothing to reload —
+		// the watcher's debounce must not throw on it.
+		const allSessions = this.#host.allSessions;
+		if (typeof allSessions !== "function") return;
+		for (const live of allSessions.call(this.#host)) {
 			const session = live.agentSession;
 			const entryPaths = [...session.getExtensionEntryMtimes().keys()];
 			if (entryPaths.length === 0) continue;

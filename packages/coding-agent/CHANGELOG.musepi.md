@@ -5,6 +5,14 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+- **插件详情弹窗补上整体启停开关**：内置插件单元此前点开详情只有状态、组件与配置，没有整体开关——要启停得回列表找行，而用户插件包那边一向有。现在内置与用户插件同一套实现：详情头部一个总闸（与列表行、插件包开关同一个 RPC 语义），只读展示项照旧不渲染死开关。
+  - EN: The plugin detail dialog gains a whole-plugin enable switch. Built-in plugin units used to open into status, components and config only — enabling or disabling one meant going back to the list to find its row, while installed packages had always had a switch in their detail view. Built-in and user plugins now share one implementation: one master switch in the dialog header, with the same RPC semantics as the list row and the package toggle, and read-only display items still render no dead switch.
+- **组件列表不再随插件启停消失**：插件停用后，详情里的「包含的组件」段曾整个不见了——用户无从知道停用期间关掉了什么，重新启用后那段也空着。现在组件的声明面与插件是否在役无关：停用只卸载运行体，组件行照旧列出，各自读真实的未挂载状态。
+  - EN: The component list no longer vanishes with the plugin's toggle. Disabling a plugin used to make the whole "included components" section disappear from its detail view — there was no way to see what was switched off, and after re-enabling the section stayed empty. A component's declared surface is now independent of whether its plugin is in service: a disable unloads the runtime only, the component rows stay listed, and each reads its real not-mounted state.
+- **扩展文件变动不再让守护进程的会话重载崩溃**：监视器防抖回调假设宿主一定能枚举会话；宿主面不全（或正在拆卸）时这次重掷异常直接中断整批后续刷新。现在缺该能力时跳过重载——没有会话可重载，本来就不该抛。
+  - EN: An extension file change no longer crashes the daemon's session reload. The watcher's debounced callback assumed the host could always enumerate sessions; when that surface was absent (or mid-teardown) the throw aborted the whole follow-up refresh. Reload is now skipped when the capability is missing — no sessions to reload means nothing to throw about.
+
 ## [0.5.6] - 2026-10-13
 
 ### Fixed

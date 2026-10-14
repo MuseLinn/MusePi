@@ -271,6 +271,8 @@ export function PluginDetailDialog({
 	item,
 	rpc,
 	onError,
+	onToggle,
+	toggleBusy,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -278,12 +280,20 @@ export function PluginDetailDialog({
 	rpc: RpcClient | null;
 	/** 组件开关错误出口（弹层内横幅）。 */
 	onError(message: string | null): void;
+	/** 条目整体启停（与插件包开关同一 RPC：extensions.setEnabled）。
+	 *  缺省 = 只读条目（无禁用语义），不渲染总开关。 */
+	onToggle?(item: ExtensionItem): void;
+	/** 总开关忙碌中（父级同一把锁，防连点）。 */
+	toggleBusy?: boolean;
 }): ReactNode {
 	const pickerKeys = item ? VOICE_PICKER_KEYS[item.id] : undefined;
 	const filteredItem =
 		item && pickerKeys && item.config
 			? { ...item, config: item.config.filter(f => !pickerKeys.includes(f.key)) }
 			: item;
+	// 只读条目（主题包/渲染器包：禁用不改变运行时）不渲染死开关——与卡片
+	// 行同一判据，一个条目在列表和详情里的可管性必须一致。
+	const canToggle = item?.readonly !== true && onToggle !== undefined;
 	return (
 		<DialogFrame open={open} onClose={onClose} label={t("ext plugin details")} className="gui-plugin-dialog">
 			{item && filteredItem && (
@@ -305,6 +315,22 @@ export function PluginDetailDialog({
 						/>
 						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{builtinDisplayName(item)}</span>
 						<span className="gui-ext-item-tag">{item.id}</span>
+						{/* 整体启停：与插件包详情、能力清单行同一个开关语义
+						 *  （extensions.setEnabled）。头部收一个总闸，避免它在
+						 *  状态行与组件段之间重复出现。 */}
+						{canToggle && (
+							<button
+								type="button"
+								role="switch"
+								aria-checked={item.state === "active"}
+								aria-label={`${t("plugin enable")} ${builtinDisplayName(item)}`}
+								className={`gui-toggle${item.state === "active" ? " gui-toggle--on" : ""}`}
+								disabled={!rpc || toggleBusy === true}
+								onClick={() => onToggle?.(item)}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						)}
 						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
 							<Icon name="close" className="h-4 w-4" />
 						</button>
