@@ -119,6 +119,7 @@ impl Backend for WaylandBackend {
 			input: self.input_error.is_none(),
 			ax: self.ax.is_some(),
 			background_window_input: false,
+			overlay: false,
 			delivery_modes: vec!["background".to_string()],
 			capture_permission: if cfg!(feature = "wayland-pipewire") {
 				"prompt-or-granted".to_string()

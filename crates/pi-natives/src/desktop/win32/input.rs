@@ -1,14 +1,63 @@
+use std::{thread, time::Duration};
+
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE};
 
 use super::{
 	super::{
-		backend::{DeliveryMode, Modifiers, MouseButton, PointerEvent},
+		backend::{DeliveryMode, InputTiming, Modifiers, MouseButton, PointerEvent},
 		error::{CoreResult, DesktopError},
 		keys::KeyName,
 		types::Target,
 	},
 	capture,
 };
+
+/// Sleep for a pacing interval; zero skips the wait.
+fn settle(ms: u16) {
+	if ms > 0 {
+		thread::sleep(Duration::from_millis(u64::from(ms)));
+	}
+}
+
+/// Reports whether physical Escape is currently held, letting a paced
+/// gesture abort between steps without installing a keyboard hook.
+fn escape_pressed() -> bool {
+	// SAFETY: GetAsyncKeyState performs a stateless key-state query; a
+	// negative result reports the key as currently down.
+	let state = unsafe { GetAsyncKeyState(i32::from(VK_ESCAPE)) };
+	state < 0
+}
+
+/// Saves the system cursor position on creation and restores it on drop, so
+/// incidental cursor travel during click/drag/scroll does not strand the
+/// user's pointer. Best-effort: capture or restore failure is ignored.
+struct CursorGuard {
+	previous: Option<(i32, i32)>,
+}
+
+impl CursorGuard {
+	fn capture() -> Self {
+		let mut point = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
+		// SAFETY: GetCursorPos writes exactly one POINT when it reports success.
+		let previous =
+			if unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point) } != 0 {
+				Some((point.x, point.y))
+			} else {
+				None
+			};
+		Self { previous }
+	}
+}
+
+impl Drop for CursorGuard {
+	fn drop(&mut self) {
+		if let Some((x, y)) = self.previous {
+			// SAFETY: restoring plain screen coordinates retains no borrowed memory.
+			unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetCursorPos(x, y) };
+		}
+	}
+}
 
 pub(super) fn create_global_input() -> CoreResult<Enigo> {
 	let _ = enigo::set_dpi_awareness();
@@ -80,15 +129,22 @@ fn scroll_steps(delta: f64) -> i32 {
 fn global_pointer(input: &mut Enigo, event: PointerEvent) -> CoreResult<()> {
 	match event {
 		PointerEvent::Click { x, y, button, count, modifiers } => {
+			let _cursor = CursorGuard::capture();
 			with_global_modifiers(input, modifiers, |input| {
 				input
 					.move_mouse(x.round() as i32, y.round() as i32, Coordinate::Abs)
 					.map_err(enigo_error)?;
+				settle(InputTiming::CLICK.move_settle_ms);
 				for _ in 0..count {
+					if escape_pressed() {
+						return Err(DesktopError::cancelled("pointer input aborted by physical Escape"));
+					}
 					input
 						.button(button_to_enigo(button), Direction::Click)
 						.map_err(enigo_error)?;
+					settle(InputTiming::CLICK.press_ms);
 				}
+				settle(InputTiming::CLICK.after_ms);
 				Ok(())
 			})
 		},
@@ -99,6 +155,7 @@ fn global_pointer(input: &mut Enigo, event: PointerEvent) -> CoreResult<()> {
 			let Some(&(start_x, start_y)) = path.first() else {
 				return Err(DesktopError::input_failed("drag path is empty"));
 			};
+			let _cursor = CursorGuard::capture();
 			with_global_modifiers(input, modifiers, |input| {
 				input
 					.move_mouse(start_x.round() as i32, start_y.round() as i32, Coordinate::Abs)
@@ -106,18 +163,26 @@ fn global_pointer(input: &mut Enigo, event: PointerEvent) -> CoreResult<()> {
 				input
 					.button(button_to_enigo(button), Direction::Press)
 					.map_err(enigo_error)?;
+				settle(InputTiming::DRAG.press_ms);
 				let movement = path.iter().skip(1).try_for_each(|&(x, y)| {
+					if escape_pressed() {
+						return Err(DesktopError::cancelled("pointer input aborted by physical Escape"));
+					}
 					input
 						.move_mouse(x.round() as i32, y.round() as i32, Coordinate::Abs)
-						.map_err(enigo_error)
+						.map_err(enigo_error)?;
+					settle(InputTiming::DRAG.step_ms);
+					Ok(())
 				});
 				let release = input
 					.button(button_to_enigo(button), Direction::Release)
 					.map_err(enigo_error);
+				settle(InputTiming::DRAG.after_ms);
 				movement.and(release)
 			})
 		},
 		PointerEvent::Scroll { x, y, dx, dy } => {
+			let _cursor = CursorGuard::capture();
 			input
 				.move_mouse(x.round() as i32, y.round() as i32, Coordinate::Abs)
 				.map_err(enigo_error)?;
@@ -583,7 +648,8 @@ mod foreground {
 	};
 
 	use super::{
-		CoreResult, DesktopError, KeyName, Modifiers, MouseButton, PointerEvent, background, capture,
+		CoreResult, CursorGuard, DesktopError, InputTiming, KeyName, Modifiers, MouseButton,
+		PointerEvent, background, capture, escape_pressed, settle,
 	};
 
 	struct ForegroundGuard {
@@ -678,15 +744,24 @@ mod foreground {
 
 	pub(super) fn pointer(id: &str, event: PointerEvent) -> CoreResult<()> {
 		let _guard = ForegroundGuard::activate(id)?;
+		let _cursor = CursorGuard::capture();
 		match event {
 			PointerEvent::Click { x, y, button, count, modifiers } => {
 				move_to(x, y)?;
+				settle(InputTiming::CLICK.move_settle_ms);
 				with_modifiers(modifiers, || {
 					let (down, up) = button_flags(button);
 					for _ in 0..count {
+						if escape_pressed() {
+							return Err(DesktopError::cancelled(
+								"pointer input aborted by physical Escape",
+							));
+						}
 						send(mouse_event(down, 0))?;
+						settle(InputTiming::CLICK.press_ms);
 						send(mouse_event(up, 0))?;
 					}
+					settle(InputTiming::CLICK.after_ms);
 					Ok(())
 				})
 			},
@@ -699,8 +774,19 @@ mod foreground {
 				with_modifiers(modifiers, || {
 					let (down, up) = button_flags(button);
 					send(mouse_event(down, 0))?;
-					let movement = path.iter().skip(1).try_for_each(|&(x, y)| move_to(x, y));
+					settle(InputTiming::DRAG.press_ms);
+					let movement = path.iter().skip(1).try_for_each(|&(x, y)| {
+						if escape_pressed() {
+							return Err(DesktopError::cancelled(
+								"pointer input aborted by physical Escape",
+							));
+						}
+						move_to(x, y)?;
+						settle(InputTiming::DRAG.step_ms);
+						Ok(())
+					});
 					let release = send(mouse_event(up, 0));
+					settle(InputTiming::DRAG.after_ms);
 					movement.and(release)
 				})
 			},

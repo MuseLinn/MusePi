@@ -86,7 +86,13 @@ Codex 订阅端点以及自定义或代理路由不会从 model ID 推断原生�
 
 当 tool 处于活动状态时，system prompt 即使是紧凑的原生 tool 清单也会明确 host-desktop 路由：桌面请求必须使用 `computer`，并且每次成功动作后都必须在下一个动作前检查其最新截图。这不会自动启用该 tool、绕过审批，也不会在 computer 出错后阻止用户请求的替代方案。
 
-输入默认使用 `delivery: "background"`，这避免改变用户的焦点、指针或窗口顺序。如果 OS 或应用无法安全地定位该事件，调用会抛出 `BackgroundUnavailable`。在 macOS 上，使用 AX 或显式重试 `delivery: "foreground"`，这会短暂激活目标并在之后恢复焦点。Wayland 合成器只接受当前聚焦 surface 的原生输入，且不允许 musepi 激活任意窗口，因此逐窗口原生输入与 `raise()` 不可用；改用 AX 动作，或自行聚焦目标后使用桌面输入。
+输入默认使用 `delivery: "background"`，这避免改变用户的焦点、指针或窗口顺序。如果 OS 或应用无法安全地定位该事件，调用会抛出 `BackgroundUnavailable`。在 macOS 上，使用 AX 或显式重试 `delivery: "foreground"`，这会短暂激活目标并在之后恢复焦点。
+
+### 接管提示与派发契约
+
+Windows 的前台或桌面全局输入会先在穿透 overlay 上画出 agent 的第二光标并弹出简短接管横幅，然后才动你的鼠标键盘；每次动作后 overlay 自动隐藏。另一个 desktop session 正占用真实输入时，新的前台输入以 `DESKTOP_INPUT_BUSY` 失败，而不会争抢指针。一次成功的输入调用只表示事件已派发，不代表应用已接受；重要结果先重新观察再继续。
+
+租约、第二光标与接管横幅目前仅限 Windows：其它平台 `capabilities().overlay` 报告 `false`。Pacing、光标恢复、拖拽上限与 Esc 中断目前也仅限 Windows；macOS（Quartz/CGEvent）与 Linux X11（XTest）存在同样的全局输入争用，已列为后续项。Wayland 下 overlay 没有标准合成器协议，不在范围内。Wayland 合成器只接受当前聚焦 surface 的原生输入，且不允许 musepi 激活任意窗口，因此逐窗口原生输入与 `raise()` 不可用；改用 AX 动作，或自行聚焦目标后使用桌面输入。
 
 如果该 tool 从不出现：
 
@@ -270,6 +276,8 @@ Computer backend 错误以稳定代码开头：
 | `DESKTOP_DEADLINE_EXCEEDED` | 60 秒原生批次期限已过；剩余动作未执行。将批次拆成更小的调用并重新捕获截图。 |
 | `DESKTOP_SESSION_CLOSED` | 原生 session 已关闭。开启新的 OMP session。 |
 | `DESKTOP_WORKER_FAILED` | 原生 worker 启动、通信、超时或关闭失败。开新 session；若持续存在，请验证原生 addon 安装。 |
+| `DESKTOP_CANCELLED` | 物理 Esc 中止了指针输入；手势已停止，光标已恢复。重试该动作。 |
+| `DESKTOP_INPUT_BUSY` | 真实输入正被另一个 desktop session 占用。等其回合结束再重试；只读观察仍可用。 |
 
 常见确切失败：
 

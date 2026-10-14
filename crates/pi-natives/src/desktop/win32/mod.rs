@@ -5,6 +5,10 @@ mod capture;
 pub mod delivery;
 #[cfg(target_os = "windows")]
 mod input;
+#[cfg(target_os = "windows")]
+mod lease;
+#[cfg(target_os = "windows")]
+mod overlay;
 
 #[cfg(target_os = "windows")]
 use enigo::Enigo;
@@ -31,6 +35,8 @@ pub(crate) struct Win32Backend {
 	display:      DisplaySelector,
 	global_input: Enigo,
 	ax:           Win32Ax,
+	lease:        Option<lease::Win32Lease>,
+	overlay:      Option<overlay::OverlayHandle>,
 }
 
 #[cfg(target_os = "windows")]
@@ -40,7 +46,33 @@ impl Win32Backend {
 		// keeping both APIs in the same per-monitor physical coordinate regime.
 		let global_input = input::create_global_input()?;
 		let _ = capture::displays(&display)?;
-		Ok(Self { display, global_input, ax: Win32Ax::new() })
+		// The overlay is best-effort: a session without a window still offers
+		// full input, only without the second cursor.
+		let overlay = overlay::OverlayHandle::try_create().ok();
+		Ok(Self { display, global_input, ax: Win32Ax::new(), lease: None, overlay })
+	}
+
+	/// Acquires the cross-session real-input lease when the request touches
+	/// shared input, and announces the takeover on the overlay. Window-message
+	/// delivery bypasses both: it moves neither the shared cursor nor the
+	/// system input queue.
+	fn begin_input(&mut self, target: &Target, mode: DeliveryMode) -> CoreResult<()> {
+		if !super::lease::needs_lease(target, mode) {
+			return Ok(());
+		}
+		if self.lease.is_none() {
+			self.lease = Some(lease::acquire()?);
+		}
+		if let Some(overlay) = &self.overlay {
+			overlay.notice("foreground input is taking over mouse and keyboard");
+		}
+		Ok(())
+	}
+
+	fn end_input(&self) {
+		if let Some(overlay) = &self.overlay {
+			overlay.hide();
+		}
 	}
 }
 
@@ -56,6 +88,7 @@ impl Backend for Win32Backend {
 			input: true,
 			ax: true,
 			background_window_input: true,
+			overlay: self.overlay.is_some(),
 			delivery_modes: vec!["background".to_string(), "foreground".to_string()],
 			capture_permission: if display_count > 0 {
 				"granted"
@@ -92,11 +125,20 @@ impl Backend for Win32Backend {
 		_frame: &FrameGeometry,
 		mode: DeliveryMode,
 	) -> CoreResult<()> {
-		input::pointer(&mut self.global_input, target, event, mode)
+		self.begin_input(target, mode)?;
+		if let Some(overlay) = &self.overlay {
+			overlay.show_event(&event);
+		}
+		let result = input::pointer(&mut self.global_input, target, event, mode);
+		self.end_input();
+		result
 	}
 
 	fn type_text(&mut self, target: &Target, text: &str, mode: DeliveryMode) -> CoreResult<()> {
-		input::type_text(&mut self.global_input, target, text, mode)
+		self.begin_input(target, mode)?;
+		let result = input::type_text(&mut self.global_input, target, text, mode);
+		self.end_input();
+		result
 	}
 
 	fn key_chord(
@@ -105,7 +147,10 @@ impl Backend for Win32Backend {
 		keys: &[KeyName],
 		mode: DeliveryMode,
 	) -> CoreResult<()> {
-		input::key_chord(&mut self.global_input, target, keys, mode)
+		self.begin_input(target, mode)?;
+		let result = input::key_chord(&mut self.global_input, target, keys, mode);
+		self.end_input();
+		result
 	}
 
 	fn raise_window(&mut self, id: &str) -> CoreResult<()> {
@@ -114,5 +159,27 @@ impl Backend for Win32Backend {
 
 	fn ax(&mut self) -> Option<&mut dyn AxBackend> {
 		Some(&mut self.ax)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{super::error::ErrorCode, *};
+
+	/// Manual end-to-end: the backend acquires the machine-wide lease, and a
+	/// second backend observes it as busy. Ignored by default because it
+	/// touches real global lease state and creates overlay windows.
+	#[test]
+	#[ignore = "needs an interactive desktop; acquires the real input lease"]
+	fn backend_lease_blocks_second_backend() {
+		let mut first = Win32Backend::new(DisplaySelector::All).expect("first backend starts");
+		first
+			.begin_input(&Target::Desktop, DeliveryMode::Background)
+			.expect("first backend acquires the lease");
+		let mut second = Win32Backend::new(DisplaySelector::All).expect("second backend starts");
+		let busy = second
+			.begin_input(&Target::Desktop, DeliveryMode::Background)
+			.expect_err("second backend must observe a busy lease");
+		assert_eq!(busy.code, ErrorCode::InputBusy);
 	}
 }

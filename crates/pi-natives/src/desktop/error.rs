@@ -15,6 +15,8 @@ pub enum ErrorCode {
 	AxFailed,
 	Timeout,
 	Closed,
+	Cancelled,
+	InputBusy,
 	Internal,
 }
 
@@ -34,6 +36,8 @@ impl ErrorCode {
 			Self::AxFailed => "AxFailed",
 			Self::Timeout => "Timeout",
 			Self::Closed => "Closed",
+			Self::Cancelled => "Cancelled",
+			Self::InputBusy => "InputBusy",
 			Self::Internal => "Internal",
 		}
 	}
@@ -103,6 +107,14 @@ impl DesktopError {
 		Self::new(ErrorCode::Closed, "desktop session is closed")
 	}
 
+	pub(crate) fn cancelled(message: impl Into<String>) -> Self {
+		Self::new(ErrorCode::Cancelled, message)
+	}
+
+	pub(crate) fn input_busy(message: impl Into<String>) -> Self {
+		Self::new(ErrorCode::InputBusy, message)
+	}
+
 	pub(crate) fn internal(message: impl Into<String>) -> Self {
 		Self::new(ErrorCode::Internal, message)
 	}
@@ -123,3 +135,15 @@ impl From<DesktopError> for napi::Error {
 }
 
 pub type CoreResult<T> = Result<T, DesktopError>;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn cancelled_carries_code_prefix() {
+		let error = DesktopError::cancelled("pointer input aborted by physical Escape");
+		assert_eq!(error.code, ErrorCode::Cancelled);
+		assert_eq!(error.to_string(), "Cancelled: pointer input aborted by physical Escape");
+	}
+}

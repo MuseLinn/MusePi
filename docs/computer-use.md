@@ -84,7 +84,13 @@ Natively capable OpenAI Responses routes may receive a forced `{ "type": "comput
 When a session switches from a native-capable API route to a subscription or proxy route, prior native computer history is converted to a representation the target accepts. Codex subscription requests replay it as named `computer` function calls and results, then declare the next computer call as the same named function. Other non-native OpenAI Responses-family targets may use stable assistant text notes; other provider adapters use their ordinary tool format.
 While the tool is active, the system prompt makes host-desktop routing explicit even for compact native-tool inventories: desktop requests must use `computer`, and every successful action must be followed by inspection of its fresh screenshot before the next action. This does not auto-enable the tool, bypass approval, or prevent a user-requested alternative after a computer error.
 
-Input defaults to `delivery: "background"`, which avoids changing the user's focus, pointer, or window order. If the OS or application cannot target that event safely, the call throws `BackgroundUnavailable`. On macOS, use AX or explicitly retry with `delivery: "foreground"`, which briefly activates the target and restores focus afterward. Wayland compositors accept native input only for the currently focused surface and do not permit musepi to activate an arbitrary window, so per-window native input and `raise()` are unavailable; use AX actions, or desktop input after focusing the target yourself.
+Input defaults to `delivery: "background"`, which avoids changing the user's focus, pointer, or window order. If the OS or application cannot target that event safely, the call throws `BackgroundUnavailable`. On macOS, use AX or explicitly retry with `delivery: "foreground"`, which briefly activates the target and restores focus afterward.
+
+### Takeover notice and dispatch contract
+
+Foreground or desktop-global input on Windows draws the agent's second cursor in a click-through overlay and posts a brief takeover banner before touching your mouse or keyboard; the overlay hides after each action. A second desktop session holding real input fails new foreground input with `DESKTOP_INPUT_BUSY` instead of fighting over the pointer. A successful input call reports dispatch, not acceptance: re-observe important results before the next action.
+
+The lease, second cursor and takeover banner are currently Windows-only: `capabilities().overlay` reports `false` elsewhere. Pacing, cursor restore, drag cap and Escape abort are likewise Windows-only today; macOS (Quartz/CGEvent) and Linux X11 (XTest) share the same global-input contention and are tracked follow-ups. On Wayland an overlay has no standard compositor protocol and is out of scope. Wayland compositors accept native input only for the currently focused surface and do not permit musepi to activate an arbitrary window, so per-window native input and `raise()` are unavailable; use AX actions, or desktop input after focusing the target yourself.
 
 If the tool never appears:
 
@@ -268,6 +274,8 @@ Computer backend errors begin with a stable code:
 | `DESKTOP_DEADLINE_EXCEEDED` | The 60-second native batch deadline expired; remaining actions were not executed. Split the batch into smaller calls and capture a fresh screenshot. |
 | `DESKTOP_SESSION_CLOSED` | Native session was closed. Start a new OMP session. |
 | `DESKTOP_WORKER_FAILED` | Native worker startup, communication, timeout, or shutdown failed. Start a new session; if persistent, verify the native addon installation. |
+| `DESKTOP_CANCELLED` | Pointer input aborted by physical Escape; the gesture stopped and the cursor was restored. Retry the action. |
+| `DESKTOP_INPUT_BUSY` | Real input is owned by another desktop session. Retry after its turn ends; read-only observation still works. |
 
 Common exact failures:
 

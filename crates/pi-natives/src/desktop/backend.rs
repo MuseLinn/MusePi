@@ -53,6 +53,45 @@ pub struct Modifiers {
 	pub meta:  bool,
 }
 
+/// Pacing between synthesized global-input events.
+///
+/// Waits occur after moving to the start, after button-down, after each
+/// following move, and after button-up respectively. `0` skips that wait; it
+/// does not promise zero latency or that the target can process the stream.
+/// Defaults mirror the field-tested click/drag cadence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::struct_field_names, reason = "shared `_ms` suffix documents the millisecond unit")]
+pub struct InputTiming {
+	pub move_settle_ms: u16,
+	pub press_ms:       u16,
+	pub step_ms:        u16,
+	pub after_ms:       u16,
+}
+
+impl InputTiming {
+	/// Single-click cadence.
+	pub const CLICK: Self =
+		Self { move_settle_ms: 40, press_ms: 25, step_ms: 0, after_ms: 60 };
+	/// Drag-path cadence.
+	pub const DRAG: Self =
+		Self { move_settle_ms: 0, press_ms: 12, step_ms: 8, after_ms: 12 };
+}
+
+/// Upper bound for drag paths so a malformed path cannot queue an unbounded
+/// event burst. Enforced once in `Worker::process` so every backend inherits
+/// it.
+pub(crate) const MAX_DRAG_POINTS: usize = 1024;
+
+pub(crate) fn check_drag_len(path: &[(f64, f64)]) -> CoreResult<()> {
+	if path.len() > MAX_DRAG_POINTS {
+		return Err(DesktopError::input_failed(format!(
+			"drag path has {} points, exceeding the {MAX_DRAG_POINTS}-point limit",
+			path.len()
+		)));
+	}
+	Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub enum PointerEvent {
 	Click {
@@ -124,5 +163,27 @@ mod tests {
 		assert_eq!(DeliveryMode::parse(None), DeliveryMode::Background);
 		assert_eq!(DeliveryMode::parse(Some("garbage")), DeliveryMode::Background);
 		assert_eq!(DeliveryMode::parse(Some(" FoReGrOuNd ")), DeliveryMode::Foreground);
+	}
+
+	#[test]
+	fn drag_cap_rejects_overlong_paths() {
+		assert!(check_drag_len(&vec![(0.0, 0.0); MAX_DRAG_POINTS]).is_ok());
+		assert!(check_drag_len(&vec![(0.0, 0.0); MAX_DRAG_POINTS + 1]).is_err());
+	}
+
+	#[test]
+	fn input_timing_defaults_match_field_cadence() {
+		assert_eq!(InputTiming::CLICK, InputTiming {
+			move_settle_ms: 40,
+			press_ms:       25,
+			step_ms:        0,
+			after_ms:       60,
+		});
+		assert_eq!(InputTiming::DRAG, InputTiming {
+			move_settle_ms: 0,
+			press_ms:       12,
+			step_ms:        8,
+			after_ms:       12,
+		});
 	}
 }

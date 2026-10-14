@@ -3,6 +3,7 @@ mod backend;
 mod error;
 mod frame;
 mod keys;
+mod lease;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -366,6 +367,7 @@ impl Worker {
 				Ok(Response::Unit)
 			},
 			Request::Drag { target, path, options, .. } => {
+				backend::check_drag_len(path)?;
 				let frame = self.frame(target)?;
 				let current = if matches!(target, Target::Window(_)) {
 					Some(self.window(target)?)

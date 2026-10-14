@@ -42,6 +42,7 @@ impl Backend for X11Backend {
 			input: true,
 			ax: self.ax.is_some(),
 			background_window_input: true,
+			overlay: false,
 			delivery_modes: vec!["background".to_string(), "foreground".to_string()],
 			capture_permission: if displays.is_ok() {
 				"granted"
