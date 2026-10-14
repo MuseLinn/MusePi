@@ -552,6 +552,13 @@
 	transition: background 140ms ease, color 140ms ease;
 }
 
+/* Hidden-surfaces restore section inside the overflow menu. */
+.gui-right-rail-overflow-label {
+	padding: 8px 8px 2px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
 .gui-right-rail-overflow-item:hover {
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	color: var(--color-text);

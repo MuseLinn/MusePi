@@ -31,7 +31,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
 import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/slot-host";
-import { SURFACES } from "../lib/surfaces/registry";
+import { SURFACES, surfaceById, widthForSurface, writeSurfaceWidth } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -397,25 +397,38 @@ export function ContextPanel({
 			}
 		});
 	}, []);
-	// Resizable right-pane width: drag the left edge;
+	// Resizable right-pane width, remembered per surface: drag the left edge;
 	// persisted per run.
 	// Width range 260–1200 (openchamber ContextPanel 380–1400, adapted to the
 	// desktop surface): file preview takeover and the browser need room; 260
 	// keeps a minimal notes/context view usable. 1200 = code previews at
 	// readable width.
+	const activeSurfaceId = panelTabs.tabs.find(tab => tab.id === panelTabs.activeId)?.surface ?? null;
 	const [width, setWidth] = useState(() => {
-		try {
-			const v = Number.parseInt(localStorage.getItem("musepi-gui-right-width") ?? "", 10);
-			return Number.isFinite(v) && v >= 260 && v <= 1200 ? v : 340;
-		} catch {
-			return 340;
-		}
+		const descriptor = activeSurfaceId ? surfaceById(activeSurfaceId) : undefined;
+		const initial = widthForSurface(activeSurfaceId ?? "", descriptor?.defaultWidthFraction ?? 0.5);
+		return Math.min(1200, Math.max(260, initial));
 	});
+	// Switching surfaces restores that surface's remembered width.
+	useEffect(() => {
+		if (!activeSurfaceId) return;
+		const descriptor = surfaceById(activeSurfaceId);
+		setWidth(current => {
+			// Preserve an in-progress drag; only re-anchor on surface change.
+			if (document.body.classList.contains("gui-resizing")) return current;
+			const remembered = widthForSurface(activeSurfaceId, descriptor?.defaultWidthFraction ?? 0.5);
+			return Math.min(1200, Math.max(260, remembered));
+		});
+	}, [activeSurfaceId]);
 	// Maximize (openchamber fullscreen-surface / proma quick-window parity):
 	// the panel floats over the chat column at near-full width/height; toggling
 	// off returns to the persisted width. Width-drag is disabled while maximized.
 	const [maximized, setMaximized] = useState(false);
 	maximizedRef.current = maximized;
+	// Active surface at drag end (the drag callbacks close over the render
+	// that started the gesture, so a ref carries the current surface).
+	const activeSurfaceRef = useRef<string | null>(null);
+	activeSurfaceRef.current = activeSurfaceId;
 	// Maximize/restore morph (FLIP): the docked↔fixed switch is not
 	// interpolable (position is discrete, so toggling the class teleported
 	// the panel: user 2026-09-22 — 最大化没有动效，只有还原有). The toggle
@@ -572,11 +585,8 @@ export function ContextPanel({
 			// below its minimum on a narrow window.
 			const settled = Math.min(maxWidthRef.current, snapWidth(resizeWidthRef.current));
 			setWidth(settled);
-			try {
-				localStorage.setItem("musepi-gui-right-width", String(settled));
-			} catch {
-				// storage unavailable
-			}
+			const surface = activeSurfaceRef.current;
+			if (surface) writeSurfaceWidth(surface, settled);
 		},
 		onTap: () => setGestureShield(false),
 	});

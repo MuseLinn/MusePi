@@ -216,7 +216,10 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **⌘/Ctrl 长按揭示序号**:按住修饰键 500ms → rail 图标右上角显示 1..N(对应 ⌘1..8 跳转);松开、失焦、或真的按了数字键即消费并消除,下次按住才回来。app.tsx 的 ⌘1..8 处理器不变,这边只负责可视化。
 - **角标**:live 计数(当前仅 git 变更文件数,99+ 封顶)优先于序号;序号只在修饰键长按时出现。a11y 标签把计数读进 `aria-label`(「git,3 个已更改文件」)。
 - **富 tooltip**:registry 每项带可选 `description`(i18n key);hover 150ms 后在图标左侧弹出(label + description + 角标描述行),单个 portal 由 rail 层托管(`RailTooltip`),拖拽中抑制。rail 是贴视口右缘的定宽列,几何恒定,不需要 floating-ui 的 flip/shift。
-- **不做**:surface 显示/隐藏配置弹窗(openchamber 的 equalizer 入口)——musepi 的 has-content 自动隐藏已够用,用户未提需求。
+- **不做**:surface 显示/隐藏配置弹窗(openchamber 的 equalizer 入口)——右键隐藏 + overflow 恢复已覆盖,不做弹窗。
+- **rail 右键隐藏(2026-10-15,openchamber 吸收 A2)**:rail 图标右键 →「隐藏表面」(`ContextMenu`;图标按钮仍是唯一的拖拽 activator)。隐藏 id 持久化,rail、⌘1..8 跳转、陈旧顺序回填三处过滤;已打开的面板不强制关闭。从「…」overflow 菜单「显示已隐藏的表面」分区逐个恢复(有隐藏项时 overflow 按钮常显)。
+- **按表面记忆宽度(2026-10-15,吸收 A3)**:`musepi-gui-right-widths` 映射(`surfaceId → px`,200–1200 钳制);切换表面载入其记忆宽度(默认 `defaultWidthFraction`),拖拽结束写回。旧单键只做首次回退。RightRail 原先按 surface 切 effect 写宽度的代码删除(写了没人读,归 ContextPanel 统一拥有)。
+- **has-content 回退规则(2026-10-15,吸收 A1,仅机制)**:无显式判定的 has-content 退到"有打开 tab 即见"(`openSurfaces` 由 ChatView → RightRail → ctx);暂无内置翻转,翻转是一行产品决策。
 
 ### 模型选择器(provider 复合键)
 

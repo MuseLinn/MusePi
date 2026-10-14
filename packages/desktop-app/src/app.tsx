@@ -57,7 +57,7 @@ import {
 import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
-import { readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
+import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import { Icon } from "./vendor/oc-icons";
@@ -3203,7 +3203,8 @@ function AppInner(): ReactNode {
 				// while collapsed expands the panel.
 				e.preventDefault();
 				const order = readSurfaceOrder(storeRef.current?.cwd || undefined).filter(id => surfaceById(id));
-				const id = order[Number(k) - 1];
+				const hidden = new Set(readHiddenSurfaces());
+				const id = order.filter(surface => !hidden.has(surface))[Number(k) - 1];
 				if (id) {
 					setRightCollapsed(false);
 					localStorage.setItem("musepi-gui-right", "0");

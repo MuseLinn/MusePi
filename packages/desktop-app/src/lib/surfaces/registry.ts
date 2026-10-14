@@ -25,6 +25,10 @@ export interface SurfaceProps {
 	rpc: RpcClient | null;
 	sessionId?: string | null;
 	cwd?: string;
+	/** Surfaces with open tabs (tab-primary model). Feeds the has-content
+	 *  fallback: a has-content surface without its own predicate stays
+	 *  visible while it has open tabs (openchamber parity). */
+	openSurfaces?: ReadonlySet<string>;
 }
 
 export type SurfaceGroup = "primary" | "secondary" | "tertiary";
@@ -162,16 +166,96 @@ export function surfaceById(id: string | null): SurfaceDescriptor | undefined {
 	return id ? byId.get(id) : undefined;
 }
 
-/** 对于 has-content surface，仅当 ctx 判定成功才显示。 */
+/** 对于 has-content surface：有判定函数用它；否则退到"有打开的 tab 即可见"
+ * （openchamber parity：用中不消失）。 */
 export function surfaceVisible(s: SurfaceDescriptor, ctx: SurfaceProps): boolean {
 	if (s.availability === "always") return true;
-	return s.hasContent ? s.hasContent(ctx) : false;
+	if (s.hasContent) return s.hasContent(ctx);
+	return ctx.openSurfaces?.has(s.id) ?? false;
 }
 
 /* ── 持久化 ───────────────────────────────────────────────────── */
 export const SURFACE_ORDER_KEY = "musepi-gui-right-order";
 export const SURFACE_CTX_PREFIX = "musepi-gui-right-ctx-";
+export const SURFACE_WIDTHS_KEY = "musepi-gui-right-widths";
+export const SURFACE_HIDDEN_KEY = "musepi-gui-right-hidden";
+/** @deprecated 按表面记忆宽度后不再使用；仅作首次迁移的回退源。 */
 export const SURFACE_WIDTH_KEY = "musepi-gui-right-width";
+
+/** 每表面宽度（px），200–1200 钳制；非法整体丢弃。 */
+export function readSurfaceWidths(): Record<string, number> {
+	try {
+		const raw = localStorage.getItem(SURFACE_WIDTHS_KEY);
+		if (!raw) return {};
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+		const out: Record<string, number> = {};
+		for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+			const px = Number(value);
+			if (typeof id === "string" && id !== "" && Number.isFinite(px)) {
+				out[id] = Math.min(1200, Math.max(200, Math.round(px)));
+			}
+		}
+		return out;
+	} catch {
+		return {};
+	}
+}
+
+export function writeSurfaceWidths(widths: Record<string, number>): void {
+	try {
+		localStorage.setItem(SURFACE_WIDTHS_KEY, JSON.stringify(widths));
+	} catch {
+		/* ignore */
+	}
+}
+
+function readLegacyGlobalWidth(): number | null {
+	try {
+		const raw = localStorage.getItem(SURFACE_WIDTH_KEY);
+		if (raw === null || raw.trim() === "") return null;
+		const n = Number(raw);
+		if (!Number.isFinite(n)) return null;
+		return Math.min(1200, Math.max(200, Math.round(n)));
+	} catch {
+		return null;
+	}
+}
+
+/** 某表面的记忆宽度：map 命中 → 旧全局键回退 → 默认占比换算。 */
+export function widthForSurface(id: string, defaultWidthFraction: number): number {
+	const hit = readSurfaceWidths()[id];
+	if (hit !== undefined) return hit;
+	return readLegacyGlobalWidth() ?? Math.max(200, Math.min(1200, Math.round(defaultWidthFraction * 900)));
+}
+
+export function writeSurfaceWidth(id: string, px: number): void {
+	if (!id) return;
+	const widths = readSurfaceWidths();
+	widths[id] = Math.min(1200, Math.max(200, Math.round(px)));
+	writeSurfaceWidths(widths);
+}
+
+/** 用户隐藏的表面 id（rail 不渲染，⌘ 跳转跳过；面板已打开的不强制关闭）。 */
+export function readHiddenSurfaces(): string[] {
+	try {
+		const raw = localStorage.getItem(SURFACE_HIDDEN_KEY);
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter((id): id is string => typeof id === "string" && id !== "");
+	} catch {
+		return [];
+	}
+}
+
+export function writeHiddenSurfaces(ids: readonly string[]): void {
+	try {
+		localStorage.setItem(SURFACE_HIDDEN_KEY, JSON.stringify([...ids]));
+	} catch {
+		/* ignore */
+	}
+}
 
 /** 读取（并按注册表兜底）工具栏顺序；返回稳定顺序的字面 id 列表。 */
 export function readSurfaceOrder(cwd?: string): string[] {
@@ -197,19 +281,4 @@ export function writeSurfaceOrder(ids: string[], cwd?: string): void {
 	} catch {
 		/* ignore */
 	}
-}
-
-export function readSurfaceWidth(cwd?: string): number {
-	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}:w` : SURFACE_WIDTH_KEY;
-	try {
-		const n = Number(localStorage.getItem(key));
-		if (Number.isFinite(n)) return Math.min(1200, Math.max(200, n));
-	} catch {}
-	return 300;
-}
-export function writeSurfaceWidth(w: number, cwd?: string): void {
-	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}:w` : SURFACE_WIDTH_KEY;
-	try {
-		localStorage.setItem(key, String(Math.round(w)));
-	} catch {}
 }

@@ -637,6 +637,9 @@ export const general = {
 	"close all tabs": "关闭所有标签页",
 	"close tab": "关闭标签页",
 	"duplicate tab": "复制标签页",
+	// Right-rail surface visibility (hide from rail, restore from overflow).
+	"hide surface": "隐藏表面",
+	"show hidden surfaces": "显示已隐藏的表面",
 	// Tab-primary right panel empty state.
 	"start here": "从这里开始",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).

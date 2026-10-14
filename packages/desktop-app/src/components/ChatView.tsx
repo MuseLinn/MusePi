@@ -808,6 +808,9 @@ export function ChatView({
 	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.cwd ?? ""}`);
 	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
 	const activeView = activePanelTab?.surface ?? null;
+	// Surfaces with open tabs — feeds the rail's has-content fallback so a
+	// has-content surface stays visible while it has open tabs.
+	const openSurfaces = useMemo(() => new Set(panelTabs.tabs.map(tab => tab.surface)), [panelTabs.tabs]);
 	// Layer-1 session-tree leaf: null = follow the tip (linear session);
 	// a branchAt / branch switch sets it to a historical node so sending
 	// forks a new branch under it (TUI navigateTree parity). "root" pins the
@@ -2980,7 +2983,7 @@ export function ChatView({
 									sessionId={store?.sessionId ?? null}
 									cwd={store?.cwd ?? ""}
 									rpc={rpc}
-									tool={activeView}
+									openSurfaces={openSurfaces}
 									rightPanelOpen={rightPanelOpen && !focusMode}
 									extTabs={extTabs}
 									onSelect={id => {

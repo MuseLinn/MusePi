@@ -14,17 +14,18 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { RpcClient } from "../lib/rpc";
 import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
 import {
+	readHiddenSurfaces,
 	readSurfaceOrder,
-	readSurfaceWidth,
 	SURFACES,
 	type SurfaceDescriptor,
 	type SurfaceProps,
 	surfaceById,
 	surfaceVisible,
+	writeHiddenSurfaces,
 	writeSurfaceOrder,
-	writeSurfaceWidth,
 } from "../lib/surfaces/registry";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { ContextMenu } from "./ContextMenu";
 import { RailTooltip } from "./RailTooltip";
 import { StateIcon } from "./StateIcon";
 
@@ -40,17 +41,16 @@ export function RightRail({
 	rpc,
 	sessionId,
 	cwd,
-	tool,
 	rightPanelOpen,
 	onSelect,
 	onSelectNew,
 	onToggleRightPanel,
+	openSurfaces,
 	extTabs = [],
 }: {
 	rpc: RpcClient | null;
 	sessionId?: string | null;
 	cwd?: string;
-	tool: string | null;
 	rightPanelOpen: boolean;
 	onSelect(tool: string): void;
 	/** Middle-click / ⌘-click on a rail item: open another instance of that
@@ -58,39 +58,76 @@ export function RightRail({
 	 *  caller without a tab model still renders the rail. */
 	onSelectNew?(tool: string): void;
 	onToggleRightPanel?(): void;
+	/** 有打开 tab 的表面（tab-primary 模型）：喂给 has-content 回退规则。 */
+	openSurfaces?: ReadonlySet<string>;
 	/** Extension panel-tab slots (panel.tab.*), rendered as primary rail
 	 *  items after the built-in surfaces (nav unification: the rail is the
 	 *  single navigation axis — no second tab row in the panel header). */
 	extTabs?: import("../lib/slot-host").SlotComponent[];
 }): ReactNode {
-	// 顺序（目录级）+ 面板宽（目录级）
+	// 顺序（目录级）
 	const [order, setOrder] = useState<string[]>(() => readSurfaceOrder(cwd));
-	const [width, setWidth] = useState<number>(() => readSurfaceWidth(cwd));
+	// 用户隐藏的表面（目录级）：rail 不渲染，⌘ 跳转跳过；已打开的面板不强制关闭
+	const [hidden, setHidden] = useState<string[]>(() => readHiddenSurfaces());
 	const [overflowOpen, setOverflowOpen] = useState(false);
+	// 右键隐藏菜单的锚点（复用 ContextMenu；与拖拽/序号互斥，无需额外状态机）
+	const [hideMenu, setHideMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 	const overflowRef = useRef<HTMLDivElement | null>(null);
 	const railRef = useRef<HTMLElement | null>(null);
 	// Nav-axis overflow fold (user: 更多按钮只在高度不够时显示). When every
 	// surface fits the rail height, render all (incl. secondary) as icons;
 	// only a rail shorter than the item stack folds secondary into the "…".
 	const [railFits, setRailFits] = useState(false);
-	const ctx: SurfaceProps = useMemo(() => ({ rpc, sessionId, cwd }), [rpc, sessionId, cwd]);
+	const ctx: SurfaceProps = useMemo(
+		() => ({ rpc, sessionId, cwd, openSurfaces }),
+		[rpc, sessionId, cwd, openSurfaces],
+	);
+	const hiddenSet = useMemo(() => new Set(hidden), [hidden]);
+	const hideSurface = useCallback((id: string) => {
+		setHideMenu(null);
+		setHidden(prev => {
+			if (prev.includes(id)) return prev;
+			const next = [...prev, id];
+			writeHiddenSurfaces(next);
+			return next;
+		});
+	}, []);
+	const restoreSurface = useCallback((id: string) => {
+		setHidden(prev => {
+			if (!prev.includes(id)) return prev;
+			const next = prev.filter(x => x !== id);
+			writeHiddenSurfaces(next);
+			return next;
+		});
+	}, []);
 
-	// 注册表顺序 → 渲染项（过滤 has-content 不可见；未知/扩展追加在尾）
+	// 注册表顺序 → 渲染项（过滤隐藏与 has-content 不可见；未知/扩展追加在尾）
 	const items = useMemo(() => {
 		const ordered: Array<{ id: string; s: import("../lib/surfaces/registry").SurfaceDescriptor }> = [];
 		for (const id of order) {
 			const s = surfaceById(id);
 			if (!s) continue;
+			if (hiddenSet.has(id)) continue;
 			if (!surfaceVisible(s, ctx)) continue;
 			ordered.push({ id, s });
 		}
 		// Registry ids absent from a stale stored order still ship (the rail
 		// grew from tools-only to the full nav axis).
 		for (const s of SURFACES) {
-			if (!order.includes(s.id) && surfaceVisible(s, ctx)) ordered.push({ id: s.id, s });
+			if (!order.includes(s.id) && !hiddenSet.has(s.id) && surfaceVisible(s, ctx)) {
+				ordered.push({ id: s.id, s });
+			}
 		}
 		return ordered;
-	}, [order, ctx]);
+	}, [order, hiddenSet, ctx]);
+	const hiddenItems = useMemo(() => {
+		const out: Array<{ id: string; s: SurfaceDescriptor }> = [];
+		for (const id of hidden) {
+			const s = surfaceById(id);
+			if (s) out.push({ id, s });
+		}
+		return out;
+	}, [hidden]);
 
 	// Extension tabs render as primary items after the built-ins.
 	const extItems = useMemo(() => extTabs.map(item => ({ id: `ext:${item.slot}`, item })), [extTabs]);
@@ -277,19 +314,6 @@ export function RightRail({
 		return () => document.removeEventListener("mousedown", onDocClick);
 	}, [overflowOpen]);
 
-	useEffect(() => {
-		const apply = (id: string): void => {
-			const s = surfaceById(id);
-			if (!s) return;
-			setWidth(w => {
-				const next = Math.max(200, Math.min(900, Math.round((s.defaultWidthFraction ?? 0.5) * 900)));
-				writeSurfaceWidth(next, cwd);
-				return w === 0 || w === 300 ? next : w; // 首次用默认占比，之后保持用户拖拽
-			});
-		};
-		if (tool) apply(tool);
-	}, [tool, cwd]);
-
 	return (
 		<aside
 			ref={railRef}
@@ -324,6 +348,7 @@ export function RightRail({
 								onSelect={onSelect}
 								onSelectNew={nextId => onSelectNew?.(nextId)}
 								onHover={(anchor, hoverId) => setTip(anchor && hoverId ? { anchor, id: hoverId } : null)}
+								onHideMenu={(id, x, y) => setHideMenu({ x, y, id })}
 							/>
 						))}
 					</SortableContext>
@@ -341,7 +366,7 @@ export function RightRail({
 					</button>
 				))}
 			</div>
-			{foldedItems.length > 0 && (
+			{foldedItems.length > 0 || hiddenItems.length > 0 ? (
 				<div className="gui-right-rail-group" ref={overflowRef}>
 					<button
 						type="button"
@@ -400,10 +425,32 @@ export function RightRail({
 									<span>{t(s.label as TranslationKey)}</span>
 								</button>
 							))}
+							{hiddenItems.length > 0 && (
+								<>
+									<div className="gui-right-rail-overflow-label" aria-hidden="true">
+										{t("show hidden surfaces")}
+									</div>
+									{hiddenItems.map(({ id, s }) => (
+										<button
+											key={id}
+											type="button"
+											role="menuitem"
+											className="gui-right-rail-overflow-item"
+											onClick={() => {
+												restoreSurface(id);
+												setOverflowOpen(false);
+											}}
+										>
+											<Icon name={s.icon as IconName} className="h-3.5 w-3.5" />
+											<span>{t(s.label as TranslationKey)}</span>
+										</button>
+									))}
+								</>
+							)}
 						</div>
 					)}
 				</div>
-			)}
+			) : null}
 			<div className="gui-right-rail-spacer" />
 			<div className="gui-right-rail-group">
 				<button
@@ -424,6 +471,15 @@ export function RightRail({
 				extra={tip?.id === "git" && gitChanges ? t("{count} changed files", { count: gitChanges }) : null}
 				suppressed={dragging}
 			/>
+			{hideMenu && (
+				<ContextMenu
+					x={hideMenu.x}
+					y={hideMenu.y}
+					open
+					onClose={() => setHideMenu(null)}
+					items={[{ label: t("hide surface"), onSelect: () => hideSurface(hideMenu.id) }]}
+				/>
+			)}
 		</aside>
 	);
 }
@@ -445,6 +501,7 @@ function SortableRailItem({
 	dragging,
 	onSelect,
 	onSelectNew,
+	onHideMenu,
 	onHover,
 }: {
 	id: string;
@@ -456,6 +513,8 @@ function SortableRailItem({
 	onSelect(id: string): void;
 	/** Middle-click / ⌘-click: another instance rather than open-or-focus. */
 	onSelectNew(id: string): void;
+	/** Right-click: open the hide menu for this surface. */
+	onHideMenu(id: string, x: number, y: number): void;
 	onHover(anchor: HTMLElement | null, hoverId: string | null): void;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -497,6 +556,10 @@ function SortableRailItem({
 				// Middle click does not synthesise onClick in every browser, and its
 				// autoscroll default on a draggable is user-hostile either way.
 				onAuxClick={openNew}
+				onContextMenu={e => {
+					e.preventDefault();
+					onHideMenu(id, e.clientX, e.clientY);
+				}}
 				onMouseEnter={e => onHover(e.currentTarget, id)}
 				onMouseLeave={() => onHover(null, null)}
 				onFocus={e => onHover(e.currentTarget, id)}
