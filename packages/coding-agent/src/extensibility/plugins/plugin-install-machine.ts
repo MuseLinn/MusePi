@@ -26,15 +26,17 @@
  *   questions (see `capability-report.ts`).
  *
  * There is no `awaiting-approval` stage here, and the reason is the package
- * manager rather than a design choice: `bun install <spec>` does not pass
- * `--trust`, and bun does not run a dependency's lifecycle scripts unless the
- * package appears in the project's `trustedDependencies`. A dragged-in archive
- * therefore cannot execute its own `preinstall`/`postinstall` at all — the
- * approval question that gates a skill package (whose install copies files the
- * loader then evaluates, and which this machine can intercept between download
- * and copy) has no analogue here. Adding a stage later would mean adding
- * `--trust`, which is a decision about what a plugin install may execute, not
- * about presenting one.
+ * manager rather than a design choice: bun never fails an install for
+ * blocked lifecycle scripts (it prints `Blocked N postinstall` and carries
+ * on), so there is no failure point at which to park the run. Approval
+ * instead arrives as `approvedBuilds` on a retry: the previous run's view
+ * carries the blocked names (`pendingBuilds`, read from `bun pm untrusted`
+ * after the install), the person approves some of them, and the retry merges
+ * those names into the plugins project's `trustedDependencies` before
+ * installing — which is also what makes the scripts actually execute.
+ * The plugins project itself is default-deny (`trustedDependencies: []`
+ * unless the person approved something), because without the field bun runs
+ * every dependency script silently.
  */
 
 import { logger } from "@musepi/pi-utils";
@@ -73,7 +75,7 @@ export interface PluginInstallView {
 	readonly state: PluginInstallState;
 	/** failed 时：语义分类。 */
 	readonly kind?: PluginInstallFailureKind;
-	/** failed 时：人类可读原因。 */
+	/** failed 时：人类可读原因；done+pendingBuilds 时： blocked 脚本说明。 */
 	readonly message?: string;
 	/** done 时：解析出的包名。 */
 	readonly name?: string;
@@ -89,6 +91,12 @@ export interface PluginInstallView {
 	 * plugins shared between harnesses.
 	 */
 	readonly capability?: PluginCapabilityReport;
+	/**
+	 * done 时：安装中被 bun 拦截的构建脚本所属包名（`bun pm untrusted`）。
+	 * 只在非空时出现：包已装好，但这些脚本从未执行——带 `approvedBuilds`
+	 * 重跑一次即执行它们。
+	 */
+	readonly pendingBuilds?: string[];
 	readonly startedAt: number;
 	readonly updatedAt: number;
 }
@@ -98,6 +106,12 @@ export interface PluginInstallStartParams {
 	readonly spec: string;
 	/** Overwrite an existing entry of the same name. */
 	readonly force?: boolean;
+	/**
+	 * Build scripts the person approved after a previous run reported them via
+	 * `pendingBuilds`. Merged into the plugins project's `trustedDependencies`
+	 * before this run installs, so the scripts execute this time.
+	 */
+	readonly approvedBuilds?: string[];
 }
 
 interface InstallRecord {
@@ -273,6 +287,7 @@ export class PluginInstallMachine {
 
 			const installed: InstalledPlugin = await this.#manager.install(record.params.spec, {
 				force: record.params.force ?? false,
+				approvedBuilds: record.params.approvedBuilds,
 				signal: record.controller.signal,
 				onOutput: (chunk: InstallOutputChunk) => this.#recordOutput(record, chunk),
 			});
@@ -286,11 +301,21 @@ export class PluginInstallMachine {
 			// question, answered after the fact so a runnable install is never
 			// reported as a failure.
 			const capability = await describePluginCapability(installed);
-			this.#settle(record, "done", undefined, undefined, {
-				name: installed.name,
-				version: installed.version,
-				capability,
-			});
+			const pendingBuilds = installed.pendingBuilds;
+			this.#settle(
+				record,
+				"done",
+				undefined,
+				pendingBuilds !== undefined && pendingBuilds.length > 0
+					? `Installed ${installed.name}, but ${pendingBuilds.length} build script(s) were blocked (${pendingBuilds.join(", ")}). Re-run with approvedBuilds to run them.`
+					: undefined,
+				{
+					name: installed.name,
+					version: installed.version,
+					capability,
+					...(pendingBuilds !== undefined && pendingBuilds.length > 0 ? { pendingBuilds } : {}),
+				},
+			);
 		} catch (err) {
 			if (err instanceof InvalidInstallSpecError) {
 				this.#settle(record, "failed", "spec", err.reason);
@@ -325,7 +350,12 @@ export class PluginInstallMachine {
 		state: PluginInstallState,
 		kind?: PluginInstallFailureKind,
 		message?: string,
-		done?: { name: string; version: string; capability: PluginCapabilityReport },
+		done?: {
+			name: string;
+			version: string;
+			capability: PluginCapabilityReport;
+			pendingBuilds?: string[];
+		},
 	): void {
 		record.state = state;
 		record.view = {
@@ -333,7 +363,14 @@ export class PluginInstallMachine {
 			state,
 			...(kind !== undefined ? { kind } : {}),
 			...(message !== undefined ? { message } : {}),
-			...(done !== undefined ? { name: done.name, version: done.version, capability: done.capability } : {}),
+			...(done !== undefined
+				? {
+						name: done.name,
+						version: done.version,
+						capability: done.capability,
+						...(done.pendingBuilds !== undefined ? { pendingBuilds: done.pendingBuilds } : {}),
+					}
+				: {}),
 			updatedAt: Date.now(),
 		};
 		this.#onState?.(record.view);

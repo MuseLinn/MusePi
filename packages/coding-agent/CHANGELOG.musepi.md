@@ -5,6 +5,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+- **插件安装不再静默执行依赖脚本**：此前插件工程没有 `trustedDependencies`，bun 会静默执行所有依赖的安装脚本——拖进来的包可在安装时跑任意代码，装完也没有任何提示。现在默认拒绝（空 allowlist），被拦下的脚本在安装结果里按名点出，带着这份名单重装一次即按名单放行并持久记录；安装失败回滚不会撤销已给的批准。
+  - EN: Plugin installs no longer execute dependency scripts silently. The plugins project previously had no `trustedDependencies`, so bun ran every dependency's install scripts without a word — a dragged-in package could run arbitrary code at install time with nothing reported afterwards. The default is now deny (empty allowlist): blocked scripts are named in the install result, and reinstalling with that name list approves and persists them; a failed install's rollback never revokes a granted approval.
+
 ### Fixed
 - **插件详情弹窗补上整体启停开关**：内置插件单元此前点开详情只有状态、组件与配置，没有整体开关——要启停得回列表找行，而用户插件包那边一向有。现在内置与用户插件同一套实现：详情头部一个总闸（与列表行、插件包开关同一个 RPC 语义），只读展示项照旧不渲染死开关。
   - EN: The plugin detail dialog gains a whole-plugin enable switch. Built-in plugin units used to open into status, components and config only — enabling or disabling one meant going back to the list to find its row, while installed packages had always had a switch in their detail view. Built-in and user plugins now share one implementation: one master switch in the dialog header, with the same RPC semantics as the list row and the package toggle, and read-only display items still render no dead switch.

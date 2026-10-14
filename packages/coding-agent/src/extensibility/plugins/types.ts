@@ -119,6 +119,13 @@ export interface InstalledPlugin {
 	enabledFeatures: string[] | null;
 	/** Whether the plugin is enabled */
 	enabled: boolean;
+	/**
+	 * Dependency lifecycle scripts bun blocked during this install
+	 * (`bun pm untrusted`). Present only when non-empty: the package
+	 * installed, but these scripts never ran — re-run with `approvedBuilds`
+	 * to execute them.
+	 */
+	pendingBuilds?: string[];
 }
 
 // =============================================================================
@@ -189,6 +196,12 @@ export interface InstallOptions {
 	force?: boolean;
 	/** Preview changes without applying */
 	dryRun?: boolean;
+	/**
+	 * Build scripts the person approved after a previous run reported them
+	 * blocked (`pendingBuilds`). Merged into the plugins project's
+	 * `trustedDependencies` before the install, so this run executes them.
+	 */
+	approvedBuilds?: string[];
 	/**
 	 * Receive the package manager's output as it is produced.
 	 *

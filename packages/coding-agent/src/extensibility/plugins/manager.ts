@@ -12,6 +12,7 @@ import {
 	logger,
 } from "@musepi/pi-utils";
 import { loadExtensions } from "../extensions/loader";
+import { ensureTrustedField, parseBlockedBuilds, withApprovedBuilds } from "./build-approval";
 import { refreshBunGitCache } from "./bun-git-cache";
 import { type GitSource, parseGitUrl } from "./git-url";
 import { resolvePluginManifestEntries } from "./loader";
@@ -311,7 +312,13 @@ export class PluginManager {
 	async #ensurePackageJson(): Promise<void> {
 		const pkgJsonPath = getPluginsPackageJson();
 		try {
-			await Bun.file(pkgJsonPath).json();
+			const pkg = (await Bun.file(pkgJsonPath).json()) as Record<string, unknown>;
+			// Default-deny for lifecycle scripts: without the field bun runs
+			// every dependency script silently; with it, only listed packages
+			// run and the rest surface through `bun pm untrusted`.
+			if (ensureTrustedField(pkg)) {
+				await Bun.write(pkgJsonPath, JSON.stringify(pkg, null, 2));
+			}
 		} catch (err) {
 			if (isEnoent(err)) {
 				await Bun.write(
@@ -321,6 +328,7 @@ export class PluginManager {
 							name: "musepi-plugins",
 							private: true,
 							dependencies: {},
+							trustedDependencies: [],
 						},
 						null,
 						2,
@@ -329,6 +337,37 @@ export class PluginManager {
 				return;
 			}
 			throw err;
+		}
+	}
+
+	/**
+	 * Merge person-approved build names into the plugins project's
+	 * `trustedDependencies` and persist them. Runs before the rollback
+	 * snapshot is taken, so a failed install never revokes a granted
+	 * approval. Returns the names actually added.
+	 */
+	async #mergeApprovedBuilds(approved: readonly string[] | undefined): Promise<string[]> {
+		if (!approved || approved.length === 0) return [];
+		const pkgJsonPath = getPluginsPackageJson();
+		const pkg = (await Bun.file(pkgJsonPath).json()) as Record<string, unknown>;
+		const added = withApprovedBuilds(pkg, approved);
+		if (added.length > 0) {
+			await Bun.write(pkgJsonPath, JSON.stringify(pkg, null, 2));
+		}
+		return added;
+	}
+
+	/**
+	 * Ask bun which dependency scripts are currently blocked in the plugins
+	 * project. Never throws: a probe must not fail an install.
+	 */
+	async #readBlockedBuilds(signal?: AbortSignal): Promise<string[]> {
+		try {
+			const run = await this.#packageManager(["bun", "pm", "untrusted"], { signal });
+			if (run.exitCode !== 0) return [];
+			return parseBlockedBuilds(`${run.stdoutTail}\n${run.stderrTail}`);
+		} catch {
+			return [];
 		}
 	}
 
@@ -628,6 +667,9 @@ export class PluginManager {
 				enabled: true,
 			};
 		}
+		// Person-approved script grants persist before the rollback snapshot
+		// below, so a failed install never revokes them.
+		await this.#mergeApprovedBuilds(options.approvedBuilds);
 		const pkgJsonPath = getPluginsPackageJson();
 		const packageJsonBefore = await Bun.file(pkgJsonPath).text();
 		// Snapshot bun's lockfile so the rollback path can restore the pin. Every
@@ -794,6 +836,13 @@ export class PluginManager {
 				enabled: true,
 			};
 			await this.#saveRuntimeConfig();
+
+			// Blocked lifecycle scripts never fail a bun install, so surface them
+			// explicitly: the package is installed but these scripts never ran.
+			const pendingBuilds = await this.#readBlockedBuilds(options.signal);
+			if (pendingBuilds.length > 0) {
+				installedPlugin.pendingBuilds = pendingBuilds;
+			}
 
 			return installedPlugin;
 		} catch (err) {

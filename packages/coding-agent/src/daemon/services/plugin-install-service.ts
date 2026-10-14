@@ -23,7 +23,7 @@
  * - 名称/ns：`pluginInstall`；RPC 面 `plugins.install` /
  *   `plugins.install.status` / `plugins.install.cancel` / `plugins.install.output`
  *   / `plugins.uninstall`。
- * - 输入：`plugins.install` 收 `{ spec, force? }`。spec 为包名、git 源、
+ * - 输入：`plugins.install` 收 `{ spec, force?, approvedBuilds? }`。spec 为包名、git 源、
  *   tarball（本地归档或 http(s) URL）或绝对路径；无法分类的 spec 在调用点即拒。
  *   其余三个 install.* 收 `{ installId }`；`plugins.uninstall` 收解析后的包名。
  * - 输出：install 立即返回 `{ installId }`；状态迁移广播
@@ -109,7 +109,7 @@ export class PluginInstallService implements DaemonService {
 	/**
 	 * Begin an install.
 	 *
-	 * @param params - `{ spec, force? }`. The spec is a package name, a git
+	 * @param params - `{ spec, force?, approvedBuilds? }`. The spec is a package name, a git
 	 * source, a tarball, or an absolute path.
 	 * @returns the install id to poll, read output for, or cancel.
 	 * @throws {InvalidInstallSpecError} when the spec cannot be classified, so a

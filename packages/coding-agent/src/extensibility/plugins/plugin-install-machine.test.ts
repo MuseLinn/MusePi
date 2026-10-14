@@ -33,13 +33,17 @@ interface StubBehaviour {
 }
 
 function stubManager(behaviour: StubBehaviour = {}) {
-	const calls: { spec: string; signals: AbortSignal[] }[] = [];
+	const calls: { spec: string; signals: AbortSignal[]; approvedBuilds?: string[] }[] = [];
 	const manager = {
 		async install(
 			spec: string,
-			options: { signal?: AbortSignal; onOutput?: (c: { stream: "stdout" | "stderr"; text: string }) => void } = {},
+			options: {
+				signal?: AbortSignal;
+				approvedBuilds?: string[];
+				onOutput?: (c: { stream: "stdout" | "stderr"; text: string }) => void;
+			} = {},
 		) {
-			calls.push({ spec, signals: [options.signal as AbortSignal] });
+			calls.push({ spec, signals: [options.signal as AbortSignal], approvedBuilds: options.approvedBuilds });
 			for (const text of behaviour.emit ?? []) options.onOutput?.({ stream: "stdout", text });
 			return new Promise<InstalledPlugin>((resolve, reject) => {
 				const finish = behaviour.settle ?? ((res: (p: InstalledPlugin) => void) => res(stubPlugin()));
@@ -181,5 +185,30 @@ describe("PluginInstallMachine", () => {
 		const { manager } = stubManager();
 		const machine = new PluginInstallMachine(manager);
 		await expect(machine.stop()).resolves.toBeUndefined();
+	});
+
+	it("carries blocked builds from the install to the view with retry guidance", async () => {
+		// The install itself succeeded (bun never fails for blocked scripts),
+		// so the view stays done — but names what never ran and how to run it.
+		const { manager } = stubManager({
+			settle: resolve => resolve(stubPlugin({ pendingBuilds: ["core-js"] })),
+		});
+		const machine = new PluginInstallMachine(manager);
+		const installId = machine.start({ spec: "acme-plugin" });
+		await drain();
+
+		const view = machine.status().installs.find(v => v.installId === installId);
+		expect(view?.state).toBe("done");
+		expect(view?.pendingBuilds).toEqual(["core-js"]);
+		expect(view?.message).toMatch(/approvedBuilds/);
+	});
+
+	it("forwards approvedBuilds to the manager install", async () => {
+		const { manager, calls } = stubManager();
+		const machine = new PluginInstallMachine(manager);
+		machine.start({ spec: "acme-plugin", approvedBuilds: ["core-js"] });
+		await drain();
+
+		expect(calls[0]?.approvedBuilds).toEqual(["core-js"]);
 	});
 });
