@@ -3056,6 +3056,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		);
 
 		extensionRunnerRef = extensionRunner;
+		toolSession.extensionRunner = extensionRunner;
 
 		credentialDisabledTarget = extensionRunner;
 		for (const event of startupCredentialDisabledEvents.splice(0)) {

@@ -252,14 +252,18 @@ export async function resolveEffectiveSubagentPolicy(
 	assertDepthAndSpawnAllowed(request, agentName);
 
 	const discovery = await discoverAgents(request.session.cwd);
-	const agent = getAgent(discovery.agents, agentName);
+	// Extension-registered types first: explicit code beats discovered files,
+	// so a hot-reloaded registration takes effect without touching the fs.
+	const registered = request.session.extensionRunner?.listRegisteredSubagents() ?? [];
+	const candidates = [...registered, ...discovery.agents];
+	const agent = getAgent(candidates, agentName);
 	if (!agent) {
-		const available = discovery.agents.map(candidate => candidate.name).join(", ") || "none";
+		const available = candidates.map(candidate => candidate.name).join(", ") || "none";
 		throw new StructuredSubagentError("preflight", `Unknown agent "${agentName}". Available: ${available}`);
 	}
 	const disabledAgents = request.session.settings.get("task.disabledAgents") as string[];
 	if (disabledAgents.includes(agentName)) {
-		const enabled = discovery.agents
+		const enabled = candidates
 			.filter(candidate => !disabledAgents.includes(candidate.name))
 			.map(candidate => candidate.name);
 		throw new StructuredSubagentError(

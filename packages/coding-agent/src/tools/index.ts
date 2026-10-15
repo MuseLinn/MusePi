@@ -312,6 +312,10 @@ export interface ToolSession {
 	asyncJobManager?: AsyncJobManager;
 	/** MCP manager visible to subagents without relying on the process-global singleton. */
 	mcpManager?: MCPManager;
+	/** Extension runner owning this session's registered subagent types (see
+	 *  `ctx.registerSubagent`). Absent in restricted sessions and hosts that
+	 *  never built one; resolution then uses filesystem discovery only. */
+	extensionRunner?: import("../extensibility/extensions/runner").ExtensionRunner;
 	/** Local protocol root to propagate to nested subagents and eval-created agents. */
 	localProtocolOptions?: LocalProtocolOptions;
 	/** Settings instance for passing to subagents */

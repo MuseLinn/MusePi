@@ -86,6 +86,7 @@ import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
 import type { ReadonlySessionManager, SessionManager } from "../../session/session-manager";
+import type { SubagentDefinition } from "../../task/types";
 import type {
 	BashToolDetails,
 	BashToolInput,
@@ -566,6 +567,21 @@ export interface ExtensionContext {
 	/** Disconnect a server registered through {@link registerMcpServer}.
 	 * Resolves false for names this session never registered. */
 	unregisterMcpServer(name: string): Promise<boolean>;
+	/**
+	 * Register a subagent type for this session's task tool (dsh
+	 * `ctx.subagents` parity at session scope).
+	 *
+	 * The definition is everything an agent markdown file carries minus
+	 * provenance (`source` is always `"extension"`). Resolution consults
+	 * registered types before filesystem discovery, so an explicit
+	 * registration wins over a same-named file; re-registering a name
+	 * replaces it (hot reload safe). Unload with
+	 * {@link unregisterSubagent}; the map dies with the session.
+	 */
+	registerSubagent(def: SubagentDefinition): { name: string };
+	/** Remove a type registered through {@link registerSubagent}.
+	 * Resolves false for unknown names. */
+	unregisterSubagent(name: string): boolean;
 	/**
 	 * Session-scoped reminders (dsh `ctx.schedule` parity at session scope).
 	 *

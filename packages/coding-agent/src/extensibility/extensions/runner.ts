@@ -22,6 +22,7 @@ import type { MemoryRuntimeContext } from "../../memory-backend";
 import { setExtensionThemeTokens, type Theme, theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
+import type { AgentDefinition, SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { loadExtensions } from "./loader";
@@ -1482,6 +1483,8 @@ export class ExtensionRunner {
 			clearTimer: timer => this.#managedTimers.clear(timer),
 			registerMcpServer: (name, config) => this.#mcpServers.register(name, config),
 			unregisterMcpServer: (name: string) => this.#mcpServers.unregister(name),
+			registerSubagent: (def: SubagentDefinition) => this.registerSubagent(def),
+			unregisterSubagent: (name: string) => this.unregisterSubagent(name),
 			schedule: {
 				create: (input: ScheduleCreate) => {
 					const record = this.#schedules.create(input);
@@ -1543,6 +1546,46 @@ export class ExtensionRunner {
 	 */
 	async releaseMcpServers(): Promise<string[]> {
 		return this.#mcpServers.releaseAll();
+	}
+
+	/**
+	 * Agent types registered through extension contexts on this runner.
+	 * Session-scoped like everything else here: registration is last-wins by
+	 * name (hot reload re-runs factories), and the map dies with the runner.
+	 * Resolution consults these before filesystem discovery (explicit code
+	 * beats discovered files).
+	 */
+	readonly #subagents = new Map<string, AgentDefinition>();
+
+	/**
+	 * Register a subagent type for this session's task tool. Returns the
+	 * effective name. Re-registering a name replaces it.
+	 */
+	registerSubagent(def: SubagentDefinition): { name: string } {
+		const name = typeof def?.name === "string" ? def.name.trim() : "";
+		if (name === "") throw new Error("registerSubagent requires a non-empty name");
+		if (typeof def.description !== "string" || def.description.trim() === "") {
+			throw new Error(`registerSubagent "${name}" requires a non-empty description`);
+		}
+		if (typeof def.systemPrompt !== "string" || def.systemPrompt.trim() === "") {
+			throw new Error(`registerSubagent "${name}" requires a non-empty systemPrompt`);
+		}
+		for (const key of ["tools", "model", "spawns"] as const) {
+			const value = def[key];
+			if (value !== undefined && !Array.isArray(value) && !(key === "spawns" && value === "*")) {
+				throw new Error(`registerSubagent "${name}" field "${key}" must be an array`);
+			}
+		}
+		this.#subagents.set(name, { ...def, name, source: "extension" });
+		return { name };
+	}
+
+	unregisterSubagent(name: string): boolean {
+		return this.#subagents.delete(name);
+	}
+
+	listRegisteredSubagents(): AgentDefinition[] {
+		return [...this.#subagents.values()].map(def => ({ ...def }));
 	}
 
 	/**

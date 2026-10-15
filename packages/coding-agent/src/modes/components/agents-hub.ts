@@ -72,8 +72,9 @@ const SOURCE_LABEL: Record<AgentSource, string> = {
 	project: "Project",
 	user: "User",
 	bundled: "Bundled",
+	extension: "Extension",
 };
-const SOURCE_ORDER: Record<AgentSource, number> = { project: 0, user: 1, bundled: 2 };
+const SOURCE_ORDER: Record<AgentSource, number> = { project: 0, user: 1, bundled: 2, extension: 3 };
 
 interface SidebarEntry {
 	id: string;
@@ -328,12 +329,12 @@ export class AgentsHubComponent implements Component {
 	}
 
 	#buildSidebar(): void {
-		const counts: Record<AgentSource, number> = { project: 0, user: 0, bundled: 0 };
+		const counts: Record<AgentSource, number> = { project: 0, user: 0, bundled: 0, extension: 0 };
 		for (const agent of this.#allAgents) counts[agent.source]++;
 		const entries: SidebarEntry[] = [
 			{ id: "all", kind: "all", label: "All agents", annotation: String(this.#allAgents.length) },
 		];
-		const sources = (["project", "user", "bundled"] as const).filter(source => counts[source] > 0);
+		const sources = (["project", "user", "bundled", "extension"] as const).filter(source => counts[source] > 0);
 		if (sources.length > 0) {
 			entries.push({ id: "sep:sources", kind: "separator", label: "" });
 			for (const source of sources) {

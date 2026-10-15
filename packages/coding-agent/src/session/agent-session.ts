@@ -6303,6 +6303,16 @@ export class AgentSession {
 			setInterval: (callback, ms, ...args) => this.#fallbackTimers().setInterval(callback, ms, ...args),
 			setTimeout: (callback, ms, ...args) => this.#fallbackTimers().setTimeout(callback, ms, ...args),
 			clearTimer: timer => this.#fallbackTimers().clear(timer),
+			registerSubagent: () => {
+				throw new Error(
+					"registerSubagent requires a full extension session (unavailable in runner-less command contexts)",
+				);
+			},
+			unregisterSubagent: () => {
+				throw new Error(
+					"unregisterSubagent requires a full extension session (unavailable in runner-less command contexts)",
+				);
+			},
 			registerMcpServer: (name, config) => this.#fallbackMcpServers.register(name, config),
 			unregisterMcpServer: (name: string) => this.#fallbackMcpServers.unregister(name),
 			schedule: {

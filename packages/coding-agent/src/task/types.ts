@@ -6,7 +6,7 @@ import type { ConfiguredThinkingLevel, TaskEffort } from "../thinking";
 import type { NestedRepoPatch } from "./worktree";
 
 /** Source of an agent definition */
-export type AgentSource = "bundled" | "user" | "project";
+export type AgentSource = "bundled" | "user" | "project" | "extension";
 /**
  * Enforcement policy for a structured subagent output schema.
  *
@@ -393,6 +393,26 @@ export interface AgentDefinition {
 	advisor?: boolean | string;
 	source: AgentSource;
 	filePath?: string;
+}
+
+/**
+ * Agent type contributed at runtime via `ctx.registerSubagent` — everything
+ * in {@link AgentDefinition} except provenance, which is always "extension".
+ */
+export interface SubagentDefinition {
+	name: string;
+	description: string;
+	systemPrompt: string;
+	tools?: string[];
+	spawns?: string[] | "*";
+	model?: string[];
+	thinkingLevel?: ConfiguredThinkingLevel;
+	output?: unknown;
+	blocking?: boolean;
+	autoloadSkills?: string[];
+	readSummarize?: boolean;
+	prewalk?: boolean | string;
+	advisor?: boolean | string;
 }
 
 /** Details extracted from a subagent `yield` tool call for final-result assembly and task rendering. */
