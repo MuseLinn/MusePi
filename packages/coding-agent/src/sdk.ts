@@ -3050,6 +3050,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			settings,
 			localProtocolOptions,
 			() => (hasSession ? session.getAsyncJobSnapshot() : null),
+			undefined,
+			undefined,
+			() => mcpManager,
 		);
 
 		extensionRunnerRef = extensionRunner;

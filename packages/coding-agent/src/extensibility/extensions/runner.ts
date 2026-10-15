@@ -26,6 +26,7 @@ import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-wr
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
+import { type ExtensionMcpHost, ExtensionMcpRegistry } from "./mcp-servers";
 import { createExtensionModelQuery } from "./model-api";
 import {
 	ExtensionScheduler,
@@ -415,6 +416,7 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 		extensionRunner.disposeFileFallbacks();
 		extensionRunner.clearManagedTimers();
 		extensionRunner.stopServices();
+		await extensionRunner.releaseMcpServers();
 	}
 }
 
@@ -469,6 +471,14 @@ export class ExtensionRunner {
 	#getAsyncJobSnapshotFn: () => AsyncJobSnapshot | null = () => null;
 	#getAsyncJobManagerFn: () => AsyncJobManager | undefined = () => undefined;
 	#getAgentIdFn: () => string | undefined = () => undefined;
+	#getMcpHostFn: () => ExtensionMcpHost | undefined = () => undefined;
+	/**
+	 * MCP servers registered through extension contexts on this runner.
+	 * Session-scoped like everything else here: re-registering an identical
+	 * config is a no-op (hot reload re-runs factories), and session shutdown
+	 * disconnects whatever is still owned (see {@link releaseMcpServers}).
+	 */
+	readonly #mcpServers = new ExtensionMcpRegistry(() => this.#getMcpHostFn());
 	#newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	#branchHandler: BranchHandler = async () => ({ cancelled: false });
 	#navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
@@ -686,12 +696,14 @@ export class ExtensionRunner {
 		getAsyncJobSnapshot?: () => AsyncJobSnapshot | null,
 		getAsyncJobManager?: () => AsyncJobManager | undefined,
 		getAgentId?: () => string | undefined,
+		getMcpHost?: () => ExtensionMcpHost | undefined,
 	) {
 		this.#uiContext = noOpUIContext;
 		this.#getMemoryFn = getMemory;
 		this.#getAsyncJobSnapshotFn = getAsyncJobSnapshot ?? (() => null);
 		this.#getAsyncJobManagerFn = getAsyncJobManager ?? (() => undefined);
 		this.#getAgentIdFn = getAgentId ?? (() => undefined);
+		this.#getMcpHostFn = getMcpHost ?? (() => undefined);
 		for (const extension of extensions) {
 			this.#recordExtensionEntryMtime(extension.resolvedPath);
 		}
@@ -1468,6 +1480,8 @@ export class ExtensionRunner {
 			setInterval: (callback, ms, ...args) => this.#managedTimers.setInterval(callback, ms, ...args),
 			setTimeout: (callback, ms, ...args) => this.#managedTimers.setTimeout(callback, ms, ...args),
 			clearTimer: timer => this.#managedTimers.clear(timer),
+			registerMcpServer: (name, config) => this.#mcpServers.register(name, config),
+			unregisterMcpServer: (name: string) => this.#mcpServers.unregister(name),
 			schedule: {
 				create: (input: ScheduleCreate) => {
 					const record = this.#schedules.create(input);
@@ -1520,6 +1534,15 @@ export class ExtensionRunner {
 		// lets it restart lazily. Records stay (a spurious clear must not eat
 		// reminders) and die with the runner itself.
 		this.#scheduleTimer = null;
+	}
+
+	/**
+	 * Disconnect every MCP server still owned by this runner. Best-effort per
+	 * server (the registry never throws); called on session shutdown so an
+	 * extension's servers cannot outlive its session.
+	 */
+	async releaseMcpServers(): Promise<string[]> {
+		return this.#mcpServers.releaseAll();
 	}
 
 	/**

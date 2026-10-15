@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **扩展能注册自己的 MCP 服务了**：`ctx.registerMcpServer(name, config)` 把服务接到当前会话——配置走 manager 自身校验，工具经正常刷新到达并沿用会话既有审批；同名同配置重复注册是无操作，异配置冲突失败而非抢占；`unregisterMcpServer` 摘除，会话结束自动断开仍持有的全部。runner-less 命令上下文因无 manager 而报不可用（校验本身可用）。
+  - EN: Extensions can register their own MCP servers. `ctx.registerMcpServer(name, config)` attaches a server to the current session — configs pass the manager's own validation, tools arrive through the normal refresh under the session's existing approval, re-registering an identical config is a no-op while a conflicting live name fails instead of hijacking, and whatever is still owned disconnects on session shutdown.
 - **扩展能给自己定提醒了**：扩展可通过 `ctx.schedule` 创建一次或周期提醒（`afterSeconds`/`at`/`everySeconds`），到点以跟随轮的方式回到本会话；提醒随会话共存亡——会话结束即止，跨重启的日历级计划仍走守护进程定时任务。
   - EN: Extensions can set their own reminders. `ctx.schedule` creates one-shot (`afterSeconds`/`at`) or recurring (`everySeconds`) reminders that return to the owning session as a follow-up turn; reminders live and die with the session, while durable calendar-grade plans stay with the daemon cron tasks.
 - **插件安装不再静默执行依赖脚本**：此前插件工程没有 `trustedDependencies`，bun 会静默执行所有依赖的安装脚本——拖进来的包可在安装时跑任意代码，装完也没有任何提示。现在默认拒绝（空 allowlist），被拦下的脚本在安装结果里按名点出，带着这份名单重装一次即按名单放行并持久记录；安装失败回滚不会撤销已给的批准。

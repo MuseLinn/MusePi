@@ -143,6 +143,7 @@ import type {
 } from "../extensibility/extensions";
 import { emitSessionShutdownEvent } from "../extensibility/extensions";
 import { ManagedTimers } from "../extensibility/extensions/managed-timers";
+import { ExtensionMcpRegistry } from "../extensibility/extensions/mcp-servers";
 import { createExtensionModelQuery } from "../extensibility/extensions/model-api";
 import {
 	ExtensionScheduler,
@@ -660,6 +661,12 @@ export class AgentSession {
 	 * created; cleared on dispose alongside the runner's own timers (#5664).
 	 */
 	#fallbackExtensionTimers: ManagedTimers | undefined = undefined;
+	/**
+	 * MCP ownership for the runner-less fallback: validation works, but
+	 * registration always reports MCP unavailable (no manager is plumbed
+	 * into this path by design — use a full session for MCP servers).
+	 */
+	#fallbackMcpServers = new ExtensionMcpRegistry(() => undefined);
 	/** Session-scoped reminders for the runner-less fallback (mirrors the
 	 *  extension runner's `ctx.schedule`; same session-scope limits). */
 	#fallbackSchedules = new ExtensionScheduler();
@@ -6296,6 +6303,8 @@ export class AgentSession {
 			setInterval: (callback, ms, ...args) => this.#fallbackTimers().setInterval(callback, ms, ...args),
 			setTimeout: (callback, ms, ...args) => this.#fallbackTimers().setTimeout(callback, ms, ...args),
 			clearTimer: timer => this.#fallbackTimers().clear(timer),
+			registerMcpServer: (name, config) => this.#fallbackMcpServers.register(name, config),
+			unregisterMcpServer: (name: string) => this.#fallbackMcpServers.unregister(name),
 			schedule: {
 				create: (input: ScheduleCreate): ScheduleRecord => {
 					const record = this.#fallbackSchedules.create(input);

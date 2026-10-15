@@ -78,6 +78,7 @@ import type { BashResult } from "../../exec/bash-executor";
 import type { ExecOptions, ExecResult } from "../../exec/exec";
 import type * as PiCodingAgent from "../../index";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
+import type { MCPServerConfig } from "../../mcp/types";
 import type { MemoryRuntimeContext } from "../../memory-backend";
 import type { CustomEditor } from "../../modes/components/custom-editor";
 import type { Theme } from "../../modes/theme/theme";
@@ -549,6 +550,22 @@ export interface ExtensionContext {
 	setTimeout(callback: (...args: unknown[]) => void, ms?: number, ...args: unknown[]): Timer;
 	/** Clear a timer scheduled via {@link setInterval} or {@link setTimeout}. */
 	clearTimer(timer: Timer): void;
+	/**
+	 * Register an MCP server with the session (dsh one-plugin-per-server
+	 * parity at session scope).
+	 *
+	 * The config passes the manager's own validation; tools from the server
+	 * arrive through the normal refresh and inherit the session's MCP
+	 * approval machinery. Names must be non-empty; a name already connected
+	 * with an identical config re-registers as a no-op (hot reload is safe),
+	 * while a differently-configured live name fails as a conflict instead
+	 * of hijacking it. Unload with {@link unregisterMcpServer}; whatever is
+	 * still owned disconnects on session shutdown.
+	 */
+	registerMcpServer(name: string, config: MCPServerConfig): Promise<{ name: string }>;
+	/** Disconnect a server registered through {@link registerMcpServer}.
+	 * Resolves false for names this session never registered. */
+	unregisterMcpServer(name: string): Promise<boolean>;
 	/**
 	 * Session-scoped reminders (dsh `ctx.schedule` parity at session scope).
 	 *
