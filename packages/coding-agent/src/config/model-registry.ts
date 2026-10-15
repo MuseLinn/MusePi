@@ -1820,11 +1820,26 @@ export class ModelRegistry {
 			if (available === undefined) {
 				available =
 					!disabledProviders.has(provider) &&
-					(this.#keylessProviders.has(provider) || this.authStorage.hasAuth(provider));
+					(this.#keylessProviders.has(provider) ||
+						this.authStorage.hasAuth(provider) ||
+						this.#hasLiveRuntimeModels(provider));
 				byProvider.set(provider, available);
 			}
 			return available;
 		};
+	}
+
+	/**
+	 * Extension-attested availability: a runtime (extension-registered)
+	 * provider whose last discovery yielded models is usable — the extension
+	 * resolved credentials from its own pool (multi-account rotation,
+	 * imports), which the host AuthStorage never sees. Without this,
+	 * pool-backed providers are discovered yet filtered out of every picker
+	 * (`getAvailable`). Empties symmetrically: an empty discovery drops the
+	 * provider's models (authoritative), so the gate closes again.
+	 */
+	#hasLiveRuntimeModels(provider: string): boolean {
+		return this.#runtimeModelManagers.has(provider) && this.#models.some(model => model.provider === provider);
 	}
 
 	/**

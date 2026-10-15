@@ -1196,4 +1196,33 @@ describe("ModelRegistry runtime provider registration", () => {
 			warn.mockRestore();
 		}
 	});
+
+	test("runtime providers with live discovered models pass the availability gate without host auth", async () => {
+		// Pool-backed extension providers resolve credentials from their own
+		// store, which the host AuthStorage never sees — yet their discovery
+		// yielding models is itself the usability attestation.
+		let serve: boolean = true;
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				fetchDynamicModels: async () => (serve ? [{ ...baseModel, id: "pool-model" }] : []),
+			},
+			"ext://runtime",
+		);
+		expect(authStorage.hasAuth("pool-provider")).toBe(false);
+		await registry.refreshRuntimeProviders("online");
+		expect(
+			registry
+				.getAvailable()
+				.filter(model => model.provider === "pool-provider")
+				.map(model => model.id),
+		).toEqual(["pool-model"]);
+		// Symmetric close: an emptied discovery drops the models and the gate.
+		serve = false;
+		await registry.refreshRuntimeProviders("online");
+		expect(registry.getAvailable().some(model => model.provider === "pool-provider")).toBe(false);
+	});
 });
