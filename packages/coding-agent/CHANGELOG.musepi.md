@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **扩展能注册自己的内部 URL 协议了**：`ctx.registerUrlScheme({scheme, immutable, resolve, write?, complete?})` 向进程内 URL 路由贡献新的 `scheme://` 命名空间——读/写/补全直呈 `ProtocolHandler` 形状；已占用的 built-in 或他方槽位拒绝抢占，同源重注册替换；`unregisterUrlScheme` 摘除，会话结束仅清理仍属自己的槽。
+  - EN: Extensions can register their own internal URL schemes. `ctx.registerUrlScheme({scheme, immutable, resolve, write?, complete?})` contributes a new `scheme://` namespace to the in-process URL router with the `ProtocolHandler` shape directly; occupied built-in or foreign slots refuse to be hijacked while re-registering our own replaces it, and session shutdown only removes slots that are still ours.
 - **扩展能注册自己的子代理类型了**：`ctx.registerSubagent({name, description, systemPrompt, ...})` 向本会话的 task 工具提供新代理类型——解析优先于文件发现（含 bundled），`disabledAgents`、模型覆盖、深度守卫自动适用；`unregisterSubagent` 摘除；runner-less 命令上下文明确拒绝（无归属会话可解析）。
   - EN: Extensions can register their own subagent types. `ctx.registerSubagent({name, description, systemPrompt, ...})` contributes an agent type to the session's task tool — resolution consults registered types before filesystem discovery, and `disabledAgents`, model overrides, and depth guards apply automatically; `unregisterSubagent` removes one, and runner-less command contexts refuse explicitly.
 - **扩展能注册自己的 MCP 服务了**：`ctx.registerMcpServer(name, config)` 把服务接到当前会话——配置走 manager 自身校验，工具经正常刷新到达并沿用会话既有审批；同名同配置重复注册是无操作，异配置冲突失败而非抢占；`unregisterMcpServer` 摘除，会话结束自动断开仍持有的全部。runner-less 命令上下文因无 manager 而报不可用（校验本身可用）。

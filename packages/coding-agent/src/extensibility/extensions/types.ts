@@ -142,6 +142,7 @@ import type {
 } from "../shared-events";
 import type { SlashCommandInfo } from "../slash-commands";
 import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
+import type { UrlSchemeDefinition } from "./url-schemes";
 
 export type { OverlayHandle, OverlayOptions } from "@musepi/pi-tui";
 export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
@@ -582,6 +583,21 @@ export interface ExtensionContext {
 	/** Remove a type registered through {@link registerSubagent}.
 	 * Resolves false for unknown names. */
 	unregisterSubagent(name: string): boolean;
+	/**
+	 * Register an internal-URL scheme for this session (the applicable half
+	 * of dsh's "protocol drivers": new `scheme://` namespaces for read,
+	 * write and completion).
+	 *
+	 * Schemes already handled — built-ins or another party's — fail instead
+	 * of hijacking; re-registering our own installed handler replaces it
+	 * (hot reload safe). Unload with {@link unregisterUrlScheme}; whatever
+	 * is still owned is removed on session shutdown, but only while it is
+	 * still ours (a slot someone else overwrote is left alone).
+	 */
+	registerUrlScheme(def: UrlSchemeDefinition): { scheme: string };
+	/** Remove a scheme registered through {@link registerUrlScheme}.
+	 * Resolves false for names this session never registered. */
+	unregisterUrlScheme(scheme: string): boolean;
 	/**
 	 * Session-scoped reminders (dsh `ctx.schedule` parity at session scope).
 	 *

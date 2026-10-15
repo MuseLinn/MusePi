@@ -118,7 +118,7 @@ import {
 } from "./extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands as loadSlashCommandsInternal } from "./extensibility/slash-commands";
 import type { HindsightSessionState } from "./hindsight/state";
-import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
+import { InternalUrlRouter, LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
 import { setSharedLspEnabled } from "./lsp/client";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
 import {
@@ -3053,6 +3053,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			undefined,
 			undefined,
 			() => mcpManager,
+			() => InternalUrlRouter.instance(),
 		);
 
 		extensionRunnerRef = extensionRunner;

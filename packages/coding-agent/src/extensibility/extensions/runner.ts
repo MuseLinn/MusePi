@@ -95,6 +95,7 @@ import type {
 	UserPythonEvent,
 	UserPythonEventResult,
 } from "./types";
+import { type ExtensionUrlHost, ExtensionUrlRegistry, type UrlSchemeDefinition } from "./url-schemes";
 
 /** Combined result from all before_agent_start handlers */
 interface BeforeAgentStartCombinedResult {
@@ -418,6 +419,7 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 		extensionRunner.clearManagedTimers();
 		extensionRunner.stopServices();
 		await extensionRunner.releaseMcpServers();
+		extensionRunner.releaseUrlSchemes();
 	}
 }
 
@@ -473,6 +475,7 @@ export class ExtensionRunner {
 	#getAsyncJobManagerFn: () => AsyncJobManager | undefined = () => undefined;
 	#getAgentIdFn: () => string | undefined = () => undefined;
 	#getMcpHostFn: () => ExtensionMcpHost | undefined = () => undefined;
+	#getUrlRouterFn: () => ExtensionUrlHost | undefined = () => undefined;
 	/**
 	 * MCP servers registered through extension contexts on this runner.
 	 * Session-scoped like everything else here: re-registering an identical
@@ -480,6 +483,7 @@ export class ExtensionRunner {
 	 * disconnects whatever is still owned (see {@link releaseMcpServers}).
 	 */
 	readonly #mcpServers = new ExtensionMcpRegistry(() => this.#getMcpHostFn());
+	readonly #urlSchemes = new ExtensionUrlRegistry(() => this.#getUrlRouterFn());
 	#newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	#branchHandler: BranchHandler = async () => ({ cancelled: false });
 	#navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
@@ -698,6 +702,7 @@ export class ExtensionRunner {
 		getAsyncJobManager?: () => AsyncJobManager | undefined,
 		getAgentId?: () => string | undefined,
 		getMcpHost?: () => ExtensionMcpHost | undefined,
+		getUrlRouter?: () => ExtensionUrlHost | undefined,
 	) {
 		this.#uiContext = noOpUIContext;
 		this.#getMemoryFn = getMemory;
@@ -705,6 +710,7 @@ export class ExtensionRunner {
 		this.#getAsyncJobManagerFn = getAsyncJobManager ?? (() => undefined);
 		this.#getAgentIdFn = getAgentId ?? (() => undefined);
 		this.#getMcpHostFn = getMcpHost ?? (() => undefined);
+		this.#getUrlRouterFn = getUrlRouter ?? (() => undefined);
 		for (const extension of extensions) {
 			this.#recordExtensionEntryMtime(extension.resolvedPath);
 		}
@@ -1483,6 +1489,8 @@ export class ExtensionRunner {
 			clearTimer: timer => this.#managedTimers.clear(timer),
 			registerMcpServer: (name, config) => this.#mcpServers.register(name, config),
 			unregisterMcpServer: (name: string) => this.#mcpServers.unregister(name),
+			registerUrlScheme: (def: UrlSchemeDefinition) => this.#urlSchemes.register(def),
+			unregisterUrlScheme: (scheme: string) => this.#urlSchemes.unregister(scheme),
 			registerSubagent: (def: SubagentDefinition) => this.registerSubagent(def),
 			unregisterSubagent: (name: string) => this.unregisterSubagent(name),
 			schedule: {
@@ -1546,6 +1554,15 @@ export class ExtensionRunner {
 	 */
 	async releaseMcpServers(): Promise<string[]> {
 		return this.#mcpServers.releaseAll();
+	}
+
+	/**
+	 * Remove every URL scheme still owned by this runner. Sync (all
+	 * operations are in-memory map + sync router calls); called on session
+	 * shutdown so an extension's schemes cannot outlive its session.
+	 */
+	releaseUrlSchemes(): string[] {
+		return this.#urlSchemes.releaseAll();
 	}
 
 	/**

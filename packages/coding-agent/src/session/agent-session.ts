@@ -6313,6 +6313,16 @@ export class AgentSession {
 					"unregisterSubagent requires a full extension session (unavailable in runner-less command contexts)",
 				);
 			},
+			registerUrlScheme: () => {
+				throw new Error(
+					"registerUrlScheme requires a full extension session (unavailable in runner-less command contexts)",
+				);
+			},
+			unregisterUrlScheme: () => {
+				throw new Error(
+					"unregisterUrlScheme requires a full extension session (unavailable in runner-less command contexts)",
+				);
+			},
 			registerMcpServer: (name, config) => this.#fallbackMcpServers.register(name, config),
 			unregisterMcpServer: (name: string) => this.#fallbackMcpServers.unregister(name),
 			schedule: {
