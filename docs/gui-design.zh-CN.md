@@ -575,6 +575,23 @@ turn
   而不是像出了 bug。
 - **面板记住上一次的 query**（关闭时捕获、打开时回填），所以重新打开不会抹掉敲了一半的
   搜索词。
+## 5y. 表面 keep-alive 纪律 + 入口/Escape 不变量（2026-10-15，openchamber A4 审计 + A6）
+
+- **keep-alive 铁律——必须活过表面切换的状态不得放在 pane 组件内部。**`ContextPanel` 的
+  `renderPanelBody` 只挂载当前 tab 的 body，pane 内 `useState` 跨表面切换即死。清单（已审计，
+  非推断）：
+  - 终端 dock：首次打开即挂载、永不卸载（`ChatView`——折叠是高度归零，pty + 回滚在会话切换后存活）。
+  - 浏览器：`<webview>` guest 常驻 `ManagedBrowserHost`，面板只是槽位矩形，面板关闭不丢导航/会话。
+  - 设置页往返：chat 列 + 侧栏 `display:none` 常驻，回来状态全在（见 §1 settings-shell 条目）。
+  - 编辑器未存文本：`FilePane` 模块级 `unsavedBufferCache`（绝对路径键；保存/改回 saved 即删条目）——
+    此前的实例级 ref 随 pane 卸载一起死，files→他表面→files 会丢未存文本。
+  - 明确不保留（接受现状）：文件树 `scrollTop`、trajectory 列表滚动——重挂即重置；进会话默认落尾，
+    jump-to-entry 按需滚动。加滚动缓存须另立设计说明。
+- **入口不变量（openchamber 对等，只记文档）**：表面只许从 rail、命令面板、内容内链
+  （jump/reveal）、composer 菜单四处打开。别处浮钮不得直链表面。
+- **Escape 不变量（现状追认）**：弹窗在 `document` 捕获阶段认领 Escape（`DialogFrame`、
+  prompt-dialog 前例）；无人认领的 Escape 中断当前轮次（`lib/escape-stop`）；portalled 菜单自理
+  关闭。新层按此顺序来，不自创新语义。
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。

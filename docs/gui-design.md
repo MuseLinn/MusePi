@@ -682,6 +682,31 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
   its own subtitle so the match reads as deliberate rather than as a glitch.
 - **The palette remembers its last query** across a ⌘K toggle (captured on close, re-seeded
   on open) so re-opening does not wipe a half-typed search.
+## 5y. Surface keep-alive discipline + entry/Escape invariants (2026-10-15, openchamber A4 audit + A6)
+
+- **Keep-alive rule — state that must survive a surface switch lives outside the
+  pane component.** `ContextPanel`'s `renderPanelBody` mounts only the active tab's
+  body, so anything in pane-local `useState` dies on a cross-surface switch. The
+  inventory (audited, not assumed):
+  - Terminal dock: mounts on first open, never unmounts (`ChatView` — folding is
+    height 0, ptys + scrollback survive session switches).
+  - Browser: the `<webview>` guest lives in the always-mounted `ManagedBrowserHost`;
+    the pane is only a slot rect, so navigation/session survive panel close.
+  - Chat column + sidebar across settings: `display:none` keepers, state restored
+    on return (see §1 settings-shell entry).
+  - Editor unsaved text: module-scoped `unsavedBufferCache` in `FilePane`
+    (keyed by absolute path; save / edit-back-to-saved drops the entry) — a prior
+    instance-scoped ref died with the pane and lost buffers on files→other→files.
+  - NOT preserved (accepted): file-tree `scrollTop`, trajectory list scroll —
+    both reset on remount; session enter tails to latest, jump-to-entry scrolls on
+    demand. Do not add scroll caches without a design note.
+- **Entry invariant (openchamber parity, documented only):** a surface opens only
+  from the rail, the command palette, an in-content chain (jump/reveal), or a
+  composer menu. No floating buttons elsewhere may deep-link a surface.
+- **Escape invariant (documents existing behavior):** modals claim Escape on
+  `document` capture phase (`DialogFrame`, prompt-dialog); an unclaimed Escape
+  interrupts the running turn (`lib/escape-stop`); portalled menus dismiss
+  themselves. New layers follow this order, they do not invent their own.
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

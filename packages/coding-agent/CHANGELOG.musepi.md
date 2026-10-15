@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **切换表面不再丢编辑器未存文本**：右面板只挂载当前 tab 的 body，跨表面切换会卸载文件面板——此前未存草稿缓存在实例级 ref 里，随卸载一起死，回来变成磁盘旧字节。现在缓存提为模块级（绝对路径键；保存/改回已存即删），卸载 stash、重开恢复、dirty 守卫协议不动；终端/浏览器/chat 列此前已是 keep-alive，无需动。文件树与 trajectory 滚动位置明确不保留（重挂重置）。
+  - EN: Switching surfaces no longer drops unsaved editor text. The right panel mounts only the active tab's body, so leaving for another surface unmounts the file pane — unsaved drafts used to live in an instance-scoped ref that died with it and came back as stale disk bytes. The cache is now module-scoped (absolute-path keys; dropped on save or edit-back-to-saved) with the stash/restore/dirty-guard protocol unchanged; terminal, browser, and the chat column were already keep-alive. File-tree and trajectory scroll positions are explicitly not preserved (reset on remount).
 - **扩展能注册自己的内部 URL 协议了**：`ctx.registerUrlScheme({scheme, immutable, resolve, write?, complete?})` 向进程内 URL 路由贡献新的 `scheme://` 命名空间——读/写/补全直呈 `ProtocolHandler` 形状；已占用的 built-in 或他方槽位拒绝抢占，同源重注册替换；`unregisterUrlScheme` 摘除，会话结束仅清理仍属自己的槽。
   - EN: Extensions can register their own internal URL schemes. `ctx.registerUrlScheme({scheme, immutable, resolve, write?, complete?})` contributes a new `scheme://` namespace to the in-process URL router with the `ProtocolHandler` shape directly; occupied built-in or foreign slots refuse to be hijacked while re-registering our own replaces it, and session shutdown only removes slots that are still ours.
 - **扩展能注册自己的子代理类型了**：`ctx.registerSubagent({name, description, systemPrompt, ...})` 向本会话的 task 工具提供新代理类型——解析优先于文件发现（含 bundled），`disabledAgents`、模型覆盖、深度守卫自动适用；`unregisterSubagent` 摘除；runner-less 命令上下文明确拒绝（无归属会话可解析）。

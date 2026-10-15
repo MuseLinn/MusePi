@@ -140,6 +140,14 @@ const OFFICE_SHEET_ROWS = 1000;
 const ROW_H = 26;
 const ROW_BUFFER = 6;
 
+/** Unsaved inline-editor buffers keyed by absolute path, module-scoped so a
+ *  buffer survives the pane unmounting (renderPanelBody mounts only the
+ *  active tab's body — switching to another surface unmounts this pane and
+ *  would otherwise reset the textarea to disk bytes on return). Saved files
+ *  and buffers edited back to `saved` drop their entry; the map holds text
+ *  only, never file bytes. */
+const unsavedBufferCache = new Map<string, { text: string; saved: string }>();
+
 interface TreeNode {
 	entry: WorkspaceEntry;
 	children: TreeNode[];
@@ -491,10 +499,10 @@ export function FilePane({
 		};
 	}, [preview?.imageUrl]);
 
-	// Editor buffer cache keyed by path: leaving a tab unmounts the pane, so
-	// the unsaved textarea would reset to the on-disk text on return. The
-	// cache holds the last buffer per path; a saved file drops its entry.
-	const bufferCacheRef = useRef(new Map<string, { text: string; saved: string }>());
+	// Editor buffer cache keyed by path (see `unsavedBufferCache`): leaving a
+	// tab unmounts the pane, so the unsaved textarea would reset to the
+	// on-disk text on return. The cache holds the last buffer per path; a
+	// saved file drops its entry.
 
 	// Tree↔file tab switches unmount this pane (renderPanelBody mounts only
 	// the active tab). Stash a dirty editor buffer keyed by the preview path
@@ -524,7 +532,7 @@ export function FilePane({
 		return () => {
 			const buf = editBufRef.current;
 			const path = previewPathRef.current;
-			if (buf && buf.text !== buf.saved && path) bufferCacheRef.current.set(path, buf);
+			if (buf && buf.text !== buf.saved && path) unsavedBufferCache.set(path, buf);
 		};
 	}, []);
 
@@ -597,8 +605,8 @@ export function FilePane({
 			// DIRTY cached buffer also re-enters the editor straight away
 			// (pane unmount across a tree↔file tab switch): the user comes
 			// back to their unsaved text, not a silent reset to disk bytes.
-			const buffer = bufferCacheRef.current.get(absPath) ?? null;
-			if (!buffer) bufferCacheRef.current.delete(absPath);
+			const buffer = unsavedBufferCache.get(absPath) ?? null;
+			if (!buffer) unsavedBufferCache.delete(absPath);
 			// If the editor opened straight into a freshly created file, a
 			// tree click before any save would otherwise drop its content.
 			const enterEdit = opts?.enterEdit ?? false;
@@ -796,7 +804,7 @@ export function FilePane({
 	const startEdit = useCallback(async (): Promise<void> => {
 		if (!preview) return;
 		if (preview.raw !== undefined) {
-			const cached = bufferCacheRef.current.get(preview.path);
+			const cached = unsavedBufferCache.get(preview.path);
 			if (cached) {
 				if (edit && edit.text !== edit.saved) {
 					if (!(await confirm(t("discard unsaved changes?"), t("discard")))) return;
@@ -832,7 +840,7 @@ export function FilePane({
 		try {
 			await rpc.request("fs.write", { cwd, path: rel, content: edit.text });
 			setEdit(cur => (cur ? { ...cur, saved: cur.text } : cur));
-			bufferCacheRef.current.delete(preview.path);
+			unsavedBufferCache.delete(preview.path);
 			await load();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
@@ -1237,8 +1245,8 @@ export function FilePane({
 												// Stash so a tab switch (pane unmount) or a
 												// re-open of this file restores the unsaved
 												// buffer instead of re-reading disk.
-												bufferCacheRef.current.set(preview.path, next);
-												if (text === next.saved) bufferCacheRef.current.delete(preview.path);
+												unsavedBufferCache.set(preview.path, next);
+												if (text === next.saved) unsavedBufferCache.delete(preview.path);
 											}
 											return next;
 										})
