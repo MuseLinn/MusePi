@@ -27,6 +27,13 @@ import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../s
 import { loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
 import { createExtensionModelQuery } from "./model-api";
+import {
+	ExtensionScheduler,
+	frameScheduledPrompt,
+	type ScheduleCreate,
+	type ScheduleRecord,
+	type ScheduleUpdate,
+} from "./schedule";
 import type {
 	AfterProviderResponseEvent,
 	AssistantThinkingRenderer,
@@ -525,6 +532,39 @@ export class ExtensionRunner {
 	#managedTimers = new ManagedTimers((event, error, stack) =>
 		this.emitError({ extensionPath: "<timer>", event, error, stack }),
 	);
+	/**
+	 * Session-scoped reminders (`ctx.schedule`). Live and die with this
+	 * runner: records are never persisted (a session that ends has nowhere
+	 * to deliver into), and the 1s driver timer rides the managed timers so
+	 * session teardown stops it. Durable, cross-restart schedules belong to
+	 * daemon cron, not here.
+	 */
+	readonly #schedules = new ExtensionScheduler();
+	#scheduleTimer: ReturnType<ManagedTimers["setInterval"]> | null = null;
+
+	/** Start the 1s schedule driver unless it already runs. */
+	#ensureScheduleDriver(): void {
+		if (this.#scheduleTimer !== null) return;
+		this.#scheduleTimer = this.#managedTimers.setInterval(() => this.#driveSchedules(), 1000);
+	}
+
+	/** Stop the driver when nothing remains scheduled. */
+	#maybeStopScheduleDriver(): void {
+		if (this.#schedules.list().length === 0 && this.#scheduleTimer !== null) {
+			this.#managedTimers.clear(this.#scheduleTimer);
+			this.#scheduleTimer = null;
+		}
+	}
+
+	/** Fire due schedules into the session as follow-up user turns. */
+	#driveSchedules(): void {
+		const send = this.runtime.sendUserMessage;
+		this.#schedules.drive(Date.now(), record => {
+			if (typeof send !== "function") return;
+			send(frameScheduledPrompt(record), { deliverAs: "followUp" });
+		});
+		this.#maybeStopScheduleDriver();
+	}
 	/** Subscribers notified when an extension pushes a notification channel
 	 *  message. The daemon host subscribes via {@link onNotification} and
 	 *  forwards to the GUI; a subscriber throw is isolated. */
@@ -1428,6 +1468,24 @@ export class ExtensionRunner {
 			setInterval: (callback, ms, ...args) => this.#managedTimers.setInterval(callback, ms, ...args),
 			setTimeout: (callback, ms, ...args) => this.#managedTimers.setTimeout(callback, ms, ...args),
 			clearTimer: timer => this.#managedTimers.clear(timer),
+			schedule: {
+				create: (input: ScheduleCreate) => {
+					const record = this.#schedules.create(input);
+					this.#ensureScheduleDriver();
+					return record;
+				},
+				list: (): ScheduleRecord[] => this.#schedules.list(),
+				update: (id: string, patch: ScheduleUpdate) => {
+					const record = this.#schedules.update(id, patch);
+					this.#ensureScheduleDriver();
+					return record;
+				},
+				delete: (id: string): boolean => {
+					const removed = this.#schedules.delete(id);
+					this.#maybeStopScheduleDriver();
+					return removed;
+				},
+			},
 			invokeTool:
 				delegation !== undefined && this.hasNativeTool(delegation.toolName)
 					? (params, options) =>
@@ -1458,6 +1516,10 @@ export class ExtensionRunner {
 	 */
 	clearManagedTimers(): void {
 		this.#managedTimers.clearAll();
+		// The schedule driver rides the managed timers; dropping the handle
+		// lets it restart lazily. Records stay (a spurious clear must not eat
+		// reminders) and die with the runner itself.
+		this.#scheduleTimer = null;
 	}
 
 	/**

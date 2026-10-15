@@ -139,6 +139,7 @@ import type {
 	TurnStartEvent,
 } from "../shared-events";
 import type { SlashCommandInfo } from "../slash-commands";
+import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
 
 export type { OverlayHandle, OverlayOptions } from "@musepi/pi-tui";
 export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
@@ -548,6 +549,21 @@ export interface ExtensionContext {
 	setTimeout(callback: (...args: unknown[]) => void, ms?: number, ...args: unknown[]): Timer;
 	/** Clear a timer scheduled via {@link setInterval} or {@link setTimeout}. */
 	clearTimer(timer: Timer): void;
+	/**
+	 * Session-scoped reminders (dsh `ctx.schedule` parity at session scope).
+	 *
+	 * One-shots (`afterSeconds`/`at`) fire once and are consumed; `everySeconds`
+	 * recurs until deleted. Firing delivers the prompt into this session as a
+	 * follow-up user turn. Records live and die with the session — they are
+	 * never persisted, so a closed session drops its reminders. Durable,
+	 * cross-restart schedules belong to daemon cron, not here.
+	 */
+	schedule: {
+		create(input: ScheduleCreate): ScheduleRecord;
+		list(): ScheduleRecord[];
+		update(id: string, patch: ScheduleUpdate): ScheduleRecord;
+		delete(id: string): boolean;
+	};
 	/**
 	 * Run the NATIVE built-in implementation of the tool this handler re-registered, with `params`,
 	 * and return its result. Lets a tool that re-registers a built-in (e.g. wrapping `write` to add

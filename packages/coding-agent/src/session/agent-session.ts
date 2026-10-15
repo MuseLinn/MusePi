@@ -144,6 +144,13 @@ import type {
 import { emitSessionShutdownEvent } from "../extensibility/extensions";
 import { ManagedTimers } from "../extensibility/extensions/managed-timers";
 import { createExtensionModelQuery } from "../extensibility/extensions/model-api";
+import {
+	ExtensionScheduler,
+	frameScheduledPrompt,
+	type ScheduleCreate,
+	type ScheduleRecord,
+	type ScheduleUpdate,
+} from "../extensibility/extensions/schedule";
 import type { CompactOptions, ContextUsage } from "../extensibility/extensions/types";
 import type { HookCommandContext } from "../extensibility/hooks/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
@@ -653,6 +660,10 @@ export class AgentSession {
 	 * created; cleared on dispose alongside the runner's own timers (#5664).
 	 */
 	#fallbackExtensionTimers: ManagedTimers | undefined = undefined;
+	/** Session-scoped reminders for the runner-less fallback (mirrors the
+	 *  extension runner's `ctx.schedule`; same session-scope limits). */
+	#fallbackSchedules = new ExtensionScheduler();
+	#fallbackScheduleTimer: ReturnType<ManagedTimers["setInterval"]> | null = null;
 	#turnIndex = 0;
 	#messageEndPersistenceTail: Promise<void> = Promise.resolve();
 	#pendingMessageEndPersistence = new Map<string, Promise<void>>();
@@ -4162,6 +4173,7 @@ export class AgentSession {
 
 		// Stop fallback extension timers before aborting deferred work they could enqueue.
 		this.#fallbackExtensionTimers?.clearAll();
+		this.#fallbackScheduleTimer = null;
 		this.abortRetry();
 		this.abortCompaction();
 		const postPromptDrain = this.#cancelPostPromptTasks();
@@ -6284,6 +6296,24 @@ export class AgentSession {
 			setInterval: (callback, ms, ...args) => this.#fallbackTimers().setInterval(callback, ms, ...args),
 			setTimeout: (callback, ms, ...args) => this.#fallbackTimers().setTimeout(callback, ms, ...args),
 			clearTimer: timer => this.#fallbackTimers().clear(timer),
+			schedule: {
+				create: (input: ScheduleCreate): ScheduleRecord => {
+					const record = this.#fallbackSchedules.create(input);
+					this.#ensureFallbackScheduleDriver();
+					return record;
+				},
+				list: (): ScheduleRecord[] => this.#fallbackSchedules.list(),
+				update: (id: string, patch: ScheduleUpdate): ScheduleRecord => {
+					const record = this.#fallbackSchedules.update(id, patch);
+					this.#ensureFallbackScheduleDriver();
+					return record;
+				},
+				delete: (id: string): boolean => {
+					const removed = this.#fallbackSchedules.delete(id);
+					this.#maybeStopFallbackScheduleDriver();
+					return removed;
+				},
+			},
 		};
 	}
 
@@ -6293,6 +6323,28 @@ export class AgentSession {
 			logger.warn("Extension timer callback threw", { event, error }),
 		);
 		return this.#fallbackExtensionTimers;
+	}
+
+	/** Start the 1s fallback schedule driver unless it already runs. */
+	#ensureFallbackScheduleDriver(): void {
+		if (this.#fallbackScheduleTimer !== null) return;
+		this.#fallbackScheduleTimer = this.#fallbackTimers().setInterval(() => this.#driveFallbackSchedules(), 1000);
+	}
+
+	/** Stop the fallback driver when nothing remains scheduled. */
+	#maybeStopFallbackScheduleDriver(): void {
+		if (this.#fallbackSchedules.list().length === 0 && this.#fallbackScheduleTimer !== null) {
+			this.#fallbackTimers().clear(this.#fallbackScheduleTimer);
+			this.#fallbackScheduleTimer = null;
+		}
+	}
+
+	/** Fire due fallback schedules into the session as follow-up turns. */
+	#driveFallbackSchedules(): void {
+		this.#fallbackSchedules.drive(Date.now(), record => {
+			void this.followUp(frameScheduledPrompt(record)).catch(() => {});
+		});
+		this.#maybeStopFallbackScheduleDriver();
 	}
 
 	/**
