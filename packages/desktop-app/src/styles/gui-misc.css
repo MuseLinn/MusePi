@@ -2550,12 +2550,14 @@
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	right: var(--edge-v);
+	/* Centred under the bead column / pac glyph (both var(--edge-size)
+	 * wide at right:var(--edge-v)); parked at the column's right edge it
+	 * read as a second rail next to the beads. */
+	right: calc(var(--edge-v) + (var(--edge-size) - 1px) / 2);
 	width: 1px;
 	background: var(--skin-track, color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent));
 }
-.gfs-beads,
-.gfs-beads-eaten {
+.gfs-beads {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -2570,12 +2572,20 @@
 .gfs-beads {
 	opacity: 0.4;
 }
-/* The eaten run is the same column scaled down to the progress point, drawn as
- * a flat tint rather than a copy of the beads — scaling the bead circles
- * themselves would squash each one into an ellipse as progress drops. It sits
- * ON TOP of the beads so the run above the pac reads as dimmed, and it is
- * driven by the same progress scalar as the glyph, so the two cannot drift. */
+/* The eaten run is a thin trail on the thread's centre line, scaled down to
+ * the progress point — deliberately NOT a copy of the bead column. A
+ * full-width flat tint (the previous render) painted a thick grey bar over
+ * the whole rail; a bead copy scaled with scaleY would squash each bead
+ * into an ellipse as progress drops. The 3px trail sits ON TOP of the
+ * beads so the run above the pac reads as eaten, and it is driven by the
+ * same progress scalar as the glyph, so the two cannot drift. */
 .gfs-beads-eaten {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: calc(var(--edge-v) + (var(--edge-size) - 3px) / 2);
+	width: 3px;
+	border-radius: 999px;
 	transform-origin: top center;
 	transform: scaleY(0);
 	background: color-mix(in oklab, var(--skin-eaten, #7a7462) 82%, transparent);

@@ -1,17 +1,16 @@
 import type { ReactNode } from "react";
 
 /**
- * Pac-man glyph — a classic vector pac-man: yellow disc, one big eye on
- * the mouth side, and a SECTOR mouth (an arc cut, not the previous wedge
- * triangle that read as a plain notch at small sizes). Renders crisp at
- * any size; the mouth chomps via a 3-frame sprite (three sector paths
- * alternating opacity — SVG paths can't be interpolated by CSS without a
- * registered `d`).
+ * Pac-man glyph — a true vector pac-man: a yellow disc with the mouth CUT
+ * OUT (transparent, showing whatever is behind it), plus one eye placed
+ * clear of the mouth cone. Renders crisp at any size; the mouth chomps via
+ * a 3-frame sprite (three body paths alternating opacity — SVG paths can't
+ * be interpolated by CSS without a registered `d`).
  *
  * Mouth frame selection:
- * - `mouth` 0..1 drives the static sector angle (TurnRail hover states).
- * - `animating` adds the `.pac-chomp` class → the CSS animation cycles
- *   the three sectors (open → mid → closed → …) while it runs.
+ * - `mouth` 0..1 drives the static body cutout (TurnRail hover states).
+ * - `animating` renders the three chomp frames instead of the rest body;
+ *   the `.pac-chomp` class cycles them (open → mid → closed → …).
  */
 export function PacMan({
 	size,
@@ -29,26 +28,29 @@ export function PacMan({
 	animating?: boolean;
 	className?: string;
 }): ReactNode {
-	// Sector mouth in a 24×24 viewBox (r=10 disc at 12,12). `halfAngle` is
-	// half the mouth opening in radians: the sector runs from the lower
-	// rim point (12+halfAngle) to the upper rim point (−halfAngle) through
-	// the right rim, so the disc keeps its round profile and the cut is a
-	// true pac-man wedge with an arc edge.
-	const sector = (halfAngle: number): string => {
+	// Pac body in a 24x24 viewBox (r=10 disc at 12,12). `halfAngle` is half
+	// the mouth opening in radians: the path runs from the lower rim point
+	// (+halfAngle) the LONG way round (through the left side) to the upper
+	// rim point (-halfAngle), so the yellow keeps its round profile and the
+	// missing sector is the mouth — transparent, not painted dark. A dark
+	// wedge painted on top of a full disc (the previous render) read as a
+	// muddy blob at 12px; the cutout reads as pac-man at any size.
+	const body = (halfAngle: number): string => {
 		const x1 = 12 + 10 * Math.cos(halfAngle);
 		const y1 = 12 + 10 * Math.sin(halfAngle);
 		const x2 = 12 + 10 * Math.cos(-halfAngle);
 		const y2 = 12 + 10 * Math.sin(-halfAngle);
-		return `M12 12 L${x1.toFixed(2)} ${y1.toFixed(2)} A10 10 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+		const a = `M12 12 L${x1.toFixed(2)} ${y1.toFixed(2)}`;
+		const b = `A10 10 0 1 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+		return `${a} ${b}`;
 	};
-	// mouth 1 → halfAngle ≈ 1.0 rad (~57°, the classic wide open chomp);
-	// mouth 0 → a hairline 0.05 rad slit.
-	const rest = sector(0.02 + mouth * 0.98);
-	const fOpen = sector(1.0); // wide open
-	const fMid = sector(0.45); // half
-	const fClosed = sector(0.05); // nearly closed
+	// mouth 1 -> halfAngle about 1.0 rad (the classic wide open chomp);
+	// mouth 0 -> a hairline 0.05 rad slit.
+	const rest = body(0.02 + mouth * 0.98);
+	const fOpen = body(1.0); // wide open
+	const fMid = body(0.45); // half
+	const fClosed = body(0.05); // nearly closed
 
-	const mouthClass = `pac-mouth${animating ? " pac-chomp" : ""}`;
 	return (
 		<svg
 			width={size}
@@ -65,16 +67,24 @@ export function PacMan({
 						: undefined
 			}
 		>
-			<circle cx="12" cy="12" r="10" fill="#ffd94d" />
-			{/* Classic eye: one black disc on the mouth side, above the
-			 * opening — the wedge's arc edge frames it. */}
-			<circle cx="15.8" cy="7.4" r="2.1" fill="#201a14" />
-			{/* Static rest sector (shown when not animating) */}
-			<path d={rest} className="pac-mouth-rest" fill="#201a14" />
-			{/* Chomp frames — CSS alternates their opacity while .pac-chomp runs */}
-			<path d={fOpen} className={`${mouthClass} pac-mouth-f0`} fill="#201a14" />
-			<path d={fMid} className={`${mouthClass} pac-mouth-f1`} fill="#201a14" />
-			<path d={fClosed} className={`${mouthClass} pac-mouth-f2`} fill="#201a14" />
+			{animating ? (
+				<>
+					{/* Chomp frames — CSS cycles their opacity while .pac-chomp
+					 * runs. The rest body is not rendered here: leaving it under
+					 * the frames doubled the mouth edges and muddied the glyph. */}
+					<path d={fOpen} className="pac-mouth pac-chomp pac-mouth-f0" fill="#ffd94d" />
+					<path d={fMid} className="pac-mouth pac-chomp pac-mouth-f1" fill="#ffd94d" />
+					<path d={fClosed} className="pac-mouth pac-chomp pac-mouth-f2" fill="#ffd94d" />
+					{/* Eye stays clear of the wide-open mouth cone (rim reaches
+					 * x about 17.4 at y about 3.6/20.4): centred on top. */}
+					<circle cx="12" cy="6" r="2" fill="#201a14" />
+				</>
+			) : (
+				<>
+					<path d={rest} className="pac-mouth-rest" fill="#ffd94d" />
+					<circle cx="12" cy="6" r="2" fill="#201a14" />
+				</>
+			)}
 		</svg>
 	);
 }
