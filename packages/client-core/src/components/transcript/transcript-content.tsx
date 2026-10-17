@@ -169,8 +169,9 @@ export function readLiveCustomMessage(message: unknown): LiveCustomMessage | und
 /** 分支拓扑只统计会话分叉:普通 provider 消息。custom 角色消息(顾问卡、
  *  IRC、async 结果——live 消息缝上的插入展示卡)与 custom /
  *  model_change / thinking_level_change 等非 message 簿记条目都不是分叉;
- *  历史快照 rekey 会把它们 parent 到最近 message 祖先,若计入 children 索引,
- *  每条消息都会凭空多出"2 个分支"的分叉条。 */
+ *  历史 rekey 保留直接父链(非 message 节点也在链上);分支判定仍只计
+ *  message——展示卡若计入 children 索引,同父的卡和消息会凭空凑出
+ *  "2 个分支"。 */
 export function isBranchFormingEntry(entry: SessionEntry): boolean {
 	if (entry.type !== "message") return false;
 	return readLiveCustomMessage(entry.message) === undefined;

@@ -1244,7 +1244,7 @@ export function ChatView({
 		for (const entry of snap?.entries ?? []) {
 			const e = entry as { id?: string; parentId?: string | null; type?: string; message?: { role?: string } };
 			if (typeof e.id !== "string" || typeof e.parentId !== "string" || !e.parentId) continue;
-			// 分叉条只数会话分叉(message);custom 簿记/展示卡经历史 rekey
+			// 分叉条只数会话分叉(message);custom 簿记/展示卡保留直接父链,
 			// 后 parent 到最近 message 祖先,计入会让每条消息都亮"2 个分支"。
 			if (!isBranchFormingEntry(entry as SessionEntry)) continue;
 			const bucket = map.get(e.parentId);
