@@ -202,7 +202,7 @@ export function readSurfaceWidths(): Record<string, number> {
 	}
 }
 
-export function writeSurfaceWidths(widths: Record<string, number>): void {
+function writeSurfaceWidths(widths: Record<string, number>): void {
 	try {
 		localStorage.setItem(SURFACE_WIDTHS_KEY, JSON.stringify(widths));
 	} catch {
