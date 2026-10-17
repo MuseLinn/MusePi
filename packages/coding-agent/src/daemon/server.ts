@@ -4901,6 +4901,13 @@ export class DaemonServer {
 				await live.agentSession.sessionManager.setSessionName(p.title.trim(), "user");
 				return { ok: true };
 			}
+			case "session.retitle": {
+				// openchamber SessionAiRename parity: model-generated title from
+				// the first user message (reasons documented on host.retitle).
+				const p = (params ?? {}) as { sessionId: string };
+				if (!p.sessionId) throw new Error("sessionId required");
+				return this.#host.retitle(p.sessionId);
+			}
 			case "session.slashCommand": {
 				// TUI slash-command parity: execute a "/..." invocation
 				// headlessly via the ACP dispatcher (same builtin registry

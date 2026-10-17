@@ -2646,6 +2646,68 @@ export class DaemonSessionHost {
 	}
 
 	/**
+	 * AI rename (openchamber SessionAiRename parity): (re)generate the
+	 * session title from its first user message through the same title
+	 * pipeline as auto-title, then persist it as a USER title so
+	 * replan-refresh never overwrites an explicit choice. History sessions
+	 * are activated first (the same resume path as opening them). Sessions
+	 * with no user message report { ok: false, reason: "empty" } and an
+	 * unavailable title model reports "generation-failed" -- the row menu
+	 * toasts the reason instead of guessing enablement client-side.
+	 */
+	async retitle(sessionId: string): Promise<{ ok: boolean; title?: string; reason?: string }> {
+		const live = this.#sessions.get(sessionId) ?? (await this.activate(sessionId).catch(() => null));
+		if (!live) throw new Error(`Unknown session: ${sessionId}`);
+		const entries = live.view.snapshot().entries as Array<{
+			type?: string;
+			message?: { role?: string; content?: unknown };
+		}>;
+		const firstUser = entries.find(e => e?.type === "message" && e.message?.role === "user");
+		const content = firstUser?.message?.content;
+		const text =
+			typeof content === "string"
+				? content
+				: Array.isArray(content)
+					? (content as Array<{ type?: string; text?: string }>)
+							.filter(b => b?.type === "text")
+							.map(b => b.text ?? "")
+							.join(" ")
+					: "";
+		if (!text.trim()) return { ok: false, reason: "empty" };
+		// No-model and provider failures surface as a reason, never a 500:
+		// the row menu toasts it (empty test sessions hit this path).
+		let title: string | null;
+		try {
+			title = await live.agentSession.generateTitle(text);
+		} catch {
+			title = null;
+		}
+		if (!title) return { ok: false, reason: "generation-failed" };
+		await live.agentSession.sessionManager.setSessionName(title, "user");
+		return { ok: true, title };
+	}
+
+	/**
+	 * True when the SDK transcript provably holds records the journal
+	 * missed, so a checkpoint-less journal replay must not stand in for
+	 * it. Same-process ordering makes this sound: the session manager
+	 * persists entries synchronously per record while journal appends go
+	 * through an async chain, so a journal that saw every record can never
+	 * lag the SDK tail. Ties keep the journal.
+	 */
+	async #sdkSupersedesJournal(sessionId: string, journalNewestTs: string | null): Promise<boolean> {
+		if (journalNewestTs === null) return false;
+		const journalMs = Date.parse(journalNewestTs);
+		if (!Number.isFinite(journalMs)) return false;
+		const { resolveResumableSession } = await import("../session/session-listing");
+		const match = await resolveResumableSession(sessionId, this.#options.cwd ?? "");
+		if (!match) return false;
+		const sdkMs = await readSdkNewestTimestamp(match.session.path);
+		if (sdkMs === null) return false;
+		return sdkMs > journalMs;
+	}
+
+	/**
 	 * Catch-up deltas for a resume cursor: journal records with seq > cursor.
 	 * Sends each as an event envelope on the connection (caller orders this
 	 * after the resume response so the snapshot lands first).
