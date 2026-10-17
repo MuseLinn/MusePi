@@ -78,6 +78,31 @@ blueprint 组件一样可用的要点：
   跟随，别让内容溢出卡片。
 - 主题切换宿主重建 iframe，无需自己监听。
 
+### 让用户选：直接用宿主给的类
+
+做「让用户挑」的面时**不要自己写一整套组件**，宿主已经注好了：
+
+- `.musepi-options` — 网格容器；加 `data-columns="2"` 变两列
+- `.musepi-option` — 一张选项卡（用 `<button>`），选中时加 `aria-pressed="true"`
+- `.musepi-option-sub` — 选项下方的补充说明
+- `.musepi-button` — 主操作按钮
+
+配色用宿主注入的变量，不要自己挑颜色：`var(--bg)`、`var(--bg-raised)`、
+`var(--fg)`、`var(--fg-muted)`、`var(--fg-faint)`、`var(--border)`、
+`var(--border-strong)`、`var(--accent)`、`var(--radius-sm|md|lg)`。
+沙箱是 null origin，读不到应用的 CSS 变量，这些值是宿主解析后注入的，
+深浅主题各一套、会跟着宿主实时切换。
+
+```
+<div class="musepi-options" data-columns="2">
+  <button class="musepi-option" onclick="pick(this)">
+    A 档 · 抬升色 74%
+    <span class="musepi-option-sub">保留磨砂感，透出 26% 背景</span>
+  </button>
+  <button class="musepi-option" onclick="pick(this)">B 档 · 实心面板</button>
+</div>
+```
+
 ### 把选择交回会话（可交互面）
 
 当这个面需要用户做选择（选密度、挑方案、确认取舍）而不是纯展示时，用
@@ -92,13 +117,27 @@ button.onclick = function () { musepiSubmit("用户选了 A 档：74% 抬升色"
   轮等答案，用 `ask` 工具，别用这个。
 - `text` 会进入你的上下文，等于给了模型生成的代码一条注入通道：只放你
   自己写的选项文案，不要回显用户的自由输入（上限 8KB）。
-- 一个面提交一次就够；重复提交会发出多条用户消息。
+- 一个面**只能提交一次**：宿主在首次提交后会加上 `html[data-musepi-answered]`、
+  派发 `musepi-widget-answered` 事件并把控件变灰，重复点击不会发出第二条消息。
+  想显示「已提交」就监听该事件读 `window.musepiWidgetAnswered`。
+
+### 选哪一种提问方式
+
+| 情况 | 用什么 |
+|---|---|
+| 同一轮内必须拿到答案才能继续 | **`ask` 工具**——它会卡住这一轮 |
+| 答案可以晚点回，本轮先结束 | HTML 面 + `musepiSubmit` |
+
+`musepiSubmit` 不阻塞：你的这一轮已经结束，答案作为下一条用户消息到达。
+**需要在同一轮里据答案调整后续步骤时，用 `ask`，不要用这个。**
 
 ### 检查清单
 - [ ] 两套主题都有、对比度够
 - [ ] 数据来自 `__WIDGET_DATA__` 而非硬编码
 - [ ] 布局自适应卡尺寸（flex/grid，无固定像素墙）
 - [ ] 交互有反馈、高度上报正确
+- [ ] 选择类面用了 `.musepi-options` / `.musepi-option` 和宿主注入的配色变量
+- [ ] 需要同一轮内拿到答案时用 `ask`，而不是 `musepiSubmit`
 - [ ] 需要用户选择时用 `musepiSubmit`；纯展示则不提交
 - [ ] 总长 ≤64KB（超了宿主不渲染这张卡）
 

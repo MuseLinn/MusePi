@@ -13,7 +13,7 @@ import { collectWidgetPayloads, latestWidgetFromEntries } from "../src/component
 import { widgetDataEq, widgetRenderer } from "../src/tool-render/tools/widget";
 import type { ToolRenderProps } from "../src/tool-render/types";
 import { WidgetErrorBoundary } from "../src/widgets/error-boundary";
-import { readWidgetFaceMessage, widgetHostTheme } from "../src/widgets/html";
+import { createAnswerGate, readFaceTokens, readWidgetFaceMessage, widgetHostTheme } from "../src/widgets/html";
 
 // widgetRenderer always ships both renderers; the shared ToolRenderer type
 // marks Body optional (other renderers may omit it) and ComponentType is a
@@ -328,5 +328,66 @@ describe("sandbox face answer channel", () => {
 		expect(html).toContain("musepiSubmit");
 		expect(html).toContain("musepi-widget-submit");
 		expect(html).toContain("musepi-theme-dark");
+	});
+});
+
+describe("one card answers at most once", () => {
+	it("claims the first answer and refuses every later one", () => {
+		const gate = createAnswerGate();
+		expect(gate.claim("A 档")).toBe("A 档");
+		// A double-click, or a face that re-posts on re-render, must not turn one
+		// choice into two identical user messages the agent then has to reconcile.
+		expect(gate.claim("A 档")).toBeNull();
+		expect(gate.claim("B 档")).toBeNull();
+		expect(gate.answered).toBe(true);
+	});
+
+	it("reports un-answered until the first claim", () => {
+		const gate = createAnswerGate();
+		expect(gate.answered).toBe(false);
+		gate.claim("x");
+		expect(gate.answered).toBe(true);
+	});
+
+	it("hands out no tokens where there is no document to read them from", () => {
+		expect(readFaceTokens()).toEqual({});
+	});
+});
+
+describe("faces get a ready-made option card and a settled state", () => {
+	function srcdoc(): string {
+		return renderToStaticMarkup(
+			renderBody({
+				args: { type: "html" },
+				result: widgetResult("html", { html: '<div class="musepi-options">x</div>', data: {} }),
+			} as never),
+		);
+	}
+
+	it("ships the option-card and button classes instead of making faces write them", () => {
+		const doc = srcdoc();
+		expect(doc).toContain(".musepi-options");
+		expect(doc).toContain(".musepi-option");
+		// The selected state a face marks by hand. Asserted without the value:
+		// React HTML-escapes the srcdoc attribute, so the quotes around "true"
+		// reach the static markup as &quot;.
+		expect(doc).toContain(".musepi-option[aria-pressed=");
+		expect(doc).toContain(".musepi-button");
+	});
+
+	it("dims and blocks the face's controls once the answer has landed", () => {
+		// Without this a face that ignores the event still accepts a second click,
+		// which is the duplicate-message case the gate is there to prevent.
+		expect(srcdoc()).toContain("data-musepi-answered");
+	});
+
+	it("tells the face it has answered, and exposes the flag it can read", () => {
+		const doc = srcdoc();
+		expect(doc).toContain("musepi-widget-answered");
+		expect(doc).toContain("musepiWidgetAnswered");
+	});
+
+	it("refuses to queue a second submit from inside the face", () => {
+		expect(srcdoc()).toContain("if (window.musepiWidgetAnswered) return;");
 	});
 });

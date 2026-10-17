@@ -25,6 +25,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
  *   light/dark toggle (widget.md's 铁律: faces must adapt, never ship a
  *   single fixed palette that loses contrast on the other scheme).
  *
+ * - **Injected component kit**: `.musepi-options` / `.musepi-option` /
+ *   `.musepi-button` plus the host's own `--bg` / `--fg` / `--accent` /
+ *   `--border` / `--radius-*` values, so a "pick one" face does not have
+ *   to hand-write a component or invent a palette. The sandbox is a null
+ *   origin, so these are resolved host-side and shipped in; a face that
+ *   uses `var(--bg)` without them gets nothing.
  * - **Answer channel**: the face hands a choice back to the conversation
  *   with `musepiSubmit(text, data)` - the host turns it into a user
  *   prompt, the same path every other interactive widget uses.
@@ -46,6 +52,56 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const MAX_HTML = 64_000;
 /** Ceiling on what one face may say into the conversation. */
 const MAX_SUBMIT_TEXT = 8_000;
+
+/** One card answers at most once. Without this a double-click — or a face
+ * that re-posts on every render — sends a second identical user message, and
+ * the agent then sees the user "choosing" the same option twice. */
+export function createAnswerGate(): { claim(text: string): string | null; readonly answered: boolean } {
+	let answered = false;
+	return {
+		claim(text: string): string | null {
+			if (answered) return null;
+			answered = true;
+			return text;
+		},
+		get answered(): boolean {
+			return answered;
+		},
+	};
+}
+
+/** Host tokens a face cannot read for itself: the sandbox is a null origin,
+ *  so `var(--bg)` inside the face resolves against the frame's own document,
+ *  where the app's custom properties do not exist. The host resolves them and
+ *  ships the computed values. Only names that actually resolve are sent, so a
+ *  theme that drops one leaves the face with that var unset rather than with
+ *  the literal string "". */
+const FACE_TOKENS = [
+	"--bg",
+	"--bg-raised",
+	"--fg",
+	"--fg-muted",
+	"--fg-faint",
+	"--border",
+	"--border-strong",
+	"--accent",
+	"--color-success",
+	"--color-danger",
+	"--radius-sm",
+	"--radius-md",
+	"--radius-lg",
+] as const;
+
+export function readFaceTokens(): Record<string, string> {
+	if (typeof document === "undefined") return {};
+	const computed = getComputedStyle(document.documentElement);
+	const out: Record<string, string> = {};
+	for (const name of FACE_TOKENS) {
+		const value = computed.getPropertyValue(name).trim();
+		if (value) out[name] = value;
+	}
+	return out;
+}
 
 /** What a sandbox face is allowed to ask the host for. */
 export type WidgetFaceMessage = { kind: "resize"; height: number } | { kind: "submit"; text: string };
@@ -88,7 +144,15 @@ export function widgetHostTheme(): "dark" | "light" {
 	return scheme === "light" ? "light" : "dark";
 }
 
-function bootScript(canvasId: string, mountId: string, theme: "dark" | "light"): string {
+function bootScript(
+	canvasId: string,
+	mountId: string,
+	theme: "dark" | "light",
+	tokens: Record<string, string>,
+): string {
+	const root = Object.entries(tokens)
+		.map(([k, v]) => `document.documentElement.style.setProperty(${JSON.stringify(k)}, ${JSON.stringify(v)});`)
+		.join("\n");
 	return `<script>
 document.documentElement.className = "musepi-theme-${theme} omp-theme-${theme}";
 window.__WIDGET_THEME__ = ${JSON.stringify(theme)};
@@ -96,6 +160,10 @@ window.__WIDGET_DATA__ = window.__WIDGET_DATA__ || {};
 // The payload script runs before this one, so alias it rather than
 // starting a second object - the two globals must not diverge.
 window.musepiWidgetData = window.__WIDGET_DATA__;
+// Host-resolved design tokens (the sandbox is a null origin and cannot
+// read the app's custom properties itself).
+${root}
+window.musepiWidgetTokens = ${JSON.stringify(tokens)};
 window.DaimonCanvas = window.DaimonCanvas || { canvasId: ${JSON.stringify(canvasId)}, mountId: ${JSON.stringify(mountId)} };
 function ompReportHeight() {
   try {
@@ -103,6 +171,9 @@ function ompReportHeight() {
   } catch (err) {}
 }
 window.musepiSubmit = function (text, data) {
+  // One answer per card: the host drops repeats, and this keeps the face
+  // from queueing them in the first place.
+  if (window.musepiWidgetAnswered) return;
   try {
     parent.postMessage({ type: "musepi-widget-submit", text: String(text == null ? "" : text), data: data === undefined ? undefined : data }, "*");
   } catch (err) {}
@@ -112,6 +183,11 @@ window.addEventListener("resize", ompReportHeight);
 new MutationObserver(ompReportHeight).observe(document.documentElement, { subtree: true, childList: true, attributes: true });
 window.addEventListener("message", function (e) {
   var d = e.data;
+  if (d && d.type === "musepi-widget-answered") {
+    window.musepiWidgetAnswered = true;
+    document.documentElement.setAttribute("data-musepi-answered", "1");
+    window.dispatchEvent(new CustomEvent("musepi-widget-answered"));
+  }
   if (d && d.type === "musepi-widget-data") {
     window.__WIDGET_DATA__ = d.data || {};
     window.musepiWidgetData = window.__WIDGET_DATA__;
@@ -145,6 +221,9 @@ export function HtmlCard({
 	const raw = typeof data.html === "string" ? data.html : "";
 	const oversize = raw.length > MAX_HTML;
 	const frameRef = useRef<HTMLIFrameElement | null>(null);
+	// One answer per card. Ref, not state: a re-render must not reopen the gate.
+	const gateRef = useRef(createAnswerGate());
+	const answeredRef = useRef(false);
 	// Theme-aware face: the srcdoc carries the host scheme so faces can
 	// adapt; a MutationObserver rebuilds it when the scheme flips live.
 	const [theme, setTheme] = useState<"dark" | "light">(widgetHostTheme);
@@ -170,8 +249,33 @@ export function HtmlCard({
 			// the iframe default black vanishes on the dark scheme).
 			`html.musepi-theme-dark body,html.omp-theme-dark body{color:#e8e8ea}` +
 			`html.musepi-theme-light body,html.omp-theme-light body{color:#1f2328}` +
-			`html.musepi-theme-dark body,html.musepi-theme-light body{font-size:14px;line-height:1.6}</style>`;
-		const boot = bootScript(canvasId ?? "", mountId ?? "", theme);
+			`html.musepi-theme-dark body,html.musepi-theme-light body{font-size:14px;line-height:1.6}` +
+			// Option cards and a primary button, so a "pick one" face does not have
+			// to hand-write a whole component. Values come from the injected
+			// --bg/--fg/--accent vars, which the host resolves for this scheme.
+			`.musepi-options{display:grid;gap:10px;grid-template-columns:1fr}` +
+			`@media (min-width:560px){.musepi-options[data-columns="2"]{grid-template-columns:1fr 1fr}}` +
+			`.musepi-option{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;` +
+			`padding:11px 13px;border-radius:calc(var(--radius-lg,10px) * 1.2);cursor:pointer;` +
+			`font:inherit;color:inherit;` +
+			`background:var(--bg-raised);border:1px solid var(--border);}` +
+			`.musepi-option:hover{border-color:var(--border-strong)}` +
+			`.musepi-option[aria-pressed="true"]{border-color:var(--accent);` +
+			`box-shadow:inset 0 0 0 1px var(--accent)}` +
+			`.musepi-option-sub{color:var(--fg-muted);font-size:12.5px;line-height:1.5}` +
+			`.musepi-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;` +
+			`padding:7px 14px;border-radius:var(--radius-md,6px);cursor:pointer;font:inherit;` +
+			`background:var(--accent);border:0}` +
+			// Answered: the host sent musepi-widget-answered, so this card already
+			// reached the conversation. Dim and stop taking clicks even if the face
+			// ignores the event — a second answer would be a duplicate user message.
+			`html[data-musepi-answered] .musepi-option,` +
+			`html[data-musepi-answered] .musepi-button,` +
+			`html[data-musepi-answered] button,` +
+			`html[data-musepi-answered] [role="button"]{opacity:.5;pointer-events:none;cursor:default}` +
+			`</style>`;
+		const tokens = readFaceTokens();
+		const boot = bootScript(canvasId ?? "", mountId ?? "", theme, tokens);
 		const bootData = `<script>window.__WIDGET_DATA__ = ${JSON.stringify(payload)};</script>`;
 		return head + bootData + boot + raw;
 	}, [raw, oversize, data.data, canvasId, mountId, theme]);
@@ -197,7 +301,14 @@ export function HtmlCard({
 			if (msg?.kind === "resize") {
 				setFrameHeight(prev => (prev === msg.height ? prev : msg.height));
 			} else if (msg?.kind === "submit") {
-				sendPrompt?.(msg.text);
+				const claimed = gateRef.current.claim(msg.text);
+				if (claimed === null) return;
+				answeredRef.current = true;
+				sendPrompt?.(claimed);
+				// Tell the face so it can render a settled state; the injected
+				// stylesheet dims its controls whether or not it listens.
+				const win = frameRef.current?.contentWindow;
+				win?.postMessage({ type: "musepi-widget-answered" }, "*");
 			}
 		};
 		window.addEventListener("message", onMsg);

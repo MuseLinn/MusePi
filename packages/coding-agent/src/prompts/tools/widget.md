@@ -47,7 +47,7 @@ widget { type, data, title? }
 |`kline`|`candles: [{o, h, l, c, v}]`|K 线图（蜡烛 + 均线）；`price`/`delta`/`stocks` 可选|
 |`heatwall`|`tiles: [{name, delta}]`|涨跌热力墙|
 |`indextape`|`indices: […]`|指数磁带（三市指数）|
-|`html`|`html: string`, `data: object`|自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.musepiWidgetData`；主题经 `window.__WIDGET_THEME__` 与 `<html class="musepi-theme-dark\|light">` 注入；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用；需要用户选择时用注入的 `musepiSubmit(text)` 把答案交回会话）|
+|`html`|`html: string`, `data: object`|自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.musepiWidgetData`；主题经 `window.__WIDGET_THEME__` 与 `<html class="musepi-theme-dark\|light">` 注入；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用；需要用户选择时用注入的 `musepiSubmit(text)` 把答案交回会话；选择类面直接用宿主注好的 `.musepi-options` / `.musepi-option` / `.musepi-button` 与 `var(--bg)`/`var(--fg)`/`var(--accent)` 等配色变量；必须在同一轮内拿到答案时用 `ask` 工具而不是这个）|
 
 - `data` 可省略字段——缺省值自动补齐（如 `calc` 缺 `mode` 默认 `post`）。
 - `title` 可选，默认组件名。
