@@ -192,13 +192,12 @@ code,
 	--gui-glass-saturate: 180%;
 }
 
-/* Light scheme: the backdrop behind the window is DIMMED by the native
- * under-window material (and macOS has no bright vibrancy variant on this
- * system) — a thin white scrim over that reads as dirty grey, not glass
- * ("灰蒙蒙"). The scrim is therefore heavy enough to dominate: 76% white
- * at minimum transparency → 58% at maximum, which still lets the desktop
- * tint through without ever going grey. The window-level override keeps
- * every glass surface (menus, composer, topbar) on the same derivation. */
+/* Light scheme: macOS dims the backdrop behind the window with the
+ * under-window material (and this system has no bright vibrancy variant)
+ * — a thin white scrim over that reads as dirty grey, not glass
+ * ("灰蒙蒙"). The scrim is therefore heavy enough to dominate, which is
+ * also what keeps text off a near-white backdrop. The darwin-light
+ * override below handles the one platform whose material does not dim. */
 [data-theme="light"] {
 	--gui-glass-overlay: clamp(58%, calc(85% - 30% * var(--gui-glass-alpha, 0.55)), 76%);
 }
@@ -212,14 +211,6 @@ code,
 	--gui-glass-overlay: clamp(22%, calc(58% * (1 - var(--gui-glass-alpha, 0.55))), 58%);
 }
 
-/* Windows light: DWM Acrylic (backgroundMaterial) on Windows 11 is a
- * bright translucent material like macOS vibrancy "light" — the thick
- * 58–76% white scrim from the default light scheme washes out the frost
- * and reads as near-opaque ("不是真磨砂玻璃"). A thin scrim over the
- * acrylic gives clean light frosted glass. */
-[data-platform="win32"][data-theme="light"] {
-	--gui-glass-overlay: clamp(22%, calc(58% * (1 - var(--gui-glass-alpha, 0.55))), 58%);
-}
 
 /* Adaptive text on glass panes at high transparency. Blended from the raw
  * --fg tokens (never from --color-text: a custom property referencing

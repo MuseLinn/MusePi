@@ -36,7 +36,7 @@ import { applyAppearancePrefs } from "./lib/appearance";
 import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMethods } from "./lib/daemon-version";
 import { openMiniChat, pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
-import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
+import { applyGlass, applyGlassMaterial } from "./lib/glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
 import { dispatchNotification } from "./lib/notify";
 import type { PetSessionCard } from "./lib/pet";
@@ -279,7 +279,7 @@ function AppInner(): ReactNode {
 			if (fs) document.documentElement.style.setProperty("--gui-font-scale", `${fs}px`);
 			// Glass transparency (slider value = transparency %) — migrates the
 			// v1 scrim-coefficient pref once, then applies scrim + adaptive text.
-			applyGlassPreset(readGlassPreset());
+			applyGlass();
 			// Window-transparency toggle OFF → opaque panes (overrides the slider).
 			const glassEnabled = localStorage.getItem("musepi-gui-glass-enabled") !== "0";
 			if (!glassEnabled) {

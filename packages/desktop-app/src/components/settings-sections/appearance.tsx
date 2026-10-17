@@ -46,7 +46,7 @@ import {
 	UI_FONT_OPTIONS,
 	WEEK_START_KEY,
 } from "../../lib/appearance";
-import { applyGlassMaterial, applyGlassPreset, GLASS_PRESETS, readGlassPreset } from "../../lib/glass";
+import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
 import {
@@ -197,7 +197,6 @@ export function AppearanceSection({
 	const [alwaysShowScrollbars, setAlwaysShowScrollbars] = useState<boolean>(() => readAlwaysShowScrollbar());
 	const [skinError, setSkinError] = useState(false);
 	const [importingSkin, setImportingSkin] = useState(false);
-	const [glass, setGlass] = useState<string>(() => readGlassPreset().id);
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",
 	);
@@ -550,26 +549,6 @@ export function AppearanceSection({
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
-				<Reveal open={glassEnabled}>
-					<div className="gui-settings-field">
-						<div className="gui-settings-field-label">{t("glass opacity")}</div>
-						<div className="gui-settings-field-hint">{t("glass opacity description")}</div>
-						<div className="gui-settings-field-control">
-							<Segmented
-								ariaLabel={t("glass opacity")}
-								value={glass}
-								options={GLASS_PRESETS.map(p => ({ value: p.id, label: t(`glass preset ${p.id}`) }))}
-								onChange={v => {
-									const p = GLASS_PRESETS.find(o => o.id === v);
-									if (!p) return;
-									setGlass(p.id);
-									setPref("musepi-gui-glass", p.id);
-									applyGlassPreset(p);
-								}}
-							/>
-						</div>
-					</div>
-				</Reveal>
 			</div>
 
 			{/* ── 效果 — motion / info status bar / avatars (session chrome the
