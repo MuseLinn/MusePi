@@ -311,26 +311,28 @@
 }
 
 /* Floating menus and the session hover card are the two overlay surfaces
- * that never got this exemption, and the result was the most visible
- * material inconsistency in the app: a row menu opened over the chat
- * column came out frosted, while the same menu over the sidebar or the
- * header read as a plain transparent pane. On these platforms the page
- * blur samples only the opaque DOM it can reach (a chat card) and nothing
- * where the backdrop is the translucent workspace over the OS material,
- * which Chromium cannot sample at all.
+ * that never got this exemption. On these platforms the page blur samples
+ * only the opaque DOM it can reach (a chat card) and nothing at all where
+ * the backdrop is the translucent workspace over the OS material, which
+ * Chromium cannot sample — so the same menu came out frosted over the
+ * chat column and plainly see-through over the sidebar or the header.
  *
- * So the blur goes here too, but the surface then has to be carried by the
- * scrim alone — and that needs a real density, not a token nudge.
- * `--gui-glass-overlay` is always defined (it is derived from the user's
- * alpha), so a `var(--gui-glass-overlay, N)` fallback is dead code: what
- * ships is 68.5% in the light scheme. Over a light backdrop that reads as
- * plain translucency once the blur is gone. The density below is therefore
- * written as a clamp, in the same shape as the light-scheme token in
- * gui-base.css: the user's alpha still moves it (more transparent →
- * thinner), but it cannot fall below a floor that keeps menu text readable
- * with no blur behind it. Windows and Linux get the same trade the
- * workspace root already makes: the frost comes from the window material
- * showing through. */
+ * The blur goes, which leaves the scrim alone to carry the surface, and a
+ * computed scrim cannot: --gui-glass-overlay resolves to 26.1% here
+ * (`clamp(22%, 58% * (1 - alpha), 58%)` for win32/light, gui-base.css), and
+ * the tint it mixes, --bg-overlay, is within 0.02 L of the canvas --bg. A
+ * 26% wash of a canvas-coloured surface has nothing to show for itself at
+ * any opacity the slider can reach, which is why these menus read as
+ * transparent rather than as glass.
+ *
+ * So on these platforms the surface is simply the solid elevated colour,
+ * which is what .gui-menu-popup already names as its own degradation
+ * ("degrades to a solid surface instead of fully transparent text over
+ * content") and what its 1px 36%-black ring plus the 32px drop shadow were
+ * drawn to sit against. This is openchamber's split: the surface colour
+ * carries the panel and the blur is an enhancement on top of it, not the
+ * thing making it legible. The transparency slider keeps driving every
+ * surface that still has real blur to show. */
 [data-platform="win32"] .gui-menu-popup,
 [data-platform="linux"] .gui-menu-popup,
 [data-platform="win32"] .gui-session-hover-card,
@@ -341,22 +343,12 @@
 
 [data-platform="win32"] .gui-menu-popup,
 [data-platform="linux"] .gui-menu-popup {
-	background:
-		color-mix(
-			in oklab,
-			var(--bg-overlay) clamp(74%, calc(92% - 20% * var(--gui-glass-alpha, 0.55)), 92%),
-			transparent
-		),
-		var(--glass-bg);
+	background: var(--bg-overlay);
 }
 
 [data-platform="win32"] .gui-session-hover-card,
 [data-platform="linux"] .gui-session-hover-card {
-	background: color-mix(
-		in oklab,
-		var(--bg-overlay) clamp(70%, calc(88% - 20% * var(--gui-glass-alpha, 0.55)), 88%),
-		transparent
-	);
+	background: var(--bg-overlay);
 }
 
 [data-platform="win32"] .gui-dialog-backdrop,
