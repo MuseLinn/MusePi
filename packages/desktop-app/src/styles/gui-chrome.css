@@ -455,6 +455,13 @@
 	border-radius: var(--radius-lg);
 	opacity: 0;
 	pointer-events: none;
+	/* Fallback surface: if the layered wash below is
+	 * dropped wholesale (an unresolvable var invalidates the
+	 * whole shorthand), the menu degrades to a solid surface
+	 * instead of fully transparent text over content. Overridden
+	 * below whenever vars resolve, so healthy rendering is
+	 * pixel-identical. */
+	background-color: var(--bg-overlay, var(--bg));
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
