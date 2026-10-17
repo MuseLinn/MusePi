@@ -2867,27 +2867,28 @@ async function createWindow() {
 			// the iframe fallback cannot read external pages.
 			webviewTag: true,
 		},
-		// Platform-native window glass (no CSS compositing cost):
-		// - macOS: transparent background + under-window vibrancy — the
-		//   system material paints the shell, the page paints translucent
-		//   scrims over it. The renderer toggles off via `gui-vibrancy`.
-		// - Windows 11: DWM Acrylic via backgroundMaterial (the same
-		//   material the tray menu window uses). The window stays OPAQUE —
-		//   the DWM compositor blurs the desktop behind the whole frame,
-		//   and the page's translucent scrims over a transparent
-		//   backgroundColor let the frosted material show through, so
-		//   every pane (sidebar, header, menus) reads as the same real
-		//   frosted glass. The 磨砂玻璃透明度 slider then controls how
-		//   much of that blurred backdrop the scrim lets through (true
-		//   see-through — the previous transparent-window variant showed
-		//   the desktop sharp and unblurred, so the slider only changed
-		//   the tint's depth, user report). Windows 10 / Linux fall back
-		//   to a transparent frame with the CSS self-drawn glass layer.
+		// Window background, per platform:
+		// - macOS: transparent + under-window vibrancy. The system
+		//   material paints the shell and the page's translucent scrims
+		//   sit over it; the renderer toggles it off via `gui-vibrancy`.
+		//   macOS is the one platform where this works end to end.
+		// - Windows and Linux: an opaque frame the page paints itself.
+		//   This used to be DWM backgroundMaterial on Windows 11, which
+		//   is the nicest-looking option and the wrong one: the material
+		//   is composited by the OS behind the window, and Chromium does
+		//   not sample it. A backdrop-filter could then frost the opaque
+		//   chat card and nothing else — the same menu came out frosted
+		//   over the transcript and plainly see-through over the sidebar
+		//   and header, because those panes are translucent down to a
+		//   layer no page filter can reach. With the page owning its own
+		//   backdrop, every floating surface has in-window content to
+		//   sample and the glass is uniform (openchamber's model).
+		//   The trade: the desktop no longer shows through the
+		//   workspace, so the 磨砂玻璃透明度 slider now moves tint depth
+		//   rather than true see-through.
 		...(process.platform === "darwin"
 			? { backgroundColor: "#00000000", vibrancy: "under-window" }
-			: process.platform === "win32" && IS_WIN11
-				? { backgroundColor: "#00000000", backgroundMaterial: "acrylic" }
-				: { backgroundColor: "#00000000" }),
+			: { backgroundColor: "#1e1c1a" }),
 	});
 
 	// Dev hot-reload renderer: with MUSEPI_GUI_DEV=1 (bun run desktop:dev)

@@ -111,6 +111,21 @@ html:root body {
 	background: transparent;
 }
 
+/* Windows/Linux: the frame is opaque (electron/main.cjs paints the
+ * window background rather than asking DWM for a material), so the
+ * page owns its own backdrop. Without this the root stays transparent
+ * down to the window colour and a backdrop-filter over the sidebar or
+ * header has no in-window content to sample — the pane reads as a
+ * hole rather than as frost. Painting the canvas makes every floating
+ * surface frost whatever the page drew underneath it. macOS keeps its
+ * transparent root: the vibrancy material is sampled there, and
+ * covering it would throw away the one platform whose glass works
+ * end to end. */
+[data-platform="win32"] body,
+[data-platform="linux"] body {
+	background: var(--bg);
+}
+
 /* ── Selection scope (dsh parity) ─────────────────────────────────────
  * Chrome text is non-selectable by default: dragging across nav tabs,
  * rail icons, settings labels or plugin cards must not start an
