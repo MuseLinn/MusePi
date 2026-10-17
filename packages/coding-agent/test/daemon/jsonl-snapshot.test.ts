@@ -12,9 +12,12 @@
  *    space (messageKey / type:tsMs), so branchChildren / breadcrumb / leafPath
  *    lookups silently missed — or, with same-ms same-role collisions, children
  *    reparented onto the wrong duplicate;
- *  ③ parentId pointed at a non-message entry (model_change/custom), which
- *    tree consumers cannot link through — it must resolve to the nearest
- *    MESSAGE ancestor's (suffixed) view id;
+ *  ③ parentId keeps the DIRECT hex parent's view id (chain fidelity):
+ *    skipping non-message nodes (nearest-message-ancestor) forked phantom
+ *    sibling branches in the map — the post-advisor assistant reparented
+ *    under the pre-advisor one (real session 01a13e95 "3-1/3-2").
+ *    Message-only tree consumers walk up through non-message nodes
+ *    themselves; every parentId is still null-or-resolving;
  *  ④ snapshot.cursor received the entry count instead of the journal seq
  *    tail, so the GUI's M1.4 watermark seeded below every live record and
  *    live frames were dropped as "replays";
@@ -25,7 +28,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { snapshotFromJsonl } from "../../src/daemon/jsonl-snapshot";
+import { readSdkNewestTimestamp, snapshotFromJsonl } from "../../src/daemon/jsonl-snapshot";
 
 const dirs: string[] = [];
 
@@ -136,7 +139,7 @@ describe("snapshotFromJsonl", () => {
 		expect(suffixed).toHaveLength(1);
 	});
 
-	test("parentId resolves to the nearest message ancestor's suffixed view id (never dangling)", async () => {
+	test("parentId keeps the direct hex parent's suffixed view id (never dangling, never skipping)", async () => {
 		const snap = await snapshotFromJsonl(writeTranscript(fullFamilyTranscript()), "sess-1", 42);
 		const entries = entriesOf(snap);
 		const idSet = new Set(entries.map(e => e.id));
@@ -151,16 +154,73 @@ describe("snapshotFromJsonl", () => {
 		expect(parentOf("hex-u1")).toBeNull();
 		// Message child of message: direct link.
 		expect(parentOf("hex-a1")).toBe(viewIdOf("hex-u1"));
-		// Non-message children chain UP to the nearest message ancestor (a1),
-		// not to their literal non-message parent.
+		// Direct linkage down the whole chain — non-message nodes stay on
+		// it (c1 under a1, cm1 under c1, k1 under cm1, m1 under k1).
 		expect(parentOf("hex-c1")).toBe(viewIdOf("hex-a1"));
-		expect(parentOf("hex-cm1")).toBe(viewIdOf("hex-a1"));
-		expect(parentOf("hex-k1")).toBe(viewIdOf("hex-a1"));
-		expect(parentOf("hex-m1")).toBe(viewIdOf("hex-a1"));
+		expect(parentOf("hex-cm1")).toBe(viewIdOf("hex-c1"));
+		expect(parentOf("hex-k1")).toBe(viewIdOf("hex-cm1"));
+		expect(parentOf("hex-m1")).toBe(viewIdOf("hex-k1"));
 		// Every parentId is null or resolves inside this snapshot — no hex
 		// leftovers, no dangles.
 		for (const e of entries) {
 			if (e.parentId !== null) expect(idSet.has(e.parentId)).toBe(true);
+		}
+	});
+
+	test("keeps non-message nodes on the parent chain (advisor is not forked, real session 01a13e95)", async () => {
+		// The map/trajectory read parent chains: skipping non-message nodes
+		// (nearest-message-ancestor remap) silently reparented the post-
+		// advisor assistant UNDER the pre-advisor one, so the advisor card
+		// and the next user message shared one parent turn-start and rendered
+		// as phantom sibling branches "3-1/3-2" on two lanes. Direct parents
+		// keep the advisor on the chain: every parentId resolves in-snapshot
+		// and the user's ancestry includes the advisor card.
+		const t0 = Date.parse("2026-10-15T08:03:00.000Z");
+		const advTs = t0 + 123627;
+		const lines = [
+			JSON.stringify({ type: "session", id: "sess-adv", timestamp: new Date(t0).toISOString(), cwd: "C:\\proj" }),
+			JSON.stringify(msg("hex-u1", null, "user", t0)),
+			JSON.stringify(msg("hex-a1", "hex-u1", "assistant", t0 + 1000)),
+			JSON.stringify({
+				type: "custom_message",
+				id: "hex-adv",
+				parentId: "hex-a1",
+				timestamp: new Date(advTs).toISOString(),
+				customType: "advisor",
+				display: true,
+				details: { notes: [{ note: "capability list note" }] },
+			}),
+			JSON.stringify(msg("hex-a2", "hex-adv", "assistant", t0 + 3000)),
+			JSON.stringify({
+				type: "thinking_level_change",
+				id: "hex-tlc",
+				parentId: "hex-a2",
+				timestamp: new Date(t0 + 4000).toISOString(),
+			}),
+			JSON.stringify(msg("hex-u2", "hex-tlc", "user", t0 + 5000)),
+		];
+		const snap = await snapshotFromJsonl(writeTranscript(lines), "sess-adv", 7);
+		const entries = entriesOf(snap);
+		const byId = new Map(entries.map(e => [e.id, e]));
+		const adv = entries.find(e => e.type === "custom_message");
+		const a2 = entries.find(e => e.type === "message" && e.message?.content === "content-hex-a2");
+		const u2 = entries.find(e => e.type === "message" && e.message?.content === "content-hex-u2");
+		const tlc = entries.find(e => e.type === "thinking_level_change");
+		if (!adv || !a2 || !u2 || !tlc) throw new Error("fixture entries missing");
+		// Direct linkage: post-advisor assistant hangs off the advisor card,
+		// the next user message off the level-change node — nothing skipped.
+		expect(a2.parentId).toBe(adv.id);
+		expect(u2.parentId).toBe(tlc.id);
+		// The user's ancestry walks THROUGH the advisor card (no phantom fork).
+		const ancestors: string[] = [];
+		let cur: string | null = u2.parentId ?? null;
+		while (cur !== null) {
+			ancestors.push(cur);
+			cur = byId.get(cur)?.parentId ?? null;
+		}
+		expect(ancestors).toContain(adv.id);
+		for (const e of entries) {
+			if (e.parentId !== null) expect(byId.has(e.parentId)).toBe(true);
 		}
 	});
 
@@ -196,3 +256,29 @@ describe("snapshotFromJsonl", () => {
 		expect((future as { payload?: number }).payload).toBe(1);
 	});
 });
+
+describe("readSdkNewestTimestamp", () => {
+	test("returns the tail entry timestamp, skipping torn/corrupt tail lines", async () => {
+		const t0 = Date.parse("2026-09-27T10:00:00.000Z");
+		const file = writeTranscript([
+			JSON.stringify({
+				type: "session",
+				id: "s",
+				timestamp: new Date(t0).toISOString(),
+				cwd: "C:\\x",
+			}),
+			JSON.stringify(msg("a", null, "user", t0)),
+			JSON.stringify(msg("b", "a", "assistant", t0 + 5000)),
+			"{corrupt tail",
+		]);
+		// The corrupt tail line is skipped; the newest COMPLETE record wins.
+		expect(await readSdkNewestTimestamp(file)).toBe(t0 + 5000);
+	});
+
+	test("returns null for missing or timestamp-less files", async () => {
+		expect(await readSdkNewestTimestamp(path.join(os.tmpdir(), "jsonl-snapshot-nope.jsonl"))).toBeNull();
+		const file = writeTranscript(['{"type":"session","id":"s"}']);
+		expect(await readSdkNewestTimestamp(file)).toBeNull();
+	});
+});
+// probe-marker-12345

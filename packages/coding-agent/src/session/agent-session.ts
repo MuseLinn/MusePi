@@ -460,6 +460,24 @@ const kPersistedSessionEntryId = Symbol("persistedSessionEntryId");
 type PersistedAssistantMessage = AssistantMessage & { [kPersistedSessionEntryId]?: string };
 
 /**
+ * Marks a CustomMessage already persisted by its sender
+ * (`sendCustomMessage` idle branches persist synchronously, then emit
+ * live frames so subscribers learn about the row). `#persistMessageEnd`
+ * skips marked messages so the file never gains a second copy when the
+ * same object crosses a later turn boundary. Non-enumerable: invisible to
+ * spread/structuredClone/JSON, so it never crosses the wire.
+ */
+const kSkipPersistMessageEnd = Symbol("skipPersistMessageEnd");
+
+function markPersistedMessageEnd(message: CustomMessage): void {
+	Object.defineProperty(message, kSkipPersistMessageEnd, { value: true, enumerable: false });
+}
+
+function hasPersistedMessageEndMark(message: AgentMessage): boolean {
+	return (message as { [kSkipPersistMessageEnd]?: unknown })[kSkipPersistMessageEnd] === true;
+}
+
+/**
  * Clone one top-level notification field without ever returning an object owned
  * by the live session. Most values take the lossless structured-clone path. If
  * a third-party metadata object contains functions or other unsupported values,
@@ -2502,7 +2520,9 @@ export class AgentSession {
 		if (message.role === "hookMessage" || message.role === "custom") {
 			// Prewalk's plan nudge is a one-run steering instruction. Persisting it would
 			// resurrect the consumed prompt on resume, fork, or any context rebuild.
-			if (!isPrewalkPlanNudge(message)) {
+			// A sender-marked message is already on disk (see
+			// #emitIdleCustomMessage); only the ttsr bookkeeping below reruns.
+			if (!hasPersistedMessageEndMark(message) && !isPrewalkPlanNudge(message)) {
 				this.sessionManager.appendCustomMessageEntry(
 					message.customType,
 					message.content,
@@ -6820,6 +6840,7 @@ export class AgentSession {
 				normalizedAppMessage.details,
 				normalizedAppMessage.attribution,
 			);
+			this.#emitIdleCustomMessage(normalizedAppMessage);
 			return false;
 		}
 
@@ -6840,7 +6861,22 @@ export class AgentSession {
 			normalizedAppMessage.details,
 			normalizedAppMessage.attribution,
 		);
+		this.#emitIdleCustomMessage(normalizedAppMessage);
 		return false;
+	}
+
+	/**
+	 * Publish an idle-persisted custom message to live subscribers. The
+	 * message is already in the agent context and on disk (the caller
+	 * appended both); these frames only inform the journal / view /
+	 * broadcast path, mirroring #preserveAdvisorCard. The persist mark
+	 * keeps #persistMessageEnd from writing a second file copy when the
+	 * same object crosses a later turn boundary.
+	 */
+	#emitIdleCustomMessage(message: CustomMessage): void {
+		markPersistedMessageEnd(message);
+		this.agent.emitExternalEvent({ type: "message_start", message });
+		this.agent.emitExternalEvent({ type: "message_end", message });
 	}
 
 	/**

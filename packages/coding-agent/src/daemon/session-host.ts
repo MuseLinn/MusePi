@@ -332,7 +332,7 @@ function extractSnapshotText(content: unknown): string {
  * Canonical implementation lives in ./jsonl-snapshot (P0-5: full record
  * families preserved + view-key rekeying — one copy, two call sites).
  */
-import { snapshotFromJsonl } from "./jsonl-snapshot";
+import { readSdkNewestTimestamp, rekeyEntriesToViewSpace, snapshotFromJsonl } from "./jsonl-snapshot";
 
 export { snapshotFromJsonl };
 
@@ -1697,71 +1697,14 @@ export class DaemonSessionHost {
 			// 混入两种 id 空间:branchChildren/面包屑/leafPath 全按 hex 找
 			// messageKey,三层树 UI 在历史会话上全部失效。这里统一 rekey
 			// 全部条目:message → messageKey,非 message → "type:tsMs";
-			// parentId 统一映射到最近 message 祖先的 messageKey。
-			const byHex = new Map(sdkEntries.map(e => [e.id, e]));
-			// Messages link to their nearest MESSAGE ancestor: the SDK leaf at
-			// append time may be a non-message entry (model_change / custom /
-			// thinking_level_change), so a message's hex parentId can point at
-			// one — walking up keeps the /tree projection connected (scattered
-			// single-node trees otherwise) in both the canvas and the
-			// trajectory tree.
-			const nearestMessageOf = (startId: string | null | undefined): WireMessage | null => {
-				let cur = startId ? byHex.get(startId) : null;
-				const seen = new Set<string>();
-				while (cur && !seen.has(cur.id)) {
-					seen.add(cur.id);
-					const m = (cur as { message?: WireMessage }).message;
-					if (cur.type === "message" && m) return m;
-					cur = cur.parentId ? byHex.get(cur.parentId) : null;
-				}
-				return null;
-			};
-			// Rekey EVERY entry into the view key space, not just messages:
-			// non-message entries (custom / model_change / thinking_level_change
-			// …) kept SDK hex ids while their parent messages were rekeyed into
-			// messageKey space — their hex parentIds dangled (silent broken
-			// chains for any future consumer that walks them). Non-message
-			// entries get a deterministic "type:tsMs" id (collision-suffixed)
-			// and remap parentId through the same nearest-message-ancestor
-			// walk, so every parentId in the snapshot resolves to an entry in
-			// the same snapshot (or null at the root).
-			const usedViewIds = new Set<string>();
-			const viewIdByHex = new Map<string, string>();
-			for (const e of sdkEntries) {
-				const msg = (e as { message?: WireMessage }).message;
-				let viewId: string;
-				if (e.type === "message" && msg) {
-					// Collision-suffixed like the non-message branch below: two
-					// advisor "Session update" user messages can land in the SAME
-					// millisecond, and messageKey("role:timestamp") would emit
-					// the same id twice. Duplicate entry ids break downstream
-					// id-keyed consumers — React transcript rows with dup keys
-					// leak orphaned DOM nodes across session switches (the
-					// first fiber of a dup pair is dropped from React's
-					// existingChildren map and never unmounted), so the parent
-					// session rendered the advisor transcript after a child
-					// visit. Suffixing keeps ids unique; tree walks use
-					// parentId, which is unaffected.
-					const base = messageKey(msg);
-					viewId = base;
-					for (let n = 2; usedViewIds.has(viewId); n++) viewId = `${base}#${n}`;
-				} else {
-					const tsMs = Date.parse(e.timestamp);
-					const base = Number.isFinite(tsMs) ? `${e.type}:${tsMs}` : e.id;
-					viewId = base;
-					for (let n = 2; usedViewIds.has(viewId); n++) viewId = `${base}#${n}`;
-				}
-				usedViewIds.add(viewId);
-				viewIdByHex.set(e.id, viewId);
-			}
-			const viewEntries = sdkEntries.map(e => {
-				const parentMsg = nearestMessageOf(e.parentId);
-				return {
-					...e,
-					id: viewIdByHex.get(e.id) ?? e.id,
-					parentId: parentMsg ? messageKey(parentMsg) : null,
-				};
-			});
+			// parentId 直接映射 hex 父节点的 view id(链保真,顾问卡不再分叉)。
+			// View-key rekeying shares the canonical implementation with the
+			// transcript-recovery path (jsonl-snapshot rekeyEntriesToViewSpace):
+			// every entry keeps its DIRECT hex parent's view id, so advisor /
+			// custom / thinking_level_change nodes stay on the parent chain
+			// instead of forking phantom sibling branches in the map
+			// (real session 01a13e95 "3-1/3-2").
+			const viewEntries = rekeyEntriesToViewSpace(sdkEntries);
 			view =
 				MaterializedView.fromSnapshot(sessionId, cwd, {
 					entries: viewEntries,
@@ -2664,8 +2607,17 @@ export class DaemonSessionHost {
 		const journal = new AppendJournal(JOURNAL_DIR, sessionId);
 		await journal.open();
 		try {
-			const { checkpoint, events } = await journal.replaySource();
-			if (checkpoint || events.length > 0) {
+			const { checkpoint, events, newestTs } = await journal.replaySource();
+			let useReplay = checkpoint !== null || events.length > 0;
+			if (useReplay && checkpoint === null && (await this.#sdkSupersedesJournal(sessionId, newestTs))) {
+				// The journal missed records the SDK transcript holds (async
+				// write lag/loss, cross-instance rewrite, crash between
+				// seq-assign and flush): a replay would serve a fragment
+				// while the file has the full transcript. Fall through to
+				// the SDK fallback below instead.
+				useReplay = false;
+			}
+			if (useReplay) {
 				const view = checkpoint
 					? (MaterializedView.fromSnapshot(sessionId, "", checkpoint.snapshot) ??
 						MaterializedView.replay(sessionId, "", events))

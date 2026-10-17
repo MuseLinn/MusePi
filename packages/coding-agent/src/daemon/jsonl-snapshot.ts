@@ -20,11 +20,16 @@
  *    through leaves id/parentId in a different key space from every other
  *    session, so branchChildren / breadcrumbs / leafPath lookups silently
  *    miss. Every entry is rekeyed here (collision-suffixed), and parentId
- *    remaps to the nearest MESSAGE ancestor's view id — non-message parents
- *    (model_change etc.) dangle for tree consumers otherwise. Note the
- *    remap resolves the ancestor's SUFFIXED view id, not a recomputed base
- *    key: same-millisecond same-role collisions would otherwise reparent the
- *    child onto the wrong duplicate.
+ *    maps to the DIRECT hex parent's view id (resolved through the same
+ *    suffixed map, never a recomputed base key: same-millisecond same-role
+ *    collisions would otherwise reparent the child onto the wrong
+ *    duplicate). Remapping through the nearest MESSAGE ancestor instead is
+ *    wrong: it drops advisor/custom/thinking_level_change nodes off parent
+ *    chains, so the post-advisor assistant reparented under the pre-advisor
+ *    one and the advisor card plus the next user message rendered as phantom
+ *    sibling branches "3-1/3-2" on two map lanes (real session 01a13e95).
+ *    Chain fidelity first — message-only tree consumers walk up through
+ *    non-message nodes themselves.
  *
  * The 256-byte title slot (its own `{"type":"title"…}` line, padded) is not
  * a transcript entry — it is harvested into the snapshot header's title so
@@ -50,23 +55,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Rekey every entry into the view identity space (see module header ②). */
-function rekeyEntriesToViewSpace(entries: readonly SessionEntry[]): SessionEntry[] {
-	const byHex = new Map<string, SessionEntry>();
-	for (const e of entries) byHex.set(e.id, e);
-	// Nearest MESSAGE ancestor's hex id — tree consumers link through
-	// messages only; a non-message parent (model_change/custom) would
-	// dangle for branchChildren/leafPath walks.
-	const nearestMessageHexOf = (startId: string | null | undefined): string | null => {
-		let cur = startId ? byHex.get(startId) : undefined;
-		const seen = new Set<string>();
-		while (cur && !seen.has(cur.id)) {
-			seen.add(cur.id);
-			if (cur.type === "message" && (cur as { message?: unknown }).message) return cur.id;
-			cur = cur.parentId ? byHex.get(cur.parentId) : undefined;
-		}
-		return null;
-	};
+/** Rekey every entry into the view identity space (see module header ②).
+ *  Shared with the daemon resume-seed path (session-host adoptAgentSession)
+ *  — one implementation so history resume and transcript recovery project
+ *  identical chains. */
+export function rekeyEntriesToViewSpace(entries: readonly SessionEntry[]): SessionEntry[] {
 	const usedViewIds = new Set<string>();
 	const viewIdByHex = new Map<string, string>();
 	for (const e of entries) {
@@ -86,10 +79,50 @@ function rekeyEntriesToViewSpace(entries: readonly SessionEntry[]): SessionEntry
 	return entries.map(e => ({
 		...e,
 		id: viewIdByHex.get(e.id) ?? e.id,
-		parentId: nearestMessageHexOf(e.parentId)
-			? (viewIdByHex.get(nearestMessageHexOf(e.parentId) as string) ?? null)
-			: null,
+		// Direct hex-parent mapping: every entry was rekeyed above, so the
+		// parent always resolves in-snapshot (unknown hex maps to null, same
+		// as a genuine root). Never skip non-message nodes — see header note.
+		parentId: typeof e.parentId === "string" ? (viewIdByHex.get(e.parentId) ?? null) : null,
 	}));
+}
+
+/**
+ * Newest entry timestamp (epoch ms) of an SDK transcript, read from the
+ * tail only — the history-resume path uses it to tell a journal that
+ * missed records apart from an authoritative one (see session-host
+ * `snapshot()`). Returns null when the file is missing, unreadable, or
+ * carries no parseable timestamp. Never throws.
+ */
+export async function readSdkNewestTimestamp(file: string): Promise<number | null> {
+	let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+	try {
+		handle = await fs.open(file, "r");
+		const { size } = await handle.stat();
+		if (size <= 0) return null;
+		const take = Math.min(size, 4096);
+		const buf = Buffer.alloc(take);
+		await handle.read(buf, 0, take, size - take);
+		const lines = buf.toString("utf8").split("\n");
+		// The chunk may start mid-record and end with a torn line: only trust
+		// complete lines (a trailing fragment without "\n" at EOF is skipped).
+		const complete = buf[take - 1] === 0x0a ? lines : lines.slice(0, -1);
+		for (let i = complete.length - 1; i >= 0; i--) {
+			const line = complete[i]?.trim();
+			if (!line) continue;
+			try {
+				const rec = JSON.parse(line) as { timestamp?: unknown };
+				if (typeof rec.timestamp === "string") {
+					const ms = Date.parse(rec.timestamp);
+					if (Number.isFinite(ms)) return ms;
+				}
+			} catch {}
+		}
+		return null;
+	} catch {
+		return null;
+	} finally {
+		await handle?.close().catch(() => {});
+	}
 }
 
 /**

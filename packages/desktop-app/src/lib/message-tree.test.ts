@@ -45,3 +45,31 @@ describe("flattenMessageTree (iterative)", () => {
 		expect(rows.map(r => r.depth)).toEqual([0, 1, 1, 2]);
 	});
 });
+
+describe("buildMessageTree over direct (chain-faithful) parents", () => {
+	it("attaches a message parented to a custom node under the nearest message ancestor", () => {
+		const entries = [
+			{ id: "m1", parentId: null, timestamp: "1", type: "message" },
+			{ id: "adv", parentId: "m1", timestamp: "2", type: "custom_message" },
+			{ id: "m2", parentId: "adv", timestamp: "3", type: "message" },
+		];
+		const roots = buildMessageTree(entries);
+		// One tree, not a forest: m2's parent (adv) is not a message node,
+		// so m2 links through it to m1.
+		expect(roots.map(r => r.id)).toEqual(["m1"]);
+		const rows = flattenMessageTree(roots);
+		expect(rows.map(r => r.node.id)).toEqual(["m1", "m2"]);
+		expect(rows.map(r => r.depth)).toEqual([0, 1]);
+	});
+
+	it("still forks on genuine same-parent message siblings", () => {
+		const entries = [
+			{ id: "m1", parentId: null, timestamp: "1", type: "message" },
+			{ id: "b1", parentId: "m1", timestamp: "2", type: "message" },
+			{ id: "b2", parentId: "m1", timestamp: "3", type: "message" },
+		];
+		const roots = buildMessageTree(entries);
+		expect(roots.map(r => r.id)).toEqual(["m1"]);
+		expect(roots[0]!.children.map(c => c.id)).toEqual(["b1", "b2"]);
+	});
+});

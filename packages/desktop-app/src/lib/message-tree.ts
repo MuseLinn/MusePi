@@ -103,8 +103,9 @@ export interface FlatMessageTreeRow {
  * 从 entries 构建消息树:孤儿(无父/父缺失/自环)作为根,兄弟保持条目顺序。
  * 只收 message 条目(画布/分支树的节点 = 消息摘要,边 = parent-child 消息
  * 流;model_change/custom/thinking_level_change 等非消息条目不进树——
- * 它们是轨迹时间线的事件,不是消息流节点。daemon 侧已把消息的 parentId
- * 归一为「最近消息祖先」的 view key,这里无需再走链)。
+ * 它们是轨迹时间线的事件,不是消息流节点。daemon 侧保留直接父链(链保真),
+ * 消息的 parentId 可能指向非消息节点(如顾问卡)——挂载时向上走到最近的
+ * message 祖先再挂(不走就会把顾问后的消息孤立成根,地图又多出幻影分支)。
  */
 export function buildMessageTree(entries: readonly unknown[]): MessageTreeNode[] {
 	const nodes = new Map<string, MessageTreeNode>();
@@ -123,15 +124,34 @@ export function buildMessageTree(entries: readonly unknown[]): MessageTreeNode[]
 		};
 		nodes.set(entry.id, node);
 	}
+	// Full id map (every entry kind) for the walk-up below: with direct
+	// parents a message may hang off a non-message node (advisor card),
+	// which is not in `nodes` -- walk up to the nearest MESSAGE ancestor
+	// and attach there (cycle-guarded; dangling/self links stay roots).
+	const parentOf = new Map<string, string | null>();
+	for (const raw of entries) {
+		if (!raw || typeof raw !== "object") continue;
+		const e = raw as { id?: unknown; parentId?: unknown };
+		if (typeof e.id !== "string") continue;
+		parentOf.set(e.id, typeof e.parentId === "string" ? e.parentId : null);
+	}
 	for (const node of nodes.values()) {
-		if (node.parentId !== null && node.parentId !== node.id) {
-			const parent = nodes.get(node.parentId);
+		const seen = new Set<string>([node.id]);
+		let cursor = node.parentId;
+		let attached = false;
+		while (cursor !== null && !seen.has(cursor)) {
+			seen.add(cursor);
+			const parent = nodes.get(cursor);
 			if (parent) {
 				parent.children.push(node);
-				continue;
+				attached = true;
+				break;
 			}
+			const next = parentOf.get(cursor);
+			if (next === undefined || next === null) break;
+			cursor = next;
 		}
-		roots.push(node);
+		if (!attached) roots.push(node);
 	}
 	return roots;
 }

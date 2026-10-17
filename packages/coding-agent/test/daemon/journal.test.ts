@@ -2,8 +2,9 @@
  * Unit tests for the daemon's append journal + compaction
  * (src/daemon/journal.ts).
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-wire";
@@ -29,7 +30,10 @@ function event(type: string, n: number): AgentEvent {
 function bulkyEvent(n: number): AgentEvent {
 	return {
 		type: "assistant_message",
-		message: { role: "assistant", content: [{ type: "text", text: "x".repeat(900) }] },
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "x".repeat(900) }],
+		},
 		seq: n,
 	} as unknown as AgentEvent;
 }
@@ -80,7 +84,10 @@ describe("AppendJournal", () => {
 		await j.compact(4, { folded: true, entries: 4 });
 		// checkpoint persisted
 		const ckpt = await AppendJournal.readCheckpoint(j.filePath);
-		expect(ckpt).toMatchObject({ seq: 4, snapshot: { folded: true, entries: 4 } });
+		expect(ckpt).toMatchObject({
+			seq: 4,
+			snapshot: { folded: true, entries: 4 },
+		});
 		// journal trimmed to increments only
 		const remaining = await j.readAll();
 		expect(remaining.map(r => r.seq)).toEqual([5, 6]);
@@ -410,6 +417,51 @@ describe("AppendJournal", () => {
 		// The file must be deletable with no handle left behind — the actual
 		// precondition the delete path needs.
 		expect(() => fs.unlinkSync(j.filePath)).not.toThrow();
+	});
+
+	test("one failed write does not kill later appends (chain stays alive)", async () => {
+		// Contract: appends share one write chain, so a rejection used to skip
+		// every later link — one transient failure (Windows EPERM/EBUSY on the
+		// file, disk pressure) silently froze the journal at that record while
+		// the live view and broadcast kept moving: later history reads and
+		// catchups then saw a stale tail. The failed record is still lost, but
+		// loudly (console error), and the chain stays alive.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		j.append(event("thinking_level_changed", 1));
+		await j.flush();
+		const probeHolder: { fn?: unknown } = {};
+		let calls = 0;
+		const errSpy = spyOn(console, "error").mockImplementation(() => {});
+		// Reach the fd prototype through a scratch handle (bun does not export
+		// the FileHandle class for direct import).
+		const probe = await fsp.open(path.join(dir, "probe.tmp"), "w");
+		const fdProto = Object.getPrototypeOf(probe) as Record<string, unknown>;
+		await probe.close();
+		probeHolder.fn = fdProto.write;
+		// FileHandle.write is overloaded: a plain function is not assignable
+		// to the mock slot, so cast once here (the runtime shape is asserted
+		// by the test outcome, not by the type).
+		const writeSpy = spyOn(fdProto, "write").mockImplementation(function (this: unknown, ...args: unknown[]) {
+			calls += 1;
+			if (calls === 1) return Promise.reject(Object.assign(new Error("synthetic EIO"), { code: "EIO" }));
+			const orig = probeHolder.fn as (this: unknown, ...a: unknown[]) => Promise<unknown>;
+			return orig.apply(this, args);
+		} as never);
+		try {
+			j.append(event("thinking_level_changed", 2));
+			j.append(event("thinking_level_changed", 3));
+			// Must resolve: pre-fix the poisoned chain rejected here (and in
+			// close()), taking session.delete down with it.
+			await j.flush();
+		} finally {
+			writeSpy.mockRestore();
+			errSpy.mockRestore();
+		}
+		await j.close();
+		const records = await j.readAll();
+		expect(records.map(r => (r.event as { thinkingLevel: string }).thinkingLevel)).toEqual(["lvl-1", "lvl-3"]);
 	});
 
 	test("recordsAfter agrees with readAll on the same cursor", async () => {

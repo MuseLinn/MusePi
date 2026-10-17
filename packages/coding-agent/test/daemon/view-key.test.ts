@@ -152,7 +152,7 @@ describe("daemon snapshot id space (messageKey)", () => {
 		expect(children.map(c => c.id)).toContain(`assistant:${t + 4}`);
 	}, 20_000);
 
-	test("message parentId walks up non-message leaves (model_change) to nearest message ancestor", async () => {
+	test("message parentId keeps the direct non-message leaf (model_change) on the chain", async () => {
 		// The SDK leaf at append time may be a non-message entry; the
 		// rekey must link the next message to the nearest MESSAGE
 		// ancestor, not null it out (scattered single-node trees).
@@ -179,6 +179,9 @@ describe("daemon snapshot id space (messageKey)", () => {
 		const ids = msgs.map(() => crypto.randomBytes(4).toString("hex"));
 		// A model_change sits BETWEEN assistant B and user C — its id is
 		// the leaf when C is appended, so C's hex parentId points at it.
+		// Chain fidelity: C hangs DIRECTLY under the model_change node
+		// (which hangs under B) — skipping it forked phantom advisor
+		// branches in the map (01a13e95 "3-1/3-2").
 		const modelChangeId = crypto.randomBytes(4).toString("hex");
 		const lines: string[] = [];
 		for (let i = 0; i < msgs.length; i++) {
@@ -235,11 +238,14 @@ ${lines.join("\n")}
 		// The non-message entry (model_change) stays in the view (the
 		// timeline shows it); only the tree projection filters it out.
 		expect(entries.length).toBe(5);
-		// C (user at t+2) must hang under B (assistant at t+1) — the walk
-		// skips the model_change entry — not under a null/hex parent.
+		// C (user at t+2) hangs DIRECTLY under the model_change node —
+		// not under a null/hex parent, and not skipped up to B.
 		const c = entries.find(e => e.id === `user:${t + 2}`);
 		expect(c).toBeDefined();
-		expect(c!.parentId).toBe(`assistant:${t + 1}`);
+		const mc2 = entries.find(e => e.id.startsWith("model_change:"));
+		expect(mc2).toBeDefined();
+		expect(c!.parentId).toBe(mc2!.id);
+		expect(mc2!.parentId).toBe(`assistant:${t + 1}`);
 		// D hangs under C; the chain is fully connected (one root).
 		const d = entries.find(e => e.id === `assistant:${t + 3}`);
 		expect(d!.parentId).toBe(`user:${t + 2}`);
@@ -346,11 +352,11 @@ ${lines.join("\n")}
 		const mc = entries.find(e => e.type === "model_change");
 		expect(mc).toBeDefined();
 		expect(mc!.id).toBe(`model_change:${t + 22}`);
-		// ... and its parent chain resolves: model_change → assistant B
-		// (nearest MESSAGE ancestor, skipping the custom entry), custom → B.
-		expect(mc!.parentId).toBe(`assistant:${t + 1}`);
+		// ... and its parent chain resolves directly: model_change → the
+		// custom entry → assistant B. No skipping (see test 2 comment).
 		const custom = entries.find(e => e.type === "custom");
 		expect(custom).toBeDefined();
+		expect(mc!.parentId).toBe(custom!.id);
 		expect(custom!.parentId).toBe(`assistant:${t + 1}`);
 		// Universal invariant: every parentId resolves to an id present in
 		// the same snapshot, or is null at exactly one root.

@@ -248,12 +248,24 @@ export class AppendJournal {
 			.then(() => this.#fdReady)
 			.then(fd => {
 				if (!fd) return;
-				return fd.write(line).catch((err: unknown) => {
-					if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EBADF") return;
-					throw err;
-				});
+				return fd.write(line);
 			})
-			.then(() => {});
+			.then(
+				() => {},
+				// One failed write must not poison every later append: the
+				// chain is shared, so a rejection here would skip all
+				// subsequent links (later records silently never written,
+				// flush()/close() rejecting on top). The record is still
+				// lost, but loudly, and the journal stays operational.
+				// EBADF stays silent: a cross-instance rewrite
+				// (forEachFdInstance closing every fd on the file) can close
+				// this instance's fd after the captured handle was resolved
+				// from #fdReady but before the actual write.
+				(err: unknown) => {
+					if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EBADF") return;
+					console.error(`[daemon] journal append failed for ${this.filePath} (seq ${seq}); continuing`, err);
+				},
+			);
 		return seq;
 	}
 
@@ -655,15 +667,25 @@ export class AppendJournal {
 
 	/** Replay source: checkpoint + journal increments. Returns the checkpoint
 	 *  (or null) and the events to apply AFTER it. Callers reconstruct via
-	 *  MaterializedView.fromSnapshot + apply. */
-	async replaySource(): Promise<{ checkpoint: JournalCheckpoint | null; events: WireAgentEvent[] }> {
+	 *  MaterializedView.fromSnapshot + apply. `newestTs` is the newest record
+	 *  timestamp seen (or null when the journal holds no records) — lets a
+	 *  recovery path tell a journal that missed records (async-write lag,
+	 *  cross-instance rewrite, crash between seq-assign and flush) apart from
+	 *  an authoritative one, by comparing against the SDK transcript tail. */
+	async replaySource(): Promise<{
+		checkpoint: JournalCheckpoint | null;
+		events: WireAgentEvent[];
+		newestTs: string | null;
+	}> {
 		const checkpoint = await AppendJournal.readCheckpoint(this.filePath);
 		const events: WireAgentEvent[] = [];
+		let newestTs: string | null = null;
 		for (const record of await this.readAll()) {
+			if (typeof record.ts === "string") newestTs = record.ts;
 			if (checkpoint && record.seq <= checkpoint.seq) continue;
 			events.push(record.event);
 		}
-		return { checkpoint, events };
+		return { checkpoint, events, newestTs };
 	}
 
 	/**
