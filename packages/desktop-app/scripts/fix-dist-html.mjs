@@ -1,9 +1,12 @@
 /**
- * Dist HTML post-fix: bun 1.3.14 emits module scripts and stylesheet links
- * with `crossorigin`, which makes Chromium enforce CORS on file-origin
- * subresources (origin "null" can never satisfy it) and the renderer goes
- * blank after every rebuild. Strip the attribute so plain file:// loading
- * works (bun 1.3.13 and earlier didn't emit it).
+ * Dist HTML post-fix: bun emits module scripts, stylesheet links AND (with
+ * --splitting) modulepreload links carrying `crossorigin`, which makes
+ * Chromium enforce CORS on file-origin subresources (origin "null" can never
+ * satisfy it) and the renderer goes blank. Strip the attribute so plain
+ * file:// loading works. Every emitted tag form has to be listed here: a
+ * pattern that is not covered leaves a crossorigin behind, and the build
+ * prints its stripped count so a regression shows up as a zero that used
+ * to be non-zero rather than as a silent white screen.
  *
  * HTML entry names are stable (build:bundle no longer hashes them), so no
  * rename is needed.
@@ -24,7 +27,10 @@ for (const file of htmlFiles) {
 	const content = readFileSync(`${dir}${file}`, "utf8");
 	const fixed = content
 		.replaceAll('<script type="module" crossorigin src=', '<script type="module" src=')
-		.replaceAll('<link rel="stylesheet" crossorigin href=', '<link rel="stylesheet" href=');
+		.replaceAll('<link rel="stylesheet" crossorigin href=', '<link rel="stylesheet" href=')
+		// --splitting emits these for every shared chunk the entry statically
+		// imports; without stripping them the preloads fail CORS on file://.
+		.replaceAll('<link rel="modulepreload" crossorigin href=', '<link rel="modulepreload" href=');
 	if (fixed !== content) {
 		writeFileSync(`${dir}${file}`, fixed);
 		stripped++;
