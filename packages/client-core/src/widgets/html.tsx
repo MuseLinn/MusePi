@@ -48,9 +48,7 @@ const MAX_HTML = 64_000;
 const MAX_SUBMIT_TEXT = 8_000;
 
 /** What a sandbox face is allowed to ask the host for. */
-export type WidgetFaceMessage =
-	| { kind: "resize"; height: number }
-	| { kind: "submit"; text: string };
+export type WidgetFaceMessage = { kind: "resize"; height: number } | { kind: "submit"; text: string };
 
 /**
  * Route one postMessage from a sandbox face.
