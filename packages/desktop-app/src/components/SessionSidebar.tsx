@@ -70,6 +70,9 @@ export function SessionSidebar({
 	collapsed,
 	width,
 	onDeleteArchived,
+	onDeleteSession,
+	onExportSession,
+	onRetitleSession,
 	unread,
 	onToggleUnread,
 	onImportSessions,
@@ -131,6 +134,18 @@ export function SessionSidebar({
 	 *  daemon; returns success so the UI only drops the archive row on a real
 	 *  deletion (the confirm dialog wording promises data cleanup). */
 	onDeleteArchived(sessionId: string): Promise<boolean>;
+	/** Permanently delete a session from its row menu (same daemon
+	 *  session.delete + centralized confirm as the top-bar menu).
+	 *  Optional: without it the row menu simply omits the delete item. */
+	onDeleteSession?(sessionId: string): Promise<boolean> | void;
+	/** Export a session transcript as Markdown from its row menu (same
+	 *  client-side download as the top-bar menu). Optional: without it
+	 *  the row menu omits the export item. */
+	onExportSession?(sessionId: string, title: string): Promise<boolean>;
+	/** AI rename a session from its row menu (daemon session.retitle).
+	 *  Resolves the outcome so the menu can toast the failure reason.
+	 *  Optional: without it the row menu omits the AI item. */
+	onRetitleSession?(sessionId: string): Promise<{ ok: boolean; reason?: string }>;
 	/** Pane width in px (draggable resize). */
 	width?: number;
 	/** Unread session ids (single source: app-level unread set — pet
@@ -343,6 +358,23 @@ export function SessionSidebar({
 	const openSessionCtx = useCallback((id: string, x: number, y: number): void => {
 		setSessionCtx({ id, x, y });
 	}, []);
+	// AI rename in flight (row menu item disables while its own run is
+	// pending -- openchamber shows a spinner; disabled-with-same-label
+	// is the ContextMenu vocabulary for busy here).
+	const [retitlingId, setRetitlingId] = useState<string | null>(null);
+	// Row display title for the export filename/header: node label wins,
+	// then the entry label, then the raw id.
+	const sessionLabelOf = (id: string): string => {
+		const walk = (ns: SessionListNode[]): string | null => {
+			for (const n of ns) {
+				if (n.entry.id === id) return n.label ?? n.entry.label ?? id;
+				const child = walk(n.children ?? []);
+				if (child) return child;
+			}
+			return null;
+		};
+		return walk(nodes) ?? id;
+	};
 	const [groupCtx, setGroupCtx] = useState<{
 		index: number;
 		x: number;
@@ -1433,6 +1465,31 @@ export function SessionSidebar({
 									icon: "pencil",
 									onSelect: () => void renameSession(sessionCtx.id),
 								},
+								// AI rename (daemon session.retitle: title from the first
+								// user message, same pipeline as auto-title). Gated on the
+								// prop so hosts without it keep the old menu shape.
+								...(onRetitleSession
+									? [
+											{
+												label: t("AI rename"),
+												icon: "ai-generate-2",
+												disabled: retitlingId !== null,
+												onSelect: () => {
+													const id = sessionCtx.id;
+													setRetitlingId(id);
+													void onRetitleSession(id).then(r => {
+														setRetitlingId(cur => (cur === id ? null : cur));
+														if (!r.ok)
+															pushActionToast({
+																message: t(
+																	r.reason === "empty" ? "AI rename empty" : "AI rename failed",
+																),
+															});
+													});
+												},
+											},
+										]
+									: []),
 								{
 									// Right-click: any session row (parent or
 									// subagent) can be popped out into the mini chat
@@ -1515,6 +1572,40 @@ export function SessionSidebar({
 									disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
 									onSelect: () => openInFinder(sessionCtx.id),
 								},
+								// Export transcript (read-only session.snapshot RPC,
+								// same Markdown builder as the top-bar menu). Gated on
+								// the prop like delete.
+								...(onExportSession
+									? [
+											{
+												label: t("export markdown"),
+												icon: "download",
+												onSelect: () => {
+													const id = sessionCtx.id;
+													void onExportSession(id, sessionLabelOf(id)).then(ok => {
+														if (!ok) pushActionToast({ message: t("export failed") });
+													});
+												},
+											},
+										]
+									: []),
+								// Permanent delete (daemon session.delete + centralized
+								// confirm in app.deleteSession, same as the top-bar menu).
+								// Gated on the prop so hosts without deletion keep the
+								// old menu shape.
+								...(onDeleteSession
+									? [
+											{ divider: true },
+											{
+												label: t("delete session"),
+												icon: "delete-bin",
+												danger: true,
+												onSelect: () => {
+													void onDeleteSession(sessionCtx.id);
+												},
+											},
+										]
+									: []),
 							]
 						: []
 				}

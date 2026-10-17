@@ -1,5 +1,5 @@
 import { BlurText, getLocaleSnapshot, ShinyText, setLocale, subscribeLocale, t } from "@musepi/client-core";
-import type { SubagentProgressPayload } from "@musepi/pi-wire";
+import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
@@ -47,6 +47,7 @@ import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./
 import { RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
+import { buildSessionMarkdown, markdownFileName } from "./lib/session-markdown";
 import {
 	clearRoundDurations,
 	clearUnviewedCompletions,
@@ -2616,6 +2617,58 @@ function AppInner(): ReactNode {
 		[confirm, refreshSessions],
 	);
 
+	/** Export ANY session's transcript as Markdown (row-menu parity with
+	 *  the top-bar export, which only covers the active session). Read-only
+	 *  session.snapshot RPC -- never subscribes or activates the session.
+	 *  Selection rule (advisor cards etc.) shared with the top bar via
+	 *  lib/session-markdown. Returns false when offline or unreadable. */
+	const exportSessionById = useCallback(async (sessionId: string, title: string): Promise<boolean> => {
+		const client = rpcRef.current;
+		if (!client) return false;
+		try {
+			const snap = (await client.request("session.snapshot", { sessionId })) as {
+				entries?: readonly SessionEntry[];
+			};
+			const markdown = buildSessionMarkdown(title, snap.entries ?? [], {
+				user: t("user"),
+				assistant: t("assistant"),
+				advisor: t("advisor"),
+			});
+			const blob = new Blob([markdown], { type: "text/markdown" });
+			const a = document.createElement("a");
+			a.href = URL.createObjectURL(blob);
+			a.download = `${markdownFileName(title)}.md`;
+			a.click();
+			URL.revokeObjectURL(a.href);
+			return true;
+		} catch {
+			return false;
+		}
+	}, []);
+
+	/** AI rename any session (openchamber SessionAiRename parity): the
+	 *  daemon generates a title from the first user message. Refreshes the
+	 *  tree on success; callers toast the reason on failure. The model pass
+	 *  runs past the 15s default RPC cap, so this carries its own timeout. */
+	const retitleSessionById = useCallback(
+		async (sessionId: string): Promise<{ ok: boolean; reason?: string }> => {
+			const client = rpcRef.current;
+			if (!client) return { ok: false, reason: "offline" };
+			try {
+				const res = (await client.request("session.retitle", { sessionId }, { timeoutMs: 120_000 })) as {
+					ok: boolean;
+					title?: string;
+					reason?: string;
+				};
+				if (res?.ok) await refreshSessions(client);
+				return { ok: res?.ok === true, reason: res?.reason };
+			} catch {
+				return { ok: false, reason: "failed" };
+			}
+		},
+		[refreshSessions],
+	);
+
 	// ── Agent companion pet bridge (伙伴): forward the live session mood
 	// and activity bubbles to the floating pet window over Electron IPC.
 	// Pref changes (settings page dispatches omp-pet-changed) show/hide the
@@ -3580,6 +3633,9 @@ function AppInner(): ReactNode {
 							collapsed={sideCollapsed}
 							width={sideWidth}
 							onDeleteArchived={deleteSession}
+							onDeleteSession={deleteSession}
+							onExportSession={exportSessionById}
+							onRetitleSession={retitleSessionById}
 						/>
 					</div>
 					{settingsActive && (
