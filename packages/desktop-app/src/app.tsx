@@ -3618,7 +3618,6 @@ function AppInner(): ReactNode {
 							rpc={rpc ?? undefined}
 							onSelect={selectSession}
 							onNewSession={startNewTask}
-							status={status === "open" ? "open" : "closed"}
 							onDisconnect={disconnect}
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenBoard={() => viewSwapRef.current("board")}

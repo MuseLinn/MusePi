@@ -53,13 +53,6 @@
 	display: inline-block;
 }
 
-.gui-dot-open {
-	background: var(--color-ok);
-}
-
-.gui-dot-closed {
-	background: var(--color-danger);
-}
 
 .gui-work-orb {
 	display: inline-flex;

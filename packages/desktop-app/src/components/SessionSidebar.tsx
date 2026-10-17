@@ -48,7 +48,6 @@ export function SessionSidebar({
 	selectedId,
 	onSelect,
 	onNewSession,
-	status,
 	onDisconnect,
 	onOpenConnect,
 	onOpenBoard,
@@ -99,7 +98,6 @@ export function SessionSidebar({
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onNewSession(): void;
-	status: "open" | "closed";
 	onDisconnect(): void;
 	onOpenConnect(): void;
 	onOpenBoard?(): void;
@@ -1396,13 +1394,11 @@ export function SessionSidebar({
 						)}
 					</div>
 				</div>
-				{/* User footer: daemon status + settings (theme/language moved into
-				 * the settings dialog). */}
-				<div className="gui-sidebar-footer flex items-center gap-1.5 border-t border-[var(--border)] px-3 py-2">
-					<div className="flex flex-1 items-center gap-1.5 text-[13px] text-[var(--color-text-muted)]">
-						<span className={`gui-dot gui-dot-${status}`} />
-						<span>{status === "open" ? t("local daemon") : t("disconnected")}</span>
-					</div>
+				{/* User footer: settings and session actions (theme/language moved
+				 * into the settings dialog). Connection state is NOT here — the
+				 * header's instance menu already carries it, with latency, a
+				 * refresh, the status dot and the daemon URL. */}
+				<div className="gui-sidebar-footer flex items-center justify-end gap-1.5 border-t border-[var(--border)] px-3 py-2">
 					<button
 						type="button"
 						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
