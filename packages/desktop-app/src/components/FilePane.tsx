@@ -24,7 +24,7 @@ import {
 	ScanEye,
 	Search,
 } from "lucide-react";
-import * as pdfjs from "pdfjs-dist";
+import type * as PdfjsLib from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
@@ -58,11 +58,31 @@ const HTML_VIEW_SEGMENTS: SegmentedOption<"live" | "source">[] = [
 ];
 
 /**
+ * pdf.js is ~0.9 MB and is reached only once someone opens a PDF, so it
+ * loads on demand and is kept for the pane's lifetime (a second preview
+ * of the same kind resolves instantly). The type stays a top-level import:
+ * only the value is deferred.
+ */
+let pdfjsPromise: Promise<typeof PdfjsLib> | null = null;
+function loadPdfjs(): Promise<typeof PdfjsLib> {
+	if (pdfjsPromise) return pdfjsPromise;
+	pdfjsPromise = import("pdfjs-dist").then(mod => {
+		// pdf.js worker: copied next to index.html by the build script
+		// (scripts/build copies node_modules/pdfjs-dist/build/pdf.worker.min.mjs
+		// into dist/); file:// workers load fine from the same origin.
+		mod.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", window.location.href).toString();
+		return mod;
+	});
+	return pdfjsPromise;
+}
+
+/**
  * Inline PDF preview via pdf.js (VS Code-style): render every page to a canvas
  * → data URL. Throws on a corrupt/encrypted PDF; the pdf viewer turns that into
  * a decline, which the pane reads as "open in the system default app".
  */
 async function renderPdfPagesToDataUrls(bytes: Uint8Array): Promise<string[]> {
+	const pdfjs = await loadPdfjs();
 	const doc = await pdfjs.getDocument({ data: bytes }).promise;
 	const pages: string[] = [];
 	for (let i = 1; i <= doc.numPages; i++) {
@@ -427,13 +447,6 @@ export function FilePane({
 	// File instances live in the PANEL tab strip (tab-primary, docs §3.3.2):
 	// this pane is the body of whichever `files:<path>` tab is active, so it
 	// loads on activeFile changes and registers tree clicks via onOpenFile.
-
-	// pdf.js worker: copied next to index.html by the build script
-	// (scripts/build copies node_modules/pdfjs-dist/build/pdf.worker.min.mjs
-	// into dist/); file:// workers load fine from the same origin.
-	useEffect(() => {
-		pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", window.location.href).toString();
-	}, []);
 
 	const load = useCallback(async (): Promise<void> => {
 		setError(null);
