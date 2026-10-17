@@ -76,6 +76,21 @@ const DEFAULT_URL = "ws://127.0.0.1:8300";
  */
 const BOOT_STALL_MS = 20_000;
 
+/**
+ * Renderer-side startup marks. Silent unless the launch sets
+ * MUSEPI_STARTUP_PERF=1, and even then only as a prefixed line that the
+ * main process relays to the terminal (electron/main.cjs) — the
+ * renderer's own console output is never forwarded. Boot crosses the
+ * WS handshake, the daemon prewarm and the version/capability gate, so
+ * without marks a slow launch can only be attributed by guess.
+ */
+const STARTUP_PERF = typeof process !== "undefined" && process.env?.MUSEPI_STARTUP_PERF === "1";
+const STARTUP_MARK_PREFIX = "[renderer-startup] ";
+function markStartup(phase: string): void {
+	if (!STARTUP_PERF) return;
+	console.info(`${STARTUP_MARK_PREFIX}${phase} +${Math.round(performance.now())}ms`);
+}
+
 /** Transient RPC-error banner: how long a failure stays visible before
  *  auto-dismissing. Reconnect and the next successful session op clear it
  *  sooner. Long enough to read, short enough that a stale failure never
@@ -1441,6 +1456,7 @@ function AppInner(): ReactNode {
 		// running — the default URL or a probed port connects in ~300ms)
 		// only holds for the animation itself, so relaunches feel instant
 		// instead of a fixed 2s stare (2026-08-11 fixed hold).
+		markStartup("boot.start");
 		const t0 = performance.now();
 		let coldStart = false;
 		// The daemon prewarms the lazy SDK module graph in the background
@@ -1457,6 +1473,7 @@ function AppInner(): ReactNode {
 				try {
 					const st = await client.request<{ ready?: boolean }>("system.prewarmStatus");
 					if (st?.ready === true) return;
+					markStartup("prewarm.ready");
 				} catch {
 					return; // older daemon without the RPC — nothing to wait for
 				}
@@ -1525,12 +1542,14 @@ function AppInner(): ReactNode {
 							}
 							stale = shouldRestartForMissingMethods(answered);
 						}
+						markStartup("version.gate");
 						if (stale) {
 							capabilityRestarted.add(u);
 							const port = Number.parseInt(new URL(u).port, 10) || 8300;
 							await api.restartDaemon(port);
 							await connect(u);
 							await waitForPrewarm();
+							markStartup("daemon.restarted");
 						}
 					}
 				}
@@ -1548,6 +1567,7 @@ function AppInner(): ReactNode {
 				try {
 					coldStart = true;
 					const spawned = await startDaemonViaShell(8300);
+					markStartup("daemon.spawned");
 					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) return;
 					// The spawn returned a port but the first WebSocket handshake
 					// raced the listener; retry once before giving up.
@@ -1565,6 +1585,7 @@ function AppInner(): ReactNode {
 				setTimeout(resolve, holdMs - elapsed);
 				await promise;
 			}
+			markStartup("boot.done");
 			setBooting(false);
 		}
 	}, [connect, url]);

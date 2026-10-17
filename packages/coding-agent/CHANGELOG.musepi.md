@@ -24,7 +24,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Plugin installs no longer execute dependency scripts silently. The plugins project previously had no `trustedDependencies`, so bun ran every dependency's install scripts without a word — a dragged-in package could run arbitrary code at install time with nothing reported afterwards. The default is now deny (empty allowlist): blocked scripts are named in the install result, and reinstalling with that name list approves and persists them; a failed install's rollback never revokes a granted approval.
 - **会话行右键菜单补齐删除、导出与 AI 重命名**：此前行菜单只能置顶/归档/手工改名/复制——删除藏在归档视图与顶栏，导出只对当前会话，标题只能手改。现在行内直接删（同顶栏确认）、导出任意会话为 Markdown、让模型按首条消息重起标题（空会话或模型不可用会明说原因而不是没反应）。
   - EN: Session rows gained delete, export, and AI rename in their right-click menu. Previously the row menu could only pin/archive/rename/copy — deletion lived in the archive view and the top bar, export covered just the active session, and titles were manual-only. Rows now delete in place (same confirm as the top bar), export any session to Markdown, and ask the model to title from the first message (empty sessions or an unavailable model report the reason instead of staying silent).
-
+- **安装版启动不再每次清空资源缓存**：清空缓存原本只为了开发时 dist 重建后不给旧文件，但它却在每一次启动都执行——包装版的资源名本身带内容哈希，清空只会让首帧重新下载一遍全部资源。现在只在开发模式下执行。
+  - EN: Packaged launches no longer wipe the resource cache on every start. Clearing it only existed so a rebuilt dist would not serve stale files in dev, but it ran on every launch — and since packaged assets carry content-hashed names, clearing only forced the first frame to re-download everything. It is now dev-only.
 ### Fixed
 
 - **顾问卡不再把会话地图撕成假分支**：恢复历史会话时，顾问卡等非消息节点被跳过重挂父链，顾问后的回复被挂到了顾问前的消息之下——地图把顾问与下一条用户消息算成同一父轮的两个分支（"3-1/3-2"两条泳道）。现在父链原样保留，线性历史就是一条线，消息树挂载时自己走链经过非消息节点。
