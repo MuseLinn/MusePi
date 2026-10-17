@@ -314,16 +314,23 @@
  * that never got this exemption, and the result was the most visible
  * material inconsistency in the app: a row menu opened over the chat
  * column came out frosted, while the same menu over the sidebar or the
- * header read as a plain transparent pane. The page blur sampled only
- * the opaque DOM it can reach (the chat card); where the backdrop is the
- * translucent pane over the OS material it samples nothing, and the text
- * behind bled straight through. Keeping the blur here is what made it
- * read as half-frosted rather than as a material at all.
+ * header read as a plain transparent pane. On these platforms the page
+ * blur samples only the opaque DOM it can reach (a chat card) and nothing
+ * where the backdrop is the translucent workspace over the OS material,
+ * which Chromium cannot sample at all.
  *
- * Same trade as .gui-main above: no page blur on these platforms, the
- * frost comes from the window material showing through the scrim. The
- * scrim is densified to carry the surface on its own, because these two
- * carry text the user is expected to read and aim at, not through. */
+ * So the blur goes here too, but the surface then has to be carried by the
+ * scrim alone — and that needs a real density, not a token nudge.
+ * `--gui-glass-overlay` is always defined (it is derived from the user's
+ * alpha), so a `var(--gui-glass-overlay, N)` fallback is dead code: what
+ * ships is 68.5% in the light scheme. Over a light backdrop that reads as
+ * plain translucency once the blur is gone. The density below is therefore
+ * written as a clamp, in the same shape as the light-scheme token in
+ * gui-base.css: the user's alpha still moves it (more transparent →
+ * thinner), but it cannot fall below a floor that keeps menu text readable
+ * with no blur behind it. Windows and Linux get the same trade the
+ * workspace root already makes: the frost comes from the window material
+ * showing through. */
 [data-platform="win32"] .gui-menu-popup,
 [data-platform="linux"] .gui-menu-popup,
 [data-platform="win32"] .gui-session-hover-card,
@@ -337,7 +344,7 @@
 	background:
 		color-mix(
 			in oklab,
-			var(--bg-overlay) var(--gui-glass-overlay, calc(76% * var(--gui-glass-alpha, 1))),
+			var(--bg-overlay) clamp(74%, calc(92% - 20% * var(--gui-glass-alpha, 0.55)), 92%),
 			transparent
 		),
 		var(--glass-bg);
@@ -347,7 +354,7 @@
 [data-platform="linux"] .gui-session-hover-card {
 	background: color-mix(
 		in oklab,
-		var(--bg-overlay) var(--gui-glass-overlay, calc(72% * var(--gui-glass-alpha, 1))),
+		var(--bg-overlay) clamp(70%, calc(88% - 20% * var(--gui-glass-alpha, 0.55)), 88%),
 		transparent
 	);
 }
