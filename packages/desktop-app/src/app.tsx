@@ -2238,6 +2238,10 @@ function AppInner(): ReactNode {
 				p.then(() => refreshSessions(client)).catch(() => {});
 				await p;
 			} catch (err) {
+				// 发送失败:daemon 从未收到这条消息,不会有 message_start 来认领,
+				// 也可能永远没有 agent_end——不等那两个,在这里清掉乐观回显,
+				// 不留幽灵气泡(签名对不上说明用户已发出下一条,不误伤)。
+				store?.discardOptimisticEcho(text, images);
 				setError(fmtError("session.send", err));
 			}
 		},

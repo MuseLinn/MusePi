@@ -84,6 +84,24 @@ describe("乐观回显", () => {
 		expect(snap.entries.some(e => (e as { id?: string }).id?.includes("optimistic"))).toBe(false);
 	});
 
+	it("发送失败直接丢弃回显,不等 message_start/agent_end", () => {
+		const s = store();
+		s.optimisticEcho("hello");
+		expect(s.getSnapshot().entries).toHaveLength(1);
+		// 发送 RPC 抛错:daemon 从未收到,不可能再有认领/收尾事件。
+		s.discardOptimisticEcho("hello");
+		expect(s.getSnapshot().entries).toHaveLength(0);
+	});
+
+	it("丢弃时签名对不上则保留(用户已发出下一条)", () => {
+		const s = store();
+		s.optimisticEcho("hello");
+		s.discardOptimisticEcho("other text");
+		const snap = s.getSnapshot();
+		const last = snap.entries[snap.entries.length - 1] as { id?: string };
+		expect(last.id).toContain("optimistic");
+	});
+
 	it("图片消息也按签名匹配(文本+图片数)", async () => {
 		const s = store();
 		s.optimisticEcho("看图", [{ type: "image", data: "aGVsbG8=", mimeType: "image/png" }]);

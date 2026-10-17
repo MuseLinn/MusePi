@@ -527,6 +527,20 @@ export class GuiSessionStore {
 		this.#emit();
 	}
 
+	/**
+	 * 发送 RPC 失败时丢弃乐观回显:daemon 从未收到这条消息,不会有
+	 * message_start 来认领,也可能永远没有 agent_end——不等那两个,
+	 * 立刻清掉,不留幽灵气泡。只清签名一致的那条:失败回调到达时用户
+	 * 可能已经发出了下一条,不能误伤。
+	 */
+	discardOptimisticEcho(text: string, images?: { type: "image"; data: string; mimeType: string }[]): void {
+		const o = this.#optimisticUser;
+		if (!o) return;
+		const want = `${text}\u0000${images?.length ?? 0}`;
+		if (`${o.text}\u0000${o.images?.length ?? 0}` !== want) return;
+		this.#clearOptimisticUser();
+	}
+
 	/** 乐观条目内容签名(与 daemon message_start 比对)。 */
 	#optimisticSignature(): string {
 		const o = this.#optimisticUser;
