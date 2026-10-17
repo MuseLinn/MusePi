@@ -19,12 +19,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { AppendJournal } from "../../src/daemon/journal";
 import { startDaemon } from "../../src/daemon/server";
+import { JOURNAL_DIR } from "../../src/daemon/session-host";
 import { ViewStore, viewStorePath } from "../../src/daemon/view-store";
 import { computeDefaultSessionDir } from "../../src/session/session-paths";
 import { FileSessionStorage } from "../../src/session/session-storage";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
-
-const JOURNAL_DIR = path.join(os.tmpdir(), "musepi-daemon", "journal");
 
 interface WireMessage {
 	role: string;
