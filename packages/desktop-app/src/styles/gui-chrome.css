@@ -310,6 +310,48 @@
 	background: color-mix(in oklab, var(--bg) 80%, transparent);
 }
 
+/* Floating menus and the session hover card are the two overlay surfaces
+ * that never got this exemption, and the result was the most visible
+ * material inconsistency in the app: a row menu opened over the chat
+ * column came out frosted, while the same menu over the sidebar or the
+ * header read as a plain transparent pane. The page blur sampled only
+ * the opaque DOM it can reach (the chat card); where the backdrop is the
+ * translucent pane over the OS material it samples nothing, and the text
+ * behind bled straight through. Keeping the blur here is what made it
+ * read as half-frosted rather than as a material at all.
+ *
+ * Same trade as .gui-main above: no page blur on these platforms, the
+ * frost comes from the window material showing through the scrim. The
+ * scrim is densified to carry the surface on its own, because these two
+ * carry text the user is expected to read and aim at, not through. */
+[data-platform="win32"] .gui-menu-popup,
+[data-platform="linux"] .gui-menu-popup,
+[data-platform="win32"] .gui-session-hover-card,
+[data-platform="linux"] .gui-session-hover-card {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+[data-platform="win32"] .gui-menu-popup,
+[data-platform="linux"] .gui-menu-popup {
+	background:
+		color-mix(
+			in oklab,
+			var(--bg-overlay) var(--gui-glass-overlay, calc(76% * var(--gui-glass-alpha, 1))),
+			transparent
+		),
+		var(--glass-bg);
+}
+
+[data-platform="win32"] .gui-session-hover-card,
+[data-platform="linux"] .gui-session-hover-card {
+	background: color-mix(
+		in oklab,
+		var(--bg-overlay) var(--gui-glass-overlay, calc(72% * var(--gui-glass-alpha, 1))),
+		transparent
+	);
+}
+
 [data-platform="win32"] .gui-dialog-backdrop,
 [data-platform="linux"] .gui-dialog-backdrop,
 [data-platform="win32"] .gui-cap-drawer-backdrop,
