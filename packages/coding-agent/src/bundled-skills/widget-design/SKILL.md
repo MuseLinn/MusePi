@@ -55,13 +55,16 @@ blueprint 组件一样可用的要点：
   （沙箱无外部 CSS 文件）。
 - 根元素撑满视口：`html, body { height: 100%; margin: 0; }`，内容用
   flex/grid 布局——**不要固定像素宽**（卡尺寸可变）。
-- 数据从 `window.__WIDGET_DATA__` 读（agent 塞的 `data` 字段），不要
-  硬编码。
+- 数据从 `window.musepiWidgetData` 读（agent 塞的 `data` 字段），不要
+  硬编码。旧名 `window.__WIDGET_DATA__` 仍然可用，但新写的面一律用
+  `musepiWidgetData`；数据更新时宿主推 `musepi-widget-data` 消息并
+  派发同名 CustomEvent（旧的 `omp-widget-data` 仍会派发一次）。
 
 ### 样式
-- **两套主题**（深色为主）：`.omp-theme-dark body { … }` +
-  `.omp-theme-light body { … }`，所有有颜色的元素都要两套（铁律，
-  宿主热切换会重建 iframe）。
+- **两套主题**（深色为主）：`.musepi-theme-dark body { … }` +
+  `.musepi-theme-light body { … }`，所有有颜色的元素都要两套（铁律，
+  宿主热切换会重建 iframe）。旧的 `.omp-theme-*` 类名仍在，但新写的
+  面一律用 `musepi-theme-*`。
 - 深底配浅字、浅底配深字（对比度 ≥4.5:1）；设了 `background` 的元素
   必须同时设 `color`。
 - 配色用 CSS 变量组织（`:root { --bg; --fg; --accent }`，两套主题换值），
@@ -71,17 +74,33 @@ blueprint 组件一样可用的要点：
 - 按钮/滑杆/勾选**即时反馈**（hover/点击态），禁止无响应装饰。
 - 需要外部数据：**先取好注入 data**（沙箱禁第三方 fetch）；`<img src="https://…">`
   可用（不回读字节，不受 CORS 限制）。
-- 高度自适应：内容变化后
-  `parent.postMessage({ type: "omp-widget-resize", mountId: window.DaimonCanvas.mountId, height: document.documentElement.scrollHeight }, "*")`
-  ——宿主自动跟随，别让内容溢出卡片。
+- 高度自适应：内容变化后调一次注入的 `ompReportHeight()`，宿主自动
+  跟随，别让内容溢出卡片。
 - 主题切换宿主重建 iframe，无需自己监听。
+
+### 把选择交回会话（可交互面）
+
+当这个面需要用户做选择（选密度、挑方案、确认取舍）而不是纯展示时，用
+注入的 `musepiSubmit(text)` 把答案交回会话——它会作为一条用户消息发出
+去，下一轮你就拿到了用户的选择：
+
+```
+button.onclick = function () { musepiSubmit("用户选了 A 档：74% 抬升色"); };
+```
+
+- **非阻塞**：你的这一轮已经结束，答案作为下一条用户消息到达。要卡住这一
+  轮等答案，用 `ask` 工具，别用这个。
+- `text` 会进入你的上下文，等于给了模型生成的代码一条注入通道：只放你
+  自己写的选项文案，不要回显用户的自由输入（上限 8KB）。
+- 一个面提交一次就够；重复提交会发出多条用户消息。
 
 ### 检查清单
 - [ ] 两套主题都有、对比度够
 - [ ] 数据来自 `__WIDGET_DATA__` 而非硬编码
 - [ ] 布局自适应卡尺寸（flex/grid，无固定像素墙）
 - [ ] 交互有反馈、高度上报正确
-- [ ] 总长 ≤64KB
+- [ ] 需要用户选择时用 `musepiSubmit`；纯展示则不提交
+- [ ] 总长 ≤64KB（超了宿主不渲染这张卡）
 
 ## 组合成板（看板）
 

@@ -91,7 +91,7 @@ export async function rasterizeToBlob(element: HTMLElement, options: RasterizeOp
 		shadow.setAttribute("srcdoc", srcdoc);
 		const rect = frame.getBoundingClientRect();
 		shadow.style.width = `${Math.max(1, rect.width)}px`;
-		// The face reports its own height (omp-widget-resize) onto the frame's
+		// The face reports its own height (musepi-widget-resize) onto the frame's
 		// inline style; the rect of a zero-height face would flatten it.
 		const styleHeight = frame.style.height;
 		shadow.style.height = styleHeight && styleHeight !== "auto" ? styleHeight : `${Math.max(1, rect.height)}px`;

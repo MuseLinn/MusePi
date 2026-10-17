@@ -126,7 +126,7 @@ export function AppearanceSection({
 	rpc: RpcClient | null;
 }): ReactNode {
 	// Picking the already-active theme (theme.ts setThemePreference) emits
-	// omp-theme-toggle-shake — jiggle the active segmented button instead
+	// musepi-theme-toggle-shake — jiggle the active segmented button instead
 	// of running another overlay. The class is removed on animationend (no
 	// timer: background-window timers throttle and would leave it stuck).
 	const [themeShake, setThemeShake] = useState(false);
@@ -135,8 +135,8 @@ export function AppearanceSection({
 			setThemeShake(false);
 			requestAnimationFrame(() => setThemeShake(true));
 		};
-		window.addEventListener("omp-theme-toggle-shake", on);
-		return () => window.removeEventListener("omp-theme-toggle-shake", on);
+		window.addEventListener("musepi-theme-toggle-shake", on);
+		return () => window.removeEventListener("musepi-theme-toggle-shake", on);
 	}, []);
 	const { preference, resolved, setPreference } = useThemePreference();
 	const { accent, setAccent, customAccent, applyCustomAccent } = useAccentPreference();

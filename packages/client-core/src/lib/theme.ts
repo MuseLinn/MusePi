@@ -285,7 +285,7 @@ export const THEME_MODE_ICON: Record<ThemePreference, "monitor" | "sun" | "moon"
  *  control instead. */
 function emitThemeShake(): void {
 	if (typeof window === "undefined") return;
-	window.dispatchEvent(new Event("omp-theme-toggle-shake"));
+	window.dispatchEvent(new Event("musepi-theme-toggle-shake"));
 }
 
 function readVar(name: string, fallback: string): string {
@@ -356,7 +356,7 @@ type ThemeOverlayOpts = {
  * target's. The veil fades from the current scheme color to the target
  * scheme color while the morph runs, the swap fires mid-fade, then the
  * veil fades out. Picking the already-active mode skips the veil and
- * emits `omp-theme-toggle-shake` so the caller's button can jiggle
+ * emits `musepi-theme-toggle-shake` so the caller's button can jiggle
  * instead. The module-init apply is skipped.
  */
 function withColorTransition(fn: () => void, icon: keyof typeof MORPH_ICONS, opts: ThemeOverlayOpts = {}): void {

@@ -18,7 +18,7 @@ const THEME_OPTIONS: readonly { value: ThemePreference; label: TranslationKey; i
 export function ThemeToggle(): ReactNode {
 	const { preference, setPreference } = useThemePreference();
 	// Re-picking the active mode (theme.ts setThemePreference) emits
-	// omp-theme-toggle-shake — jiggle the thumb instead of running another
+	// musepi-theme-toggle-shake — jiggle the thumb instead of running another
 	// flip overlay. Cleared on animationend (no timer: throttled
 	// background-window timers would leave it stuck).
 	const [shake, setShake] = useState(false);
@@ -27,8 +27,8 @@ export function ThemeToggle(): ReactNode {
 			setShake(false);
 			requestAnimationFrame(() => setShake(true));
 		};
-		window.addEventListener("omp-theme-toggle-shake", on);
-		return () => window.removeEventListener("omp-theme-toggle-shake", on);
+		window.addEventListener("musepi-theme-toggle-shake", on);
+		return () => window.removeEventListener("musepi-theme-toggle-shake", on);
 	}, []);
 	// Translate inside render so a locale switch re-labels the segments.
 	const options: SegmentedOption<ThemePreference>[] = THEME_OPTIONS.map(o => ({

@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **HTML 卡片可以直接让你选，选择自动回到对话**：模型给出的可交互 HTML 面现在能带选择按钮——点一下，你选的那项就作为一条用户消息发回给智能体，下一轮它就按这个选择继续。比如让它给出三档界面方案并标出推荐项，你点哪档它就照哪档改，不用再打字。文字输入上限 8KB，且只接受卡片自己窗口发来的消息。
+  - EN: HTML cards can now collect your choice and carry it back into the conversation. An interactive HTML surface from the model can carry choice buttons — click one and your selection is sent to the agent as a message, so the next turn continues from what you picked. Ask for three layout options with a recommended one and it applies the one you click, with no typing. Submitted text is capped at 8 KB and only messages from the card's own window are accepted.
 - **插件池模型进入模型列表**：扩展注册的 provider 只要上次发现产出了模型即视为可用——此前 `getAvailable` 只认宿主 AuthStorage 里的凭据，账号池/导入凭据的渠道被发现后又被过滤掉，输入框模型列表永远看不到它们。池子清空后发现归零，对称关闭。
   - EN: Pool-backed extension models now reach the model list. A runtime (extension-registered) provider whose last discovery yielded models counts as available — previously `getAvailable` only honored host AuthStorage credentials, so discovered pool/import channels were filtered out of every picker. An emptied discovery closes the gate symmetrically.
 

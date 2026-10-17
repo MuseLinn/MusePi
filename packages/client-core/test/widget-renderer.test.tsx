@@ -13,7 +13,7 @@ import { collectWidgetPayloads, latestWidgetFromEntries } from "../src/component
 import { widgetDataEq, widgetRenderer } from "../src/tool-render/tools/widget";
 import type { ToolRenderProps } from "../src/tool-render/types";
 import { WidgetErrorBoundary } from "../src/widgets/error-boundary";
-import { widgetHostTheme } from "../src/widgets/html";
+import { readWidgetFaceMessage, widgetHostTheme } from "../src/widgets/html";
 
 // widgetRenderer always ships both renderers; the shared ToolRenderer type
 // marks Body optional (other renderers may omit it) and ComponentType is a
@@ -251,5 +251,82 @@ describe("widget standalone payload extraction", () => {
 			{ type: "message", message: { role: "user", content: "hi" } },
 		];
 		expect(latestWidgetFromEntries(entries)).toBeNull();
+	});
+});
+
+/**
+ * The sandbox face's answer channel. A face is model-authored HTML, so the
+ * contract that matters is what the host refuses: a submit only counts when
+ * it came from this card's own frame, and what it says is bounded.
+ */
+describe("sandbox face answer channel", () => {
+	const own = {} as MessageEventSource;
+	const foreign = {} as MessageEventSource;
+
+	it("routes a submit from the card's own frame to the host", () => {
+		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-submit", text: "A 档" })).toEqual({
+			kind: "submit",
+			text: "A 档",
+		});
+	});
+
+	it("ignores a submit forged by another window on the page", () => {
+		// Without the source check any frame in the app could inject text
+		// into the conversation through a widget card.
+		expect(readWidgetFaceMessage(foreign, own, { type: "musepi-widget-submit", text: "injected" })).toBeNull();
+	});
+
+	it("ignores a resize forged by another window on the page", () => {
+		expect(readWidgetFaceMessage(foreign, own, { type: "musepi-widget-resize", height: 9999 })).toBeNull();
+	});
+
+	it("acts on nothing while the card has no frame yet", () => {
+		expect(readWidgetFaceMessage(own, null, { type: "musepi-widget-submit", text: "x" })).toBeNull();
+		expect(readWidgetFaceMessage(own, null, { type: "musepi-widget-resize", height: 10 })).toBeNull();
+	});
+
+	it("caps what one face may say into the conversation", () => {
+		const msg = readWidgetFaceMessage(own, own, { type: "musepi-widget-submit", text: "x".repeat(50_000) });
+		expect(msg).toEqual({ kind: "submit", text: "x".repeat(8_000) });
+	});
+
+	it("drops empty, malformed and unknown shapes", () => {
+		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-submit", text: "" })).toBeNull();
+		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-submit" })).toBeNull();
+		expect(readWidgetFaceMessage(own, own, { type: "omp-widget-submit", text: "x" })).toBeNull();
+		expect(readWidgetFaceMessage(own, own, null)).toBeNull();
+		expect(readWidgetFaceMessage(own, own, "a string")).toBeNull();
+	});
+
+	it("still carries the auto-height report the card already depended on", () => {
+		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-resize", height: 412 })).toEqual({
+			kind: "resize",
+			height: 412,
+		});
+	});
+
+	it("refuses an oversized face rather than rendering half a document", () => {
+		const html = renderToStaticMarkup(
+			renderBody({
+				args: { type: "html" },
+				result: widgetResult("html", { html: `<p>${"y".repeat(70_000)}</p>`, data: {} }),
+			} as never),
+		);
+		expect(html).toContain("gui-widget-html-empty");
+		expect(html).not.toContain("yyyyyy");
+	});
+
+	it("exposes the submit helper to the face inside the sandbox", () => {
+		const html = renderToStaticMarkup(
+			renderBody({
+				args: { type: "html" },
+				result: widgetResult("html", { html: '<div class="plot">x</div>', data: {} }),
+			} as never),
+		);
+		// A face must be able to reach the channel; the legacy alias stays
+		// because faces written before the rename bind to it.
+		expect(html).toContain("musepiSubmit");
+		expect(html).toContain("musepi-widget-submit");
+		expect(html).toContain("musepi-theme-dark");
 	});
 });
