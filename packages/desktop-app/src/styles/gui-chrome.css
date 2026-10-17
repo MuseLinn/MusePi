@@ -310,47 +310,6 @@
 	background: color-mix(in oklab, var(--bg) 80%, transparent);
 }
 
-/* Floating menus and the session hover card are the two overlay surfaces
- * that never got this exemption. On these platforms the page blur samples
- * only the opaque DOM it can reach (a chat card) and nothing at all where
- * the backdrop is the translucent workspace over the OS material, which
- * Chromium cannot sample — so the same menu came out frosted over the
- * chat column and plainly see-through over the sidebar or the header.
- *
- * The blur goes, which leaves the scrim alone to carry the surface, and a
- * computed scrim cannot: --gui-glass-overlay resolves to 26.1% here
- * (`clamp(22%, 58% * (1 - alpha), 58%)` for win32/light, gui-base.css), and
- * the tint it mixes, --bg-overlay, is within 0.02 L of the canvas --bg. A
- * 26% wash of a canvas-coloured surface has nothing to show for itself at
- * any opacity the slider can reach, which is why these menus read as
- * transparent rather than as glass.
- *
- * So on these platforms the surface is simply the solid elevated colour,
- * which is what .gui-menu-popup already names as its own degradation
- * ("degrades to a solid surface instead of fully transparent text over
- * content") and what its 1px 36%-black ring plus the 32px drop shadow were
- * drawn to sit against. This is openchamber's split: the surface colour
- * carries the panel and the blur is an enhancement on top of it, not the
- * thing making it legible. The transparency slider keeps driving every
- * surface that still has real blur to show. */
-[data-platform="win32"] .gui-menu-popup,
-[data-platform="linux"] .gui-menu-popup,
-[data-platform="win32"] .gui-session-hover-card,
-[data-platform="linux"] .gui-session-hover-card {
-	backdrop-filter: none;
-	-webkit-backdrop-filter: none;
-}
-
-[data-platform="win32"] .gui-menu-popup,
-[data-platform="linux"] .gui-menu-popup {
-	background: var(--bg-overlay);
-}
-
-[data-platform="win32"] .gui-session-hover-card,
-[data-platform="linux"] .gui-session-hover-card {
-	background: var(--bg-overlay);
-}
-
 [data-platform="win32"] .gui-dialog-backdrop,
 [data-platform="linux"] .gui-dialog-backdrop,
 [data-platform="win32"] .gui-cap-drawer-backdrop,
