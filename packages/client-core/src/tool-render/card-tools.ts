@@ -39,6 +39,7 @@ export const TOOL_RENDER_CARD_TOOLS: readonly string[] = [
 	"irc",
 	"job",
 	"js",
+	"knowledge",
 	"lsp",
 	"notebook",
 	"poll",

@@ -11,7 +11,7 @@ describe("widget tool", () => {
 		const tool = new WidgetTool();
 		const res = await tool.execute("c1", { type: "calc", data: { amount: 2000 } });
 		expect(res.isError).not.toBe(true);
-		expect(res.details).toEqual({ type: "calc", data: { mode: "post", amount: 2000 } });
+		expect(res.details).toEqual({ action: "card", type: "calc", data: { mode: "post", amount: 2000 } });
 		expect(res.content[0].type).toBe("text");
 	});
 
@@ -42,5 +42,68 @@ describe("widget tool", () => {
 		const tool = new WidgetTool();
 		const res = await tool.execute("c1", { type: "metric" });
 		expect(res.details?.data).toMatchObject({ value: 4200, delta: 0.12 });
+	});
+});
+
+describe("widget page action", () => {
+	const page = "<!doctype html><html><body><h1>Compare</h1></body></html>";
+
+	test("renders a page as the html widget's face, not a second implementation", async () => {
+		const tool = new WidgetTool();
+		const res = await tool.execute("c1", { action: "page", title: "Compare two plans", html: page });
+		expect(res.isError).not.toBe(true);
+		// The renderer already owns the sandbox, the answer handback and the
+		// theme tokens for `html`; a page must land on that same face so those
+		// come for free instead of being re-built.
+		expect(res.details?.action).toBe("page");
+		expect(res.details?.type).toBe("html");
+		expect(res.details?.data).toEqual({ html: page });
+		expect(res.details?.title).toBe("Compare two plans");
+	});
+
+	test("tells the caller the page is already on screen", async () => {
+		// Without this the model repeats the page's content in prose, which is
+		// what a page exists to avoid.
+		const tool = new WidgetTool();
+		const res = await tool.execute("c1", { action: "page", html: page });
+		const text = res.content[0].type === "text" ? res.content[0].text : "";
+		expect(text).toContain("Don't announce, describe or restate the page");
+	});
+
+	test("collects local image paths the chat must inline", async () => {
+		// A sandboxed page cannot read the filesystem; the host swaps each path
+		// for the file's contents.
+		const tool = new WidgetTool();
+		const res = await tool.execute("c1", {
+			action: "page",
+			html: `<img src="C:\\shots\\a.png"><div style="background:url('/tmp/b.jpg')"></div>`,
+		});
+		expect(res.details?.images).toEqual(["C:\\shots\\a.png", "/tmp/b.jpg"]);
+	});
+
+	test("rejects empty html, and html over the renderer's own cap", async () => {
+		const tool = new WidgetTool();
+		const blank = await tool.execute("c1", { action: "page", html: "   " });
+		expect(blank.isError).toBe(true);
+		expect(blank.content[0].type === "text" ? blank.content[0].text : "").toContain("html is required");
+
+		const huge = "x".repeat(64_001);
+		const over = await tool.execute("c1", { action: "page", html: huge });
+		expect(over.isError).toBe(true);
+		expect(over.content[0].type === "text" ? over.content[0].text : "").toContain("64000");
+	});
+
+	test("rejects a title over the cap so a heading stays a heading", async () => {
+		const tool = new WidgetTool();
+		const res = await tool.execute("c1", { action: "page", html: page, title: "t".repeat(200) });
+		expect(res.isError).toBe(true);
+		expect(res.content[0].type === "text" ? res.content[0].text : "").toContain("title exceeds");
+	});
+
+	test("still rejects an unknown card type, so the action never becomes a bypass", async () => {
+		const tool = new WidgetTool();
+		const res = await tool.execute("c1", { type: "nope" });
+		expect(res.isError).toBe(true);
+		expect(res.content[0].type === "text" ? res.content[0].text : "").toContain("unknown type");
 	});
 });

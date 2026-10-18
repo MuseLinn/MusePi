@@ -1,7 +1,9 @@
-# widget — 内联交互卡片
+# widget — 内联交互卡片 / 内联页面
 
-在会话中渲染一张**可交互的活卡片**（计算器、滑杆面板、行情、指标、待办、时钟），
-而不是用大段文字描述数值/结构。
+两种东西，一个工具：
+
+- **card**（默认）：结构化活卡片（计算器、滑杆面板、行情、指标、待办、时钟）
+- **page**：一页自包含 HTML，直接在对话里摊开给用户看
 
 ## 何时使用
 
@@ -11,6 +13,13 @@
 - **交互**：用户需要调参观察（滑杆面板——噪声/抖动对信号的影响）
 - **仪表盘感**：一组相关数值（时钟 + 市场状态、行情列表）
 - **清单**：待办、检查项
+
+### card 还是 page？
+
+有对应结构类型就用 **card**（有 schema、有默认值、更省 token）。
+只有当答案需要自由布局时才用 **page**：
+
+Use it when the answer is mostly data or structure the user would otherwise have to picture: numbers compared across several items (sizes, counts, timings, costs, test or benchmark results), a breakdown or share of a whole, a trend over time, options compared on several criteria, a timeline of events, or how components connect. Use it too when the answer is about how something looks: a proposed interface change shown as it would appear, before and after side by side, or layout options to choose between. Do not use it for a few numbers or a short list that reads fine as text, for code, or when the user asked for plain text. At most one page per answer.
 
 **不要**用于：普通文字回答、逐行代码解释、文件列表、破坏性/阻塞输入流程、
 大型长驻应用。
@@ -25,8 +34,11 @@
 ## 怎么写
 
 ```
-widget { type, data, title? }
+widget { action?, type?, data?, title?, html? }
 ```
+
+`action` 省略或 `"card"` → 用 `type` + `data`（结构化卡片）。
+`action: "page"` → 用 `title` + `html`（自由页面），忽略 `type`/`data`。
 
 |type|data 字段|说明|
 |---|---|---|

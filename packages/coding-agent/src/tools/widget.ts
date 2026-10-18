@@ -254,17 +254,84 @@ export const WIDGET_TYPES: Record<
 // Upper bound for widget data (agents sometimes pass verbose payloads);
 // oversized data is rejected instead of bloating the transcript.
 const MAX_DATA_JSON = 12_000;
+/**
+ * A rendered page's HTML travels in the tool call's input, which the daemon
+ * stores with the message and streams to every client.
+ *
+ * The cap is the renderer's `MAX_HTML` (client-core/src/widgets/html.tsx), not
+ * an invented number: a page over it renders as an "oversize" notice instead of
+ * a face, so accepting more here would only defer the failure to the client.
+ * Everything else a page needs — the null-origin sandbox, `musepiSubmit` answer
+ * handback, theme injection, `.musepi-options` styling, height reporting — is
+ * the existing `html` widget's, which is why `page` is an action of this tool
+ * rather than a second implementation.
+ */
+const MAX_PAGE_HTML = 64_000;
+/** A page's title is a heading, not a sentence. */
+const MAX_PAGE_TITLE = 120;
+
+/**
+ * When a page beats prose, and when it does not.
+ *
+ * Both the tool description and the line every session carries state it.
+ * Stated only in the tool description it went unread: asked for a breakdown of
+ * lines of code per package, an agent answered with a list and drew the chart
+ * only when asked. Interface mockups are named on their own — listed only as
+ * data, the cases read to a literal model as "charts only", while a proposed
+ * UI change is where a page helps most. The limits matter as much as the
+ * cases: a page for two numbers is worse than a sentence.
+ */
+export const RENDER_PAGE_WHEN =
+	"Use it when the answer is mostly data or structure the user would otherwise have to picture:" +
+	" numbers compared across several items (sizes, counts, timings, costs, test or benchmark results)," +
+	" a breakdown or share of a whole, a trend over time, options compared on several criteria," +
+	" a timeline of events, or how components connect." +
+	" Use it too when the answer is about how something looks: a proposed interface change shown as it would appear," +
+	" before and after side by side, or layout options to choose between." +
+	" Do not use it for a few numbers or a short list that reads fine as text, for code, or when the user asked for plain text." +
+	" At most one page per answer.";
+
+/**
+ * Local image paths a page names, in order, at most 12.
+ *
+ * A sandboxed page cannot read the filesystem, so the chat swaps each path for
+ * the file's contents before drawing it. Matches both a quoted src/CSS value
+ * (which may contain spaces — macOS screenshots do) and an unquoted url(...).
+ */
+const LOCAL_IMAGE_RE =
+	/(["'`])((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>\n]*?\.(?:png|jpe?g|gif|webp))\1|url\(\s*((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>()\s]*?\.(?:png|jpe?g|gif|webp))\s*\)/gi;
+export const RENDER_PAGE_MAX_LOCAL_IMAGES = 12;
+
+export function renderPageImageSources(html: string): string[] {
+	const sources = new Set<string>();
+	for (const match of html.matchAll(LOCAL_IMAGE_RE)) {
+		sources.add(match[2] ?? match[3] ?? "");
+		if (sources.size === RENDER_PAGE_MAX_LOCAL_IMAGES) break;
+	}
+	return [...sources];
+}
 
 const widgetSchema = type({
-	type: type("string").describe(`Widget type: ${Object.keys(WIDGET_TYPES).join(" / ")}`),
+	"action?": type('"card" | "page"').describe(
+		'What to render: "card" (a structured widget type — the default) or "page" (one self-contained HTML page shown inline in the chat)',
+	),
+	"type?": type("string").describe(`Widget type (action=card): ${Object.keys(WIDGET_TYPES).join(" / ")}`),
 	"data?": type("object").describe("Widget data fields per type (defaults fill the rest)"),
 	"title?": type("string").describe("Optional card title (defaults to the widget name)"),
+	"html?": type("string").describe("The page's HTML, complete document with inline CSS (action=page)"),
 });
 
 export interface WidgetToolDetails {
+	/** `card` = a structured widget type; `page` = one free HTML page. */
+	action: "card" | "page";
 	type: string;
 	data: Record<string, unknown>;
 	title?: string;
+	/** The page's HTML (action=page only). */
+	html?: string;
+	/** Local image paths the page names; the chat swaps them for file contents
+	 *  (a sandboxed page cannot read the filesystem itself). */
+	images?: string[];
 }
 
 export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDetails> {
@@ -277,11 +344,19 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 	readonly examples: readonly ToolExample<typeof widgetSchema.infer>[] = [
 		{
 			caption: "Render a labor-fee calculator",
-			call: { type: "calc", data: { mode: "post", amount: 1760 } },
+			call: { action: "card", type: "calc", data: { mode: "post", amount: 1760 } },
 		},
 		{
 			caption: "Render a ticker quote",
-			call: { type: "ticker", data: { label: "EUR / CNY", value: "7.7945", delta: 0.0046 } },
+			call: { action: "card", type: "ticker", data: { label: "EUR / CNY", value: "7.7945", delta: 0.0046 } },
+		},
+		{
+			caption: "Render a comparison page with a choice",
+			call: {
+				action: "page",
+				title: "Compare two plans",
+				html: "<!doctype html><html><body><h1>Compare two plans</h1><button onclick=\"window.musepiSubmit('Plan A',{plan:'a'})\">Pick A</button></body></html>",
+			},
 		},
 	];
 
@@ -292,6 +367,61 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 		_onUpdate?: AgentToolUpdateCallback<WidgetToolDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<WidgetToolDetails>> {
+		const action = params.action === "page" ? "page" : "card";
+
+		if (action === "page") {
+			const html = typeof params.html === "string" ? params.html : "";
+			if (!html.trim()) {
+				return {
+					content: [{ type: "text", text: "widget (page): html is required and must not be empty" }],
+					isError: true,
+				};
+			}
+			if (html.length > MAX_PAGE_HTML) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `widget (page): html exceeds ${MAX_PAGE_HTML} characters — trim styles, comments and inline scripts`,
+						},
+					],
+					isError: true,
+				};
+			}
+			const title = typeof params.title === "string" ? params.title.trim() : "";
+			if (title.length > MAX_PAGE_TITLE) {
+				return {
+					content: [{ type: "text", text: `widget (page): title exceeds ${MAX_PAGE_TITLE} characters` }],
+					isError: true,
+				};
+			}
+			const details: WidgetToolDetails = {
+				action,
+				// A page IS the `html` widget's face: same sandbox, same
+				// `musepiSubmit` handback, same theme tokens. Reusing the type is
+				// what keeps one implementation instead of two.
+				type: "html",
+				data: { html },
+				html,
+				images: renderPageImageSources(html),
+			};
+			if (title) details.title = title;
+			return {
+				content: [
+					{
+						type: "text",
+						text:
+							`Rendered page${title ? ` "${title}"` : ""} (${html.length} characters). ` +
+							"Shown to the user in the chat above your reply. Don't announce, describe or restate the page; reply with only what it doesn't already say." +
+							(details.images?.length
+								? ` The page references ${details.images.length} local image(s), which the chat inlines for it.`
+								: ""),
+					},
+				],
+				details,
+			};
+		}
+
 		const typeName = typeof params.type === "string" ? params.type : "";
 		const spec = WIDGET_TYPES[typeName];
 		if (!spec) {
@@ -317,7 +447,7 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 				isError: true,
 			};
 		}
-		const details: WidgetToolDetails = { type: typeName, data: { ...spec.defaults, ...rawData } };
+		const details: WidgetToolDetails = { action: "card", type: typeName, data: { ...spec.defaults, ...rawData } };
 		if (typeof params.title === "string" && params.title.length > 0) details.title = params.title;
 		return {
 			content: [
