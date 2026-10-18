@@ -654,6 +654,11 @@ export const general = {
 	// Right-rail surface visibility (hide from rail, restore from overflow).
 	"hide surface": "Hide surface",
 	"show hidden surfaces": "Show hidden surfaces",
+	// Right-rail chrome (nav axis: the "…" fold button and the panel toggle).
+	"right rail": "Right rail",
+	"more tools": "More tools",
+	"collapse right panel": "Collapse right panel",
+	"expand right panel": "Expand right panel",
 	// Tab-primary right panel empty state.
 	"start here": "Start here",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).

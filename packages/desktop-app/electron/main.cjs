@@ -37,7 +37,7 @@ const win32Native = createWindowsNative({ log: msg => console.log(`[pet] ${msg}`
 if (process.env.MUSEPI_CDP_PORT) {
 	app.commandLine.appendSwitch("remote-debugging-port", process.env.MUSEPI_CDP_PORT);
 }
-const { probe, probeWeb, restart, start, kill, portOpen } = require("./daemon.cjs");
+const { probe, probeWeb, restart, start, kill, portOpen, reapOrphanedDaemons } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
 const {
 	checkForUpdates,
@@ -3401,11 +3401,27 @@ ipcMain.handle("daemon-probe", () => probe());
 // startup" and the app shows 无法连接本地守护进程. Clear the port first
 // (kill has SIGTERM→SIGKILL escalation, so it cannot wedge on a stuck
 // process), then spawn.
+//
+// The clear is scoped to daemons WE spawned whose owner is gone: a bare
+// `kill(port)` here SIGTERMed whatever listened, with no ownership check —
+// which is how a dev instance whose package version differed from a daemon
+// started by the installed app took down `:8300` (docs/gui-implementation.md
+// §8 hazards). `reapOrphanedDaemons` never records a foreign daemon, so a
+// terminal-launched or launch-at-login daemon is now left alone; if one still
+// holds the port, the spawn reports EADDRINUSE instead of killing it.
 ipcMain.handle("daemon-start", async (_event, port) => {
-	await kill(Number(port)).catch(() => {});
+	await reapOrphanedDaemons();
 	return start(Number(port), daemonEnv());
 });
-ipcMain.handle("daemon-restart", (_event, port) => restart(Number(port), daemonEnv()));
+ipcMain.handle("daemon-restart", async (_event, port) => {
+	// Explicit user action (instance menu / boot version gate): replacing the
+	// listener IS the request, so reap our own orphans and then kill the
+	// listener on the port. This path intentionally keeps the hard kill —
+	// `restart` is only reachable when the user or the boot gate asked for a
+	// refresh of THIS machine's daemon.
+	await reapOrphanedDaemons();
+	return restart(Number(port), daemonEnv());
+});
 
 /**
  * Relocate the app data root (设置 → 常规 → 数据存储路径).

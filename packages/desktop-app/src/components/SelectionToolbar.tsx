@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { tapFeedback } from "../lib/haptic";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon, type IconName } from "../vendor/oc-icons";
@@ -11,6 +12,16 @@ import { MENU_ANIM_MS } from "./MenuPopup";
  * selecting text inside the transcript pops a small glass toolbar above
  * the selection with 引用 (quote to composer) / 复制 / 基于选择新建会话 /
  * 添加到笔记. Dismisses on outside click, scroll, or Escape.
+ *
+ * PORTALLED to the React root, and that is load-bearing, not stylistic.
+ * `.gui-select-pop` is `position: fixed` and this component mounts inside
+ * `.gui-transcript-wrap`, which declares `container-type: size`. Layout
+ * containment makes that wrap the CONTAINING BLOCK for fixed descendants, so
+ * the viewport coordinates reported by `range.getBoundingClientRect()` were
+ * resolved against the wrap instead of the window — the toolbar landed
+ * offset by the wrap's origin and was clipped by the chat column's
+ * `overflow: hidden` (audit 2026-10-18). Portalling restores the viewport as
+ * the containing block, which is what the coordinates mean.
  */
 export function SelectionToolbar({
 	containerRef,
@@ -134,7 +145,10 @@ export function SelectionToolbar({
 		{ icon: "chat-new", label: t("new session from selection"), run: () => onNewSession(pop.text) },
 		{ icon: "sticky-note", label: t("add to notes"), run: () => onAddNote(pop.text) },
 	];
-	return (
+	// Portal into the React root (NOT document.body): React's delegated
+	// listeners live on the root container, so a body-level portal never
+	// bubbles through it and the buttons' clicks would silently die.
+	return createPortal(
 		<div
 			className={`gui-select-pop${enteredCls ? " gui-select-pop--entered" : ""}${closing ? " gui-select-pop--closing" : ""}${expanded ? " gui-select-pop--expanded" : ""}`}
 			role="toolbar"
@@ -164,6 +178,7 @@ export function SelectionToolbar({
 					<span className="gui-select-pop-label">{a.label}</span>
 				</button>
 			))}
-		</div>
+		</div>,
+		document.getElementById("root") ?? document.body,
 	);
 }

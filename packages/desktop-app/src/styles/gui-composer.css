@@ -2862,6 +2862,28 @@ button.gui-stats-pill {
 	min-width: 260px;
 }
 
+/* Extension status list (ExtensionStatusCard) — LAYOUT ONLY.
+ *
+ * The popup is a useFloatingMenu portal, so the shell (.gui-menu-popup) owns
+ * position/surface/enter animation and nothing here may declare them. It used
+ * to be an in-component `absolute bottom-full` box; the session composer is
+ * always `hero`, so BorderBeam's `[data-beam] { overflow: hidden }` clipped the
+ * upward-opening list at the input card's top edge (user report 2026-10-18). */
+.gui-ext-status-menu {
+	min-width: 240px;
+	padding: 4px;
+}
+
+.gui-ext-status-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: var(--radius-md);
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
 .gui-approval-menu-head {
 	padding: 6px 12px 4px;
 	font-size: 11px;

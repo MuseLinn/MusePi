@@ -24,6 +24,7 @@ import {
 	writeHiddenSurfaces,
 	writeSurfaceOrder,
 } from "../lib/surfaces/registry";
+import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { RailTooltip } from "./RailTooltip";
@@ -72,7 +73,7 @@ export function RightRail({
 	const [overflowOpen, setOverflowOpen] = useState(false);
 	// 右键隐藏菜单的锚点（复用 ContextMenu；与拖拽/序号互斥，无需额外状态机）
 	const [hideMenu, setHideMenu] = useState<{ x: number; y: number; id: string } | null>(null);
-	const overflowRef = useRef<HTMLDivElement | null>(null);
+	const overflowBtnRef = useRef<HTMLButtonElement | null>(null);
 	const railRef = useRef<HTMLElement | null>(null);
 	// Nav-axis overflow fold (user: 更多按钮只在高度不够时显示). When every
 	// surface fits the rail height, render all (incl. secondary) as icons;
@@ -304,21 +305,24 @@ export function RightRail({
 		return () => ro.disconnect();
 	}, [items.length, extItems.length]);
 
-	// 折叠菜单：点击外部关闭
-	useEffect(() => {
-		if (!overflowOpen) return;
-		const onDocClick = (e: MouseEvent): void => {
-			if (!overflowRef.current?.contains(e.target as Node)) setOverflowOpen(false);
-		};
-		document.addEventListener("mousedown", onDocClick);
-		return () => document.removeEventListener("mousedown", onDocClick);
-	}, [overflowOpen]);
+	// 折叠菜单（"…"）：走全局唯一的浮层实现（useFloatingMenu —— portal 到
+	// React root + fixed 定位 + 翻转/夹取 + 两阶段入场 + 外部点击/Esc 关闭 +
+	// 单开互斥）。此前是 rail 内部 `position:absolute; right:48px` 的盒子，
+	// 而 `.gui-right-rail` 是 `overflow:hidden` 的 44px 卡片：菜单被裁成不可见，
+	// 点开等于什么都不发生（用户报告）。
+	const overflowMenu = useFloatingMenu(overflowOpen, setOverflowOpen, {
+		className: "gui-right-rail-overflow",
+		anchor: overflowBtnRef.current,
+		// 贴着窗口右缘的栏：flyout 向左展开，而不是向下（向下会被视口夹成一条）。
+		side: "left",
+		gap: 8,
+	});
 
 	return (
 		<aside
 			ref={railRef}
 			className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`}
-			aria-label="right rail"
+			aria-label={t("right rail")}
 		>
 			{/* The single navigation axis (VSCode Activity-Bar unification).
 			 * Scrolls when a short window cannot fit every view; edges
@@ -367,29 +371,27 @@ export function RightRail({
 				))}
 			</div>
 			{foldedItems.length > 0 || hiddenItems.length > 0 ? (
-				<div className="gui-right-rail-group" ref={overflowRef}>
+				<div className="gui-right-rail-group">
 					<button
+						ref={overflowBtnRef}
 						type="button"
 						className={`gui-right-rail-btn${overflowOpen ? " gui-right-rail-btn--active" : ""}`}
-						title="more tools"
-						aria-label="more tools"
+						title={t("more tools")}
+						aria-label={t("more tools")}
+						aria-haspopup="menu"
 						aria-expanded={overflowOpen}
 						onClick={() => setOverflowOpen(v => !v)}
 					>
 						<Icon name="more" className="h-4 w-4" />
 					</button>
-					{overflowOpen && (
+					{overflowMenu.renderMenu(
 						<div
-							className="gui-right-rail-overflow"
 							role="menu"
 							aria-orientation="vertical"
+							// Esc 由 useFloatingMenu 统一处理（它同时 preventDefault 认领
+							// 按键，见 docs/gui-implementation.md §Escape ownership）；
+							// 这里只管方向键遍历与 Enter 激活。
 							onKeyDown={e => {
-								if (e.key === "Escape") {
-									e.preventDefault();
-									setOverflowOpen(false);
-									return;
-								}
-								// ArrowUp/Down cycle items, Enter activates.
 								const buttons = Array.from(
 									e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]"),
 								);
@@ -447,7 +449,7 @@ export function RightRail({
 									))}
 								</>
 							)}
-						</div>
+						</div>,
 					)}
 				</div>
 			) : null}
@@ -456,8 +458,8 @@ export function RightRail({
 				<button
 					type="button"
 					className="gui-right-rail-btn"
-					title={rightPanelOpen ? "collapse" : "expand"}
-					aria-label={rightPanelOpen ? "collapse right panel" : "expand right panel"}
+					title={rightPanelOpen ? t("collapse") : t("expand")}
+					aria-label={rightPanelOpen ? t("collapse right panel") : t("expand right panel")}
 					onClick={() => onToggleRightPanel?.()}
 				>
 					<StateIcon on={rightPanelOpen} pair={["arrow-right", "arrow-left"]} className="h-4 w-4" />
@@ -466,7 +468,7 @@ export function RightRail({
 			</div>
 			<RailTooltip
 				anchor={tip?.anchor ?? null}
-				label={tip ? (surfaceById(tip.id)?.label ?? "context") : "context"}
+				label={tip ? surfaceById(tip.id)?.label : undefined}
 				description={tip ? surfaceById(tip.id)?.description : undefined}
 				extra={tip?.id === "git" && gitChanges ? t("{count} changed files", { count: gitChanges }) : null}
 				suppressed={dragging}

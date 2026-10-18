@@ -58,7 +58,6 @@
   "packages/desktop-app/src/components/NavRail.tsx": 4,
   "packages/desktop-app/src/components/OnboardingOverlay.tsx": 15,
   "packages/desktop-app/src/components/RewardOverlay.tsx": 1,
-  "packages/desktop-app/src/components/RightRail.tsx": 9,
   "packages/desktop-app/src/components/ScheduledTasksPage.tsx": 6,
   "packages/desktop-app/src/components/SchemaSettings.tsx": 1,
   "packages/desktop-app/src/components/SettingsNav.tsx": 10,

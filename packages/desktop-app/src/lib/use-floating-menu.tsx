@@ -39,15 +39,40 @@ export interface MenuPoint {
 	y: number;
 }
 
+/**
+ * Where the popup grows from its anchor.
+ *
+ * `bottom` (default) is the menu/select shape: drop below and flip above.
+ * `left` is the flyout shape for edge-docked triggers — the right icon rail
+ * sits flush against the window's right edge, so a popup below it would be
+ * clamped almost to zero width by the viewport shift. A `left` menu pins its
+ * RIGHT edge to the anchor's left edge, aligns its top with the anchor and
+ * clamps into the viewport both axes.
+ */
+export type MenuSide = "bottom" | "left";
+
 export function useFloatingMenu(
 	open: boolean,
 	onOpenChange?: (open: boolean) => void,
-	options?: { className?: string; align?: "left" | "right"; anchor?: HTMLElement | MenuPoint | null },
+	options?: {
+		className?: string;
+		align?: "left" | "right";
+		anchor?: HTMLElement | MenuPoint | null;
+		side?: MenuSide;
+		/** Distance in px from the anchor (default 6). */
+		gap?: number;
+	},
 ): {
 	anchorRef: (el: HTMLElement | null) => void;
 	renderMenu(children: ReactNode): ReactNode;
 } {
-	const { className = "gui-menu-popup", align = "left", anchor: anchorOption } = options ?? {};
+	const {
+		className = "gui-menu-popup",
+		align = "left",
+		anchor: anchorOption,
+		side = "bottom",
+		gap = 6,
+	} = options ?? {};
 	const anchorRef = useRef<HTMLElement | null>(null);
 	const setAnchor = (el: HTMLElement | null): void => {
 		anchorRef.current = el;
@@ -99,11 +124,36 @@ export function useFloatingMenu(
 		// re-measure/scroll repositions instead of reacting to the clamp.
 		const menuEl = menuRef.current;
 		const menuH = menuEl ? Math.max(menuEl.offsetHeight, menuEl.scrollHeight) : MENU_ESTIMATED_H;
+		setClosing(false);
+		// Entered is reset ONLY on a fresh open (the two-phase enter fades in
+		// from opacity 0). Scroll/resize re-positioning must NOT touch it —
+		// resetting here made menus flicker transparent → glassy on every
+		// scroll tick inside the menu or its scrolling container.
+		if (resetEntered) setEntered(false);
+		// Flyout (edge-docked trigger): pin the menu's right edge to the
+		// anchor's left edge and slide it into the viewport. The vertical
+		// axis prefers a top alignment with the anchor and only lifts the
+		// menu as far as it must to fit; tall content scrolls inside.
+		if (side === "left") {
+			const left = Math.max(
+				MENU_EDGE_PAD,
+				Math.min(r.left - gap - menuW, window.innerWidth - menuW - MENU_EDGE_PAD),
+			);
+			const availH = window.innerHeight - MENU_EDGE_PAD * 2;
+			const clampedH = Math.min(menuH, availH);
+			const top = Math.max(MENU_EDGE_PAD, Math.min(r.top, window.innerHeight - clampedH - MENU_EDGE_PAD));
+			setPos(prev =>
+				prev?.left === left && prev.top === top && prev.bottom === undefined && prev.maxH === availH
+					? prev
+					: { left, top, up: false, maxH: availH },
+			);
+			return;
+		}
 		// Flip up when the menu would overflow the viewport bottom (top +
 		// height > innerHeight) as well as when there is simply more room
 		// above — a tall menu near the bottom edge must not clip (Base-UI
 		// flip parity for the vertical axis).
-		const flipUpForBottomOverflow = r.bottom + 6 + menuH > window.innerHeight - MENU_EDGE_PAD;
+		const flipUpForBottomOverflow = r.bottom + gap + menuH > window.innerHeight - MENU_EDGE_PAD;
 		const roomAbove = r.top;
 		const roomBelow = window.innerHeight - r.bottom;
 		const up = flipUpForBottomOverflow || roomAbove > roomBelow;
@@ -112,7 +162,7 @@ export function useFloatingMenu(
 		// clipped at the viewport top). The wrapper scrolls (inline
 		// overflowY) when its content exceeds the clamp; the 0 floor keeps
 		// a negative value from disabling the clamp entirely.
-		const maxH = Math.max(0, up ? r.top - 6 - MENU_EDGE_PAD : window.innerHeight - r.bottom - 6 - MENU_EDGE_PAD);
+		const maxH = Math.max(0, up ? r.top - gap - MENU_EDGE_PAD : window.innerHeight - r.bottom - gap - MENU_EDGE_PAD);
 		// Align: right -> menu's right edge on anchor's right edge; left ->
 		// menu's left edge on anchor's left edge. Then CLAMP horizontally into
 		// the viewport — the previous anchor-only clamp (right: innerWidth -
@@ -123,14 +173,8 @@ export function useFloatingMenu(
 			Math.max(rawLeft, MENU_EDGE_PAD),
 			Math.max(MENU_EDGE_PAD, window.innerWidth - menuW - MENU_EDGE_PAD),
 		);
-		setClosing(false);
-		// Entered is reset ONLY on a fresh open (the two-phase enter fades in
-		// from opacity 0). Scroll/resize re-positioning must NOT touch it —
-		// resetting here made menus flicker transparent → glassy on every
-		// scroll tick inside the menu or its scrolling container.
-		if (resetEntered) setEntered(false);
-		const top = !up ? r.bottom + 6 : undefined;
-		const bottom = up ? window.innerHeight - r.top + 6 : undefined;
+		const top = !up ? r.bottom + gap : undefined;
+		const bottom = up ? window.innerHeight - r.top + gap : undefined;
 		setPos(prev => {
 			// Skip identical positions (scroll inside the menu moves the
 			// anchor's rect not at all; every tick otherwise re-renders the
@@ -154,7 +198,7 @@ export function useFloatingMenu(
 			return;
 		}
 		positionMenu(true);
-	}, [open, align]);
+	}, [open, align, side]);
 
 	// Re-position on scroll/resize: an anchor inside a scrolling container
 	// (settings provider cards, onboarding provider list) moves with the
@@ -174,7 +218,7 @@ export function useFloatingMenu(
 			document.removeEventListener("scroll", onScroll, true);
 			window.removeEventListener("resize", onScroll);
 		};
-	}, [open, align, anchorOption]);
+	}, [open, align, side, anchorOption]);
 
 	// One-shot re-measure: first positioning ran before the portal existed
 	// (estimated width) — after mount, snap left/right to the real menu
@@ -291,8 +335,17 @@ export function useFloatingMenu(
 					// stays hidden via .gui-menu-popup.
 					maxHeight: `${pos.maxH}px`,
 					overflowY: "auto",
+					// Growth origin: scale from the edge that touches the trigger.
 					transformOrigin:
-						align === "right" ? (pos.up ? "bottom right" : "top right") : pos.up ? "bottom left" : "top left",
+						side === "left"
+							? "right top"
+							: align === "right"
+								? pos.up
+									? "bottom right"
+									: "top right"
+								: pos.up
+									? "bottom left"
+									: "top left",
 				}}
 			>
 				{children}

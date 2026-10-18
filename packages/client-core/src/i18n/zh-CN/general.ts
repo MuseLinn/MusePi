@@ -644,6 +644,11 @@ export const general = {
 	// Right-rail surface visibility (hide from rail, restore from overflow).
 	"hide surface": "隐藏表面",
 	"show hidden surfaces": "显示已隐藏的表面",
+	// Right-rail chrome (nav axis: the "…" fold button and the panel toggle).
+	"right rail": "右侧工具栏",
+	"more tools": "更多工具",
+	"collapse right panel": "收起右侧面板",
+	"expand right panel": "展开右侧面板",
 	// Tab-primary right panel empty state.
 	"start here": "从这里开始",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).

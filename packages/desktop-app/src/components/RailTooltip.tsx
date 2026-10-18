@@ -25,7 +25,13 @@ export function RailTooltip({
 	suppressed,
 }: {
 	anchor: HTMLElement | null;
-	label: string;
+	/**
+	 * i18n key of the hovered surface. `undefined` while no surface is hovered
+	 * (the portal is not rendered then, so there is no copy to fall back to —
+	 * a literal placeholder here was untranslated English in the dictionary's
+	 * blind spot).
+	 */
+	label?: string;
 	description?: string;
 	extra?: string | null;
 	suppressed: boolean;
@@ -63,7 +69,7 @@ export function RailTooltip({
 		return () => window.clearTimeout(id);
 	}, [anchor, suppressed]);
 
-	if (!pos || !shown) return null;
+	if (!pos || !shown || !label) return null;
 	return createPortal(
 		<div
 			className="gui-rail-tooltip"
