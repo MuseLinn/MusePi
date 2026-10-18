@@ -181,7 +181,35 @@ Three independent paths, completely different rules:
 - **Any surface that handles Escape MUST claim it** (`e.preventDefault()`) — a handler that closes its UI without claiming leaks the key into the interrupt binding, which is how a menu dismissal aborted a live turn. Owned cases are also detected structurally by `escapeOwner`: `[role="dialog"|"listbox"|"menu"|"tooltip"]`, `[aria-modal="true"]`, `[data-escape-owner]` (→ `"overlay"`), and any `input`/`textarea`/`select`/`contenteditable` **outside** `[data-chat-input="true"]` (→ `"field"`). The composer is deliberately NOT an owner: Escape there keeps interrupt semantics. Focus lives on a menu's trigger *outside* its portal, so structural detection can't see an open popup — claiming is the only reliable signal for those.
 - **`session.abort` must thread `USER_INTERRUPT_LABEL`**, never a similar literal: `AgentSession.abort` compares `reason === USER_INTERRUPT_LABEL` ("Interrupted by user") by strict equality to set `AIError.Flag.UserInterrupt` and suppress advisor auto-resume. Covered by `coding-agent/test/daemon/session-abort-rpc.test.ts` (asserts the reason satisfies `isUserInterruptAbort`, not just that it looks right).
 - **Verification safety (shared daemon)**: an isolated `--user-data-dir` instance still connects to the SAME daemon, and its window shows the same sessions. Never drive Escape, the stop button, or `session.abort` into it while it displays a session you care about — a probe that presses Escape has already interrupted the user's live turn. Point the probe at a scratch session, or at its own daemon (`PI_CONFIG_DIR=<temp root> musepi serve --port <n>` + seed `localStorage["musepi-gui-url"]`). Offline turn fixture: `scripts/fake-openai-server.mjs` (streaming stub) + a `fake` provider in the temp root's `agent/models.yml`, so no real quota is spent. Driver: `scripts/verify-escape-guard.mjs`.
-- **Known hazards (documented, not fixed here)**: (1) **the quit path is safe, the spawn paths are not.** `before-quit` / update-install call `killOwnedDaemon()`, which returns false unless `client.pid` matches this process (`main.cjs:177-194`; a quit against another instance's daemon logs `daemon teardown on quit: not owned` and kills nothing). The unowned kills live in the IPC handlers — `daemon-start` (`main.cjs:2564`, `await kill(port)` before spawning to clear a stale listener) and `daemon-restart` (`main.cjs:2568`) — both `kill(port)` by listener pid with no ownership check. `daemon-restart` is what the boot version gate fires (`shouldRestartDaemon` → `api.restartDaemon`), so **a dev instance whose package version differs from a daemon started by the installed app or a terminal will kill that daemon on connect** — this is what took down `:8300` during the Escape verification. (2) A SIGTERM'd daemon whose children inherited the listening socket leaves the port accepting TCP forever with no process behind it — `connect()` never settles, so the shell hangs on the splash and must be killed manually (recovery: reboot, or find the orphan holding the handle). Boot also tries the default `:8300` before probing and does not time out that attempt.
+- **Known hazards**: (1) **the spawn paths no longer kill foreign daemons (fixed 2026-10-18).** `daemon-start` used to `await kill(port)` with no ownership check, and `daemon-restart` still kills by listener pid — `daemon-restart` is what the boot version gate fires (`shouldRestartDaemon` → `api.restartDaemon`), so a dev instance whose package version differed from a daemon started by the installed app or a terminal could kill that daemon (`:8300` went down this way during the Escape verification). `daemon-start` now reaps only registered orphans (see §8b) and never kills an unregistered listener: a foreign daemon holding the port surfaces as EADDRINUSE instead of being replaced. `daemon-restart` keeps the hard kill on purpose — it is only reachable from an explicit user action or the boot gate. (2) **The port-stuck-forever case is fixed (2026-10-18).** A daemon whose children inherited the listening socket used to survive as an accepting port with no server behind it — `connect()` never settled and the shell hung on its splash. `kill()` now snapshots the descendant pids BEFORE signalling (see §8c) and reclaims them, because `taskkill /T` and `pgrep -P` both walk live parent links and cannot find children that were spawned `detached`. Boot also tries the default `:8300` before probing and does not time out that attempt. (3) **On Windows `SIGTERM` is `TerminateProcess` and is uncatchable**, so a signal alone can never produce an orderly daemon shutdown there. That is why `system.shutdown` exists (§8c): the cooperative path travels the WS RPC channel on every platform, and the SIGTERM stage is only the fallback for a daemon too wedged to answer RPC.
+
+### 8b. Daemon ownership and orphan reaping (2026-10-18)
+
+**The daemon is deliberately `detached` + `unref`ed**, so it outlives a GUI crash and a running turn finishes (A crash never reaches the quit path.) The cost used to be that a hard-killed GUI stranded a daemon nobody owned, and the only recovery was `daemon-start`'s blind `kill(port)`. The registry replaces "something holds the port → kill it" with evidence, mirroring openchamber's `managed-process-registry`.
+
+- **Storage**: `<MUSEPI_DAEMON_DIR>/managed/<pid>.json`, one file per daemon we spawned. One-file-per-pid, not a shared JSON: several shells/worktrees run concurrently and a read-modify-write on one file would clobber siblings. Written after the listener binds (a process that never became ready is not worth reclaiming), by write-then-rename so a crash cannot leave truncated JSON.
+- **Reap conditions — all three, never fewer**: ① the pid is in OUR registry (we spawned it); ② **identity still binds pid↔port in both directions** — `ws.port` (written by the daemon itself) still names the recorded port **and** `listenerPid(port) === record.pid`; ③ the recorded owner pid is dead. Anything unverifiable is left alone: verification is positive, never assumed.
+- **Why the bidirectional check**: port liveness alone proves "a daemon runs", not "the pid in this record IS it". A recycled pid that happens to be alive while an unrelated server owns the port passes a liveness-only test — and a test that weakened the check this way immediately SIGTERMed its own bun runner (revert-verified in `test/daemon-registry.test.ts`).
+- **What is never a candidate**: a daemon spawned by another GUI, by launch-at-login, or by a terminal `musepi serve` is never registered, so the reaper cannot see it. Quit still uses `ownsDaemon()` (`client.pid`), unchanged.
+- **Quit path unchanged**: `before-quit` → `killOwnedDaemon()` → owned daemon SIGTERM → SIGKILL escalation. Non-owned daemons survive, as before.
+- **Crash survival is deliberate and sits between the two reference designs.** dsh has no daemon at all (one owned child, `process.once('disconnect')` → self-terminate, so a hard-killed shell takes the host with it). openchamber's backend dies with the app too, and its reaper exists only for the externally-spawned OpenCode child. We keep the daemon alive on crash (a running turn is expensive to lose) and pay for it with the reaper — which is exactly the trade openchamber makes for the child it does not control.
+- **Tests**: `test/daemon-registry.test.ts` (never kill: unregistered listener, live owner, recycled pid, dead-pid bookkeeping) + `test/daemon-reaper-reclaim.test.ts` (does reclaim: real child listener, dead owner, port closed afterwards).
+
+### 8c. Cooperative shutdown + tree kill (2026-10-18)
+
+**The problem signals cannot solve.** Stopping the daemon used to be `process.kill(pid, "SIGTERM")`. On POSIX that is catchable (`commands/serve.ts` closes cleanly); **on Windows Node maps SIGTERM to `TerminateProcess`, which cannot be caught**, so the daemon's own handler never ran and every teardown was a hard kill that dropped in-flight turns. The "3s grace window" was dead time on the primary desktop platform.
+
+- **`system.shutdown` RPC** (`daemon/server.ts`) — the cooperative path. Contract details that are load-bearing:
+  - **Transport is the daemon's newline-delimited JSON-RPC socket** (`daemon.sock` — a unix socket / Windows named pipe), NOT the WebSocket port. Both transports feed the same `handleRpcLine` dispatcher, but a WebSocket *client* emits an **uncatchable process-level error** when the peer is not a WS server or has already vanished — observed as `Unhandled error. (ErrorEvent)` that took down every test sharing the process (`addEventListener("error")` and `onerror` both failed to contain it). Plain stream errors are ours to handle.
+  - **Ack before teardown.** The reply is written while the socket is still open (`setTimeout(0)` defers `close()` past the response flush). Replying afterwards would race the closing connection, time the caller out, and provoke the very hard kill the RPC exists to avoid.
+  - **The ack says "accepted", not "finished".** Completion is observed as the listener going away; `busy` reports how many live sessions are mid-work so the shell can report it.
+  - **No hook → error, not silence.** A server constructed without `setShutdownHook` (embedded/test) throws rather than reporting success it cannot deliver.
+  - **Process exit is the owner's decision**: `DaemonOptions.onShutdownComplete` defaults to `process.exit(0)` (what a real `musepi serve` needs — releasing the socket and continuing would leave a half-dead process holding a stale pid), and embedders inject their own so teardown is observable without killing the host.
+- **`kill()` ladder** (`electron/daemon.cjs`): ① probe the port (an unconditional boot-path `kill()` must not open a socket to discover nobody is listening) → ② `system.shutdown` over `daemon.sock` + grace window → ③ on Windows, `taskkill /F /T` **while the root is still alive** → ④ SIGTERM + 3s → ⑤ SIGKILL/`taskkill /F` + 2s confirmation.
+- **Why `taskkill /T` runs BEFORE the signal on Windows**: `/T` walks *live* parent-child links, and the daemon deliberately spawns children `detached` (PTY hosts, extension sidecars). Once the root exits those links are gone, so a post-mortem tree kill finds nothing and the survivor keeps the inherited socket — the port stays accepting with no server behind it. Running `/T` before any signal is what makes the escalation able to reclaim them.
+- **The descendant snapshot is the fallback, not the primary**: reading the Windows process table needs a PowerShell start (measured ~2.7s idle, ~5.5s under load), and a quit must not pay that. `taskkill /T` handles the normal case; `descendantPids` covers what `/T` could not see.
+- **Why not the IPC-spawn model** (dsh's shape: `stdio: [.., 'ipc']` + `disconnect` → self-terminate): dsh can do that because it has **no attach scenario** — one server process per owner, no daemon concept at all. We have instance switching, launch-at-login and terminal-started daemons, so the daemon must survive its shell. The RPC gives the same orderly teardown without changing the ownership model.
+- **Tests**: `coding-agent/test/daemon/system-shutdown.test.ts` (ack ordering, listener released, idempotent close) + `desktop-app/test/daemon-kill-tree.test.ts` (port freed, descendants reclaimed, no-op fast path, bystanders untouched). Each daemon test file takes its port from the **OS** (`listen(0)`): the suite runs several `bun test` processes in parallel, and any fixed or pid-derived range collided across runners.
 
 ## 9. Platform adaptation (2026-08-11)
 
@@ -449,7 +477,7 @@ Gotchas: `server.port` is typed `number | undefined` under tsgo (`const port = s
 - **Groups/projects tab motion**: the capsule gained a sliding thumb (`.gui-tab-thumb`, `data-tab` driven `translateX(calc(100% + 2px))`, 200ms spring — both pills are fixed-width so no measuring) and the active pill's own fill goes transparent inside the capsule (base `--active` fill preserved for other users of the class). The list pane is keyed by view (`archived | groups | projects`) and remounts with a 160ms fade (`.gui-tab-pane-in`).
 - **Switch-stagger reveal tightened**: the reveal (guest-client `transcript.css`, `data-switched` marker from ChatView) had TWO conflicting ladders — packages/desktop-app/src/styles/gui-pet.css duplicated the guest-client rule with different delays, winner decided by bundle order. The duplicate is removed (transcript.css is the single source), duration 300→240ms, tail delay 210→120ms (last row settles ~360ms instead of ~510ms), and motion-off/reduced-motion now disable the reveal entirely.
 - **Skeleton flicker threshold 150→250ms**: fast local switches keep the old transcript visible (it stays mounted during load); only genuinely slow opens (history reactivate) get the skeleton.
-- **Send path audited (no change needed)**: the composer clears text immediately (`onSend` is fire-and-forget), the store frame-coalesces stream bursts (dsh Notifier.markFrameDirty parity) and collapses consecutive `message_update`s, snapshots are tail-capped at 200 (`tailSnapshot`), and `session.send`'s sidebar refresh is hooked to the send ack. Perceived send/switch latency is daemon-bound, not GUI-bound.
+- **Send path audited (no change needed)**: the composer clears text immediately (`onSend` is fire-and-forget), the store coalesces stream bursts (~10 Hz, see §50) and collapses consecutive `message_update`s, snapshots are tail-capped at 200 (`tailSnapshot`), and `session.send`'s sidebar refresh is hooked to the send ack. Perceived send/switch latency is daemon-bound, not GUI-bound.
 - **dsh upstream scan (user pulled)**: new commits are the code-mode→PTC rename, Connection-owned RPC transport (ApiProxy removed) and a session-export download route — structural cleanups with nothing actionable for musepi's GUI this round; the earlier-absorbed seams (Notifier frame-dirty coalescing, plugin inventory) are unchanged.
 ### Transparency audit + compat-shell glass (2026-08-29, "该透明的区域仍没有透明")
 
@@ -951,3 +979,107 @@ never receives an empty proxy.
 declare `musepi.extensions`, declare `musepi.icon` for a brand mark, and register
 the panel into `settings.extensions` — no `import from "react"` (the daemon rewrites the
 `React` identifier to `window.MusePiReact`).
+
+## 50. Streaming render cadence + narrow store subscriptions (2026-10-18)
+
+**Contract:** a live turn must not repaint the shell once per daemon frame.
+
+- **`GuiSessionStore` flushes at ~10 Hz, not per animation frame.** `apply()`
+  queues; the first event of a burst flushes on the next microtask (so first-token
+  latency is unchanged), then a `FLUSH_COALESCE_MS` (100 ms) window accumulates the
+  rest. 33 ms was measured against this window and cost ~6% more CPU with no visible
+  difference. One flush = one snapshot rebuild + one emit.
+- **`#applyNow` is pure.** It returns whether anything observable changed and never
+  rebuilds or emits; the caller commits once per batch. Frames carrying only another
+  session's subagent traffic return `false`, so they cost no render at all.
+  `approval-request` / `recap` still apply synchronously — the user is blocked on a
+  dialog and must not wait out a coalescing window.
+- **Subscribers select a slice.** `useStoreSelector` (packages/desktop-app/src/lib/
+  use-store.ts) keeps the previous selection when the new one is equal, so a new
+  snapshot object alone no longer re-renders a component. `GuiHeader` subscribes to
+  `{working, streaming, approvals, cwd, titleCandidate}` — it used to re-render the
+  entire header on every transcript flush while reading two booleans.
+- **Polls publish only real changes.** `session.contextUsage` (3 s) and the
+  `session.list` poll (5 s, already keyed) compare before `setState`; an idle session
+  used to re-render the status bar once per tick.
+
+**Verification:** `packages/desktop-app/test/session-store-batching.test.ts` (one
+emit per batch, zero for foreign frames), `test/use-store-selector.test.tsx`
+(no re-render on unrelated fields, re-render on selected ones).
+
+## 51. HTML card answer readback (2026-10-18)
+
+The face submits with `musepiSubmit(text, data)`; the host turns it into a user
+prompt. **After accepting, the host tells the face WHICH answer it accepted** —
+otherwise the card could only dim and the face had no way to render "you picked A".
+
+- Wire: `{type: "musepi-widget-answered", text, data}` posted into the card's own
+  frame. `data` is the face's own structured payload, echoed back verbatim when it
+  is serializable JSON under 8 KB.
+- Face surface: `window.musepiWidgetAnswer` (= `__MUSEPI_ANSWER__`, so a face booting
+  after the answer reads it on load), the `musepi-widget-answered` DOM event with the
+  answer as `detail`, and `data-musepi-answered` on `<html>` (the injected stylesheet
+  dims on it).
+- The answer is replayed on frame load, because a theme flip rewrites the srcdoc and
+  the face would otherwise come back looking answerable.
+- Still non-blocking by design: the agent's turn is over by the time the user clicks.
+  A question that must hold the turn open stays the `ask` tool's job.
+
+## 52. Session-less plugin RPCs: load-once lifecycle (2026-10-18)
+
+**Contract:** a slot-panel RPC must dispatch to the SAME loaded extension module
+instance across calls, exactly as a live session does.
+
+`ext.call` used to (a) validate the extension id against a full
+`loadAllExtensions` scan — evaluating EVERY installed extension's factory — and
+(b) re-import the entry, both per call. Installing the plugin and calling
+`auth_hub.pool.status` measured 3.5s+ per call; a panel firing four RPCs on
+mount exhausted the GUI's 15s RPC budget before the first row rendered, which
+read as "the plugin never loads its own data". Two changes:
+
+- **Fast path in `ExtensionService.call`**: load the entry directly
+  (`invokeExtensionRpc`), guarded by the settings' disabled list + `existsSync`,
+  instead of a full inventory scan. The guard that matters survives: an
+  unloadable path and an unregistered method still throw.
+- **Load-once, explicit invalidation** (replacing a 10s TTL):
+  `extensionLoadCache` holds the loaded extension until
+  `invalidateExtensionLoadCache()` runs. Every mutation path — install,
+  uninstall, enable/disable, config write, and the HMR watcher — already
+  funnels through `invalidateExtensionsCache()` /
+  `invalidateExtensionCaches()`, which now clear it, so a change takes effect
+  immediately while a panel refresh never re-pays the load.
+
+**Verification:** `packages/coding-agent/test/extension-artifact-compiler.test.ts`
+counts factory runs across two dispatches (must be 1) and after invalidation
+(must be 2), with the counter on `globalThis` so a module re-import cannot hide
+a re-run.
+
+## 53. RPC patience and the "still waiting" signal (2026-10-18)
+
+**Contract:** a slow-but-healthy request must never surface as a failure, and a
+long wait must show that it is progressing.
+
+The GUI's per-request ceiling was 15s. Two things legitimately outrun it:
+`session.create` instantiates the extension set for a new context (seconds on a
+daemon restoring many sessions) and a model turn can sit in provider prep. At
+15s both turned into a red "请求失败" banner that a retry immediately fixed —
+the caller read a spurious failure. The ceiling is now 45s, and it is safe
+because liveness is NOT this timer's job: the keepalive loop (ping every 20s,
+force-close after 45s of total silence) decides whether the SOCKET is dead, and
+a dead socket rejects every pending request at once.
+
+`session.create` keeps its own 120s cap — it is the slowest thing the GUI
+starts.
+
+**The wait is visible.** `withSlowHint` (packages/desktop-app/src/lib/
+rpc-slow-hint.ts) arms a 2.5s threshold and then a 1s tick carrying elapsed
+time. It never changes the request's outcome, and the interval is cleared the
+moment the request settles (no leaked ticker). The cold-open skeleton renders
+it as "正在加载会话… 已等待 N 秒" with tabular figures, so the number does not
+shift the layout as it ticks.
+
+**Verification:** `packages/desktop-app/test/rpc-slow-hint.test.ts` — a fast
+request never ticks; a slow one ticks with advancing elapsed values; a failure
+still rejects with its own error (the hint is additive); no ticker survives the
+request; the seconds helper rounds for display.
+

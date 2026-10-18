@@ -197,6 +197,14 @@
 - **上下翻转含高度**:`flipUpForBottomOverflow = r.bottom + 6 + menuH > innerHeight − 8` —— 高菜单挂在低锚点下也向上翻,不许底部溢出。
 - **常驻浮卡(非弹出)**:btw 侧问卡/角标卡等 fixed 角卡必须自带视口 clamp(`maxWidth: calc(100vw − 48px)` + `max-height: min(60vh,520px)` + body 滚动),禁止裸 fixed 无边界。
 - **键盘**:浮卡/浮菜单的 Esc 承诺必须接线(如 btw 卡 hint「Esc closes」↔ onKeyDown Escape),不许提示与行为脱节。
+- **三个必须(2026-10-18 定稿)**:每个浮层合入前必须同时满足——
+  1. **可关闭**:外部点击 + Esc 关闭,Esc 还要 `preventDefault` 认领(否则漏到窗口级 bare-Esc,把正在跑的一轮对话打断)。
+  2. **视口内**:flip/shift/max-height clamp,永不出窗、永远内部滚动而不是被截断。
+  3. **不被裁剪**:逃出所有 `overflow`/`transform`/`backdrop-filter` 祖先(即走 portal),且不被相邻元素盖住。
+- **「被裁剪」是这套组件的头号故障,且不是样式写法问题**:`.gui-right-rail` 是 44px 卡片且 `overflow: hidden`(圆角卡片必须裁,否则子元素溢出圆角);任何 `position: absolute` 画在它里面的浮层都会被整块裁掉。这不是某个组件"属性配错了",而是**裁剪容器 + 绝对定位子元素**这个组合本身不允许出现。两条硬规则:
+  - **浮层的定位属性(`position/top/right/z-index/animation`)归浮层壳(`.gui-menu-popup`),不归内容类**。内容类只写内部布局(`display/gap/min-width/padding`);壳的 inline `position: fixed` 负责跑出裁剪树。同族先例:`.gui-context-menu` / `.gui-select-menu`。
+  - **贴窗口边缘的触发器要往"有空间"的方向开**:右缘 rail 的浮层必须用 `side: "left"`(`useFloatingMenu`)向左 flyout。向下开会被视口 shift 夹成一条——这跟裁剪是两个独立故障,只修 portal 不修方向仍然不可用。
+- **dsh / openchamber 的做法(2026-10-18 对照)**:dsh 的 `Menu`/`Tooltip` **默认就地 `absolute`**,靠调用点显式传 `portal` 逃出裁剪树——所以它每个漏传的调用点就是一个潜在裁剪 bug(其 `TabMenu.tsx` 注释正是在记录这个坑);openchamber 用 Base UI,`Portal` 是结构性的、调用点无法写错。**我们的对齐方式是 openchamber**:`useFloatingMenu` 无条件 portal,调用点不需要也不会忘记一个 `portal` 开关。两家都**没有**机械门禁能拦住"就地渲染的浮层被裁"(dsh 只有一条 AST 测试要求 `role=menu/listbox` 包在 `MenuSurface` 里)。
 
 > **范围澄清(2026-09-14)**:「手写同语义、不相依」只适用于**浮层定位**这一域——floating-ui 的 flip/shift/clamp 语义量小、CSS + 尺寸测量足以精确复刻,且与 `gui-menu-in/out` 两阶段入场深度耦合。**拖拽排序不适用此原则**:**务实选型**——`@dnd-kit` 的传感器仲裁(指针/键盘激活阈值)、碰撞检测、可访问性(屏幕阅读器 reorder announcement)、嵌套容器是实打实的状态机,依赖能很好解决这类需求,就用依赖(openchamber 全线 14 处拖拽同库对齐,见下节);**只有**当交互简单到依赖反而是累赘(无排序语义的一次性拖放、纯指针的一维位移)时才手写。判断标准:涉及"顺序"且需持久化 → `@dnd-kit`;单纯"把这个东西放到那里" → 手写 pointer capture。
 

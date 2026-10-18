@@ -178,7 +178,35 @@ daemon RPC:
 - **任何自行处理 Esc 的面都必须认领该键**（`e.preventDefault()`）——只关自己的 UI 而不认领就会把按键漏给中断绑定，这正是「菜单关闭却中断了回合」的成因。结构归属由 `escapeOwner` 兜底识别：`[role="dialog"|"listbox"|"menu"|"tooltip"]`、`[aria-modal="true"]`、`[data-escape-owner]`（→ `"overlay"`），以及 `[data-chat-input="true"]` **之外**的 `input`/`textarea`/`select`/`contenteditable`（→ `"field"`）。composer 刻意不算归属面：那里的 Esc 保持中断语义。焦点在菜单触发器上（在 portal 之外），结构识别看不到已打开的弹层——这类只能靠认领。
 - **`session.abort` 必须传 `USER_INTERRUPT_LABEL`**，不能用相近字面量：`AgentSession.abort` 以 `reason === USER_INTERRUPT_LABEL`（"Interrupted by user"）严格比较来决定是否设 `AIError.Flag.UserInterrupt` 并抑制顾问自动续跑。契约由 `coding-agent/test/daemon/session-abort-rpc.test.ts` 锁定（断言该 reason 满足 `isUserInterruptAbort`，而非仅「看起来像」）。
 - **验证安全（共享 daemon）**：隔离 `--user-data-dir` 实例仍连**同一个** daemon，窗口里是同一批会话。它只要显示着你关心的会话，就绝不能向它发 Esc、点停止按钮或调 `session.abort`——按一次 Esc 已经中断了用户正在跑的回合。探针请指向临时会话，或指向它自己的 daemon（`PI_CONFIG_DIR=<临时根> musepi serve --port <n>` + 预置 `localStorage["musepi-gui-url"]`）。离线回合夹具：`scripts/fake-openai-server.mjs`（流式桩）+ 临时根 `agent/models.yml` 里的 `fake` provider，不消耗任何真实配额。驱动脚本：`scripts/verify-escape-guard.mjs`。
-- **已知隐患（此处只记录，未修）**：(1) **退出路径是安全的，启动路径不是。** `before-quit` / 更新安装走 `killOwnedDaemon()`——除非 `client.pid` 等于本进程否则返回 false（`main.cjs:177-194`；对别的实例的 daemon 退出时日志为 `daemon teardown on quit: not owned`，不会杀任何东西）。真正无归属判断的 kill 在两个 IPC handler：`daemon-start`（`main.cjs:2564`，spawn 前 `await kill(port)` 清掉陈旧监听者）与 `daemon-restart`（`main.cjs:2568`）——都按监听 pid `kill(port)`，不做 ownership 检查。而 `daemon-restart` 正是启动期版本门控触发的（`shouldRestartDaemon` → `api.restartDaemon`）：**开发实例的包版本与「由安装版或终端启动的 daemon」版本不一致时，一连上就会杀掉那个 daemon**——本轮 Esc 验证期间 :8300 上的 daemon 就是这么没的。(2) 被 SIGTERM 的 daemon 若其子进程继承了监听 socket，端口会永远接受 TCP 而背后没有进程——`connect()` 永不 settle，壳停在启动闪屏且必须手动终止（恢复：重启机器，或找出持有句柄的孤儿进程）。启动还会先试默认 `:8300` 再探测，且该次尝试不设超时。
+- **已知隐患**：(1) **启动路径不再误杀别人的 daemon（2026-10-18 修复）。** `daemon-start` 过去先 `await kill(port)` 且不看归属，`daemon-restart` 至今仍按监听 pid 硬杀——而 `daemon-restart` 正是启动期版本门控触发的（`shouldRestartDaemon` → `api.restartDaemon`），所以开发实例包版本与「安装版或终端启动的 daemon」不一致时，一连上就会杀掉那个 daemon（本轮 Esc 验证期间 `:8300` 就是这么没的）。`daemon-start` 现在只回收自己登记过的孤儿，未登记的监听者不再被杀：外来 daemon 占着端口时以 EADDRINUSE 暴露，而不是被替换掉。`daemon-restart` 保留硬杀是刻意的——它只由用户显式操作或启动门控触发。(2) 被 SIGTERM 的 daemon 若其子进程继承了监听 socket，端口会永远接受 TCP 而背后没有进程——`connect()` 永不 settle，壳停在启动闪屏且必须手动终止（恢复：重启机器，或找出持有句柄的孤儿进程）。启动还会先试默认 `:8300` 再探测，且该次尝试不设超时。(3) **Windows 上 `SIGTERM` 就是 `TerminateProcess`，不可捕获**，所以 daemon 侧 `process.on("SIGTERM", shutdown)`（`commands/serve.ts`）在那里永远不执行，`kill()` 里那 3 秒宽限是空等。真正的优雅关闭需要 IPC spawn 模型（§8b，未实现），或让 daemon 轮询关闭标记文件。
+
+### 8b. daemon 归属与孤儿回收（2026-10-18）
+
+**daemon 是刻意 `detached` + `unref` 的**：这样 GUI 崩溃后它还活着，正在跑的回合能跑完（崩溃永远走不到退出路径）。代价是 GUI 被硬杀会留下没人认领的 daemon，而过去的唯一回收手段是 `daemon-start` 的盲杀 `kill(port)`。注册表把「端口被占 → 杀掉」换成证据，对齐 openchamber 的 `managed-process-registry`。
+
+- **存储**：`<MUSEPI_DAEMON_DIR>/managed/<pid>.json`，我们 spawn 的 daemon 一个进程一个文件。之所以一 pid 一文件而非共享 JSON：多个壳/工作区并发运行，共享文件的读改写在并发下会互相覆盖。在监听成功后才写（从未就绪的进程不值得回收），写临时文件再 rename，崩溃不会留下截断的 JSON。
+- **回收条件——三条同时成立，缺一不可**：① pid 在我们的注册表里（我们 spawn 的）；② **身份双向绑定 pid↔端口**——`ws.port`（daemon 自己写的）仍指向记录的端口 **且** `listenerPid(port) === 记录的 pid`；③ 记录的 owner pid 已死。任何无法证实的一律不动：验证必须是正向的，绝不假设。
+- **为什么要双向校验**：端口活着只能证明「有个 daemon 在跑」，不能证明「记录里这个 pid 就是它」。一个被回收的 pid 恰好活着、而端口被无关服务占着时，纯存活性校验会放行并把它 SIGTERM 掉——把这个校验削弱成只查存活性时，测试立刻把它自己的 bun 进程杀了（`test/daemon-registry.test.ts` 有 revert-verify）。
+- **永远不会成为候选**：别的 GUI、开机自启、终端 `musepi serve` 起的 daemon 从不登记，回收器根本看不见。退出路径仍用 `ownsDaemon()`（`client.pid`），未改动。
+- **退出路径未变**：`before-quit` → `killOwnedDaemon()` → 自己 spawn 的 daemon SIGTERM → SIGKILL 升级。非自己 spawn 的照旧存活。
+- **崩溃存活是刻意选择，位置介于两家参考实现之间。** dsh 根本没有 daemon（一个 owned child，`process.once('disconnect')` 自尽，硬杀壳就带走 host）；openchamber 的后端同样随 app 退出，它的回收器只服务于外部 spawn 的 OpenCode 子进程。我们让 daemon 在崩溃后存活（丢一个正在跑的回合太贵），代价就是这套回收器——这正是 openchamber 对它无法掌控的那个 child 所做的同一笔交易。
+- **测试**：`test/daemon-registry.test.ts`（绝不误杀：未登记监听者、owner 存活、pid 被回收、死 pid 记账）+ `test/daemon-reaper-reclaim.test.ts`（确实回收：真实子进程监听、owner 已死、回收后端口关闭）。
+
+### 8c. 合作式关闭 + 杀树（2026-10-18）
+
+**信号解决不了的问题。** 关闭 daemon 过去只有 `process.kill(pid, "SIGTERM")`。POSIX 上它可捕获（`commands/serve.ts` 会干净收尾）；**Windows 上 Node 把 SIGTERM 映射成 `TerminateProcess`，不可捕获**，所以 daemon 自己的 handler 从未执行，每次关停都是硬杀，正在跑的回合直接丢失；那 3 秒「宽限期」在主要桌面平台上纯属空等。
+
+- **`system.shutdown` RPC**（`daemon/server.ts`）—— 合作路径。几条契约都是承重的：
+  - **传输走 daemon 自己的换行分隔 JSON-RPC socket**（`daemon.sock`，unix socket / Windows 命名管道），**不是 WebSocket 端口**。两条通道共用同一个 `handleRpcLine` 分发器，但 WebSocket *客户端* 在对方不是 WS 服务端、或已消失时，会抛出**无法捕获的进程级错误**——实测表现为 `Unhandled error. (ErrorEvent)`，会带走同进程的所有测试（`addEventListener("error")` 与 `onerror` 都拦不住）。普通 stream 错误则归我们处理。
+  - **先应答再拆除**：回包在 socket 仍开着时写入（`setTimeout(0)` 把 `close()` 推到 flush 之后）。先拆再答会与关闭中的连接竞争，调用方超时后照样退回硬杀——正是这个 RPC 要避免的。
+  - **应答语义是「已受理」而非「已完成」**：完成以监听消失为准；`busy` 报告有多少活跃会话正在干活，供壳层提示。
+  - **没有 hook 就报错，不装成功**：未 `setShutdownHook` 的实例（嵌入式/测试）抛出错误，而不是谎报成功。
+  - **进程退出是宿主的决定**：`DaemonOptions.onShutdownComplete` 默认 `process.exit(0)`（真实 `musepi serve` 需要——只释放 socket 继续跑会留下一个半死进程占着陈旧 pid），嵌入方可注入自己的实现，从而在不杀宿主的前提下观测完整拆除。
+- **`kill()` 阶梯**（`electron/daemon.cjs`）：① 探测端口（启动路径无条件调用 `kill()`，不能在没人监听时还去建连接）→ ② 经 `daemon.sock` 发 `system.shutdown` + 宽限窗口 → ③ Windows 上**在根进程仍存活时**执行 `taskkill /F /T` → ④ SIGTERM + 3s → ⑤ SIGKILL/`taskkill /F` + 2s 确认。
+- **为什么 Windows 上 `/T` 必须早于信号**：`/T` 沿**活着的**父子链遍历，而 daemon 刻意把子进程 spawn 成 `detached`（PTY 宿主、扩展 sidecar）。根进程一退出这些链就断了，事后再杀树什么也找不到，幸存者继续持有继承来的 socket——端口一直接受连接却没有服务在背后。把 `/T` 提到任何信号之前，才是升级能回收它们的原因。
+- **后代快照是兜底而非主力**：读 Windows 进程表要启动一次 PowerShell（实测空闲 ~2.7s、负载下 ~5.5s），退出不该付这个代价。常规情况由 `taskkill /T` 处理，`descendantPids` 只补 `/T` 看不见的部分。
+- **为什么不照抄 IPC spawn 模型**（dsh 的形态：`stdio: [.., 'ipc']` + `disconnect` 自尽）：dsh 能那样做是因为它**没有 attach 场景**——一个 server 进程对一 owner，压根没有 daemon 概念。我们有实例切换、开机自启、终端起的 daemon，所以 daemon 必须活过它的壳。RPC 给出了同样的有序拆除，且不改变归属模型。
+- **测试**：`coding-agent/test/daemon/system-shutdown.test.ts`（应答顺序、监听释放、重复关闭幂等）+ `desktop-app/test/daemon-kill-tree.test.ts`（端口释放、后代回收、空闲快路径、旁观进程不受影响）。每个 daemon 测试文件的端口都向 **OS** 申请（`listen(0)`）：套件会并行跑多个 `bun test` 进程，任何固定或 pid 推导的端口段都会跨 runner 撞车。
 
 ## 9. 平台适配(2026-08-11)
 
@@ -446,7 +474,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **分组/项目 tab 动效**:胶囊新增滑动 thumb(`.gui-tab-thumb`,`data-tab` 驱动 `translateX(calc(100% + 2px))`,200ms spring——两个 pill 固定宽,几何确定无需测量),胶囊内激活 pill 自身填充转透明(类的基础 `--active` 填充保留给其他使用方)。列表容器按视图 key(`archived | groups | projects`)重挂载并 160ms 淡入(`.gui-tab-pane-in`)。
 - **切换错峰动画收紧**:错峰 reveal(guest-client `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——packages/desktop-app/src/styles/gui-pet.css 以不同延迟复制了 guest-client 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
 - **骨架屏闪烁阈值 150→250ms**:快速本地切换期间旧会话内容保持可见(加载期间不卸载),只有真正慢的打开(历史会话重激活)才出骨架。
-- **发送路径审计(无需改动)**:composer 立即清空文本(`onSend` 即发即忘),store 按帧合并流事件突发(dsh Notifier.markFrameDirty 对齐)并折叠连续 `message_update`,快照尾部截断 200 条(`tailSnapshot`),`session.send` 的侧栏刷新挂在发送 ack。感知延迟在 daemon 侧,不在 GUI。
+- **发送路径审计(无需改动)**:composer 立即清空文本(`onSend` 即发即忘),store 按约 10 Hz 合批流事件突发(见 §50)并折叠连续 `message_update`,快照尾部截断 200 条(`tailSnapshot`),`session.send` 的侧栏刷新挂在发送 ack。感知延迟在 daemon 侧,不在 GUI。
 - **dsh 上游扫描(用户已 pull)**:新提交为 code-mode→PTC 改名、Connection 自持 RPC 传输(移除 ApiProxy)与 session-export 下载路由——结构性清理,本轮对 musepi GUI 无可吸收项;此前吸收的缝(Notifier 帧脏合并、插件清单)未变。
 ### 透明审计 + compat 壳玻璃（2026-08-29，「该透明的区域仍没有透明」）
 
@@ -858,3 +886,86 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
 **第三方插件要求**（见 `docs/extensions-dev.md` §6）：声明 `musepi.extensions`、声明
 `musepi.icon` 作为品牌标识，并把面板注册到 `settings.extensions`；**禁止
 `import from "react"`**（daemon 会把 `React` 标识符改写为 `window.MusePiReact`）。
+
+## 50. 流式渲染节奏 + store 窄订阅（2026-10-18）
+
+**契约**：一轮实时对话不得按 daemon 帧数重绘整个外壳。
+
+- **`GuiSessionStore` 以约 10 Hz 合批，不再逐动画帧刷新。** `apply()` 先入队；一批里的
+  第一帧在下一个微任务刷新（首 token 延迟不变），随后开启 100 ms
+  （`FLUSH_COALESCE_MS`）窗口累积其余事件。33 ms 实测过：比这个窗口多花约 6% CPU，
+  视觉无差别。一次刷新 = 一次快照重建 + 一次 emit。
+- **`#applyNow` 是纯变更。** 它返回「有没有可观察的变化」，自己不再重建、不再 emit；
+  调用方每批只 commit 一次。只承载**其它会话** subagent 流量的帧返回 `false`，
+  因此完全不产生渲染。`approval-request` / `recap` 仍同步生效——用户正卡在弹窗上，
+  不能让他等合批窗口。
+- **订阅方按切片选取。** `useStoreSelector`（packages/desktop-app/src/lib/use-store.ts）
+  在新选取值相等时保留旧引用，于是「快照对象换了」本身不再触发重渲染。`GuiHeader`
+  只订阅 `{working, streaming, approvals, cwd, titleCandidate}`——它此前每次对话流
+  刷新都整块重渲染，而实际只读两个布尔。
+- **轮询只发布真变化。** `session.contextUsage`（3 秒）与 `session.list`（5 秒，原本
+  已按 key 去重）在 `setState` 前比较；空闲会话此前每个 tick 都重渲染一次状态栏。
+
+**验证**：`packages/desktop-app/test/session-store-batching.test.ts`（每批一次 emit、
+外来帧零次）、`test/use-store-selector.test.tsx`（无关字段不重渲染、选中字段重渲染）。
+
+## 51. HTML 卡片答案回读（2026-10-18）
+
+面用 `musepiSubmit(text, data)` 提交，宿主转成一条用户消息。**宿主接受后要把
+「接受的是哪一条」告诉面**——否则卡片只能变灰，面没有任何办法渲染「你选了 A」。
+
+- 线格式：向卡片自己的 frame 投递 `{type: "musepi-widget-answered", text, data}`。
+  `data` 是面自己提交的结构化载荷，在可序列化且小于 8 KB 时原样回传。
+- 面可见面：`window.musepiWidgetAnswer`（等同 `__MUSEPI_ANSWER__`，让在答案之后
+  才启动的面在 load 时也能读到）、带 `detail` 的 `musepi-widget-answered` DOM 事件、
+  以及 `<html>` 上的 `data-musepi-answered`（注入样式据此变灰）。
+- 答案在 frame load 时重放：主题切换会重写 srcdoc，不重放的话面会回到「看起来还能答」。
+- 仍然是非阻塞设计：用户点下去时智能体那一轮已经结束。需要在同一轮内据答案调整，
+  仍是 `ask` 工具的职责。
+
+## 52. session-less 插件 RPC 的 load-once 生命周期（2026-10-18）
+
+**契约**：槽位面板的 RPC 必须每次都派发到**同一个已加载的扩展模块实例**——与实时
+会话完全一致。
+
+`ext.call` 过去每次调用都：(a) 拿扩展 id 去比对一次全量 `loadAllExtensions`
+扫描（会执行**每一个已装扩展**的 factory）；(b) 重新 import 入口。装上插件后调
+`auth_hub.pool.status` 实测单次 3.5s+；面板挂载时发 4 个 RPC，还没渲染第一行就
+把 GUI 的 15 秒 RPC 预算烧光——观感就是「插件自己的数据永远加载不出来」。两处改动：
+
+- **`ExtensionService.call` 走快路径**：直接 `invokeExtensionRpc` 装载入口，用
+  settings 的禁用清单 + `existsSync` 把关，不再做全量清单扫描。要紧的那道守卫仍在：
+  路径装不动、方法没注册，照样抛错。
+- **load-once + 显式失效**（取代原来的 10s TTL）：`extensionLoadCache` 一直持有
+  已加载实例，直到 `invalidateExtensionLoadCache()`。所有变更路径——装卸、启停、
+  配置写入、HMR watcher——本来就都汇到 `invalidateExtensionsCache()` /
+  `invalidateExtensionCaches()`，现在一并清它，所以改动立刻生效，而面板刷新不再
+  重复付加载成本。
+
+**验证**：`packages/coding-agent/test/extension-artifact-compiler.test.ts` 统计
+factory 运行次数：连续两次派发必须只跑 1 次，失效后必须跑到 2 次（计数器挂在
+`globalThis` 上，模块重新 import 掩盖不住重跑）。
+
+## 53. RPC 等待耐心与「仍在处理」提示（2026-10-18）
+
+**契约**：慢但健康的请求绝不显示成失败；长等待必须让人看出它在推进。
+
+GUI 的单个请求上限原本是 15 秒。有两件事合理地超出它：`session.create`
+会为新上下文实例化扩展集（daemon 恢复多个会话时要数秒），模型回合可能在
+provider prep 里待一会。15 秒时两者都变成一个红色的「请求失败」横幅，而重试
+一次立刻成功——调用方读到的是一个假失败。上限现在 45s，而且这么做是安全的，
+因为**探活不是这个定时器的活**：keepalive 环（每 20s ping、45s 全静默后强关）
+负责判断 socket 是否已死，而 socket 死掉时所有在途请求会一次性以
+「connection closed」拒绝。
+
+`session.create` 保留自己的 120s 上限——它是 GUI 发起的最慢的一件事。
+
+**等待可见。** `withSlowHint`（packages/desktop-app/src/lib/rpc-slow-hint.ts）
+设 2.5s 阈值，之后每秒 tick 一次并带回已用时间。它不改变请求结果，且请求一
+落定就清掉 interval（不留漏跑的 ticker）。冷启动骨架把它渲染成
+「正在加载会话… 已等待 N 秒」，用等宽数字，数字跳动不移布局。
+
+**验证**：`packages/desktop-app/test/rpc-slow-hint.test.ts`——快请求不 tick；
+慢请求 tick 且 elapsed 递增；失败仍以自身错误拒绝（提示是附加的，不是替代）；
+请求结束后没有 ticker 存活；秒数助手按展示取整。
+
