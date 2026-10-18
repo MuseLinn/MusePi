@@ -75,16 +75,6 @@ const SECTION_LABEL: Record<Section, string> = {
 	plans: t("knowledge plans"),
 };
 
-function loadTodos(cwd: string): TodoItem[] {
-	try {
-		const raw = localStorage.getItem(`${TODO_STORAGE_PREFIX}${cwd}`);
-		const parsed = raw ? (JSON.parse(raw) as TodoItem[]) : [];
-		return parsed.map(t => ({ id: t.id, text: t.text, done: t.done, createdAt: t.createdAt ?? Date.now() }));
-	} catch {
-		return [];
-	}
-}
-
 const clampNavW = (w: number): number => Math.min(NAV_W_MAX, Math.max(NAV_W_MIN, Math.round(w)));
 
 function readNum(key: string, fallback: number, min: number, max: number): number {
@@ -680,7 +670,7 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 	const [notes, setNotes] = useState<NoteFile[] | null>(null);
 	const [plans, setPlans] = useState<PlanFile[] | null>(null);
 	const [planOpen, setPlanOpen] = useState<{ id: string; title: string; body: string } | null>(null);
-	const [todos, setTodos] = useState<TodoItem[]>(() => loadTodos(cwd));
+	const [todos, setTodos] = useState<TodoItem[]>([]);
 	const [navW, setNavW] = useState(() => readNum(NAV_W_KEY, 120, NAV_W_MIN, NAV_W_MAX));
 
 	const loadPlans = useCallback((): void => {
@@ -695,6 +685,51 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 			.then(res => setNotes(res.notes ?? []))
 			.catch(() => setNotes([]));
 	}, [rpc, cwd]);
+	// Todos live in the daemon, beside notes and plans: the knowledge tool reads
+	// the same store, and a session with no window (a scheduled task, a
+	// dispatched subagent) can reach them. They used to be localStorage, which
+	// made them invisible to the agent entirely.
+	const loadTodos = useCallback((): void => {
+		void rpc
+			.request<{ todos?: TodoItem[] }>("todos.list", { cwd })
+			.then(res => setTodos(res.todos ?? []))
+			.catch(() => setTodos([]));
+	}, [rpc, cwd]);
+
+	/**
+	 * Adopt this project's pre-daemon localStorage todos, once.
+	 *
+	 * The legacy key is removed only after the daemon confirms, so a failed
+	 * migration leaves the old list recoverable instead of losing it. Runs
+	 * before the first list, so adopted rows show up immediately.
+	 */
+	useEffect(() => {
+		const key = `${TODO_STORAGE_PREFIX}${cwd}`;
+		let legacy: unknown = null;
+		try {
+			legacy = JSON.parse(localStorage.getItem(key) ?? "null");
+		} catch {
+			legacy = null;
+		}
+		if (!Array.isArray(legacy) || legacy.length === 0) {
+			loadTodos();
+			return;
+		}
+		void rpc
+			.request("todos.importLegacy", { cwd, todos: legacy })
+			.then(() => {
+				try {
+					localStorage.removeItem(key);
+				} catch {
+					// storage unavailable — the daemon copy is authoritative anyway
+				}
+			})
+			.catch(() => {
+				// keep the old key: the next open retries the migration
+			})
+			.finally(() => loadTodos());
+	}, [rpc, cwd, loadTodos]);
+
 	useEffect(() => {
 		loadNotes();
 		loadPlans();
@@ -711,13 +746,20 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 		setPlanOpen(null);
 	}, [section]);
 
+	/**
+	 * Write the whole todo list (the panel's order is part of what it renders:
+	 * new items land before the first completed one, completing moves an item
+	 * to the end). Local state updates first so the checkbox responds at once;
+	 * a rejected write reloads the daemon's truth instead of drifting.
+	 */
 	const persistTodos = (next: TodoItem[]): void => {
 		setTodos(next);
-		try {
-			localStorage.setItem(`${TODO_STORAGE_PREFIX}${cwd}`, JSON.stringify(next));
-		} catch {
-			// storage unavailable
-		}
+		void rpc
+			.request<{ ok?: boolean; error?: string; todos?: TodoItem[] }>("todos.replace", { cwd, todos: next })
+			.then(res => {
+				if (res?.error) loadTodos();
+			})
+			.catch(() => loadTodos());
 	};
 
 	const createPlan = async (): Promise<void> => {

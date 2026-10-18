@@ -331,6 +331,8 @@ export const settings = {
 	"Enable the todo tool for task tracking": "启用 todo 工具进行任务跟踪",
 	"Enable the widget tool: draw a live card inline in the transcript": "启用 widget 工具：在对话中内联绘制实时卡片",
 	"Enable the board tool: read and write the desktop board's card wall": "启用 board 工具：读写桌面看板的卡片墙",
+	"Enable the knowledge tool: read and write the project's notes, todos and plans": "启用 knowledge 工具：读写项目的笔记、待办与计划",
+	"Project knowledge": "项目知识",
 	"Enable the web_search tool for live web results": "启用 web_search 工具获取实时网络结果",
 	"Encourage novelty": "鼓励创新",
 	"Encrypted Blob": "加密数据块",

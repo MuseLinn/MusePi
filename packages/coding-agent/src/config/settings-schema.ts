@@ -4311,6 +4311,20 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	// Project knowledge (the right panel's notes / todos / plans). The tool is
+	// how the agent reaches data the panel already shows; without it the agent
+	// could not read or write any of it.
+	"knowledge.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Available Tools",
+			label: "Project knowledge",
+			description: "Enable the knowledge tool: read and write the project's notes, todos and plans",
+		},
+	},
+
 	"todo.reminders": {
 		type: "boolean",
 		default: true,

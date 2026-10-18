@@ -467,6 +467,15 @@ async function runGitRead(
 export { snapshotFromJsonl } from "./jsonl-snapshot";
 
 import { ModelsConfigFile } from "../config/models-config";
+import {
+	createTodo,
+	deleteTodo,
+	importLegacyTodos,
+	type KnowledgeTodo,
+	listTodos,
+	replaceTodos,
+	updateTodo,
+} from "../knowledge/store";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge, managedBrowserBridgeUrl } from "../tools/browser/managed-bridge";
@@ -7061,6 +7070,76 @@ export class DaemonServer {
 					return { ok: true };
 				} catch {
 					return { error: "note not found" };
+				}
+			}
+			case "todos.list": {
+				// Project todos (right-panel 项目知识 → 待办). They used to live in
+				// the GUI's localStorage, which meant the AGENT could not read
+				// them at all and a session with no window (a scheduled task, a
+				// dispatched subagent) had nothing to read. The `knowledge` tool
+				// and this RPC share one store.
+				const p = (params ?? {}) as { cwd?: string };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				return { todos: await listTodos(cwd) };
+			}
+			case "todos.create": {
+				const p = (params ?? {}) as { cwd?: string; text?: string };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				try {
+					return { ok: true, todo: await createTodo(cwd, p.text ?? "") };
+				} catch (err) {
+					return { error: err instanceof Error ? err.message : String(err) };
+				}
+			}
+			case "todos.update": {
+				const p = (params ?? {}) as { cwd?: string; id?: string; text?: string; done?: boolean };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				if (!p.id) return { error: "invalid todo id" };
+				try {
+					const todo = await updateTodo(cwd, p.id, { text: p.text, done: p.done });
+					return todo ? { ok: true, todo } : { error: "todo not found" };
+				} catch (err) {
+					return { error: err instanceof Error ? err.message : String(err) };
+				}
+			}
+			case "todos.delete": {
+				const p = (params ?? {}) as { cwd?: string; id?: string };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				if (!p.id) return { error: "invalid todo id" };
+				return (await deleteTodo(cwd, p.id)) ? { ok: true } : { error: "todo not found" };
+			}
+			case "todos.replace": {
+				// The panel's list is order-sensitive (new items land before the
+				// first completed one, completing moves an item to the end), so it
+				// writes the whole list rather than per-item deltas.
+				const p = (params ?? {}) as { cwd?: string; todos?: Array<Partial<KnowledgeTodo>> };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				const todos = (p.todos ?? []).map(t => ({
+					id: String(t.id ?? ""),
+					text: String(t.text ?? ""),
+					done: t.done === true,
+					createdAt: Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : Date.now(),
+				}));
+				try {
+					return { ok: true, todos: await replaceTodos(cwd, todos) };
+				} catch (err) {
+					return { error: err instanceof Error ? err.message : String(err) };
+				}
+			}
+			case "todos.importLegacy": {
+				// One-shot adoption of the GUI's old localStorage todos. Kept as a
+				// separate RPC (not folded into create) so the migration is
+				// idempotent and the panel only drops its keys after it succeeds —
+				// a failed migration must leave the old data recoverable.
+				const p = (params ?? {}) as {
+					cwd?: string;
+					todos?: Array<{ id?: unknown; text?: unknown; done?: unknown; createdAt?: unknown }>;
+				};
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				try {
+					return { ok: true, ...(await importLegacyTodos(cwd, p.todos ?? [])) };
+				} catch (err) {
+					return { error: err instanceof Error ? err.message : String(err) };
 				}
 			}
 			case "plans.list": {

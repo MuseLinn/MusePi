@@ -54,6 +54,7 @@ import { GlobTool } from "./glob";
 import { GrepTool } from "./grep";
 import { HubTool, isIrcEnabled } from "./hub";
 import { InspectImageTool } from "./inspect-image";
+import { KnowledgeTool } from "./knowledge";
 import { LearnTool } from "./learn";
 import { ManageSkillTool } from "./manage-skill";
 import { MemoryEditTool } from "./memory-edit";
@@ -447,6 +448,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	task: s => TaskTool.create(s),
 	hub: s => new HubTool(s),
 	todo: s => new TodoTool(s),
+	knowledge: s => new KnowledgeTool(s),
 	web_search: s => new WebSearchTool(s),
 	board: () => new BoardTool(),
 	widget: () => new WidgetTool(),
@@ -627,6 +629,9 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "debug") return session.settings.get("debug.enabled");
 		if (name === "todo")
 			return (!includeYield || session.prewalkArmed === true) && session.settings.get("todo.enabled");
+		// Project knowledge (notes / todos / plans). The panel's three sections
+		// share this store, so the tool is gated like any other data tool.
+		if (name === "knowledge") return session.settings.get("knowledge.enabled");
 		// Presentation tools (`widget` draws a live card in the transcript,
 		// `board` writes the desktop board). Both used to be registered
 		// unconditionally — there was no way to turn them off.

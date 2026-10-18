@@ -65,7 +65,8 @@ Unless user tells you exactly what to write:
 
 - No `any` unless absolutely necessary.
 - **NEVER use `ReturnType<>`** — use the actual type name.
-- **NEVER use inline imports** — no `await import()`, no `import("pkg").Type` in type positions, no dynamic type imports. Always top-level.
+- **No inline type imports** — `import("pkg").Type` in a type position, and dynamic type imports, are banned; use a top-level `import type`. They escape the static graph (refactors miss them, and the checker loses the real type) and no peer project does it.
+- **Dynamic `import()` only at a real split point** — `React.lazy` / route-level code splitting, plugin or extension loaders, an optional heavy dependency, or a genuine module-graph cycle. Not as a way to dodge a static import between two modules that already share a graph: that buys nothing and hides a dependency the bundler would otherwise see. (dsh keeps exactly 3, all `React.lazy`; openchamber uses ~860 including ordinary helpers — the split point is the test, not the syntax.)
 - Check `node_modules` for external API types instead of guessing.
 - **Barrel exports**: prefer `export * from "./module"` over named re-exports, including `export type { ... } from`. In pure `index.ts` barrels, use star re-exports even for single-specifier cases. If stars create ambiguity, remove the redundant export path; do not keep duplicates.
 - **Class privacy**: use ES `#private` fields; leave externally accessible members bare. **No `private`/`protected`/`public` keyword on fields or methods**, except on **constructor parameter properties** where TypeScript requires it (e.g. `constructor(private readonly session: ToolSession)`).
