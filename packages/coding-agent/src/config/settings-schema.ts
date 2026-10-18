@@ -4284,6 +4284,33 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	// Display tools. These two had no gate at all: `widget` and `board` were
+	// registered unconditionally, so a user could not turn off an agent that
+	// draws cards in the transcript or writes to the desktop board. Both are
+	// presentation surfaces — removing them costs nothing but the drawing, and
+	// some users do not want an agent writing cards.
+	"widget.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Presentation",
+			label: "Widgets",
+			description: "Enable the widget tool: draw a live card inline in the transcript",
+		},
+	},
+
+	"board.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Presentation",
+			label: "Board",
+			description: "Enable the board tool: read and write the desktop board's card wall",
+		},
+	},
+
 	"todo.reminders": {
 		type: "boolean",
 		default: true,

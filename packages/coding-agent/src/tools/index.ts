@@ -627,6 +627,11 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "debug") return session.settings.get("debug.enabled");
 		if (name === "todo")
 			return (!includeYield || session.prewalkArmed === true) && session.settings.get("todo.enabled");
+		// Presentation tools (`widget` draws a live card in the transcript,
+		// `board` writes the desktop board). Both used to be registered
+		// unconditionally — there was no way to turn them off.
+		if (name === "widget") return session.settings.get("widget.enabled");
+		if (name === "board") return session.settings.get("board.enabled");
 		if (name === "glob") return session.settings.get("glob.enabled");
 		if (name === "grep") return session.settings.get("grep.enabled");
 		if (name === "github") return session.settings.get("github.enabled");
