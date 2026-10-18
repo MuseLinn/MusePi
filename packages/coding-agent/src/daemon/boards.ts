@@ -7,6 +7,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 
 export interface BoardPos {
 	x: number;
@@ -96,8 +97,8 @@ export function validateBoards(boards: unknown, knownTypes: Record<string, unkno
 			}
 			if (w.type === "html") {
 				const html = (w as { data?: { html?: unknown } }).data?.html;
-				if (typeof html !== "string" || html.length > 64_000) {
-					return { ok: false, error: `html widget needs data.html string ≤ 64KB` };
+				if (typeof html !== "string" || html.length > MAX_WIDGET_HTML) {
+					return { ok: false, error: `html widget needs data.html string ≤ ${MAX_WIDGET_HTML}` };
 				}
 			}
 			const p = w.pos as { x?: unknown; y?: unknown; w?: unknown; h?: unknown } | undefined;

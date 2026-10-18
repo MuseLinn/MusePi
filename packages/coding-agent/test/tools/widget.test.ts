@@ -4,6 +4,7 @@
  * payload for the GUI tool-render pipeline.
  */
 import { describe, expect, test } from "bun:test";
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import { WidgetTool } from "../../src/tools/widget";
 
 describe("widget tool", () => {
@@ -87,10 +88,17 @@ describe("widget page action", () => {
 		expect(blank.isError).toBe(true);
 		expect(blank.content[0].type === "text" ? blank.content[0].text : "").toContain("html is required");
 
-		const huge = "x".repeat(64_001);
+		// The cap is the renderer's MAX_HTML, not a number invented here: a page
+		// over it renders as an "oversize" notice, so accepting more would only
+		// defer the failure to the client.
+		const huge = "x".repeat(MAX_WIDGET_HTML + 1);
 		const over = await tool.execute("c1", { action: "page", html: huge });
 		expect(over.isError).toBe(true);
-		expect(over.content[0].type === "text" ? over.content[0].text : "").toContain("64000");
+		expect(over.content[0].type === "text" ? over.content[0].text : "").toContain(String(MAX_WIDGET_HTML));
+
+		// And exactly at the cap still renders.
+		const edge = await tool.execute("c1", { action: "page", html: "x".repeat(MAX_WIDGET_HTML) });
+		expect(edge.isError).not.toBe(true);
 	});
 
 	test("rejects a title over the cap so a heading stays a heading", async () => {

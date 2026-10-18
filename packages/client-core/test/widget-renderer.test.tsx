@@ -7,6 +7,7 @@
  * error-text surfacing, and the late-data adopt guard.
  */
 import { describe, expect, it } from "bun:test";
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { collectWidgetPayloads, latestWidgetFromEntries } from "../src/components/transcript/widget-standalone";
@@ -298,6 +299,38 @@ describe("sandbox face answer channel", () => {
 		expect(readWidgetFaceMessage(own, own, "a string")).toBeNull();
 	});
 
+	it("carries the face's structured answer back so it can render what it picked", () => {
+		// The readback a face needs to say "you chose B" instead of going quiet:
+		// the payload it submitted has to survive the trip unchanged.
+		expect(
+			readWidgetFaceMessage(own, own, {
+				type: "musepi-widget-submit",
+				text: "B 档",
+				data: { option: "b", columns: 2 },
+			}),
+		).toEqual({ kind: "submit", text: "B 档", data: { option: "b", columns: 2 } });
+	});
+
+	it("drops an answer payload that cannot be echoed faithfully", () => {
+		// An unserializable or oversized payload would have to be dropped on
+		// the way back anyway — accept the text, refuse the data.
+		const cyclic: Record<string, unknown> = {};
+		cyclic.self = cyclic;
+		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-submit", text: "x", data: cyclic })).toEqual({
+			kind: "submit",
+			text: "x",
+		});
+		expect(
+			readWidgetFaceMessage(own, own, { type: "musepi-widget-submit", text: "x", data: "y".repeat(20_000) }),
+		).toEqual({ kind: "submit", text: "x" });
+		// A primitive payload is untouched.
+		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-submit", text: "x", data: 3 })).toEqual({
+			kind: "submit",
+			text: "x",
+			data: 3,
+		});
+	});
+
 	it("still carries the auto-height report the card already depended on", () => {
 		expect(readWidgetFaceMessage(own, own, { type: "musepi-widget-resize", height: 412 })).toEqual({
 			kind: "resize",
@@ -309,7 +342,7 @@ describe("sandbox face answer channel", () => {
 		const html = renderToStaticMarkup(
 			renderBody({
 				args: { type: "html" },
-				result: widgetResult("html", { html: `<p>${"y".repeat(70_000)}</p>`, data: {} }),
+				result: widgetResult("html", { html: `<p>${"y".repeat(MAX_WIDGET_HTML + 1)}</p>`, data: {} }),
 			} as never),
 		);
 		expect(html).toContain("gui-widget-html-empty");
@@ -385,6 +418,18 @@ describe("faces get a ready-made option card and a settled state", () => {
 		const doc = srcdoc();
 		expect(doc).toContain("musepi-widget-answered");
 		expect(doc).toContain("musepiWidgetAnswered");
+	});
+
+	it("hands the accepted answer back to the face so it can show what was picked", () => {
+		// The settled state a face renders is worthless if it cannot name the
+		// choice: the boot script has to record the answer, not just a flag.
+		const doc = srcdoc();
+		expect(doc).toContain("musepiWidgetAnswer");
+		expect(doc).toContain("__MUSEPI_ANSWER__");
+		// And the event carries the answer itself, for a face that listens
+		// instead of polling the global. Matched without the surrounding quotes:
+		// React HTML-escapes them in the srcdoc attribute.
+		expect(doc).toContain("detail: answer");
 	});
 
 	it("refuses to queue a second submit from inside the face", () => {

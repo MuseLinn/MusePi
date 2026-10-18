@@ -1,3 +1,4 @@
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -40,18 +41,31 @@ import { useEffect, useMemo, useRef, useState } from "react";
  *   This is a prompt-injection surface - model-authored JS can now put
  *   text into the agent's context - so the host bounds it: the message
  *   source must be this card's own frame, and the text is capped.
+ * - **Answer readback**: after the host accepts an answer the face is told
+ *   which one, via `window.musepiWidgetAnswer` (`{text, data}`,
+ *   also `__MUSEPI_ANSWER__`), the `musepi-widget-answered` DOM event
+ *   (`detail` carries the same object) and `data-musepi-answered` on
+ *   `<html>`. Without it a click just dimmed the card and the face had no
+ *   way to show "you picked A" - it could not even tell WHY it was dimmed.
+ *   The answer survives a frame rebuild (theme flip rewrites the srcdoc):
+ *   the host replays it on load.
  *
  * The card is interactive by default (buttons/sliders inside the face);
  * the board canvas disables iframe pointer-events while in edit mode so
  * cards stay draggable (kimi's draft-mode behavior).
  */
 
-/** Declared but previously never enforced. Model-authored markup that can
- * now answer is context-injection surface, so it gets a real bound rather
- * than a decorative constant. */
-const MAX_HTML = 64_000;
+/** Ceiling on one face's HTML. Model-authored markup that can answer is
+ * context-injection surface, so it gets a real bound rather than a decorative
+ * constant: over it the card degrades to an empty notice rather than silently
+ * rendering nothing. Shared with the tool side so the two cannot drift. */
+const MAX_HTML = MAX_WIDGET_HTML;
 /** Ceiling on what one face may say into the conversation. */
 const MAX_SUBMIT_TEXT = 8_000;
+/** Ceiling on the answer's structured payload. It is echoed back to the face
+ *  only (never into the conversation), so the bound is about not copying an
+ *  unbounded object through postMessage twice per answer. */
+const MAX_SUBMIT_DATA = 8_000;
 
 /** One card answers at most once. Without this a double-click — or a face
  * that re-posts on every render — sends a second identical user message, and
@@ -104,7 +118,7 @@ export function readFaceTokens(): Record<string, string> {
 }
 
 /** What a sandbox face is allowed to ask the host for. */
-export type WidgetFaceMessage = { kind: "resize"; height: number } | { kind: "submit"; text: string };
+export type WidgetFaceMessage = { kind: "resize"; height: number } | { kind: "submit"; text: string; data?: unknown };
 
 /**
  * Route one postMessage from a sandbox face.
@@ -120,15 +134,30 @@ export function readWidgetFaceMessage(
 	raw: unknown,
 ): WidgetFaceMessage | null {
 	if (expected === null || source !== expected) return null;
-	const d = raw as { type?: string; height?: number; text?: string } | null;
+	const d = raw as { type?: string; height?: number; text?: string; data?: unknown } | null;
 	if (!d || typeof d !== "object") return null;
 	if (d.type === "musepi-widget-resize" && typeof d.height === "number") {
 		return { kind: "resize", height: d.height };
 	}
 	if (d.type === "musepi-widget-submit" && typeof d.text === "string" && d.text.length > 0) {
-		return { kind: "submit", text: d.text.slice(0, MAX_SUBMIT_TEXT) };
+		const data = readAnswerData(d.data);
+		return { kind: "submit", text: d.text.slice(0, MAX_SUBMIT_TEXT), ...(data !== undefined ? { data } : {}) };
 	}
 	return null;
+}
+
+/** Keep the answer payload only when it is small, serializable JSON. The face
+ *  gets it back verbatim, so an unserializable value would also be impossible
+ *  to echo — dropping it is the honest choice over a lossy copy. */
+function readAnswerData(value: unknown): unknown {
+	if (value === undefined || value === null) return undefined;
+	let json: string;
+	try {
+		json = JSON.stringify(value);
+	} catch {
+		return undefined;
+	}
+	return json.length <= MAX_SUBMIT_DATA ? value : undefined;
 }
 
 export function htmlDefaults(): Record<string, unknown> {
@@ -185,8 +214,16 @@ window.addEventListener("message", function (e) {
   var d = e.data;
   if (d && d.type === "musepi-widget-answered") {
     window.musepiWidgetAnswered = true;
+    // The answer the host accepted, so the face can render "you picked A"
+    // instead of just going quiet. Mirrored onto a global (a face that boots
+    // after the answer, e.g. a theme rebuild, reads it on load) and delivered
+    // as an event (a face already running reacts without polling).
+    var answer = { text: typeof d.text === "string" ? d.text : "", data: d.data };
+    window.musepiWidgetAnswer = answer;
+    window.__MUSEPI_ANSWER__ = answer;
     document.documentElement.setAttribute("data-musepi-answered", "1");
-    window.dispatchEvent(new CustomEvent("musepi-widget-answered"));
+    try { document.documentElement.setAttribute("data-musepi-answer", answer.text); } catch (err) {}
+    window.dispatchEvent(new CustomEvent("musepi-widget-answered", { detail: answer }));
   }
   if (d && d.type === "musepi-widget-data") {
     window.__WIDGET_DATA__ = d.data || {};
@@ -223,7 +260,10 @@ export function HtmlCard({
 	const frameRef = useRef<HTMLIFrameElement | null>(null);
 	// One answer per card. Ref, not state: a re-render must not reopen the gate.
 	const gateRef = useRef(createAnswerGate());
-	const answeredRef = useRef(false);
+	/** The answer this card accepted. Kept so a REBUILT frame (theme flip
+	 *  rewrites the srcdoc) can be told again — otherwise the settled state
+	 *  vanishes on a light/dark switch and the face looks answerable again. */
+	const answerRef = useRef<{ text: string; data?: unknown } | null>(null);
 	// Theme-aware face: the srcdoc carries the host scheme so faces can
 	// adapt; a MutationObserver rebuilds it when the scheme flips live.
 	const [theme, setTheme] = useState<"dark" | "light">(widgetHostTheme);
@@ -303,12 +343,12 @@ export function HtmlCard({
 			} else if (msg?.kind === "submit") {
 				const claimed = gateRef.current.claim(msg.text);
 				if (claimed === null) return;
-				answeredRef.current = true;
+				const answer = { text: claimed, ...(msg.data !== undefined ? { data: msg.data } : {}) };
+				answerRef.current = answer;
 				sendPrompt?.(claimed);
 				// Tell the face so it can render a settled state; the injected
 				// stylesheet dims its controls whether or not it listens.
-				const win = frameRef.current?.contentWindow;
-				win?.postMessage({ type: "musepi-widget-answered" }, "*");
+				frameRef.current?.contentWindow?.postMessage({ type: "musepi-widget-answered", ...answer }, "*");
 			}
 		};
 		window.addEventListener("message", onMsg);
@@ -325,6 +365,14 @@ export function HtmlCard({
 			title="widget"
 			sandbox="allow-scripts"
 			srcDoc={doc}
+			// A rebuilt frame (theme flip rewrites the srcdoc) starts blank;
+			// replay the accepted answer so the face still shows its settled
+			// state instead of looking answerable again.
+			onLoad={() => {
+				const answer = answerRef.current;
+				if (answer)
+					frameRef.current?.contentWindow?.postMessage({ type: "musepi-widget-answered", ...answer }, "*");
+			}}
 			style={{
 				height: frameHeight !== null ? `${frameHeight}px` : undefined,
 				...(interactive ? {} : { pointerEvents: "none" }),

@@ -9,6 +9,7 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import widgetDescription from "../prompts/tools/widget.md" with { type: "text" };
 
 // The widget registry lives in guest-client (shared with the GUI board);
@@ -256,17 +257,15 @@ export const WIDGET_TYPES: Record<
 const MAX_DATA_JSON = 12_000;
 /**
  * A rendered page's HTML travels in the tool call's input, which the daemon
- * stores with the message and streams to every client.
- *
- * The cap is the renderer's `MAX_HTML` (client-core/src/widgets/html.tsx), not
- * an invented number: a page over it renders as an "oversize" notice instead of
- * a face, so accepting more here would only defer the failure to the client.
- * Everything else a page needs — the null-origin sandbox, `musepiSubmit` answer
- * handback, theme injection, `.musepi-options` styling, height reporting — is
- * the existing `html` widget's, which is why `page` is an action of this tool
- * rather than a second implementation.
+ * stores with the message and streams to every client. Shared with the
+ * renderer so the two cannot drift: a page over it renders as an "oversize"
+ * notice instead of a face, so accepting more here would only defer the
+ * failure to the client. Everything else a page needs — the null-origin
+ * sandbox, `musepiSubmit` answer handback, theme injection, `.musepi-options`
+ * styling, height reporting — is the existing `html` widget's, which is why
+ * `page` is an action of this tool rather than a second implementation.
  */
-const MAX_PAGE_HTML = 64_000;
+const MAX_PAGE_HTML = MAX_WIDGET_HTML;
 /** A page's title is a heading, not a sentence. */
 const MAX_PAGE_TITLE = 120;
 

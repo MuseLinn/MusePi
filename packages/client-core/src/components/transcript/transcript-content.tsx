@@ -19,11 +19,11 @@ import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
-
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
 import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
+import { useHoldAnchor } from "./use-hold-anchor";
 import { useWorkingNow } from "./use-working-now";
 import { WidgetStandaloneCards } from "./widget-standalone";
 
@@ -581,6 +581,9 @@ export function RoundFoldHeader({
 	onRevert?(messageId: string, text: string): void;
 }): ReactNode {
 	const changed = fold.filesChanged > 0;
+	// Keep the reader still when this fold closes above them. Without it the
+	// content below jumps up by the fold's height under someone reading the reply.
+	const headerRef = useHoldAnchor(open);
 	// Summary segments: changes · explored · commands,
 	// falling back to the bare tool count for rounds with neither signal.
 	const segments: ReactNode[] = [];
@@ -604,6 +607,7 @@ export function RoundFoldHeader({
 	}
 	return (
 		<button
+			ref={headerRef}
 			type="button"
 			className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`}
 			data-turn-start-ts={startTs}
