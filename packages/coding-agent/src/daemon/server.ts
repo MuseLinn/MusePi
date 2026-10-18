@@ -502,6 +502,7 @@ import {
 	DEFAULT_SOCKET,
 	estimateSnapcompactSavings,
 	extractEntryText,
+	isLiveSessionBusy,
 	MAX_REQUEST_BYTES,
 	modesOf,
 	PAIR_PORT,
@@ -551,6 +552,23 @@ export class DaemonServer {
 
 	setSocketPath(p: string): void {
 		this.#socketPath = p;
+	}
+
+	/**
+	 * Cooperative-shutdown hook, injected by startDaemon once the listener is
+	 * up (it closes the servers, releases handles, unlinks socket/port files).
+	 *
+	 * `system.shutdown` exists because a GUI cannot otherwise ask the daemon to
+	 * stop politely: POSIX SIGTERM is catchable, but on Windows Node's SIGTERM
+	 * is TerminateProcess — uncatchable — so `process.on("SIGTERM")` in
+	 * commands/serve.ts never runs there and every teardown was a hard kill that
+	 * lost in-flight turns. An RPC travels the channel the daemon already
+	 * serves, on every platform.
+	 */
+	#onShutdown: (() => Promise<void>) | null = null;
+
+	setShutdownHook(fn: () => Promise<void>): void {
+		this.#onShutdown = fn;
 	}
 	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
 	readonly #services = new HostServices();
@@ -605,6 +623,26 @@ export class DaemonServer {
 			await this.#hostContext.dispose();
 			throw err;
 		}
+		// Route plugin `ext.call` RPCs to the CORDIS-MANAGED instance of each
+		// plugin instead of letting the artifact compiler load a second copy.
+		//
+		// `loadLegacyPiModule` stamps every load with `?mtime=<tag>` (that is
+		// what makes HMR work), so the compiler's copy and the session's copy
+		// are separate module instances. Any module-level state a plugin keeps is
+		// then split in two — a real bug this session hit: a plugin captured the
+		// session context on one instance and its RPC answered from the other,
+		// which saw `null`.
+		//
+		// Registering here (rather than changing the loader, which would break
+		// HMR) keeps ONE instance for both faces. The dispatcher returns
+		// `found: false` for anything the runtime does not manage, so bare
+		// extension files keep the old path.
+		const { setExtensionRpcDispatcher } = await import("./extension-artifact-compiler");
+		setExtensionRpcDispatcher(async (entryPath, method, params, ctx) => {
+			const runtime = await this.#getDynamicExtensions().catch(() => null);
+			if (runtime === null) return { found: false as const };
+			return runtime.invokeRpc(entryPath, method, params, ctx);
+		});
 	}
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性装配：首个
 	 *  session-less 装载请求到达时才动态 import 并挂到宿主根 Context。 */
@@ -1447,6 +1485,41 @@ export class DaemonServer {
 				// cannot send WS ping frames; the renderer pings this RPC to
 				// detect sockets Electron tears down on system sleep).
 				return { pong: Date.now() };
+			}
+			case "system.shutdown": {
+				// Cooperative shutdown, requested by the desktop shell before it
+				// escalates to a kill (Electron daemon.cjs `kill()`).
+				//
+				// The answer is sent BEFORE teardown starts: `close()` shuts the
+				// socket server, so replying after it would race the connection
+				// away and the caller would time out and fall back to SIGTERM —
+				// exactly the hard kill this RPC exists to avoid. The
+				// acknowledgement therefore says "accepted", not "finished";
+				// completion is observed by the listener going away.
+				//
+				const shutdown = this.#onShutdown;
+				if (!shutdown) {
+					// No listener set (embedded/test construction): nothing to
+					// stop, and reporting success would lie about the process.
+					throw new Error("system.shutdown is unavailable: daemon has no shutdown hook");
+				}
+				// `busy` reports how many live sessions are mid-work. Genuine
+				// work is never aborted here: the shell only escalates after
+				// its grace window, and a turn that outlives it is the shell's
+				// decision to force, not this handler's.
+				let busy = 0;
+				for (const live of this.#host.allSessions()) {
+					if (isLiveSessionBusy(live)) busy += 1;
+				}
+				// Defer past this request's own write: the caller must receive
+				// the ack on a live socket. `setTimeout(0)` runs after the
+				// current frame, when the reply has been flushed.
+				setTimeout(() => {
+					void shutdown().catch(err => {
+						logger.error("daemon shutdown hook failed", { error: String(err) });
+					});
+				}, 0);
+				return { ok: true, busy };
 			}
 			case "system.meta": {
 				// Derived, never hardcoded: MUSEPI_VERSION is baked by the
@@ -4261,12 +4334,11 @@ export class DaemonServer {
 				// selector must not go empty when opening old sessions.
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
-				if (live) {
-					return live.agentSession.getAvailableModels().map(modelDetailRow);
-				}
-				const registry = await this.#host.ensureRegistry();
-				if (!registry) return [];
-				return registry.getAvailable().map(modelDetailRow);
+				const registry = live ? undefined : await this.#host.ensureRegistry();
+				const models = live ? live.agentSession.getAvailableModels() : (registry?.getAvailable() ?? []);
+				return models.map(model =>
+					modelDetailRow(model, (registry ?? live?.agentSession.modelRegistry)?.getProviderLabel(model.provider)),
+				);
 			}
 			case "session.setModel": {
 				const p = (params ?? {}) as { sessionId: string; model: { id: string; name?: string; provider?: string } };
@@ -4902,8 +4974,8 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "session.retitle": {
-				// openchamber SessionAiRename parity: model-generated title from
-				// the first user message (reasons documented on host.retitle).
+				// Model-generated session title from the first user message
+				// (reasons documented on host.retitle).
 				const p = (params ?? {}) as { sessionId: string };
 				if (!p.sessionId) throw new Error("sessionId required");
 				return this.#host.retitle(p.sessionId);
@@ -7082,7 +7154,9 @@ export class DaemonServer {
 				// exists.
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) return [];
-				return registry.getAvailable().map(modelDetailRow);
+				return registry
+					.getAvailable()
+					.map(model => modelDetailRow(model, registry.getProviderLabel(model.provider)));
 			}
 			case "models.catalog": {
 				// Full bundled catalog grouped by provider (TUI model-hub
@@ -7095,6 +7169,11 @@ export class DaemonServer {
 				const all = registry.getAll();
 				const available = new Set(registry.getAvailable().map(model => model.provider));
 				const registryNames = new Map(PROVIDER_REGISTRY.map(def => [def.id, def.name]));
+				// Extension-registered providers carry their own display label
+				// (`registerProvider({ label })`); it wins over the builtin table,
+				// which has no entry for them anyway.
+				const labelOf = (provider: string): string =>
+					registry.getProviderLabel(provider) ?? registryNames.get(provider) ?? provider;
 				const byProvider = new Map<
 					string,
 					{
@@ -7118,7 +7197,7 @@ export class DaemonServer {
 					if (!group) {
 						group = {
 							provider: model.provider,
-							name: registryNames.get(model.provider) ?? model.provider,
+							name: labelOf(model.provider),
 							available: available.has(model.provider),
 							models: [],
 						};
@@ -7163,7 +7242,7 @@ export class DaemonServer {
 						? (resolveProviderModelReference(p.id.slice(0, slash), p.id.slice(slash + 1), available) ??
 							available.find(m => m.id === p.id))
 						: available.find(m => m.id === p.id);
-				return model ? modelDetailRow(model) : null;
+				return model ? modelDetailRow(model, registry.getProviderLabel(model.provider)) : null;
 			}
 			case "models.add": {
 				// Append an OpenAI-compatible custom provider to models.yml
@@ -7421,20 +7500,28 @@ function isBuiltinRole(role: string): boolean {
  * detail lines the browser shows — context window, output budget, per-M
  * cost, reasoning flag, vision support, and the thinking efforts the model
  * actually exposes (drives the GUI thinking selector's exact ladder).
+ *
+ * `providerLabel` is the DISPLAY name for the provider section header; `provider`
+ * stays the identity the picker keys on. They differ for extension-registered
+ * providers, whose registration id is a namespaced identifier.
  */
-function modelDetailRow(model: {
-	id: string;
-	name?: string;
-	provider?: string;
-	contextWindow?: number | null;
-	maxTokens?: number | null;
-	cost?: { input?: number; output?: number };
-	reasoning?: boolean;
-	input?: string[];
-}): {
+function modelDetailRow(
+	model: {
+		id: string;
+		name?: string;
+		provider?: string;
+		contextWindow?: number | null;
+		maxTokens?: number | null;
+		cost?: { input?: number; output?: number };
+		reasoning?: boolean;
+		input?: string[];
+	},
+	providerLabel?: string,
+): {
 	id: string;
 	name: string;
 	provider: string;
+	providerLabel: string;
 	contextWindow: number | null;
 	maxTokens: number | null;
 	costInput: number;
@@ -7448,10 +7535,14 @@ function modelDetailRow(model: {
 	efforts: string[];
 } {
 	const capabilities = resolveModelCapabilities(model.id, model.input);
+	const provider = model.provider ?? "";
 	return {
 		id: model.id,
 		name: model.name ?? model.id,
-		provider: model.provider ?? "",
+		provider,
+		// The picker falls back to the id when the label is empty, so an
+		// extension that declares none keeps the previous behavior.
+		providerLabel: providerLabel ?? provider,
 		contextWindow: model.contextWindow ?? null,
 		maxTokens: model.maxTokens ?? null,
 		costInput: model.cost?.input ?? 0,
@@ -7722,11 +7813,13 @@ export async function startDaemon(
 		netServer.listen(socketPath, resolve);
 	});
 
-	return {
-		socketPath,
-		wsPort: wsHandle?.port,
-		webUrl: webHandle?.url,
-		close: async () => {
+	// Orderly teardown, shared by the interactive shutdown signals (serve.ts)
+	// and the `system.shutdown` RPC. Idempotent: a second call is a no-op, so a
+	// shell that sends the RPC and then escalates to a signal cannot double-free
+	// handles mid-teardown.
+	let closing: Promise<void> | null = null;
+	const close = (): Promise<void> => {
+		closing ??= (async () => {
 			try {
 				await fs.promises.unlink(portFile);
 			} catch {
@@ -7749,7 +7842,25 @@ export async function startDaemon(
 			} catch {
 				// already gone
 			}
-		},
+		})();
+		return closing;
+	};
+
+	// `system.shutdown`: tear down, then hand the process-exit decision to the
+	// owner. A shell-initiated shutdown means "stop the daemon", so the default
+	// ends the process — without it, serve.ts's never-resolving keepalive would
+	// leave a half-dead process holding a stale pid. Embedders (tests, hosts)
+	// inject their own completion so teardown is observable without exiting.
+	server.setShutdownHook(async () => {
+		await close();
+		(options.onShutdownComplete ?? (() => process.exit(0)))();
+	});
+
+	return {
+		socketPath,
+		wsPort: wsHandle?.port,
+		webUrl: webHandle?.url,
+		close,
 	};
 }
 

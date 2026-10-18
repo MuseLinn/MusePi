@@ -371,6 +371,17 @@ export interface DaemonOptions {
 	 * set headers). Absent => loopback-only, no auth (current behavior).
 	 */
 	remoteToken?: string;
+	/**
+	 * What `system.shutdown` does after teardown completes. Defaults to
+	 * terminating the process, which is what a real `musepi serve` needs: the
+	 * shell asked the DAEMON to stop, so a process that released its socket and
+	 * kept running would be a half-dead orphan holding a stale pid.
+	 *
+	 * Injectable because the process-exit decision belongs to the owner, not to
+	 * the server object: an embedded daemon (tests, embedding hosts) must be
+	 * able to exercise the teardown without taking its host down.
+	 */
+	onShutdownComplete?: () => void;
 }
 
 /**
@@ -2646,7 +2657,7 @@ export class DaemonSessionHost {
 	}
 
 	/**
-	 * AI rename (openchamber SessionAiRename parity): (re)generate the
+	 * AI rename: (re)generate the
 	 * session title from its first user message through the same title
 	 * pipeline as auto-title, then persist it as a USER title so
 	 * replan-refresh never overwrites an explicit choice. History sessions
