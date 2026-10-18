@@ -610,7 +610,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 						providers={providers}
 						unhosted={unhosted}
 						onOpenDiagnostics={() => setView("diagnostics")}
-						onOpenCapabilityCenter={() => window.dispatchEvent(new CustomEvent("omp-open-capability"))}
+						onOpenCapabilityCenter={() => window.dispatchEvent(new CustomEvent("musepi-open-capability"))}
 						onToggleProvider={toggleProvider}
 						slots={data?.slots ?? null}
 						onForceEnable={e => forceToggle(e as ExtensionItem, true)}

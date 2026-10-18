@@ -16,7 +16,7 @@ import type { RpcClient } from "../src/lib/rpc";
  * 1. ＋市场卡：设计体系 rail 排尾追加 dashed 入口卡（结构从属卡片排：
  *    同 120×72 基类、同入场 stagger），DOM 顺序恒为行内最后一个子元素，
  *    且不进 radiogroup（a11y：radiogroup 只含 role=radio）。
- * 2. 跳转：点击 dispatch 宿主既有 `omp-open-capability` 事件，detail.tab =
+ * 2. 跳转：点击 dispatch 宿主既有 `musepi-open-capability` 事件，detail.tab =
  *    "marketplace"（app.tsx 监听落能力中心市场 tab；ExtensionsCenter CTA
  *    同款通道，无 detail 的旧调用方行为不变——本测试钉 detail 载荷）。
  * 3. 能力中心落地 tab：CapabilityCenterPage initialTab="marketplace" 时
@@ -97,7 +97,7 @@ describe("M3.7d ＋市场卡（rail 排尾 + 跳能力中心市场 tab）", () =
 		document.body.innerHTML = "";
 	});
 
-	test("点击 dispatch omp-open-capability 事件（detail.tab = marketplace）", () => {
+	test("点击 dispatch musepi-open-capability 事件（detail.tab = marketplace）", () => {
 		const root = renderRail();
 		const events: Event[] = [];
 		const onEvent = (e: Event): void => {

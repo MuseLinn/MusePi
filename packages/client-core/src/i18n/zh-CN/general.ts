@@ -339,6 +339,7 @@ export const general = {
 	"knowledge search": "搜索笔记、待办、计划…",
 	"knowledge notes": "笔记",
 	"knowledge plans": "计划",
+	"plan not found": "没有这个计划，可能已被删除",
 	"knowledge no results": "没有匹配的内容",
 	"knowledge expand note": "展开笔记",
 	"knowledge resize sections": "调整分区宽度",

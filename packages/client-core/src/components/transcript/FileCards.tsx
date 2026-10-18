@@ -3,7 +3,7 @@
  * compact chips under the assistant message — preview in the right panel,
  * copy the path, or open in the system default app.
  *
- * The desktop GUI listens for the `omp-open-file` window event (ChatView);
+ * The desktop GUI listens for the `musepi-open-file` window event (ChatView);
  * guests / exports render the buttons inert.
  */
 import type { ReactNode } from "react";
@@ -18,7 +18,7 @@ export interface FileCardItem {
 
 /** Preview a file in the GUI right panel (desktop); no-op elsewhere. */
 export function openFileInPanel(path: string): void {
-	window.dispatchEvent(new CustomEvent("omp-open-file", { detail: { path } }));
+	window.dispatchEvent(new CustomEvent("musepi-open-file", { detail: { path } }));
 }
 
 export function openFileExternally(path: string): void {

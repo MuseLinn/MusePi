@@ -61,6 +61,16 @@ export interface ToolRenderHost {
 	 *  without a settings surface omit it and contextual "fix this in
 	 *  settings" actions hide themselves. */
 	openSettings?(section?: string): void;
+	/**
+	 * Put a project plan in front of the user (the `knowledge` tool's `show`).
+	 *
+	 * `show` is not "return the text to the model" — it is "open this plan where
+	 * the user can read it". A host without a plans surface omits the
+	 * capability, and the renderer then reports that the plan could not be
+	 * shown instead of pretending it was. The desktop panel implements it by
+	 * opening the project-knowledge surface on that plan.
+	 */
+	showPlan?(request: { directory: string; id: string; title: string }): void;
 }
 
 /**

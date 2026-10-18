@@ -23,6 +23,7 @@ import { hubRenderer } from "./tools/hub";
 import { inspectImageRenderer } from "./tools/inspect-image";
 import { ircRenderer } from "./tools/irc";
 import { jobRenderer } from "./tools/job";
+import { knowledgeRenderer } from "./tools/knowledge";
 import { lspRenderer } from "./tools/lsp";
 import { recallRenderer } from "./tools/memory-recall";
 import { reflectRenderer } from "./tools/memory-reflect";
@@ -82,6 +83,7 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	grep: grepRenderer,
 	search: grepRenderer,
 	task: taskRenderer,
+	knowledge: knowledgeRenderer,
 	todo: todoRenderer,
 	vibe_spawn: vibeRenderer,
 	vibe_send: vibeRenderer,

@@ -16,7 +16,7 @@ import { type DesignSystemEntry, designSystemLabel } from "./use-design-systems"
  * （§3.3「hover 浮卡给 description 全文」）。
  *
  * ＋市场卡（M3.7d §3.2 末段）：排尾 dashed 卡（加号 + 「市场」），点击
- * 经宿主既有 `omp-open-capability` 事件通道跳能力中心市场 tab
+ * 经宿主既有 `musepi-open-capability` 事件通道跳能力中心市场 tab
  * （ExtensionsCenter CTA 同款通道，app.tsx 监听；detail.tab =
  * "marketplace" 是可选载荷，无载荷的旧调用方行为不变）。它不是单选
  * 项，故不进 radiogroup（a11y：radiogroup 只含 role=radio）。
@@ -26,7 +26,7 @@ import { type DesignSystemEntry, designSystemLabel } from "./use-design-systems"
 const HOVER_LEAVE_MS = 120;
 
 /** 宿主「打开能力中心」事件名（app.tsx 监听；ExtensionsCenter CTA 同款）。 */
-export const OPEN_CAPABILITY_EVENT = "omp-open-capability";
+export const OPEN_CAPABILITY_EVENT = "musepi-open-capability";
 
 export function DesignSystemRail({
 	systems,

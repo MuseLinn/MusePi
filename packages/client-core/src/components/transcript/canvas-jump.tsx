@@ -43,7 +43,7 @@ export function extractCanvasJumpBlocks(content: string): { content: string; blo
 /** Open-board card dispatched to the desktop shell. */
 export function openBoardFromChat(canvasId: string, title?: string): void {
 	window.dispatchEvent(
-		new CustomEvent("omp-open-board", {
+		new CustomEvent("musepi-open-board", {
 			detail: { id: canvasId, title: title ?? "" },
 		}),
 	);
@@ -71,8 +71,24 @@ export function CanvasJumpCard({ block }: { block: CanvasJumpBlock }): ReactNode
  *  hops to the 任务中心 with that task selected in the editor. */
 export function openScheduledTaskFromChat(taskId: string, name?: string): void {
 	window.dispatchEvent(
-		new CustomEvent("omp-open-scheduled-task", {
+		new CustomEvent("musepi-open-scheduled-task", {
 			detail: { id: taskId, name: name ?? "" },
+		}),
+	);
+}
+
+/**
+ * The `knowledge` tool's `show`: put a project plan in front of the user.
+ *
+ * Same bridge as the two above — the tool runs on the daemon and cannot touch
+ * the panel, so it dispatches and the shell opens the project-knowledge surface
+ * on that plan. `directory` matters because knowledge is per-project: showing a
+ * plan must open the project it belongs to, not whichever one is on screen.
+ */
+export function openPlanFromChat(directory: string, planId: string, title?: string): void {
+	window.dispatchEvent(
+		new CustomEvent("musepi-open-plan", {
+			detail: { directory, id: planId, title: title ?? "" },
 		}),
 	);
 }

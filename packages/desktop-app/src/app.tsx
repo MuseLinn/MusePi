@@ -561,6 +561,10 @@ function AppInner(): ReactNode {
 	// renders and throws "Rendered more hooks than during the previous
 	// render" on the splash → full-app transition (Rules of Hooks).
 	const [sessionLoading, setSessionLoading] = useState(false);
+	/** Seconds the open/create wait has run, once past the skeleton threshold.
+	 *  A frozen screen during a multi-second RPC reads as "it broke"; a live
+	 *  counter reads as "it is working". */
+	const [waitSeconds, setWaitSeconds] = useState(0);
 	const sessionLoadingTimerRef = useRef<Timer | null>(null);
 	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
@@ -769,7 +773,7 @@ function AppInner(): ReactNode {
 	// 能力中心当前 tab（受控：CapabilityCenterPage 始终挂载，切 tab 只改
 	// 这里，页面内部不再各自 useState(initialTab)——否则人在能力中心时经
 	// 侧边栏悬停菜单点另一个 tab 只更新了 state、组件不重挂载，永远不跳）。
-	// omp-open-capability 事件的可选 detail.tab 载荷与侧边栏悬停菜单都写这里。
+	// musepi-open-capability 事件的可选 detail.tab 载荷与侧边栏悬停菜单都写这里。
 	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "composition" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "chat"): void => {});
@@ -780,7 +784,7 @@ function AppInner(): ReactNode {
 			setBoardJumpId(id);
 			viewSwapRef.current("board");
 		};
-		window.addEventListener("omp-open-board", onOpenBoard);
+		window.addEventListener("musepi-open-board", onOpenBoard);
 		// 会话内 schedule_task 卡片（issue #11）：跳到任务中心并选中该任务。
 		const onOpenScheduledTask = (e: Event) => {
 			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
@@ -788,7 +792,7 @@ function AppInner(): ReactNode {
 			setScheduledJumpId(id);
 			viewSwapRef.current("scheduled");
 		};
-		window.addEventListener("omp-open-scheduled-task", onOpenScheduledTask);
+		window.addEventListener("musepi-open-scheduled-task", onOpenScheduledTask);
 		// 设置 → 扩展控制中心概览的 CTA（设计稿 07 底部互跳）：开一级能力中心。
 		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab）；无载荷的旧
 		// 调用方保持默认 skills tab。
@@ -797,11 +801,11 @@ function AppInner(): ReactNode {
 			setCapabilityTab(tab === "marketplace" || tab === "plugins" ? tab : "skills");
 			viewSwapRef.current("capability");
 		};
-		window.addEventListener("omp-open-capability", onOpenCapability);
+		window.addEventListener("musepi-open-capability", onOpenCapability);
 		return () => {
-			window.removeEventListener("omp-open-board", onOpenBoard);
-			window.removeEventListener("omp-open-scheduled-task", onOpenScheduledTask);
-			window.removeEventListener("omp-open-capability", onOpenCapability);
+			window.removeEventListener("musepi-open-board", onOpenBoard);
+			window.removeEventListener("musepi-open-scheduled-task", onOpenScheduledTask);
+			window.removeEventListener("musepi-open-capability", onOpenCapability);
 		};
 	}, []);
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
@@ -1690,7 +1694,17 @@ function AppInner(): ReactNode {
 			// a cold open — show the skeleton only when the wait actually
 			// exceeds the flicker threshold, clear it when the store lands.
 			if (sessionLoadingTimerRef.current !== null) clearTimeout(sessionLoadingTimerRef.current);
-			sessionLoadingTimerRef.current = setTimeout(() => setSessionLoading(true), 250);
+			sessionLoadingTimerRef.current = setTimeout(() => {
+				setSessionLoading(true);
+				// Elapsed counter for the skeleton: the wait is real work (a
+				// cold history open reactivates on demand), and a live number
+				// tells the user it is progressing rather than stuck.
+				setWaitSeconds(1);
+				sessionLoadingTimerRef.current = setInterval(() => {
+					setWaitSeconds(s => s + 1);
+				}, 1_000);
+				sessionLoadingTimerRef.current.unref?.();
+			}, 250);
 			setUnreadSessions(prev => {
 				if (!prev.has(sessionId)) return prev;
 				const next = new Set(prev);
@@ -1896,6 +1910,7 @@ function AppInner(): ReactNode {
 					sessionLoadingTimerRef.current = null;
 				}
 				setSessionLoading(false);
+				setWaitSeconds(0);
 				// its pause-state envelopes via the live stream).
 				try {
 					const st = await client.request<{
@@ -1927,6 +1942,7 @@ function AppInner(): ReactNode {
 					sessionLoadingTimerRef.current = null;
 				}
 				setSessionLoading(false);
+				setWaitSeconds(0);
 				previous?.dispose();
 				storeRef.current = null;
 				setStore(null);
@@ -2102,6 +2118,11 @@ function AppInner(): ReactNode {
 				// The project picker chooses the workspace folder — it
 				// becomes the session cwd so 按项目 groups by it.}
 				const res = await client.request<{ sessionId: string }>("session.create", {
+					// Creating a session instantiates the extension set for its new
+					// context; on a daemon restoring many sessions that routinely
+					// exceeds the 15s default — a timeout there is a spurious
+					// failure (the immediate retry succeeds), not a dead daemon.
+					timeoutMs: 120_000,
 					...(opts?.cwd ? { cwd: opts.cwd } : {}),
 					// Settings → 会话 → 自动生成会话标题: off keeps the session
 					// title generic instead of falling back to the first message.
@@ -2667,7 +2688,7 @@ function AppInner(): ReactNode {
 		}
 	}, []);
 
-	/** AI rename any session (openchamber SessionAiRename parity): the
+	/** AI rename any session: the
 	 *  daemon generates a title from the first user message. Refreshes the
 	 *  tree on success; callers toast the reason on failure. The model pass
 	 *  runs past the 15s default RPC cap, so this carries its own timeout. */
@@ -3328,7 +3349,7 @@ function AppInner(): ReactNode {
 							shineColor="var(--color-accent)"
 						/>
 					</div>
-					{/* Boot stall recovery (dsh-desktop parity): appears only after
+					{/* Boot stall recovery: appears only after
 					 * BOOT_STALL_MS of an in-flight attempt — a slow boot still
 					 * lands in the app; this adds an exit, it never gates one. */}
 					{bootStalled && (
@@ -3557,6 +3578,7 @@ function AppInner(): ReactNode {
 						onSelectReminder={id => void openSession(id)}
 						onMarkAllRead={markAllRead}
 						sessionLoading={sessionLoading}
+						waitSeconds={waitSeconds}
 						ask={activeAsk}
 						onAskAnswer={answerAsk}
 					/>
@@ -3593,7 +3615,7 @@ function AppInner(): ReactNode {
 			 * 虚拟列表状态与侧栏展开态全部保留,不再整树重挂、重新订阅、
 			 * 重新物化上万条 entry。设置壳层自身仍按 blur-out/blur-in 进出。 */}
 			<div className="gui-workspace-keeper gui-workspace-keeper--enter">
-				{/* openchamber-style shell: a full-width immersive toolbar riding
+				{/* Immersive shell: a full-width toolbar riding
 				 * the top edge, the three panes below it sharing its surface
 				 * (no divider, same frosted tint). */}
 				<div className="gui-main relative flex min-h-0 flex-1">
@@ -3813,6 +3835,7 @@ function AppInner(): ReactNode {
 											onSelectReminder={id => void openSession(id)}
 											onMarkAllRead={markAllRead}
 											sessionLoading={sessionLoading}
+											waitSeconds={waitSeconds}
 											ask={activeAsk}
 											onAskAnswer={answerAsk}
 										/>
@@ -3994,7 +4017,7 @@ function AppInner(): ReactNode {
 			>
 				<ImportSessionsSetup rpc={rpc} />
 			</DialogFrame>
-			{/* kimiwork parity: 新建空白项目 — name + parent path, mkdir via the
+			{/* 新建空白项目 — name + parent path, mkdir via the
 			 * daemon (works outside any session cwd), then open + surface it. */}
 			<DialogFrame
 				open={newProjectOpen}
@@ -4106,7 +4129,7 @@ function AppInner(): ReactNode {
 			 * here so they survive panel close/switch — the pane only positions
 			 * itself over them, and the agent keeps driving the same pages. */}
 			<ManagedBrowserHost />
-			{/* Auto-checked update notice (BitFun parity toast; main.cjs
+			{/* Auto-checked update notice (toast; main.cjs
 			 * pushes update-available ~12s after boot). */}
 			<UpdateToast />
 			{/* Undo-action toasts (archive → Undo). Bottom-center: clear of

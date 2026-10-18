@@ -647,7 +647,17 @@ function PlanEditor({
  * active section persisted), cross-section search in the title row with
  * per-section match counts, one scroller owned by the panel.
  */
-export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+export function NotesPane({
+	rpc,
+	cwd,
+	showPlanRequest,
+}: {
+	rpc: RpcClient;
+	cwd: string;
+	/** `knowledge` show: open this plan for the user. Consumed on a nonce
+	 *  change so a repeat request re-opens; see {@link openPlanFromChat}. */
+	showPlanRequest?: { directory: string; id: string; title: string; nonce: number } | null;
+}): ReactNode {
 	const { prompt } = usePrompt();
 	const { confirm } = useConfirm();
 	const [section, setSectionRaw] = useState<Section>(() => {
@@ -670,6 +680,9 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 	const [notes, setNotes] = useState<NoteFile[] | null>(null);
 	const [plans, setPlans] = useState<PlanFile[] | null>(null);
 	const [planOpen, setPlanOpen] = useState<{ id: string; title: string; body: string } | null>(null);
+	// `knowledge` show asked for a plan that is not in the list: the panel says
+	// so instead of opening an empty editor (the model believes it showed one).
+	const [planMissing, setPlanMissing] = useState<string | null>(null);
 	const [todos, setTodos] = useState<TodoItem[]>([]);
 	const [navW, setNavW] = useState(() => readNum(NAV_W_KEY, 120, NAV_W_MIN, NAV_W_MAX));
 
@@ -798,6 +811,42 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 		loadPlans();
 	};
 
+	/**
+	 * `knowledge` show: the agent asked to put this plan in front of the user.
+	 *
+	 * Two things have to line up, and each was a real failure mode:
+	 *  - the plans LIST must be loaded first (the request can arrive before the
+	 *    RPC answers, and opening an id that has not arrived yet would silently
+	 *    do nothing);
+	 *  - the plan must exist, or the user gets an empty editor over the list.
+	 * A plan that cannot be shown says so instead of pretending it worked —
+	 * the model believes it opened something.
+	 */
+	const planShowNonce = showPlanRequest?.nonce ?? 0;
+	useEffect(() => {
+		const request = showPlanRequest;
+		if (!request) return;
+		// A plan belongs to its own project; a request naming a different one is
+		// ignored rather than opening the wrong project's row.
+		if (request.directory !== cwd) return;
+		let cancelled = false;
+		void (async () => {
+			const loaded = plans ?? (await rpc.request<{ plans?: PlanFile[] }>("plans.list", { cwd })).plans ?? [];
+			if (cancelled) return;
+			setSection("plans");
+			if (!loaded.some(p => p.id === request.id)) {
+				setPlanOpen(null);
+				setPlanMissing(request.id);
+				return;
+			}
+			await openPlan(request.id);
+		})();
+		return () => {
+			cancelled = true;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [planShowNonce, cwd]);
+
 	// Cross-section search counts (filtered), per-section on the nav entries.
 	const needle = query.trim().toLowerCase();
 	const notesCount = notes ? notes.filter(n => !needle || n.body.toLowerCase().includes(needle)).length : 0;
@@ -894,13 +943,23 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 						/>
 					)}
 					{section === "plans" && !planOpen && plans !== null && (
-						<PlansSection
-							plans={plans}
-							query={query}
-							onOpen={id => void openPlan(id)}
-							onCreate={() => void createPlan()}
-							onDelete={id => void deletePlan(id)}
-						/>
+						<>
+							{planMissing && (
+								<div className="gui-panel-empty-label" role="status">
+									{t("plan not found")}
+								</div>
+							)}
+							<PlansSection
+								plans={plans}
+								query={query}
+								onOpen={id => {
+									setPlanMissing(null);
+									void openPlan(id);
+								}}
+								onCreate={() => void createPlan()}
+								onDelete={id => void deletePlan(id)}
+							/>
+						</>
 					)}
 				</div>
 				{/* Section nav (openchamber v1.19: content left, sections right —

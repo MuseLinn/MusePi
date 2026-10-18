@@ -473,6 +473,7 @@ import {
 	importLegacyTodos,
 	type KnowledgeTodo,
 	listTodos,
+	projectSlug,
 	replaceTodos,
 	updateTodo,
 } from "../knowledge/store";
@@ -7080,13 +7081,13 @@ export class DaemonServer {
 				// and this RPC share one store.
 				const p = (params ?? {}) as { cwd?: string };
 				const cwd = p.cwd?.trim() || this.#host.cwd();
-				return { todos: await listTodos(cwd) };
+				return { todos: await listTodos(projectSlug(cwd)) };
 			}
 			case "todos.create": {
 				const p = (params ?? {}) as { cwd?: string; text?: string };
 				const cwd = p.cwd?.trim() || this.#host.cwd();
 				try {
-					return { ok: true, todo: await createTodo(cwd, p.text ?? "") };
+					return { ok: true, todo: await createTodo(projectSlug(cwd), p.text ?? "") };
 				} catch (err) {
 					return { error: err instanceof Error ? err.message : String(err) };
 				}
@@ -7096,7 +7097,7 @@ export class DaemonServer {
 				const cwd = p.cwd?.trim() || this.#host.cwd();
 				if (!p.id) return { error: "invalid todo id" };
 				try {
-					const todo = await updateTodo(cwd, p.id, { text: p.text, done: p.done });
+					const todo = await updateTodo(projectSlug(cwd), p.id, { text: p.text, done: p.done });
 					return todo ? { ok: true, todo } : { error: "todo not found" };
 				} catch (err) {
 					return { error: err instanceof Error ? err.message : String(err) };
@@ -7106,7 +7107,7 @@ export class DaemonServer {
 				const p = (params ?? {}) as { cwd?: string; id?: string };
 				const cwd = p.cwd?.trim() || this.#host.cwd();
 				if (!p.id) return { error: "invalid todo id" };
-				return (await deleteTodo(cwd, p.id)) ? { ok: true } : { error: "todo not found" };
+				return (await deleteTodo(projectSlug(cwd), p.id)) ? { ok: true } : { error: "todo not found" };
 			}
 			case "todos.replace": {
 				// The panel's list is order-sensitive (new items land before the
@@ -7121,7 +7122,7 @@ export class DaemonServer {
 					createdAt: Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : Date.now(),
 				}));
 				try {
-					return { ok: true, todos: await replaceTodos(cwd, todos) };
+					return { ok: true, todos: await replaceTodos(projectSlug(cwd), todos) };
 				} catch (err) {
 					return { error: err instanceof Error ? err.message : String(err) };
 				}
@@ -7137,7 +7138,7 @@ export class DaemonServer {
 				};
 				const cwd = p.cwd?.trim() || this.#host.cwd();
 				try {
-					return { ok: true, ...(await importLegacyTodos(cwd, p.todos ?? [])) };
+					return { ok: true, ...(await importLegacyTodos(projectSlug(cwd), p.todos ?? [])) };
 				} catch (err) {
 					return { error: err instanceof Error ? err.message : String(err) };
 				}

@@ -14,6 +14,7 @@ import {
 	type TurnIndexItem,
 	t,
 } from "@musepi/client-core";
+import { openPlanFromChat } from "@musepi/client-core/src/components/transcript/canvas-jump";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
@@ -312,6 +313,7 @@ export function ChatView({
 	onSelectReminder,
 	onMarkAllRead,
 	sessionLoading,
+	waitSeconds,
 	ask,
 	onAskAnswer,
 }: {
@@ -411,6 +413,8 @@ export function ChatView({
 	/** History-session cold open in flight: show the skeleton overlay
 	 *  over the transcript until the store lands. */
 	sessionLoading?: boolean;
+	/** Seconds the open has been waiting, for the skeleton's elapsed readout. */
+	waitSeconds?: number;
 	/** Pending ask question (TUI ask parity): the daemon pushed an
 	 *  ask-request envelope — the floating card above the composer answers
 	 *  via onAskAnswer (session.askAnswer). */
@@ -900,8 +904,8 @@ export function ChatView({
 			setOpenFileReq(prev => ({ path, nonce: (prev?.nonce ?? 0) + 1 }));
 			onOpenFileInPanel?.(path);
 		};
-		window.addEventListener("omp-open-file", onOpenFile);
-		return () => window.removeEventListener("omp-open-file", onOpenFile);
+		window.addEventListener("musepi-open-file", onOpenFile);
+		return () => window.removeEventListener("musepi-open-file", onOpenFile);
 	}, [onOpenFileInPanel]);
 	// External browser reveal (chat link click → managed browser).
 	useEffect(() => {
@@ -911,8 +915,8 @@ export function ChatView({
 			if (typeof url !== "string" || !url) return;
 			setOpenBrowserReq(prev => ({ url, nonce: (prev?.nonce ?? 0) + 1 }));
 		};
-		window.addEventListener("omp-open-url", onOpenUrl);
-		return () => window.removeEventListener("omp-open-url", onOpenUrl);
+		window.addEventListener("musepi-open-url", onOpenUrl);
+		return () => window.removeEventListener("musepi-open-url", onOpenUrl);
 	}, []);
 	// ⌘1..8 surface jump: App turns the digit into a select request; the
 	// nonce bump re-fires even when the same surface is requested twice.
@@ -923,6 +927,36 @@ export function ChatView({
 		if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [panelSelectRequest?.nonce]);
+	// `knowledge` show: the tool asked to put a plan in front of the user. The
+	// request is stashed here (nonce-bumped) and consumed by NotesPane, which
+	// opens the plan once its list has loaded — the rail jump alone cannot open
+	// a plan whose row does not exist yet.
+	const [planShowRequest, setPlanShowRequest] = useState<{
+		directory: string;
+		id: string;
+		title: string;
+		nonce: number;
+	} | null>(null);
+	useEffect(() => {
+		const onOpenPlan = (ev: Event): void => {
+			const detail = (ev as CustomEvent<{ directory?: string; id?: string; title?: string }>).detail;
+			const id = detail?.id;
+			const directory = detail?.directory;
+			if (typeof id !== "string" || !id || typeof directory !== "string" || !directory) return;
+			setPlanShowRequest(prev => ({
+				directory,
+				id,
+				title: detail.title ?? "",
+				nonce: (prev?.nonce ?? 0) + 1,
+			}));
+			// The panel only renders the project-knowledge surface, so opening a
+			// plan always means opening that surface first.
+			setActiveView("notes");
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		};
+		window.addEventListener("musepi-open-plan", onOpenPlan);
+		return () => window.removeEventListener("musepi-open-plan", onOpenPlan);
+	}, [setActiveView, rightPanelOpen, focusMode, onExpandRightPanel]);
 	const setThinking = (level: ThinkingLevel | null): void => {
 		if (!store) return;
 		void rpc
@@ -2082,6 +2116,11 @@ export function ChatView({
 		// Tool cards with a "fix this in settings" action (web search
 		// provider failures) jump straight to the matching section.
 		openSettings: onOpenSettings ? (section?: string) => onOpenSettings(section) : undefined,
+		// `knowledge` show: put a project plan in front of the user. The panel
+		// switches to the project-knowledge surface and opens that plan; without
+		// this the tool would claim to have shown something the user never saw.
+		showPlan: (request: { directory: string; id: string; title: string }) =>
+			openPlanFromChat(request.directory, request.id, request.title),
 		// Widget card "下载为图片"/"复制为图片": rasterize the card and hand
 		// the blob to the download/clipboard helper. html-to-image is imported
 		// dynamically inside rasterizeToBlob on purpose (same as
@@ -2466,6 +2505,14 @@ export function ChatView({
 													<div className="gui-loading-note">
 														<span className="gui-loading-orb" aria-hidden />
 														{t("loading session")}
+														{/* Elapsed, once the wait is long enough to notice. A frozen
+														    skeleton reads as "it broke"; a live number reads as
+														    "it is working". */}
+														{(waitSeconds ?? 0) >= 2 ? (
+															<span className="gui-loading-elapsed">
+																{t("waiting {seconds}s", { seconds: String(waitSeconds) })}
+															</span>
+														) : null}
 													</div>
 												</div>
 											)}
@@ -2957,6 +3004,7 @@ export function ChatView({
 									activePathIds={trustedPathIds}
 									pathEntries={pathEntriesOrNull}
 									modeCatalog={modes}
+									planShowRequest={planShowRequest}
 									onBranchTo={id => {
 										// Pin the clicked canvas node (see the trajectory
 										// handler: branchAt maps user messages to parents).

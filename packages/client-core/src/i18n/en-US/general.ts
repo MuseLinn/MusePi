@@ -345,6 +345,7 @@ export const general = {
 	"knowledge search": "Search notes, todos, plans…",
 	"knowledge notes": "Notes",
 	"knowledge plans": "Plans",
+	"plan not found": "That plan is gone — it may have been deleted",
 	"knowledge no results": "No matches",
 	"knowledge expand note": "Expand note",
 	"knowledge resize sections": "Resize sections",

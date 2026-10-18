@@ -8,7 +8,7 @@ import { detailsRecord, isRecord, normalizeWs, num, resultTextOf, str, truncate 
 
 /**
  * Chat-link routing (Markdown.tsx onCopy parity): http(s) links open in the
- * managed in-app browser (the desktop GUI listens for `omp-open-url`), not
+ * managed in-app browser (the desktop GUI listens for `musepi-open-url`), not
  * the system browser. Modifier clicks keep the default external behavior.
  */
 function handleSearchLinkClick(e: React.MouseEvent<HTMLElement>): void {
@@ -17,7 +17,7 @@ function handleSearchLinkClick(e: React.MouseEvent<HTMLElement>): void {
 	const href = linkEl.getAttribute("href") ?? "";
 	if (/^https?:\/\//i.test(href)) {
 		e.preventDefault();
-		window.dispatchEvent(new CustomEvent("omp-open-url", { detail: { url: href } }));
+		window.dispatchEvent(new CustomEvent("musepi-open-url", { detail: { url: href } }));
 	}
 }
 

@@ -159,6 +159,7 @@ export function ContextPanel({
 	onForkAt,
 	onJumpToEntry,
 	modeCatalog,
+	planShowRequest,
 	overviewEntries,
 	overviewLoading,
 	overviewError,
@@ -232,6 +233,10 @@ export function ContextPanel({
 	 *  of the shared mode naming chain: user-created session presets carry
 	 *  no `mode {id}` i18n key, so their real label can only come from here. */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
+	/** `knowledge` show request (the agent opened a plan for the user): the
+	 *  project-knowledge surface consumes it to open that plan once its list
+	 *  has loaded. Nonce-bumped by ChatView so a repeat re-opens. */
+	planShowRequest?: { directory: string; id: string; title: string; nonce: number } | null;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
@@ -830,7 +835,7 @@ export function ContextPanel({
 		) : (
 			<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 				{bodyView === "notes" ? (
-					<NotesPane rpc={rpc} cwd={cwd} />
+					<NotesPane rpc={rpc} cwd={cwd} showPlanRequest={planShowRequest} />
 				) : bodyView === "files" && cwd ? (
 					<FilePane
 						rpc={rpc}

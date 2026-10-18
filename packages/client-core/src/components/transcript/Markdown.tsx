@@ -723,7 +723,7 @@ export const Markdown = memo(function Markdown({
 	const onCopy = useCallback((e: ReactMouseEvent<HTMLDivElement>): void => {
 		const target = e.target as HTMLElement;
 		// Chat link → managed in-app browser (proma AgentBrowserLinkProvider
-		// parity): http(s) link clicks dispatch omp-open-url so ChatView can
+		// parity): http(s) link clicks dispatch musepi-open-url so ChatView can
 		// open them in the right-panel browser instead of the system browser
 		// (the old target=_blank opened a bare Electron window). Modifier
 		// clicks (ctrl/cmd) still open externally via the default behavior.
@@ -732,7 +732,7 @@ export const Markdown = memo(function Markdown({
 			const href = linkEl.getAttribute("href") ?? "";
 			if (/^https?:\/\//i.test(href)) {
 				e.preventDefault();
-				window.dispatchEvent(new CustomEvent("omp-open-url", { detail: { url: href } }));
+				window.dispatchEvent(new CustomEvent("musepi-open-url", { detail: { url: href } }));
 				return;
 			}
 		}
@@ -748,10 +748,10 @@ export const Markdown = memo(function Markdown({
 				const onHandled = (ev: Event): void => {
 					if ((ev as CustomEvent<{ path: string }>).detail?.path === path) handled = true;
 				};
-				window.addEventListener("omp-open-file", onHandled, { once: true });
-				window.dispatchEvent(new CustomEvent("omp-open-file", { detail: { path } }));
+				window.addEventListener("musepi-open-file", onHandled, { once: true });
+				window.dispatchEvent(new CustomEvent("musepi-open-file", { detail: { path } }));
 				window.setTimeout(() => {
-					window.removeEventListener("omp-open-file", onHandled);
+					window.removeEventListener("musepi-open-file", onHandled);
 					if (!handled && path) void openWith("", path);
 				}, 120);
 			}
