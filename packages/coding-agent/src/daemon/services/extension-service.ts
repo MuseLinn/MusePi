@@ -403,13 +403,16 @@ export class ExtensionService implements DaemonService {
 			}
 			ext.compatibility = gate;
 		}
-		// 「会话插件」面（预设启用轴）：Agent 预设的显式扩展白名单 →
-		// 每个扩展的「启用于」预设列表 + 顶部预设清单（GUI 切换器/分组）。
-		// 三态白名单里 undefined = 全部启用，不构成「按预设提供」语义
-		// （只有显式声明白名单的预设才算提供者）。白名单 id
-		// 是发现路径稳定名（sdk extensionIdOf 同规则），只可能命中
-		// extension-module 条目。fail-soft：预设面是增益信息，任何一步
-		// 失败都不阻塞清单主数据。
+		// 「会话插件」面（预设启用轴）：Agent 预设声明的东西 → 每个扩展的
+		// 「启用于」预设列表 + 顶部预设清单（GUI 切换器/分组）。
+		//
+		// A preset declares plugins two ways and BOTH feed this: the legacy
+		// `extensions` whitelist and the `plugins` composition. Only the whitelist
+		// used to be read, so a preset that composed a plugin showed nothing under
+		// "enabled in" — the tag existed in the UI and had no data behind the half
+		// of the feature that was newer. 三态白名单里 undefined = 全部启用，不构成
+		// 「按预设提供」语义（只有显式声明的预设才算提供者）。fail-soft：预设面是
+		// 增益信息，任何一步失败都不阻塞清单主数据。
 		const presets: { id: string; label: string }[] = [];
 		const enabledInByName = new Map<string, string[]>();
 		try {
@@ -417,6 +420,18 @@ export class ExtensionService implements DaemonService {
 			const { t } = await import("../../i18n/index.js");
 			const { $env } = await import("@musepi/pi-utils");
 			const { getExtensionNameFromPath } = await import("../../discovery/helpers");
+			// A composition row names a PACKAGE, while the "enabled in" map is keyed
+			// by the extension name derived from an entry path. Resolving the package
+			// to its extension entries is what lets the two spellings meet.
+			const { getEnabledPlugins, resolvePluginExtensionPaths } = await import(
+				"../../extensibility/plugins/runtime/loader"
+			);
+			const installedPlugins = await getEnabledPlugins(this.#deps.cwd()).catch(() => []);
+			const extensionNamesOfPackage = (packageName: string): string[] => {
+				const plugin = installedPlugins.find(p => p.name === packageName);
+				if (!plugin) return [];
+				return resolvePluginExtensionPaths(plugin).map(entry => getExtensionNameFromPath(entry));
+			};
 			const dir = this.#deps.modesDir?.() ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
 			ensureModeTemplates(dir);
 			for (const id of listModeIds(dir)) {
@@ -426,14 +441,25 @@ export class ExtensionService implements DaemonService {
 				} catch {
 					continue; // 环/悬空预设不参与启用面，与 modes.list 容错同口径
 				}
-				if (!resolved.extensionsExplicit) continue;
+				// A preset that declares neither an extension whitelist nor a plugin
+				// composition contributes nothing to this axis.
+				if (!resolved.extensionsExplicit && resolved.plugins.length === 0) continue;
 				const builtinName = t(`preset ${id} name` as never);
 				const label = !builtinName.startsWith("preset ") ? builtinName : (resolved.label ?? id);
 				presets.push({ id, label });
-				for (const extName of resolved.extensions ?? []) {
+				const contributed = [
+					...(resolved.extensions ?? []),
+					// Only enabled rows compose; a disabled row is how a child preset
+					// switches one of its parent's plugins off.
+					...resolved.plugins
+						.filter(row => row.enabled !== false)
+						.flatMap(row => extensionNamesOfPackage(row.name)),
+				];
+				for (const extName of contributed) {
 					const list = enabledInByName.get(extName);
-					if (list) list.push(label);
-					else enabledInByName.set(extName, [label]);
+					if (list) {
+						if (!list.includes(label)) list.push(label);
+					} else enabledInByName.set(extName, [label]);
 				}
 			}
 			for (const ext of extensions) {
