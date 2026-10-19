@@ -88,6 +88,7 @@ describe("declared dependencies, either shape", () => {
 		// it failed later on first use instead of being refused at load.
 		class NeedsServices {
 			static inject = ["credentials", "llm"];
+			constructor(_api: unknown) {}
 		}
 		expect(declaredInject(NeedsServices as never)).toEqual(["credentials", "llm"]);
 		expect(missingServiceDependencies(NeedsServices as never)).toEqual([]);
@@ -96,6 +97,7 @@ describe("declared dependencies, either shape", () => {
 	test("a class's unsatisfiable dependency is refused", () => {
 		class NeedsNobodyProvides {
 			static inject = ["no-such-service"];
+			constructor(_api: unknown) {}
 		}
 		expect(missingServiceDependencies(NeedsNobodyProvides as never)).toEqual(["no-such-service"]);
 	});
@@ -103,6 +105,7 @@ describe("declared dependencies, either shape", () => {
 	test("a class's static provide is read", () => {
 		class Provides {
 			static provide = ["mine.thing"];
+			constructor(_api: unknown) {}
 		}
 		expect(providedServices(Provides as never)).toEqual(["mine.thing"]);
 		expect(declaredProvide(Provides as never)).toEqual(["mine.thing"]);

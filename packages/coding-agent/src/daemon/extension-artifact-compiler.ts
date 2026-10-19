@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { loadExtensions } from "../extensibility/extensions/loader";
+import { logger } from "@musepi/pi-utils";
 import type { Extension } from "../extensibility/extensions/types";
 
 /**
@@ -109,8 +109,20 @@ const compileCache = new Map<string, { mtimeMs: number; code: string; css?: stri
 async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extension | null> {
 	const cached = extensionLoadCache.get(entryPath);
 	if (cached && Date.now() - cached.at < EXTENSION_LOAD_TTL_MS) return cached.extension;
-	const result = await loadExtensions([entryPath], cwd);
+	// The SAME pipeline the host and session loaders use. This used to call the
+	// legacy loader, which is a second reading of what a plugin module is: it
+	// treats a function export as a factory and calls it, so a class-shaped plugin
+	// that mounted everywhere else threw here — and this is the path an `ext.call`
+	// falls back to when the cordis runtime does not recognize the entry, so the
+	// symptom was "the plugin's own panel cannot reach it" for a plugin that was
+	// running fine.
+	const { loadSessionPlugins } = await import("../extensibility/plugins/session-loader");
+	const { EventBus } = await import("../utils/event-bus");
+	const result = await loadSessionPlugins([entryPath], cwd, new EventBus());
 	const extension = result.extensions[0] ?? null;
+	if (extension === null && result.errors.length > 0) {
+		logger.warn("extension load for an RPC call failed", { entryPath, errors: result.errors });
+	}
 	extensionLoadCache.set(entryPath, { at: Date.now(), extension });
 	return extension;
 }
