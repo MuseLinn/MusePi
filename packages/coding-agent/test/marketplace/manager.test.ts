@@ -4,12 +4,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { listOmpExtensionRoots } from "@musepi/pi-coding-agent/discovery/omp-extension-roots";
-import { getEnabledPlugins } from "@musepi/pi-coding-agent/extensibility/plugins/loader";
-import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/manager";
+import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
 import {
 	MarketplaceManager,
 	readInstalledPluginsRegistry,
 } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
+import { getEnabledPlugins } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/loader";
 import * as piUtils from "@musepi/pi-utils";
 import { removeSyncWithRetries } from "@musepi/pi-utils";
 

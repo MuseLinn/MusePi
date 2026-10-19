@@ -30,7 +30,7 @@ import { cp, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
-import { parseGitUrl } from "../extensibility/plugins/git-url";
+import { parseGitUrl } from "../extensibility/plugins/shared/git-url";
 import { normalizeSkillSource, resolveSkillDir, shallowClone, skillTargetName } from "./install";
 import { skillHubDownloadUrl } from "./marketplace-client";
 import { extractZipEntries, fetchBytes } from "./marketplace-install";

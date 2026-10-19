@@ -35,15 +35,15 @@ import {
 	type DshApplication,
 	mountableEntryPaths,
 	mountableRows,
-} from "../../extensibility/plugins/dsh-apply";
+} from "../../extensibility/plugins/dsh/dsh-apply";
 import {
 	ensureProfileCompositionExample,
 	type ProfileCompositionNote,
 	profileDirFor,
 	readProfileComposition,
 	resolveBundleDirs,
-} from "../../extensibility/plugins/profile-composition";
-import { writeRowEnabled } from "../../extensibility/plugins/profile-patch-edit";
+} from "../../extensibility/plugins/profile/profile-composition";
+import { writeRowEnabled } from "../../extensibility/plugins/profile/profile-patch-edit";
 import type { DaemonService } from "./types";
 
 /** TTL window for the composition read — matches the plugin inventory's. */

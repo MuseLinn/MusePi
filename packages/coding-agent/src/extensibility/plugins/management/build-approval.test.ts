@@ -16,7 +16,7 @@ const WINDOWS_OUTPUT = [
 	"bun pm untrusted v1.4.2 (744846f84)",
 	"",
 	".\\node_modules\\core-js @3.39.0",
-	" » [postinstall]: node -e \"try{require('./postinstall')}catch(e){}\"",
+	" » [postinstall]: node -e \"try{require('../postinstall')}catch(e){}\"",
 	"",
 	"These dependencies had their lifecycle scripts blocked during install.",
 	"",
@@ -25,11 +25,11 @@ const WINDOWS_OUTPUT = [
 ].join("\n");
 
 const POSIX_OUTPUT = [
-	"./node_modules/@scope/pkg @1.0.0",
+	"../node_modules/@scope/pkg @1.0.0",
 	" » [postinstall]: node ./install.js",
-	"./node_modules/esbuild @0.21.5",
+	"../node_modules/esbuild @0.21.5",
 	" » [postinstall]: node install.js",
-	"./node_modules/@scope/pkg @1.0.0",
+	"../node_modules/@scope/pkg @1.0.0",
 	" » [postinstall]: node install.js",
 	"some unrelated line",
 	"",

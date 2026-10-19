@@ -5,8 +5,8 @@ import * as path from "node:path";
 import {
 	resolvePluginExtensionPaths,
 	resolvePluginToolPaths,
-} from "@musepi/pi-coding-agent/extensibility/plugins/loader";
-import type { InstalledPlugin, PluginManifest } from "@musepi/pi-coding-agent/extensibility/plugins/types";
+} from "@musepi/pi-coding-agent/extensibility/plugins/runtime/loader";
+import type { InstalledPlugin, PluginManifest } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/types";
 import { removeSyncWithRetries } from "@musepi/pi-utils";
 
 function makePlugin(pluginPath: string, manifest: PluginManifest): InstalledPlugin {

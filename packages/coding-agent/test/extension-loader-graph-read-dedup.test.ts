@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, spyOn } from "b
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadExtensions } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
-import { loadLegacyPiModule } from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { loadLegacyPiModule } from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { TempDir } from "@musepi/pi-utils";
 import type { BunFile } from "bun";
 

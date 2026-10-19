@@ -16,7 +16,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { VERSION } from "@musepi/pi-utils";
 import { loadExtensions } from "../src/extensibility/extensions/loader";
-import { resolveCompatibilityPath } from "../src/extensibility/plugins/compatibility-store";
+import { resolveCompatibilityPath } from "../src/extensibility/plugins/compat/compatibility-store";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
 
 const PLUGIN = "loader-compat";

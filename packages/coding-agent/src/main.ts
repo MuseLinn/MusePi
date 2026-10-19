@@ -56,7 +56,7 @@ import { formatExtensionLoadNotifications } from "./extensibility/extensions/loa
 import { loadExtensions } from "./extensibility/extensions/loader";
 import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
-import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/marketplace-auto-update";
+import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/management/marketplace-auto-update";
 import { setLocale } from "./i18n/index.js";
 import { registerDaemonProjectPresence } from "./launch/presence";
 import type { MCPManager } from "./mcp";

@@ -59,19 +59,22 @@ import type {
 	ExtensionCommandContext,
 	LoadExtensionsResult,
 } from "../extensibility/extensions/types";
-import { readCompatibilityExemptions, resolveCompatibilityPath } from "../extensibility/plugins/compatibility-store";
+import {
+	readCompatibilityExemptions,
+	resolveCompatibilityPath,
+} from "../extensibility/plugins/compat/compatibility-store";
+import { extensionGraphFiles } from "../extensibility/plugins/compat/legacy-pi-compat";
+import {
+	compatibilityGateForExtensionPath,
+	pluginCompatibilityWarning,
+} from "../extensibility/plugins/compat/plugin-compatibility";
+import { PluginGraphIdentities } from "../extensibility/plugins/hmr/plugin-graph-identities";
 import {
 	type CordisPluginEntry,
 	HOST_SERVICES,
 	providedServices,
 	type ServiceRegistry,
-} from "../extensibility/plugins/cordis-entry";
-import { extensionGraphFiles } from "../extensibility/plugins/legacy-pi-compat";
-import {
-	compatibilityGateForExtensionPath,
-	pluginCompatibilityWarning,
-} from "../extensibility/plugins/plugin-compatibility";
-import { PluginGraphIdentities } from "../extensibility/plugins/plugin-graph-identities";
+} from "../extensibility/plugins/runtime/cordis-entry";
 import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
 
@@ -789,7 +792,7 @@ export class CordisDynamicPluginRuntime {
 		const fiber = group.ctx.plugin({
 			name: `dynamic-extension:${record.name}`,
 			apply: async ctx => {
-				const { mountPlugin } = await import("../extensibility/plugins/mount");
+				const { mountPlugin } = await import("../extensibility/plugins/runtime/mount");
 				const { readPluginConfigStore } = await import("../extensibility/extensions-center/plugin-config-store");
 				const { coerceConfigValues } = await import("@musepi/pi-wire");
 				const { readExtensionPluginMeta } = await import("../extensibility/extensions/plugin-manifest");
@@ -841,7 +844,9 @@ export class CordisDynamicPluginRuntime {
 			// was registered past the throw, so there are no cleanups to run —
 			// but the state is meaningless now and must not outlive the attempt.
 			if (record.extension) {
-				const { disposeFailedPluginPrimitives } = await import("../extensibility/plugins/cordis-primitives");
+				const { disposeFailedPluginPrimitives } = await import(
+					"../extensibility/plugins/runtime/cordis-primitives"
+				);
 				disposeFailedPluginPrimitives(record.extension);
 			}
 			record.status = "failed";
@@ -909,7 +914,7 @@ export class CordisDynamicPluginRuntime {
 				// Components mount through Track A's pipeline too: they are part of
 				// the same plugin, so identity, dependency gating and config all
 				// follow the entry's rules rather than the legacy extension's.
-				const { mountPlugin } = await import("../extensibility/plugins/mount");
+				const { mountPlugin } = await import("../extensibility/plugins/runtime/mount");
 				const mounted = await mountPlugin({
 					entryPath: entryAbs,
 					cwd: record.cwd,
@@ -1065,7 +1070,7 @@ export class CordisDynamicPluginRuntime {
 		// registrations, so they need their own pass. Running them after the
 		// fiber is gone is deliberate: a cleanup that touches a registration
 		// must see the world as it was, not a half-torn-down one.
-		const { disposePluginPrimitives } = await import("../extensibility/plugins/cordis-primitives");
+		const { disposePluginPrimitives } = await import("../extensibility/plugins/runtime/cordis-primitives");
 		if (extension) await disposePluginPrimitives(extension);
 		// The component DECLARATIONS survive the unload: a package toggle is an
 		// install/uninstall of the whole plugin, and the management surface

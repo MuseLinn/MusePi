@@ -4,7 +4,7 @@ import {
 	__getLegacyPiBundledModulesGlobal,
 	__synthesizeLegacyPiBundledSourceWithModules,
 	resolveBundledVirtualSpecifier,
-} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+} from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { TempDir } from "@musepi/pi-utils";
 import type { BunPlugin } from "bun";
 

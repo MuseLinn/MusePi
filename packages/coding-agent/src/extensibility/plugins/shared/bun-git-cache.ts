@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent } from "@musepi/pi-utils";
-import type { GitSource } from "./git-url";
+import type { GitSource } from "./../shared/git-url";
 
 interface CommandResult {
 	readonly exitCode: number;

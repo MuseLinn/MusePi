@@ -25,7 +25,7 @@ async function runMarketplaceAutoUpdate(options: MarketplaceAutoUpdateOptions): 
 			getMarketplacesCacheDir,
 			getMarketplacesRegistryPath,
 			getPluginsCacheDir,
-		} = await import("./marketplace");
+		} = await import("../marketplace");
 		const mgr = new MarketplaceManager({
 			marketplacesRegistryPath: getMarketplacesRegistryPath(),
 			installedRegistryPath: getInstalledPluginsRegistryPath(),

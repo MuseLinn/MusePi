@@ -11,19 +11,14 @@ import {
 	isEnoent,
 	logger,
 } from "@musepi/pi-utils";
-import { loadExtensions } from "../extensions/loader";
-import { ensureTrustedField, parseBlockedBuilds, withApprovedBuilds } from "./build-approval";
-import { refreshBunGitCache } from "./bun-git-cache";
-import { type GitSource, parseGitUrl } from "./git-url";
-import { resolvePluginManifestEntries } from "./loader";
-import { readPluginBlock } from "./manifest-block";
-import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "./marketplace/registry";
-import { parsePluginId } from "./marketplace/types";
-import { extractPackageName, parsePluginSpec } from "./parser";
-import { resolveRegistryConfig } from "./registry-config";
-import { attributeFailure, registryArgument, registryPlan } from "./registry-fallback";
-import { normalizePluginRuntimeConfig } from "./runtime-config";
-import { installSpecFor, parseInstallSpec } from "./spec-classifier";
+import { loadExtensions } from "../../extensions/loader";
+import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "../marketplace/registry";
+import { parsePluginId } from "../marketplace/types";
+import { readPluginBlock } from "../profile/manifest-block";
+import { resolveRegistryConfig } from "../profile/registry-config";
+import { attributeFailure, registryArgument, registryPlan } from "../profile/registry-fallback";
+import { normalizePluginRuntimeConfig } from "../profile/runtime-config";
+import { resolvePluginManifestEntries } from "../runtime/loader";
 import type {
 	DoctorCheck,
 	DoctorOptions,
@@ -34,8 +29,13 @@ import type {
 	PluginRuntimeConfig,
 	PluginSettingSchema,
 	ProjectPluginOverrides,
-} from "./types";
-import { InstallAbortedError } from "./types";
+} from "../runtime/types";
+import { InstallAbortedError } from "../runtime/types";
+import { refreshBunGitCache } from "../shared/bun-git-cache";
+import { type GitSource, parseGitUrl } from "../shared/git-url";
+import { extractPackageName, parsePluginSpec } from "../shared/parser";
+import { ensureTrustedField, parseBlockedBuilds, withApprovedBuilds } from "./build-approval";
+import { installSpecFor, parseInstallSpec } from "./spec-classifier";
 
 // =============================================================================
 // Validation

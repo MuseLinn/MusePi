@@ -29,11 +29,17 @@
  * validation) living on the track that owns it, not about forking mechanisms.
  */
 
-import type { EventBus } from "../../utils/event-bus";
-import type { DynamicExtensionLoadErrorCode } from "../extensions/dynamic-extension-error";
-import { DynamicExtensionLoadError } from "../extensions/dynamic-extension-error";
-import { createConcreteExtensionAPI } from "../extensions/loader";
-import type { Extension, ExtensionAPI } from "../extensions/types";
+import type { EventBus } from "../../../utils/event-bus";
+import type { DynamicExtensionLoadErrorCode } from "../../extensions/dynamic-extension-error";
+import { DynamicExtensionLoadError } from "../../extensions/dynamic-extension-error";
+import { createConcreteExtensionAPI } from "../../extensions/loader";
+import type { Extension, ExtensionAPI } from "../../extensions/types";
+// STATIC, not `await import()`: this module holds process-wide state (the source
+// graph snapshot the loader records, and the module cache it keys imports on). A
+// dynamic import resolved to a second instance in practice — the loader wrote
+// into one copy while the runtime read the other and saw no record at all, so
+// every plugin looked like a one-file graph and no edit was ever detected.
+import { entryNeedsGraphSnapshot, loadLegacyPiModule } from "../compat/legacy-pi-compat";
 import {
 	type CordisPluginEntry,
 	hostOnlyRegistry,
@@ -45,12 +51,6 @@ import {
 	toFactory,
 } from "./cordis-entry";
 import { registerEffect, stateDelete, stateGet, stateHas, stateKeys, stateSet } from "./cordis-primitives";
-// STATIC, not `await import()`: this module holds process-wide state (the source
-// graph snapshot the loader records, and the module cache it keys imports on). A
-// dynamic import resolved to a second instance in practice — the loader wrote
-// into one copy while the runtime read the other and saw no record at all, so
-// every plugin looked like a one-file graph and no edit was ever detected.
-import { entryNeedsGraphSnapshot, loadLegacyPiModule } from "./legacy-pi-compat";
 
 /** A mount that could not proceed, with the reason and a stable code. */
 export interface MountFailure {

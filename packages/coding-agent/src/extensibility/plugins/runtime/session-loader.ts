@@ -25,14 +25,14 @@
  */
 
 import { logger } from "@musepi/pi-utils";
-import type { EventBus } from "../../utils/event-bus";
-import { enablementAllowsPath } from "../enablement-manifest";
-import { ExtensionRuntime } from "../extensions/loader";
-import type { Extension, LoadExtensionsResult } from "../extensions/types";
-import { readCompatibilityExemptions, resolveCompatibilityPath } from "./compatibility-store";
+import type { EventBus } from "../../../utils/event-bus";
+import { enablementAllowsPath } from "../../enablement-manifest";
+import { ExtensionRuntime } from "../../extensions/loader";
+import type { Extension, LoadExtensionsResult } from "../../extensions/types";
+import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
+import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
 import type { MountContext } from "./mount";
 import { mountPlugin } from "./mount";
-import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "./plugin-compatibility";
 
 /** What a session load may vary. */
 export interface SessionPluginLoadOptions {
@@ -122,10 +122,10 @@ async function defaultConfigReader(): Promise<MountContext["readConfig"]> {
 		{ readExtensionPluginMeta },
 		{ getExtensionNameFromPath },
 	] = await Promise.all([
-		import("../extensions-center/plugin-config-store"),
+		import("../../extensions-center/plugin-config-store"),
 		import("@musepi/pi-wire"),
-		import("../extensions/plugin-manifest"),
-		import("../../discovery/helpers"),
+		import("../../extensions/plugin-manifest"),
+		import("../../../discovery/helpers"),
 	]);
 	return async entryPath => {
 		const meta = await readExtensionPluginMeta(entryPath);

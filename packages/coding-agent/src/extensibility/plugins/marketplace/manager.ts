@@ -11,10 +11,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { isEnoent, logger, pathIsWithin } from "@musepi/pi-utils";
-import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compatibility-store";
-import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugin-compatibility";
-import { normalizePluginRuntimeConfig } from "../runtime-config";
-import type { PluginRuntimeConfig } from "../types";
+import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
+import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
+import { normalizePluginRuntimeConfig } from "../profile/runtime-config";
+import type { PluginRuntimeConfig } from "../runtime/types";
 
 import { cachePlugin } from "./cache";
 import { classifySource, fetchMarketplace, parseMarketplaceCatalog, promoteCloneToCache } from "./fetcher";

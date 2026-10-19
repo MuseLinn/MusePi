@@ -3,8 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import type { InstalledPlugin } from "../runtime/types";
 import { describePluginCapability } from "./capability-report";
-import type { InstalledPlugin } from "./types";
 
 /**
  * The capability report is what separates "the package manager wrote it" from
@@ -47,7 +47,7 @@ describe("describePluginCapability", () => {
 				name: "acme-bundle",
 				version: "1.0.0",
 				musepi: { extensions: ["index.ts"] },
-				dsh: { bundle: { patch: "./rows.yml" } },
+				dsh: { bundle: { patch: "../rows.yml" } },
 			}),
 			"index.ts": "export default () => {}",
 			"rows.yml":
@@ -89,7 +89,7 @@ describe("describePluginCapability", () => {
 				name: "acme-bundle",
 				version: "1.0.0",
 				musepi: { extensions: ["index.ts"] },
-				dsh: { bundle: { patch: "./absent.yml" } },
+				dsh: { bundle: { patch: "../absent.yml" } },
 			}),
 			"index.ts": "export default () => {}",
 		});
@@ -167,7 +167,7 @@ describe("describePluginCapability", () => {
 				version: "1.0.0",
 				musepi: { extensions: ["index.ts"] },
 			}),
-			"index.ts": `pi.registerComponent({ slot: "panel.tab.mine", moduleUrl: "./ui.tsx" });`,
+			"index.ts": `pi.registerComponent({ slot: "panel.tab.mine", moduleUrl: "../ui.tsx" });`,
 		});
 
 		const report = await describePluginCapability(plugin);
@@ -207,7 +207,7 @@ describe("describePluginCapability", () => {
 					version: "1.0.0",
 					musepi: { extensions: ["index.ts"] },
 				}),
-				"index.ts": `pi.registerComponent({ slot: ${JSON.stringify(slot)}, moduleUrl: "./ui.tsx" });`,
+				"index.ts": `pi.registerComponent({ slot: ${JSON.stringify(slot)}, moduleUrl: "../ui.tsx" });`,
 			});
 
 			const report = await describePluginCapability(plugin);
@@ -221,7 +221,7 @@ describe("describePluginCapability", () => {
 					version: "1.0.0",
 					musepi: { extensions: ["index.ts"] },
 				}),
-				"index.ts": `pi.registerComponent({ slot: ${JSON.stringify(slot)}, moduleUrl: "./ui.tsx" });`,
+				"index.ts": `pi.registerComponent({ slot: ${JSON.stringify(slot)}, moduleUrl: "../ui.tsx" });`,
 			});
 
 			const report = await describePluginCapability(plugin);

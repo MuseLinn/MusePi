@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { runPluginCommand } from "@musepi/pi-coding-agent/cli/plugin-cli";
-import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/manager";
+import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
 import type { InstalledPluginSummary } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
 import { MarketplaceManager } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
 

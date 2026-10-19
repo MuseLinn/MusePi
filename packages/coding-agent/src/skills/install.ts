@@ -18,7 +18,7 @@ import { existsSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { parseGitUrl } from "../extensibility/plugins/git-url";
+import { parseGitUrl } from "../extensibility/plugins/shared/git-url";
 
 export interface InstallSkillOptions {
 	url: string;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { parseInstallSpec } from "../management/spec-classifier";
 import {
 	attributeFailure,
 	NPMMIRROR_REGISTRY,
@@ -7,7 +8,6 @@ import {
 	registryArgument,
 	registryPlan,
 } from "./registry-fallback";
-import { parseInstallSpec } from "./spec-classifier";
 
 /**
  * A fallback chain has one failure mode worse than not having one: asking a

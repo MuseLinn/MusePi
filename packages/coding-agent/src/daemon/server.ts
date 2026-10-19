@@ -78,7 +78,7 @@ import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-de
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
-import { extensionEntriesNeedingReload } from "../extensibility/plugins/legacy-pi-compat";
+import { extensionEntriesNeedingReload } from "../extensibility/plugins/compat/legacy-pi-compat";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../internal-urls/local-protocol";

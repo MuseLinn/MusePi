@@ -328,7 +328,7 @@ export function mountableRows(application: DshApplication): Array<ComposedRow & 
 export async function mountableEntryPaths(application: DshApplication, cwd: string, home?: string): Promise<string[]> {
 	const rows = mountableRows(application);
 	if (rows.length === 0) return [];
-	const { getAllPlugins, resolvePluginExtensionPaths } = await import("./loader");
+	const { getAllPlugins, resolvePluginExtensionPaths } = await import("../runtime/loader");
 	// cwd selects which plugin root applies (project vs user), so it comes from
 	// the caller rather than the process directory.
 	const installed = await getAllPlugins(cwd, home ? { home } : {});

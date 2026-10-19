@@ -17,9 +17,9 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { runPluginCommand } from "@musepi/pi-coding-agent/cli/plugin-cli";
-import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/manager";
+import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
 import { MarketplaceManager } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
-import type { InstalledPlugin } from "@musepi/pi-coding-agent/extensibility/plugins/types";
+import type { InstalledPlugin } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/types";
 import * as piUtils from "@musepi/pi-utils";
 import { removeWithRetries } from "@musepi/pi-utils";
 

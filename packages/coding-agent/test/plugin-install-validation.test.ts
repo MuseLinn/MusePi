@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/manager";
+import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
 import * as piUtils from "@musepi/pi-utils";
 import { removeWithRetries } from "@musepi/pi-utils";
 import type { Subprocess } from "bun";

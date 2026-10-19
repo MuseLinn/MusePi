@@ -116,7 +116,7 @@ async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extens
 	// falls back to when the cordis runtime does not recognize the entry, so the
 	// symptom was "the plugin's own panel cannot reach it" for a plugin that was
 	// running fine.
-	const { loadSessionPlugins } = await import("../extensibility/plugins/session-loader");
+	const { loadSessionPlugins } = await import("../extensibility/plugins/runtime/session-loader");
 	const { EventBus } = await import("../utils/event-bus");
 	const result = await loadSessionPlugins([entryPath], cwd, new EventBus());
 	const extension = result.extensions[0] ?? null;

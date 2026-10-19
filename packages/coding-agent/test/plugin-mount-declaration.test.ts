@@ -12,8 +12,8 @@
  * upstream form reaches into live runtime state rather than computing from data.
  */
 import { describe, expect, it } from "bun:test";
-import type { PluginPackageJson } from "../src/extensibility/plugins/manifest-block";
-import { decideMount, readMountDeclaration } from "../src/extensibility/plugins/mount-declaration";
+import type { PluginPackageJson } from "../src/extensibility/plugins/profile/manifest-block";
+import { decideMount, readMountDeclaration } from "../src/extensibility/plugins/shared/mount-declaration";
 
 function pkgWithMount(mount: unknown): PluginPackageJson {
 	return { name: "acme", musepi: { extensions: ["index.ts"], ...(mount === undefined ? {} : { mount }) } };

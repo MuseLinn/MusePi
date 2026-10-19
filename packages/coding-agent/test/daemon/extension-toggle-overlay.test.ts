@@ -14,7 +14,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/manager";
+import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
 import * as piUtils from "@musepi/pi-utils";
 import { getMCPConfigPath, removeWithRetries } from "@musepi/pi-utils";
 import { ExtensionService } from "../../src/daemon/services/extension-service";

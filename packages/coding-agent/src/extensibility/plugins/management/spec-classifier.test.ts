@@ -77,8 +77,8 @@ describe("parseInstallSpec", () => {
 	it("refuses a relative path rather than resolving it against the plugins directory", () => {
 		// The person typing a spec has no working directory in a GUI field, so a
 		// relative path would silently point somewhere they did not mean.
-		expect(() => parseInstallSpec("./pkg")).toThrow(InvalidInstallSpecError);
-		expect(() => parseInstallSpec("../pkg")).toThrow(/must be absolute/);
+		expect(() => parseInstallSpec("../pkg")).toThrow(InvalidInstallSpecError);
+		expect(() => parseInstallSpec("../../pkg")).toThrow(/must be absolute/);
 	});
 
 	it("refuses an https URL that is neither a repository nor an archive", () => {

@@ -25,7 +25,7 @@ import { DynamicExtensionLoadError } from "../../src/extensibility/extensions/dy
 import {
 	readCompatibilityExemptions,
 	resolveCompatibilityPath,
-} from "../../src/extensibility/plugins/compatibility-store";
+} from "../../src/extensibility/plugins/compat/compatibility-store";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const PLUGIN = "compat-guard";

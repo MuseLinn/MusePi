@@ -30,7 +30,7 @@
  * "the plugin's side effects".
  */
 
-import type { Extension } from "../extensions/types";
+import type { Extension } from "../../extensions/types";
 
 /** One registered cleanup, with the label used in diagnostics. */
 interface EffectEntry {

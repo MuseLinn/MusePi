@@ -6,7 +6,7 @@ import {
 	type InstalledPluginSummary,
 	MarketplaceManager,
 } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
-import type { InstalledPlugin } from "@musepi/pi-coding-agent/extensibility/plugins/types";
+import type { InstalledPlugin } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/types";
 import {
 	MarketplacePluginDetailComponent,
 	PluginListComponent,

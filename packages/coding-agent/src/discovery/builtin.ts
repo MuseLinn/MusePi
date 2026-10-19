@@ -572,7 +572,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	// panel never mounted). Feeding the same paths into this capability puts
 	// the management face and the runtime face on one list.
 	try {
-		const { getAllPluginExtensionPaths } = await import("../extensibility/plugins/loader");
+		const { getAllPluginExtensionPaths } = await import("../extensibility/plugins/runtime/loader");
 		for (const extPath of await getAllPluginExtensionPaths(ctx.cwd)) {
 			items.push(createExtensionModule(extPath, "user"));
 		}

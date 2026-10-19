@@ -76,13 +76,13 @@ describe("dsh bundle inventory", () => {
 	it("reads the patch file a manifest names", async () => {
 		await withBundleDir(
 			{
-				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./cordis.patch.yml" } } }),
+				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../cordis.patch.yml" } } }),
 				"cordis.patch.yml": MINIMAL_PRESET,
 			},
 			async dir => {
 				const inventory = await describeDshBundle(dir);
 				expect(inventory.isBundle).toBe(true);
-				expect(inventory.patchFiles).toEqual(["./cordis.patch.yml"]);
+				expect(inventory.patchFiles).toEqual(["../cordis.patch.yml"]);
 				expect(inventory.rows.map(r => r.id)).toContain("preset-minimal");
 				expect(inventory.rows[0]?.name).toBe("@deepseek-ai/dsh-agent-preset");
 			},
@@ -97,14 +97,14 @@ describe("dsh bundle inventory", () => {
 			{
 				"package.json": JSON.stringify({
 					name: "multi",
-					dsh: { bundle: { patch: ["./b.yml", "./a.yml"] } },
+					dsh: { bundle: { patch: ["../b.yml", "../a.yml"] } },
 				}),
 				"b.yml": "- insert:\n    - id: from-b\n      name: pkg-b\n",
 				"a.yml": "- insert:\n    - id: from-a\n      name: pkg-a\n",
 			},
 			async dir => {
 				const inventory = await describeDshBundle(dir);
-				expect(inventory.patchFiles).toEqual(["./b.yml", "./a.yml"]);
+				expect(inventory.patchFiles).toEqual(["../b.yml", "../a.yml"]);
 				expect(inventory.rows.map(r => r.id)).toEqual(["from-b", "from-a"]);
 			},
 		);
@@ -117,7 +117,7 @@ describe("dsh bundle inventory", () => {
 		// the row as unconditional says a Windows-incompatible shell is fine.
 		await withBundleDir(
 			{
-				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./p.yml" } } }),
+				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../p.yml" } } }),
 				"p.yml":
 					"- insert:\n    - id: shell\n      name: pkg-shell\n      disabled: !!js process.platform === 'win32'\n",
 			},
@@ -133,7 +133,7 @@ describe("dsh bundle inventory", () => {
 	it("reports a row with no condition as unconditional", async () => {
 		await withBundleDir(
 			{
-				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./p.yml" } } }),
+				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../p.yml" } } }),
 				"p.yml": "- insert:\n    - id: plain\n      name: pkg-plain\n      disabled: false\n",
 			},
 			async dir => {
@@ -154,7 +154,7 @@ describe("dsh bundle inventory", () => {
 		// expressions — the install reads as "one harmless plugin".
 		await withBundleDir(
 			{
-				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./p.yml" } } }),
+				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../p.yml" } } }),
 				"p.yml": MINIMAL_PRESET,
 			},
 			async dir => {
@@ -181,7 +181,7 @@ describe("dsh bundle inventory", () => {
 	it("resolves a nested member's package name, not only the group's", async () => {
 		await withBundleDir(
 			{
-				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./p.yml" } } }),
+				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../p.yml" } } }),
 				"p.yml": MINIMAL_PRESET,
 			},
 			async dir => {
@@ -201,14 +201,14 @@ describe("dsh bundle inventory", () => {
 
 	it("names a missing patch file rather than reporting a bundle with no rows", async () => {
 		await withBundleDir(
-			{ "package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./absent.yml" } } }) },
+			{ "package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../absent.yml" } } }) },
 			async dir => {
 				const inventory = await describeDshBundle(dir);
 				// "Declares a bundle" and "contributed nothing" are different
 				// failures and only one of them is the package's fault.
 				expect(inventory.isBundle).toBe(true);
 				expect(inventory.unreadable).toHaveLength(1);
-				expect(inventory.unreadable[0]?.path).toBe("./absent.yml");
+				expect(inventory.unreadable[0]?.path).toBe("../absent.yml");
 			},
 		);
 	});
@@ -218,7 +218,7 @@ describe("dsh bundle inventory", () => {
 		// the only place that can say so before the person tries to use it.
 		await withBundleDir(
 			{
-				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "./p.yml" } } }),
+				"package.json": JSON.stringify({ name: "b", dsh: { bundle: { patch: "../p.yml" } } }),
 				"p.yml": "- insert:\n    - id: row\n      name: '@deepseek-ai/dsh-agent-preset'\n",
 			},
 			async dir => {

@@ -7,7 +7,7 @@ import { Type as TypeBoxShimType } from "@musepi/pi-coding-agent/extensibility/l
 import {
 	installLegacyPiSpecifierShim,
 	loadLegacyPiModule,
-} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+} from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { removeWithRetries } from "@musepi/pi-utils";
 
 // The remap installs a Bun.plugin onResolve hook plus an explicit

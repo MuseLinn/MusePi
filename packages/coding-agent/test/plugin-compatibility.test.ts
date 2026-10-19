@@ -24,12 +24,12 @@ import {
 	resolveCompatibilityPath,
 	setVersionExemption,
 	validateVersionExemption,
-} from "../src/extensibility/plugins/compatibility-store";
+} from "../src/extensibility/plugins/compat/compatibility-store";
 import {
 	compatibilityGateForExtensionPath,
 	evaluatePluginCompatibility,
 	pluginCompatibilityWarning,
-} from "../src/extensibility/plugins/plugin-compatibility";
+} from "../src/extensibility/plugins/compat/plugin-compatibility";
 
 const RUNTIME = "0.6.0";
 

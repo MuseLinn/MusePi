@@ -110,7 +110,7 @@ import {
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
-import { loadSessionPlugins } from "./extensibility/plugins/session-loader";
+import { loadSessionPlugins } from "./extensibility/plugins/runtime/session-loader";
 import {
 	loadSkills as loadSkillsInternal,
 	type Skill,

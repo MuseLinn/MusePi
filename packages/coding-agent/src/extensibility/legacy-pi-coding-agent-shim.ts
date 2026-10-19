@@ -74,7 +74,7 @@ import type {
 	WriteToolResultEvent,
 } from "./extensions/types";
 import { Type } from "./legacy-typebox";
-import { getEnabledPlugins, resolvePluginExtensionPaths, type ScopedInstalledPlugin } from "./plugins/loader";
+import { getEnabledPlugins, resolvePluginExtensionPaths, type ScopedInstalledPlugin } from "./plugins/runtime/loader";
 import type { Skill } from "./skills";
 import { loadSkillsFromDir } from "./skills";
 

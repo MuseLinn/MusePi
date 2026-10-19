@@ -24,7 +24,7 @@ import {
 	missingServiceDependencies,
 	providedServices,
 	type ServiceRegistry,
-} from "../src/extensibility/plugins/cordis-entry";
+} from "../src/extensibility/plugins/runtime/cordis-entry";
 
 /** A registry where `provided` are the currently-mounted plugin services. */
 function registry(provided: Record<string, string>): ServiceRegistry {

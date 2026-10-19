@@ -16,7 +16,7 @@
  * So it is declared instead: a package says its mount is exclusive, and the
  * loader declines the second one and says which entry already holds it.
  */
-import { type PluginBlock, type PluginPackageJson, readPluginBlock } from "./manifest-block";
+import { type PluginBlock, type PluginPackageJson, readPluginBlock } from "../profile/manifest-block";
 
 /** What a package declares about how it may be mounted. */
 export interface PluginMountDeclaration {

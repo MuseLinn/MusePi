@@ -1,6 +1,6 @@
 import { $which } from "@musepi/pi-utils";
-import { theme } from "../../modes/theme/theme";
-import type { DoctorCheck } from "./types";
+import { theme } from "../../../modes/theme/theme";
+import type { DoctorCheck } from "../runtime/types";
 
 export async function runDoctorChecks(): Promise<DoctorCheck[]> {
 	const checks: DoctorCheck[] = [];

@@ -40,10 +40,10 @@
  */
 
 import { logger } from "@musepi/pi-utils";
+import { InstallAbortedError, type InstalledPlugin, type InstallOutputChunk } from "../runtime/types";
 import { describePluginCapability, type PluginCapabilityReport } from "./capability-report";
 import type { PluginManager } from "./manager";
 import { type InstallSpecKind, InvalidInstallSpecError, parseInstallSpec } from "./spec-classifier";
-import { InstallAbortedError, type InstalledPlugin, type InstallOutputChunk } from "./types";
 
 export type PluginInstallState = "inspecting" | "installing" | "done" | "failed" | "cancelled";
 

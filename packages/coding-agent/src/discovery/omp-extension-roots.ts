@@ -21,7 +21,7 @@ import * as path from "node:path";
 import { getAgentDir, getProjectAgentDir, isEnoent, logger, tryParseJson } from "@musepi/pi-utils";
 import { readDirEntries, readFile } from "../capability/fs";
 import type { LoadContext } from "../capability/types";
-import { getEnabledPlugins } from "../extensibility/plugins/loader";
+import { getEnabledPlugins } from "../extensibility/plugins/runtime/loader";
 import { expandTilde } from "../tools/path-utils";
 import { listClaudePluginRoots } from "./helpers";
 

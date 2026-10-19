@@ -12,7 +12,7 @@ import {
 	readCompatibilityExemptions,
 	resolveCompatibilityPath,
 	setVersionExemption,
-} from "../../extensibility/plugins/compatibility-store";
+} from "../../extensibility/plugins/compat/compatibility-store";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { DaemonService } from "./types";
@@ -831,7 +831,7 @@ export class ExtensionService implements DaemonService {
 		// settings → plugins tab. Session-independent; TTL-cached so
 		// the list doesn't re-walk node_modules on each tab switch.
 		if (!this.#pluginPackagesCache || Date.now() - this.#pluginPackagesCache.at > 10_000) {
-			const { getAllPlugins } = await import("../../extensibility/plugins/loader");
+			const { getAllPlugins } = await import("../../extensibility/plugins/runtime/loader");
 			const installed = await getAllPlugins(this.#deps.cwd());
 			this.#pluginPackagesCache = {
 				at: Date.now(),
@@ -1027,7 +1027,7 @@ export class ExtensionService implements DaemonService {
 		// manifest points at a missing entry) flips to "enabled" in the UI
 		// while nothing is registered. So after the write, this re-loads the
 		// plugin's extension entries and reports what ACTUALLY happened.
-		const { PluginManager } = await import("../../extensibility/plugins/manager");
+		const { PluginManager } = await import("../../extensibility/plugins/management/manager");
 		const p = (params ?? {}) as { name: string; enabled: boolean };
 		if (!p.name) throw new Error("plugins.setEnabled: name required");
 		const manager = new PluginManager(this.#deps.cwd());
@@ -1047,7 +1047,7 @@ export class ExtensionService implements DaemonService {
 		// disable cannot break a load that already succeeded), so the probe
 		// runs for enables; a disable reports without one.
 		if (!p.enabled) return { ok: true, enabled: false };
-		const { getAllPlugins, resolvePluginExtensionPaths } = await import("../../extensibility/plugins/loader");
+		const { getAllPlugins, resolvePluginExtensionPaths } = await import("../../extensibility/plugins/runtime/loader");
 		const { loadExtensions } = await import("../../extensibility/extensions/loader");
 		const installed = await getAllPlugins(this.#deps.cwd());
 		const plugin = installed.find(x => x.name === p.name);

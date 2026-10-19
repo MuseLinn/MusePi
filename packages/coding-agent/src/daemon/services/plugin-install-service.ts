@@ -44,13 +44,13 @@
  * - 会话内插件热重载归 ExtensionService，本服务完成后只发失效通知。
  */
 
-import { PluginManager } from "../../extensibility/plugins/manager";
+import { PluginManager } from "../../extensibility/plugins/management/manager";
 import {
 	PluginInstallMachine,
 	type PluginInstallOutputLine,
 	type PluginInstallStartParams,
 	type PluginInstallView,
-} from "../../extensibility/plugins/plugin-install-machine";
+} from "../../extensibility/plugins/management/plugin-install-machine";
 import type { DaemonService } from "./types";
 
 /** Host capabilities this service needs. */

@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import "../../src/extensibility/plugins/legacy-pi-compat";
+import "../../src/extensibility/plugins/compat/legacy-pi-compat";
 
 const modules = Object.keys(require.cache)
 	.filter(modulePath => {

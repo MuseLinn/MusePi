@@ -25,7 +25,7 @@
  * @module extensibility/plugins/registry-fallback
  */
 
-import type { ParsedInstallSpec } from "./spec-classifier";
+import type { ParsedInstallSpec } from "../management/spec-classifier";
 
 /** npm's own registry: the one a chain trusts as public without being told. */
 export const OFFICIAL_NPM_REGISTRY = "https://registry.npmjs.org/";

@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { linkSync, mkdtempSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isDependencyOf, PluginGraphIdentities } from "../src/extensibility/plugins/plugin-graph-identities";
+import { isDependencyOf, PluginGraphIdentities } from "../src/extensibility/plugins/hmr/plugin-graph-identities";
 
 let dir = "";
 let entry = "";

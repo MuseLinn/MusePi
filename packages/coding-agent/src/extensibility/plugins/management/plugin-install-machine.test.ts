@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import type { InstalledPlugin } from "../runtime/types";
 import { PluginInstallMachine } from "./plugin-install-machine";
-import type { InstalledPlugin } from "./types";
 
 /**
  * The machine is the part of plugin install a person actually interacts with

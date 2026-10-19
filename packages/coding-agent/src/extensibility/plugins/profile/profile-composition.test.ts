@@ -18,7 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { applyDshProfile, mountableRows } from "./dsh-apply";
+import { applyDshProfile, mountableRows } from "../dsh/dsh-apply";
 import { ensureProfileCompositionExample, readProfileComposition, resolveBundleDirs } from "./profile-composition";
 
 let home: string;
@@ -55,7 +55,7 @@ describe("profile composition (bundle layer stack)", () => {
 			path.join(bundleDir, "package.json"),
 			JSON.stringify({
 				name: "@demo/schedule-bundle",
-				dsh: { bundle: { patch: "./cordis.patch.yml" } },
+				dsh: { bundle: { patch: "../cordis.patch.yml" } },
 			}),
 		);
 		write(

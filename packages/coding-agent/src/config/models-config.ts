@@ -24,6 +24,8 @@ export interface ProviderValidationConfig {
 	api?: Api;
 	auth?: ProviderAuthMode;
 	oauthConfigured?: boolean;
+	/** Extension-owned credential resolver — an auth source in its own right. */
+	resolverConfigured?: boolean;
 	discovery?: ProviderDiscovery;
 	compat?: ModelSpec<Api>["compat"];
 	remoteCompaction?: unknown;
@@ -65,12 +67,12 @@ export function validateProviderConfiguration(
 		}
 		const requiresAuth =
 			mode === "runtime-register"
-				? !config.apiKey && !config.oauthConfigured
+				? !config.apiKey && !config.oauthConfigured && !config.resolverConfigured
 				: !config.apiKey && (config.auth ?? "apiKey") !== "none";
 		if (requiresAuth) {
 			throw new Error(
 				mode === "runtime-register"
-					? `Provider ${providerName}: "apiKey" or "oauth" is required when defining models.`
+					? `Provider ${providerName}: "apiKey", "oauth", or "resolveApiKey" is required when defining models.`
 					: `Provider ${providerName}: "apiKey" is required when defining custom models unless auth is "none".`,
 			);
 		}

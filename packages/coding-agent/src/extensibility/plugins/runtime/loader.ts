@@ -7,10 +7,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getPluginsDir, getPluginsLockfile, isEnoent } from "@musepi/pi-utils";
-import { getConfigDirPaths } from "../../config";
-import { registerPluginCacheInvalidator, resolveActiveProjectRegistryPath } from "../../discovery/helpers";
-import { installLegacyPiSpecifierShim } from "./legacy-pi-compat";
-import { normalizePluginRuntimeConfig } from "./runtime-config";
+import { getConfigDirPaths } from "../../../config";
+import { registerPluginCacheInvalidator, resolveActiveProjectRegistryPath } from "../../../discovery/helpers";
+import { installLegacyPiSpecifierShim } from "../compat/legacy-pi-compat";
+import { normalizePluginRuntimeConfig } from "../profile/runtime-config";
 import type { InstalledPlugin, PluginManifest, PluginRuntimeConfig, ProjectPluginOverrides } from "./types";
 
 /** Installed plugin plus the root scope that supplied its runtime metadata. */

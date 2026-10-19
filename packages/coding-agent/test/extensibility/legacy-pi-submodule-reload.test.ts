@@ -5,7 +5,7 @@ import * as path from "node:path";
 import {
 	extensionEntriesNeedingReload,
 	loadLegacyPiModule,
-} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+} from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { removeWithRetries } from "@musepi/pi-utils";
 
 // HMR used to key its change detection on the entry file's mtime alone, while

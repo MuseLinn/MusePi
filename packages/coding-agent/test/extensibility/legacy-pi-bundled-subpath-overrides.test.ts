@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as url from "node:url";
-import { __buildLegacyPiPackageRootOverrides } from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { __buildLegacyPiPackageRootOverrides } from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { TempDir } from "@musepi/pi-utils";
 import { __renderLegacyPiVirtualModule, collectBundledPiEntries } from "../../scripts/legacy-pi-virtual-module";
 

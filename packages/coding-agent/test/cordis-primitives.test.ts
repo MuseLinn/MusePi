@@ -27,7 +27,7 @@ import {
 	stateHas,
 	stateKeys,
 	stateSet,
-} from "../src/extensibility/plugins/cordis-primitives";
+} from "../src/extensibility/plugins/runtime/cordis-primitives";
 
 /** A minimal `Extension` — the primitives only use it as an identity key. */
 function fakeExtension(): Extension {

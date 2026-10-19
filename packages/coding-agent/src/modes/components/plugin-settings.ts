@@ -21,7 +21,7 @@ import {
 } from "@musepi/pi-tui";
 import { logger } from "@musepi/pi-utils";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
-import { PluginManager } from "../../extensibility/plugins/manager";
+import { PluginManager } from "../../extensibility/plugins/management/manager";
 import type { InstalledPluginSummary } from "../../extensibility/plugins/marketplace";
 import {
 	getInstalledPluginsRegistryPath,
@@ -30,7 +30,7 @@ import {
 	getPluginsCacheDir,
 	MarketplaceManager,
 } from "../../extensibility/plugins/marketplace";
-import type { InstalledPlugin, PluginSettingSchema } from "../../extensibility/plugins/types";
+import type { InstalledPlugin, PluginSettingSchema } from "../../extensibility/plugins/runtime/types";
 import { t } from "../../i18n/index.js";
 import { getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
 import { shortenPath } from "../../tools/render-utils";

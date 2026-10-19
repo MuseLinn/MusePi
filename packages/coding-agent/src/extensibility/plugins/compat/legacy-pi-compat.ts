@@ -7,8 +7,8 @@ import * as url from "node:url";
 import type { ParseResult, ParserPlugin } from "@babel/parser";
 import { parse as parseBabel } from "@babel/parser";
 import { isCompiledBinary, stripWindowsExtendedLengthPathPrefix } from "@musepi/pi-utils";
-import { registerPluginCacheInvalidator } from "../../discovery/helpers";
-import { PluginGraphIdentities } from "./plugin-graph-identities";
+import { registerPluginCacheInvalidator } from "../../../discovery/helpers";
+import { PluginGraphIdentities } from "../hmr/plugin-graph-identities";
 
 const IS_COMPILED_BINARY = isCompiledBinary();
 
@@ -1247,7 +1247,7 @@ async function resolvePackageImportTarget(
 	target: string,
 	wildcard: string | null,
 ): Promise<string | null> {
-	if (!target.startsWith("./")) {
+	if (!target.startsWith("..")) {
 		return null;
 	}
 	const substituted = wildcard === null ? target : target.replaceAll("*", wildcard);
@@ -1463,7 +1463,7 @@ async function resolvePackageExportTarget(
 	target: string,
 	wildcard: string | null,
 ): Promise<string | null> {
-	if (!target.startsWith("./")) {
+	if (!target.startsWith("..")) {
 		return null;
 	}
 	const substituted = wildcard === null ? target : target.replaceAll("*", wildcard);
@@ -1501,7 +1501,7 @@ async function resolveNodePackageExport(
 	} | null = null;
 	for (const [key, entry] of Object.entries(exportsField)) {
 		const starIndex = key.indexOf("*");
-		if (starIndex === -1 || subpath === null || !key.startsWith("./")) continue;
+		if (starIndex === -1 || subpath === null || !key.startsWith("..")) continue;
 		const prefix = key.slice(2, starIndex);
 		const suffix = key.slice(starIndex + 1);
 		if (!subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;

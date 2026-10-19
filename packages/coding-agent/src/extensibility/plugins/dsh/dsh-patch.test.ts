@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import fixture from "../fixtures/dsh-sdk-minimal.patch.yml" with { type: "text" };
 import { parseDshPatch } from "./dsh-patch";
-import fixture from "./fixtures/dsh-sdk-minimal.patch.yml" with { type: "text" };
 
 /**
  * A DSH patch file is YAML a Loader evaluates, marked with `!!js`. Two things

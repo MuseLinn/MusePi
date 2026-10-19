@@ -21,7 +21,7 @@ import {
 	providedServices,
 	resolvePluginEntry,
 	toFactory,
-} from "../src/extensibility/plugins/cordis-entry";
+} from "../src/extensibility/plugins/runtime/cordis-entry";
 
 describe("calling convention", () => {
 	test("a class entry is constructed, not called", () => {

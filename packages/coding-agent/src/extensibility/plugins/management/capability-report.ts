@@ -29,8 +29,8 @@
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { logger } from "@musepi/pi-utils";
-import { describeDshBundle } from "./dsh-bundle";
-import type { InstalledPlugin } from "./types";
+import { describeDshBundle } from "../dsh/dsh-bundle";
+import type { InstalledPlugin } from "../runtime/types";
 
 /** How a plugin fared against this host's runtime. */
 export type PluginCapabilityVerdict = "runnable" | "partial" | "incompatible";

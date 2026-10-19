@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { loadLegacyPiModule } from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { loadLegacyPiModule } from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { parseMarketplaceCatalog } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace/fetcher";
 import { formatRepoState } from "../../../musepi-git/src/format.ts";
 

@@ -22,7 +22,7 @@
  * @module extensibility/plugins/registry-config
  */
 
-import { Settings } from "../../config/settings";
+import { Settings } from "../../../config/settings";
 import { normalizeRegistry, OFFICIAL_NPM_REGISTRY, type RegistryPlanConfig } from "./registry-fallback";
 
 /**

@@ -17,7 +17,7 @@
  * @module extensibility/plugins/dsh-name-resolution
  */
 
-import { getAllPlugins, getEnabledPlugins } from "./loader";
+import { getAllPlugins, getEnabledPlugins } from "../runtime/loader";
 
 /** What a name resolved to, and why when it did not. */
 export type PluginNameResolution =

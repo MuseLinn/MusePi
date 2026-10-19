@@ -1,4 +1,4 @@
-import type { PluginRuntimeConfig } from "./types";
+import type { PluginRuntimeConfig } from "../runtime/types";
 
 /** Normalizes persisted plugin runtime config across legacy lockfile shapes. */
 export function normalizePluginRuntimeConfig(config: Partial<PluginRuntimeConfig>): PluginRuntimeConfig {

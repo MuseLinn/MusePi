@@ -14,7 +14,7 @@ import { type CustomTool, loadCapability } from "../../discovery";
 import type { ExecOptions } from "../../exec/exec";
 import { execCommand } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
-import { getAllPluginToolPaths } from "../../extensibility/plugins/loader";
+import { getAllPluginToolPaths } from "../../extensibility/plugins/runtime/loader";
 // Runtime self-reference: dereference this namespace only inside loader functions to keep the index.ts cycle safe.
 import * as PiCodingAgent from "../../index";
 import * as typebox from "../legacy-typebox";

@@ -6,8 +6,8 @@ import { clearClaudePluginRootsCache } from "@musepi/pi-coding-agent/discovery/h
 import {
 	__resetLegacyPiResolutionCache,
 	__rewriteLegacyExtensionSourceForTests,
-} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
-import { getEnabledPlugins } from "@musepi/pi-coding-agent/extensibility/plugins/loader";
+} from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
+import { getEnabledPlugins } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/loader";
 import { getPluginsDir, removeWithRetries } from "@musepi/pi-utils";
 
 const tempRoots: string[] = [];

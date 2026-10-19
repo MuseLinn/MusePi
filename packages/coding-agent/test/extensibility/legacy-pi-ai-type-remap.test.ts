@@ -15,7 +15,7 @@ import {
 	__resetLegacyPiResolutionCache,
 	installLegacyPiSpecifierShim,
 	loadLegacyPiModule,
-} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+} from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 import { removeWithRetries } from "@musepi/pi-utils";
 
 // pi-ai 15.1.0 removed the runtime `Type` export from `@musepi/pi-ai`'s

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { __computeBundledSelfPackageRoot } from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { __computeBundledSelfPackageRoot } from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
 
 // Issue #3423 removed the runtime bunfs-path computation (`__computeBunfsPackageRoot`,
 // `__joinBunfsPath`, `bunfsPath`): Bun 1.3.14 stopped exposing `--compile`
