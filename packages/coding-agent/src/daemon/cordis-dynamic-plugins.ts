@@ -70,6 +70,7 @@ import {
 	compatibilityGateForExtensionPath,
 	pluginCompatibilityWarning,
 } from "../extensibility/plugins/plugin-compatibility";
+import { PluginFileIdentities } from "../extensibility/plugins/plugin-file-identities";
 import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
 
@@ -542,6 +543,10 @@ export class CordisDynamicPluginRuntime {
 	 *  `provide`，卸载即整条摘除——一个名字只有在提供者活着时才可被 inject。 */
 	readonly #providedServices = new Map<string, { owner: string; service?: unknown }>();
 	readonly #eventBus = new EventBus();
+	/** 在役插件入口的磁盘身份——reconcile 靠它判断哪个插件的文件变了
+	 *  （HMR）。判定口径（inode+size+mtime、2 秒容差、标记文件取时钟）
+	 *  见 PluginFileIdentities 的模块注释。 */
+	readonly #files = new PluginFileIdentities();
 
 	constructor(host: DaemonHostContext) {
 		this.#host = host;
@@ -661,13 +666,28 @@ export class CordisDynamicPluginRuntime {
 		}
 		if (gate) logger.warn("compatibility exemption active, loading anyway", { plugin: gate.plugin.name });
 		await this.#mount(record, target, disabledComponents);
+		// Record what the entry looked like as it was evaluated, so a later
+		// reconcile can tell an edit from a no-op. `observe` takes the whole
+		// active set: it replaces every record, so passing one entry would forget
+		// the others and make them all look newly-loaded.
+		this.#files.observe([...this.#records.values()].filter(r => r.status === "active").map(r => r.entryKey));
 		return this.#buildHandle(record);
 	}
 
-	/** reconcile 批量装载（宿主级 getExtensionRuntimeLoad 的 fiber 路径）：
+	/**
+	 * reconcile 批量装载（宿主级 getExtensionRuntimeLoad 的 fiber 路径）：
 	 *  发现清单 ↔ 在役记录对账——消失的路径卸载（效果账本反向回收）、
-	 *  新路径装载、在役不动（TTL 语义由调用方的缓存失效驱动）。聚合结果
-	 *  与 loadExtensions 同形状（extensions/errors/runtime）。 */
+	 *  新路径装载、**入口文件内容变了的在役插件重载**、其余不动。
+	 *
+	 * 第三项是 HMR 的核心：watcher 只报「这些根下面有东西动了」，要决定
+	 * 重载哪个插件，必须把在役入口与它被求值时的磁盘身份比一次。比较规则
+	 * （inode+size+mtime、不含 ctime、2 秒时间戳容差、标记文件取时钟）
+	 * 见 {@link PluginFileIdentities}。
+	 *
+	 * 变更判定放在这里而不是 watcher 里，是因为 cordis 的装载是惰性的：
+	 * watcher 只清缓存，真正 reconcile 的时机由下一次 RPC 决定——那时才知道
+	 * 哪些入口还在役、该跟哪个 record 对账。
+	 */
 	async loadAll(
 		paths: string[],
 		cwd: string,
@@ -684,9 +704,30 @@ export class CordisDynamicPluginRuntime {
 			}
 		}
 		// 消失的路径：卸载（登记随效果账本回收，如 design system 注销）。
+		const activeEntries = [...this.#records.values()]
+			.filter(record => record.status === "active")
+			.map(record => record.entryKey);
+		const { stale } = this.#files.compare(activeEntries);
+
 		for (const record of [...this.#records.values()]) {
 			if (record.status === "active" && !targets.has(record.entryKey)) {
 				await this.#unloadRecord(record);
+			}
+		}
+		// 在役但文件变了：就地重载（同一 record，不重新发现）。
+		for (const record of [...this.#records.values()]) {
+			if (record.status !== "active" || !stale.has(record.entryKey)) continue;
+			try {
+				await this.reloadPlugin(record.name);
+				// 重载后记录新身份，否则下一轮比对仍判它 stale —— 会变成每次
+				// reconcile 都重载一次。
+				this.#files.refresh([record.entryKey]);
+				logger.info("plugin reloaded after its entry changed on disk", { plugin: record.name });
+			} catch (err) {
+				errors.push({
+					path: record.entryKey,
+					error: err instanceof Error ? err.message : String(err),
+				});
 			}
 		}
 		// 新路径（或入口已改道的同名扩展）：装载；失败归 errors 不阻塞其余。
@@ -1156,5 +1197,6 @@ export class CordisDynamicPluginRuntime {
 		}
 		this.#group = undefined;
 		this.#records.clear();
+		this.#files.clear();
 	}
 }
