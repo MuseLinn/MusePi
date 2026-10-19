@@ -123,9 +123,9 @@ function sessionModeLabel(modes: SessionModes | null | undefined, catalog?: read
 	if (!modes) return resolveModeLabel(null, catalog);
 	if (modes.goalMode?.enabled === true) {
 		const objective = modes.goalMode.objective?.trim();
-		return objective ? `${t("goal mode")}: ${objective}` : t("goal mode");
+		return objective ? `${t("general.goalMode")}: ${objective}` : t("general.goalMode");
 	}
-	if (modes.planMode === true) return t("plan mode");
+	if (modes.planMode === true) return t("general.planMode");
 	return resolveModeLabel(modes.modeId, catalog);
 }
 
@@ -318,7 +318,7 @@ export function ContextPanel({
 	const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
 	const runMaintenance = async (op: "shake" | "fresh" | "clear"): Promise<void> => {
 		if (!rpc || !snap?.sessionId || maintenanceBusy) return;
-		if (op === "clear" && !(await confirm(t("confirm clear context")))) return;
+		if (op === "clear" && !(await confirm(t("tools.confirmClearContext")))) return;
 		setMaintenanceBusy(op);
 		setMaintenanceStatus(null);
 		try {
@@ -330,7 +330,7 @@ export function ContextPanel({
 					tokensFreed: number;
 				}>("session.shake", { sessionId: snap.sessionId, mode: "elide" });
 				setMaintenanceStatus(
-					t("shake result {dropped} blocks {tokens} tokens", {
+					t("tools.shakeResultBlocksTokensWithDroppedWithTokens", {
 						dropped: r.toolResultsDropped,
 						tokens: r.tokensFreed,
 					}),
@@ -339,12 +339,12 @@ export function ContextPanel({
 				const r = await rpc.request<{ closedProviderSessions: number }>("session.fresh", {
 					sessionId: snap.sessionId,
 				});
-				setMaintenanceStatus(t("fresh result {closed} sessions", { closed: r.closedProviderSessions }));
+				setMaintenanceStatus(t("tools.freshResultSessionsWithClosed", { closed: r.closedProviderSessions }));
 			} else {
 				const r = await rpc.request<{ droppedCount: number }>("session.resetContext", {
 					sessionId: snap.sessionId,
 				});
-				setMaintenanceStatus(t("clear result {dropped} messages", { dropped: r.droppedCount }));
+				setMaintenanceStatus(t("tools.clearResultMessagesWithDropped", { dropped: r.droppedCount }));
 			}
 		} catch (err) {
 			setMaintenanceStatus(err instanceof Error ? err.message : String(err));
@@ -473,7 +473,7 @@ export function ContextPanel({
 			// FLIP target then captures a mid-animation rect and the morph
 			// animates to the wrong geometry (verified 2026-09-22: restore
 			// pinned width 1244 and never came back to the docked 395).
-			el.style.transition = "none";
+			el.style.transition = "settings.none2";
 			flushSync(() => setMaximized(toMaximized));
 			if (!el.isConnected) {
 				el.style.removeProperty("transition");
@@ -670,7 +670,7 @@ export function ContextPanel({
 	const closeTabWithGuard = useCallback(
 		async (id: string): Promise<void> => {
 			const tab = panelTabs.tabs.find(t => t.id === id);
-			if (tab?.dirty && !(await confirm(t("discard unsaved changes?"), t("close anyway")))) return;
+			if (tab?.dirty && !(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway")))) return;
 			panelTabs.close(id);
 		},
 		[panelTabs, confirm],
@@ -681,7 +681,7 @@ export function ContextPanel({
 	// path the FilePane registered (target is relative to cwd).
 	const onFileDirty = useCallback(
 		(path: string, dirty: boolean): void => {
-			const id = panelTabId({ surface: "files", target: path });
+			const id = panelTabId({ surface: "settings.files", target: path });
 			panelTabs.setDirty(id, dirty);
 		},
 		[panelTabs],
@@ -695,7 +695,7 @@ export function ContextPanel({
 			const keep = new Set<string>();
 			for (const id of ids) {
 				const tab = panelTabs.tabs.find(t => t.id === id);
-				if (tab?.dirty && !(await confirm(t("discard unsaved changes?"), t("close anyway")))) {
+				if (tab?.dirty && !(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway")))) {
 					keep.add(id);
 				}
 			}
@@ -794,8 +794,8 @@ export function ContextPanel({
 					<span className="gui-pane-tab-empty-icon">
 						<Icon name="window" />
 					</span>
-					<p className="gui-pane-tab-empty-title">{t("browser shown in other column")}</p>
-					<p className="gui-pane-tab-empty-hint">{t("click to focus browser tab")}</p>
+					<p className="gui-pane-tab-empty-title">{t("settings.browserShownOtherColumn")}</p>
+					<p className="gui-pane-tab-empty-hint">{t("settings.clickFocusBrowserTab")}</p>
 				</button>
 			) : (
 				/* Browser pane renders OUTSIDE the feather-scroll container:
@@ -852,11 +852,11 @@ export function ContextPanel({
 						// click, does not. That makes the two distinguishable
 						// without stat-ing on every render.
 						browseRoot={bodyTab?.surface === "files" && bodyTab.dedupeKey !== null ? bodyTab.target : null}
-						onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
+						onOpenFile={(path, name) => panelTabs.open({ surface: "settings.files", target: path, label: name })}
 						onDirty={onFileDirty}
 						// Tree and file previews are sibling tabs:
 						// the preview's back button activates the tree tab.
-						onShowTree={() => panelTabs.open({ surface: "files" })}
+						onShowTree={() => panelTabs.open({ surface: "settings.files" })}
 					/>
 				) : bodyView === "artifacts" ? (
 					/* Artifacts panel (设计板 W3): artifact.manifest.json
@@ -873,8 +873,8 @@ export function ContextPanel({
 							<span className="gui-pane-tab-empty-icon">
 								<Icon name="inbox-archive" />
 							</span>
-							<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
-							<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
+							<p className="gui-pane-tab-empty-title">{t("settings.selectSession")}</p>
+							<p className="gui-pane-tab-empty-hint">{t("settings.jobsEmptyHint")}</p>
 						</div>
 					)
 				) : bodyView === "agents" ? (
@@ -892,7 +892,7 @@ export function ContextPanel({
 								<span className="gui-pane-tab-empty-icon">
 									<Icon name="ai-agent" />
 								</span>
-								<p className="gui-pane-tab-empty-title">{t("no subagents")}</p>
+								<p className="gui-pane-tab-empty-title">{t("agents.noSubagents")}</p>
 							</div>
 						) : (
 							<AgentsPanel
@@ -927,11 +927,11 @@ export function ContextPanel({
 					})()
 				) : (
 					<div className="px-1 py-2">
-						<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
+						<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.session2")}</div>
 						<div className="flex flex-col gap-1 px-2 text-[13px]">
 							<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
 								<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
-								<span className="truncate">{cwd || t("no folder")}</span>
+								<span className="truncate">{cwd || t("transcript.noFolder")}</span>
 							</div>
 							{snap?.state?.model?.id && (
 								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
@@ -948,22 +948,22 @@ export function ContextPanel({
 						</div>
 						{/* Session stats (openchamber context-drawer parity): message
 						 * count and run time at a glance. */}
-						<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
+						<div className="gui-group-label px-2 pb-1 pt-3">{t("general.stats")}</div>
 						<div className="grid grid-cols-2 gap-1.5 px-2">
 							<div className="gui-ctx-stat">
 								<div className="gui-ctx-stat-v">{messageCount}</div>
-								<div className="gui-ctx-stat-l">{t("messages")}</div>
+								<div className="gui-ctx-stat-l">{t("general.messages")}</div>
 							</div>
 							<div className="gui-ctx-stat">
 								<div className="gui-ctx-stat-v">{runMinutes}</div>
-								<div className="gui-ctx-stat-l">{t("minutes")}</div>
+								<div className="gui-ctx-stat-l">{t("general.minutes")}</div>
 							</div>
 						</div>
 						{/* Context-window usage: live tokens/capacity bar (product
 						 * parity with the header ring — same RPC). */}
 						{ctxUsage && (
 							<>
-								<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
+								<div className="gui-group-label px-2 pb-1 pt-3">{t("settings.contextWindow2")}</div>
 								<div className="px-2">
 									<div className="gui-ctx-usage-row">
 										<span className="text-[12px] tabular-nums opacity-80">
@@ -993,13 +993,13 @@ export function ContextPanel({
 								}}
 							>
 								<Icon name="clipboard" className="h-3.5 w-3.5" />
-								<span>{t("copy workspace path")}</span>
+								<span>{t("general.copyWorkspacePath")}</span>
 							</button>
 						</div>
 						{/* Session hygiene (会话维护): shake context / reset
 						 * provider stream / clear session context — each RPC
 						 * reports counts into the status line below. */}
-						<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
+						<div className="gui-group-label px-2 pb-1 pt-3">{t("tools.sessionMaintenance")}</div>
 						<div className="flex flex-col gap-0.5 px-2">
 							<button
 								type="button"
@@ -1011,7 +1011,7 @@ export function ContextPanel({
 									name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
 									className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
 								/>
-								<span>{t("shake context")}</span>
+								<span>{t("tools.shakeContext")}</span>
 							</button>
 							<button
 								type="button"
@@ -1023,7 +1023,7 @@ export function ContextPanel({
 									name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
 									className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
 								/>
-								<span>{t("fresh provider")}</span>
+								<span>{t("tools.freshProvider")}</span>
 							</button>
 							<button
 								type="button"
@@ -1035,7 +1035,7 @@ export function ContextPanel({
 									name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
 									className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
 								/>
-								<span>{t("clear session context")}</span>
+								<span>{t("tools.clearSessionContext")}</span>
 							</button>
 						</div>
 						{maintenanceStatus && (
@@ -1064,7 +1064,7 @@ export function ContextPanel({
 					y={tabMenu.y}
 					items={[
 						{
-							label: t("duplicate tab"),
+							label: t("general.duplicateTab"),
 							icon: "file-copy-2",
 							// A copy is a second independent instance of the same
 							// target (M1.12): single-instance surfaces (the whole
@@ -1073,21 +1073,21 @@ export function ContextPanel({
 							onSelect: () => panelTabs.duplicate(tabMenu.id),
 						},
 						{
-							label: t("close tab"),
-							icon: "close",
+							label: t("general.closeTab"),
+							icon: "settings.close",
 							onSelect: () => void closeTabWithGuard(tabMenu.id),
 						},
 						{
-							label: t("close other tabs"),
-							icon: "close",
+							label: t("general.closeOtherTabs"),
+							icon: "settings.close",
 							divider: true,
 							disabled: panelTabs.tabs.length <= 1,
 							onSelect: () =>
 								void closeManyWithGuard(panelTabs.tabs.filter(tb => tb.id !== tabMenu.id).map(tb => tb.id)),
 						},
 						{
-							label: t("close all tabs"),
-							icon: "close",
+							label: t("general.closeAllTabs"),
+							icon: "settings.close",
 							disabled: panelTabs.tabs.length === 0,
 							onSelect: () => void closeManyWithGuard(panelTabs.tabs.map(tb => tb.id)),
 						},
@@ -1108,7 +1108,7 @@ export function ContextPanel({
 						icon: s.icon as IconName,
 						onSelect: () => {
 							if (s.id === "browser") {
-								panelTabs.open({ surface: "browser" }, { column: addMenu.column });
+								panelTabs.open({ surface: "settings.browser" }, { column: addMenu.column });
 								void createBrowserTab("about:blank").catch(() => {});
 								return;
 							}
@@ -1124,9 +1124,9 @@ export function ContextPanel({
 									// A directory outside the workspace has no workspace-relative
 									// form, and the daemon would scan nothing for it.
 									if (rel === null) return;
-									const name = rel.split("/").filter(Boolean).at(-1) || t("files");
+									const name = rel.split("/").filter(Boolean).at(-1) || t("settings.files");
 									panelTabs.open(
-										{ surface: "files", target: rel, label: name, dedupeKey: `dir:${rel}` },
+										{ surface: "settings.files", target: rel, label: name, dedupeKey: `dir:${rel}` },
 										{ column },
 									);
 								});
@@ -1154,7 +1154,7 @@ export function ContextPanel({
 						onPointerCancel={resizeDrag.onPointerCancel}
 						aria-hidden
 					/>,
-					document.getElementById("root") ?? document.body,
+					document.getElementById("transcript.root") ?? document.body,
 				)}
 			<aside ref={panelRef} className={panelClass} style={maximized ? undefined : { width }}>
 				{/* Left-edge drag handle for width: pointer capture on the 4px
@@ -1189,7 +1189,7 @@ export function ContextPanel({
 															dirty: t.dirty,
 														}))}
 														activeId={colTab?.id ?? null}
-														closeLabel={t("close tab")}
+														closeLabel={t("general.closeTab")}
 														onActivate={panelTabs.activate}
 														onClose={closeTabWithGuard}
 														onReorder={panelTabs.reorder}
@@ -1199,8 +1199,8 @@ export function ContextPanel({
 												<div className="gui-pane-col-tools">
 													<button
 														type="button"
-														title={t("new tab")}
-														aria-label={t("new tab")}
+														title={t("general.newTab")}
+														aria-label={t("general.newTab")}
 														className="gui-pane-tool"
 														onClick={e => setAddMenu({ column: col, x: e.clientX, y: e.clientY })}
 													>
@@ -1210,8 +1210,8 @@ export function ContextPanel({
 														<>
 															<button
 																type="button"
-																title={t("merge panel")}
-																aria-label={t("merge panel")}
+																title={t("settings.mergePanel")}
+																aria-label={t("settings.mergePanel")}
 																className="gui-pane-tool"
 																onClick={() => panelTabs.setSplit(false)}
 															>
@@ -1219,8 +1219,8 @@ export function ContextPanel({
 															</button>
 															<button
 																type="button"
-																title={maximized ? t("restore panel") : t("maximize panel")}
-																aria-label={maximized ? t("restore panel") : t("maximize panel")}
+																title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
+																aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
 																className="gui-pane-tool"
 																onClick={toggleMaximized}
 															>
@@ -1239,7 +1239,7 @@ export function ContextPanel({
 													<span className="gui-pane-tab-empty-icon">
 														<Icon name="layout-column" />
 													</span>
-													<p className="gui-pane-tab-empty-title">{t("drop tabs here")}</p>
+													<p className="gui-pane-tab-empty-title">{t("settings.dropTabsHere")}</p>
 												</div>
 											) : (
 												renderPanelBody(colTab.surface, colTab)
@@ -1272,7 +1272,7 @@ export function ContextPanel({
 												dirty: t.dirty,
 											}))}
 											activeId={panelTabs.activeId}
-											closeLabel={t("close tab")}
+											closeLabel={t("general.closeTab")}
 											onActivate={panelTabs.activate}
 											onClose={closeTabWithGuard}
 											onReorder={panelTabs.reorder}
@@ -1288,8 +1288,8 @@ export function ContextPanel({
 									 *  (user 2026-09-22). */}
 									<button
 										type="button"
-										title={t("new tab")}
-										aria-label={t("new tab")}
+										title={t("general.newTab")}
+										aria-label={t("general.newTab")}
 										className="gui-pane-tool"
 										onClick={e => setAddMenu({ column: 0, x: e.clientX, y: e.clientY })}
 									>
@@ -1297,8 +1297,8 @@ export function ContextPanel({
 									</button>
 									<button
 										type="button"
-										title={t("split panel")}
-										aria-label={t("split panel")}
+										title={t("settings.splitPanel")}
+										aria-label={t("settings.splitPanel")}
 										className="gui-pane-tool"
 										onClick={() => panelTabs.setSplit(true)}
 									>
@@ -1306,8 +1306,8 @@ export function ContextPanel({
 									</button>
 									<button
 										type="button"
-										title={maximized ? t("restore panel") : t("maximize panel")}
-										aria-label={maximized ? t("restore panel") : t("maximize panel")}
+										title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
+										aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
 										className="gui-pane-tool"
 										onClick={toggleMaximized}
 									>
@@ -1324,7 +1324,7 @@ export function ContextPanel({
 									/* Zero tabs → empty-state navigation page (Kimi "从这里开始"
 									 * parity): the rail's primary surfaces as launchable entries. */
 									<PanelTabsEmptyState
-										heading={t("start here")}
+										heading={t("general.startHere")}
 										items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(
 											s => ({
 												id: s.id,
@@ -1400,7 +1400,7 @@ function PanelSplitZone({ active }: { active: boolean }): ReactNode {
 					<span className="gui-pane-split-zone-icon">
 						<Icon name="layout-column" />
 					</span>
-					<p className="gui-pane-split-zone-label">{t("drop to split panel")}</p>
+					<p className="gui-pane-split-zone-label">{t("settings.dropSplitPanel")}</p>
 				</>
 			)}
 		</div>
@@ -1416,7 +1416,7 @@ function WidgetSidebarTab({ entries }: { entries: readonly unknown[] }): ReactNo
 		return (
 			<div className="gui-widget-tab-empty">
 				<Icon name="layout-column" className="h-5 w-5" />
-				<p>{t("widget preview empty")}</p>
+				<p>{t("settings.widgetPreviewEmpty")}</p>
 			</div>
 		);
 	}
@@ -1514,7 +1514,7 @@ function SubSessionsSection({
 
 	return (
 		<div className="px-1 pb-2 pt-1">
-			<div className="gui-group-label px-2 pb-1 pt-1">{t("sub sessions")}</div>
+			<div className="gui-group-label px-2 pb-1 pt-1">{t("general.subSessions")}</div>
 			{rows.length === 0 ? (
 				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
 			) : (
@@ -1525,7 +1525,7 @@ function SubSessionsSection({
 								type="button"
 								className="gui-subsession-open"
 								title={`${row.displayName} · ${row.status}`}
-								aria-label={`${t("open subagent session")}: ${row.displayName}`}
+								aria-label={`${t("general.openSubagentSession")}: ${row.displayName}`}
 								onClick={() => onOpenSession?.(row.sessionId)}
 							>
 								<span className={`ag-dot ag-dot--${row.status}`} />
@@ -1540,8 +1540,8 @@ function SubSessionsSection({
 								<button
 									type="button"
 									className="gui-subsession-dock"
-									title={t("preview subagent in panel")}
-									aria-label={`${t("preview subagent in panel")}: ${row.displayName}`}
+									title={t("agents.previewSubagentPanel")}
+									aria-label={`${t("agents.previewSubagentPanel")}: ${row.displayName}`}
 									onClick={() =>
 										onDockAgent(
 											{
@@ -1555,7 +1555,7 @@ function SubSessionsSection({
 													row.status === "parked" ||
 													row.status === "aborted"
 														? row.status
-														: "idle",
+														: "settings.idle",
 												// The registry scan only lists
 												// refs that own a transcript file.
 												hasSessionFile: true,
@@ -1627,7 +1627,7 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 	const delivery = data?.delivery;
 	return (
 		<div className="px-1 py-2">
-			<div className="gui-group-label px-2 pb-1 pt-1">{t("jobs running")}</div>
+			<div className="gui-group-label px-2 pb-1 pt-1">{t("tools.jobsRunning")}</div>
 			{running.length === 0 ? (
 				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
 			) : (
@@ -1642,8 +1642,8 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 							<button
 								type="button"
 								className="gui-pane-action !w-auto flex-shrink-0 px-1.5 text-[12px]"
-								title={t("jobs cancel")}
-								aria-label={`${t("jobs cancel")}: ${job.label || job.id}`}
+								title={t("tools.jobsCancel")}
+								aria-label={`${t("tools.jobsCancel")}: ${job.label || job.id}`}
 								disabled={cancelling !== null}
 								onClick={() => void cancelJob(job.id)}
 							>
@@ -1652,13 +1652,13 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 								) : (
 									<Icon name="close" className="h-3 w-3" />
 								)}
-								<span>{t("jobs cancel")}</span>
+								<span>{t("tools.jobsCancel")}</span>
 							</button>
 						</div>
 					))}
 				</div>
 			)}
-			<div className="gui-group-label px-2 pb-1 pt-3">{t("jobs recent")}</div>
+			<div className="gui-group-label px-2 pb-1 pt-3">{t("tools.jobsRecent")}</div>
 			{recent.length === 0 ? (
 				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
 			) : (
@@ -1676,13 +1676,13 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 				<div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 text-[12px] text-[var(--color-text-muted)]">
 					<span className="inline-flex items-center gap-1">
 						<Icon name="inbox-archive" className="h-3.5 w-3.5" />
-						{t("jobs queued")} {delivery.queued ?? 0}
+						{t("tools.jobsQueued")} {delivery.queued ?? 0}
 					</span>
 					<span className="inline-flex items-center gap-1">
-						{t("jobs delivering")} {delivery.delivering ? "✓" : "—"}
+						{t("tools.jobsDelivering")} {delivery.delivering ? "✓" : "—"}
 					</span>
 					<span className="inline-flex items-center gap-1">
-						{t("jobs pending")} {delivery.pendingJobIds?.length ?? 0}
+						{t("tools.jobsPending")} {delivery.pendingJobIds?.length ?? 0}
 					</span>
 				</div>
 			)}
@@ -1692,10 +1692,10 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 }
 
 const BROWSER_VIEWPORTS = [
-	{ labelKey: "viewport fit", width: null },
-	{ labelKey: "viewport phone", width: 393 },
-	{ labelKey: "viewport tablet", width: 768 },
-	{ labelKey: "viewport desktop", width: 1440 },
+	{ labelKey: "transcript.viewportFit", width: null },
+	{ labelKey: "transcript.viewportPhone", width: 393 },
+	{ labelKey: "transcript.viewportTablet", width: 768 },
+	{ labelKey: "transcript.viewportDesktop", width: 1440 },
 ] as const;
 
 /**
@@ -1837,7 +1837,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 		try {
 			const picked = (await wv.executeJavaScript(BROWSER_INSPECT_SCRIPT, true)) as PickedElement | null;
 			if (picked?.text) {
-				const insertion = `${t("inserted element", { tag: picked.tag, text: picked.text.slice(0, 80) })}\n${t("inserted element selector")}: ${picked.selector}`;
+				const insertion = `${t("transcript.insertedElement", { tag: picked.tag, text: picked.text.slice(0, 80) })}\n${t("transcript.insertedElementSelector")}: ${picked.selector}`;
 				window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
 			}
 		} catch {
@@ -1865,7 +1865,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 						text: picked.text,
 						x: (rect?.left ?? 0) + (rect?.width ?? 0) / 2,
 						y: (rect?.top ?? 0) + Math.min((rect?.height ?? 0) / 2, 200),
-						context: picked.title ? `${t("ask browser selection")}: ${picked.title}` : undefined,
+						context: picked.title ? `${t("settings.askBrowserSelection")}: ${picked.title}` : undefined,
 					},
 				}),
 			);
@@ -1880,7 +1880,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 			 * capture a screenshot thumbnail. */}
 			{agentTabs.length > 0 && (
 				<div ref={agentTabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{t("agent tabs")}:</span>
+					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{t("tools.agentTabs")}:</span>
 					{agentTabs.map(tab => (
 						<button
 							key={tab.targetId}
@@ -1901,13 +1901,13 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				<div className="relative mx-1 mb-1 overflow-hidden rounded-md border border-[var(--border)]">
 					<img
 						src={`data:image/jpeg;base64,${agentShot.base64}`}
-						alt={t("agent tab preview")}
+						alt={t("tools.agentTabPreview")}
 						className="block h-24 w-full object-cover object-top opacity-80"
 					/>
 					<button
 						type="button"
 						className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded bg-[rgba(0,0,0,0.6)] text-[10px] text-white"
-						aria-label={t("close")}
+						aria-label={t("settings.close")}
 						onClick={() => setAgentShot(null)}
 					>
 						×
@@ -1918,8 +1918,8 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				<button
 					type="button"
 					className="gui-pane-action !w-auto px-1.5"
-					aria-label={t("back")}
-					title={t("back")}
+					aria-label={t("settings.back")}
+					title={t("settings.back")}
 					disabled={histIndex <= 0}
 					onClick={back}
 				>
@@ -1928,8 +1928,8 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				<button
 					type="button"
 					className="gui-pane-action !w-auto px-1.5"
-					aria-label={t("forward")}
-					title={t("forward")}
+					aria-label={t("transcript.forward")}
+					title={t("transcript.forward")}
 					disabled={histIndex >= history.length - 1}
 					onClick={forward}
 				>
@@ -1954,8 +1954,8 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				<button
 					type="button"
 					className="gui-pane-action !w-auto px-2"
-					aria-label={loading ? t("loading…") : t("refresh")}
-					title={loading ? t("loading…") : t("refresh")}
+					aria-label={loading ? t("settings.loading2") : t("settings.refresh")}
+					title={loading ? t("settings.loading2") : t("settings.refresh")}
 					aria-busy={loading ? "true" : undefined}
 					onClick={refresh}
 				>
@@ -1964,8 +1964,8 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				<button
 					type="button"
 					className="gui-pane-action !w-auto px-2"
-					aria-label={t("open in browser")}
-					title={t("open in browser")}
+					aria-label={t("transcript.openBrowser")}
+					title={t("transcript.openBrowser")}
 					onClick={() => void openExternalUrl(current)}
 				>
 					<Icon name="external-link" className="h-3.5 w-3.5" />
@@ -1974,8 +1974,8 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 					<button
 						type="button"
 						className={`gui-pane-action !w-auto px-2${picking ? " gui-view-opt--active" : ""}`}
-						aria-label={picking ? t("stop picking element") : t("pick element")}
-						title={picking ? t("stop picking element") : t("pick element")}
+						aria-label={picking ? t("transcript.stopPickingElement") : t("transcript.pickElement")}
+						title={picking ? t("transcript.stopPickingElement") : t("transcript.pickElement")}
 						onClick={() => void pickElement()}
 					>
 						<Icon name="cursor" className="h-3.5 w-3.5" />
@@ -1985,8 +1985,8 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 					<button
 						type="button"
 						className="gui-pane-action !w-auto px-2"
-						aria-label={t("ask about page selection")}
-						title={t("ask about page selection")}
+						aria-label={t("settings.askAboutPageSelection")}
+						title={t("settings.askAboutPageSelection")}
 						onClick={() => void askSelection()}
 					>
 						<Icon name="sparkling" className="h-3.5 w-3.5" />
@@ -2036,7 +2036,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 							src={current}
 							className="h-full w-full border-0"
 							sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-							title={t("browser")}
+							title={t("settings.browser")}
 							onLoad={() => setLoading(false)}
 						/>
 					)}

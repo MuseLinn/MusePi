@@ -157,7 +157,7 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		};
 	}, []);
 	const initial = user?.name?.trim().charAt(0)?.toLocaleUpperCase() ?? "";
-	const title = user ? (user.email ? `${user.name} <${user.email}>` : user.name) : t("you");
+	const title = user ? (user.email ? `${user.name} <${user.email}>` : user.name) : t("settings.you");
 	const punkFace = user?.name?.trim() ? (
 		<img src={punkAvatarUri(user.name.trim())} alt="" className="gui-user-avatar-img gui-avatar-punk" />
 	) : null;
@@ -1057,7 +1057,7 @@ export function ChatView({
 			if (res?.ok !== true) {
 				// Route through the shared in-app banner: an OS notification is
 				// easy to miss and leaves the click looking like a no-op.
-				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("general.branchFailed") }));
 				return false;
 			}
 			// null leafId = landed on the session ROOT (rewound past the first
@@ -1073,7 +1073,7 @@ export function ChatView({
 			pulseSwitch();
 			return true;
 		} catch (err) {
-			const reason = `${t("branch failed")}: ${err instanceof Error ? err.message : String(err)}`;
+			const reason = `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`;
 			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
 			return false;
 		}
@@ -1189,7 +1189,7 @@ export function ChatView({
 	);
 	const confirmTreeOpWhileWorking = useCallback(async (): Promise<boolean> => {
 		if (snap?.working !== true) return true;
-		return confirm(`${t("agent is running")}\n\n${t("tree op interrupts work")}`, t("interrupt and continue"));
+		return confirm(`${t("general.agentRunning")}\n\n${t("general.treeOpInterruptsWork")}`, t("general.interruptContinue"));
 	}, [confirm, snap?.working, t]);
 	// 统一树操作守卫(retry / rewind / switchBranch / fork 共用):运行中先
 	// 确认,确认后停下在途回合并等它真正收敛(branchAt 在在途回合下重锚
@@ -1221,7 +1221,7 @@ export function ChatView({
 					{ sessionId: store.sessionId, messageId },
 				);
 				if (res?.ok !== true) {
-					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
+					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("general.branchFailed") }));
 					return;
 				}
 				// Follow the fresh tip: the regenerated reply streams in as a new
@@ -1231,7 +1231,7 @@ export function ChatView({
 				setPinnedPathIds(null);
 				pulseSwitch();
 			} catch (err) {
-				const reason = `${t("branch failed")}: ${err instanceof Error ? err.message : String(err)}`;
+				const reason = `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`;
 				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
 			}
 		});
@@ -1435,7 +1435,7 @@ export function ChatView({
 			leafPath.map((p, i) => ({
 				id: p.id,
 				kind: (p.kind as "user") === "user" ? "user" : p.kind === "toolResult" ? "toolResult" : "assistant",
-				label: labelOf(p, i === 0 ? t("root") : "…"),
+				label: labelOf(p, i === 0 ? t("transcript.root") : "…"),
 			})),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[leafPath],
@@ -2154,7 +2154,7 @@ export function ChatView({
 				} catch (err) {
 					const detail = err instanceof Error ? err.message : String(err);
 					window.dispatchEvent(
-						new CustomEvent("musepi-gui-toast", { detail: `${t("widget download image")}: ${detail}` }),
+						new CustomEvent("musepi-gui-toast", { detail: `${t("settings.widgetDownloadImage")}: ${detail}` }),
 					);
 				}
 			})();
@@ -2168,7 +2168,7 @@ export function ChatView({
 				} catch (err) {
 					const detail = err instanceof Error ? err.message : String(err);
 					window.dispatchEvent(
-						new CustomEvent("musepi-gui-toast", { detail: `${t("copy as image")}: ${detail}` }),
+						new CustomEvent("musepi-gui-toast", { detail: `${t("settings.copyImage2")}: ${detail}` }),
 					);
 				}
 			})();
@@ -2234,8 +2234,8 @@ export function ChatView({
 	// semantics as TUI Esc: current turn stops, queued messages stay).
 	const handleStop = useCallback(async (): Promise<void> => {
 		const ok = await confirm(
-			`${t("terminate current turn?")}\n\n${t("the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)")}`,
-			t("terminate"),
+			`${t("general.terminateCurrentTurn")}\n\n${t("general.agentWillStop.desc")}`,
+			t("general.terminate"),
 		);
 		if (ok) onStop();
 	}, [confirm, onStop]);
@@ -2423,7 +2423,7 @@ export function ChatView({
 													<Icon name="pause" className="h-3.5 w-3.5" />
 												</span>
 												<span className="gui-pause-banner-text">
-													{t("paused")}
+													{t("tools.paused")}
 													{pausedAt ? (
 														<span className="gui-pause-banner-timer" data-paused-at={pausedAt}>
 															{" "}
@@ -2437,7 +2437,7 @@ export function ChatView({
 														className="gui-pause-banner-resume"
 														onClick={() => onResume()}
 													>
-														{t("resume")}
+														{t("tools.resume")}
 													</button>
 												)}
 											</div>
@@ -2456,7 +2456,7 @@ export function ChatView({
 													onClick={() => setViewMode("chat")}
 												>
 													<Icon name="chat-history" className="h-3 w-3" />
-													{t("surface chat")}
+													{t("transcript.surfaceChat")}
 												</button>
 												<button
 													type="button"
@@ -2466,7 +2466,7 @@ export function ChatView({
 													onClick={() => setViewMode("canvas")}
 												>
 													<Icon name="apps-2-ai" className="h-3 w-3" />
-													{t("surface canvas")}
+													{t("transcript.surfaceCanvas")}
 												</button>
 											</div>
 											{/* Parent-session back chip: when the
@@ -2477,12 +2477,12 @@ export function ChatView({
 												<button
 													type="button"
 													className="gui-parent-back"
-													title={parentSession.label ?? t("back to parent")}
+													title={parentSession.label ?? t("general.backParent")}
 													onClick={() => onOpenParentSession?.(parentSession.id)}
 												>
 													<Icon name="arrow-go-back" className="h-3 w-3 flex-shrink-0" />
 													<span className="gui-parent-back-label">
-														{t("back to parent")}
+														{t("general.backParent")}
 														{parentSession.label ? ` · ${parentSession.label}` : ""}
 													</span>
 												</button>
@@ -2508,7 +2508,7 @@ export function ChatView({
 												<div
 													className="gui-session-loading"
 													role="status"
-													aria-label={t("loading session")}
+													aria-label={t("settings.loadingSession")}
 												>
 													<div className="gui-loading-skeleton" aria-hidden>
 														<span className="gui-loading-bar" />
@@ -2517,13 +2517,13 @@ export function ChatView({
 													</div>
 													<div className="gui-loading-note">
 														<span className="gui-loading-orb" aria-hidden />
-														{t("loading session")}
+														{t("settings.loadingSession")}
 														{/* Elapsed, once the wait is long enough to notice. A frozen
 														    skeleton reads as "it broke"; a live number reads as
 														    "it is working". */}
 														{(waitSeconds ?? 0) >= 2 ? (
 															<span className="gui-loading-elapsed">
-																{t("waiting {seconds}s", { seconds: String(waitSeconds) })}
+																{t("settings.waitingSWithSeconds", { seconds: String(waitSeconds) })}
 															</span>
 														) : null}
 													</div>
@@ -2758,7 +2758,7 @@ export function ChatView({
 													{snap?.recap && (
 														<div
 															className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
-															title={recapExpanded ? t("collapse") : t("expand")}
+															title={recapExpanded ? t("tools.collapse") : t("tools.expand")}
 															role="button"
 															onClick={() => setRecapExpanded(v => !v)}
 														>
@@ -2772,8 +2772,8 @@ export function ChatView({
 															<button
 																type="button"
 																className="gui-recap-dismiss"
-																title={t("dismiss")}
-																aria-label={t("dismiss")}
+																title={t("settings.dismiss")}
+																aria-label={t("settings.dismiss")}
 																onClick={e => {
 																	e.stopPropagation();
 																	store?.dismissRecap();
@@ -2838,7 +2838,7 @@ export function ChatView({
 										 * away; appears/disappears and expands with the shared
 										 * Reveal motion (fade + collapse). */}
 										<Reveal open={jumpBack !== null}>
-											<div className="gui-revert-dock" role="region" aria-label={t("jumped back")}>
+											<div className="gui-revert-dock" role="region" aria-label={t("general.jumpedBack")}>
 												<div
 													role="button"
 													tabIndex={0}
@@ -2858,13 +2858,13 @@ export function ChatView({
 													/>
 													<span className="gui-revert-dock-title" title={jumpBack?.text}>
 														{jumpBack
-															? t("jumped back to") + (jumpBack.text ? `: ${jumpBack.text}` : "")
-															: t("jumped back")}
+															? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
+															: t("general.jumpedBack")}
 													</span>
 													<button
 														type="button"
 														className="gui-pane-action !w-auto px-1.5"
-														title={t("undo jump")}
+														title={t("general.undoJump")}
 														onClick={e => {
 															// The head is a click target for collapse/expand —
 															// don't toggle it when the undo button fires.
@@ -2877,7 +2877,7 @@ export function ChatView({
 													<button
 														type="button"
 														className="gui-pane-action !w-auto px-1.5"
-														title={t("close")}
+														title={t("settings.close")}
 														onClick={e => {
 															// #12: dismiss the dock but STAY at the reverted
 															// position — the sibling branch stays on the tree,
@@ -2904,7 +2904,7 @@ export function ChatView({
 																{jumpBack?.text ?? ""}
 															</span>
 														</div>
-														<p className="gui-revert-hint">{t("jump back hint")}</p>
+														<p className="gui-revert-hint">{t("general.jumpBackHint")}</p>
 													</div>
 												</Reveal>
 											</div>
@@ -2937,7 +2937,7 @@ export function ChatView({
 											<SessionTreeNav
 												segments={breadcrumb}
 												activeLeafIsHistorical={leafChildren.length > 0}
-												activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("this node"))}
+												activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("transcript.thisNode"))}
 												onJump={id => {
 													// /tree parity: 点击路径段 = 切换 leaf 到该节点
 													// (旧尾部保留为 sibling branch),非仅滚动。
@@ -2948,7 +2948,7 @@ export function ChatView({
 										{readOnly ? (
 											<div className="gui-readonly-bar" role="note">
 												<Icon name="sparkling" className="h-3.5 w-3.5" />
-												<span>{t("advisor transcript readonly")}</span>
+												<span>{t("general.advisorTranscriptReadonly")}</span>
 											</div>
 										) : (
 											<Composer

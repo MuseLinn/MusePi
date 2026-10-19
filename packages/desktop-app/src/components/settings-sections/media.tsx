@@ -114,7 +114,7 @@ export function MediaSection({
 	if (error) {
 		return (
 			<>
-				<h2 className="gui-settings-page-title">{t("image & video generation")}</h2>
+				<h2 className="gui-settings-page-title">{t("settings.imageVideoGeneration")}</h2>
 				<p className="text-[var(--color-warning)] text-[13px]">{error}</p>
 			</>
 		);
@@ -132,14 +132,14 @@ export function MediaSection({
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("image & video generation")}</h2>
-			<p className="gui-settings-page-subtitle">{t("image & video gen subtitle")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.imageVideoGeneration")}</h2>
+			<p className="gui-settings-page-subtitle">{t("settings.imageVideoGenSubtitle")}</p>
 
 			{/* Image generation providers */}
-			<h3 className="gui-settings-card-title">{t("image generation providers")}</h3>
+			<h3 className="gui-settings-card-title">{t("settings.imageGenerationProviders")}</h3>
 			<div className="gui-settings-card-grid">
 				{imageProviders.length === 0 && (
-					<p className="text-[13px] text-[var(--color-text-muted)]">{t("no image providers available")}</p>
+					<p className="text-[13px] text-[var(--color-text-muted)]">{t("settings.noImageProvidersAvailable")}</p>
 				)}
 				{imageProviders.map(p => (
 					<div key={p.id} className="gui-settings-section mb-2">
@@ -155,12 +155,12 @@ export function MediaSection({
 								aria-hidden="true"
 							/>
 							<span className="text-[12px] text-[var(--color-text-muted)]">
-								{p.configured ? t("configured") : t("not configured")}
+								{p.configured ? t("settings.configured") : t("settings.notConfigured")}
 							</span>
 						</div>
 						{p.source === "extension" && p.models && p.models.length > 0 && (
 							<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">
-								<span className="font-medium">{t("models")}:</span>
+								<span className="font-medium">{t("general.models")}:</span>
 								<span>{p.models.join(", ")}</span>
 							</div>
 						)}
@@ -175,11 +175,11 @@ export function MediaSection({
 											onClick={() => onLogin(p.id)}
 										>
 											<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-											{t("login")}
+											{t("settings.login")}
 										</button>
 									) : (
 										<span className="text-[12px] text-[var(--color-text-muted)]">
-											{t("oauth provider — manage in providers tab")}
+											{t("settings.oauthProviderManageProviders")}
 										</span>
 									)
 								) : (
@@ -187,7 +187,7 @@ export function MediaSection({
 										<SecretInput
 											value={apiKeys[p.id] ?? ""}
 											onChange={v => setApiKeys(prev => ({ ...prev, [p.id]: v }))}
-											placeholder={t("enter api key")}
+											placeholder={t("settings.enterApiKey")}
 										/>
 										<button
 											type="button"
@@ -195,7 +195,7 @@ export function MediaSection({
 											disabled={busy || !(apiKeys[p.id] ?? "").trim()}
 											onClick={() => void importKey(p.id)}
 										>
-											{t("save")}
+											{t("general.save")}
 										</button>
 									</div>
 								)}
@@ -210,7 +210,7 @@ export function MediaSection({
 									onClick={() => void removeCredential(p.id)}
 								>
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
-									{t("remove credential")}
+									{t("general.removeCredential")}
 								</button>
 							</div>
 						)}
@@ -221,7 +221,7 @@ export function MediaSection({
 			{/* Video generation */}
 			{videoProviders.length > 0 && (
 				<>
-					<h3 className="gui-settings-card-title mt-4">{t("video generation providers")}</h3>
+					<h3 className="gui-settings-card-title mt-4">{t("settings.videoGenerationProviders")}</h3>
 					{videoProviders.map(p => (
 						<div key={p.id} className="gui-settings-section mb-2">
 							<div className="gui-settings-row">
@@ -233,7 +233,7 @@ export function MediaSection({
 									aria-hidden="true"
 								/>
 								<span className="text-[12px] text-[var(--color-text-muted)]">
-									{p.configured ? t("configured") : t("not configured")}
+									{p.configured ? t("settings.configured") : t("settings.notConfigured")}
 								</span>
 							</div>
 							{!p.configured && (
@@ -242,7 +242,7 @@ export function MediaSection({
 										<SecretInput
 											value={apiKeys[p.id] ?? ""}
 											onChange={v => setApiKeys(prev => ({ ...prev, [p.id]: v }))}
-											placeholder={t("enter api key")}
+											placeholder={t("settings.enterApiKey")}
 										/>
 										<button
 											type="button"
@@ -250,7 +250,7 @@ export function MediaSection({
 											disabled={busy || !(apiKeys[p.id] ?? "").trim()}
 											onClick={() => void importKey(p.id)}
 										>
-											{t("save")}
+											{t("general.save")}
 										</button>
 									</div>
 								</div>
@@ -264,20 +264,20 @@ export function MediaSection({
 										onClick={() => void removeCredential(p.id)}
 									>
 										<Icon name="delete-bin" className="h-3.5 w-3.5" />
-										{t("remove credential")}
+										{t("general.removeCredential")}
 									</button>
 								</div>
 							)}
 						</div>
 					))}
-					<p className="text-[12px] text-[var(--color-text-muted)] mt-1">{t("video gen note")}</p>
+					<p className="text-[12px] text-[var(--color-text-muted)] mt-1">{t("settings.videoGenNote")}</p>
 				</>
 			)}
 
 			{/* Extension providers summary */}
 			{providers.extension.length > 0 && (
 				<p className="text-[12px] text-[var(--color-text-faint)] mt-3">
-					{t("extension providers count", { count: providers.extension.length })}
+					{t("settings.extensionProvidersCount", { count: providers.extension.length })}
 				</p>
 			)}
 		</>

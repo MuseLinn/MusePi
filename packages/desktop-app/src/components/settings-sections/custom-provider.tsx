@@ -152,7 +152,7 @@ export function CustomProviderPane({
 		// A provider needs at least one model: either the hand-typed single
 		// row or rows adopted from the endpoint interrogation.
 		if (!form.name || !form.baseUrl || (form.modelId.length === 0 && form.adopted.length === 0)) {
-			setFormError(t("provider name, base URL and at least one model are required"));
+			setFormError(t("settings.providerNameBase.info2"));
 			return;
 		}
 		setFormBusy(true);
@@ -220,7 +220,7 @@ export function CustomProviderPane({
 			const wasEditing = editingProvider !== null;
 			setEditingProvider(null);
 			setAddOpen(false);
-			setAddedName(wasEditing ? `${t("provider saved")} ${form.name}` : form.name);
+			setAddedName(wasEditing ? `${t("settings.providerSaved")} ${form.name}` : form.name);
 			window.setTimeout(() => setAddedName(null), 2500);
 			onChanged();
 		} catch (err) {
@@ -291,10 +291,10 @@ export function CustomProviderPane({
 	return (
 		<>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("custom providers")}</div>
-				<div className="gui-settings-section-desc">{t("custom providers hint")}</div>
+				<div className="gui-settings-section-title">{t("settings.customProviders")}</div>
+				<div className="gui-settings-section-desc">{t("settings.customProvidersHint")}</div>
 				{custom.length === 0 ? (
-					<div className="text-[13px] text-[var(--color-text-faint)]">{t("no custom providers")}</div>
+					<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.noCustomProviders")}</div>
 				) : (
 					custom.map(c => (
 						<div key={c.name} className="gui-settings-row">
@@ -307,8 +307,8 @@ export function CustomProviderPane({
 							<button
 								type="button"
 								className="gui-btn"
-								title={t("edit custom provider")}
-								aria-label={t("edit custom provider")}
+								title={t("settings.editCustomProvider")}
+								aria-label={t("settings.editCustomProvider")}
 								onClick={() => void editProvider(c.name)}
 							>
 								<Icon name="edit-2" className="h-3.5 w-3.5" />
@@ -322,7 +322,7 @@ export function CustomProviderPane({
 				{addedName ? (
 					<div className="mt-2 flex items-center gap-2 text-[13px] text-[var(--color-accent)]">
 						<Icon name="check" className="h-3.5 w-3.5" />
-						<span>{t("provider added")}</span>
+						<span>{t("settings.providerAdded")}</span>
 					</div>
 				) : (
 					<button
@@ -334,7 +334,7 @@ export function CustomProviderPane({
 						}}
 					>
 						<Icon name="add-circle" className="h-4 w-4" />
-						<span>{t("add custom provider")}</span>
+						<span>{t("settings.addCustomProvider")}</span>
 					</button>
 				)}
 			</div>
@@ -362,16 +362,16 @@ export function CustomProviderPane({
 					ep.setFetchError(null);
 				}}
 				className="gui-dialog--settings"
-				label={editingProvider ? t("edit custom provider") : t("add custom provider")}
+				label={editingProvider ? t("settings.editCustomProvider") : t("settings.addCustomProvider")}
 			>
 				<div className="gui-dialog-head">
 					<div className="text-[14px] font-medium">
-						{editingProvider ? t("edit custom provider") : t("add custom provider")}
+						{editingProvider ? t("settings.editCustomProvider") : t("settings.addCustomProvider")}
 					</div>
 					<button
 						type="button"
 						className="gui-btn gui-btn--icon"
-						aria-label={t("close")}
+						aria-label={t("settings.close")}
 						onClick={() => {
 							setAddOpen(false);
 							setEditingProvider(null);
@@ -390,7 +390,7 @@ export function CustomProviderPane({
 					<QuickProviderChips onPick={(name, baseUrl) => setForm(v => ({ ...v, name, baseUrl }))} />
 					<input
 						className="gui-input"
-						placeholder={t("provider name")}
+						placeholder={t("settings.providerName")}
 						value={form.name}
 						onChange={e => setForm(v => ({ ...v, name: e.target.value }))}
 					/>
@@ -402,7 +402,7 @@ export function CustomProviderPane({
 					/>
 					<input
 						className="gui-input"
-						placeholder={t("api key (optional)")}
+						placeholder={t("settings.apiKey")}
 						type="password"
 						value={form.apiKey}
 						onChange={e => setForm(v => ({ ...v, apiKey: e.target.value }))}
@@ -415,23 +415,23 @@ export function CustomProviderPane({
 							type="button"
 							className="gui-btn"
 							disabled={!form.baseUrl || ep.fetchingModels || formBusy}
-							title={form.baseUrl ? undefined : t("enter a base URL to fetch models")}
+							title={form.baseUrl ? undefined : t("settings.enterBaseUrlFetch")}
 							onClick={() => void ep.fetchModels()}
 						>
-							{ep.fetchingModels ? t("fetching models…") : t("fetch available models")}
+							{ep.fetchingModels ? t("settings.fetchingModels") : t("settings.fetchAvailableModels")}
 						</button>
 						<button
 							type="button"
 							className="gui-btn"
 							disabled={formBusy}
-							title={t("add model hint")}
+							title={t("settings.addModelHint")}
 							onClick={addManualModel}
 						>
-							{t("add model")}
+							{t("settings.addModel")}
 						</button>
 						{form.adopted.length > 0 && (
 							<span className="text-[12px] text-[var(--color-text-faint)]">
-								{t("adopted models")}: {form.adopted.length}
+								{t("settings.adoptedModels")}: {form.adopted.length}
 							</span>
 						)}
 					</div>
@@ -445,21 +445,21 @@ export function CustomProviderPane({
 										<div className="flex items-center gap-2">
 											<input
 												className="gui-input flex-1"
-												placeholder={t("model id")}
+												placeholder={t("settings.modelId")}
 												value={m.id}
 												onChange={e => patchAdopted(index, { id: e.target.value })}
 											/>
 											<input
 												className="gui-input flex-1"
-												placeholder={t("model name (optional)")}
+												placeholder={t("settings.modelName")}
 												value={m.name ?? ""}
 												onChange={e => patchAdopted(index, { name: e.target.value || undefined })}
 											/>
 											<button
 												type="button"
 												className="gui-btn"
-												title={t("model capabilities")}
-												aria-label={`${t("model capabilities")} ${m.id}`}
+												title={t("settings.modelCapabilities")}
+												aria-label={`${t("settings.modelCapabilities")} ${m.id}`}
 												onClick={() => setExpandedCaps(capsOpen ? null : index)}
 											>
 												<Icon name="settings-3" className="h-3.5 w-3.5" />
@@ -467,7 +467,7 @@ export function CustomProviderPane({
 											<button
 												type="button"
 												className="gui-btn"
-												aria-label={`${t("delete")} ${m.id}`}
+												aria-label={`${t("settings.delete")} ${m.id}`}
 												onClick={() => removeAdopted(index)}
 											>
 												<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -477,12 +477,12 @@ export function CustomProviderPane({
 											<div className="flex flex-col gap-1 rounded-lg border border-[var(--border-strong)] p-2">
 												<div className="flex items-center justify-between">
 													<div className="text-[12px] font-medium text-[var(--color-text-muted)]">
-														{t("model capabilities")}
+														{t("settings.modelCapabilities")}
 													</div>
 													<button
 														type="button"
 														className="text-[12px] text-[var(--color-accent)]"
-														title={t("restore capabilities to auto")}
+														title={t("settings.restoreCapabilitiesAuto")}
 														onClick={() =>
 															patchAdopted(index, {
 																input: null,
@@ -491,7 +491,7 @@ export function CustomProviderPane({
 															})
 														}
 													>
-														{t("restore to auto")}
+														{t("settings.restoreAuto")}
 													</button>
 												</div>
 												<div className="flex items-center gap-3">
@@ -529,13 +529,13 @@ export function CustomProviderPane({
 																})
 															}
 														/>
-														{t("model supports tools")}
+														{t("general.modelSupportsTools")}
 													</label>
 												</div>
 												<div className="flex gap-2">
 													<input
 														className="gui-input flex-1"
-														placeholder={t("context window (optional)")}
+														placeholder={t("settings.contextWindow")}
 														type="number"
 														min={0}
 														value={m.contextWindow ?? ""}
@@ -547,7 +547,7 @@ export function CustomProviderPane({
 													/>
 													<input
 														className="gui-input flex-1"
-														placeholder={t("max output tokens (optional)")}
+														placeholder={t("settings.maxOutputTokens")}
 														type="number"
 														min={0}
 														value={m.maxTokens ?? ""}
@@ -568,20 +568,20 @@ export function CustomProviderPane({
 					<div className="flex gap-2">
 						<input
 							className="gui-input flex-1"
-							placeholder={t("model id")}
+							placeholder={t("settings.modelId")}
 							value={form.modelId}
 							onChange={e => setForm(v => ({ ...v, modelId: e.target.value }))}
 						/>
 						<input
 							className="gui-input flex-1"
-							placeholder={t("model name (optional)")}
+							placeholder={t("settings.modelName")}
 							value={form.modelName}
 							onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
 						/>
 					</div>
 					<input
 						className="gui-input"
-						placeholder={t("compaction model id (optional)")}
+						placeholder={t("settings.compactionModelId")}
 						value={form.compactionModel}
 						onChange={e => setForm(v => ({ ...v, compactionModel: e.target.value }))}
 					/>
@@ -606,12 +606,12 @@ export function CustomProviderPane({
 					<div className="flex flex-col gap-1 rounded-lg border border-[var(--border-strong)] p-2">
 						<div className="flex items-center justify-between">
 							<div className="text-[12px] font-medium text-[var(--color-text-muted)]">
-								{t("model capabilities")}
+								{t("settings.modelCapabilities")}
 							</div>
 							<button
 								type="button"
 								className="text-[12px] text-[var(--color-accent)]"
-								title={t("restore capabilities to auto")}
+								title={t("settings.restoreCapabilitiesAuto")}
 								onClick={() =>
 									setForm(v => ({
 										...v,
@@ -623,7 +623,7 @@ export function CustomProviderPane({
 									}))
 								}
 							>
-								{t("restore to auto")}
+								{t("settings.restoreAuto")}
 							</button>
 						</div>
 						<div className="flex items-center gap-3">
@@ -664,13 +664,13 @@ export function CustomProviderPane({
 										}))
 									}
 								/>
-								{t("model supports tools")}
+								{t("general.modelSupportsTools")}
 							</label>
 						</div>
 						<div className="flex gap-2">
 							<input
 								className="gui-input flex-1"
-								placeholder={t("context window (optional)")}
+								placeholder={t("settings.contextWindow")}
 								type="number"
 								min={0}
 								value={form.modelContextWindow ?? ""}
@@ -683,7 +683,7 @@ export function CustomProviderPane({
 							/>
 							<input
 								className="gui-input flex-1"
-								placeholder={t("max output tokens (optional)")}
+								placeholder={t("settings.maxOutputTokens")}
 								type="number"
 								min={0}
 								value={form.modelMaxTokens ?? ""}
@@ -703,7 +703,7 @@ export function CustomProviderPane({
 						disabled={formBusy}
 						onClick={() => void submitModel()}
 					>
-						{formBusy ? `${t("saving")}…` : editingProvider ? t("save changes") : t("add provider")}
+						{formBusy ? `${t("settings.saving")}…` : editingProvider ? t("settings.saveChanges") : t("settings.addProvider")}
 					</button>
 				</div>
 				{/* Candidate picker for "fetch available models" — shared with

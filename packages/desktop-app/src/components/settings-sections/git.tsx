@@ -9,8 +9,8 @@ import { Icon } from "../../vendor/oc-icons";
 
 /** Changes view: flat file list vs grouped tree. */
 const CHANGES_VIEW_SEGMENTS: SegmentedOption<"flat" | "tree">[] = [
-	{ value: "flat", label: t("flat list") },
-	{ value: "tree", label: t("tree view") },
+	{ value: "flat", label: t("general.flatList") },
+	{ value: "tree", label: t("general.treeView") },
 ];
 
 /** Read-only keyboard shortcut reference. */
@@ -146,7 +146,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					return;
 				}
 				stopFlow();
-				setFlowError(res.error ?? t("github auth failed"));
+				setFlowError(res.error ?? t("general.githubAuthFailed"));
 			} catch (err) {
 				stopFlow();
 				setFlowError(err instanceof Error ? err.message : String(err));
@@ -175,7 +175,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	const disableAuth = async (): Promise<void> => {
 		if (!rpc) return;
-		const ok = await confirm(t("confirm disable github auth"));
+		const ok = await confirm(t("general.confirmDisableGithubAuth"));
 		if (!ok) return;
 		setAuthLoading(true);
 		try {
@@ -210,9 +210,9 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 	};
 	const addIdentity = async (): Promise<void> => {
-		const name = await prompt({ title: t("new identity name"), placeholder: t("identity name") });
+		const name = await prompt({ title: t("general.newIdentityName"), placeholder: t("general.identityName") });
 		if (!name) return;
-		const email = await prompt({ title: t("new identity email"), placeholder: t("identity email") });
+		const email = await prompt({ title: t("general.newIdentityEmail"), placeholder: t("general.identityEmail") });
 		if (!email) return;
 		const id = crypto.randomUUID();
 		saveIdentities([...identities, { id, name, email }]);
@@ -226,7 +226,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 	};
 	const removeIdentity = async (id: string): Promise<void> => {
-		const ok = await confirm(t("confirm delete identity"));
+		const ok = await confirm(t("general.confirmDeleteIdentity"));
 		if (!ok) return;
 		saveIdentities(identities.filter(i => i.id !== id));
 		if (defaultIdentity === id) {
@@ -241,20 +241,20 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("git settings")}</h2>
-			<p className="gui-settings-page-desc">{t("git settings description")}</p>
+			<h2 className="gui-settings-page-title">{t("general.gitSettings")}</h2>
+			<p className="gui-settings-page-desc">{t("general.gitSettingsDescription")}</p>
 
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("github oauth token")}</div>
-				<div className="gui-settings-section-desc">{t("github oauth token description")}</div>
+				<div className="gui-settings-section-title">{t("general.githubOauthToken")}</div>
+				<div className="gui-settings-section-desc">{t("general.githubOauthTokenDescription")}</div>
 				{authLoading && !auth ? (
 					<div className="gui-settings-row">
-						<div className="gui-settings-row-desc">{t("loading")}</div>
+						<div className="gui-settings-row-desc">{t("settings.loading")}</div>
 					</div>
 				) : auth?.installed === false ? (
 					<div className="gui-settings-row">
 						<div className="gui-settings-row-desc">
-							{t("gh cli not installed")}
+							{t("general.ghCliNotInstalled")}
 							{auth.detail && <span className="block text-[12px] opacity-70">({auth.detail})</span>}
 						</div>
 					</div>
@@ -273,30 +273,30 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<div className="min-w-0 flex-1">
 							<div className="flex items-center gap-1.5">
 								<Icon name="github" className="h-3.5 w-3.5" />
-								<span className="font-medium">{auth.login ?? t("unknown")}</span>
+								<span className="font-medium">{auth.login ?? t("transcript.unknown")}</span>
 								{auth.email && (
 									<span className="text-[12px] text-[var(--color-text-muted)]">· {auth.email}</span>
 								)}
 							</div>
-							<div className="text-[12px] text-[var(--color-text-muted)]">{t("authenticated via gh cli")}</div>
+							<div className="text-[12px] text-[var(--color-text-muted)]">{t("general.authenticatedViaGhCli")}</div>
 						</div>
 						<button type="button" className="gui-btn" disabled={authLoading} onClick={() => void disableAuth()}>
-							{t("disable")}
+							{t("transcript.disable")}
 						</button>
 					</div>
 				) : (
 					<div className="gui-settings-row">
-						<div className="gui-settings-row-desc">{auth?.detail || t("not authenticated via gh cli")}</div>
+						<div className="gui-settings-row-desc">{auth?.detail || t("general.notAuthenticatedViaGh")}</div>
 					</div>
 				)}
 				{flow && (
 					<div className="gui-github-flow">
-						<div className="gui-github-flow-title">{t("authorize device")}</div>
-						<div className="gui-github-flow-hint">{t("github device flow hint")}</div>
+						<div className="gui-github-flow-title">{t("general.authorizeDevice")}</div>
+						<div className="gui-github-flow-hint">{t("general.githubDeviceFlowHint")}</div>
 						<div className="gui-github-flow-code-row">
 							<code className="gui-github-flow-code">{flow.userCode}</code>
 							<button type="button" className="gui-btn gui-github-flow-copy" onClick={() => void copyCode()}>
-								{copied ? t("code copied") : t("copy code")}
+								{copied ? t("general.codeCopied") : t("general.copyCode")}
 							</button>
 						</div>
 						<div className="gui-github-flow-actions">
@@ -306,15 +306,15 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								onClick={() => void openExternalUrl(flow.verificationUri)}
 							>
 								<Icon name="external-link" className="h-3.5 w-3.5" />
-								{t("open github")}
+								{t("general.openGithub")}
 							</button>
 							<button type="button" className="gui-link" onClick={stopFlow}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 						</div>
 						<div className="gui-github-flow-waiting">
 							<span className="gui-flow-spinner" aria-hidden="true" />
-							{t("waiting approval")}
+							{t("general.waitingApproval")}
 						</div>
 					</div>
 				)}
@@ -323,7 +323,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="mt-2 flex justify-center">
 						<button type="button" className="gui-btn" disabled={authLoading} onClick={() => void startFlow()}>
 							<Icon name="add" className="h-3.5 w-3.5" />
-							{t("add account")}
+							{t("general.addAccount")}
 						</button>
 					</div>
 				)}
@@ -331,15 +331,15 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("user avatar source")}</div>
-					<div className="gui-settings-row-desc">{t("user avatar source description")}</div>
+					<div className="gui-settings-row-label">{t("settings.userAvatarSource")}</div>
+					<div className="gui-settings-row-desc">{t("settings.userAvatarSourceDescription")}</div>
 				</div>
 				<div className="flex items-center gap-1">
 					{(
 						[
-							["auto", t("user avatar auto")],
-							["punk", t("user avatar punk")],
-							["initial", t("user avatar initial")],
+							["auto", t("settings.userAvatarAuto")],
+							["punk", t("settings.userAvatarPunk")],
+							["initial", t("settings.userAvatarInitial")],
 						] as const
 					).map(([mode, label]) => (
 						<button
@@ -357,25 +357,25 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			</div>
 
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("git preferences")}</div>
-				<div className="gui-settings-section-desc">{t("git preferences description")}</div>
+				<div className="gui-settings-section-title">{t("general.gitPreferences")}</div>
+				<div className="gui-settings-section-desc">{t("general.gitPreferencesDescription")}</div>
 				<GitPrefsRow />
 			</div>
 
 			<div className="gui-settings-section">
 				<div className="flex items-center justify-between">
 					<div>
-						<div className="gui-settings-section-title">{t("identities")}</div>
-						<div className="gui-settings-section-desc">{t("identities description")}</div>
+						<div className="gui-settings-section-title">{t("general.identities")}</div>
+						<div className="gui-settings-section-desc">{t("general.identitiesDescription")}</div>
 					</div>
 					<button type="button" className="gui-btn" onClick={() => void addIdentity()}>
 						<Icon name="add" className="h-3.5 w-3.5" />
-						{t("new identity")}
+						{t("general.newIdentity")}
 					</button>
 				</div>
 				{identities.length === 0 ? (
 					<div className="gui-settings-row">
-						<div className="gui-settings-row-desc">{t("no identities yet")}</div>
+						<div className="gui-settings-row-desc">{t("general.noIdentitiesYet")}</div>
 					</div>
 				) : (
 					identities.map(idt => (
@@ -384,15 +384,15 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							<div className="min-w-0 flex-1">
 								<div className="text-[13.5px]">
 									{idt.name}
-									{defaultIdentity === idt.id && <span className="gui-identity-default">{t("default")}</span>}
+									{defaultIdentity === idt.id && <span className="gui-identity-default">{t("transcript.default")}</span>}
 								</div>
 								<div className="text-[12px] text-[var(--color-text-muted)]">{idt.email}</div>
 							</div>
 							<button
 								type="button"
 								className="gui-view-opt"
-								title={t("set default")}
-								aria-label={t("set default")}
+								title={t("general.setDefault")}
+								aria-label={t("general.setDefault")}
 								disabled={defaultIdentity === idt.id}
 								onClick={() => {
 									setDefaultIdentity(idt.id);
@@ -408,8 +408,8 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							<button
 								type="button"
 								className="gui-view-opt gui-view-opt--danger"
-								title={t("delete")}
-								aria-label={t("delete")}
+								title={t("settings.delete")}
+								aria-label={t("settings.delete")}
 								onClick={() => void removeIdentity(idt.id)}
 							>
 								<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -436,11 +436,11 @@ export function GitPrefsRow(): ReactNode {
 		<>
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("changes view")}</div>
-					<div className="gui-settings-row-desc">{t("changes view description")}</div>
+					<div className="gui-settings-row-label">{t("general.changesView")}</div>
+					<div className="gui-settings-row-desc">{t("general.changesViewDescription")}</div>
 				</div>
 				<Segmented
-					ariaLabel={t("changes view")}
+					ariaLabel={t("general.changesView")}
 					value={view}
 					options={CHANGES_VIEW_SEGMENTS}
 					onChange={v => {
@@ -451,8 +451,8 @@ export function GitPrefsRow(): ReactNode {
 			</div>
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("enable gitmoji picker")}</div>
-					<div className="gui-settings-row-desc">{t("enable gitmoji picker description")}</div>
+					<div className="gui-settings-row-label">{t("general.enableGitmojiPicker")}</div>
+					<div className="gui-settings-row-desc">{t("general.enableGitmojiPickerDescription")}</div>
 				</div>
 				<button
 					type="button"
@@ -467,15 +467,15 @@ export function GitPrefsRow(): ReactNode {
 						// on this event — same-window storage events don't fire.
 						window.dispatchEvent(new CustomEvent("omp-gitmoji-changed"));
 					}}
-					aria-label={t("enable gitmoji picker")}
+					aria-label={t("general.enableGitmojiPicker")}
 				>
 					<span className="gui-toggle-knob" />
 				</button>
 			</div>
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("show gitignored")}</div>
-					<div className="gui-settings-row-desc">{t("show gitignored description")}</div>
+					<div className="gui-settings-row-label">{t("general.showGitignored")}</div>
+					<div className="gui-settings-row-desc">{t("general.showGitignoredDescription")}</div>
 				</div>
 				<button
 					type="button"

@@ -312,7 +312,7 @@ function TerminalTab({
 			<div className="gui-tool-placeholder">
 				<Icon name="terminal-box" className="h-6 w-6" />
 				<span>{error}</span>
-				<span className="text-[12px] text-[var(--color-text-faint)]">{t("tool needs a daemon backend")}</span>
+				<span className="text-[12px] text-[var(--color-text-faint)]">{t("transcript.toolNeedsDaemonBackend")}</span>
 			</div>
 		);
 	}
@@ -329,11 +329,11 @@ function TerminalTab({
 						window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text } }));
 						termRef.current?.clearSelection();
 					}}
-					aria-label={t("attach selection to chat")}
-					title={t("attach selection to chat")}
+					aria-label={t("general.attachSelectionChat")}
+					title={t("general.attachSelectionChat")}
 				>
 					<Icon name="send-plane" className="h-3 w-3" />
-					<span>{t("attach selection to chat")}</span>
+					<span>{t("general.attachSelectionChat")}</span>
 				</button>
 			) : null}
 		</div>
@@ -433,8 +433,8 @@ export function TerminalPanel({
 						<span className="truncate">{tab.label}</span>
 						<button
 							type="button"
-							aria-label={t("close")}
-							title={t("close")}
+							aria-label={t("settings.close")}
+							title={t("settings.close")}
 							className={`gui-term-close ml-0.5 rounded p-0.5 text-[var(--color-text-faint)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]${
 								tab.key === active ? " block" : " hidden group-hover:block"
 							}`}
@@ -449,8 +449,8 @@ export function TerminalPanel({
 				))}
 				<button
 					type="button"
-					aria-label={t("new tab")}
-					title={t("new tab")}
+					aria-label={t("general.newTab")}
+					title={t("general.newTab")}
 					className="gui-terminal-new ml-0.5 flex h-[26px] w-6 items-center justify-center rounded-full text-[var(--color-text-faint)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
 					onClick={() => newTab(cwd)}
 				>

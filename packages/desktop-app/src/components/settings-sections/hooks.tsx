@@ -19,10 +19,10 @@ export function HooksSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	};
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("hooks")}</h2>
-			<p className="gui-settings-page-desc">{t("hooks description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.hooks")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.hooksDescription")}</p>
 			{hooks.length === 0 ? (
-				<div className="gui-settings-row">{t("no hooks")}</div>
+				<div className="gui-settings-row">{t("settings.noHooks")}</div>
 			) : (
 				hooks.map(h => (
 					<div key={h.id} className="gui-agent-card">

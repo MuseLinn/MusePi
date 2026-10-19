@@ -1230,10 +1230,10 @@ export function Composer({
 						showSlashNotice(
 							"error",
 							res.reason === "tui-only"
-								? t("this command only works in the terminal")
+								? t("composer.commandOnlyWorksTerminal")
 								: res.reason === "skill-not-found"
-									? t("skill not found")
-									: t("unknown slash command"),
+									? t("composer.skillNotFound")
+									: t("composer.unknownSlashCommand"),
 						);
 						return;
 					}
@@ -1248,7 +1248,7 @@ export function Composer({
 						sfxFor("send");
 					}
 				})
-				.catch(() => showSlashNotice("error", t("slash command failed")));
+				.catch(() => showSlashNotice("error", t("composer.slashCommandFailed")));
 		},
 		[rpc, sessionId, onSend, showSlashNotice],
 	);
@@ -1270,17 +1270,17 @@ export function Composer({
 					if (!res) return;
 					setText("");
 					if (res.cancelled) {
-						showSlashNotice("info", t("bash command cancelled"));
+						showSlashNotice("info", t("composer.bashCommandCancelled"));
 						return;
 					}
-					let summary = t("bash exited with code {code} ({lines} lines)", {
+					let summary = t("composer.bashExitedCodeWithCodeWithLines", {
 						code: res.exitCode === null ? "?" : String(res.exitCode),
 						lines: String(res.totalLines),
 					});
-					if (res.excludeFromContext) summary += ` · ${t("bash output excluded from context")}`;
+					if (res.excludeFromContext) summary += ` · ${t("composer.bashOutputExcludedContext")}`;
 					showSlashNotice(res.exitCode === 0 ? "info" : "error", summary);
 				})
-				.catch(() => showSlashNotice("error", t("bash command failed")));
+				.catch(() => showSlashNotice("error", t("composer.bashCommandFailed")));
 		},
 		[rpc, sessionId, showSlashNotice],
 	);
@@ -1313,7 +1313,7 @@ export function Composer({
 						setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: false } : a)));
 						showSlashNotice(
 							"error",
-							`${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+							`${t("composer.attachmentUploadFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 						);
 						return;
 					}
@@ -1329,7 +1329,7 @@ export function Composer({
 				} catch (err) {
 					showSlashNotice(
 						"error",
-						`${t("guided goal failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+						`${t("general.guidedGoalFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 					);
 					return;
 				}
@@ -1545,7 +1545,7 @@ export function Composer({
 						setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: false } : a)));
 						showSlashNotice(
 							"error",
-							`${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+							`${t("composer.attachmentUploadFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 						);
 						return;
 					}
@@ -2040,7 +2040,7 @@ export function Composer({
 													<div
 														className="gui-swarm-popup-card"
 														role="region"
-														aria-label={t("swarm members")}
+														aria-label={t("tools.swarmMembers")}
 													>
 														<SwarmCardPreview
 															details={
@@ -2276,7 +2276,7 @@ export function Composer({
 					<div className="gui-voice-error" role="status" aria-live="polite">
 						<span className="gui-voice-error-dot" aria-hidden />
 						<span className="min-w-0 flex-1">{dictation.error}</span>
-						<span className="gui-voice-error-hint">{t("voice esc to cancel")}</span>
+						<span className="gui-voice-error-hint">{t("settings.voiceEscCancel")}</span>
 					</div>
 				)}
 				{voiceSetup.dialog}
@@ -2454,10 +2454,10 @@ export function Composer({
 						onKeyDown={onKeyDown}
 						placeholder={
 							working
-								? t("agent working — send steers the agent now, /queue waits for the turn to end…")
+								? t("general.agentWorkingSend.info")
 								: isDesignSession
-									? t("design empty placeholder")
-									: t("ask anything, / for commands, @ for context…")
+									? t("composer.designEmptyPlaceholder")
+									: t("composer.askAnythingCommands.info")
 						}
 						spellCheck={spellcheckEnabled()}
 						autoComplete="off"

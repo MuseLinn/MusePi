@@ -111,7 +111,7 @@ function usageAccountLabel(limit: UsageLimitView, report: UsageReportView, index
 	const projectId =
 		(typeof meta.projectId === "string" && meta.projectId ? meta.projectId : limit.scope?.projectId) ?? undefined;
 	if (projectId) return projectId;
-	return t("account {count}", { count: String(index + 1) });
+	return t("general.accountWithCount", { count: String(index + 1) });
 }
 
 /** Used fraction 0..1 — mirrors @musepi/pi-ai resolveUsedFraction. */
@@ -154,12 +154,12 @@ function usageResetRange(limits: UsageLimitView[], nowMs: number): string | null
 	const minReset = offsets[0]!;
 	const maxReset = offsets[offsets.length - 1]!;
 	if (maxReset - minReset > 60_000) {
-		return t("resets in {min}–{max}", {
+		return t("general.resetsInWithMinWithMax", {
 			min: fmtQuotaDuration(minReset - nowMs),
 			max: fmtQuotaDuration(maxReset - nowMs),
 		});
 	}
-	return t("resets in {time}", { time: fmtQuotaDuration(minReset - nowMs) });
+	return t("general.resetsInWithTime", { time: fmtQuotaDuration(minReset - nowMs) });
 }
 
 /** Status tone for a limit's bar + dot ("ok" | "warn" | "err").
@@ -199,15 +199,15 @@ function UsageResetsBlock({
 	const label =
 		(typeof meta.email === "string" && meta.email ? meta.email : undefined) ??
 		(typeof meta.accountId === "string" && meta.accountId ? meta.accountId : undefined) ??
-		t("account {count}", { count: "1" });
+		t("general.accountWithCount", { count: "1" });
 	const isActive =
 		activeAccount?.provider === report.provider &&
 		((activeAccount.email !== undefined && meta.email === activeAccount.email) ||
 			(activeAccount.accountId !== undefined && meta.accountId === activeAccount.accountId));
 	const rows: ReactNode[] = [
 		<span key="row">
-			• {label}: {resets.availableCount} {resets.availableCount === 1 ? t("saved reset") : t("saved resets")}
-			{isActive ? ` (${t("active")})` : ""}
+			• {label}: {resets.availableCount} {resets.availableCount === 1 ? t("general.savedReset") : t("general.savedResets")}
+			{isActive ? ` (${t("settings.active")})` : ""}
 		</span>,
 	];
 	for (const credit of resets.credits ?? []) {
@@ -219,14 +219,14 @@ function UsageResetsBlock({
 		rows.push(
 			<span key={`${credit.expiresAt}-${date}`}>
 				{remaining > 0
-					? t("expires in {time}", { time: fmtQuotaDuration(remaining) })
-					: t("expired ({date})", { date })}
+					? t("general.expiresInWithTime", { time: fmtQuotaDuration(remaining) })
+					: t("general.expiredWithDate", { date })}
 			</span>,
 		);
 	}
 	return (
 		<div className="gui-usage-resets">
-			<span className="gui-usage-resets-title">{t("saved rate-limit resets")}</span>
+			<span className="gui-usage-resets-title">{t("general.savedRateLimitResets")}</span>
 			{rows}
 		</div>
 	);
@@ -326,7 +326,7 @@ export function UsageProviderSection({
 				<span className="gui-usage-provider">{usageProviderTitle(provider)}</span>
 				{groupList.length > 0 && (
 					<span className="gui-usage-provider-summary">
-						{t("{count} windows", { count: String(groupList.length) })}
+						{t("general.windowsWithCount", { count: String(groupList.length) })}
 					</span>
 				)}
 				<Icon name="arrow-down" className={`gui-usage-chevron${expanded ? " gui-usage-chevron--open" : ""}`} />
@@ -335,7 +335,7 @@ export function UsageProviderSection({
 				<div className="gui-usage-provider-body">
 					{activeHere && (
 						<div className="gui-usage-note">
-							{t("in use by this session: {account}", { account: activeHere })}
+							{t("general.useSessionWithAccount", { account: activeHere })}
 						</div>
 					)}
 					{notes.length > 0 && <div className="gui-usage-note">{notes.join(" • ")}</div>}
@@ -394,7 +394,7 @@ export function UsageProviderSection({
 										const active = usageLimitIsActive(cell.limit, cell.report, activeAccount);
 										const resetShort =
 											cell.limit.window?.resetsAt !== undefined && cell.limit.window.resetsAt > nowMs
-												? t("resets in {time}", {
+												? t("general.resetsInWithTime", {
 														time: fmtQuotaDuration(cell.limit.window.resetsAt - nowMs),
 													})
 												: undefined;
@@ -418,7 +418,7 @@ export function UsageProviderSection({
 													</div>
 													<span className="gui-quota-pct">
 														{fraction !== undefined
-															? t("{percent}% used", { percent: String(Math.round(fraction * 100)) })
+															? t("general.usedWithPercent", { percent: String(Math.round(fraction * 100)) })
 															: "—"}
 													</span>
 												</div>
@@ -427,7 +427,7 @@ export function UsageProviderSection({
 									})}
 									<div className="gui-usage-cell gui-usage-cell--total">
 										<div className="gui-usage-cell-label">
-											<span className="gui-usage-acct-name">{t("total")}</span>
+											<span className="gui-usage-acct-name">{t("general.total")}</span>
 										</div>
 										<div className="gui-quota-bar">
 											<div className="gui-usage-bar-track">
@@ -459,7 +459,7 @@ export function UsageProviderSection({
 							{typeof report.metadata?.planType === "string" && report.metadata.planType
 								? ` (${report.metadata.planType})`
 								: ""}{" "}
-							<span className="gui-usage-note">— {t("no limits")}</span>
+							<span className="gui-usage-note">— {t("general.noLimits")}</span>
 						</div>
 					))}
 				</div>
@@ -500,7 +500,7 @@ export function UsageGapLines({ provider, data }: { provider: string; data: Usag
 		<div className="gui-usage-gaps">
 			{unreported.map(account => (
 				<div className="gui-usage-gap" key={`${account.provider}-${usageGapLabel(account)}`}>
-					<span className="gui-usage-gap-glyph">○</span> {usageGapLabel(account)} — {t("no usage data")}
+					<span className="gui-usage-gap-glyph">○</span> {usageGapLabel(account)} — {t("general.noUsageData")}
 				</div>
 			))}
 			{disabled.map(credential => (
@@ -508,8 +508,8 @@ export function UsageGapLines({ provider, data }: { provider: string; data: Usag
 					className="gui-usage-gap gui-usage-gap--disabled"
 					key={`${credential.provider}-${usageGapLabel(credential)}`}
 				>
-					<span className="gui-usage-gap-glyph">✗</span> {usageGapLabel(credential)} — {t("disabled")}:{" "}
-					{usageShortCause(credential.cause)} <span className="gui-usage-note">({t("re-login to restore")})</span>
+					<span className="gui-usage-gap-glyph">✗</span> {usageGapLabel(credential)} — {t("general.disabled")}:{" "}
+					{usageShortCause(credential.cause)} <span className="gui-usage-note">({t("general.reLoginRestore")})</span>
 				</div>
 			))}
 			{relogin.map(deadline => (
@@ -519,8 +519,8 @@ export function UsageGapLines({ provider, data }: { provider: string; data: Usag
 				>
 					<span className="gui-usage-gap-glyph">⚠</span> {usageGapLabel(deadline)} —{" "}
 					{deadline.remainingMs > 0
-						? t("re-login within {time}", { time: fmtQuotaDuration(deadline.remainingMs) })
-						: t("grant expired; re-login now")}
+						? t("general.reLoginWithinWithTime", { time: fmtQuotaDuration(deadline.remainingMs) })
+						: t("general.grantExpiredReLogin")}
 				</div>
 			))}
 		</div>
@@ -539,14 +539,14 @@ export function UsagePanelCard({
 	onClose(): void;
 }): ReactNode {
 	return (
-		<div className="gui-quota-panel" role="dialog" aria-label={t("subscription usage")}>
-			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("close")}>
+		<div className="gui-quota-panel" role="dialog" aria-label={t("general.subscriptionUsage")}>
+			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("settings.close")}>
 				<Icon name="close" className="h-3.5 w-3.5" />
 			</button>
 			<div className="gui-quota-title">
-				{t("subscription usage")}
+				{t("general.subscriptionUsage")}
 				{data?.fetchedAt
-					? ` · ${t("usage {time} ago", { time: fmtQuotaDuration(Date.now() - data.fetchedAt) })}`
+					? ` · ${t("general.usageAgoWithTime", { time: fmtQuotaDuration(Date.now() - data.fetchedAt) })}`
 					: null}
 			</div>
 			{loading ? (
@@ -591,7 +591,7 @@ export function UsagePanelCard({
 					})()}
 				</div>
 			) : (
-				<div className="gui-quota-note">{t("no subscription usage reported")}</div>
+				<div className="gui-quota-note">{t("general.noSubscriptionUsageReported")}</div>
 			)}
 		</div>
 	);

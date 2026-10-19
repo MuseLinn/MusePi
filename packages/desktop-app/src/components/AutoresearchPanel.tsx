@@ -59,15 +59,15 @@ function fmtWhen(ts: number): string {
 function statusLabel(status: string | null): string {
 	switch (status) {
 		case "keep":
-			return t("autoresearch status keep");
+			return t("settings.autoresearchStatusKeep");
 		case "discard":
-			return t("autoresearch status discard");
+			return t("settings.autoresearchStatusDiscard");
 		case "crash":
-			return t("autoresearch status crash");
+			return t("settings.autoresearchStatusCrash");
 		case "checks_failed":
-			return t("autoresearch status checks failed");
+			return t("settings.autoresearchStatusChecksFailed");
 		case "running":
-			return t("autoresearch status running");
+			return t("settings.autoresearchStatusRunning");
 		default:
 			return status ?? "—";
 	}
@@ -108,44 +108,44 @@ export function AutoresearchPanel({
 	}, [open, rpc, cwd]);
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("autoresearch")} className="w-[560px] max-w-[92vw]">
+		<DialogFrame open={open} onClose={onClose} label={t("settings.autoresearch")} className="w-[560px] max-w-[92vw]">
 			<div className="gui-ar-panel">
 				<div className="gui-ar-title">
-					<span className="gui-ar-title-name">{t("autoresearch")}</span>
+					<span className="gui-ar-title-name">{t("settings.autoresearch")}</span>
 					{status?.active && (
-						<span className="gui-ar-title-branch">{status.active.branch ?? t("autoresearch no branch")}</span>
+						<span className="gui-ar-title-branch">{status.active.branch ?? t("settings.autoresearchNoBranch")}</span>
 					)}
 				</div>
 				{loading ? (
-					<div className="gui-ar-empty">{t("loading…")}</div>
+					<div className="gui-ar-empty">{t("settings.loading2")}</div>
 				) : !status?.active ? (
 					<div className="gui-ar-empty">
-						{t("autoresearch empty")}
-						<div className="gui-ar-empty-hint">{t("autoresearch empty hint")}</div>
+						{t("settings.autoresearchEmpty")}
+						<div className="gui-ar-empty-hint">{t("settings.autoresearchEmptyHint")}</div>
 					</div>
 				) : (
 					<>
 						{status.active.goal && <div className="gui-ar-goal">{status.active.goal}</div>}
 						<div className="gui-ar-meta">
 							<span className="gui-ar-meta-chip">
-								{t("autoresearch metric")}: {status.active.primaryMetric}
+								{t("settings.autoresearchMetric")}: {status.active.primaryMetric}
 								{status.active.metricUnit ? ` (${status.active.metricUnit})` : ""}
 							</span>
 							<span className="gui-ar-meta-chip">
-								{t("autoresearch segment")}: {status.active.currentSegment}
+								{t("settings.autoresearchSegment")}: {status.active.currentSegment}
 								{status.active.maxIterations !== null ? ` / ${status.active.maxIterations}` : ""}
 							</span>
 							{status.active.direction && (
 								<span className="gui-ar-meta-chip">
-									{status.active.direction === "lower" ? "↓" : "↑"} {t("autoresearch direction")}
+									{status.active.direction === "lower" ? "↓" : "↑"} {t("settings.autoresearchDirection")}
 								</span>
 							)}
 						</div>
 						{status.active.notes && <div className="gui-ar-notes">{status.active.notes}</div>}
 						<div className="gui-ar-runs">
-							<div className="gui-ar-runs-title">{t("autoresearch runs")}</div>
+							<div className="gui-ar-runs-title">{t("settings.autoresearchRuns")}</div>
 							{status.runs.length === 0 ? (
-								<div className="gui-ar-empty">{t("autoresearch no runs")}</div>
+								<div className="gui-ar-empty">{t("settings.autoresearchNoRuns")}</div>
 							) : (
 								status.runs.map((r, i) => (
 									<div key={`${r.startedAt}-${i}`} className="gui-ar-run">
@@ -169,7 +169,7 @@ export function AutoresearchPanel({
 											{r.exitCode !== null && r.exitCode !== 0 && (
 												<span className="gui-ar-run-err">exit {r.exitCode}</span>
 											)}
-											{r.timedOut && <span className="gui-ar-run-err">{t("autoresearch timed out")}</span>}
+											{r.timedOut && <span className="gui-ar-run-err">{t("settings.autoresearchTimedOut")}</span>}
 										</div>
 									</div>
 								))

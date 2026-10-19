@@ -40,13 +40,13 @@ export function SessionTreeNav({
 				<div className="tr-tree-nav-hint" role="status">
 					<GitFork size={12} />
 					<span>
-						{t("will fork a new branch from {label}", {
-							label: activeLeafLabel || t("this node"),
+						{t("transcript.willForkNewBranchWithLabel", {
+							label: activeLeafLabel || t("transcript.thisNode"),
 						})}
 					</span>
 				</div>
 			)}
-			<div className="tr-tree-nav-breadcrumb" aria-label={t("session path")}>
+			<div className="tr-tree-nav-breadcrumb" aria-label={t("transcript.sessionPath")}>
 				{segments.length > 5 && (
 					<span className="tr-tree-nav-more" aria-hidden>
 						…

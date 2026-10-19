@@ -72,34 +72,34 @@ export function DesignStyleSelect({
 				className={`gui-style-select-btn${current ? " gui-style-select-btn--set" : ""}${
 					open ? " gui-style-select-btn--open" : ""
 				}`}
-				title={t("design style hint")}
+				title={t("composer.designStyleHint")}
 				aria-haspopup="menu"
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="palette" className="h-3 w-3" />
-				<span>{current ? designSystemLabel(current) : t("design style inherit")}</span>
+				<span>{current ? designSystemLabel(current) : t("composer.designStyleInherit")}</span>
 				<Icon name="arrow-down-s" className="h-3 w-3 gui-style-select-caret" />
 			</button>
 			{renderMenu(
 				<div
 					className="gui-attach-menu gui-style-select-menu"
 					role="menu"
-					aria-label={t("design style")}
+					aria-label={t("composer.designStyle")}
 					onMouseLeave={() => setHoverRect(null)}
 				>
-					<div className="gui-approval-menu-head">{t("design style")}</div>
+					<div className="gui-approval-menu-head">{t("composer.designStyle")}</div>
 					<button
 						type="button"
 						className={`gui-attach-opt${selected === null ? " gui-attach-opt--on" : ""}`}
 						role="menuitemradio"
 						aria-checked={selected === null}
-						title={t("design style hint")}
+						title={t("composer.designStyleHint")}
 						onClick={() => pick(null)}
 					>
 						<Icon name={selected === null ? "check" : "palette"} className="h-4 w-4" />
 						<span className="min-w-0 flex-1 truncate text-[13px] leading-tight text-[var(--color-text)]">
-							{t("design style inherit")}
+							{t("composer.designStyleInherit")}
 						</span>
 					</button>
 					{systems.map(s => (
@@ -109,7 +109,7 @@ export function DesignStyleSelect({
 							className={`gui-attach-opt${selected === s.id ? " gui-attach-opt--on" : ""}`}
 							role="menuitemradio"
 							aria-checked={selected === s.id}
-							title={t("design style hint")}
+							title={t("composer.designStyleHint")}
 							onMouseEnter={enterRow(s.id)}
 							onMouseLeave={scheduleHide}
 							onClick={() => pick(s.id)}

@@ -13,8 +13,8 @@ import { Icon } from "../../vendor/oc-icons";
 
 /** What expiry does to a stale session: snapshot it or drop it. */
 const CLEANUP_ACTION_SEGMENTS: SegmentedOption<"archive" | "delete">[] = [
-	{ value: "archive", label: t("archive") },
-	{ value: "delete", label: t("delete") },
+	{ value: "archive", label: t("settings.archive") },
+	{ value: "delete", label: t("settings.delete") },
 ];
 
 /** Session behavior: auto titles, delete-confirmation toggle, and
@@ -96,15 +96,15 @@ export function SessionsSection({
 	};
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("sessions")}</h2>
-			<p className="gui-settings-page-desc">{t("sessions settings")}</p>
+			<h2 className="gui-settings-page-title">{t("general.sessions")}</h2>
+			<p className="gui-settings-page-desc">{t("general.sessionsSettings")}</p>
 
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("session defaults")}</div>
+				<div className="gui-settings-section-title">{t("general.sessionDefaults")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("auto title")}</div>
-						<div className="gui-settings-row-desc">{t("auto title description")}</div>
+						<div className="gui-settings-row-label">{t("general.autoTitle")}</div>
+						<div className="gui-settings-row-desc">{t("general.autoTitleDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -116,15 +116,15 @@ export function SessionsSection({
 							setAutoTitle(next);
 							localStorage.setItem("musepi-gui-autotitle", next ? "1" : "0");
 						}}
-						aria-label={t("auto title")}
+						aria-label={t("general.autoTitle")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("show delete dialog")}</div>
-						<div className="gui-settings-row-desc">{t("show delete dialog description")}</div>
+						<div className="gui-settings-row-label">{t("general.showDeleteDialog")}</div>
+						<div className="gui-settings-row-desc">{t("general.showDeleteDialogDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -136,7 +136,7 @@ export function SessionsSection({
 							setConfirmDelete(next);
 							localStorage.setItem("musepi-gui-confirm-delete", next ? "1" : "0");
 						}}
-						aria-label={t("show delete dialog")}
+						aria-label={t("general.showDeleteDialog")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -144,12 +144,12 @@ export function SessionsSection({
 			</div>
 
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("session retention")}</div>
-				<div className="gui-settings-section-desc">{t("session retention description")}</div>
+				<div className="gui-settings-section-title">{t("general.sessionRetention")}</div>
+				<div className="gui-settings-section-desc">{t("general.sessionRetentionDescription")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("enable auto cleanup")}</div>
-						<div className="gui-settings-row-desc">{t("enable auto cleanup description")}</div>
+						<div className="gui-settings-row-label">{t("general.enableAutoCleanup")}</div>
+						<div className="gui-settings-row-desc">{t("general.enableAutoCleanupDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -161,15 +161,15 @@ export function SessionsSection({
 							setCleanupOn(next);
 							localStorage.setItem("musepi-gui-autoclean", next ? "1" : "0");
 						}}
-						aria-label={t("enable auto cleanup")}
+						aria-label={t("general.enableAutoCleanup")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 				<div className={`gui-settings-row${cleanupOn ? "" : " gui-settings-row--disabled"}`}>
 					<div>
-						<div className="gui-settings-row-label">{t("retention days")}</div>
-						<div className="gui-settings-row-desc">{t("retention days description")}</div>
+						<div className="gui-settings-row-label">{t("general.retentionDays")}</div>
+						<div className="gui-settings-row-desc">{t("general.retentionDaysDescription")}</div>
 					</div>
 					<div className="gui-settings-control">
 						<div className="gui-settings-stepper" aria-disabled={!cleanupOn}>
@@ -177,7 +177,7 @@ export function SessionsSection({
 								type="button"
 								className="gui-stepper-btn"
 								disabled={!cleanupOn}
-								aria-label={t("decrease")}
+								aria-label={t("general.decrease")}
 								onClick={() => setDays(cleanupDays - 1)}
 							>
 								<Icon name="subtract" className="h-3.5 w-3.5" />
@@ -187,22 +187,22 @@ export function SessionsSection({
 								type="button"
 								className="gui-stepper-btn"
 								disabled={!cleanupOn}
-								aria-label={t("increase")}
+								aria-label={t("general.increase")}
 								onClick={() => setDays(cleanupDays + 1)}
 							>
 								<Icon name="add" className="h-3.5 w-3.5" />
 							</button>
-							<span className="gui-settings-stepper-unit">{t("days")}</span>
+							<span className="gui-settings-stepper-unit">{t("general.days")}</span>
 						</div>
 					</div>
 				</div>
 				<div className={`gui-settings-row${cleanupOn ? "" : " gui-settings-row--disabled"}`}>
 					<div>
-						<div className="gui-settings-row-label">{t("session expiry action")}</div>
-						<div className="gui-settings-row-desc">{t("session expiry action description")}</div>
+						<div className="gui-settings-row-label">{t("general.sessionExpiryAction")}</div>
+						<div className="gui-settings-row-desc">{t("general.sessionExpiryActionDescription")}</div>
 					</div>
 					<Segmented
-						ariaLabel={t("session expiry action")}
+						ariaLabel={t("general.sessionExpiryAction")}
 						value={cleanupAction}
 						options={CLEANUP_ACTION_SEGMENTS}
 						onChange={v => {
@@ -213,9 +213,9 @@ export function SessionsSection({
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("manual cleanup")}</div>
+						<div className="gui-settings-row-label">{t("general.manualCleanup")}</div>
 						<div className="gui-settings-row-desc">
-							{running ? t("cleanup running") : t("archivable count", { count: String(candidates.length) })}
+							{running ? t("general.cleanupRunning") : t("general.archivableCount", { count: String(candidates.length) })}
 						</div>
 					</div>
 					<button
@@ -225,7 +225,7 @@ export function SessionsSection({
 						onClick={() => void runCleanup(true)}
 					>
 						<Icon name="refresh" className="h-3.5 w-3.5" />
-						{t("run cleanup now")}
+						{t("general.runCleanupNow")}
 					</button>
 				</div>
 			</div>

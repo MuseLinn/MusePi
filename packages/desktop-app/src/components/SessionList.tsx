@@ -310,9 +310,9 @@ const SessionRow = memo(function SessionRow({
 					<button
 						type="button"
 						className="gui-tree-fold"
-						aria-label={t(collapsed ? "expand subtree" : "collapse subtree")}
+						aria-label={t(collapsed ? "general.expandSubtree" : "general.collapseSubtree")}
 						aria-expanded={!collapsed}
-						title={t(collapsed ? "expand subtree" : "collapse subtree")}
+						title={t(collapsed ? "general.expandSubtree" : "general.collapseSubtree")}
 						onClick={e => {
 							e.stopPropagation();
 							onToggleCollapse?.(id);
@@ -337,12 +337,12 @@ const SessionRow = memo(function SessionRow({
 					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
 				</span>
 				{paused && (
-					<span className="gui-tree-pause" role="img" aria-label={t("paused")} title={t("paused")}>
+					<span className="gui-tree-pause" role="img" aria-label={t("tools.paused")} title={t("tools.paused")}>
 						<Icon name="pause" className="h-3 w-3" />
 					</span>
 				)}
 				{working && (
-					<span className="gui-tree-working" role="img" aria-label={t("in progress")} title={t("in progress")}>
+					<span className="gui-tree-working" role="img" aria-label={t("settings.inProgress")} title={t("settings.inProgress")}>
 						{/* ZCode parity: an 8-ray starburst spinning while the
 						 * agent turn runs (was a breathing dot) — opacity ramps
 						 * around the ring so the rotation reads at 12px. */}
@@ -355,8 +355,8 @@ const SessionRow = memo(function SessionRow({
 					<span
 						className="gui-tree-fork"
 						role="img"
-						aria-label={t("forked session")}
-						title={t("forked from {name}", { name: parentLabel })}
+						aria-label={t("general.forkedSession")}
+						title={t("general.forkedFromWithName", { name: parentLabel })}
 					>
 						<Icon name="git-branch" className="h-3 w-3" />
 					</span>
@@ -365,8 +365,8 @@ const SessionRow = memo(function SessionRow({
 					<span
 						className="gui-tree-fork"
 						role="img"
-						aria-label={t("subagent session")}
-						title={t("subagent session")}
+						aria-label={t("general.subagentSession")}
+						title={t("general.subagentSession")}
 					>
 						<Icon name="ai-agent-fill" className="h-3 w-3" />
 					</span>
@@ -375,8 +375,8 @@ const SessionRow = memo(function SessionRow({
 					<span
 						className="gui-tree-advisor"
 						role="img"
-						aria-label={t("advisor session")}
-						title={t("advisor session")}
+						aria-label={t("general.advisorSession")}
+						title={t("general.advisorSession")}
 					>
 						<Icon name="sparkling" className="h-3 w-3" />
 					</span>
@@ -388,7 +388,7 @@ const SessionRow = memo(function SessionRow({
 					className="gui-session-time"
 					title={
 						updatedAt && updatedAt !== timestamp
-							? `${t("last active")}: ${fullTime(updatedAt)} · ${t("created at")}: ${fullTime(timestamp)}`
+							? `${t("general.lastActive")}: ${fullTime(updatedAt)} · ${t("general.createdAt")}: ${fullTime(timestamp)}`
 							: fullTime(timestamp)
 					}
 				>
@@ -491,8 +491,8 @@ export function SessionList({
 					<SessionRow
 						key={node.entry.id}
 						id={node.entry.id}
-						label={node.entry.label ?? t("untitled session")}
-						parentLabel={parent ? (parent.entry.label ?? t("untitled session")) : null}
+						label={node.entry.label ?? t("transcript.untitledSession")}
+						parentLabel={parent ? (parent.entry.label ?? t("transcript.untitledSession")) : null}
 						timestamp={node.entry.timestamp}
 						updatedAt={node.entry.updatedAt}
 						selected={node.entry.id === selectedId}

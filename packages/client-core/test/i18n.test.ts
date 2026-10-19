@@ -8,8 +8,8 @@ afterAll(() => setLocale(INITIAL_LOCALE));
 describe("i18n t()", () => {
 	test("named-param replacement works on the localized string", () => {
 		setLocale("zh-CN");
-		expect(t("staged count", { count: 3 })).toBe("已暂存 3 个文件");
-		expect(t("retry {attempt}/{max}: {reason}", { attempt: 2, max: 3, reason: "boom" })).toBe("重试 2/3：boom");
+		expect(t("general.stagedCount", { count: 3 })).toBe("已暂存 3 个文件");
+		expect(t("sessions.retryWithAttemptWithMaxWithReason", { attempt: 2, max: 3, reason: "boom" })).toBe("重试 2/3：boom");
 	});
 
 	test("all {name} placeholders are replaceable from call-site params", () => {
@@ -24,13 +24,13 @@ describe("i18n t()", () => {
 		// en-US has no dict entry — the key (with {name}) is the fallback and
 		// must still be interpolated, not rendered raw.
 		setLocale("en-US");
-		expect(t("staged count", { count: 2 })).toBe("staged count");
-		expect(t("watching run #{id} on {repo}", { id: 7, repo: "a/b" })).toBe("watching run #7 on a/b");
+		expect(t("general.stagedCount", { count: 2 })).toBe("general.stagedCount");
+		expect(t("tools.watchingRunWithIdWithRepo", { id: 7, repo: "a/b" })).toBe("watching run #7 on a/b");
 		setLocale("zh-CN");
 	});
 
 	test("missing key falls back to the raw key; params untouched when absent", () => {
-		expect(t("staged count")).toBe("已暂存 {count} 个文件");
+		expect(t("general.stagedCount")).toBe("已暂存 {count} 个文件");
 	});
 
 	test("missing translation key falls back to the key itself", () => {

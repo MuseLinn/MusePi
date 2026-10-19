@@ -77,22 +77,22 @@ export function RemindersPanel({
 	// driven through a CSS var so height transitions animate both ways.
 	const listH = Math.min(reminders.length * ROW_H + LIST_PAD, MAX_LIST_H);
 	return (
-		<section className="gui-reminders" aria-label={t("real-time reminders")}>
+		<section className="gui-reminders" aria-label={t("settings.realTimeReminders")}>
 			<div className="gui-reminders-head">
 				<button
 					type="button"
 					className="gui-reminders-toggle"
 					onClick={toggle}
 					aria-expanded={!collapsed}
-					title={collapsed ? t("expand reminders") : t("collapse reminders")}
+					title={collapsed ? t("settings.expandReminders") : t("settings.collapseReminders")}
 				>
 					<Icon name="arrow-down-s" className={`gui-reminders-chevron${collapsed ? " is-collapsed" : ""}`} />
-					<span className="gui-reminders-title">{t("real-time reminders")}</span>
+					<span className="gui-reminders-title">{t("settings.realTimeReminders")}</span>
 					{unreadCount > 0 && <span className="gui-reminders-count">{unreadCount}</span>}
 				</button>
 				{unreadCount > 0 && (
 					<button type="button" className="gui-reminders-readall" onClick={onMarkAllRead}>
-						{t("mark all read")}
+						{t("settings.markAllRead")}
 					</button>
 				)}
 			</div>
@@ -119,9 +119,9 @@ export function RemindersPanel({
 							</span>
 						)}
 						{r.working ? (
-							<span className="gui-reminder-status" aria-label={t("in progress")}>
+							<span className="gui-reminder-status" aria-label={t("settings.inProgress")}>
 								<span className="gui-reminder-dot" aria-hidden />
-								{t("in progress")}
+								{t("settings.inProgress")}
 							</span>
 						) : (
 							<span className="gui-reminder-time">{relTime(r.timestamp)}</span>

@@ -85,20 +85,20 @@ export function StartFromPicker({
 
 	return (
 		<div className="gui-creation-startfrom">
-			<span className="gui-creation-startfrom-label">{t("creation start from")}</span>
-			<div className="gui-creation-startfrom-row" role="radiogroup" aria-label={t("creation start from")}>
+			<span className="gui-creation-startfrom-label">{t("creation.creationStart")}</span>
+			<div className="gui-creation-startfrom-row" role="radiogroup" aria-label={t("creation.creationStart")}>
 				<button
 					type="button"
 					role="radio"
 					aria-checked={value === null}
 					className={`gui-creation-startcard${value === null ? " gui-creation-startcard--on" : ""}`}
-					title={t("creation start blank hint")}
+					title={t("creation.creationStartBlankHint")}
 					onClick={() => pick(null)}
 				>
 					<span className="gui-creation-startcard-thumb gui-creation-startcard-thumb--blank" aria-hidden="true">
 						+
 					</span>
-					<span className="gui-creation-startcard-name">{t("creation start blank")}</span>
+					<span className="gui-creation-startcard-name">{t("creation.creationStartBlank")}</span>
 				</button>
 				{templates.map(tpl => (
 					<TemplateCard

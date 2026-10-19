@@ -29,15 +29,15 @@ export function GoalChip({
 			className={`gui-mode-chip${armed ? " gui-mode-chip--armed" : paused ? " gui-mode-chip--goal gui-mode-chip--paused" : " gui-mode-chip--goal"}`}
 			title={
 				armed
-					? t("next message becomes the goal objective")
+					? t("general.nextMessageBecomesGoal")
 					: paused
-						? `${t("goal mode")} · ${t("goal status paused")} · ${objective} · ${t("click for details")}`
-						: `${t("goal mode")} · ${objective} · ${t("click for details")}`
+						? `${t("general.goalMode")} · ${t("general.goalStatusPaused")} · ${objective} · ${t("general.clickDetails")}`
+						: `${t("general.goalMode")} · ${objective} · ${t("general.clickDetails")}`
 			}
 			onClick={armed ? onToggle : onOpen}
 		>
 			<StateIcon on={paused} pair={["pause", "target"]} className="h-3 w-3" />
-			<span className="max-w-[200px] truncate">{armed ? t("goal") : objective || t("goal")}</span>
+			<span className="max-w-[200px] truncate">{armed ? t("general.goal") : objective || t("general.goal")}</span>
 			{!armed && <Icon name="more" className="h-2.5 w-2.5 opacity-60" />}
 		</button>
 	);
@@ -50,11 +50,11 @@ export function PlanChip({ onOpen }: { onOpen(): void }): ReactNode {
 		<button
 			type="button"
 			className="gui-mode-chip"
-			title={`${t("plan mode")} · ${t("click for details")}`}
+			title={`${t("general.planMode")} · ${t("general.clickDetails")}`}
 			onClick={onOpen}
 		>
 			<Icon name="compass-3" className="h-3 w-3" />
-			<span>{t("plan")}</span>
+			<span>{t("tools.plan")}</span>
 			<Icon name="more" className="h-2.5 w-2.5 opacity-60" />
 		</button>
 	);

@@ -89,9 +89,9 @@ export function SessionSearchBar({
 			{/* openchamber meta line: count on the left, Escape on the right. */}
 			<div className="mx-[10px] flex items-center justify-between pb-0.5 text-[11px] text-[var(--color-text-faint)]">
 				<span aria-live="polite">
-					{!pending && hasQuery && matchCount > 0 ? t("search match count", { count: matchCount }) : ""}
+					{!pending && hasQuery && matchCount > 0 ? t("settings.searchMatchCount", { count: matchCount }) : ""}
 				</span>
-				<span>{pending ? t("press enter to search") : t("esc to clear or close")}</span>
+				<span>{pending ? t("settings.pressEnterSearch") : t("settings.escClearClose")}</span>
 			</div>
 			<div className="gui-session-search">
 				<Icon name="search" className="h-3.5 w-3.5 flex-none" />
@@ -133,8 +133,8 @@ export function SessionSearchBar({
 						if (hasDraft || hasQuery) clear();
 						else onOpenChange(false);
 					}}
-					placeholder={t("search sessions…")}
-					aria-label={t("search sessions…")}
+					placeholder={t("settings.searchSessions")}
+					aria-label={t("settings.searchSessions")}
 				/>
 				{hasDraft && (
 					<button
@@ -146,15 +146,15 @@ export function SessionSearchBar({
 							clear();
 							inputRef.current?.focus();
 						}}
-						title={t("clear")}
-						aria-label={t("clear")}
+						title={t("settings.clear")}
+						aria-label={t("settings.clear")}
 					>
 						<Icon name="close" className="h-3 w-3" />
 					</button>
 				)}
 			</div>
 			{!pending && hasQuery && matchCount === 0 && (
-				<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">{t("no matching sessions")}</p>
+				<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">{t("settings.noMatchingSessions")}</p>
 			)}
 		</div>
 	);

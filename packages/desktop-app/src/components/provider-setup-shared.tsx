@@ -50,7 +50,7 @@ export const URL_HINTS: Record<string, string> = {
 export function QuickProviderChips({ onPick }: { onPick(name: string, baseUrl: string): void }): ReactNode {
 	return (
 		<div className="gui-obo-quick">
-			<span className="gui-obo-quick-label">{t("quick providers")}</span>
+			<span className="gui-obo-quick-label">{t("settings.quickProviders")}</span>
 			<div className="gui-obo-quick-chips">
 				{QUICK_PROVIDERS.map(qp => (
 					<button
@@ -124,7 +124,7 @@ export function useEndpointModels(rpc: RpcClient | null, draft: EndpointDraft): 
 			});
 			const models = result?.models ?? [];
 			if (models.length === 0) {
-				setFetchError(t("no models found at this endpoint"));
+				setFetchError(t("settings.noModelsFoundEndpoint"));
 				return;
 			}
 			setCandidates(models);
@@ -210,19 +210,19 @@ export function EndpointCandidatesDialog({
 			open={candidates !== null}
 			onClose={onClose}
 			className="gui-dialog--confirm"
-			label={t("available models")}
+			label={t("settings.availableModels")}
 		>
 			<div className="gui-dialog-head">
-				<div className="text-[14px] font-medium">{t("available models")}</div>
+				<div className="text-[14px] font-medium">{t("settings.availableModels")}</div>
 				<button type="button" className="gui-btn" onClick={onAdopt}>
-					{t("adopt selected")}
+					{t("settings.adoptSelected")}
 				</button>
 			</div>
 			<div className="p-3">
 				<div className="mb-2 flex items-center justify-between">
-					<span className="text-[13px] text-[var(--color-text-faint)]">{t("select models to add")}</span>
+					<span className="text-[13px] text-[var(--color-text-faint)]">{t("settings.selectModelsAdd")}</span>
 					<button type="button" className="text-[12px] text-[var(--color-accent)]" onClick={onToggleAll}>
-						{allSelected ? t("deselect all") : t("select all")}
+						{allSelected ? t("settings.deselectAll") : t("settings.selectAll")}
 					</button>
 				</div>
 				<FadeScroll className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">

@@ -122,14 +122,14 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("index library")}</h2>
-			<p className="gui-settings-page-desc">{t("index library description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.indexLibrary")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.indexLibraryDescription")}</p>
 
-			<div className="gui-settings-section-title">{t("code library")}</div>
+			<div className="gui-settings-section-title">{t("settings.codeLibrary")}</div>
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("index new folders")}</div>
-					<div className="gui-settings-row-desc">{t("index new folders description")}</div>
+					<div className="gui-settings-row-label">{t("settings.indexNewFolders")}</div>
+					<div className="gui-settings-row-desc">{t("settings.indexNewFoldersDescription")}</div>
 				</div>
 				<button
 					type="button"
@@ -154,8 +154,8 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 			</div>
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("index repositories")}</div>
-					<div className="gui-settings-row-desc">{t("index repositories description")}</div>
+					<div className="gui-settings-row-label">{t("settings.indexRepositories")}</div>
+					<div className="gui-settings-row-desc">{t("settings.indexRepositoriesDescription")}</div>
 				</div>
 				<button
 					type="button"
@@ -170,15 +170,15 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 			<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">
 				{idxStatus
 					? idxStatus.scanning
-						? `${t("indexing")}…`
-						: `${t("indexed files")}: ${idxStatus.files} · ${t("last scan")}: ${lastScanLabel}${idxStatus.truncated ? ` · ${t("index truncated")}` : ""}`
-					: t("index unavailable")}
+						? `${t("settings.indexing")}…`
+						: `${t("settings.indexedFiles")}: ${idxStatus.files} · ${t("settings.lastScan")}: ${lastScanLabel}${idxStatus.truncated ? ` · ${t("settings.indexTruncated")}` : ""}`
+					: t("settings.indexUnavailable")}
 			</div>
 			<div className="gui-settings-row">
 				<input
 					type="search"
 					className="gui-settings-input w-full"
-					placeholder={t("instant search placeholder")}
+					placeholder={t("settings.instantSearchPlaceholder")}
 					value={idxQuery}
 					onChange={e => setIdxQuery(e.target.value)}
 				/>
@@ -186,7 +186,7 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 			{idxSearching ? (
 				<div className="gui-settings-row text-[13px] text-[var(--color-text-faint)]">…</div>
 			) : idxHits && idxHits.length === 0 ? (
-				<div className="gui-settings-row text-[13px] text-[var(--color-text-muted)]">{t("no results")}</div>
+				<div className="gui-settings-row text-[13px] text-[var(--color-text-muted)]">{t("general.noResults")}</div>
 			) : (
 				(idxHits ?? []).map(h => (
 					<div key={h.path} className="gui-agent-card">

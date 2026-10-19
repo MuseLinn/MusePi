@@ -49,5 +49,5 @@ export function ActionToastStack(): ReactNode {
 
 /** i18n key for the archive confirmation body (shared by every archive site). */
 export function archivedToastMessage(): string {
-	return t("session archived");
+	return t("general.sessionArchived");
 }

@@ -28,6 +28,29 @@ import { sfxFor } from "./sfx";
  *  main-window bridge to the floating pet window. */
 export type PetBubbleKind = "completed" | "subtask" | "error" | "question";
 
+/**
+ * Coalescing window for streaming renders (ms).
+ *
+ * A live turn pushed one `message_update` per token and the store rendered once
+ * per animation frame (~16 ms ≈ 60 snapshots/s) — and every emit re-rendered
+ * the whole shell (transcript, header, status orb). The reference client
+ * measured 33 ms against this interval and found it cost ~6% more CPU with no
+ * visible difference; 100 ms is still far inside what the eye resolves as
+ * "live" and cuts the render rate by ~6×. The first event of a burst still
+ * flushes on the next microtask, so latency — the thing a user actually feels
+ * on the first token — is unchanged.
+ */
+const FLUSH_COALESCE_MS = 100;
+
+/** Stores that still owe a render. Test-support seam only: lets a suite await
+ *  the coalescing window instead of sleeping a fixed duration. */
+const flushPendingStores = new Set<GuiSessionStore>();
+
+/** Whether any store still owes a render (test-support seam). */
+export function hasPendingSessionFlush(): boolean {
+	return flushPendingStores.size > 0;
+}
+
 /** Broadcast a pet bubble (window event — app.tsx forwards it to the pet
  *  window over Electron IPC; plain browsers ignore it). `requestId` rides
  *  along for question bubbles so the pet panel can answer approvals. */
@@ -226,11 +249,15 @@ export class GuiSessionStore {
 	 *  between mutations, so the snapshot is rebuilt only inside {@link apply}. */
 	#snapshot: GuiSessionState;
 	/** Frame-coalesced streaming envelopes (dsh Notifier.markFrameDirty parity):
-	 *  daemon pushes per-message_update, but React only needs one render per
-	 *  animation frame — the burst collapses to a single snapshot rebuild +
-	 *  emit. Non-streaming envelopes (approval-request, recap) bypass this. */
+	 *  daemon pushes per-message_update, but React only needs a bounded number
+	 *  of renders per second — the burst collapses to a single snapshot rebuild
+	 *  + emit per window. Non-streaming envelopes (approval-request, recap)
+	 *  bypass the queue and apply synchronously. */
 	#pending: StreamEvent[] = [];
-	#frameScheduled = false;
+	/** A flush is queued on the next microtask (leading edge of a burst). */
+	#flushQueued = false;
+	/** Coalescing window handle: while armed, further events accumulate. */
+	#flushWindow: ReturnType<typeof setTimeout> | null = null;
 	/** Journal watermark (M1.4): last contiguously applied event seq.
 	 *  Seeded from the snapshot cursor (the daemon stamps it with the
 	 *  journal tail); advances only when watermark+1 is applied. */
@@ -629,8 +656,7 @@ export class GuiSessionStore {
 		// store has no consumer for their payloads; drop them outright.
 		if (event.kind === "global-event") return;
 		if (event.kind === "approval-request" || event.kind === "recap") {
-			this.#applyNow(event);
-			this.#emit();
+			if (this.#applyNow(event)) this.#commit();
 			return;
 		}
 		const payload = event.payload as AgentEvent | undefined;
@@ -738,23 +764,47 @@ export class GuiSessionStore {
 		}
 	}
 
-	/** Frame-coalesce: collapse the pending burst to one flush per frame. */
+	/** Schedule the next render.
+	 *
+	 *  Two-speed: the FIRST event of a burst flushes on the next microtask
+	 *  (identical latency to the old per-frame flush — a token still lands in
+	 *  the same tick), then a {@link FLUSH_COALESCE_MS} window opens during
+	 *  which further events only accumulate. The window's timer flushes them
+	 *  and re-arms, so a streaming turn renders at ~10 Hz instead of once per
+	 *  rAF (~60 Hz). Every emit re-renders the whole shell, so the old rate
+	 *  was the single biggest cost of a live turn. */
 	#scheduleFlush(): void {
-		if (this.#frameScheduled) return;
-		this.#frameScheduled = true;
-		const raf = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
-		if (typeof raf === "function") {
-			raf(() => this.#flush());
-		} else {
-			queueMicrotask(() => this.#flush());
-		}
+		// Tracked for the test settle helper: the store owes a render until
+		// #flush drains it.
+		flushPendingStores.add(this);
+		if (this.#flushQueued || this.#flushWindow !== null) return;
+		this.#flushQueued = true;
+		queueMicrotask(() => {
+			this.#flushQueued = false;
+			this.#flush();
+			this.#openFlushWindow();
+		});
+	}
+
+	/** Start the coalescing window. Work arriving while it is armed is left in
+	 *  {@link #pending} for the timer instead of scheduling another microtask. */
+	#openFlushWindow(): void {
+		if (this.#flushWindow !== null) return;
+		this.#flushWindow = setTimeout(() => {
+			this.#flushWindow = null;
+			if (this.#pending.length > 0) this.#scheduleFlush();
+			else flushPendingStores.delete(this);
+		}, FLUSH_COALESCE_MS);
+		this.#flushWindow.unref?.();
 	}
 
 	#flush(): void {
-		this.#frameScheduled = false;
 		const batch = this.#pending;
 		this.#pending = [];
-		if (batch.length === 0) return;
+		if (batch.length === 0) {
+			if (!this.#flushQueued && this.#flushWindow === null) flushPendingStores.delete(this);
+			return;
+		}
 		// Coalesce consecutive message_update envelopes of the same assistant
 		// message: only the latest cumulative payload matters (wire messages
 		// carry full state, no deltas).
@@ -773,7 +823,16 @@ export class GuiSessionStore {
 				collapsed.push(ev);
 			}
 		}
-		for (const ev of collapsed) this.#applyNow(ev);
+		let changed = false;
+		for (const ev of collapsed) changed = this.#applyNow(ev) || changed;
+		// Nothing observable changed (every frame was another session's
+		// subagent traffic): skip the rebuild entirely — a new snapshot object
+		// would re-render every subscriber for no reason.
+		if (changed) this.#commit();
+	}
+
+	/** Rebuild the snapshot and notify subscribers. One call per batch. */
+	#commit(): void {
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
 	}
@@ -817,7 +876,14 @@ export class GuiSessionStore {
 	}
 
 	/** Core envelope handling: state mutations + materialized view fold. */
-	#applyNow(event: StreamEvent): void {
+	/** Fold one envelope into the store's state. PURE mutation: never rebuilds
+	 *  the snapshot and never emits — the caller owns both, so a coalesced
+	 *  batch costs one render instead of one per event.
+	 *
+	 *  Returns true when something observable changed, so the caller can skip
+	 *  the rebuild + emit entirely for frames that only carried foreign state
+	 *  (another session's subagent progress is the common case). */
+	#applyNow(event: StreamEvent): boolean {
 		// Authoritative state frames (daemon rebroadcast after revert/abort
 		// and the like): the event-driven #working flag can go stale when a
 		// turn is aborted without a turn_end — apply isStreaming whenever a
@@ -829,41 +895,35 @@ export class GuiSessionStore {
 				this.#working = p.isStreaming;
 				if (!p.isStreaming) this.#streaming = false;
 			}
-			this.#snapshot = this.#buildSnapshot();
-			this.#emit();
-			return;
+			return true;
 		}
 		// Pending tool approvals — the GUI answers via tool.approve / tool.deny.
 		if (event.kind === "approval-request") {
 			const p = event.payload as { requestId?: unknown; tool?: unknown; prompt?: unknown };
-			if (typeof p?.requestId === "string") {
-				this.#approvals.set(p.requestId, {
-					requestId: p.requestId,
-					tool: typeof p.tool === "string" ? p.tool : "unknown",
-					prompt: typeof p.prompt === "string" ? p.prompt : undefined,
-				});
-				// The agent is asking the user a question (approval request).
-				dispatchNotification(
-					"question",
-					this.#notifyCtx({ lastMessage: typeof p.tool === "string" ? p.tool : undefined }),
-				);
-				dispatchPetActivity("question", typeof p.tool === "string" ? p.tool : "", p.requestId);
-				this.#snapshot = this.#buildSnapshot();
-				this.#emit();
-			}
-			return;
+			if (typeof p?.requestId !== "string") return false;
+			this.#approvals.set(p.requestId, {
+				requestId: p.requestId,
+				tool: typeof p.tool === "string" ? p.tool : "unknown",
+				prompt: typeof p.prompt === "string" ? p.prompt : undefined,
+			});
+			// The agent is asking the user a question (approval request).
+			dispatchNotification(
+				"question",
+				this.#notifyCtx({ lastMessage: typeof p.tool === "string" ? p.tool : undefined }),
+			);
+			dispatchPetActivity("question", typeof p.tool === "string" ? p.tool : "", p.requestId);
+			return true;
 		}
 		// Non-AgentEvent envelopes: subagent visuals + terminal state.
 		if (event.kind === "stream-end") {
-			this.#emit();
-			return;
+			return true;
 		}
 		if (event.kind === "agent-lifecycle") {
 			const p = event.payload as SubagentLifecyclePayload;
 			// Cross-session guard (client half of the daemon's ownership
 			// routing): a frame tagged for another session must never paint
 			// this session's swarm visuals.
-			if (p.sessionId !== undefined && p.sessionId !== this.#sessionId) return;
+			if (p.sessionId !== undefined && p.sessionId !== this.#sessionId) return false;
 			if (p.status === "completed") {
 				// Completed while the user wasn't looking → keep the marker so
 				// the Agents Center row shows it as unviewed until opened.
@@ -905,41 +965,30 @@ export class GuiSessionStore {
 				// marker so the row can't show "新" while the agent re-runs.
 				unviewedCompletedFor(this.#sessionId).delete(p.id);
 			}
-			this.#snapshot = this.#buildSnapshot();
-			this.#emit();
-			return;
+			return true;
 		}
 		if (event.kind === "agent-progress") {
 			// The stream carries the EventBus wrapper (SubagentProgressPayload);
 			// the AgentProgress lives inside it. AgentsPanel consumes the
 			// wrapper shape, keyed by the subagent id.
 			const wrapper = event.payload as SubagentProgressPayload;
-			if (wrapper.sessionId !== undefined && wrapper.sessionId !== this.#sessionId) return;
-			if (!this.#upsertSubagentProgress(wrapper)) {
-				this.#emit();
-				return;
-			}
-			this.#snapshot = this.#buildSnapshot();
-			this.#emit();
-			return;
+			if (wrapper.sessionId !== undefined && wrapper.sessionId !== this.#sessionId) return false;
+			if (!this.#upsertSubagentProgress(wrapper)) return false;
+			return true;
 		}
 		// Idle recap (daemon recap.enabled parity): the latest summary text, kept
 		// until the next wire activity supersedes it.
 		if (event.kind === "recap") {
 			const p = event.payload as { text?: unknown; at?: unknown };
-			if (typeof p?.text === "string") {
-				this.#recap = { text: p.text, at: typeof p.at === "number" ? p.at : Date.now() };
-				this.#snapshot = this.#buildSnapshot();
-				this.#emit();
-			}
-			return;
+			if (typeof p?.text !== "string") return false;
+			this.#recap = { text: p.text, at: typeof p.at === "number" ? p.at : Date.now() };
+			return true;
 		}
 		const payload = event.payload as AgentEvent | undefined;
 		if (!payload || typeof payload !== "object") {
 			// Non-AgentEvent envelopes (state snapshots from resume etc.) are
 			// already folded into the snapshot by the daemon — nothing to do.
-			this.#emit();
-			return;
+			return true;
 		}
 		const ev = payload as AgentEvent;
 		switch (ev.type) {
@@ -1135,13 +1184,17 @@ export class GuiSessionStore {
 		// Any new wire activity supersedes the idle recap (TUI parity).
 		this.#recap = null;
 		this.#view.apply(ev);
-		// NOTE: snapshot rebuild + emit are owned by the caller — the
-		// synchronous apply() path emits once, the frame flush emits once
-		// per animation frame after folding the whole batch.
+		// The caller owns the snapshot rebuild + emit (see the method doc).
+		return true;
 	}
 
 	dispose(): void {
 		this.#clearGapTimer();
+		if (this.#flushWindow !== null) {
+			clearTimeout(this.#flushWindow);
+			this.#flushWindow = null;
+		}
+		flushPendingStores.delete(this);
 		this.#listeners.clear();
 	}
 

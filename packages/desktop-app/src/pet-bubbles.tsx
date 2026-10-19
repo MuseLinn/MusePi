@@ -124,13 +124,13 @@ interface Bubble {
 function bubbleKindLabel(kind: string): string | null {
 	switch (kind) {
 		case "completed":
-			return t("pet bubble kind completed");
+			return t("settings.petBubbleKindCompleted");
 		case "error":
-			return t("pet bubble kind error");
+			return t("settings.petBubbleKindError");
 		case "question":
-			return t("pet bubble kind question");
+			return t("settings.petBubbleKindQuestion");
 		case "subtask":
-			return t("pet bubble kind subtask");
+			return t("settings.petBubbleKindSubtask");
 		default:
 			return null;
 	}
@@ -190,7 +190,7 @@ export function PetBubbles(): ReactNode {
 								{
 									id: Date.now(),
 									kind: "question",
-									text: t("pet approval · {tool}", { tool: approval.tool }),
+									text: t("settings.petApprovalWithTool", { tool: approval.tool }),
 									requestId: approval.requestId,
 									visible: "",
 								},
@@ -605,7 +605,7 @@ export function PetBubbles(): ReactNode {
 		>
 			<input
 				className="pet-bubble__reply-input"
-				placeholder={t("pet reply placeholder")}
+				placeholder={t("settings.petReplyPlaceholder")}
 				value={replyText}
 				autoFocus
 				onChange={e => setReplyText(e.target.value)}
@@ -620,8 +620,8 @@ export function PetBubbles(): ReactNode {
 			<button
 				type="button"
 				className="pet-bubble__reply-send"
-				aria-label={t("send")}
-				title={t("send")}
+				aria-label={t("settings.send2")}
+				title={t("settings.send2")}
 				onClick={() => sendReply(sessionId)}
 				disabled={!replyText.trim() || sending}
 			>
@@ -692,8 +692,8 @@ export function PetBubbles(): ReactNode {
 						<button
 							type="button"
 							className={`pet-bubble__action${replyFor === replyKey ? " pet-bubble__action--active" : ""}`}
-							aria-label={t("pet bubble reply")}
-							title={t("pet bubble reply")}
+							aria-label={t("settings.petBubbleReply")}
+							title={t("settings.petBubbleReply")}
 							onClick={e => {
 								e.stopPropagation();
 								setReplyFor(prev => (prev === replyKey ? null : replyKey));
@@ -706,8 +706,8 @@ export function PetBubbles(): ReactNode {
 							<button
 								type="button"
 								className="pet-bubble__action pet-bubble__action--stop"
-								aria-label={t("pet bubble stop")}
-								title={t("pet bubble stop")}
+								aria-label={t("settings.petBubbleStop")}
+								title={t("settings.petBubbleStop")}
 								onClick={e => {
 									e.stopPropagation();
 									stopCard(c);
@@ -719,8 +719,8 @@ export function PetBubbles(): ReactNode {
 							<button
 								type="button"
 								className="pet-bubble__action pet-bubble__action--primary"
-								aria-label={t("pet bubble confirm")}
-								title={t("pet bubble confirm")}
+								aria-label={t("settings.petBubbleConfirm")}
+								title={t("settings.petBubbleConfirm")}
 								onClick={e => {
 									e.stopPropagation();
 									dismissCard(c);
@@ -770,8 +770,8 @@ export function PetBubbles(): ReactNode {
 							<button
 								type="button"
 								className={`pet-bubble__action${replyFor === replyKey ? " pet-bubble__action--active" : ""}`}
-								aria-label={t("pet bubble reply")}
-								title={t("pet bubble reply")}
+								aria-label={t("settings.petBubbleReply")}
+								title={t("settings.petBubbleReply")}
 								onClick={e => {
 									e.stopPropagation();
 									setReplyFor(prev => (prev === replyKey ? null : replyKey));
@@ -784,8 +784,8 @@ export function PetBubbles(): ReactNode {
 						<button
 							type="button"
 							className="pet-bubble__action pet-bubble__action--primary"
-							aria-label={t("pet bubble confirm")}
-							title={t("pet bubble confirm")}
+							aria-label={t("settings.petBubbleConfirm")}
+							title={t("settings.petBubbleConfirm")}
 							onClick={e => {
 								e.stopPropagation();
 								confirmBubble(b);
@@ -797,8 +797,8 @@ export function PetBubbles(): ReactNode {
 							<button
 								type="button"
 								className="pet-bubble__action pet-bubble__action--deny"
-								aria-label={t("pet bubble deny")}
-								title={t("pet bubble deny")}
+								aria-label={t("settings.petBubbleDeny")}
+								title={t("settings.petBubbleDeny")}
 								onClick={e => {
 									e.stopPropagation();
 									denyBubble(b);
@@ -821,8 +821,8 @@ export function PetBubbles(): ReactNode {
 			<button
 				type="button"
 				className="pet-bubbles__badge"
-				aria-label={t("pet bubbles count", { count: itemCount })}
-				title={t("pet bubbles show")}
+				aria-label={t("settings.petBubblesCount", { count: itemCount })}
+				title={t("settings.petBubblesShow")}
 				onClick={() => switchMode("stacked")}
 			>
 				{itemCount}
@@ -835,8 +835,8 @@ export function PetBubbles(): ReactNode {
 		<button
 			type="button"
 			className="pet-bubbles__fab"
-			aria-label={stackMode === "expanded" ? t("pet bubbles collapse") : t("pet bubbles hide")}
-			title={stackMode === "expanded" ? t("pet bubbles collapse") : t("pet bubbles hide")}
+			aria-label={stackMode === "expanded" ? t("settings.petBubblesCollapse") : t("settings.petBubblesHide")}
+			title={stackMode === "expanded" ? t("settings.petBubblesCollapse") : t("settings.petBubblesHide")}
 			onClick={() => switchMode(stackMode === "expanded" ? "stacked" : "hidden")}
 		>
 			⌄
@@ -860,9 +860,9 @@ export function PetBubbles(): ReactNode {
 					aria-live="polite"
 				>
 					<div className="pet-bubbles__head">
-						<span className="pet-bubbles__count">{t("pet bubbles count", { count: itemCount })}</span>
+						<span className="pet-bubbles__count">{t("settings.petBubblesCount", { count: itemCount })}</span>
 						<button type="button" className="pet-bubbles__clear" onClick={clearAll}>
-							{t("pet bubbles clear all")}
+							{t("settings.petBubblesClearAll")}
 						</button>
 					</div>
 					{items}
@@ -890,7 +890,7 @@ export function PetBubbles(): ReactNode {
 				}
 				aria-live="polite"
 			>
-				{more > 0 && <span className="pet-bubble__more">{t("pet bubbles more", { count: more })}</span>}
+				{more > 0 && <span className="pet-bubble__more">{t("settings.petBubblesMore", { count: more })}</span>}
 				{top}
 			</div>
 			{fab}

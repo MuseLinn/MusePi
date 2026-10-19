@@ -120,22 +120,22 @@ export function CapabilityCenterPage({
 	// enable toggle is the management surface; removal happens on disk.
 
 	const tabs: { id: Tab; label: string; icon: IconName }[] = [
-		{ id: "skills", label: t("skills tab"), icon: "sparkling" },
-		{ id: "plugins", label: t("plugins"), icon: "plug" },
-		{ id: "composition", label: tLoose("bundle title"), icon: "stack" },
-		{ id: "marketplace", label: t("marketplace"), icon: "plug-2" },
+		{ id: "skills", label: t("tools.skillsTab"), icon: "sparkling" },
+		{ id: "plugins", label: t("settings.plugins"), icon: "plug" },
+		{ id: "composition", label: tLoose("tools.bundleTitle"), icon: "stack" },
+		{ id: "marketplace", label: t("guest.marketplace"), icon: "plug-2" },
 	];
 
 	return (
 		<div className="gui-agents-center gui-capability-page">
 			<header className="gui-agents-center-head">
-				<button type="button" className="gui-tool-btn" onClick={onBack} aria-label={t("back")} title={t("back")}>
+				<button type="button" className="gui-tool-btn" onClick={onBack} aria-label={t("settings.back")} title={t("settings.back")}>
 					<Icon name="arrow-left" className="h-4 w-4" />
 				</button>
 				<div className="gui-agents-center-title">
 					<Icon name="star" className="h-4 w-4 text-[var(--color-accent)]" />
-					<h2 className="gui-agents-center-name">{t("capability center")}</h2>
-					<span className="gui-agents-center-count">{t("capability center desc")}</span>
+					<h2 className="gui-agents-center-name">{t("tools.capabilityCenter")}</h2>
+					<span className="gui-agents-center-count">{t("tools.capabilityCenterDesc")}</span>
 				</div>
 			</header>
 			<div className="gui-capability-tabs" role="tablist">
@@ -161,8 +161,8 @@ export function CapabilityCenterPage({
 					<div className="gui-capability-subtabs" role="tablist">
 						{(
 							[
-								["discover", t("discover")],
-								["installed", t("installed {count}", { count: installedCount })],
+								["discover", t("general.discover")],
+								["installed", t("general.installedWithCount", { count: installedCount })],
 							] as [SkillPane, string][]
 						).map(([id, label]) => (
 							<button

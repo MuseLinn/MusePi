@@ -129,14 +129,14 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("browser")}</h2>
-			<p className="gui-settings-page-desc">{t("browser settings description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.browser")}</h2>
+			<p className="gui-settings-page-desc">{t("tools.browserSettingsDescription")}</p>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("browser engine")}</div>
+				<div className="gui-settings-section-title">{t("tools.browserEngine")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("headless browser")}</div>
-						<div className="gui-settings-row-desc">{t("headless browser description")}</div>
+						<div className="gui-settings-row-label">{t("tools.headlessBrowser")}</div>
+						<div className="gui-settings-row-desc">{t("tools.headlessBrowserDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -144,15 +144,15 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						aria-checked={headless === true}
 						className={`gui-toggle${headless === true ? " gui-toggle--on" : ""}`}
 						onClick={() => setBool("browser.headless", !(headless === true))}
-						aria-label={t("headless browser")}
+						aria-label={t("tools.headlessBrowser")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("browser relay")}</div>
-						<div className="gui-settings-row-desc">{t("browser relay description")}</div>
+						<div className="gui-settings-row-label">{t("tools.browserRelay")}</div>
+						<div className="gui-settings-row-desc">{t("tools.browserRelayDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -160,15 +160,15 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						aria-checked={relay === true}
 						className={`gui-toggle${relay === true ? " gui-toggle--on" : ""}`}
 						onClick={() => setBool("browser.relay", !(relay === true))}
-						aria-label={t("browser relay")}
+						aria-label={t("tools.browserRelay")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("managed browser")}</div>
-						<div className="gui-settings-row-desc">{t("managed browser description")}</div>
+						<div className="gui-settings-row-label">{t("tools.managedBrowser")}</div>
+						<div className="gui-settings-row-desc">{t("tools.managedBrowserDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -176,7 +176,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						aria-checked={gui === true}
 						className={`gui-toggle${gui === true ? " gui-toggle--on" : ""}`}
 						onClick={() => setBool("browser.gui", !(gui === true))}
-						aria-label={t("managed browser")}
+						aria-label={t("tools.managedBrowser")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -185,14 +185,14 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				 * 是重试区间),这里填的值只在没有桥时兜底。 */}
 				<div className="gui-settings-row">
 					<div className="min-w-0 flex-1">
-						<div className="gui-settings-row-label">{t("managed browser url")}</div>
-						<div className="gui-settings-row-desc">{t("managed browser url description")}</div>
+						<div className="gui-settings-row-label">{t("tools.managedBrowserUrl")}</div>
+						<div className="gui-settings-row-desc">{t("tools.managedBrowserUrlDescription")}</div>
 						<input
 							className="gui-input mt-1.5"
 							value={guiUrl ?? ""}
 							spellCheck={false}
 							placeholder="http://127.0.0.1:9230"
-							aria-label={t("managed browser url")}
+							aria-label={t("tools.managedBrowserUrl")}
 							onChange={e => setGuiUrl(e.target.value)}
 							onBlur={() => {
 								if (guiUrl === null) return;
@@ -206,14 +206,14 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("browser channel priority")}</div>
-						<div className="gui-settings-row-desc">{t("browser channel priority description")}</div>
+						<div className="gui-settings-row-label">{t("tools.browserChannelPriority")}</div>
+						<div className="gui-settings-row-desc">{t("tools.browserChannelPriorityDescription")}</div>
 					</div>
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("public internet only")}</div>
-						<div className="gui-settings-row-desc">{t("public internet only description")}</div>
+						<div className="gui-settings-row-label">{t("tools.publicInternetOnly")}</div>
+						<div className="gui-settings-row-desc">{t("tools.publicInternetOnlyDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -221,7 +221,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						aria-checked={restrictToPublic === true}
 						className={`gui-toggle${restrictToPublic === true ? " gui-toggle--on" : ""}`}
 						onClick={() => setBool("browser.policy.restrictToPublic", !(restrictToPublic === true))}
-						aria-label={t("public internet only")}
+						aria-label={t("tools.publicInternetOnly")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -230,17 +230,17 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				 * 安装/卸载 + 三层状态(文件写出 / server 在跑 / 扩展握手)。 */}
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("browser relay extension")}</div>
+						<div className="gui-settings-row-label">{t("tools.browserRelayExtension")}</div>
 						<div className="gui-settings-row-desc">
 							{relayStatus === null
 								? "…"
 								: !relayStatus.installed
-									? t("browser relay extension description")
+									? t("tools.browserRelayExtensionDescription")
 									: relayStatus.connected
-										? t("browser relay connected")
+										? t("tools.browserRelayConnected")
 										: relayStatus.serving
-											? t("browser relay serving waiting")
-											: t("browser relay installed not loaded")}
+											? t("tools.browserRelayServingWaiting")
+											: t("tools.browserRelayInstalledNot")}
 						</div>
 					</div>
 					{relayStatus?.installed ? (
@@ -250,11 +250,11 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							disabled={installing}
 							onClick={uninstallRelay}
 						>
-							{installing ? "…" : t("uninstall")}
+							{installing ? "…" : t("tools.uninstall")}
 						</button>
 					) : (
 						<button type="button" className="gui-btn gui-btn--small" disabled={installing} onClick={installRelay}>
-							{installing ? "…" : t("install")}
+							{installing ? "…" : t("tools.install")}
 						</button>
 					)}
 				</div>
@@ -263,11 +263,11 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			 * while the agent operates the desktop (computer.glow) — its own
 			 * section, this tab covers desktop automation too. */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("desktop operation hints")}</div>
+				<div className="gui-settings-section-title">{t("tools.desktopOperationHints")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("computer glow")}</div>
-						<div className="gui-settings-row-desc">{t("computer glow description")}</div>
+						<div className="gui-settings-row-label">{t("tools.computerGlow")}</div>
+						<div className="gui-settings-row-desc">{t("tools.computerGlowDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -275,7 +275,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						aria-checked={glow === true}
 						className={`gui-toggle${glow === true ? " gui-toggle--on" : ""}`}
 						onClick={() => setBool("computer.glow", !(glow === true))}
-						aria-label={t("computer glow")}
+						aria-label={t("tools.computerGlow")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -313,11 +313,11 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{/* Browser data (zcode 浏览器数据 parity): one-time Chrome
 			 * import, cache clear, full clear. */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("browser data")}</div>
+				<div className="gui-settings-section-title">{t("tools.browserData")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("import chrome data")}</div>
-						<div className="gui-settings-row-desc">{t("import chrome data description")}</div>
+						<div className="gui-settings-row-label">{t("tools.importChromeData")}</div>
+						<div className="gui-settings-row-desc">{t("tools.importChromeDataDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -332,14 +332,14 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								.finally(() => setImporting(false));
 						}}
 					>
-						{importing ? "…" : t("import browser data")}
+						{importing ? "…" : t("tools.importBrowserData")}
 					</button>
 				</div>
 				{importMsg && <div className="px-3 pb-2 text-[11.5px] text-[var(--color-text-faint)]">{importMsg}</div>}
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("clear browser cache")}</div>
-						<div className="gui-settings-row-desc">{t("clear browser cache description")}</div>
+						<div className="gui-settings-row-label">{t("tools.clearBrowserCache")}</div>
+						<div className="gui-settings-row-desc">{t("tools.clearBrowserCacheDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -351,13 +351,13 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							void rpc.request("browser.clearCache", {}).finally(() => setClearing(false));
 						}}
 					>
-						{clearing ? "…" : t("clear cache")}
+						{clearing ? "…" : t("tools.clearCache")}
 					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("clear all browser data")}</div>
-						<div className="gui-settings-row-desc">{t("clear all browser data description")}</div>
+						<div className="gui-settings-row-label">{t("tools.clearAllBrowserData")}</div>
+						<div className="gui-settings-row-desc">{t("tools.clearAllBrowserDataDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -369,38 +369,38 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							void rpc.request("browser.clearAll", {}).finally(() => setClearing(false));
 						}}
 					>
-						{clearing ? "…" : t("clear all")}
+						{clearing ? "…" : t("tools.clearAll")}
 					</button>
 				</div>
 			</div>
 			{/* Shared browser status + installed extensions */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("running state")}</div>
+				<div className="gui-settings-section-title">{t("tools.runningState")}</div>
 				{/* 通道一:托管浏览器桥(桌面应用右栏内置浏览器,agent 默认接管) */}
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("managed browser bridge")}</div>
+						<div className="gui-settings-row-label">{t("tools.managedBrowserBridge")}</div>
 						<div className="gui-settings-row-desc">
 							{bridgePort !== null
-								? t("managed browser bridge running · {port}", { port: String(bridgePort) })
-								: t("managed browser bridge idle")}
+								? t("tools.managedBrowserBridgeRunningWithPort", { port: String(bridgePort) })
+								: t("tools.managedBrowserBridgeIdle")}
 							{" · "}
-							{agentTab ? t("managed browser agent tab active") : t("managed browser agent tab idle")}
+							{agentTab ? t("tools.managedBrowserAgentTab") : t("tools.managedBrowserAgentTabIdle")}
 						</div>
 					</div>
-					{bridgePort !== null && <span className="gui-provider-chip">{t("running")}</span>}
+					{bridgePort !== null && <span className="gui-provider-chip">{t("tools.running")}</span>}
 				</div>
 				{/* 通道二:共享无头浏览器(没有托管桥时的兜底) */}
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("shared headless browser")}</div>
+						<div className="gui-settings-row-label">{t("tools.sharedHeadlessBrowser")}</div>
 						<div className="gui-settings-row-desc">
 							{endpoint
-								? t("shared browser running · {tabs} tabs", { tabs: tabCount ?? 0 })
-								: t("shared browser idle")}
+								? t("tools.sharedBrowserRunningTabsWithTabs", { tabs: tabCount ?? 0 })
+								: t("tools.sharedBrowserIdle")}
 						</div>
 					</div>
-					{endpoint && <span className="gui-provider-chip">{t("running")}</span>}
+					{endpoint && <span className="gui-provider-chip">{t("tools.running")}</span>}
 				</div>
 				{profileDir && (
 					<div className="px-3 pb-2">
@@ -409,11 +409,11 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						</div>
 					</div>
 				)}
-				<div className="gui-group-label px-3 pb-1 pt-2">{t("extensions")}</div>
+				<div className="gui-group-label px-3 pb-1 pt-2">{t("tools.extensions")}</div>
 				{extensions === null ? (
 					<div className="px-3 text-[12px] text-[var(--color-text-faint)]">…</div>
 				) : extensions.length === 0 ? (
-					<div className="px-3 pb-2 text-[12px] text-[var(--color-text-faint)]">{t("no extensions")}</div>
+					<div className="px-3 pb-2 text-[12px] text-[var(--color-text-faint)]">{t("tools.noExtensions")}</div>
 				) : (
 					extensions.map(ext => (
 						<div key={ext.id} className="gui-agent-card">

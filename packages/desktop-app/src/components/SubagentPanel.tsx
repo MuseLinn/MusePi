@@ -196,7 +196,7 @@ export function SubagentPanel(props: {
 							onClick={() => void rpc.request("agents.kill", { agentId: shownAgent.id }).catch(() => {})}
 						>
 							<OctagonX size={13} aria-hidden />
-							{t("kill")}
+							{t("settings.kill")}
 						</button>
 					) : null}
 					{shownAgent.status === "parked" || shownAgent.status === "aborted" ? (
@@ -206,15 +206,15 @@ export function SubagentPanel(props: {
 							onClick={() => void rpc.request("agents.revive", { agentId: shownAgent.id }).catch(() => {})}
 						>
 							<RotateCcw size={13} aria-hidden />
-							{t("revive")}
+							{t("settings.revive")}
 						</button>
 					) : null}
 					{shownSessionId && onOpenSession ? (
 						<button
 							type="button"
 							className="ag-iconbtn"
-							title={t("open subagent session")}
-							aria-label={t("open subagent session")}
+							title={t("general.openSubagentSession")}
+							aria-label={t("general.openSubagentSession")}
 							onClick={() => {
 								onClose();
 								if (shownSessionId) onOpenSession?.(shownSessionId);
@@ -223,7 +223,7 @@ export function SubagentPanel(props: {
 							<ExternalLink size={14} aria-hidden />
 						</button>
 					) : null}
-					<button type="button" className="ag-iconbtn" aria-label={t("close")} onClick={onClose}>
+					<button type="button" className="ag-iconbtn" aria-label={t("settings.close")} onClick={onClose}>
 						<X size={15} aria-hidden />
 					</button>
 				</div>
@@ -231,15 +231,15 @@ export function SubagentPanel(props: {
 			{shownProgress ? (
 				<div className="ag-stats">
 					<span className="ag-stat">
-						<span className="ag-stat-label">{t("tok")}</span>
+						<span className="ag-stat-label">{t("settings.tok")}</span>
 						<span className="ag-stat-value">{fmtTokens(shownProgress.tokens)}</span>
 					</span>
 					{ctxPct !== null ? (
 						<span
 							className="ag-stat"
-							title={t("context {count}", { count: fmtTokens(shownProgress.contextTokens ?? 0) })}
+							title={t("agents.contextWithCount", { count: fmtTokens(shownProgress.contextTokens ?? 0) })}
 						>
-							<span className="ag-stat-label">{t("ctx")}</span>
+							<span className="ag-stat-label">{t("settings.ctx")}</span>
 							<span className="ag-gauge">
 								<span
 									className={ctxPct > 80 ? "ag-gauge-fill ag-gauge-fill--warn" : "ag-gauge-fill"}
@@ -249,11 +249,11 @@ export function SubagentPanel(props: {
 						</span>
 					) : null}
 					<span className="ag-stat">
-						<span className="ag-stat-label">{t("cost")}</span>
+						<span className="ag-stat-label">{t("settings.cost")}</span>
 						<span className="ag-stat-value">{fmtCost(shownProgress.cost)}</span>
 					</span>
 					<span className="ag-stat">
-						<span className="ag-stat-label">{t("tools")}</span>
+						<span className="ag-stat-label">{t("settings.tools")}</span>
 						<span className="ag-stat-value">{shownProgress.toolCount}</span>
 					</span>
 					<span className="ag-stat">
@@ -280,12 +280,12 @@ export function SubagentPanel(props: {
 						/>
 						{fetchError !== null ? (
 							<div className="ag-fetch-error" role="alert">
-								{t("transcript unavailable: {reason}", { reason: fetchError })}
+								{t("agents.transcriptUnavailableWithReason", { reason: fetchError })}
 							</div>
 						) : null}
 					</>
 				) : (
-					<div className="ag-empty">{t("no transcript available")}</div>
+					<div className="ag-empty">{t("agents.noTranscriptAvailable")}</div>
 				)}
 			</div>
 			<form
@@ -298,10 +298,10 @@ export function SubagentPanel(props: {
 				<input
 					className="ag-chat-input"
 					value={draft}
-					placeholder={t("message {name}…", { name: shownAgent.displayName })}
+					placeholder={t("agents.messageWithName", { name: shownAgent.displayName })}
 					onChange={e => setDraft(e.target.value)}
 				/>
-				<button type="submit" className="ag-iconbtn" aria-label={t("send")} disabled={draft.trim().length === 0}>
+				<button type="submit" className="ag-iconbtn" aria-label={t("settings.send2")} disabled={draft.trim().length === 0}>
 					<SendHorizontal size={15} aria-hidden />
 				</button>
 			</form>

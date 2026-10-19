@@ -53,14 +53,14 @@ export function TaskModal({
 		>
 			<div className="gui-task-modal-card" onClick={e => e.stopPropagation()}>
 				<div className="gui-task-modal-head">
-					<span className="gui-task-modal-title">{t("widget task modal")}</span>
-					<button type="button" className="gui-tool-btn" onClick={close} aria-label={t("close")}>
+					<span className="gui-task-modal-title">{t("settings.widgetTaskModal")}</span>
+					<button type="button" className="gui-tool-btn" onClick={close} aria-label={t("settings.close")}>
 						<Icon name="close" className="h-4 w-4" />
 					</button>
 				</div>
 				<div className="gui-task-modal-body">
 					<div className="gui-task-row">
-						<span className="gui-task-label">{t("widget task status")}</span>
+						<span className="gui-task-label">{t("settings.widgetTaskStatus")}</span>
 						<button
 							type="button"
 							className={`gui-toggle${task.enabled ? " gui-toggle--on" : ""}`}
@@ -72,36 +72,36 @@ export function TaskModal({
 						</button>
 					</div>
 					<div className="gui-task-row">
-						<span className="gui-task-label">{t("widget task schedule")}</span>
+						<span className="gui-task-label">{t("settings.widgetTaskSchedule")}</span>
 						<GuiSelect
 							className="gui-settings-select"
 							value={task.schedule ?? "manual"}
 							onChange={v => update({ task: { ...task, schedule: v as WidgetTask["schedule"] } })}
 							options={[
-								{ value: "manual", label: t("widget task manual") },
-								{ value: "hourly", label: t("widget task hourly") },
-								{ value: "daily", label: t("widget task daily") },
+								{ value: "manual", label: t("settings.widgetTaskManual") },
+								{ value: "hourly", label: t("settings.widgetTaskHourly") },
+								{ value: "daily", label: t("settings.widgetTaskDaily") },
 							]}
 						/>
 					</div>
 					<div className="gui-task-field">
-						<span className="gui-task-label">{t("widget task name")}</span>
+						<span className="gui-task-label">{t("settings.widgetTaskName")}</span>
 						<input className="gui-task-input" value={task.name} readOnly />
 					</div>
 					<div className="gui-task-field">
-						<span className="gui-task-label">{t("widget task desc")}</span>
+						<span className="gui-task-label">{t("settings.widgetTaskDesc")}</span>
 						<textarea className="gui-task-input gui-task-textarea" value={task.desc} readOnly rows={2} />
 					</div>
 					<div className="gui-task-field">
-						<span className="gui-task-label">{t("widget task runs")}</span>
+						<span className="gui-task-label">{t("settings.widgetTaskRuns")}</span>
 						<div className="gui-task-runs">
-							{task.runs.length === 0 && <span className="gui-task-runs-empty">{t("widget task no runs")}</span>}
+							{task.runs.length === 0 && <span className="gui-task-runs-empty">{t("settings.widgetTaskNoRuns")}</span>}
 							{task.runs.map((run, i) => (
 								<div key={`${run.time}-${i}`} className="gui-task-run">
 									<span className="gui-task-run-time">{run.time}</span>
 									<span className={`gui-task-run-dot${run.success ? "" : " gui-task-run-dot--fail"}`} />
 									<span className="gui-task-run-status">
-										{run.success ? t("widget task success") : t("widget task failed")}
+										{run.success ? t("settings.widgetTaskSuccess") : t("settings.widgetTaskFailed")}
 									</span>
 								</div>
 							))}

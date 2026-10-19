@@ -134,27 +134,27 @@ export function seedBoards(): BoardData[] {
 	// 每日财经：左侧时钟 + 市场温度竖排，右侧全高超级图表，
 	// 底行热力墙 + 指数磁带并排。
 	const f: BoardWidget[] = [];
-	f.push(at(f, "clock", t("widget clock"), 0, 0, 356, 296));
-	f.push(at(f, "kline", t("widget kline"), 368, 0, 724, 604));
-	f.push(at(f, "gauge", t("widget gauge"), 0, 308, 356, 296));
-	f.push(at(f, "heatwall", t("widget heatwall"), 0, 616, 540, 428));
-	f.push(at(f, "indextape", t("widget indextape"), 552, 616, 540, 428));
+	f.push(at(f, "clock", t("settings.widgetClock"), 0, 0, 356, 296));
+	f.push(at(f, "kline", t("settings.widgetKline"), 368, 0, 724, 604));
+	f.push(at(f, "gauge", t("settings.widgetGauge"), 0, 308, 356, 296));
+	f.push(at(f, "heatwall", t("settings.widgetHeatwall"), 0, 616, 540, 428));
+	f.push(at(f, "indextape", t("settings.widgetIndextape"), 552, 616, 540, 428));
 	// Hello World：fx/盯盘并排，全宽黑胶播放器，视频 + 历史并排，
 	// todo/pomodoro/clock 竖排列，底部工具行。
 	const h: BoardWidget[] = [];
-	h.push(at(h, "fx", t("widget fx"), 0, 0, 540, 340));
-	h.push(at(h, "stocks", t("widget stocks"), 552, 0, 540, 340));
-	h.push(at(h, "music", t("widget music"), 0, 352, 1092, 604));
-	h.push(at(h, "video", t("widget video"), 0, 968, 632, 560));
-	h.push(at(h, "history", t("widget history"), 644, 968, 436, 560));
-	h.push(at(h, "todo", t("widget todo"), 0, 1540, 356, 516));
-	h.push(at(h, "pomodoro", t("widget pomodoro"), 368, 1540, 356, 516));
-	h.push(at(h, "clock", t("widget clock"), 736, 1540, 356, 516));
-	h.push(at(h, "slider", t("widget slider"), 0, 2068, 540, 252));
-	h.push(at(h, "calc", t("widget calc"), 552, 2068, 540, 252));
-	h.push(at(h, "metric", t("widget metric"), 0, 2332, 356, 252));
-	h.push(at(h, "ticker", t("widget ticker"), 368, 2332, 356, 252));
-	h.push(at(h, "gallery", t("widget gallery"), 736, 2332, 356, 252));
+	h.push(at(h, "fx", t("settings.widgetFx"), 0, 0, 540, 340));
+	h.push(at(h, "stocks", t("settings.widgetStocks"), 552, 0, 540, 340));
+	h.push(at(h, "music", t("settings.widgetMusic"), 0, 352, 1092, 604));
+	h.push(at(h, "video", t("settings.widgetVideo"), 0, 968, 632, 560));
+	h.push(at(h, "history", t("settings.widgetHistory"), 644, 968, 436, 560));
+	h.push(at(h, "todo", t("settings.widgetTodo"), 0, 1540, 356, 516));
+	h.push(at(h, "pomodoro", t("settings.widgetPomodoro"), 368, 1540, 356, 516));
+	h.push(at(h, "clock", t("settings.widgetClock"), 736, 1540, 356, 516));
+	h.push(at(h, "slider", t("settings.widgetSlider"), 0, 2068, 540, 252));
+	h.push(at(h, "calc", t("settings.widgetCalc"), 552, 2068, 540, 252));
+	h.push(at(h, "metric", t("settings.widgetMetric"), 0, 2332, 356, 252));
+	h.push(at(h, "ticker", t("settings.widgetTicker"), 368, 2332, 356, 252));
+	h.push(at(h, "gallery", t("settings.widgetGallery"), 736, 2332, 356, 252));
 	// 汇率卡带一个可运行任务（运行按钮 + 查看任务弹窗）。
 	const tk = h.find(w => w.type === "ticker");
 	if (tk) {
@@ -188,8 +188,8 @@ export function seedBoards(): BoardData[] {
 		vd.data.subtitle = "BILIBILI · 年番";
 	}
 	return [
-		{ id: "finance", title: t("board finance title"), widgets: f, builtin: true },
-		{ id: "hello", title: t("board hello title"), widgets: h, builtin: true },
+		{ id: "finance", title: t("settings.boardFinanceTitle"), widgets: f, builtin: true },
+		{ id: "hello", title: t("settings.boardHelloTitle"), widgets: h, builtin: true },
 	];
 }
 

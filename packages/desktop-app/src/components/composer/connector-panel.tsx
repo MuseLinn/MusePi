@@ -112,15 +112,15 @@ export function ConnectorChip({
 				className={`gui-connector-chip${open ? " gui-connector-chip--open" : ""}${
 					narrowed ? " gui-connector-chip--narrowed" : ""
 				}`}
-				title={t("connectors chip title")}
+				title={t("tools.connectorsChipTitle")}
 				aria-expanded={open}
 				onClick={onToggle}
 			>
 				<Icon name="plug" className="h-3 w-3" />
 				<span className="gui-connector-chip-label">
 					{narrowed
-						? t("connectors chip narrowed", { chosen: String(chosenCount), total: String(serverCount) })
-						: t("connectors chip")}
+						? t("tools.connectorsChipNarrowed", { chosen: String(chosenCount), total: String(serverCount) })
+						: t("tools.connectorsChip")}
 				</span>
 			</button>
 			{menu}
@@ -147,13 +147,13 @@ export function ConnectorPanel({
 	onUseAll(): void;
 }): ReactNode {
 	if (loadFailed && snapshot === null) {
-		return <div className="gui-connector-panel gui-connector-panel--empty">{t("connectors load failed")}</div>;
+		return <div className="gui-connector-panel gui-connector-panel--empty">{t("tools.connectorsLoadFailed")}</div>;
 	}
 	if (snapshot === null) {
-		return <div className="gui-connector-panel gui-connector-panel--empty">{t("connectors loading")}</div>;
+		return <div className="gui-connector-panel gui-connector-panel--empty">{t("tools.connectorsLoading")}</div>;
 	}
 	if (snapshot.servers.length === 0) {
-		return <div className="gui-connector-panel gui-connector-panel--empty">{t("connectors none")}</div>;
+		return <div className="gui-connector-panel gui-connector-panel--empty">{t("tools.connectorsNone")}</div>;
 	}
 
 	const allChecked = snapshot.servers.every(server => isChecked(snapshot, server.name));
@@ -161,18 +161,18 @@ export function ConnectorPanel({
 	const checkedNames = () => snapshot.servers.filter(server => isChecked(snapshot, server.name)).map(s => s.name);
 
 	return (
-		<div className="gui-connector-panel" role="group" aria-label={t("connectors panel title")}>
+		<div className="gui-connector-panel" role="group" aria-label={t("tools.connectorsPanelTitle")}>
 			<div className="gui-connector-panel-head">
 				<button
 					type="button"
 					className="gui-connector-link"
 					onClick={() => (allChecked ? onSelectAll() : onToggleServers(checkedNames()))}
 				>
-					{allChecked ? t("connectors clear all") : t("connectors select all")}
+					{allChecked ? t("tools.connectorsClearAll") : t("tools.connectorsSelectAll")}
 				</button>
 				{snapshot.selected !== null && (
 					<button type="button" className="gui-connector-link" onClick={onUseAll}>
-						{t("connectors use all")}
+						{t("tools.connectorsUseAll")}
 					</button>
 				)}
 			</div>

@@ -69,7 +69,7 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 		setReply("");
 		setError(null);
 		try {
-			const body = `${q}\n\n${t("selection context")}:\n${wrapSelectionForChat(popRef.current?.text ?? "")}`;
+			const body = `${q}\n\n${t("settings.selectionContext")}:\n${wrapSelectionForChat(popRef.current?.text ?? "")}`;
 			const res = await rpc.request<{ replyText?: string }>("session.ephemeralAsk", {
 				sessionId,
 				promptText: body,
@@ -101,13 +101,13 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 		<div
 			className={`gui-ask-pop${enteredCls ? " gui-ask-pop--entered" : ""}`}
 			role="dialog"
-			aria-label={t("ask about selection")}
+			aria-label={t("settings.askAboutSelection")}
 			style={{ left, top }}
 		>
 			<div className="gui-ask-pop-head">
 				<Icon name="sparkling" className="h-3.5 w-3.5" />
-				<span className="gui-ask-pop-title">{t("ask about selection")}</span>
-				<button type="button" className="gui-ask-pop-x" aria-label={t("close")} title={t("close")} onClick={close}>
+				<span className="gui-ask-pop-title">{t("settings.askAboutSelection")}</span>
+				<button type="button" className="gui-ask-pop-x" aria-label={t("settings.close")} title={t("settings.close")} onClick={close}>
 					<Icon name="close" className="h-3 w-3" />
 				</button>
 			</div>
@@ -128,19 +128,19 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 						<button
 							type="button"
 							className="gui-ask-pop-btn"
-							title={t("copy")}
+							title={t("settings.copy")}
 							onClick={() => {
 								tapFeedback();
 								void navigator.clipboard.writeText(reply);
 							}}
 						>
 							<Icon name="file-copy-2" className="h-3.5 w-3.5" />
-							<span>{t("copy")}</span>
+							<span>{t("settings.copy")}</span>
 						</button>
 						<button
 							type="button"
 							className="gui-ask-pop-btn"
-							title={t("ask another question")}
+							title={t("settings.askAnotherQuestion")}
 							onClick={() => {
 								setPhase("input");
 								setReply("");
@@ -149,7 +149,7 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 							}}
 						>
 							<Icon name="chat-1" className="h-3.5 w-3.5" />
-							<span>{t("ask another question")}</span>
+							<span>{t("settings.askAnotherQuestion")}</span>
 						</button>
 					</div>
 				</div>
@@ -160,7 +160,7 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 						className="gui-ask-pop-input"
 						rows={2}
 						value={question}
-						placeholder={t("ask about selection placeholder")}
+						placeholder={t("settings.askAboutSelectionPlaceholder")}
 						onChange={e => setQuestion(e.target.value)}
 						onKeyDown={onKeyDown}
 						disabled={phase === "asking"}
@@ -168,7 +168,7 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 					<button
 						type="button"
 						className="gui-ask-pop-send"
-						title={t("ask")}
+						title={t("settings.ask")}
 						disabled={phase === "asking" || !question.trim()}
 						onClick={() => void ask()}
 					>

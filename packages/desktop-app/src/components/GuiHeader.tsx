@@ -209,7 +209,7 @@ export function GuiHeader({
 	// Managed-browser bridge state (batch C): port / tab count / last error
 	// for the instance-menu diagnostics row.
 	const browserHost = useSyncExternalStore(subscribeHost, getHostState);
-	const statusText = snap?.working ? (snap.streaming ? t("replying") : t("working")) : t("idle");
+	const statusText = snap?.working ? (snap.streaming ? t("settings.replying") : t("settings.working")) : t("settings.idle");
 	// Traffic lights are macOS-only. Windows/Linux get a native
 	// titleBarOverlay (top-right ~138px) so the right cluster needs
 	// clearance; macOS keeps the 172px left clearance for the
@@ -218,7 +218,7 @@ export function GuiHeader({
 	const isLinux = shellPlatform() === "linux";
 	const hasOverlay = isWin || isLinux;
 	const [ceiling, setCeiling] = useState<string | null>(null);
-	const projectLabel = snap?.state?.cwd ? projectName(snap.state.cwd) : store ? t("session") : t("local");
+	const projectLabel = snap?.state?.cwd ? projectName(snap.state.cwd) : store ? t("settings.session2") : t("general.local");
 	// Trigger refs for the portaled popups (global z-order above the chat
 	// surface — the header itself is z-1 and would trap in-flow menus).
 	const projBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -580,7 +580,7 @@ export function GuiHeader({
 	}, [rpc, store?.cwd]);
 
 	const sessionTitle = ((): string => {
-		if (!store) return t("MusePi");
+		if (!store) return t("settings.musepi");
 		const first = snap?.entries.find(
 			e => e.type === "message" && (e as { message?: { role?: string } }).message?.role === "user",
 		);
@@ -598,7 +598,7 @@ export function GuiHeader({
 						: "";
 			if (text) return text.slice(0, 40);
 		}
-		return snap?.state?.cwd?.split("/").pop() ?? t("session");
+		return snap?.state?.cwd?.split("/").pop() ?? t("settings.session2");
 	})();
 	// A renamed title comes from the session tree, not the message stream.
 	const title = sessionLabel?.trim() ? sessionLabel : sessionTitle;
@@ -607,7 +607,7 @@ export function GuiHeader({
 	const renameActiveSession = (): void => {
 		if (!store) return;
 		const current = title;
-		void prompt({ title: t("rename session"), defaultValue: current }).then(next => {
+		void prompt({ title: t("settings.renameSession"), defaultValue: current }).then(next => {
 			if (!next || next === current) return;
 			onRenameSession(store.sessionId, next);
 		});
@@ -621,9 +621,9 @@ export function GuiHeader({
 		// Selection rule (advisor cards, hook notices, collab/skill prompts, and
 		// the model-facing-XML trap) lives in lib/session-markdown.ts.
 		const markdown = buildSessionMarkdown(title, snap.entries, {
-			user: t("user"),
-			assistant: t("assistant"),
-			advisor: t("advisor"),
+			user: t("general.user"),
+			assistant: t("general.assistant"),
+			advisor: t("general.advisor"),
 		});
 		const blob = new Blob([markdown], { type: "text/markdown" });
 		const a = document.createElement("a");
@@ -648,8 +648,8 @@ export function GuiHeader({
 		// the archive is a local list edit, so the reverse is free (no daemon
 		// round trip, no confirm dialog).
 		pushActionToast({
-			message: t("session archived"),
-			actionLabel: t("undo"),
+			message: t("general.sessionArchived"),
+			actionLabel: t("general.undo"),
 			onAction: () => unarchiveSession(archivedId),
 		});
 		onNewSession();
@@ -679,9 +679,9 @@ export function GuiHeader({
 		if (!rpc || !store) return;
 		const suggested = `musepi/session-${Date.now().toString(36)}`;
 		const branch = await prompt({
-			title: t("move to new worktree"),
+			title: t("general.moveNewWorktree"),
 			defaultValue: suggested,
-			placeholder: t("branch name"),
+			placeholder: t("general.branchName"),
 		});
 		if (!branch) return;
 		const created = await rpc
@@ -693,7 +693,7 @@ export function GuiHeader({
 				error: err instanceof Error ? err.message : String(err),
 			}));
 		if (!created?.path) {
-			toast(created?.error || t("worktree failed"));
+			toast(created?.error || t("general.worktreeFailed"));
 			return;
 		}
 		const moved = await rpc
@@ -703,10 +703,10 @@ export function GuiHeader({
 			})
 			.catch(() => null);
 		if (!moved?.consumed) {
-			toast(t("worktree failed"));
+			toast(t("general.worktreeFailed"));
 			return;
 		}
-		toast(t("moved to worktree"));
+		toast(t("general.movedWorktree"));
 	};
 
 	// Outside click / Escape closes every open header popup (base-ui
@@ -771,8 +771,8 @@ export function GuiHeader({
 				<button
 					type="button"
 					className="gui-sidebar-toggle"
-					title={sideCollapsed ? t("open sidebar") : t("close sidebar")}
-					aria-label={sideCollapsed ? t("open sidebar") : t("close sidebar")}
+					title={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
+					aria-label={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
 					onClick={onToggleSidebar}
 				>
 					<StateIcon on={sideCollapsed} pair={["layout-right", "layout-left"]} className="h-4 w-4" />
@@ -784,17 +784,17 @@ export function GuiHeader({
 						className={`gui-openin-main${devRunning ? " gui-openin-main--running" : ""}`}
 						title={
 							devRunning || devStopping
-								? t("stop dev server")
+								? t("general.stopDevServer")
 								: devCommand
-									? t("run dev server")
-									: t("auto discover")
+									? t("general.runDevServer")
+									: t("general.autoDiscover")
 						}
 						aria-label={
 							devRunning || devStopping
-								? t("stop dev server")
+								? t("general.stopDevServer")
 								: devCommand
-									? t("run dev server")
-									: t("auto discover")
+									? t("general.runDevServer")
+									: t("general.autoDiscover")
 						}
 						onClick={runDevServer}
 					>
@@ -815,8 +815,8 @@ export function GuiHeader({
 							type="button"
 							data-header-trigger="proj-preview"
 							className="gui-openin-more"
-							title={t("open preview")}
-							aria-label={t("open preview")}
+							title={t("general.openPreview")}
+							aria-label={t("general.openPreview")}
 							onClick={() => void openExternalUrl(devPreviewUrl)}
 						>
 							<Icon name="global" className="h-3.5 w-3.5" />
@@ -827,15 +827,15 @@ export function GuiHeader({
 						ref={projBtnRef}
 						data-header-trigger="proj"
 						className="gui-openin-more"
-						title={t("project actions")}
-						aria-label={t("project actions")}
+						title={t("general.projectActions")}
+						aria-label={t("general.projectActions")}
 						onClick={() => setProjOpen(v => !v)}
 					>
 						<Icon name="arrow-down-s" className="h-3 w-3" />
 					</button>
 					{noDevFlash && (
 						<div className="gui-openin-menu gui-header-no-dev" role="status">
-							{t("no dev script")}
+							{t("general.noDevScript")}
 						</div>
 					)}
 					<MenuPopup
@@ -872,7 +872,7 @@ export function GuiHeader({
 							}}
 						>
 							<Icon name="add" className="h-3.5 w-3.5" />
-							<span>{t("add new action")}</span>
+							<span>{t("general.addNewAction")}</span>
 						</button>
 						<div className="my-1 border-t border-[var(--border)]" />
 						<button
@@ -892,10 +892,10 @@ export function GuiHeader({
 							) : (
 								<Icon name="scan-2" className="h-3.5 w-3.5" />
 							)}
-							<span>{t("auto discover")}</span>
+							<span>{t("general.autoDiscover")}</span>
 							{!devCommand && (
 								<span className="ml-auto pl-3 text-[11px] text-[var(--color-text-faint)]">
-									{t("no dev script")}
+									{t("general.noDevScript")}
 								</span>
 							)}
 						</button>
@@ -915,8 +915,8 @@ export function GuiHeader({
 						ref={switcherBtnRef}
 						data-header-trigger="switcher"
 						className="gui-header-title-btn"
-						title={t("recent sessions")}
-						aria-label={t("recent sessions")}
+						title={t("general.recentSessions")}
+						aria-label={t("general.recentSessions")}
 						onClick={() => setSwitcherOpen(v => !v)}
 					>
 						<span className="gui-header-title-row">
@@ -925,34 +925,34 @@ export function GuiHeader({
 								{title}
 							</span>
 							{remote && (
-								<span className="gui-remote-chip" title={t("remote workspace")}>
+								<span className="gui-remote-chip" title={t("settings.remoteWorkspace")}>
 									<Icon name="server" className="h-3 w-3" />
-									{t("remote")}
+									{t("settings.remote2")}
 								</span>
 							)}
 							{ceiling && (
 								<span className="hidden text-[12px] text-[var(--color-text-faint)] md:inline">
-									{t("thinking")} · {ceiling}
+									{t("settings.thinking2")} · {ceiling}
 								</span>
 							)}
 						</span>
 						<span className="gui-header-subrow">
 							{gitBranch && (
-								<span className="gui-header-chip" title={`${t("git branch")} · ${gitBranch}`}>
+								<span className="gui-header-chip" title={`${t("general.gitBranch")} · ${gitBranch}`}>
 									<Icon name="git-branch" className="h-2.5 w-2.5" />
 									{gitBranch}
 								</span>
 							)}
 							<span
 								className="min-w-0 truncate text-[10.5px] text-[var(--color-text-faint)]"
-								title={store ? projectLabel : project ? projectName(project) : t("local")}
+								title={store ? projectLabel : project ? projectName(project) : t("general.local")}
 							>
-								{store ? projectLabel : project ? projectName(project) : t("local")}
+								{store ? projectLabel : project ? projectName(project) : t("general.local")}
 							</span>
 							{ctxChip && (
 								<span
 									className="gui-header-chip"
-									title={t("context usage")}
+									title={t("general.contextUsage")}
 								>{`ctx ${Math.round(ctxChip.percent)}%`}</span>
 							)}
 						</span>
@@ -973,12 +973,12 @@ export function GuiHeader({
 							}}
 						>
 							<Icon name="chat-new" className="h-4 w-4 text-[var(--color-text-faint)]" />
-							<span className="truncate text-[13px] text-[var(--color-text)]">{t("new session")}</span>
+							<span className="truncate text-[13px] text-[var(--color-text)]">{t("settings.newSession")}</span>
 						</button>
 						<div className="my-1 border-t border-[var(--border)]" />
 						{sessions.length === 0 ? (
 							<div className="px-3 py-4 text-center text-[12px] text-[var(--color-text-faint)]">
-								{t("select a session")}
+								{t("settings.selectSession")}
 							</div>
 						) : (
 							sessions.map(s => {
@@ -999,7 +999,7 @@ export function GuiHeader({
 											pair={["chat-thread", "chat-1"]}
 											className="h-3.5 w-3.5 flex-shrink-0"
 										/>
-										<span className="min-w-0 flex-1 truncate">{s.label.trim() || t("untitled session")}</span>
+										<span className="min-w-0 flex-1 truncate">{s.label.trim() || t("transcript.untitledSession")}</span>
 										{active && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
 										<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
 											{fmtSessionTime(s.timestamp)}
@@ -1020,8 +1020,8 @@ export function GuiHeader({
 							ref={titleMenuBtnRef}
 							data-header-trigger="titleMenu"
 							className="gui-tool-btn h-6 w-6"
-							title={t("more")}
-							aria-label={t("more")}
+							title={t("tools.more")}
+							aria-label={t("tools.more")}
 							onClick={() => setTitleMenuOpen(v => !v)}
 						>
 							<Icon name="more" className="h-3.5 w-3.5" />
@@ -1042,7 +1042,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="pencil" className="h-3.5 w-3.5" />
-								<span>{t("rename session")}</span>
+								<span>{t("settings.renameSession")}</span>
 							</button>
 							<button
 								type="button"
@@ -1053,7 +1053,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="clipboard" className="h-3.5 w-3.5" />
-								<span>{t("copy session id")}</span>
+								<span>{t("transcript.copySessionId")}</span>
 							</button>
 							<button
 								type="button"
@@ -1064,7 +1064,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="share-2" className="h-3.5 w-3.5" />
-								<span>{t("share")}</span>
+								<span>{t("general.share")}</span>
 							</button>
 							<button
 								type="button"
@@ -1075,7 +1075,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="download" className="h-3.5 w-3.5" />
-								<span>{t("export markdown")}</span>
+								<span>{t("general.exportMarkdown")}</span>
 							</button>
 							<button
 								type="button"
@@ -1086,7 +1086,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="folder-shared" className="h-3.5 w-3.5" />
-								<span>{t("move to new worktree")}</span>
+								<span>{t("general.moveNewWorktree")}</span>
 							</button>
 							<div className="my-1 border-t border-[var(--border)]" />
 							<button
@@ -1098,7 +1098,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="inbox-archive" className="h-3.5 w-3.5" />
-								<span>{t("archive")}</span>
+								<span>{t("settings.archive")}</span>
 							</button>
 							<button
 								type="button"
@@ -1109,7 +1109,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="delete-bin" className="h-3.5 w-3.5" />
-								<span>{t("delete session")}</span>
+								<span>{t("general.deleteSession")}</span>
 							</button>
 						</MenuPopup>
 					</div>
@@ -1126,19 +1126,19 @@ export function GuiHeader({
 						className={`gui-pause-btn gui-tool-btn--p2${paused ? " gui-pause-btn--active" : ""}`}
 						title={
 							pauseDisabled
-								? t("select a session to pause it")
+								? t("tools.selectSessionPause")
 								: paused
 									? pausedAt
-										? `${t("resume all agents")} · ${formatPauseElapsed(pausedAt)}`
-										: t("resume all agents")
-									: t("pause all agents")
+										? `${t("tools.resumeAllAgents")} · ${formatPauseElapsed(pausedAt)}`
+										: t("tools.resumeAllAgents")
+									: t("tools.pauseAllAgents")
 						}
 						aria-label={
 							pauseDisabled
-								? t("select a session to pause it")
+								? t("tools.selectSessionPause")
 								: paused
-									? t("resume all agents")
-									: t("pause all agents")
+									? t("tools.resumeAllAgents")
+									: t("tools.pauseAllAgents")
 						}
 						aria-pressed={paused === true}
 						disabled={pauseDisabled === true}
@@ -1152,8 +1152,8 @@ export function GuiHeader({
 						type="button"
 						data-header-trigger="global-pause"
 						className={`gui-pause-btn gui-global-pause-btn gui-tool-btn--p2${globalPaused ? " gui-pause-btn--active" : ""}`}
-						title={globalPaused ? t("resume all sessions") : t("pause all sessions")}
-						aria-label={globalPaused ? t("resume all sessions") : t("pause all sessions")}
+						title={globalPaused ? t("tools.resumeAllSessions") : t("tools.pauseAllSessions")}
+						aria-label={globalPaused ? t("tools.resumeAllSessions") : t("tools.pauseAllSessions")}
 						aria-pressed={globalPaused === true}
 						onClick={() => onToggleGlobalPause()}
 					>
@@ -1163,8 +1163,8 @@ export function GuiHeader({
 				<button
 					type="button"
 					className={`gui-tool-btn h-7 w-7${terminalOpen ? " gui-tool-btn--active" : ""}`}
-					title={t("toggle terminal")}
-					aria-label={t("toggle terminal")}
+					title={t("general.toggleTerminal")}
+					aria-label={t("general.toggleTerminal")}
 					onClick={onToggleTerminal}
 				>
 					<Icon name="terminal-box" className="h-4 w-4" />
@@ -1173,8 +1173,8 @@ export function GuiHeader({
 					<button
 						type="button"
 						className="gui-tool-btn gui-tool-btn--p2 h-7 w-7"
-						title={t("board")}
-						aria-label={t("board")}
+						title={t("settings.board")}
+						aria-label={t("settings.board")}
 						onClick={onOpenBoard}
 					>
 						<Icon name="layout-column" className="h-4 w-4" />
@@ -1184,8 +1184,8 @@ export function GuiHeader({
 					<button
 						type="button"
 						className={`gui-tool-btn h-7 w-7${rightPanelOpen ? " gui-tool-btn--active" : ""}`}
-						title={t("toggle panel")}
-						aria-label={t("toggle panel")}
+						title={t("settings.togglePanel")}
+						aria-label={t("settings.togglePanel")}
 						onClick={onToggleRightPanel}
 					>
 						<Icon name="equalizer-2" className="h-4 w-4" />
@@ -1195,8 +1195,8 @@ export function GuiHeader({
 				<button
 					type="button"
 					className="gui-tool-btn gui-tool-btn--p2 h-7 w-7"
-					title={t("mini chat")}
-					aria-label={t("mini chat")}
+					title={t("general.miniChat")}
+					aria-label={t("general.miniChat")}
 					onClick={() => void openMiniChat()}
 				>
 					<Icon name="apps-2-ai" className="h-4 w-4" />
@@ -1211,17 +1211,17 @@ export function GuiHeader({
 							className={`gui-openin-main${openInScanning ? " gui-openin-main--scanning" : ""}`}
 							title={
 								selectedOpenInApp
-									? t("open with {app}", {
+									? t("settings.openWithWithApp", {
 											app: openInLabel(selectedOpenInApp),
 										})
-									: t("open actions")
+									: t("general.openActions")
 							}
 							aria-label={
 								selectedOpenInApp
-									? t("open with {app}", {
+									? t("settings.openWithWithApp", {
 											app: openInLabel(selectedOpenInApp),
 										})
-									: t("open actions")
+									: t("general.openActions")
 							}
 							onClick={() => {
 								if (selectedOpenInApp) void openWith(selectedOpenInApp.appName, openInDir);
@@ -1242,8 +1242,8 @@ export function GuiHeader({
 							ref={openInBtnRef}
 							data-header-trigger="openIn"
 							className="gui-openin-more"
-							title={t("choose open app")}
-							aria-label={t("choose open app")}
+							title={t("settings.chooseOpenApp")}
+							aria-label={t("settings.chooseOpenApp")}
 							onClick={() => setOpenInOpen(v => !v)}
 						>
 							<Icon name="arrow-down-s" className="h-3 w-3" />
@@ -1265,7 +1265,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="file-copy" className="h-3.5 w-3.5" />
-								<span>{t("copy path")}</span>
+								<span>{t("settings.copyPath")}</span>
 							</button>
 							<div className="my-1 border-t border-[var(--border)]" />
 							{openInApps.map(app => {
@@ -1292,7 +1292,7 @@ export function GuiHeader({
 								);
 							})}
 							{openInApps.length === 0 && (
-								<div className="px-3 py-2 text-[12px] text-[var(--color-text-faint)]">{t("no apps")}</div>
+								<div className="px-3 py-2 text-[12px] text-[var(--color-text-faint)]">{t("general.noApps")}</div>
 							)}
 							<button
 								type="button"
@@ -1303,7 +1303,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="refresh" className="h-3.5 w-3.5" />
-								<span>{t("refresh apps")}</span>
+								<span>{t("general.refreshApps")}</span>
 							</button>
 							<div className="my-1 border-t border-[var(--border)]" />
 							<button
@@ -1315,7 +1315,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="folder-open" className="h-3.5 w-3.5" />
-								<span>{t("open folder")}</span>
+								<span>{t("settings.openFolder")}</span>
 							</button>
 						</MenuPopup>
 					</div>
@@ -1327,12 +1327,12 @@ export function GuiHeader({
 					data-header-trigger="instance"
 					ref={instanceBtnRef}
 					className="gui-instance-btn gui-instance-btn--recessed"
-					title={t("instance info")}
-					aria-label={t("instance info")}
+					title={t("general.instanceInfo")}
+					aria-label={t("general.instanceInfo")}
 					onClick={() => setInstanceOpen(v => !v)}
 				>
 					<Icon name="stack" className="h-4 w-4" />
-					<span>{t("local")}</span>
+					<span>{t("general.local")}</span>
 					<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 				</button>
 				<MenuPopup
@@ -1351,7 +1351,7 @@ export function GuiHeader({
 						</span>
 						<div className="min-w-0 flex-1">
 							<div className="flex items-center gap-1.5 text-[12.5px] font-medium">
-								{t("local daemon")}
+								{t("settings.localDaemon")}
 								{connected && (
 									<span className="rounded-full bg-[var(--color-success)]/15 px-1.5 text-[10px] font-semibold text-[var(--color-success)]">
 										current
@@ -1361,16 +1361,16 @@ export function GuiHeader({
 							<div className="truncate text-[11px] text-[var(--color-text-faint)]">
 								{connected
 									? daemonLatency !== null
-										? t("connected · {ms} ms", { ms: String(daemonLatency) })
-										: t("connected")
-									: t("disconnected")}
+										? t("general.connectedMsWithMs", { ms: String(daemonLatency) })
+										: t("transcript.connected")
+									: t("settings.disconnected")}
 							</div>
 						</div>
 						<button
 							type="button"
 							className="gui-view-opt !w-auto px-1.5"
-							aria-label={t("refresh")}
-							title={t("refresh")}
+							aria-label={t("settings.refresh")}
+							title={t("settings.refresh")}
 							onClick={refreshMeta}
 						>
 							<Icon
@@ -1386,18 +1386,18 @@ export function GuiHeader({
 							className={`h-2 w-2 shrink-0 rounded-full ${connected ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]"}`}
 						/>
 						<div className="min-w-0 flex-1">
-							<div className="truncate text-[12.5px]">{t("local")}</div>
+							<div className="truncate text-[12.5px]">{t("general.local")}</div>
 							<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">{daemonUrl}</div>
 						</div>
 						<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
 						{latestVersion && daemonVersion && latestVersion !== daemonVersion && (
 							<span
 								className="gui-update-badge"
-								title={t("update available", {
+								title={t("general.updateAvailable", {
 									version: `v${latestVersion}`,
 								})}
 							>
-								{t("update available", { version: `v${latestVersion}` })}
+								{t("general.updateAvailable", { version: `v${latestVersion}` })}
 							</span>
 						)}
 					</div>
@@ -1408,14 +1408,14 @@ export function GuiHeader({
 							className={`h-2 w-2 shrink-0 rounded-full ${browserHost.port ? "bg-[var(--color-success)]" : "bg-[var(--color-text-faint)]"}`}
 						/>
 						<div className="min-w-0 flex-1">
-							<div className="truncate text-[12.5px]">{t("browser bridge")}</div>
+							<div className="truncate text-[12.5px]">{t("tools.browserBridge")}</div>
 							<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">
 								{browserHost.port
-									? t("browser bridge info", {
+									? t("tools.browserBridgeInfo", {
 											port: String(browserHost.port),
 											tabs: String(browserHost.tabs.length),
 										})
-									: t("browser bridge offline")}
+									: t("tools.browserBridgeOffline")}
 							</div>
 						</div>
 					</div>
@@ -1431,7 +1431,7 @@ export function GuiHeader({
 						<>
 							<div className="my-1 border-t border-[var(--border)]" />
 							<div className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-[var(--color-text-faint)]">
-								{t("instances")}
+								{t("settings.instances")}
 							</div>
 							{hosts.map(h => {
 								const active = buildWsUrl(h) === daemonUrl;
@@ -1473,8 +1473,8 @@ export function GuiHeader({
 										<button
 											type="button"
 											className="gui-view-opt !w-auto px-1.5 opacity-0 group-hover:opacity-100"
-											aria-label={t("remove")}
-											title={t("remove")}
+											aria-label={t("general.remove")}
+											title={t("general.remove")}
 											onClick={e => {
 												e.stopPropagation();
 												onRemoveHost(h.id);
@@ -1492,7 +1492,7 @@ export function GuiHeader({
 						<div className="mx-2 mb-1 flex flex-col gap-1.5 rounded-lg bg-[var(--color-surface-sunken)] p-2">
 							<input
 								className="gui-input w-full"
-								placeholder={t("instance label")}
+								placeholder={t("settings.instanceLabel")}
 								value={hostDraft.label}
 								onChange={e => setHostDraft(d => ({ ...d, label: e.target.value }))}
 							/>
@@ -1504,7 +1504,7 @@ export function GuiHeader({
 							/>
 							<input
 								className="gui-input w-full font-mono"
-								placeholder={t("remote token (optional)")}
+								placeholder={t("settings.remoteToken")}
 								type="password"
 								value={hostDraft.token}
 								onChange={e => setHostDraft(d => ({ ...d, token: e.target.value }))}
@@ -1524,17 +1524,17 @@ export function GuiHeader({
 										setAddHostOpen(false);
 									}}
 								>
-									{t("add")}
+									{t("settings.add")}
 								</button>
 								<button type="button" className="gui-btn gui-btn-sm" onClick={() => setAddHostOpen(false)}>
-									{t("cancel")}
+									{t("settings.cancel")}
 								</button>
 							</div>
 						</div>
 					) : (
 						<button type="button" className="gui-view-opt" onClick={() => setAddHostOpen(true)}>
 							<Icon name="add-circle" className="h-3.5 w-3.5" />
-							<span>{t("add instance")}</span>
+							<span>{t("settings.addInstance")}</span>
 						</button>
 					)}
 					<div className="my-1 border-t border-[var(--border)]" />
@@ -1547,7 +1547,7 @@ export function GuiHeader({
 						}}
 					>
 						<Icon name="settings-3" className="h-3.5 w-3.5" />
-						<span>{t("settings")}</span>
+						<span>{t("settings.settings")}</span>
 					</button>
 					<button
 						type="button"
@@ -1558,7 +1558,7 @@ export function GuiHeader({
 						}}
 					>
 						<Icon name="restart" className="h-3.5 w-3.5" />
-						<span>{t("reconnect")}</span>
+						<span>{t("general.reconnect")}</span>
 					</button>
 					<div className="my-1 border-t border-[var(--border)]" />
 					<button
@@ -1571,7 +1571,7 @@ export function GuiHeader({
 						}}
 					>
 						<Icon name="close" className="h-3.5 w-3.5" />
-						<span>{t("quit app")}</span>
+						<span>{t("general.quitApp")}</span>
 					</button>
 				</MenuPopup>
 			</div>

@@ -37,23 +37,23 @@ export function taskScheduleLabel(s: TaskCenterTask["schedule"]): string {
 		case "once":
 			return `${s.date ?? "?"} ${s.time ?? ""}`.trim();
 		case "daily":
-			return `${t("scheduled daily")} ${(s.times?.length ? s.times : s.time ? [s.time] : ["09:00"]).join(" / ")}`;
+			return `${t("settings.scheduledDaily")} ${(s.times?.length ? s.times : s.time ? [s.time] : ["09:00"]).join(" / ")}`;
 		case "weekly": {
 			const names = [
-				t("scheduled sun"),
-				t("scheduled mon"),
-				t("scheduled tue"),
-				t("scheduled wed"),
-				t("scheduled thu"),
-				t("scheduled fri"),
-				t("scheduled sat"),
+				t("settings.scheduledSun"),
+				t("settings.scheduledMon"),
+				t("settings.scheduledTue"),
+				t("settings.scheduledWed"),
+				t("settings.scheduledThu"),
+				t("settings.scheduledFri"),
+				t("settings.scheduledSat"),
 			];
-			return `${t("scheduled weekly")} ${(s.weekdays ?? []).map(d => names[d] ?? d).join("、")} ${s.time ?? ""}`;
+			return `${t("settings.scheduledWeekly")} ${(s.weekdays ?? []).map(d => names[d] ?? d).join("、")} ${s.time ?? ""}`;
 		}
 		case "monthly":
-			return `${t("scheduled monthly")} ${s.dayOfMonth ?? 1} ${s.time ?? ""}`;
+			return `${t("settings.scheduledMonthly")} ${s.dayOfMonth ?? 1} ${s.time ?? ""}`;
 		case "cron":
-			return `${t("scheduled cron")} ${s.cron ?? ""}`;
+			return `${t("settings.scheduledCron")} ${s.cron ?? ""}`;
 		default:
 			return "";
 	}
@@ -62,7 +62,7 @@ export function taskScheduleLabel(s: TaskCenterTask["schedule"]): string {
 /** "M月D日 HH:mm" (zh) via the word list — never a hardcoded locale. */
 function fmtNextRunAt(epoch: number): string {
 	const d = new Date(epoch);
-	return t("scheduled next run at", {
+	return t("settings.scheduledNextRun", {
 		month: d.getMonth() + 1,
 		day: d.getDate(),
 		time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
@@ -194,21 +194,21 @@ export function TaskCalendarView({
 					type="button"
 					className="gui-taskcal-nav"
 					onClick={() => setCursor(new Date(year, month - 1, 1))}
-					aria-label={t("previous month")}
+					aria-label={t("settings.previousMonth")}
 				>
 					‹
 				</button>
-				<span className="gui-taskcal-title">{t("task calendar month", { year, month: month + 1 })}</span>
+				<span className="gui-taskcal-title">{t("settings.taskCalendarMonth", { year, month: month + 1 })}</span>
 				<button
 					type="button"
 					className="gui-taskcal-nav"
 					onClick={() => setCursor(new Date(year, month + 1, 1))}
-					aria-label={t("next month")}
+					aria-label={t("settings.nextMonth")}
 				>
 					›
 				</button>
 			</div>
-			{tasks.length === 0 && <p className="gui-taskcal-empty">{t("task calendar empty")}</p>}
+			{tasks.length === 0 && <p className="gui-taskcal-empty">{t("settings.taskCalendarEmpty")}</p>}
 			<div className="gui-taskcal-grid">
 				{orderedWeekdayKeys().map(k => (
 					<div key={k} className="gui-taskcal-weekday">
@@ -237,9 +237,9 @@ export function TaskBoardView({
 	const paused = tasks.filter(task => !task.enabled);
 	const failed = tasks.filter(task => task.state.lastStatus === "error");
 	const columns: { key: string; title: string; list: TaskCenterTask[]; tone: string }[] = [
-		{ key: "ready", title: t("board ready"), list: ready, tone: "" },
-		{ key: "paused", title: t("board paused"), list: paused, tone: "gui-taskboard-col--muted" },
-		{ key: "failed", title: t("board failed"), list: failed, tone: "gui-taskboard-col--fail" },
+		{ key: "ready", title: t("settings.boardReady"), list: ready, tone: "" },
+		{ key: "paused", title: t("settings.boardPaused"), list: paused, tone: "gui-taskboard-col--muted" },
+		{ key: "failed", title: t("settings.boardFailed"), list: failed, tone: "gui-taskboard-col--fail" },
 	];
 	return (
 		<div className="gui-taskboard">
@@ -251,7 +251,7 @@ export function TaskBoardView({
 					</div>
 					<div className="gui-taskboard-col-body">
 						{col.list.length === 0 ? (
-							<div className="gui-taskboard-empty">{t("board empty")}</div>
+							<div className="gui-taskboard-empty">{t("settings.boardEmpty")}</div>
 						) : (
 							col.list.map(task => (
 								<div key={task.id} className="gui-taskboard-card">
@@ -260,11 +260,11 @@ export function TaskBoardView({
 										className="gui-taskboard-card-main"
 										onClick={() => onSelectTask?.(task.id)}
 									>
-										<span className="gui-taskboard-card-name">{task.name || t("scheduled untitled")}</span>
+										<span className="gui-taskboard-card-name">{task.name || t("settings.scheduledUntitled")}</span>
 										<span className="gui-taskboard-card-sched">{taskScheduleLabel(task.schedule)}</span>
 										{task.state.nextRunAt && task.enabled && (
 											<span className="gui-taskboard-card-next">
-												{t("scheduled next")} {fmtNextRunAt(task.state.nextRunAt)}
+												{t("settings.scheduledNext")} {fmtNextRunAt(task.state.nextRunAt)}
 											</span>
 										)}
 										{col.key === "failed" && task.state.lastError && (
@@ -275,11 +275,11 @@ export function TaskBoardView({
 										<button
 											type="button"
 											onClick={() => onToggle?.(task.id)}
-											title={task.enabled ? t("board pause") : t("board resume")}
+											title={task.enabled ? t("settings.boardPause") : t("settings.boardResume")}
 										>
 											{task.enabled ? "⏸" : "▶"}
 										</button>
-										<button type="button" onClick={() => onDelete?.(task.id)} title={t("board delete")}>
+										<button type="button" onClick={() => onDelete?.(task.id)} title={t("settings.boardDelete")}>
 											🗑
 										</button>
 									</div>

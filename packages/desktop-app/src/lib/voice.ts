@@ -430,10 +430,10 @@ export function cancelActiveDictation(): boolean {
  * 既吓人又没用：已知失败源翻成可行动的一句话，未知原样透出。 */
 function friendlyDictationError(message: string): string {
 	const m = message ?? "";
-	if (/request timeout|RPC timeout/i.test(m)) return t("voice error timeout");
-	if (/empty transcript/i.test(m)) return t("voice error empty");
-	if (/microphone|NotAllowedError|PermissionDenied/i.test(m)) return t("voice error mic");
-	if (/not connected|connection closed|disconnect/i.test(m)) return t("voice error disconnected");
+	if (/request timeout|RPC timeout/i.test(m)) return t("settings.voiceErrorTimeout");
+	if (/empty transcript/i.test(m)) return t("settings.voiceErrorEmpty");
+	if (/microphone|NotAllowedError|PermissionDenied/i.test(m)) return t("settings.voiceErrorMic");
+	if (/not connected|connection closed|disconnect/i.test(m)) return t("settings.voiceErrorDisconnected");
 	return message;
 }
 
@@ -568,8 +568,8 @@ function speakGraph(): { ctx: AudioContext; gain: GainNode } {
 /** Map a synthesis failure onto an actionable, localized one-liner. */
 function friendlySpeakError(raw: string | undefined): string {
 	const message = raw ?? "";
-	if (/request timeout|RPC timeout/i.test(message)) return t("voice error timeout");
-	if (!message) return t("voice error tts synthesis");
+	if (/request timeout|RPC timeout/i.test(message)) return t("settings.voiceErrorTimeout");
+	if (!message) return t("settings.voiceErrorTtsSynthesis");
 	// Worker text is already actionable ("Failed to download model.onnx …");
 	// pass it through so e.g. a missing model names the real failure.
 	return message;
@@ -585,7 +585,7 @@ export function speak(
 	if (rpc) {
 		const segments = splitSpeakableSentences(clean);
 		if (segments.length === 0) {
-			onState?.({ phase: "error", message: t("voice error tts empty") });
+			onState?.({ phase: "error", message: t("settings.voiceErrorTtsEmpty") });
 			return () => {};
 		}
 		let stopped = false;
@@ -759,7 +759,7 @@ export function evaluateSubmitTrigger(
  * (Chinese enders included). Pure, exported for contract tests.
  */
 export function sanitizeForSpeech(text: string, mode: "raw" | "sanitize" | "summarize"): string {
-	const codeBlock = t("speech placeholder code block");
+	const codeBlock = t("settings.speechPlaceholderCodeBlock");
 	let s = text.replace(/```[\s\S]*?(?:```|$)/g, ` ${codeBlock} `).replace(/~~~[\s\S]*?(?:~~~|$)/g, ` ${codeBlock} `);
 	if (mode === "raw") return s.replace(/\s+/g, " ").trim().slice(0, 600);
 	s = s

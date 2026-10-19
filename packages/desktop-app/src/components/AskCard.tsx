@@ -406,7 +406,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					<AskTextarea
 						textareaRef={inputRef}
 						value={custom}
-						placeholder={t("ask input placeholder")}
+						placeholder={t("settings.askInputPlaceholder")}
 						onChange={v => setCustom(v)}
 						onKeyDown={e => {
 							if (shouldSubmitAskEnter(e) && custom.trim()) answerAndClear(custom.trim());
@@ -414,7 +414,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					/>
 					<div className="flex justify-end">
 						<button type="button" className="gui-btn" onClick={() => answerAndClear(null)}>
-							{t("cancel")}
+							{t("settings.cancel")}
 						</button>
 					</div>
 				</>
@@ -427,7 +427,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 						<AskTextarea
 							textareaRef={inputRef}
 							value={custom}
-							placeholder={t("ask input placeholder")}
+							placeholder={t("settings.askInputPlaceholder")}
 							onChange={v => setCustom(v)}
 							onKeyDown={e => {
 								if (shouldSubmitAskEnter(e) && custom.trim()) answerAndClear(custom.trim());
@@ -436,7 +436,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					</div>
 					<div className="flex justify-end gap-2">
 						<button type="button" className="gui-btn" onClick={() => setOtherMode(false)}>
-							{t("back")}
+							{t("settings.back")}
 						</button>
 						<button
 							type="button"
@@ -444,7 +444,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 							disabled={!custom.trim()}
 							onClick={() => answerAndClear(custom.trim())}
 						>
-							{t("confirm")}
+							{t("settings.confirm")}
 						</button>
 					</div>
 				</>
@@ -470,7 +470,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 				</div>
 				<div className="flex justify-end">
 					<button type="button" className="gui-btn" onClick={() => answerAndClear(null)}>
-						{t("cancel")}
+						{t("settings.cancel")}
 					</button>
 				</div>
 			</>
@@ -495,13 +495,13 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 									? answers[i]?.otherMode
 										? answers[i]?.custom.trim()
 										: answers[i]?.selected.join(", ")
-									: t("no answer")}
+									: t("settings.noAnswer")}
 							</span>
 						</button>
 					))}
 					<div className="gui-ask-summary-actions">
 						<button type="button" className="gui-btn" onClick={() => answerAndClear(null)}>
-							{t("cancel")}
+							{t("settings.cancel")}
 						</button>
 						<button
 							type="button"
@@ -509,7 +509,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 							disabled={questions.some((_, i) => !hasAnswer(i))}
 							onClick={submitDialog}
 						>
-							{t("submit")}
+							{t("settings.submit2")}
 						</button>
 					</div>
 				</div>
@@ -531,7 +531,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 		const qIndex = questions.indexOf(q);
 		const optionsCol = (
 			<>
-				{q.multi && <div className="gui-ask-multi-hint">{t("select multiple")}</div>}
+				{q.multi && <div className="gui-ask-multi-hint">{t("settings.selectMultiple")}</div>}
 				<div className={`gui-ask-opts${hasPreview ? " gui-ask-opts--preview" : ""}`}>
 					{q.options.map(opt => {
 						const selected = a.selected.includes(opt.label);
@@ -547,7 +547,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 								onClick={() => toggleOption(qIndex, opt.label)}
 							>
 								{recommended && (
-									<span className="gui-ask-opt-rec" aria-label={t("recommended")} title={t("recommended")}>
+									<span className="gui-ask-opt-rec" aria-label={t("composer.recommended")} title={t("composer.recommended")}>
 										<Icon name="star-fill" className="h-2.5 w-2.5" />
 									</span>
 								)}
@@ -585,7 +585,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 							<AskTextarea
 								textareaRef={inputRef}
 								value={a.custom}
-								placeholder={t("ask input placeholder")}
+								placeholder={t("settings.askInputPlaceholder")}
 								onChange={value => setOtherText(qIndex, value)}
 							/>
 						</div>
@@ -595,19 +595,19 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 							type="button"
 							className={`gui-ask-note-btn${a.noteOpen ? " gui-ask-note-btn--open" : ""}${a.note.trim() ? " gui-ask-note-btn--filled" : ""}`}
 							onClick={() => toggleNote(qIndex)}
-							title={`${t("add note")} (N)`}
+							title={`${t("settings.addNote")} (N)`}
 						>
 							<Icon name="sticky-note" className="h-3 w-3" />
-							<span>{a.note.trim() ? t("note") : t("add note")}</span>
+							<span>{a.note.trim() ? t("settings.note") : t("settings.addNote")}</span>
 						</button>
 						<button
 							type="button"
 							className="gui-ask-chat-btn"
 							onClick={() => answerAndClear({ kind: "chat" })}
-							title={t("chat about this")}
+							title={t("settings.chatAbout")}
 						>
 							<Icon name="chat-1" className="h-3 w-3" />
-							<span>{t("chat about this")}</span>
+							<span>{t("settings.chatAbout")}</span>
 						</button>
 					</div>
 					{a.noteOpen && (
@@ -615,7 +615,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 							<AskTextarea
 								textareaRef={noteInputRef}
 								value={a.note}
-								placeholder={t("note placeholder")}
+								placeholder={t("settings.notePlaceholder")}
 								onChange={value => setAnswerAt(qIndex, { note: value })}
 								onKeyDown={e => {
 									if (shouldSubmitAskEnter(e)) toggleNote(qIndex);
@@ -629,7 +629,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					{questions.length === 1 && (
 						<div className="gui-ask-summary-actions">
 							<button type="button" className="gui-btn" onClick={() => answerAndClear(null)}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 							<button
 								type="button"
@@ -637,7 +637,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 								disabled={!hasAnswer(qIndex)}
 								onClick={submitDialog}
 							>
-								{t("submit")}
+								{t("settings.submit2")}
 							</button>
 						</div>
 					)}
@@ -652,7 +652,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					{previewText ? (
 						<Markdown text={previewText} />
 					) : (
-						<span className="gui-ask-dialog-preview-empty">{t("preview empty")}</span>
+						<span className="gui-ask-dialog-preview-empty">{t("settings.previewEmpty")}</span>
 					)}
 				</div>
 			</div>
@@ -679,8 +679,8 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 				<button
 					type="button"
 					className="gui-ask-card-x"
-					aria-label={t("cancel")}
-					title={t("cancel")}
+					aria-label={t("settings.cancel")}
+					title={t("settings.cancel")}
 					onClick={() => answerAndClear(null)}
 				>
 					<Icon name="close" className="h-3 w-3" />
@@ -689,7 +689,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 			{isDialog ? (
 				<>
 					{totalTabs > 2 && (
-						<div className="gui-ask-tabs" role="tablist" aria-label={t("questions")}>
+						<div className="gui-ask-tabs" role="tablist" aria-label={t("settings.questions")}>
 							{questions.map((q, i) => (
 								<button
 									key={q.id}
@@ -712,10 +712,10 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 								onClick={() => setActiveTab(questions.length)}
 							>
 								<Icon name="list-check-2" className="h-3 w-3" />
-								{t("submit")}
+								{t("settings.submit2")}
 							</button>
 							<span className="gui-ask-progress" aria-live="polite">
-								{t("answered {count} of {total}", {
+								{t("settings.answeredOfWithCountWithTotal", {
 									count: String(questions.filter((_, i) => hasAnswer(i)).length),
 									total: String(questions.length),
 								})}
@@ -730,18 +730,18 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 							{totalTabs > 2 ? (
 								<>
 									<span>← →</span>
-									{t("switch question")}
+									{t("settings.switchQuestion")}
 									<span>Enter</span>
-									{t("submit on summary")}
+									{t("settings.submitSummary")}
 									<span>Esc</span>
-									{t("cancel")}
+									{t("settings.cancel")}
 								</>
 							) : (
 								<>
 									<span>Enter</span>
-									{t("submit")}
+									{t("settings.submit2")}
 									<span>Esc</span>
-									{t("cancel")}
+									{t("settings.cancel")}
 								</>
 							)}
 						</div>

@@ -1,6 +1,6 @@
 /*
  * Settings → 语音: dedicated voice I/O section. The stt.* / tts.* schema keys
- * render through <SchemaTabSection tabs={["interaction"]}> (the daemon
+ * render through <SchemaTabSection tabs={["settings.interaction"]}> (the daemon
  * schema is the single source of truth — the same rows used to be
  * hand-duplicated here with hardcoded defaults that never loaded real
  * values, and drifted from the 交互 tab's schema-driven copies), EXCEPT
@@ -422,7 +422,7 @@ export function SpeechModelPicker({
 								 *  order is the sherpa sid order, so what the GUI offers
 								 *  is exactly what the model speaks with. */}
 								{tierVoices.length > 0 && (
-									<div className="gui-stt-voices" role="radiogroup" aria-label={t("voice")}>
+									<div className="gui-stt-voices" role="radiogroup" aria-label={t("settings.voice")}>
 										{tierVoices.map(voice => (
 											<label key={voice.id} className="gui-stt-voice-radio">
 												<input
@@ -438,7 +438,7 @@ export function SpeechModelPicker({
 									</div>
 								)}
 								{m.cached ? (
-									<span className="gui-stt-row-ready">✓ {t("model ready offline")}</span>
+									<span className="gui-stt-row-ready">✓ {t("settings.modelReadyOffline")}</span>
 								) : !isActive ? (
 									<button
 										type="button"
@@ -447,7 +447,7 @@ export function SpeechModelPicker({
 										onClick={() => download(m.key)}
 									>
 										<Icon name="download" className="h-3.5 w-3.5" />
-										{t("download")}
+										{t("settings.download")}
 									</button>
 								) : null}
 							</div>
@@ -464,7 +464,7 @@ export function SpeechModelPicker({
 						{errorLabel ? `${errorLabel}: ` : ""}
 						{error.message}
 					</div>
-					<button type="button" className="gui-btn" aria-label="dismiss" onClick={() => setError(null)}>
+					<button type="button" className="gui-btn" aria-label="settings.dismiss" onClick={() => setError(null)}>
 						✕
 					</button>
 				</div>
@@ -551,7 +551,7 @@ const TTS_SAMPLE_MARKDOWN = [
  *  chat playback will use). State machine carried over from the former
  *  TtsTestCard, unchanged. Exported for the voice-settings contract tests. */
 export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown: string }): ReactNode {
-	const [state, setState] = useState<"idle" | "loading" | "speaking" | "error">("idle");
+	const [state, setState] = useState<"idle" | "loading" | "speaking" | "error">("settings.idle");
 	const [err, setErr] = useState("");
 	const stopRef = useRef<(() => void) | null>(null);
 	useEffect(() => () => stopRef.current?.(), []);
@@ -602,8 +602,8 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 		<button
 			type="button"
 			className={`tr-action${speaking ? " tr-action--speaking" : ""}${state === "error" ? " tr-action--error" : ""}`}
-			title={state === "error" ? err : speaking ? t("read aloud stop") : t("read aloud")}
-			aria-label={speaking ? t("read aloud stop") : t("read aloud")}
+			title={state === "error" ? err : speaking ? t("settings.readAloudStop") : t("settings.readAloud")}
+			aria-label={speaking ? t("settings.readAloudStop") : t("settings.readAloud")}
 			disabled={!rpc}
 			onClick={toggle}
 		>
@@ -634,17 +634,17 @@ function InputDeviceMenu({
 				type="button"
 				className="gui-btn"
 				disabled={devices.length === 0}
-				aria-label={t("voice input device")}
+				aria-label={t("settings.voiceInputDevice")}
 				aria-expanded={open}
 				aria-haspopup="menu"
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="mic" className="h-3.5 w-3.5" />
-				<span className="gui-voice-device-label">{current?.label ?? t("system default")}</span>
+				<span className="gui-voice-device-label">{current?.label ?? t("settings.systemDefault")}</span>
 				<Icon name="arrow-down-s" className="h-3.5 w-3.5" />
 			</button>
 			{renderMenu(
-				<div className="gui-attach-menu" role="menu" aria-label={t("voice input device")}>
+				<div className="gui-attach-menu" role="menu" aria-label={t("settings.voiceInputDevice")}>
 					<button
 						type="button"
 						className="gui-attach-opt"
@@ -656,7 +656,7 @@ function InputDeviceMenu({
 						}}
 					>
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("system default")}</span>
+							<span className="gui-attach-opt-title">{t("settings.systemDefault")}</span>
 						</span>
 						{deviceId === null && <Icon name="check" className="h-4 w-4" />}
 					</button>
@@ -737,7 +737,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// transcribing → result / error. Phase drives the status copy, the
 	// dictating-capsule mic button and the meter.
 	const [dictating, setDictating] = useState(false);
-	const [dictationPhase, setDictationPhase] = useState<"idle" | "recording" | "transcribing">("idle");
+	const [dictationPhase, setDictationPhase] = useState<"settings.idle" | "recording" | "transcribing">("settings.idle");
 	const [recordSeconds, setRecordSeconds] = useState(0);
 	const [recordLevel, setRecordLevel] = useState(0);
 	// Multi-turn: every finished dictation appends a user message to the
@@ -793,14 +793,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			(text: string) => {
 				setDictatedMessages(prev => [...prev, text]);
 				setDictating(false);
-				setDictationPhase("idle");
+				setDictationPhase("settings.idle");
 			},
 			(message: string) => {
 				// startDictation routes known failures through
 				// friendlyDictationError already — surface as-is.
 				setDictationError(message);
 				setDictating(false);
-				setDictationPhase("idle");
+				setDictationPhase("settings.idle");
 			},
 			rpc,
 			(a: VoiceActivity) => {
@@ -812,18 +812,18 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					setDictationPhase("transcribing");
 				} else if (a.phase === "stopped") {
 					setDictating(false);
-					setDictationPhase("idle");
+					setDictationPhase("settings.idle");
 				} else if (a.phase === "error") {
 					setDictationError(a.message);
 					setDictating(false);
-					setDictationPhase("idle");
+					setDictationPhase("settings.idle");
 				}
 			},
 		);
 		if (!stop) {
 			// Neither daemon RPC nor Web Speech fallback available.
 			setDictating(false);
-			setDictationPhase("idle");
+			setDictationPhase("settings.idle");
 			return;
 		}
 		stopRef.current = stop;
@@ -834,7 +834,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<h2 className="gui-settings-page-title">{tLoose("voice settings")}</h2>
 
 			{/* Schema-driven stt.* / tts.* rows — only the interaction tab's
-			 * "Speech" group, NOT the whole tab (the rest of the interaction
+			 * "settings.speech" group, NOT the whole tab (the rest of the interaction
 			 * groups live on 交互; duplicating them here was the old bug).
 			 * stt.modelName and tts.localModel are excluded: the picker cards
 			 * own them (a bare enum dropdown buried in the list made the four
@@ -843,7 +843,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<SchemaTabSection
 				rpc={rpc}
 				tabs={["interaction"]}
-				groups={["Speech"]}
+				groups={["speech"]}
 				excludeKeys={["stt.modelName", "tts.localModel"]}
 				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts."] as const))]}
 			/>
@@ -870,9 +870,9 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<div className="gui-settings-section-desc">{tLoose("voice test preview description")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("voice input device")}</div>
+						<div className="gui-settings-row-label">{t("settings.voiceInputDevice")}</div>
 						<div className="gui-settings-row-desc">
-							{devices.length > 0 ? t("voice input device hint") : t("voice input test description")}
+							{devices.length > 0 ? t("settings.voiceInputDeviceHint") : t("settings.voiceInputTestDescription")}
 						</div>
 					</div>
 					{/* A floating-menu picker, not a native <select>: the value is
@@ -902,8 +902,8 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 										(dictationPhase === "recording"
 											? `${tLoose("Listening… speak now")} · ${recordSeconds}s`
 											: dictationPhase === "transcribing"
-												? t("voice transcribing")
-												: t("voice input test description"))}
+												? t("settings.voiceTranscribing")
+												: t("settings.voiceInputTestDescription"))}
 								</span>
 							}
 							mic={
@@ -917,15 +917,15 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 										onClick={toggleDictation}
 										aria-label={
 											dictationPhase === "recording" || dictationPhase === "transcribing"
-												? t("stop")
-												: t("voice input test")
+												? t("settings.stop")
+												: t("settings.voiceInputTest")
 										}
 										title={
 											dictationPhase === "recording"
-												? t("stop")
+												? t("settings.stop")
 												: dictationPhase === "transcribing"
-													? t("voice transcribing")
-													: t("voice input test")
+													? t("settings.voiceTranscribing")
+													: t("settings.voiceInputTest")
 										}
 									>
 										<Icon

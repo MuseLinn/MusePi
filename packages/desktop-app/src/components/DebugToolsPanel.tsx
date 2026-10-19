@@ -21,19 +21,19 @@ interface DebugRpc {
 }
 
 const MENU = [
-	{ id: "open-artifacts", label: "debug open artifacts", desc: "debug open artifacts desc" },
-	{ id: "performance", label: "debug performance", desc: "debug performance desc" },
-	{ id: "work", label: "debug work profile", desc: "debug work profile desc" },
-	{ id: "dump", label: "debug dump session", desc: "debug dump session desc" },
-	{ id: "memory", label: "debug memory", desc: "debug memory desc" },
-	{ id: "logs", label: "debug logs", desc: "debug logs desc" },
-	{ id: "system", label: "debug system info", desc: "debug system info desc" },
-	{ id: "terminal", label: "debug terminal state", desc: "debug terminal state desc", terminalOnly: true },
-	{ id: "protocols", label: "debug terminal protocols", desc: "debug terminal protocols desc", terminalOnly: true },
-	{ id: "raw-sse", label: "debug raw sse", desc: "debug raw sse desc" },
-	{ id: "remote-debugger", label: "debug remote debugger", desc: "debug remote debugger desc" },
-	{ id: "transcript", label: "debug transcript", desc: "debug transcript desc" },
-	{ id: "clear-cache", label: "debug clear cache", desc: "debug clear cache desc" },
+	{ id: "open-artifacts", label: "settings.debugOpenArtifacts", desc: "settings.debugOpenArtifactsDesc" },
+	{ id: "performance", label: "settings.debugPerformance", desc: "settings.debugPerformanceDesc" },
+	{ id: "work", label: "settings.debugWorkProfile", desc: "settings.debugWorkProfileDesc" },
+	{ id: "dump", label: "settings.debugDumpSession", desc: "settings.debugDumpSessionDesc" },
+	{ id: "memory", label: "settings.debugMemory", desc: "settings.debugMemoryDesc" },
+	{ id: "logs", label: "settings.debugLogs", desc: "settings.debugLogsDesc" },
+	{ id: "system", label: "settings.debugSystemInfo", desc: "settings.debugSystemInfoDesc" },
+	{ id: "settings.terminal", label: "settings.debugTerminalState", desc: "settings.debugTerminalStateDesc", terminalOnly: true },
+	{ id: "protocols", label: "settings.debugTerminalProtocols", desc: "settings.debugTerminalProtocolsDesc", terminalOnly: true },
+	{ id: "raw-sse", label: "settings.debugRawSse", desc: "settings.debugRawSseDesc" },
+	{ id: "remote-debugger", label: "settings.debugRemoteDebugger", desc: "settings.debugRemoteDebuggerDesc" },
+	{ id: "transcript", label: "settings.debugTranscript", desc: "settings.debugTranscriptDesc" },
+	{ id: "clear-cache", label: "settings.debugClearCache", desc: "settings.debugClearCacheDesc" },
 ] as const;
 
 type MenuId = (typeof MENU)[number]["id"];
@@ -68,7 +68,7 @@ export function DebugToolsPanel({
 	sessionId: string;
 }): ReactNode {
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("debug tools")} className="w-[560px] max-w-[92vw]">
+		<DialogFrame open={open} onClose={onClose} label={t("settings.debugTools")} className="w-[560px] max-w-[92vw]">
 			<DebugToolsPanelBody open={open} onClose={onClose} rpc={rpc} sessionId={sessionId} />
 		</DialogFrame>
 	);
@@ -124,7 +124,7 @@ export function DebugToolsPanelBody({
 					else
 						setResult(id, {
 							kind: "error",
-							message: res.reason === "no-session-file" ? t("debug no session file") : t("debug no artifacts"),
+							message: res.reason === "no-session-file" ? t("settings.debugNoSessionFile") : t("settings.debugNoArtifacts"),
 						});
 					break;
 				}
@@ -139,14 +139,14 @@ export function DebugToolsPanelBody({
 					} else {
 						const res = await rpc.request<{ profilerId: number }>("debug.profileStart");
 						setProfiling({ profilerId: res.profilerId });
-						setResult(id, { kind: "text", text: t("debug profiling") });
+						setResult(id, { kind: "text", text: t("settings.debugProfiling") });
 					}
 					break;
 				}
 				case "work": {
 					const res = await rpc.request<{ svg: string | null; sampleCount: number }>("debug.workProfile");
 					if (!res.svg || res.sampleCount === 0) {
-						setResult(id, { kind: "text", text: t("debug no work data") });
+						setResult(id, { kind: "text", text: t("settings.debugNoWorkData") });
 					} else {
 						setResult(id, { kind: "svg", svg: res.svg, sampleCount: res.sampleCount });
 					}
@@ -165,7 +165,7 @@ export function DebugToolsPanelBody({
 				case "system": {
 					const res = await rpc.request<{ text: string }>(id === "logs" ? "debug.logs" : "debug.systemInfo");
 					const empty = res.text.trim().length === 0;
-					setResult(id, { kind: "text", text: empty ? t("debug no logs") : res.text });
+					setResult(id, { kind: "text", text: empty ? t("settings.debugNoLogs") : res.text });
 					break;
 				}
 				case "raw-sse": {
@@ -174,9 +174,9 @@ export function DebugToolsPanelBody({
 						{ sessionId },
 					);
 					if (res.text.trim().length === 0) {
-						setResult(id, { kind: "text", text: t("debug no raw sse") });
+						setResult(id, { kind: "text", text: t("settings.debugNoRawSse") });
 					} else {
-						const dropped = res.droppedChars > 0 ? `\n\n[${t("debug dropped chars")}: ${res.droppedChars}]` : "";
+						const dropped = res.droppedChars > 0 ? `\n\n[${t("settings.debugDroppedChars")}: ${res.droppedChars}]` : "";
 						setResult(id, { kind: "text", text: `${res.text}${dropped}` });
 					}
 					break;
@@ -199,7 +199,7 @@ export function DebugToolsPanelBody({
 							"debug.cacheStats",
 						);
 						if (stats.count === 0) {
-							setResult(id, { kind: "text", text: t("debug cache empty") });
+							setResult(id, { kind: "text", text: t("settings.debugCacheEmpty") });
 							break;
 						}
 						setCacheArmed(true);
@@ -207,11 +207,11 @@ export function DebugToolsPanelBody({
 					} else {
 						const res = await rpc.request<{ removed: number }>("debug.clearCache");
 						setCacheArmed(false);
-						setResult(id, { kind: "text", text: t("debug cleared", { count: res.removed }) });
+						setResult(id, { kind: "text", text: t("settings.debugCleared", { count: res.removed }) });
 					}
 					break;
 				}
-				case "terminal":
+				case "settings.terminal":
 				case "protocols":
 					break;
 			}
@@ -225,8 +225,8 @@ export function DebugToolsPanelBody({
 	return (
 		<div className="gui-dbg-panel">
 			<div className="gui-dbg-head">
-				<span className="gui-dbg-title">{t("debug tools")}</span>
-				<button type="button" className="gui-dbg-close" onClick={onClose} aria-label={t("close")}>
+				<span className="gui-dbg-title">{t("settings.debugTools")}</span>
+				<button type="button" className="gui-dbg-close" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-3.5 w-3.5" />
 				</button>
 			</div>
@@ -243,7 +243,7 @@ export function DebugToolsPanelBody({
 								onClick={() => void run(item.id)}
 							>
 								<span className="gui-dbg-row-label">
-									{terminalOnly && <span className="gui-dbg-tag">{t("debug terminal only")}</span>}
+									{terminalOnly && <span className="gui-dbg-tag">{t("settings.debugTerminalOnly")}</span>}
 									{t(item.label)}
 									{busy === item.id && <span className="gui-dbg-busy" aria-hidden="true" />}
 								</span>
@@ -251,7 +251,7 @@ export function DebugToolsPanelBody({
 							</button>
 							{profiling && item.id === "performance" && (
 								<button type="button" className="gui-dbg-row-action" onClick={() => void run("performance")}>
-									{t("debug stop profiling")}
+									{t("settings.debugStopProfiling")}
 								</button>
 							)}
 							{cacheArmed && item.id === "clear-cache" && (
@@ -260,7 +260,7 @@ export function DebugToolsPanelBody({
 									className="gui-dbg-row-action gui-dbg-row-action--danger"
 									onClick={() => void run("clear-cache")}
 								>
-									{t("debug confirm clear")}
+									{t("settings.debugConfirmClear")}
 								</button>
 							)}
 							{result && <DebugResultView result={result} />}
@@ -283,7 +283,7 @@ function DebugResultView({ result }: { result: DebugResult }): ReactNode {
 						{result.path}
 					</span>
 					{result.files !== undefined && (
-						<span className="gui-dbg-path-meta">{t("debug files", { count: result.files })}</span>
+						<span className="gui-dbg-path-meta">{t("settings.debugFiles", { count: result.files })}</span>
 					)}
 					{result.note && <pre className="gui-dbg-pre">{result.note}</pre>}
 				</div>
@@ -293,26 +293,26 @@ function DebugResultView({ result }: { result: DebugResult }): ReactNode {
 				<div className="gui-dbg-svg">
 					<img
 						src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`}
-						alt={t("debug work profile")}
+						alt={t("settings.debugWorkProfile")}
 					/>
-					<span className="gui-dbg-path-meta">{t("debug samples", { count: result.sampleCount })}</span>
+					<span className="gui-dbg-path-meta">{t("settings.debugSamples", { count: result.sampleCount })}</span>
 				</div>
 			);
 		case "endpoint":
 			return (
 				<div className="gui-dbg-path">
 					<span className="gui-dbg-path-line">
-						{t("debug listening", { host: result.host, port: String(result.port) })}
-						{result.alreadyRunning && <span className="gui-dbg-tag">{t("debug already running")}</span>}
+						{t("settings.debugListening", { host: result.host, port: String(result.port) })}
+						{result.alreadyRunning && <span className="gui-dbg-tag">{t("settings.debugAlreadyRunning")}</span>}
 					</span>
-					<span className="gui-dbg-path-meta">{t("debug remote inspector note")}</span>
+					<span className="gui-dbg-path-meta">{t("settings.debugRemoteInspectorNote")}</span>
 				</div>
 			);
 		case "stats":
 			return (
 				<div className="gui-dbg-path">
 					<span className="gui-dbg-path-line">
-						{t("debug cache stats", {
+						{t("settings.debugCacheStats", {
 							count: String(result.count),
 							size: fmtBytes(result.totalSize),
 							date: result.oldestDate ? new Date(result.oldestDate).toLocaleDateString() : "—",

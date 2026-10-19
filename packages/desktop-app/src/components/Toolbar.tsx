@@ -38,8 +38,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className="gui-tool-btn"
-				title={t("toggle sidebar")}
-				aria-label={t("toggle sidebar")}
+				title={t("settings.toggleSidebar")}
+				aria-label={t("settings.toggleSidebar")}
 				onClick={onToggleSidebar}
 			>
 				<Icon name="menu-2" className="h-[18px] w-[18px]" />
@@ -47,8 +47,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className="gui-tool-btn"
-				title={t("new task")}
-				aria-label={t("new task")}
+				title={t("settings.newTask")}
+				aria-label={t("settings.newTask")}
 				onClick={onNewSession}
 			>
 				<Icon name="add-circle" className="h-[18px] w-[18px]" />
@@ -56,8 +56,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className="gui-tool-btn"
-				title={t("settings")}
-				aria-label={t("settings")}
+				title={t("settings.settings")}
+				aria-label={t("settings.settings")}
 				onClick={onOpenSettings}
 			>
 				<Icon name="settings-3" className="h-[18px] w-[18px]" />
@@ -69,8 +69,8 @@ export function Toolbar({
 				<button
 					type="button"
 					className={`gui-tool-btn${terminalOpen ? " gui-tool-btn--active" : ""}`}
-					title={t("toggle terminal")}
-					aria-label={t("toggle terminal")}
+					title={t("general.toggleTerminal")}
+					aria-label={t("general.toggleTerminal")}
 					onClick={onToggleTerminal}
 				>
 					<Icon name="terminal-box" className="h-[18px] w-[18px]" />
@@ -78,8 +78,8 @@ export function Toolbar({
 				<button
 					type="button"
 					className="gui-tool-btn"
-					title={t("toggle panel")}
-					aria-label={t("toggle panel")}
+					title={t("settings.togglePanel")}
+					aria-label={t("settings.togglePanel")}
 					onClick={onToggleContext}
 				>
 					<Icon name="equalizer-2" className="h-[18px] w-[18px]" />

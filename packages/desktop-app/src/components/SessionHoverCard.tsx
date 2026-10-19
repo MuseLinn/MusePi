@@ -174,7 +174,7 @@ export function SessionHoverCard({
 				<div className="gui-session-hover-card-row" title={hover.parentLabel}>
 					<Icon name="git-branch" className="gui-session-hover-card-icon" />
 					<span className="gui-session-hover-card-text">
-						{t("forked from {name}", { name: hover.parentLabel })}
+						{t("general.forkedFromWithName", { name: hover.parentLabel })}
 					</span>
 				</div>
 			)}
@@ -185,19 +185,19 @@ export function SessionHoverCard({
 			{cwd && (
 				<div className="gui-session-hover-card-row" title={cwd}>
 					<Icon name="folder" className="gui-session-hover-card-icon" />
-					<span className="gui-session-hover-card-label">{t("session workspace")}</span>
+					<span className="gui-session-hover-card-label">{t("general.sessionWorkspace")}</span>
 					<span className="gui-session-hover-card-text">{baseName(cwd)}</span>
 				</div>
 			)}
 			<div className="gui-session-hover-card-row">
 				<Icon name="history" className="gui-session-hover-card-icon" />
-				<span className="gui-session-hover-card-label">{t("updated")}</span>
+				<span className="gui-session-hover-card-label">{t("settings.updated")}</span>
 				<span className="gui-session-hover-card-text">{fullTime(hover.updatedAt ?? hover.timestamp)}</span>
 			</div>
 			{hasBothTimes && (
 				<div className="gui-session-hover-card-row">
 					<Icon name="history" className="gui-session-hover-card-icon gui-session-hover-card-icon--ghost" />
-					<span className="gui-session-hover-card-label">{t("created at")}</span>
+					<span className="gui-session-hover-card-label">{t("general.createdAt")}</span>
 					<span className="gui-session-hover-card-text">{fullTime(hover.timestamp)}</span>
 				</div>
 			)}

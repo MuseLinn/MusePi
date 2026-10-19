@@ -78,9 +78,9 @@ function timeLabel(iso?: string): string {
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return "";
 	const diff = Date.now() - d.getTime();
-	if (diff < 60_000) return t("just now");
-	if (diff < 3_600_000) return t("{count} min ago", { count: String(Math.floor(diff / 60_000)) });
-	if (diff < 86_400_000) return t("{count} h ago", { count: String(Math.floor(diff / 3_600_000)) });
+	if (diff < 60_000) return t("transcript.justNow");
+	if (diff < 3_600_000) return t("transcript.minAgoWithCount", { count: String(Math.floor(diff / 60_000)) });
+	if (diff < 86_400_000) return t("transcript.hAgoWithCount", { count: String(Math.floor(diff / 3_600_000)) });
 	return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
@@ -177,14 +177,14 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 			<header className="gui-tray-menu__head">
 				<span className="gui-tray-menu__brand">MusePi</span>
 				{active > 0 && (
-					<span className="gui-tray-menu__live">{t("{count} sessions active", { count: String(active) })}</span>
+					<span className="gui-tray-menu__live">{t("general.sessionsActiveWithCount", { count: String(active) })}</span>
 				)}
 			</header>
 
 			<div className="gui-tray-menu__scroll">
 				{approvals.length > 0 && (
 					<section className="gui-tray-menu__section">
-						<div className="gui-tray-menu__sec-title">{t("needs your attention")}</div>
+						<div className="gui-tray-menu__sec-title">{t("settings.needsYourAttention")}</div>
 						{approvals.slice(0, 10).map(a => (
 							<div key={a.id} className="gui-tray-menu__approval">
 								<div className="gui-tray-menu__approval-text">
@@ -202,7 +202,7 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 											})
 										}
 									>
-										{t("allow once")}
+										{t("settings.allowOnce")}
 									</button>
 									<button
 										type="button"
@@ -218,7 +218,7 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 											})
 										}
 									>
-										{t("always allow")}
+										{t("settings.alwaysAllow")}
 									</button>
 									<button
 										type="button"
@@ -231,7 +231,7 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 											})
 										}
 									>
-										{t("deny")}
+										{t("tools.deny")}
 									</button>
 								</div>
 							</div>
@@ -240,9 +240,9 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 				)}
 
 				<section className="gui-tray-menu__section">
-					<div className="gui-tray-menu__sec-title">{t("recent sessions")}</div>
+					<div className="gui-tray-menu__sec-title">{t("general.recentSessions")}</div>
 					{sessions.length === 0 ? (
-						<div className="gui-tray-menu__empty">{t("no sessions yet")}</div>
+						<div className="gui-tray-menu__empty">{t("transcript.noSessionsYet")}</div>
 					) : (
 						sessions.slice(0, 8).map(s => (
 							<button
@@ -251,9 +251,9 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 								className="gui-tray-menu__session"
 								onClick={() => trayApi?.action("focus-session", { sessionId: s.id })}
 							>
-								<span className="gui-tray-menu__session-title">{s.title || t("untitled session")}</span>
+								<span className="gui-tray-menu__session-title">{s.title || t("transcript.untitledSession")}</span>
 								<span className="gui-tray-menu__session-meta">
-									{s.paused ? `${t("paused")} · ` : ""}
+									{s.paused ? `${t("tools.paused")} · ` : ""}
 									{timeLabel(s.timestamp)}
 								</span>
 							</button>
@@ -263,14 +263,14 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 
 				{usage && (
 					<section className="gui-tray-menu__section">
-						<div className="gui-tray-menu__sec-title">{t("usage")}</div>
+						<div className="gui-tray-menu__sec-title">{t("tools.usage")}</div>
 						<div className="gui-tray-menu__totals">
 							<span>Token {formatTokens(usage.totalTokens)}</span>
 							<span className="gui-tray-menu__totals-sep">·</span>
 							<span>${(Number.isFinite(usage.totalCost) ? usage.totalCost! : 0).toFixed(4)}</span>
 						</div>
 						{usageRows.length === 0 ? (
-							<div className="gui-tray-menu__empty">{t("no usage data")}</div>
+							<div className="gui-tray-menu__empty">{t("general.noUsageData")}</div>
 						) : (
 							usageRows.map(row => (
 								<div key={row.provider} className="gui-tray-menu__provider">
@@ -316,7 +316,7 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 														</div>
 													))}
 													<div className="gui-tray-menu__cell gui-tray-menu__cell--total">
-														<div className="gui-tray-menu__cell-label">{t("total")}</div>
+														<div className="gui-tray-menu__cell-label">{t("general.total")}</div>
 														<div className="gui-tray-menu__limit-track">
 															<div className={barClass(avg)} style={{ width: barWidth(avg) }} />
 														</div>
@@ -335,16 +335,16 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 
 			<footer className="gui-tray-menu__foot">
 				<button type="button" onClick={() => trayApi?.action("new-session")}>
-					{t("new session")}
+					{t("settings.newSession")}
 				</button>
 				<button type="button" onClick={() => trayApi?.action("mini-chat")}>
-					{t("mini chat")}
+					{t("general.miniChat")}
 				</button>
 				<button type="button" onClick={() => trayApi?.action("show-main-window")}>
-					{t("show main window")}
+					{t("shell.showMainWindow")}
 				</button>
 				<button type="button" onClick={() => trayApi?.action("quit")}>
-					{t("quit")}
+					{t("shell.quit")}
 				</button>
 			</footer>
 		</div>

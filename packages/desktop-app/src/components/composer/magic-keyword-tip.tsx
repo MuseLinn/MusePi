@@ -38,11 +38,11 @@ function hitsFor(text: string, enabled: MagicKeywordTipProps["enabled"]): string
 function describe(keyword: string): string {
 	switch (keyword) {
 		case "ultrathink":
-			return t("magic keyword ultrathink");
+			return t("general.magicKeywordUltrathink");
 		case "orchestrate":
-			return t("magic keyword orchestrate");
+			return t("general.magicKeywordOrchestrate");
 		case "workflowz":
-			return t("magic keyword workflow");
+			return t("general.magicKeywordWorkflow");
 		default:
 			return "";
 	}

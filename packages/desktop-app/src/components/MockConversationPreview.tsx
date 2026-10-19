@@ -46,7 +46,7 @@ import { AgentAvatar } from "./AgentAvatar";
  *  previewed). */
 function MockUserAvatar(): ReactNode {
 	return (
-		<span className="gui-user-avatar" title={t("you")}>
+		<span className="gui-user-avatar" title={t("settings.you")}>
 			<Icon name="user" className="h-3.5 w-3.5" />
 		</span>
 	);
@@ -104,15 +104,15 @@ export function MockActivityFoldRow({ open = false }: { open?: boolean }): React
 			<span className="tr-round-fold-icon" aria-hidden>
 				<ChevronRight size={12} />
 			</span>
-			<span className="tr-round-fold-label">{t("activity")}</span>
+			<span className="tr-round-fold-label">{t("agents.activity")}</span>
 			<span className="tr-round-fold-bar" aria-hidden />
 			<span className="tr-round-fold-changes">
-				<span className="tr-round-fold-changes-files">{t("round changed {count}", { count: "3" })}</span>
+				<span className="tr-round-fold-changes-files">{t("transcript.roundChangedWithCount", { count: "3" })}</span>
 				<span className="tr-round-fold-add">+24</span>
 				<span className="tr-round-fold-remove">−7</span>
 			</span>
 			<span className="tr-round-fold-sep">·</span>
-			<span>{t("round commands {count}", { count: "2" })}</span>
+			<span>{t("transcript.roundCommandsWithCount", { count: "2" })}</span>
 		</div>
 	);
 }
@@ -129,10 +129,10 @@ function MockExpandedActivity(): ReactNode {
 		<div className="tr-activity-preview-expanded" role="presentation">
 			<MockActivityFoldRow open />
 			<div className="tr-activity-preview-rows">
-				<div className="tr-activity-preview-row">{t("preview activity edit")}</div>
-				<div className="tr-activity-preview-row">{t("preview activity command")}</div>
-				<div className="tr-activity-preview-row">{t("preview activity read")}</div>
-				<div className="tr-live-more">{t("⋯ {count} more lines", { count: "6" })}</div>
+				<div className="tr-activity-preview-row">{t("general.previewActivityEdit")}</div>
+				<div className="tr-activity-preview-row">{t("general.previewActivityCommand")}</div>
+				<div className="tr-activity-preview-row">{t("general.previewActivityRead")}</div>
+				<div className="tr-live-more">{t("tools.moreLinesWithCount", { count: "6" })}</div>
 			</div>
 		</div>
 	);
@@ -151,7 +151,7 @@ export function MockComposer({
 }): ReactNode {
 	return (
 		<div className="gui-effect-preview-composer">
-			<div className="gui-effect-preview-input">{input ?? t("ask anything, / for commands, @ for context…")}</div>
+			<div className="gui-effect-preview-input">{input ?? t("composer.askAnythingCommands.info")}</div>
 			{mic}
 			<span className="gui-effect-preview-send" aria-hidden>
 				<Icon name="send-plane" className="h-3.5 w-3.5" />
@@ -195,14 +195,14 @@ export function MockConversationPreview({
 }): ReactNode {
 	return (
 		<div className="gui-effect-preview" data-output-style={outputStyle}>
-			<MockUserRow markdown={userMarkdown ?? t("preview user message")} showAvatar={showAvatars} />
+			<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} showAvatar={showAvatars} />
 			<MockActivityFoldRow />
 			{/* Both fold states, so a styling change to either is visible here:
 			 * the collapsed header above is what a finished turn rests as, and
 			 * the expanded block below is what clicking it reveals. */}
 			<MockExpandedActivity />
 			<MockAssistantRow
-				markdown={assistantMarkdown ?? t("preview agent message")}
+				markdown={assistantMarkdown ?? t("general.previewAgentMessage")}
 				showAvatar={showAvatars}
 				actions={assistantActions}
 			/>
@@ -211,7 +211,7 @@ export function MockConversationPreview({
 			 * text, so drawing them in one place keeps the two readings honest. */}
 			{streamingDemo && (
 				<div className="gui-effect-preview-stream">
-					<div className="gui-chat-preview-label">{t("typing effect")}</div>
+					<div className="gui-chat-preview-label">{t("settings.typingEffect")}</div>
 					<TypewriterPreview />
 				</div>
 			)}
@@ -349,5 +349,5 @@ export function TypewriterPreview(): ReactNode {
 
 /** Sample sentence the typewriter demo types out (i18n, keeps it localized). */
 export function useTypewriterSample(): string {
-	return t("preview paragraph");
+	return t("tools.previewParagraph");
 }

@@ -86,13 +86,13 @@ import type { ThinkingLevel } from "./ThinkingSelector";
  * 下午 / 晚上 / 深夜. Each bracket carries its own tone so the welcome
  * reads less canned. */
 function greeting(hour: number): string {
-	if (hour < 5) return t("it is late, take care");
-	if (hour < 8) return t("early morning");
-	if (hour < 12) return t("good morning");
-	if (hour < 14) return t("good noon");
-	if (hour < 18) return t("good afternoon");
-	if (hour < 22) return t("good evening");
-	return t("it is late, take care");
+	if (hour < 5) return t("settings.lateTakeCare");
+	if (hour < 8) return t("settings.earlyMorning");
+	if (hour < 12) return t("settings.goodMorning");
+	if (hour < 14) return t("settings.goodNoon");
+	if (hour < 18) return t("settings.goodAfternoon");
+	if (hour < 22) return t("settings.goodEvening");
+	return t("settings.lateTakeCare");
 }
 
 /** Rotating tips shown under the composer (splash/shimmer refresh). Keys are
@@ -768,7 +768,7 @@ export function WelcomeComposer({
 		// catalog already carries the TUI usage entry; keep only the GUI one.
 		const guiUsageCmd: SlashEntry = {
 			name: "usage",
-			description: t("show subscription usage"),
+			description: t("general.showSubscriptionUsage"),
 			kind: "command",
 			category: "GUI",
 		};
@@ -1394,7 +1394,7 @@ export function WelcomeComposer({
 		 * and the input grows. */
 		<>
 			{renderQuotaMenu(
-				<div className="gui-quota-panel" role="dialog" aria-label={t("subscription usage")}>
+				<div className="gui-quota-panel" role="dialog" aria-label={t("general.subscriptionUsage")}>
 					<button
 						type="button"
 						className="gui-quota-close"
@@ -1402,18 +1402,18 @@ export function WelcomeComposer({
 							setUsagePanel(s => ({ ...s, open: false }));
 							setContextNote(false);
 						}}
-						aria-label={t("close")}
+						aria-label={t("settings.close")}
 					>
 						<Icon name="close" className="h-3.5 w-3.5" />
 					</button>
 					{contextNote ? (
 						<>
-							<div className="gui-quota-title">{t("context usage")}</div>
-							<div className="gui-quota-note">{t("context usage unavailable")}</div>
+							<div className="gui-quota-title">{t("general.contextUsage")}</div>
+							<div className="gui-quota-note">{t("general.contextUsageUnavailable")}</div>
 						</>
 					) : usagePanel.loading ? (
 						<>
-							<div className="gui-quota-title">{t("subscription usage")}</div>
+							<div className="gui-quota-title">{t("general.subscriptionUsage")}</div>
 							<div className="gui-quota-note">…</div>
 						</>
 					) : usagePanel.data &&
@@ -1423,9 +1423,9 @@ export function WelcomeComposer({
 							usagePanel.data.reloginDeadlines.length > 0) ? (
 						<>
 							<div className="gui-quota-title">
-								{t("subscription usage")}
+								{t("general.subscriptionUsage")}
 								{usagePanel.data.fetchedAt
-									? ` · ${t("usage {time} ago", { time: fmtQuotaDuration(Date.now() - usagePanel.data.fetchedAt) })}`
+									? ` · ${t("general.usageAgoWithTime", { time: fmtQuotaDuration(Date.now() - usagePanel.data.fetchedAt) })}`
 									: null}
 							</div>
 							<div className="gui-usage-reports">
@@ -1455,8 +1455,8 @@ export function WelcomeComposer({
 						</>
 					) : (
 						<>
-							<div className="gui-quota-title">{t("subscription usage")}</div>
-							<div className="gui-quota-note">{t("no subscription usage reported")}</div>
+							<div className="gui-quota-title">{t("general.subscriptionUsage")}</div>
+							<div className="gui-quota-note">{t("general.noSubscriptionUsageReported")}</div>
 						</>
 					)}
 				</div>,
@@ -1475,7 +1475,7 @@ export function WelcomeComposer({
 					 * right above the input — current project, open folder, remote. */}
 					<div className="gui-brand mb-2 flex items-center gap-2">
 						<span className="gui-brand-mark">π</span>
-						<BlurText text={t("MusePi")} className="text-[22px] font-bold" />
+						<BlurText text={t("settings.musepi")} className="text-[22px] font-bold" />
 					</div>
 					<p className="gui-welcome-greet pointer-events-none mb-4">
 						<BlurText text={greeting(hour)} stepMs={38} />
@@ -1487,9 +1487,9 @@ export function WelcomeComposer({
 					{modelMissing && !focused && (
 						<div className="gui-welcome-setup mb-3" role="status">
 							<div className="gui-welcome-setup-text">
-								<span className="gui-welcome-setup-title">{t("set up a model to start")}</span>
+								<span className="gui-welcome-setup-title">{t("general.setUpModelStart")}</span>
 								<span className="gui-welcome-setup-desc">
-									{t("connect a provider or add an api key — it takes a minute")}
+									{t("general.connectProviderAdd.info")}
 								</span>
 							</div>
 							<button
@@ -1501,7 +1501,7 @@ export function WelcomeComposer({
 									)
 								}
 							>
-								{t("add a model")}
+								{t("general.addModel")}
 							</button>
 						</div>
 					)}
@@ -1547,11 +1547,11 @@ export function WelcomeComposer({
 									type="button"
 									className="gui-project-chip"
 									onClick={() => setProjOpen(v => !v)}
-									aria-label={t("current project")}
+									aria-label={t("settings.currentProject")}
 								>
 									<Icon name="folder" className="h-3.5 w-3.5" />
 									<span className="max-w-[200px] truncate">
-										{project ? (savedLabels.get(project) ?? projectName(project)) : t("not in a project")}
+										{project ? (savedLabels.get(project) ?? projectName(project)) : t("settings.notProject")}
 									</span>
 									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 								</button>
@@ -1575,7 +1575,7 @@ export function WelcomeComposer({
 										 * already listed above with the check — skip it here. */}
 										{savedProjects.filter(p => p !== project).length > 0 && (
 											<>
-												<div className="gui-proj-menu-label">{t("saved workspaces")}</div>
+												<div className="gui-proj-menu-label">{t("settings.savedWorkspaces")}</div>
 												{savedProjects
 													.filter(p => p !== project)
 													.map(p => (
@@ -1607,7 +1607,7 @@ export function WelcomeComposer({
 											}}
 										>
 											<Icon name="folder-open" className="h-3.5 w-3.5" />
-											<span>{t("open folder")}</span>
+											<span>{t("settings.openFolder")}</span>
 										</button>
 										<button
 											type="button"
@@ -1618,7 +1618,7 @@ export function WelcomeComposer({
 											}}
 										>
 											<Icon name="folder-add" className="h-3.5 w-3.5" />
-											<span>{t("new blank project")}</span>
+											<span>{t("settings.newBlankProject")}</span>
 										</button>
 										<button
 											type="button"
@@ -1629,7 +1629,7 @@ export function WelcomeComposer({
 											}}
 										>
 											<Icon name="server" className="h-3.5 w-3.5" />
-											<span>{t("remote connection")}</span>
+											<span>{t("settings.remoteConnection")}</span>
 										</button>
 										{project && (
 											<button
@@ -1641,7 +1641,7 @@ export function WelcomeComposer({
 												}}
 											>
 												<Icon name="folder" className="h-3.5 w-3.5" />
-												<span>{t("not in a project")}</span>
+												<span>{t("settings.notProject")}</span>
 											</button>
 										)}
 									</>,
@@ -1655,7 +1655,7 @@ export function WelcomeComposer({
 										type="button"
 										className="gui-project-chip"
 										onClick={() => setPresetOpen(v => !v)}
-										aria-label={t("modes title")}
+										aria-label={t("settings.modesTitle")}
 									>
 										<Icon name="stack" className="h-3.5 w-3.5" />
 										<span className="max-w-[160px] truncate">{resolveModeLabel(activeModeId, modes)}</span>
@@ -1697,8 +1697,8 @@ export function WelcomeComposer({
 										type="button"
 										className="gui-project-chip"
 										onClick={() => setBranchOpen(v => !v)}
-										aria-label={t("git branch")}
-										title={t("git branch")}
+										aria-label={t("general.gitBranch")}
+										title={t("general.gitBranch")}
 									>
 										<Icon name="git-branch" className="h-3.5 w-3.5" />
 										<span className="max-w-[160px] truncate">{branchInfo.current ?? "—"}</span>
@@ -1900,8 +1900,8 @@ export function WelcomeComposer({
 											type="button"
 											className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
 											onClick={onToggleFocus}
-											title={t("focus mode")}
-											aria-label={t("focus mode")}
+											title={t("general.focusMode")}
+											aria-label={t("general.focusMode")}
 											aria-pressed={focused}
 										>
 											<Icon name="expand-up-down" className="h-3.5 w-3.5" />
@@ -1949,22 +1949,22 @@ export function WelcomeComposer({
 										<button
 											type="button"
 											className="gui-mode-chip gui-mode-chip--armed"
-											title={t("next message becomes the goal objective")}
+											title={t("general.nextMessageBecomesGoal")}
 											onClick={() => setGoalArmed(false)}
 										>
 											<Icon name="target" className="h-3 w-3" />
-											<span>{t("goal")}</span>
+											<span>{t("general.goal")}</span>
 										</button>
 									)}
 									{planArmed && (
 										<button
 											type="button"
 											className="gui-mode-chip gui-mode-chip--armed"
-											title={t("plan mode")}
+											title={t("general.planMode")}
 											onClick={() => setPlanArmed(false)}
 										>
 											<Icon name="compass-3" className="h-3 w-3" />
-											<span>{t("plan")}</span>
+											<span>{t("tools.plan")}</span>
 										</button>
 									)}
 								</>
@@ -1981,7 +1981,7 @@ export function WelcomeComposer({
 										ref={quotaAnchorRef}
 										className="gui-send-btn"
 										disabled={!canSend}
-										aria-label={t("send message")}
+										aria-label={t("settings.sendMessage")}
 									>
 										<Icon name="send-plane" className="h-4 w-4" />
 									</button>
@@ -2007,8 +2007,8 @@ export function WelcomeComposer({
 													type="button"
 													className="gui-quote-close"
 													onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
-													title={t("remove quote")}
-													aria-label={t("remove quote")}
+													title={t("general.removeQuote")}
+													aria-label={t("general.removeQuote")}
 												>
 													<X size={12} />
 												</button>
@@ -2034,7 +2034,7 @@ export function WelcomeComposer({
 														/>
 													))}
 												</div>
-												<div className="gui-slash-footer">{t("slash completion hints")}</div>
+												<div className="gui-slash-footer">{t("general.slashCompletionHints")}</div>
 											</>
 										)}
 										{atOpen &&
@@ -2285,7 +2285,7 @@ export function WelcomeComposer({
 											(designActive && railState
 												? railState.placeholder
 												: isDesignArmed
-													? t("design empty placeholder")
+													? t("composer.designEmptyPlaceholder")
 													: t(PLACEHOLDER_TIPS[tipIdx]!))
 										}
 										spellCheck={(() => {
@@ -2388,14 +2388,14 @@ export function WelcomeComposer({
 										)
 									}
 								>
-									<span>{t("custom supplement")}</span>
+									<span>{t("general.customSupplement")}</span>
 								</button>
 							)}
 							<button
 								type="button"
 								className="gui-suggest-chip gui-suggest-chip--more"
-								title={showMore ? t("collapse suggestions") : t("more suggestions")}
-								aria-label={showMore ? t("collapse suggestions") : t("more suggestions")}
+								title={showMore ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
+								aria-label={showMore ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
 								onClick={showMore ? collapseSuggestions : expandSuggestions}
 							>
 								<MorphIcon icon={showMore ? XIcon : PlusIcon} size={13} spring="snappy" />

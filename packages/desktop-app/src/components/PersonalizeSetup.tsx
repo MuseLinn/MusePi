@@ -104,7 +104,7 @@ export function PersonalizeSetup({
 	return (
 		<div className="gui-obo-personalize">
 			<div className="gui-obo-pers-section">
-				<div className="gui-obo-pers-label">{t("pet display mode")}</div>
+				<div className="gui-obo-pers-label">{t("settings.petDisplayMode")}</div>
 				<div className="flex items-center gap-1.5">
 					<button
 						type="button"
@@ -112,7 +112,7 @@ export function PersonalizeSetup({
 						aria-pressed={petMode === "input"}
 						onClick={() => pickPetMode("input")}
 					>
-						{t("pet mode input")}
+						{t("settings.petModeInput")}
 					</button>
 					<button
 						type="button"
@@ -120,13 +120,13 @@ export function PersonalizeSetup({
 						aria-pressed={petMode === "desktop"}
 						onClick={() => pickPetMode("desktop")}
 					>
-						{t("pet mode desktop")}
+						{t("settings.petModeDesktop")}
 					</button>
 				</div>
 			</div>
 
 			<div className="gui-obo-pers-section">
-				<div className="gui-obo-pers-label">{t("agent avatar style")}</div>
+				<div className="gui-obo-pers-label">{t("settings.agentAvatarStyle")}</div>
 				<div className="flex items-center gap-1.5">
 					{AVATAR_PRESETS.map(p => (
 						<button
@@ -144,21 +144,21 @@ export function PersonalizeSetup({
 			</div>
 
 			<div className="gui-obo-pers-section">
-				<div className="gui-obo-pers-label">{t("smooth streaming")}</div>
+				<div className="gui-obo-pers-label">{t("settings.smoothStreaming")}</div>
 				<button
 					type="button"
 					role="switch"
 					aria-checked={smooth}
 					className={`gui-toggle${smooth ? " gui-toggle--on" : ""}`}
 					onClick={toggleSmooth}
-					aria-label={t("smooth streaming")}
+					aria-label={t("settings.smoothStreaming")}
 				>
 					<span className="gui-toggle-knob" />
 				</button>
 			</div>
 
 			<div className="gui-obo-pers-section">
-				<div className="gui-obo-pers-label">{t("pet theme")}</div>
+				<div className="gui-obo-pers-label">{t("settings.petTheme")}</div>
 				<div className="gui-obo-pet-grid">
 					{petOptions.map(p => (
 						<button

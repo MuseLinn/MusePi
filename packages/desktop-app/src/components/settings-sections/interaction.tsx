@@ -13,7 +13,7 @@ import { SchemaTabSection } from "./schema";
 export function InteractionSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("interaction")}</h2>
+			<h2 className="gui-settings-page-title">{t("settings.interaction")}</h2>
 			<SchemaTabSection rpc={rpc} tabs={["interaction"]} excludeGroups={["Speech", "Approvals", "Language"]} />
 		</>
 	);

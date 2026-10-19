@@ -183,8 +183,8 @@ export function ContextRing({
 			<button
 				type="button"
 				className="gui-context-ring-btn"
-				title={`${t("context usage")} · ${Math.round(effPct)}%`}
-				aria-label={`${t("context usage")} · ${Math.round(effPct)}%`}
+				title={`${t("general.contextUsage")} · ${Math.round(effPct)}%`}
+				aria-label={`${t("general.contextUsage")} · ${Math.round(effPct)}%`}
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
@@ -222,27 +222,27 @@ export function ContextRing({
 			</button>
 			{renderMenu(
 				<div className="gui-context-pop" role="tooltip">
-					<div className="gui-context-pop-title">{t("context usage")}</div>
+					<div className="gui-context-pop-title">{t("general.contextUsage")}</div>
 					<div className="gui-context-pop-row">
-						<span>{t("used")}</span>
+						<span>{t("general.used")}</span>
 						<span className="gui-context-pop-val">
 							{tokens != null ? <CountUp value={tokens} format={fmtTokens} /> : "—"}
 						</span>
 					</div>
 					<div className="gui-context-pop-row">
-						<span>{t("window")}</span>
+						<span>{t("general.window")}</span>
 						<span className="gui-context-pop-val">
 							{contextWindow != null ? <CountUp value={contextWindow} format={fmtTokens} /> : "—"}
 						</span>
 					</div>
 					<div className="gui-context-pop-row">
-						<span>{t("auto-compact threshold")}</span>
+						<span>{t("general.autoCompactThreshold")}</span>
 						<span className="gui-context-pop-val">
 							{thresholdTokens != null ? <CountUp value={thresholdTokens} format={fmtTokens} /> : "—"}
 						</span>
 					</div>
 					<div className="gui-context-pop-row">
-						<span>{t("utilization")}</span>
+						<span>{t("general.utilization")}</span>
 						<span className="gui-context-pop-val" style={{ color }}>
 							<SlidingNumber value={Math.round(effPct)} />%
 						</span>
@@ -253,60 +253,60 @@ export function ContextRing({
 					 *  expensive" with nothing to look at. */}
 					{usage?.cacheHitRate != null && (
 						<div className="gui-context-pop-row">
-							<span>{t("cache hit")}</span>
+							<span>{t("general.cacheHit")}</span>
 							<span className="gui-context-pop-val">{usage.cacheHitRate.toFixed(1)}%</span>
 						</div>
 					)}
 					{usage != null && usage.cost > 0 && (
 						<div className="gui-context-pop-row">
-							<span>{t("session spend")}</span>
+							<span>{t("general.sessionSpend")}</span>
 							<span className="gui-context-pop-val">{formatSpend(usage.cost)}</span>
 						</div>
 					)}
 					{usage != null && usage.cacheRead > 0 && (
 						<div className="gui-context-pop-note">
-							{t("cache read tokens")} {fmtTokens(usage.cacheRead)}
+							{t("general.cacheReadTokens")} {fmtTokens(usage.cacheRead)}
 						</div>
 					)}
 					{pct > 100 && (
 						<div className="gui-context-pop-note" style={{ color: "var(--color-danger)" }}>
-							{t("context over window")} — {t("over window: compact or switch to a larger-context model")}
+							{t("general.contextOverWindow")} — {t("general.overWindowCompact.info")}
 						</div>
 					)}
 					{snapcompact && (
 						<div className="gui-context-pop-snap">
 							<div className="gui-context-pop-row">
-								<span>{t("snapcompact savings")}</span>
+								<span>{t("context.snapcompactSavings")}</span>
 								<span className="gui-context-pop-val">
 									{snapcompact.visionCapable ? `~${fmtTokens(snapcompact.savedTokens)}` : "—"}
 								</span>
 							</div>
 							{!snapcompact.visionCapable ? (
-								<div className="gui-context-pop-note">{t("model does not support images")}</div>
+								<div className="gui-context-pop-note">{t("context.modelDoesNotSupport")}</div>
 							) : (
 								<>
 									{snapcompact.systemPrompt && (
 										<div className="gui-context-pop-note">
 											{snapcompact.systemPrompt.applied
-												? t("system prompt imaged: {text} text → {frames} frames (saves ~{saved})", {
+												? t("context.systemPromptImagedTextWithTextWithFramesWithSaved", {
 														text: fmtTokens(snapcompact.systemPrompt.textTokens),
 														frames: String(snapcompact.systemPrompt.frames),
 														saved: fmtTokens(snapcompact.systemPrompt.savedTokens),
 													})
-												: t("system prompt stays text ({reason})", {
+												: t("context.systemPromptStaysTextWithReason", {
 														reason: t(
 															snapcompact.systemPrompt.reason === "empty"
-																? "reason: empty"
+																? "context.reasonEmpty"
 																: snapcompact.systemPrompt.reason === "margin"
-																	? "reason: insufficient savings"
-																	: "reason: image budget",
+																	? "context.reasonInsufficientSavings"
+																	: "context.reasonImageBudget",
 														),
 													})}
 										</div>
 									)}
 									{snapcompact.toolResults && snapcompact.toolResults.swapped > 0 && (
 										<div className="gui-context-pop-note">
-											{t("tool results: {imaged} imaged (saves ~{saved})", {
+											{t("context.toolResultsImagedWithImagedWithSaved", {
 												imaged: String(snapcompact.toolResults.swapped),
 												saved: fmtTokens(snapcompact.toolResults.savedTokens),
 											})}
@@ -318,12 +318,12 @@ export function ContextRing({
 					)}
 					{quotaLoading ? (
 						<div className="gui-context-pop-quota">
-							<div className="gui-context-pop-quota-title">{t("subscription usage")}</div>
+							<div className="gui-context-pop-quota-title">{t("general.subscriptionUsage")}</div>
 							<div className="gui-context-pop-note">…</div>
 						</div>
 					) : quota && quota.providers.length > 0 ? (
 						<div className="gui-context-pop-quota">
-							<div className="gui-context-pop-quota-title">{t("subscription usage")}</div>
+							<div className="gui-context-pop-quota-title">{t("general.subscriptionUsage")}</div>
 							{quota.providers.map(provider => (
 								<div key={provider.provider} className="gui-context-pop-provider">
 									<div className="gui-context-pop-provider-name">{provider.provider}</div>
@@ -359,7 +359,7 @@ export function ContextRing({
 														</div>
 													))}
 													<div className="gui-context-pop-cell gui-context-pop-cell--total">
-														<div className="gui-context-pop-cell-label">{t("total")}</div>
+														<div className="gui-context-pop-cell-label">{t("general.total")}</div>
 														<div className="gui-usage-bar-track">
 															<div
 																className={`gui-usage-bar ${quotaTone(avg)}`}
@@ -382,11 +382,11 @@ export function ContextRing({
 							className={`gui-context-pop-action${compactFailed ? " gui-context-pop-action--danger" : ""}`}
 							onClick={onCompact}
 							disabled={compacting}
-							title={compactFailed ? t("compaction failed") : t("compact context")}
-							aria-label={t("compact context")}
+							title={compactFailed ? t("composer.compactionFailed") : t("composer.compactContext")}
+							aria-label={t("composer.compactContext")}
 						>
 							<Icon name="collapse-vertical" className="h-3.5 w-3.5" />
-							<span>{compacting ? t("compacting…") : t("compact context")}</span>
+							<span>{compacting ? t("composer.compacting") : t("composer.compactContext")}</span>
 						</button>
 					)}
 				</div>,

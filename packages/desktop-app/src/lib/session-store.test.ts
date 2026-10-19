@@ -1,5 +1,22 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { documentUnfocused, GuiSessionStore } from "./session-store";
+import { documentUnfocused, GuiSessionStore, hasPendingSessionFlush } from "./session-store";
+
+/**
+ * Await the store's coalescing window.
+ *
+ * apply() flushes the first event of a burst on the next microtask, then holds
+ * the rest for a 100 ms window. A 0 ms timer only settles the first half, so a
+ * test that applies twice in a row (the second landing mid-window) must wait
+ * out the window itself.
+ */
+async function flush(): Promise<void> {
+	await Promise.resolve();
+	await Promise.resolve();
+	// Bounded: a pathological stream must not hang the suite.
+	for (let i = 0; i < 12 && hasPendingSessionFlush(); i++) {
+		await new Promise(r => setTimeout(r, 25));
+	}
+}
 
 // Minimal snapshot shape the store needs to construct a MaterializedView.
 function emptySnapshot() {
@@ -35,7 +52,7 @@ describe("GuiSessionStore frame coalescing", () => {
 		}
 		// Nothing emitted synchronously — the burst is pending.
 		expect(emits).toBe(0);
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 		// The whole burst collapsed to a single flush.
 		expect(emits).toBe(1);
 		const snap = store.getSnapshot();
@@ -53,7 +70,7 @@ describe("GuiSessionStore frame coalescing", () => {
 		store.apply(updateEvent(1000, "a1"));
 		store.apply(updateEvent(1000, "a2"));
 		store.apply(updateEvent(2000, "b1"));
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 
 		expect(emits).toBe(1);
 		const snap = store.getSnapshot();
@@ -85,7 +102,7 @@ describe("GuiSessionStore frame coalescing", () => {
 				message: { role: "user", timestamp: 1000, content: [{ type: "text", text: "hi" }] },
 			},
 		} as never);
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 		expect(store.getSnapshot().working).toBe(true);
 
 		// Run-level contract (user direction): turn_end fires per tool batch
@@ -93,11 +110,11 @@ describe("GuiSessionStore frame coalescing", () => {
 		// boundary must NOT flip the button back to send during provider
 		// prep between rounds.
 		store.apply({ kind: "event", payload: { type: "turn_end", message: {}, toolResults: [] } } as never);
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 		expect(store.getSnapshot().working).toBe(true);
 
 		store.apply({ kind: "event", payload: { type: "agent_end", messages: [] } } as never);
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 		expect(store.getSnapshot().working).toBe(false);
 	});
 });
@@ -143,11 +160,11 @@ describe("GuiSessionStore subagent hydration + ownership", () => {
 		const store = new GuiSessionStore("s2", emptySnapshot(), "/work");
 		// Cross-session frame must never paint this session's swarm visuals.
 		store.apply({ kind: "agent-progress", payload: progressWrapper("a1", "running", "other-session") } as never);
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 		expect(store.getSnapshot().agents).toHaveLength(0);
 
 		store.apply({ kind: "agent-progress", payload: progressWrapper("a1", "running", "s2") } as never);
-		await new Promise(r => setTimeout(r, 0));
+		await flush();
 		expect(store.getSnapshot().agents.some(a => a.id === "a1")).toBe(true);
 	});
 });
@@ -194,19 +211,8 @@ describe("GuiSessionStore unviewed subagent completions", () => {
 	// unfocused state, and unlike installing a stub it cannot mislead a library
 	// that is still loading.
 	//
-	// agent-lifecycle envelopes are frame-coalesced: apply() pushes to
-	// #pending and the flush runs on the ambient scheduler — rAF when a DOM
-	// shim registered one (a happy-dom file earlier in the full-suite
-	// process), queueMicrotask otherwise. Await the actual primitive: a 0ms
-	// timer can win the race against rAF's ~16ms clamp.
-	function flush(): Promise<void> {
-		const raf = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
-		return new Promise(r => {
-			if (typeof raf === "function") raf(() => r());
-			else setTimeout(r, 0);
-		});
-	}
-
+	// agent-lifecycle envelopes are coalesced (see the module-level `flush`
+	// above): await that helper, never a 0 ms timer.
 	let savedDocument: unknown;
 	beforeEach(() => {
 		savedDocument = (globalThis as { document?: unknown }).document;

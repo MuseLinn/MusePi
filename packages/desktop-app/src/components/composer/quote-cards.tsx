@@ -15,8 +15,8 @@ export function QuoteCards({ quotes, onRemove }: { quotes: string[]; onRemove(in
 						type="button"
 						className="gui-quote-close"
 						onClick={() => onRemove(i)}
-						title={t("remove quote")}
-						aria-label={t("remove quote")}
+						title={t("general.removeQuote")}
+						aria-label={t("general.removeQuote")}
 					>
 						<X size={12} />
 					</button>

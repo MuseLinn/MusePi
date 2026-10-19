@@ -108,12 +108,12 @@ function scheduleLabel(s: CronSchedule): string {
 			return `${s.date ?? "?"} ${s.time ?? ""}`.trim();
 		case "daily": {
 			const times = s.times?.length ? s.times : s.time ? [s.time] : [];
-			return `${t("scheduled daily")} ${times.join(" / ")}${tz}`;
+			return `${t("settings.scheduledDaily")} ${times.join(" / ")}${tz}`;
 		}
 		case "weekly":
-			return `${t("scheduled weekly")} ${(s.weekdays ?? []).map(d => t(WEEKDAY_KEYS[d] as never)).join("")} ${s.time ?? ""}`;
+			return `${t("settings.scheduledWeekly")} ${(s.weekdays ?? []).map(d => t(WEEKDAY_KEYS[d] as never)).join("")} ${s.time ?? ""}`;
 		case "monthly":
-			return `${t("scheduled monthly")} ${s.dayOfMonth ?? "?"} ${s.time ?? ""}`;
+			return `${t("settings.scheduledMonthly")} ${s.dayOfMonth ?? "?"} ${s.time ?? ""}`;
 		case "cron":
 			return `cron ${s.cron ?? ""}`;
 	}
@@ -137,11 +137,11 @@ function fmtDuration(ms: number): string {
 /** Openchamber-style relative label: 刚刚 / N 分钟后 / HH:mm. */
 function fmtRelative(ms: number): string {
 	const diff = ms - Date.now();
-	if (diff > -60_000 && diff < 90_000) return t("scheduled soon");
+	if (diff > -60_000 && diff < 90_000) return t("settings.scheduledSoon");
 	const abs = Math.abs(diff);
 	if (abs < 60 * 60_000) {
 		const m = Math.max(1, Math.round(abs / 60_000));
-		return diff >= 0 ? t("scheduled in min", { count: m }) : t("scheduled min ago", { count: m });
+		return diff >= 0 ? t("settings.scheduledMin", { count: m }) : t("settings.scheduledMinAgo", { count: m });
 	}
 	return fmtTime(ms);
 }
@@ -342,7 +342,7 @@ export function ScheduledTasksPage({
 	return (
 		<div className="gui-scheduled">
 			<div className="gui-scheduled-head">
-				<h2 className="gui-scheduled-title">{t("scheduled tasks")}</h2>
+				<h2 className="gui-scheduled-title">{t("settings.scheduledTasks")}</h2>
 				<div className="gui-taskcenter-tabs" role="tablist">
 					{(["calendar", "board", "tasks"] as const).map(v => (
 						<button
@@ -360,15 +360,15 @@ export function ScheduledTasksPage({
 							/>
 							<span>
 								{v === "calendar"
-									? t("task center calendar")
+									? t("settings.taskCenterCalendar")
 									: v === "board"
-										? t("task center board")
-										: t("task list")}
+										? t("settings.taskCenterBoard")
+										: t("settings.taskList")}
 							</span>
 						</button>
 					))}
 				</div>
-				<p className="gui-scheduled-desc">{t("scheduled tasks desc")}</p>
+				<p className="gui-scheduled-desc">{t("settings.scheduledTasksDesc")}</p>
 				<div className="gui-scheduled-actions">
 					<button
 						type="button"
@@ -387,19 +387,19 @@ export function ScheduledTasksPage({
 						}
 					>
 						<Icon name="add" className="h-4 w-4" />
-						<span>{t("scheduled new")}</span>
+						<span>{t("settings.scheduledNew")}</span>
 					</button>
 					<button
 						type="button"
 						className="gui-btn"
 						onClick={refresh}
-						title={t("board refresh")}
-						aria-label={t("board refresh")}
+						title={t("settings.boardRefresh")}
+						aria-label={t("settings.boardRefresh")}
 					>
 						<Icon name="refresh" className="h-4 w-4 oc-icon-spin" />
 					</button>
 					<button type="button" className="gui-btn" onClick={onBack}>
-						{t("back to workspace")}
+						{t("settings.backWorkspace")}
 					</button>
 				</div>
 			</div>
@@ -430,8 +430,8 @@ export function ScheduledTasksPage({
 			) : tasks.length === 0 ? (
 				<div className="gui-scheduled-empty">
 					<div className="gui-scheduled-empty-icon">⏰</div>
-					<div className="gui-scheduled-empty-title">{t("scheduled empty title")}</div>
-					<div className="gui-scheduled-empty-desc">{t("scheduled empty desc")}</div>
+					<div className="gui-scheduled-empty-title">{t("settings.scheduledEmptyTitle")}</div>
+					<div className="gui-scheduled-empty-desc">{t("settings.scheduledEmptyDesc")}</div>
 					<button
 						type="button"
 						className="gui-btn gui-scheduled-new"
@@ -449,7 +449,7 @@ export function ScheduledTasksPage({
 						}
 					>
 						<Icon name="add" className="h-4 w-4" />
-						<span>{t("scheduled new")}</span>
+						<span>{t("settings.scheduledNew")}</span>
 					</button>
 				</div>
 			) : (
@@ -473,7 +473,7 @@ export function ScheduledTasksPage({
 										onClick={() => setSelectedId(task.id)}
 									>
 										<span className="gui-scheduled-row-dot" />
-										<span className="min-w-0 flex-1 truncate">{task.name || t("scheduled untitled")}</span>
+										<span className="min-w-0 flex-1 truncate">{task.name || t("settings.scheduledUntitled")}</span>
 										{!task.enabled && <Icon name="pause" className="h-3 w-3 shrink-0 opacity-50" />}
 									</button>
 								))}
@@ -484,12 +484,12 @@ export function ScheduledTasksPage({
 					<div className="gui-scheduled-detail">
 						{selected ? (
 							<>
-								<h3 className="gui-scheduled-detail-title">{selected.name || t("scheduled untitled")}</h3>
+								<h3 className="gui-scheduled-detail-title">{selected.name || t("settings.scheduledUntitled")}</h3>
 								<div className="gui-scheduled-detail-sched">{scheduleLabel(selected.schedule)}</div>
 								<div className="gui-scheduled-detail-status">
 									<span className="gui-scheduled-detail-status-item">
 										<Icon name="time" className="h-3.5 w-3.5" />
-										<span className="gui-scheduled-detail-status-key">{t("scheduled next")}</span>
+										<span className="gui-scheduled-detail-status-key">{t("settings.scheduledNext")}</span>
 										<span className="gui-scheduled-detail-status-val">
 											{selected.state.nextRunAt ? fmtRelative(selected.state.nextRunAt) : "—"}
 											{selected.state.nextRunAt ? ` · ${fmtTime(selected.state.nextRunAt)}` : ""}
@@ -497,7 +497,7 @@ export function ScheduledTasksPage({
 									</span>
 									<span className="gui-scheduled-detail-status-item">
 										<Icon name="check" className="h-3.5 w-3.5" />
-										<span className="gui-scheduled-detail-status-key">{t("scheduled last")}</span>
+										<span className="gui-scheduled-detail-status-key">{t("settings.scheduledLast")}</span>
 										{selected.state.lastStatus ? (
 											<span className={`gui-cron-status ${STATUS_CLASS[selected.state.lastStatus] ?? ""}`}>
 												{t(`scheduled status ${selected.state.lastStatus}` as never)}
@@ -515,7 +515,7 @@ export function ScheduledTasksPage({
 								</div>
 								{selected.state.lastStatus === "error" && selected.state.lastError && (
 									<div className="gui-scheduled-detail-error">
-										<span className="gui-scheduled-detail-status-key">{t("scheduled last error")}</span>
+										<span className="gui-scheduled-detail-status-key">{t("settings.scheduledLastError")}</span>
 										<p className="gui-scheduled-detail-error-text">{selected.state.lastError}</p>
 									</div>
 								)}
@@ -524,14 +524,14 @@ export function ScheduledTasksPage({
 										<input type="checkbox" checked={selected.enabled} onChange={() => toggle(selected)} />
 										<span className="gui-cron-toggle-track" />
 									</label>
-									<span>{t("scheduled enabled")}</span>
+									<span>{t("settings.scheduledEnabled")}</span>
 								</div>
 								<div className="gui-scheduled-detail-prompt">
-									<span className="gui-scheduled-detail-status-key">{t("scheduled prompt")}</span>
+									<span className="gui-scheduled-detail-status-key">{t("settings.scheduledPrompt")}</span>
 									<p className="gui-scheduled-detail-prompt-text">{selected.prompt || "—"}</p>
 								</div>
 								<details className="gui-scheduled-runs">
-									<summary className="gui-scheduled-runs-summary">{t("task run history")}</summary>
+									<summary className="gui-scheduled-runs-summary">{t("settings.taskRunHistory")}</summary>
 									{history.length === 0 ? (
 										<p className="gui-scheduled-runs-empty">—</p>
 									) : (
@@ -551,8 +551,8 @@ export function ScheduledTasksPage({
 															type="button"
 															className="gui-tool-btn"
 															onClick={() => onOpenSession(run.sessionId!)}
-															title={t("scheduled open session")}
-															aria-label={t("scheduled open session")}
+															title={t("settings.scheduledOpenSession")}
+															aria-label={t("settings.scheduledOpenSession")}
 														>
 															<Icon name="external-link" className="h-3.5 w-3.5" />
 														</button>
@@ -569,17 +569,17 @@ export function ScheduledTasksPage({
 										onClick={() => runNow(selected.id)}
 									>
 										<Icon name="play" className="h-4 w-4 oc-icon-nudge" />
-										<span>{t("scheduled run now")}</span>
+										<span>{t("settings.scheduledRunNow")}</span>
 									</button>
 									{onOpenSession && selected.state.lastSessionId ? (
 										<button
 											type="button"
 											className="gui-btn"
 											onClick={() => onOpenSession(selected.state.lastSessionId!)}
-											title={t("scheduled open session")}
+											title={t("settings.scheduledOpenSession")}
 										>
 											<Icon name="external-link" className="h-4 w-4" />
-											<span>{t("scheduled open session")}</span>
+											<span>{t("settings.scheduledOpenSession")}</span>
 										</button>
 									) : null}
 									<button
@@ -588,7 +588,7 @@ export function ScheduledTasksPage({
 										onClick={() => setDraft({ ...selected, schedule: { ...selected.schedule } })}
 									>
 										<Icon name="pencil" className="h-4 w-4" />
-										<span>{t("board edit")}</span>
+										<span>{t("settings.boardEdit")}</span>
 									</button>
 									<button
 										type="button"
@@ -610,14 +610,14 @@ export function ScheduledTasksPage({
 										}}
 									>
 										<Icon name="delete-bin" className="h-4 w-4" />
-										<span>{t("board remove")}</span>
+										<span>{t("settings.boardRemove")}</span>
 									</button>
 								</div>
 							</>
 						) : (
 							<div className="gui-scheduled-empty gui-scheduled-detail-empty">
 								<div className="gui-scheduled-empty-icon">⏰</div>
-								<div className="gui-scheduled-empty-title">{t("scheduled detail empty")}</div>
+								<div className="gui-scheduled-empty-title">{t("settings.scheduledDetailEmpty")}</div>
 							</div>
 						)}
 					</div>
@@ -672,7 +672,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 				aria-expanded={open}
 			>
 				<Icon name="folder-3" className="h-4 w-4" />
-				<span className="gui-calendar-field-text">{value || t("scheduled cwd placeholder")}</span>
+				<span className="gui-calendar-field-text">{value || t("settings.scheduledCwdPlaceholder")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
 			<MenuPopup
@@ -688,7 +688,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 					className="gui-task-input"
 					value={query}
 					onChange={e => setQuery(e.target.value)}
-					placeholder={t("scheduled cwd search")}
+					placeholder={t("settings.scheduledCwdSearch")}
 				/>
 				<div className="gui-cwd-list">
 					{matches.map(p => (
@@ -706,7 +706,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 							<span className="min-w-0 flex-1 truncate">{p}</span>
 						</button>
 					))}
-					{matches.length === 0 && <span className="gui-cwd-empty">{t("scheduled cwd empty")}</span>}
+					{matches.length === 0 && <span className="gui-cwd-empty">{t("settings.scheduledCwdEmpty")}</span>}
 				</div>
 			</MenuPopup>
 		</div>
@@ -743,7 +743,7 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 	const isSel = (d: Date): boolean => selected !== null && iso(d) === iso(selected);
 	const isToday = (d: Date): boolean => iso(d) === iso(today);
 	const fmt = (d: Date): string =>
-		t("scheduled date full", { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
+		t("settings.scheduledDateFull", { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
 	const pick = (date: string): void => {
 		onChange(date);
 		setOpen(false);
@@ -758,7 +758,7 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 				aria-expanded={open}
 			>
 				<Icon name="calendar-schedule" className="h-4 w-4" />
-				<span className="gui-calendar-field-text">{selected ? fmt(selected) : t("scheduled pick date")}</span>
+				<span className="gui-calendar-field-text">{selected ? fmt(selected) : t("settings.scheduledPickDate")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
 			<MenuPopup
@@ -775,16 +775,16 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 							type="button"
 							className="gui-calendar-nav"
 							onClick={() => setMonth(new Date(year, mon - 1, 1))}
-							aria-label={t("scheduled prev month")}
+							aria-label={t("settings.scheduledPrevMonth")}
 						>
 							<Icon name="arrow-left-s" className="h-4 w-4" />
 						</button>
-						<span className="gui-calendar-month">{t("task calendar month", { year, month: mon + 1 })}</span>
+						<span className="gui-calendar-month">{t("settings.taskCalendarMonth", { year, month: mon + 1 })}</span>
 						<button
 							type="button"
 							className="gui-calendar-nav"
 							onClick={() => setMonth(new Date(year, mon + 1, 1))}
-							aria-label={t("scheduled next month")}
+							aria-label={t("settings.scheduledNextMonth")}
 						>
 							<Icon name="arrow-right-s" className="h-4 w-4" />
 						</button>
@@ -808,14 +808,14 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 					</div>
 					<div className="gui-calendar-foot">
 						<button type="button" className="gui-btn" onClick={() => pick(iso(today))}>
-							{t("scheduled today")}
+							{t("settings.scheduledToday")}
 						</button>
 						<button
 							type="button"
 							className="gui-btn"
 							onClick={() => setMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
 						>
-							{t("scheduled jump today")}
+							{t("settings.scheduledJumpToday")}
 						</button>
 					</div>
 				</div>
@@ -909,23 +909,23 @@ function CronEditor({
 	};
 
 	return (
-		<DialogFrame open={open} label={t("scheduled editor")} onClose={onCancel} className="gui-cron-dialog">
+		<DialogFrame open={open} label={t("settings.scheduledEditor")} onClose={onCancel} className="gui-cron-dialog">
 			<div className="gui-cron-form-scroll">
 				<div className="gui-cron-form">
 					<div className="gui-cron-form-grid">
 						<div className="gui-cron-form-col">
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled name")} *</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledName")} *</span>
 								<input
 									className="gui-task-input"
 									value={draft.name}
 									onChange={e => patch({ name: e.target.value })}
-									placeholder={t("scheduled name placeholder")}
+									placeholder={t("settings.scheduledNamePlaceholder")}
 								/>
 							</div>
 							{kind === "daily" && (
 								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled times")}</span>
+									<span className="gui-widget-editor-label">{t("settings.scheduledTimes")}</span>
 									{times.map((tm, i) => (
 										<div key={i} className="gui-cron-time-row">
 											<input
@@ -943,8 +943,8 @@ function CronEditor({
 													type="button"
 													className="gui-tool-btn"
 													onClick={() => setTimes(times.filter((_, j) => j !== i))}
-													title={t("scheduled remove time")}
-													aria-label={t("scheduled remove time")}
+													title={t("settings.scheduledRemoveTime")}
+													aria-label={t("settings.scheduledRemoveTime")}
 												>
 													<Icon name="delete-bin" className="h-3.5 w-3.5" />
 												</button>
@@ -957,13 +957,13 @@ function CronEditor({
 										onClick={() => setTimes([...times, "12:00"])}
 									>
 										<Icon name="add" className="h-3.5 w-3.5" />
-										<span>{t("scheduled add time")}</span>
+										<span>{t("settings.scheduledAddTime")}</span>
 									</button>
 								</div>
 							)}
 							{(kind === "weekly" || kind === "monthly") && (
 								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled time")}</span>
+									<span className="gui-widget-editor-label">{t("settings.scheduledTime")}</span>
 									<input
 										className="gui-task-input"
 										type="time"
@@ -974,7 +974,7 @@ function CronEditor({
 							)}
 							{kind === "once" && (
 								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled time")}</span>
+									<span className="gui-widget-editor-label">{t("settings.scheduledTime")}</span>
 									<input
 										className="gui-task-input"
 										type="time"
@@ -984,53 +984,53 @@ function CronEditor({
 								</div>
 							)}
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled model")}</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledModel")}</span>
 								<GuiSelect
 									className="gui-settings-select"
 									value={draft.model ?? ""}
 									onChange={v => patch({ model: v || undefined })}
 									options={[
-										{ value: "", label: t("scheduled model default") },
+										{ value: "", label: t("settings.scheduledModelDefault") },
 										...models.map(m => ({ value: m.id, label: m.name ?? m.id })),
 									]}
 								/>
 							</div>
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled prompt")} *</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledPrompt")} *</span>
 								<textarea
 									className="gui-task-input gui-widget-editor-textarea"
 									rows={5}
 									value={draft.prompt}
 									onChange={e => patch({ prompt: e.target.value })}
-									placeholder={t("scheduled prompt placeholder")}
+									placeholder={t("settings.scheduledPromptPlaceholder")}
 								/>
 							</div>
 						</div>
 						<div className="gui-cron-form-col">
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled type")}</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledType")}</span>
 								<GuiSelect
 									className="gui-settings-select"
 									value={kind}
 									onChange={v => patchSchedule({ kind: v as CronSchedule["kind"] })}
 									options={[
-										{ value: "once", label: t("scheduled type once") },
-										{ value: "daily", label: t("scheduled type daily") },
-										{ value: "weekly", label: t("scheduled type weekly") },
-										{ value: "monthly", label: t("scheduled type monthly") },
-										{ value: "cron", label: t("scheduled type cron") },
+										{ value: "once", label: t("settings.scheduledTypeOnce") },
+										{ value: "daily", label: t("settings.scheduledTypeDaily") },
+										{ value: "weekly", label: t("settings.scheduledTypeWeekly") },
+										{ value: "monthly", label: t("settings.scheduledTypeMonthly") },
+										{ value: "cron", label: t("settings.scheduledTypeCron") },
 									]}
 								/>
 							</div>
 							{kind === "once" && (
 								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled date")}</span>
+									<span className="gui-widget-editor-label">{t("settings.scheduledDate")}</span>
 									<CalendarPicker value={draft.schedule.date} onChange={date => patchSchedule({ date })} />
 								</div>
 							)}
 							{kind === "weekly" && (
 								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled weekdays")}</span>
+									<span className="gui-widget-editor-label">{t("settings.scheduledWeekdays")}</span>
 									<div className="gui-cron-weekdays">
 										{orderedWeekdayKeys().map((key, i) => {
 											const day = (weekStartIndex() + i) % 7;
@@ -1055,7 +1055,7 @@ function CronEditor({
 							)}
 							{kind === "monthly" && (
 								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled day of month")}</span>
+									<span className="gui-widget-editor-label">{t("settings.scheduledDayMonth")}</span>
 									<input
 										className="gui-task-input"
 										type="number"
@@ -1070,7 +1070,7 @@ function CronEditor({
 							 * task only executes inside HH:mm–HH:mm (crosses midnight
 							 * allowed) — heavy jobs wait for a quiet machine. */}
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("idle window")}</span>
+								<span className="gui-widget-editor-label">{t("settings.idleWindow")}</span>
 								<div className="gui-cron-time-row">
 									<input
 										className="gui-task-input"
@@ -1084,7 +1084,7 @@ function CronEditor({
 												},
 											})
 										}
-										aria-label={t("idle window start")}
+										aria-label={t("settings.idleWindowStart")}
 									/>
 									<span className="gui-cron-idle-sep">–</span>
 									<input
@@ -1099,26 +1099,26 @@ function CronEditor({
 												},
 											})
 										}
-										aria-label={t("idle window end")}
+										aria-label={t("settings.idleWindowEnd")}
 									/>
 									{draft.schedule.idleWindow && (
 										<button
 											type="button"
 											className="gui-tool-btn"
 											onClick={() => patchSchedule({ idleWindow: undefined })}
-											title={t("idle window clear")}
-											aria-label={t("idle window clear")}
+											title={t("settings.idleWindowClear")}
+											aria-label={t("settings.idleWindowClear")}
 										>
 											<Icon name="delete-bin" className="h-3.5 w-3.5" />
 										</button>
 									)}
 								</div>
-								<div className="gui-cron-idle-hint">{t("idle window hint")}</div>
+								<div className="gui-cron-idle-hint">{t("settings.idleWindowHint")}</div>
 							</div>
 							{kind === "cron" && (
 								<>
 									<div className="gui-widget-editor-field">
-										<span className="gui-widget-editor-label">{t("scheduled cron")} *</span>
+										<span className="gui-widget-editor-label">{t("settings.scheduledCron")} *</span>
 										<input
 											className="gui-task-input gui-cron-expr"
 											value={draft.schedule.cron ?? ""}
@@ -1127,7 +1127,7 @@ function CronEditor({
 										/>
 										{cronPreview.length > 0 && (
 											<div className="gui-cron-preview">
-												<span className="gui-widget-editor-hint">{t("scheduled next runs")}</span>
+												<span className="gui-widget-editor-hint">{t("settings.scheduledNextRuns")}</span>
 												<div className="gui-cron-preview-list">
 													{cronPreview.map((r, i) => (
 														<span key={i}>{r}</span>
@@ -1137,7 +1137,7 @@ function CronEditor({
 										)}
 									</div>
 									<div className="gui-widget-editor-field">
-										<span className="gui-widget-editor-label">{t("scheduled cron examples")}</span>
+										<span className="gui-widget-editor-label">{t("settings.scheduledCronExamples")}</span>
 										<div className="gui-cron-examples">
 											{CRON_EXAMPLES.map(ex => (
 												<button
@@ -1155,33 +1155,33 @@ function CronEditor({
 								</>
 							)}
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled timezone")}</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledTimezone")}</span>
 								<GuiSelect
 									className="gui-settings-select"
 									value={draft.schedule.timezone ?? ""}
 									onChange={v => patchSchedule({ timezone: v || undefined })}
 									options={[
-										{ value: "", label: t("scheduled tz local") },
+										{ value: "", label: t("settings.scheduledTzLocal") },
 										...TIMEZONES.map(tz => ({ value: tz, label: tz })),
 									]}
 								/>
 							</div>
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled thinking")}</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledThinking")}</span>
 								<GuiSelect
 									className="gui-settings-select"
 									value={draft.thinkingLevel ?? "default"}
 									onChange={v => patch({ thinkingLevel: v as CronTask["thinkingLevel"] })}
 									options={[
-										{ value: "default", label: t("scheduled thinking default") },
-										{ value: "low", label: t("scheduled thinking low") },
-										{ value: "medium", label: t("scheduled thinking medium") },
-										{ value: "high", label: t("scheduled thinking high") },
+										{ value: "default", label: t("settings.scheduledThinkingDefault") },
+										{ value: "low", label: t("settings.scheduledThinkingLow") },
+										{ value: "medium", label: t("settings.scheduledThinkingMedium") },
+										{ value: "high", label: t("settings.scheduledThinkingHigh") },
 									]}
 								/>
 							</div>
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled cwd")}</span>
+								<span className="gui-widget-editor-label">{t("settings.scheduledCwd")}</span>
 								<CwdPicker value={draft.cwd} onChange={cwd => patch({ cwd })} />
 							</div>
 						</div>
@@ -1191,11 +1191,11 @@ function CronEditor({
 			<div className="gui-cron-form-foot">
 				<label className="gui-cron-enabled">
 					<input type="checkbox" checked={draft.enabled} onChange={e => patch({ enabled: e.target.checked })} />
-					<span>{t("scheduled enabled")}</span>
+					<span>{t("settings.scheduledEnabled")}</span>
 				</label>
 				<div className="gui-cron-form-actions">
 					<button type="button" className="gui-btn" onClick={onCancel}>
-						{t("cancel")}
+						{t("settings.cancel")}
 					</button>
 					<button
 						type="button"
@@ -1210,7 +1210,7 @@ function CronEditor({
 							onSave({ ...draft, schedule: { ...draft.schedule, idleWindow: clean } });
 						}}
 					>
-						{t("save")}
+						{t("general.save")}
 					</button>
 				</div>
 			</div>
@@ -1249,7 +1249,7 @@ function formatRunAt(epoch: number, tz: string | undefined): string {
 		hour = d.getHours();
 		minute = d.getMinutes();
 	}
-	return t("scheduled next run at", {
+	return t("settings.scheduledNextRun", {
 		month,
 		day,
 		time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
@@ -1277,16 +1277,16 @@ function DeleteConfirmDialog({
 	return (
 		<DialogFrame
 			open={open}
-			label={t("scheduled delete title")}
+			label={t("settings.scheduledDeleteTitle")}
 			onClose={onCancel}
 			className="gui-cron-delete-dialog"
 		>
 			<div className="gui-cron-delete">
 				<p className="gui-cron-delete-desc">
-					{t("scheduled delete desc", { name: task.name || t("scheduled untitled") })}
+					{t("settings.scheduledDeleteDesc", { name: task.name || t("settings.scheduledUntitled") })}
 				</p>
 				{sessionCount > 0 && (
-					<p className="gui-cron-delete-sessions">{t("scheduled delete sessions", { count: sessionCount })}</p>
+					<p className="gui-cron-delete-sessions">{t("settings.scheduledDeleteSessions", { count: sessionCount })}</p>
 				)}
 				<div className="gui-cron-delete-opts">
 					<label className="gui-cron-delete-opt">
@@ -1297,8 +1297,8 @@ function DeleteConfirmDialog({
 							onChange={() => setCleanup("none")}
 						/>
 						<span>
-							<strong>{t("scheduled delete keep")}</strong>
-							<small>{t("scheduled delete keep desc")}</small>
+							<strong>{t("settings.scheduledDeleteKeep")}</strong>
+							<small>{t("settings.scheduledDeleteKeepDesc")}</small>
 						</span>
 					</label>
 					<label className="gui-cron-delete-opt">
@@ -1309,8 +1309,8 @@ function DeleteConfirmDialog({
 							onChange={() => setCleanup("archive")}
 						/>
 						<span>
-							<strong>{t("scheduled delete archive")}</strong>
-							<small>{t("scheduled delete archive desc")}</small>
+							<strong>{t("settings.scheduledDeleteArchive")}</strong>
+							<small>{t("settings.scheduledDeleteArchiveDesc")}</small>
 						</span>
 					</label>
 					<label className="gui-cron-delete-opt">
@@ -1321,14 +1321,14 @@ function DeleteConfirmDialog({
 							onChange={() => setCleanup("delete")}
 						/>
 						<span>
-							<strong>{t("scheduled delete delete")}</strong>
-							<small>{t("scheduled delete delete desc")}</small>
+							<strong>{t("settings.scheduledDeleteDelete")}</strong>
+							<small>{t("settings.scheduledDeleteDeleteDesc")}</small>
 						</span>
 					</label>
 				</div>
 				<div className="gui-cron-form-actions">
 					<button type="button" className="gui-btn" onClick={onCancel}>
-						{t("cancel")}
+						{t("settings.cancel")}
 					</button>
 					<button
 						type="button"
@@ -1336,7 +1336,7 @@ function DeleteConfirmDialog({
 						disabled={busy}
 						onClick={() => onConfirm(cleanup)}
 					>
-						{t("board remove")}
+						{t("settings.boardRemove")}
 					</button>
 				</div>
 			</div>

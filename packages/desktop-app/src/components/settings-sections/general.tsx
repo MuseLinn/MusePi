@@ -69,9 +69,9 @@ function PetDecorSection(): ReactNode {
 	}, []);
 	return (
 		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{t("pet decor")}</div>
+			<div className="gui-settings-section-title">{t("settings.petDecor")}</div>
 			<div className="gui-settings-section-desc">
-				{builtinSelected ? t("pet decor description") : t("pet decor description imported")}
+				{builtinSelected ? t("settings.petDecorDescription") : t("settings.petDecorDescriptionImported")}
 			</div>
 			{PET_DECOR_FLAGS.map(flag => (
 				<div className="gui-settings-row" key={flag.key}>
@@ -85,7 +85,7 @@ function PetDecorSection(): ReactNode {
 						aria-checked={decor[flag.key]}
 						className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
 						disabled={!builtinSelected}
-						title={builtinSelected ? undefined : t("pet decor description imported")}
+						title={builtinSelected ? undefined : t("settings.petDecorDescriptionImported")}
 						onClick={() => {
 							setDecor({ ...decor, [flag.key]: !decor[flag.key] });
 							setPetDecorFlag(flag.key, !decor[flag.key]);
@@ -101,10 +101,10 @@ function PetDecorSection(): ReactNode {
 			 * are mutually exclusive by design (one state one look). */}
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("pet accessory")}</div>
-					<div className="gui-settings-row-desc">{t("pet accessory description")}</div>
+					<div className="gui-settings-row-label">{t("settings.petAccessory")}</div>
+					<div className="gui-settings-row-desc">{t("settings.petAccessoryDescription")}</div>
 				</div>
-				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("pet accessory")}>
+				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("settings.petAccessory")}>
 					{PET_ACCESSORIES.map((value: PetAccessory) => (
 						<button
 							key={value}
@@ -113,7 +113,7 @@ function PetDecorSection(): ReactNode {
 							aria-checked={decor.accessory === value}
 							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
 							disabled={!builtinSelected}
-							title={builtinSelected ? undefined : t("pet decor description imported")}
+							title={builtinSelected ? undefined : t("settings.petDecorDescriptionImported")}
 							onClick={() => {
 								setDecor({ ...decor, accessory: value });
 								setPetAccessory(value);
@@ -191,7 +191,7 @@ export function TaskCardStylePreview({
 				onClick={() => onPick("swarm")}
 			>
 				{swarm}
-				<span className="gui-taskstyle-preview-label">{t("MusePi Swarm")}</span>
+				<span className="gui-taskstyle-preview-label">{t("settings.musepiSwarm")}</span>
 			</button>
 			<button
 				type="button"
@@ -200,7 +200,7 @@ export function TaskCardStylePreview({
 				onClick={() => onPick("classic")}
 			>
 				{classic}
-				<span className="gui-taskstyle-preview-label">{t("MusePi original (Classic)")}</span>
+				<span className="gui-taskstyle-preview-label">{t("settings.musepiOriginal")}</span>
 			</button>
 		</div>
 	);
@@ -220,7 +220,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [pickedRoot, setPickedRoot] = useState<string | null>(null);
 	const [rootBusy, setRootBusy] = useState(false);
 	const [rootMsg, setRootMsg] = useState<{ ok: boolean; text: string } | null>(null);
-	const [updateStatus, setUpdateStatus] = useState<string>(t("check for updates"));
+	const [updateStatus, setUpdateStatus] = useState<string>(t("settings.checkUpdates"));
 	// Full check result kept for the richer row: notes snippet + explicit
 	// 前往下载 button instead of the old surprise window.open popup.
 	const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
@@ -230,13 +230,13 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		try {
 			const r = await checkAppUpdates();
 			if (!r) {
-				setUpdateStatus(t("updates only in the desktop app"));
+				setUpdateStatus(t("settings.updatesOnlyDesktopApp"));
 				return;
 			}
-			if (!r.enabled) setUpdateStatus(t("no update source configured"));
+			if (!r.enabled) setUpdateStatus(t("settings.noUpdateSourceConfigured"));
 			else if (r.error) setUpdateStatus(`⚠ ${r.error}`);
-			else if (r.newer) setUpdateStatus(`${t("new version")}: v${r.latest}`);
-			else setUpdateStatus(`${t("up to date")} (v${r.current ?? "?"})`);
+			else if (r.newer) setUpdateStatus(`${t("settings.newVersion")}: v${r.latest}`);
+			else setUpdateStatus(`${t("settings.upDate")} (v${r.current ?? "?"})`);
 			setUpdateResult(r);
 		} finally {
 			setUpdateChecking(false);
@@ -340,8 +340,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	})();
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("general")}</h2>
-			<p className="gui-settings-page-desc">{t("general settings")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.general2")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.generalSettings")}</p>
 			{/* Schema-driven settings on the general tab (settings.schema
 			 * ui.tab = "general", e.g. power.sleepPrevention). Rendered here
 			 * so the daemon's single source of truth drives the panel; the
@@ -350,24 +350,24 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<SchemaTabSection rpc={rpc} tabs={["general"]} />
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("busy enter behavior")}</div>
-					<div className="gui-settings-row-desc">{t("busy enter behavior description")}</div>
+					<div className="gui-settings-row-label">{t("settings.busyEnterBehavior")}</div>
+					<div className="gui-settings-row-desc">{t("settings.busyEnterBehaviorDescription")}</div>
 				</div>
 				<GuiSelect
 					className="gui-input max-w-[200px]"
 					value={busyEnter}
 					onChange={v => setBusyEnter(v === "queue" ? "queue" : "steer")}
-					ariaLabel={t("busy enter behavior")}
+					ariaLabel={t("settings.busyEnterBehavior")}
 					options={[
-						{ value: "queue", label: t("busy enter queue") },
-						{ value: "steer", label: t("busy enter steer") },
+						{ value: "queue", label: t("settings.busyEnterQueue") },
+						{ value: "steer", label: t("settings.busyEnterSteer") },
 					]}
 				/>
 			</div>
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("agent avatar style")}</div>
-					<div className="gui-settings-row-desc">{t("agent avatar style description")}</div>
+					<div className="gui-settings-row-label">{t("settings.agentAvatarStyle")}</div>
+					<div className="gui-settings-row-desc">{t("settings.agentAvatarStyleDescription")}</div>
 				</div>
 			</div>
 			{/* Preset picker as a labelled card grid (2026-09-20). It used to be
@@ -379,7 +379,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			 * state. The pet card previews through BuiltinPetSprite directly:
 			 * an IMPERATIVE render() at 20px would be unreadable at card size
 			 * and would not react to the decor pref. */}
-			<div className="gui-avatar-grid" role="radiogroup" aria-label={t("agent avatar style")}>
+			<div className="gui-avatar-grid" role="radiogroup" aria-label={t("settings.agentAvatarStyle")}>
 				{AVATAR_PRESETS.map(p => {
 					const selected = avatarId === p.id;
 					return (
@@ -410,8 +410,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{avatarId === "punk" && (
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("pixel face")}</div>
-						<div className="gui-settings-row-desc">{t("pixel face description")}</div>
+						<div className="gui-settings-row-label">{t("settings.pixelFace")}</div>
+						<div className="gui-settings-row-desc">{t("settings.pixelFaceDescription")}</div>
 					</div>
 					<div className="flex items-center gap-2">
 						<PunkAvatar size={40} />
@@ -423,13 +423,13 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								setPunkSeed(randomPunkSeed());
 							}}
 						>
-							{t("change face")}
+							{t("settings.changeFace")}
 						</button>
 						<input
 							className="gui-input w-[150px]"
 							value={punkSeedInput}
-							placeholder={t("face seed")}
-							aria-label={t("face seed")}
+							placeholder={t("settings.faceSeed")}
+							aria-label={t("settings.faceSeed")}
 							onChange={e => setPunkSeedInput(e.target.value)}
 							onKeyDown={e => {
 								if (e.key === "Enter" && punkSeedInput.trim()) setPunkSeed(punkSeedInput.trim());
@@ -441,7 +441,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							disabled={!punkSeedInput.trim()}
 							onClick={() => setPunkSeed(punkSeedInput.trim())}
 						>
-							{t("apply")}
+							{t("tools.apply")}
 						</button>
 					</div>
 				</div>
@@ -449,8 +449,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{autostartSupported && (
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("launch at login")}</div>
-						<div className="gui-settings-row-desc">{t("launch at login description")}</div>
+						<div className="gui-settings-row-label">{t("settings.launchLogin")}</div>
+						<div className="gui-settings-row-desc">{t("settings.launchLoginDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -459,7 +459,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						className={`gui-toggle${autostartEnabled ? " gui-toggle--on" : ""}`}
 						disabled={autostartBusy}
 						onClick={toggleAutostart}
-						aria-label={t("launch at login")}
+						aria-label={t("settings.launchLogin")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -467,8 +467,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			)}
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("dot matrix background")}</div>
-					<div className="gui-settings-row-desc">{t("dot matrix background description")}</div>
+					<div className="gui-settings-row-label">{t("settings.dotMatrixBackground")}</div>
+					<div className="gui-settings-row-desc">{t("settings.dotMatrixBackgroundDescription")}</div>
 				</div>
 				<button
 					type="button"
@@ -481,7 +481,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						localStorage.setItem("musepi-gui-dotmatrix", next ? "1" : "0");
 						window.dispatchEvent(new CustomEvent("musepi-dotmatrix-changed"));
 					}}
-					aria-label={t("dot matrix background")}
+					aria-label={t("settings.dotMatrixBackground")}
 				>
 					<span className="gui-toggle-knob" />
 				</button>
@@ -489,8 +489,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{dotMatrixOn && (
 				<div className="gui-settings-row">
 					<div className="w-full">
-						<div className="gui-settings-row-label">{t("dot matrix text")}</div>
-						<div className="gui-settings-row-desc">{t("dot matrix text description")}</div>
+						<div className="gui-settings-row-label">{t("settings.dotMatrixText")}</div>
+						<div className="gui-settings-row-desc">{t("settings.dotMatrixTextDescription")}</div>
 						<input
 							className="gui-input mt-2 w-full max-w-[320px]"
 							value={dotMatrixText}
@@ -502,7 +502,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								localStorage.setItem("musepi-gui-dotmatrix-text", v);
 								window.dispatchEvent(new CustomEvent("musepi-dotmatrix-changed"));
 							}}
-							aria-label={t("dot matrix text")}
+							aria-label={t("settings.dotMatrixText")}
 						/>
 						<div className="gui-dotmatrix-preview" aria-hidden="true">
 							<DotMatrixMark text={dotMatrixText || "MusePi"} fontSize={96} />
@@ -512,7 +512,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			)}
 			<div className="gui-settings-row">
 				<div>
-					<div className="gui-settings-row-label">{t("daemon")}</div>
+					<div className="gui-settings-row-label">{t("settings.daemon")}</div>
 					<div className="text-[13px] text-[var(--color-text-muted)]">{daemonUrl}</div>
 				</div>
 			</div>
@@ -520,7 +520,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<>
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("version")}</div>
+							<div className="gui-settings-row-label">{t("tools.version")}</div>
 							{/* MusePi brand version first; the daemon reports the OMP
 							 * engine version when it was spawned unbranded. */}
 							<div className="text-[13px] text-[var(--color-text-muted)]">
@@ -531,7 +531,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					{info.engineVersion && (
 						<div className="gui-settings-row">
 							<div>
-								<div className="gui-settings-row-label">{t("engine")}</div>
+								<div className="gui-settings-row-label">{t("tools.engine")}</div>
 								<div className="text-[13px] text-[var(--color-text-muted)]">
 									{info.engine ?? `MusePi ${info.engineVersion}`}
 								</div>
@@ -540,8 +540,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					)}
 					<div className="gui-settings-row">
 						<div className="w-full">
-							<div className="gui-settings-row-label">{t("data storage path")}</div>
-							<div className="gui-settings-row-desc">{t("data storage path description")}</div>
+							<div className="gui-settings-row-label">{t("general.dataStoragePath")}</div>
+							<div className="gui-settings-row-desc">{t("general.dataStoragePathDescription")}</div>
 							<div className="mt-2 flex items-center gap-2">
 								<div className="min-w-0 flex-1 truncate rounded-md border border-[var(--border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[12.5px] text-[var(--color-text-muted)]">
 									{pickedRoot ?? info?.dataRoot ?? info?.configDir ?? "—"}
@@ -562,14 +562,14 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 													.catch(err =>
 														setRootMsg({
 															ok: false,
-															text: t("data root migrate failed: {error}", {
+															text: t("general.dataRootMigrateFailedWithError", {
 																error: err instanceof Error ? err.message : String(err),
 															}),
 														}),
 													);
 											}}
 										>
-											{t("select folder")}
+											{t("general.selectFolder")}
 										</button>
 										<button
 											type="button"
@@ -584,11 +584,11 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 													.then(res => {
 														if (res?.ok) {
 															setPickedRoot(null);
-															setRootMsg({ ok: true, text: t("data root migrated") });
+															setRootMsg({ ok: true, text: t("general.dataRootMigrated") });
 														} else {
 															setRootMsg({
 																ok: false,
-																text: t("data root migrate failed: {error}", {
+																text: t("general.dataRootMigrateFailedWithError", {
 																	error: res?.error ?? "unknown error",
 																}),
 															});
@@ -597,7 +597,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 													.catch(err =>
 														setRootMsg({
 															ok: false,
-															text: t("data root migrate failed: {error}", {
+															text: t("general.dataRootMigrateFailedWithError", {
 																error: err instanceof Error ? err.message : String(err),
 															}),
 														}),
@@ -605,7 +605,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 													.finally(() => setRootBusy(false));
 											}}
 										>
-											{t("save")}
+											{t("general.save")}
 										</button>
 									</>
 								)}
@@ -624,14 +624,14 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					{info.runtime && (
 						<div className="gui-settings-row">
 							<div>
-								<div className="gui-settings-row-label">{t("runtime")}</div>
+								<div className="gui-settings-row-label">{t("tools.runtime")}</div>
 								<div className="truncate text-[13px] text-[var(--color-text-muted)]">{info.runtime}</div>
 							</div>
 						</div>
 					)}
 					<div className="gui-settings-row">
 						<div className="w-full">
-							<div className="gui-settings-row-label">{t("check for updates")}</div>
+							<div className="gui-settings-row-label">{t("settings.checkUpdates")}</div>
 							<div className="gui-settings-row-desc">{updateStatus}</div>
 							{updateResult?.newer && (
 								<div className="gui-update-result">
@@ -656,8 +656,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 										>
 											{t(
 												updateResult.otaCapable === false && updateResult.url
-													? "download installer"
-													: "download update",
+													? "settings.downloadInstaller"
+													: "settings.downloadUpdate",
 											)}
 										</button>
 										<button
@@ -670,7 +670,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 											}
 										>
 											<Icon name="download" className="h-3.5 w-3.5" />
-											<span>{t("go to download")}</span>
+											<span>{t("settings.goDownload")}</span>
 										</button>
 									</div>
 								</div>
@@ -683,7 +683,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							onClick={() => void runUpdateCheck()}
 						>
 							<Icon name="download" className="h-3.5 w-3.5" />
-							<span>{updateChecking ? t("checking…") : t("check")}</span>
+							<span>{updateChecking ? t("settings.checking") : t("settings.check")}</span>
 						</button>
 					</div>
 				</>
@@ -691,7 +691,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{metaErr && (
 				<div className="gui-settings-row">
 					<div className="text-[13px] text-[var(--color-warning)]">
-						{t("daemon meta unavailable: {reason}")} {metaErr}
+						{t("tools.daemonMetaUnavailableWithReason")} {metaErr}
 					</div>
 				</div>
 			)}

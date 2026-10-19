@@ -82,20 +82,20 @@ export function ShortcutsSection(): ReactNode {
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("shortcuts")}</h2>
-			<p className="gui-settings-page-desc">{t("shortcuts settings")}</p>
+			<h2 className="gui-settings-page-title">{t("general.shortcuts")}</h2>
+			<p className="gui-settings-page-desc">{t("general.shortcutsSettings")}</p>
 			<div className="gui-sc-search">
 				<Search size={13} className="gui-sc-search-ico" />
 				<input
 					className="gui-sc-search-input"
-					placeholder={tLoose("shortcut search placeholder")}
+					placeholder={tLoose("general.shortcutSearchPlaceholder")}
 					value={query}
 					onChange={e => setQuery(e.target.value)}
 				/>
 			</div>
 			{conflict && (
 				<p className="gui-sc-conflict" role="alert">
-					{tLoose("shortcut conflict", { label: conflict.label })}
+					{tLoose("general.shortcutConflict", { label: conflict.label })}
 				</p>
 			)}
 			<div className="gui-sc-list">
@@ -108,14 +108,14 @@ export function ShortcutsSection(): ReactNode {
 									<span className="gui-sc-row-name">
 										{tLoose(row.labelKey)}
 										{isOverridden(row.id) && (
-											<em className="gui-sc-modified">{tLoose("shortcut modified")}</em>
+											<em className="gui-sc-modified">{tLoose("general.shortcutModified")}</em>
 										)}
 									</span>
 									<span className="gui-sc-row-desc">{tLoose(row.descKey)}</span>
 								</div>
 								<div className="gui-sc-row-keys">
 									{capturing === row.id ? (
-										<span className="gui-sc-capture">{tLoose("shortcut capture hint")}</span>
+										<span className="gui-sc-capture">{tLoose("general.shortcutCaptureHint")}</span>
 									) : (
 										<kbd className="gui-kbd">{bindingLabel(row.id)}</kbd>
 									)}
@@ -123,8 +123,8 @@ export function ShortcutsSection(): ReactNode {
 										<button
 											type="button"
 											className="gui-sc-btn"
-											title={tLoose("shortcut edit")}
-											aria-label={tLoose("shortcut edit")}
+											title={tLoose("general.shortcutEdit")}
+											aria-label={tLoose("general.shortcutEdit")}
 											onClick={() => {
 												setConflict(null);
 												setCapturing(row.id);
@@ -137,8 +137,8 @@ export function ShortcutsSection(): ReactNode {
 										<button
 											type="button"
 											className="gui-sc-btn"
-											title={tLoose("shortcut reset")}
-											aria-label={tLoose("shortcut reset")}
+											title={tLoose("general.shortcutReset")}
+											aria-label={tLoose("general.shortcutReset")}
 											onClick={() => setBinding(row.id, null)}
 										>
 											<Trash2 size={12} />

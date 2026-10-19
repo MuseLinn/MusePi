@@ -628,8 +628,22 @@ export function stateFromSignals(s: PetSessionSignals = {}): PetState {
 export function orbFromSession(
 	snap: { working?: boolean; streaming?: boolean; approvals?: readonly unknown[] } | null | undefined,
 ): OrbState {
-	if (snap?.approvals && snap.approvals.length > 0) return "waiting";
-	if (snap?.working) return snap.streaming ? "composing" : "working";
+	return orbFromFlags({
+		working: snap?.working === true,
+		streaming: snap?.streaming === true,
+		hasApprovals: (snap?.approvals?.length ?? 0) > 0,
+	});
+}
+
+/** The same mapping from the three facts alone.
+ *
+ *  Exists so a surface that subscribes to a NARROW slice of the session (the
+ *  header reads only these flags, not the transcript) can derive the orb
+ *  without holding the whole snapshot — passing a fabricated array just to
+ *  reach the length check would be worse. */
+export function orbFromFlags(signal: { working: boolean; streaming: boolean; hasApprovals: boolean }): OrbState {
+	if (signal.hasApprovals) return "waiting";
+	if (signal.working) return signal.streaming ? "composing" : "working";
 	return "listening";
 }
 

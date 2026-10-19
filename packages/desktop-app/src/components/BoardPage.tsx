@@ -83,8 +83,8 @@ function CardMenuButton({
 			<button
 				type="button"
 				className="gui-board-card-act"
-				aria-label={t("widget menu")}
-				title={t("widget menu")}
+				aria-label={t("settings.widgetMenu")}
+				title={t("settings.widgetMenu")}
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="more-2" className="h-3.5 w-3.5" />
@@ -101,7 +101,7 @@ function CardMenuButton({
 						}}
 					>
 						<Icon name="pushpin" className="h-4 w-4" />
-						<span>{t("widget pin to desktop")}</span>
+						<span>{t("settings.widgetPinDesktop")}</span>
 					</button>
 					{onViewTask && (
 						<button
@@ -114,7 +114,7 @@ function CardMenuButton({
 							}}
 						>
 							<Icon name="list-check-2" className="h-4 w-4" />
-							<span>{t("widget view task")}</span>
+							<span>{t("settings.widgetViewTask")}</span>
 						</button>
 					)}
 					<button
@@ -127,7 +127,7 @@ function CardMenuButton({
 						}}
 					>
 						<Icon name="delete-bin" className="h-4 w-4" />
-						<span>{t("widget remove")}</span>
+						<span>{t("settings.widgetRemove")}</span>
 					</button>
 				</div>,
 			)}
@@ -178,11 +178,11 @@ function BoardHome({
 	return (
 		<div className="gui-board-home">
 			<div className="gui-board-home-head">
-				<h2 className="gui-board-home-title">{t("board")}</h2>
-				<p className="gui-board-home-desc">{t("board home desc")}</p>
+				<h2 className="gui-board-home-title">{t("settings.board")}</h2>
+				<p className="gui-board-home-desc">{t("settings.boardHomeDesc")}</p>
 				<button type="button" className="gui-btn gui-board-home-chat" onClick={() => onChatCreate("")}>
 					<Icon name="add" className="h-4 w-4" />
-					<span>{t("board chat create")}</span>
+					<span>{t("settings.boardChatCreate")}</span>
 				</button>
 			</div>
 			<div className="gui-board-home-grid">
@@ -202,8 +202,8 @@ function BoardHome({
 							<span
 								className="gui-board-home-card-x"
 								role="button"
-								aria-label={t("delete")}
-								title={t("delete")}
+								aria-label={t("settings.delete")}
+								title={t("settings.delete")}
 								onClick={e => {
 									e.stopPropagation();
 									requestDelete(b);
@@ -234,12 +234,12 @@ function BoardHome({
 						<div className="gui-board-home-card-title">{b.title}</div>
 						<div className="gui-board-home-card-meta">
 							{b.builtin ? (
-								<span className="gui-board-home-tag">{t("board example")}</span>
+								<span className="gui-board-home-tag">{t("settings.boardExample")}</span>
 							) : (
-								<span className="gui-board-home-tag gui-board-home-tag--mine">{t("board mine")}</span>
+								<span className="gui-board-home-tag gui-board-home-tag--mine">{t("settings.boardMine")}</span>
 							)}
 							<span className="gui-board-home-count">
-								{b.widgets.length} {t("widgets count")}
+								{b.widgets.length} {t("settings.widgetsCount")}
 							</span>
 						</div>
 					</button>
@@ -247,10 +247,10 @@ function BoardHome({
 				<button
 					type="button"
 					className="gui-board-home-card gui-board-home-card--new"
-					onClick={() => onCreate(t("board new title"))}
+					onClick={() => onCreate(t("settings.boardNewTitle"))}
 				>
 					<Icon name="add" className="h-5 w-5" />
-					<span>{t("board new")}</span>
+					<span>{t("settings.boardNew")}</span>
 				</button>
 			</div>
 			{menu && (
@@ -261,21 +261,21 @@ function BoardHome({
 					onClose={() => setMenu(null)}
 					items={[
 						{
-							label: t("open"),
+							label: t("settings.open"),
 							icon: "folder-open",
 							onSelect: () => onOpen(menu.board.id),
 						},
 						...(menu.board.builtin
 							? [
 									{
-										label: t("board builtin"),
+										label: t("settings.boardBuiltin"),
 										icon: "lock",
 										disabled: true,
 									},
 								]
 							: [
 									{
-										label: t("delete"),
+										label: t("settings.delete"),
 										icon: "delete-bin",
 										danger: true,
 										onSelect: () => requestDelete(menu.board),
@@ -287,21 +287,21 @@ function BoardHome({
 			<DialogFrame
 				open={confirmBoard !== null}
 				onClose={() => setConfirmBoard(null)}
-				label={t("board remove")}
+				label={t("settings.boardRemove")}
 				className="gui-board-remove-dialog gui-dialog--confirm"
 			>
 				{confirmBoard && (
 					<div className="gui-board-remove">
-						<p className="gui-board-remove-desc">{t("board remove confirm", { name: confirmBoard.title })}</p>
+						<p className="gui-board-remove-desc">{t("settings.boardRemoveConfirm", { name: confirmBoard.title })}</p>
 						<p className="gui-board-remove-hint">
-							{t("board remove hint", { count: confirmBoard.widgets.length })}
+							{t("settings.boardRemoveHint", { count: confirmBoard.widgets.length })}
 						</p>
 						<div className="gui-cron-form-actions">
 							<button type="button" className="gui-btn" onClick={() => setConfirmBoard(null)}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 							<button type="button" className="gui-btn gui-scheduled-del" onClick={doDelete}>
-								{t("board remove")}
+								{t("settings.boardRemove")}
 							</button>
 						</div>
 					</div>
@@ -315,7 +315,7 @@ function BoardHome({
 				<input
 					className="gui-board-home-input"
 					value={draft}
-					placeholder={t("board create placeholder")}
+					placeholder={t("settings.boardCreatePlaceholder")}
 					onChange={e => setDraft(e.target.value)}
 					onKeyDown={e => {
 						if (e.key === "Enter" && draft.trim()) {
@@ -1093,13 +1093,13 @@ export function BoardPage({
 				}
 			}
 			if (!changed) {
-				setGenError(t("board generate timeout"));
+				setGenError(t("settings.boardGenerateTimeout"));
 			} else {
 				setGenOpen(false);
 				setGenText("");
 			}
 		} catch (err) {
-			setGenError(t("board generate fail", { error: err instanceof Error ? err.message : String(err) }));
+			setGenError(t("settings.boardGenerateFail", { error: err instanceof Error ? err.message : String(err) }));
 		} finally {
 			setGenBusy(false);
 		}
@@ -1125,8 +1125,8 @@ export function BoardPage({
 					type="button"
 					className="gui-tool-btn"
 					onClick={openBoardHome}
-					aria-label={t("back")}
-					title={t("back")}
+					aria-label={t("settings.back")}
+					title={t("settings.back")}
 				>
 					<Icon name="arrow-left" className="h-4 w-4" />
 				</button>
@@ -1135,17 +1135,17 @@ export function BoardPage({
 						className="gui-board-title"
 						value={active.title}
 						onChange={e => updateBoard(active.id, { title: e.target.value })}
-						aria-label={t("board title")}
+						aria-label={t("settings.boardTitle")}
 					/>
-					{savedTick && <span className="gui-board-saved">{t("saved")}</span>}
+					{savedTick && <span className="gui-board-saved">{t("general.saved")}</span>}
 				</div>
 				<div className="gui-board-actions">
 					<button
 						type="button"
 						className={`gui-tool-btn${editMode ? " gui-tool-btn--active" : ""}`}
 						disabled={active.builtin === true}
-						title={active.builtin ? t("board builtin") : t("board edit")}
-						aria-label={t("board edit")}
+						title={active.builtin ? t("settings.boardBuiltin") : t("settings.boardEdit")}
+						aria-label={t("settings.boardEdit")}
 						onClick={() => {
 							setEditMode(v => !v);
 							setSelectedWidgetId(null);
@@ -1157,8 +1157,8 @@ export function BoardPage({
 						type="button"
 						className="gui-tool-btn"
 						onClick={() => organizeBoard(active.id)}
-						title={t("board organize")}
-						aria-label={t("board organize")}
+						title={t("settings.boardOrganize")}
+						aria-label={t("settings.boardOrganize")}
 					>
 						<Icon name="layout-column" className="h-4 w-4" />
 					</button>
@@ -1166,8 +1166,8 @@ export function BoardPage({
 						type="button"
 						className="gui-tool-btn"
 						onClick={refreshBoards}
-						title={t("board refresh")}
-						aria-label={t("board refresh")}
+						title={t("settings.boardRefresh")}
+						aria-label={t("settings.boardRefresh")}
 					>
 						<Icon name="refresh" className="h-4 w-4" />
 					</button>
@@ -1175,15 +1175,15 @@ export function BoardPage({
 						type="button"
 						className={`gui-btn${genBusy ? " gui-btn--busy" : ""}`}
 						disabled={active.builtin === true || genBusy}
-						title={active.builtin ? t("board builtin") : t("board generate")}
-						aria-label={t("board generate")}
+						title={active.builtin ? t("settings.boardBuiltin") : t("settings.boardGenerate")}
+						aria-label={t("settings.boardGenerate")}
 						onClick={() => setGenOpen(true)}
 					>
 						<StateIcon on={genBusy} pair={["loader", "robot"]} className="h-4 w-4" />
-						<span>{t("board generate")}</span>
+						<span>{t("settings.boardGenerate")}</span>
 					</button>
 					<button type="button" className="gui-btn" onClick={onBack}>
-						{t("back to workspace")}
+						{t("settings.backWorkspace")}
 					</button>
 				</div>
 			</div>
@@ -1191,8 +1191,8 @@ export function BoardPage({
 				<div className="gui-board-surface" style={{ width: BASE_W, transform: `scale(${canvasScale})` }}>
 					{active.widgets.length === 0 && (
 						<div className="gui-board-empty">
-							<div className="gui-board-empty-title">{t("board empty title")}</div>
-							<div className="gui-board-empty-desc">{t("board empty desc")}</div>
+							<div className="gui-board-empty-title">{t("settings.boardEmptyTitle")}</div>
+							<div className="gui-board-empty-desc">{t("settings.boardEmptyDesc")}</div>
 						</div>
 					)}
 					{ghost && (
@@ -1224,15 +1224,15 @@ export function BoardPage({
 											className="gui-board-card-title"
 											value={w.title}
 											onChange={e => renameWidget(w.id, e.target.value)}
-											aria-label={t("widget title")}
+											aria-label={t("settings.widgetTitle")}
 										/>
 										<div className="gui-board-card-actions">
 											{hasTask(w.data) && (
 												<button
 													type="button"
 													className={`gui-board-card-act${runningId === w.id ? " gui-board-card-act--running" : ""}`}
-													aria-label={t("widget run")}
-													title={t("widget run")}
+													aria-label={t("settings.widgetRun")}
+													title={t("settings.widgetRun")}
 													onPointerDown={e => e.stopPropagation()}
 													onClick={() => runTask(w)}
 												>
@@ -1246,8 +1246,8 @@ export function BoardPage({
 											<button
 												type="button"
 												className="gui-board-card-act"
-												aria-label={t("widget focus")}
-												title={t("widget focus")}
+												aria-label={t("settings.widgetFocus")}
+												title={t("settings.widgetFocus")}
 												onPointerDown={e => e.stopPropagation()}
 												onClick={() => setFocusWidget(w)}
 											>
@@ -1292,16 +1292,16 @@ export function BoardPage({
 			{genOpen && !genBusy && (
 				<DialogFrame
 					open
-					label={t("board generate")}
+					label={t("settings.boardGenerate")}
 					onClose={() => setGenOpen(false)}
 					className="gui-board-gen-dialog"
 				>
 					<div className="gui-board-gen">
-						<p className="gui-board-gen-desc">{t("board generate placeholder")}</p>
+						<p className="gui-board-gen-desc">{t("settings.boardGeneratePlaceholder")}</p>
 						<textarea
 							className="gui-board-gen-input"
 							value={genText}
-							placeholder={t("board generate placeholder")}
+							placeholder={t("settings.boardGeneratePlaceholder")}
 							autoFocus
 							rows={4}
 							onChange={e => setGenText(e.target.value)}
@@ -1312,7 +1312,7 @@ export function BoardPage({
 						{genError && <p className="gui-board-gen-error">{genError}</p>}
 						<div className="gui-cron-form-actions">
 							<button type="button" className="gui-btn" onClick={() => setGenOpen(false)}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 							<button
 								type="button"
@@ -1321,7 +1321,7 @@ export function BoardPage({
 								onClick={() => void runGenerate()}
 							>
 								<Icon name="robot" className="h-4 w-4" />
-								{t("board generate send")}
+								{t("settings.boardGenerateSend")}
 							</button>
 						</div>
 					</div>
@@ -1367,15 +1367,15 @@ export function BoardPage({
 								className="gui-board-focus-title"
 								value={focusWidget.title}
 								onChange={e => renameWidget(focusWidget.id, e.target.value)}
-								aria-label={t("widget title")}
+								aria-label={t("settings.widgetTitle")}
 							/>
 							<div className="gui-board-focus-actions">
 								{hasTask(focusWidget.data) && (
 									<button
 										type="button"
 										className={`gui-tool-btn${runningId === focusWidget.id ? " gui-tool-btn--running" : ""}`}
-										title={t("widget run")}
-										aria-label={t("widget run")}
+										title={t("settings.widgetRun")}
+										aria-label={t("settings.widgetRun")}
 										onClick={() => runTask(focusWidget)}
 									>
 										<StateIcon
@@ -1388,8 +1388,8 @@ export function BoardPage({
 								<button
 									type="button"
 									className="gui-tool-btn"
-									title={t("widget pin to desktop")}
-									aria-label={t("widget pin to desktop")}
+									title={t("settings.widgetPinDesktop")}
+									aria-label={t("settings.widgetPinDesktop")}
 									onClick={() => pinWidget(focusWidget)}
 								>
 									<Icon name="pushpin" className="h-3.5 w-3.5" />
@@ -1402,7 +1402,7 @@ export function BoardPage({
 									}}
 									onViewTask={widgetHasTask(focusWidget.data) ? () => openTaskModal(focusWidget) : undefined}
 								/>
-								<button type="button" className="gui-tool-btn" onClick={closeFocus} aria-label={t("close")}>
+								<button type="button" className="gui-tool-btn" onClick={closeFocus} aria-label={t("settings.close")}>
 									<Icon name="close" className="h-4 w-4" />
 								</button>
 							</div>

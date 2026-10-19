@@ -152,7 +152,7 @@ function SortableAttachmentChip({
 					tabIndex={0}
 					// Close-time re-measure anchor for the lightbox morph.
 					data-attach-id={a.id}
-					title={a.sketch ? t("sketch") : t("preview image")}
+					title={a.sketch ? t("composer.sketch") : t("settings.previewImage")}
 					onClick={e => (a.sketch ? onEditSketch(a.id) : onPreview(a.id, e.currentTarget))}
 					onKeyDown={e => {
 						if (e.key === "Enter" || e.key === " ") {
@@ -182,7 +182,7 @@ function SortableAttachmentChip({
 			<button
 				type="button"
 				className="gui-attach-x"
-				aria-label={t("remove attachment")}
+				aria-label={t("composer.removeAttachment")}
 				onClick={() => onRemove(a.id)}
 			>
 				<Icon name="close" className="h-3 w-3" />
@@ -497,7 +497,7 @@ export function ComposerFrame({
 								let fileNo = 0;
 								return attachments.map(a => {
 									const no = a.kind === "file" ? ++fileNo : ++imageNo;
-									const mentionLabel = t(a.kind === "file" ? "mention file {n}" : "mention image {n}", {
+									const mentionLabel = t(a.kind === "file" ? "composer.mentionFileWithN" : "composer.mentionImageWithN", {
 										n: String(no),
 									});
 									return (
@@ -520,8 +520,8 @@ export function ComposerFrame({
 						<button
 							type="button"
 							className="gui-attach-add"
-							aria-label={t("add attachments")}
-							title={t("add attachments")}
+							aria-label={t("composer.addAttachments")}
+							title={t("composer.addAttachments")}
 							onClick={onAddAttachment}
 						>
 							<Icon name="add" className="h-5 w-5" />

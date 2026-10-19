@@ -80,7 +80,7 @@ function previewText(entry: SessionEntry): string {
 	const hasTool = content.some(
 		b => typeof b === "object" && b !== null && (b as { type?: string }).type === "toolCall",
 	);
-	return hasTool ? t("tool calls") : t("thinking");
+	return hasTool ? t("general.toolCalls") : t("settings.thinking2");
 }
 
 /** Raw user-message text for the composer backfill (TUI navigateTree
@@ -262,8 +262,8 @@ export function MessageTreeButton({
 					<button
 						type="button"
 						className="gui-mtree-fork"
-						title={t("revert message")}
-						aria-label={t("revert message")}
+						title={t("general.revertMessage")}
+						aria-label={t("general.revertMessage")}
 						onClick={() => onRevertTo(node.entry)}
 					>
 						<Icon name="arrow-go-back" className="h-3 w-3" />
@@ -273,8 +273,8 @@ export function MessageTreeButton({
 					<button
 						type="button"
 						className="gui-mtree-fork"
-						title={t("continue from this point in a new session")}
-						aria-label={t("continue from this point in a new session")}
+						title={t("general.continuePointNewSession")}
+						aria-label={t("general.continuePointNewSession")}
 						onClick={() => {
 							const isUser = node.kind === "user";
 							onFork(node.entry, isUser ? rawUserText(node.entry) : undefined, !isUser);
@@ -294,8 +294,8 @@ export function MessageTreeButton({
 				type="button"
 				ref={toggleRef}
 				className="gui-mtree-toggle"
-				title={t("message tree")}
-				aria-label={t("message tree")}
+				title={t("general.messageTree")}
+				aria-label={t("general.messageTree")}
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
@@ -308,7 +308,7 @@ export function MessageTreeButton({
 				className={`gui-mtree-panel${open ? " gui-mtree-panel--open" : ""}`}
 				ref={panelRef}
 				role="dialog"
-				aria-label={t("message tree")}
+				aria-label={t("general.messageTree")}
 				aria-hidden={!open}
 			>
 				<div className="gui-mtree-search">
@@ -317,14 +317,14 @@ export function MessageTreeButton({
 						ref={inputRef}
 						value={q}
 						onChange={e => setQ(e.target.value)}
-						placeholder={t("search messages…")}
+						placeholder={t("general.searchMessages2")}
 					/>
-					<button type="button" className="gui-mtree-close" aria-label={t("close")} onClick={() => setOpen(false)}>
+					<button type="button" className="gui-mtree-close" aria-label={t("settings.close")} onClick={() => setOpen(false)}>
 						<Icon name="close" className="h-3 w-3" />
 					</button>
 				</div>
 				{/* TUI treeFilterMode 同款过滤(tuiOnly 设置 GUI 本地不读,默认 default) */}
-				<div className="gui-mtree-filters" role="group" aria-label={t("message tree filter")}>
+				<div className="gui-mtree-filters" role="group" aria-label={t("general.messageTreeFilter")}>
 					{(["default", "no-tools", "user-only", "labeled-only", "all"] as const).map(mode => (
 						<button
 							key={mode}
@@ -338,7 +338,7 @@ export function MessageTreeButton({
 				</div>
 				<div className="gui-mtree-scroll">
 					{filtered.length === 0 ? (
-						<div className="gui-mtree-empty">{t("no matches")}</div>
+						<div className="gui-mtree-empty">{t("tools.noMatches")}</div>
 					) : (
 						filtered.map(node => renderNode(node, 0))
 					)}

@@ -2,19 +2,19 @@ import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { Icon } from "../vendor/oc-icons";
 
-export type NavView = "sessions" | "search" | "tasks" | "skills";
+export type NavView = "general.sessions" | "settings.search" | "general.tasks" | "settings.skills";
 
 export interface NavItemDef {
 	view: NavView;
-	icon: "chat-1" | "search" | "checkbox-multiple" | "sparkling";
+	icon: "chat-1" | "settings.search" | "checkbox-multiple" | "sparkling";
 	label: TranslationKey;
 }
 
 export const NAV_ITEMS: NavItemDef[] = [
-	{ view: "sessions", icon: "chat-1", label: "sessions" },
-	{ view: "search", icon: "search", label: "search" },
-	{ view: "tasks", icon: "checkbox-multiple", label: "tasks" },
-	{ view: "skills", icon: "sparkling", label: "skills" },
+	{ view: "general.sessions", icon: "chat-1", label: "general.sessions" },
+	{ view: "settings.search", icon: "settings.search", label: "settings.search" },
+	{ view: "general.tasks", icon: "checkbox-multiple", label: "general.tasks" },
+	{ view: "settings.skills", icon: "sparkling", label: "settings.skills" },
 ];
 
 /**
@@ -57,12 +57,12 @@ export function NavRail({
 				<button
 					type="button"
 					className="gui-navitem"
-					title={t("settings")}
-					aria-label={t("settings")}
+					title={t("settings.settings")}
+					aria-label={t("settings.settings")}
 					onClick={() => onSettings?.()}
 				>
 					<Icon name="settings-3" className="gui-navitem-icon" />
-					<span className="gui-navitem-label">{t("settings")}</span>
+					<span className="gui-navitem-label">{t("settings.settings")}</span>
 				</button>
 			</div>
 		</aside>

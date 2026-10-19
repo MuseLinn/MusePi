@@ -99,7 +99,7 @@ function RecordInput({
 					}
 				}}
 			/>
-			{err && <span className="text-[11px] text-[var(--color-warning)]">{t("invalid json")}</span>}
+			{err && <span className="text-[11px] text-[var(--color-warning)]">{t("settings.invalidJson")}</span>}
 		</div>
 	);
 }
@@ -196,7 +196,7 @@ export function SchemaSettings({
 											<div className="min-w-0 flex-1">
 												<div className="gui-settings-row-label">
 													{t(label as TranslationKey)}
-													{tui && <span className="gui-settings-tui-badge">{t("tui only")}</span>}
+													{tui && <span className="gui-settings-tui-badge">{t("settings.tuiOnly")}</span>}
 												</div>
 												{desc && (
 													<div className="text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
@@ -256,7 +256,7 @@ export function SchemaSettings({
 															className="gui-settings-select !w-auto max-w-[240px]"
 															value={typeof value === "string" ? value : ""}
 															disabled
-															title={t("options come from the TUI runtime")}
+															title={t("settings.optionsComeTuiRuntime")}
 														/>
 													)
 												) : item.type === "number" ? (
@@ -320,8 +320,8 @@ export function SchemaSettings({
 																				<button
 																					type="button"
 																					className="gui-seg-move"
-																					aria-label={t("move earlier")}
-																					title={t("move earlier")}
+																					aria-label={t("settings.moveEarlier")}
+																					title={t("settings.moveEarlier")}
 																					disabled={pos === 0}
 																					onClick={() =>
 																						commit(
@@ -335,8 +335,8 @@ export function SchemaSettings({
 																				<button
 																					type="button"
 																					className="gui-seg-move"
-																					aria-label={t("move later")}
-																					title={t("move later")}
+																					aria-label={t("settings.moveLater")}
+																					title={t("settings.moveLater")}
 																					disabled={pos === current.length - 1}
 																					onClick={() =>
 																						commit(
@@ -358,7 +358,7 @@ export function SchemaSettings({
 													<input
 														type="text"
 														className="gui-settings-select !w-auto max-w-[240px]"
-														placeholder={t("comma separated values")}
+														placeholder={t("settings.commaSeparatedValues")}
 														defaultValue={Array.isArray(value) ? value.join(", ") : ""}
 														key={`${item.key}:${Array.isArray(value) ? value.join(",") : ""}`}
 														onBlur={e =>
@@ -379,7 +379,7 @@ export function SchemaSettings({
 														className="gui-settings-select !w-auto max-w-[240px]"
 														placeholder={
 															credential
-																? t("keep stored credential unless replaced")
+																? t("settings.keepStoredCredentialUnless")
 																: typeof item.default === "string"
 																	? item.default
 																	: undefined
@@ -432,7 +432,7 @@ export function SchemaSettings({
 						aria-expanded={tuiOpen}
 						onClick={() => setTuiOpen(o => !o)}
 					>
-						<span className="gui-settings-tui-heading">{t("terminal only settings")}</span>
+						<span className="gui-settings-tui-heading">{t("settings.terminalOnlySettings")}</span>
 						<span className="gui-settings-tui-count">{tuiItems.length}</span>
 						<span
 							className={`gui-settings-tui-chevron${tuiOpen ? " gui-settings-tui-chevron--open" : ""}`}
@@ -441,7 +441,7 @@ export function SchemaSettings({
 							▸
 						</span>
 					</button>
-					<div className="gui-settings-tui-note">{t("terminal only settings note")}</div>
+					<div className="gui-settings-tui-note">{t("settings.terminalOnlySettingsNote")}</div>
 					<Reveal open={tuiOpen}>
 						<div className="gui-settings-tui-rows">{renderGroups(tuiItems, true)}</div>
 					</Reveal>

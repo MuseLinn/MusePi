@@ -10,8 +10,8 @@ import { SchemaTabSection } from "./schema";
 export function FilesLspSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("files & lsp")}</h2>
-			<p className="gui-settings-page-desc">{t("files & lsp settings")}</p>
+			<h2 className="gui-settings-page-title">{t("general.filesLsp")}</h2>
+			<p className="gui-settings-page-desc">{t("general.filesLspSettings")}</p>
 			<SchemaTabSection rpc={rpc} tabs={["files"]} />
 		</>
 	);

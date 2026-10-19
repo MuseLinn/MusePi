@@ -27,7 +27,8 @@ export interface SurfaceProps {
 	cwd?: string;
 	/** Surfaces with open tabs (tab-primary model). Feeds the has-content
 	 *  fallback: a has-content surface without its own predicate stays
-	 *  visible while it has open tabs (openchamber parity). */
+	 *  visible while it has open tabs — a panel the user is working in must
+	 *  not vanish on a state change. */
 	openSurfaces?: ReadonlySet<string>;
 }
 
@@ -37,8 +38,7 @@ export interface SurfaceDescriptor {
 	id: SurfaceId;
 	/** i18n key（用 t() 取 display） */
 	label: string;
-	/** i18n key — rail hover tooltip 的第二行（openchamber descriptionKey
-	 * parity）。省略时 tooltip 只显示 label。 */
+	/** i18n key — rail hover tooltip 的第二行。省略时 tooltip 只显示 label。 */
 	description?: string;
 	/** oc-icons 的 IconName */
 	icon: string;
@@ -167,7 +167,7 @@ export function surfaceById(id: string | null): SurfaceDescriptor | undefined {
 }
 
 /** 对于 has-content surface：有判定函数用它；否则退到"有打开的 tab 即可见"
- * （openchamber parity：用中不消失）。 */
+ * —— 用户正在用的面板不因状态变化消失。 */
 export function surfaceVisible(s: SurfaceDescriptor, ctx: SurfaceProps): boolean {
 	if (s.availability === "always") return true;
 	if (s.hasContent) return s.hasContent(ctx);

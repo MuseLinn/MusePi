@@ -184,7 +184,7 @@ export function UpdateToast(): ReactNode {
 		setInstallError(null);
 		if (manualOnly) {
 			void downloadInstaller(notice.url ?? "").then(res => {
-				if (!res.ok) setInstallError(res.error ?? t("update download failed"));
+				if (!res.ok) setInstallError(res.error ?? t("settings.updateDownloadFailed"));
 			});
 			return;
 		}
@@ -196,7 +196,7 @@ export function UpdateToast(): ReactNode {
 		// window and counts consecutive failures toward the dialog card.
 		setInstallError(null);
 		void requestUpdateInstall().then(res => {
-			if (!res.ok) setInstallError(res.error ?? t("update install failed"));
+			if (!res.ok) setInstallError(res.error ?? t("settings.updateInstallFailed"));
 		});
 	};
 	const goManual = (): void => {
@@ -207,7 +207,7 @@ export function UpdateToast(): ReactNode {
 	return (
 		<div className={`gui-update-toast${closing ? " gui-update-toast--closing" : ""}`} role="status">
 			<div className="gui-update-toast-head">
-				<span className="gui-update-toast-title">{t("new version")}</span>
+				<span className="gui-update-toast-title">{t("settings.newVersion")}</span>
 				<span className="gui-update-toast-versions">
 					{notice.current ? `v${notice.current} → ` : ""}v{notice.latest}
 				</span>
@@ -215,8 +215,8 @@ export function UpdateToast(): ReactNode {
 					type="button"
 					className="gui-update-toast-close"
 					onClick={() => close(false)}
-					title={t("close")}
-					aria-label={t("close")}
+					title={t("settings.close")}
+					aria-label={t("settings.close")}
 				>
 					×
 				</button>
@@ -230,13 +230,13 @@ export function UpdateToast(): ReactNode {
 			)}
 			{hasNotes && notes.length > NOTES_EXPAND_THRESHOLD && (
 				<button type="button" className="gui-update-toast-notes-toggle" onClick={() => setExpanded(v => !v)}>
-					{t(expanded ? "show less" : "show more")}
+					{t(expanded ? "settings.showLess" : "settings.showMore")}
 				</button>
 			)}
 			{preparing && (
 				<div className="gui-update-toast-progress">
 					<div className="gui-update-toast-progress-meta">
-						<span>{t("preparing update")}</span>
+						<span>{t("update.preparingUpdate")}</span>
 					</div>
 					<div className="gui-update-toast-progress-bar gui-update-toast-progress-bar--indeterminate" />
 				</div>
@@ -244,7 +244,7 @@ export function UpdateToast(): ReactNode {
 			{downloading && (
 				<>
 					<div className="gui-update-toast-progress-meta">
-						<span>{t("downloading {percent}%", { percent })}</span>
+						<span>{t("settings.downloadingWithPercent", { percent })}</span>
 						{total > 0 && (
 							<span>
 								{formatMB(progress?.transferred ?? 0)} / {formatMB(total)}
@@ -260,7 +260,7 @@ export function UpdateToast(): ReactNode {
 			{verifying && (
 				<div className="gui-update-toast-progress">
 					<div className="gui-update-toast-progress-meta">
-						<span>{t("verifying update")}</span>
+						<span>{t("update.verifyingUpdate")}</span>
 					</div>
 					<div className="gui-update-toast-progress-bar" style={{ width: "100%" }} />
 				</div>
@@ -268,10 +268,10 @@ export function UpdateToast(): ReactNode {
 			{downloaded && (
 				<div className="gui-update-toast-done">
 					<Icon name="check" className="h-3.5 w-3.5" />
-					<span>{t("download complete")}</span>
+					<span>{t("settings.downloadComplete")}</span>
 				</div>
 			)}
-			{installerDone && <div className="gui-update-toast-hint">{t("installer ready hint")}</div>}
+			{installerDone && <div className="gui-update-toast-hint">{t("settings.installerReadyHint")}</div>}
 			{failed && state?.error && (
 				<div className="gui-update-toast-error" title={state.error.message}>
 					{t(UPDATE_ERROR_BODY_KEYS[state.error.kind])}
@@ -281,7 +281,7 @@ export function UpdateToast(): ReactNode {
 			{installing ? (
 				// quitAndInstall grace window: nothing clickable — the app is
 				// handing over to the installer and will relaunch itself.
-				<div className="gui-update-toast-hint">{t("installing update")}</div>
+				<div className="gui-update-toast-hint">{t("update.installingUpdate")}</div>
 			) : (
 				<div className="gui-update-toast-actions">
 					{downloaded ? (
@@ -289,26 +289,26 @@ export function UpdateToast(): ReactNode {
 						// user finishes it in Finder.
 						installerDone ? null : (
 							<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>
-								{t("restart now")}
+								{t("settings.restartNow")}
 							</button>
 						)
 					) : preparing || downloading || verifying ? null : (
 						<button type="button" className="gui-btn gui-btn-primary" onClick={startDownload}>
-							{t(manualOnly ? "download installer" : "download update")}
+							{t(manualOnly ? "settings.downloadInstaller" : "settings.downloadUpdate")}
 						</button>
 					)}
 					{failed ? (
 						<>
 							<button type="button" className="gui-btn" onClick={startDownload}>
-								{t("retry")}
+								{t("settings.retry")}
 							</button>
 							<button type="button" className="gui-btn" onClick={goManual}>
-								{t("go to download")}
+								{t("settings.goDownload")}
 							</button>
 						</>
 					) : (
 						<button type="button" className="gui-btn" onClick={() => close(true)}>
-							{t("skip this version")}
+							{t("settings.skipVersion")}
 						</button>
 					)}
 				</div>

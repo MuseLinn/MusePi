@@ -495,3 +495,32 @@ musepi 的覆盖面**更广**,不必为了"对齐 DSH"补 P3 —— 补了反而
 优先级是刻意排的:claude-plugins(70) < claude(80),所以用户自己在 `.claude/` 里的覆盖优先于 marketplace 装来的插件(`discovery/agent-plugins.ts:39-40`)。
 
 **与 DSH 的实质差异只有钩子的执行模型**:DSH 桥的是 Claude Code 的 shell 命令钩子(带 `hookSpecificOutput.hookEventName` 事件门控、`${CLAUDE_PLUGIN_ROOT}` 替换、exit 2 阻断),而 musepi 的 hooks 是 JS/TS 模块(`HookFactory`),命令钩子另走 `.claude/hooks/{pre,post}/` 的目录约定。若要补 command 型钩子,应作为 hooks 引擎的一种新来源接进现有 `HookEvent` 联合,而不是新建一套与 DSH 对齐的独立桥。
+
+## 18. `pi.effect` / `pi.state` 只属于 cordis 插件(2026-10-19)
+
+宿主有两条插件装载路径，能力面**故意不同**：cordis 插件拿得到 `pi.effect` 与
+`pi.state`，legacy 扩展拿不到。它们是 `undefined`，不在原型上、不抛错。
+
+### 为什么 legacy 侧不给
+
+两者都需要一个**可以挂东西的生命周期对象**才能成立：
+
+| 原语 | 依赖 |
+|---|---|
+| `pi.effect(cleanup)` | 一条 fiber 效果账本——卸载时反向执行登记的清理 |
+| `pi.state` | 一个随卸载清空的 fiber 作用域存储 |
+
+legacy 扩展按模块级状态写，没有 fiber 可挂。给它一个「看起来能用」的 `effect`
+是最坏的选项：登记进去了，但没有任何时机触发清理——**副作用泄漏，且泄漏得无声**，
+因为 API 的存在本身就承诺了回收。所以这一侧不发这两个方法，扩展作者拿到的
+`undefined` 就是「这条路在这里不存在」的诚实回答。
+
+### 写插件时怎么选
+
+- 需要清理定时器、监听器、子进程 → 写成 cordis 插件（`export function apply(pi)`），
+  用 `pi.effect(() => clearInterval(t))`。
+- 只是想注册工具 / 命令 / provider → 两者都行，用 legacy 的 `export default function`
+  即可，不必为了 `effect` 换形态。
+
+`ExtensionAPI` 上这两个成员是**可选**的（`effect?` / `state?`），类型层面就把
+「legacy 装载拿不到」表达了；代码里必须按可选处理，不要断言非空。

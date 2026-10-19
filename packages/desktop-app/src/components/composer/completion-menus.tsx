@@ -120,7 +120,7 @@ export function CompletionMenus({
 							<SlashRow key={c.name} item={c} active={i === slashIdx} onClick={() => onPickSlash(c.name)} />
 						))}
 					</div>
-					<div className="gui-slash-footer">{t("slash completion hints")}</div>
+					<div className="gui-slash-footer">{t("general.slashCompletionHints")}</div>
 				</div>
 			)}
 			{atOpen && atEntries.length > 0 && (

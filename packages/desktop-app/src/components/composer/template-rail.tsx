@@ -33,12 +33,12 @@ export interface CreationTemplateRow {
 /** 模板文件里的 tab 是任意字符串(daemon 不枚举校验历史文件)——
  *  已知 tab 走 i18n,未知原样回显。 */
 const TAB_LABEL_KEYS: Record<string, TranslationKey> = {
-	prototype: "creation tab prototype",
-	"live-artifact": "creation tab live artifact",
-	deck: "creation tab deck",
-	template: "creation tab template",
-	media: "creation tab media",
-	other: "creation tab other",
+	prototype: "creation.creationTabPrototype",
+	"live-artifact": "creation.creationTabLiveArtifact",
+	deck: "creation.creationTabDeck",
+	template: "creation.creationTabTemplate",
+	media: "creation.creationTabMedia",
+	other: "creation.creationTabOther",
 };
 
 function tabLabel(tab: string): string {
@@ -107,8 +107,8 @@ export function TemplateRail({
 	};
 
 	const deleteTemplate = async (tpl: CreationTemplateRow): Promise<void> => {
-		const name = tpl.name ?? t("creation template unnamed");
-		const ok = await confirm(t("creation template confirm delete", { name }), t("creation template delete"));
+		const name = tpl.name ?? t("creation.creationTemplateUnnamed");
+		const ok = await confirm(t("creation.creationTemplateConfirmDelete", { name }), t("creation.creationTemplateDelete"));
 		if (!ok) return;
 		try {
 			await rpc?.request("creation.templates.delete", { id: tpl.id });
@@ -120,16 +120,16 @@ export function TemplateRail({
 
 	return (
 		<div className="gui-creation-template-rail" data-testid="gui-template-rail">
-			<div className="gui-creation-field-label">{t("creation templates title")}</div>
+			<div className="gui-creation-field-label">{t("creation.creationTemplatesTitle")}</div>
 			{templates.length === 0 ? (
 				<div className="gui-creation-template-empty">
 					{/* 来源指引:等价 OD 的 noTemplatesBody(怎么造模板)。 */}
-					<p className="gui-creation-empty">{t("creation templates empty")}</p>
+					<p className="gui-creation-empty">{t("creation.creationTemplatesEmpty")}</p>
 					{/* 「空白起步」等价路径(OD StartFromPicker 的 Blank 第一项):
 					 *  聚焦 composer,直接输入发送即可建会话,空态不卡住用户。 */}
 					<button type="button" className="gui-creation-template-blank" onClick={onBlankStart}>
 						<Icon name="file-add" className="h-3.5 w-3.5" />
-						<span>{t("creation templates blank start")}</span>
+						<span>{t("creation.creationTemplatesBlankStart")}</span>
 					</button>
 				</div>
 			) : (
@@ -142,13 +142,13 @@ export function TemplateRail({
 								disabled={busy}
 								onClick={() => void createFromTemplate(tpl)}
 							>
-								<span className="gui-creation-template-name">{tpl.name ?? t("creation template unnamed")}</span>
+								<span className="gui-creation-template-name">{tpl.name ?? t("creation.creationTemplateUnnamed")}</span>
 								<span className="gui-creation-template-tab">{tabLabel(tpl.tab)}</span>
 							</button>
 							<button
 								type="button"
 								className="gui-creation-template-delete"
-								aria-label={t("creation template delete")}
+								aria-label={t("creation.creationTemplateDelete")}
 								onClick={() => void deleteTemplate(tpl)}
 							>
 								<Icon name="delete-bin" className="h-3.5 w-3.5" />

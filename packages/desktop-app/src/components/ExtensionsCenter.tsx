@@ -60,7 +60,7 @@ function levelLabel(s: ExtensionItem): string {
 	// 能力清单的来源标签必须一致，防 drift）。builtin 注册表行/标注行
 	// （含安装后的 bundled skills）优先显示"内置"——它们的 level 可能是
 	// user（用户目录安装副本），但身份是内置部署物。
-	if (s.builtin) return t("ext builtin");
+	if (s.builtin) return t("tools.extBuiltin");
 	return sourceLevelLabel(s.source.provider, s.source.level);
 }
 
@@ -133,25 +133,25 @@ function OverviewView({
 	const managedProviders = providers.filter(p => p.id !== "native");
 	const stats: { label: string; value: number; tone?: "err"; sub?: string }[] = [
 		{
-			label: t("ext stat total"),
+			label: t("tools.extStatTotal"),
 			value: extensions.length,
-			sub: t("ext stat total sub {kinds} {sources}", { kinds: kindCount, sources: managedProviders.length }),
+			sub: t("tools.extStatTotalSubWithKindsWithSources", { kinds: kindCount, sources: managedProviders.length }),
 		},
 		{
-			label: t("ext stat active"),
+			label: t("tools.extStatActive"),
 			value: activeCount,
-			sub: t("ext stat active sub {n}", { n: extensions.length - activeCount }),
+			sub: t("tools.extStatActiveSubWithN", { n: extensions.length - activeCount }),
 		},
 		{
-			label: t("ext stat failed"),
+			label: t("tools.extStatFailed"),
 			value: failed.length,
 			tone: failed.length > 0 ? "err" : undefined,
 			sub: failed[0]?.displayName ?? failed[0]?.name,
 		},
 		{
-			label: t("ext stat unhosted"),
+			label: t("tools.extStatUnhosted"),
 			value: unhosted.length,
-			sub: unhosted.length > 0 ? unhosted.join(", ") : t("ext stat unhosted sub ok {total}", { total: totalSlots }),
+			sub: unhosted.length > 0 ? unhosted.join(", ") : t("tools.extStatUnhostedSubWithTotal", { total: totalSlots }),
 		},
 	];
 	const providerCount = (p: { id: string }): number => extensions.filter(e => e.source.provider === p.id).length;
@@ -168,13 +168,13 @@ function OverviewView({
 			</div>
 			<div className="gui-ext-overview-section">
 				<div className="gui-ext-overview-head">
-					<span className="gui-group-label">{t("ext needs attention")}</span>
+					<span className="gui-group-label">{t("tools.extNeedsAttention")}</span>
 					<button type="button" className="gui-btn" onClick={onOpenDiagnostics}>
-						{t("ext open diagnostics")}
+						{t("tools.extOpenDiagnostics")}
 					</button>
 				</div>
 				{attention.length === 0 ? (
-					<div className="gui-ext-empty">{t("ext needs attention empty")}</div>
+					<div className="gui-ext-empty">{t("tools.extNeedsAttentionEmpty")}</div>
 				) : (
 					<div className="gui-ext-overview-rows">
 						{attention.map(e => (
@@ -188,16 +188,16 @@ function OverviewView({
 								</span>
 								{e.loadError ? (
 									<>
-										<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>
+										<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("tools.extLoadFailed")}</span>
 										<button type="button" className="gui-btn" onClick={onOpenDiagnostics}>
-											{t("ext view details")}
+											{t("tools.extViewDetails")}
 										</button>
 									</>
 								) : (
 									<>
-										<span className="gui-ext-item-tag">{t("ext shadowed")}</span>
+										<span className="gui-ext-item-tag">{t("tools.extShadowed")}</span>
 										<button type="button" className="gui-btn" onClick={() => onForceEnable(e)}>
-											{t("force enable")}
+											{t("tools.forceEnable")}
 										</button>
 									</>
 								)}
@@ -208,7 +208,7 @@ function OverviewView({
 			</div>
 			<div className="gui-ext-overview-section">
 				<div className="gui-ext-overview-head">
-					<span className="gui-group-label">{t("ext provider health")}</span>
+					<span className="gui-group-label">{t("tools.extProviderHealth")}</span>
 				</div>
 				<div className="gui-ext-overview-rows">
 					{managedProviders.map(p => (
@@ -217,14 +217,14 @@ function OverviewView({
 							<span className="gui-ext-overview-row-text">
 								<span className="gui-ext-overview-row-title">{p.displayName}</span>
 								<span className="gui-ext-overview-row-sub">
-									{t("ext provider items {n}", { n: providerCount(p) })}
+									{t("tools.extProviderItemsWithN", { n: providerCount(p) })}
 								</span>
 							</span>
 							<button
 								type="button"
 								role="switch"
 								aria-checked={p.enabled}
-								aria-label={`${t("ext provider")} ${p.displayName}`}
+								aria-label={`${t("tools.extProvider")} ${p.displayName}`}
 								className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
 								onClick={() => onToggleProvider(p)}
 							>
@@ -240,9 +240,9 @@ function OverviewView({
 			<button type="button" className="gui-ext-overview-cta" onClick={onOpenCapabilityCenter}>
 				<Icon name="star" className="h-4 w-4" />
 				<span className="min-w-0 flex-1 text-left">
-					<span className="block text-[13px] font-medium">{t("capability center")}</span>
+					<span className="block text-[13px] font-medium">{t("tools.capabilityCenter")}</span>
 					<span className="block truncate text-[12px] text-[var(--color-text-faint)]">
-						{t("ext open capability hint")}
+						{t("tools.extOpenCapabilityHint")}
 					</span>
 				</span>
 				<Icon name="arrow-right-s" className="h-4 w-4 shrink-0 opacity-60" />
@@ -419,7 +419,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	const remove = (e: ExtensionItem): void => {
 		if (!rpc) return;
-		void confirm(t("delete skill confirm {name}", { name: e.name }), t("delete")).then(ok => {
+		void confirm(t("tools.deleteSkillConfirmWithName", { name: e.name }), t("settings.delete")).then(ok => {
 			if (!ok) return;
 			void rpc
 				.request("skills.delete", { name: e.name })
@@ -493,7 +493,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			nodes.push({
 				provider: {
 					id: "extension",
-					displayName: t("extension provider"),
+					displayName: t("tools.extensionProvider"),
 					enabled: true,
 				},
 				count: orphaned.length,
@@ -521,19 +521,19 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			{/* 标题区 (设计稿 2:1427):大标题 + 副标题 + 右上槽位挂载胶囊。 */}
 			<div className="gui-ext-head">
 				<div className="gui-ext-head-text">
-					<div className="gui-ext-head-title">{t("ext center title")}</div>
-					<div className="gui-ext-head-sub">{t("ext center subtitle")}</div>
+					<div className="gui-ext-head-title">{t("tools.extCenterTitle")}</div>
+					<div className="gui-ext-head-sub">{t("tools.extCenterSubtitle")}</div>
 				</div>
 				{unhosted.length > 0 ? (
 					<span className="gui-ext-head-pill gui-ext-head-pill--warn">
 						<Icon name="alert" className="h-3 w-3" />
-						{t("slot unhosted {slot}", { slot: unhosted.join(", ") })}
+						{t("tools.slotUnhostedWithSlot", { slot: unhosted.join(", ") })}
 					</span>
 				) : (
 					extensions !== null && (
 						<span className="gui-ext-head-pill gui-ext-head-pill--ok">
 							<Icon name="check" className="h-3 w-3" />
-							{t("all slots hosted")}
+							{t("tools.allSlotsHosted")}
 						</span>
 					)
 				)}
@@ -549,7 +549,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					onClick={() => setView("overview")}
 				>
 					<Icon name="layout-column" className="h-3.5 w-3.5 shrink-0 opacity-70" />
-					{t("ext overview")}
+					{t("tools.extOverview")}
 				</button>
 				<button
 					type="button"
@@ -558,7 +558,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					className={`gui-ext-tab${view === "inventory" ? " gui-ext-tab--active" : ""}`}
 					onClick={() => setView("inventory")}
 				>
-					{t("ext inventory")}
+					{t("tools.extInventory")}
 					<span className="gui-ext-tab-count">{(extensions ?? []).length}</span>
 				</button>
 				{/* 插件 tab:统一清单(UnifiedPluginsView)—— 插件包(marketplace/npm)
@@ -571,7 +571,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					className={`gui-ext-tab${view === "plugins" ? " gui-ext-tab--active" : ""}`}
 					onClick={() => setView("plugins")}
 				>
-					{t("plugins")}
+					{t("settings.plugins")}
 					<span className="gui-ext-tab-count">{plugins.length + moduleCount}</span>
 				</button>
 				{/* Marketplace tab:daemon marketplace.list 的远程插件目录
@@ -586,7 +586,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					onClick={() => setView("marketplace")}
 				>
 					<Icon name="plug-2" className="h-3.5 w-3.5 shrink-0 opacity-70" />
-					{t("marketplace")}
+					{t("guest.marketplace")}
 				</button>
 				{/* 槽位诊断 tab:加载失败 / 遮蔽 / 技能发现警告 / 已关闭来源 ——
 				 * 一个回答"为什么没生效"的健康视图。 */}
@@ -598,7 +598,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					onClick={() => setView("diagnostics")}
 				>
 					<Icon name="pulse" className="h-3.5 w-3.5 shrink-0 opacity-70" />
-					{t("ext slot diagnostics")}
+					{t("tools.extSlotDiagnostics")}
 				</button>
 			</div>
 			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
@@ -668,7 +668,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 									<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
 									<input
 										className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
-										placeholder={t("search skills...")}
+										placeholder={t("tools.searchSkills")}
 										value={query}
 										onChange={e => setQuery(e.target.value)}
 									/>
@@ -700,7 +700,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 															type="button"
 															role="switch"
 															aria-checked={node.enabled}
-															aria-label={`${t("ext provider")} ${node.provider.displayName}`}
+															aria-label={`${t("tools.extProvider")} ${node.provider.displayName}`}
 															className={`gui-toggle gui-toggle--sm${node.enabled ? " gui-toggle--on" : ""}`}
 															onClick={e => {
 																e.stopPropagation();
@@ -755,7 +755,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																				<span className="min-w-0 flex-1 truncate">{e.name}</span>
 																				{e.loadError && (
 																					<span className="gui-ext-item-tag gui-ext-item-tag--err">
-																						{t("ext load failed")}
+																						{t("tools.extLoadFailed")}
 																					</span>
 																				)}
 																				{isGuiKind(e) && (
@@ -773,8 +773,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																								ev.stopPropagation();
 																								remove(e);
 																							}}
-																							title={t("delete skill")}
-																							aria-label={t("delete skill")}
+																							title={t("tools.deleteSkill")}
+																							aria-label={t("tools.deleteSkill")}
 																						>
 																							<Icon name="delete-bin" className="h-3 w-3" />
 																						</button>
@@ -787,8 +787,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																							aria-checked={e.state === "active"}
 																							aria-label={
 																								e.state === "active"
-																									? t("disable skill")
-																									: t("enable skill")
+																									? t("tools.disableSkill")
+																									: t("tools.enableSkill")
 																							}
 																							className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
 																							onClick={ev => {
@@ -810,7 +810,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											</div>
 										);
 									})}
-									{filtered.length === 0 && <div className="gui-ext-empty">{t("no skills found")}</div>}
+									{filtered.length === 0 && <div className="gui-ext-empty">{t("tools.noSkillsFound")}</div>}
 								</div>
 							</div>
 							{/* Right: detail pane (name / type / description / trigger /
@@ -820,23 +820,23 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 									<>
 										<div className="gui-ext-detail-name">{selected.displayName}</div>
 										<div className="gui-ext-detail-meta">
-											{t("extension type")}: {kindLabel(selected.kind)}
+											{t("tools.extensionType")}: {kindLabel(selected.kind)}
 											{isGuiKind(selected) && (
 												<span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>
 											)}
-											{selected.readonly && <span className="gui-ext-item-tag">{t("ext read-only")}</span>}
+											{selected.readonly && <span className="gui-ext-item-tag">{t("tools.extReadOnly")}</span>}
 										</div>
 										{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
 										{selected.trigger && (
 											<div className="gui-ext-detail-section">
-												<div className="gui-ext-detail-label">{t("trigger")}</div>
+												<div className="gui-ext-detail-label">{t("tools.trigger")}</div>
 												<div className="gui-ext-detail-path">{selected.trigger}</div>
 											</div>
 										)}
 										<div className="gui-ext-detail-section">
-											<div className="gui-ext-detail-label">{t("source")}</div>
+											<div className="gui-ext-detail-label">{t("tools.source")}</div>
 											<div className="gui-ext-detail-value">
-												{t("via {provider} ({level})", {
+												{t("tools.viaWithProviderWithLevel", {
 													provider: selected.source.providerName,
 													level: levelLabel(selected),
 												})}
@@ -844,7 +844,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											<div className="gui-ext-detail-path">{selected.path}</div>
 										</div>
 										<div className="gui-ext-detail-section">
-											<div className="gui-ext-detail-label">{t("status")}</div>
+											<div className="gui-ext-detail-label">{t("tools.status")}</div>
 											<div
 												className={`gui-ext-detail-status${selected.state === "active" ? " gui-ext-detail-status--active" : selected.state === "shadowed" ? " gui-ext-detail-status--shadowed" : ""}`}
 											>
@@ -854,7 +854,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												{stateLabel(selected)}
 												{selected.state === "shadowed" && selected.shadowedBy && (
 													<span className="gui-ext-detail-shadowed">
-														{t("shadowed by {name}", { name: selected.shadowedBy })}
+														{t("tools.shadowedByWithName", { name: selected.shadowedBy })}
 													</span>
 												)}
 											</div>
@@ -876,19 +876,19 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 													onClick={() => forceToggle(selected, true)}
 												>
 													<Icon name="plug" className="h-3.5 w-3.5" />
-													{t("force enable")}
+													{t("tools.forceEnable")}
 												</button>
 											</div>
 										)}
 										{(selected.kind === "skill" || selected.kind === "context-file") && (
 											<div className="gui-ext-detail-section">
-												<div className="gui-ext-detail-label">{t("instructions")}</div>
+												<div className="gui-ext-detail-label">{t("tools.instructions")}</div>
 												<div className="gui-ext-detail-code">
 													{detail ? (
 														<pre>{detail.content}</pre>
 													) : (
 														<div className="text-[12px] text-[var(--color-text-faint)]">
-															{t("no content")}
+															{t("tools.noContent")}
 														</div>
 													)}
 												</div>
@@ -906,7 +906,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 													pair={["arrow-down-s", "arrow-right-s"]}
 													className="h-3.5 w-3.5"
 												/>
-												{t("raw data")}
+												{t("tools.rawData")}
 											</button>
 											<HeightMorph morphKey={rawOpen ? "raw-open" : "raw-closed"}>
 												{rawOpen && (
@@ -920,13 +920,13 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											<div className="gui-ext-detail-actions">
 												<button type="button" className="gui-btn" onClick={() => remove(selected)}>
 													<Icon name="delete-bin" className="h-3.5 w-3.5" />
-													{t("delete skill")}
+													{t("tools.deleteSkill")}
 												</button>
 											</div>
 										)}
 									</>
 								) : (
-									<div className="gui-ext-detail-empty">{t("select an extension")}</div>
+									<div className="gui-ext-detail-empty">{t("tools.selectExtension")}</div>
 								)}
 							</div>
 						</div>
@@ -942,7 +942,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 				<div className="gui-ext-itemcards">
 					<div className="gui-ext-slots-head">
 						<Icon name="plug-2" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-						<span className="text-[12px] font-medium">{t("extension settings")}</span>
+						<span className="text-[12px] font-medium">{t("tools.extensionSettings")}</span>
 					</div>
 					{extSettingCards.map(([extId, items]) => (
 						<div key={extId} className="gui-agent-card gui-ext-settings-card">
@@ -961,7 +961,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			)}
 			{/* Bottom status bar (CCEC parity). */}
 			<div className="gui-ext-statusbar">
-				<span>{t("ext status hint")}</span>
+				<span>{t("tools.extStatusHint")}</span>
 				<span className="ml-auto truncate">
 					{filtered.length} / {(extensions ?? []).length}
 				</span>

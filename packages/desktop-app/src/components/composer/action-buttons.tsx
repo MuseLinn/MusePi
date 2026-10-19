@@ -29,7 +29,7 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
 					className="gui-composer-morph"
 				/>
 			)}
-			<span>{state === "enhancing" ? t("enhancing…") : state === "enhanced" ? t("enhanced") : t("enhance")}</span>
+			<span>{state === "enhancing" ? t("transcript.enhancing") : state === "enhanced" ? t("settings.enhanced") : t("settings.enhance")}</span>
 		</button>
 	);
 }
@@ -53,10 +53,10 @@ export function VoiceButton({
 }): ReactNode {
 	const label =
 		state === "recording"
-			? t("voice recording stop")
+			? t("settings.voiceRecordingStop")
 			: state === "transcribing"
-				? t("voice transcribing")
-				: t("voice input");
+				? t("settings.voiceTranscribing")
+				: t("settings.voiceInput");
 	return (
 		<button
 			type="button"
@@ -110,9 +110,9 @@ export function VoiceStatusStrip({
 				))}
 			</span>
 			<span className="gui-voice-strip-label">
-				{phase === "recording" ? `${seconds}s` : t("voice transcribing")}
+				{phase === "recording" ? `${seconds}s` : t("settings.voiceTranscribing")}
 			</span>
-			<span className="gui-voice-strip-hint">{t("voice esc to cancel")}</span>
+			<span className="gui-voice-strip-hint">{t("settings.voiceEscCancel")}</span>
 		</div>
 	);
 }
@@ -124,8 +124,8 @@ export function StopButton({ onPress }: { onPress(): void }): ReactNode {
 			type="button"
 			className="gui-composer-ico"
 			onClick={onPress}
-			title={t("stop the current turn")}
-			aria-label={t("stop the current turn")}
+			title={t("composer.stopCurrentTurn")}
+			aria-label={t("composer.stopCurrentTurn")}
 		>
 			<Square size={11} />
 		</button>
@@ -140,8 +140,8 @@ export function RetryButton({ busy, none, onPress }: { busy: boolean; none: bool
 			className={`gui-composer-ico${none ? " gui-composer-ico--danger" : ""}`}
 			onClick={onPress}
 			disabled={busy}
-			title={none ? t("nothing to retry") : t("retry last turn")}
-			aria-label={t("retry last turn")}
+			title={none ? t("composer.nothingRetry") : t("composer.retryLastTurn")}
+			aria-label={t("composer.retryLastTurn")}
 		>
 			<Icon name="arrow-go-back" className="h-3.5 w-3.5" />
 		</button>
@@ -166,8 +166,8 @@ export function SendButton({
 			className="gui-composer-send"
 			onClick={canSend && !busy ? onPress : undefined}
 			disabled={!canSend || busy}
-			title={working ? t("steer message") : t("send message")}
-			aria-label={working ? t("steer message") : t("send message")}
+			title={working ? t("general.steerMessage") : t("settings.sendMessage")}
+			aria-label={working ? t("general.steerMessage") : t("settings.sendMessage")}
 		>
 			<SendHorizontal size={14} />
 		</button>
@@ -273,8 +273,8 @@ export function SendOrStopButton({
 				className="gui-composer-send"
 				onClick={canSend && !busy ? onPress : undefined}
 				disabled={!canSend || busy}
-				title={t("send message")}
-				aria-label={t("send message")}
+				title={t("settings.sendMessage")}
+				aria-label={t("settings.sendMessage")}
 			>
 				<SendHorizontal size={14} />
 			</button>
@@ -289,8 +289,8 @@ export function SendOrStopButton({
 			onMouseLeave={() => setInteracting(false)}
 			onFocus={() => setInteracting(true)}
 			onBlur={() => setInteracting(false)}
-			title={t("stop the current turn")}
-			aria-label={t("stop the current turn")}
+			title={t("composer.stopCurrentTurn")}
+			aria-label={t("composer.stopCurrentTurn")}
 		>
 			<span className="gui-send-work">
 				<MatrixLoader className="gui-send-matrix" />
@@ -299,9 +299,9 @@ export function SendOrStopButton({
 					 * morph (工作中 is longer than 停止), so the button never
 					 * nudges the composer on hover. */}
 					<span aria-hidden className="gui-send-label gui-send-label--sizer">
-						{t("working active")}
+						{t("composer.workingActive")}
 					</span>
-					<TextMorph text={interacting ? t("stop turn") : t("working active")} className="gui-send-morph" />
+					<TextMorph text={interacting ? t("composer.stopTurn") : t("composer.workingActive")} className="gui-send-morph" />
 				</span>
 			</span>
 		</button>
@@ -315,8 +315,8 @@ export function FocusButton({ focused, onPress }: { focused: boolean; onPress():
 			type="button"
 			className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
 			onClick={onPress}
-			title={t("focus mode")}
-			aria-label={t("focus mode")}
+			title={t("general.focusMode")}
+			aria-label={t("general.focusMode")}
 			aria-pressed={focused}
 		>
 			<Icon name="expand-up-down" className="h-3.5 w-3.5" />

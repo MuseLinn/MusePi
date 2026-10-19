@@ -29,21 +29,21 @@ const MODES: readonly {
 }[] = [
 	{
 		value: "always-ask",
-		short: "approval short always ask",
-		label: "approval mode always ask",
-		hint: "approval mode always ask hint",
+		short: "general.approvalShortAlwaysAsk",
+		label: "general.approvalModeAlwaysAsk",
+		hint: "general.approvalModeAlwaysAskHint",
 	},
 	{
 		value: "write",
-		short: "approval short write",
-		label: "approval mode write",
-		hint: "approval mode write hint",
+		short: "general.approvalShortWrite",
+		label: "general.approvalModeWrite",
+		hint: "general.approvalModeWriteHint",
 	},
 	{
 		value: "yolo",
-		short: "approval short yolo",
-		label: "approval mode yolo",
-		hint: "approval mode yolo hint",
+		short: "general.approvalShortYolo",
+		label: "general.approvalModeYolo",
+		hint: "general.approvalModeYoloHint",
 	},
 ];
 
@@ -99,8 +99,8 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 				className={`gui-approval-btn${mode === "write" ? " gui-approval-btn--write" : ""}${
 					mode === "yolo" ? " gui-approval-btn--yolo" : ""
 				}${open ? " gui-approval-btn--open" : ""}`}
-				title={t("approval mode")}
-				aria-label={t("approval mode")}
+				title={t("general.approvalMode")}
+				aria-label={t("general.approvalMode")}
 				aria-haspopup="menu"
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
@@ -109,8 +109,8 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 				<span>{t(current.short)}</span>
 			</button>
 			{renderMenu(
-				<div className="gui-attach-menu gui-approval-menu" role="menu" aria-label={t("approval mode")}>
-					<div className="gui-approval-menu-head">{t("approval mode")}</div>
+				<div className="gui-attach-menu gui-approval-menu" role="menu" aria-label={t("general.approvalMode")}>
+					<div className="gui-approval-menu-head">{t("general.approvalMode")}</div>
 					{MODES.map(m => (
 						<button
 							key={m.value}
@@ -120,7 +120,7 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 							aria-checked={mode === m.value}
 							onClick={() => pick(m.value)}
 						>
-							<Icon name={mode === m.value ? "check" : "shield"} className="h-4 w-4" />
+							<Icon name={mode === m.value ? "settings.check" : "shield"} className="h-4 w-4" />
 							<span className="min-w-0 flex-1">
 								<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
 									{t(m.label)}

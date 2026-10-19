@@ -9,10 +9,10 @@ function dateGroup(ts: string): string {
 	const now = new Date();
 	const startOfDay = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
 	const days = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000);
-	if (days <= 0) return t("today");
-	if (days === 1) return t("yesterday");
-	if (days <= 7) return t("last 7 days");
-	return t("earlier");
+	if (days <= 0) return t("settings.today");
+	if (days === 1) return t("settings.yesterday");
+	if (days <= 7) return t("settings.last7Days");
+	return t("settings.earlier");
 }
 
 const GROUP_ORDER = ["today", "yesterday", "last 7 days", "earlier"];
@@ -71,7 +71,7 @@ export function GroupedSessionList({
 		// and its matches may sit in other sections (pinned, 定时任务) — the
 		// empty-workspace fallback would contradict that.
 		if (searchQuery?.trim()) return null;
-		return <p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">{t("no sessions yet")}</p>;
+		return <p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">{t("transcript.noSessionsYet")}</p>;
 	}
 	return (
 		<>

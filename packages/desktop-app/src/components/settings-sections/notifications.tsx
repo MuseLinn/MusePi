@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { type TranslationKey, t } from "@musepi/client-core";
 import type { SoundName } from "cuelume";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -40,14 +40,49 @@ import { StateIcon } from "../StateIcon";
 /** One configurable activity row (opencode per-category sounds parity):
  *  activity name + trigger desc, a preview button for the current choice,
  *  and a palette select that persists under musepi-gui-sfx:<event>. */
+/** Sfx/notification event labels are keyed per event id; the ids come from
+ *  SFX_EVENTS / NOTIFY_EVENTS, so both lookups are closed over that set. */
+const NOTIFY_EVENT_KEY: Record<string, TranslationKey> = {
+	completion: "settings.notificationEventCompletion",
+	subtask: "settings.notificationEventSubtask",
+	error: "settings.notificationEventError",
+	question: "settings.notificationEventQuestion",
+};
+
+const SFX_EVENT_KEY: Record<string, TranslationKey> = {
+	send: "settings.sfxEventSend",
+	first: "settings.sfxEventFirst",
+	complete: "settings.sfxEventComplete",
+	approval: "settings.sfxEventApproval",
+	"approval-ok": "settings.sfxEventApprovalOk",
+	"approval-deny": "settings.sfxEventApprovalDeny",
+	switch: "settings.sfxEventSwitch",
+	stop: "settings.sfxEventStop",
+	tool: "settings.sfxEventTool",
+	error: "settings.sfxEventError",
+};
+
+const SFX_EVENT_DESC_KEY: Record<string, TranslationKey> = {
+	send: "settings.sfxEventSendDesc",
+	first: "settings.sfxEventFirstDesc",
+	complete: "settings.sfxEventCompleteDesc",
+	approval: "settings.sfxEventApprovalDesc",
+	"approval-ok": "settings.sfxEventApprovalOkDesc",
+	"approval-deny": "settings.sfxEventApprovalDenyDesc",
+	switch: "settings.sfxEventSwitchDesc",
+	stop: "settings.sfxEventStopDesc",
+	tool: "settings.sfxEventToolDesc",
+	error: "settings.sfxEventErrorDesc",
+};
+
 export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
 	const [name, setName] = useState<SoundName>(() => soundFor(ev));
 	return (
 		<div className="gui-sfx-event-row">
 			<div className="min-w-0 flex-1">
-				<div className="gui-settings-row-label">{t(`sfx event ${ev}`)}</div>
+				<div className="gui-settings-row-label">{t(SFX_EVENT_KEY[ev] ?? ev)}</div>
 				<div className="gui-settings-row-desc">
-					{t(`sfx event ${ev} desc`)} · {t("default")}: {DEFAULT_SFX[ev]}
+					{t(SFX_EVENT_DESC_KEY[ev] ?? ev)} · {t("default")}: {DEFAULT_SFX[ev]}
 				</div>
 			</div>
 			<button
@@ -67,7 +102,7 @@ export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
 					setName(next);
 					setSoundFor(ev, next);
 				}}
-				ariaLabel={t(`sfx event ${ev}`)}
+				ariaLabel={t(SFX_EVENT_KEY[ev] ?? ev)}
 				options={ALL_SOUNDS.map(s => ({ value: s, label: s }))}
 			/>
 		</div>
@@ -219,7 +254,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					<div className="gui-settings-section-title">{t("notification events")}</div>
 					{NOTIFY_EVENTS.map(ev => (
 						<div key={ev} className="gui-settings-row">
-							<div className="gui-settings-row-label">{t(`notification event ${ev}`)}</div>
+							<div className="gui-settings-row-label">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
 							<button
 								type="button"
 								role="switch"
@@ -230,7 +265,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 									setEventPrefs(next);
 									saveEventPrefs(next);
 								}}
-								aria-label={t(`notification event ${ev}`)}
+								aria-label={t(NOTIFY_EVENT_KEY[ev] ?? ev)}
 							>
 								<span className="gui-toggle-knob" />
 							</button>
@@ -248,7 +283,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					<div className="gui-notify-tpl-grid">
 						{NOTIFY_EVENTS.map(ev => (
 							<div key={ev} className="gui-notify-tpl-group">
-								<div className="gui-notify-tpl-name">{t(`notification event ${ev}`)}</div>
+								<div className="gui-notify-tpl-name">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
 								<div>
 									<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-title`}>
 										{t("title")}

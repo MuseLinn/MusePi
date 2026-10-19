@@ -9,7 +9,7 @@ import type { RpcClient } from "../../lib/rpc";
  * 授权跳转(系统设置深链)。Kimi Work 权限引导弹窗的设置面板版。
  * 非 macOS(后端不可用)渲染空节点。
  */
-export type ComputerPermissionKind = "capture" | "ax" | "input";
+export type ComputerPermissionKind = "capture" | "ax" | "tools.input";
 
 export interface ComputerPermissionRow {
 	kind: ComputerPermissionKind;
@@ -28,9 +28,9 @@ const PERMISSION_META: Record<
 	ComputerPermissionKind,
 	{ labelKey: TranslationKey; descriptionKey: TranslationKey; icon: string }
 > = {
-	capture: { labelKey: "screen recording", descriptionKey: "permission screen recording description", icon: "camera" },
-	ax: { labelKey: "accessibility", descriptionKey: "permission accessibility description", icon: "key" },
-	input: { labelKey: "input monitoring", descriptionKey: "permission input description", icon: "key" },
+	capture: { labelKey: "tools.screenRecording", descriptionKey: "tools.permissionScreenRecordingDescription", icon: "camera" },
+	ax: { labelKey: "tools.accessibility", descriptionKey: "tools.permissionAccessibilityDescription", icon: "key" },
+	input: { labelKey: "tools.inputMonitoring", descriptionKey: "tools.permissionInputDescription", icon: "key" },
 };
 
 interface Props {
@@ -49,7 +49,7 @@ export function computerPermissionRows(caps: Record<string, unknown> | undefined
 	};
 	pick("capture", "capturePermission", "capture");
 	pick("ax", "axPermission", "ax");
-	pick("input", "inputPermission", "input");
+	pick("tools.input", "inputPermission", "tools.input");
 	return rows;
 }
 
@@ -83,8 +83,8 @@ export function ComputerPermissionsSection({ rpc, onRefreshTick }: Props): React
 
 	return (
 		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{t("computer permissions")}</div>
-			<p className="gui-settings-row-desc">{t("computer permissions hint")}</p>
+			<div className="gui-settings-section-title">{t("tools.computerPermissions")}</div>
+			<p className="gui-settings-row-desc">{t("tools.computerPermissionsHint")}</p>
 			{rows.map(row => {
 				const meta = PERMISSION_META[row.kind];
 				const granted = row.state === "granted";
@@ -95,7 +95,7 @@ export function ComputerPermissionsSection({ rpc, onRefreshTick }: Props): React
 							<div className="gui-settings-row-desc">{t(meta.descriptionKey)}</div>
 						</div>
 						{granted ? (
-							<span className="gui-permission-granted">{t("granted")}</span>
+							<span className="gui-permission-granted">{t("tools.granted")}</span>
 						) : (
 							<button
 								type="button"
@@ -103,7 +103,7 @@ export function ComputerPermissionsSection({ rpc, onRefreshTick }: Props): React
 								disabled={opening !== null}
 								onClick={() => authorize(row.kind)}
 							>
-								{t("authorize")}
+								{t("tools.authorize")}
 							</button>
 						)}
 					</div>

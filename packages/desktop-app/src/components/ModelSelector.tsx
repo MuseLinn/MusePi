@@ -209,7 +209,7 @@ export function ModelSelector({
 	/** Top-menu action (openchamber 添加新提供商): opens the settings
 	 *  providers page; omitted where no settings opener is reachable. */
 	onAddProvider?(): void;
-	/** Render the "not selected" clearing row (openchamber
+	/** Render the "settings.notSelected" clearing row (openchamber
 	 *  includeNotSelected parity): a top action that reports the clear via
 	 *  onSelect(null). Off by default — the live composer always has a
 	 *  model; opt in where "no pick" is a real state (role pickers falling
@@ -344,7 +344,7 @@ export function ModelSelector({
 	};
 
 	const current = models.find(m => m.id === modelId || `${m.provider}/${m.id}` === modelId);
-	const label = current ? (current.name || current.id).replace(/^[^/]*\//, "") : t("model");
+	const label = current ? (current.name || current.id).replace(/^[^/]*\//, "") : t("settings.model");
 
 	const favs = useSyncExternalStore(subscribeFavs, readFavModels);
 	const recents = useSyncExternalStore(subscribeRecentModels, readRecentModels);
@@ -417,13 +417,13 @@ export function ModelSelector({
 		// keeps the t() key-typing intact.
 		const nextSections: Array<{
 			key: string;
-			labelKey: "favorite models" | "recent models" | null;
+			labelKey: "settings.favoriteModels" | "settings.recentModels" | null;
 			label: string;
 			rows: WireModel[];
 		}> = [];
-		if (favRows.length > 0) nextSections.push({ key: "fav", labelKey: "favorite models", label: "", rows: favRows });
+		if (favRows.length > 0) nextSections.push({ key: "fav", labelKey: "settings.favoriteModels", label: "", rows: favRows });
 		if (recentRows.length > 0)
-			nextSections.push({ key: "recent", labelKey: "recent models", label: "", rows: recentRows });
+			nextSections.push({ key: "settings.recent", labelKey: "settings.recentModels", label: "", rows: recentRows });
 		for (const { provider, rows } of providerSections) {
 			nextSections.push({ key: `provider:${provider}`, labelKey: null, label: provider, rows });
 		}
@@ -555,7 +555,7 @@ export function ModelSelector({
 				// rides along so the daemon resolves the exact model, not the first
 				// provider that happens to serve the same id.
 				void rpc
-					.request("session.setModel", { sessionId, model: { id: selected.id, provider: selected.provider } })
+					.request("settings.sessionSetmodel", { sessionId, model: { id: selected.id, provider: selected.provider } })
 					.then(() => onSelect?.(selected.id, selected.provider))
 					.catch(() => {});
 			} else {
@@ -575,8 +575,8 @@ export function ModelSelector({
 				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
 				ref={capsule ? anchorRef : undefined}
 				onClick={() => setOpen(v => !v)}
-				title={current ? `${current.provider}/${current.id} · ${current.name}` : t("model")}
-				aria-label={t("select model")}
+				title={current ? `${current.provider}/${current.id} · ${current.name}` : t("settings.model")}
+				aria-label={t("settings.selectModel")}
 			>
 				{current ? (
 					<ModelBrandIcon provider={current.provider} modelId={current.id} size={14} />
@@ -593,7 +593,7 @@ export function ModelSelector({
 					{onAddProvider && (
 						<button type="button" className="gui-model-add" onClick={onAddProvider}>
 							<Icon name="add" className="h-3.5 w-3.5" />
-							<span>{t("add provider")}</span>
+							<span>{t("settings.addProvider")}</span>
 						</button>
 					)}
 					<div className="gui-model-menu-search">
@@ -601,16 +601,16 @@ export function ModelSelector({
 						<input
 							value={query}
 							onChange={e => setQuery(e.target.value)}
-							placeholder={t("search models…")}
+							placeholder={t("settings.searchModels")}
 							className="gui-model-menu-input"
-							aria-label={t("search models…")}
+							aria-label={t("settings.searchModels")}
 							/* Focused on open so ↑↓/Enter navigation works without a
 							 * pointing-device detour (openchamber menu parity). */
 							autoFocus
 						/>
 					</div>
 					<div className="gui-model-list" ref={listRef} data-kbd-nav={kbdOwner || undefined}>
-						{/* "not selected" clearing row (openchamber includeNotSelected
+						{/* "settings.notSelected" clearing row (openchamber includeNotSelected
 						 * parity): lives OUTSIDE the ↑↓/Enter flat list, exactly like
 						 * the reference — it's an action, not a model row. */}
 						{allowNone && (
@@ -625,13 +625,13 @@ export function ModelSelector({
 									}}
 								>
 									<Icon name="close" className="h-3.5 w-3.5" />
-									<span>{t("not selected")}</span>
+									<span>{t("settings.notSelected")}</span>
 									{!current && <Icon name="check" className="h-3.5 w-3.5" />}
 								</button>
 								<div className="gui-model-sep" aria-hidden="true" />
 							</>
 						)}
-						{filtered.length === 0 && <div className="gui-model-empty">{t("no matching models")}</div>}
+						{filtered.length === 0 && <div className="gui-model-empty">{t("settings.noMatchingModels")}</div>}
 						{sections.map(sec => {
 							const closed = secClosed[sec.key] === true;
 							return (
@@ -709,7 +709,7 @@ export function ModelSelector({
 							);
 						})}
 					</div>
-					<div className="gui-model-menu-foot">{t("model menu hint")}</div>
+					<div className="gui-model-menu-foot">{t("settings.modelMenuHint")}</div>
 				</div>,
 			)}
 		</div>
@@ -784,19 +784,19 @@ const ModelRow = memo(function ModelRow({
 	const isDefault = `${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
 	const genModel = isGenerationModel(m);
 	const capTitle = [
-		m.text !== false ? t("text input") : null,
-		m.vision ? t("image understanding") : null,
-		m.video ? t("video understanding") : null,
-		m.imageGen ? t("image generation") : null,
-		m.videoGen ? t("video generation") : null,
-		m.reasoning ? t("reasoning") : null,
+		m.text !== false ? t("general.textInput") : null,
+		m.vision ? t("general.imageUnderstanding") : null,
+		m.video ? t("general.videoUnderstanding") : null,
+		m.imageGen ? t("general.imageGeneration") : null,
+		m.videoGen ? t("general.videoGeneration") : null,
+		m.reasoning ? t("general.reasoning") : null,
 	]
 		.filter((rowLabel): rowLabel is string => rowLabel !== null)
 		.join(" · ");
 	const genNote = genModel
 		? m.imageGen
-			? t("image generation model — use the generate_image tool")
-			: t("video generation model — use the video generation tool")
+			? t("general.imageGenerationModelUse")
+			: t("general.videoGenerationModelUse")
 		: undefined;
 	return (
 		// Row is a div (role=button) so the favorite star can be a real
@@ -825,8 +825,8 @@ const ModelRow = memo(function ModelRow({
 						type="button"
 						ref={gripRef}
 						className="gui-model-grip"
-						title={t("drag to reorder favorites")}
-						aria-label={t("drag to reorder favorites")}
+						title={t("settings.dragReorderFavorites")}
+						aria-label={t("settings.dragReorderFavorites")}
 						onClick={e => e.stopPropagation()}
 						{...(gripProps as Record<string, never>)}
 					>
@@ -845,8 +845,8 @@ const ModelRow = memo(function ModelRow({
 				<button
 					type="button"
 					className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
-					title={fav ? t("unfavorite model") : t("favorite model")}
-					aria-label={fav ? t("unfavorite model") : t("favorite model")}
+					title={fav ? t("settings.unfavoriteModel") : t("settings.favoriteModel")}
+					aria-label={fav ? t("settings.unfavoriteModel") : t("settings.favoriteModel")}
 					onClick={e => {
 						e.stopPropagation();
 						onToggleFav(m.id, m.provider);
@@ -858,8 +858,8 @@ const ModelRow = memo(function ModelRow({
 					<button
 						type="button"
 						className={`gui-model-fav${isDefault ? " gui-model-fav--on" : ""}`}
-						title={isDefault ? t("default model") : t("set as default model")}
-						aria-label={isDefault ? t("default model") : t("set as default model")}
+						title={isDefault ? t("settings.defaultModel") : t("settings.setDefaultModel")}
+						aria-label={isDefault ? t("settings.defaultModel") : t("settings.setDefaultModel")}
 						onClick={e => {
 							e.stopPropagation();
 							onSetDefault(m.id, m.provider);

@@ -66,12 +66,12 @@ export function ProjectActionsDialog({
 	};
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("edit project actions")} className="w-[460px] max-w-[92vw]">
+		<DialogFrame open={open} onClose={onClose} label={t("general.editProjectActions")} className="w-[460px] max-w-[92vw]">
 			<div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-				<h3 className="text-[14px] font-semibold text-[var(--color-text)]">{t("edit project actions")}</h3>
+				<h3 className="text-[14px] font-semibold text-[var(--color-text)]">{t("general.editProjectActions")}</h3>
 				{actions.length === 0 ? (
 					<div className="flex flex-1 items-center justify-center px-4 text-center text-[12.5px] text-[var(--color-text-faint)]">
-						{t("no custom actions")}
+						{t("general.noCustomActions")}
 					</div>
 				) : (
 					<div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
@@ -97,8 +97,8 @@ export function ProjectActionsDialog({
 								<button
 									type="button"
 									className="gui-view-opt !w-auto px-1.5"
-									title={t("edit action")}
-									aria-label={t("edit action")}
+									title={t("general.editAction")}
+									aria-label={t("general.editAction")}
 									onClick={() => startEdit(action)}
 								>
 									<Icon name="pencil" className="h-3.5 w-3.5" />
@@ -106,8 +106,8 @@ export function ProjectActionsDialog({
 								<button
 									type="button"
 									className="gui-view-opt gui-view-opt--danger !w-auto px-1.5"
-									title={t("delete action")}
-									aria-label={t("delete action")}
+									title={t("general.deleteAction")}
+									aria-label={t("general.deleteAction")}
 									onClick={() => removeAction(action.id)}
 								>
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -118,17 +118,17 @@ export function ProjectActionsDialog({
 				)}
 				<div className="flex flex-col gap-1.5 border-t border-[var(--border)] pt-3">
 					<div className="text-[10.5px] uppercase tracking-wider text-[var(--color-text-faint)]">
-						{editingId ? t("edit action") : t("add action")}
+						{editingId ? t("general.editAction") : t("general.addAction")}
 					</div>
 					<input
 						className="gui-input w-full"
-						placeholder={t("action name")}
+						placeholder={t("general.actionName")}
 						value={name}
 						onChange={e => setName(e.target.value)}
 					/>
 					<input
 						className="gui-input w-full font-mono"
-						placeholder={t("action command")}
+						placeholder={t("general.actionCommand")}
 						value={command}
 						onChange={e => setCommand(e.target.value)}
 					/>
@@ -139,11 +139,11 @@ export function ProjectActionsDialog({
 							disabled={!name.trim() || !command.trim()}
 							onClick={saveDraft}
 						>
-							{editingId ? t("save") : t("add")}
+							{editingId ? t("general.save") : t("settings.add")}
 						</button>
 						{editingId && (
 							<button type="button" className="gui-btn gui-btn-sm" onClick={resetDraft}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 						)}
 					</div>

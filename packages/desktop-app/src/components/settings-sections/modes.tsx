@@ -143,7 +143,7 @@ export function ModesSection({
 			try {
 				const rootDef = await rpc.request<ModeDef | null>("modes.get", { id });
 				if (!rootDef) {
-					setViewState({ status: "error", id, error: t("modes view missing", { id }) });
+					setViewState({ status: "error", id, error: t("settings.modesViewMissing", { id }) });
 					return;
 				}
 				const rows = modes ?? [];
@@ -192,7 +192,7 @@ export function ModesSection({
 		setSaving(true);
 		try {
 			await rpc.request("modes.save", { ...duplicateSource, id, label: duplicateSource.label ?? id });
-			setSaveMsg(t("modes saved"));
+			setSaveMsg(t("settings.modesSaved"));
 			setDuplicateSource(null);
 		} catch (error) {
 			setSaveMsg(`⚠ ${String(error)}`);
@@ -247,15 +247,17 @@ export function ModesSection({
 					<span className="truncate text-[13px] font-medium">{resolveModeLabel(mode.id, modes)}</span>
 					<span className="text-[11px] text-[var(--color-text-faint)]">({mode.id})</span>
 					<span className="gui-provider-chip">
-						{mode.builtin === true ? t("modes builtin badge") : t("modes custom badge")}
+						{mode.builtin === true ? t("settings.modesBuiltinBadge") : t("settings.modesCustomBadge")}
 					</span>
-					{mode.promptComplete ? <span className="gui-provider-chip">{t("modes complete badge")}</span> : null}
+					{mode.promptComplete ? (
+						<span className="gui-provider-chip">{t("settings.modesCompleteBadge")}</span>
+					) : null}
 					{mode.extensions?.length === 0 ? (
-						<span className="gui-provider-chip">{t("modes core-only badge")}</span>
+						<span className="gui-provider-chip">{t("settings.modesCoreOnlyBadge")}</span>
 					) : null}
 					{mode.settingsKeys.length > 0 ? (
 						<span className="gui-provider-chip">
-							{t("{count} settings", { count: String(mode.settingsKeys.length) })}
+							{t("settings.settingsWithCount", { count: String(mode.settingsKeys.length) })}
 						</span>
 					) : null}
 				</div>
@@ -264,7 +266,7 @@ export function ModesSection({
 				) : null}
 				{mode.extends.length > 0 ? (
 					<div className="mt-0.5 text-[12px] text-[var(--color-text-faint)]">
-						{t("modes based on")} {mode.extends.map(e => resolveModeLabel(e, modes)).join(" + ")}
+						{t("settings.modesBased")} {mode.extends.map(e => resolveModeLabel(e, modes)).join(" + ")}
 					</div>
 				) : null}
 				{/* 卡片右下角操作(DSH Agent presets 对齐):内置 = 查看/复制;
@@ -276,7 +278,7 @@ export function ModesSection({
 						onClick={() => openView(mode.id)}
 						disabled={mode.source === "extension"}
 					>
-						{t("modes view")}
+						{t("settings.modesView")}
 					</button>
 					<button
 						type="button"
@@ -284,7 +286,7 @@ export function ModesSection({
 						onClick={() => openDuplicate(mode.id)}
 						disabled={mode.source === "extension"}
 					>
-						{t("modes duplicate")}
+						{t("settings.modesDuplicate")}
 					</button>
 					{mode.builtin !== true && mode.source !== "extension" && (
 						<>
@@ -293,14 +295,14 @@ export function ModesSection({
 								className="text-[12px] text-[var(--color-accent)] hover:underline"
 								onClick={() => void openModesDir()}
 							>
-								{t("modes open dir")}
+								{t("settings.modesOpenDir")}
 							</button>
 							<button
 								type="button"
 								className="text-[12px] text-[var(--color-danger)] hover:underline"
 								onClick={() => remove(mode.id)}
 							>
-								{t("modes delete")}
+								{t("settings.modesDelete")}
 							</button>
 						</>
 					)}
@@ -311,8 +313,8 @@ export function ModesSection({
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("modes title")}</h2>
-			<p className="gui-settings-page-desc">{t("modes description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.modesTitle")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.modesDescription")}</p>
 			{errors.length > 0 && (
 				<div className="gui-settings-row text-[12px] text-[var(--color-danger)]">{errors.join("; ")}</div>
 			)}
@@ -327,7 +329,7 @@ export function ModesSection({
 			>
 				<input
 					className="gui-board-home-input"
-					placeholder={t("modes create placeholder")}
+					placeholder={t("settings.modesCreatePlaceholder")}
 					value={newDesc}
 					onChange={e => setNewDesc(e.target.value)}
 					onKeyDown={e => {
@@ -345,21 +347,23 @@ export function ModesSection({
 			</SpotlightCard>
 
 			{modes === null ? (
-				<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">{t("loading")}</div>
+				<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">{t("settings.loading")}</div>
 			) : modes.length === 0 ? (
-				<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">{t("modes empty")}</div>
+				<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">
+					{t("settings.modesEmpty")}
+				</div>
 			) : (
 				<>
-					<p className="mt-1 text-[11px] text-[var(--color-text-faint)]">{t("modes default hint")}</p>
+					<p className="mt-1 text-[11px] text-[var(--color-text-faint)]">{t("settings.modesDefaultHint")}</p>
 					{builtinModes.length > 0 && (
 						<>
-							<div className="gui-modes-group-title">{t("modes builtin group")}</div>
+							<div className="gui-modes-group-title">{t("settings.modesBuiltinGroup")}</div>
 							<div className="mt-1 flex flex-col gap-2">{builtinModes.map(renderModeCard)}</div>
 						</>
 					)}
 					{customModes.length > 0 && (
 						<>
-							<div className="gui-modes-group-title">{t("modes custom group")}</div>
+							<div className="gui-modes-group-title">{t("settings.modesCustomGroup")}</div>
 							<div className="mt-1 flex flex-col gap-2">{customModes.map(renderModeCard)}</div>
 						</>
 					)}
@@ -372,13 +376,13 @@ export function ModesSection({
 			<DialogFrame
 				open={viewState.status !== "idle"}
 				onClose={() => setViewState({ status: "idle" })}
-				label={t("modes view title")}
+				label={t("settings.modesViewTitle")}
 				className="w-[560px] max-w-[92vw]"
 			>
 				{viewState.status !== "idle" && (
 					<>
 						<div className="gui-dialog-head">
-							<h3 className="text-[14px] font-medium">{t("modes view title")}</h3>
+							<h3 className="text-[14px] font-medium">{t("settings.modesViewTitle")}</h3>
 							<button
 								type="button"
 								className="text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -388,7 +392,7 @@ export function ModesSection({
 							</button>
 						</div>
 						{viewState.status === "loading" ? (
-							<div className="p-4 text-[12px] text-[var(--color-text-muted)]">{t("loading")}</div>
+							<div className="p-4 text-[12px] text-[var(--color-text-muted)]">{t("settings.loading")}</div>
 						) : viewState.status === "error" ? (
 							<div className="p-4 text-[12px] text-[var(--color-danger)]">{viewState.error}</div>
 						) : (
@@ -402,13 +406,13 @@ export function ModesSection({
 			<DialogFrame
 				open={duplicateSource !== null}
 				onClose={() => setDuplicateSource(null)}
-				label={t("modes duplicate as")}
+				label={t("settings.modesDuplicate2")}
 				className="gui-dialog--confirm"
 			>
 				{duplicateSource && (
 					<>
-						<h3 className="text-[14px] font-medium">{t("modes duplicate as")}</h3>
-						<p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{t("modes duplicate hint")}</p>
+						<h3 className="text-[14px] font-medium">{t("settings.modesDuplicate2")}</h3>
+						<p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{t("settings.modesDuplicateHint")}</p>
 						<input
 							className="mt-2 w-full rounded-md border border-[var(--border)] bg-[var(--color-surface)] px-2 py-1 text-[13px] outline-none focus:border-[var(--color-accent)]"
 							placeholder={`${duplicateSource.id}-copy`}
@@ -427,10 +431,10 @@ export function ModesSection({
 								onClick={() => void doDuplicate()}
 								disabled={saving || !dupId.trim()}
 							>
-								<span>{t("modes duplicate")}</span>
+								<span>{t("settings.modesDuplicate")}</span>
 							</button>
 							<button type="button" className="gui-pane-action" onClick={() => setDuplicateSource(null)}>
-								<span>{t("modes cancel")}</span>
+								<span>{t("settings.modesCancel")}</span>
 							</button>
 							{saveMsg && <span className="text-[12px] text-[var(--color-text-muted)]">{saveMsg}</span>}
 						</div>
@@ -462,43 +466,43 @@ function ModeViewBody({
 		<FadeScroll className="min-h-0 flex-1 overflow-auto p-4">
 			{view.cycle && (
 				<div className="gui-modes-view-warn text-[var(--color-danger)]">
-					{t("modes view cycle warning", { path: view.cycle.join(" → ") })}
+					{t("settings.modesViewCycleWarning", { path: view.cycle.join(" → ") })}
 				</div>
 			)}
 			{view.truncated && (
 				<div className="gui-modes-view-warn text-[var(--color-text-muted)]">
-					{t("modes view truncated", { max: String(MAX_MODE_CHAIN_DEPTH) })}
+					{t("settings.modesViewTruncated", { max: String(MAX_MODE_CHAIN_DEPTH) })}
 				</div>
 			)}
 			{view.missing.map(missingId => (
 				<div key={missingId} className="gui-modes-view-warn text-[var(--color-danger)]">
-					{t("modes view missing", { id: missingId })}
+					{t("settings.modesViewMissing", { id: missingId })}
 				</div>
 			))}
 
-			<div className="gui-modes-view-section-title">{t("modes view chain")}</div>
+			<div className="gui-modes-view-section-title">{t("settings.modesViewChain")}</div>
 			<div className="gui-modes-chain">
 				{chainDisplay.map((nodeId, i) => (
 					<div key={nodeId} className="gui-modes-chain-row">
-						<span className="gui-modes-chain-tag">{i === 0 ? t("modes view chain root") : "extends"}</span>
+						<span className="gui-modes-chain-tag">{i === 0 ? t("settings.modesViewChainRoot") : "extends"}</span>
 						<span className="truncate text-[12px] font-medium">{resolveModeLabel(nodeId, catalog)}</span>
 						<span className="text-[11px] text-[var(--color-text-faint)]">({nodeId})</span>
 					</div>
 				))}
 				{chainDisplay.length === 0 && (
-					<div className="text-[12px] text-[var(--color-text-muted)]">{t("modes view none")}</div>
+					<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.modesViewNone")}</div>
 				)}
 			</div>
 
-			<div className="gui-modes-view-section-title">{t("modes view prompt sections")}</div>
+			<div className="gui-modes-view-section-title">{t("settings.modesViewPromptSections")}</div>
 			{promptSorted.length === 0 ? (
-				<div className="text-[12px] text-[var(--color-text-muted)]">{t("modes view none")}</div>
+				<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.modesViewNone")}</div>
 			) : (
 				promptSorted.map(section => (
 					<div key={section.name} className="gui-modes-prompt-block">
 						<div className="flex items-center gap-1.5">
 							<span className="gui-provider-chip">
-								{t("modes prompt order")} {section.order}
+								{t("settings.modesPromptOrder")} {section.order}
 							</span>
 							<span className="truncate text-[12px] font-medium">{section.name}</span>
 						</div>
@@ -507,9 +511,9 @@ function ModeViewBody({
 				))
 			)}
 
-			<div className="gui-modes-view-section-title">{t("modes view extensions")}</div>
+			<div className="gui-modes-view-section-title">{t("settings.modesViewExtensions")}</div>
 			{!resolved.extensionsExplicit ? (
-				<div className="text-[12px] text-[var(--color-text-muted)]">{t("modes extensions all")}</div>
+				<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.modesExtensionsAll")}</div>
 			) : resolved.extensions && resolved.extensions.length > 0 ? (
 				<div className="flex flex-wrap gap-1.5">
 					{resolved.extensions.map(ext => (
@@ -519,12 +523,12 @@ function ModeViewBody({
 					))}
 				</div>
 			) : (
-				<div className="text-[12px] text-[var(--color-text-muted)]">{t("modes extensions none")}</div>
+				<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.modesExtensionsNone")}</div>
 			)}
 
-			<div className="gui-modes-view-section-title">{t("modes view settings")}</div>
+			<div className="gui-modes-view-section-title">{t("settings.modesViewSettings")}</div>
 			{settingsEntries.length === 0 ? (
-				<div className="text-[12px] text-[var(--color-text-muted)]">{t("modes view none")}</div>
+				<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.modesViewNone")}</div>
 			) : (
 				settingsEntries.map(([key, value]) => (
 					<div key={key} className="gui-modes-kv">
@@ -534,28 +538,28 @@ function ModeViewBody({
 				))
 			)}
 
-			<div className="gui-modes-view-section-title">{t("modes view flags")}</div>
+			<div className="gui-modes-view-section-title">{t("settings.modesViewFlags")}</div>
 			<div className="gui-modes-kv">
 				<span className="gui-modes-kv-key">promptComplete</span>
 				<span className="gui-modes-kv-val">
-					{resolved.promptComplete ? t("modes view flag on") : t("modes view flag off")}
+					{resolved.promptComplete ? t("settings.modesViewFlag") : t("settings.modesViewFlagOff")}
 					{resolved.promptCompleteSource ? ` · ${resolved.promptCompleteSource}` : ""}
 				</span>
 			</div>
 			<div className="gui-modes-kv">
 				<span className="gui-modes-kv-key">runtimeContext</span>
 				<span className="gui-modes-kv-val">
-					{resolved.runtimeContext ? t("modes view flag on") : t("modes view flag off")}
+					{resolved.runtimeContext ? t("settings.modesViewFlag") : t("settings.modesViewFlagOff")}
 				</span>
 			</div>
 			<div className="gui-modes-kv">
-				<span className="gui-modes-kv-key">{t("modes view model role")}</span>
-				<span className="gui-modes-kv-val">{resolved.modelRole ?? t("modes view model role none")}</span>
+				<span className="gui-modes-kv-key">{t("settings.modesViewModelRole")}</span>
+				<span className="gui-modes-kv-val">{resolved.modelRole ?? t("settings.modesViewModelRoleNone")}</span>
 			</div>
 			{/* 兜底提示:视图根 id 与展示 id 不符说明聚合来自部分链。 */}
 			{view.missing.includes(id) && (
 				<div className="mt-2 text-[11px] text-[var(--color-text-faint)]">
-					{t("modes view title")} · {id}
+					{t("settings.modesViewTitle")} · {id}
 				</div>
 			)}
 		</FadeScroll>

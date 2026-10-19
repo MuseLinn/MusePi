@@ -131,7 +131,7 @@ export function CommandPalette({
 					.then(res => {
 						const counts = new Map((res?.sessions ?? []).map(s => [s.sessionId, s.messageCount]));
 						const labelOf = (id: string): string =>
-							sessions.find(s => s.id === id)?.label ?? t("untitled session");
+							sessions.find(s => s.id === id)?.label ?? t("transcript.untitledSession");
 						const seen = new Map<string, SearchRow>();
 						for (const m of res?.matches ?? []) {
 							if (!seen.has(m.sessionId)) {
@@ -193,45 +193,45 @@ export function CommandPalette({
 	const actions: { icon: string; label: string; hint?: string; fn(): void }[] = [
 		{
 			icon: "add-circle",
-			label: t("new task"),
+			label: t("settings.newTask"),
 			hint: "⌘N",
 			fn: onNewSession,
 		},
 		{
 			icon: "folder-open",
-			label: t("open workspace"),
+			label: t("general.openWorkspace"),
 			hint: "⌘O",
 			fn: onOpenWorkspace,
 		},
-		{ icon: "settings-3", label: t("settings"), fn: onSettings },
+		{ icon: "settings-3", label: t("settings.settings"), fn: onSettings },
 	];
 	const panels: { icon: string; label: string; hint?: string; fn(): void }[] = [
 		{
 			icon: "layout-left",
-			label: t("toggle sidebar"),
+			label: t("settings.toggleSidebar"),
 			hint: "⌘B",
 			fn: onToggleSidebar,
 		},
 		{
 			icon: "terminal-box",
-			label: t("toggle terminal"),
+			label: t("general.toggleTerminal"),
 			hint: "⌘J",
 			fn: onToggleTerminal,
 		},
 		{
 			icon: "equalizer-2",
-			label: t("toggle preview"),
+			label: t("general.togglePreview"),
 			hint: "⌘E",
 			fn: onTogglePreview,
 		},
-		...(onOpenCapability ? [{ icon: "star", label: t("capability center"), fn: onOpenCapability }] : []),
+		...(onOpenCapability ? [{ icon: "star", label: t("tools.capabilityCenter"), fn: onOpenCapability }] : []),
 		// openchamber parity: a Reload UI escape hatch. Every renderer-side
 		// recovery path (a stale extension slot, derived state blown away by a
 		// hot reload) bottoms out in one full reload; without this command the
 		// user has to restart the window by hand.
 		{
 			icon: "refresh",
-			label: t("reload ui"),
+			label: t("general.reloadUi"),
 			fn: () => window.location.reload(),
 		},
 	];
@@ -244,7 +244,7 @@ export function CommandPalette({
 		fn(): void;
 	}>(s => ({
 		icon: "chat-1",
-		label: s.label || t("untitled session"),
+		label: s.label || t("transcript.untitledSession"),
 		hint: "count" in s ? String(s.count) : undefined,
 		// An exact-id hit shows the id as its own subtitle — otherwise the row
 		// looks identical to a plain recent session and the match reads as a
@@ -268,7 +268,7 @@ export function CommandPalette({
 				className={`gui-palette${enteredCls ? " gui-palette--entered" : ""}${closing ? " gui-palette--closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
-				aria-label={t("search")}
+				aria-label={t("settings.search")}
 				onClick={e => e.stopPropagation()}
 				onKeyDown={e => {
 					if (e.key === "Enter") {
@@ -283,7 +283,7 @@ export function CommandPalette({
 						ref={inputRef}
 						value={query}
 						onChange={e => setQuery(e.target.value)}
-						placeholder={t("search actions, tasks or messages")}
+						placeholder={t("general.searchActionsTasksMessages")}
 						spellCheck={false}
 						autoComplete="off"
 					/>
@@ -308,14 +308,14 @@ export function CommandPalette({
 								}}
 								className="h-3.5 w-3.5"
 							/>
-							<span>{id === "all" ? t("all") : id === "actions" ? t("actions") : t("tasks")}</span>
+							<span>{id === "all" ? t("tools.all") : id === "actions" ? t("general.actions") : t("general.tasks")}</span>
 						</button>
 					))}
 				</div>
 				<div className="gui-palette-body" key={tab} ref={listRef}>
 					{showActions && (
 						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">{t("suggestions")}</div>
+							<div className="gui-palette-section-title">{t("general.suggestions")}</div>
 							{actions.map((a, i) => (
 								<button
 									key={a.label}
@@ -334,7 +334,7 @@ export function CommandPalette({
 					)}
 					{showActions && (
 						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">{t("panels")}</div>
+							<div className="gui-palette-section-title">{t("general.panels")}</div>
 							{panels.map((p, i) => {
 								const idx = actions.length + i;
 								return (
@@ -356,11 +356,11 @@ export function CommandPalette({
 					)}
 					{showTasks && (
 						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">{query.trim() ? t("tasks") : t("recent sessions")}</div>
+							<div className="gui-palette-section-title">{query.trim() ? t("general.tasks") : t("general.recentSessions")}</div>
 							{searching ? (
 								<div className="gui-palette-empty">…</div>
 							) : query.trim() && rows !== null && rows.length === 0 ? (
-								<div className="gui-palette-empty">{t("no results")}</div>
+								<div className="gui-palette-empty">{t("general.noResults")}</div>
 							) : (
 								taskRows.map((r, i) => {
 									const idx = actions.length + panels.length + i;
@@ -393,7 +393,7 @@ export function CommandPalette({
 				<div className="gui-palette-footer">
 					<button type="button" className="gui-palette-config" onClick={() => run(onSettings)}>
 						<Icon name="settings-3" className="h-3.5 w-3.5" />
-						<span>{t("configure")}</span>
+						<span>{t("general.configure")}</span>
 					</button>
 				</div>
 			</div>

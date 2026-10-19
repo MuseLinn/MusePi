@@ -22,18 +22,18 @@ const REASON = "429 insufficient balance, top up required";
 function entries(assistantReason: string, retryReason: string, attempt: number): SessionEntry[] {
 	return [
 		{
-			type: "message",
+			type: "settings.message",
 			id: "user-1",
 			parentId: null,
 			timestamp: "2026-10-05T00:00:00Z",
-			message: { role: "user", content: "hello?", timestamp: 1 },
+			message: { role: "general.user", content: "hello?", timestamp: 1 },
 		} as unknown as SessionEntry,
 		{
-			type: "message",
+			type: "settings.message",
 			id: "assistant-err",
 			parentId: null,
 			timestamp: "2026-10-05T00:00:01Z",
-			message: { role: "assistant", content: [], stopReason: "error", errorMessage: assistantReason, timestamp: 2 },
+			message: { role: "general.assistant", content: [], stopReason: "tools.error", errorMessage: assistantReason, timestamp: 2 },
 		} as unknown as SessionEntry,
 		{
 			type: "custom_message",
@@ -75,7 +75,7 @@ describe("transcript error surfaces", () => {
 		// a transient blip from a provider that is down.
 		const html = render(REASON, 3);
 
-		expect(html).toContain(t("retry attempt {count}", { count: "3" }));
+		expect(html).toContain(t("general.retryAttemptWithCount", { count: "3" }));
 	});
 
 	test("renders no bordered card for a failed turn", () => {
@@ -125,21 +125,21 @@ describe("transcript error surfaces", () => {
 			<Transcript
 				entries={[
 					{
-						type: "message",
+						type: "settings.message",
 						id: "user-1",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:00Z",
-						message: { role: "user", content: "hello?", timestamp: 1 },
+						message: { role: "general.user", content: "hello?", timestamp: 1 },
 					} as unknown as SessionEntry,
 					{
-						type: "message",
+						type: "settings.message",
 						id: "assistant-ok",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:01Z",
 						message: {
-							role: "assistant",
-							content: [{ type: "text", text: "a real reply" }],
-							stopReason: "stop",
+							role: "general.assistant",
+							content: [{ type: "tools.text", text: "a real reply" }],
+							stopReason: "settings.stop",
 							timestamp: 2,
 						},
 					} as unknown as SessionEntry,
@@ -156,27 +156,27 @@ describe("transcript error surfaces", () => {
 
 	test("shows an interrupted turn as an interruption, not a failure", () => {
 		// A stop the user asked for is not an error. Rendering both under the same
-		// "request failed" heading would make an intentional stop read as a fault.
+		// "general.requestFailed" heading would make an intentional stop read as a fault.
 		const html = renderToStaticMarkup(
 			<Transcript
 				entries={[
 					{
-						type: "message",
+						type: "settings.message",
 						id: "user-1",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:00Z",
-						message: { role: "user", content: "hello?", timestamp: 1 },
+						message: { role: "general.user", content: "hello?", timestamp: 1 },
 					} as unknown as SessionEntry,
 					{
-						type: "message",
+						type: "settings.message",
 						id: "assistant-stop",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:01Z",
 						message: {
-							role: "assistant",
-							content: [{ type: "text", text: "partial answer" }],
-							stopReason: "aborted",
-							errorMessage: "aborted",
+							role: "general.assistant",
+							content: [{ type: "tools.text", text: "partial answer" }],
+							stopReason: "tools.aborted",
+							errorMessage: "tools.aborted",
 							timestamp: 2,
 						},
 					} as unknown as SessionEntry,
@@ -188,7 +188,7 @@ describe("transcript error surfaces", () => {
 			/>,
 		);
 
-		expect(html).toContain(t("request interrupted"));
-		expect(html).not.toContain(t("request failed"));
+		expect(html).toContain(t("general.requestInterrupted"));
+		expect(html).not.toContain(t("general.requestFailed"));
 	});
 });

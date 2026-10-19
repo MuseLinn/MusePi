@@ -352,15 +352,15 @@ export function StatusCards({
 						type="button"
 						className="gui-status-tool"
 						onClick={toggleCollapsed}
-						aria-label={t("collapse to capsule")}
-						title={t("collapse to capsule")}
+						aria-label={t("general.collapseCapsule")}
+						title={t("general.collapseCapsule")}
 					>
 						<Icon name="fullscreen-exit" className="h-3.5 w-3.5" />
 					</button>
 				</div>
 				<div className="gui-status-body">
 					{hasGitSection && git && (
-						<StatusSection title={t("git tools")}>
+						<StatusSection title={t("general.gitTools")}>
 							<button
 								type="button"
 								className="gui-status-row"
@@ -369,7 +369,7 @@ export function StatusCards({
 								aria-expanded={changesOpen}
 							>
 								<Icon name="file-check" className="gui-status-row-icon" />
-								<span className="min-w-0 flex-1 truncate text-left">{t("workspace changes")}</span>
+								<span className="min-w-0 flex-1 truncate text-left">{t("settings.workspaceChanges")}</span>
 								{!gitStale && changedFiles.length > 0 && (
 									<span className="gui-status-nums">
 										{git.added > 0 && <span className="gui-status-num-add">+{git.added}</span>}
@@ -418,7 +418,7 @@ export function StatusCards({
 											className="gui-status-file gui-status-file--more"
 											onClick={() => onOpenSurface("git")}
 										>
-											{t("and more files", { count: changedFiles.length - CHANGED_FILES_CAP })}
+											{t("general.moreFiles", { count: changedFiles.length - CHANGED_FILES_CAP })}
 										</button>
 									)}
 								</div>
@@ -433,12 +433,12 @@ export function StatusCards({
 									{!gitStale && (git.ahead > 0 || git.behind > 0) && (
 										<span className="gui-status-tracks">
 											{git.ahead > 0 && (
-												<span className="gui-status-track-up" title={t("commits to push")}>
+												<span className="gui-status-track-up" title={t("general.commitsPush")}>
 													↑{git.ahead}
 												</span>
 											)}
 											{git.behind > 0 && (
-												<span className="gui-status-track-down" title={t("commits to pull")}>
+												<span className="gui-status-track-down" title={t("general.commitsPull")}>
 													↓{git.behind}
 												</span>
 											)}
@@ -449,7 +449,7 @@ export function StatusCards({
 							</div>
 							<button type="button" className="gui-status-row" onClick={() => onOpenSurface("git")}>
 								<Icon name="git-commit" className="gui-status-row-icon" />
-								<span className="min-w-0 flex-1 truncate text-left">{t("commit or push")}</span>
+								<span className="min-w-0 flex-1 truncate text-left">{t("general.commitPush")}</span>
 								{!gitStale && changedFiles.length > 0 && (
 									<Icon name="arrow-right-s" className="gui-status-caret" />
 								)}
@@ -458,7 +458,7 @@ export function StatusCards({
 					)}
 					{hasAgentsSection && (
 						<StatusSection
-							title={t("agents")}
+							title={t("general.agents")}
 							trailing={
 								live.length > 0 ? (
 									<span className="gui-status-count gui-status-count--live">{live.length}</span>
@@ -495,7 +495,7 @@ export function StatusCards({
 										pair={["arrow-down-s", "arrow-right-s"]}
 										className="gui-status-row-icon"
 									/>
-									<span className="min-w-0 flex-1 truncate text-left">{t("ended")}</span>
+									<span className="min-w-0 flex-1 truncate text-left">{t("general.ended")}</span>
 									<span className="gui-status-count">{endedCount}</span>
 								</button>
 							)}
@@ -517,13 +517,13 @@ export function StatusCards({
 					)}
 					{hasTodoSection && todo && (
 						<StatusSection
-							title={t("todo progress")}
+							title={t("general.todoProgress")}
 							trailing={<span className="gui-status-count">{`${todo.done}/${todo.total}`}</span>}
 						>
 							<button type="button" className="gui-status-row" onClick={() => onOpenSurface("trajectory")}>
 								<Icon name="list-check-2" className="gui-status-row-icon" />
 								<span className="min-w-0 flex-1 truncate text-left" title={todo.current ?? undefined}>
-									{todo.current ?? t("todo progress")}
+									{todo.current ?? t("general.todoProgress")}
 								</span>
 							</button>
 						</StatusSection>
@@ -537,11 +537,11 @@ export function StatusCards({
 								className="gui-status-branch-input"
 								value={branchQuery}
 								onChange={e => setBranchQuery(e.target.value)}
-								placeholder={t("search branches")}
+								placeholder={t("general.searchBranches")}
 								spellCheck={false}
 							/>
 						</div>
-						<div className="gui-status-branch-section">{t("branches")}</div>
+						<div className="gui-status-branch-section">{t("general.branches")}</div>
 						{git?.branch && (
 							<div className="gui-status-branch-current">
 								<Icon name="git-branch" className="gui-status-row-icon" />
@@ -549,7 +549,7 @@ export function StatusCards({
 									<span className="gui-status-branch-name">{git.branch}</span>
 									{!gitStale && changedFiles.length > 0 && (
 										<span className="gui-status-branch-sub">
-											{t("uncommitted changes", { count: changedFiles.length })}
+											{t("general.uncommittedChanges", { count: changedFiles.length })}
 										</span>
 									)}
 								</span>
@@ -560,7 +560,7 @@ export function StatusCards({
 							const q = branchQuery.trim().toLowerCase();
 							const filtered = q ? branches.filter(b => b.toLowerCase().includes(q)) : branches;
 							if (filtered.length === 0) {
-								return <div className="gui-status-branch-empty">{t("no branches found")}</div>;
+								return <div className="gui-status-branch-empty">{t("general.noBranchesFound")}</div>;
 							}
 							return filtered.map(b => (
 								<button
@@ -586,14 +586,14 @@ export function StatusCards({
 									if (e.key === "Enter") void switchBranch(newBranchName, true);
 									if (e.key === "Escape") setCreating(false);
 								}}
-								placeholder={t("new branch name")}
+								placeholder={t("general.newBranchName")}
 								spellCheck={false}
 								disabled={switching}
 							/>
 						) : (
 							<button type="button" className="gui-status-branch-item" onClick={() => setCreating(true)}>
 								<Icon name="add" className="gui-status-row-icon" />
-								<span className="min-w-0 flex-1 truncate text-left">{t("create and checkout branch")}</span>
+								<span className="min-w-0 flex-1 truncate text-left">{t("general.createCheckoutBranch")}</span>
 							</button>
 						)}
 					</div>,
@@ -626,14 +626,14 @@ export function StatusCards({
 				type="button"
 				className="gui-status-pill"
 				onClick={toggleCollapsed}
-				aria-label={t("expand status cards")}
-				title={t("expand status cards")}
+				aria-label={t("general.expandStatusCards")}
+				title={t("general.expandStatusCards")}
 			>
 				{git ? (
 					hasDiff ? (
 						<>
 							<Icon name="file-check" className="gui-status-pill-ico" />
-							<span className="gui-status-pill-label">{t("git changes")}</span>
+							<span className="gui-status-pill-label">{t("general.gitChanges")}</span>
 							{diffNums}
 						</>
 					) : (
@@ -651,14 +651,14 @@ export function StatusCards({
 				) : hasAgentsSection ? (
 					<>
 						<Icon name="ai-agent" className="gui-status-pill-ico" />
-						<span className="gui-status-pill-label">{t("agents")}</span>
+						<span className="gui-status-pill-label">{t("general.agents")}</span>
 						<span className="gui-status-nums">{live.length}</span>
 					</>
 				) : (
 					todo && (
 						<>
 							<Icon name="list-check-2" className="gui-status-pill-ico" />
-							<span className="gui-status-pill-label">{t("todo progress")}</span>
+							<span className="gui-status-pill-label">{t("general.todoProgress")}</span>
 							<span className="gui-status-nums">{`${todo.done}/${todo.total}`}</span>
 						</>
 					)
@@ -679,12 +679,12 @@ export function StatusCards({
 						type="button"
 						className="gui-status-mini-main"
 						onClick={() => setForceFull(true)}
-						aria-label={t("expand status cards")}
-						title={t("expand status cards")}
+						aria-label={t("general.expandStatusCards")}
+						title={t("general.expandStatusCards")}
 					>
 						{git ? (
 							<>
-								<span className="gui-status-mini-label">{t("git tools")}</span>
+								<span className="gui-status-mini-label">{t("general.gitTools")}</span>
 								{hasDiff ? (
 									diffNums
 								) : (
@@ -701,13 +701,13 @@ export function StatusCards({
 							</>
 						) : hasAgentsSection ? (
 							<>
-								<span className="gui-status-mini-label">{t("agents")}</span>
+								<span className="gui-status-mini-label">{t("general.agents")}</span>
 								<span className="gui-status-nums">{live.length}</span>
 							</>
 						) : (
 							todo && (
 								<>
-									<span className="gui-status-mini-label">{t("todo progress")}</span>
+									<span className="gui-status-mini-label">{t("general.todoProgress")}</span>
 									<span className="gui-status-nums">{`${todo.done}/${todo.total}`}</span>
 								</>
 							)
@@ -717,8 +717,8 @@ export function StatusCards({
 						type="button"
 						className="gui-status-tool"
 						onClick={() => setForceFull(true)}
-						aria-label={t("expand status cards")}
-						title={t("expand status cards")}
+						aria-label={t("general.expandStatusCards")}
+						title={t("general.expandStatusCards")}
 					>
 						<Icon name="fullscreen" className="h-3.5 w-3.5" />
 					</button>

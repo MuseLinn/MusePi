@@ -25,13 +25,13 @@ export function CompactionStatusLine({ onCancel }: { onCancel(): void }): ReactN
 			<span className="gui-agent-status-braille" aria-hidden>
 				{BRAILLE_FRAMES[braille]}
 			</span>
-			<span className="gui-compact-line-text">{t("compacting…")}</span>
+			<span className="gui-compact-line-text">{t("composer.compacting")}</span>
 			<button
 				type="button"
 				className="gui-compact-line-stop"
 				onClick={onCancel}
-				title={t("stop compaction")}
-				aria-label={t("stop compaction")}
+				title={t("composer.stopCompaction")}
+				aria-label={t("composer.stopCompaction")}
 			>
 				<Square size={11} fill="currentColor" />
 			</button>

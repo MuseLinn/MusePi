@@ -192,7 +192,7 @@ export function ConnectDialog({
 		onOpenWorkspace(cwd);
 	};
 
-	const steps = [t("select method"), t("fill config"), t("connecting…"), t("select directory")];
+	const steps = [t("settings.selectMethod"), t("settings.fillConfig"), t("settings.connecting2"), t("settings.selectDirectory")];
 	const canNext =
 		step === 0
 			? method !== null
@@ -203,10 +203,10 @@ export function ConnectDialog({
 				: true;
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("remote connection")}>
+		<DialogFrame open={open} onClose={onClose} label={t("settings.remoteConnection")}>
 			<div className="gui-dialog-head">
-				<span className="text-[14px] font-semibold">{t("remote connection")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
+				<span className="text-[14px] font-semibold">{t("settings.remoteConnection")}</span>
+				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
@@ -238,9 +238,9 @@ export function ConnectDialog({
 				<div className="flex min-w-0 flex-1 flex-col p-4">
 					{step === 0 && (
 						<>
-							<h2 className="mb-1 text-[15px] font-semibold">{t("select connection method")}</h2>
+							<h2 className="mb-1 text-[15px] font-semibold">{t("settings.selectConnectionMethod")}</h2>
 							<p className="mb-4 text-[13px] text-[var(--color-text-muted)]">
-								{t("choose how to reach the workspace")}
+								{t("settings.chooseHowReachWorkspace")}
 							</p>
 							<div className="flex gap-3">
 								<button
@@ -250,28 +250,28 @@ export function ConnectDialog({
 								>
 									<Icon name="server" className="h-5 w-5" />
 									<span className="font-medium">SSH</span>
-									<span className="text-[13px] text-[var(--color-text-muted)]">{t("remote host")}</span>
+									<span className="text-[13px] text-[var(--color-text-muted)]">{t("settings.remoteHost")}</span>
 								</button>
 								<button
 									type="button"
 									className="gui-conn-card relative opacity-60"
 									disabled
 									aria-disabled="true"
-									title={t("docker coming soon")}
+									title={t("settings.dockerComingSoon")}
 								>
 									<span className="absolute right-2 top-2 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-[11px] text-[var(--color-text-faint)] ring-1 ring-[var(--border)]">
-										{t("docker coming soon")}
+										{t("settings.dockerComingSoon")}
 									</span>
 									<Icon name="archive-stack" className="h-5 w-5" />
 									<span className="font-medium">Docker</span>
-									<span className="text-[13px] text-[var(--color-text-muted)]">{t("local container")}</span>
+									<span className="text-[13px] text-[var(--color-text-muted)]">{t("settings.localContainer")}</span>
 								</button>
 							</div>
 						</>
 					)}
 					{step === 1 && (
 						<>
-							<h2 className="mb-1 text-[15px] font-semibold">{t("remote host")}</h2>
+							<h2 className="mb-1 text-[15px] font-semibold">{t("settings.remoteHost")}</h2>
 							{hostsError && (
 								<div className="mb-3 rounded-lg border border-[var(--color-danger-bd)] bg-[var(--color-danger-soft)] px-3 py-2 text-[13px] text-[var(--color-danger)]">
 									{hostsError}
@@ -279,7 +279,7 @@ export function ConnectDialog({
 							)}
 							{!sshfs && (
 								<div className="mb-3 rounded-lg border border-[var(--color-warn-bd)] bg-[var(--color-warn-soft)] px-3 py-2 text-[13px] text-[var(--color-warn)]">
-									{t("sshfs missing hint")}
+									{t("settings.sshfsMissingHint")}
 								</div>
 							)}
 							{hosts === null ? (
@@ -290,7 +290,7 @@ export function ConnectDialog({
 								<div className="flex max-w-sm flex-col gap-3">
 									<div className="gui-field">
 										<label className="gui-field-label" htmlFor="rc-name">
-											{t("host name")}
+											{t("settings.hostName")}
 										</label>
 										<input
 											id="rc-name"
@@ -303,7 +303,7 @@ export function ConnectDialog({
 									</div>
 									<div className="gui-field">
 										<label className="gui-field-label" htmlFor="rc-host">
-											{t("host address")}
+											{t("settings.hostAddress")}
 										</label>
 										<input
 											id="rc-host"
@@ -317,7 +317,7 @@ export function ConnectDialog({
 									<div className="grid grid-cols-2 gap-3">
 										<div className="gui-field">
 											<label className="gui-field-label" htmlFor="rc-user">
-												{t("username")}
+												{t("settings.username")}
 											</label>
 											<input
 												id="rc-user"
@@ -330,7 +330,7 @@ export function ConnectDialog({
 										</div>
 										<div className="gui-field">
 											<label className="gui-field-label" htmlFor="rc-port">
-												{t("port")}
+												{t("tools.port")}
 											</label>
 											<input
 												id="rc-port"
@@ -345,7 +345,7 @@ export function ConnectDialog({
 									</div>
 									<div className="gui-field">
 										<label className="gui-field-label" htmlFor="rc-key">
-											{t("ssh key path")}
+											{t("settings.sshKeyPath")}
 										</label>
 										<input
 											id="rc-key"
@@ -361,13 +361,13 @@ export function ConnectDialog({
 										className="text-[13px] text-[var(--color-accent)] hover:underline"
 										onClick={() => setNewHostMode(false)}
 									>
-										← {t("saved hosts")}
+										← {t("settings.savedHosts")}
 									</button>
 								</div>
 							) : (
 								<div className="flex min-h-0 flex-1 flex-col">
 									{hosts.length === 0 ? (
-										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">{t("no saved hosts")}</p>
+										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">{t("settings.noSavedHosts")}</p>
 									) : (
 										<FadeScroll className="max-h-56 min-h-0 overflow-y-auto pr-1">
 											{hosts.map(h => (
@@ -402,7 +402,7 @@ export function ConnectDialog({
 										className="mt-3 self-start text-[13px] text-[var(--color-accent)] hover:underline"
 										onClick={() => setNewHostMode(true)}
 									>
-										+ {t("new host")}
+										+ {t("settings.newHost")}
 									</button>
 								</div>
 							)}
@@ -415,14 +415,14 @@ export function ConnectDialog({
 									<>
 										<Icon name="loader" className="mx-auto h-8 w-8 animate-spin" />
 										<p className="mt-3 text-[13px] text-[var(--color-text-muted)]">
-											{t("connecting to {host}…", { host: selectedHost ?? "" })}
+											{t("settings.connectingToWithHost", { host: selectedHost ?? "" })}
 										</p>
 									</>
 								) : (
 									<>
 										{connectError && (
 											<div className="max-w-sm rounded-lg border border-[var(--color-danger-bd)] bg-[var(--color-danger-soft)] px-3 py-2 text-left text-[13px] text-[var(--color-danger)]">
-												<div className="mb-1 font-medium">{t("connect failed")}</div>
+												<div className="mb-1 font-medium">{t("settings.connectFailed")}</div>
 												<div className="break-words whitespace-pre-wrap">{connectError}</div>
 											</div>
 										)}
@@ -432,7 +432,7 @@ export function ConnectDialog({
 											disabled={!selectedHost}
 											onClick={() => void doConnect()}
 										>
-											{t("retry")}
+											{t("settings.retry")}
 										</button>
 									</>
 								)}
@@ -443,12 +443,12 @@ export function ConnectDialog({
 						<>
 							<div className="mb-2 flex items-center gap-2">
 								<h2 className="text-[15px] font-semibold">
-									{t("select a remote directory to open as a workspace")}
+									{t("settings.selectRemoteDirectoryOpen")}
 								</h2>
 								<div className="ml-auto flex items-center gap-1">
 									{connected && (
 										<span className="mr-1 rounded-full bg-[var(--color-ok-soft)] px-2 py-0.5 text-[11px] text-[var(--color-ok)]">
-											{connected.os} · {t("connected")}
+											{connected.os} · {t("transcript.connected")}
 										</span>
 									)}
 									<button
@@ -456,7 +456,7 @@ export function ConnectDialog({
 										className="gui-tool-btn"
 										onClick={() => void loadBrowse(browse?.parent ?? "/")}
 										disabled={!browse?.parent || browseBusy}
-										title={t("parent directory")}
+										title={t("settings.parentDirectory")}
 									>
 										<Icon name="arrow-up" className="h-4 w-4" />
 									</button>
@@ -465,7 +465,7 @@ export function ConnectDialog({
 										className="gui-tool-btn"
 										onClick={() => void loadBrowse("/")}
 										disabled={browseBusy}
-										title={t("refresh")}
+										title={t("settings.refresh")}
 									>
 										<Icon name="refresh" className="h-4 w-4" />
 									</button>
@@ -474,7 +474,7 @@ export function ConnectDialog({
 										className="gui-tool-btn"
 										onClick={() => void doDisconnect()}
 										disabled={disconnecting}
-										title={t("disconnect")}
+										title={t("settings.disconnect2")}
 									>
 										<Icon name="close-circle" className="h-4 w-4" />
 									</button>
@@ -552,7 +552,7 @@ export function ConnectDialog({
 							}}
 							disabled={connecting}
 						>
-							{step === 0 ? t("Cancel") : t("back")}
+							{step === 0 ? t("settings.cancel2") : t("settings.back")}
 						</button>
 						{step === 1 && newHostMode ? (
 							<button
@@ -561,11 +561,11 @@ export function ConnectDialog({
 								disabled={!canNext || savingHost}
 								onClick={() => void saveHost()}
 							>
-								{savingHost ? t("saving") : t("add host")}
+								{savingHost ? t("settings.saving") : t("settings.addHost")}
 							</button>
 						) : step === 2 && connecting ? (
 							<button type="button" className="gui-btn gui-btn-primary" disabled>
-								{t("connecting…")}
+								{t("settings.connecting2")}
 							</button>
 						) : (
 							<button
@@ -586,12 +586,12 @@ export function ConnectDialog({
 								}}
 							>
 								{step === 0
-									? t("next")
+									? t("settings.next")
 									: step === 1
-										? t("connect")
+										? t("settings.connect2")
 										: step === 2
-											? t("back")
-											: t("open workspace")}
+											? t("settings.back")
+											: t("general.openWorkspace")}
 							</button>
 						)}
 					</div>

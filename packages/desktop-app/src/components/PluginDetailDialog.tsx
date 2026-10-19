@@ -122,7 +122,7 @@ function CompatibilitySection({
 			})
 			.then(() => onError(null))
 			.catch((err: unknown) =>
-				onError(`${t("ext compatibility grant failed")}: ${err instanceof Error ? err.message : String(err)}`),
+				onError(`${t("tools.extCompatibilityGrantFailed")}: ${err instanceof Error ? err.message : String(err)}`),
 			)
 			.finally(() => setBusy(false));
 		// daemon 扇出 extensions.changed → registry 重拉，标注自动刷新。
@@ -130,14 +130,14 @@ function CompatibilitySection({
 
 	const grant = (): void => {
 		void confirm(
-			t("ext compatibility grant confirm", { name: packageKey, version: gate.runtimeVersion }),
-			t("ext compatibility grant label"),
+			t("tools.extCompatibilityGrantConfirm", { name: packageKey, version: gate.runtimeVersion }),
+			t("tools.extCompatibilityGrantLabel"),
 		).then(ok => {
 			if (ok) call(true, true);
 		});
 	};
 	const revoke = (): void => {
-		void confirm(t("ext compatibility revoke confirm", { name: packageKey })).then(ok => {
+		void confirm(t("tools.extCompatibilityRevokeConfirm", { name: packageKey })).then(ok => {
 			if (ok) call(false, false);
 		});
 	};
@@ -152,34 +152,34 @@ function CompatibilitySection({
 					<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
 					<span>
 						{gate.code === "malformed-manifest"
-							? t("ext compatibility malformed")
+							? t("tools.extCompatibilityMalformed")
 							: gate.status === "exempted"
-								? t("ext compatibility exempted")
-								: t("ext compatibility incompatible")}
+								? t("tools.extCompatibilityExempted")
+								: t("tools.extCompatibilityIncompatible")}
 					</span>
 					<span className="gui-ext-item-tag">{packageKey}</span>
 				</div>
 				{peers.length > 0 ? (
 					<div className="gui-ext-compat-peers">
-						<div className="gui-ext-compat-peers-label">{t("ext compatibility unmet peers")}</div>
+						<div className="gui-ext-compat-peers-label">{t("tools.extCompatibilityUnmetPeers")}</div>
 						{peers.map(([name, range]) => (
 							<div key={name} className="gui-ext-compat-peer">
-								<span>{t("ext compatibility peer line", { name, range })}</span>
+								<span>{t("tools.extCompatibilityPeerLine", { name, range })}</span>
 							</div>
 						))}
 					</div>
 				) : null}
 				{gate.detail ? <div className="gui-ext-compat-detail">{gate.detail}</div> : null}
 				<div className="gui-ext-compat-runtime">
-					{t("ext compatibility runtime", { version: gate.runtimeVersion })}
+					{t("tools.extCompatibilityRuntime", { version: gate.runtimeVersion })}
 				</div>
 				{gate.status === "exempted" ? (
 					<button type="button" className="gui-btn gui-btn--sm" disabled={busy || !rpc} onClick={revoke}>
-						{t("ext compatibility revoke")}
+						{t("tools.extCompatibilityRevoke")}
 					</button>
 				) : (
 					<button type="button" className="gui-btn gui-btn--sm" disabled={busy || !rpc} onClick={grant}>
-						{t("ext compatibility grant")}
+						{t("tools.extCompatibilityGrant")}
 					</button>
 				)}
 			</div>
@@ -206,7 +206,7 @@ function ComponentsSection({
 			.request("extensions.setComponentEnabled", { id: item.id, component: componentId, enabled })
 			.then(() => onError(null))
 			.catch((err: unknown) =>
-				onError(`${t("ext component toggle failed")}: ${err instanceof Error ? err.message : String(err)}`),
+				onError(`${t("tools.extComponentToggleFailed")}: ${err instanceof Error ? err.message : String(err)}`),
 			)
 			.finally(() => setBusy(null));
 		// daemon 广播 extensions.changed → registry 单例重拉，不本地乐观更新。
@@ -215,9 +215,9 @@ function ComponentsSection({
 	return (
 		<div className="gui-ext-detail-section">
 			<div className="gui-ext-detail-label">
-				{t("ext plugin components")} · {item.components.length}
+				{t("tools.extPluginComponents")} · {item.components.length}
 			</div>
-			<div className="gui-plugin-config-desc">{t("ext plugin components desc")}</div>
+			<div className="gui-plugin-config-desc">{t("tools.extPluginComponentsDesc")}</div>
 			<div className="gui-plugin-components">
 				{item.components.map(c => {
 					// 组件名/描述同 builtin 覆盖模式：daemon 英文原文,GUI 按
@@ -235,11 +235,11 @@ function ComponentsSection({
 								</div>
 								{description ? <div className="gui-plugin-component-desc">{description}</div> : null}
 								{!c.enabled && c.disabledReason ? (
-									<div className="gui-plugin-component-denied">{t("ext component denied")}</div>
+									<div className="gui-plugin-component-denied">{t("tools.extComponentDenied")}</div>
 								) : null}
 								{c.runtime && c.runtime.fiberState !== "ACTIVE" ? (
 									<div className="gui-plugin-component-runtime">
-										{t("ext fiber state")} {c.runtime.fiberState}
+										{t("tools.extFiberState")} {c.runtime.fiberState}
 										{c.runtime.effects > 0 ? ` · ${c.runtime.effects}` : null}
 									</div>
 								) : null}
@@ -249,7 +249,7 @@ function ComponentsSection({
 									type="button"
 									role="switch"
 									aria-checked={c.enabled}
-									aria-label={`${t("plugin enable")} ${name}`}
+									aria-label={`${t("tools.pluginEnable")} ${name}`}
 									className={`gui-toggle gui-toggle--sm${c.enabled ? " gui-toggle--on" : ""}`}
 									disabled={busy === c.id}
 									onClick={() => toggle(c.id, !c.enabled)}
@@ -295,7 +295,7 @@ export function PluginDetailDialog({
 	// 行同一判据，一个条目在列表和详情里的可管性必须一致。
 	const canToggle = item?.readonly !== true && onToggle !== undefined;
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("ext plugin details")} className="gui-plugin-dialog">
+		<DialogFrame open={open} onClose={onClose} label={t("tools.extPluginDetails")} className="gui-plugin-dialog">
 			{item && filteredItem && (
 				<>
 					<div className="gui-dialog-head">
@@ -323,7 +323,7 @@ export function PluginDetailDialog({
 								type="button"
 								role="switch"
 								aria-checked={item.state === "active"}
-								aria-label={`${t("plugin enable")} ${builtinDisplayName(item)}`}
+								aria-label={`${t("tools.pluginEnable")} ${builtinDisplayName(item)}`}
 								className={`gui-toggle${item.state === "active" ? " gui-toggle--on" : ""}`}
 								disabled={!rpc || toggleBusy === true}
 								onClick={() => onToggle?.(item)}
@@ -331,7 +331,7 @@ export function PluginDetailDialog({
 								<span className="gui-toggle-knob" />
 							</button>
 						)}
-						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
+						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 							<Icon name="close" className="h-4 w-4" />
 						</button>
 					</div>
@@ -363,28 +363,28 @@ export function PluginDetailDialog({
 						 *  按会话提供」，与 dsh presetProvidedDetail 同语义。 */}
 						<dl className="gui-plugin-facts">
 							<div>
-								<dt>{t("ext full name")}</dt>
+								<dt>{t("tools.extFullName")}</dt>
 								<dd>
 									<code>{item.id}</code>
 								</dd>
 							</div>
 							<div>
-								<dt>{t("ext configuration status")}</dt>
+								<dt>{t("tools.extConfigurationStatus")}</dt>
 								<dd>
 									{item.enabledInPresets && item.enabledInPresets.length > 0
-										? t("ext preset provided detail")
+										? t("tools.extPresetProvidedDetail")
 										: pluginStateLabel(item)}
 								</dd>
 							</div>
 							{item.enabledInPresets && item.enabledInPresets.length > 0 ? (
 								<div>
-									<dt>{t("ext enabled in")}</dt>
+									<dt>{t("tools.extEnabled")}</dt>
 									<dd>{item.enabledInPresets.join(" · ")}</dd>
 								</div>
 							) : null}
 							{item.runtime && (
 								<div>
-									<dt>{t("ext runtime status")}</dt>
+									<dt>{t("tools.extRuntimeStatus")}</dt>
 									<dd>
 										<span
 											className={
@@ -394,19 +394,19 @@ export function PluginDetailDialog({
 											}
 										/>
 										{item.runtime.operational === "running"
-											? t("ext operational running")
-											: t("ext operational stopped")}
+											? t("tools.extOperationalRunning")
+											: t("tools.extOperationalStopped")}
 										{item.runtime.fiberState !== "ACTIVE"
-											? ` · ${t("ext fiber state")} ${item.runtime.fiberState}`
+											? ` · ${t("tools.extFiberState")} ${item.runtime.fiberState}`
 											: null}
 									</dd>
 								</div>
 							)}
 							{item.activation && (
 								<div>
-									<dt>{t("ext activation condition")}</dt>
+									<dt>{t("tools.extActivationCondition")}</dt>
 									<dd>
-										<code>{item.activation.key}</code> {t("ext activation when on")}
+										<code>{item.activation.key}</code> {t("tools.extActivation")}
 									</dd>
 								</div>
 							)}
@@ -414,14 +414,14 @@ export function PluginDetailDialog({
 						<CompatibilitySection item={item} rpc={rpc} onError={onError} />
 						{item.trigger && (
 							<div className="gui-ext-detail-section">
-								<div className="gui-ext-detail-label">{t("trigger")}</div>
+								<div className="gui-ext-detail-label">{t("tools.trigger")}</div>
 								<div className="gui-ext-detail-path">{item.trigger}</div>
 							</div>
 						)}
 						<div className="gui-ext-detail-section">
-							<div className="gui-ext-detail-label">{t("source")}</div>
+							<div className="gui-ext-detail-label">{t("tools.source")}</div>
 							<div className="gui-ext-detail-value">
-								{t("via {provider} ({level})", {
+								{t("tools.viaWithProviderWithLevel", {
 									provider: item.source.providerName,
 									level: sourceLevelLabel(item.source.provider, item.source.level),
 								})}

@@ -18,10 +18,10 @@ export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	};
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("mcp servers")}</h2>
-			<p className="gui-settings-page-desc">{t("mcp settings")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.mcpServers")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.mcpSettings")}</p>
 			{mcps.length === 0 ? (
-				<div className="gui-settings-row">{t("no mcp servers")}</div>
+				<div className="gui-settings-row">{t("settings.noMcpServers")}</div>
 			) : (
 				mcps.map(m => (
 					<div key={m.id} className="gui-agent-card">

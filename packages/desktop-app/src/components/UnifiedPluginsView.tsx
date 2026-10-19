@@ -57,13 +57,13 @@ export interface PluginPackageEntry {
  *  单一权威实现，ExtensionsCenter 的 levelLabel 委托到这里。 */
 export function sourceLevelLabel(provider: string, level: string): string {
 	if (provider === "native" || provider === "musepi-managed" || provider === "builtin-defaults") {
-		return t("skill filter builtin");
+		return t("tools.skillFilterBuiltin");
 	}
 	// builtin-registry 条目：musepi-extensions provider + native level。
 	if (provider === "musepi-extensions" && level === "native") {
-		return t("skill filter builtin");
+		return t("tools.skillFilterBuiltin");
 	}
-	return level === "project" ? t("skill filter project") : t("skill filter user");
+	return level === "project" ? t("tools.skillFilterProject") : t("tools.skillFilterUser");
 }
 
 /**
@@ -92,10 +92,10 @@ function kindTag(kind: string): string {
  * 加载失败是制胜相位（dsh PluginInventory parity）：条目在配置里可能
  * 名义 active，但实际什么都没注册。 */
 export function pluginStateLabel(e: ExtensionItem): string {
-	if (e.loadError) return t("ext load failed");
-	if (e.state === "active") return t("extension active");
-	if (e.state === "shadowed") return t("ext shadowed");
-	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
+	if (e.loadError) return t("tools.extLoadFailed");
+	if (e.state === "active") return t("tools.extensionActive");
+	if (e.state === "shadowed") return t("tools.extShadowed");
+	return e.disabledReason === "provider-disabled" ? t("tools.extProviderDisabled") : t("tools.extItemDisabled");
 }
 
 /**
@@ -168,13 +168,13 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 			.then(() => {
 				const hint =
 					desc.restart && desc.restart !== "none"
-						? ` · ${desc.restart === "session" ? t("ext restart session") : t("ext restart daemon")}`
+						? ` · ${desc.restart === "session" ? t("tools.extRestartSession") : t("tools.extRestartDaemon")}`
 						: "";
-				setNotice({ kind: "saved", text: `${t("ext config saved")}${hint}` });
+				setNotice({ kind: "saved", text: `${t("tools.extConfigSaved")}${hint}` });
 			})
 			.catch((err: unknown) => {
 				setValues(prev => ({ ...prev, [key]: previous }));
-				setNotice({ kind: "error", text: `${t("ext config save failed")}: ${String(err)}` });
+				setNotice({ kind: "error", text: `${t("tools.extConfigSaveFailed")}: ${String(err)}` });
 			});
 	};
 
@@ -183,13 +183,15 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 			{item.configErrors && item.configErrors.length > 0 && (
 				<div className="gui-ext-detail-loaderror">
 					<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
-					<span className="min-w-0 truncate">{t("ext config errors", { count: item.configErrors.length })}</span>
+					<span className="min-w-0 truncate">
+						{t("tools.extConfigErrors", { count: item.configErrors.length })}
+					</span>
 				</div>
 			)}
 			{item.config && item.config.length > 0 && (
 				<div className="gui-ext-detail-section">
-					<div className="gui-ext-detail-label">{t("ext plugin config")}</div>
-					<div className="gui-plugin-config-desc">{t("ext plugin config desc")}</div>
+					<div className="gui-ext-detail-label">{t("tools.extPluginConfig")}</div>
+					<div className="gui-plugin-config-desc">{t("tools.extPluginConfigDesc")}</div>
 					<ConfigFormRenderer fields={item.config} values={values} onChange={handleChange} disabled={!rpc} />
 					{notice && (
 						<div
@@ -202,29 +204,29 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 			)}
 			{resources && (
 				<div className="gui-ext-detail-section">
-					<div className="gui-ext-detail-label">{t("ext plugin resources")}</div>
+					<div className="gui-ext-detail-label">{t("tools.extPluginResources")}</div>
 					<div className="gui-plugin-resources">
 						{resources.disk && (
 							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources disk")}</span>
+								<span className="gui-plugin-resource-key">{t("tools.extResourcesDisk")}</span>
 								<span className="gui-plugin-resource-value">{resources.disk}</span>
 							</div>
 						)}
 						{resources.memory && (
 							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources memory")}</span>
+								<span className="gui-plugin-resource-key">{t("tools.extResourcesMemory")}</span>
 								<span className="gui-plugin-resource-value">{resources.memory}</span>
 							</div>
 						)}
 						{typeof resources.setupMinutes === "number" && (
 							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources setup")}</span>
+								<span className="gui-plugin-resource-key">{t("tools.extResourcesSetup")}</span>
 								<span className="gui-plugin-resource-value">{resources.setupMinutes}</span>
 							</div>
 						)}
 						{resources.models && resources.models.length > 0 && (
 							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources models")}</span>
+								<span className="gui-plugin-resource-key">{t("tools.extResourcesModels")}</span>
 								<span className="gui-plugin-resource-value">
 									{resources.models.map(m => (m.size ? `${m.name} · ${m.size}` : m.name)).join(", ")}
 								</span>
@@ -259,7 +261,7 @@ export function ModuleRow({
 			className="gui-ext-provider gui-ext-provider--btn"
 			role="button"
 			tabIndex={0}
-			aria-label={`${t("ext open plugin details")} · ${builtinDisplayName(e)}`}
+			aria-label={`${t("tools.extOpenPluginDetails")} · ${builtinDisplayName(e)}`}
 			onClick={() => onOpen(e)}
 			onKeyDown={ev => {
 				if (ev.key === "Enter" || ev.key === " ") {
@@ -280,12 +282,12 @@ export function ModuleRow({
 				<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{builtinDisplayName(e)}</span>
 				<span className="gui-ext-item-tag">{kindTag(e.kind)}</span>
 				{e.enabledInPresets && e.enabledInPresets.length > 0 && (
-					<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("ext preset tag")}</span>
+					<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("tools.extPresetTag")}</span>
 				)}
 				{e.components && e.components.length > 0 && (
-					<span className="gui-ext-item-tag">{t("ext component count", { count: e.components.length })}</span>
+					<span className="gui-ext-item-tag">{t("tools.extComponentCount", { count: e.components.length })}</span>
 				)}
-				{e.loadError && <span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>}
+				{e.loadError && <span className="gui-ext-item-tag gui-ext-item-tag--err">{t("tools.extLoadFailed")}</span>}
 				{/* 只读展示项(主题包/渲染器包/终端):无禁用语义,不渲染
 				 * 死开关——禁用不会改变运行时,放个可点的开关是撒谎。 */}
 				{!e.readonly && (
@@ -294,7 +296,9 @@ export function ModuleRow({
 						role="switch"
 						aria-checked={e.state === "active"}
 						aria-label={
-							e.state === "active" ? `${t("disable skill")} ${e.name}` : `${t("enable skill")} ${e.name}`
+							e.state === "active"
+								? `${t("tools.disableSkill")} ${e.name}`
+								: `${t("tools.enableSkill")} ${e.name}`
 						}
 						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
 						disabled={!rpc || busy}
@@ -334,7 +338,7 @@ export function ModuleCard({
 			role="button"
 			tabIndex={0}
 			className="gui-plugin-card"
-			aria-label={`${t("ext open plugin details")} · ${builtinDisplayName(e)}`}
+			aria-label={`${t("tools.extOpenPluginDetails")} · ${builtinDisplayName(e)}`}
 			onClick={() => onOpen(e)}
 			onKeyDown={ev => {
 				if (ev.key === "Enter" || ev.key === " ") {
@@ -358,7 +362,9 @@ export function ModuleCard({
 						role="switch"
 						aria-checked={e.state === "active"}
 						aria-label={
-							e.state === "active" ? `${t("disable skill")} ${e.name}` : `${t("enable skill")} ${e.name}`
+							e.state === "active"
+								? `${t("tools.disableSkill")} ${e.name}`
+								: `${t("tools.enableSkill")} ${e.name}`
 						}
 						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
 						disabled={!rpc || busy}
@@ -375,7 +381,7 @@ export function ModuleCard({
 			{builtinDescription(e) ? <div className="gui-plugin-card-desc">{builtinDescription(e)}</div> : null}
 			<div className="gui-plugin-card-foot">
 				{e.enabledInPresets && e.enabledInPresets.length > 0 && (
-					<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("ext preset tag")}</span>
+					<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("tools.extPresetTag")}</span>
 				)}
 				<span className="gui-ext-item-tag">{pluginStateLabel(e)}</span>
 				<span className="gui-ext-item-tag">{e.id}</span>
@@ -486,7 +492,7 @@ export function UnifiedPluginsView({
 	/** 卸载是删除性的：先确认再执行。 */
 	const uninstallWithConfirm = useCallback(
 		(p: PluginPackageEntry): void => {
-			void confirm(t("plugin uninstall confirm", { name: p.name }), t("uninstall")).then(ok => {
+			void confirm(t("tools.pluginUninstallConfirm", { name: p.name }), t("tools.uninstall")).then(ok => {
 				if (ok) void uninstallPackage(p);
 			});
 		},
@@ -600,12 +606,12 @@ export function UnifiedPluginsView({
 				 * from instead of leaving a blank. */}
 				<div className="gui-ext-empty-state">
 					<Icon name="plug" className="h-5 w-5 opacity-40" />
-					<div className="gui-ext-empty-state-title">{t("no plugins loaded")}</div>
-					<p className="gui-ext-empty-state-desc">{t("plugins empty hint")}</p>
-					<p className="gui-ext-empty-state-desc">{t("plugins empty modules hint")}</p>
+					<div className="gui-ext-empty-state-title">{t("tools.noPluginsLoaded")}</div>
+					<p className="gui-ext-empty-state-desc">{t("tools.pluginsEmptyHint")}</p>
+					<p className="gui-ext-empty-state-desc">{t("tools.pluginsEmptyModulesHint")}</p>
 					<button type="button" className="gui-btn" onClick={onOpenMarketplace}>
 						<Icon name="plug-2" className="h-3.5 w-3.5" />
-						{t("go to marketplace")}
+						{t("tools.goMarketplace")}
 					</button>
 				</div>
 			</div>
@@ -621,36 +627,36 @@ export function UnifiedPluginsView({
 					<input
 						type="search"
 						value={query}
-						placeholder={t("ext search plugins")}
-						aria-label={t("ext search plugins")}
+						placeholder={t("tools.extSearchPlugins")}
+						aria-label={t("tools.extSearchPlugins")}
 						onChange={event => setQuery(event.currentTarget.value)}
 					/>
 				</label>
 				<span className="gui-ext-plugins-toolbar-count">
-					{t("ext plugins official")} {official.length} · {t("ext plugins installed")}{" "}
+					{t("tools.extPluginsOfficial")} {official.length} · {t("tools.extPluginsInstalled")}{" "}
 					{filteredPackages.length + standaloneModules.length}
 				</span>
 				<button type="button" className="gui-btn gui-btn--sm" onClick={onOpenMarketplace}>
 					<Icon name="add" className="h-3.5 w-3.5" />
-					{t("ext add plugin")}
+					{t("tools.extAddPlugin")}
 				</button>
 				{/* 市场只收录已发布的包；自建插件、压缩包与本机目录从这里进。 */}
 				<button type="button" className="gui-btn gui-btn--sm" onClick={() => setInstallOpen(true)}>
 					<Icon name="download" className="h-3.5 w-3.5" />
-					{t("plugin install title")}
+					{t("settings.pluginInstallTitle")}
 				</button>
 			</div>
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
 			{normalizedQuery.length > 0 &&
 				official.length === 0 &&
 				filteredPackages.length === 0 &&
-				standaloneModules.length === 0 && <div className="gui-ext-plugins-error">{t("no matches")}</div>}
+				standaloneModules.length === 0 && <div className="gui-ext-plugins-error">{t("tools.noMatches")}</div>}
 			{variant === "cards" ? (
 				<div className="gui-ext-list-scroll">
 					{official.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins official")} · {official.length}
+								{t("tools.extPluginsOfficial")} · {official.length}
 							</div>
 							<div className="gui-plugin-cards">
 								{official.map(e => (
@@ -669,7 +675,7 @@ export function UnifiedPluginsView({
 					{(filteredPackages.length > 0 || standaloneModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins installed")} · {filteredPackages.length + standaloneModules.length}
+								{t("tools.extPluginsInstalled")} · {filteredPackages.length + standaloneModules.length}
 							</div>
 							{filteredPackages.length > 0 && (
 								<div className="gui-plugin-cards">
@@ -694,7 +700,7 @@ export function UnifiedPluginsView({
 													type="button"
 													role="switch"
 													aria-checked={p.enabled}
-													aria-label={`${t("plugin enable")} ${p.name}`}
+													aria-label={`${t("tools.pluginEnable")} ${p.name}`}
 													className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
 													onClick={e => {
 														e.stopPropagation();
@@ -706,7 +712,7 @@ export function UnifiedPluginsView({
 											</div>
 											{p.description ? <div className="gui-plugin-card-desc">{p.description}</div> : null}
 											<div className="gui-plugin-card-foot">
-												<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
+												<span className="gui-ext-item-tag">{t("tools.pluginPackageTag")}</span>
 												<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
 												<span className="gui-ext-item-tag">{`v${p.version}`}</span>
 												<span style={{ marginLeft: "auto" }}>
@@ -714,8 +720,8 @@ export function UnifiedPluginsView({
 														type="button"
 														className="gui-icon-btn"
 														disabled={uninstallBusy}
-														title={t("uninstall")}
-														aria-label={`${t("uninstall")} ${p.name}`}
+														title={t("tools.uninstall")}
+														aria-label={`${t("tools.uninstall")} ${p.name}`}
 														onClick={e => {
 															e.stopPropagation();
 															uninstallWithConfirm(p);
@@ -792,7 +798,7 @@ export function UnifiedPluginsView({
 					{official.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins official")} · {official.length}
+								{t("tools.extPluginsOfficial")} · {official.length}
 							</div>
 							{official.map(e => (
 								<ModuleRow
@@ -809,7 +815,7 @@ export function UnifiedPluginsView({
 					{(filteredPackages.length > 0 || standaloneModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins installed")} · {filteredPackages.length + standaloneModules.length}
+								{t("tools.extPluginsInstalled")} · {filteredPackages.length + standaloneModules.length}
 							</div>
 							{filteredPackages.map(p => (
 								<div
@@ -828,14 +834,14 @@ export function UnifiedPluginsView({
 									<div className="gui-ext-provider-h">
 										<PluginIcon name={p.name} icon={p.icon} size={24} status={p.enabled ? "active" : "off"} />
 										<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
-										<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
+										<span className="gui-ext-item-tag">{t("tools.pluginPackageTag")}</span>
 										<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
 										<button
 											type="button"
 											className="gui-icon-btn"
 											disabled={uninstallBusy}
-											title={t("uninstall")}
-											aria-label={`${t("uninstall")} ${p.name}`}
+											title={t("tools.uninstall")}
+											aria-label={`${t("tools.uninstall")} ${p.name}`}
 											onClick={e => {
 												e.stopPropagation();
 												uninstallWithConfirm(p);
@@ -847,7 +853,7 @@ export function UnifiedPluginsView({
 											type="button"
 											role="switch"
 											aria-checked={p.enabled}
-											aria-label={`${t("plugin enable")} ${p.name}`}
+											aria-label={`${t("tools.pluginEnable")} ${p.name}`}
 											className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
 											onClick={e => {
 												e.stopPropagation();
@@ -862,7 +868,11 @@ export function UnifiedPluginsView({
 									<div className="gui-ext-plugins-meta">
 										<span className="gui-ext-plugins-version">{`v${p.version}`}</span>
 										<span className="gui-ext-group-count">
-											{t("plugin counts", { tools: p.tools, commands: p.commands, handlers: p.handlers })}
+											{t("tools.pluginCounts", {
+												tools: p.tools,
+												commands: p.commands,
+												handlers: p.handlers,
+											})}
 										</span>
 									</div>
 									{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}

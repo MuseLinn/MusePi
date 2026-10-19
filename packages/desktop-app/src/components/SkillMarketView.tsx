@@ -91,11 +91,11 @@ interface ActiveInstall {
 }
 
 const INSTALL_STATE_LABEL_KEYS: Record<Exclude<InstallEventState, "done" | "failed" | "cancelled">, TranslationKey> = {
-	inspecting: "skill market install state preparing",
-	downloading: "skill market install state downloading",
-	verifying: "skill market install state verifying",
-	installing: "skill market install state installing",
-	"awaiting-approval": "skill market install state awaiting-approval",
+	inspecting: "general.skillMarketInstallState",
+	downloading: "general.skillMarketInstallStateDownloading",
+	verifying: "general.skillMarketInstallStateVerifying",
+	installing: "general.skillMarketInstallStateInstalling",
+	"awaiting-approval": "general.skillMarketInstallStateAwaitingApproval",
 };
 
 const PAGE_SIZE = 12;
@@ -307,7 +307,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			if (entry.source === "skills.sh" && !entry.repo) {
 				setNotice({
 					ok: false,
-					text: t("skill market install failed {name}", { name: entry.name, msg: "no repo" }),
+					text: t("general.skillMarketInstallFailedWithName", { name: entry.name, msg: "no repo" }),
 				});
 				return;
 			}
@@ -328,7 +328,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				})
 				.catch((e: unknown) => {
 					const msg = e instanceof Error ? e.message : String(e);
-					setNotice({ ok: false, text: t("skill market install failed {name}", { name: entry.name, msg }) });
+					setNotice({ ok: false, text: t("general.skillMarketInstallFailedWithName", { name: entry.name, msg }) });
 				});
 		},
 		[rpc, busyId, installedNames],
@@ -369,14 +369,14 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	useEffect(() => {
 		if (!active) return;
 		if (active.state === "done") {
-			setNotice({ ok: true, text: t("skill installed {name}", { name: active.entry.name }) });
+			setNotice({ ok: true, text: t("tools.skillInstalledWithName", { name: active.entry.name }) });
 			setActive(null);
 			refreshInstalled();
 			onInstalled?.();
 			return;
 		}
 		if (active.state === "cancelled") {
-			setNotice({ ok: true, text: t("skill market install cancelled", { name: active.entry.name }) });
+			setNotice({ ok: true, text: t("general.skillMarketInstallCancelled", { name: active.entry.name }) });
 			setActive(null);
 			return;
 		}
@@ -384,7 +384,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			if (active.kind === "conflict") {
 				// 重复安装同一技能：语义态而非错误 —— 卡片就地翻「已安装」
 				// （daemon 已落盘，回读让角标/底部计数立即对齐），不报错误条。
-				setNotice({ ok: true, text: t("skill market already installed {name}", { name: active.entry.name }) });
+				setNotice({ ok: true, text: t("general.skillMarketAlreadyInstalledWithName", { name: active.entry.name }) });
 				setActive(null);
 				refreshInstalled();
 				onInstalled?.();
@@ -392,10 +392,10 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			}
 			const text =
 				active.kind === "network"
-					? t("skill market install failed network", { msg: active.message ?? "" })
+					? t("general.skillMarketInstallFailed", { msg: active.message ?? "" })
 					: active.kind === "script-declined"
-						? t("skill market install failed script-declined")
-						: t("skill market install failed {name}", {
+						? t("general.skillMarketInstallFailedScriptDeclined")
+						: t("general.skillMarketInstallFailedWithName", {
 								name: active.entry.name,
 								msg: active.message ?? active.kind ?? "",
 							});
@@ -403,7 +403,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			setNotice({
 				ok: false,
 				text,
-				actions: [{ label: t("skill market install retry"), onClick: () => installEntry(entry) }],
+				actions: [{ label: t("general.skillMarketInstallRetry"), onClick: () => installEntry(entry) }],
 			});
 			setActive(null);
 		}
@@ -431,7 +431,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					<input
 						type="search"
 						value={keyword}
-						placeholder={t("skill market search")}
+						placeholder={t("general.skillMarketSearch")}
 						onChange={ev => {
 							setKeyword(ev.target.value);
 							setPage(1);
@@ -445,11 +445,11 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 						setSource(v);
 						setPage(1);
 					}}
-					ariaLabel={t("skill market source")}
+					ariaLabel={t("general.skillMarketSource")}
 					options={[
-						{ value: "all", label: t("skill market source all") },
-						{ value: "skillhub", label: t("skill market source skillhub") },
-						{ value: "skills.sh", label: t("skill market source skills.sh") },
+						{ value: "all", label: t("general.skillMarketSourceAll") },
+						{ value: "skillhub", label: t("general.skillMarketSourceSkillhub") },
+						{ value: "skills.sh", label: t("general.skillMarketSourceSkills") },
 					]}
 				/>
 				<GuiSelect<SortKey>
@@ -458,20 +458,20 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 						setSortBy(v);
 						setPage(1);
 					}}
-					ariaLabel={t("skill market sort")}
+					ariaLabel={t("general.skillMarketSort")}
 					options={[
-						{ value: "downloads", label: t("skill market sort downloads") },
-						{ value: "stars", label: t("skill market sort stars") },
-						{ value: "installs", label: t("skill market sort installs") },
+						{ value: "downloads", label: t("general.skillMarketSortDownloads") },
+						{ value: "stars", label: t("general.skillMarketSortStars") },
+						{ value: "installs", label: t("general.skillMarketSortInstalls") },
 					]}
 				/>
 				<button type="button" className="gui-skill-market-add" onClick={() => setAddPrefill({})}>
 					<Icon name="add" className="h-3.5 w-3.5 shrink-0" />
-					{t("add skill")}
+					{t("general.addSkill")}
 				</button>
 			</div>
 
-			{failures ? <div className="gui-skill-market-warn">{t("skill market offline", { msg: failures })}</div> : null}
+			{failures ? <div className="gui-skill-market-warn">{t("general.skillMarketOffline", { msg: failures })}</div> : null}
 			{loadError ? <div className="gui-skill-market-warn">{loadError}</div> : null}
 			{notice && (
 				<div
@@ -485,29 +485,29 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					))}
 				</div>
 			)}
-			{active && active.state !== "failed" && active.state !== "done" && active.state !== "cancelled" ? (
+			{active && active.state !== "failed" && active.state !== "done" && active.state !== "composer.cancelled" ? (
 				<div className="gui-skill-market-note">
 					{active.state === "awaiting-approval" ? (
 						<>
-							{t("skill market install scripts found", { count: String(active.scripts?.length ?? 0) })}{" "}
+							{t("general.skillMarketInstallScripts", { count: String(active.scripts?.length ?? 0) })}{" "}
 							<button type="button" className="gui-skill-market-page" onClick={() => approveInstall(true)}>
-								{t("skill market install approve")}
+								{t("general.skillMarketInstallApprove")}
 							</button>{" "}
 							<button type="button" className="gui-skill-market-page" onClick={() => approveInstall(false)}>
-								{t("skill market install decline")}
+								{t("general.skillMarketInstallDecline")}
 							</button>{" "}
 							<button type="button" className="gui-skill-market-page" onClick={cancelInstall}>
-								{t("skill market install cancel")}
+								{t("general.skillMarketInstallCancel")}
 							</button>
 						</>
 					) : (
 						<>
-							{t("skill market install progress", {
+							{t("general.skillMarketInstallProgress", {
 								name: active.entry.name,
 								state: t(INSTALL_STATE_LABEL_KEYS[active.state]),
 							})}{" "}
 							<button type="button" className="gui-skill-market-page" onClick={cancelInstall}>
-								{t("skill market install cancel")}
+								{t("general.skillMarketInstallCancel")}
 							</button>
 						</>
 					)}
@@ -518,13 +518,13 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				<section className="gui-skill-market-section">
 					<div className="gui-skill-market-section-h">
 						<Icon name="sparkling" className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />
-						<span className="gui-skill-market-section-title">{t("skill market featured")}</span>
+						<span className="gui-skill-market-section-title">{t("general.skillMarketFeatured")}</span>
 						<button
 							type="button"
 							className="gui-skill-market-link"
 							onClick={() => setFeaturedOffset(o => (o + FEATURED_SIZE) % Math.max(featured.length, 1))}
 						>
-							{t("skill market shuffle")}
+							{t("general.skillMarketShuffle")}
 						</button>
 					</div>
 					<div className="gui-skill-market-featured">
@@ -546,13 +546,13 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			<section className="gui-skill-market-section">
 				{/* 推荐套件行:左侧来源 pill,右侧 来自 N 个市场 · 共 M 个技能 */}
 				<div className="gui-skill-market-section-h">
-					<span className="gui-skill-market-section-title">{t("skill market recommended")}</span>
+					<span className="gui-skill-market-section-title">{t("general.skillMarketRecommended")}</span>
 					<div className="gui-skill-market-pills">
 						{(
 							[
-								["all", t("skill market source all")],
-								["skillhub", t("skill market source skillhub")],
-								["skills.sh", t("skill market source skills.sh")],
+								["tools.all", t("general.skillMarketSourceAll")],
+								["skillhub", t("general.skillMarketSourceSkillhub")],
+								["skills.sh", t("general.skillMarketSourceSkills")],
 							] as [SourceFilter, string][]
 						).map(([id, label]) => (
 							<button
@@ -569,7 +569,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 						))}
 					</div>
 					<span className="gui-skill-market-count">
-						{t("skill market summary", {
+						{t("general.skillMarketSummary", {
 							sources: String(pageData?.liveSources?.length ?? 0),
 							total: fmtCount(total),
 						})}
@@ -584,7 +584,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 							setPage(1);
 						}}
 					>
-						{t("skill market all categories")}
+						{t("general.skillMarketAllCategories")}
 					</button>
 					{categories.map(c => (
 						<button
@@ -602,9 +602,9 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				</div>
 				{entries.length === 0 && !loading ? (
 					source === "skills.sh" && !keyword.trim() ? (
-						<div className="gui-skill-market-note">{t("skill market search skills.sh hint")}</div>
+						<div className="gui-skill-market-note">{t("general.skillMarketSearchSkills")}</div>
 					) : (
-						<div className="gui-skill-market-note">{t("skill market empty")}</div>
+						<div className="gui-skill-market-note">{t("general.skillMarketEmpty")}</div>
 					)
 				) : (
 					<div className="gui-skill-market-grid">
@@ -629,7 +629,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 							disabled={page <= 1}
 							onClick={() => setPage(p => Math.max(1, p - 1))}
 						>
-							{t("prev page")}
+							{t("general.prevPage")}
 						</button>
 						<span className="gui-skill-market-page-n">
 							{page} / {maxPage}
@@ -640,7 +640,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 							disabled={!hasMore}
 							onClick={() => setPage(p => p + 1)}
 						>
-							{t("next page")}
+							{t("general.nextPage")}
 						</button>
 					</div>
 				) : null}
@@ -648,7 +648,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 
 			{/* 底部状态栏 (设计稿 01):已启用 N · 已停用 M · 来源 K 个市场 */}
 			<div className="gui-skill-market-status">
-				{t("skill market status", {
+				{t("general.skillMarketStatus", {
 					enabled: String(installed.enabled),
 					disabled: String(installed.disabled),
 					sources: String(pageData?.liveSources?.length ?? 0),
@@ -662,7 +662,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					initialName={addPrefill.name ?? ""}
 					onClose={() => setAddPrefill(null)}
 					onDone={name => {
-						setNotice({ ok: true, text: t("skill installed {name}", { name }) });
+						setNotice({ ok: true, text: t("tools.skillInstalledWithName", { name }) });
 						refreshInstalled();
 						onInstalled?.();
 					}}
@@ -737,7 +737,7 @@ function CardAddButton({
 				type="button"
 				className="gui-skill-market-plus gui-skill-market-plus--done"
 				disabled
-				title={t("skill market installed")}
+				title={t("general.skillMarketInstalled")}
 			>
 				<Icon name="check" className="h-3.5 w-3.5" />
 			</button>
@@ -748,7 +748,7 @@ function CardAddButton({
 			<button
 				type="button"
 				className="gui-skill-market-plus"
-				title={t("skill market install cancel")}
+				title={t("general.skillMarketInstallCancel")}
 				onClick={ev => {
 					ev.stopPropagation();
 					onCancel();
@@ -762,7 +762,7 @@ function CardAddButton({
 		<button
 			type="button"
 			className="gui-skill-market-plus"
-			title={t("add skill")}
+			title={t("general.addSkill")}
 			onClick={ev => {
 				// 角标动作不冒泡到卡片主体的预览点击。
 				ev.stopPropagation();
@@ -852,7 +852,7 @@ function SkillCard({
 			<div className="gui-skill-market-card-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-card-name">{entry.name}</span>
-				{entry.verified ? <span className="gui-skill-market-badge">{t("skill market verified")}</span> : null}
+				{entry.verified ? <span className="gui-skill-market-badge">{t("general.skillMarketVerified")}</span> : null}
 			</div>
 			<p className="gui-skill-market-card-desc">{entry.descriptionZh || entry.description}</p>
 			<footer className="gui-skill-market-card-f">
@@ -920,16 +920,16 @@ function AddSkillDialog({
 				tabIndex={-1}
 				className="gui-skill-market-dialog"
 				role="dialog"
-				aria-label={t("add skill")}
+				aria-label={t("general.addSkill")}
 				onClick={ev => ev.stopPropagation()}
 			>
-				<div className="gui-skill-market-dialog-h">{t("add skill")}</div>
+				<div className="gui-skill-market-dialog-h">{t("general.addSkill")}</div>
 				<input
 					className="gui-skill-market-dialog-input"
 					value={url}
 					autoFocus
 					spellCheck={false}
-					placeholder={t("skill market add url")}
+					placeholder={t("general.skillMarketAddUrl")}
 					onChange={ev => setUrl(ev.target.value)}
 					onKeyDown={ev => {
 						if (ev.key === "Enter") install(false);
@@ -939,7 +939,7 @@ function AddSkillDialog({
 					className="gui-skill-market-dialog-input"
 					value={name}
 					spellCheck={false}
-					placeholder={t("optional name override")}
+					placeholder={t("tools.optionalNameOverride")}
 					onChange={ev => setName(ev.target.value)}
 					onKeyDown={ev => {
 						if (ev.key === "Enter") install(false);
@@ -949,11 +949,11 @@ function AddSkillDialog({
 				<div className="gui-skill-market-dialog-f">
 					{err?.canOverwrite && (
 						<button type="button" className="gui-skill-market-page" disabled={busy} onClick={() => install(true)}>
-							{t("overwrite install")}
+							{t("tools.overwriteInstall")}
 						</button>
 					)}
 					<button type="button" className="gui-skill-market-page" onClick={requestClose}>
-						{t("cancel")}
+						{t("settings.cancel")}
 					</button>
 					<button
 						type="button"
@@ -961,7 +961,7 @@ function AddSkillDialog({
 						disabled={busy || !url.trim()}
 						onClick={() => install(false)}
 					>
-						{busy ? t("installing") : t("add skill")}
+						{busy ? t("tools.installing") : t("general.addSkill")}
 					</button>
 				</div>
 			</div>
@@ -1060,12 +1060,12 @@ export function SkillPreviewDialog({
 						<span className="gui-skill-market-preview-name">{entry.name}</span>
 						<span className="gui-skill-market-meta">
 							{entry.source === "skillhub"
-								? t("skill market source skillhub")
-								: t("skill market source skills.sh")}
+								? t("general.skillMarketSourceSkillhub")
+								: t("general.skillMarketSourceSkills")}
 							{meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
 						</span>
 					</div>
-					<button type="button" className="gui-skill-market-page" onClick={requestClose} aria-label={t("close")}>
+					<button type="button" className="gui-skill-market-page" onClick={requestClose} aria-label={t("settings.close")}>
 						✕
 					</button>
 				</div>
@@ -1080,14 +1080,14 @@ export function SkillPreviewDialog({
 						</p>
 					) : null}
 
-					{loading ? <p className="gui-skill-market-note">{t("skill market preview loading")}</p> : null}
+					{loading ? <p className="gui-skill-market-note">{t("general.skillMarketPreviewLoading")}</p> : null}
 					{error ? <p className="gui-skill-market-warn">{error}</p> : null}
 
 					{!loading && !error && entry.source === "skills.sh" ? (
 						markdown ? (
 							<pre className="gui-skill-market-preview-md">{markdown}</pre>
 						) : (
-							<p className="gui-skill-market-note">{t("skill market preview none")}</p>
+							<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
 						)
 					) : null}
 
@@ -1096,13 +1096,13 @@ export function SkillPreviewDialog({
 							<div className="gui-skill-market-preview-detail">
 								{detail.latestVersion ? (
 									<p className="gui-skill-market-meta">
-										{t("skill market preview version")} v{detail.latestVersion}
+										{t("general.skillMarketPreviewVersion")} v{detail.latestVersion}
 									</p>
 								) : null}
 								{detail.files && detail.files.length > 0 ? (
 									<div className="gui-skill-market-preview-files">
 										<p className="gui-skill-market-meta">
-											{t("skill market preview files")} · {detail.files.length}
+											{t("general.skillMarketPreviewFiles")} · {detail.files.length}
 										</p>
 										<ul>
 											{detail.files.slice(0, 30).map(f => (
@@ -1117,7 +1117,7 @@ export function SkillPreviewDialog({
 								) : null}
 								{detail.security && detail.security.length > 0 ? (
 									<div className="gui-skill-market-preview-files">
-										<p className="gui-skill-market-meta">{t("skill market preview security")}</p>
+										<p className="gui-skill-market-meta">{t("general.skillMarketPreviewSecurity")}</p>
 										<ul>
 											{detail.security.map((s, i) => (
 												<li key={i}>
@@ -1136,11 +1136,11 @@ export function SkillPreviewDialog({
 									</div>
 								) : null}
 								{!detail.latestVersion && (!detail.files || detail.files.length === 0) ? (
-									<p className="gui-skill-market-note">{t("skill market preview none")}</p>
+									<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
 								) : null}
 							</div>
 						) : (
-							<p className="gui-skill-market-note">{t("skill market preview none")}</p>
+							<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
 						)
 					) : null}
 				</div>
@@ -1154,13 +1154,13 @@ export function SkillPreviewDialog({
 							rel="noreferrer"
 							onClick={ev => ev.stopPropagation()}
 						>
-							{t("skill market homepage")}
+							{t("general.skillMarketHomepage")}
 						</a>
 					) : null}
 					<span className="gui-skill-market-flex" aria-hidden />
 					{installed ? (
 						<button type="button" className="gui-skill-market-add" disabled>
-							<Icon name="check" className="h-3.5 w-3.5" /> {t("skill market installed")}
+							<Icon name="check" className="h-3.5 w-3.5" /> {t("general.skillMarketInstalled")}
 						</button>
 					) : (
 						<button
@@ -1172,7 +1172,7 @@ export function SkillPreviewDialog({
 								onInstall();
 							}}
 						>
-							{busy ? t("installing") : t("skill market install")}
+							{busy ? t("tools.installing") : t("general.skillMarketInstall")}
 						</button>
 					)}
 				</div>

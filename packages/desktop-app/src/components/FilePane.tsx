@@ -47,14 +47,14 @@ import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
 const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
-	{ value: "rendered", label: t("rendered view") },
-	{ value: "source", label: t("source code") },
+	{ value: "rendered", label: t("settings.renderedView") },
+	{ value: "source", label: t("settings.sourceCode") },
 ];
 
 /** HTML preview switch: live iframe vs the raw source text. */
 const HTML_VIEW_SEGMENTS: SegmentedOption<"live" | "source">[] = [
-	{ value: "live", label: t("page preview") },
-	{ value: "source", label: t("source code") },
+	{ value: "live", label: t("settings.pagePreview") },
+	{ value: "source", label: t("settings.sourceCode") },
 ];
 
 /**
@@ -580,7 +580,7 @@ export function FilePane({
 	const confirmDiscard = useCallback(async (): Promise<boolean> => {
 		const buf = editBufRef.current;
 		if (!buf || buf.text === buf.saved) return true;
-		const ok = await confirm(t("discard unsaved changes?"), t("discard"));
+		const ok = await confirm(t("settings.discardUnsavedChanges"), t("general.discard"));
 		if (ok) {
 			editBufRef.current = null;
 			setEdit(null);
@@ -820,19 +820,19 @@ export function FilePane({
 			const cached = unsavedBufferCache.get(preview.path);
 			if (cached) {
 				if (edit && edit.text !== edit.saved) {
-					if (!(await confirm(t("discard unsaved changes?"), t("discard")))) return;
+					if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard")))) return;
 				}
 				setEdit(cached);
 			} else if (!edit) setEdit({ text: preview.raw, saved: preview.raw });
 			else if (edit.text !== edit.saved) {
-				if (!(await confirm(t("discard unsaved changes?"), t("discard")))) return;
+				if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard")))) return;
 				setEdit({ text: preview.raw, saved: preview.raw });
 			}
 			editRef.current?.focus();
 		} else if (preview.size > EDIT_MAX_BYTES) {
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("file too large to edit") }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("settings.fileTooLargeEdit") }));
 		} else {
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("unsupported edit") }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("settings.unsupportedEdit") }));
 		}
 	}, [preview, edit, confirm]);
 
@@ -841,7 +841,7 @@ export function FilePane({
 			setEdit(null);
 			return;
 		}
-		if (await confirm(t("discard unsaved changes?"), t("discard"))) setEdit(null);
+		if (await confirm(t("settings.discardUnsavedChanges"), t("general.discard"))) setEdit(null);
 	}, [edit, confirm]);
 
 	/** Persist the edited buffer. fs.write takes cwd-relative paths; the
@@ -874,29 +874,29 @@ export function FilePane({
 		const parentDepth = entry.isDir ? depth : Math.max(1, depth - 1);
 		const items: ContextMenuItem[] = [];
 		items.push({
-			label: t("new file"),
+			label: t("settings.newFile"),
 			icon: "file-add",
 			onSelect: () => startNewFile(parentDir, parentDepth + (entry.isDir ? 1 : 1)),
 		});
 		items.push({
-			label: t("new folder"),
+			label: t("settings.newFolder"),
 			icon: "folder-add",
 			onSelect: () => startNewDir(parentDir, parentDepth + (entry.isDir ? 1 : 1)),
 		});
 		items.push({ divider: true });
 		if (!entry.isDir) {
-			items.push({ label: t("open preview"), icon: "eye", onSelect: () => void openPreview(entry) });
+			items.push({ label: t("general.openPreview"), icon: "eye", onSelect: () => void openPreview(entry) });
 			items.push({
-				label: t("open with app"),
+				label: t("general.openApp"),
 				icon: "external-link",
 				onSelect: () => void window.electronAPI?.openWith("", `${cwd}/${entry.path}`),
 			});
 		}
-		items.push({ label: t("rename"), icon: "pencil", onSelect: () => startRename(entry, depth) });
-		items.push({ label: t("copy path"), icon: "clipboard", onSelect: () => void copyPath(entry) });
+		items.push({ label: t("settings.rename"), icon: "pencil", onSelect: () => startRename(entry, depth) });
+		items.push({ label: t("settings.copyPath"), icon: "clipboard", onSelect: () => void copyPath(entry) });
 		items.push({ divider: true });
 		items.push({
-			label: ctx.confirmDelete ? t("confirm delete?") : t("delete"),
+			label: ctx.confirmDelete ? t("settings.confirmDelete") : t("settings.delete"),
 			icon: "delete-bin",
 			danger: true,
 			onSelect: () => {
@@ -904,7 +904,7 @@ export function FilePane({
 				else setCtx({ ...ctx, confirmDelete: true });
 			},
 		});
-		items.push({ label: t("refresh"), icon: "refresh", onSelect: () => void load() });
+		items.push({ label: t("settings.refresh"), icon: "refresh", onSelect: () => void load() });
 		return items;
 	}, [ctx, openPreview, copyPath, load, startNewFile, startNewDir, startRename, confirmDelete, cwd]);
 
@@ -921,8 +921,8 @@ export function FilePane({
 			<button
 				type="button"
 				className="gui-filepane-open-btn"
-				title={t("open with app")}
-				aria-label={t("open with app")}
+				title={t("general.openApp")}
+				aria-label={t("general.openApp")}
 				onClick={ev => {
 					ev.stopPropagation();
 					void window.electronAPI?.openWith("", `${cwd}/${entry.path}`);
@@ -1007,7 +1007,7 @@ export function FilePane({
 				ref={editRef}
 				className="gui-filepane-edit-input"
 				value={editValue}
-				placeholder={editing.kind === "new-dir" ? t("new folder") : t("new file")}
+				placeholder={editing.kind === "new-dir" ? t("settings.newFolder") : t("settings.newFile")}
 				onChange={ev => setEditValue(ev.target.value)}
 				onKeyDown={ev => {
 					if (ev.key === "Enter") void commitEdit();
@@ -1022,12 +1022,12 @@ export function FilePane({
 	return (
 		<div className="gui-filepane">
 			<div className="gui-filepane-head">
-				<span className="gui-sidebar-title">{t("Files")}</span>
+				<span className="gui-sidebar-title">{t("settings.files2")}</span>
 				<div className="gui-filepane-actions">
 					<button
 						className="gui-btn gui-btn-icon"
 						type="button"
-						title={t("new file")}
+						title={t("settings.newFile")}
 						onClick={() => startNewFile("", 1)}
 					>
 						<FilePlus size={12} />
@@ -1035,17 +1035,17 @@ export function FilePane({
 					<button
 						className="gui-btn gui-btn-icon"
 						type="button"
-						title={t("new folder")}
+						title={t("settings.newFolder")}
 						onClick={() => startNewDir("", 1)}
 					>
 						<FolderPlus size={12} />
 					</button>
-					<label className="gui-filepane-search" title={t("search files")}>
+					<label className="gui-filepane-search" title={t("settings.searchFiles")}>
 						<Search size={12} className="gui-filepane-search-icon" />
 						<input
 							type="text"
 							value={query}
-							placeholder={t("search")}
+							placeholder={t("settings.search")}
 							onChange={ev => {
 								setQuery(ev.target.value);
 								setScrollTop(0);
@@ -1056,8 +1056,8 @@ export function FilePane({
 					<button
 						className={`gui-btn gui-btn-icon${showIgnored ? " gui-btn-icon--active" : ""}`}
 						type="button"
-						title={t("show gitignored")}
-						aria-label={t("show gitignored")}
+						title={t("general.showGitignored")}
+						aria-label={t("general.showGitignored")}
 						aria-pressed={showIgnored}
 						onClick={() => {
 							const next = !showIgnored;
@@ -1070,8 +1070,8 @@ export function FilePane({
 					<button
 						className={`gui-btn gui-btn-icon${showHidden ? " gui-btn-icon--active" : ""}`}
 						type="button"
-						title={t("show hidden files")}
-						aria-label={t("show hidden files")}
+						title={t("general.showHiddenFiles")}
+						aria-label={t("general.showHiddenFiles")}
 						aria-pressed={showHidden}
 						onClick={() => {
 							const next = !showHidden;
@@ -1081,7 +1081,7 @@ export function FilePane({
 					>
 						{showHidden ? <ScanEye size={12} /> : <EyeOff size={12} />}
 					</button>
-					<button className="gui-btn gui-btn-icon" type="button" onClick={() => void load()} title={t("refresh")}>
+					<button className="gui-btn gui-btn-icon" type="button" onClick={() => void load()} title={t("settings.refresh")}>
 						<RefreshCw size={12} />
 					</button>
 				</div>
@@ -1092,7 +1092,7 @@ export function FilePane({
 				<span className="truncate">{cwd.replace(/^\/Users\/[^/]+\//, "")}</span>
 			</div>
 			{error && <p className="gui-error">{error}</p>}
-			{!entries && !error && <p className="gui-filepane-empty">{t("loading…")}</p>}
+			{!entries && !error && <p className="gui-filepane-empty">{t("settings.loading2")}</p>}
 			<div className="gui-filepane-body" ref={bodyRef}>
 				{entries && !preview && (
 					<div
@@ -1118,7 +1118,7 @@ export function FilePane({
 							<button
 								type="button"
 								className="gui-btn gui-btn-icon"
-								title={t("back to files")}
+								title={t("settings.backFiles")}
 								onClick={() => {
 									// Panel-level file instances split tree and
 									// preview into two tabs: back
@@ -1145,15 +1145,15 @@ export function FilePane({
 										className="gui-filepane-artifact-badge gui-filepane-artifact-badge--invalid"
 										title={preview.artifact.errors.join("\n")}
 									>
-										{t("artifact manifest invalid")}
+										{t("tools.artifactManifestInvalid")}
 									</span>
 								) : (
 									<span
 										className="gui-filepane-artifact-badge"
 										title={
 											preview.artifact.exports?.length
-												? t("artifact exports hint", { exports: preview.artifact.exports.join(", ") })
-												: t("artifact badge hint", { kind: preview.artifact.kind })
+												? t("tools.artifactExportsHint", { exports: preview.artifact.exports.join(", ") })
+												: t("tools.artifactBadgeHint", { kind: preview.artifact.kind })
 										}
 									>
 										{preview.artifact.kind} · {preview.artifact.renderer}
@@ -1162,7 +1162,7 @@ export function FilePane({
 							{extOf(preview.name) === "md" && preview.text !== undefined && !edit && (
 								<Segmented
 									className="gui-seg--compact"
-									ariaLabel={t("preview")}
+									ariaLabel={t("companion.preview")}
 									value={mdRender ? "rendered" : "source"}
 									options={MD_VIEW_SEGMENTS}
 									onChange={v => setMdRender(v === "rendered")}
@@ -1173,7 +1173,7 @@ export function FilePane({
 									<button
 										type="button"
 										className="gui-btn gui-btn-icon"
-										title={t("edit")}
+										title={t("settings.edit")}
 										onClick={() => void startEdit()}
 									>
 										<Pencil size={12} />
@@ -1182,7 +1182,7 @@ export function FilePane({
 								<button
 									type="button"
 									className="gui-btn gui-btn-icon"
-									title={t("copy path")}
+									title={t("settings.copyPath")}
 									onClick={() => {
 										window.electronAPI?.copyText(preview.path).catch(() => {});
 									}}
@@ -1192,7 +1192,7 @@ export function FilePane({
 								<button
 									type="button"
 									className="gui-btn gui-btn-icon"
-									title={t("cite file in composer")}
+									title={t("general.citeFileComposer")}
 									onClick={() => {
 										// Cite the workspace-relative path into the
 										// chat draft (shared insert channel — the
@@ -1210,7 +1210,7 @@ export function FilePane({
 								<button
 									type="button"
 									className="gui-btn gui-btn-icon"
-									title={t("open with default app")}
+									title={t("settings.openDefaultApp")}
 									onClick={() => {
 										window.electronAPI?.openWith("", preview.path).catch(() => {});
 									}}
@@ -1221,7 +1221,7 @@ export function FilePane({
 							<button
 								type="button"
 								className="gui-btn gui-btn-icon"
-								title={t("close")}
+								title={t("settings.close")}
 								onClick={() => void exitEdit().then(() => setPreview(null))}
 							>
 								✕
@@ -1275,7 +1275,7 @@ export function FilePane({
 									<button
 										type="button"
 										className="gui-filepane-preview-img-btn"
-										title={t("open image viewer")}
+										title={t("general.openImageViewer")}
 										onClick={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
 									>
 										<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
@@ -1296,7 +1296,7 @@ export function FilePane({
 							)}
 							{preview.external && (
 								<p className="gui-filepane-preview-note">
-									{t("opened in default app")} — {preview.size.toLocaleString()} B
+									{t("general.openedDefaultApp")} — {preview.size.toLocaleString()} B
 								</p>
 							)}
 						</div>
@@ -1336,7 +1336,7 @@ function HtmlPreview({
 			<div className="gui-filepane-preview-html-bar">
 				<Segmented
 					className="gui-seg--compact"
-					ariaLabel={t("preview")}
+					ariaLabel={t("companion.preview")}
 					value={live ? "live" : "source"}
 					options={HTML_VIEW_SEGMENTS}
 					onChange={onToggle}
@@ -1345,7 +1345,7 @@ function HtmlPreview({
 			{live ? (
 				<iframe
 					className="gui-filepane-preview-html-frame"
-					title={t("preview")}
+					title={t("companion.preview")}
 					sandbox="allow-scripts"
 					srcDoc={source}
 				/>
@@ -1389,7 +1389,7 @@ function FileEditor({
 				<button
 					type="button"
 					className="gui-btn gui-btn-icon"
-					title={t("discard changes and close editor")}
+					title={t("settings.discardChangesCloseEditor")}
 					onClick={onExit}
 				>
 					<ArrowLeft size={12} />
@@ -1411,11 +1411,11 @@ function FileEditor({
 				}}
 			/>
 			<div className="gui-filepane-editor-foot">
-				<button type="button" className="gui-btn gui-btn-sm" disabled={saving} onClick={onSave} title={t("save")}>
+				<button type="button" className="gui-btn gui-btn-sm" disabled={saving} onClick={onSave} title={t("general.save")}>
 					<Save size={12} />
-					{t("save")}
+					{t("general.save")}
 				</button>
-				<span className="gui-panel-muted">{t("cmd s to save")}</span>
+				<span className="gui-panel-muted">{t("settings.cmdSSave")}</span>
 			</div>
 		</div>
 	);
@@ -1451,13 +1451,13 @@ function DocxPreview({ data, path }: { data: ArrayBuffer; path: string }): React
 	}, [data, path]);
 	return failed ? (
 		<p className="gui-error">
-			{t("cannot preview this file")} —{" "}
+			{t("guest.cannotPreviewFile")} —{" "}
 			<button
 				type="button"
 				className="gui-btn gui-btn-sm"
 				onClick={() => window.electronAPI?.openWith("", path).catch(() => {})}
 			>
-				{t("open with default app")}
+				{t("settings.openDefaultApp")}
 			</button>
 		</p>
 	) : (
@@ -1500,7 +1500,7 @@ function SheetPreview({
 				</div>
 			)}
 			{sheet?.truncated && (
-				<p className="gui-filepane-preview-note">{t("only first {n} rows shown", { n: OFFICE_SHEET_ROWS })}</p>
+				<p className="gui-filepane-preview-note">{t("settings.onlyFirstRowsShownWithN", { n: OFFICE_SHEET_ROWS })}</p>
 			)}
 			{sheet && (
 				<div

@@ -25,16 +25,16 @@ export interface DesignSystemEntry {
 	swatches: readonly string[];
 	/** gui token 覆盖片段——hover 卡迷你 mock 渲染用。 */
 	tokens: Record<string, string>;
-	source: "builtin" | "extension";
+	source: "general.builtin" | "extension";
 }
 
 /** 内置五 id → i18n labelKey（词表 composer 域；扩展体系直接用 RPC label）。 */
 const BUILTIN_LABEL_KEYS: Record<string, TranslationKey> = {
-	minimal: "design style minimal",
-	glass: "design style glass",
-	editorial: "design style editorial",
-	neubrutalism: "design style neubrutalism",
-	darkneon: "design style darkneon",
+	minimal: "composer.designStyleMinimal",
+	glass: "composer.designStyleGlass",
+	editorial: "composer.designStyleEditorial",
+	neubrutalism: "composer.designStyleNeubrutalism",
+	darkneon: "composer.designStyleDarkneon",
 };
 
 /** 展示名：内置五套走 i18n 词表（跟随界面语言），扩展用 RPC 原样 label。 */
@@ -62,7 +62,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--border": "oklch(0 0 0 / 8%)",
 			"--radius": "6px",
 		},
-		source: "builtin",
+		source: "general.builtin",
 	},
 	{
 		id: "glass",
@@ -76,7 +76,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--blur-3xl": "24px",
 			"--radius-2xl": "16px",
 		},
-		source: "builtin",
+		source: "general.builtin",
 	},
 	{
 		id: "editorial",
@@ -89,7 +89,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--border": "oklch(0 0 0 / 12%)",
 			"--radius": "2px",
 		},
-		source: "builtin",
+		source: "general.builtin",
 	},
 	{
 		id: "neubrutalism",
@@ -102,7 +102,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--bg": "#f7f7f7",
 			"--fg": "#1a1a1a",
 		},
-		source: "builtin",
+		source: "general.builtin",
 	},
 	{
 		id: "darkneon",
@@ -116,7 +116,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--accent-muted": "oklch(0.83 0.15 195 / 18%)",
 			"--fg": "oklch(0.95 0.01 240)",
 		},
-		source: "builtin",
+		source: "general.builtin",
 	},
 ];
 

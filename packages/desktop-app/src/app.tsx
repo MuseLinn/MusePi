@@ -103,7 +103,7 @@ const ERROR_BANNER_MS = 8_000;
  *  surface a plain hint instead of id noise. */
 const fmtError = (op: string, err: unknown): string => {
 	const msg = err instanceof Error ? err.message : String(err);
-	return /Unknown session/.test(msg) ? `${op}: ${t("session unavailable")}` : `${op}: ${msg}`;
+	return /Unknown session/.test(msg) ? `${op}: ${t("settings.sessionUnavailable")}` : `${op}: ${msg}`;
 };
 
 /** Builtin mode presets used to seed the welcome preset chip when the daemon
@@ -249,15 +249,15 @@ function CreationSavedToast({
 	return (
 		<div className="gui-creation-saved" role="status">
 			<Icon name="check" className="gui-creation-saved-check" />
-			<span className="gui-creation-saved-text">{t("creation saved toast")}</span>
+			<span className="gui-creation-saved-text">{t("creation.creationSavedToast")}</span>
 			{state === "done" ? (
-				<span className="gui-creation-saved-done">{t("creation template saved")}</span>
+				<span className="gui-creation-saved-done">{t("creation.creationTemplateSaved")}</span>
 			) : (
 				<button type="button" className="gui-creation-saved-action" disabled={state === "saving"} onClick={save}>
-					{t("creation template save action")}
+					{t("creation.creationTemplateSaveAction")}
 				</button>
 			)}
-			<button type="button" className="gui-creation-saved-close" aria-label={t("creation close")} onClick={onDone}>
+			<button type="button" className="gui-creation-saved-close" aria-label={t("creation.creationClose")} onClick={onDone}>
 				<Icon name="close" className="h-3.5 w-3.5" />
 			</button>
 		</div>
@@ -632,7 +632,7 @@ function AppInner(): ReactNode {
 				path: name,
 			})) as { ok?: boolean; error?: string };
 			if (res?.ok === false || res?.error) {
-				setNewProjectError(res?.error ?? t("create project failed"));
+				setNewProjectError(res?.error ?? t("settings.createProjectFailed"));
 				return;
 			}
 			const dir = `${parent.replace(/\/+$/, "")}/${name}`;
@@ -643,7 +643,7 @@ function AppInner(): ReactNode {
 			setNewProjectName("");
 			setNewProjectParent(null);
 		} catch {
-			setNewProjectError(t("create project failed"));
+			setNewProjectError(t("settings.createProjectFailed"));
 		} finally {
 			setNewProjectBusy(false);
 		}
@@ -694,7 +694,7 @@ function AppInner(): ReactNode {
 						if (run.status === "running" || cronNotifiedRef.current.has(run.id)) continue;
 						cronNotifiedRef.current.add(run.id);
 						if (baseline) continue;
-						const taskName = nameById.get(run.taskId) ?? run.taskId ?? t("scheduled tasks");
+						const taskName = nameById.get(run.taskId) ?? run.taskId ?? t("settings.scheduledTasks");
 						if (run.status === "error") {
 							dispatchNotification("error", {
 								lastMessage: `${taskName}${run.error ? ` · ${run.error}` : ""}`,
@@ -703,10 +703,10 @@ function AppInner(): ReactNode {
 						} else {
 							dispatchNotification("completion", {
 								agentName: taskName,
-								modelName: t("scheduled tasks"),
+								modelName: t("settings.scheduledTasks"),
 								lastMessage: taskName,
 							});
-							dispatchPetActivity("completed", `${t("scheduled tasks completed")}: ${taskName}`);
+							dispatchPetActivity("completed", `${t("tools.scheduledTasksCompleted")}: ${taskName}`);
 						}
 						// Glow the sidebar 定时任务 button for 20s.
 						setCronGlow(true);
@@ -2208,7 +2208,7 @@ function AppInner(): ReactNode {
 				);
 				return refs.length > 0 ? `${refs.join("\n")}\n\n${text}`.trim() : text;
 			} catch (err) {
-				const msg = `${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`;
+				const msg = `${t("composer.attachmentUploadFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`;
 				dispatchPetActivity("error", msg);
 				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: msg }));
 				return null;
@@ -2401,17 +2401,17 @@ function AppInner(): ReactNode {
 					.then(res => {
 						if (!res) return;
 						if (res.cancelled) {
-							dispatchPetActivity("error", t("bash command cancelled"));
+							dispatchPetActivity("error", t("composer.bashCommandCancelled"));
 							return;
 						}
-						const summary = t("bash exited with code {code} ({lines} lines)", {
+						const summary = t("composer.bashExitedCodeWithCodeWithLines", {
 							code: res.exitCode === null ? "?" : String(res.exitCode),
 							lines: String(res.totalLines),
 						});
 						dispatchPetActivity(res.exitCode === 0 ? "completed" : "error", summary);
 						dispatchNotification("completion", { lastMessage: summary });
 					})
-					.catch(() => dispatchPetActivity("error", t("bash command failed")));
+					.catch(() => dispatchPetActivity("error", t("composer.bashCommandFailed")));
 				return;
 			}
 			if (guidedMatch) {
@@ -2431,7 +2431,7 @@ function AppInner(): ReactNode {
 				} catch (err) {
 					dispatchPetActivity(
 						"error",
-						`${t("guided goal failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+						`${t("general.guidedGoalFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 					);
 				}
 				return;
@@ -2449,10 +2449,10 @@ function AppInner(): ReactNode {
 						if (!res?.consumed) {
 							const msg =
 								res?.reason === "tui-only"
-									? t("this command only works in the terminal")
+									? t("composer.commandOnlyWorksTerminal")
 									: res?.reason === "skill-not-found"
-										? t("skill not found")
-										: t("unknown slash command");
+										? t("composer.skillNotFound")
+										: t("composer.unknownSlashCommand");
 							dispatchPetActivity("error", msg);
 							return;
 						}
@@ -2487,7 +2487,7 @@ function AppInner(): ReactNode {
 				} catch (err) {
 					dispatchPetActivity(
 						"error",
-						`${t("guided goal failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+						`${t("general.guidedGoalFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 					);
 				}
 				return;
@@ -2633,7 +2633,7 @@ function AppInner(): ReactNode {
 			if (!client) return false;
 			try {
 				if (localStorage.getItem("musepi-gui-confirm-delete") !== "0") {
-					const ok = await confirm(t("confirm delete session"));
+					const ok = await confirm(t("general.confirmDeleteSession"));
 					if (!ok) return false;
 				}
 				await client.request("session.delete", { sessionId });
@@ -2672,9 +2672,9 @@ function AppInner(): ReactNode {
 				entries?: readonly SessionEntry[];
 			};
 			const markdown = buildSessionMarkdown(title, snap.entries ?? [], {
-				user: t("user"),
-				assistant: t("assistant"),
-				advisor: t("advisor"),
+				user: t("general.user"),
+				assistant: t("general.assistant"),
+				advisor: t("general.advisor"),
 			});
 			const blob = new Blob([markdown], { type: "text/markdown" });
 			const a = document.createElement("a");
@@ -2773,7 +2773,7 @@ function AppInner(): ReactNode {
 			const unread = unreadSessionsRef.current;
 			const selected = selectedIdRef.current;
 			for (const [id, meta] of sessionMetaRef.current) {
-				const title = meta.title ?? findLabel(treeRef.current, id) ?? t("pet session untitled");
+				const title = meta.title ?? findLabel(treeRef.current, id) ?? t("settings.petSessionUntitled");
 				if (meta.working) {
 					const live = id === selected;
 					cards.push({
@@ -2782,8 +2782,8 @@ function AppInner(): ReactNode {
 						phase: "working",
 						statusText:
 							live && activeToolName
-								? t("pet session using tool", { tool: activeToolName })
-								: t("pet session working"),
+								? t("settings.petSessionUsingTool", { tool: activeToolName })
+								: t("settings.petSessionWorking"),
 						replyPreview: null,
 					});
 				} else if (unread.has(id)) {
@@ -2791,7 +2791,7 @@ function AppInner(): ReactNode {
 						sessionId: id,
 						title,
 						phase: meta.status === "error" ? "error" : "done",
-						statusText: meta.status === "error" ? t("pet session error") : t("pet session done"),
+						statusText: meta.status === "error" ? t("settings.petSessionError") : t("settings.petSessionDone"),
 						replyPreview: id === selected ? activeLastMessage : null,
 					});
 				}
@@ -3343,7 +3343,7 @@ function AppInner(): ReactNode {
 						</div>
 						<BlurText text="MusePi" className="gui-splash-wordmark" stepMs={55} />
 						<ShinyText
-							text={t("your pair engineer, on every surface")}
+							text={t("settings.yourPairEngineer.info")}
 							className="gui-splash-tagline"
 							speed={3.4}
 							shineColor="var(--color-accent)"
@@ -3354,9 +3354,9 @@ function AppInner(): ReactNode {
 					 * lands in the app; this adds an exit, it never gates one. */}
 					{bootStalled && (
 						<div className="gui-splash-stall">
-							<p className="gui-splash-stall-text">{t("boot is taking longer than usual")}</p>
+							<p className="gui-splash-stall-text">{t("general.bootTakingLongerThan")}</p>
 							<button className="gui-btn gui-btn-primary" type="button" onClick={() => void boot()}>
-								{t("retry")}
+								{t("settings.retry")}
 							</button>
 						</div>
 					)}
@@ -3371,20 +3371,20 @@ function AppInner(): ReactNode {
 					<div className="gui-brand">
 						<span className="gui-brand-mark">π</span> MusePi
 					</div>
-					<p className="gui-connect-sub">{t("cannot reach the local daemon")}</p>
+					<p className="gui-connect-sub">{t("settings.cannotReachLocalDaemon")}</p>
 					<button
 						className="gui-btn gui-btn-primary"
 						type="button"
 						disabled={status === "connecting"}
 						onClick={() => void boot()}
 					>
-						{t("retry")}
+						{t("settings.retry")}
 					</button>
-					{status === "connecting" && <p className="gui-note">{t("connecting…")}</p>}
+					{status === "connecting" && <p className="gui-note">{t("settings.connecting2")}</p>}
 					{connectError && <p className="gui-error">{connectError}</p>}
 					{error && <p className="gui-error">{error}</p>}
 					<details className="gui-connect-advanced">
-						<summary>{t("manual connection")}</summary>
+						<summary>{t("settings.manualConnection")}</summary>
 						<form
 							className="gui-connect-form"
 							onSubmit={e => {
@@ -3404,7 +3404,7 @@ function AppInner(): ReactNode {
 								autoComplete="off"
 							/>
 							<button className="gui-btn" type="submit" disabled={status === "connecting"}>
-								{t("Connect")}
+								{t("settings.connect")}
 							</button>
 						</form>
 					</details>
@@ -3455,7 +3455,7 @@ function AppInner(): ReactNode {
 			if (!working && !unread) continue;
 			rows.push({
 				id,
-				title: meta.title?.trim() || t("untitled session"),
+				title: meta.title?.trim() || t("transcript.untitledSession"),
 				timestamp: meta.timestamp ? new Date(meta.timestamp).getTime() : 0,
 				working,
 				unread,
@@ -3493,7 +3493,7 @@ function AppInner(): ReactNode {
 	// ChatView full-bleed (transcript + composer, no sidebar/header).
 	if (isMini) {
 		const miniTitle = ((): string => {
-			if (!store) return t("MusePi");
+			if (!store) return t("settings.musepi");
 			const snap = store.getSnapshot();
 			const first = snap.entries.find(
 				e => e.type === "message" && (e as { message?: { role?: string } }).message?.role === "user",
@@ -3502,7 +3502,7 @@ function AppInner(): ReactNode {
 				const content = (first as { message?: { content?: unknown } }).message?.content;
 				if (typeof content === "string" && content.trim()) return content.trim().slice(0, 40);
 			}
-			return snap.state?.cwd?.split("/").pop() ?? t("session");
+			return snap.state?.cwd?.split("/").pop() ?? t("settings.session2");
 		})();
 		return (
 			<div className="gui-shell gui-shell--mini">
@@ -3512,8 +3512,8 @@ function AppInner(): ReactNode {
 						<button
 							type="button"
 							className="gui-error-toast-x"
-							title={t("dismiss")}
-							aria-label={t("dismiss")}
+							title={t("settings.dismiss")}
+							aria-label={t("settings.dismiss")}
 							onClick={() => setError(null)}
 						>
 							<Icon name="close" className="h-3 w-3" />
@@ -3601,8 +3601,8 @@ function AppInner(): ReactNode {
 					<button
 						type="button"
 						className="gui-error-toast-x"
-						title={t("dismiss")}
-						aria-label={t("dismiss")}
+						title={t("settings.dismiss")}
+						aria-label={t("settings.dismiss")}
 						onClick={() => setError(null)}
 					>
 						<Icon name="close" className="h-3 w-3" />
@@ -4012,7 +4012,7 @@ function AppInner(): ReactNode {
 			<DialogFrame
 				open={importOpen}
 				onClose={() => setImportOpen(false)}
-				label={t("import sessions")}
+				label={t("settings.importSessions")}
 				className="gui-import-dialog"
 			>
 				<ImportSessionsSetup rpc={rpc} />
@@ -4022,19 +4022,19 @@ function AppInner(): ReactNode {
 			<DialogFrame
 				open={newProjectOpen}
 				onClose={() => setNewProjectOpen(false)}
-				label={t("new blank project")}
+				label={t("settings.newBlankProject")}
 				className="gui-new-project-dialog gui-dialog--confirm"
 			>
 				{" "}
 				<div className="flex flex-col gap-3">
 					<div className="gui-new-project-field">
 						<div className="gui-new-project-label">
-							{t("project name")} <span className="gui-new-project-req">*</span>
+							{t("settings.projectName")} <span className="gui-new-project-req">*</span>
 						</div>
 						<input
 							className="gui-input w-full"
 							value={newProjectName}
-							placeholder={t("project name placeholder")}
+							placeholder={t("settings.projectNamePlaceholder")}
 							autoFocus
 							spellCheck={false}
 							onChange={e => setNewProjectName(e.target.value)}
@@ -4045,7 +4045,7 @@ function AppInner(): ReactNode {
 					</div>
 					<div className="gui-new-project-field">
 						<div className="gui-new-project-label">
-							{t("project parent path")} <span className="gui-new-project-req">*</span>
+							{t("settings.projectParentPath")} <span className="gui-new-project-req">*</span>
 						</div>
 						<button
 							type="button"
@@ -4058,7 +4058,7 @@ function AppInner(): ReactNode {
 						>
 							<Icon name="folder" className="h-3.5 w-3.5 flex-none" />
 							<span className="min-w-0 flex-1 truncate">
-								{newProjectParent ?? t("project parent placeholder")}
+								{newProjectParent ?? t("settings.projectParentPlaceholder")}
 							</span>
 							<Icon name="arrow-right-s" className="h-3 w-3 flex-none opacity-60" />
 						</button>
@@ -4066,7 +4066,7 @@ function AppInner(): ReactNode {
 					{newProjectError && <div className="text-[12.5px] text-[var(--color-danger)]">{newProjectError}</div>}
 					<div className="mt-1 flex justify-end gap-2">
 						<button type="button" className="gui-btn" onClick={() => setNewProjectOpen(false)}>
-							{t("cancel")}
+							{t("settings.cancel")}
 						</button>
 						<button
 							type="button"
@@ -4074,7 +4074,7 @@ function AppInner(): ReactNode {
 							disabled={!newProjectName.trim() || !newProjectParent || newProjectBusy}
 							onClick={() => void createNewProject()}
 						>
-							{newProjectBusy ? t("creating…") : t("save")}
+							{newProjectBusy ? t("settings.creating") : t("general.save")}
 						</button>
 					</div>
 				</div>

@@ -259,7 +259,7 @@ export function CreationModeRow({
 					ref={chiprailRef}
 					className="gui-creation-chiprail gui-fade-scroll"
 					role="radiogroup"
-					aria-label={t("creation title")}
+					aria-label={t("creation.creationTitle")}
 				>
 					{CREATION_CHIPS.map(item => {
 						const on = chip === item;

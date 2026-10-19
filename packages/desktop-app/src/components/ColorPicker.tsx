@@ -201,7 +201,7 @@ export function ColorPickerPanel({
 				ref={svRef}
 				className="gui-cp-field"
 				role="slider"
-				aria-label={t("pick color")}
+				aria-label={t("settings.pickColor")}
 				aria-valuetext={value}
 				onPointerDown={e => {
 					e.currentTarget.setPointerCapture(e.pointerId);
@@ -220,7 +220,7 @@ export function ColorPickerPanel({
 				ref={hueRef}
 				className="gui-cp-hue"
 				role="slider"
-				aria-label={t("hue")}
+				aria-label={t("settings.hue")}
 				aria-valuenow={Math.round(fieldHue)}
 				aria-valuemin={0}
 				aria-valuemax={360}
@@ -268,7 +268,7 @@ export function ColorPickerPanel({
 				))}
 			</div>
 			<div className="gui-cp-presets">
-				<span className="gui-cp-label">{t("preset colors")}</span>
+				<span className="gui-cp-label">{t("settings.presetColors")}</span>
 				{PRESET_HEXES.map(c => (
 					<button
 						key={c}
@@ -282,29 +282,29 @@ export function ColorPickerPanel({
 				))}
 			</div>
 			<div className="gui-cp-contrast">
-				<span>{t("background contrast")}</span>
+				<span>{t("settings.backgroundContrast")}</span>
 				<span
 					className={`gui-cp-contrast-grade${ratio >= 4.5 ? " gui-cp-contrast-grade--ok" : " gui-cp-contrast-grade--bad"}`}
 				>
-					{ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : t("contrast low")} · {ratio.toFixed(1)}:1
+					{ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : t("settings.contrastLow")} · {ratio.toFixed(1)}:1
 				</span>
 			</div>
 			<div className="gui-cp-contrast">
 				{/* The grade the accent's own foreground will get — the pairing the
 				 *  old sRGB derivation broke (2.2:1 on the brand gold). Gate is the
 				 *  same WCAG AA 4.5:1; deriveCustomAccent picks the better ink. */}
-				<span>{t("on-accent contrast")}</span>
+				<span>{t("settings.accentContrast")}</span>
 				<span
 					className={`gui-cp-contrast-grade${onAccentRatio >= 4.5 ? " gui-cp-contrast-grade--ok" : " gui-cp-contrast-grade--bad"}`}
 				>
-					{onAccentRatio >= 7 ? "AAA" : onAccentRatio >= 4.5 ? "AA" : t("contrast low")} ·{" "}
+					{onAccentRatio >= 7 ? "AAA" : onAccentRatio >= 4.5 ? "AA" : t("settings.contrastLow")} ·{" "}
 					{onAccentRatio.toFixed(1)}:1
 				</span>
 			</div>
 			{onApply && (
 				<div className="gui-cp-actions">
 					<button type="button" className="gui-cp-btn gui-cp-btn--primary" onClick={() => onApply(value)}>
-						{t("apply")}
+						{t("tools.apply")}
 					</button>
 				</div>
 			)}

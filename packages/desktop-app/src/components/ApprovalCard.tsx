@@ -56,7 +56,7 @@ export function ApprovalCard({
 				<div className="gui-approval" role="alert">
 					<ShieldAlert size={14} className="gui-approval-icon" />
 					<div className="gui-approval-body">
-						<span className="gui-approval-title">{t("Approval required")}</span>
+						<span className="gui-approval-title">{t("settings.approvalRequired")}</span>
 						<span className="gui-approval-tool">{tool}</span>
 						{details.length > 0 && <pre className="gui-approval-prompt">{details}</pre>}
 					</div>
@@ -64,7 +64,7 @@ export function ApprovalCard({
 						<textarea
 							value={note}
 							rows={2}
-							placeholder={t("add a note (optional)")}
+							placeholder={t("general.addNote")}
 							onChange={e => setNote(e.target.value)}
 							onKeyDown={e => {
 								if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -87,7 +87,7 @@ export function ApprovalCard({
 								onDecide(requestId, true, note);
 							}}
 						>
-							{t("Approve")}
+							{t("settings.approve")}
 						</button>
 						<button
 							type="button"
@@ -98,7 +98,7 @@ export function ApprovalCard({
 								onDecide(requestId, false, note);
 							}}
 						>
-							{t("Deny")}
+							{t("settings.deny")}
 						</button>
 					</div>
 				</div>

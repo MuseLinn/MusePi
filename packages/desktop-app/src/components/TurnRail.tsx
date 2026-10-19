@@ -591,8 +591,8 @@ export function TurnRail({
 				<button
 					type="button"
 					className="gui-turn-loadmore"
-					aria-label={t("load more prompts")}
-					title={t("load more prompts")}
+					aria-label={t("settings.loadMorePrompts")}
+					title={t("settings.loadMorePrompts")}
 					disabled={olderPager.loadingOlder}
 					onPointerDown={event => event.stopPropagation()}
 					onClick={event => {
@@ -608,7 +608,7 @@ export function TurnRail({
 				className="gui-turn-track"
 				role="listbox"
 				tabIndex={0}
-				aria-label={t("jump to turn")}
+				aria-label={t("settings.jumpTurn")}
 				aria-activedescendant={hover !== null ? `gui-turn-tick-${hover}` : undefined}
 				style={{ height: `${visibleCount * TICK_PITCH_PX}px` }}
 				onPointerMove={onTrackPointerMove}
@@ -706,9 +706,9 @@ export function TurnRail({
 										>
 											<div className="gui-turn-panel-card">
 												{m.kind === "advisor" && (
-													<span className="gui-turn-panel-kind">{t("advisor")}</span>
+													<span className="gui-turn-panel-kind">{t("general.advisor")}</span>
 												)}
-												<span className="gui-turn-panel-text">{m.summary || t("no text")}</span>
+												<span className="gui-turn-panel-text">{m.summary || t("settings.noText")}</span>
 											</div>
 										</div>
 									);

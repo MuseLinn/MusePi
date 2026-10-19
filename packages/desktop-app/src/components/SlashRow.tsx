@@ -33,7 +33,7 @@ export function SlashRow({
 }): ReactElement {
 	const isSkill = item.kind === "skill";
 	const display = slashDisplayName(item);
-	const kindLabel = isSkill ? t("skills") : t("command");
+	const kindLabel = isSkill ? t("settings.skills") : t("tools.command");
 	const categoryLabel = t(`tag.${item.category ?? "system"}` as TranslationKey);
 	return (
 		<button

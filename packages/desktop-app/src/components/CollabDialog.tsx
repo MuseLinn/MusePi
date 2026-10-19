@@ -10,9 +10,9 @@ import { Reveal } from "./Reveal";
 
 /** Share scope: what the guest link exposes. */
 const SHARE_SCOPE_SEGMENTS: SegmentedOption<"session" | "workspace" | "tunnel">[] = [
-	{ value: "session", label: t("current session") },
-	{ value: "workspace", label: t("workspace") },
-	{ value: "tunnel", label: t("public tunnel") },
+	{ value: "session", label: t("general.currentSession") },
+	{ value: "workspace", label: t("tools.workspace") },
+	{ value: "tunnel", label: t("settings.publicTunnel") },
 ];
 
 interface CollabGuest {
@@ -210,7 +210,7 @@ export function CollabDialog({
 	 *  a confirm dialog — Enter confirms, Escape cancels (prompt-dialog). */
 	const unlinkChannel = async (kind: string): Promise<void> => {
 		if (!rpc) return;
-		const ok = await confirm(t("unlink channel confirm"), t("unlink"));
+		const ok = await confirm(t("settings.unlinkChannelConfirm"), t("settings.unlink"));
 		if (!ok) return;
 		await rpc.request("channels.unlink", { kind }).catch(() => {});
 		await refreshChannels();
@@ -376,13 +376,13 @@ export function CollabDialog({
 	const sessionHint =
 		sessionId !== null && sessionTitle
 			? t(`share session "{title}" live on the local network`, { title: sessionTitle })
-			: t("share this session live on the local network");
+			: t("settings.shareSessionLiveLocal");
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("mobile remote control")} className="gui-collab-dialog">
+		<DialogFrame open={open} onClose={onClose} label={t("settings.mobileRemoteControl")} className="gui-collab-dialog">
 			<div className="gui-dialog-head">
-				<span className="text-[14px] font-semibold">{t("mobile remote control")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
+				<span className="text-[14px] font-semibold">{t("settings.mobileRemoteControl")}</span>
+				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
@@ -391,16 +391,16 @@ export function CollabDialog({
 				<section className="gui-collab-col">
 					<div className="gui-collab-col-head">
 						<Icon name="smartphone" className="h-4 w-4" />
-						<span>{t("scan to connect")}</span>
+						<span>{t("settings.scanConnect")}</span>
 					</div>
-					<p className="gui-collab-desc">{t("scan with your phone camera to open this workspace")}</p>
+					<p className="gui-collab-desc">{t("settings.scanYourPhoneCamera")}</p>
 					<div className="gui-collab-status">
 						<span className="gui-collab-dot" />
-						<span>{hosting ? t("waiting for phone connection") : t("ready")}</span>
+						<span>{hosting ? t("settings.waitingPhoneConnection") : t("settings.ready")}</span>
 						{hosting && (
 							<button type="button" className="gui-btn gui-btn-stop ml-auto" onClick={() => void stopShare()}>
 								<Icon name="stop" className="h-3 w-3" />
-								<span>{t("stop")}</span>
+								<span>{t("settings.stop")}</span>
 							</button>
 						)}
 					</div>
@@ -413,7 +413,7 @@ export function CollabDialog({
 									key={`${p.role}:${p.name}`}
 									className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]"
 								>
-									{p.readOnly ? t("{name} (watch-only)", { name: p.name }) : p.name}
+									{p.readOnly ? t("settings.text", { name: p.name }) : p.name}
 								</span>
 							))}
 						</div>
@@ -427,39 +427,39 @@ export function CollabDialog({
 							<div className="gui-collab-actions">
 								<button type="button" className="gui-btn" onClick={() => void refresh()}>
 									<Icon name="refresh" className="h-3.5 w-3.5" />
-									<span>{t("refresh")}</span>
+									<span>{t("settings.refresh")}</span>
 								</button>
 								<button type="button" className="gui-btn" onClick={() => void copyLink()}>
 									<Icon name="external-link" className="h-3.5 w-3.5" />
-									<span>{copied ? t("copied") : t("copy link")}</span>
+									<span>{copied ? t("settings.copied") : t("settings.copyLink")}</span>
 								</button>
 								{/* Watch-only links are minted alongside the write link; the
 								 * pane never showed them, so read-only sharing was TUI-only. */}
 								{info?.viewLink ? (
 									<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
 										<Icon name="eye" className="h-3.5 w-3.5" />
-										<span>{copiedView ? t("copied") : t("copy watch-only link")}</span>
+										<span>{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}</span>
 									</button>
 								) : null}
 							</div>
 							{/* MusePi Mobile pair code: no-camera fallback to the QR. */}
 							<div className="gui-collab-pair">
 								<span className="text-[12px] text-[var(--color-text-faint)]">
-									{t("or use MusePi Mobile pair code")}
+									{t("settings.useMusepiMobilePair")}
 								</span>
 								<div className="gui-collab-pair-row">
 									<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
 									<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
 										<Icon name="refresh" className="h-3.5 w-3.5" />
-										<span>{t("get code")}</span>
+										<span>{t("settings.getCode")}</span>
 									</button>
 								</div>
 								<span className="text-[11px] text-[var(--color-text-faint)]">
 									{pairSecondsLeft === null
-										? t("enter the 6-digit code in MusePi Mobile (same network)")
+										? t("settings.enter6DigitCodeMusepiMobile")
 										: pairSecondsLeft > 0
-											? t("single use · expires in {seconds}s", { seconds: String(pairSecondsLeft) })
-											: t("this code has expired — get a new one")}
+											? t("settings.singleUseExpiresSWithSeconds", { seconds: String(pairSecondsLeft) })
+											: t("settings.codeHasExpiredGet")}
 								</span>
 							</div>
 						</>
@@ -478,15 +478,15 @@ export function CollabDialog({
 								onClick={() => void startShare()}
 							>
 								<Icon name="send-plane" className="h-3.5 w-3.5" />
-								<span>{busy ? t("starting…") : t("start sharing")}</span>
+								<span>{busy ? t("settings.starting") : t("settings.startSharing")}</span>
 							</button>
 							<p className="gui-collab-hint">
 								{sessionId === null && mode === "session"
-									? t("open or create a session first to share it")
+									? t("settings.openCreateSessionFirst")
 									: mode === "workspace"
-										? t("share the whole workspace — guests see every session")
+										? t("general.shareWholeWorkspaceGuests")
 										: mode === "tunnel"
-											? t("public tunnel — anyone with the link can join; stop sharing to close it")
+											? t("settings.publicTunnelAnyone.info")
 											: sessionHint}
 							</p>
 						</div>
@@ -496,9 +496,9 @@ export function CollabDialog({
 				<section className="gui-collab-col">
 					<div className="gui-collab-col-head">
 						<Icon name="robot" className="h-4 w-4" />
-						<span>{t("use bot channel")}</span>
+						<span>{t("settings.useBotChannel")}</span>
 					</div>
-					<p className="gui-collab-desc">{t("connect a chat bot for longer mobile access")}</p>
+					<p className="gui-collab-desc">{t("settings.connectChatBotLonger")}</p>
 					<div className="gui-collab-bots">
 						{(channels ?? []).map(c => {
 							const label = c.kind;
@@ -523,7 +523,7 @@ export function CollabDialog({
 												<span className={`gui-collab-dot${on ? "" : " gui-collab-dot--off"}`} />
 											</div>
 											<div className="truncate text-[12px] text-[var(--color-text-faint)]">
-												{c.detail ?? (c.state === "off" ? t("off") : c.state)}
+												{c.detail ?? (c.state === "off" ? t("settings.off") : c.state)}
 											</div>
 										</div>
 										{on ? (
@@ -540,17 +540,17 @@ export function CollabDialog({
 															.catch(() => refreshChannels());
 													}}
 												>
-													{t("stop")}
+													{t("settings.stop")}
 												</button>
 												{/* 解绑：断开 + 清除凭证（下次要重新扫码），二次确认。 */}
 												<button
 													type="button"
 													className="gui-btn gui-btn-sm"
-													title={t("unlink")}
+													title={t("settings.unlink")}
 													onClick={() => void unlinkChannel(c.kind)}
 												>
 													<Icon name="link-unlink-m" className="h-3 w-3" />
-													<span>{t("unlink")}</span>
+													<span>{t("settings.unlink")}</span>
 												</button>
 											</div>
 										) : (
@@ -568,14 +568,14 @@ export function CollabDialog({
 														}
 													}}
 												>
-													{t("start")}
+													{t("settings.start")}
 												</button>
 												{fields && (
 													<button
 														type="button"
 														className="gui-btn gui-btn-sm"
-														title={t("configure channel")}
-														aria-label={t("configure channel")}
+														title={t("settings.configureChannel")}
+														aria-label={t("settings.configureChannel")}
 														onClick={() => setExpandedKind(expandedKind === c.kind ? null : c.kind)}
 													>
 														<Icon name="settings-3" className="h-3 w-3" />
@@ -593,7 +593,7 @@ export function CollabDialog({
 										{qrUrl ? (
 											<div className="gui-collab-channel-qr">
 												<img src={channelQrSrc(qrUrl)} alt="WeChat login QR" />
-												<span>{c.detail ?? t("scan the QR code")}</span>
+												<span>{c.detail ?? t("settings.scanQrCode")}</span>
 											</div>
 										) : null}
 									</Reveal>
@@ -618,7 +618,7 @@ export function CollabDialog({
 													disabled={!fields.every(f => f.optional || (configDraft[f.key] ?? "").trim())}
 													onClick={() => void saveConfig(c.kind)}
 												>
-													{t("save and start")}
+													{t("settings.saveStart")}
 												</button>
 											</div>
 										)}
@@ -627,7 +627,7 @@ export function CollabDialog({
 							);
 						})}
 						{(channels ?? []).length === 0 && (
-							<div className="text-[12px] text-[var(--color-text-faint)]">{t("no channels configured")}</div>
+							<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.noChannelsConfigured")}</div>
 						)}
 					</div>
 					{/* Plugin inventory (game-mod style): builtin + hot-plugged
@@ -635,12 +635,12 @@ export function CollabDialog({
 					<div className="mt-2 border-t border-[var(--border)] pt-2">
 						<div className="flex items-center justify-between">
 							<span className="text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
-								{t("channel plugins")}
+								{t("settings.channelPlugins")}
 							</span>
 							<button
 								type="button"
 								className="gui-btn gui-btn-sm"
-								title={t("reload plugins")}
+								title={t("settings.reloadPlugins")}
 								onClick={() => void reloadPlugins()}
 							>
 								<Icon name="refresh" className="h-3 w-3" />
@@ -657,7 +657,7 @@ export function CollabDialog({
 								</span>
 							))}
 							{(plugins ?? []).length === 0 && (
-								<span className="text-[11px] text-[var(--color-text-faint)]">{t("no plugins")}</span>
+								<span className="text-[11px] text-[var(--color-text-faint)]">{t("settings.noPlugins")}</span>
 							)}
 						</div>
 					</div>

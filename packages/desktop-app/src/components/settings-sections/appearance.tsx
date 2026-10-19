@@ -87,33 +87,33 @@ const ACCENT_SWATCH: Record<string, string> = {
 
 /** Accent preset → localized name (swatch tooltip/aria). */
 const ACCENT_NAMES: Record<string, TranslationKey> = {
-	brand: "accent brand",
-	mono: "accent mono",
-	ocean: "accent ocean",
-	jade: "accent jade",
+	brand: "settings.accentBrand",
+	mono: "settings.accentMono",
+	ocean: "settings.accentOcean",
+	jade: "settings.accentJade",
 };
 
 /** Motion budget: full springs / reduced / off (the `gui-motion-off` class
  * on <html> is what the CSS degrades on). */
 const MOTION_SEGMENTS: SegmentedOption<"full" | "reduced" | "off">[] = [
-	{ value: "full", label: t("full") },
-	{ value: "reduced", label: t("reduced") },
-	{ value: "off", label: t("off") },
+	{ value: "full", label: t("settings.full") },
+	{ value: "reduced", label: t("settings.reduced") },
+	{ value: "off", label: t("settings.off") },
 ];
 
 /** Separate light/dark presets vs one unified preset — Segmented keys on a
  * string, so the boolean rides on these two ids. */
 const THEME_MODE_SEGMENTS: SegmentedOption<"separate" | "unified">[] = [
-	{ value: "separate", label: t("theme mode separate") },
-	{ value: "unified", label: t("theme mode unified") },
+	{ value: "separate", label: t("settings.themeModeSeparate") },
+	{ value: "unified", label: t("settings.themeModeUnified") },
 ];
 
 /** Follow-system / light / dark with per-mode icons (monitor / sun / moon) —
  * the theme flip overlay morphs between these same icons. */
 const TYPE_THEME_SEGMENTS: SegmentedOption<ThemePreference>[] = [
-	{ value: "system", label: t("follow system"), icon: MonitorIcon },
-	{ value: "light", label: t("light"), icon: SunIcon },
-	{ value: "dark", label: t("dark"), icon: MoonIcon },
+	{ value: "system", label: t("settings.followSystem"), icon: MonitorIcon },
+	{ value: "light", label: t("settings.light"), icon: SunIcon },
+	{ value: "dark", label: t("settings.dark"), icon: MoonIcon },
 ];
 export function AppearanceSection({
 	showAvatars,
@@ -162,7 +162,31 @@ export function AppearanceSection({
 	// Locale: subscribe so the dropdown reflects the current language.
 	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot);
 	// Custom appearance (persisted, applied on the root element).
-	const [motion, setMotion] = useState<"full" | "reduced" | "off">(
+	
+/** Theme-preset labels are keyed per preset id; the ids come from
+ *  client-core's preset tables, so the lookup is closed over that set. */
+const THEME_PRESET_KEY: Record<string, TranslationKey> = {
+	default: "settings.themePresetDefault",
+	warm: "settings.themePresetWarm",
+	cool: "settings.themePresetCool",
+	midnight: "settings.themePresetMidnight",
+	graphite: "settings.themePresetGraphite",
+	anthro: "settings.themePresetAnthro",
+	openchamber: "settings.themePresetOpenchamber",
+	catppuccin: "settings.themePresetCatppuccin",
+	nord: "settings.themePresetNord",
+	tokyonight: "settings.themePresetTokyonight",
+	aura: "settings.themePresetAura",
+	ayu: "settings.themePresetAyu",
+	dracula: "settings.themePresetDracula",
+	gruvbox: "settings.themePresetGruvbox",
+	kanagawa: "settings.themePresetKanagawa",
+	monokai: "settings.themePresetMonokai",
+	solarized: "settings.themePresetSolarized",
+	vesper: "settings.themePresetVesper",
+};
+
+const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
@@ -184,11 +208,11 @@ export function AppearanceSection({
 	);
 	const [codeFont, setCodeFont] = useState<number>(() => Number(localStorage.getItem(EDITOR_FONT_KEY) ?? 13));
 	const [density, setDensity] = useState<number>(() => Number(localStorage.getItem(DENSITY_KEY) ?? 100));
-	const [timeFmt, setTimeFmt] = useState<"auto" | "12h" | "24h">(
-		() => (localStorage.getItem(TIME_FMT_KEY) as "auto" | "12h" | "24h") ?? "auto",
+	const [timeFmt, setTimeFmt] = useState<"general.auto" | "12h" | "24h">(
+		() => (localStorage.getItem(TIME_FMT_KEY) as "general.auto" | "12h" | "24h") ?? "general.auto",
 	);
-	const [weekStart, setWeekStart] = useState<"auto" | "monday" | "sunday">(
-		() => (localStorage.getItem(WEEK_START_KEY) as "auto" | "monday" | "sunday") ?? "auto",
+	const [weekStart, setWeekStart] = useState<"general.auto" | "general.monday" | "general.sunday">(
+		() => (localStorage.getItem(WEEK_START_KEY) as "general.auto" | "general.monday" | "general.sunday") ?? "general.auto",
 	);
 	const [uiFont, setUiFont] = useState<string>(() => localStorage.getItem(UI_FONT_KEY) ?? DEFAULT_UI_FONT.id);
 	const [monoFont, setMonoFont] = useState<string>(() => localStorage.getItem(MONO_FONT_KEY) ?? DEFAULT_CODE_FONT.id);
@@ -225,19 +249,19 @@ export function AppearanceSection({
 	};
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("appearance")}</h2>
-			<p className="gui-settings-page-desc">{t("appearance settings")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.appearance")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.appearanceSettings")}</p>
 
 			{/* ── 界面设置 — theme + interface type (ZCode section). ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("interface settings")}</div>
-				<div className="gui-settings-section-desc">{t("interface settings description")}</div>
+				<div className="gui-settings-section-title">{t("settings.interfaceSettings")}</div>
+				<div className="gui-settings-section-desc">{t("settings.interfaceSettingsDescription")}</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("interface theme")}</div>
-					<div className="gui-settings-field-hint">{t("choose light, dark or follow the system")}</div>
+					<div className="gui-settings-field-label">{t("settings.interfaceTheme")}</div>
+					<div className="gui-settings-field-hint">{t("settings.chooseLightDark.info")}</div>
 					<div className="gui-settings-field-control">
 						<Segmented
-							ariaLabel={t("interface theme")}
+							ariaLabel={t("settings.interfaceTheme")}
 							value={preference}
 							options={TYPE_THEME_SEGMENTS}
 							onChange={setPreference}
@@ -247,11 +271,11 @@ export function AppearanceSection({
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("theme mode")}</div>
-					<div className="gui-settings-field-hint">{t("theme mode description")}</div>
+					<div className="gui-settings-field-label">{t("settings.themeMode")}</div>
+					<div className="gui-settings-field-hint">{t("settings.themeModeDescription")}</div>
 					<div className="gui-settings-field-control">
 						<Segmented
-							ariaLabel={t("theme mode")}
+							ariaLabel={t("settings.themeMode")}
 							value={unifiedMode ? "unified" : "separate"}
 							options={THEME_MODE_SEGMENTS}
 							onChange={v => setUnifiedMode(v === "unified")}
@@ -260,47 +284,47 @@ export function AppearanceSection({
 				</div>
 				<Reveal open={unifiedMode}>
 					<div className="gui-settings-field">
-						<div className="gui-settings-field-label">{t("unified theme")}</div>
-						<div className="gui-settings-field-hint">{t("unified theme description")}</div>
+						<div className="gui-settings-field-label">{t("settings.unifiedTheme")}</div>
+						<div className="gui-settings-field-hint">{t("settings.unifiedThemeDescription")}</div>
 						<div className="gui-settings-field-control">
 							<GuiSelect
 								className="gui-settings-select"
 								value={unifiedThemeId}
 								onChange={v => setUnifiedTheme(v as UiThemeId)}
-								options={UNIFIED_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
+								options={UNIFIED_THEME_PRESETS.map(p => ({ value: p.id, label: t(THEME_PRESET_KEY[p.id] ?? p.id) }))}
 							/>
 						</div>
 					</div>
 				</Reveal>
 				<Reveal open={!unifiedMode}>
 					<div className="gui-settings-field">
-						<div className="gui-settings-field-label">{t("light theme")}</div>
-						<div className="gui-settings-field-hint">{t("light theme description")}</div>
+						<div className="gui-settings-field-label">{t("settings.lightTheme")}</div>
+						<div className="gui-settings-field-hint">{t("settings.lightThemeDescription")}</div>
 						<div className="gui-settings-field-control">
 							<GuiSelect
 								className="gui-settings-select"
 								value={lightThemeId}
 								onChange={v => setLightTheme(v as UiThemeId)}
-								options={LIGHT_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
+								options={LIGHT_THEME_PRESETS.map(p => ({ value: p.id, label: t(THEME_PRESET_KEY[p.id] ?? p.id) }))}
 							/>
 						</div>
 					</div>
 					<div className="gui-settings-field">
-						<div className="gui-settings-field-label">{t("dark theme")}</div>
-						<div className="gui-settings-field-hint">{t("dark theme description")}</div>
+						<div className="gui-settings-field-label">{t("settings.darkTheme")}</div>
+						<div className="gui-settings-field-hint">{t("settings.darkThemeDescription")}</div>
 						<div className="gui-settings-field-control">
 							<GuiSelect
 								className="gui-settings-select"
 								value={darkThemeId}
 								onChange={v => setDarkTheme(v as UiThemeId)}
-								options={DARK_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
+								options={DARK_THEME_PRESETS.map(p => ({ value: p.id, label: t(THEME_PRESET_KEY[p.id] ?? p.id) }))}
 							/>
 						</div>
 					</div>
 				</Reveal>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("accent")}</div>
-					<div className="gui-settings-field-hint">{t("accent color")}</div>
+					<div className="gui-settings-field-label">{t("settings.accent")}</div>
+					<div className="gui-settings-field-hint">{t("settings.accentColor")}</div>
 					<div className="gui-settings-field-control">
 						<div className="flex items-center gap-2">
 							{Object.entries(ACCENT_SWATCH).map(([id, color]) => (
@@ -309,8 +333,8 @@ export function AppearanceSection({
 									type="button"
 									className={`gui-accent-swatch${accent === id ? " gui-accent-swatch--active" : ""}`}
 									style={{ background: color }}
-									aria-label={t(ACCENT_NAMES[id] ?? "accent brand")}
-									title={t(ACCENT_NAMES[id] ?? "accent brand")}
+									aria-label={t(ACCENT_NAMES[id] ?? "settings.accentBrand")}
+									title={t(ACCENT_NAMES[id] ?? "settings.accentBrand")}
 									onClick={() => setAccent(id as "brand" | "mono" | "ocean" | "jade")}
 								/>
 							))}
@@ -319,8 +343,8 @@ export function AppearanceSection({
 								type="button"
 								className={`gui-accent-swatch gui-accent-swatch--custom${accent === "custom" ? " gui-accent-swatch--active" : ""}`}
 								style={{ background: customAccent }}
-								title={t("custom accent")}
-								aria-label={t("custom accent")}
+								title={t("settings.customAccent")}
+								aria-label={t("settings.customAccent")}
 								aria-haspopup="dialog"
 								onClick={() => {
 									// Open only — no accent switch, no veil. Snapshot
@@ -341,9 +365,9 @@ export function AppearanceSection({
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("interface font size")}</div>
+					<div className="gui-settings-field-label">{t("settings.interfaceFontSize")}</div>
 					<NumberStepper
-						label={t("interface font size")}
+						label={t("settings.interfaceFontSize")}
 						value={fontScale}
 						min={12}
 						max={18}
@@ -357,7 +381,7 @@ export function AppearanceSection({
 					/>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("interface font")}</div>
+					<div className="gui-settings-field-label">{t("general.interfaceFont")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -373,8 +397,8 @@ export function AppearanceSection({
 						<button
 							type="button"
 							className="gui-settings-reset"
-							title={t("reset")}
-							aria-label={t("reset")}
+							title={t("general.reset")}
+							aria-label={t("general.reset")}
 							disabled={uiFont === DEFAULT_UI_FONT.id}
 							onClick={() => {
 								setUiFont(DEFAULT_UI_FONT.id);
@@ -387,9 +411,9 @@ export function AppearanceSection({
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("spacing density")}</div>
+					<div className="gui-settings-field-label">{t("general.spacingDensity")}</div>
 					<NumberStepper
-						label={t("spacing density")}
+						label={t("general.spacingDensity")}
 						value={density}
 						min={50}
 						max={200}
@@ -404,8 +428,8 @@ export function AppearanceSection({
 					/>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("turn rail position")}</div>
-					<div className="gui-settings-field-hint">{t("turn rail position hint")}</div>
+					<div className="gui-settings-field-label">{t("settings.turnRailPosition")}</div>
+					<div className="gui-settings-field-hint">{t("settings.turnRailPositionHint")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -417,14 +441,14 @@ export function AppearanceSection({
 								window.dispatchEvent(new Event(TURN_RAIL_CHANGED_EVENT));
 							}}
 							options={[
-								{ value: "right", label: t("right side") },
-								{ value: "left", label: t("left side") },
+								{ value: "right", label: t("settings.rightSide") },
+								{ value: "left", label: t("settings.leftSide") },
 							]}
 						/>
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("turn rail style")}</div>
+					<div className="gui-settings-field-label">{t("settings.turnRailStyle")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -436,15 +460,15 @@ export function AppearanceSection({
 								window.dispatchEvent(new Event(TURN_RAIL_CHANGED_EVENT));
 							}}
 							options={[
-								{ value: "burger", label: t("burger layers") },
-								{ value: "pacman", label: t("pacman") },
+								{ value: "burger", label: t("settings.burgerLayers") },
+								{ value: "pacman", label: t("settings.pacman") },
 							]}
 						/>
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("scrollbar style")}</div>
-					<div className="gui-settings-field-hint">{t("scrollbar style hint")}</div>
+					<div className="gui-settings-field-label">{t("settings.scrollbarStyle")}</div>
+					<div className="gui-settings-field-hint">{t("settings.scrollbarStyleHint")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -457,9 +481,9 @@ export function AppearanceSection({
 							}}
 							options={[
 								...importedSkins.map(s => ({ value: s.id, label: s.displayName })),
-								{ value: "builtin-snake", label: t("snake") },
-								{ value: "builtin-gummy-rainbow", label: t("gummy rainbow") },
-								{ value: "builtin-pacman", label: t("pacman") },
+								{ value: "builtin-snake", label: t("settings.snake") },
+								{ value: "builtin-gummy-rainbow", label: t("settings.gummyRainbow") },
+								{ value: "builtin-pacman", label: t("settings.pacman") },
 							]}
 						/>
 						<div className="flex items-center gap-2 mt-2">
@@ -495,11 +519,11 @@ export function AppearanceSection({
 										.finally(() => setImportingSkin(false));
 								}}
 							>
-								{importingSkin ? "…" : t("import scrollbar skin")}
+								{importingSkin ? "…" : t("settings.importScrollbarSkin")}
 							</button>
 							{skinError && (
 								<span className="text-xs" style={{ color: "var(--color-danger, #ff5c5c)" }}>
-									{t("invalid scrollbar skin")}
+									{t("settings.invalidScrollbarSkin")}
 								</span>
 							)}
 						</div>
@@ -507,15 +531,15 @@ export function AppearanceSection({
 				</div>
 				<div className="gui-settings-row">
 					<div className="flex-1">
-						<div className="gui-settings-row-label">{t("always show scrollbars")}</div>
-						<div className="gui-settings-row-desc">{t("always show scrollbars desc")}</div>
+						<div className="gui-settings-row-label">{t("settings.alwaysShowScrollbars")}</div>
+						<div className="gui-settings-row-desc">{t("settings.alwaysShowScrollbarsDesc")}</div>
 					</div>
 					<button
 						type="button"
 						role="switch"
 						aria-checked={alwaysShowScrollbars}
 						className={`gui-toggle${alwaysShowScrollbars ? " gui-toggle--on" : ""}`}
-						aria-label={t("always show scrollbars")}
+						aria-label={t("settings.alwaysShowScrollbars")}
 						onClick={() => {
 							const next = !alwaysShowScrollbars;
 							setAlwaysShowScrollbars(next);
@@ -527,8 +551,8 @@ export function AppearanceSection({
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("window transparency")}</div>
-						<div className="gui-settings-row-desc">{t("window transparency description")}</div>
+						<div className="gui-settings-row-label">{t("settings.windowTransparency")}</div>
+						<div className="gui-settings-row-desc">{t("settings.windowTransparencyDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -550,7 +574,7 @@ export function AppearanceSection({
 							// Desktop shell: mirror onto the native window material.
 							applyGlassMaterial(next);
 						}}
-						aria-label={t("window transparency")}
+						aria-label={t("settings.windowTransparency")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -560,14 +584,14 @@ export function AppearanceSection({
 			{/* ── 效果 — motion / info status bar / avatars (session chrome the
 			 * 效果预览 below reflects live). ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("effects")}</div>
+				<div className="gui-settings-section-title">{t("settings.effects")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("motion effects")}</div>
-						<div className="gui-settings-row-desc">{t("menu popups, orb animation, splash pulse")}</div>
+						<div className="gui-settings-row-label">{t("settings.motionEffects")}</div>
+						<div className="gui-settings-row-desc">{t("settings.menuPopupsOrb.info")}</div>
 					</div>
 					<Segmented
-						ariaLabel={t("motion effects")}
+						ariaLabel={t("settings.motionEffects")}
 						value={motion}
 						options={MOTION_SEGMENTS}
 						onChange={m => {
@@ -579,9 +603,9 @@ export function AppearanceSection({
 				</div>
 				<div className="gui-settings-row">
 					<div className="flex-1">
-						<div className="gui-settings-row-label">{t("show avatars")}</div>
+						<div className="gui-settings-row-label">{t("settings.showAvatars")}</div>
 						<div className="gui-settings-row-desc">
-							{t("agent orb avatar beside replies, your avatar at the bubble")}
+							{t("settings.agentOrbAvatar.info")}
 						</div>
 					</div>
 					<button
@@ -590,7 +614,7 @@ export function AppearanceSection({
 						aria-checked={showAvatars}
 						className={`gui-toggle${showAvatars ? " gui-toggle--on" : ""}`}
 						onClick={onToggleAvatars}
-						aria-label={t("show avatars")}
+						aria-label={t("settings.showAvatars")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -602,18 +626,18 @@ export function AppearanceSection({
 			 * the live orb, collapsed 活动 fold) + the current composer card,
 			 * driven live by the toggles above (avatars / info status bar). ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("effects preview")}</div>
-				<div className="gui-settings-section-desc">{t("effects preview description")}</div>
+				<div className="gui-settings-section-title">{t("general.effectsPreview")}</div>
+				<div className="gui-settings-section-desc">{t("general.effectsPreviewDescription")}</div>
 				<MockConversationPreview showAvatars={showAvatars} outputStyle={outputStyle} streamingDemo />
 			</div>
 			{/* ── 图片 — the GUI inline-images toggle + the daemon schema's
 			 * Images group (auto-resize / block images) in one place. ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("Images")}</div>
+				<div className="gui-settings-section-title">{t("settings.images")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("inline images")}</div>
-						<div className="gui-settings-row-desc">{t("show images inside the transcript")}</div>
+						<div className="gui-settings-row-label">{t("settings.inlineImages")}</div>
+						<div className="gui-settings-row-desc">{t("settings.showImagesInsideTranscript")}</div>
 					</div>
 					<button
 						type="button"
@@ -626,18 +650,18 @@ export function AppearanceSection({
 							localStorage.setItem("musepi-gui-images", next ? "1" : "0");
 							document.documentElement.classList.toggle("gui-no-images", !next);
 						}}
-						aria-label={t("inline images")}
+						aria-label={t("settings.inlineImages")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
-				<SchemaTabSection rpc={rpc} tabs={["appearance"]} groups={["Images"]} />
+				<SchemaTabSection rpc={rpc} tabs={["appearance"]} groups={["images"]} />
 			</div>
 			{/* ── 本地化 — language / time format / week start (openchamber parity). ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("localization")}</div>
+				<div className="gui-settings-section-title">{t("general.localization")}</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("language")}</div>
+					<div className="gui-settings-field-label">{t("settings.language")}</div>
 					<GuiSelect
 						className="gui-settings-select"
 						value={locale}
@@ -656,36 +680,36 @@ export function AppearanceSection({
 					/>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("time format")}</div>
+					<div className="gui-settings-field-label">{t("general.timeFormat")}</div>
 					<GuiSelect
 						className="gui-settings-select"
 						value={timeFmt}
 						onChange={nv => {
-							const v = nv as "auto" | "12h" | "24h";
+							const v = nv as "general.auto" | "12h" | "24h";
 							setTimeFmt(v);
 							setPref(TIME_FMT_KEY, v);
 						}}
 						options={[
-							{ value: "auto", label: t("auto") },
-							{ value: "12h", label: t("12-hour") },
-							{ value: "24h", label: t("24-hour") },
+							{ value: "auto", label: t("general.auto") },
+							{ value: "12h", label: t("general.12Hour") },
+							{ value: "24h", label: t("general.24Hour") },
 						]}
 					/>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("week starts on")}</div>
+					<div className="gui-settings-field-label">{t("general.weekStarts")}</div>
 					<GuiSelect
 						className="gui-settings-select"
 						value={weekStart}
 						onChange={nv => {
-							const v = nv as "auto" | "monday" | "sunday";
+							const v = nv as "general.auto" | "general.monday" | "general.sunday";
 							setWeekStart(v);
 							setPref(WEEK_START_KEY, v);
 						}}
 						options={[
-							{ value: "auto", label: t("auto") },
-							{ value: "monday", label: t("monday") },
-							{ value: "sunday", label: t("sunday") },
+							{ value: "auto", label: t("general.auto") },
+							{ value: "monday", label: t("general.monday") },
+							{ value: "sunday", label: t("general.sunday") },
 						]}
 					/>
 				</div>
@@ -693,11 +717,11 @@ export function AppearanceSection({
 
 			{/* ── 代码设置 — code themes / line numbers / wrap / sizes (ZCode). ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("code settings")}</div>
-				<div className="gui-settings-section-desc">{t("code settings description")}</div>
+				<div className="gui-settings-section-title">{t("settings.codeSettings")}</div>
+				<div className="gui-settings-section-desc">{t("settings.codeSettingsDescription")}</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("light code theme")}</div>
-					<div className="gui-settings-field-hint">{t("light code theme description")}</div>
+					<div className="gui-settings-field-label">{t("settings.lightCodeTheme")}</div>
+					<div className="gui-settings-field-hint">{t("settings.lightCodeThemeDescription")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -713,8 +737,8 @@ export function AppearanceSection({
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("dark code theme")}</div>
-					<div className="gui-settings-field-hint">{t("dark code theme description")}</div>
+					<div className="gui-settings-field-label">{t("settings.darkCodeTheme")}</div>
+					<div className="gui-settings-field-hint">{t("settings.darkCodeThemeDescription")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -731,8 +755,8 @@ export function AppearanceSection({
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("show line numbers")}</div>
-						<div className="gui-settings-row-desc">{t("show line numbers description")}</div>
+						<div className="gui-settings-row-label">{t("settings.showLineNumbers")}</div>
+						<div className="gui-settings-row-desc">{t("settings.showLineNumbersDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -745,15 +769,15 @@ export function AppearanceSection({
 							setPref(CODE_LINES_KEY, next ? "1" : "0");
 							document.documentElement.classList.toggle("gui-code-lines", next);
 						}}
-						aria-label={t("show line numbers")}
+						aria-label={t("settings.showLineNumbers")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("wrap long lines")}</div>
-						<div className="gui-settings-row-desc">{t("wrap long lines description")}</div>
+						<div className="gui-settings-row-label">{t("settings.wrapLongLines")}</div>
+						<div className="gui-settings-row-desc">{t("settings.wrapLongLinesDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -766,16 +790,16 @@ export function AppearanceSection({
 							setPref(CODE_WRAP_KEY, next ? "1" : "0");
 							document.documentElement.classList.toggle("gui-code-wrap", next);
 						}}
-						aria-label={t("wrap long lines")}
+						aria-label={t("settings.wrapLongLines")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("code font size")}</div>
-					<div className="gui-settings-field-hint">{t("code font size description")}</div>
+					<div className="gui-settings-field-label">{t("settings.codeFontSize")}</div>
+					<div className="gui-settings-field-hint">{t("settings.codeFontSizeDescription")}</div>
 					<NumberStepper
-						label={t("code font size")}
+						label={t("settings.codeFontSize")}
 						value={codeFont}
 						min={9}
 						max={32}
@@ -789,7 +813,7 @@ export function AppearanceSection({
 					/>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("code font")}</div>
+					<div className="gui-settings-field-label">{t("general.codeFont")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
 							className="gui-settings-select"
@@ -805,8 +829,8 @@ export function AppearanceSection({
 						<button
 							type="button"
 							className="gui-settings-reset"
-							title={t("reset")}
-							aria-label={t("reset")}
+							title={t("general.reset")}
+							aria-label={t("general.reset")}
 							disabled={monoFont === DEFAULT_CODE_FONT.id}
 							onClick={() => {
 								setMonoFont(DEFAULT_CODE_FONT.id);
@@ -819,9 +843,9 @@ export function AppearanceSection({
 					</div>
 				</div>
 				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("terminal font size")}</div>
+					<div className="gui-settings-field-label">{t("general.terminalFontSize")}</div>
 					<NumberStepper
-						label={t("terminal font size")}
+						label={t("general.terminalFontSize")}
 						value={termFont}
 						min={9}
 						max={32}
@@ -836,19 +860,19 @@ export function AppearanceSection({
 			</div>
 
 			{/* ── 代码预览 — light/dark preview cards (ZCode), the active main
-			 * theme's card carries the "currently active" tag. ── */}
+			 * theme's card carries the "settings.currentlyActive" tag. ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("code preview")}</div>
-				<div className="gui-settings-section-desc">{t("code preview description")}</div>
+				<div className="gui-settings-section-title">{t("settings.codePreview")}</div>
+				<div className="gui-settings-section-desc">{t("settings.codePreviewDescription")}</div>
 				<div className="grid grid-cols-2 gap-3">
 					<CodePreviewCard
-						title={t("light preview")}
+						title={t("settings.lightPreview")}
 						theme={lightTheme}
 						active={resolved === "light"}
 						scheme="light"
 					/>
 					<CodePreviewCard
-						title={t("dark preview")}
+						title={t("settings.darkPreview")}
 						theme={darkTheme}
 						active={resolved === "dark"}
 						scheme="dark"
@@ -866,7 +890,7 @@ export function AppearanceSection({
 				<div className="gui-settings-section-desc">
 					{tLoose("Affects the terminal (TUI) interface only; desktop settings live above")}
 				</div>
-				<SchemaTabSection rpc={rpc} tabs={["appearance"]} excludeGroups={["Images"]} />
+				<SchemaTabSection rpc={rpc} tabs={["appearance"]} excludeGroups={["images"]} />
 			</div>
 			{/* Chat display settings (previously the 聊天设置 tab): transcript
 			 * rendering prefs are appearance — merged into one 外观 page. */}
@@ -919,7 +943,7 @@ export function CodePreviewCard({
 			<div className="gui-code-preview-head">
 				<span className="text-[13px] font-medium">{title}</span>
 				<span className="gui-settings-row-desc">{theme.label}</span>
-				{active && <span className="gui-code-preview-tag">{t("currently active")}</span>}
+				{active && <span className="gui-code-preview-tag">{t("settings.currentlyActive")}</span>}
 			</div>
 			<pre ref={previewRef} className="gui-code-preview-body" style={{ background: theme.bg, color: theme.fg }}>
 				{html !== null ? (

@@ -77,13 +77,13 @@ export function PlanPanel({
 	};
 
 	return (
-		<div className="gui-plan-panel" role="dialog" aria-label={t("plan mode")}>
-			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("close")}>
+		<div className="gui-plan-panel" role="dialog" aria-label={t("general.planMode")}>
+			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("settings.close")}>
 				<Icon name="close" className="h-3.5 w-3.5" />
 			</button>
 			<div className="gui-quota-title">
 				<Icon name="compass-3" className="h-3.5 w-3.5" />
-				{t("plan mode")}
+				{t("general.planMode")}
 				{plan?.title ? <span className="gui-plan-title">{plan.title}</span> : null}
 			</div>
 			{loading ? (
@@ -96,7 +96,7 @@ export function PlanPanel({
 						value={planText ?? plan.content}
 						rows={12}
 						spellCheck={false}
-						aria-label={t("plan content")}
+						aria-label={t("settings.planContent")}
 						onChange={e => setPlanText(e.target.value)}
 					/>
 					{error && <div className="gui-goal-error">{error}</div>}
@@ -108,7 +108,7 @@ export function PlanPanel({
 							onClick={() => run("save", { content: planText })}
 						>
 							<Icon name="check" className="h-3.5 w-3.5" />
-							{t("plan save")}
+							{t("settings.planSave")}
 						</button>
 						<button
 							type="button"
@@ -117,38 +117,38 @@ export function PlanPanel({
 							onClick={() => run("approve", { fresh: true })}
 						>
 							<Icon name="check" className="h-3.5 w-3.5" />
-							{t("plan approve execute")}
+							{t("general.planApproveExecute")}
 						</button>
 						<button
 							type="button"
 							className="gui-goal-btn"
 							disabled={busy !== null}
-							title={t("plan approve keep hint")}
+							title={t("general.planApproveKeepHint")}
 							onClick={() => run("approve")}
 						>
 							<Icon name="pushpin" className="h-3.5 w-3.5" />
-							{t("plan approve keep")}
+							{t("general.planApproveKeep")}
 						</button>
 						<button
 							type="button"
 							className="gui-goal-btn"
 							disabled={busy !== null}
-							title={t("plan approve compact hint")}
+							title={t("general.planApproveCompactHint")}
 							onClick={() => run("approve", { compact: true })}
 						>
 							<Icon name="stack" className="h-3.5 w-3.5" />
-							{t("plan approve compact")}
+							{t("general.planApproveCompact")}
 						</button>
 						<button type="button" className="gui-goal-btn" disabled={busy !== null} onClick={() => run("exit")}>
 							<Icon name="close" className="h-3.5 w-3.5" />
-							{t("plan exit")}
+							{t("general.planExit")}
 						</button>
 					</div>
 					<div className="gui-plan-refine">
 						<textarea
 							ref={refineRef}
 							value={refineText}
-							placeholder={t("plan refine placeholder")}
+							placeholder={t("general.planRefinePlaceholder")}
 							rows={2}
 							onChange={e => setRefineText(e.target.value)}
 							onKeyDown={e => {
@@ -162,12 +162,12 @@ export function PlanPanel({
 							onClick={() => run("refine", { feedback: refineText })}
 						>
 							<Icon name="refresh" className="h-3.5 w-3.5" />
-							{t("plan refine")}
+							{t("general.planRefine")}
 						</button>
 					</div>
 				</div>
 			) : (
-				<div className="gui-quota-note">{plan?.enabled ? t("plan not written yet") : t("plan mode off")}</div>
+				<div className="gui-quota-note">{plan?.enabled ? t("general.planNotWrittenYet") : t("general.planModeOff")}</div>
 			)}
 		</div>
 	);

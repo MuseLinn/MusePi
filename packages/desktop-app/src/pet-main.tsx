@@ -705,8 +705,8 @@ function PetApp(): ReactNode {
 						type="button"
 						className="pet-window__badge"
 						role="status"
-						aria-label={t("pet bubbles count", { count: hiddenCount })}
-						title={t("pet bubbles show")}
+						aria-label={t("settings.petBubblesCount", { count: hiddenCount })}
+						title={t("settings.petBubblesShow")}
 						onClick={() => void bridge?.bubblesRestoreStack?.()}
 					>
 						{hiddenCount > 99 ? "99+" : hiddenCount}

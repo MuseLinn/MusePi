@@ -45,8 +45,8 @@ import { AgentAvatar } from "./AgentAvatar";
 import { PetSprite } from "./PetSprite";
 
 const STEPS = [
-	{ icon: Languages, key: "onboarding step1" },
-	{ icon: KeyRound, key: "onboarding step6" },
+	{ icon: Languages, key: "settings.onboardingStep1" },
+	{ icon: KeyRound, key: "settings.onboardingStep6" },
 	{ icon: Sparkles, key: "onboarding done" },
 ] as const;
 
@@ -62,25 +62,25 @@ const DEMO_STEP: readonly number[] = [1, 5, 3];
 
 /** Per-step title — each page carries its own heading, not "Welcome". */
 const STEP_TITLES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
-	"onboarding step1": "onboarding title main1",
-	"onboarding step6": "onboarding title6",
-	"onboarding done": "onboarding title done",
+	"settings.onboardingStep1": "settings.onboardingTitleMain1",
+	"settings.onboardingStep6": "settings.onboardingTitle6",
+	"onboarding done": "settings.onboardingTitleDone",
 };
 
 /** Per-step body copy (the merged/done steps carry their own wording; the
  *  provider step reuses the original step6 copy). */
 const STEP_BODIES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
-	"onboarding step1": "onboarding step main1",
-	"onboarding step6": "onboarding step6",
-	"onboarding done": "onboarding step done",
+	"settings.onboardingStep1": "settings.onboardingStepMain1",
+	"settings.onboardingStep6": "settings.onboardingStep6",
+	"onboarding done": "settings.onboardingStepDone",
 };
 
 /** Feature bullets per promo step (steps 3–5) — each page carries real
  *  product facts, not a single sentence. */
 const PROMO_FEATURES = {
-	"onboarding step3": ["onboarding feat s1", "onboarding feat s2", "onboarding feat s3"],
-	"onboarding step4": ["onboarding feat c1", "onboarding feat c2", "onboarding feat c3"],
-	"onboarding step5": ["onboarding feat t1", "onboarding feat t2", "onboarding feat t3", "onboarding feat t4"],
+	"settings.onboardingStep3": ["settings.onboardingFeatS1", "settings.onboardingFeatS2", "settings.onboardingFeatS3"],
+	"settings.onboardingStep4": ["settings.onboardingFeatC1", "settings.onboardingFeatC2", "settings.onboardingFeatC3"],
+	"settings.onboardingStep5": ["settings.onboardingFeatT1", "settings.onboardingFeatT2", "settings.onboardingFeatT3", "settings.onboardingFeatT4"],
 } as const;
 
 /** Wire shapes from daemon providers.list (SettingsView parity). */
@@ -246,14 +246,14 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 					<span className="gui-obo-provider-dot" />
 					<span className="gui-obo-provider-skel" />
 					<span className="gui-obo-provider-btn">
-						<span className="gui-obo-login-txt">{t("login")}</span>
+						<span className="gui-obo-login-txt">{t("settings.login")}</span>
 						<span className="gui-obo-login-ok">✓ 已登录</span>
 					</span>
 				</div>
 				<div className="gui-obo-provider-row">
 					<span className="gui-obo-provider-dot" />
 					<span className="gui-obo-provider-skel" />
-					<span className="gui-obo-provider-btn">{t("login")}</span>
+					<span className="gui-obo-provider-btn">{t("settings.login")}</span>
 				</div>
 			</div>
 		);
@@ -264,7 +264,7 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 	// builtin or petdex) shown as its static rest frame, like the actual
 	// composer (gui-composer-pet positioning). The pet is SMALLER than the
 	// real composer's (the mock window is scaled) and only shows in
-	// "input" mode — "desktop" moves it to its own window.
+	// "tools.input" mode — "desktop" moves it to its own window.
 	return (
 		<div className="gui-obo-morph-fill gui-obo-morph-fill--chat">
 			<div className="gui-obo-pers-row gui-obo-pers-row--user">
@@ -317,7 +317,7 @@ const EMPTY_FORM = {
 	api: "openai-completions",
 	modelId: "",
 	modelName: "",
-	// Models adopted from the "fetch available models" interrogation.
+	// Models adopted from the "settings.fetchAvailableModels" interrogation.
 	adopted: [] as { id: string; name?: string }[],
 };
 
@@ -474,7 +474,7 @@ function ProviderSetup({
 
 	const login = async (providerId: string): Promise<void> => {
 		if (!rpc) {
-			setError(t("not connected"));
+			setError(t("settings.notConnected"));
 			return;
 		}
 		setLoginBusy(true);
@@ -508,7 +508,7 @@ function ProviderSetup({
 	const submitLoginInput = async (): Promise<void> => {
 		if (!rpc || !loginState) return;
 		try {
-			await rpc.request("providers.loginInput", { providerId: loginState.providerId, value: promptValue });
+			await rpc.request("settings.providersLogininput", { providerId: loginState.providerId, value: promptValue });
 			setLoginState(s => (s ? { ...s, waitingInput: false } : s));
 			setPromptValue("");
 		} catch {
@@ -519,7 +519,7 @@ function ProviderSetup({
 	const cancelLogin = async (): Promise<void> => {
 		if (!rpc || !loginState) return;
 		try {
-			await rpc.request("providers.loginCancel", { providerId: loginState.providerId });
+			await rpc.request("settings.providersLogincancel", { providerId: loginState.providerId });
 		} catch {
 			// ignore
 		}
@@ -532,7 +532,7 @@ function ProviderSetup({
 		if (!rpc) return;
 		setCredsMenu(null);
 		try {
-			await rpc.request("providers.logout", { providerId, credentialId });
+			await rpc.request("settings.providersLogout", { providerId, credentialId });
 			await loadProviders();
 		} catch {
 			// keep the row; the daemon error is non-fatal for the list
@@ -544,7 +544,7 @@ function ProviderSetup({
 		if (!rpc) return;
 		setCredsMenu(null);
 		try {
-			await rpc.request("providers.logout", { providerId });
+			await rpc.request("settings.providersLogout", { providerId });
 			await loadProviders();
 		} catch {
 			// keep the row
@@ -558,7 +558,7 @@ function ProviderSetup({
 		current: string | null,
 	): Promise<void> => {
 		if (!rpc) return;
-		const note = await prompt({ title: t("credential note"), defaultValue: current ?? "" });
+		const note = await prompt({ title: t("general.credentialNote"), defaultValue: current ?? "" });
 		if (note === null) return; // cancelled
 		try {
 			await rpc.request("providers.setCredentialNote", { providerId, credentialId, note });
@@ -604,7 +604,7 @@ function ProviderSetup({
 	const submit = async (): Promise<void> => {
 		setError(null);
 		if (!rpc) {
-			setError(t("not connected"));
+			setError(t("settings.notConnected"));
 			return;
 		}
 		if (
@@ -612,12 +612,12 @@ function ProviderSetup({
 			!form.baseUrl.trim() ||
 			(form.modelId.trim().length === 0 && form.adopted.length === 0)
 		) {
-			setError(t("provider name, base URL and at least one model are required"));
+			setError(t("settings.providerNameBase.info2"));
 			return;
 		}
 		setBusy(true);
 		try {
-			await rpc.request("models.add", {
+			await rpc.request("settings.modelsAdd", {
 				provider: {
 					name: form.name.trim(),
 					baseUrl: form.baseUrl.trim(),
@@ -643,15 +643,15 @@ function ProviderSetup({
 		setError(null);
 		setTestOk(false);
 		if (!rpc) {
-			setError(t("not connected"));
+			setError(t("settings.notConnected"));
 			return;
 		}
 		if (!form.baseUrl.trim() || !form.modelId.trim()) {
-			setError(t("provider name, base URL and model id are required"));
+			setError(t("settings.providerNameBase.info"));
 			return;
 		}
 		if (!form.apiKey.trim()) {
-			setError(t("api key required to test the connection"));
+			setError(t("settings.apiKeyRequiredTest"));
 			return;
 		}
 		setTesting(true);
@@ -676,8 +676,8 @@ function ProviderSetup({
 				<div className="gui-obo-provider-added-icon">
 					<Icon name="check" className="h-5 w-5" />
 				</div>
-				<div className="gui-obo-provider-added-title">{t("provider added")}</div>
-				<div className="gui-obo-provider-added-body">{t("provider added body", { name: added.name })}</div>
+				<div className="gui-obo-provider-added-title">{t("settings.providerAdded")}</div>
+				<div className="gui-obo-provider-added-body">{t("settings.providerAddedBody", { name: added.name })}</div>
 			</div>
 		);
 	}
@@ -701,7 +701,7 @@ function ProviderSetup({
 				aria-expanded={credsMenu === id}
 				onClick={() => setCredsMenu(menu => (menu === id ? null : id))}
 			>
-				{t("logout")}
+				{t("settings.logout")}
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
 			<MenuPopup
@@ -714,7 +714,7 @@ function ProviderSetup({
 					if (!open && credsMenu === id) setCredsMenu(null);
 				}}
 			>
-				<div className="gui-creds-menu-label">{t("accounts")}</div>
+				<div className="gui-creds-menu-label">{t("general.accounts")}</div>
 				{(credsByProvider[id] ?? []).map(c => (
 					<div key={c.id} className="gui-creds-row">
 						<div className="min-w-0 flex-1">
@@ -724,8 +724,8 @@ function ProviderSetup({
 						<button
 							type="button"
 							className="gui-btn gui-btn--icon"
-							title={t("edit credential note")}
-							aria-label={t("edit credential note")}
+							title={t("general.editCredentialNote")}
+							aria-label={t("general.editCredentialNote")}
 							onClick={() => void editCredentialNote(id, c.id, c.note ?? null)}
 						>
 							<Icon name="pencil" className="h-3 w-3" />
@@ -733,8 +733,8 @@ function ProviderSetup({
 						<button
 							type="button"
 							className="gui-btn gui-btn--icon"
-							title={t("remove credential")}
-							aria-label={t("remove credential")}
+							title={t("general.removeCredential")}
+							aria-label={t("general.removeCredential")}
 							onClick={() => void logoutCredential(id, c.id)}
 						>
 							<Icon name="delete-bin" className="h-3 w-3" />
@@ -751,10 +751,10 @@ function ProviderSetup({
 					}}
 				>
 					<Icon name="add-circle" className="h-3.5 w-3.5" />
-					<span className="min-w-0 flex-1">{t("add another credential")}</span>
+					<span className="min-w-0 flex-1">{t("general.addAnotherCredential")}</span>
 				</button>
 				<button type="button" className="gui-view-opt gui-view-opt--danger" onClick={() => void logoutAll(id)}>
-					<span className="min-w-0 flex-1">{t("logout all")}</span>
+					<span className="min-w-0 flex-1">{t("general.logoutAll")}</span>
 				</button>
 			</MenuPopup>
 		</div>
@@ -830,7 +830,7 @@ function ProviderSetup({
 						setTab("builtin");
 					}}
 				>
-					{t("onboarding builtin")}
+					{t("settings.onboardingBuiltin")}
 				</button>
 				<button
 					type="button"
@@ -840,7 +840,7 @@ function ProviderSetup({
 						setTab("custom");
 					}}
 				>
-					{t("onboarding custom")}
+					{t("settings.onboardingCustom")}
 				</button>
 			</div>
 
@@ -850,7 +850,7 @@ function ProviderSetup({
 						<Icon name="search" className="h-3.5 w-3.5" />
 						<input
 							className="gui-input"
-							placeholder={t("search providers")}
+							placeholder={t("settings.searchProviders2")}
 							value={providerQuery}
 							onChange={e => setProviderQuery(e.target.value)}
 						/>
@@ -866,7 +866,7 @@ function ProviderSetup({
 									<div className="flex shrink-0 items-center gap-2">
 										<span className="gui-obo-provider-status">
 											<Icon name="check" className="h-3.5 w-3.5" />
-											{t("configured")}
+											{t("settings.configured")}
 										</span>
 										{renderCredsMenu(p.id, p.addAnother)}
 									</div>
@@ -877,18 +877,18 @@ function ProviderSetup({
 										disabled={loginPending.includes(p.id)}
 										onClick={() => void login(p.id)}
 									>
-										{t("login")}
+										{t("settings.login")}
 									</button>
 								) : (
 									<button type="button" className="gui-btn gui-obo-provider-login" onClick={p.addAnother}>
-										{t("import api key")}
+										{t("general.importApiKey")}
 									</button>
 								)}
 							</div>
 						))}
 						{oboRows.length === 0 && (
 							<div className="gui-obo-provider-empty">
-								{q ? t("no matching providers") : t("no models available")}
+								{q ? t("settings.noMatchingProviders") : t("settings.noModelsAvailable")}
 							</div>
 						)}
 					</div>
@@ -912,10 +912,10 @@ function ProviderSetup({
 									disabled={importBusy || !importValue.trim()}
 									onClick={() => void importKey()}
 								>
-									{importBusy ? `${t("saving")}…` : t("import api key")}
+									{importBusy ? `${t("settings.saving")}…` : t("general.importApiKey")}
 								</button>
 								<button type="button" className="gui-btn gui-btn-ghost" onClick={() => setImportTarget(null)}>
-									{t("cancel")}
+									{t("settings.cancel")}
 								</button>
 							</div>
 						</div>
@@ -926,7 +926,7 @@ function ProviderSetup({
 					<QuickProviderChips onPick={(name, baseUrl) => setForm(v => ({ ...v, name, baseUrl }))} />
 					<input
 						className="gui-input"
-						placeholder={t("provider name")}
+						placeholder={t("settings.providerName")}
 						value={form.name}
 						onChange={e => setForm(v => ({ ...v, name: e.target.value }))}
 					/>
@@ -938,7 +938,7 @@ function ProviderSetup({
 					/>
 					<input
 						className="gui-input"
-						placeholder={t("api key (optional)")}
+						placeholder={t("settings.apiKey")}
 						type="password"
 						value={form.apiKey}
 						onChange={e => setForm(v => ({ ...v, apiKey: e.target.value }))}
@@ -953,16 +953,16 @@ function ProviderSetup({
 							type="button"
 							className="gui-btn"
 							disabled={!form.baseUrl || ep.fetchingModels || busy}
-							title={form.baseUrl ? undefined : t("enter a base URL to fetch models")}
+							title={form.baseUrl ? undefined : t("settings.enterBaseUrlFetch")}
 							onClick={() => void ep.fetchModels()}
 						>
-							{ep.fetchingModels ? t("fetching models…") : t("fetch available models")}
+							{ep.fetchingModels ? t("settings.fetchingModels") : t("settings.fetchAvailableModels")}
 						</button>
 						<button
 							type="button"
 							className="gui-btn"
 							disabled={busy}
-							title={t("add model hint")}
+							title={t("settings.addModelHint")}
 							onClick={() =>
 								setForm(v => ({
 									...v,
@@ -972,11 +972,11 @@ function ProviderSetup({
 								}))
 							}
 						>
-							{t("add model")}
+							{t("settings.addModel")}
 						</button>
 						{form.adopted.length > 0 && (
 							<span className="text-[12px] text-[var(--color-text-faint)]">
-								{t("adopted models")}: {form.adopted.length}
+								{t("settings.adoptedModels")}: {form.adopted.length}
 							</span>
 						)}
 					</div>
@@ -989,7 +989,7 @@ function ProviderSetup({
 									<button
 										type="button"
 										className="gui-btn"
-										aria-label={`${t("delete")} ${m.id}`}
+										aria-label={`${t("settings.delete")} ${m.id}`}
 										onClick={() => removeAdopted(m.id)}
 									>
 										<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -1001,13 +1001,13 @@ function ProviderSetup({
 					<div className="flex gap-2">
 						<input
 							className="gui-input flex-1"
-							placeholder={t("model id")}
+							placeholder={t("settings.modelId")}
 							value={form.modelId}
 							onChange={e => setForm(v => ({ ...v, modelId: e.target.value }))}
 						/>
 						<input
 							className="gui-input flex-1"
-							placeholder={t("model name (optional)")}
+							placeholder={t("settings.modelName")}
 							value={form.modelName}
 							onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
 						/>
@@ -1031,7 +1031,7 @@ function ProviderSetup({
 							disabled={busy}
 							onClick={() => void submit()}
 						>
-							{busy ? `${t("saving")}…` : t("add provider")}
+							{busy ? `${t("settings.saving")}…` : t("settings.addProvider")}
 						</button>
 						<button
 							type="button"
@@ -1039,19 +1039,19 @@ function ProviderSetup({
 							disabled={testing}
 							onClick={() => void testConnection()}
 						>
-							{testing ? `${t("testing")}…` : t("test connection")}
+							{testing ? `${t("settings.testing")}…` : t("settings.testConnection")}
 						</button>
 						{testOk && (
 							<span className="gui-obo-test-ok">
 								<Icon name="check" className="h-3.5 w-3.5" />
-								{t("connection ok")}
+								{t("settings.connectionOk")}
 							</span>
 						)}
 					</div>
 				</div>
 			)}
 
-			{/* Candidate picker for "fetch available models" — shared with the
+			{/* Candidate picker for "settings.fetchAvailableModels" — shared with the
 			 * settings custom-provider dialog (provider-setup-shared). */}
 			<EndpointCandidatesDialog
 				candidates={ep.candidates}
@@ -1065,7 +1065,7 @@ function ProviderSetup({
 
 			{loginState && (
 				<div className="gui-obo-login" role="dialog">
-					<div className="gui-obo-login-title">{t("authorize in browser")}</div>
+					<div className="gui-obo-login-title">{t("settings.authorizeBrowser")}</div>
 					{loginState.url && (
 						<div className="gui-obo-login-row">
 							<a href={loginState.url} target="_blank" rel="noreferrer" className="gui-obo-login-url">
@@ -1080,7 +1080,7 @@ function ProviderSetup({
 									window.setTimeout(() => setCopied(false), 1500);
 								}}
 							>
-								{copied ? t("link copied") : t("copy link")}
+								{copied ? t("settings.linkCopied") : t("settings.copyLink")}
 							</button>
 						</div>
 					)}
@@ -1090,7 +1090,7 @@ function ProviderSetup({
 						<>
 							<input
 								className="gui-input"
-								placeholder={t("paste verification code")}
+								placeholder={t("settings.pasteVerificationCode")}
 								value={promptValue}
 								onChange={e => setPromptValue(e.target.value)}
 								onKeyDown={e => {
@@ -1105,10 +1105,10 @@ function ProviderSetup({
 									disabled={!promptValue.trim()}
 									onClick={() => void submitLoginInput()}
 								>
-									{t("confirm login")}
+									{t("settings.confirmLogin")}
 								</button>
 								<button type="button" className="gui-btn gui-btn-ghost" onClick={() => void cancelLogin()}>
-									{t("cancel")}
+									{t("settings.cancel")}
 								</button>
 							</div>
 						</>
@@ -1122,10 +1122,10 @@ function ProviderSetup({
 									void loadProviders();
 								}}
 							>
-								{t("authorization done")}
+								{t("settings.authorizationDone")}
 							</button>
 							<button type="button" className="gui-btn gui-btn-ghost" onClick={() => void cancelLogin()}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 						</div>
 					)}
@@ -1160,7 +1160,7 @@ function LanguageSetup(): ReactNode {
 	return (
 		<div className="gui-obo-appearance">
 			<div className="gui-obo-appearance-group">
-				<span className="gui-obo-quick-label">{t("language")}</span>
+				<span className="gui-obo-quick-label">{t("settings.language")}</span>
 				<div className="gui-obo-appearance-options">
 					<button
 						type="button"
@@ -1189,17 +1189,17 @@ function LanguageSetup(): ReactNode {
 }
 
 const THEME_OPTIONS = [
-	{ id: "dark", key: "dark" },
-	{ id: "light", key: "light" },
-	{ id: "system", key: "follow system" },
+	{ id: "dark", key: "settings.dark" },
+	{ id: "light", key: "settings.light" },
+	{ id: "system", key: "settings.followSystem" },
 ] as const;
 
 const ACCENT_OPTIONS = [
-	{ id: "brand", key: "accent brand" },
-	{ id: "mono", key: "accent mono" },
-	{ id: "ocean", key: "accent ocean" },
-	{ id: "jade", key: "accent jade" },
-	{ id: "custom", key: "custom accent" },
+	{ id: "brand", key: "settings.accentBrand" },
+	{ id: "mono", key: "settings.accentMono" },
+	{ id: "ocean", key: "settings.accentOcean" },
+	{ id: "jade", key: "settings.accentJade" },
+	{ id: "custom", key: "settings.customAccent" },
 ] as const;
 
 /** Step 2 — appearance: theme (dark/light/system) + accent (brand/mono/
@@ -1221,7 +1221,7 @@ function AppearanceSetup(): ReactNode {
 	return (
 		<div className="gui-obo-appearance">
 			<div className="gui-obo-appearance-group">
-				<span className="gui-obo-quick-label">{t("theme")}</span>
+				<span className="gui-obo-quick-label">{t("settings.theme")}</span>
 				<div className="gui-obo-appearance-options">
 					{THEME_OPTIONS.map(opt => (
 						<button
@@ -1239,7 +1239,7 @@ function AppearanceSetup(): ReactNode {
 				</div>
 			</div>
 			<div className="gui-obo-appearance-group">
-				<span className="gui-obo-quick-label">{t("accent color")}</span>
+				<span className="gui-obo-quick-label">{t("settings.accentColor")}</span>
 				<div className="gui-obo-appearance-options">
 					{ACCENT_OPTIONS.map(opt => {
 						const isCustom = opt.id === "custom";
@@ -1305,7 +1305,7 @@ export function OnboardingOverlay({
 		try {
 			return localStorage.getItem("musepi-gui-pet-mode") === "desktop" ? "desktop" : "input";
 		} catch {
-			return "input";
+			return "tools.input";
 		}
 	});
 	// Stay mounted through the exit (Pop/DialogFrame parity): closing plays
@@ -1417,11 +1417,11 @@ export function OnboardingOverlay({
 		>
 			<div className={`gui-onboarding-card${closing ? " gui-onboarding-card--closing" : ""}`}>
 				<div className="gui-onboarding-topbar">
-					<span className="gui-onboarding-badge">{t("onboarding badge")}</span>
+					<span className="gui-onboarding-badge">{t("settings.onboardingBadge")}</span>
 					<button
 						type="button"
 						className="gui-onboarding-close"
-						aria-label={t("close")}
+						aria-label={t("settings.close")}
 						onClick={() => {
 							tapFeedback();
 							finish();
@@ -1470,7 +1470,7 @@ export function OnboardingOverlay({
 											}}
 										>
 											<Icon name="download" className="h-4 w-4" />
-											<span className="flex-1 text-left">{t("onboarding branch import")}</span>
+											<span className="flex-1 text-left">{t("settings.onboardingBranchImport")}</span>
 											<Icon
 												name="arrow-down-s"
 												className={`h-4 w-4 opacity-60${branch === "import" ? " rotate-180" : ""}`}
@@ -1491,7 +1491,7 @@ export function OnboardingOverlay({
 											}}
 										>
 											<Icon name="robot-2" className="h-4 w-4" />
-											<span className="flex-1 text-left">{t("onboarding branch personalize")}</span>
+											<span className="flex-1 text-left">{t("settings.onboardingBranchPersonalize")}</span>
 											<Icon
 												name="arrow-down-s"
 												className={`h-4 w-4 opacity-60${branch === "personalize" ? " rotate-180" : ""}`}
@@ -1514,7 +1514,7 @@ export function OnboardingOverlay({
 											}}
 										>
 											<Icon name="sparkling" className="h-4 w-4" />
-											<span className="flex-1 text-left">{t("onboarding branch design")}</span>
+											<span className="flex-1 text-left">{t("settings.onboardingBranchDesign")}</span>
 											<Icon
 												name="arrow-down-s"
 												className={`h-4 w-4 opacity-60${branch === "design" ? " rotate-180" : ""}`}
@@ -1523,10 +1523,10 @@ export function OnboardingOverlay({
 										<Reveal open={branch === "design"}>
 											<div className="flex flex-col gap-2">
 												<p className="text-[13px] leading-5 text-[var(--color-text-muted)]">
-													{t("onboarding branch design body")}
+													{t("settings.onboardingBranchDesignBody")}
 												</p>
 												<p className="text-[13px] leading-5 text-[var(--color-text-muted)]">
-													{t("onboarding branch design entries")}
+													{t("settings.onboardingBranchDesignEntries")}
 												</p>
 											</div>
 										</Reveal>
@@ -1542,7 +1542,7 @@ export function OnboardingOverlay({
 											}}
 										>
 											<Icon name="sparkling" className="h-4 w-4" />
-											<span className="flex-1 text-left">{t("onboarding branch features")}</span>
+											<span className="flex-1 text-left">{t("settings.onboardingBranchFeatures")}</span>
 											<Icon
 												name="arrow-down-s"
 												className={`h-4 w-4 opacity-60${branch === "features" ? " rotate-180" : ""}`}
@@ -1550,7 +1550,7 @@ export function OnboardingOverlay({
 										</button>
 										<Reveal open={branch === "features"}>
 											<div className="flex flex-col gap-3">
-												{(["onboarding title3", "onboarding title4", "onboarding title5"] as const).map(
+												{(["settings.onboardingTitle3", "settings.onboardingTitle4", "settings.onboardingTitle5"] as const).map(
 													k => (
 														<div key={k}>
 															<div className="mb-1 text-[13px] font-medium">{t(k)}</div>
@@ -1559,9 +1559,9 @@ export function OnboardingOverlay({
 																	PROMO_FEATURES[
 																		(
 																			{
-																				"onboarding title3": "onboarding step3",
-																				"onboarding title4": "onboarding step4",
-																				"onboarding title5": "onboarding step5",
+																				"settings.onboardingTitle3": "settings.onboardingStep3",
+																				"settings.onboardingTitle4": "settings.onboardingStep4",
+																				"settings.onboardingTitle5": "settings.onboardingStep5",
 																			} as const
 																		)[k]
 																	] ?? []
@@ -1594,7 +1594,7 @@ export function OnboardingOverlay({
 										setStep(s => s - 1);
 									}}
 								>
-									{t("back")}
+									{t("settings.back")}
 								</button>
 							)}
 							<button
@@ -1606,7 +1606,7 @@ export function OnboardingOverlay({
 									else finish();
 								}}
 							>
-								<span>{last ? t("get started") : t("next")}</span>
+								<span>{last ? t("settings.getStarted") : t("settings.next")}</span>
 								<Icon name="arrow-right" className="h-4 w-4" />
 							</button>
 						</div>

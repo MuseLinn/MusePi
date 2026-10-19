@@ -199,11 +199,11 @@ export const TmNodeCard = memo(function TmNodeCard({
 				<>
 					<div className="tm-node-head">
 						<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-							{n.group.turn === 0 ? t("trajectory system events") : `Turn ${shownTurn}`}
+							{n.group.turn === 0 ? t("settings.trajectorySystemEvents") : `Turn ${shownTurn}`}
 							{n.advisor && (
 								<em className="tm-turn-advisor">
 									<Icon name="sparkling" className="h-2.5 w-2.5" />
-									{t("advisor")}
+									{t("general.advisor")}
 								</em>
 							)}
 						</span>
@@ -225,8 +225,8 @@ export const TmNodeCard = memo(function TmNodeCard({
 						))}
 					</div>
 					<div className="tm-node-stats">
-						{tLoose("turn map replies", { count: statsRow.replies })} ·{" "}
-						{tLoose("turn map tools", { count: statsRow.tools })}
+						{tLoose("transcript.turnMapReplies", { count: statsRow.replies })} ·{" "}
+						{tLoose("transcript.turnMapTools", { count: statsRow.tools })}
 					</div>
 					{/* 轮内泳道(单击展开):该轮事件卡,与轨迹检视器同 i18n/颜色。
 						明细 = trace 对齐:工具参数摘要、assistant usage/duration/ttft。
@@ -292,8 +292,8 @@ export const TmNodeCard = memo(function TmNodeCard({
 													<button
 														type="button"
 														className="tm-lane-act"
-														title={t("map switch to branch")}
-														aria-label={t("map switch to branch")}
+														title={t("transcript.mapSwitchBranch")}
+														aria-label={t("transcript.mapSwitchBranch")}
 														onClick={e => {
 															e.stopPropagation();
 															onSwitchEvent(n, ev);
@@ -306,8 +306,8 @@ export const TmNodeCard = memo(function TmNodeCard({
 													<button
 														type="button"
 														className="tm-lane-act"
-														title={t("branch re-answer here")}
-														aria-label={t("branch re-answer here")}
+														title={t("transcript.branchReAnswerHere")}
+														aria-label={t("transcript.branchReAnswerHere")}
 														onClick={e => {
 															e.stopPropagation();
 															onReanswerEvent(ev);
@@ -332,13 +332,13 @@ export const TmNodeCard = memo(function TmNodeCard({
 			) : (
 				<div className="tm-compact">
 					<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-						{n.group.turn === 0 ? t("trajectory system events") : `Turn ${shownTurn}`}
+						{n.group.turn === 0 ? t("settings.trajectorySystemEvents") : `Turn ${shownTurn}`}
 					</span>
 					<span className="tm-compact-summary" title={summary}>
 						{summary || `${n.group.events.length} events`}
 					</span>
 					<span className="tm-compact-count">
-						{tLoose("turn map compact count", { count: n.group.events.length })}
+						{tLoose("transcript.turnMapCompactCount", { count: n.group.events.length })}
 					</span>
 					{statsRow.durationMs !== undefined && (
 						<span className="tm-node-dur">{durationText(statsRow.durationMs)}</span>
@@ -690,32 +690,32 @@ export function TurnMapCanvas({
 			const items: ContextMenuItem[] = [];
 			if (ev?.entryId && onJumpToEntry) {
 				items.push({
-					label: t("trajectory jump"),
-					description: t("context jump desc"),
+					label: t("settings.trajectoryJump"),
+					description: t("settings.contextJumpDesc"),
 					icon: "arrow-go-forward",
 					onSelect: () => onJumpToEntry(ev.entryId!),
 				});
 			}
 			if (switchEv?.entryId && onSwitchToBranch) {
 				items.push({
-					label: t("map switch to branch"),
-					description: t("map switch to branch desc"),
+					label: t("transcript.mapSwitchBranch"),
+					description: t("transcript.mapSwitchBranchDesc"),
 					icon: "git-merge",
 					onSelect: () => onSwitchToBranch(switchEv.entryId!),
 				});
 			}
 			if (reanswerEv?.entryId && onBranchTo) {
 				items.push({
-					label: t("branch re-answer here"),
-					description: t("context branch desc"),
+					label: t("transcript.branchReAnswerHere"),
+					description: t("settings.contextBranchDesc"),
 					icon: "git-branch",
 					onSelect: () => onBranchTo(reanswerEv.entryId!),
 				});
 			}
 			if (ev?.entryId && onForkAt) {
 				items.push({
-					label: t("fork session here"),
-					description: t("context fork desc"),
+					label: t("transcript.forkSessionHere"),
+					description: t("settings.contextForkDesc"),
 					icon: "git-fork",
 					onSelect: () => onForkAt(ev.entryId!),
 				});
@@ -724,8 +724,8 @@ export function TurnMapCanvas({
 		}
 		return [
 			{
-				label: t("canvas reset view"),
-				description: t("context reset desc"),
+				label: t("transcript.canvasResetView"),
+				description: t("settings.contextResetDesc"),
 				icon: "align-justify",
 				onSelect: () => {
 					needsFitRef.current = true;
@@ -818,9 +818,9 @@ export function TurnMapCanvas({
 			{/* 顶栏:标题 + 轮数 + 搜索 + 时间轴 + 批量折叠/方向(玻璃容器)。 */}
 			<div className="tm-topbar" onPointerDown={e => e.stopPropagation()}>
 				<span className="tm-title">
-					{t("turn map title")}
-					<em className="tm-title-count">{tLoose("turn map turns count", { count: stats.turns })}</em>
-					{loading === true && <em className="tm-title-loading">{t("turn map loading history")}</em>}
+					{t("transcript.turnMapTitle")}
+					<em className="tm-title-count">{tLoose("transcript.turnMapTurnsCount", { count: stats.turns })}</em>
+					{loading === true && <em className="tm-title-loading">{t("transcript.turnMapLoadingHistory")}</em>}
 				</span>
 				{turns.length > 0 && <TimelineOverview turns={turns} selection={range} onSelectionChange={setRange} />}
 				<div className="tm-search" role="search">
@@ -828,7 +828,7 @@ export function TurnMapCanvas({
 					<input
 						className="tm-search-input"
 						type="text"
-						placeholder={t("trajectory search placeholder")}
+						placeholder={t("settings.trajectorySearchPlaceholder")}
 						value={searchQuery}
 						onChange={e => setSearchQuery(e.target.value)}
 					/>
@@ -836,8 +836,8 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-topbar-btn"
-					title={t(anyExpanded ? "trajectory collapse all" : "trajectory expand all")}
-					aria-label={t(anyExpanded ? "trajectory collapse all" : "trajectory expand all")}
+					title={t(anyExpanded ? "transcript.trajectoryCollapseAll" : "transcript.trajectoryExpandAll")}
+					aria-label={t(anyExpanded ? "transcript.trajectoryCollapseAll" : "transcript.trajectoryExpandAll")}
 					onClick={toggleAll}
 				>
 					<Icon name={anyExpanded ? "contract-up-down" : "expand-up-down"} className="h-3 w-3" />
@@ -845,15 +845,15 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-topbar-btn"
-					title={t(horizontal ? "turn map layout vertical" : "turn map layout horizontal")}
-					aria-label={t(horizontal ? "turn map layout vertical" : "turn map layout horizontal")}
+					title={t(horizontal ? "transcript.turnMapLayoutVertical" : "transcript.turnMapLayoutHorizontal")}
+					aria-label={t(horizontal ? "transcript.turnMapLayoutVertical" : "transcript.turnMapLayoutHorizontal")}
 					onClick={switchDirection}
 				>
 					<Icon name="layout-column" className="h-3 w-3" />
 				</button>
 			</div>
 			{nodes.length === 0 ? (
-				<p className="tm-empty">{t("trajectory empty")}</p>
+				<p className="tm-empty">{t("settings.trajectoryEmpty")}</p>
 			) : (
 				<>
 					{/* 迷你导航条:全轮次剪影 + 视口映射 + 点击/拖动跳转。 */}
@@ -870,7 +870,7 @@ export function TurnMapCanvas({
 							const turn = nodes[clamped]?.group.turn;
 							if (turn !== undefined) centerOnTurn(turn);
 						}}
-						title={t("trajectory turns")}
+						title={t("settings.trajectoryTurns")}
 					>
 						{nodes.map(n => (
 							<span
@@ -982,7 +982,7 @@ export function TurnMapCanvas({
 									className="tm-lane-head"
 									style={{ left: lane.first.x, top: Math.max(0, lane.first.y - 22) }}
 								>
-									{tLoose("turn map branch from", {
+									{tLoose("transcript.turnMapBranch", {
 										turn:
 											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurnLabel ??
 											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ??
@@ -1017,7 +1017,7 @@ export function TurnMapCanvas({
 				<div className="tm-hover" onPointerDown={e => e.stopPropagation()}>
 					<div className="tm-hover-head">
 						{hoverNode.group.turn === 0
-							? t("trajectory system events")
+							? t("settings.trajectorySystemEvents")
 							: `Turn ${hoverNode.group.displayTurnLabel ?? hoverNode.group.displayTurn ?? hoverNode.group.turn}`}
 						<span className="tm-hover-time">
 							{hoverNode.group.firstTs
@@ -1037,8 +1037,8 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-zoom-btn"
-					title={t("locate current")}
-					aria-label={t("locate current")}
+					title={t("settings.locateCurrent")}
+					aria-label={t("settings.locateCurrent")}
 					disabled={currentTurn === null}
 					onClick={() => currentTurn !== null && centerOnTurn(currentTurn)}
 				>
@@ -1047,8 +1047,8 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-zoom-btn"
-					title={t("canvas zoom in")}
-					aria-label={t("canvas zoom in")}
+					title={t("transcript.canvasZoom")}
+					aria-label={t("transcript.canvasZoom")}
 					onClick={() =>
 						setView(v => {
 							const scale = Math.min(MAX_SCALE, v.scale * 1.2);
@@ -1065,8 +1065,8 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-zoom-btn"
-					title={t("canvas reset view")}
-					aria-label={t("canvas reset view")}
+					title={t("transcript.canvasResetView")}
+					aria-label={t("transcript.canvasResetView")}
 					onClick={() => {
 						needsFitRef.current = true;
 						fitView();
@@ -1077,8 +1077,8 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-zoom-btn"
-					title={t("canvas zoom out")}
-					aria-label={t("canvas zoom out")}
+					title={t("transcript.canvasZoomOut")}
+					aria-label={t("transcript.canvasZoomOut")}
 					onClick={() =>
 						setView(v => {
 							const scale = Math.max(MIN_SCALE, v.scale / 1.2);

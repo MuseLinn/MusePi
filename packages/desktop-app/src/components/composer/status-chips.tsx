@@ -22,12 +22,12 @@ export function SwarmChip({
 				type="button"
 				ref={anchorRef}
 				className={`gui-swarm-chip${open ? " gui-swarm-chip--open" : ""}`}
-				title={t("swarm members")}
+				title={t("tools.swarmMembers")}
 				aria-expanded={open}
 				onClick={onToggle}
 			>
 				<span className="gui-swarm-chip-dot" aria-hidden="true" />
-				<span className="gui-swarm-chip-label">{t("swarm members")}</span>
+				<span className="gui-swarm-chip-label">{t("tools.swarmMembers")}</span>
 			</button>
 			{menu}
 		</>
@@ -90,7 +90,7 @@ export function QueueToggleChip({
 			onClick={onToggle}
 		>
 			<Icon name="list-unordered" className="h-3 w-3" />
-			<span>{t("queued {count}", { count: String(count) })}</span>
+			<span>{t("general.queuedWithCount", { count: String(count) })}</span>
 		</button>
 	);
 }

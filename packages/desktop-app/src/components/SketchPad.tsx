@@ -571,7 +571,7 @@ export function SketchPad({
 			onClose();
 			return;
 		}
-		void confirm(t("sketch discard title"), t("discard")).then(ok => {
+		void confirm(t("composer.sketchDiscardTitle"), t("general.discard")).then(ok => {
 			if (ok) onClose();
 		});
 	}, [dirty, confirm, onClose, textEditor, closeTextEditor]);
@@ -1029,7 +1029,7 @@ export function SketchPad({
 		<div className={`gui-sketch-veil${closing ? " gui-sketch-veil--closing" : ""}`} role="dialog" aria-modal="true">
 			<div className="gui-sketch-board">
 				<div className="gui-sketch-toolbar">
-					<button type="button" className="gui-btn gui-btn-icon" title={t("close")} onClick={requestClose}>
+					<button type="button" className="gui-btn gui-btn-icon" title={t("settings.close")} onClick={requestClose}>
 						<X size={14} />
 					</button>
 					<span className="gui-sketch-toolbar-sep" aria-hidden />
@@ -1059,8 +1059,8 @@ export function SketchPad({
 						<button
 							type="button"
 							className={`gui-sketch-tool${activeShape ? " gui-sketch-tool--on" : ""}`}
-							title={t("sketch tool shapes")}
-							aria-label={t("sketch tool shapes")}
+							title={t("composer.sketchToolShapes")}
+							aria-label={t("composer.sketchToolShapes")}
 							aria-expanded={flyout}
 							aria-haspopup="menu"
 							onClick={() => setFlyout(v => !v)}
@@ -1095,8 +1095,8 @@ export function SketchPad({
 					<button
 						type="button"
 						className="gui-sketch-tool"
-						title={t("sketch undo")}
-						aria-label={t("sketch undo")}
+						title={t("composer.sketchUndo")}
+						aria-label={t("composer.sketchUndo")}
 						disabled={!canUndo}
 						onClick={undo}
 					>
@@ -1105,8 +1105,8 @@ export function SketchPad({
 					<button
 						type="button"
 						className="gui-sketch-tool"
-						title={t("sketch redo")}
-						aria-label={t("sketch redo")}
+						title={t("composer.sketchRedo")}
+						aria-label={t("composer.sketchRedo")}
 						disabled={!canRedo}
 						onClick={redo}
 					>
@@ -1115,8 +1115,8 @@ export function SketchPad({
 					<button
 						type="button"
 						className="gui-sketch-tool"
-						title={t("sketch clear")}
-						aria-label={t("sketch clear")}
+						title={t("composer.sketchClear")}
+						aria-label={t("composer.sketchClear")}
 						disabled={!strokes.length}
 						onClick={clearAll}
 					>
@@ -1126,8 +1126,8 @@ export function SketchPad({
 					<button
 						type="button"
 						className={`gui-sketch-tool${lightExport ? " gui-sketch-tool--on" : ""}`}
-						title={t("sketch export light")}
-						aria-label={t("sketch export light")}
+						title={t("composer.sketchExportLight")}
+						aria-label={t("composer.sketchExportLight")}
 						aria-pressed={lightExport}
 						onClick={() => setLightExport(v => !v)}
 					>
@@ -1146,7 +1146,7 @@ export function SketchPad({
 							max={MAX_SIZE}
 							step={1}
 							value={size}
-							aria-label={t("sketch thickness")}
+							aria-label={t("composer.sketchThickness")}
 							title={`${size}px`}
 							onChange={e => setSize(Number(e.currentTarget.value))}
 						/>
@@ -1245,7 +1245,7 @@ export function SketchPad({
 								onChange={e => setTextDraft(e.currentTarget.value)}
 								onPointerDown={e => e.stopPropagation()}
 								onBlur={closeTextEditor}
-								placeholder={t("sketch text placeholder")}
+								placeholder={t("composer.sketchTextPlaceholder")}
 							/>
 						)}
 					</div>
@@ -1257,8 +1257,8 @@ export function SketchPad({
 							key={c}
 							className={`gui-sketch-color${color === c ? " gui-sketch-color--on" : ""}`}
 							style={{ background: c }}
-							title={t("sketch color")}
-							aria-label={t("sketch color")}
+							title={t("composer.sketchColor")}
+							aria-label={t("composer.sketchColor")}
 							aria-pressed={color === c}
 							onClick={() => {
 								setColor(c);
@@ -1277,7 +1277,7 @@ export function SketchPad({
 							max={MAX_SIZE}
 							step={1}
 							value={size}
-							aria-label={t("sketch thickness")}
+							aria-label={t("composer.sketchThickness")}
 							onChange={e => setSize(Number(e.currentTarget.value))}
 						/>
 					</span>
@@ -1285,8 +1285,8 @@ export function SketchPad({
 					<button
 						type="button"
 						className="gui-sketch-done"
-						title={t("sketch done")}
-						aria-label={t("sketch done")}
+						title={t("composer.sketchDone")}
+						aria-label={t("composer.sketchDone")}
 						disabled={!drawing && !strokes.length}
 						onClick={finish}
 					>

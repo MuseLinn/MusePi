@@ -8,7 +8,7 @@ import { SchemaTabSection } from "./schema";
 export function ShellSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("shell")}</h2>
+			<h2 className="gui-settings-page-title">{t("settings.shell")}</h2>
 			<SchemaTabSection rpc={rpc} tabs={["shell"]} />
 		</>
 	);

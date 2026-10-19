@@ -19,12 +19,12 @@ const PERMISSION_META: Record<
 	{ labelKey: TranslationKey; descriptionKey: TranslationKey; icon: IconName }
 > = {
 	capture: {
-		labelKey: "screen recording",
-		descriptionKey: "permission screen recording description",
+		labelKey: "tools.screenRecording",
+		descriptionKey: "tools.permissionScreenRecordingDescription",
 		icon: "camera",
 	},
-	ax: { labelKey: "accessibility", descriptionKey: "permission accessibility description", icon: "eye" },
-	input: { labelKey: "input monitoring", descriptionKey: "permission input description", icon: "key" },
+	ax: { labelKey: "tools.accessibility", descriptionKey: "tools.permissionAccessibilityDescription", icon: "eye" },
+	input: { labelKey: "tools.inputMonitoring", descriptionKey: "tools.permissionInputDescription", icon: "key" },
 } as const;
 
 interface Props {
@@ -66,12 +66,12 @@ export function ComputerPermissionsDialog({ rpc, open, onClose }: Props): ReactN
 	};
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("computer permissions")} className="w-[520px] max-w-[92vw]">
+		<DialogFrame open={open} onClose={onClose} label={t("tools.computerPermissions")} className="w-[520px] max-w-[92vw]">
 			<div className="gui-permissions-dialog">
-				<h3 className="gui-permissions-dialog-title">{t("computer permissions overlay title")}</h3>
-				<p className="gui-permissions-dialog-desc">{t("computer permissions overlay description")}</p>
+				<h3 className="gui-permissions-dialog-title">{t("tools.computerPermissionsOverlayTitle")}</h3>
+				<p className="gui-permissions-dialog-desc">{t("tools.computerPermissionsOverlayDescription")}</p>
 				{refreshing && rows.length === 0 ? (
-					<div className="gui-permissions-dialog-loading">{t("loading")}</div>
+					<div className="gui-permissions-dialog-loading">{t("settings.loading")}</div>
 				) : (
 					<div className="gui-permission-list">
 						{rows.map(row => {
@@ -87,7 +87,7 @@ export function ComputerPermissionsDialog({ rpc, open, onClose }: Props): ReactN
 										<div className="gui-permission-description">{t(meta.descriptionKey)}</div>
 									</div>
 									{granted ? (
-										<span className="gui-permission-granted">{t("granted")}</span>
+										<span className="gui-permission-granted">{t("tools.granted")}</span>
 									) : (
 										<button
 											type="button"
@@ -95,7 +95,7 @@ export function ComputerPermissionsDialog({ rpc, open, onClose }: Props): ReactN
 											disabled={opening !== null}
 											onClick={() => authorize(row.kind)}
 										>
-											{t("authorize")}
+											{t("tools.authorize")}
 										</button>
 									)}
 								</div>
@@ -106,14 +106,14 @@ export function ComputerPermissionsDialog({ rpc, open, onClose }: Props): ReactN
 				<div className="gui-permissions-dialog-actions">
 					{!allGranted && (
 						<button type="button" className="gui-btn" onClick={onClose}>
-							{t("overlay later")}
+							{t("tools.overlayLater")}
 						</button>
 					)}
 					<button type="button" className="gui-btn gui-btn-primary" onClick={onClose}>
-						{t("done")}
+						{t("tools.done")}
 					</button>
 				</div>
-				{!allGranted && <div className="gui-permissions-dialog-footer">{t("computer permissions later hint")}</div>}
+				{!allGranted && <div className="gui-permissions-dialog-footer">{t("tools.computerPermissionsLaterHint")}</div>}
 			</div>
 		</DialogFrame>
 	);

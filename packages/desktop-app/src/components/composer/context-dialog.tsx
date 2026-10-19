@@ -22,18 +22,18 @@ function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number
 		lines.push(
 			<div className="gui-context-snap-line" key="sp">
 				{sp.applied
-					? t("system prompt imaged: {text} text → {frames} frames (saves ~{saved})", {
+					? t("context.systemPromptImagedTextWithTextWithFramesWithSaved", {
 							text: fmtTokens(sp.textTokens),
 							frames: String(sp.frames),
 							saved: fmtTokens(sp.savedTokens),
 						})
-					: t("system prompt stays text ({reason})", {
+					: t("context.systemPromptStaysTextWithReason", {
 							reason: t(
 								sp.reason === "empty"
-									? "reason: empty"
+									? "context.reasonEmpty"
 									: sp.reason === "margin"
-										? "reason: insufficient savings"
-										: "reason: image budget",
+										? "context.reasonInsufficientSavings"
+										: "context.reasonImageBudget",
 							),
 						})}
 			</div>,
@@ -44,18 +44,18 @@ function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number
 		lines.push(
 			<div className="gui-context-snap-line" key="tr">
 				{tr.swapped > 0
-					? t("tool results: {imaged} imaged (saves ~{saved})", {
+					? t("context.toolResultsImagedWithImagedWithSaved", {
 							imaged: String(tr.swapped),
 							saved: fmtTokens(tr.savedTokens),
 						})
-					: t("tool results: none imaged ({total} in history)", { total: String(tr.total) })}
+					: t("context.toolResultsNoneImagedWithTotal", { total: String(tr.total) })}
 			</div>,
 		);
 	}
 	if (snap.savedTokens > 0) {
 		lines.push(
 			<div className="gui-context-snap-line" key="next">
-				{t("next request: ~{tokens} tokens on the wire", {
+				{t("context.nextRequestTokensWithTokens.info", {
 					tokens: fmtTokens(Math.max(0, usedTokens - snap.savedTokens)),
 				})}
 			</div>,
@@ -194,11 +194,11 @@ export function ContextUsageCard({
 	onClose(): void;
 }): ReactNode {
 	return (
-		<div className="gui-quota-panel" role="dialog" aria-label={t("context usage")}>
-			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("close")}>
+		<div className="gui-quota-panel" role="dialog" aria-label={t("general.contextUsage")}>
+			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("settings.close")}>
 				<Icon name="close" className="h-3.5 w-3.5" />
 			</button>
-			<div className="gui-quota-title">{t("context usage")}</div>
+			<div className="gui-quota-title">{t("general.contextUsage")}</div>
 			{loading ? (
 				<div className="gui-quota-note">…</div>
 			) : data ? (
@@ -206,7 +206,7 @@ export function ContextUsageCard({
 					{data.model && <div className="gui-context-model">{data.model}</div>}
 					<div className="gui-context-summary">
 						<span className="gui-context-summary-tokens">
-							{t("context window {tokens} ({percent} used)", {
+							{t("general.contextWindowWithTokensWithPercent", {
 								tokens: fmtTokens(data.contextWindow),
 								percent: `${Math.round(data.percent)}%`,
 							})}
@@ -217,12 +217,12 @@ export function ContextUsageCard({
 						<div className="gui-context-snap">
 							{data.usage.cacheHitRate != null && (
 								<div className="gui-context-snap-line">
-									{t("cache hit")}: {data.usage.cacheHitRate.toFixed(1)}%
+									{t("general.cacheHit")}: {data.usage.cacheHitRate.toFixed(1)}%
 								</div>
 							)}
 							{data.usage.cost > 0 && (
 								<div className="gui-context-snap-line">
-									{t("session spend")}: {formatSpend(data.usage.cost)}
+									{t("general.sessionSpend")}: {formatSpend(data.usage.cost)}
 								</div>
 							)}
 						</div>
@@ -231,8 +231,8 @@ export function ContextUsageCard({
 						<div className="gui-context-snap">
 							<div className="gui-context-snap-title">
 								{data.snapcompact.visionCapable
-									? t("snapcompact savings")
-									: `Snapcompact: ${t("model does not support images")}`}
+									? t("context.snapcompactSavings")
+									: `Snapcompact: ${t("context.modelDoesNotSupport")}`}
 							</div>
 							{data.snapcompact.visionCapable &&
 								renderSnapcompactLines(data.snapcompact, data.tokens ?? data.breakdown?.usedTokens ?? 0)}
@@ -296,11 +296,11 @@ export function ContextUsageCard({
 								)}
 						</div>
 					) : (
-						<div className="gui-quota-note">{t("context usage unavailable")}</div>
+						<div className="gui-quota-note">{t("general.contextUsageUnavailable")}</div>
 					)}
 				</>
 			) : (
-				<div className="gui-quota-note">{t("context usage unavailable")}</div>
+				<div className="gui-quota-note">{t("general.contextUsageUnavailable")}</div>
 			)}
 		</div>
 	);

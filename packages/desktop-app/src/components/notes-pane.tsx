@@ -70,9 +70,9 @@ type Section = "notes" | "todos" | "plans";
 const SECTIONS: Section[] = ["notes", "todos", "plans"];
 const SECTION_ICONS: Record<Section, IconName> = { notes: "sticky-note", todos: "checkbox-circle", plans: "file-text" };
 const SECTION_LABEL: Record<Section, string> = {
-	notes: t("knowledge notes"),
-	todos: t("todos"),
-	plans: t("knowledge plans"),
+	notes: t("general.knowledgeNotes"),
+	todos: t("general.todos"),
+	plans: t("general.knowledgePlans"),
 };
 
 const clampNavW = (w: number): number => Math.min(NAV_W_MAX, Math.max(NAV_W_MIN, Math.round(w)));
@@ -164,7 +164,7 @@ function NoteCard({
 			}
 			role={expanded ? undefined : "button"}
 			tabIndex={expanded ? undefined : 0}
-			aria-label={expanded ? undefined : t("knowledge expand note")}
+			aria-label={expanded ? undefined : t("general.knowledgeExpandNote")}
 		>
 			<div className="flex min-w-0 items-start gap-1">
 				<div className="min-w-0 flex-1">
@@ -200,8 +200,8 @@ function NoteCard({
 							type="button"
 							className="gui-btn gui-btn--icon"
 							onClick={onToggle}
-							title={t("collapse")}
-							aria-label={t("collapse")}
+							title={t("tools.collapse")}
+							aria-label={t("tools.collapse")}
 						>
 							<Icon name="arrow-up-s" className="h-3 w-3" />
 						</button>
@@ -210,8 +210,8 @@ function NoteCard({
 						type="button"
 						className="gui-btn gui-btn--icon"
 						onClick={onDelete}
-						title={t("delete note")}
-						aria-label={t("delete note")}
+						title={t("general.deleteNote")}
+						aria-label={t("general.deleteNote")}
 					>
 						<Icon name="delete-bin" className="h-3 w-3" />
 					</button>
@@ -295,7 +295,7 @@ function NotesSection({
 					style={{ height: composerH }}
 					value={composer}
 					maxLength={NOTE_BODY_MAX}
-					placeholder={t("notes placeholder")}
+					placeholder={t("general.notesPlaceholder")}
 					spellCheck={false}
 					onChange={e => setComposer(e.target.value.slice(0, NOTE_BODY_MAX))}
 				/>
@@ -309,8 +309,8 @@ function NotesSection({
 						className="gui-btn gui-btn-icon"
 						onClick={() => void addNote()}
 						disabled={!composer.trim()}
-						title={t("add knowledge note")}
-						aria-label={t("add knowledge note")}
+						title={t("general.addKnowledgeNote")}
+						aria-label={t("general.addKnowledgeNote")}
 					>
 						<Icon name="add" className="h-3.5 w-3.5" />
 					</button>
@@ -318,7 +318,7 @@ function NotesSection({
 			</div>
 			{filtered.length === 0 ? (
 				<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
-					{needle ? t("knowledge no results") : t("no notes yet")}
+					{needle ? t("general.knowledgeNoResults") : t("general.noNotesYet")}
 				</p>
 			) : (
 				<ul className="flex flex-col gap-1.5">
@@ -364,8 +364,8 @@ function SortableTodoRow({
 					className="gui-notes-todo-grip"
 					{...attributes}
 					{...listeners}
-					title={t("drag to reorder todo")}
-					aria-label={t("drag to reorder todo")}
+					title={t("general.dragReorderTodo")}
+					aria-label={t("general.dragReorderTodo")}
 				>
 					<Icon name="draggable" className="h-3 w-3" />
 				</button>
@@ -442,7 +442,7 @@ function TodosSection({
 		<div className="gui-notes-todos flex flex-col">
 			<div className="flex items-center justify-between px-1 pt-1">
 				<span className="flex min-w-0 items-baseline gap-2">
-					<span className="gui-group-label px-2">{t("todo count items", { count: todos.length })}</span>
+					<span className="gui-group-label px-2">{t("general.todoCountItems", { count: todos.length })}</span>
 					<span className="text-[11px] text-[var(--color-text-faint)]">
 						{todoInput.length}/{TODO_TEXT_MAX}
 					</span>
@@ -452,9 +452,9 @@ function TodosSection({
 					className="gui-link text-[11.5px]"
 					disabled={doneCount === 0}
 					onClick={clearDone}
-					title={doneCount === 0 ? t("clear done disabled") : t("clear done")}
+					title={doneCount === 0 ? t("general.clearDoneDisabled") : t("general.clearDone")}
 				>
-					{t("clear done")}
+					{t("general.clearDone")}
 				</button>
 			</div>
 			<div className="flex items-center gap-1 px-1 pt-1">
@@ -462,19 +462,19 @@ function TodosSection({
 					className="gui-input min-w-0 flex-1 !px-2 !py-1 text-[12px]"
 					value={todoInput}
 					maxLength={TODO_TEXT_MAX}
-					placeholder={t("add todo placeholder")}
+					placeholder={t("general.addTodoPlaceholder")}
 					onChange={e => setTodoInput(e.target.value)}
 					onKeyDown={e => {
 						if (e.key === "Enter") addTodo();
 					}}
 				/>
-				<button type="button" className="gui-btn gui-btn-icon" onClick={addTodo} title={t("add todo")}>
+				<button type="button" className="gui-btn gui-btn-icon" onClick={addTodo} title={t("general.addTodo")}>
 					<Icon name="add" className="h-3.5 w-3.5" />
 				</button>
 			</div>
 			{filtered.length === 0 ? (
 				<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
-					{needle ? t("knowledge no results") : t("no todos yet")}
+					{needle ? t("general.knowledgeNoResults") : t("general.noTodosYet")}
 				</p>
 			) : (
 				<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
@@ -487,7 +487,7 @@ function TodosSection({
 											type="button"
 											className={`gui-notes-todo-check${todo.done ? " gui-notes-todo-check--done" : ""}`}
 											onClick={() => toggleTodo(todo.id)}
-											title={todo.done ? t("mark undone") : t("mark done")}
+											title={todo.done ? t("general.markUndone") : t("general.markDone")}
 										>
 											{todo.done && <Icon name="check" className="h-2.5 w-2.5" />}
 										</button>
@@ -498,7 +498,7 @@ function TodosSection({
 											type="button"
 											className="gui-notes-todo-remove"
 											onClick={() => removeTodo(todo.id)}
-											title={t("remove todo")}
+											title={t("general.removeTodo")}
 										>
 											✕
 										</button>
@@ -532,14 +532,14 @@ function PlansSection({
 	return (
 		<div className="flex flex-col">
 			<div className="flex items-center justify-between px-1 pt-1">
-				<span className="gui-group-label px-2">{t("plan count files", { count: plans.length })}</span>
-				<button type="button" className="gui-btn gui-btn-icon" onClick={onCreate} title={t("new plan")}>
+				<span className="gui-group-label px-2">{t("general.planCountFiles", { count: plans.length })}</span>
+				<button type="button" className="gui-btn gui-btn-icon" onClick={onCreate} title={t("general.newPlan")}>
 					<Icon name="add" className="h-3.5 w-3.5" />
 				</button>
 			</div>
 			{filtered.length === 0 ? (
 				<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
-					{needle ? t("knowledge no results") : t("no plans yet")}
+					{needle ? t("general.knowledgeNoResults") : t("general.noPlansYet")}
 				</p>
 			) : (
 				<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
@@ -559,7 +559,7 @@ function PlansSection({
 									type="button"
 									className="gui-notes-todo-remove"
 									onClick={() => onDelete(plan.id)}
-									title={t("delete plan")}
+									title={t("general.deletePlan")}
 								>
 									✕
 								</button>
@@ -609,8 +609,8 @@ function PlanEditor({
 					type="button"
 					className="gui-btn gui-btn--icon"
 					onClick={onBack}
-					title={t("back")}
-					aria-label={t("back")}
+					title={t("settings.back")}
+					aria-label={t("settings.back")}
 				>
 					<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
 				</button>
@@ -618,12 +618,12 @@ function PlanEditor({
 					className="gui-input min-w-0 flex-1 !px-2 !py-1 text-[12.5px] font-medium"
 					value={title}
 					onChange={e => setTitle(e.target.value)}
-					placeholder={t("new plan title")}
-					aria-label={t("new plan title")}
+					placeholder={t("general.newPlanTitle")}
+					aria-label={t("general.newPlanTitle")}
 				/>
-				<button type="button" className="gui-btn gui-btn-icon" onClick={() => void save()} title={t("save")}>
+				<button type="button" className="gui-btn gui-btn-icon" onClick={() => void save()} title={t("general.save")}>
 					<StateIcon on={saved} pair={["check", "download"]} className="h-3.5 w-3.5" />
-					<span className="text-[12px]">{saved ? t("saved") : t("save")}</span>
+					<span className="text-[12px]">{saved ? t("general.saved") : t("general.save")}</span>
 				</button>
 			</div>
 			<textarea
@@ -631,7 +631,7 @@ function PlanEditor({
 				className="gui-notes-editor min-h-0 flex-1 resize-none overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2.5 text-[12.5px] leading-relaxed text-[var(--color-text)] outline-none"
 				value={body}
 				spellCheck={false}
-				placeholder={t("new plan body")}
+				placeholder={t("general.newPlanBody")}
 				onChange={e => setBody(e.target.value)}
 				onBlur={() => void save()}
 			/>
@@ -776,9 +776,9 @@ export function NotesPane({
 	};
 
 	const createPlan = async (): Promise<void> => {
-		const title = await prompt({ title: t("new plan title") });
+		const title = await prompt({ title: t("general.newPlanTitle") });
 		if (!title) return;
-		const body = await prompt({ title: t("new plan body") });
+		const body = await prompt({ title: t("general.newPlanBody") });
 		if (body === null) return;
 		try {
 			await rpc.request("plans.save", { cwd, title, body });
@@ -800,7 +800,7 @@ export function NotesPane({
 		}
 	};
 	const deletePlan = async (id: string): Promise<void> => {
-		const ok = await confirm(t("confirm delete plan"));
+		const ok = await confirm(t("general.confirmDeletePlan"));
 		if (!ok) return;
 		try {
 			await rpc.request("plans.delete", { cwd, id });
@@ -896,7 +896,7 @@ export function NotesPane({
 			 * (PlanEditor titles the plan itself, so a second title row
 			 * would say the same thing twice). */}
 			<div className="flex flex-shrink-0 items-center gap-1.5 px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("project knowledge")}</span>
+				<span className="gui-group-label px-2">{t("general.projectKnowledge")}</span>
 				<div className="relative ml-auto w-36 min-w-0 flex-shrink-0">
 					<Icon
 						name="search"
@@ -906,16 +906,16 @@ export function NotesPane({
 						className="gui-input h-7 w-full rounded-md !py-0.5 pl-6 pr-6 text-[12px]"
 						value={query}
 						onChange={e => setQuery(e.target.value)}
-						placeholder={t("knowledge search")}
-						aria-label={t("knowledge search")}
+						placeholder={t("general.knowledgeSearch")}
+						aria-label={t("general.knowledgeSearch")}
 					/>
 					{query && (
 						<button
 							type="button"
 							className="absolute right-1 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
 							onClick={() => setQuery("")}
-							aria-label={t("clear")}
-							title={t("clear")}
+							aria-label={t("settings.clear")}
+							title={t("settings.clear")}
 						>
 							<Icon name="close" className="h-3 w-3" />
 						</button>
@@ -930,7 +930,7 @@ export function NotesPane({
 						<NotesSection rpc={rpc} cwd={cwd} notes={notes} query={query} onChanged={loadNotes} />
 					)}
 					{section === "notes" && notes === null && (
-						<p className="px-2 pt-1 text-[12.5px] text-[var(--color-text-faint)]">{t("loading")}…</p>
+						<p className="px-2 pt-1 text-[12.5px] text-[var(--color-text-faint)]">{t("settings.loading")}…</p>
 					)}
 					{section === "todos" && <TodosSection todos={todos} query={query} onPersist={persistTodos} />}
 					{section === "plans" && planOpen && (
@@ -946,7 +946,7 @@ export function NotesPane({
 						<>
 							{planMissing && (
 								<div className="gui-panel-empty-label" role="status">
-									{t("plan not found")}
+									{t("general.planNotFound")}
 								</div>
 							)}
 							<PlansSection
@@ -964,13 +964,13 @@ export function NotesPane({
 				</div>
 				{/* Section nav (openchamber v1.19: content left, sections right —
 				 * the same arrangement the files surface uses). */}
-				<nav className="gui-knowledge-nav" style={{ width: navW }} aria-label={t("project knowledge")}>
+				<nav className="gui-knowledge-nav" style={{ width: navW }} aria-label={t("general.projectKnowledge")}>
 					<div
 						className="gui-knowledge-nav-resize"
 						onPointerDown={onNavResizeStart}
 						role="separator"
 						aria-orientation="vertical"
-						aria-label={t("knowledge resize sections")}
+						aria-label={t("general.knowledgeResizeSections")}
 					/>
 					{SECTIONS.map(s => (
 						<button

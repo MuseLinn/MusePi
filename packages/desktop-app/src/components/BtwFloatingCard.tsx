@@ -77,7 +77,7 @@ export function BtwFloatingCard({
 				const res = await onAsk(question, history);
 				if (cancelledRef.current) return;
 				if (res === null) {
-					const failed = { ...turn, error: t("btw unavailable — no active session") };
+					const failed = { ...turn, error: t("transcript.btwUnavailableNoActive") };
 					historyRef.current = [...history, failed];
 					setTurns(historyRef.current);
 					return;
@@ -87,7 +87,7 @@ export function BtwFloatingCard({
 				setTurns(historyRef.current);
 			} catch {
 				if (cancelledRef.current) return;
-				const failed = { ...turn, error: t("btw failed — check the daemon connection") };
+				const failed = { ...turn, error: t("transcript.btwFailedCheckDaemon") };
 				historyRef.current = [...history, failed];
 				setTurns(historyRef.current);
 			} finally {
@@ -124,7 +124,7 @@ export function BtwFloatingCard({
 		<div
 			className="gui-btw-card"
 			role="dialog"
-			aria-label={t("side question")}
+			aria-label={t("transcript.sideQuestion")}
 			onKeyDown={e => {
 				if (e.key === "Escape") onClose();
 			}}
@@ -141,8 +141,8 @@ export function BtwFloatingCard({
 		>
 			<div className="gui-btw-head">
 				<Sparkles size={13} />
-				<span className="gui-btw-title">{t("side question")}</span>
-				<button type="button" className="gui-btw-x" aria-label={t("close")} onClick={onClose}>
+				<span className="gui-btw-title">{t("transcript.sideQuestion")}</span>
+				<button type="button" className="gui-btw-x" aria-label={t("settings.close")} onClick={onClose}>
 					<X size={14} />
 				</button>
 			</div>
@@ -155,7 +155,7 @@ export function BtwFloatingCard({
 						) : asking && i === turns.length - 1 && turn.answer === "" ? (
 							<div className="gui-btw-loading">
 								<span className="gui-btw-spinner" aria-hidden />
-								{t("thinking…")}
+								{t("settings.thinking")}
 							</div>
 						) : (
 							<div className="gui-btw-a">
@@ -166,11 +166,11 @@ export function BtwFloatingCard({
 							<button
 								type="button"
 								className="gui-btw-branch"
-								title={t("branch this answer")}
+								title={t("transcript.branchAnswer")}
 								onClick={() => void onBranch(turn.question, turn.answer)}
 							>
 								<GitBranch size={12} />
-								<span>{t("branch")}</span>
+								<span>{t("settings.branch")}</span>
 							</button>
 						)}
 					</div>
@@ -178,16 +178,16 @@ export function BtwFloatingCard({
 			</div>
 			<div className="gui-btw-foot">
 				{asking && (
-					<button type="button" className="gui-btw-stop" onClick={stop} title={t("stop")}>
+					<button type="button" className="gui-btw-stop" onClick={stop} title={t("settings.stop")}>
 						<StopCircle size={13} />
-						<span>{t("stop")}</span>
+						<span>{t("settings.stop")}</span>
 					</button>
 				)}
 				<input
 					ref={inputRef}
 					className="gui-btw-input"
 					value={input}
-					placeholder={t("follow up…")}
+					placeholder={t("transcript.followUp")}
 					disabled={asking}
 					onChange={e => setInput(e.target.value)}
 					onFocus={() => setInputFocused(true)}
@@ -205,10 +205,10 @@ export function BtwFloatingCard({
 					disabled={asking || input.trim().length === 0}
 					onClick={submitFollowUp}
 				>
-					{t("ask")}
+					{t("settings.ask")}
 				</button>
 			</div>
-			{inputFocused && <div className="gui-btw-hint">{t("Enter to ask — Esc closes")}</div>}
+			{inputFocused && <div className="gui-btw-hint">{t("transcript.enterAskEscCloses")}</div>}
 		</div>,
 		document.body,
 	);

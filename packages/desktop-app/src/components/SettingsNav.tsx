@@ -251,46 +251,46 @@ export function navGroups(
 ): { title: string; items: SectionDef[] }[] {
 	const groups: { title: string; items: SectionDef[] }[] = [
 		{
-			title: t("basic settings"),
+			title: t("settings.basicSettings"),
 			items: [
-				{ id: "general", icon: "settings-3", label: t("general"), enabled: true },
-				{ id: "appearance", icon: "palette", label: t("appearance"), enabled: true },
-				{ id: "notifications", icon: "notification-3", label: t("notifications & sound"), enabled: true },
-				{ id: "pet", icon: "robot-2", label: t("agent companion"), enabled: true },
-				{ id: "sessions", icon: "history", label: t("sessions"), enabled: true },
-				{ id: "git", icon: "git-branch", label: t("git settings"), enabled: true },
-				{ id: "shortcuts", icon: "command", label: t("shortcuts"), enabled: true },
-				{ id: "model", icon: "ai-agent", label: t("model settings"), enabled: true },
-				{ id: "interaction", icon: "shuffle", label: t("interaction"), enabled: true },
+				{ id: "general", icon: "settings-3", label: t("settings.general2"), enabled: true },
+				{ id: "appearance", icon: "palette", label: t("settings.appearance"), enabled: true },
+				{ id: "notifications", icon: "notification-3", label: t("settings.notificationsSound"), enabled: true },
+				{ id: "pet", icon: "robot-2", label: t("settings.agentCompanion"), enabled: true },
+				{ id: "sessions", icon: "history", label: t("general.sessions"), enabled: true },
+				{ id: "git", icon: "git-branch", label: t("general.gitSettings"), enabled: true },
+				{ id: "shortcuts", icon: "command", label: t("general.shortcuts"), enabled: true },
+				{ id: "model", icon: "ai-agent", label: t("settings.modelSettings"), enabled: true },
+				{ id: "interaction", icon: "shuffle", label: t("settings.interaction"), enabled: true },
 				{ id: "voice", icon: "mic", label: tLoose("voice settings"), enabled: true },
-				{ id: "context", icon: "stack", label: t("context"), enabled: true },
-				{ id: "shell", icon: "terminal-window", label: t("shell"), enabled: true },
-				{ id: "tools", icon: "plug-2", label: t("tools"), enabled: true },
-				{ id: "media", icon: "image-download", label: t("image & video generation"), enabled: true },
-				{ id: "files", icon: "file-text", label: t("files & lsp"), enabled: true },
-				{ id: "memory", icon: "brain", label: t("memory settings"), enabled: true },
+				{ id: "context", icon: "stack", label: t("settings.context"), enabled: true },
+				{ id: "shell", icon: "terminal-window", label: t("settings.shell"), enabled: true },
+				{ id: "tools", icon: "plug-2", label: t("settings.tools"), enabled: true },
+				{ id: "media", icon: "image-download", label: t("settings.imageVideoGeneration"), enabled: true },
+				{ id: "files", icon: "file-text", label: t("general.filesLsp"), enabled: true },
+				{ id: "memory", icon: "brain", label: t("settings.memorySettings"), enabled: true },
 			],
 		},
 		{
-			title: t("agent capabilities"),
+			title: t("settings.agentCapabilities"),
 			items: [
-				{ id: "skills", icon: "sparkling", label: t("extensions & plugins"), enabled: true },
-				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
-				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
-				{ id: "commands", icon: "terminal-box", label: t("commands"), enabled: true },
-				{ id: "hooks", icon: "node-tree", label: t("hooks"), enabled: true },
-				{ id: "suggestions", icon: "chat-1", label: t("starter prompts"), enabled: true },
-				{ id: "modes", icon: "stack", label: t("modes title"), enabled: true },
-				{ id: "browser", icon: "compass-3", label: t("browser"), enabled: true },
+				{ id: "skills", icon: "sparkling", label: t("tools.extensionsPlugins"), enabled: true },
+				{ id: "subagents", icon: "user", label: t("settings.tasksSubagents"), enabled: true },
+				{ id: "mcp", icon: "server", label: t("settings.mcpServers"), enabled: true },
+				{ id: "commands", icon: "terminal-box", label: t("settings.commands"), enabled: true },
+				{ id: "hooks", icon: "node-tree", label: t("settings.hooks"), enabled: true },
+				{ id: "suggestions", icon: "chat-1", label: t("settings.starterPrompts"), enabled: true },
+				{ id: "modes", icon: "stack", label: t("settings.modesTitle"), enabled: true },
+				{ id: "browser", icon: "compass-3", label: t("settings.browser"), enabled: true },
 			],
 		},
 		{
-			title: t("data and statistics"),
+			title: t("settings.dataStatistics"),
 			items: [
-				{ id: "history", icon: "history", label: t("session history"), enabled: true },
-				{ id: "indexes", icon: "book", label: t("index library"), enabled: true },
-				{ id: "usage", icon: "star", label: t("usage statistics"), enabled: true },
-				{ id: "migration", icon: "download", label: t("data migration"), enabled: true },
+				{ id: "history", icon: "history", label: t("settings.sessionHistory"), enabled: true },
+				{ id: "indexes", icon: "book", label: t("settings.indexLibrary"), enabled: true },
+				{ id: "usage", icon: "star", label: t("settings.usageStatistics"), enabled: true },
+				{ id: "migration", icon: "download", label: t("settings.dataMigration"), enabled: true },
 			],
 		},
 	];
@@ -343,7 +343,7 @@ export function SettingsNav({
 			<div className="gui-settings-nav-head">
 				<button type="button" className="gui-settings-back" onClick={onBack}>
 					<Icon name="arrow-left-s" className="h-4 w-4" />
-					<span className="gui-settings-back-label">{t("back to workspace")}</span>
+					<span className="gui-settings-back-label">{t("settings.backWorkspace")}</span>
 				</button>
 			</div>
 			<div className="gui-settings-search">
@@ -352,16 +352,16 @@ export function SettingsNav({
 					className="gui-input min-w-0 flex-1"
 					value={query}
 					onChange={e => onQueryChange(e.target.value)}
-					placeholder={t("search settings…")}
-					aria-label={t("search settings…")}
+					placeholder={t("settings.searchSettings")}
+					aria-label={t("settings.searchSettings")}
 				/>
 				{query && (
 					<button
 						type="button"
 						className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
 						onClick={() => onQueryChange("")}
-						title={t("clear")}
-						aria-label={t("clear")}
+						title={t("settings.clear")}
+						aria-label={t("settings.clear")}
 					>
 						<Icon name="close" className="h-3 w-3" />
 					</button>
@@ -388,7 +388,7 @@ export function SettingsNav({
 								<button
 									key={item.id}
 									type="button"
-									title={item.enabled ? item.label : `${item.label} · ${t("coming soon")}`}
+									title={item.enabled ? item.label : `${item.label} · ${t("settings.comingSoon")}`}
 									className={`gui-settings-nav${activeSection === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
 									onClick={() => {
 										if (item.enabled) onSelect(item.id as SectionRequest);
@@ -409,7 +409,7 @@ export function SettingsNav({
 					onClick={() => window.dispatchEvent(new CustomEvent("musepi-open-onboarding"))}
 				>
 					<Icon name="rocket" className="h-4 w-4" />
-					<span className="gui-settings-nav-label">{t("onboarding")}</span>
+					<span className="gui-settings-nav-label">{t("settings.onboarding")}</span>
 				</button>
 				<button
 					type="button"
@@ -417,7 +417,7 @@ export function SettingsNav({
 					onClick={() => window.dispatchEvent(new CustomEvent("musepi-open-announcement"))}
 				>
 					<Icon name="sparkling" className="h-4 w-4" />
-					<span className="gui-settings-nav-label">{t("what's new")}</span>
+					<span className="gui-settings-nav-label">{t("settings.whatSNew")}</span>
 				</button>
 			</div>
 		</nav>

@@ -42,7 +42,7 @@ export function ConfigFormRenderer({
 }
 
 function restartLabel(restart: ConfigFieldDesc["restart"]): string {
-	if (!restart || restart === "none") return t("ext restart none");
+	if (!restart || restart === "none") return t("tools.extRestartNone");
 	const key = `ext restart ${restart}` as TranslationKey;
 	return t(key);
 }
@@ -140,7 +140,7 @@ function ConfigFieldRow({
 				{desc.description && <div className="gui-settings-row-desc">{tLoose(desc.description)}</div>}
 				{desc.restart && desc.restart !== "none" && (
 					<div className="gui-plugin-config-restart">
-						{t("ext restart label")} · {restartLabel(desc.restart)}
+						{t("tools.extRestartLabel")} · {restartLabel(desc.restart)}
 					</div>
 				)}
 			</div>

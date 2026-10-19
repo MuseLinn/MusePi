@@ -126,13 +126,13 @@ export function useCompletion({
 		// the friendly description + GUI category) and drop the daemon's.
 		const guiUsageCmd: SlashEntry = {
 			name: "usage",
-			description: t("show subscription usage"),
+			description: t("general.showSubscriptionUsage"),
 			kind: "command",
 			category: "GUI",
 		};
 		const guiContextCmd: SlashEntry = {
 			name: "context",
-			description: t("show context usage"),
+			description: t("general.showContextUsage"),
 			kind: "command",
 			category: "GUI",
 		};

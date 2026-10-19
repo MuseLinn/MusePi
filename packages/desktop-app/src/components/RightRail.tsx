@@ -322,7 +322,7 @@ export function RightRail({
 		<aside
 			ref={railRef}
 			className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`}
-			aria-label={t("right rail")}
+			aria-label={t("general.rightRail")}
 		>
 			{/* The single navigation axis (VSCode Activity-Bar unification).
 			 * Scrolls when a short window cannot fit every view; edges
@@ -376,8 +376,8 @@ export function RightRail({
 						ref={overflowBtnRef}
 						type="button"
 						className={`gui-right-rail-btn${overflowOpen ? " gui-right-rail-btn--active" : ""}`}
-						title={t("more tools")}
-						aria-label={t("more tools")}
+						title={t("general.moreTools")}
+						aria-label={t("general.moreTools")}
 						aria-haspopup="menu"
 						aria-expanded={overflowOpen}
 						onClick={() => setOverflowOpen(v => !v)}
@@ -430,7 +430,7 @@ export function RightRail({
 							{hiddenItems.length > 0 && (
 								<>
 									<div className="gui-right-rail-overflow-label" aria-hidden="true">
-										{t("show hidden surfaces")}
+										{t("general.showHiddenSurfaces")}
 									</div>
 									{hiddenItems.map(({ id, s }) => (
 										<button
@@ -458,8 +458,8 @@ export function RightRail({
 				<button
 					type="button"
 					className="gui-right-rail-btn"
-					title={rightPanelOpen ? t("collapse") : t("expand")}
-					aria-label={rightPanelOpen ? t("collapse right panel") : t("expand right panel")}
+					title={rightPanelOpen ? t("tools.collapse") : t("tools.expand")}
+					aria-label={rightPanelOpen ? t("general.collapseRightPanel") : t("general.expandRightPanel")}
 					onClick={() => onToggleRightPanel?.()}
 				>
 					<StateIcon on={rightPanelOpen} pair={["arrow-right", "arrow-left"]} className="h-4 w-4" />
@@ -470,7 +470,7 @@ export function RightRail({
 				anchor={tip?.anchor ?? null}
 				label={tip ? surfaceById(tip.id)?.label : undefined}
 				description={tip ? surfaceById(tip.id)?.description : undefined}
-				extra={tip?.id === "git" && gitChanges ? t("{count} changed files", { count: gitChanges }) : null}
+				extra={tip?.id === "git" && gitChanges ? t("general.changedFilesWithCount", { count: gitChanges }) : null}
 				suppressed={dragging}
 			/>
 			{hideMenu && (
@@ -479,7 +479,7 @@ export function RightRail({
 					y={hideMenu.y}
 					open
 					onClose={() => setHideMenu(null)}
-					items={[{ label: t("hide surface"), onSelect: () => hideSurface(hideMenu.id) }]}
+					items={[{ label: t("general.hideSurface"), onSelect: () => hideSurface(hideMenu.id) }]}
 				/>
 			)}
 		</aside>
@@ -522,7 +522,7 @@ function SortableRailItem({
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 	const label = t(s.label as TranslationKey);
 	const displayBadge = badgeCount != null && badgeCount > 0 ? (badgeCount > 99 ? "99+" : String(badgeCount)) : null;
-	const badgeAria = badgeCount ? t("{count} changed files", { count: badgeCount }) : null;
+	const badgeAria = badgeCount ? t("general.changedFilesWithCount", { count: badgeCount }) : null;
 	// A launcher button opens its surface; the modifier means "another one of
 	// these". Both live on one button rather than a separate affordance: the
 	// modifier is how browsers open new tabs of a link, and the rail is the same

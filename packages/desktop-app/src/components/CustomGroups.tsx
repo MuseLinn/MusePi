@@ -105,7 +105,7 @@ export function CustomGroups({
 			{groups.length === 0 && (
 				<button type="button" className="gui-group-add" onClick={onAddGroup}>
 					<Icon name="add-circle" className="h-4 w-4" />
-					<span>{t("new group")}</span>
+					<span>{t("settings.newGroup")}</span>
 				</button>
 			)}
 			{groups.map((g, i) => (
@@ -311,7 +311,7 @@ function GroupBlock({
 				) : (
 					<span
 						className="min-w-0 flex-1 truncate text-[13px] font-medium"
-						title={t("double click to rename")}
+						title={t("general.doubleClickRename")}
 						onDoubleClick={e => {
 							e.stopPropagation();
 							onEditStart?.(index);
@@ -324,8 +324,8 @@ function GroupBlock({
 				<button
 					type="button"
 					className="gui-group-act"
-					title={t("add to group")}
-					aria-label={t("add to group")}
+					title={t("settings.addGroup")}
+					aria-label={t("settings.addGroup")}
 					onClick={e => {
 						e.stopPropagation();
 						onAddGroup();
@@ -379,7 +379,7 @@ function GroupBlock({
 				)}
 				{memberNodes.length === 0 && (
 					<button type="button" className="gui-group-empty" onClick={onNewSession}>
-						{t("new task, or drag here")}
+						{t("settings.newTaskDragHere")}
 					</button>
 				)}
 			</Reveal>

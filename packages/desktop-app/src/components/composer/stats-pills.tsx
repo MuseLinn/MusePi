@@ -88,7 +88,7 @@ function TimePill({ stats }: { stats: StatsRowProps["stats"] }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	const tps = decodeTokensPerSecond(stats);
-	const counts = t("stats turns steps", { turns: String(stats.turns), steps: String(stats.steps) });
+	const counts = t("general.statsTurnsSteps", { turns: String(stats.turns), steps: String(stats.steps) });
 	const label = (
 		<span className="gui-stats-pill-label">
 			{counts}
@@ -126,12 +126,12 @@ function TimePill({ stats }: { stats: StatsRowProps["stats"] }): ReactNode {
 			</button>
 			{renderMenu(
 				<StatsPop title={counts} icon="timer">
-					{stats.llmMs > 0 && <PopRow label={t("stats model time")} value={formatDurationMs(stats.llmMs)} />}
-					{stats.toolMs > 0 && <PopRow label={t("stats tool time")} value={formatDurationMs(stats.toolMs)} />}
+					{stats.llmMs > 0 && <PopRow label={t("general.statsModelTime")} value={formatDurationMs(stats.llmMs)} />}
+					{stats.toolMs > 0 && <PopRow label={t("general.statsToolTime")} value={formatDurationMs(stats.toolMs)} />}
 					{stats.ttftSteps > 0 && (
-						<PopRow label={t("avg ttft")} value={formatDurationMs(stats.ttftMs / stats.ttftSteps)} />
+						<PopRow label={t("settings.avgTtft")} value={formatDurationMs(stats.ttftMs / stats.ttftSteps)} />
 					)}
-					{tps !== null && <PopRow label={t("tokens per second")} value={`${tps.toFixed(1)} tok/s`} />}
+					{tps !== null && <PopRow label={t("settings.tokensPerSecond")} value={`${tps.toFixed(1)} tok/s`} />}
 				</StatsPop>,
 			)}
 		</span>
@@ -142,7 +142,7 @@ function UsagePill({ usage }: { usage: NonNullable<StatsRowProps["usage"]> }): R
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	const total = billedTotalTokens(usage);
-	const totalText = t("stats total tokens", { tokens: formatTokenCount(total) });
+	const totalText = t("general.statsTotalTokens", { tokens: formatTokenCount(total) });
 	const hit = cacheHitPercent(usage);
 	return (
 		<span ref={anchorRef} className="gui-stats-anchor">
@@ -151,7 +151,7 @@ function UsagePill({ usage }: { usage: NonNullable<StatsRowProps["usage"]> }): R
 				className="gui-stats-pill"
 				aria-haspopup="dialog"
 				aria-expanded={open}
-				aria-label={hit === null ? totalText : `${totalText} · ${t("cache hit")} ${hit}%`}
+				aria-label={hit === null ? totalText : `${totalText} · ${t("general.cacheHit")} ${hit}%`}
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="database-2" className="h-3 w-3" />
@@ -162,24 +162,24 @@ function UsagePill({ usage }: { usage: NonNullable<StatsRowProps["usage"]> }): R
 							<span className="gui-stats-pill-sep" aria-hidden>
 								·
 							</span>
-							{`${t("cache hit")} ${hit}%`}
+							{`${t("general.cacheHit")} ${hit}%`}
 						</>
 					)}
 				</span>
 			</button>
 			{renderMenu(
 				<StatsPop title={totalText} icon="database-2">
-					{hit !== null && <PopRow label={t("cache hit")} value={`${hit}%`} />}
+					{hit !== null && <PopRow label={t("general.cacheHit")} value={`${hit}%`} />}
 					{usage.input > usage.cacheRead && (
-						<PopRow label={t("uncached input tokens")} value={formatTokenCount(usage.input - usage.cacheRead)} />
+						<PopRow label={t("general.uncachedInputTokens")} value={formatTokenCount(usage.input - usage.cacheRead)} />
 					)}
-					<PopRow label={t("input tokens")} value={formatTokenCount(usage.input)} />
-					<PopRow label={t("cache read tokens")} value={formatTokenCount(usage.cacheRead)} />
+					<PopRow label={t("settings.inputTokens")} value={formatTokenCount(usage.input)} />
+					<PopRow label={t("general.cacheReadTokens")} value={formatTokenCount(usage.cacheRead)} />
 					{usage.cacheWrite !== 0 && (
-						<PopRow label={t("cache write tokens")} value={formatTokenCount(usage.cacheWrite)} />
+						<PopRow label={t("general.cacheWriteTokens")} value={formatTokenCount(usage.cacheWrite)} />
 					)}
-					<PopRow label={t("output tokens")} value={formatTokenCount(usage.output)} />
-					{usage.cost > 0 && <PopRow label={t("session spend")} value={formatSpend(usage.cost)} />}
+					<PopRow label={t("settings.outputTokens")} value={formatTokenCount(usage.output)} />
+					{usage.cost > 0 && <PopRow label={t("general.sessionSpend")} value={formatSpend(usage.cost)} />}
 				</StatsPop>,
 			)}
 		</span>
@@ -203,7 +203,7 @@ export const StatsPillsRow = memo(function StatsPillsRow({ stats, usage, mode }:
 				{hit !== null && (
 					<span className="gui-stats-pill">
 						<Icon name="database-2" className="h-3 w-3" />
-						{`${t("cache hit")} ${hit}%`}
+						{`${t("general.cacheHit")} ${hit}%`}
 					</span>
 				)}
 			</div>

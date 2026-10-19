@@ -52,18 +52,18 @@ export function WidgetEditor({
 		<div
 			className={`gui-widget-editor${closing ? " gui-widget-editor--closing" : ""}`}
 			role="dialog"
-			aria-label={t("board edit")}
+			aria-label={t("settings.boardEdit")}
 		>
 			<div className="gui-widget-editor-head">
-				<span className="gui-widget-editor-title">{t("board edit")}</span>
-				<button type="button" className="gui-tool-btn" onClick={handleClose} aria-label={t("close")}>
+				<span className="gui-widget-editor-title">{t("settings.boardEdit")}</span>
+				<button type="button" className="gui-tool-btn" onClick={handleClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
 			{widget && def ? (
 				<>
 					<div className="gui-widget-editor-field">
-						<span className="gui-widget-editor-label">{t("widget title")}</span>
+						<span className="gui-widget-editor-label">{t("settings.widgetTitle")}</span>
 						<input
 							className="gui-task-input"
 							value={widget.title}
@@ -72,14 +72,14 @@ export function WidgetEditor({
 					</div>
 					<div className="gui-widget-editor-field">
 						<span className="gui-widget-editor-label">
-							{t("widget type")} · {widget.type}
+							{t("settings.widgetType")} · {widget.type}
 						</span>
 						<div className="gui-widget-editor-meta">
 							<span>
 								{widget.pos.w} × {widget.pos.h}px
 							</span>
 							<span>
-								{t("widget tone")}: {def.tone ?? "default"}
+								{t("settings.widgetTone")}: {def.tone ?? "default"}
 							</span>
 						</div>
 					</div>
@@ -95,7 +95,7 @@ export function WidgetEditor({
 					 * the current data (and tone), so every field edit reflects
 					 * instantly — no static mock. */}
 					<div className="gui-widget-editor-preview">
-						<div className="gui-widget-editor-label">{t("widget preview")}</div>
+						<div className="gui-widget-editor-label">{t("settings.widgetPreview")}</div>
 						<div
 							className="gui-widget-editor-preview-stage"
 							data-tone={def.tone ?? "default"}
@@ -106,14 +106,14 @@ export function WidgetEditor({
 					</div>
 					<button type="button" className="gui-widget-editor-danger" onClick={() => onDelete(widget.id)}>
 						<Icon name="delete-bin" className="h-3.5 w-3.5" />
-						<span>{t("widget remove")}</span>
+						<span>{t("settings.widgetRemove")}</span>
 					</button>
 				</>
 			) : (
-				<div className="gui-widget-editor-hint">{t("board edit hint")}</div>
+				<div className="gui-widget-editor-hint">{t("settings.boardEditHint")}</div>
 			)}
 			<div className="gui-widget-editor-add">
-				<span className="gui-widget-editor-label">{t("board add widget")}</span>
+				<span className="gui-widget-editor-label">{t("settings.boardAddWidget")}</span>
 				<div className="gui-widget-editor-add-list">
 					{WIDGET_REGISTRY.map(w => (
 						<button

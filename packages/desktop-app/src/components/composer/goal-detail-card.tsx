@@ -19,15 +19,15 @@ export interface GoalDetail {
 function statusLabel(status: string): string {
 	switch (status) {
 		case "active":
-			return t("goal status active");
+			return t("general.goalStatusActive");
 		case "paused":
-			return t("goal status paused");
+			return t("general.goalStatusPaused");
 		case "complete":
-			return t("goal status complete");
+			return t("general.goalStatusComplete");
 		case "budget-limited":
-			return t("goal status budget limited");
+			return t("general.goalStatusBudgetLimited");
 		case "dropped":
-			return t("goal status dropped");
+			return t("general.goalStatusDropped");
 		default:
 			return status;
 	}
@@ -90,7 +90,7 @@ export function GoalDetailCard({
 		setError(null);
 		const value = budgetValue.trim();
 		if (value !== "off" && !/^[1-9]\d*$/.test(value)) {
-			setError(t("goal budget invalid"));
+			setError(t("general.goalBudgetInvalid"));
 			return;
 		}
 		void rpc
@@ -108,13 +108,13 @@ export function GoalDetailCard({
 	const isPaused = status === "paused";
 
 	return (
-		<div className="gui-goal-panel" role="dialog" aria-label={t("goal mode")}>
-			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("close")}>
+		<div className="gui-goal-panel" role="dialog" aria-label={t("general.goalMode")}>
+			<button type="button" className="gui-quota-close" onClick={onClose} aria-label={t("settings.close")}>
 				<Icon name="close" className="h-3.5 w-3.5" />
 			</button>
 			<div className="gui-quota-title">
 				<Icon name="target" className="h-3.5 w-3.5" />
-				{t("goal mode")}
+				{t("general.goalMode")}
 				{detail && <span className={`gui-goal-status gui-goal-status--${status}`}>{statusLabel(status)}</span>}
 			</div>
 			{loading ? (
@@ -124,7 +124,7 @@ export function GoalDetailCard({
 					<div className="gui-goal-objective">{detail.objective}</div>
 					{(detail.tokensUsed != null || detail.tokenBudget != null) && (
 						<div className="gui-goal-meta">
-							{t("goal tokens used")}: {detail.tokensUsed ?? 0}
+							{t("general.goalTokensUsed")}: {detail.tokensUsed ?? 0}
 							{detail.tokenBudget != null ? ` / ${detail.tokenBudget}` : ""}
 						</div>
 					)}
@@ -133,13 +133,13 @@ export function GoalDetailCard({
 						{isActive && (
 							<button type="button" className="gui-goal-btn" onClick={() => act("pause")}>
 								<Icon name="pause" className="h-3.5 w-3.5" />
-								{t("goal pause")}
+								{t("general.goalPause")}
 							</button>
 						)}
 						{isPaused && (
 							<button type="button" className="gui-goal-btn gui-goal-btn--primary" onClick={() => act("resume")}>
 								<Icon name="play" className="h-3.5 w-3.5" />
-								{t("goal resume")}
+								{t("general.goalResume")}
 							</button>
 						)}
 						{(isActive || isPaused) && (
@@ -152,13 +152,13 @@ export function GoalDetailCard({
 								}}
 							>
 								<Icon name="timer" className="h-3.5 w-3.5" />
-								{t("goal adjust budget")}
+								{t("general.goalAdjustBudget")}
 							</button>
 						)}
 						{(isActive || isPaused) && (
 							<button type="button" className="gui-goal-btn gui-goal-btn--danger" onClick={() => act("drop")}>
 								<Icon name="delete-bin" className="h-3.5 w-3.5" />
-								{t("goal drop")}
+								{t("general.goalDrop")}
 							</button>
 						)}
 					</div>
@@ -167,7 +167,7 @@ export function GoalDetailCard({
 							<input
 								ref={budgetRef}
 								value={budgetValue}
-								placeholder={t("goal budget placeholder")}
+								placeholder={t("general.goalBudgetPlaceholder")}
 								onChange={e => setBudgetValue(e.target.value)}
 								onKeyDown={e => {
 									if (e.key === "Enter") saveBudget();
@@ -175,13 +175,13 @@ export function GoalDetailCard({
 								}}
 							/>
 							<button type="button" className="gui-goal-btn gui-goal-btn--primary" onClick={saveBudget}>
-								{t("goal budget save")}
+								{t("general.goalBudgetSave")}
 							</button>
 						</div>
 					)}
 				</div>
 			) : (
-				<div className="gui-quota-note">{t("no goal")}</div>
+				<div className="gui-quota-note">{t("general.noGoal")}</div>
 			)}
 		</div>
 	);

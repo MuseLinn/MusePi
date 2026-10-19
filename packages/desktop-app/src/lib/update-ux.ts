@@ -26,12 +26,12 @@ type Listener = () => void;
 /** Classified failure kind → localized body copy key (design §3.1-3: the
  *  main process ships only the stable kind enum; copy lives here). */
 export const UPDATE_ERROR_BODY_KEYS: Record<UpdateErrorInfo["kind"], TranslationKey> = {
-	check: "update error check",
-	"check-network": "update error check-network",
-	download: "update error download",
-	"download-network": "update error download-network",
-	install: "update error install",
-	"install-network": "update error install-network",
+	check: "update.updateErrorCheck",
+	"check-network": "update.updateErrorCheckNetwork",
+	download: "update.updateErrorDownload",
+	"download-network": "update.updateErrorDownloadNetwork",
+	install: "update.updateErrorInstall",
+	"install-network": "update.updateErrorInstallNetwork",
 };
 
 let toastVisible = false;
@@ -82,7 +82,7 @@ function setInstalling(value: boolean): void {
 
 /**
  * Trigger the install from either surface: flips both into the
- * non-clickable "installing" copy until the promise settles. On failure
+ * non-clickable "tools.installing" copy until the promise settles. On failure
  * the grace window ends and the consecutive-failure count increments
  * (the failure-decision card opens at ≥2).
  */

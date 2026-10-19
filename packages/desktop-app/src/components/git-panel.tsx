@@ -125,10 +125,10 @@ function GitCommitGraph({
 			</svg>
 			<div style={{ marginLeft: railW }}>
 				<div className="flex h-5 items-center gap-2 border-b border-[var(--border)] pr-1 text-[10px] text-[var(--color-text-faint)]">
-					<span className="min-w-0 flex-1">{t("subject column")}</span>
-					<span className="w-[86px] shrink-0">{t("date column")}</span>
-					<span className="w-[72px] shrink-0">{t("author column")}</span>
-					<span className="w-[52px] shrink-0">{t("commit column")}</span>
+					<span className="min-w-0 flex-1">{t("settings.subjectColumn")}</span>
+					<span className="w-[86px] shrink-0">{t("settings.dateColumn")}</span>
+					<span className="w-[72px] shrink-0">{t("settings.authorColumn")}</span>
+					<span className="w-[52px] shrink-0">{t("settings.commitColumn")}</span>
 				</div>
 				{commits.map((c, i) => (
 					<div key={`${c.hash}-${i}`} className="flex h-[22px] items-center gap-2 whitespace-nowrap pr-1">
@@ -151,10 +151,10 @@ function GitCommitGraph({
 						<button
 							type="button"
 							className="w-[52px] shrink-0 text-left font-mono text-[10.5px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
-							title={copied === c.hash ? t("copied") : c.hash}
+							title={copied === c.hash ? t("settings.copied") : c.hash}
 							onClick={() => onCopyHash(c.hash)}
 						>
-							{copied === c.hash ? t("copied") : c.shortHash}
+							{copied === c.hash ? t("settings.copied") : c.shortHash}
 						</button>
 					</div>
 				))}
@@ -227,10 +227,10 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("commit history")}</span>
+				<span className="gui-group-label px-2">{t("settings.commitHistory")}</span>
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => load("reset")}>
 					<Icon name="refresh" className="h-3.5 w-3.5" />
-					<span>{t("refresh")}</span>
+					<span>{t("settings.refresh")}</span>
 				</button>
 			</div>
 			{branch && (
@@ -249,9 +249,9 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				{error ? (
 					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{error}</div>
 				) : commits === null ? (
-					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("loading…")}</div>
+					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 				) : commits.length === 0 ? (
-					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
 				) : (
 					<>
 						<GitCommitGraph commits={commits} copied={copied} onCopyHash={copyHash} />
@@ -263,7 +263,7 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 								onClick={() => load("more")}
 							>
 								<StateIcon on={loadingMore} pair={["loader-4", "arrow-down"]} className="h-3.5 w-3.5" />
-								<span>{loadingMore ? t("loading…") : t("load more")}</span>
+								<span>{loadingMore ? t("settings.loading2") : t("settings.loadMore")}</span>
 							</button>
 						)}
 					</>
@@ -455,8 +455,8 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						(group === "staged" ? (
 							<span
 								className="gui-changes-act"
-								title={t("unstage")}
-								aria-label={t("unstage")}
+								title={t("general.unstage")}
+								aria-label={t("general.unstage")}
 								onClick={e => {
 									e.stopPropagation();
 									void stagePaths([file.path], false);
@@ -467,8 +467,8 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						) : (
 							<span
 								className="gui-changes-act"
-								title={t("stage")}
-								aria-label={t("stage")}
+								title={t("general.stage")}
+								aria-label={t("general.stage")}
 								onClick={e => {
 									e.stopPropagation();
 									void stagePaths([file.path], true);
@@ -486,13 +486,13 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				{open && (
 					<div className="gui-changes-file-diff overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2 font-mono text-[11px] leading-relaxed">
 						{diffLoading ? (
-							<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("loading…")}</div>
+							<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 						) : (
 							<CodeHighlightProvider highlight={highlight}>
 								{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
 								{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
 								{!fileDiff?.staged && !fileDiff?.unstaged && (
-									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
 								)}
 							</CodeHighlightProvider>
 						)}
@@ -553,12 +553,12 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	};
 
 	if (loading) {
-		return <div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">{t("loading…")}</div>;
+		return <div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>;
 	}
 	if (status?.error || !status?.root) {
 		return (
 			<div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">
-				{status?.error ?? t("not a git repository")}
+				{status?.error ?? t("tools.notGitRepository")}
 			</div>
 		);
 	}
@@ -566,14 +566,14 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center gap-1 px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("workspace changes")}</span>
+				<span className="gui-group-label px-2">{t("settings.workspaceChanges")}</span>
 				<div className="ml-auto flex items-center gap-0.5">
 					{/* openchamber GitSettings parity: flat/tree changes view */}
 					<button
 						type="button"
 						className={`gui-pane-tool${view === "flat" ? " gui-pane-tool--active" : ""}`}
-						title={t("flat list")}
-						aria-label={t("flat list")}
+						title={t("general.flatList")}
+						aria-label={t("general.flatList")}
 						onClick={() => {
 							setView("flat");
 							localStorage.setItem("musepi-gui-git-view", "flat");
@@ -584,8 +584,8 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					<button
 						type="button"
 						className={`gui-pane-tool${view === "tree" ? " gui-pane-tool--active" : ""}`}
-						title={t("tree view")}
-						aria-label={t("tree view")}
+						title={t("general.treeView")}
+						aria-label={t("general.treeView")}
 						onClick={() => {
 							setView("tree");
 							localStorage.setItem("musepi-gui-git-view", "tree");
@@ -596,8 +596,8 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					<button
 						type="button"
 						className={`gui-pane-tool${showIgnored ? " gui-pane-tool--active" : ""}`}
-						title={t("show gitignored")}
-						aria-label={t("show gitignored")}
+						title={t("general.showGitignored")}
+						aria-label={t("general.showGitignored")}
 						onClick={() => {
 							const next = !showIgnored;
 							setShowIgnored(next);
@@ -609,8 +609,8 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					<button
 						type="button"
 						className="gui-pane-tool"
-						title={t("refresh")}
-						aria-label={t("refresh")}
+						title={t("settings.refresh")}
+						aria-label={t("settings.refresh")}
 						onClick={load}
 					>
 						<Icon name="refresh" className="h-3.5 w-3.5" />
@@ -625,7 +625,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						}}
 					>
 						<Icon name="git-commit" className="h-3 w-3" />
-						{t("commit")}
+						{t("general.commit")}
 					</button>
 				</div>
 			</div>
@@ -634,7 +634,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					<textarea
 						className="gui-input min-h-[64px] w-full resize-y text-[12.5px]"
 						value={commitMsg}
-						placeholder={t("commit message")}
+						placeholder={t("general.commitMessage")}
 						onChange={e => setCommitMsg(e.target.value)}
 						autoFocus
 						onKeyDown={e => {
@@ -661,10 +661,10 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					{commitError && <div className="mt-1.5 text-[12px] text-[var(--color-danger)]">{commitError}</div>}
 					<div className="mt-2 flex items-center justify-end gap-2">
 						<span className="mr-auto text-[11.5px] text-[var(--color-text-faint)]">
-							{t("staged count", { count: String(status.staged.length) })}
+							{t("general.stagedCount", { count: String(status.staged.length) })}
 						</span>
 						<button type="button" className="gui-btn" onClick={() => setCommitOpen(false)}>
-							{t("cancel")}
+							{t("settings.cancel")}
 						</button>
 						<button
 							type="button"
@@ -672,19 +672,19 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							disabled={committing || !commitMsg.trim()}
 							onClick={() => void runCommit()}
 						>
-							{committing ? t("committing…") : t("commit")}
+							{committing ? t("general.committing") : t("general.commit")}
 						</button>
 					</div>
 				</div>
 			)}
 			{total === 0 && !showIgnored ? (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
 			) : (
 				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
 					{status.staged.length > 0 && (
 						<>
 							<div className="gui-group-label px-2 pb-0.5 pt-1">
-								{t("staged")} · {status.staged.length}
+								{t("general.staged")} · {status.staged.length}
 							</div>
 							{groupRows(status.staged, "staged")}
 						</>
@@ -692,7 +692,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					{status.unstaged.length > 0 && (
 						<>
 							<div className="gui-group-label px-2 pb-0.5 pt-2">
-								{t("unstaged")} · {status.unstaged.length}
+								{t("general.unstaged")} · {status.unstaged.length}
 							</div>
 							{groupRows(status.unstaged, "unstaged")}
 						</>
@@ -700,7 +700,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					{status.untracked.length > 0 && (
 						<>
 							<div className="gui-group-label px-2 pb-0.5 pt-2">
-								{t("untracked")} · {status.untracked.length}
+								{t("general.untracked")} · {status.untracked.length}
 							</div>
 							{groupRows(status.untracked, "untracked")}
 						</>
@@ -708,13 +708,13 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					{showIgnored && (status.ignored?.length ?? 0) > 0 && (
 						<>
 							<div className="gui-group-label px-2 pb-0.5 pt-2">
-								{t("ignored")} · {status.ignored?.length}
+								{t("general.ignored")} · {status.ignored?.length}
 							</div>
 							{groupRows(status.ignored ?? [], "ignored")}
 						</>
 					)}
 					{total === 0 && (status.ignored?.length ?? 0) === 0 && (
-						<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+						<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
 					)}
 				</FadeScroll>
 			)}
@@ -759,16 +759,16 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("pull requests")}</span>
+				<span className="gui-group-label px-2">{t("settings.pullRequests")}</span>
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={load}>
 					<Icon name="refresh" className="h-3.5 w-3.5" />
-					<span>{t("refresh")}</span>
+					<span>{t("settings.refresh")}</span>
 				</button>
 			</div>
 			{error ? (
 				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
 			) : loading ? (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("loading…")}</div>
+				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 			) : prs && prs.length > 0 ? (
 				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
 					{prs.map(pr => (
@@ -798,7 +798,7 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					))}
 				</FadeScroll>
 			) : (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no open pull requests")}</div>
+				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("general.noOpenPullRequests")}</div>
 			)}
 		</div>
 	);
@@ -824,7 +824,7 @@ export function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 	useDeepScrollShadow(rootRef, ".gui-changes-file-diff");
 	return (
 		<div ref={rootRef} className="flex h-full min-h-0 flex-col">
-			<div className="gui-pane-subtabs" role="tablist" aria-label={t("git")}>
+			<div className="gui-pane-subtabs" role="tablist" aria-label={t("settings.git")}>
 				{GIT_PANE_TABS.map(({ id, label }) => (
 					<button
 						key={id}

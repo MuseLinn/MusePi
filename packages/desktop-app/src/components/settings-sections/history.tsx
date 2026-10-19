@@ -127,8 +127,8 @@ export function HistorySection({
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("session history")}</h2>
-			<p className="gui-settings-page-desc">{t("session history description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.sessionHistory")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.sessionHistoryDescription")}</p>
 			<div className="gui-ext-body" style={{ gridTemplateColumns: "minmax(0, 34%) minmax(0, 1fr)" }}>
 				<div className="gui-ext-list">
 					<div className="gui-ext-search">
@@ -136,7 +136,7 @@ export function HistorySection({
 						<input
 							type="search"
 							className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
-							placeholder={t("search messages placeholder")}
+							placeholder={t("settings.searchMessagesPlaceholder")}
 							value={query}
 							onChange={e => setQuery(e.target.value)}
 						/>
@@ -145,7 +145,7 @@ export function HistorySection({
 						{sessions === null ? (
 							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-faint)]">…</div>
 						) : visibleSessions.length === 0 ? (
-							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">{t("no results")}</div>
+							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">{t("general.noResults")}</div>
 						) : (
 							visibleSessions.map(s => (
 								<button
@@ -162,7 +162,7 @@ export function HistorySection({
 									</div>
 									<div className="truncate text-[11px] text-[var(--color-text-muted)]">
 										{s.timestamp ? new Date(s.timestamp).toLocaleString() : ""}
-										{s.messageCount != null ? ` · ${s.messageCount} ${t("messages")}` : ""}
+										{s.messageCount != null ? ` · ${s.messageCount} ${t("general.messages")}` : ""}
 										{searchRes ? ` · ${bySession.get(s.id)?.length ?? 0}` : ""}
 									</div>
 								</button>
@@ -187,7 +187,7 @@ export function HistorySection({
 									onOpenSession(selected);
 								}}
 							>
-								{t("open")}
+								{t("settings.open")}
 							</button>
 						)}
 					</div>
@@ -197,7 +197,7 @@ export function HistorySection({
 								<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-faint)]">…</div>
 							) : visibleMsgs.length === 0 ? (
 								<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">
-									{searchRes ? t("no results") : t("no messages")}
+									{searchRes ? t("general.noResults") : t("settings.noMessages")}
 								</div>
 							) : (
 								visibleMsgs.map(m => (

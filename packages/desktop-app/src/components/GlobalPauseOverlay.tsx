@@ -55,7 +55,7 @@ export function GlobalPauseOverlay({
 			className={`gui-global-pause${paused ? " gui-global-pause--active" : ""}`}
 			role="dialog"
 			aria-modal="true"
-			aria-label={t("paused")}
+			aria-label={t("tools.paused")}
 			onClick={() => {
 				if (paused) onResume();
 			}}
@@ -64,14 +64,14 @@ export function GlobalPauseOverlay({
 				<span className="gui-global-pause-icon" aria-hidden="true">
 					<Icon name="pause" className="h-9 w-9" />
 				</span>
-				<h2 className="gui-global-pause-title">{t("paused")}</h2>
+				<h2 className="gui-global-pause-title">{t("tools.paused")}</h2>
 				<p className="gui-global-pause-timer" data-paused-at={pausedAt}>
 					{pausedAt ? formatPauseElapsed(pausedAt) : "0:00"}
 				</p>
-				<p className="gui-global-pause-hint">{t("all sessions are frozen until you resume")}</p>
+				<p className="gui-global-pause-hint">{t("tools.allSessionsFrozenUntil")}</p>
 				<button type="button" className="gui-global-pause-resume" onClick={() => onResume()}>
 					<Icon name="play" className="h-4 w-4" />
-					{t("resume")}
+					{t("tools.resume")}
 				</button>
 			</div>
 		</div>

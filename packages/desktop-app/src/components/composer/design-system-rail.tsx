@@ -59,10 +59,10 @@ export function DesignSystemRail({
 	};
 	return (
 		<div className="gui-ds-rail" data-testid="gui-design-system-rail">
-			<div className="gui-ds-rail-head">{t("design system rail title")}</div>
+			<div className="gui-ds-rail-head">{t("composer.designSystemRailTitle")}</div>
 			<FadeScroll className="gui-ds-rail-scroll overflow-x-auto">
 				<div className="gui-ds-rail-row">
-					<div className="gui-ds-rail-group" role="radiogroup" aria-label={t("design system rail title")}>
+					<div className="gui-ds-rail-group" role="radiogroup" aria-label={t("composer.designSystemRailTitle")}>
 						{systems.map((s, i) => {
 							const on = selected === s.id;
 							return (
@@ -81,7 +81,7 @@ export function DesignSystemRail({
 									<DesignSystemSwatchBar entry={s} className="gui-ds-swatchbar gui-ds-swatchbar--rail" />
 									<span className="gui-ds-card-name">{designSystemLabel(s)}</span>
 									<span className={`gui-ds-badge gui-ds-badge--${s.source}`}>
-										{s.source === "builtin" ? t("design system builtin") : t("design system extension")}
+										{s.source === "builtin" ? t("composer.designSystemBuiltin") : t("composer.designSystemExtension")}
 									</span>
 									{on && (
 										<span className="gui-ds-card-check" aria-hidden="true">
@@ -97,7 +97,7 @@ export function DesignSystemRail({
 						data-testid="gui-ds-market-card"
 						className="gui-ds-card gui-ds-market-card"
 						style={{ animationDelay: `${systems.length * 60}ms` }}
-						aria-label={t("design system market aria")}
+						aria-label={t("composer.designSystemMarketAria")}
 						onClick={() =>
 							window.dispatchEvent(new CustomEvent(OPEN_CAPABILITY_EVENT, { detail: { tab: "marketplace" } }))
 						}
@@ -105,7 +105,7 @@ export function DesignSystemRail({
 						<span className="gui-ds-market-plus" aria-hidden="true">
 							<Icon name="add" className="h-3.5 w-3.5" />
 						</span>
-						<span className="gui-ds-card-name">{t("design system market cta")}</span>
+						<span className="gui-ds-card-name">{t("composer.designSystemMarketCta")}</span>
 					</button>
 				</div>
 			</FadeScroll>

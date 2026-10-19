@@ -51,11 +51,11 @@ export function QueuePanel({
 			onReorder(group, from, to);
 		};
 	return (
-		<div className="gui-queue-panel" role="region" aria-label={t("queued messages")}>
+		<div className="gui-queue-panel" role="region" aria-label={t("general.queuedMessages")}>
 			{queued.steering.length > 0 && (
 				<>
 					<div className="gui-queue-group">
-						{t("Steering")} · {queued.steering.length}
+						{t("general.steering")} · {queued.steering.length}
 					</div>
 					{/* Steering (引导) messages are the immediate queue: they are
 					 * delivered in order while the agent runs. "Send now" still
@@ -86,7 +86,7 @@ export function QueuePanel({
 			{queued.followUp.length > 0 && (
 				<>
 					<div className="gui-queue-group">
-						{t("After yield")} · {queued.followUp.length}
+						{t("general.afterYield")} · {queued.followUp.length}
 					</div>
 					<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd("followUp")}>
 						<SortableContext
@@ -111,11 +111,11 @@ export function QueuePanel({
 			<div className="gui-queue-panel-actions">
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => void onPop()}>
 					<Icon name="arrow-go-back" className="h-3 w-3" />
-					<span>{t("take back newest")}</span>
+					<span>{t("general.takeBackNewest")}</span>
 				</button>
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => void onClear()}>
 					<Icon name="delete-bin" className="h-3 w-3" />
-					<span>{t("clear queue")}</span>
+					<span>{t("general.clearQueue")}</span>
 				</button>
 			</div>
 		</div>
@@ -159,8 +159,8 @@ function SortableQueueItem({
 				type="button"
 				ref={setActivatorNodeRef}
 				className="gui-queue-grip"
-				title={t("drag to reorder queued message")}
-				aria-label={t("drag to reorder queued message")}
+				title={t("general.dragReorderQueuedMessage")}
+				aria-label={t("general.dragReorderQueuedMessage")}
 				{...attributes}
 				{...listeners}
 			>
@@ -172,20 +172,20 @@ function SortableQueueItem({
 			<button
 				type="button"
 				className="gui-queue-send"
-				title={t("take back")}
-				aria-label={t("take back")}
+				title={t("general.takeBack")}
+				aria-label={t("general.takeBack")}
 				onClick={onPop}
 			>
 				<Icon name="arrow-go-back" className="h-3 w-3" />
 			</button>
-			<button type="button" className="gui-queue-send" title={t("edit")} aria-label={t("edit")} onClick={onEdit}>
+			<button type="button" className="gui-queue-send" title={t("settings.edit")} aria-label={t("settings.edit")} onClick={onEdit}>
 				<Icon name="edit-2" className="h-3 w-3" />
 			</button>
 			<button
 				type="button"
 				className="gui-queue-send"
-				title={t("delete")}
-				aria-label={t("delete")}
+				title={t("settings.delete")}
+				aria-label={t("settings.delete")}
 				onClick={onDelete}
 			>
 				<Icon name="delete-bin" className="h-3 w-3" />
@@ -193,8 +193,8 @@ function SortableQueueItem({
 			<button
 				type="button"
 				className="gui-queue-send"
-				title={t("send now")}
-				aria-label={t("send now")}
+				title={t("general.sendNow")}
+				aria-label={t("general.sendNow")}
 				onClick={onSend}
 			>
 				<Icon name="arrow-up" className="h-3 w-3" />

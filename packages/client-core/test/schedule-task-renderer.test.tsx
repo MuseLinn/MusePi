@@ -20,7 +20,7 @@ const ARGS = {
 	action: "create",
 	name: "nightly tests",
 	prompt: "run the test suite",
-	schedule: { kind: "daily", time: "22:00", idleWindow: { start: "23:00", end: "08:00" } },
+	schedule: { kind: "guest.daily", time: "22:00", idleWindow: { start: "23:00", end: "08:00" } },
 };
 
 const DETAILS = {
@@ -82,7 +82,7 @@ describe("schedule_task renderer", () => {
 		const html = renderToStaticMarkup(
 			Body({ args: { action: "list" }, result: { content: [], details: { action: "list", tasks: [] } } } as never),
 		);
-		expect(html).toContain(t("no scheduled tasks"));
+		expect(html).toContain(t("settings.noScheduledTasks"));
 	});
 
 	it("tolerates malformed details instead of throwing", () => {
@@ -92,6 +92,6 @@ describe("schedule_task renderer", () => {
 
 	it("summarises into one line", () => {
 		expect(Summary({ args: ARGS, result: undefined } as never)).toContain("nightly tests");
-		expect(Summary({ args: { action: "list" }, result: undefined } as never)).toContain(t("scheduled task"));
+		expect(Summary({ args: { action: "list" }, result: undefined } as never)).toContain(t("settings.scheduledTask"));
 	});
 });

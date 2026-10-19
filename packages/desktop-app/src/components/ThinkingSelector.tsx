@@ -77,8 +77,8 @@ export function ThinkingSelector({
 				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
 				ref={capsule ? anchorRef : undefined}
 				onClick={() => setOpen(v => !v)}
-				title={capsule ? `${t("thinking level")} · ${thinkingLabel(value)}` : t("thinking level")}
-				aria-label={t("thinking level")}
+				title={capsule ? `${t("transcript.thinkingLevel")} · ${thinkingLabel(value)}` : t("transcript.thinkingLevel")}
+				aria-label={t("transcript.thinkingLevel")}
 			>
 				<Icon name="brain" className="h-3.5 w-3.5" />
 				<span className="gui-model-capsule-seg-text gui-model-capsule-seg-text--thinking max-w-[120px] truncate">
@@ -96,7 +96,7 @@ export function ThinkingSelector({
 							setOpen(false);
 						}}
 					>
-						<span className="min-w-0 flex-1 truncate">{t("thinking off")}</span>
+						<span className="min-w-0 flex-1 truncate">{t("transcript.thinkingOff")}</span>
 						{value == null && <Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />}
 					</button>
 					<button
@@ -108,7 +108,7 @@ export function ThinkingSelector({
 							setOpen(false);
 						}}
 					>
-						<span className="min-w-0 flex-1 truncate">{t("thinking auto")}</span>
+						<span className="min-w-0 flex-1 truncate">{t("transcript.thinkingAuto")}</span>
 						{value === "auto" && <Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />}
 					</button>
 					{efforts !== undefined && efforts !== null
@@ -123,7 +123,7 @@ export function ThinkingSelector({
 										type="button"
 										disabled={capped}
 										className={`gui-model-opt${(configValue ?? value) === level ? " gui-model-opt--active" : ""}${capped ? " gui-model-opt--capped" : ""}`}
-										title={capped ? t("thinking capped by model") : undefined}
+										title={capped ? t("transcript.thinkingCappedModel") : undefined}
 										onClick={() => {
 											if (capped) return;
 											tapFeedback(1);
@@ -132,7 +132,7 @@ export function ThinkingSelector({
 										}}
 									>
 										<span className="min-w-0 flex-1 truncate">{thinkingLabel(level)}</span>
-										{capped && <span className="gui-provider-chip">{t("model cap")}</span>}
+										{capped && <span className="gui-provider-chip">{t("transcript.modelCap")}</span>}
 										{value === level && !capped && (
 											<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
 										)}
@@ -150,7 +150,7 @@ export function ThinkingSelector({
 										type="button"
 										disabled={capped}
 										className={`gui-model-opt${(configValue ?? value) === level ? " gui-model-opt--active" : ""}${capped ? " gui-model-opt--capped" : ""}`}
-										title={capped ? t("thinking capped by model") : undefined}
+										title={capped ? t("transcript.thinkingCappedModel") : undefined}
 										onClick={() => {
 											if (capped) return;
 											tapFeedback(1);
@@ -159,7 +159,7 @@ export function ThinkingSelector({
 										}}
 									>
 										<span className="min-w-0 flex-1 truncate">{thinkingLabel(level)}</span>
-										{capped && <span className="gui-provider-chip">{t("model cap")}</span>}
+										{capped && <span className="gui-provider-chip">{t("transcript.modelCap")}</span>}
 										{value === level && !capped && (
 											<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
 										)}

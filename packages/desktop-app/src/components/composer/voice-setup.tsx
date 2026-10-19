@@ -101,7 +101,7 @@ export function useVoiceSetupGate(opts: { rpc: RpcClient | null; onProceed(): vo
 				}, 450);
 				return;
 			}
-			setSetup({ ...current, phase: "error", error: p.message ?? t("voice setup download failed") });
+			setSetup({ ...current, phase: "error", error: p.message ?? t("settings.voiceSetupDownloadFailed") });
 		});
 		return off;
 	}, [rpc]);
@@ -191,13 +191,13 @@ function VoiceSetupDialog({
 			? `${state.percent}% · ${formatBytes(state.loaded)} / ${formatBytes(state.total)}`
 			: state.percent > 0
 				? `${state.percent}%`
-				: t("voice setup preparing");
+				: t("settings.voiceSetupPreparing");
 
 	return (
 		<div className="gui-voice-setup" data-dismissing={dismissing ? "" : undefined} role="dialog" aria-modal="false">
 			<div className="gui-voice-setup-head">
-				<span className="gui-voice-setup-title">{t("voice setup title")}</span>
-				<button type="button" className="gui-voice-setup-close" onClick={close} aria-label={t("later")}>
+				<span className="gui-voice-setup-title">{t("settings.voiceSetupTitle")}</span>
+				<button type="button" className="gui-voice-setup-close" onClick={close} aria-label={t("settings.later")}>
 					✕
 				</button>
 			</div>
@@ -205,9 +205,9 @@ function VoiceSetupDialog({
 				{state.phase === "prompt" && (
 					<>
 						<p className="gui-voice-setup-desc">
-							{t("voice setup desc", { model: state.label, size: state.size })}
+							{t("settings.voiceSetupDesc", { model: state.label, size: state.size })}
 						</p>
-						<p className="gui-voice-setup-note">{t("voice setup note")}</p>
+						<p className="gui-voice-setup-note">{t("settings.voiceSetupNote")}</p>
 					</>
 				)}
 				{state.phase === "downloading" && (
@@ -230,16 +230,16 @@ function VoiceSetupDialog({
 			</div>
 			<div className="gui-voice-setup-actions">
 				<button type="button" className="gui-voice-setup-btn" onClick={close}>
-					{t("later")}
+					{t("settings.later")}
 				</button>
 				{state.phase === "prompt" && (
 					<button type="button" className="gui-voice-setup-btn gui-voice-setup-btn-primary" onClick={onInstall}>
-						{t("voice setup install")}
+						{t("settings.voiceSetupInstall")}
 					</button>
 				)}
 				{state.phase === "error" && (
 					<button type="button" className="gui-voice-setup-btn gui-voice-setup-btn-primary" onClick={onRetry}>
-						{t("retry")}
+						{t("settings.retry")}
 					</button>
 				)}
 			</div>

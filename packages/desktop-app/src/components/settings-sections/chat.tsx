@@ -8,35 +8,35 @@ import { STATS_MODE_EVENT, STATS_MODE_KEY } from "../composer/stats-pills";
 /** Segmented option tables — module scope is fine, the labels are static
  * per locale and the settings view remounts on a language switch. */
 const MERMAID_SEGMENTS: SegmentedOption<"svg" | "ascii">[] = [
-	{ value: "svg", label: t("svg") },
-	{ value: "ascii", label: t("ascii") },
+	{ value: "svg", label: t("settings.svg") },
+	{ value: "ascii", label: t("settings.ascii") },
 ];
 
 const DIFF_LAYOUT_SEGMENTS: SegmentedOption<"dynamic" | "inline" | "side-by-side">[] = [
-	{ value: "dynamic", label: t("dynamic") },
-	{ value: "inline", label: t("always inline") },
-	{ value: "side-by-side", label: t("always side by side") },
+	{ value: "dynamic", label: t("settings.dynamic") },
+	{ value: "inline", label: t("settings.alwaysInline") },
+	{ value: "side-by-side", label: t("settings.alwaysSideSide") },
 ];
 
 const OUTPUT_STYLE_SEGMENTS: SegmentedOption<"default" | "kimi" | "zcode">[] = [
-	{ value: "default", label: t("output style default") },
-	{ value: "kimi", label: t("output style kimi") },
-	{ value: "zcode", label: t("output style zcode") },
+	{ value: "default", label: t("settings.outputStyleDefault") },
+	{ value: "kimi", label: t("settings.outputStyleKimi") },
+	{ value: "zcode", label: t("settings.outputStyleZcode") },
 ];
 
 const TYPING_EFFECT_SEGMENTS: SegmentedOption<"typewriter" | "burst" | "shimmer" | "glitch" | "flip" | "ink">[] = [
-	{ value: "typewriter", label: t("typing effect typewriter") },
-	{ value: "burst", label: t("typing effect burst") },
-	{ value: "shimmer", label: t("typing effect shimmer") },
-	{ value: "glitch", label: t("typing effect glitch") },
-	{ value: "flip", label: t("typing effect flip") },
-	{ value: "ink", label: t("typing effect ink") },
+	{ value: "typewriter", label: t("settings.typingEffectTypewriter") },
+	{ value: "burst", label: t("settings.typingEffectBurst") },
+	{ value: "shimmer", label: t("settings.typingEffectShimmer") },
+	{ value: "glitch", label: t("settings.typingEffectGlitch") },
+	{ value: "flip", label: t("settings.typingEffectFlip") },
+	{ value: "ink", label: t("settings.typingEffectInk") },
 ];
 
 /** Composer stats row density (§5w) — same localStorage key the row reads. */
 const STATS_MODE_SEGMENTS: SegmentedOption<"detailed" | "compact">[] = [
-	{ value: "detailed", label: t("stats mode detailed") },
-	{ value: "compact", label: t("stats mode compact") },
+	{ value: "detailed", label: t("general.statsModeDetailed") },
+	{ value: "compact", label: t("general.statsModeCompact") },
 ];
 
 /** Small persisted toggle with a settings-row label (shared by the new tabs). */
@@ -168,8 +168,8 @@ function AutoFoldToggle(): ReactNode {
 	return (
 		<div className="gui-settings-row">
 			<div>
-				<div className="gui-settings-row-label">{t("message auto fold")}</div>
-				<div className="gui-settings-row-desc">{t("message auto fold description")}</div>
+				<div className="gui-settings-row-label">{t("settings.messageAutoFold")}</div>
+				<div className="gui-settings-row-desc">{t("settings.messageAutoFoldDescription")}</div>
 			</div>
 			<button
 				type="button"
@@ -187,7 +187,7 @@ function AutoFoldToggle(): ReactNode {
 					}
 					window.dispatchEvent(new CustomEvent("musepi-roundfold-default-changed", { detail: !next }));
 				}}
-				aria-label={t("message auto fold")}
+				aria-label={t("settings.messageAutoFold")}
 			>
 				<span className="gui-toggle-knob" />
 			</button>
@@ -267,58 +267,58 @@ export function ChatSection(): ReactNode {
 	return (
 		<CodeHighlightProvider highlight={chatHighlight}>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("chat settings")}</div>
-				<div className="gui-settings-section-desc">{t("chat settings description")}</div>
+				<div className="gui-settings-section-title">{t("settings.chatSettings")}</div>
+				<div className="gui-settings-section-desc">{t("settings.chatSettingsDescription")}</div>
 			</div>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("message rendering")}</div>
+				<div className="gui-settings-section-title">{t("tools.messageRendering")}</div>
 				<PrefSegmented
-					label={t("user message rendering")}
-					description={t("user message rendering description")}
+					label={t("settings.userMessageRendering")}
+					description={t("settings.userMessageRenderingDescription")}
 					storageKey="musepi-gui-chat-usermsg"
 					defaultValue="markdown"
 					options={[
-						{ id: "markdown", label: t("markdown") },
-						{ id: "plain", label: t("plain text") },
+						{ id: "markdown", label: t("settings.markdown") },
+						{ id: "plain", label: t("settings.plainText") },
 					]}
 				/>
 				<PrefToggle
-					label={t("collapse long user messages")}
-					description={t("collapse long user messages description")}
+					label={t("settings.collapseLongUserMessages")}
+					description={t("settings.collapseLongUserMessagesDescription")}
 					storageKey="musepi-gui-chat-collapseuser"
 				/>
 				<AutoFoldToggle />
 				<PrefToggle
-					label={t("tool call summary")}
-					description={t("tool call summary description")}
+					label={t("settings.toolCallSummary")}
+					description={t("settings.toolCallSummaryDescription")}
 					storageKey="musepi-gui-chat-toolsummary"
 					onChange={on => window.dispatchEvent(new CustomEvent("musepi-toolsummary-changed", { detail: on }))}
 				/>
 				<PrefToggle
-					label={t("show reasoning traces")}
-					description={t("show reasoning traces description")}
+					label={t("settings.showReasoningTraces")}
+					description={t("settings.showReasoningTracesDescription")}
 					storageKey="musepi-gui-chat-thinking"
 					onClass="gui-chat-hide-thinking"
 				/>
 				<PrefToggle
-					label={t("widget standalone")}
-					description={t("widget standalone description")}
+					label={t("settings.widgetStandalone")}
+					description={t("settings.widgetStandaloneDescription")}
 					storageKey="musepi-gui-widget-standalone"
 					onChange={setWidgetStandalone}
 				/>
 				<PrefToggle
-					label={t("widgets expanded")}
-					description={t("widgets expanded description")}
+					label={t("settings.widgetsExpanded")}
+					description={t("settings.widgetsExpandedDescription")}
 					storageKey="musepi-gui-widget-expanded"
 					disabled={widgetStandalone}
 				/>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("mermaid rendering")}</div>
-						<div className="gui-settings-row-desc">{t("mermaid rendering description")}</div>
+						<div className="gui-settings-row-label">{t("settings.mermaidRendering")}</div>
+						<div className="gui-settings-row-desc">{t("settings.mermaidRenderingDescription")}</div>
 					</div>
 					<Segmented
-						ariaLabel={t("mermaid rendering")}
+						ariaLabel={t("settings.mermaidRendering")}
 						value={mermaidModeState}
 						options={MERMAID_SEGMENTS}
 						onChange={v => {
@@ -334,24 +334,24 @@ export function ChatSection(): ReactNode {
 				{/* The sample lives in 外观 → 效果预览 (MockConversationPreview) and
 				 * scopes itself to this picker's value, so it is not drawn twice. */}
 				<PrefToggle
-					label={t("streaming caret")}
-					description={t("streaming caret description")}
+					label={t("settings.streamingCaret")}
+					description={t("settings.streamingCaretDescription")}
 					storageKey="musepi-gui-chat-caret"
 					onClass="gui-chat-no-caret"
 				/>
 				<PrefToggle
-					label={t("code highlight")}
-					description={t("code highlight description")}
+					label={t("settings.codeHighlight")}
+					description={t("settings.codeHighlightDescription")}
 					storageKey="musepi-gui-chat-codehl"
 					onClass="gui-chat-plain-code"
 				/>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("performance usage")}</div>
-						<div className="gui-settings-row-desc">{t("performance usage description")}</div>
+						<div className="gui-settings-row-label">{t("general.performanceUsage")}</div>
+						<div className="gui-settings-row-desc">{t("general.performanceUsageDescription")}</div>
 					</div>
 					<Segmented
-						ariaLabel={t("performance usage")}
+						ariaLabel={t("general.performanceUsage")}
 						value={statsMode}
 						options={STATS_MODE_SEGMENTS}
 						onChange={v => {
@@ -369,14 +369,14 @@ export function ChatSection(): ReactNode {
 			</div>
 
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("presentation style")}</div>
+				<div className="gui-settings-section-title">{t("tools.presentationStyle")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("output style")}</div>
-						<div className="gui-settings-row-desc">{t("output style description")}</div>
+						<div className="gui-settings-row-label">{t("settings.outputStyle")}</div>
+						<div className="gui-settings-row-desc">{t("settings.outputStyleDescription")}</div>
 					</div>
 					<Segmented
-						ariaLabel={t("output style")}
+						ariaLabel={t("settings.outputStyle")}
 						value={outputStyle}
 						options={OUTPUT_STYLE_SEGMENTS}
 						onChange={v => {
@@ -393,8 +393,8 @@ export function ChatSection(): ReactNode {
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("typing effect")}</div>
-						<div className="gui-settings-row-desc">{t("typing effect description")}</div>
+						<div className="gui-settings-row-label">{t("settings.typingEffect")}</div>
+						<div className="gui-settings-row-desc">{t("settings.typingEffectDescription")}</div>
 					</div>
 					<div className="gui-settings-row-extra">
 						{/* Six equal-width segments outgrow any shared row with the
@@ -402,7 +402,7 @@ export function ChatSection(): ReactNode {
 						 * slot drops the control to its own full-width line, and
 						 * gui-seg--wide lifts the 260px cap so every label fits. */}
 						<Segmented
-							ariaLabel={t("typing effect")}
+							ariaLabel={t("settings.typingEffect")}
 							className="gui-seg--compact gui-seg--wide"
 							value={typingEffect}
 							options={TYPING_EFFECT_SEGMENTS}

@@ -84,17 +84,17 @@ export function ChatFind({
 		: !query.trim()
 			? ""
 			: hits.length === 0
-				? t("no results")
+				? t("general.noResults")
 				: `${index + 1}/${hits.length}`;
 
 	return (
-		<div className="gui-find" role="search" aria-label={t("find in chat")}>
+		<div className="gui-find" role="search" aria-label={t("general.findChat")}>
 			<div className="gui-find-field">
 				<input
 					ref={inputRef}
 					className="gui-find-input"
 					value={query}
-					placeholder={t("find in chat")}
+					placeholder={t("general.findChat")}
 					spellCheck={false}
 					autoComplete="off"
 					onChange={e => onQuery(e.target.value)}
@@ -108,8 +108,8 @@ export function ChatFind({
 					className="gui-find-btn"
 					onClick={onPrev}
 					disabled={hits.length === 0}
-					title={t("previous match")}
-					aria-label={t("previous match")}
+					title={t("general.previousMatch")}
+					aria-label={t("general.previousMatch")}
 				>
 					<ChevronUp size={13} />
 				</button>
@@ -118,8 +118,8 @@ export function ChatFind({
 					className="gui-find-btn"
 					onClick={onNext}
 					disabled={hits.length === 0}
-					title={t("next match")}
-					aria-label={t("next match")}
+					title={t("general.nextMatch")}
+					aria-label={t("general.nextMatch")}
 				>
 					<ChevronDown size={13} />
 				</button>
@@ -127,14 +127,14 @@ export function ChatFind({
 					type="button"
 					className="gui-find-btn"
 					onClick={onClose}
-					title={t("close find bar")}
-					aria-label={t("close find bar")}
+					title={t("general.closeFindBar")}
+					aria-label={t("general.closeFindBar")}
 				>
 					<X size={13} />
 				</button>
 			</div>
 			{current && (
-				<button type="button" className="gui-find-preview" onClick={reveal} title={t("jump to match")}>
+				<button type="button" className="gui-find-preview" onClick={reveal} title={t("general.jumpMatch")}>
 					{current.snippet}
 				</button>
 			)}

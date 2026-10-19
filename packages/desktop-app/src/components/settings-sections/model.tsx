@@ -558,7 +558,7 @@ export function ModelSection({
 		current: string | null,
 	): Promise<void> => {
 		if (!rpc) return;
-		const note = await prompt({ title: t("credential note"), defaultValue: current ?? "" });
+		const note = await prompt({ title: t("general.credentialNote"), defaultValue: current ?? "" });
 		if (note === null) return; // cancelled
 		try {
 			await rpc.request("providers.setCredentialNote", {
@@ -588,10 +588,10 @@ export function ModelSection({
 	};
 
 	const modelTabs = [
-		{ id: "roles", label: t("role models") },
-		{ id: "behavior", label: t("model behavior") },
-		{ id: "providers", label: t("providers") },
-		{ id: "custom", label: t("custom providers") },
+		{ id: "roles", label: t("general.roleModels") },
+		{ id: "behavior", label: t("general.modelBehavior") },
+		{ id: "providers", label: t("settings.providers") },
+		{ id: "custom", label: t("settings.customProviders") },
 	] as const;
 
 	// One role row (TUI /model roles-panel parity): tag + assignment state,
@@ -614,7 +614,7 @@ export function ModelSection({
 					<div className="gui-settings-row-label">
 						<span className="gui-role-tag">{BUILTIN_ROLE_TAGS[role] ?? role}</span>
 						{cycleIndex >= 0 && (
-							<span className="gui-role-cycle-badge" title={t("cycle order")}>
+							<span className="gui-role-cycle-badge" title={t("general.cycleOrder")}>
 								⟳{cycleIndex + 1}
 							</span>
 						)}
@@ -630,9 +630,9 @@ export function ModelSection({
 								const source = roleSources[role] ?? "default";
 								const sourceLabel =
 									source === "project"
-										? t("scope project")
+										? t("general.scopeProject")
 										: source === "global" || source === "overlay" || source === "runtime"
-											? t("scope global")
+											? t("general.scopeGlobal")
 											: null;
 								const shadows = sourceLabel !== null && sourceLabel !== target;
 								return (
@@ -641,10 +641,10 @@ export function ModelSection({
 										className={`gui-role-scope-badge${shadows ? " gui-role-scope-badge--warn" : ""}`}
 										title={
 											shadows
-												? `${t("role scope shadowed")} (${sourceLabel} → ${target === "project" ? t("scope project") : t("scope global")})`
-												: t("role scope toggle")
+												? `${t("general.roleScopeShadowed")} (${sourceLabel} → ${target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")})`
+												: t("general.roleScopeToggle")
 										}
-										aria-label={t("role scope toggle")}
+										aria-label={t("general.roleScopeToggle")}
 										onClick={() =>
 											setRoleScope(prev => ({
 												...prev,
@@ -657,7 +657,7 @@ export function ModelSection({
 												●
 											</span>
 										)}
-										{target === "project" ? t("scope project") : t("scope global")}
+										{target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")}
 									</button>
 								);
 							})()}
@@ -667,10 +667,10 @@ export function ModelSection({
 							<div className="truncate">{resolved?.name || model}</div>
 						) : resolved ? (
 							<div className="truncate">
-								{t("auto selection")}: {resolved.name || resolved.id}
+								{t("general.autoSelection")}: {resolved.name || resolved.id}
 							</div>
 						) : (
-							<div className="italic">{t("auto selection applies")}</div>
+							<div className="italic">{t("general.autoSelectionApplies")}</div>
 						)}
 					</div>
 				</div>
@@ -712,7 +712,7 @@ export function ModelSection({
 						{chain.length > 0 && (
 							<div className="gui-role-fallbacks-title">
 								<Icon name="git-branch" className="h-3 w-3" />
-								<span>{t("fallback chain")}</span>
+								<span>{t("general.fallbackChain")}</span>
 							</div>
 						)}
 						{chain.map((selector, i) =>
@@ -766,7 +766,7 @@ export function ModelSection({
 											.catch(() => {});
 									}}
 								>
-									<span className="gui-role-fallback-grip" title={t("drag to reorder")} aria-hidden="true">
+									<span className="gui-role-fallback-grip" title={t("general.dragReorder")} aria-hidden="true">
 										<Icon name="draggable" className="h-3 w-3" />
 									</span>
 									<span className="gui-role-fallback-arrow">↳</span>
@@ -774,7 +774,7 @@ export function ModelSection({
 										<button
 											type="button"
 											className="min-w-0 flex-1 truncate text-left text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-											title={t("edit fallback")}
+											title={t("general.editFallback")}
 											onClick={() => setFallbackEditIndex(`${role}:${i}`)}
 										>
 											{selector}
@@ -787,8 +787,8 @@ export function ModelSection({
 									<button
 										type="button"
 										className="gui-btn gui-btn--icon"
-										title={t("remove fallback")}
-										aria-label={t("remove fallback")}
+										title={t("general.removeFallback")}
+										aria-label={t("general.removeFallback")}
 										onClick={() => {
 											const nextChain = chain.filter((_, idx) => idx !== i);
 											const next = { ...fallbackChains };
@@ -837,7 +837,7 @@ export function ModelSection({
 							const next = { ...roleModels, [role]: joinRoleValue(model, nextLevel) };
 							apply(next);
 						}}
-						ariaLabel={t("role thinking level")}
+						ariaLabel={t("general.roleThinkingLevel")}
 						options={(() => {
 							// TUI #thinkingOptionsFor parity: inherit + off always
 							// present, then the resolved role model's real effort
@@ -846,8 +846,8 @@ export function ModelSection({
 							// behavior tab's defaultThinkingLevel setting here.
 							const efforts = resolvedRoleModels[role]?.efforts ?? [];
 							return [
-								{ value: "inherit", label: t("inherit") },
-								{ value: "off", label: t("thinking off") },
+								{ value: "inherit", label: t("general.inherit") },
+								{ value: "off", label: t("transcript.thinkingOff") },
 								...efforts.map(lv => ({
 									value: lv,
 									label: t(`thinking ${lv}` as TranslationKey),
@@ -860,8 +860,8 @@ export function ModelSection({
 					<button
 						type="button"
 						className="gui-btn"
-						title={editingFallback ? t("add fallback") : t("fallback chain")}
-						aria-label={editingFallback ? t("add fallback") : t("fallback chain")}
+						title={editingFallback ? t("general.addFallback") : t("general.fallbackChain")}
+						aria-label={editingFallback ? t("general.addFallback") : t("general.fallbackChain")}
 						onClick={() => {
 							setFallbackEditIndex(null);
 							setFallbackEditor(editingFallback ? null : role);
@@ -874,8 +874,8 @@ export function ModelSection({
 					<button
 						type="button"
 						className="gui-btn"
-						title={cycleIndex >= 0 ? t("remove from cycle") : t("add to cycle")}
-						aria-label={cycleIndex >= 0 ? t("remove from cycle") : t("add to cycle")}
+						title={cycleIndex >= 0 ? t("general.removeCycle") : t("general.addCycle")}
+						aria-label={cycleIndex >= 0 ? t("general.removeCycle") : t("general.addCycle")}
 						onClick={() => {
 							const next = [...(cycleOrder ?? [])];
 							const at = next.indexOf(role);
@@ -892,8 +892,8 @@ export function ModelSection({
 						<button
 							type="button"
 							className="gui-btn"
-							title={t("clear role model")}
-							aria-label={t("clear role model")}
+							title={t("general.clearRoleModel")}
+							aria-label={t("general.clearRoleModel")}
 							onClick={() => {
 								const next = { ...roleModels };
 								delete next[role];
@@ -907,8 +907,8 @@ export function ModelSection({
 						<button
 							type="button"
 							className="gui-btn"
-							title={t("remove role")}
-							aria-label={t("remove role")}
+							title={t("general.removeRole")}
+							aria-label={t("general.removeRole")}
 							onClick={() => {
 								const next = { ...roleModels };
 								delete next[role];
@@ -978,12 +978,12 @@ export function ModelSection({
 						// Same icon set + wording as the model picker's rows, so a
 						// model reads identically in both places.
 						const capTitle = [
-							m.text ? t("text input") : null,
-							m.vision ? t("image understanding") : null,
-							m.video ? t("video understanding") : null,
-							m.imageGen ? t("image generation") : null,
-							m.videoGen ? t("video generation") : null,
-							m.reasoning ? t("reasoning") : null,
+							m.text ? t("general.textInput") : null,
+							m.vision ? t("general.imageUnderstanding") : null,
+							m.video ? t("general.videoUnderstanding") : null,
+							m.imageGen ? t("general.imageGeneration") : null,
+							m.videoGen ? t("general.videoGeneration") : null,
+							m.reasoning ? t("general.reasoning") : null,
 						]
 							.filter((label): label is string => label !== null)
 							.join(" · ");
@@ -1009,7 +1009,7 @@ export function ModelSection({
 						);
 					})
 				) : (
-					<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("no models")}</div>
+					<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("general.noModels")}</div>
 				)}
 				{p.modelCount > shown.length && <div className="gui-model-model-more">+{p.modelCount - shown.length}</div>}
 			</div>
@@ -1020,7 +1020,7 @@ export function ModelSection({
 	const renderAllModels = (): ReactNode => (
 		<div className="gui-model-all">
 			{catalog === null ? (
-				<div className="text-[13px] text-[var(--color-text-faint)]">{t("loading")}…</div>
+				<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.loading")}…</div>
 			) : (
 				railProviders.map(p => (
 					<div key={p.provider} className="gui-model-provider-block">
@@ -1048,13 +1048,13 @@ export function ModelSection({
 		const known = mergedProviders.find(m => m.id === p.provider || m.alternateLogins.some(a => a.id === p.provider));
 		const status = known
 			? known.loggedIn
-				? t("logged in")
+				? t("settings.loggedIn")
 				: known.configured
-					? t("configured")
-					: t("not logged in")
+					? t("settings.configured")
+					: t("settings.notLogged")
 			: p.available
-				? t("logged in")
-				: t("not logged in");
+				? t("settings.loggedIn")
+				: t("settings.notLogged");
 		return (
 			<div className="gui-settings-section">
 				<div className="gui-settings-row">
@@ -1079,7 +1079,7 @@ export function ModelSection({
 								onClick={() => void onLogin(p.provider)}
 							>
 								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-								{t("login")}
+								{t("settings.login")}
 							</button>
 						)}
 						{p.canImport && (
@@ -1092,7 +1092,7 @@ export function ModelSection({
 								}}
 							>
 								<Icon name="key" className="h-3.5 w-3.5" />
-								{t("import api key")}
+								{t("general.importApiKey")}
 							</button>
 						)}
 					</div>
@@ -1123,7 +1123,7 @@ export function ModelSection({
 		return (
 			<DialogFrame
 				open={s !== null}
-				label={t("login to {name}", { name: providerDisplayName(s?.providerId ?? "") })}
+				label={t("settings.loginToWithName", { name: providerDisplayName(s?.providerId ?? "") })}
 				onClose={() => void onCancelLogin()}
 				className="gui-dialog--confirm gui-provider-flow-dialog"
 			>
@@ -1131,7 +1131,7 @@ export function ModelSection({
 					<div className="gui-github-flow">
 						<div className="gui-github-flow-title flex items-center gap-1.5">
 							<Icon name="lock" className="h-3.5 w-3.5" />
-							{t("login to {name}", { name: providerDisplayName(s.providerId) })}
+							{t("settings.loginToWithName", { name: providerDisplayName(s.providerId) })}
 						</div>
 						{s.url && (
 							<div className="gui-github-flow-actions">
@@ -1141,7 +1141,7 @@ export function ModelSection({
 									onClick={() => void openExternalUrl(s.launchUrl ?? s.url!)}
 								>
 									<Icon name="external-link" className="h-3.5 w-3.5" />
-									{t("open login page")}
+									{t("transcript.openLoginPage")}
 								</button>
 								<button
 									type="button"
@@ -1152,7 +1152,7 @@ export function ModelSection({
 										window.setTimeout(() => setCopied(false), 1500);
 									}}
 								>
-									{copied ? t("link copied") : t("copy link")}
+									{copied ? t("settings.linkCopied") : t("settings.copyLink")}
 								</button>
 							</div>
 						)}
@@ -1164,7 +1164,7 @@ export function ModelSection({
 									className="gui-input flex-1"
 									value={inputValue}
 									onChange={e => setInputValue(e.target.value)}
-									placeholder={t("paste the code or redirect URL")}
+									placeholder={t("settings.pasteCodeRedirectUrl")}
 									onKeyDown={e => {
 										if (e.key === "Enter") {
 											void onSubmitInput(inputValue);
@@ -1177,7 +1177,7 @@ export function ModelSection({
 									className="gui-btn gui-btn-approve"
 									onClick={() => void onSubmitInput(inputValue)}
 								>
-									{t("submit")}
+									{t("settings.submit2")}
 								</button>
 							</div>
 						) : (
@@ -1185,13 +1185,13 @@ export function ModelSection({
 							pendingLogins.includes(s.providerId) && (
 								<div className="gui-github-flow-waiting">
 									<span className="gui-flow-spinner" aria-hidden="true" />
-									{t("waiting login")}
+									{t("transcript.waitingLogin")}
 								</div>
 							)
 						)}
 						<div className="gui-github-flow-actions">
 							<button type="button" className="gui-btn" onClick={() => void onCancelLogin()}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 						</div>
 					</div>
@@ -1205,7 +1205,7 @@ export function ModelSection({
 		return (
 			<DialogFrame
 				open={apiKeyTarget !== null}
-				label={t("import api key for {name}", { name: providerDisplayName(apiKeyTarget ?? "") })}
+				label={t("general.importApiKeyWithName", { name: providerDisplayName(apiKeyTarget ?? "") })}
 				onClose={() => setApiKeyTarget(null)}
 				className="gui-dialog--confirm gui-provider-flow-dialog"
 			>
@@ -1213,7 +1213,7 @@ export function ModelSection({
 					<div className="gui-github-flow">
 						<div className="gui-github-flow-title flex items-center gap-1.5">
 							<Icon name="key" className="h-3.5 w-3.5" />
-							{t("import api key for {name}", { name: providerDisplayName(apiKeyTarget) })}
+							{t("general.importApiKeyWithName", { name: providerDisplayName(apiKeyTarget) })}
 						</div>
 						<div className="flex items-center gap-2">
 							<input
@@ -1232,10 +1232,10 @@ export function ModelSection({
 								disabled={!apiKeyValue.trim()}
 								onClick={() => void submitApiKey()}
 							>
-								{t("import")}
+								{t("general.import")}
 							</button>
 							<button type="button" className="gui-btn" onClick={() => setApiKeyTarget(null)}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 						</div>
 					</div>
@@ -1246,14 +1246,14 @@ export function ModelSection({
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("model settings")}</h2>
-			<p className="gui-settings-page-desc">{t("model settings description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.modelSettings")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.modelSettingsDescription")}</p>
 
 			<div className="gui-model-pane">
 				{/* Top tabs (extensions-center pill parity): the pane's old left
 				 * nav moved up — the roles tab now hosts its own TUI-style rail,
 				 * so a second vertical nav would double up. */}
-				<div ref={modelTabsRef} className="gui-model-tabs" role="tablist" aria-label={t("model settings")}>
+				<div ref={modelTabsRef} className="gui-model-tabs" role="tablist" aria-label={t("settings.modelSettings")}>
 					{modelTabs.map(tab => (
 						<button
 							key={tab.id}
@@ -1275,28 +1275,28 @@ export function ModelSection({
 					{activeTab === "roles" && rpc && (
 						<>
 							<div className="gui-settings-section">
-								<div className="gui-settings-section-title">{t("role models")}</div>
-								<div className="gui-settings-section-desc">{t("role models description")}</div>
+								<div className="gui-settings-section-title">{t("general.roleModels")}</div>
+								<div className="gui-settings-section-desc">{t("settings.roleModelsDescription")}</div>
 							</div>
 							{/* TUI /model parity: the roles tab is a split pane — a
 							 * rail of Roles / All models / registered providers /
 							 * unregistered providers on the left, the selected
 							 * view's content on the right. */}
 							<div className="gui-model-rail-wrap">
-								<nav className="gui-model-rail" aria-label={t("role models")}>
+								<nav className="gui-model-rail" aria-label={t("general.roleModels")}>
 									<button type="button" className={railEntryCls("roles")} onClick={() => setRailView("roles")}>
-										<span className="gui-model-rail-label">{t("role models")}</span>
+										<span className="gui-model-rail-label">{t("general.roleModels")}</span>
 										<span className="gui-model-rail-count">
 											{assignedCount}/{rolesOrder.length}
 										</span>
 									</button>
 									<button type="button" className={railEntryCls("all")} onClick={() => setRailView("all")}>
-										<span className="gui-model-rail-label">{t("all models")}</span>
+										<span className="gui-model-rail-label">{t("general.allModels")}</span>
 										<span className="gui-model-rail-count">{catalogModels?.length ?? 0}</span>
 									</button>
 									{catalog !== null && (
 										<>
-											<div className="gui-model-rail-group">{t("registered providers")}</div>
+											<div className="gui-model-rail-group">{t("general.registeredProviders")}</div>
 											{registeredProviders.map(p => (
 												<button
 													key={p.provider}
@@ -1315,7 +1315,7 @@ export function ModelSection({
 													<span className="gui-model-rail-count">{p.modelCount}</span>
 												</button>
 											))}
-											<div className="gui-model-rail-group">{t("unregistered providers")}</div>
+											<div className="gui-model-rail-group">{t("general.unregisteredProviders")}</div>
 											{unregisteredProviders.map(p => (
 												<button
 													key={p.provider}
@@ -1347,7 +1347,7 @@ export function ModelSection({
 											 * settings. The DEFAULT role below IS the default
 											 * model for new sessions. */}
 											{roleModels === null ? (
-												<div className="text-[13px] text-[var(--color-text-faint)]">{t("loading")}…</div>
+												<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.loading")}…</div>
 											) : (
 												<>
 													<div className="gui-role-grid">
@@ -1359,7 +1359,7 @@ export function ModelSection({
 														type="button"
 														className="gui-connect-add"
 														onClick={() => {
-															void prompt({ title: t("new role name") }).then((role: string | null) => {
+															void prompt({ title: t("general.newRoleName") }).then((role: string | null) => {
 																if (!role?.trim() || !rpc) return;
 																const next = { ...roleModels, [role.trim()]: "" };
 																applyRoleModels(next);
@@ -1367,12 +1367,12 @@ export function ModelSection({
 														}}
 													>
 														<Icon name="add-circle" className="h-4 w-4" />
-														<span>{t("add role")}</span>
+														<span>{t("general.addRole")}</span>
 													</button>
 													{(cycleOrder?.length ?? 0) > 0 && (
 														<div className="gui-role-cycle-track">
 															<span className="text-[12px] text-[var(--color-text-faint)]">
-																{t("cycle order")}:
+																{t("general.cycleOrder")}:
 															</span>
 															{cycleOrder!.map(role => (
 																<span key={role} className="gui-role-cycle-chip">
@@ -1394,9 +1394,9 @@ export function ModelSection({
 															return (
 																<div className="gui-project-overrides">
 																	<div className="gui-project-overrides-title">
-																		<span>{t("project overrides")}</span>
+																		<span>{t("general.projectOverrides")}</span>
 																		<span className="text-[12px] text-[var(--color-text-faint)]">
-																			{t("overrides count {count}", { count: String(real.length) })}
+																			{t("general.overridesCountWithCount", { count: String(real.length) })}
 																		</span>
 																	</div>
 																	{real.map(entry => (
@@ -1421,8 +1421,8 @@ export function ModelSection({
 																				<button
 																					type="button"
 																					className="gui-btn gui-btn--icon"
-																					title={t("delete override")}
-																					aria-label={t("delete override")}
+																					title={t("general.deleteOverride")}
+																					aria-label={t("general.deleteOverride")}
 																					onClick={() => deleteProjectOverride(entry.path)}
 																				>
 																					<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -1430,9 +1430,9 @@ export function ModelSection({
 																			) : (
 																				<span
 																					className="text-[11px] text-[var(--color-text-faint)]"
-																					title={t("override read only")}
+																					title={t("general.overrideReadOnly")}
 																				>
-																					{t("read only")}
+																					{t("general.readOnly")}
 																				</span>
 																			)}
 																		</div>
@@ -1454,8 +1454,8 @@ export function ModelSection({
 					{activeTab === "behavior" && rpc && (
 						<>
 							<div className="gui-settings-section">
-								<div className="gui-settings-section-title">{t("model behavior")}</div>
-								<div className="gui-settings-section-desc">{t("model behavior description")}</div>
+								<div className="gui-settings-section-title">{t("general.modelBehavior")}</div>
+								<div className="gui-settings-section-desc">{t("general.modelBehaviorDescription")}</div>
 							</div>
 							<div className="gui-schema-card">
 								{/* Model behaviour (thinking/sampling/prompt/retry & fallback/
@@ -1464,12 +1464,12 @@ export function ModelSection({
 								<SchemaTabSection rpc={rpc} tabs={["model"]} />
 							</div>
 							<div className="gui-settings-section mt-4">
-								<div className="gui-settings-section-title">{t("side channel model")}</div>
-								<div className="gui-settings-section-desc">{t("side channel model description")}</div>
+								<div className="gui-settings-section-title">{t("settings.sideChannelModel")}</div>
+								<div className="gui-settings-section-desc">{t("settings.sideChannelModelDescription")}</div>
 								<div className="gui-settings-row">
 									<div>
-										<div className="gui-settings-row-label">{t("side channel model")}</div>
-										<div className="gui-settings-row-desc">{t("side channel model label desc")}</div>
+										<div className="gui-settings-row-label">{t("settings.sideChannelModel")}</div>
+										<div className="gui-settings-row-desc">{t("settings.sideChannelModelLabel")}</div>
 									</div>
 									<GuiSelect
 										className="gui-input max-w-[260px]"
@@ -1481,9 +1481,9 @@ export function ModelSection({
 												.request("settings.set", { key: "sideChannelModel", value: next })
 												.catch(() => {});
 										}}
-										ariaLabel={t("side channel model")}
+										ariaLabel={t("settings.sideChannelModel")}
 										options={[
-											{ value: "", label: t("follow session model") },
+											{ value: "", label: t("settings.followSessionModel") },
 											...(catalogModels ?? []).map(m => ({ value: m.id, label: m.name ?? m.id })),
 										]}
 									/>
@@ -1498,12 +1498,12 @@ export function ModelSection({
 							 * one searchable list — active providers first, model tags on
 							 * API-backed cards, floating modal for API-key import. */}
 							<div className="gui-settings-section">
-								<div className="gui-settings-section-title">{t("providers unified")}</div>
-								<div className="gui-settings-section-desc">{t("providers unified hint")}</div>
+								<div className="gui-settings-section-title">{t("settings.providersUnified")}</div>
+								<div className="gui-settings-section-desc">{t("settings.providersUnifiedHint")}</div>
 								{providers === null ? (
-									<div className="text-[13px] text-[var(--color-text-faint)]">{t("loading")}…</div>
+									<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.loading")}…</div>
 								) : mergedProviders.length === 0 ? (
-									<div className="text-[13px] text-[var(--color-text-faint)]">{t("no providers")}</div>
+									<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.noProviders")}</div>
 								) : (
 									<>
 										<div className="gui-provider-search">
@@ -1512,8 +1512,8 @@ export function ModelSection({
 												className="gui-input min-w-0 flex-1"
 												value={providerQuery}
 												onChange={e => setProviderQuery(e.target.value)}
-												placeholder={t("search providers…")}
-												aria-label={t("search providers…")}
+												placeholder={t("settings.searchProviders")}
+												aria-label={t("settings.searchProviders")}
 											/>
 										</div>
 										<HeightMorph morphKey={`${showAll}:${providerQ}`}>
@@ -1555,13 +1555,13 @@ export function ModelSection({
 																		/>
 																		{p.loggedIn
 																			? creds.length > 1
-																				? t("logged in · {count}", { count: String(creds.length) })
-																				: t("logged in")
+																				? t("general.loggedInWithCount", { count: String(creds.length) })
+																				: t("settings.loggedIn")
 																			: p.configured
-																				? t("configured")
+																				? t("settings.configured")
 																				: p.canImport
-																					? `${p.modelCount} ${t("models")}`
-																					: t("not logged in")}
+																					? `${p.modelCount} ${t("general.models")}`
+																					: t("settings.notLogged")}
 																	</div>
 																</div>
 																{active ? (
@@ -1578,7 +1578,7 @@ export function ModelSection({
 																				setCredsMenu(menu => (menu === p.id ? null : p.id))
 																			}
 																		>
-																			{t("logout")}
+																			{t("settings.logout")}
 																			<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 																		</button>
 																		<MenuPopup
@@ -1591,7 +1591,7 @@ export function ModelSection({
 																				if (!open && credsMenu === p.id) setCredsMenu(null);
 																			}}
 																		>
-																			<div className="gui-creds-menu-label">{t("accounts")}</div>
+																			<div className="gui-creds-menu-label">{t("general.accounts")}</div>
 																			{creds.map(c => (
 																				<div key={c.id} className="gui-creds-row">
 																					<div className="min-w-0 flex-1">
@@ -1607,8 +1607,8 @@ export function ModelSection({
 																					<button
 																						type="button"
 																						className="gui-btn gui-btn--icon"
-																						title={t("edit credential note")}
-																						aria-label={t("edit credential note")}
+																						title={t("general.editCredentialNote")}
+																						aria-label={t("general.editCredentialNote")}
 																						onClick={() =>
 																							void editCredentialNote(p.id, c.id, c.note ?? null)
 																						}
@@ -1618,8 +1618,8 @@ export function ModelSection({
 																					<button
 																						type="button"
 																						className="gui-btn gui-btn--icon"
-																						title={t("remove credential")}
-																						aria-label={t("remove credential")}
+																						title={t("general.removeCredential")}
+																						aria-label={t("general.removeCredential")}
 																						onClick={() => void logoutCredential(p.id, c.id)}
 																					>
 																						<Icon name="delete-bin" className="h-3 w-3" />
@@ -1649,7 +1649,7 @@ export function ModelSection({
 																			>
 																				<Icon name="add-circle" className="h-3.5 w-3.5" />
 																				<span className="min-w-0 flex-1">
-																					{t("add another credential")}
+																					{t("general.addAnotherCredential")}
 																				</span>
 																			</button>
 																			{p.alternateLogins.map(alt => (
@@ -1657,7 +1657,7 @@ export function ModelSection({
 																					type="button"
 																					key={alt.id}
 																					className="gui-view-opt"
-																					title={t("alternate login hint")}
+																					title={t("general.alternateLoginHint")}
 																					disabled={pendingLogins.includes(alt.id)}
 																					onClick={() => {
 																						setCredsMenu(null);
@@ -1666,7 +1666,7 @@ export function ModelSection({
 																				>
 																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
 																					<span className="min-w-0 flex-1">
-																						{t("login with {name}", { name: alt.name })}
+																						{t("general.loginWithWithName", { name: alt.name })}
 																					</span>
 																				</button>
 																			))}
@@ -1678,7 +1678,7 @@ export function ModelSection({
 																					void onLogout(p.id);
 																				}}
 																			>
-																				<span className="min-w-0 flex-1">{t("logout all")}</span>
+																				<span className="min-w-0 flex-1">{t("general.logoutAll")}</span>
 																			</button>
 																		</MenuPopup>
 																	</div>
@@ -1692,8 +1692,8 @@ export function ModelSection({
 																				else cardMenuAnchors.current.delete(`actions-${p.id}`);
 																			}}
 																			aria-expanded={actionsMenu === p.id}
-																			aria-label={t("provider actions")}
-																			title={t("provider actions")}
+																			aria-label={t("general.providerActions")}
+																			title={t("general.providerActions")}
 																			onClick={() =>
 																				setActionsMenu(menu => (menu === p.id ? null : p.id))
 																			}
@@ -1721,7 +1721,7 @@ export function ModelSection({
 																					}}
 																				>
 																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-																					<span className="min-w-0 flex-1">{t("login")}</span>
+																					<span className="min-w-0 flex-1">{t("settings.login")}</span>
 																				</button>
 																			)}
 																			{p.canImport && (
@@ -1736,7 +1736,7 @@ export function ModelSection({
 																				>
 																					<Icon name="key" className="h-3.5 w-3.5" />
 																					<span className="min-w-0 flex-1">
-																						{t("import api key")}
+																						{t("general.importApiKey")}
 																					</span>
 																				</button>
 																			)}
@@ -1770,8 +1770,8 @@ export function ModelSection({
 												onClick={() => setShowAll(v => !v)}
 											>
 												{showAll
-													? t("collapse")
-													: t("show all {count}", { count: String(filteredProviders.length) })}
+													? t("tools.collapse")
+													: t("settings.showAllWithCount", { count: String(filteredProviders.length) })}
 												<StateIcon
 													on={showAll}
 													pair={["arrow-up-s", "arrow-down-s"]}
@@ -1781,7 +1781,7 @@ export function ModelSection({
 										)}
 										{providerQ && filteredProviders.length === 0 && (
 											<div className="text-[13px] text-[var(--color-text-faint)]">
-												{t("no matching providers")}
+												{t("settings.noMatchingProviders")}
 											</div>
 										)}
 									</>

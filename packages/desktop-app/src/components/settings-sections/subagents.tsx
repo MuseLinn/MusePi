@@ -10,7 +10,7 @@ import { SchemaTabSection } from "./schema";
 export function SubagentsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("tasks & subagents")}</h2>
+			<h2 className="gui-settings-page-title">{t("settings.tasksSubagents")}</h2>
 			<SchemaTabSection rpc={rpc} tabs={["tasks"]} />
 		</>
 	);

@@ -121,13 +121,13 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		return (
 			<div className="gui-ext-plugins">
 				<div className="gui-ext-plugins-toolbar">
-					<span className="gui-ext-plugins-toolbar-count">{tLoose("bundle title")}</span>
+					<span className="gui-ext-plugins-toolbar-count">{tLoose("tools.bundleTitle")}</span>
 				</div>
 				<div className="gui-ext-empty-state">
 					<Icon name="plug-2" className="h-5 w-5 opacity-40" />
-					<div className="gui-ext-empty-state-title">{tLoose("bundle no composition title")}</div>
+					<div className="gui-ext-empty-state-title">{tLoose("tools.bundleNoCompositionTitle")}</div>
 					<p className="gui-ext-empty-state-desc">
-						{composition.declared === "unreadable" ? composition.detail : tLoose("bundle no composition desc")}
+						{composition.declared === "unreadable" ? composition.detail : tLoose("tools.bundleNoCompositionDesc")}
 					</p>
 				</div>
 			</div>
@@ -138,36 +138,36 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		<div className="gui-ext-plugins">
 			<div className="gui-ext-plugins-toolbar">
 				<span className="gui-ext-plugins-toolbar-count">
-					{composition.profile ? `${tLoose("bundle profile")} ${composition.profile} · ` : ""}
-					{tLoose("bundle rows", { count: counts.total })}
-					{counts.disabled > 0 ? ` · ${tLoose("bundle disabled count", { count: counts.disabled })}` : ""}
-					{counts.conditional > 0 ? ` · ${tLoose("bundle conditional count", { count: counts.conditional })}` : ""}
+					{composition.profile ? `${tLoose("tools.bundleProfile")} ${composition.profile} · ` : ""}
+					{tLoose("tools.bundleRows", { count: counts.total })}
+					{counts.disabled > 0 ? ` · ${tLoose("tools.bundleDisabledCount", { count: counts.disabled })}` : ""}
+					{counts.conditional > 0 ? ` · ${tLoose("tools.bundleConditionalCount", { count: counts.conditional })}` : ""}
 				</span>
 			</div>
 			{error && <div className="gui-ext-plugins-error">{error}</div>}
 			{composition.unevaluatedExpressions > 0 && (
 				<div className="gui-ext-plugins-note">
 					<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
-					<span>{tLoose("bundle unevaluated hint", { count: composition.unevaluatedExpressions })}</span>
+					<span>{tLoose("tools.bundleUnevaluatedHint", { count: composition.unevaluatedExpressions })}</span>
 				</div>
 			)}
 			<div className="gui-ext-list-scroll">
 				<div className="gui-ext-group">
 					<div className="gui-ext-group-title">
-						{tLoose("bundle layers")} · {composition.layers.length}
+						{tLoose("tools.bundleLayers")} · {composition.layers.length}
 					</div>
 					{composition.layers.map(layer => (
 						<div key={layer.name} className="gui-bundle-layer">
 							<span className="gui-bundle-layer-name">{layer.name}</span>
-							<span className="gui-ext-item-tag">{tLoose("bundle layer rows", { count: layer.rows })}</span>
+							<span className="gui-ext-item-tag">{tLoose("tools.bundleLayerRows", { count: layer.rows })}</span>
 							{layer.overrides > 0 && (
 								<span className="gui-ext-item-tag gui-ext-item-tag--preset">
-									{tLoose("bundle layer overrides", { count: layer.overrides })}
+									{tLoose("tools.bundleLayerOverrides", { count: layer.overrides })}
 								</span>
 							)}
 							{layer.unreadable.length > 0 && (
 								<span className="gui-ext-item-tag gui-ext-item-tag--err" title={layer.unreadable.join("\n")}>
-									{tLoose("bundle layer unreadable", { count: layer.unreadable.length })}
+									{tLoose("tools.bundleLayerUnreadable", { count: layer.unreadable.length })}
 								</span>
 							)}
 						</div>
@@ -176,32 +176,32 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				{composition.rows.length === 0 ? (
 					<div className="gui-ext-empty-state">
 						<Icon name="plug" className="h-5 w-5 opacity-40" />
-						<div className="gui-ext-empty-state-title">{tLoose("bundle no rows title")}</div>
-						<p className="gui-ext-empty-state-desc">{tLoose("bundle no rows desc")}</p>
+						<div className="gui-ext-empty-state-title">{tLoose("tools.bundleNoRowsTitle")}</div>
+						<p className="gui-ext-empty-state-desc">{tLoose("tools.bundleNoRowsDesc")}</p>
 					</div>
 				) : (
 					<div className="gui-ext-group">
-						<div className="gui-ext-group-title">{tLoose("bundle rows", { count: composition.rows.length })}</div>
+						<div className="gui-ext-group-title">{tLoose("tools.bundleRows", { count: composition.rows.length })}</div>
 						{composition.rows.map(row => (
 							<div key={row.id} className="gui-ext-provider">
 								<div className="gui-ext-provider-h">
 									<span className="gui-bundle-dot" data-state={row.state} aria-hidden="true" />
 									<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{row.id}</span>
-									{row.group && <span className="gui-ext-item-tag">{tLoose("bundle group tag")}</span>}
+									{row.group && <span className="gui-ext-item-tag">{tLoose("tools.bundleGroupTag")}</span>}
 									{row.pluginIssue === "not-installed" && (
 										<span className="gui-ext-item-tag gui-ext-item-tag--err">
-											{tLoose("bundle plugin missing")}
+											{tLoose("tools.bundlePluginMissing")}
 										</span>
 									)}
 									{row.pluginIssue === "disabled" && (
-										<span className="gui-ext-item-tag">{tLoose("bundle plugin disabled")}</span>
+										<span className="gui-ext-item-tag">{tLoose("tools.bundlePluginDisabled")}</span>
 									)}
 									{row.state === "conditional" && (
 										<span
 											className="gui-ext-item-tag gui-ext-item-tag--gui"
-											title={tLoose("bundle conditional hint")}
+											title={tLoose("tools.bundleConditionalHint")}
 										>
-											{tLoose("bundle conditional tag")}
+											{tLoose("tools.bundleConditionalTag")}
 										</span>
 									)}
 									{row.state !== "conditional" && (
@@ -209,7 +209,7 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 											type="button"
 											role="switch"
 											aria-checked={row.state === "enabled"}
-											aria-label={`${row.state === "enabled" ? tLoose("disable skill") : tLoose("enable skill")} ${row.id}`}
+											aria-label={`${row.state === "enabled" ? tLoose("tools.disableSkill") : tLoose("tools.enableSkill")} ${row.id}`}
 											className={`gui-toggle gui-toggle--sm${row.state === "enabled" ? " gui-toggle--on" : ""}`}
 											disabled={busyId !== null}
 											onClick={() => toggle(row)}

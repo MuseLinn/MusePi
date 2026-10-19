@@ -122,22 +122,22 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 			    each carried the pair and the dialog showed both. */}
 			{withTips && (
 				<ul className="gui-shortcut-tips">
-					<li>{t("shortcut tips palette", { shortcut: paletteBinding })}</li>
-					<li>{t("shortcut tips rebind")}</li>
+					<li>{t("general.shortcutTipsPalette", { shortcut: paletteBinding })}</li>
+					<li>{t("general.shortcutTipsRebind")}</li>
 				</ul>
 			)}
 		</div>
 	);
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("keyboard shortcuts")} className="gui-dialog--shortcuts">
+		<DialogFrame open={open} onClose={onClose} label={t("general.keyboardShortcuts")} className="gui-dialog--shortcuts">
 			<div className="gui-dialog-head">
 				<div className="flex items-center gap-2.5">
 					<Icon name="command" className="h-5 w-5 text-[var(--color-text-muted)]" />
-					<h3 className="gui-dialog-title">{t("keyboard shortcuts")}</h3>
+					<h3 className="gui-dialog-title">{t("general.keyboardShortcuts")}</h3>
 				</div>
 			</div>
-			<p className="gui-shortcuts-lede">{t("keyboard shortcuts desc")}</p>
+			<p className="gui-shortcuts-lede">{t("general.keyboardShortcutsDesc")}</p>
 			<div
 				ref={gridRef}
 				className="gui-shortcuts-grid"

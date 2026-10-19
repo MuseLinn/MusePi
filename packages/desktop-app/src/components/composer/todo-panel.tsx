@@ -34,7 +34,7 @@ export function TodoPanel({
 	onAppendChange(value: string): void;
 }): ReactNode {
 	return (
-		<div className="gui-todo-panel" role="region" aria-label={t("todo list")}>
+		<div className="gui-todo-panel" role="region" aria-label={t("transcript.todoList")}>
 			{phases.map(phase => (
 				<div key={phase.name} className="gui-todo-phase">
 					<div className="gui-todo-phase-head">
@@ -62,8 +62,8 @@ export function TodoPanel({
 									<button
 										type="button"
 										className="gui-todo-act"
-										title={t("mark in progress")}
-										aria-label={t("mark in progress")}
+										title={t("composer.markProgress")}
+										aria-label={t("composer.markProgress")}
 										onClick={() => onOp("start", task.content)}
 									>
 										<Icon name="play" className="h-3 w-3" />
@@ -73,8 +73,8 @@ export function TodoPanel({
 									<button
 										type="button"
 										className="gui-todo-act"
-										title={t("mark done")}
-										aria-label={t("mark done")}
+										title={t("general.markDone")}
+										aria-label={t("general.markDone")}
 										onClick={() => onOp("done", task.content)}
 									>
 										<Icon name="check" className="h-3 w-3" />
@@ -84,8 +84,8 @@ export function TodoPanel({
 									<button
 										type="button"
 										className="gui-todo-act"
-										title={t("abandon task")}
-										aria-label={t("abandon task")}
+										title={t("composer.abandonTask")}
+										aria-label={t("composer.abandonTask")}
 										onClick={() => onOp("drop", task.content)}
 									>
 										<Icon name="close" className="h-3 w-3" />
@@ -94,8 +94,8 @@ export function TodoPanel({
 								<button
 									type="button"
 									className="gui-todo-act"
-									title={t("remove task")}
-									aria-label={t("remove task")}
+									title={t("composer.removeTask")}
+									aria-label={t("composer.removeTask")}
 									onClick={() => onOp("rm", task.content)}
 								>
 									<Icon name="delete-bin" className="h-3 w-3" />
@@ -117,14 +117,14 @@ export function TodoPanel({
 									}
 								}
 							}}
-							placeholder={t("add a task…")}
-							aria-label={t("add a task…")}
+							placeholder={t("composer.addTask")}
+							aria-label={t("composer.addTask")}
 						/>
 						<button
 							type="button"
 							className="gui-todo-act gui-todo-act--add"
-							title={t("add task")}
-							aria-label={t("add task")}
+							title={t("guest.addTask")}
+							aria-label={t("guest.addTask")}
 							disabled={!appendText.trim()}
 							onClick={() => {
 								if (appendText.trim()) {

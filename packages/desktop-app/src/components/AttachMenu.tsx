@@ -220,7 +220,7 @@ export function AttachMenu({
 						<span className="gui-attach-opt-title">{p.displayName || p.name}</span>
 						<span className="gui-attach-opt-hint">{p.description || p.path}</span>
 					</span>
-					<span className="gui-attach-picker-badge">{t("plus picker enabled badge")}</span>
+					<span className="gui-attach-picker-badge">{t("composer.plusPickerEnabledBadge")}</span>
 				</>
 			),
 			token: p.displayName || p.name,
@@ -243,15 +243,15 @@ export function AttachMenu({
 				type="button"
 				className={`gui-composer-ico${open ? " gui-composer-ico--active" : ""}`}
 				onClick={() => setOpen(v => !v)}
-				title={t("attach")}
-				aria-label={t("attach")}
+				title={t("general.attach")}
+				aria-label={t("general.attach")}
 				aria-expanded={open}
 				aria-haspopup="menu"
 			>
 				<Icon name="add" className="h-3.5 w-3.5" />
 			</button>
 			{renderMenu(
-				<div className="gui-attach-menu" role="menu" aria-label={t("attach")}>
+				<div className="gui-attach-menu" role="menu" aria-label={t("general.attach")}>
 					<button
 						type="button"
 						className="gui-attach-opt"
@@ -262,8 +262,8 @@ export function AttachMenu({
 					>
 						<Icon name="file-image" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("add images")}</span>
-							<span className="gui-attach-opt-hint">{tLoose("add images desc")}</span>
+							<span className="gui-attach-opt-title">{t("general.addImages")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("general.addImagesDesc")}</span>
 						</span>
 					</button>
 					{/* kimicode "+" menu parity: icon + label + one-line desc per
@@ -282,8 +282,8 @@ export function AttachMenu({
 						>
 							<Icon name="camera" className="h-4 w-4 gui-attach-opt-ico" />
 							<span className="min-w-0 flex-1">
-								<span className="gui-attach-opt-title">{tLoose("attach capture screen")}</span>
-								<span className="gui-attach-opt-hint">{tLoose("attach capture screen desc")}</span>
+								<span className="gui-attach-opt-title">{tLoose("general.attachCaptureScreen")}</span>
+								<span className="gui-attach-opt-hint">{tLoose("general.attachCaptureScreenDesc")}</span>
 							</span>
 							<kbd className="gui-attach-keys">{bindingLabel("capture-screen")}</kbd>
 						</button>
@@ -300,8 +300,8 @@ export function AttachMenu({
 						>
 							<Icon name="palette" className="h-4 w-4 gui-attach-opt-ico" />
 							<span className="min-w-0 flex-1">
-								<span className="gui-attach-opt-title">{t("sketch")}</span>
-								<span className="gui-attach-opt-hint">{tLoose("sketch desc")}</span>
+								<span className="gui-attach-opt-title">{t("composer.sketch")}</span>
+								<span className="gui-attach-opt-hint">{tLoose("general.sketchDesc")}</span>
 							</span>
 						</button>
 					)}
@@ -316,8 +316,8 @@ export function AttachMenu({
 						>
 							<Icon name="file" className="h-4 w-4 gui-attach-opt-ico" />
 							<span className="min-w-0 flex-1">
-								<span className="gui-attach-opt-title">{t("add attachments")}</span>
-								<span className="gui-attach-opt-hint">{tLoose("add attachments desc")}</span>
+								<span className="gui-attach-opt-title">{t("composer.addAttachments")}</span>
+								<span className="gui-attach-opt-hint">{tLoose("general.addAttachmentsDesc")}</span>
 							</span>
 						</button>
 					)}
@@ -332,8 +332,8 @@ export function AttachMenu({
 					>
 						<Icon name="terminal" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("insert command")}</span>
-							<span className="gui-attach-opt-hint">{tLoose("insert command desc")}</span>
+							<span className="gui-attach-opt-title">{t("general.insertCommand")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("general.insertCommandDesc")}</span>
 						</span>
 					</button>
 					<button
@@ -347,8 +347,8 @@ export function AttachMenu({
 					>
 						<Icon name="chat-1" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("mention file")}</span>
-							<span className="gui-attach-opt-hint">{tLoose("mention file desc")}</span>
+							<span className="gui-attach-opt-title">{t("general.mentionFile")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("general.mentionFileDesc")}</span>
 						</span>
 					</button>
 					<button
@@ -362,8 +362,8 @@ export function AttachMenu({
 					>
 						<Icon name="chat-3" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("insert session")}</span>
-							<span className="gui-attach-opt-hint">{tLoose("insert session desc")}</span>
+							<span className="gui-attach-opt-title">{t("general.insertSession")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("general.insertSessionDesc")}</span>
 						</span>
 					</button>
 					<div className="gui-creds-menu-sep" />
@@ -371,7 +371,7 @@ export function AttachMenu({
 						type="button"
 						className="gui-attach-opt"
 						role="menuitem"
-						title={t("insert magic keyword hint")}
+						title={t("general.insertMagicKeywordHint")}
 						onClick={() => {
 							onInsert(" ultrathink ");
 							setOpen(false);
@@ -379,15 +379,15 @@ export function AttachMenu({
 					>
 						<Icon name="brain-ai-3" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("insert ultrathink")}</span>
-							<span className="gui-attach-opt-hint">{tLoose("insert ultrathink desc")}</span>
+							<span className="gui-attach-opt-title">{t("general.insertUltrathink")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("general.insertUltrathinkDesc")}</span>
 						</span>
 					</button>
 					<button
 						type="button"
 						className="gui-attach-opt"
 						role="menuitem"
-						title={t("insert magic keyword hint")}
+						title={t("general.insertMagicKeywordHint")}
 						onClick={() => {
 							onInsert(" workflowz ");
 							setOpen(false);
@@ -395,8 +395,8 @@ export function AttachMenu({
 					>
 						<Icon name="git-branch" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("insert workflowz")}</span>
-							<span className="gui-attach-opt-hint">{tLoose("insert workflowz desc")}</span>
+							<span className="gui-attach-opt-title">{t("general.insertWorkflowz")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("general.insertWorkflowzDesc")}</span>
 						</span>
 					</button>
 					<div className="gui-creds-menu-sep" />
@@ -406,13 +406,13 @@ export function AttachMenu({
 						role="menuitemcheckbox"
 						aria-checked={planMode}
 						disabled={planDisabled}
-						title={planDisabled ? t("start a session to use plan mode") : undefined}
+						title={planDisabled ? t("general.startSessionUsePlan") : undefined}
 						onClick={onTogglePlan}
 					>
 						<Icon name="compass-3" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("plan mode")}</span>
-							<span className="gui-attach-opt-hint">{t("plan mode hint")}</span>
+							<span className="gui-attach-opt-title">{t("general.planMode")}</span>
+							<span className="gui-attach-opt-hint">{t("general.planModeHint")}</span>
 						</span>
 						<span className={`gui-attach-switch${planMode ? " gui-attach-switch--on" : ""}`} aria-hidden>
 							<span className="gui-attach-switch-knob" />
@@ -424,13 +424,13 @@ export function AttachMenu({
 						role="menuitemcheckbox"
 						aria-checked={goalMode}
 						disabled={goalDisabled}
-						title={goalDisabled ? t("start a session to use goal mode") : undefined}
+						title={goalDisabled ? t("general.startSessionUseGoal") : undefined}
 						onClick={onToggleGoal}
 					>
 						<Icon name="target" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("goal mode")}</span>
-							<span className="gui-attach-opt-hint">{t("goal mode hint")}</span>
+							<span className="gui-attach-opt-title">{t("general.goalMode")}</span>
+							<span className="gui-attach-opt-hint">{t("general.goalModeHint")}</span>
 						</span>
 						<span className={`gui-attach-switch${goalMode ? " gui-attach-switch--on" : ""}`} aria-hidden>
 							<span className="gui-attach-switch-knob" />
@@ -441,7 +441,7 @@ export function AttachMenu({
 						className={`gui-attach-opt${goalDisabled ? " gui-attach-opt--disabled" : ""}`}
 						role="menuitem"
 						disabled={goalDisabled}
-						title={goalDisabled ? t("start a session to use goal mode") : undefined}
+						title={goalDisabled ? t("general.startSessionUseGoal") : undefined}
 						onClick={() => {
 							onGuidedGoal();
 							setOpen(false);
@@ -449,8 +449,8 @@ export function AttachMenu({
 					>
 						<Icon name="chat-1" className="h-4 w-4" />
 						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("guided goal mode")}</span>
-							<span className="gui-attach-opt-hint">{t("guided goal mode hint")}</span>
+							<span className="gui-attach-opt-title">{t("general.guidedGoalMode")}</span>
+							<span className="gui-attach-opt-hint">{t("general.guidedGoalModeHint")}</span>
 						</span>
 					</button>
 					{/* M2-2.6 third segment: enabled plugins / workspace files.
@@ -468,8 +468,8 @@ export function AttachMenu({
 							>
 								<Icon name="plug-2" className="h-4 w-4 gui-attach-opt-ico" />
 								<span className="min-w-0 flex-1">
-									<span className="gui-attach-opt-title">{t("plus enabled plugins")}</span>
-									<span className="gui-attach-opt-hint">{t("plus enabled plugins desc")}</span>
+									<span className="gui-attach-opt-title">{t("composer.plusEnabledPlugins")}</span>
+									<span className="gui-attach-opt-hint">{t("composer.plusEnabledPluginsDesc")}</span>
 								</span>
 							</button>
 							<button
@@ -480,8 +480,8 @@ export function AttachMenu({
 							>
 								<Icon name="folder-open" className="h-4 w-4 gui-attach-opt-ico" />
 								<span className="min-w-0 flex-1">
-									<span className="gui-attach-opt-title">{t("plus workspace files")}</span>
-									<span className="gui-attach-opt-hint">{t("plus workspace files desc")}</span>
+									<span className="gui-attach-opt-title">{t("composer.plusWorkspaceFiles")}</span>
+									<span className="gui-attach-opt-hint">{t("composer.plusWorkspaceFilesDesc")}</span>
 								</span>
 							</button>
 						</>
@@ -523,18 +523,18 @@ export function AttachMenu({
 				 *  double the padding/width (use-floating-menu contract). */
 				<div
 					role="dialog"
-					aria-label={picker === "plugins" ? t("plus enabled plugins") : t("plus workspace files")}
+					aria-label={picker === "plugins" ? t("composer.plusEnabledPlugins") : t("composer.plusWorkspaceFiles")}
 				>
 					{picker === "plugins" ? (
 						<AttachPicker
-							title={t("plus enabled plugins")}
+							title={t("composer.plusEnabledPlugins")}
 							query={pluginQuery}
 							onQuery={q => {
 								setPluginQuery(q);
 								setPluginActive(0);
 							}}
 							load={plugins}
-							emptyText={t("plus picker no plugins")}
+							emptyText={t("composer.plusPickerNoPlugins")}
 							active={pluginActive}
 							onActive={setPluginActive}
 							onPickIndex={i => {
@@ -548,14 +548,14 @@ export function AttachMenu({
 						/>
 					) : picker === "files" ? (
 						<AttachPicker
-							title={t("plus workspace files")}
+							title={t("composer.plusWorkspaceFiles")}
 							query={fileQuery}
 							onQuery={q => {
 								setFileQuery(q);
 								setFileActive(0);
 							}}
 							load={files}
-							emptyText={t("plus picker no files")}
+							emptyText={t("composer.plusPickerNoFiles")}
 							active={fileActive}
 							onActive={setFileActive}
 							onPickIndex={i => {
@@ -572,7 +572,7 @@ export function AttachMenu({
 							footer={
 								fileItems.truncated ? (
 									<div className="gui-attach-picker-note">
-										{t("plus picker truncated", { n: FILE_ROW_LIMIT })}
+										{t("composer.plusPickerTruncated", { n: FILE_ROW_LIMIT })}
 									</div>
 								) : undefined
 							}
@@ -651,16 +651,16 @@ function AttachPicker({
 				value={query}
 				onChange={e => onQuery(e.target.value)}
 				onKeyDown={onKeyDown}
-				placeholder={t("plus picker search")}
+				placeholder={t("composer.plusPickerSearch")}
 				spellCheck={false}
 				autoFocus
 			/>
 			{load.kind === "loading" ? (
-				<div className="gui-attach-picker-note">{t("plus picker loading")}</div>
+				<div className="gui-attach-picker-note">{t("composer.plusPickerLoading")}</div>
 			) : load.kind === "error" ? (
-				<div className="gui-attach-picker-note">{t("plus picker load failed")}</div>
+				<div className="gui-attach-picker-note">{t("composer.plusPickerLoadFailed")}</div>
 			) : items.length === 0 ? (
-				<div className="gui-attach-picker-note">{query ? t("plus picker no results") : emptyText}</div>
+				<div className="gui-attach-picker-note">{query ? t("composer.plusPickerNoResults") : emptyText}</div>
 			) : (
 				<div className="gui-attach-picker-list" role="listbox" ref={listRef}>
 					{items.map((item, i) => (

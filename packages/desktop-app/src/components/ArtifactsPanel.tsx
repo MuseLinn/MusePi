@@ -124,8 +124,8 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 				<span className="gui-pane-tab-empty-icon">
 					<Icon name="stack" />
 				</span>
-				<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
-				<p className="gui-pane-tab-empty-hint">{t("artifacts empty hint")}</p>
+				<p className="gui-pane-tab-empty-title">{t("settings.selectSession")}</p>
+				<p className="gui-pane-tab-empty-hint">{t("tools.artifactsEmptyHint")}</p>
 			</div>
 		);
 	}
@@ -140,7 +140,7 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 					<button
 						type="button"
 						className="gui-btn gui-btn-icon"
-						title={t("back to artifacts")}
+						title={t("tools.backArtifacts")}
 						onClick={() => {
 							setSelected(null);
 							setContent(null);
@@ -157,7 +157,7 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 						<span className="gui-art-badge gui-art-badge--muted">{selected.renderer}</span>
 					</div>
 					{selected.exports && selected.exports.length > 0 && (
-						<span className="gui-art-exports" title={t("exports label")}>
+						<span className="gui-art-exports" title={t("tools.exportsLabel")}>
 							{selected.exports.join(" · ")}
 						</span>
 					)}
@@ -165,10 +165,10 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 				{contentError ? (
 					<div className="gui-art-note gui-art-note--error">{contentError}</div>
 				) : !content ? (
-					<div className="gui-art-note">{t("loading")}</div>
+					<div className="gui-art-note">{t("settings.loading")}</div>
 				) : (
 					<>
-						{content.truncated && <div className="gui-art-note">{t("artifact truncated")}</div>}
+						{content.truncated && <div className="gui-art-note">{t("tools.artifactTruncated")}</div>}
 						{live ? (
 							<>
 								{/* Viewport switch (设计板 frame: 桌面/平板/移动) — the
@@ -206,7 +206,7 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 							</div>
 						) : source ? (
 							<>
-								<div className="gui-art-note">{t("artifact code view hint")}</div>
+								<div className="gui-art-note">{t("tools.artifactCodeViewHint")}</div>
 								<pre className="gui-art-source">{content.text}</pre>
 							</>
 						) : (
@@ -221,26 +221,26 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 	return (
 		<div className="gui-art-list">
 			<div className="gui-art-list-head">
-				<span className="gui-group-label">{t("artifacts")}</span>
-				<button type="button" className="gui-btn gui-btn-icon" title={t("refresh")} onClick={() => void load()}>
+				<span className="gui-group-label">{t("tools.artifacts")}</span>
+				<button type="button" className="gui-btn gui-btn-icon" title={t("settings.refresh")} onClick={() => void load()}>
 					<RefreshCw size={13} className={loading ? "gui-art-spinning" : undefined} />
 				</button>
 			</div>
 			{error ? (
 				<div className="gui-art-note gui-art-note--error">{error}</div>
 			) : !scan ? (
-				<div className="gui-art-note">{t("loading")}</div>
+				<div className="gui-art-note">{t("settings.loading")}</div>
 			) : scan.artifacts.length === 0 ? (
 				<div className="gui-pane-tab-empty">
 					<span className="gui-pane-tab-empty-icon">
 						<Icon name="stack" />
 					</span>
-					<p className="gui-pane-tab-empty-title">{t("artifacts empty")}</p>
-					<p className="gui-pane-tab-empty-hint">{t("artifacts empty hint")}</p>
+					<p className="gui-pane-tab-empty-title">{t("tools.artifactsEmpty")}</p>
+					<p className="gui-pane-tab-empty-hint">{t("tools.artifactsEmptyHint")}</p>
 				</div>
 			) : (
 				<>
-					{scan.truncated && <div className="gui-art-note">{t("artifacts scan truncated")}</div>}
+					{scan.truncated && <div className="gui-art-note">{t("tools.artifactsScanTruncated")}</div>}
 					<div className="gui-art-cards">
 						{scan.artifacts.map(a => (
 							<button
@@ -259,7 +259,7 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 									{a.errors ? (
 										<span className="gui-art-badge gui-art-badge--danger">
 											<FileWarning size={11} />
-											{t("artifact manifest invalid")}
+											{t("tools.artifactManifestInvalid")}
 										</span>
 									) : (
 										<span className="gui-art-badge">{kindLabel(a.kind)}</span>

@@ -29,7 +29,7 @@ export function LongPasteDialog({
 		<div className="gui-long-paste-dialog" data-dismissing={dismissing ? "" : undefined}>
 			<div className="gui-long-paste-header">
 				<div className="gui-long-paste-summary">
-					{t("Pasted {lines} lines ({chars} chars)", { lines: lineCount, chars: charCount })}
+					{t("composer.pastedLinesWithLinesWithChars", { lines: lineCount, chars: charCount })}
 				</div>
 				<button
 					type="button"
@@ -38,23 +38,23 @@ export function LongPasteDialog({
 						setDismissing(true);
 						onDismiss();
 					}}
-					aria-label={t("discard paste")}
+					aria-label={t("composer.discardPaste")}
 				>
 					✕
 				</button>
 			</div>
 			<div className="gui-long-paste-actions">
 				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("inline")}>
-					{t("paste inline")}
+					{t("composer.pasteInline")}
 				</button>
 				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("attachment")}>
-					{t("wrap as attachment")}
+					{t("composer.wrapAttachment")}
 				</button>
 				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("code-block")}>
-					{t("wrap as code block")}
+					{t("composer.wrapCodeBlock")}
 				</button>
 				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("file")}>
-					{t("attach as file")}
+					{t("composer.attachFile")}
 				</button>
 			</div>
 		</div>

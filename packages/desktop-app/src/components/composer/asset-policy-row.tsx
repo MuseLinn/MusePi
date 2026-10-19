@@ -46,7 +46,7 @@ export interface MediaProviderEntry {
 	id: string;
 	label: string;
 	kind: string;
-	source: "builtin" | "extension";
+	source: "general.builtin" | "extension";
 	configured: boolean;
 	description?: string;
 	baseUrl?: string | null;
@@ -69,8 +69,8 @@ function AdvancedFields({
 	// 平台多选（prototype/live-artifact/other 共用,M3.1 §3.1 默认 responsive）。
 	const platformPicker = (
 		<div className="gui-creation-advanced-field">
-			<div className="gui-creation-field-label">{t("creation platform label")}</div>
-			<div className="gui-creation-chips" role="group" aria-label={t("creation platform label")}>
+			<div className="gui-creation-field-label">{t("creation.creationPlatformLabel")}</div>
+			<div className="gui-creation-chips" role="group" aria-label={t("creation.creationPlatformLabel")}>
 				{CREATION_PLATFORMS.map(p => {
 					const on = draft.platforms.includes(p);
 					return (
@@ -96,8 +96,8 @@ function AdvancedFields({
 	// high-fidelity 的编译语义由 buildProjectMetadata 保证,M3.1 §3.2）。
 	const fidelityPicker = (
 		<div className="gui-creation-advanced-field">
-			<div className="gui-creation-field-label">{t("creation fidelity label")}</div>
-			<div className="gui-creation-chips" role="radiogroup" aria-label={t("creation fidelity label")}>
+			<div className="gui-creation-field-label">{t("creation.creationFidelityLabel")}</div>
+			<div className="gui-creation-chips" role="radiogroup" aria-label={t("creation.creationFidelityLabel")}>
 				{(["wireframe", "high-fidelity"] as const).map(f => (
 					<button
 						key={f}
@@ -116,11 +116,11 @@ function AdvancedFields({
 	// 表面选项双 toggle（M3.1 §3.1「含落地页 / 含 OS 控件」,默认关）。
 	const surfaceToggles = (
 		<div className="gui-creation-advanced-field">
-			<div className="gui-creation-chips" role="group" aria-label={t("creation surface landing")}>
+			<div className="gui-creation-chips" role="group" aria-label={t("creation.creationSurfaceLanding")}>
 				{(
 					[
-						["landingPage", "creation surface landing"],
-						["osWidgets", "creation surface os widgets"],
+						["landingPage", "creation.creationSurfaceLanding"],
+						["osWidgets", "creation.creationSurfaceOsWidgets"],
 					] as const
 				).map(([key, labelKey]) => {
 					const on = draft[key];
@@ -146,11 +146,11 @@ function AdvancedFields({
 		.sort((a, b) => Number(b.configured) - Number(a.configured));
 	const providerCards = (
 		<div className="gui-creation-advanced-field">
-			<div className="gui-creation-field-label">{t("creation media model label")}</div>
+			<div className="gui-creation-field-label">{t("creation.creationMediaModelLabel")}</div>
 			{providers === null ? null : kindProviders.length === 0 ? (
-				<p className="gui-creation-empty">{t("creation media no providers")}</p>
+				<p className="gui-creation-empty">{t("creation.creationMediaNoProviders")}</p>
 			) : (
-				<div className="gui-creation-media-cards" role="radiogroup" aria-label={t("creation media model label")}>
+				<div className="gui-creation-media-cards" role="radiogroup" aria-label={t("creation.creationMediaModelLabel")}>
 					{kindProviders.map(p => {
 						const on = draft.mediaProvider === p.id;
 						return (
@@ -171,7 +171,7 @@ function AdvancedFields({
 											className={`gui-provider-status-dot${p.configured ? " gui-provider-status-dot--on" : ""}`}
 											aria-hidden="true"
 										/>
-										{p.configured ? t("creation media configured") : t("creation media not configured")}
+										{p.configured ? t("creation.creationMediaConfigured") : t("creation.creationMediaNotConfigured")}
 									</span>
 								</span>
 								{on && <Icon name="check" className="gui-creation-media-card-check" />}
@@ -185,8 +185,8 @@ function AdvancedFields({
 	// 画幅卡（image/video,M3.1 §3.5 值域 MEDIA_ASPECTS）。
 	const aspectPicker = (
 		<div className="gui-creation-advanced-field">
-			<div className="gui-creation-field-label">{t("creation media aspect label")}</div>
-			<div className="gui-creation-chips" role="radiogroup" aria-label={t("creation media aspect label")}>
+			<div className="gui-creation-field-label">{t("creation.creationMediaAspectLabel")}</div>
+			<div className="gui-creation-chips" role="radiogroup" aria-label={t("creation.creationMediaAspectLabel")}>
 				{MEDIA_ASPECTS.map(aspect => (
 					<button
 						key={aspect}
@@ -205,14 +205,14 @@ function AdvancedFields({
 	// 时长档（video/audio,值域 MEDIA_DURATIONS;控件沿用 M3.2 的 GuiSelect）。
 	const durationSelect = (
 		<div className="gui-creation-advanced-field">
-			<div className="gui-creation-field-label">{t("creation media duration label")}</div>
+			<div className="gui-creation-field-label">{t("creation.creationMediaDurationLabel")}</div>
 			<GuiSelect
 				value={String(draft.mediaDurationSec)}
 				onChange={v => updateDraft({ mediaDurationSec: Number(v) })}
-				ariaLabel={t("creation media duration label")}
+				ariaLabel={t("creation.creationMediaDurationLabel")}
 				options={MEDIA_DURATIONS.map(sec => ({
 					value: String(sec),
-					label: t("creation media duration sec", { sec: String(sec) }),
+					label: t("creation.creationMediaDurationSec", { sec: String(sec) }),
 				}))}
 			/>
 		</div>
@@ -238,14 +238,14 @@ function AdvancedFields({
 		case "deck":
 			return (
 				<div className="gui-creation-advanced-field">
-					<div className="gui-creation-chips" role="group" aria-label={t("creation speaker notes")}>
+					<div className="gui-creation-chips" role="group" aria-label={t("creation.creationSpeakerNotes")}>
 						<button
 							type="button"
 							aria-pressed={draft.speakerNotes}
 							className={`gui-creation-chip${draft.speakerNotes ? " gui-creation-chip--on" : ""}`}
 							onClick={() => updateDraft({ speakerNotes: !draft.speakerNotes })}
 						>
-							{t("creation speaker notes")}
+							{t("creation.creationSpeakerNotes")}
 						</button>
 					</div>
 				</div>
@@ -269,11 +269,11 @@ function AdvancedFields({
 			return (
 				<>
 					<div className="gui-creation-advanced-field">
-						<div className="gui-creation-field-label">{t("creation media audio kind label")}</div>
+						<div className="gui-creation-field-label">{t("creation.creationMediaAudioKind")}</div>
 						<div
 							className="gui-creation-chips"
 							role="radiogroup"
-							aria-label={t("creation media audio kind label")}
+							aria-label={t("creation.creationMediaAudioKind")}
 						>
 							{(["speech", "sfx"] as const).map(k => (
 								<button
@@ -292,12 +292,12 @@ function AdvancedFields({
 					{durationSelect}
 					{draft.mediaAudioKind === "speech" && (
 						<div className="gui-creation-advanced-field">
-							<div className="gui-creation-field-label">{t("creation media voice label")}</div>
+							<div className="gui-creation-field-label">{t("creation.creationMediaVoiceLabel")}</div>
 							<input
 								type="text"
 								className="gui-input w-full"
 								value={draft.mediaVoice}
-								placeholder={t("creation media voice placeholder")}
+								placeholder={t("creation.creationMediaVoicePlaceholder")}
 								spellCheck={false}
 								onChange={e => updateDraft({ mediaVoice: e.target.value })}
 							/>
@@ -359,8 +359,8 @@ export function AssetPolicyRow({
 	return (
 		<div className="gui-creation-assetrow" data-testid="gui-creation-assetrow">
 			<div className="gui-creation-assetrow-main">
-				<span className="gui-creation-asset-label">{t("creation asset policy label")}</span>
-				<div className="gui-creation-asset-radios" role="radiogroup" aria-label={t("creation asset policy label")}>
+				<span className="gui-creation-asset-label">{t("creation.creationAssetPolicyLabel")}</span>
+				<div className="gui-creation-asset-radios" role="radiogroup" aria-label={t("creation.creationAssetPolicyLabel")}>
 					{ASSET_POLICIES.map(policy => {
 						const on = draft.assetPolicy === policy;
 						return (
@@ -375,8 +375,8 @@ export function AssetPolicyRow({
 							>
 								{t(
 									policy === "ai-image"
-										? "creation asset policy ai image"
-										: "creation asset policy placeholder",
+										? "creation.creationAssetPolicyAi"
+										: "creation.creationAssetPolicyPlaceholder",
 								)}
 							</button>
 						);
@@ -388,7 +388,7 @@ export function AssetPolicyRow({
 					aria-expanded={draft.advancedOpen}
 					onClick={() => updateDraft({ advancedOpen: !draft.advancedOpen })}
 				>
-					{t("creation advanced")}
+					{t("creation.creationAdvanced")}
 					<Icon
 						name="arrow-down-s"
 						className={`gui-creation-advanced-chevron${draft.advancedOpen ? " gui-creation-advanced-chevron--open" : ""}`}

@@ -26,12 +26,12 @@ export function resolveModeLabel(
 	catalog?: readonly ModeLabelEntry[] | null,
 ): string {
 	const id = (modeId ?? "").trim() || "work";
-	if (!id) return t("default mode");
+	if (!id) return t("general.defaultMode");
 	const key = `mode ${id}` as TranslationKey;
 	const label = t(key);
 	if (label !== key) return label;
 	const entry = catalog?.find(m => m.id === id);
-	return entry?.label?.trim() ? entry.label.trim() : t("default mode");
+	return entry?.label?.trim() ? entry.label.trim() : t("general.defaultMode");
 }
 
 /**

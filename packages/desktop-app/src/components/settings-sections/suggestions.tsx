@@ -107,12 +107,12 @@ export function PromptsSection(): ReactNode {
 
 	return (
 		<>
-			<div className="gui-settings-page-title">{t("starter prompts")}</div>
-			<p className="gui-settings-page-desc">{t("starter prompts hint")}</p>
+			<div className="gui-settings-page-title">{t("settings.starterPrompts")}</div>
+			<p className="gui-settings-page-desc">{t("settings.starterPromptsHint")}</p>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("starter prompts")}</div>
+				<div className="gui-settings-section-title">{t("settings.starterPrompts")}</div>
 				{items.length === 0 ? (
-					<div className="text-[13px] text-[var(--color-text-faint)]">{t("no prompts yet")}</div>
+					<div className="text-[13px] text-[var(--color-text-faint)]">{t("general.noPromptsYet")}</div>
 				) : (
 					displayed.map((s, i) => {
 						if (editing?.index === i) {
@@ -121,13 +121,13 @@ export function PromptsSection(): ReactNode {
 									<input
 										className="gui-input min-w-0 flex-1"
 										value={editing.label}
-										placeholder={t("suggestion label")}
+										placeholder={t("general.suggestionLabel")}
 										onChange={e => setEditing({ ...editing, label: e.target.value })}
 									/>
 									<input
 										className="gui-input min-w-0 flex-1"
 										value={editing.prompt}
-										placeholder={t("suggestion prompt")}
+										placeholder={t("general.suggestionPrompt")}
 										onChange={e => setEditing({ ...editing, prompt: e.target.value })}
 									/>
 									<button
@@ -136,10 +136,10 @@ export function PromptsSection(): ReactNode {
 										disabled={!editing.label.trim() || !editing.prompt.trim()}
 										onClick={saveEdit}
 									>
-										{t("save")}
+										{t("general.save")}
 									</button>
 									<button type="button" className="gui-btn" onClick={() => setEditing(null)}>
-										{t("cancel")}
+										{t("settings.cancel")}
 									</button>
 								</div>
 							);
@@ -167,15 +167,15 @@ export function PromptsSection(): ReactNode {
 								<div className="min-w-0 flex-1">
 									<div className="gui-settings-row-label">
 										{r.label}
-										{r.builtin && <span className="gui-suggest-badge">{t("builtin")}</span>}
+										{r.builtin && <span className="gui-suggest-badge">{t("general.builtin")}</span>}
 									</div>
 									<div className="truncate text-[12px] text-[var(--color-text-faint)]">{r.prompt}</div>
 								</div>
 								<button
 									type="button"
 									className="gui-btn gui-btn--icon"
-									title={t("edit")}
-									aria-label={t("edit")}
+									title={t("settings.edit")}
+									aria-label={t("settings.edit")}
 									onPointerDown={e => e.stopPropagation()}
 									onClick={() => startEdit(i)}
 								>
@@ -184,8 +184,8 @@ export function PromptsSection(): ReactNode {
 								<button
 									type="button"
 									className="gui-btn gui-btn--icon"
-									title={t("remove")}
-									aria-label={t("remove")}
+									title={t("general.remove")}
+									aria-label={t("general.remove")}
 									onPointerDown={e => e.stopPropagation()}
 									onClick={() => remove(i)}
 								>
@@ -200,14 +200,14 @@ export function PromptsSection(): ReactNode {
 						<input
 							className="gui-input min-w-0 flex-1"
 							value={adding.label}
-							placeholder={t("suggestion label")}
+							placeholder={t("general.suggestionLabel")}
 							autoFocus
 							onChange={e => setAdding({ ...adding, label: e.target.value })}
 						/>
 						<input
 							className="gui-input min-w-0 flex-1"
 							value={adding.prompt}
-							placeholder={t("suggestion prompt")}
+							placeholder={t("general.suggestionPrompt")}
 							onChange={e => setAdding({ ...adding, prompt: e.target.value })}
 						/>
 						<button
@@ -216,17 +216,17 @@ export function PromptsSection(): ReactNode {
 							disabled={!adding.label.trim() || !adding.prompt.trim()}
 							onClick={saveAdd}
 						>
-							{t("save")}
+							{t("general.save")}
 						</button>
 						<button type="button" className="gui-btn" onClick={() => setAdding(null)}>
-							{t("cancel")}
+							{t("settings.cancel")}
 						</button>
 					</div>
 				)}
 				<div className="gui-suggest-manage-actions">
 					<button type="button" className="gui-btn" onClick={() => setAdding({ label: "", prompt: "" })}>
 						<Icon name="add-circle" className="h-3.5 w-3.5" />
-						<span>{t("add suggestion")}</span>
+						<span>{t("general.addSuggestion")}</span>
 					</button>
 					<button
 						type="button"
@@ -240,7 +240,7 @@ export function PromptsSection(): ReactNode {
 						}}
 					>
 						<Icon name="refresh" className="h-3.5 w-3.5" />
-						<span>{t("reset to defaults")}</span>
+						<span>{t("general.resetDefaults")}</span>
 					</button>
 				</div>
 			</div>

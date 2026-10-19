@@ -113,7 +113,7 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 					<button
 						className="gui-reward-skybtn gui-reward-skybtn--replay"
 						type="button"
-						title={t("reward replay")}
+						title={t("reward.rewardReplay")}
 						onClick={() => setRunId(r => r + 1)}
 					>
 						<RotateCcw size={14} />
@@ -121,7 +121,7 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 					<button
 						className="gui-reward-skybtn gui-reward-skybtn--close"
 						type="button"
-						title={t("close")}
+						title={t("settings.close")}
 						onClick={requestClose}
 					>
 						<X size={15} />
@@ -159,16 +159,16 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 					<div className="gui-reward-success">
 						<CircleCheck className="gui-reward-check" size={22} />
 						<div className="min-w-0">
-							<div className="gui-reward-success-title">{payload.successTitle ?? t("reward claim success")}</div>
-							<div className="gui-reward-success-desc">{payload.successDesc ?? t("reward ready desc")}</div>
+							<div className="gui-reward-success-title">{payload.successTitle ?? t("reward.rewardClaimSuccess")}</div>
+							<div className="gui-reward-success-desc">{payload.successDesc ?? t("reward.rewardReadyDesc")}</div>
 						</div>
 					</div>
 					<button className="gui-reward-primary" type="button" onClick={onPrimary}>
-						{payload.primaryLabel ?? t("reward start")}
+						{payload.primaryLabel ?? t("reward.rewardStart")}
 					</button>
 					<button className="gui-reward-secondary" type="button" onClick={onShare}>
 						<Share2 size={14} />
-						{shared ? t("copied") : (payload.secondaryLabel ?? t("reward share"))}
+						{shared ? t("settings.copied") : (payload.secondaryLabel ?? t("reward.rewardShare"))}
 					</button>
 				</div>
 			</div>

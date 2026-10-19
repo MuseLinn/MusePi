@@ -222,9 +222,9 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// ── By-agent token share (main / subagent / advisor) ─────────────────
 	// Fixed display order; agents absent from the range still show as 0%.
 	const AGENT_META: Record<string, { label: string; color: string }> = {
-		main: { label: t("main agent"), color: "#ed4abf" },
-		subagent: { label: t("subagent"), color: "#9b4dff" },
-		advisor: { label: t("advisor"), color: "#5ad8e6" },
+		main: { label: t("settings.mainAgent"), color: "#ed4abf" },
+		subagent: { label: t("settings.subagent"), color: "#9b4dff" },
+		advisor: { label: t("general.advisor"), color: "#5ad8e6" },
 	};
 	const agentTokens = (stats?.byAgentType ?? []).map(a => {
 		const tok = a.totalInputTokens + a.totalOutputTokens + a.totalCacheReadTokens + a.totalCacheWriteTokens;
@@ -302,8 +302,8 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const trendLabels = days.map(d => fmtDay(d));
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("usage statistics")}</h2>
-			<p className="gui-settings-page-desc">{t("usage statistics description")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.usageStatistics")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.usageStatisticsDescription")}</p>
 			<div className="flex items-center justify-between">
 				<div className="flex gap-1 rounded-lg border border-[var(--border)] p-0.5">
 					{(["7d", "30d"] as const).map(r => (
@@ -324,7 +324,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								persistRange(r);
 							}}
 						>
-							{t(r === "7d" ? "last 7 days" : "last 30 days")}
+							{t(r === "7d" ? "settings.last7Days" : "settings.last30Days")}
 						</button>
 					))}
 				</div>
@@ -346,7 +346,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						spring="snappy"
 						className={busy ? "gui-spin" : undefined}
 					/>
-					<span>{t("refresh")}</span>
+					<span>{t("settings.refresh")}</span>
 				</button>
 			</div>
 			{error ? (
@@ -357,32 +357,32 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<>
 					<div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-3">
 						{[
-							{ icon: "flashlight", label: t("token usage"), value: fmtCompact(tokensTotal), sub: null },
-							{ icon: "chat-3", label: t("session count"), value: String(stats.sessionCount ?? 0), sub: null },
-							{ icon: "chat-4", label: t("message count"), value: fmtCompact(msgTotal), sub: null },
-							{ icon: "calendar-schedule", label: t("active days"), value: String(activeDays), sub: null },
-							{ icon: "bar-chart-box", label: t("current streak"), value: String(streak), sub: null },
+							{ icon: "flashlight", label: t("settings.tokenUsage"), value: fmtCompact(tokensTotal), sub: null },
+							{ icon: "chat-3", label: t("settings.sessionCount"), value: String(stats.sessionCount ?? 0), sub: null },
+							{ icon: "chat-4", label: t("settings.messageCount"), value: fmtCompact(msgTotal), sub: null },
+							{ icon: "calendar-schedule", label: t("settings.activeDays"), value: String(activeDays), sub: null },
+							{ icon: "bar-chart-box", label: t("settings.currentStreak"), value: String(streak), sub: null },
 							{
 								icon: "equalizer-2",
-								label: t("most used model"),
+								label: t("settings.mostUsedModel"),
 								value: topModel ? topModel.model : "—",
-								sub: topModel ? `${t("usage share")} ${topShare}%` : null,
+								sub: topModel ? `${t("settings.usageShare")} ${topShare}%` : null,
 							},
 							{
 								icon: "shield-check",
-								label: t("success rate"),
+								label: t("settings.successRate"),
 								value: successRatePct == null ? "—" : `${successRatePct}%`,
-								sub: overall ? `${fmtCompact(overall.failedRequests)} ${t("failed requests")}` : null,
+								sub: overall ? `${fmtCompact(overall.failedRequests)} ${t("settings.failedRequests")}` : null,
 							},
 							{
 								icon: "timer",
-								label: t("avg ttft"),
+								label: t("settings.avgTtft"),
 								value: fmtMs(overall?.avgTtft ?? null),
 								sub: null,
 							},
 							{
 								icon: "pulse",
-								label: t("tokens per second"),
+								label: t("settings.tokensPerSecond"),
 								value:
 									overall?.avgTokensPerSecond == null
 										? "—"
@@ -391,7 +391,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							},
 							{
 								icon: "database-2",
-								label: t("cache tokens"),
+								label: t("settings.cacheTokens"),
 								value: fmtCompact(cacheTokensTotal),
 								sub: null,
 							},
@@ -416,9 +416,9 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					{/* Active heatmap (ZCode parity): one cell per day, depth = tokens */}
 					<div className="gui-settings-section">
 						<div className="flex items-center justify-between">
-							<div className="gui-settings-section-title">{t("active heatmap")}</div>
+							<div className="gui-settings-section-title">{t("settings.activeHeatmap")}</div>
 							<div className="flex items-center gap-1 text-[10.5px] text-[var(--color-text-muted)]">
-								<span>{t("less activity")}</span>
+								<span>{t("settings.lessActivity")}</span>
 								<span className="flex gap-0.5">
 									{[0.08, 0.2, 0.4, 0.65, 1].map(a => (
 										<span
@@ -430,7 +430,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 										/>
 									))}
 								</span>
-								<span>{t("more activity")}</span>
+								<span>{t("settings.moreActivity")}</span>
 							</div>
 						</div>
 						<div className="mt-2">
@@ -519,7 +519,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					{/* Token usage by agent (main / subagent / advisor) — CLI parity */}
 					{agentTotalTokens > 0 && (
 						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("by agent")}</div>
+							<div className="gui-settings-section-title">{t("settings.byAgent")}</div>
 							<div
 								className="mt-2 flex h-3 w-full overflow-hidden rounded-full"
 								style={{ background: "var(--border)" }}
@@ -571,14 +571,14 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					 * SVG, no preserveAspectRatio stretch, CSS-var theme). */}
 					{series.length > 0 && (
 						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("requests & errors")}</div>
+							<div className="gui-settings-section-title">{t("settings.requestsErrors")}</div>
 							<LineChart
 								className="mt-2"
 								height={120}
 								yMax={Math.max(1, ...series.map(p => Math.max(p.requests, p.errors)))}
 								series={[
-									{ name: t("requests"), color: "#5ad8e6", data: series.map(p => p.requests) },
-									{ name: t("errors"), color: "#ff6b7d", data: series.map(p => p.errors) },
+									{ name: t("settings.requests"), color: "#5ad8e6", data: series.map(p => p.requests) },
+									{ name: t("settings.errors"), color: "#ff6b7d", data: series.map(p => p.errors) },
 								]}
 								labels={series.map(p => fmtDay(p.timestamp))}
 								formatY={n => fmtCompact(n)}
@@ -586,11 +586,11 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							<div className="mt-1.5 flex items-center gap-4 text-[10.5px] text-[var(--color-text-muted)]">
 								<span className="flex items-center gap-1.5">
 									<span className="h-2 w-2 rounded-full" style={{ background: "#5ad8e6" }} />
-									{t("requests")}
+									{t("settings.requests")}
 								</span>
 								<span className="flex items-center gap-1.5">
 									<span className="h-2 w-2 rounded-full" style={{ background: "#ff6b7d" }} />
-									{t("errors")}
+									{t("settings.errors")}
 								</span>
 							</div>
 						</div>
@@ -600,7 +600,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					 * measures its container and renders stacked SVG rects. */}
 					{days.length > 0 && (
 						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("daily token trend")}</div>
+							<div className="gui-settings-section-title">{t("settings.dailyTokenTrend")}</div>
 							<BarChart
 								className="mt-2"
 								height={140}
@@ -628,13 +628,13 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					)}
 					{(stats.byModel?.length ?? 0) > 0 && (
 						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("by model")}</div>
+							<div className="gui-settings-section-title">{t("settings.byModel")}</div>
 							{stats.byModel.map(m => (
 								<div key={`${m.provider}:${m.model}`} className="gui-agent-card">
 									<div className="min-w-0 flex-1">
 										<div className="truncate text-[13px] font-medium">{m.model}</div>
 										<div className="truncate text-[12px] text-[var(--color-text-muted)]">
-											{m.provider} · {fmtCompact(m.totalRequests)} {t("requests")} ·{" "}
+											{m.provider} · {fmtCompact(m.totalRequests)} {t("settings.requests")} ·{" "}
 											{fmtCompact(m.totalInputTokens + m.totalOutputTokens)} tok · {fmtCost(m.totalCost)}
 										</div>
 									</div>
@@ -647,13 +647,13 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					)}
 					{(stats.byFolder?.length ?? 0) > 0 && (
 						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("by folder")}</div>
+							<div className="gui-settings-section-title">{t("settings.byFolder")}</div>
 							{stats.byFolder.map(f => (
 								<div key={f.folder} className="gui-agent-card">
 									<div className="min-w-0 flex-1">
 										<div className="truncate text-[13px] font-medium">{f.folder}</div>
 										<div className="truncate text-[12px] text-[var(--color-text-muted)]">
-											{fmtCompact(f.totalRequests)} {t("requests")} ·{" "}
+											{fmtCompact(f.totalRequests)} {t("settings.requests")} ·{" "}
 											{fmtCompact(f.totalInputTokens + f.totalOutputTokens)} tok · {fmtCost(f.totalCost)}
 										</div>
 									</div>

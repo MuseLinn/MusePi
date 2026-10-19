@@ -259,7 +259,7 @@ export function SessionSidebar({
 	const { confirm } = useConfirm();
 	const renameSession = (id: string): void => {
 		const current = nodes.find(n => n.entry.id === id)?.entry.label ?? "";
-		void prompt({ title: t("rename session"), defaultValue: current }).then(next => {
+		void prompt({ title: t("settings.renameSession"), defaultValue: current }).then(next => {
 			if (!next || next === current) return;
 			onRenameSession?.(id, next);
 		});
@@ -578,7 +578,7 @@ export function SessionSidebar({
 		<div className="mb-1.5">
 			<div className="gui-group-label flex items-center gap-1 px-2 pb-1 pt-2.5">
 				<Icon name="calendar-schedule" className="h-3.5 w-3.5" />
-				{t("scheduled tasks")}
+				{t("settings.scheduledTasks")}
 			</div>
 			<SessionList
 				nodes={cronNodes}
@@ -599,7 +599,7 @@ export function SessionSidebar({
 	const removeProject = (path: string): void => {
 		// Disambiguated too (issue #15) — "remove demo?" is ambiguous when two
 		// different folders are both called demo.
-		void confirm(`${t("remove project")} ${projectLabel(path, projects)}?`, t("remove")).then(ok => {
+		void confirm(`${t("general.removeProject")} ${projectLabel(path, projects)}?`, t("general.remove")).then(ok => {
 			if (!ok) return;
 			setProjects(prev => prev.filter(p => p !== path));
 			setCollapsedProjects(prev => prev.filter(p => p !== path));
@@ -629,12 +629,12 @@ export function SessionSidebar({
 				<div className="gui-side-menu flex flex-col gap-0.5 px-2.5">
 					<button type="button" className="gui-menu-item" onClick={onNewSession}>
 						<Icon name="add-circle" className="h-4 w-4" />
-						<span>{t("new task")}</span>
+						<span>{t("settings.newTask")}</span>
 						<span className="gui-menu-kbd">{shortcutLabel("⌘N")}</span>
 					</button>
-					<button type="button" className="gui-menu-item" onClick={onOpenSearch} title={t("search")}>
+					<button type="button" className="gui-menu-item" onClick={onOpenSearch} title={t("settings.search")}>
 						<Icon name="search" className="h-4 w-4" />
-						<span>{t("search")}</span>
+						<span>{t("settings.search")}</span>
 						<span className="gui-menu-kbd">{shortcutLabel("⌘K")}</span>
 					</button>
 					{onOpenScheduled && (
@@ -642,10 +642,10 @@ export function SessionSidebar({
 							type="button"
 							className={`gui-menu-item${scheduledActive ? " gui-menu-item--active" : ""}${cronGlow ? " gui-menu-item--glow" : ""}`}
 							onClick={onOpenScheduled}
-							title={t("scheduled tasks")}
+							title={t("settings.scheduledTasks")}
 						>
 							<Icon name="calendar-schedule" className="h-4 w-4" />
-							<span>{t("scheduled tasks")}</span>
+							<span>{t("settings.scheduledTasks")}</span>
 						</button>
 					)}
 					{onOpenBoard && (
@@ -653,10 +653,10 @@ export function SessionSidebar({
 							type="button"
 							className={`gui-menu-item${boardActive ? " gui-menu-item--active" : ""}`}
 							onClick={onOpenBoard}
-							title={t("board")}
+							title={t("settings.board")}
 						>
 							<Icon name="layout-column" className="h-4 w-4" />
-							<span>{t("board")}</span>
+							<span>{t("settings.board")}</span>
 						</button>
 					)}
 					{onOpenCapability && (
@@ -678,10 +678,10 @@ export function SessionSidebar({
 								}}
 								onFocus={openCapHub}
 								onBlur={scheduleCapHubClose}
-								title={t("capability center")}
+								title={t("tools.capabilityCenter")}
 							>
 								<Icon name="star" className="h-4 w-4" />
-								<span>{t("capability center")}</span>
+								<span>{t("tools.capabilityCenter")}</span>
 							</button>
 							<MenuPopup
 								open={capHubOpen}
@@ -692,10 +692,10 @@ export function SessionSidebar({
 								<div onMouseEnter={openCapHub} onMouseLeave={scheduleCapHubClose}>
 									{(
 										[
-											["skills", "sparkling", t("skills tab")],
-											["plugins", "plug", t("plugins")],
-											["composition", "stack", tLoose("bundle title")],
-											["marketplace", "plug-2", t("marketplace")],
+											["skills", "sparkling", t("tools.skillsTab")],
+											["plugins", "plug", t("settings.plugins")],
+											["composition", "stack", tLoose("tools.bundleTitle")],
+											["marketplace", "plug-2", t("guest.marketplace")],
 										] as ["skills" | "plugins" | "composition" | "marketplace", string, string][]
 									).map(([id, icon, label]) => (
 										<button
@@ -735,7 +735,7 @@ export function SessionSidebar({
 							onClick={() => pickTab("groups")}
 						>
 							<Icon name="folder-3" className="h-3.5 w-3.5" />
-							<span>{t("groups")}</span>
+							<span>{t("settings.groups")}</span>
 						</button>
 						<button
 							type="button"
@@ -743,7 +743,7 @@ export function SessionSidebar({
 							onClick={() => pickTab("projects")}
 						>
 							<Icon name="folder" className="h-3.5 w-3.5" />
-							<span>{t("projects")}</span>
+							<span>{t("settings.projects")}</span>
 						</button>
 					</div>
 					{/* Right cluster: never shrinks — the capsule flexes instead, so
@@ -757,8 +757,8 @@ export function SessionSidebar({
 							type="button"
 							className="gui-tab-action"
 							data-search-toggle="true"
-							title={`${t("search sessions…")} (${shortcutLabel("⌘⇧F")})`}
-							aria-label={t("search sessions…")}
+							title={`${t("settings.searchSessions")} (${shortcutLabel("⌘⇧F")})`}
+							aria-label={t("settings.searchSessions")}
 							aria-expanded={searchOpen}
 							onClick={() => {
 								if (searchOpen) closeSearch();
@@ -770,8 +770,8 @@ export function SessionSidebar({
 						<button
 							type="button"
 							className="gui-tab-action"
-							title={t("expand or collapse all")}
-							aria-label={t("expand or collapse all")}
+							title={t("general.expandCollapseAll")}
+							aria-label={t("general.expandCollapseAll")}
 							onClick={() => {
 								if (tab === "groups") {
 									// Custom groups only (import-created groups included):
@@ -790,13 +790,13 @@ export function SessionSidebar({
 							<button
 								type="button"
 								className="gui-tab-action"
-								title={t("new group")}
-								aria-label={t("new group")}
+								title={t("settings.newGroup")}
+								aria-label={t("settings.newGroup")}
 								onClick={() =>
 									setGroups(g => [
 										...g,
 										{
-											name: t("new group"),
+											name: t("settings.newGroup"),
 											sessions: [],
 											color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
 										},
@@ -810,8 +810,8 @@ export function SessionSidebar({
 								ref={viewMenuAnchorRef}
 								type="button"
 								className="gui-tab-action"
-								title={t("view and sort")}
-								aria-label={t("view and sort")}
+								title={t("settings.viewSort")}
+								aria-label={t("settings.viewSort")}
 								aria-expanded={viewMenu}
 								onClick={() => setViewMenu(v => !v)}
 							>
@@ -821,8 +821,8 @@ export function SessionSidebar({
 						<button
 							type="button"
 							className="gui-tab-action"
-							title={t("archive")}
-							aria-label={t("archive")}
+							title={t("settings.archive")}
+							aria-label={t("settings.archive")}
 							onClick={() => {
 								setArchivedView(v => !v);
 								setViewMenu(false);
@@ -845,7 +845,7 @@ export function SessionSidebar({
 						onOpenChange={setViewMenu}
 					>
 						<div className="px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
-							{t("view")}
+							{t("settings.view")}
 						</div>
 						<button
 							type="button"
@@ -856,7 +856,7 @@ export function SessionSidebar({
 							}}
 						>
 							<Icon name="folder" className="h-3.5 w-3.5" />
-							<span>{t("by project")}</span>
+							<span>{t("settings.byProject")}</span>
 							{projView === "project" && <Icon name="check" className="h-3 w-3 ml-auto" />}
 						</button>
 						<button
@@ -868,11 +868,11 @@ export function SessionSidebar({
 							}}
 						>
 							<Icon name="history" className="h-3.5 w-3.5" />
-							<span>{t("timeline")}</span>
+							<span>{t("settings.timeline")}</span>
 							{projView === "timeline" && <Icon name="check" className="h-3 w-3 ml-auto" />}
 						</button>
 						<div className="mt-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
-							{t("sort by")}
+							{t("settings.sortBy")}
 						</div>
 						<button
 							type="button"
@@ -883,7 +883,7 @@ export function SessionSidebar({
 							}}
 						>
 							<Icon name="chat-1" className="h-3.5 w-3.5" />
-							<span>{t("updated time")}</span>
+							<span>{t("settings.updatedTime")}</span>
 							{projSort === "updated" && <Icon name="check" className="h-3 w-3 ml-auto" />}
 						</button>
 						<button
@@ -895,7 +895,7 @@ export function SessionSidebar({
 							}}
 						>
 							<Icon name="history" className="h-3.5 w-3.5" />
-							<span>{t("created time")}</span>
+							<span>{t("settings.createdTime")}</span>
 							{projSort === "created" && <Icon name="check" className="h-3 w-3 ml-auto" />}
 						</button>
 					</MenuPopup>
@@ -917,8 +917,8 @@ export function SessionSidebar({
 								type="button"
 								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
 								onClick={() => setArchivedView(false)}
-								title={t("back")}
-								aria-label={t("back")}
+								title={t("settings.back")}
+								aria-label={t("settings.back")}
 							>
 								<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
 							</button>
@@ -937,7 +937,7 @@ export function SessionSidebar({
 						{archivedView ? (
 							archived.length === 0 ? (
 								<p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">
-									{t("no archived sessions")}
+									{t("transcript.noArchivedSessions")}
 								</p>
 							) : (
 								archived.map(a => {
@@ -946,12 +946,12 @@ export function SessionSidebar({
 										<div key={a.sessionId} className="gui-archive-row">
 											<div className="min-w-0 flex-1">
 												<div className="truncate text-[13px]">
-													{node?.entry.label ?? t("untitled session")}
+													{node?.entry.label ?? t("transcript.untitledSession")}
 												</div>
 												<div className="flex items-center gap-1 text-[13px] text-[var(--color-text-faint)]">
 													<Icon name="folder-3" className="h-3 w-3 flex-shrink-0" />
 													<span className="min-w-0 flex-1 truncate">
-														{a.cwd ? (a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd) : t("no folder")}
+														{a.cwd ? (a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd) : t("transcript.noFolder")}
 													</span>
 													<span className="flex-shrink-0">{new Date(a.archivedAt).toLocaleString()}</span>
 												</div>
@@ -959,8 +959,8 @@ export function SessionSidebar({
 											<button
 												type="button"
 												className="gui-archive-act"
-												title={t("unarchive")}
-												aria-label={t("unarchive")}
+												title={t("settings.unarchive")}
+												aria-label={t("settings.unarchive")}
 												onClick={() => unarchiveSession(a.sessionId)}
 											>
 												<Icon name="restart" className="h-3.5 w-3.5" />
@@ -968,8 +968,8 @@ export function SessionSidebar({
 											<button
 												type="button"
 												className="gui-archive-act gui-archive-act--danger"
-												title={t("delete")}
-												aria-label={t("delete")}
+												title={t("settings.delete")}
+												aria-label={t("settings.delete")}
 												onClick={() => void deleteArchived(a.sessionId)}
 											>
 												<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -991,7 +991,7 @@ export function SessionSidebar({
 										onClick={() => setProjMenu(v => !v)}
 									>
 										<Icon name="add-circle" className="h-4 w-4" />
-										<span>{t("add project or remote")}</span>
+										<span>{t("settings.addProjectRemote")}</span>
 									</button>
 									<MenuPopup
 										open={projMenu}
@@ -1008,7 +1008,7 @@ export function SessionSidebar({
 											}}
 										>
 											<Icon name="folder-open" className="h-3.5 w-3.5" />
-											<span>{t("open folder")}</span>
+											<span>{t("settings.openFolder")}</span>
 										</button>
 										<button
 											type="button"
@@ -1019,7 +1019,7 @@ export function SessionSidebar({
 											}}
 										>
 											<Icon name="folder-add" className="h-3.5 w-3.5" />
-											<span>{t("new blank project")}</span>
+											<span>{t("settings.newBlankProject")}</span>
 										</button>
 										<button
 											type="button"
@@ -1030,7 +1030,7 @@ export function SessionSidebar({
 											}}
 										>
 											<Icon name="server" className="h-3.5 w-3.5" />
-											<span>{t("remote connection")}</span>
+											<span>{t("settings.remoteConnection")}</span>
 										</button>
 										<button
 											type="button"
@@ -1041,7 +1041,7 @@ export function SessionSidebar({
 											}}
 										>
 											<Icon name="download" className="h-3.5 w-3.5" />
-											<span>{t("import sessions")}</span>
+											<span>{t("settings.importSessions")}</span>
 										</button>
 									</MenuPopup>
 								</div>
@@ -1049,7 +1049,7 @@ export function SessionSidebar({
 									<>
 										{pinnedNodes.length > 0 && (
 											<div className="mb-1.5">
-												<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
+												<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
 												<SessionList
 													nodes={pinnedNodes}
 													selectedId={selectedId}
@@ -1118,7 +1118,7 @@ export function SessionSidebar({
 											<>
 												{pinnedNodes.length > 0 && (
 													<div className="mb-1.5">
-														<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
+														<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
 														<SessionList
 															nodes={pinnedNodes}
 															selectedId={selectedId}
@@ -1244,7 +1244,7 @@ export function SessionSidebar({
 															</div>
 															<ProjectCollapse collapsed={isCollapsed}>
 																{list.length === 0 ? (
-																	<p className="gui-project-empty">{t("no sessions")}</p>
+																	<p className="gui-project-empty">{t("settings.noSessions")}</p>
 																) : (
 																	<SessionList
 																		nodes={list}
@@ -1267,7 +1267,7 @@ export function SessionSidebar({
 													<div className="mb-1.5">
 														<div className="gui-group-label flex items-center gap-1 px-2 pb-1 pt-2.5">
 															<Icon name="folder" className="h-3 w-3" />
-															<span className="min-w-0 flex-1 truncate">{t("no folder")}</span>
+															<span className="min-w-0 flex-1 truncate">{t("transcript.noFolder")}</span>
 															<span className="text-[12px] text-[var(--color-text-faint)]">
 																{noFolder.length}
 															</span>
@@ -1296,7 +1296,7 @@ export function SessionSidebar({
 								{/* Pinned sessions show in the groups tab too, above custom groups. */}
 								{pinnedNodes.length > 0 && (
 									<div className="mb-1.5">
-										<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
+										<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
 										<SessionList
 											nodes={pinnedNodes}
 											selectedId={selectedId}
@@ -1326,7 +1326,7 @@ export function SessionSidebar({
 										setGroups(g => [
 											...g,
 											{
-												name: t("new group"),
+												name: t("settings.newGroup"),
 												sessions: [],
 												color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
 											},
@@ -1403,8 +1403,8 @@ export function SessionSidebar({
 						type="button"
 						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
 						onClick={onOpenShortcuts}
-						title={t("keyboard shortcuts")}
-						aria-label={t("keyboard shortcuts")}
+						title={t("general.keyboardShortcuts")}
+						aria-label={t("general.keyboardShortcuts")}
 					>
 						<Icon name="command" className="h-4 w-4" />
 					</button>{" "}
@@ -1412,8 +1412,8 @@ export function SessionSidebar({
 						type="button"
 						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
 						onClick={onOpenSettings}
-						title={t("settings")}
-						aria-label={t("settings")}
+						title={t("settings.settings")}
+						aria-label={t("settings.settings")}
 					>
 						<Icon name="settings-3" className="h-4 w-4" />
 					</button>
@@ -1421,8 +1421,8 @@ export function SessionSidebar({
 						type="button"
 						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
 						onClick={onOpenCollab}
-						title={t("mobile remote control")}
-						aria-label={t("mobile remote control")}
+						title={t("settings.mobileRemoteControl")}
+						aria-label={t("settings.mobileRemoteControl")}
 					>
 						<Icon name="smartphone" className="h-4 w-4" />
 					</button>
@@ -1430,8 +1430,8 @@ export function SessionSidebar({
 						type="button"
 						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
 						onClick={onDisconnect}
-						title={t("Disconnect")}
-						aria-label={t("Disconnect")}
+						title={t("settings.disconnect")}
+						aria-label={t("settings.disconnect")}
 					>
 						<Icon name="close" className="h-4 w-4" />
 					</button>
@@ -1447,7 +1447,7 @@ export function SessionSidebar({
 					sessionCtx
 						? [
 								{
-									label: pinned.includes(sessionCtx.id) ? t("unpin task") : t("pin task"),
+									label: pinned.includes(sessionCtx.id) ? t("settings.unpinTask") : t("settings.pinTask"),
 									icon: "pushpin",
 									onSelect: () =>
 										persistPinned(
@@ -1457,7 +1457,7 @@ export function SessionSidebar({
 										),
 								},
 								{
-									label: t("rename task"),
+									label: t("settings.renameTask"),
 									icon: "pencil",
 									onSelect: () => void renameSession(sessionCtx.id),
 								},
@@ -1467,7 +1467,7 @@ export function SessionSidebar({
 								...(onRetitleSession
 									? [
 											{
-												label: t("AI rename"),
+												label: t("general.aiRename"),
 												icon: "ai-generate-2",
 												disabled: retitlingId !== null,
 												onSelect: () => {
@@ -1478,7 +1478,7 @@ export function SessionSidebar({
 														if (!r.ok)
 															pushActionToast({
 																message: t(
-																	r.reason === "empty" ? "AI rename empty" : "AI rename failed",
+																	r.reason === "empty" ? "general.aiRenameEmpty" : "general.aiRenameFailed",
 																),
 															});
 													});
@@ -1491,12 +1491,12 @@ export function SessionSidebar({
 									// subagent) can be popped out into the mini chat
 									// window; non-Electron hosts fall back to opening
 									// it in place (handled by the app callback).
-									label: t("open in mini chat"),
+									label: t("general.openMiniChat"),
 									icon: "chat-1",
 									onSelect: () => onOpenMiniChat?.(sessionCtx.id),
 								},
 								{
-									label: t("archive task"),
+									label: t("settings.archiveTask"),
 									icon: "archive",
 									// cwd rides along so the archive row can show the folder.
 									// Archiving is a local list edit, so the undo is a
@@ -1504,14 +1504,14 @@ export function SessionSidebar({
 									onSelect: () => {
 										archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd);
 										pushActionToast({
-											message: t("session archived"),
-											actionLabel: t("undo"),
+											message: t("general.sessionArchived"),
+											actionLabel: t("general.undo"),
 											onAction: () => unarchiveSession(sessionCtx.id),
 										});
 									},
 								},
 								{
-									label: unread?.has(sessionCtx.id) ? t("mark as read") : t("mark as unread"),
+									label: unread?.has(sessionCtx.id) ? t("settings.markRead") : t("settings.markUnread"),
 									icon: "chat-1",
 									onSelect: () => onToggleUnread?.(sessionCtx.id),
 								},
@@ -1522,15 +1522,15 @@ export function SessionSidebar({
 								// status on the row's left square; 清除标记 restores it.
 								...(
 									[
-										{ tag: "complete", dot: "ok", label: t("tag complete") },
+										{ tag: "complete", dot: "ok", label: t("settings.tagComplete") },
 										{
 											tag: "interrupted",
 											dot: "warning",
-											label: t("tag interrupted"),
+											label: t("settings.tagInterrupted"),
 										},
-										{ tag: "error", dot: "danger", label: t("tag error") },
-										{ tag: "aborted", dot: "muted", label: t("tag aborted") },
-										{ tag: "pending", dot: "accent", label: t("tag pending") },
+										{ tag: "error", dot: "danger", label: t("settings.tagError") },
+										{ tag: "aborted", dot: "muted", label: t("settings.tagAborted") },
+										{ tag: "pending", dot: "accent", label: t("settings.tagPending") },
 									] as const
 								).map(({ tag, dot, label }) => ({
 									label: `#${label}`,
@@ -1539,14 +1539,14 @@ export function SessionSidebar({
 									onSelect: () => setSessionTag(sessionCtx.id, tag),
 								})),
 								{
-									label: t("clear tag"),
+									label: t("settings.clearTag"),
 									icon: "palette",
 									disabled: !manualTags.has(sessionCtx.id),
 									onSelect: () => setSessionTag(sessionCtx.id, null),
 								},
 								{ divider: true },
 								{
-									label: t("copy path"),
+									label: t("settings.copyPath"),
 									icon: "folder",
 									disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
 									onSelect: () => {
@@ -1555,7 +1555,7 @@ export function SessionSidebar({
 									},
 								},
 								{
-									label: t("copy session id"),
+									label: t("transcript.copySessionId"),
 									icon: "clipboard",
 									onSelect: () => {
 										void navigator.clipboard?.writeText(sessionCtx.id).catch(() => {});
@@ -1563,7 +1563,7 @@ export function SessionSidebar({
 								},
 								{ divider: true },
 								{
-									label: t("open in finder"),
+									label: t("settings.openFinder"),
 									icon: "folder-open",
 									disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
 									onSelect: () => openInFinder(sessionCtx.id),
@@ -1574,12 +1574,12 @@ export function SessionSidebar({
 								...(onExportSession
 									? [
 											{
-												label: t("export markdown"),
+												label: t("general.exportMarkdown"),
 												icon: "download",
 												onSelect: () => {
 													const id = sessionCtx.id;
 													void onExportSession(id, sessionLabelOf(id)).then(ok => {
-														if (!ok) pushActionToast({ message: t("export failed") });
+														if (!ok) pushActionToast({ message: t("general.exportFailed") });
 													});
 												},
 											},
@@ -1593,7 +1593,7 @@ export function SessionSidebar({
 									? [
 											{ divider: true },
 											{
-												label: t("delete session"),
+												label: t("general.deleteSession"),
 												icon: "delete-bin",
 												danger: true,
 												onSelect: () => {
@@ -1616,13 +1616,13 @@ export function SessionSidebar({
 					groupCtx
 						? [
 								{
-									label: t("rename group"),
+									label: t("transcript.renameGroup"),
 									icon: "pencil",
 									onSelect: () => renameGroup(groupCtx.index),
 								},
 								{ divider: true },
 								...GROUP_COLORS.map(color => ({
-									label: t("group color {color}", { color: color }),
+									label: t("settings.groupColorWithColor", { color: color }),
 									icon: "circle" as const,
 									onSelect: () =>
 										setGroups(gs => gs.map((g, i) => (i === groupCtx.index ? { ...g, color } : g))),
@@ -1630,7 +1630,7 @@ export function SessionSidebar({
 								})),
 								{ divider: true },
 								{
-									label: t("delete group"),
+									label: t("transcript.deleteGroup"),
 									icon: "delete-bin",
 									danger: true,
 									onSelect: () => setGroups(gs => gs.filter((_, i) => i !== groupCtx.index)),
@@ -1651,7 +1651,7 @@ export function SessionSidebar({
 					projectCtx
 						? [
 								{
-									label: t("open in finder"),
+									label: t("settings.openFinder"),
 									icon: "folder-open",
 									onSelect: () => {
 										const api = (
@@ -1663,7 +1663,7 @@ export function SessionSidebar({
 									},
 								},
 								{
-									label: t("copy path"),
+									label: t("settings.copyPath"),
 									icon: "clipboard",
 									onSelect: () => {
 										void navigator.clipboard?.writeText(projectCtx.path).catch(() => {});
@@ -1671,7 +1671,7 @@ export function SessionSidebar({
 								},
 								{ divider: true },
 								{
-									label: t("remove project"),
+									label: t("general.removeProject"),
 									icon: "delete-bin",
 									danger: true,
 									onSelect: () => removeProject(projectCtx.path),

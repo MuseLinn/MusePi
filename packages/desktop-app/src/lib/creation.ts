@@ -130,26 +130,26 @@ export function isLiveArtifact(draft: CreationDraft): boolean {
 
 /** chip → 标签键（媒体三类复用 media 文案,其余复用 tab 文案,零新文案）。 */
 export const CREATION_CHIP_LABEL_KEYS: Record<CreationChip, TranslationKey> = {
-	prototype: "creation tab prototype",
-	"live-artifact": "creation tab live artifact",
-	deck: "creation tab deck",
-	image: "creation media image",
-	video: "creation media video",
-	audio: "creation media audio",
-	template: "creation tab template",
-	other: "creation tab other",
+	prototype: "creation.creationTabPrototype",
+	"live-artifact": "creation.creationTabLiveArtifact",
+	deck: "creation.creationTabDeck",
+	image: "creation.creationMediaImage",
+	video: "creation.creationMediaVideo",
+	audio: "creation.creationMediaAudio",
+	template: "creation.creationTabTemplate",
+	other: "creation.creationTabOther",
 };
 
 /** chip → 输入框 placeholder 键（§2.4:placeholder 随选中类型变化）。 */
 export const CREATION_PLACEHOLDER_KEYS: Record<CreationChip, TranslationKey> = {
-	prototype: "creation placeholder prototype",
-	"live-artifact": "creation placeholder live artifact",
-	deck: "creation placeholder deck",
-	image: "creation placeholder image",
-	video: "creation placeholder video",
-	audio: "creation placeholder audio",
-	template: "creation placeholder template",
-	other: "creation placeholder other",
+	prototype: "creation.creationPlaceholderPrototype",
+	"live-artifact": "creation.creationPlaceholderLiveArtifact",
+	deck: "creation.creationPlaceholderDeck",
+	image: "creation.creationPlaceholderImage",
+	video: "creation.creationPlaceholderVideo",
+	audio: "creation.creationPlaceholderAudio",
+	template: "creation.creationPlaceholderTemplate",
+	other: "creation.creationPlaceholderOther",
 };
 
 /**

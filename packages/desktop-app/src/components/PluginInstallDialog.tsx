@@ -183,7 +183,7 @@ export function PluginInstallDialog({
 			const dropped = item?.getAsFile();
 			const path = dropped ? (window.electronAPI?.getDroppedFilePath(dropped) ?? "") : "";
 			if (path === "") {
-				setError(t("plugin install drop unreadable"));
+				setError(t("settings.pluginInstallDropUnreadable"));
 				return;
 			}
 			// A folder has no extension to judge, and a directory is the shape a
@@ -192,7 +192,7 @@ export function PluginInstallDialog({
 			// person learns it immediately instead of from a package-manager error
 			// about a spec it could not resolve.
 			if (!DROP_ACCEPTED.test(path)) {
-				setError(t("plugin install drop unsupported"));
+				setError(t("settings.pluginInstallDropUnsupported"));
 				return;
 			}
 			setError(null);
@@ -216,7 +216,7 @@ export function PluginInstallDialog({
 				.then(res => {
 					const installId = res?.installId ?? "";
 					if (installId === "") {
-						setError(t("plugin install no id"));
+						setError(t("settings.pluginInstallNoId"));
 						setView(null);
 						return;
 					}
@@ -246,16 +246,16 @@ export function PluginInstallDialog({
 	const phase = view?.state ?? "idle";
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("plugin install title")} className="gui-plugin-dialog">
+		<DialogFrame open={open} onClose={onClose} label={t("settings.pluginInstallTitle")} className="gui-plugin-dialog">
 			<div className="gui-dialog-head">
 				<Icon name="download" className="h-4 w-4 opacity-70" />
-				<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{t("plugin install title")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} disabled={busy} aria-label={t("close")}>
+				<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{t("settings.pluginInstallTitle")}</span>
+				<button type="button" className="gui-tool-btn" onClick={onClose} disabled={busy} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
 			<div className="gui-plugin-dialog-body">
-				<p className="gui-plugin-config-desc">{t("plugin install hint")}</p>
+				<p className="gui-plugin-config-desc">{t("settings.pluginInstallHint")}</p>
 
 				<div
 					className={`gui-plugin-drop${dragging ? " gui-plugin-drop--over" : ""}`}
@@ -275,8 +275,8 @@ export function PluginInstallDialog({
 							type="text"
 							value={spec}
 							disabled={busy}
-							placeholder={t("plugin install placeholder")}
-							aria-label={t("plugin install placeholder")}
+							placeholder={t("settings.pluginInstallPlaceholder")}
+							aria-label={t("settings.pluginInstallPlaceholder")}
 							onChange={event => setSpec(event.currentTarget.value)}
 							onKeyDown={event => {
 								// Enter submits unless an input-method candidate is being
@@ -289,7 +289,7 @@ export function PluginInstallDialog({
 							}}
 						/>
 					</div>
-					<div className="gui-plugin-drop-hint">{t("plugin install drop hint")}</div>
+					<div className="gui-plugin-drop-hint">{t("settings.pluginInstallDropHint")}</div>
 				</div>
 
 				{error !== null && <div className="gui-ext-plugins-error">{error}</div>}
@@ -307,7 +307,7 @@ export function PluginInstallDialog({
 				{phase === "done" && view?.capability !== undefined && (
 					<div className="gui-ext-detail-section">
 						<div className="gui-ext-detail-label">
-							{t("plugin install done {name}", {
+							{t("settings.pluginInstallDoneWithName", {
 								name: view.name ?? view.spec,
 							})}
 						</div>
@@ -316,22 +316,22 @@ export function PluginInstallDialog({
 				)}
 
 				{phase === "failed" && (
-					<div className="gui-ext-plugins-error">{view?.message ?? t("plugin install failed")}</div>
+					<div className="gui-ext-plugins-error">{view?.message ?? t("settings.pluginInstallFailed")}</div>
 				)}
-				{phase === "cancelled" && <div className="gui-ext-plugins-desc">{t("plugin install cancelled")}</div>}
+				{phase === "cancelled" && <div className="gui-ext-plugins-desc">{t("settings.pluginInstallCancelled")}</div>}
 
 				<div className="gui-plugin-dialog-actions">
 					{busy ? (
 						<button type="button" className="gui-btn" onClick={cancel}>
-							{t("plugin install cancel")}
+							{t("settings.pluginInstallCancel")}
 						</button>
 					) : (
 						<>
 							<button type="button" className="gui-btn" onClick={onClose}>
-								{t("close")}
+								{t("settings.close")}
 							</button>
 							<button type="button" className="gui-btn-primary" onClick={() => start(spec)}>
-								{phase === "failed" || phase === "cancelled" ? t("retry") : t("plugin install start")}
+								{phase === "failed" || phase === "cancelled" ? t("settings.retry") : t("settings.pluginInstallStart")}
 							</button>
 						</>
 					)}

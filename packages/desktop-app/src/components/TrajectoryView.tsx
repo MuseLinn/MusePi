@@ -68,7 +68,7 @@ function EventRow({
 							: ev.kind === "user"
 								? "USER"
 								: ev.kind === "advisor"
-									? t("advisor").toUpperCase()
+									? t("general.advisor").toUpperCase()
 									: "SYSTEM"}
 				</span>
 				<div className="traj-content">
@@ -86,10 +86,10 @@ function EventRow({
 					) : ev.kind === "system" ? (
 						<div className="traj-text">
 							{ev.title === "model_change"
-								? t("model changed")
+								? t("settings.modelChanged")
 								: ev.title === "tool_registry"
-									? t("tools updated")
-									: t("thinking level changed")}
+									? t("general.toolsUpdated")
+									: t("settings.thinkingLevelChanged")}
 						</div>
 					) : (
 						<div className="traj-text">{ev.body ?? ev.title}</div>
@@ -104,8 +104,8 @@ function EventRow({
 				<button
 					type="button"
 					className="traj-event-jump"
-					title={t("trajectory jump")}
-					aria-label={t("trajectory jump")}
+					title={t("settings.trajectoryJump")}
+					aria-label={t("settings.trajectoryJump")}
 					onClick={e => {
 						e.stopPropagation();
 						onJumpToEntry(ev.entryId!);
@@ -131,11 +131,11 @@ function InspectorCard({
 }): ReactNode {
 	const kindLabel =
 		ev.kind === "user"
-			? t("trajectory user")
+			? t("settings.trajectoryUser")
 			: ev.kind === "tool"
 				? "TOOL"
 				: ev.kind === "advisor"
-					? t("advisor")
+					? t("general.advisor")
 					: ev.kind === "system"
 						? "SYSTEM"
 						: "ASSISTANT";
@@ -161,8 +161,8 @@ function InspectorCard({
 				<button
 					type="button"
 					className="traj-inspector-close"
-					title={t("trajectory close")}
-					aria-label={t("trajectory close")}
+					title={t("settings.trajectoryClose")}
+					aria-label={t("settings.trajectoryClose")}
 					onClick={onClose}
 				>
 					<Icon name="close" className="h-3 w-3" />
@@ -171,22 +171,22 @@ function InspectorCard({
 			<div className="traj-inspector-body">
 				<div className="traj-inspector-grid">
 					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory time")}</div>
+						<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryTime")}</div>
 						<div className="traj-inspector-value">{timeText}</div>
 					</div>
 					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory turns")}</div>
+						<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryTurns")}</div>
 						<div className="traj-inspector-value">Turn {ev.pathTurnLabel ?? ev.pathTurn ?? ev.turn}</div>
 					</div>
 					{roundDurationMs !== undefined && (
 						<div className="gui-ctx-stat">
-							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory round duration")}</div>
+							<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryRoundDuration")}</div>
 							<div className="traj-inspector-value">{durationText(roundDurationMs)}</div>
 						</div>
 					)}
 					{ev.tsMs !== undefined && (
 						<div className="gui-ctx-stat">
-							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory clock")}</div>
+							<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryClock")}</div>
 							<div className="traj-inspector-value">
 								{new Date(ev.tsMs).toLocaleTimeString(undefined, timeFormatOptions())}
 							</div>
@@ -195,7 +195,7 @@ function InspectorCard({
 					{/* settled 回合的模型请求统计(wire AssistantMessage 原样携带)。 */}
 					{ev.usage && (
 						<div className="gui-ctx-stat">
-							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory tokens")}</div>
+							<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryTokens")}</div>
 							<div className="traj-inspector-value">
 								{fmtTokens(ev.usage.input + ev.usage.cacheWrite)}↑ {fmtTokens(ev.usage.output)}↓
 								{ev.usage.cacheRead > 0 ? ` ☍${fmtTokens(ev.usage.cacheRead)}` : ""}
@@ -204,32 +204,32 @@ function InspectorCard({
 					)}
 					{ev.usage && ev.ttftMs !== undefined && (
 						<div className="gui-ctx-stat">
-							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory ttft")}</div>
+							<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryTtft")}</div>
 							<div className="traj-inspector-value">{(ev.ttftMs / 1000).toFixed(1)}s</div>
 						</div>
 					)}
 					{ev.durationMs !== undefined && (
 						<div className="gui-ctx-stat">
-							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory request duration")}</div>
+							<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryRequestDuration")}</div>
 							<div className="traj-inspector-value">{durationText(ev.durationMs)}</div>
 						</div>
 					)}
 					{rateText !== undefined && (
 						<div className="gui-ctx-stat">
-							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory rate")}</div>
+							<div className="gui-ctx-stat-v text-[11px]">{t("settings.trajectoryRate")}</div>
 							<div className="traj-inspector-value">{rateText}</div>
 						</div>
 					)}
 				</div>
 				{input !== undefined && input !== "" && (
 					<div className="traj-inspector-block">
-						<div className="traj-inspector-block-label">{t("trajectory input")}</div>
+						<div className="traj-inspector-block-label">{t("settings.trajectoryInput")}</div>
 						<pre className="traj-inspector-pre">{input}</pre>
 					</div>
 				)}
 				{output !== undefined && output !== "" && (
 					<div className="traj-inspector-block">
-						<div className="traj-inspector-block-label">{t("trajectory output")}</div>
+						<div className="traj-inspector-block-label">{t("settings.trajectoryOutput")}</div>
 						<pre className="traj-inspector-pre">{output}</pre>
 					</div>
 				)}
@@ -278,7 +278,7 @@ export function TreeNodeRow({
 			style={{ paddingLeft: Math.min(depth, TRAJ_MAX_INDENT) * 14 }}
 			data-trajectory-entry={node.id}
 		>
-			<button type="button" className="traj-trow-main" onClick={() => onJump(node.id)} title={t("trajectory jump")}>
+			<button type="button" className="traj-trow-main" onClick={() => onJump(node.id)} title={t("settings.trajectoryJump")}>
 				<Icon
 					name={(TREE_ICON[kind] ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
 					className={`h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${kind}`}
@@ -289,7 +289,7 @@ export function TreeNodeRow({
 				{childCount > 1 && (
 					<span
 						className={`traj-trow-badge${isCollapsed ? " traj-trow-badge--closed" : ""}`}
-						title={isCollapsed ? t("trajectory expand branch") : t("trajectory collapse branch")}
+						title={isCollapsed ? t("transcript.trajectoryExpandBranch") : t("transcript.trajectoryCollapseBranch")}
 						onClick={e => {
 							e.stopPropagation();
 							onToggleCollapse(node.id);
@@ -309,8 +309,8 @@ export function TreeNodeRow({
 						<button
 							type="button"
 							className="traj-trow-action"
-							title={t("branch re-answer here")}
-							aria-label={t("branch re-answer here")}
+							title={t("transcript.branchReAnswerHere")}
+							aria-label={t("transcript.branchReAnswerHere")}
 							onClick={() => onBranchTo(node.id)}
 						>
 							<Icon name="git-branch" className="h-3 w-3" />
@@ -320,8 +320,8 @@ export function TreeNodeRow({
 						<button
 							type="button"
 							className="traj-trow-action"
-							title={t("map switch to branch")}
-							aria-label={t("map switch to branch")}
+							title={t("transcript.mapSwitchBranch")}
+							aria-label={t("transcript.mapSwitchBranch")}
 							onClick={() => onSwitchTo(node.id)}
 						>
 							<Icon name="arrow-right-s" className="h-3 w-3" />
@@ -331,8 +331,8 @@ export function TreeNodeRow({
 						<button
 							type="button"
 							className="traj-trow-action"
-							title={t("fork session here")}
-							aria-label={t("fork session here")}
+							title={t("transcript.forkSessionHere")}
+							aria-label={t("transcript.forkSessionHere")}
 							onClick={() => onForkAt(node.id)}
 						>
 							<Icon name="git-fork" className="h-3 w-3" />
@@ -714,7 +714,7 @@ export function TrajectoryView({
 						onClick={() => setMode("timeline")}
 					>
 						<Icon name="history" className="h-3 w-3" />
-						{t("trajectory mode timeline")}
+						{t("transcript.trajectoryModeTimeline")}
 					</button>
 					<button
 						type="button"
@@ -724,7 +724,7 @@ export function TrajectoryView({
 						onClick={() => setMode("tree")}
 					>
 						<Icon name="git-branch" className="h-3 w-3" />
-						{t("trajectory mode tree")}
+						{t("transcript.trajectoryModeTree")}
 					</button>
 				</div>
 				{/* 长会话默认全折叠后的一键展开/折叠。 */}
@@ -735,7 +735,7 @@ export function TrajectoryView({
 						onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(turns.map(g => g.turn)))}
 					>
 						<Icon name={collapsed.size > 0 ? "arrow-down-s" : "arrow-up-double"} className="h-3 w-3" />
-						{collapsed.size > 0 ? t("trajectory expand all") : t("trajectory collapse all")}
+						{collapsed.size > 0 ? t("transcript.trajectoryExpandAll") : t("transcript.trajectoryCollapseAll")}
 					</button>
 				)}
 			</div>
@@ -745,30 +745,30 @@ export function TrajectoryView({
 			<div className="grid grid-cols-2 gap-1.5 px-2.5 pb-2 pt-2">
 				<div className="gui-ctx-stat">
 					<div className="gui-ctx-stat-v">{durationText(stats.durationSec * 1000)}</div>
-					<div className="gui-ctx-stat-l">{t("trajectory duration")}</div>
+					<div className="gui-ctx-stat-l">{t("settings.trajectoryDuration")}</div>
 				</div>
 				<div className="gui-ctx-stat">
 					<div className="gui-ctx-stat-v">{stats.turns}</div>
-					<div className="gui-ctx-stat-l">{t("trajectory turns")}</div>
+					<div className="gui-ctx-stat-l">{t("settings.trajectoryTurns")}</div>
 				</div>
 				<div className="gui-ctx-stat">
 					<div className="gui-ctx-stat-v">{stats.calls}</div>
-					<div className="gui-ctx-stat-l">{t("trajectory calls")}</div>
+					<div className="gui-ctx-stat-l">{t("settings.trajectoryCalls")}</div>
 				</div>
 				<div className="gui-ctx-stat">
 					<div className="gui-ctx-stat-v truncate text-[11px]">{modelId ?? "—"}</div>
-					<div className="gui-ctx-stat-l">{t("trajectory model")}</div>
+					<div className="gui-ctx-stat-l">{t("settings.trajectoryModel")}</div>
 				</div>
 			</div>
 			{/* 全量历史补全中:统计当前只覆盖加载窗,补全后自动刷新。 */}
 			{fullLoading === true && !fullEntries && (
-				<div className="traj-loading-note">{t("turn map loading history")}</div>
+				<div className="traj-loading-note">{t("transcript.turnMapLoadingHistory")}</div>
 			)}
 			{/* P0-4 补全失败的显式降级:不再静默只覆盖加载窗——点按重试
 			    (ensureFullHistory 的闩锁已在失败时复位)。 */}
 			{fullError === true && !fullEntries && fullLoading !== true && (
 				<button type="button" className="traj-loading-note traj-error-note" onClick={onEnsureFullHistory}>
-					{t("trajectory history partial retry")}
+					{t("transcript.trajectoryHistoryPartialRetry")}
 				</button>
 			)}
 			{/* Overview 时间轴:拖拽区间聚焦 / 悬停时刻提示 / 单击整轮。 */}
@@ -783,15 +783,15 @@ export function TrajectoryView({
 					<div className="traj-focus-chip">
 						<Icon name="target" className="h-3 w-3 flex-shrink-0" />
 						<span className="traj-focus-time">
-							{t("trajectory focus")}{" "}
+							{t("settings.trajectoryFocus")}{" "}
 							{new Date(range.startMs).toLocaleTimeString(undefined, timeFormatOptions())} –{" "}
 							{new Date(range.endMs).toLocaleTimeString(undefined, timeFormatOptions())}
 						</span>
 						<button
 							type="button"
 							className="traj-focus-clear"
-							title={t("trajectory clear filter")}
-							aria-label={t("trajectory clear filter")}
+							title={t("settings.trajectoryClearFilter")}
+							aria-label={t("settings.trajectoryClearFilter")}
 							onClick={() => {
 								setRange(null);
 								beginInspectorClose();
@@ -829,7 +829,7 @@ export function TrajectoryView({
 				{mode === "tree" ? (
 					treeRows.length === 0 ? (
 						<p className="px-2 py-5 text-[12px] leading-relaxed text-[var(--color-text-faint)]">
-							{t("trajectory empty")}
+							{t("settings.trajectoryEmpty")}
 						</p>
 					) : (
 						<div className="flex flex-col">
@@ -862,7 +862,7 @@ export function TrajectoryView({
 					)
 				) : turns.length === 0 ? (
 					<p className="px-2 py-5 text-[12px] leading-relaxed text-[var(--color-text-faint)]">
-						{t("trajectory empty")}
+						{t("settings.trajectoryEmpty")}
 					</p>
 				) : (
 					<div className="flex flex-col">
@@ -907,14 +907,14 @@ export function TrajectoryView({
 											/>
 											<span className="traj-turn-tag">
 												{group.turn === 0
-													? t("trajectory system events")
+													? t("settings.trajectorySystemEvents")
 													: `Turn ${group.displayTurnLabel ?? group.displayTurn ?? group.turn}`}
 											</span>
 											<span className="traj-turn-summary">
 												{assistant ? assistant.title : `${group.events.length} events`}
 											</span>
 											<span className="traj-turn-meta">
-												{toolCount > 0 ? `${toolCount} ${t("trajectory calls").toLowerCase()}` : ""}
+												{toolCount > 0 ? `${toolCount} ${t("settings.trajectoryCalls").toLowerCase()}` : ""}
 												{groupDuration !== undefined
 													? `${toolCount > 0 ? " · " : ""}${durationText(groupDuration)}`
 													: ""}
@@ -930,8 +930,8 @@ export function TrajectoryView({
 													<button
 														type="button"
 														className="traj-trow-action"
-														title={t("branch re-answer here")}
-														aria-label={t("branch re-answer here")}
+														title={t("transcript.branchReAnswerHere")}
+														aria-label={t("transcript.branchReAnswerHere")}
 														onClick={() => onBranchTo(reanswerAnchor.entryId!)}
 													>
 														<Icon name="git-branch" className="h-3 w-3" />
@@ -941,8 +941,8 @@ export function TrajectoryView({
 													<button
 														type="button"
 														className="traj-trow-action"
-														title={t("map switch to branch")}
-														aria-label={t("map switch to branch")}
+														title={t("transcript.mapSwitchBranch")}
+														aria-label={t("transcript.mapSwitchBranch")}
 														onClick={() => onSwitchTo(switchAnchor.entryId!)}
 													>
 														<Icon name="git-merge" className="h-3 w-3" />
@@ -967,7 +967,7 @@ export function TrajectoryView({
 													{ev.branch && (
 														<span className="traj-branch-chip">
 															<Icon name="git-fork" className="h-2.5 w-2.5" />
-															{t("trajectory branch")}
+															{t("settings.trajectoryBranch")}
 														</span>
 													)}
 												</EventRow>

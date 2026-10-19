@@ -8,20 +8,20 @@ export const THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "ma
 export function thinkingLabel(level: string | null | undefined): string {
 	switch (level) {
 		case "minimal":
-			return t("thinking minimal");
+			return t("transcript.thinkingMinimal");
 		case "low":
-			return t("thinking low");
+			return t("transcript.thinkingLow");
 		case "medium":
-			return t("thinking medium");
+			return t("transcript.thinkingMedium");
 		case "high":
-			return t("thinking high");
+			return t("transcript.thinkingHigh");
 		case "xhigh":
-			return t("thinking xhigh");
+			return t("transcript.thinkingXhigh");
 		case "max":
-			return t("thinking max");
+			return t("transcript.thinkingMax");
 		case "auto":
-			return t("thinking auto");
+			return t("transcript.thinkingAuto");
 		default:
-			return t("thinking off");
+			return t("transcript.thinkingOff");
 	}
 }

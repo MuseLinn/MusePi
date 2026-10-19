@@ -39,7 +39,7 @@ export function NumberStepper({
 				<button
 					type="button"
 					className="gui-stepper-btn"
-					aria-label={t("decrease")}
+					aria-label={t("general.decrease")}
 					disabled={value <= min}
 					onClick={() => commit(value - step)}
 				>
@@ -59,7 +59,7 @@ export function NumberStepper({
 				<button
 					type="button"
 					className="gui-stepper-btn"
-					aria-label={t("increase")}
+					aria-label={t("general.increase")}
 					disabled={value >= max}
 					onClick={() => commit(value + step)}
 				>
@@ -70,8 +70,8 @@ export function NumberStepper({
 			<button
 				type="button"
 				className="gui-settings-reset"
-				title={t("reset")}
-				aria-label={t("reset")}
+				title={t("general.reset")}
+				aria-label={t("general.reset")}
 				disabled={value === defaultValue}
 				onClick={() => commit(defaultValue)}
 			>

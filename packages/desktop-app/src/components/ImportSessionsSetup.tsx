@@ -203,7 +203,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 				for (const [cwd, ids] of byCwd) {
 					const name = cwd
 						? (labels.get(cwd) ?? cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd)
-						: t("no workspace");
+						: t("settings.noWorkspace");
 					const existing = cwd ? groups.find(g => g.cwd === cwd) : groups.find(g => !g.cwd && g.name === name);
 					if (existing) {
 						for (const id of ids) if (!existing.sessions.includes(id)) existing.sessions.push(id);
@@ -225,13 +225,13 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 
 	return (
 		<div className="flex flex-col gap-2">
-			<p className="text-[12px] text-[var(--color-text-faint)]">{t("import sessions hint")}</p>
+			<p className="text-[12px] text-[var(--color-text-faint)]">{t("settings.importSessionsHint")}</p>
 			{agents === null ? (
-				<div className="text-[12px] text-[var(--color-text-faint)]">{t("loading…")}</div>
+				<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 			) : scanned === null ? (
 				<>
 					{agents.length === 0 && (
-						<div className="text-[12px] text-[var(--color-text-faint)]">{t("no agents")}</div>
+						<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.noAgents")}</div>
 					)}
 					<FadeScroll className="flex max-h-48 flex-col gap-1 overflow-y-auto">
 						{agents.map(agent => (
@@ -252,14 +252,14 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 						disabled={scanning || picked.size === 0}
 						onClick={() => void scan()}
 					>
-						{scanning ? t("scanning…") : t("scan")}
+						{scanning ? t("settings.scanning") : t("settings.scan")}
 					</button>
 				</>
 			) : (
 				<>
 					{scanned.length === 0 && (
 						<div className="text-[12px] text-[var(--color-text-faint)]">
-							{t("no sessions found in selected agents")}
+							{t("settings.noSessionsFoundSelected")}
 						</div>
 					)}
 					<FadeScroll className="flex max-h-64 flex-col gap-2 overflow-y-auto">
@@ -268,7 +268,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 								<div className="flex items-center justify-between">
 									<span className="text-[13px] font-semibold">{src.name}</span>
 									<span className="text-[11px] text-[var(--color-text-faint)]">
-										{t("session count label", { count: src.count })}
+										{t("settings.sessionCountLabel", { count: src.count })}
 									</span>
 								</div>
 								<div className="mt-1 flex flex-col gap-1.5">
@@ -289,7 +289,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 														onChange={() => toggleWorkspace(src.source, group)}
 													/>
 													<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-														{group.cwd || t("no workspace")}
+														{group.cwd || t("settings.noWorkspace")}
 													</span>
 													<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
 														{group.sessions.length}
@@ -325,9 +325,9 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 					{scanError && <div className="text-[12px] text-[var(--color-danger)]">{scanError}</div>}
 					{done && (
 						<div className="text-[12px] text-[var(--color-text-faint)]">
-							{t("import done", { count: done.ok })}
-							{done.failed > 0 ? ` · ${t("import failed", { count: done.failed })}` : ""}
-							{done.grouped ? ` · ${t("import grouped", { count: done.grouped })}` : ""}
+							{t("settings.importDone", { count: done.ok })}
+							{done.failed > 0 ? ` · ${t("settings.importFailed", { count: done.failed })}` : ""}
+							{done.grouped ? ` · ${t("settings.importGrouped", { count: done.grouped })}` : ""}
 						</div>
 					)}
 					<div className="flex items-center justify-between">
@@ -337,7 +337,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 							disabled={busy || scanning}
 							onClick={changeAgents}
 						>
-							{t("change selection")}
+							{t("settings.changeSelection")}
 						</button>
 						<button
 							type="button"
@@ -345,7 +345,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 							disabled={busy || totalSelected === 0}
 							onClick={() => void importSelected()}
 						>
-							{busy ? t("importing…") : t("import selected", { count: totalSelected })}
+							{busy ? t("settings.importing") : t("settings.importSelected", { count: totalSelected })}
 						</button>
 					</div>
 				</>

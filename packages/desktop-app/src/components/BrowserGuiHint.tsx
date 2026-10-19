@@ -81,27 +81,27 @@ export function BrowserGuiHint({
 	return (
 		<div className="gui-update-toast" role="status" data-testid="browser-gui-hint">
 			<div className="gui-update-toast-head">
-				<span className="gui-update-toast-title">{t("watch the agent's browser live")}</span>
+				<span className="gui-update-toast-title">{t("settings.watchAgentSBrowser")}</span>
 				<button
 					type="button"
 					className="gui-update-toast-close"
 					onClick={() => setVisible(false)}
-					aria-label={t("close")}
+					aria-label={t("settings.close")}
 				>
 					×
 				</button>
 			</div>
 			<div className="gui-update-toast-notes">
 				{t(
-					"with the managed browser on, pages the agent opens show up in the side panel and share its login state",
+					"settings.managedBrowserPages.info",
 				)}
 			</div>
 			<div className="gui-update-toast-actions">
 				<button type="button" className="gui-btn gui-btn-primary" onClick={enableAndWatch}>
-					{t("enable & watch")}
+					{t("settings.enableWatch")}
 				</button>
 				<button type="button" className="gui-btn" onClick={neverAsk}>
-					{t("don't ask again")}
+					{t("settings.donTAskAgain")}
 				</button>
 			</div>
 		</div>

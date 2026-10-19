@@ -203,11 +203,11 @@ export function UpdateDialog(): ReactNode {
 	const failedInstall = mode === "failure" && failureInfo?.kind.startsWith("install");
 	const title =
 		mode === "reboot"
-			? t("update ready title")
-			: t(failedInstall ? "update failed title install" : "update failed title download");
+			? t("update.updateReadyTitle")
+			: t(failedInstall ? "update.updateFailedTitleInstall" : "update.updateFailedTitleDownload");
 	const body =
 		mode === "reboot"
-			? t("update ready body", { version: version ?? "" })
+			? t("update.updateReadyBody", { version: version ?? "" })
 			: t(UPDATE_ERROR_BODY_KEYS[failureInfo?.kind ?? "install"]);
 
 	// DialogFrame is ALWAYS rendered (never conditionally mounted) — it owns
@@ -225,7 +225,7 @@ export function UpdateDialog(): ReactNode {
 			)}
 			{mode === "failure" && failureInfo && (failureInfo.message || failureInfo.technicalDetails) && (
 				<details className="mt-2 text-xs opacity-70">
-					<summary className="cursor-pointer select-none">{t("technical details")}</summary>
+					<summary className="cursor-pointer select-none">{t("update.technicalDetails")}</summary>
 					<pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all">
 						{failureInfo.technicalDetails ?? failureInfo.message}
 					</pre>
@@ -233,15 +233,15 @@ export function UpdateDialog(): ReactNode {
 			)}
 			<div className="mt-4 flex justify-end gap-2">
 				{installing ? (
-					<span className="text-sm opacity-80">{t("installing update")}</span>
+					<span className="text-sm opacity-80">{t("update.installingUpdate")}</span>
 				) : (
 					<>
 						<button type="button" className="gui-btn" onClick={close}>
-							{t("update later")}
+							{t("update.updateLater")}
 						</button>
 						{mode === "failure" && (
 							<button type="button" className="gui-btn" onClick={goReleases}>
-								{t("go to download")}
+								{t("settings.goDownload")}
 							</button>
 						)}
 						<button
@@ -249,7 +249,7 @@ export function UpdateDialog(): ReactNode {
 							className="gui-btn gui-btn-primary"
 							onClick={() => (mode === "reboot" ? void doInstall() : retry())}
 						>
-							{mode === "reboot" ? t("restart now") : t("retry")}
+							{mode === "reboot" ? t("settings.restartNow") : t("settings.retry")}
 						</button>
 					</>
 				)}

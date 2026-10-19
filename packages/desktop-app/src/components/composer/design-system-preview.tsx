@@ -79,7 +79,7 @@ export function DesignSystemMiniMock({ entry }: { entry: DesignSystemEntry }): R
 				<span style={{ background: "currentColor", opacity: 0.16, width: "62%" }} />
 			</div>
 			<span className="gui-ds-mock-btn" style={{ background: accent, color: fg, borderRadius: "inherit" }}>
-				{t("design system preview cta")}
+				{t("composer.designSystemPreviewCta")}
 			</span>
 		</div>
 	);
@@ -93,7 +93,7 @@ export function DesignSystemPreviewCard({ entry }: { entry: DesignSystemEntry })
 			<div className="gui-ds-preview-head">
 				<span className="gui-ds-preview-name">{designSystemLabel(entry)}</span>
 				<span className={`gui-ds-badge gui-ds-badge--${entry.source}`}>
-					{entry.source === "builtin" ? t("design system builtin") : t("design system extension")}
+					{entry.source === "builtin" ? t("composer.designSystemBuiltin") : t("composer.designSystemExtension")}
 				</span>
 			</div>
 			<p className="gui-ds-preview-desc">{entry.description}</p>

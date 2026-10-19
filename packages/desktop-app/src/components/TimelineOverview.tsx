@@ -147,7 +147,7 @@ export function TimelineOverview({
 	};
 
 	return (
-		<div className="traj-ov-wrap" role="img" aria-label={t("trajectory timeline")}>
+		<div className="traj-ov-wrap" role="img" aria-label={t("settings.trajectoryTimeline")}>
 			{/* 时钟行在绘图区之外(DSH 标签列 parity 的变体):起止时刻 + 总时长
 			 * 不再 absolute 进 track 内部——旧布局里起点附近的条/点被时钟文字
 			 * 盖住,投影域也被迫横跨含文字的全宽。 */}
@@ -161,20 +161,20 @@ export function TimelineOverview({
 				<div className="traj-ov-labels" aria-hidden="true">
 					<span style={{ top: 6 }}>
 						<i style={{ background: KIND_COLOR.user }} />
-						{t("trajectory lane users")}
+						{t("settings.trajectoryLaneUsers")}
 					</span>
 					<span style={{ top: 20 }}>
 						<i style={{ background: KIND_COLOR.assistant }} />
-						{t("trajectory lane replies")}
+						{t("settings.trajectoryLaneReplies")}
 					</span>
 					<span style={{ top: 34 }}>
 						<i style={{ background: KIND_COLOR.tool }} />
-						{t("trajectory lane tools")}
+						{t("settings.trajectoryLaneTools")}
 					</span>
 					{hasAdvisor && (
 						<span style={{ top: 48 }}>
 							<i style={{ background: KIND_COLOR.advisor }} />
-							{t("advisor")}
+							{t("general.advisor")}
 						</span>
 					)}
 				</div>

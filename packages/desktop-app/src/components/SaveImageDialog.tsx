@@ -69,17 +69,17 @@ export function SaveImageDialog({
 			// is what made a CSP-blocked fetch read as "the button is broken"
 			// for a whole release — the user saw nothing, not even in console.
 			const detail = err instanceof Error ? err.message : String(err);
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: `${t("copy image failed")}: ${detail}` }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: `${t("settings.copyImageFailed")}: ${detail}` }));
 		} finally {
 			setBusy(false);
 		}
 	};
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("save as image")} className="gui-saveimg-dialog">
+		<DialogFrame open={open} onClose={onClose} label={t("settings.saveImage")} className="gui-saveimg-dialog">
 			<div className="gui-saveimg-head">
-				<span className="gui-saveimg-title">{t("save as image")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
+				<span className="gui-saveimg-title">{t("settings.saveImage")}</span>
+				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
@@ -97,22 +97,22 @@ export function SaveImageDialog({
 				</div>
 				<div className="gui-saveimg-options">
 					<label className="gui-saveimg-opt">
-						<span>{t("title")}</span>
+						<span>{t("settings.title")}</span>
 						<input
 							type="text"
 							className="gui-task-input gui-saveimg-input"
 							value={title}
 							onChange={e => setTitle(e.target.value)}
-							placeholder={t("image title placeholder")}
+							placeholder={t("settings.imageTitlePlaceholder")}
 						/>
 					</label>
 					<label className="gui-saveimg-opt gui-saveimg-opt--toggle">
 						<input type="checkbox" checked={border} onChange={e => setBorder(e.target.checked)} />
-						<span>{t("border")}</span>
+						<span>{t("settings.border")}</span>
 					</label>
 					<label className="gui-saveimg-opt gui-saveimg-opt--toggle">
 						<input type="checkbox" checked={watermark} onChange={e => setWatermark(e.target.checked)} />
-						<span>{t("watermark")}</span>
+						<span>{t("settings.watermark")}</span>
 					</label>
 					<input
 						type="text"
@@ -120,21 +120,21 @@ export function SaveImageDialog({
 						value={watermarkText}
 						disabled={!watermark}
 						onChange={e => setWatermarkText(e.target.value)}
-						placeholder={t("image watermark placeholder")}
+						placeholder={t("settings.imageWatermarkPlaceholder")}
 					/>
 					<button
 						type="button"
 						className="gui-btn gui-btn-primary gui-saveimg-copy"
 						onClick={() => void copy()}
 						disabled={busy}
-						title={t("copy image")}
+						title={t("settings.copyImage")}
 					>
 						{busy ? (
 							<Loader size={13} className="gui-spin" />
 						) : (
 							<MorphIcon icon={copied ? CheckIconData : CopyIconData} size={13} spring="snappy" />
 						)}
-						<span>{busy ? t("saving image…") : copied ? t("copied") : t("copy image")}</span>
+						<span>{busy ? t("settings.savingImage") : copied ? t("settings.copied") : t("settings.copyImage")}</span>
 					</button>
 				</div>
 			</div>

@@ -106,8 +106,7 @@ export const tools = {
 	"tools.location": "Location",
 	"tools.exitCode": "Exit code",
 	"tools.configuration": "Configuration",
-	"tools.pendingConfigurationdoneSet.info":
-		"Pending configurationDone — set breakpoints, then continue",
+	"tools.pendingConfigurationdoneSet.info": "Pending configurationDone — set breakpoints, then continue",
 	"tools.function": "Function",
 	"tools.name": "Name",
 	"tools.condition": "Condition",
@@ -413,7 +412,8 @@ export const tools = {
 	"tools.slotRegistry": "Slot registry",
 	"tools.extensionSettings": "Extension settings",
 	"tools.extensionSettingsDesc": "Settings cards contributed by each extension (settings.item slot)",
-	"tools.noExtensionSettings": "No extension settings cards — enabled extensions with a settings component appear here",
+	"tools.noExtensionSettings":
+		"No extension settings cards — enabled extensions with a settings component appear here",
 	"tools.allSlotsHosted": "All declared slots have a desktop host",
 	"tools.slotUnhostedWithSlot": "Declared but no desktop host: {slot}",
 	"tools.slotDeclaration": "Slot declaration",
@@ -520,7 +520,8 @@ export const tools = {
 	"tools.pluginCfgTerminalProviderDesc":
 		"Explicit terminal backend: auto (fallback chain) / bun-pty (native, lowest latency) / node-pty (bridge process, more portable).",
 	"tools.pluginCfgTerminalShowimages": "Inline images",
-	"tools.pluginCfgTerminalShowimagesDesc": "Render images inline in the terminal (TUI, image-protocol terminals only).",
+	"tools.pluginCfgTerminalShowimagesDesc":
+		"Render images inline in the terminal (TUI, image-protocol terminals only).",
 	"tools.pluginCfgTerminalShowprogress": "Progress bars",
 	"tools.pluginCfgTerminalShowprogressDesc": "Render command progress bars inline in the terminal (TUI).",
 	"tools.pluginCfgBrowserHeadless": "Headless mode",
@@ -751,7 +752,8 @@ export const tools = {
 	"tools.skillInvoke": "Use in session",
 	"tools.skillInvokeCopied": "Copied — paste it in a session",
 	"tools.skillAutoTrigger": "Auto-trigger",
-	"tools.skillAutoTriggerHint": "When off, this skill no longer auto-triggers in conversations — manual invocation only",
+	"tools.skillAutoTriggerHint":
+		"When off, this skill no longer auto-triggers in conversations — manual invocation only",
 	"tools.skillAutoTriggerWithName": "{name} auto-trigger enabled",
 	"tools.skillAutoTriggerOffWithName": "{name} auto-trigger off — manual invocation only",
 	"tools.skillOverviewSummary": "Summary",
@@ -810,8 +812,7 @@ export const tools = {
 	"tools.broadcast": "Broadcast",
 	"tools.awaitReply": "Await reply",
 	"tools.reply": "Reply",
-	"tools.noReplyYet.info":
-		"No reply yet — they may answer later; check inbox or wait again.",
+	"tools.noReplyYet.info": "No reply yet — they may answer later; check inbox or wait again.",
 	"tools.anyone": "Anyone",
 	"tools.toWithName": "To {name}",
 	"tools.fromWithName": "From {name}",

@@ -56,7 +56,7 @@ export function ToolsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("tools")}</h2>
+			<h2 className="gui-settings-page-title">{t("settings.tools")}</h2>
 			<ComputerPermissionsSection rpc={rpc} />
 			{/* computer.glow lives in 浏览器与桌面 (its custom row live-applies
 			 * via the omp-glow-setting event) — the schema copy would duplicate
@@ -65,7 +65,7 @@ export function ToolsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{/* Tool approvals moved from 交互 (group-level dedupe): the
 			 * approval policy gates exactly the tools toggled above. */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("approvals")}</div>
+				<div className="gui-settings-section-title">{t("settings.approvals")}</div>
 				<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Approvals"]} />
 			</div>
 			<ComputerPermissionsDialog rpc={rpc} open={dialogOpen} onClose={dismiss} />

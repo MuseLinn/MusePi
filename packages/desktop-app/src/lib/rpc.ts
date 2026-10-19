@@ -13,6 +13,8 @@
  * drives resume via session.resume after reconnect.
  */
 
+import { type RpcProgressTick, withSlowHint } from "./rpc-slow-hint";
+
 export interface RpcError {
 	code: number;
 	message: string;
@@ -34,8 +36,19 @@ type TimerHandle = Timer;
 /** A request unanswered this long is rejected (dead socket / hung daemon) —
  *  without this, a silently-dead connection hangs every caller forever.
  *  Long-running methods (stt.transcribe loads a GB-scale local model on
- *  first use; tts.synthesize warms Kokoro) pass a larger per-call cap. */
-const REQUEST_TIMEOUT_MS = 15_000;
+ *  first use; tts.synthesize warms Kokoro) pass a larger per-call cap.
+ *
+ *  45s, not the historical 15s. The floor has to cover the slowest legitimate
+ *  work the GUI starts: `session.create` instantiates the extension set for a
+ *  new context (measured in seconds on a daemon restoring many sessions), and
+ *  a model turn can sit in provider prep for a while. At 15s those turned into
+ *  "request timeout" banners that a retry immediately fixed — the caller read
+ *  a spurious failure, not a slow one. Liveness is NOT this timer's job: the
+ *  keepalive loop below (ping every 20s, force-close after 45s of total
+ *  silence) decides whether the SOCKET is dead, and a dead socket rejects
+ *  every pending request at once with "connection closed". So this is a
+ *  per-request ceiling, and a generous one is safe. */
+const REQUEST_TIMEOUT_MS = 45_000;
 
 /** OAuth logins keep the request open while the user authorizes in a
  *  browser — routinely far beyond {@link REQUEST_TIMEOUT_MS}. The daemon
@@ -46,6 +59,13 @@ export const PROVIDER_LOGIN_TIMEOUT_MS = 300_000;
 export interface RpcRequestOptions {
 	/** Reject the request after this long instead of {@link REQUEST_TIMEOUT_MS}. */
 	timeoutMs?: number;
+	/**
+	 * Report "still waiting" for a slow request. Fires once at
+	 * {@link RPC_SLOW_HINT_AFTER_MS} and then every second, carrying the
+	 * elapsed time — so a caller can show "正在加载… 3s" instead of a frozen
+	 * screen. Does not change the request's outcome.
+	 */
+	onSlowHint?: (tick: RpcProgressTick) => void;
 }
 /** App-level keepalive cadence. Browsers cannot send WS ping frames, so
  *  liveness is probed with a lightweight RPC ("system.ping"). */
@@ -223,7 +243,7 @@ export class RpcClient {
 		const ws = this.#ws;
 		if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("not connected"));
 		const id = this.#nextId++;
-		return new Promise<T>((resolve, reject) => {
+		const promise = new Promise<T>((resolve, reject) => {
 			// A request on a silently-dead socket would otherwise hang the
 			// caller forever (no close frame arrives on macOS sleep teardown)
 			// — bound every request so the UI stays responsive and the
@@ -245,6 +265,11 @@ export class RpcClient {
 			});
 			ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
 		});
+		// A slow request reports that it is still waiting rather than sitting
+		// behind a frozen screen — see withSlowHint. Callers that pass nothing
+		// get the plain promise with no extra timer.
+		if (opts?.onSlowHint) return withSlowHint(promise, opts.onSlowHint);
+		return promise;
 	}
 
 	/** Wire the message handler (called once after connect; loops internally). */

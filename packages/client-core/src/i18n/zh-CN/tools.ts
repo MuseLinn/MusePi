@@ -207,8 +207,7 @@ export const tools = {
 	"tools.browserRelayConnected": "已连接 — MusePi 可以驱动你的 Chrome 标签页",
 	"tools.browserRelayServingWaiting":
 		"中继已运行，等待扩展加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
-	"tools.browserRelayInstalledNot":
-		"已写入但未加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
+	"tools.browserRelayInstalledNot": "已写入但未加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
 	"tools.install": "安装",
 	"tools.uninstall": "卸载",
 	"tools.sharedBrowser": "共享浏览器",
@@ -481,7 +480,8 @@ export const tools = {
 	"tools.pluginCfgSttSubmittriggerOptRelease": "松开时（2 个词以上）",
 	"tools.pluginCfgSttSubmittriggerOptReleaseComplete": "完整句子结束时",
 	"tools.pluginCfgSttSubmittriggerOptSay": "说出“提交”",
-	"tools.pluginCfgSttSubmittriggerDesc": "听写何时自动提交：手动 / 松开时（2 个词以上）/ 完整句子结束时 / 说出“提交”。",
+	"tools.pluginCfgSttSubmittriggerDesc":
+		"听写何时自动提交：手动 / 松开时（2 个词以上）/ 完整句子结束时 / 说出“提交”。",
 	"tools.pluginCfgTtsLocalmodel": "朗读模型",
 	"tools.pluginCfgTtsLocalmodelDesc":
 		"本地神经 TTS 模型：Kokoro-82M（英语优先，多音色）或 MeloTTS 中文（普通话 / 中英混合）。",
@@ -714,7 +714,8 @@ export const tools = {
 	"tools.uninstallSkillsConfirmPartialWithNWithSkipped":
 		"将卸载 {n} 个技能；另有 {skipped} 个为内置或扩展技能，已跳过（不可卸载）。",
 	"tools.uninstallSomeFailedWithN": "有 {n} 个技能卸载失败，其余已处理。",
-	"tools.installedSkillsStatusWithEnabledWithDisabledWithTotal": "已启用 {enabled} · 已停用 {disabled} · 共 {total} 个技能",
+	"tools.installedSkillsStatusWithEnabledWithDisabledWithTotal":
+		"已启用 {enabled} · 已停用 {disabled} · 共 {total} 个技能",
 	"tools.skillTabOverview": "概览",
 	"tools.skillTabSkillmd": "SKILL.md",
 	"tools.skillTabVersions": "版本记录",
@@ -779,8 +780,7 @@ export const tools = {
 	"tools.broadcast": "广播",
 	"tools.awaitReply": "等待回复",
 	"tools.reply": "回复",
-	"tools.noReplyYet.info":
-		"尚无回复 — 对方可能稍后回复；请检查收件箱或再次等待。",
+	"tools.noReplyYet.info": "尚无回复 — 对方可能稍后回复；请检查收件箱或再次等待。",
 	"tools.anyone": "任何人",
 	"tools.toWithName": "发给 {name}",
 	"tools.fromWithName": "来自 {name}",

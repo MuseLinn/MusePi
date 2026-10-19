@@ -82,16 +82,16 @@ function MarketplaceDetailDialog({
 					<div className="gui-cron-form-actions">
 						{homepage && (
 							<button type="button" className="gui-btn" onClick={() => void openExternalUrl(homepage)}>
-								{t("plugin detail homepage")}
+								{t("guest.pluginDetailHomepage")}
 							</button>
 						)}
 						{repository && (
 							<button type="button" className="gui-btn" onClick={() => void openExternalUrl(repository)}>
-								{t("plugin detail repository")}
+								{t("guest.pluginDetailRepository")}
 							</button>
 						)}
 						<button type="button" className="gui-btn" onClick={onClose}>
-							{t("close")}
+							{t("settings.close")}
 						</button>
 					</div>
 				</div>

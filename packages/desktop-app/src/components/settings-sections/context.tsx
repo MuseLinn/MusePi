@@ -8,7 +8,7 @@ import { SchemaTabSection } from "./schema";
 export function ContextSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("context")}</h2>
+			<h2 className="gui-settings-page-title">{t("settings.context")}</h2>
 			<SchemaTabSection rpc={rpc} tabs={["context"]} />
 		</>
 	);

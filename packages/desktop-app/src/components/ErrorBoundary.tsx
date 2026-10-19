@@ -37,9 +37,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
 						<div className="gui-brand">
 							<span className="gui-brand-mark">π</span> MusePi
 						</div>
-						<p className="gui-connect-sub">{t("interface render error — reconnecting will recover")}</p>
+						<p className="gui-connect-sub">{t("settings.interfaceRenderErrorReconnecting")}</p>
 						<button className="gui-btn gui-btn-primary" type="button" onClick={() => window.location.reload()}>
-							{t("retry")}
+							{t("settings.retry")}
 						</button>
 					</div>
 				</div>

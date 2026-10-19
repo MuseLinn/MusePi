@@ -40,8 +40,8 @@ export function CommandsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	}, [items]);
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("commands")}</h2>
-			<p className="gui-settings-page-desc">{t("commands settings")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.commands")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.commandsSettings")}</p>
 			{items === null ? (
 				<div className="text-[13px] text-[var(--color-text-faint)]">…</div>
 			) : (

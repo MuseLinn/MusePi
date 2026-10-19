@@ -47,16 +47,16 @@ import { StateIcon } from "./StateIcon";
 
 const statusLabel = (status: string): string => {
 	switch (status) {
-		case "dispatched":
-			return t("dispatched");
-		case "failed":
-			return t("failed");
-		case "canceled":
-			return t("canceled");
+		case "tools.dispatched":
+			return t("tools.dispatched");
+		case "tools.failed":
+			return t("tools.failed");
+		case "tools.canceled":
+			return t("tools.canceled");
 		case "verified":
-			return t("completed");
+			return t("tools.completed");
 		default:
-			return t("completed");
+			return t("tools.completed");
 	}
 };
 
@@ -138,7 +138,7 @@ function saveZooms(zooms: Record<string, number>): void {
 }
 
 function labelFromUrl(url: string): string {
-	if (url === EMPTY_URL) return t("browser empty tab");
+	if (url === EMPTY_URL) return t("tools.browserEmptyTab");
 	try {
 		const parsed = new URL(url);
 		return parsed.hostname.replace(/^www\./, "") || url;
@@ -199,10 +199,10 @@ function isHistoryUrl(url: string): boolean {
 // ── viewport presets (legacy pane parity, moved into the managed pane) ─
 
 const VIEWPORTS = [
-	{ key: "browser viewport fit", width: null as number | null, device: "fit" },
-	{ key: "browser viewport phone", width: 393, device: "phone" },
-	{ key: "browser viewport tablet", width: 768, device: "tablet" },
-	{ key: "browser viewport desktop", width: 1440, device: "desktop" },
+	{ key: "tools.browserViewportFit", width: null as number | null, device: "fit" },
+	{ key: "tools.browserViewportPhone", width: 393, device: "phone" },
+	{ key: "tools.browserViewportTablet", width: 768, device: "tablet" },
+	{ key: "tools.browserViewportDesktop", width: 1440, device: "desktop" },
 ] as const;
 
 // ── quick links (start page 快速链接) ─────────────────────────────────
@@ -210,13 +210,13 @@ const VIEWPORTS = [
 const QUICK_LINKS: Array<{
 	label: string;
 	url: string;
-	icon: "github" | "search" | "book" | "terminal" | "chat-1" | "compass-3";
+	icon: "github" | "settings.search" | "book" | "settings.terminal" | "chat-1" | "compass-3";
 }> = [
 	{ label: "GitHub", url: "https://github.com", icon: "github" },
-	{ label: "Google", url: "https://www.google.com", icon: "search" },
-	{ label: "Bing", url: "https://www.bing.com", icon: "search" },
+	{ label: "Google", url: "https://www.google.com", icon: "settings.search" },
+	{ label: "Bing", url: "https://www.bing.com", icon: "settings.search" },
 	{ label: "MDN", url: "https://developer.mozilla.org", icon: "book" },
-	{ label: "Stack Overflow", url: "https://stackoverflow.com", icon: "terminal" },
+	{ label: "Stack Overflow", url: "https://stackoverflow.com", icon: "settings.terminal" },
 	{ label: "DeepL", url: "https://www.deepl.com", icon: "chat-1" },
 ];
 
@@ -248,7 +248,7 @@ export function ManagedBrowserPane({
 	// Preset KEY, not its width: the key also carries the device identity the
 	// page is served under (see the device-preset effect below), while the
 	// width drives the fit-scaling.
-	const [viewportKey, setViewportKey] = useState<(typeof VIEWPORTS)[number]["key"]>("browser viewport fit");
+	const [viewportKey, setViewportKey] = useState<(typeof VIEWPORTS)[number]["key"]>("tools.browserViewportFit");
 	const viewport = VIEWPORTS.find(v => v.key === viewportKey)?.width ?? null;
 	const [copied, setCopied] = useState(false);
 	const slotRef = useRef<HTMLDivElement | null>(null);
@@ -265,12 +265,12 @@ export function ManagedBrowserPane({
 		if (!target) return [];
 		return [
 			{
-				label: t("browser close tab"),
-				icon: "close",
+				label: t("tools.browserCloseTab"),
+				icon: "settings.close",
 				onSelect: () => closeTab(target.id),
 			},
 			{
-				label: t("close other tabs"),
+				label: t("general.closeOtherTabs"),
 				icon: "close-circle",
 				disabled: host.tabs.length <= 1,
 				onSelect: () => {
@@ -279,12 +279,12 @@ export function ManagedBrowserPane({
 			},
 			{ divider: true },
 			{
-				label: t("browser duplicate tab"),
+				label: t("tools.browserDuplicateTab"),
 				icon: "file-copy",
 				onSelect: () => void createTab(target.url).catch(() => {}),
 			},
 			{
-				label: t("browser copy url"),
+				label: t("tools.browserCopyUrl"),
 				icon: "clipboard",
 				onSelect: () => void window.electronAPI?.copyText(target.url).catch(() => {}),
 			},
@@ -434,7 +434,7 @@ export function ManagedBrowserPane({
 			const picked = (await pickElementInPage(BROWSER_INSPECT_SCRIPT)) as PickedElement | null;
 			if (picked?.selector) {
 				setPickedSelector(picked.selector);
-				const insertion = `${t("inserted element", { tag: picked.tag, text: picked.text.slice(0, 80) })} ${t("picked element")}: ${picked.selector}`;
+				const insertion = `${t("transcript.insertedElement", { tag: picked.tag, text: picked.text.slice(0, 80) })} ${t("transcript.pickedElement")}: ${picked.selector}`;
 				window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
 			}
 		} finally {
@@ -613,7 +613,7 @@ export function ManagedBrowserPane({
 			key: `history:${entry.url}`,
 			label: entry.title || labelFromUrl(entry.url),
 			detail: entry.url,
-			icon: "history" as const,
+			icon: "transcript.history" as const,
 			url: entry.url,
 		}));
 		if (showDefault || !query) return historySuggestions;
@@ -718,8 +718,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-browser-icon-btn"
-						aria-label={t("back")}
-						title={t("back")}
+						aria-label={t("settings.back")}
+						title={t("settings.back")}
 						disabled={!activeTab?.canGoBack}
 						onClick={() => goBack()}
 					>
@@ -728,8 +728,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-browser-icon-btn"
-						aria-label={t("forward")}
-						title={t("forward")}
+						aria-label={t("transcript.forward")}
+						title={t("transcript.forward")}
 						disabled={!activeTab?.canGoForward}
 						onClick={() => goForward()}
 					>
@@ -738,8 +738,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className={`gui-browser-icon-btn${activeTabLoading ? " gui-browser-icon-btn--spinning" : ""}`}
-						aria-label={activeTabLoading ? t("stop agent operation") : t("refresh")}
-						title={activeTabLoading ? t("stop agent operation") : t("refresh")}
+						aria-label={activeTabLoading ? t("tools.stopAgentOperation") : t("settings.refresh")}
+						title={activeTabLoading ? t("tools.stopAgentOperation") : t("settings.refresh")}
 						disabled={isBlank}
 						onClick={() => {
 							if (activeTabLoading) void stopAgentOp(activeTab?.id);
@@ -783,9 +783,9 @@ export function ManagedBrowserPane({
 								window.setTimeout(() => setAddressEditing(false), 80);
 							}}
 							onKeyDown={onAddressKeyDown}
-							placeholder={isBlank ? t("browser search placeholder") : ""}
-							aria-label={t("browser search placeholder")}
-							autoComplete="off"
+							placeholder={isBlank ? t("tools.browserSearchPlaceholder") : ""}
+							aria-label={t("tools.browserSearchPlaceholder")}
+							autoComplete="settings.off"
 							spellCheck={false}
 						/>
 						{addressDisplayParts.url ? (
@@ -834,8 +834,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-browser-icon-btn"
-						aria-label={t("browser zoom out")}
-						title={t("browser zoom out")}
+						aria-label={t("tools.browserZoomOut")}
+						title={t("tools.browserZoomOut")}
 						disabled={isBlank}
 						onClick={() => setActiveZoom(activeZoom - 0.1)}
 					>
@@ -844,7 +844,7 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-browser-zoom-value"
-						title={t("browser reset zoom")}
+						title={t("tools.browserResetZoom")}
 						disabled={isBlank}
 						onClick={() => setActiveZoom(1)}
 					>
@@ -853,8 +853,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-browser-icon-btn"
-						aria-label={t("browser zoom in")}
-						title={t("browser zoom in")}
+						aria-label={t("tools.browserZoom")}
+						title={t("tools.browserZoom")}
 						disabled={isBlank}
 						onClick={() => setActiveZoom(activeZoom + 0.1)}
 					>
@@ -868,8 +868,8 @@ export function ManagedBrowserPane({
 						<button
 							type="button"
 							className={`gui-browser-icon-btn${vpMenuOpen ? " gui-browser-icon-btn--active" : ""}`}
-							aria-label={t("browser viewport presets")}
-							title={t("browser viewport presets")}
+							aria-label={t("tools.browserViewportPresets")}
+							title={t("tools.browserViewportPresets")}
 							onClick={() => {
 								setVpMenuOpen(o => !o);
 								setSuggestionsOpen(false);
@@ -879,7 +879,7 @@ export function ManagedBrowserPane({
 						</button>
 						{renderVpMenu(
 							<div role="menu">
-								<span className="gui-browser-menu-label">{t("browser viewport presets")}</span>
+								<span className="gui-browser-menu-label">{t("tools.browserViewportPresets")}</span>
 								<div className="gui-browser-menu-viewports">
 									{VIEWPORTS.map(v => (
 										<button
@@ -902,8 +902,8 @@ export function ManagedBrowserPane({
 						<button
 							type="button"
 							className={`gui-browser-icon-btn${menuOpen ? " gui-browser-icon-btn--active" : ""}`}
-							aria-label={t("browser menu")}
-							title={t("browser menu")}
+							aria-label={t("tools.browserMenu")}
+							title={t("tools.browserMenu")}
 							onClick={() => {
 								setMenuOpen(o => !o);
 								setSuggestionsOpen(false);
@@ -925,7 +925,7 @@ export function ManagedBrowserPane({
 									}}
 								>
 									<Icon name="target" className="h-3.5 w-3.5" />
-									{t("pick element")}
+									{t("transcript.pickElement")}
 								</button>
 								<button
 									type="button"
@@ -937,7 +937,7 @@ export function ManagedBrowserPane({
 									}}
 								>
 									<Icon name="clipboard" className="h-3.5 w-3.5" />
-									{copied ? t("browser copy url done") : t("browser copy url")}
+									{copied ? t("tools.browserCopyUrlDone") : t("tools.browserCopyUrl")}
 								</button>
 								<button
 									type="button"
@@ -946,7 +946,7 @@ export function ManagedBrowserPane({
 									onClick={openInSystem}
 								>
 									<Icon name="external-link" className="h-3.5 w-3.5" />
-									{t("browser open in system")}
+									{t("tools.browserOpenSystem")}
 								</button>
 								<button
 									type="button"
@@ -958,7 +958,7 @@ export function ManagedBrowserPane({
 									}}
 								>
 									<Icon name="refresh" className="h-3.5 w-3.5" />
-									{t("browser hard reload")}
+									{t("tools.browserHardReload")}
 								</button>
 								{/* Zoom entry for narrow panels: the standing zoom
 								 * group hides under the 480px container tier, so
@@ -973,20 +973,20 @@ export function ManagedBrowserPane({
 									}}
 								>
 									<Icon name="expand-up-down" className="h-3.5 w-3.5" />
-									{t("browser reset zoom")}
+									{t("tools.browserResetZoom")}
 								</button>
 								<span className="gui-browser-menu-sep" />
 								<button type="button" role="menuitem" disabled={history.length === 0} onClick={clearHistory}>
 									<Icon name="history" className="h-3.5 w-3.5" />
-									{t("browser clear history")}
+									{t("tools.browserClearHistory")}
 								</button>
 								<button type="button" role="menuitem" onClick={() => void clearBrowserData("cookies")}>
 									<Icon name="lock" className="h-3.5 w-3.5" />
-									{t("browser clear cookies")}
+									{t("tools.browserClearCookies")}
 								</button>
-								<button type="button" role="menuitem" onClick={() => void clearBrowserData("all")}>
+								<button type="button" role="menuitem" onClick={() => void clearBrowserData("tools.all")}>
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
-									{t("browser clear all data")}
+									{t("tools.browserClearAllData")}
 								</button>
 							</div>,
 						)}
@@ -994,8 +994,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-browser-icon-btn"
-						aria-label={t("browser new tab")}
-						title={t("browser new tab")}
+						aria-label={t("tools.browserNewTab")}
+						title={t("tools.browserNewTab")}
 						onClick={() => void createTab(EMPTY_URL).catch(() => {})}
 					>
 						<Icon name="add" className="h-4 w-4" />
@@ -1010,7 +1010,7 @@ export function ManagedBrowserPane({
 			{agentBusy && (
 				<div className="gui-browser-agent-strip" role="status" aria-live="polite">
 					<span className="gui-browser-agent-dot" />
-					<span className="flex-shrink-0">{t("agent operating")}</span>
+					<span className="flex-shrink-0">{t("tools.agentOperating")}</span>
 					{host.activity?.summary ? <span className="min-w-0 truncate">{host.activity.summary}</span> : null}
 				</div>
 			)}
@@ -1027,7 +1027,7 @@ export function ManagedBrowserPane({
 							<div
 								key={tab.id}
 								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}`}
-								title={tab.frozen ? `${tab.url} · ${t("browser tab frozen")}` : tab.url}
+								title={tab.frozen ? `${tab.url} · ${t("tools.browserTabFrozen")}` : tab.url}
 								style={
 									themeRgb
 										? {
@@ -1045,7 +1045,7 @@ export function ManagedBrowserPane({
 								<button
 									type="button"
 									className="gui-browser-tab-main"
-									aria-label={`${tab.title}${tab.agent ? ` (${t("agent created tab")})` : ""}`}
+									aria-label={`${tab.title}${tab.agent ? ` (${t("tools.agentCreatedTab")})` : ""}`}
 									onClick={() => selectTab(tab.id)}
 								>
 									{tab.frozen ? (
@@ -1058,20 +1058,20 @@ export function ManagedBrowserPane({
 											alt=""
 											className="h-3.5 w-3.5 shrink-0 rounded-[3px]"
 											onError={e => {
-												e.currentTarget.style.display = "none";
+												e.currentTarget.style.display = "settings.none2";
 											}}
 										/>
 									) : (
 										<Icon name="global" className="h-3 w-3 shrink-0 opacity-60" />
 									)}
-									<span className="max-w-[110px] truncate">{tab.title?.trim() || t("browser empty tab")}</span>
-									{tab.agent && <span className="gui-browser-tab-badge">{t("agent created tab")}</span>}
+									<span className="max-w-[110px] truncate">{tab.title?.trim() || t("tools.browserEmptyTab")}</span>
+									{tab.agent && <span className="gui-browser-tab-badge">{t("tools.agentCreatedTab")}</span>}
 								</button>
 								<button
 									type="button"
 									className="gui-browser-tab-close"
-									aria-label={t("browser close tab")}
-									title={t("browser close tab")}
+									aria-label={t("tools.browserCloseTab")}
+									title={t("tools.browserCloseTab")}
 									onClick={() => closeTab(tab.id)}
 								>
 									<Icon name="close" className="h-3 w-3" />
@@ -1089,7 +1089,7 @@ export function ManagedBrowserPane({
 					role="status"
 					aria-live="polite"
 				>
-					<span className="flex-shrink-0 font-medium text-[var(--color-accent)]">{t("agent activity")}</span>
+					<span className="flex-shrink-0 font-medium text-[var(--color-accent)]">{t("tools.agentActivity")}</span>
 					<span className="flex-shrink-0 text-[var(--color-text-faint)]">{statusLabel(host.activity.status)}</span>
 					<span className="truncate text-[var(--color-text-muted)]">
 						{host.activity.summary}
@@ -1099,8 +1099,8 @@ export function ManagedBrowserPane({
 						<button
 							type="button"
 							className="gui-pane-action ml-auto !w-auto px-1.5"
-							aria-label={t("stop agent operation")}
-							title={t("stop agent operation")}
+							aria-label={t("tools.stopAgentOperation")}
+							title={t("tools.stopAgentOperation")}
 							onClick={() => void stopAgentOp(host.activity?.tabId)}
 						>
 							<Icon name="stop" className="h-3 w-3" />
@@ -1111,7 +1111,7 @@ export function ManagedBrowserPane({
 			{pickedSelector && (
 				<div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--color-accent)]/[0.06] px-2 py-1">
 					<span className="flex-shrink-0 text-[11px] font-medium text-[var(--color-accent)]">
-						{t("picked element")}
+						{t("transcript.pickedElement")}
 					</span>
 					<code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--color-text)]">
 						{pickedSelector}
@@ -1119,8 +1119,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-pane-action !w-auto px-1.5 text-[11px]"
-						aria-label={t("copy")}
-						title={t("copy")}
+						aria-label={t("settings.copy")}
+						title={t("settings.copy")}
 						onClick={() => {
 							void navigator.clipboard.writeText(pickedSelector).catch(() => {});
 						}}
@@ -1130,8 +1130,8 @@ export function ManagedBrowserPane({
 					<button
 						type="button"
 						className="gui-pane-action !w-auto px-1.5"
-						aria-label={t("close")}
-						title={t("close")}
+						aria-label={t("settings.close")}
+						title={t("settings.close")}
 						onClick={() => setPickedSelector(null)}
 					>
 						<Icon name="close" className="h-3 w-3" />
@@ -1147,7 +1147,7 @@ export function ManagedBrowserPane({
 			 * lives in the always-mounted host); a viewport preset is applied by
 			 * scaling the host, not by constraining this box. */}
 			<div className="gui-browser-content">
-				<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
+				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
 				{/* Preset mode: dashed viewport frame + right/bottom drag handles
 				 * (§3.2.2). Pure overlay siblings of the slot — the §23 webview
 				 * constraints are untouched (no display/reparent near the page
@@ -1163,8 +1163,8 @@ export function ManagedBrowserPane({
 						<button
 							type="button"
 							className="gui-browser-vp-handle gui-browser-vp-handle--x"
-							title={t("browser viewport width")}
-							aria-label={t("browser viewport width")}
+							title={t("tools.browserViewportWidth")}
+							aria-label={t("tools.browserViewportWidth")}
 							onPointerDown={e => startVpDrag(e, "x")}
 							onPointerMove={onVpDragMove}
 							onPointerUp={endVpDrag}
@@ -1173,8 +1173,8 @@ export function ManagedBrowserPane({
 						<button
 							type="button"
 							className="gui-browser-vp-handle gui-browser-vp-handle--y"
-							title={t("browser viewport height")}
-							aria-label={t("browser viewport height")}
+							title={t("tools.browserViewportHeight")}
+							aria-label={t("tools.browserViewportHeight")}
 							onPointerDown={e => startVpDrag(e, "y")}
 							onPointerMove={onVpDragMove}
 							onPointerUp={endVpDrag}
@@ -1188,7 +1188,7 @@ export function ManagedBrowserPane({
 				{!isBlank && activeTabLoading && (
 					<div className="gui-browser-loading" role="status" aria-live="polite">
 						<Icon name="loader-4" className="h-4 w-4 animate-spin" />
-						<span>{t("browser page loading")}</span>
+						<span>{t("tools.browserPageLoading")}</span>
 					</div>
 				)}
 				{/* Blank tab: the start page layers OVER the about:blank guest — the
@@ -1209,10 +1209,10 @@ export function ManagedBrowserPane({
 			</div>
 			{/* Local-only login note (Proma parity) */}
 			<div className="flex items-center justify-between px-2 pb-1 pt-0.5">
-				<span className="text-[10.5px] text-[var(--color-text-faint)]">{t("managed browser local only")}</span>
+				<span className="text-[10.5px] text-[var(--color-text-faint)]">{t("tools.managedBrowserLocalOnly")}</span>
 				{host.port ? (
 					<span className="text-[10.5px] text-[var(--color-text-faint)]">
-						{t("managed browser port", { port: String(host.port) })}
+						{t("tools.managedBrowserPort", { port: String(host.port) })}
 					</span>
 				) : null}
 			</div>
@@ -1222,13 +1222,13 @@ export function ManagedBrowserPane({
 				<div
 					role="dialog"
 					aria-modal="true"
-					aria-label={t("risky navigation")}
+					aria-label={t("tools.riskyNavigation")}
 					className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
 				>
 					<div className="max-w-[380px] rounded-lg border border-[var(--border)] bg-[var(--color-surface)] p-3 shadow-lg">
-						<div className="mb-1 text-[12px] font-medium text-[var(--color-text)]">{t("risky navigation")}</div>
+						<div className="mb-1 text-[12px] font-medium text-[var(--color-text)]">{t("tools.riskyNavigation")}</div>
 						<div className="mb-2 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-							{t("risky navigation description")}
+							{t("tools.riskyNavigationDescription")}
 						</div>
 						<div className="mb-3 break-all rounded-md bg-[var(--color-surface-sunken)] px-2 py-1 font-mono text-[11px] text-[var(--color-text)]">
 							{host.confirm.url}
@@ -1239,14 +1239,14 @@ export function ManagedBrowserPane({
 								className="gui-pane-action !w-auto px-2.5 py-1"
 								onClick={() => void answerConfirm(host.confirm?.requestId ?? "", false)}
 							>
-								{t("deny")}
+								{t("tools.deny")}
 							</button>
 							<button
 								type="button"
 								className="gui-pane-action !w-auto bg-[var(--color-accent)] px-2.5 py-1 text-[var(--color-on-accent)]"
 								onClick={() => void answerConfirm(host.confirm?.requestId ?? "", true)}
 							>
-								{t("allow")}
+								{t("tools.allow")}
 							</button>
 						</div>
 					</div>
@@ -1278,14 +1278,14 @@ function BrowserStartPage({
 	return (
 		<div className="gui-browser-start">
 			<div className="gui-browser-start-hero">
-				<span className="gui-browser-start-kicker">{t("browser")}</span>
-				<h2>{t("browser start title")}</h2>
-				<p className="gui-browser-start-sub">{t("browser start subtitle")}</p>
+				<span className="gui-browser-start-kicker">{t("settings.browser")}</span>
+				<h2>{t("tools.browserStartTitle")}</h2>
+				<p className="gui-browser-start-sub">{t("tools.browserStartSubtitle")}</p>
 			</div>
 			<div className="gui-browser-start-section">
 				<div className="gui-browser-start-section-head">
-					<span>{t("browser quick links")}</span>
-					<small>{t("browser quick links hint")}</small>
+					<span>{t("tools.browserQuickLinks")}</span>
+					<small>{t("tools.browserQuickLinksHint")}</small>
 				</div>
 				<div className="gui-browser-quick-grid">
 					{QUICK_LINKS.map(link => (
@@ -1303,16 +1303,16 @@ function BrowserStartPage({
 			</div>
 			<div className="gui-browser-start-section">
 				<div className="gui-browser-start-section-head">
-					<span>{t("browser recent visits")}</span>
-					<small>{t("browser recent hint")}</small>
+					<span>{t("tools.browserRecentVisits")}</span>
+					<small>{t("tools.browserRecentHint")}</small>
 				</div>
 				{recent.length === 0 ? (
 					<div className="gui-browser-start-empty">
-						<p>{t("browser no history")}</p>
-						<p>{t("browser type or paste url")}</p>
+						<p>{t("tools.browserNoHistory")}</p>
+						<p>{t("tools.browserTypePasteUrl")}</p>
 						<button type="button" className="gui-browser-start-address" onClick={onFocusAddress}>
 							<Icon name="compass-3" className="h-4 w-4" />
-							<span>{t("browser search placeholder")}</span>
+							<span>{t("tools.browserSearchPlaceholder")}</span>
 						</button>
 					</div>
 				) : (
@@ -1332,7 +1332,7 @@ function BrowserStartPage({
 									<span>{entry.title || labelFromUrl(entry.url)}</span>
 									<small>{hostnameFromUrl(entry.url)}</small>
 								</span>
-								<span className="gui-browser-recent-open">{t("browser open")}</span>
+								<span className="gui-browser-recent-open">{t("tools.browserOpen")}</span>
 							</button>
 						))}
 					</div>

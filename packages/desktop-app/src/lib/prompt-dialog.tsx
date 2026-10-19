@@ -198,14 +198,14 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 								) : null}
 								<div className="mt-4 flex justify-end gap-2">
 									<button type="button" className="gui-btn" onClick={() => finish(false)}>
-										{t("cancel")}
+										{t("settings.cancel")}
 									</button>
 									<button
 										type="button"
 										className="gui-btn gui-btn-primary"
 										onClick={() => (state?.kind === "prompt" ? finish(value.trim()) : finish(true))}
 									>
-										{state.okLabel ?? t("confirm")}
+										{state.okLabel ?? t("settings.confirm")}
 									</button>
 								</div>
 							</div>

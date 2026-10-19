@@ -9,32 +9,32 @@ import { zhCN } from "../src/i18n/zh-CN/index.js";
  * The wizard's step titles/bodies and the done-step branch labels are looked
  * up by key from STEP_TITLES / STEP_BODIES in OnboardingOverlay.tsx. A key
  * with no dictionary entry silently falls back to the raw key (the key IS
- * the English string), which would ship "onboarding branch import" as
+ * the English string), which would ship "settings.onboardingBranchImport" as
  * visible copy — this locks the three restructured surfaces instead:
  *   main step 1 (语言与外观) · main step 2 (连接模型) · done step + branches.
  */
 const RESTRUCTURE_KEYS = [
 	// Main spine: merged language/appearance step + done step.
-	"onboarding title main1",
-	"onboarding step main1",
-	"onboarding title done",
-	"onboarding step done",
-	"onboarding branches label",
+	"settings.onboardingTitleMain1",
+	"settings.onboardingStepMain1",
+	"settings.onboardingTitleDone",
+	"settings.onboardingStepDone",
+	"settings.onboardingBranchesLabel",
 	// Done-step optional branches.
-	"onboarding branch import",
-	"onboarding branch personalize",
-	"onboarding branch features",
+	"settings.onboardingBranchImport",
+	"settings.onboardingBranchPersonalize",
+	"settings.onboardingBranchFeatures",
 	// Design mode branch (2026-09-18): new capability, must exist in both locales.
-	"onboarding branch design",
-	"onboarding branch design body",
-	"onboarding branch design entries",
+	"settings.onboardingBranchDesign",
+	"settings.onboardingBranchDesignBody",
+	"settings.onboardingBranchDesignEntries",
 	// Provider step reuses the original copy; the feature tour reuses the
 	// three promo feature pages — all four must stay present.
-	"onboarding title6",
-	"onboarding step6",
-	"onboarding title3",
-	"onboarding title4",
-	"onboarding title5",
+	"settings.onboardingTitle6",
+	"settings.onboardingStep6",
+	"settings.onboardingTitle3",
+	"settings.onboardingTitle4",
+	"settings.onboardingTitle5",
 ] as const;
 
 describe("onboarding copy (3 main steps + 3 branches)", () => {
@@ -58,14 +58,14 @@ describe("onboarding copy (3 main steps + 3 branches)", () => {
 		const initial = getLocaleSnapshot();
 		try {
 			setLocale("zh-CN");
-			expect(t("onboarding title main1")).toBe("语言与外观");
-			expect(t("onboarding title done")).toBe("一切就绪");
-			expect(t("onboarding branch import")).toBe("导入会话");
-			expect(t("onboarding branch personalize")).toBe("个性化");
-			expect(t("onboarding branch features")).toBe("功能速览");
+			expect(t("settings.onboardingTitleMain1")).toBe("语言与外观");
+			expect(t("settings.onboardingTitleDone")).toBe("一切就绪");
+			expect(t("settings.onboardingBranchImport")).toBe("导入会话");
+			expect(t("settings.onboardingBranchPersonalize")).toBe("个性化");
+			expect(t("settings.onboardingBranchFeatures")).toBe("功能速览");
 			setLocale("en-US");
-			expect(t("onboarding title main1")).toBe("Language & appearance");
-			expect(t("onboarding branch import")).toBe("Import sessions");
+			expect(t("settings.onboardingTitleMain1")).toBe("Language & appearance");
+			expect(t("settings.onboardingBranchImport")).toBe("Import sessions");
 		} finally {
 			setLocale(initial);
 		}

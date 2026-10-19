@@ -18,17 +18,17 @@ export function DetailsPanel({
 	state: SessionState | null;
 }): ReactNode {
 	const meta: Array<[string, string]> = [];
-	if (state?.cwd) meta.push([t("cwd"), state.cwd]);
-	if (state?.model?.id) meta.push([t("model"), `${state.model.provider}/${state.model.id}`]);
+	if (state?.cwd) meta.push([t("settings.cwd"), state.cwd]);
+	if (state?.model?.id) meta.push([t("settings.model"), `${state.model.provider}/${state.model.id}`]);
 	// SessionState carries participants; surface a count when present.
 	const participants = state?.participants?.length ?? 0;
-	if (participants > 0) meta.push([t("participants"), String(participants)]);
+	if (participants > 0) meta.push([t("settings.participants"), String(participants)]);
 
 	return (
 		<aside className="gui-details">
 			{meta.length > 0 && (
 				<section className="gui-details-section">
-					<h3 className="gui-details-title">{t("Session")}</h3>
+					<h3 className="gui-details-title">{t("settings.session")}</h3>
 					<dl className="gui-details-meta">
 						{meta.map(([k, v]) => (
 							<div key={k} className="gui-details-meta-row">
@@ -40,7 +40,7 @@ export function DetailsPanel({
 				</section>
 			)}
 			<section className="gui-details-section">
-				<h3 className="gui-details-title">{t("Agents")}</h3>
+				<h3 className="gui-details-title">{t("settings.agents")}</h3>
 				<AgentsPanel
 					agents={agents}
 					progress={progress}

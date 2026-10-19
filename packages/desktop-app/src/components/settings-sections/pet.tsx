@@ -108,8 +108,8 @@ export function PetCard({
 					<button
 						type="button"
 						className="gui-pet-card__delete"
-						aria-label={t("delete pet")}
-						title={t("delete pet")}
+						aria-label={t("settings.deletePet")}
+						title={t("settings.deletePet")}
 						onClick={e => {
 							e.stopPropagation();
 							onDelete();
@@ -198,7 +198,7 @@ export function PetMarketCard({
 			{installed ? (
 				<span className="gui-pet-market-card__installed">
 					<Icon name="check" className="h-3 w-3" />
-					{t("pet installed")}
+					{t("companion.petInstalled")}
 				</span>
 			) : (
 				<button
@@ -207,7 +207,7 @@ export function PetMarketCard({
 					disabled={installing || !pet.zipUrl}
 					onClick={onInstall}
 				>
-					{installing ? "…" : t("pet market install")}
+					{installing ? "…" : t("companion.petMarketInstall")}
 				</button>
 			)}
 		</div>
@@ -318,20 +318,20 @@ export function PetMarket({
 	return (
 		<div className="gui-pet-market">
 			<div className="gui-pet-market__head">
-				<span className="gui-pet-group-label">{t("pet market")}</span>
+				<span className="gui-pet-group-label">{t("companion.petMarket")}</span>
 				<input
 					type="search"
 					className="gui-input gui-pet-market__search"
 					value={query}
 					onChange={e => setQuery(e.target.value)}
-					placeholder={t("pet market search placeholder")}
-					aria-label={t("pet market")}
+					placeholder={t("companion.petMarketSearchPlaceholder")}
+					aria-label={t("companion.petMarket")}
 				/>
 			</div>
-			{error && <div className="gui-pet-market__error">{t("pet market error", { reason: error })}</div>}
-			{searching && !results ? <div className="gui-pet-market__status">{t("pet market searching")}</div> : null}
+			{error && <div className="gui-pet-market__error">{t("companion.petMarketError", { reason: error })}</div>}
+			{searching && !results ? <div className="gui-pet-market__status">{t("companion.petMarketSearching")}</div> : null}
 			{results && results.length === 0 && !searching ? (
-				<div className="gui-pet-market__status">{t("pet market empty")}</div>
+				<div className="gui-pet-market__status">{t("companion.petMarketEmpty")}</div>
 			) : null}
 			{results && results.length > 0 && (
 				<div className="gui-pet-market__grid">
@@ -429,7 +429,7 @@ export function PetSection(): ReactNode {
 		if (!raw) return;
 		if ("error" in raw) {
 			console.error("[pet] import failed:", raw.error);
-			setImportError(t("pet import failed"));
+			setImportError(t("settings.petImportFailed"));
 			return;
 		}
 		// The main process cannot decode image dimensions — measure the
@@ -443,7 +443,7 @@ export function PetSection(): ReactNode {
 		await decoded;
 		if (!img.naturalWidth || !img.naturalHeight) {
 			console.error("[pet] spritesheet undecodable");
-			setImportError(t("pet import failed"));
+			setImportError(t("settings.petImportFailed"));
 			return;
 		}
 		const { rows, contentH } = measurePetdex(img);
@@ -494,13 +494,13 @@ export function PetSection(): ReactNode {
 		try {
 			if (file.size > importSvgSize) {
 				console.error("[pet] svg too large:", file.size);
-				setImportError(t("pet import failed"));
+				setImportError(t("settings.petImportFailed"));
 				return;
 			}
 			const text = await file.text();
 			if (!/<svg[\s>]/i.test(text)) {
 				console.error("[pet] not an svg document");
-				setImportError(t("pet import failed"));
+				setImportError(t("settings.petImportFailed"));
 				return;
 			}
 			const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -529,7 +529,7 @@ export function PetSection(): ReactNode {
 			}
 			if (!width || !height) {
 				console.error("[pet] svg has no resolvable size");
-				setImportError(t("pet import failed"));
+				setImportError(t("settings.petImportFailed"));
 				return;
 			}
 			const pkg: PetdexPackage = {
@@ -563,8 +563,8 @@ export function PetSection(): ReactNode {
 	// code-owned brand mascot; the AI-generated sheet presets follow.
 	const builtinSvgEntry: PetGridEntry = {
 		id: BUILTIN_SVG_ID,
-		name: t("builtin pet"),
-		description: t("builtin pet description"),
+		name: t("settings.builtinPet"),
+		description: t("settings.builtinPetDescription"),
 		src: "",
 		width: 0,
 		height: 0,
@@ -605,14 +605,14 @@ export function PetSection(): ReactNode {
 	const selectedEntry = allEntries.find(e => e.id === selectedPetId) ?? null;
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("agent companion")}</h2>
-			<p className="gui-settings-page-desc">{t("pet settings")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.agentCompanion")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.petSettings")}</p>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("pet display")}</div>
+				<div className="gui-settings-section-title">{t("tools.petDisplay")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("show agent companion")}</div>
-						<div className="gui-settings-row-desc">{t("show agent companion description")}</div>
+						<div className="gui-settings-row-label">{t("settings.showAgentCompanion")}</div>
+						<div className="gui-settings-row-desc">{t("settings.showAgentCompanionDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -624,7 +624,7 @@ export function PetSection(): ReactNode {
 							setEnabled(next);
 							setPref("musepi-gui-pet", next ? "1" : "0");
 						}}
-						aria-label={t("show agent companion")}
+						aria-label={t("settings.showAgentCompanion")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -633,8 +633,8 @@ export function PetSection(): ReactNode {
 					<>
 						<div className="gui-settings-row">
 							<div>
-								<div className="gui-settings-row-label">{t("pet size")}</div>
-								<div className="gui-settings-row-desc">{t("pet size description")}</div>
+								<div className="gui-settings-row-label">{t("settings.petSize")}</div>
+								<div className="gui-settings-row-desc">{t("settings.petSizeDescription")}</div>
 							</div>
 							<div className="flex items-center gap-2">
 								<input
@@ -650,7 +650,7 @@ export function PetSection(): ReactNode {
 										setPetScale(v);
 										commit();
 									}}
-									aria-label={t("pet size")}
+									aria-label={t("settings.petSize")}
 								/>
 								<span className="w-10 text-right text-[12.5px] tabular-nums text-[var(--color-text-muted)]">
 									{Math.round(sizeScale * 100)}%
@@ -659,8 +659,8 @@ export function PetSection(): ReactNode {
 						</div>
 						<div className="gui-settings-row">
 							<div>
-								<div className="gui-settings-row-label">{t("display position")}</div>
-								<div className="gui-settings-row-desc">{t("display position description")}</div>
+								<div className="gui-settings-row-label">{t("settings.displayPosition")}</div>
+								<div className="gui-settings-row-desc">{t("settings.displayPositionDescription")}</div>
 							</div>
 							<GuiSelect
 								className="gui-input gui-pet-mode-select"
@@ -670,17 +670,17 @@ export function PetSection(): ReactNode {
 									setMode(next);
 									setPref("musepi-gui-pet-mode", next);
 								}}
-								ariaLabel={t("display position")}
+								ariaLabel={t("settings.displayPosition")}
 								options={[
-									{ value: "input", label: t("pet display input") },
-									{ value: "desktop", label: t("pet display desktop") },
+									{ value: "input", label: t("settings.petDisplayInput") },
+									{ value: "desktop", label: t("settings.petDisplayDesktop") },
 								]}
 							/>
 						</div>
 						<div className="gui-settings-row">
 							<div>
-								<div className="gui-settings-row-label">{t("dock to screen edge")}</div>
-								<div className="gui-settings-row-desc">{t("dock to screen edge description")}</div>
+								<div className="gui-settings-row-label">{t("settings.dockScreenEdge")}</div>
+								<div className="gui-settings-row-desc">{t("settings.dockScreenEdgeDescription")}</div>
 							</div>
 							<button
 								type="button"
@@ -697,7 +697,7 @@ export function PetSection(): ReactNode {
 									).electronAPI;
 									void api?.setPetDock?.(next);
 								}}
-								aria-label={t("dock to screen edge")}
+								aria-label={t("settings.dockScreenEdge")}
 							>
 								<span className="gui-toggle-knob" />
 							</button>
@@ -706,7 +706,7 @@ export function PetSection(): ReactNode {
 				)}
 			</div>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("pet appearance")}</div>
+				<div className="gui-settings-section-title">{t("tools.petAppearance")}</div>
 				{enabled && (
 					<>
 						{/* Appearance (BitFun parity): header row with refresh +
@@ -714,15 +714,15 @@ export function PetSection(): ReactNode {
 						 * expandable preset grid grouped 预设 / 已导入. */}
 						<div className="gui-settings-row">
 							<div>
-								<div className="gui-settings-row-label">{t("companion appearance")}</div>
-								<div className="gui-settings-row-desc">{t("companion appearance description")}</div>
+								<div className="gui-settings-row-label">{t("settings.companionAppearance")}</div>
+								<div className="gui-settings-row-desc">{t("settings.companionAppearanceDescription")}</div>
 							</div>
 							<div className="flex items-center gap-2">
 								<button
 									type="button"
 									className="gui-btn gui-btn--icon"
-									aria-label={t("pet refresh")}
-									title={t("pet refresh")}
+									aria-label={t("companion.petRefresh")}
+									title={t("companion.petRefresh")}
 									onClick={() => {
 										setPetdex(loadPetdex());
 										setSelectedPetId(petId());
@@ -735,20 +735,20 @@ export function PetSection(): ReactNode {
 									className="gui-btn"
 									onClick={() => void importPetdex()}
 									disabled={importing || !isDesktopShell}
-									title={isDesktopShell ? t("import petdex") : t("desktop pet needs desktop app")}
+									title={isDesktopShell ? t("settings.importPetdex") : t("settings.desktopPetNeedsDesktop")}
 								>
 									<Icon name="add" className="h-3.5 w-3.5" />
-									{importing ? "…" : t("import petdex")}
+									{importing ? "…" : t("settings.importPetdex")}
 								</button>
 								<button
 									type="button"
 									className="gui-btn"
 									onClick={() => void importCodexPet()}
 									disabled={importing || !isDesktopShell}
-									title={isDesktopShell ? t("import codex sprite") : t("desktop pet needs desktop app")}
+									title={isDesktopShell ? t("settings.importCodexSprite") : t("settings.desktopPetNeedsDesktop")}
 								>
 									<Icon name="download" className="h-3.5 w-3.5" />
-									{importing ? "…" : t("import codex sprite")}
+									{importing ? "…" : t("settings.importCodexSprite")}
 								</button>
 								{/* User SVG import — renderer-side file pick, no
 								 * desktop-shell gate (a file input works everywhere). */}
@@ -757,10 +757,10 @@ export function PetSection(): ReactNode {
 									className="gui-btn"
 									onClick={importSvgPet}
 									disabled={importing}
-									title={t("import svg")}
+									title={t("settings.importSvg")}
 								>
 									<Icon name="file-add" className="h-3.5 w-3.5" />
-									{importing ? "…" : t("import svg")}
+									{importing ? "…" : t("settings.importSvg")}
 								</button>
 								<input
 									ref={svgInputRef}
@@ -803,15 +803,15 @@ export function PetSection(): ReactNode {
 									<BuiltinPetSprite mood="rest" gloss={decor.gloss} accessory={decor.accessory} />
 								)}
 							</span>
-							<span className="gui-pet-trigger__name">{selectedEntry?.name ?? t("builtin pet")}</span>
+							<span className="gui-pet-trigger__name">{selectedEntry?.name ?? t("settings.builtinPet")}</span>
 							<Icon
 								name="arrow-down"
 								className={`gui-pet-trigger__chevron${expanded ? " gui-pet-trigger__chevron--open" : ""}`}
 							/>
 						</button>
 						<Reveal open={expanded}>
-							<div className="gui-pet-grid" role="radiogroup" aria-label={t("companion appearance")}>
-								{userEntries.length > 0 && <div className="gui-pet-group-label">{t("pet imported")}</div>}
+							<div className="gui-pet-grid" role="radiogroup" aria-label={t("settings.companionAppearance")}>
+								{userEntries.length > 0 && <div className="gui-pet-group-label">{t("settings.petImported")}</div>}
 								{userEntries.map(entry => (
 									<PetCard
 										key={entry.id}
@@ -821,7 +821,7 @@ export function PetSection(): ReactNode {
 										onDelete={() => removePet(entry.id)}
 									/>
 								))}
-								<div className="gui-pet-group-label">{t("pet presets")}</div>
+								<div className="gui-pet-group-label">{t("settings.petPresets")}</div>
 								{presetEntries.map(entry => (
 									<PetCard
 										key={entry.id}

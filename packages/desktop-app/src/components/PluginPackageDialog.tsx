@@ -61,13 +61,13 @@ export function PluginPackageDialog({
 
 	const askUninstall = (): void => {
 		if (!pkg) return;
-		void confirm(t("plugin uninstall confirm", { name: pkg.name }), t("uninstall")).then(ok => {
+		void confirm(t("tools.pluginUninstallConfirm", { name: pkg.name }), t("tools.uninstall")).then(ok => {
 			if (ok) onUninstall(pkg);
 		});
 	};
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("ext plugin details")} className="gui-plugin-dialog">
+		<DialogFrame open={open} onClose={onClose} label={t("tools.extPluginDetails")} className="gui-plugin-dialog">
 			{pkg && (
 				<>
 					<div className="gui-dialog-head">
@@ -79,12 +79,12 @@ export function PluginPackageDialog({
 							className="gui-tool-btn"
 							disabled={uninstalling}
 							onClick={askUninstall}
-							title={t("uninstall")}
-							aria-label={`${t("uninstall")} ${pkg.name}`}
+							title={t("tools.uninstall")}
+							aria-label={`${t("tools.uninstall")} ${pkg.name}`}
 						>
 							<Icon name="delete-bin" className="h-4 w-4" />
 						</button>
-						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
+						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 							<Icon name="close" className="h-4 w-4" />
 						</button>
 					</div>
@@ -92,14 +92,14 @@ export function PluginPackageDialog({
 						<div className="gui-ext-detail-section">
 							<div className={`gui-ext-detail-status${pkg.enabled ? " gui-ext-detail-status--active" : ""}`}>
 								<span className={`gui-ext-dot${pkg.enabled ? "" : " gui-ext-dot--off"}`} />
-								{pkg.enabled ? t("plugin state enabled") : t("plugin state disabled")}
+								{pkg.enabled ? t("tools.pluginStateEnabled") : t("tools.pluginStateDisabled")}
 								<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", pkg.scope)}</span>
 								<span style={{ marginLeft: "auto" }}>
 									<button
 										type="button"
 										role="switch"
 										aria-checked={pkg.enabled}
-										aria-label={`${t("plugin enable")} ${pkg.name}`}
+										aria-label={`${t("tools.pluginEnable")} ${pkg.name}`}
 										className={`gui-toggle${pkg.enabled ? " gui-toggle--on" : ""}`}
 										disabled={busy}
 										onClick={() => onTogglePackage(pkg)}
@@ -113,14 +113,14 @@ export function PluginPackageDialog({
 						{pkg.tools > 0 || pkg.commands > 0 || pkg.handlers > 0 ? (
 							<div className="gui-ext-plugins-meta">
 								<span className="gui-ext-group-count">
-									{t("plugin counts", { tools: pkg.tools, commands: pkg.commands, handlers: pkg.handlers })}
+									{t("tools.pluginCounts", { tools: pkg.tools, commands: pkg.commands, handlers: pkg.handlers })}
 								</span>
 							</div>
 						) : null}
 						{modules.length > 0 && (
 							<div className="gui-ext-detail-section">
 								<div className="gui-ext-detail-label">
-									{t("ext included components")} · {modules.length}
+									{t("tools.extIncludedComponents")} · {modules.length}
 								</div>
 								{modules.map(m => (
 									<div key={m.id} className="gui-ext-provider-h">
@@ -129,14 +129,14 @@ export function PluginPackageDialog({
 											className={`gui-ext-dot${m.loadError ? " gui-ext-dot--error" : m.state === "active" ? "" : " gui-ext-dot--off"}`}
 										/>
 										{m.loadError ? (
-											<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>
+											<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("tools.extLoadFailed")}</span>
 										) : null}
 										<span style={{ marginLeft: "auto" }}>
 											<button
 												type="button"
 												role="switch"
 												aria-checked={m.state === "active"}
-												aria-label={`${m.state === "active" ? t("disable skill") : t("enable skill")} ${m.displayName || m.name}`}
+												aria-label={`${m.state === "active" ? t("tools.disableSkill") : t("tools.enableSkill")} ${m.displayName || m.name}`}
 												className={`gui-toggle gui-toggle--sm${m.state === "active" ? " gui-toggle--on" : ""}`}
 												disabled={busy}
 												onClick={() => onToggleModule(m)}
@@ -150,7 +150,7 @@ export function PluginPackageDialog({
 						)}
 						{settingsComponents.length > 0 && (
 							<div className="gui-ext-detail-section">
-								<div className="gui-ext-detail-label">{t("plugin settings section")}</div>
+								<div className="gui-ext-detail-label">{t("tools.pluginSettingsSection")}</div>
 								{settingsComponents.map(item => (
 									<ConfigFormSlotMount
 										key={`${item.slot}:${item.extensionId}`}

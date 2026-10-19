@@ -139,11 +139,11 @@ export function SelectionToolbar({
 
 	if (!pop) return null;
 	const actions: Array<{ icon: IconName; label: string; run(): void }> = [
-		{ icon: "chat-1", label: t("quote to chat"), run: () => onQuote(pop.text) },
-		{ icon: "sparkling", label: t("ask about selection"), run: () => onAsk(pop.text, pop.x, pop.y) },
-		{ icon: "file-copy-2", label: t("copy"), run: () => onCopy(pop.text) },
-		{ icon: "chat-new", label: t("new session from selection"), run: () => onNewSession(pop.text) },
-		{ icon: "sticky-note", label: t("add to notes"), run: () => onAddNote(pop.text) },
+		{ icon: "chat-1", label: t("settings.quoteChat"), run: () => onQuote(pop.text) },
+		{ icon: "sparkling", label: t("settings.askAboutSelection"), run: () => onAsk(pop.text, pop.x, pop.y) },
+		{ icon: "file-copy-2", label: t("settings.copy"), run: () => onCopy(pop.text) },
+		{ icon: "chat-new", label: t("settings.newSessionSelection"), run: () => onNewSession(pop.text) },
+		{ icon: "sticky-note", label: t("settings.addNotes"), run: () => onAddNote(pop.text) },
 	];
 	// Portal into the React root (NOT document.body): React's delegated
 	// listeners live on the root container, so a body-level portal never
