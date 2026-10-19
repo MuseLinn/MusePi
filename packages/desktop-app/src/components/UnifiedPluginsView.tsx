@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
@@ -26,6 +26,14 @@ import { PluginPackageDialog } from "./PluginPackageDialog";
  * 共享 useExtensionRegistry 单例（10s 轮询 + extensions.changed 即时
  * 刷新），不新增轮询。
  */
+
+/** One preset (its composition) as `modes.list` reports it, for grouping. */
+interface PresetRow {
+	id: string;
+	label: string;
+	/** Plugin rows this preset composes; empty ones are filtered out. */
+	plugins?: { name: string; id?: string; enabled?: boolean }[];
+}
 
 /** One installed plugin package from daemon plugins.packages (full
  *  inventory incl. disabled: name/version/description/scope/enabled). */
@@ -417,6 +425,30 @@ export function UnifiedPluginsView({
 	const [uninstallBusy, setUninstallBusy] = useState(false);
 	const { confirm } = useConfirm();
 	/**
+	 * Presets, for the by-preset grouping.
+	 *
+	 * A preset is a plugin composition, and this list is where a user asks "what
+	 * would switching preset change?". Reading it here rather than through the
+	 * parent keeps the one view that needs the composition responsible for it —
+	 * the other tabs show installed things, not declared ones.
+	 */
+	const [presets, setPresets] = useState<PresetRow[]>([]);
+	useEffect(() => {
+		if (!rpc) return;
+		let live = true;
+		void rpc
+			.request<{ modes: PresetRow[] } | null>("modes.list", {})
+			.then(res => {
+				if (live) setPresets((res?.modes ?? []).filter(p => (p.plugins ?? []).length > 0));
+			})
+			.catch(() => {
+				// The preset plane is additive: the flat list still renders without it.
+			});
+		return () => {
+			live = false;
+		};
+	}, [rpc]);
+	/**
 	 * Re-read the installed packages after a spec install or uninstall.
 	 *
 	 * The install ran on the daemon and the list this view renders came from the
@@ -496,6 +528,30 @@ export function UnifiedPluginsView({
 	const filteredPackages = useMemo(
 		() => plugins.filter(p => matchesQuery([p.name, p.description, p.path], normalizedQuery)),
 		[plugins, normalizedQuery],
+	);
+	/**
+	 * The same installed things, seen through each preset's composition.
+	 *
+	 * Ordered before the flat groups because a preset is the thing a user switches
+	 * between, and "which plugins does this preset bring" is the question the flat
+	 * list cannot answer. A composition row may name a package or a module, so it
+	 * is matched against both — a row that matched only one spelling would show an
+	 * empty group for a preset that plainly composes something.
+	 */
+	const presetGroups = useMemo(
+		() =>
+			presets
+				.map(preset => {
+					const rows = (preset.plugins ?? []).filter(row => row.enabled !== false);
+					const names = new Set(rows.map(row => row.name));
+					return {
+						preset,
+						packages: filteredPackages.filter(p => names.has(p.name)),
+						modules: modules.filter(e => names.has(e.name) || names.has(e.displayName) || names.has(e.id)),
+					};
+				})
+				.filter(group => group.packages.length > 0 || group.modules.length > 0),
+		[presets, filteredPackages, modules],
 	);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
@@ -690,6 +746,49 @@ export function UnifiedPluginsView({
 				</div>
 			) : (
 				<div className="gui-ext-list-scroll">
+					{/* Presets first: they are what a user switches between, and the flat
+					 * groups below cannot answer "which plugins does this preset bring".
+					 * Read-only membership — a preset's rows are edited in its own
+					 * definition, and a switch here would have nowhere to write. */}
+					{presetGroups.map(({ preset, packages, modules: presetModules }) => (
+						<div className="gui-ext-group" key={preset.id}>
+							<div className="gui-ext-group-title">
+								{t("tools.extPluginsPresetGroup", { name: preset.label })} ·{" "}
+								{packages.length + presetModules.length}
+							</div>
+							{packages.map(p => (
+								<div
+									key={`pkg:${p.path}`}
+									className="gui-ext-provider gui-ext-provider--btn"
+									role="button"
+									tabIndex={0}
+									onClick={() => setPackageDetail(p)}
+									onKeyDown={e => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											setPackageDetail(p);
+										}
+									}}
+								>
+									<div className="gui-ext-provider-h">
+										<PluginIcon name={p.name} icon={p.icon} size={24} status={p.enabled ? "active" : "off"} />
+										<span className="gui-plugin-card-name min-w-0 flex-1 truncate">{p.name}</span>
+										<span className="gui-ext-item-tag">{t("tools.pluginPackageTag")}</span>
+									</div>
+								</div>
+							))}
+							{presetModules.map(e => (
+								<ModuleRow
+									key={`mod:${e.id}`}
+									e={e}
+									rpc={rpc}
+									busy={busyId !== null}
+									onToggle={toggleModule}
+									onOpen={item => setDetailId(item.id)}
+								/>
+							))}
+						</div>
+					))}
 					{official.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">

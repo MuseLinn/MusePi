@@ -571,6 +571,8 @@ export const tools = {
 	"tools.extResourcesModels": "需下载模型",
 	"tools.extPluginsOfficial": "官方",
 	"tools.extPluginsInstalled": "已安装",
+	// 插件列表按 Agent 预设分组（预设 = 一组插件组合）
+	"tools.extPluginsPresetGroup": "预设「{name}」",
 	// bundle/profile 组合面（能力中心「组合」tab）
 	"tools.bundleTitle": "组合",
 	"tools.bundleProfile": "Profile",

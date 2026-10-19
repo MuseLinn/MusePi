@@ -30,6 +30,8 @@ interface ModeRow {
 	description?: string;
 	extends: string[];
 	extensions?: string[];
+	/** Plugins this preset composes, in order. A preset IS a composition. */
+	plugins?: { name: string; id?: string; enabled?: boolean }[];
 	hasPrompt: boolean;
 	promptComplete: boolean;
 	settingsKeys: string[];

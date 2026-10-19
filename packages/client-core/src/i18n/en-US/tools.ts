@@ -596,6 +596,8 @@ export const tools = {
 	"tools.extResourcesModels": "Model downloads",
 	"tools.extPluginsOfficial": "Official",
 	"tools.extPluginsInstalled": "Installed",
+	// Plugin list grouped by Agent preset (a preset is a plugin composition)
+	"tools.extPluginsPresetGroup": 'Preset "{name}"',
 	// bundle/profile composition surface (capability center "Composition" tab)
 	"tools.bundleTitle": "Composition",
 	"tools.bundleProfile": "Profile",
