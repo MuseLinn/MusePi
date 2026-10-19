@@ -1663,6 +1663,26 @@ export const settings = {
 	"import svg": "导入 SVG",
 	// ── i18n gaps (2026-08-11): hand translations for schema strings the TUI zh didn't carry ──
 	"Hide Tool Activity": "隐藏工具活动",
+	Display: "显示",
+	"Resize Scrollback": "重整历史滚动区",
+	"How a settled terminal resize refreshes transcript rows retained in terminal scrollback":
+		"终端窗口大小改变并稳定后，如何刷新仍留在终端滚动区里的对话内容",
+	"Render Mermaid Diagrams": "渲染 Mermaid 图表",
+	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.":
+		"把 Mermaid 代码块渲染成 ASCII 图（终端界面）。桌面端对话按自己的图表设置渲染成 SVG",
+	"Streaming rendering": "流式渲染",
+	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
+		"内容分块到达时平滑显示助手文字与流式工具输入",
+	"Running Turn Detail": "运行中回合显示多少",
+	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to":
+		"运行中的回合保留多少内容在视野里。默认「全部显示」会画每一行；选一个数字则只保留最近 N 行，更早的折成「⋯ 还有 N 行」，长任务时画面更稳。跑完的回合无论这里选什么都不受影响，照旧折进活动摘要行",
+	"Show all": "全部显示",
+	"Every row stays visible while the agent works.": "智能体工作时每一行都可见",
+	"Latest 3 rows": "最近 3 行",
+	"Latest 5 rows": "最近 5 行",
+	"Latest 7 rows": "最近 7 行",
+	"Holds a long task's tail in view.": "让长任务的画面停在尾部",
+	"Latest 10 rows": "最近 10 行",
 	"Hide model-initiated tool calls and results from the transcript": "在转录中隐藏模型发起的工具调用及其结果",
 	"Agnes Video Generation": "Agnes 视频生成",
 	Slash: "斜杠",
@@ -2260,7 +2280,6 @@ export const settings = {
 	"Disabled Rules": "已禁用的规则",
 	"Disabled; tail-only truncation": "已禁用；仅保留尾部",
 	"Discovery & MCP": "发现与 MCP",
-	Display: "显示",
 	"Display hook status messages below the status line": "在状态栏下方显示钩子状态消息",
 	"Display Name": "显示名称",
 	"Display the actual model ID used by each subagent in the task widget status line":
@@ -2728,7 +2747,6 @@ export const settings = {
 	"Render images inline in the terminal": "在终端中内联渲染图片",
 	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.":
 		"使用 Kitty 的 OSC 66 文字大小协议以 2 倍比例渲染 Markdown H1 标题。仅在 Kitty 终端上生效；其他终端忽略。默认关闭。",
-	"Render Mermaid Diagrams": "渲染 Mermaid 图表",
 	"Render Mermaid fenced code blocks as ASCII diagrams": "将 Mermaid 围栏代码块渲染为 ASCII 图表",
 	"Render non-JSON MCP text results as Markdown in the transcript":
 		"在转录文本中将非 JSON 的 MCP 文本结果渲染为 Markdown",
@@ -2750,8 +2768,6 @@ export const settings = {
 	"Retry Fallback Chains": "重试回退链",
 	"Retry Model Fallback": "重试模型回退",
 	"Return to the primary model after its suppression window ends": "在抑制窗口结束后返回主模型",
-	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
-		"在数据块到达时平滑显示助手文字和流式工具输入",
 	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure":
 		"在合成前使用 tiny/smol 模型将助手输出重写为自然的口语化散文（描述代码，去除链接和 markdown）。失败时回退到机械清理",
 	"Rewrite Scrollback": "重写滚动历史",
@@ -3173,6 +3189,7 @@ export const settings = {
 	"oauth provider — manage in providers tab": "OAuth 供应商 — 请在“模型设置 → 供应商”中登录",
 	"video gen note": "视频生成（agnes_video_gen）复用上方 Agnes 凭证；工具开关在“工具”设置中",
 	"extension providers count": "另有 {count} 个来自扩展的媒体供应商",
+	"waiting {seconds}s": "已等待 {seconds} 秒",
 	knowledge: "项目知识",
 	"knowledge call failed": "知识操作失败",
 	"knowledge plan opened": "已打开计划「{title}」",

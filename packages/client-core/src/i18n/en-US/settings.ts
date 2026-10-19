@@ -1754,6 +1754,26 @@ export const settings = {
 	"import svg": "Import SVG",
 	// ── i18n gaps (2026-08-11): hand translations for schema strings the TUI zh didn't carry ──
 	"Hide Tool Activity": "Hide Tool Activity",
+	Display: "Display",
+	"Resize Scrollback": "Resize Scrollback",
+	"How a settled terminal resize refreshes transcript rows retained in terminal scrollback":
+		"How a settled terminal resize refreshes transcript rows retained in terminal scrollback",
+	"Render Mermaid Diagrams": "Render Mermaid Diagrams",
+	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.":
+		"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.",
+	"Streaming rendering": "Streaming rendering",
+	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
+		"Reveal assistant text and streamed tool input smoothly while chunks arrive",
+	"Running Turn Detail": "Running Turn Detail",
+	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to":
+		"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to",
+	"Show all": "Show all",
+	"Every row stays visible while the agent works.": "Every row stays visible while the agent works.",
+	"Latest 3 rows": "Latest 3 rows",
+	"Latest 5 rows": "Latest 5 rows",
+	"Latest 7 rows": "Latest 7 rows",
+	"Holds a long task's tail in view.": "Holds a long task's tail in view.",
+	"Latest 10 rows": "Latest 10 rows",
 	"Hide model-initiated tool calls and results from the transcript":
 		"Hide model-initiated tool calls and results from the transcript",
 	"Agnes Video Generation": "Agnes Video Generation",
@@ -2353,7 +2373,6 @@ export const settings = {
 	"Disabled Rules": "Disabled Rules",
 	"Disabled; tail-only truncation": "Disabled; tail-only truncation",
 	"Discovery & MCP": "Discovery & MCP",
-	Display: "Display",
 	"Display hook status messages below the status line": "Display hook status messages below the status line",
 	"Display Name": "Display Name",
 	"Display the actual model ID used by each subagent in the task widget status line":
@@ -2838,7 +2857,6 @@ export const settings = {
 	"Render images inline in the terminal": "Render images inline in the terminal",
 	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.":
 		"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.",
-	"Render Mermaid Diagrams": "Render Mermaid Diagrams",
 	"Render Mermaid fenced code blocks as ASCII diagrams": "Render Mermaid fenced code blocks as ASCII diagrams",
 	"Render non-JSON MCP text results as Markdown in the transcript":
 		"Render non-JSON MCP text results as Markdown in the transcript",
@@ -2862,8 +2880,6 @@ export const settings = {
 	"Retry Model Fallback": "Retry Model Fallback",
 	"Return to the primary model after its suppression window ends":
 		"Return to the primary model after its suppression window ends",
-	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
-		"Reveal assistant text and streamed tool input smoothly while chunks arrive",
 	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure":
 		"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
 	"Rewrite Scrollback": "Rewrite Scrollback",
@@ -3316,6 +3332,7 @@ export const settings = {
 	"plugin install drop hint": "You can also drop a .tgz / .zip archive or a plugin folder here",
 	"plugin install drop unreadable": "Could not read the dropped file's path. Type the path in the field instead.",
 	"plugin install drop unsupported": "Only .tgz / .tar.gz / .zip archives and plugin folders can be dropped here.",
+	"waiting {seconds}s": "Waiting {seconds}s",
 	knowledge: "Project knowledge",
 	"knowledge call failed": "Knowledge call failed",
 	"knowledge plan opened": "Opened plan “{title}”",
