@@ -3316,4 +3316,8 @@ export const settings = {
 	"plugin install drop hint": "You can also drop a .tgz / .zip archive or a plugin folder here",
 	"plugin install drop unreadable": "Could not read the dropped file's path. Type the path in the field instead.",
 	"plugin install drop unsupported": "Only .tgz / .tar.gz / .zip archives and plugin folders can be dropped here.",
+	knowledge: "Project knowledge",
+	"knowledge call failed": "Knowledge call failed",
+	"knowledge plan opened": "Opened plan “{title}”",
+	"knowledge open in panel": "Open in project knowledge",
 } as const satisfies Record<SettingsKey, string>;

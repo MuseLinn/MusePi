@@ -3173,6 +3173,10 @@ export const settings = {
 	"oauth provider — manage in providers tab": "OAuth 供应商 — 请在“模型设置 → 供应商”中登录",
 	"video gen note": "视频生成（agnes_video_gen）复用上方 Agnes 凭证；工具开关在“工具”设置中",
 	"extension providers count": "另有 {count} 个来自扩展的媒体供应商",
+	knowledge: "项目知识",
+	"knowledge call failed": "知识操作失败",
+	"knowledge plan opened": "已打开计划「{title}」",
+	"knowledge open in panel": "在项目知识中打开",
 } as const;
 
 /** Key union for the settings domain (source of truth). */
