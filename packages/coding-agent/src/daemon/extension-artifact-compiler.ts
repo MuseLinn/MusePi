@@ -11,6 +11,13 @@ import type { PresetPluginRow } from "../presets/resolve";
  * the default export into the named slot — enable/disable of the extension
  * takes effect on the next slot refresh.
  *
+ * Track ownership: **serves both.** The slot compiler and the load-once cache
+ * are keyed by entry path, which is the same identity both tracks use, so a
+ * cordis plugin and a legacy extension contribute components through one
+ * implementation. `loadExtensionOnce` runs the shared mount pipeline rather than
+ * a track-specific loader, which is what keeps a class-shaped plugin loadable
+ * here (see the note on that function).
+ *
  * Trust model: an enabled extension already executes arbitrary code in the
  * daemon process; rendering its component in the GUI is the same trust
  * domain, not a new escalation.

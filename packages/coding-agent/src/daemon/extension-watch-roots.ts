@@ -5,6 +5,11 @@ import { resolveActiveProjectRegistryPath } from "../discovery/helpers";
 /**
  * 扩展 / 插件热重载的监视根。
  *
+ * 轨道归属:**两轨共用**。这些根同时服务 Track B(legacy 扩展的会话内重载)与
+ * Track A(cordis 插件的宿主级 reconcile)——watcher 只报告"这些根下面有东西
+ * 动了",至于哪个入口要重载、按什么规则判定,各轨道用自己的机制。文件名里的
+ * `extension-` 是历史命名,不代表只服务一条轨道。
+ *
  * 这些根**必须与发现/加载实际读取的根一致** —— 否则 watcher 盯的是没人加载的
  * 目录,而唯一的症状是"我改了插件但什么都没发生"。四个来源:
  *

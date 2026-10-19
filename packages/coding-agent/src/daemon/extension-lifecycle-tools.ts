@@ -1,6 +1,11 @@
 /**
  * P0 自举:agent 扩展管理工具(extension_* 工具集)。
  *
+ * 轨道归属:**Track B（会话级 legacy 扩展）**。`extension_*` 工具操作的是调用者
+ * 所在会话的 runner,走会话装配那条路;cordis 插件的宿主级装载/卸载由
+ * `plugins.*` 面负责,两者不共用这套工具。文件名里的 `extension-` 取的是
+ * 「legacy 扩展」这个旧词,不是「两种插件都管」。
+ *
  * 会话级——操作调用者所在会话的 runner:load/reload 走 AgentSession 的
  * busy gate(streaming 时 park 到 agent_end);只读查询走 listLoadedExtensions
  * 投影(不暴露 runner 本体)。由 daemon 注入 createSession/activate 的
