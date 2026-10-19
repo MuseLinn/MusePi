@@ -331,6 +331,45 @@ export function ChatSection(): ReactNode {
 						}}
 					/>
 				</div>
+				{/* The sample lives in 外观 → 效果预览 (MockConversationPreview) and
+				 * scopes itself to this picker's value, so it is not drawn twice. */}
+				<PrefToggle
+					label={t("streaming caret")}
+					description={t("streaming caret description")}
+					storageKey="musepi-gui-chat-caret"
+					onClass="gui-chat-no-caret"
+				/>
+				<PrefToggle
+					label={t("code highlight")}
+					description={t("code highlight description")}
+					storageKey="musepi-gui-chat-codehl"
+					onClass="gui-chat-plain-code"
+				/>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("performance usage")}</div>
+						<div className="gui-settings-row-desc">{t("performance usage description")}</div>
+					</div>
+					<Segmented
+						ariaLabel={t("performance usage")}
+						value={statsMode}
+						options={STATS_MODE_SEGMENTS}
+						onChange={v => {
+							tapFeedback();
+							setStatsMode(v);
+							try {
+								localStorage.setItem(STATS_MODE_KEY, v);
+							} catch {
+								// ignore
+							}
+							window.dispatchEvent(new Event(STATS_MODE_EVENT));
+						}}
+					/>
+				</div>
+			</div>
+
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("presentation style")}</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("output style")}</div>
@@ -381,41 +420,6 @@ export function ChatSection(): ReactNode {
 							}}
 						/>
 					</div>
-				</div>
-				{/* The sample lives in 外观 → 效果预览 (MockConversationPreview) and
-				 * scopes itself to this picker's value, so it is not drawn twice. */}
-				<PrefToggle
-					label={t("streaming caret")}
-					description={t("streaming caret description")}
-					storageKey="musepi-gui-chat-caret"
-					onClass="gui-chat-no-caret"
-				/>
-				<PrefToggle
-					label={t("code highlight")}
-					description={t("code highlight description")}
-					storageKey="musepi-gui-chat-codehl"
-					onClass="gui-chat-plain-code"
-				/>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("performance usage")}</div>
-						<div className="gui-settings-row-desc">{t("performance usage description")}</div>
-					</div>
-					<Segmented
-						ariaLabel={t("performance usage")}
-						value={statsMode}
-						options={STATS_MODE_SEGMENTS}
-						onChange={v => {
-							tapFeedback();
-							setStatsMode(v);
-							try {
-								localStorage.setItem(STATS_MODE_KEY, v);
-							} catch {
-								// ignore
-							}
-							window.dispatchEvent(new Event(STATS_MODE_EVENT));
-						}}
-					/>
 				</div>
 			</div>
 		</CodeHighlightProvider>

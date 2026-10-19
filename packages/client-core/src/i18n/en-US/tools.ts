@@ -264,6 +264,7 @@ export const tools = {
 	prewalk: "Prewalk",
 	"prewalk armed": "Prewalk armed",
 	"message rendering": "Message rendering",
+	"presentation style": "Presentation",
 	"interface and input": "Interface & input",
 	"output style preview": "Output style preview",
 	"output style preview description":

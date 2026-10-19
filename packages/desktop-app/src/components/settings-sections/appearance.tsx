@@ -299,6 +299,48 @@ export function AppearanceSection({
 					</div>
 				</Reveal>
 				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("accent")}</div>
+					<div className="gui-settings-field-hint">{t("accent color")}</div>
+					<div className="gui-settings-field-control">
+						<div className="flex items-center gap-2">
+							{Object.entries(ACCENT_SWATCH).map(([id, color]) => (
+								<button
+									key={id}
+									type="button"
+									className={`gui-accent-swatch${accent === id ? " gui-accent-swatch--active" : ""}`}
+									style={{ background: color }}
+									aria-label={t(ACCENT_NAMES[id] ?? "accent brand")}
+									title={t(ACCENT_NAMES[id] ?? "accent brand")}
+									onClick={() => setAccent(id as "brand" | "mono" | "ocean" | "jade")}
+								/>
+							))}
+							<button
+								ref={accentPickerRef}
+								type="button"
+								className={`gui-accent-swatch gui-accent-swatch--custom${accent === "custom" ? " gui-accent-swatch--active" : ""}`}
+								style={{ background: customAccent }}
+								title={t("custom accent")}
+								aria-label={t("custom accent")}
+								aria-haspopup="dialog"
+								onClick={() => {
+									// Open only — no accent switch, no veil. Snapshot
+									// the current preference as the starting preview;
+									// apply happens exclusively via the card buttons.
+									setPickerPreview(customAccent);
+									setPickerOpen(o => !o);
+								}}
+							/>
+						</div>
+						{renderAccentPicker(
+							<ColorPickerPanel
+								value={pickerPreview ?? customAccent}
+								onChange={setPickerPreview}
+								onApply={applyCustomAccent}
+							/>,
+						)}
+					</div>
+				</div>
+				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("interface font size")}</div>
 					<NumberStepper
 						label={t("interface font size")}
@@ -482,48 +524,6 @@ export function AppearanceSection({
 					>
 						<span className="gui-toggle-knob" />
 					</button>
-				</div>
-				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("accent")}</div>
-					<div className="gui-settings-field-hint">{t("accent color")}</div>
-					<div className="gui-settings-field-control">
-						<div className="flex items-center gap-2">
-							{Object.entries(ACCENT_SWATCH).map(([id, color]) => (
-								<button
-									key={id}
-									type="button"
-									className={`gui-accent-swatch${accent === id ? " gui-accent-swatch--active" : ""}`}
-									style={{ background: color }}
-									aria-label={t(ACCENT_NAMES[id] ?? "accent brand")}
-									title={t(ACCENT_NAMES[id] ?? "accent brand")}
-									onClick={() => setAccent(id as "brand" | "mono" | "ocean" | "jade")}
-								/>
-							))}
-							<button
-								ref={accentPickerRef}
-								type="button"
-								className={`gui-accent-swatch gui-accent-swatch--custom${accent === "custom" ? " gui-accent-swatch--active" : ""}`}
-								style={{ background: customAccent }}
-								title={t("custom accent")}
-								aria-label={t("custom accent")}
-								aria-haspopup="dialog"
-								onClick={() => {
-									// Open only — no accent switch, no veil. Snapshot
-									// the current preference as the starting preview;
-									// apply happens exclusively via the card buttons.
-									setPickerPreview(customAccent);
-									setPickerOpen(o => !o);
-								}}
-							/>
-						</div>
-						{renderAccentPicker(
-							<ColorPickerPanel
-								value={pickerPreview ?? customAccent}
-								onChange={setPickerPreview}
-								onApply={applyCustomAccent}
-							/>,
-						)}
-					</div>
 				</div>
 				<div className="gui-settings-row">
 					<div>

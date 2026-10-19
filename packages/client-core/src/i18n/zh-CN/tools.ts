@@ -257,6 +257,7 @@ export const tools = {
 	prewalk: "预检",
 	"prewalk armed": "预检已就绪",
 	"message rendering": "消息渲染",
+	"presentation style": "呈现风格",
 	"interface and input": "界面与输入",
 	"output style preview": "输出风格预览",
 	"output style preview description":
