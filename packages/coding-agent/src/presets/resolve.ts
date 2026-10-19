@@ -28,6 +28,19 @@ export interface ModeDefinition {
 	modelRole?: string;
 	/** 三态:缺省(undefined)= 全部启用;[] = 仅内置核心;数组 = 启用白名单(决策 #10)。 */
 	extensions?: string[];
+	/**
+	 * The Cordis plugins this preset composes.
+	 *
+	 * A preset IS a list of plugin rows — that is the whole of what it declares.
+	 * The fields above are conveniences this host layered on top; a row here is
+	 * the thing a preset fundamentally is, and it is the shape a preset written
+	 * for the plugin system carries.
+	 *
+	 * A row is disabled without being removed (`enabled: false`), so a child
+	 * preset can turn a parent's row off the way an override would, and the row
+	 * stays visible in the composition.
+	 */
+	plugins?: PresetPluginRow[];
 	prompt?: ModePromptEntry[];
 	/** true = 该预设的 prompt 集成为唯一 system prompt(对齐 DSH complete:true;§5.2,决策 #2)。 */
 	promptComplete?: boolean;
@@ -43,7 +56,28 @@ export interface ModeDefinition {
 	builtinRevision?: number;
 }
 
-/** 展开后的预设(继承链折叠)。 */
+/**
+ * One plugin row a preset composes.
+ *
+ * Deliberately the smallest useful row: a name to resolve, an optional config, a
+ * group flag for nesting, and an enable switch. Everything a full entry carries
+ * belongs to the plugin, not to the preset that lists it — a preset says WHAT is
+ * composed, never how a plugin works.
+ */
+export interface PresetPluginRow {
+	/** Plugin entry path or package name, resolved by the plugin loader. */
+	name: string;
+	/** Stable identity within the composition; defaults to `name`. */
+	id?: string;
+	/** Rows nested under this one; requires `group: true`. */
+	config?: PresetPluginRow[];
+	/** Marker for a nested row list. */
+	group?: boolean;
+	/** False keeps the row in the composition but unmounted. */
+	enabled?: boolean;
+}
+
+/** Expanded preset (inheritance chain folded). */
 export interface ResolvedMode {
 	id: string;
 	label: string;
@@ -59,6 +93,9 @@ export interface ResolvedMode {
 	promptComplete: boolean;
 	runtimeContext: boolean;
 	settings: Record<string, unknown>;
+	/** The plugin composition, inheritance folded: parents first, later rows win
+	 *  by id, and a `enabled: false` row stays in the list so the UI can show it. */
+	plugins: PresetPluginRow[];
 	/** 继承链(拓扑序,诊断用)。 */
 	sources: string[];
 }
@@ -115,7 +152,40 @@ export function validateMode(def: ModeDefinition, opts: ValidateOptions = {}): s
 			if (!opts.knownExtensions.includes(ext)) errors.push(`扩展 "${ext}" 未找到`);
 		}
 	}
+	errors.push(...pluginRowProblems(def.plugins ?? [], def.id));
 	return errors;
+}
+
+/**
+ * Problems with a preset's plugin rows.
+ *
+ * Validated here rather than at mount time because a composition that cannot
+ * mount must be reported when the preset is read — a preset that silently
+ * installs half its rows is worse than one that refuses.
+ */
+function pluginRowProblems(rows: readonly PresetPluginRow[], presetId: string, at = ""): string[] {
+	const problems: string[] = [];
+	const seen = new Set<string>();
+	for (const [index, row] of rows.entries()) {
+		const label = at === "" ? `plugins[${String(index)}]` : `${at}[${String(index)}]`;
+		if (typeof row.name !== "string" || row.name.trim() === "") {
+			problems.push(`${presetId}: ${label} 没有 name`);
+			continue;
+		}
+		const key = row.id ?? row.name;
+		if (seen.has(key)) problems.push(`${presetId}: ${label} 的 id "${key}" 重复`);
+		seen.add(key);
+		// `config` is a nested row list ONLY with `group: true`; without the
+		// marker it would be read as a plugin's own config and silently ignored.
+		if (row.config !== undefined && row.group !== true) {
+			problems.push(`${presetId}: ${label} 有嵌套行但缺少 group: true`);
+		}
+		if (row.group === true) {
+			if (!Array.isArray(row.config)) problems.push(`${presetId}: ${label} 是 group 但 config 不是行数组`);
+			else problems.push(...pluginRowProblems(row.config, presetId, label));
+		}
+	}
+	return problems;
 }
 
 // ── 展开 ───────────────────────────────────────────────────────────────────
@@ -174,6 +244,11 @@ export function resolveMode(
 	let promptCompleteSource: string | undefined;
 	const settings: Record<string, unknown> = {};
 	const promptByName = new Map<string, PromptSection>();
+	// Composition folds by row id: a child that re-declares an inherited row
+	// replaces it (that is how a preset turns one of its parent's plugins off,
+	// or reconfigures it), and a new row appends. Order is parents-first so the
+	// result reads like the chain that produced it.
+	const rowsById = new Map<string, PresetPluginRow>();
 
 	for (const modeId of order) {
 		const def = defs.get(modeId)!;
@@ -183,6 +258,7 @@ export function resolveMode(
 		}
 		if (def.modelRole !== undefined) modelRole = def.modelRole;
 		if (def.runtimeContext === false) runtimeContext = false;
+		for (const row of def.plugins ?? []) rowsById.set(row.id ?? row.name, row);
 		for (const entry of def.prompt ?? []) {
 			const section = normalizePromptEntry(entry, modeId);
 			promptByName.set(section.name, section); // 后声明(子)覆盖先声明(父)
@@ -214,6 +290,7 @@ export function resolveMode(
 		promptComplete,
 		runtimeContext,
 		settings,
+		plugins: [...rowsById.values()],
 		sources: order,
 	};
 }
