@@ -20,6 +20,12 @@ import type { DaemonService } from "./types";
 /**
  * ExtensionService — 扩展/插件控制面（L2 宿主服务，P1 第十一刀抽取）。
  *
+ * 轨道归属:**两轨共用**。这是两条轨道的管理面与 RPC 入口,不偏属其一:
+ * `getExtensionRuntimeLoad` 走 cordis 宿主级装载(Track A),`listPlugins` /
+ * `collectExtensionModes` 等读的是会话装配那份清单(Track B),`ext.call` 分发
+ * 到实际持有该 RPC 的实例。**文件名的 `extension-` 是历史命名**(服务抽取时
+ * cordis 插件系统尚未落地),不代表只服务 legacy 一侧。
+ *
  * 能力缝声明（M2-2.4）：
  * - 输入：RPC `extensions.list` / `extensions.raw` / `extensions.setEnabled` /
  *   `extensions.setForceEnabled` / `extensions.setProviderEnabled`（统一扩展

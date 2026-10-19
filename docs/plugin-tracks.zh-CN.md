@@ -168,10 +168,11 @@ accepted/declined 反向传播（externals 不重载）。这里以**插件自�
 - [x] Track B 为何没有 `effect` / `state` → `extensions-dev.md` §18：
       两者都需要 fiber 才能成立，legacy 侧没有可挂的生命周期对象，
       发一个不会触发回收的 `effect` 就是静默泄漏
-- [ ] `daemon/` 下剩余 `extension-*` 的逐一定性：`extension-lifecycle-tools.ts`
-      是 Track B（会话级 extension_* 工具集），`extension-service` /
-      `-artifact-compiler` / `-watch-roots` 是两轨共用。**归轨尚未逐文件写进头部注释**——
-      读文件时仍要先自行判断，这是下一个人最容易走错的一处
+- [x] `daemon/` 下剩余 `extension-*` 的逐一定性，已写进各文件头部：
+      `extension-lifecycle-tools.ts` 是 Track B（会话级 extension_* 工具集）；
+      `extension-service.ts` / `-artifact-compiler.ts` / `-watch-roots.ts`
+      是两轨共用（管理面与 RPC 入口 / 槽位编译与 load-once 缓存 / 监视根）。
+      文件名里的 `extension-` 是历史命名，不代表只服务 legacy 一侧
 - [ ] `provide` 的真实消费者：机制已通且有测试覆盖，但除 auth-hub 自己外还没有
       第二个插件实际 `inject` 它——属于「未被真实使用验证」而非「未实现」
 
