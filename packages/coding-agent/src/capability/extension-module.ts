@@ -14,8 +14,18 @@ export interface ExtensionModule {
 	name: string;
 	/** Absolute path to extension entrypoint */
 	path: string;
-	/** Source level */
-	level: "user" | "project";
+	/**
+	 * Where the module came from: the user's own config, the current project, or
+	 * the distribution itself.
+	 *
+	 * `native` is the third case and it is not a synonym for `user`: a package the
+	 * distribution ships is neither installed by the user nor scoped to a project,
+	 * and listing it as either is what makes a user unable to tell what they can
+	 * remove. The UI already carries this third value (`_source.level` is
+	 * `"user" | "project" | "native"` in the capability center and the slash
+	 * command source); this is the same vocabulary on the daemon side.
+	 */
+	level: "user" | "project" | "native";
 	/** Source metadata */
 	_source: SourceMeta;
 }

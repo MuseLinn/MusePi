@@ -477,7 +477,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		return path.resolve(ctx.cwd, expanded);
 	};
 
-	const createExtensionModule = (extPath: string, level: "user" | "project"): ExtensionModule => ({
+	const createExtensionModule = (extPath: string, level: ExtensionModule["level"]): ExtensionModule => ({
 		name: getExtensionNameFromPath(extPath),
 		path: extPath,
 		level,
@@ -572,9 +572,12 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	// panel never mounted). Feeding the same paths into this capability puts
 	// the management face and the runtime face on one list.
 	try {
-		const { getAllPluginExtensionPaths } = await import("../extensibility/plugins/runtime/loader");
-		for (const extPath of await getAllPluginExtensionPaths(ctx.cwd)) {
-			items.push(createExtensionModule(extPath, "user"));
+		const { getScopedPluginExtensionPaths } = await import("../extensibility/plugins/runtime/loader");
+		// The scope travels with the path: a plugin installed for one project must
+		// not list as if it were installed machine-wide, because that is the fact a
+		// user acts on when deciding whether to remove it.
+		for (const entry of await getScopedPluginExtensionPaths(ctx.cwd)) {
+			items.push(createExtensionModule(entry.path, entry.scope));
 		}
 	} catch (error) {
 		// Fail-soft: a plugin tree problem must not take the whole extension
@@ -589,7 +592,10 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	// the distribution ships, not a separate kind of thing.
 	try {
 		for (const extPath of await discoverBundledPluginPaths()) {
-			items.push(createExtensionModule(extPath, "user"));
+			// `native`, not `user`: the distribution ships these. Listing them as the
+			// user's own makes the removal affordance lie — there is nothing for the
+			// user to remove.
+			items.push(createExtensionModule(extPath, "native"));
 		}
 	} catch (error) {
 		// Fail-soft for the same reason: a malformed bundled package must not

@@ -123,7 +123,7 @@ export function resolveCopilotHome(home: string): string {
 /**
  * Create source metadata for an item.
  */
-export function createSourceMeta(provider: string, filePath: string, level: "user" | "project"): SourceMeta {
+export function createSourceMeta(provider: string, filePath: string, level: SourceMeta["level"]): SourceMeta {
 	return {
 		provider,
 		providerName: "", // Filled in by registry

@@ -545,14 +545,36 @@ export async function getAllPluginCommandPaths(cwd: string): Promise<string[]> {
  * Get all extension module paths from all enabled plugins.
  */
 export async function getAllPluginExtensionPaths(cwd: string): Promise<string[]> {
+	const scoped = await getScopedPluginExtensionPaths(cwd);
+	return scoped.map(entry => entry.path);
+}
+
+/** One plugin extension entry point and the root that supplied it. */
+export interface ScopedPluginExtensionPath {
+	/** Absolute path of the extension entry module. */
+	path: string;
+	/** Which plugin root the entry came from. */
+	scope: "user" | "project";
+}
+
+/**
+ * Every enabled plugin's extension entry points, each with its scope.
+ *
+ * The scope was previously dropped on the way out of this module: callers that
+ * list plugins stamped every entry "user", so a plugin installed for one project
+ * showed up as if it were installed for the whole machine. The distinction is the
+ * one the user makes when deciding whether to remove something, so it has to
+ * survive the trip.
+ */
+export async function getScopedPluginExtensionPaths(cwd: string): Promise<ScopedPluginExtensionPath[]> {
 	const plugins = await getEnabledPlugins(cwd);
-	const paths: string[] = [];
-
+	const entries: ScopedPluginExtensionPath[] = [];
 	for (const plugin of plugins) {
-		paths.push(...resolvePluginExtensionPaths(plugin));
+		for (const path of resolvePluginExtensionPaths(plugin)) {
+			entries.push({ path, scope: plugin.scope });
+		}
 	}
-
-	return paths;
+	return entries;
 }
 
 /**
