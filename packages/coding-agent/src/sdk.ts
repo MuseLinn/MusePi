@@ -103,13 +103,14 @@ import {
 	ExtensionRunner,
 	ExtensionToolWrapper,
 	type ExtensionUIContext,
+	emitSessionStartEvent,
 	type LoadExtensionsResult,
 	loadExtensionFromFactory,
-	loadExtensions,
 	type RegisteredTool,
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
+import { loadSessionPlugins } from "./extensibility/plugins/session-loader";
 import {
 	loadSkills as loadSkillsInternal,
 	type Skill,
@@ -812,7 +813,11 @@ export async function loadSessionExtensions(
 	if (surface) {
 		paths = await applyAssemblyFilter(paths, cwd, settings, surface);
 	}
-	const result = await logger.time("loadExtensions", loadExtensions, paths, cwd, eventBus);
+	// One pipeline for every plugin, host-level or session-level. The legacy
+	// loader disagreed with the host-level one about which module shapes are a
+	// plugin at all, so a class-shaped plugin loaded at the host level and threw
+	// at the session level; this routes sessions through the same mount.
+	const result = await logger.time("loadSessionPlugins", loadSessionPlugins, paths, cwd, eventBus);
 	for (const { path, error } of result.errors) {
 		logger.error("Failed to load extension", { path, error });
 	}
@@ -2374,7 +2379,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			// Allocate a session runtime without evaluating caller-provided extension
 			// instances, paths, or factories.
 			extensionPaths = [];
-			extensionsResult = await loadExtensions([], cwd, eventBus);
+			extensionsResult = await loadSessionPlugins([], cwd, eventBus);
 		} else if (options.preloadedExtensions) {
 			extensionsResult = {
 				...options.preloadedExtensions,
@@ -2387,7 +2392,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				.filter(p => !p.startsWith("<inline"));
 		} else if (options.preloadedExtensionPaths) {
 			extensionPaths = options.preloadedExtensionPaths;
-			extensionsResult = await logger.time("loadExtensions", loadExtensions, extensionPaths, cwd, eventBus);
+			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus);
 			for (const { path, error } of extensionsResult.errors) {
 				logger.error("Failed to load extension", { path, error });
 			}
@@ -2395,7 +2400,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			extensionPaths = await logger.time("discoverSessionExtensionPaths", () =>
 				discoverSessionExtensionPaths(options, cwd, settings),
 			);
-			extensionsResult = await logger.time("loadExtensions", loadExtensions, extensionPaths, cwd, eventBus);
+			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus);
 			for (const { path, error } of extensionsResult.errors) {
 				logger.error("Failed to load extension", { path, error });
 			}
@@ -2538,8 +2543,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// loads here too: they ship as a bundled plugin package, and this is the
 		// one site that must guarantee them regardless of discovery options.
 		await ensureBundledPluginsLoaded(cwd);
-		if (extensionsResult.runtime.pendingMagicKeywordRegistrations.length > 0) {
-			applyPendingMagicKeywords(extensionsResult.runtime.pendingMagicKeywordRegistrations);
+		// A caller-supplied `preloadedExtensions` runtime may be a minimal stub
+		// (tests do exactly that, and the SDK documents accepting one when no
+		// extension hooks fire), so this queue is optional rather than assumed.
+		const pendingKeywords = extensionsResult.runtime.pendingMagicKeywordRegistrations;
+		if (pendingKeywords !== undefined && pendingKeywords.length > 0) {
+			applyPendingMagicKeywords(pendingKeywords);
 			extensionsResult.runtime.pendingMagicKeywordRegistrations = [];
 		}
 		// Hydrate cached runtime (extension) provider catalogs before model
@@ -4621,6 +4630,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 
 		startDeferredMCPDiscovery?.(session);
+
+		// `session_start` fires HERE — the session is fully constructed, so an
+		// extension handler sees a complete `ExtensionContext` (modelRegistry,
+		// sessionManager, settings) rather than a half-built one.
+		//
+		// Nothing emitted this event before, even though the type existed and
+		// `pi.on("session_start", …)` type-checked. The failure mode was silent:
+		// the handler simply never ran, so a plugin had no way to reach the
+		// context until a turn happened to fire a tool event.
+		await emitSessionStartEvent(extensionRunner);
 
 		return {
 			session,

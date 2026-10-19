@@ -70,8 +70,9 @@ export interface MountFailure {
 export interface MountedPlugin {
 	ok: true;
 	extension: Extension;
-	/** The entry as the plugin exported it (null when it used the legacy shape). */
-	entry: CordisPluginEntry | null;
+	/** The entry as the plugin exported it, in either shape (null when it used the
+	 *  bare legacy factory form). A class entry is the class itself. */
+	entry: CordisPluginEntry | PluginEntryFactory | null;
 	/** The plugin's declared config, already coerced. Empty when none declared. */
 	config: Record<string, unknown>;
 	/** What `apply` returned: the objects its `provide` names refer to, keyed by
@@ -253,7 +254,12 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		typeof module === "object" && module !== null && "default" in module
 			? (module as { default?: unknown }).default
 			: module;
-	const entry = isCordisPluginEntry(inner) ? inner : null;
+	// Either shape can DECLARE dependencies (`inject` on an object, `static inject`
+	// on a class), so the gate reads the resolved entry rather than only the
+	// object form — otherwise a class plugin bypassed the gate entirely and failed
+	// later, on first use, with no mention of the missing service.
+	const entry = resolvePluginEntry(module as never);
+	const declared = isCordisPluginEntry(inner) ? inner : null;
 	const factory = resolveFactory(module);
 	if (factory === null) {
 		return {
@@ -264,7 +270,7 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 	}
 
 	// Declared dependencies are checked BEFORE binding (see the doc above).
-	if (entry !== null) {
+	{
 		const missing = missingServiceDependencies(entry, ctx.serviceRegistry ?? hostOnlyRegistry());
 		if (missing.length > 0) {
 			const providers = missing.map(name => {
@@ -279,10 +285,13 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		}
 	}
 
-	// Read the declared config ONLY for a cordis entry. A legacy factory has none,
-	// so it skips the read entirely — no extra I/O on its mount path, and no way
-	// for an unreadable config store to break a plugin that never asked for one.
-	const values = entry === null ? {} : (await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }))).values;
+	// Read the declared config ONLY for an entry that declares one. A bare legacy
+	// factory has none, so it skips the read entirely — no extra I/O on its mount
+	// path, and no way for an unreadable config store to break a plugin that never
+	// asked for one. Both declared shapes are read: `Config` on the object form and
+	// `static Config` on the class form.
+	const declaresConfig = (entry as { Config?: unknown } | null)?.Config !== undefined;
+	const values = declaresConfig ? (await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }))).values : {};
 	const extension = createPluginExtension(ctx.entryPath, ctx.entryPath);
 	const base = createConcreteExtensionAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus);
 	// Primitives first, then the ledger: the ledger wraps registrations into
