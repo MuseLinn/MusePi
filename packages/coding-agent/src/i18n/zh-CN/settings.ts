@@ -686,6 +686,16 @@ export const settings = {
 
 	// ── Settings — Display ─────────────────────────────
 	"Collapse Compacted History": "折叠已压缩历史",
+	"Running Turn Detail": "运行中回合显示多少",
+	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to":
+		"运行中的回合保留多少内容在视野里。默认「全部显示」会画每一行；选一个数字则只保留最近 N 行，更早的折成「⋯ 还有 N 行」，长任务时画面更稳。跑完的回合无论这里选什么都不受影响，照旧折进活动摘要行",
+	"Show all": "全部显示",
+	"Every row stays visible while the agent works.": "智能体工作时每一行都可见",
+	"Latest 3 rows": "最近 3 行",
+	"Latest 5 rows": "最近 5 行",
+	"Latest 7 rows": "最近 7 行",
+	"Holds a long task's tail in view.": "让长任务的画面停在尾部",
+	"Latest 10 rows": "最近 10 行",
 	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
 		"在实时会话中折叠压缩前的历史记录到摘要分隔线后；禁用则保留完整会话并在每个压缩点显示分隔线",
 	"Compact Thinking Level": "紧凑思维层级",

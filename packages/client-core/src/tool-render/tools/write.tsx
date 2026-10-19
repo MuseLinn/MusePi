@@ -25,13 +25,16 @@ function diagnosticsOf(details: Record<string, unknown> | null): WriteDiagnostic
 	return { server: str(d.server) ?? undefined, messages, summary, errored: d.errored === true };
 }
 
-function Summary({ args }: ToolRenderProps): ReactNode {
+function Summary({ args, running }: ToolRenderProps): ReactNode {
 	const path = str(args.file_path ?? args.path);
 	const content = str(args.content);
 	const lines = content ? content.split("\n").length : 0;
 	return (
 		<>
-			{path === null ? <InvalidArg what="path" /> : <PathText path={path} />}
+			{/* A running call streams its arguments: until the path arrives there
+			 * is nothing to show, and claiming the argument is INVALID reads as a
+			 * tool failure the user did not cause and cannot act on. */}
+			{path === null ? running ? null : <InvalidArg what="path" /> : <PathText path={path} />}
 			{lines > 1 && (
 				<>
 					{" "}
@@ -42,7 +45,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 	);
 }
 
-function Body({ args, result }: ToolRenderProps): ReactNode {
+function Body({ args, result, running }: ToolRenderProps): ReactNode {
 	const path = str(args.file_path ?? args.path);
 	const content = str(args.content);
 	const details = detailsRecord(result);
@@ -61,9 +64,16 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				]}
 			/>
 			{content === null ? (
-				<Note tone="err">
-					<InvalidArg what="content" /> {t("— expected string")}
-				</Note>
+				running ? (
+					// Args still streaming — the content field has not arrived. A
+					// fault badge here is the picture the user reported: a write in
+					// progress looked like a broken write.
+					<Note>{t("preparing content…")}</Note>
+				) : (
+					<Note tone="err">
+						<InvalidArg what="content" /> {t("— expected string")}
+					</Note>
+				)
 			) : (
 				content && <CodeBlock code={content} lang={path ? languageFromPath(path) : null} maxLines={12} />
 			)}

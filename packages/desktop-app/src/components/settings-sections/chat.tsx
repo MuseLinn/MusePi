@@ -331,6 +331,57 @@ export function ChatSection(): ReactNode {
 						}}
 					/>
 				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("output style")}</div>
+						<div className="gui-settings-row-desc">{t("output style description")}</div>
+					</div>
+					<Segmented
+						ariaLabel={t("output style")}
+						value={outputStyle}
+						options={OUTPUT_STYLE_SEGMENTS}
+						onChange={v => {
+							tapFeedback();
+							setOutputStyle(v);
+							try {
+								localStorage.setItem("musepi-gui-chat-output-style", v);
+							} catch {
+								// ignore
+							}
+							document.documentElement.dataset.outputStyle = v;
+						}}
+					/>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("typing effect")}</div>
+						<div className="gui-settings-row-desc">{t("typing effect description")}</div>
+					</div>
+					<div className="gui-settings-row-extra">
+						{/* Six equal-width segments outgrow any shared row with the
+						 * long description (labels clip at ~43px/item) — the extra
+						 * slot drops the control to its own full-width line, and
+						 * gui-seg--wide lifts the 260px cap so every label fits. */}
+						<Segmented
+							ariaLabel={t("typing effect")}
+							className="gui-seg--compact gui-seg--wide"
+							value={typingEffect}
+							options={TYPING_EFFECT_SEGMENTS}
+							onChange={v => {
+								tapFeedback();
+								setTypingEffect(v);
+								try {
+									localStorage.setItem("musepi-gui-chat-effect", v);
+								} catch {
+									// ignore
+								}
+								// No root-class swap here: the transcript applies the
+								// effect only to the block that is streaming right now,
+								// and this preview re-renders from `effect` below.
+							}}
+						/>
+					</div>
+				</div>
 				{/* The sample lives in 外观 → 效果预览 (MockConversationPreview) and
 				 * scopes itself to this picker's value, so it is not drawn twice. */}
 				<PrefToggle

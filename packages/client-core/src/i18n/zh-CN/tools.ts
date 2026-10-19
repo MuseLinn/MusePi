@@ -140,6 +140,7 @@ export const tools = {
 	"{count} cells": "{count} 个单元",
 	"error (exit {code})": "错误（退出码 {code}）",
 	error: "错误",
+	"preparing content…": "正在写入内容…",
 	"made executable": "已设为可执行",
 	"— expected string": "— 应为字符串",
 

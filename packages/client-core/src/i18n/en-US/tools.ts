@@ -143,6 +143,7 @@ export const tools = {
 	"{count} cells": "{count} cells",
 	"error (exit {code})": "Error (exit {code})",
 	error: "Error",
+	"preparing content…": "Writing content…",
 	"made executable": "Made executable",
 	"— expected string": "— expected string",
 
