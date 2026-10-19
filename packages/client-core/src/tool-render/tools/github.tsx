@@ -35,7 +35,7 @@ function formatPr(pr: unknown): string | null {
 		if (id) parts.push(id);
 	}
 	if (parts.length === 0) return null;
-	if (parts.length > 3) return `${parts.slice(0, 3).join(", ")}, +${parts.length - 3} ${t("more")}`;
+	if (parts.length > 3) return `${parts.slice(0, 3).join(", ")}, +${parts.length - 3} ${t("tools.more")}`;
 	return parts.join(", ");
 }
 
@@ -67,15 +67,15 @@ function Salient({ args }: { args: Record<string, unknown> }): ReactNode {
 	if (op === "pr_create") {
 		const title = str(args.title);
 		if (title) return <span>{truncate(normalizeWs(title), 60)}</span>;
-		return args.fill === true ? <span className="tv-muted">{t("fill from commits")}</span> : null;
+		return args.fill === true ? <span className="tv-muted">{t("tools.fillCommits")}</span> : null;
 	}
 	if (op === "run_watch") {
 		const run = str(args.run);
 		const branch = str(args.branch);
-		if (run) return <span>{t("run {name}", { name: truncate(run, 50) })}</span>;
+		if (run) return <span>{t("tools.runWithName", { name: truncate(run, 50) })}</span>;
 		return (
 			<span className="tv-muted">
-				{branch ?? "HEAD"} {t("workflow runs")}
+				{branch ?? "HEAD"} {t("tools.workflowRuns")}
 			</span>
 		);
 	}
@@ -92,7 +92,7 @@ function Summary(props: ToolRenderProps): ReactNode {
 	const op = str(props.args.op);
 	return (
 		<>
-			{op ? <Badge tone="accent">{op}</Badge> : <Badge tone="warn">{t("no op")}</Badge>}{" "}
+			{op ? <Badge tone="accent">{op}</Badge> : <Badge tone="warn">{t("tools.noOp")}</Badge>}{" "}
 			<Salient args={props.args} />
 		</>
 	);
@@ -136,7 +136,7 @@ function jobVisual(job: Record<string, unknown>): { icon: string; cls: string } 
 }
 
 function RunBlock({ run }: { run: Record<string, unknown> }): ReactNode {
-	const label = str(run.workflowName) ?? str(run.displayTitle) ?? t("GitHub Actions");
+	const label = str(run.workflowName) ?? str(run.displayTitle) ?? t("tools.githubActions");
 	const meta: string[] = [];
 	const branch = str(run.branch);
 	const sha = str(run.headSha);
@@ -163,7 +163,7 @@ function RunBlock({ run }: { run: Record<string, unknown> }): ReactNode {
 			</Row>
 			{jobs.length === 0 && (
 				<Row>
-					<span className="tv-faint">{t("waiting for workflow jobs…")}</span>
+					<span className="tv-faint">{t("tools.waitingWorkflowJobs")}</span>
 				</Row>
 			)}
 			{jobs.map((job, index) => {
@@ -172,7 +172,7 @@ function RunBlock({ run }: { run: Record<string, unknown> }): ReactNode {
 				const duration = num(job.durationSeconds);
 				return (
 					<Row key={num(job.id) ?? index}>
-						<span className={visual.cls}>{visual.icon}</span> <span>{str(job.name) ?? t("job")}</span>
+						<span className={visual.cls}>{visual.icon}</span> <span>{str(job.name) ?? t("tools.job")}</span>
 						{duration !== null && <span className="tv-faint"> {duration}s</span>}
 					</Row>
 				);
@@ -189,14 +189,14 @@ function WatchView({ watch }: { watch: Record<string, unknown> }): ReactNode {
 	let header: string;
 	if (str(watch.mode) === "run" && runId !== null) {
 		header = watching
-			? t("watching run #{id} on {repo}", { id: String(runId), repo: repo })
-			: t("run #{id} on {repo}", { id: String(runId), repo: repo });
+			? t("tools.watchingRunWithIdWithRepo", { id: String(runId), repo: repo })
+			: t("tools.runOnWithIdWithRepo", { id: String(runId), repo: repo });
 	} else {
 		const sha = str(watch.headSha);
-		const target = sha ? shortSha(sha) : t("this commit");
+		const target = sha ? shortSha(sha) : t("tools.thisCommit");
 		header = watching
-			? t("watching {name} on {repo}", { name: target, repo: repo })
-			: t("workflow runs for {name} on {repo}", { name: target, repo: repo });
+			? t("tools.watchingOnWithNameWithRepo", { name: target, repo: repo })
+			: t("tools.workflowRunsWithNameWithRepo", { name: target, repo: repo });
 	}
 	const note = str(watch.note);
 	const runs: Record<string, unknown>[] = [];
@@ -211,22 +211,22 @@ function WatchView({ watch }: { watch: Record<string, unknown> }): ReactNode {
 		<>
 			<div className="tv-muted">{header}</div>
 			{note && <div className="tv-faint">{note}</div>}
-			{runs.length === 0 && <div className="tv-faint">{t("waiting for workflow runs…")}</div>}
+			{runs.length === 0 && <div className="tv-faint">{t("tools.waitingWorkflowRuns")}</div>}
 			{runs.map((item, index) => (
 				<RunBlock run={item} key={num(item.id) ?? index} />
 			))}
 			{failedLogs.map((entry, index) => {
 				if (!isRecord(entry)) return null;
-				const jobName = str(entry.jobName) ?? t("job");
+				const jobName = str(entry.jobName) ?? t("tools.job");
 				const workflow = str(entry.workflowName);
 				const failedRunId = num(entry.runId);
-				const context = workflow ?? t("run");
+				const context = workflow ?? t("tools.run");
 				const title = `${jobName} — ${context}${failedRunId !== null ? ` #${failedRunId}` : ""}`;
 				const tail = str(entry.tail);
 				if (!tail || entry.available === false) {
 					return (
 						<Note tone="warn" key={index}>
-							{title}: {t("log tail unavailable")}
+							{title}: {t("tools.logTailUnavailable")}
 						</Note>
 					);
 				}
@@ -244,10 +244,10 @@ function CheckoutRows({ checkouts }: { checkouts: readonly unknown[] }): ReactNo
 				const prNumber = num(entry.prNumber);
 				const worktree = str(entry.worktreePath);
 				return (
-					<Row k={prNumber !== null ? `#${prNumber}` : t("PR")} key={prNumber ?? index}>
+					<Row k={prNumber !== null ? `#${prNumber}` : t("tools.pr")} key={prNumber ?? index}>
 						<span>{str(entry.branch) ?? ""}</span>
 						{worktree && <span className="tv-muted"> {homePath(worktree)}</span>}
-						{entry.reused === true && <Badge>{t("reused")}</Badge>}
+						{entry.reused === true && <Badge>{t("tools.reused")}</Badge>}
 					</Row>
 				);
 			})}
@@ -293,7 +293,7 @@ function DetailsGrid({ details }: { details: Record<string, unknown> }): ReactNo
 		}
 		if (ids.length > 0) {
 			rows.push(
-				<Kv k={t("runs")} key="runs">
+				<Kv k={t("tools.runs")} key="runs">
 					{ids.join(", ")}
 				</Kv>,
 			);
@@ -306,7 +306,7 @@ function DetailsGrid({ details }: { details: Record<string, unknown> }): ReactNo
 		}
 		if (jobs.length > 0) {
 			rows.push(
-				<Kv k={t("failedJobs")} key="failedJobs">
+				<Kv k={t("tools.failedjobs")} key="failedJobs">
 					<span className="tv-err-text">{jobs.join(", ")}</span>
 				</Kv>,
 			);
@@ -323,7 +323,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<ArgsGrid args={args} />
-			{bodyText && <Output text={bodyText} maxLines={8} title={t("body")} />}
+			{bodyText && <Output text={bodyText} maxLines={8} title={t("tools.body")} />}
 			{watch && <WatchView watch={watch} />}
 			{checkouts && checkouts.length > 0 && <CheckoutRows checkouts={checkouts} />}
 			{details && !watch && <DetailsGrid details={details} />}

@@ -32,24 +32,24 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 			{subject ? (
 				<span>{truncate(normalizeWs(subject), 80)}</span>
 			) : (
-				args.subject !== undefined && <InvalidArg what="subject" />
+				args.subject !== undefined && <InvalidArg what="tools.subject" />
 			)}{" "}
 			{aspect && <Badge>{aspect}</Badge>}
-			{changes > 0 && <Badge tone="accent">{t("edit ×{count}", { count: String(changes) })}</Badge>}
+			{changes > 0 && <Badge tone="accent">{t("tools.editWithCount", { count: String(changes) })}</Badge>}
 		</>
 	);
 }
 
 const PROMPT_FIELDS = [
-	["subject", "subject"],
-	["action", "action"],
-	["scene", "scene"],
-	["composition", "composition"],
-	["lighting", "lighting"],
-	["style", "style"],
-	["text", "text"],
-	["aspect_ratio", "aspect"],
-	["image_size", "size"],
+	["tools.subject", "tools.subject"],
+	["general.action", "general.action"],
+	["tools.scene", "tools.scene"],
+	["tools.composition", "tools.composition"],
+	["tools.lighting", "tools.lighting"],
+	["tools.style", "tools.style"],
+	["tools.text", "tools.text"],
+	["aspect_ratio", "tools.aspect"],
+	["image_size", "tools.size"],
 ] as const;
 
 function Body({ args, result, running }: ToolRenderProps): ReactNode {
@@ -79,7 +79,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 				style={{ aspectRatio: (str(args.aspect_ratio) ?? "1:1").replace(":", "/") }}
 			>
 				<div className="tr-img-shimmer" aria-hidden="true" />
-				<div className="tr-img-ph-title">{t("generating image")}</div>
+				<div className="tr-img-ph-title">{t("settings.generatingImage")}</div>
 				{subjectPrompt && (
 					<div className="tr-img-ph-prompt">
 						“{subjectPrompt.length > 140 ? `${subjectPrompt.slice(0, 140)}…` : subjectPrompt}”
@@ -105,7 +105,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 						<div className="tv-list">
 							{changes.map((change, i) => (
 								// Tool-argument rows are static arrays — the index is their identity.
-								<Row key={i} k={i === 0 ? t("changes") : undefined}>
+								<Row key={i} k={i === 0 ? t("tools.changes") : undefined}>
 									{typeof change === "string" ? change : <InvalidArg what="change" />}
 								</Row>
 							))}
@@ -118,15 +118,15 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 								const mime = isRecord(input) ? str(input.mime_type) : null;
 								return (
 									// Tool-argument rows are static arrays — the index is their identity.
-									<Row key={i} k={i === 0 ? t("input") : undefined}>
+									<Row key={i} k={i === 0 ? t("tools.input") : undefined}>
 										{!isRecord(input) ? (
-											<InvalidArg what="input" />
+											<InvalidArg what="tools.input" />
 										) : path ? (
 											<PathText path={path} />
 										) : mime ? (
-											t("base64 image ({mime})", { mime: mime })
+											t("tools.base64ImageWithMime", { mime: mime })
 										) : (
-											t("base64 image")
+											t("tools.base64Image")
 										)}
 									</Row>
 								);
@@ -134,7 +134,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 						</div>
 					)}
 					{(provider || model) && <Badges items={[provider, model]} />}
-					{revised && <Note>{t("revised: {value}", { value: truncate(revised, 400) })}</Note>}
+					{revised && <Note>{t("tools.revisedWithValue", { value: truncate(revised, 400) })}</Note>}
 					{hasImages && (
 						<figure className="tr-tool-image">
 							<ResultImages result={merged} />
@@ -145,7 +145,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 						<div className="tv-list">
 							{paths.map((p, i) => (
 								// Tool-argument rows are static arrays — the index is their identity.
-								<Row key={i} k={i === 0 ? t("saved") : undefined}>
+								<Row key={i} k={i === 0 ? t("general.saved") : undefined}>
 									<PathText path={p} />
 								</Row>
 							))}

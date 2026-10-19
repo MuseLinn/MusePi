@@ -14,8 +14,8 @@ export function ApprovalCard({ client }: { client: SessionClient }): ReactNode {
 	if (!approval) return null;
 
 	return (
-		<div className="sh-approval" role="alertdialog" aria-label={t("approval needed")}>
-			<div className="sh-approval-title">{t("approval needed")}</div>
+		<div className="sh-approval" role="alertdialog" aria-label={t("shell.approvalNeeded")}>
+			<div className="sh-approval-title">{t("shell.approvalNeeded")}</div>
 			<div className="sh-approval-tool">{approval.tool}</div>
 			{approval.prompt && <pre className="sh-approval-prompt">{approval.prompt}</pre>}
 			<div className="sh-approval-actions">
@@ -24,21 +24,21 @@ export function ApprovalCard({ client }: { client: SessionClient }): ReactNode {
 					className="sh-btn sh-btn-deny"
 					onClick={() => client.respondApproval(approval.requestId, false)}
 				>
-					{t("deny tool")}
+					{t("shell.denyTool")}
 				</button>
 				<button
 					type="button"
 					className="sh-btn sh-btn-approve"
 					onClick={() => client.respondApproval(approval.requestId, true)}
 				>
-					{t("approve tool")}
+					{t("shell.approveTool")}
 				</button>
 			</div>
 			{/* Design doc §B2: while the card blocks the run it owns the wait
 			 * feedback — a thin accent shuttle replaces the (now hidden)
 			 * chat-level working pill, so "waiting on you" reads once. */}
 			<div className="sh-approval-wait" aria-hidden="true">
-				<span className="sh-approval-wait-label">{t("waiting for your decision")}</span>
+				<span className="sh-approval-wait-label">{t("shell.waitingYourDecision")}</span>
 				<span className="sh-approval-wait-track">
 					<span className="sh-approval-wait-bar" />
 				</span>

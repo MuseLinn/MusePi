@@ -15,7 +15,7 @@ export function ContextRing({ client }: { client: SessionClient }): ReactNode {
 	if (percent === null) return null;
 	const clamped = Math.max(0, Math.min(100, percent));
 	const warn = clamped > 80;
-	const title = `${t("context usage")} ${Math.round(clamped)}%`;
+	const title = `${t("general.contextUsage")} ${Math.round(clamped)}%`;
 	return (
 		<span className={`sh-ctx-ring${warn ? " sh-ctx-ring--warn" : ""}`} role="img" aria-label={title} title={title}>
 			<svg width={22} height={22} viewBox="0 0 22 22" aria-hidden="true">

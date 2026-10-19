@@ -40,18 +40,18 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 	if (error !== null) {
 		return (
 			<div className="sh-panel-state">
-				<p className="sh-panel-error">{t("load failed: {error}", { error })}</p>
+				<p className="sh-panel-error">{t("guest.loadFailedWithError", { error })}</p>
 				<button type="button" className="sh-btn" onClick={() => void load()}>
-					{t("retry")}
+					{t("settings.retry")}
 				</button>
 			</div>
 		);
 	}
 	if (boards === null) {
-		return <div className="sh-panel-state">{t("loading…")}</div>;
+		return <div className="sh-panel-state">{t("settings.loading2")}</div>;
 	}
 	if (boards.length === 0) {
-		return <div className="sh-panel-state">{t("no boards yet")}</div>;
+		return <div className="sh-panel-state">{t("guest.noBoardsYet")}</div>;
 	}
 
 	return (
@@ -60,7 +60,7 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 				<section key={board.id} className="sh-board-section">
 					<h2 className="sh-board-title">{board.title}</h2>
 					{board.widgets.length === 0 ? (
-						<p className="sh-panel-muted">{t("no widgets yet")}</p>
+						<p className="sh-panel-muted">{t("guest.noWidgetsYet")}</p>
 					) : (
 						<div className="sh-board-grid">
 							{[...board.widgets]

@@ -21,11 +21,11 @@ import { FilePanel } from "./FilePanel";
 type WorkspaceTab = "changes" | "files" | "terminal" | "notes" | "mcp";
 
 const TABS: ReadonlyArray<{ id: WorkspaceTab; label: string; disabled?: boolean }> = [
-	{ id: "changes", label: t("changes") },
-	{ id: "files", label: t("files") },
-	{ id: "terminal", label: t("terminal"), disabled: true },
-	{ id: "notes", label: t("notes"), disabled: true },
-	{ id: "mcp", label: t("mcp"), disabled: true },
+	{ id: "changes", label: t("tools.changes") },
+	{ id: "files", label: t("settings.files") },
+	{ id: "terminal", label: t("settings.terminal"), disabled: true },
+	{ id: "notes", label: t("tools.notes"), disabled: true },
+	{ id: "mcp", label: t("settings.mcp"), disabled: true },
 ];
 
 interface GitStatusFile {
@@ -67,7 +67,7 @@ export function WorkspacePanel({
 	useDeepScrollShadow(rootRef, ".sh-wspanel-tabs, .sh-changes-diff");
 	return (
 		<div ref={rootRef} className="sh-wspanel">
-			<div className="sh-wspanel-tabs" role="tablist" aria-label={t("workspace")}>
+			<div className="sh-wspanel-tabs" role="tablist" aria-label={t("tools.workspace")}>
 				{TABS.map(item =>
 					item.disabled ? (
 						<span key={item.id} className="sh-wspanel-tab sh-wspanel-tab--off" aria-disabled>
@@ -90,9 +90,9 @@ export function WorkspacePanel({
 			<div className="sh-wspanel-body">
 				{tab === "changes" && <ChangesTab client={client} cwd={cwd} />}
 				{tab === "files" && <FilePanel client={client} cwd={cwd} readOnly={readOnly} />}
-				{tab === "terminal" && <DisabledTab label={t("terminal")} />}
-				{tab === "notes" && <DisabledTab label={t("notes")} />}
-				{tab === "mcp" && <DisabledTab label={t("mcp")} />}
+				{tab === "terminal" && <DisabledTab label={t("settings.terminal")} />}
+				{tab === "notes" && <DisabledTab label={t("tools.notes")} />}
+				{tab === "mcp" && <DisabledTab label={t("settings.mcp")} />}
 			</div>
 		</div>
 	);
@@ -151,16 +151,16 @@ function ChangesTab({ client, cwd }: { client: SessionClient; cwd: string | null
 		return (
 			<div className="sh-wspanel-guide">
 				<FolderGit2 size={22} aria-hidden />
-				<p>{t("diff unavailable")}</p>
-				<p className="sh-wspanel-guide-sub">{t("needs host channel")}</p>
+				<p>{t("settings.diffUnavailable")}</p>
+				<p className="sh-wspanel-guide-sub">{t("settings.needsHostChannel")}</p>
 			</div>
 		);
 	}
 
 	const groups: { title: string; rows: GitStatusFile[] }[] = [
-		{ title: t("staged"), rows: state?.staged ?? [] },
-		{ title: t("unstaged"), rows: state?.unstaged ?? [] },
-		{ title: t("untracked"), rows: state?.untracked ?? [] },
+		{ title: t("general.staged"), rows: state?.staged ?? [] },
+		{ title: t("general.unstaged"), rows: state?.unstaged ?? [] },
+		{ title: t("general.untracked"), rows: state?.untracked ?? [] },
 	];
 	const total = groups.reduce((n, g) => n + g.rows.length, 0);
 
@@ -174,11 +174,11 @@ function ChangesTab({ client, cwd }: { client: SessionClient; cwd: string | null
 						<span className="sh-diff-del">−{state.deleted ?? 0}</span>
 					</span>
 				)}
-				<button type="button" className="sh-changes-reload" onClick={load} title={t("refresh")}>
+				<button type="button" className="sh-changes-reload" onClick={load} title={t("settings.refresh")}>
 					<RefreshCw size={13} className={loading ? "sh-ws-spin" : undefined} />
 				</button>
 			</div>
-			{!loading && total === 0 && <p className="sh-changes-empty">{t("no pending changes")}</p>}
+			{!loading && total === 0 && <p className="sh-changes-empty">{t("settings.noPendingChanges")}</p>}
 			{groups.map(
 				group =>
 					group.rows.length > 0 && (
@@ -202,7 +202,7 @@ function ChangesTab({ client, cwd }: { client: SessionClient; cwd: string | null
 									</button>
 									{openPath === row.path &&
 										(diffErr ? (
-											<p className="sh-changes-differr">{t("diff unavailable")}</p>
+											<p className="sh-changes-differr">{t("settings.diffUnavailable")}</p>
 										) : diff === null ? (
 											<p className="sh-changes-differr">…</p>
 										) : (
@@ -223,7 +223,7 @@ function DisabledTab({ label }: { label: string }): ReactNode {
 		<div className="sh-wspanel-guide sh-wspanel-guide--off">
 			<CircleAlert size={20} aria-hidden />
 			<p>{label}</p>
-			<p className="sh-wspanel-guide-sub">{t("needs host channel")}</p>
+			<p className="sh-wspanel-guide-sub">{t("settings.needsHostChannel")}</p>
 		</div>
 	);
 }

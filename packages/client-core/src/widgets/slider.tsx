@@ -67,7 +67,7 @@ export function SliderCard({
 			<Sparkline data={ys} domain={[0, 100]} height={90} strokeWidth={1.4} className="gui-widget-slider-plot" />
 
 			<SendChip
-				text={`${t("widget noise")} ${noise} / ${t("widget jitter")} ${jitter} / ${t("widget frequency")} ${freq} / ${t("widget amplitude")} ${amp}`}
+				text={`${t("settings.widgetNoise")} ${noise} / ${t("settings.widgetJitter")} ${jitter} / ${t("settings.widgetFrequency")} ${freq} / ${t("settings.widgetAmplitude")} ${amp}`}
 				onSend={sendPrompt}
 			/>
 		</div>

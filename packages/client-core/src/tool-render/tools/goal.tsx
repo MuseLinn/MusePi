@@ -34,9 +34,9 @@ function goalOf(details: Record<string, unknown> | null): GoalView | null {
 function describeOp(op: string | null): string {
 	switch (op) {
 		case "create":
-			return t("set");
+			return t("tools.set");
 		case "get":
-			return t("check");
+			return t("settings.check");
 		default:
 			return op ?? "?";
 	}
@@ -82,9 +82,9 @@ function fmtDuration(seconds: number): string {
 /** "12K / 100K tokens (88K left)" or "12K tokens" without a budget. */
 function tokensLine(goal: GoalView): string {
 	const used = fmtNum(goal.tokensUsed ?? 0);
-	if (goal.tokenBudget === null) return t("{count} tokens", { count: used });
+	if (goal.tokenBudget === null) return t("tools.tokensWithCount", { count: used });
 	const left = Math.max(0, goal.tokenBudget - (goal.tokensUsed ?? 0));
-	return t("{used} / {total} tokens ({left} left)", {
+	return t("tools.tokensWithUsedWithTotalWithLeft", {
 		used: used,
 		total: fmtNum(goal.tokenBudget),
 		left: fmtNum(left),
@@ -104,7 +104,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 			{objective !== null && objective.trim() !== "" && (
 				<span className="tv-muted">“{truncate(normalizeWs(objective), 64)}”</span>
 			)}
-			{budget !== null && <span className="tv-faint">{t("budget {value}", { value: fmtNum(budget) })}</span>}
+			{budget !== null && <span className="tv-faint">{t("tools.budgetWithValue", { value: fmtNum(budget) })}</span>}
 		</>
 	);
 }
@@ -120,24 +120,24 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<KvGrid>
-				<Kv k={t("op")}>{describeOp(op)}</Kv>
+				<Kv k={t("tools.op")}>{describeOp(op)}</Kv>
 				{goal && (
-					<Kv k={t("status")}>
+					<Kv k={t("tools.status")}>
 						<Badge tone={statusTone(goal.status)}>{goal.status}</Badge>
 					</Kv>
 				)}
-				{objective !== null && objective.trim() !== "" && <Kv k={t("objective")}>{objective.trim()}</Kv>}
+				{objective !== null && objective.trim() !== "" && <Kv k={t("tools.objective")}>{objective.trim()}</Kv>}
 				{hasTokens && goal ? (
-					<Kv k={t("tokens")}>{tokensLine(goal)}</Kv>
+					<Kv k={t("tools.tokens")}>{tokensLine(goal)}</Kv>
 				) : (
-					budgetArg !== null && <Kv k={t("budget")}>{t("{count} tokens", { count: fmtNum(budgetArg) })}</Kv>
+					budgetArg !== null && <Kv k={t("tools.budget")}>{t("tools.tokensWithCount", { count: fmtNum(budgetArg) })}</Kv>
 				)}
 				{goal !== null && goal.timeUsedSeconds !== null && goal.timeUsedSeconds > 0 && (
-					<Kv k={t("elapsed")}>{fmtDuration(goal.timeUsedSeconds)}</Kv>
+					<Kv k={t("tools.elapsed")}>{fmtDuration(goal.timeUsedSeconds)}</Kv>
 				)}
 			</KvGrid>
-			{details !== null && goal === null && !result?.isError && <Note tone="warn">{t("no active goal")}</Note>}
-			{report !== null && report !== "" && <Output text={report} title={t("Report")} maxLines={12} />}
+			{details !== null && goal === null && !result?.isError && <Note tone="warn">{t("tools.noActiveGoal")}</Note>}
+			{report !== null && report !== "" && <Output text={report} title={t("tools.report")} maxLines={12} />}
 			{(goal === null || result?.isError) && <ResultText result={result} maxLines={10} />}
 		</>
 	);

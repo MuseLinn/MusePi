@@ -336,7 +336,7 @@ export function BranchBar({
 		<div className="tr-branch">
 			<button type="button" className="tr-branch-bar" onClick={() => setOpen(v => !v)} aria-expanded={open}>
 				<span className="tr-branch-line" aria-hidden />
-				<span className="tr-branch-count">{t("this node has {count} branches", { count: String(count) })}</span>
+				<span className="tr-branch-count">{t("transcript.nodeHasBranchesWithCount", { count: String(count) })}</span>
 				<span className="tr-branch-line" aria-hidden />
 			</button>
 			{/* Kept mounted while closed so BOTH directions animate (the list is
@@ -345,7 +345,7 @@ export function BranchBar({
 			<div
 				className={`tr-branch-list${open ? " tr-branch-list--open" : ""}`}
 				role="listbox"
-				aria-label={t("switch branch")}
+				aria-label={t("transcript.switchBranch")}
 				aria-hidden={!open}
 				inert={!open}
 			>
@@ -489,8 +489,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("revert message")}
-							aria-label={t("revert message")}
+							title={t("general.revertMessage")}
+							aria-label={t("general.revertMessage")}
 							onClick={() => {
 								if (quoteText) onRevert(id, quoteText);
 							}}
@@ -502,8 +502,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("fork session from this message")}
-							aria-label={t("fork session from this message")}
+							title={t("general.forkSessionMessage")}
+							aria-label={t("general.forkSessionMessage")}
 							onClick={() => {
 								if (quoteText) onFork(id, quoteText);
 							}}
@@ -515,8 +515,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("copy message")}
-							aria-label={t("copy message")}
+							title={t("settings.copyMessage")}
+							aria-label={t("settings.copyMessage")}
 							onClick={() => {
 								play("press");
 								hapticTap();
@@ -532,8 +532,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("edit and resend")}
-							aria-label={t("edit and resend")}
+							title={t("settings.editResend")}
+							aria-label={t("settings.editResend")}
 							onClick={() => {
 								if (quoteText) onEdit(id, quoteText);
 							}}
@@ -545,8 +545,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("retry")}
-							aria-label={t("retry")}
+							title={t("settings.retry")}
+							aria-label={t("settings.retry")}
 							onClick={() => {
 								// Retry = regenerate THIS reply in place: truncate
 								// to just before it and re-run the agent — the old
@@ -565,8 +565,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("fork session from this message")}
-							aria-label={t("fork session from this message")}
+							title={t("general.forkSessionMessage")}
+							aria-label={t("general.forkSessionMessage")}
 							onClick={() => {
 								play("press");
 								hapticTap();
@@ -584,8 +584,8 @@ function Row({
 						<button
 							type="button"
 							className={`tr-action${speaking ? " tr-action--speaking" : ""}`}
-							title={speaking ? t("read aloud stop") : t("read aloud")}
-							aria-label={speaking ? t("read aloud stop") : t("read aloud")}
+							title={speaking ? t("settings.readAloudStop") : t("settings.readAloud")}
+							aria-label={speaking ? t("settings.readAloudStop") : t("settings.readAloud")}
 							onClick={() => {
 								play("press");
 								hapticTap();
@@ -605,8 +605,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("save as image")}
-							aria-label={t("save as image")}
+							title={t("settings.saveImage")}
+							aria-label={t("settings.saveImage")}
 							onClick={() => {
 								play("press");
 								hapticTap();
@@ -620,8 +620,8 @@ function Row({
 						<button
 							type="button"
 							className="tr-action"
-							title={t("quote and reply")}
-							aria-label={t("quote and reply")}
+							title={t("settings.quoteReply")}
+							aria-label={t("settings.quoteReply")}
 							onClick={() => {
 								play("press");
 								hapticTap();
@@ -830,7 +830,7 @@ function renderCustomMessage({
 		const from =
 			details !== null && typeof details === "object" && "from" in details && typeof details.from === "string"
 				? details.from
-				: t("unnamed device");
+				: t("settings.unnamedDevice");
 		return (
 			<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={timestamp}>
 				<MsgContent content={content} onPreviewImage={onPreviewImage} />
@@ -878,7 +878,7 @@ function renderCustomMessage({
 							<span className="tr-async-result-done" aria-hidden>
 								✓
 							</span>
-							<span className="tr-async-result-text">{t("Background job completed")}</span>
+							<span className="tr-async-result-text">{t("general.backgroundJobCompleted")}</span>
 							{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
 							<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
 							{typeof job.durationMs === "number" ? (
@@ -952,19 +952,19 @@ function renderCustomMessage({
 		return (
 			<Row kind="custom" gutter="" title={timestamp}>
 				<div className="tr-tool-registry" role="status">
-					<span className="tr-tool-registry-chip">{t("tools updated")}</span>
+					<span className="tr-tool-registry-chip">{t("general.toolsUpdated")}</span>
 					{added.length > 0 && (
 						<span className="tr-tool-registry-delta tr-tool-registry-delta--add">
-							{t("tools added {count}", { count: String(added.length) })}
+							{t("general.toolsAddedWithCount", { count: String(added.length) })}
 						</span>
 					)}
 					{removed.length > 0 && (
 						<span className="tr-tool-registry-delta tr-tool-registry-delta--remove">
-							{t("tools removed {count}", { count: String(removed.length) })}
+							{t("general.toolsRemovedWithCount", { count: String(removed.length) })}
 						</span>
 					)}
 					<span className="tr-tool-registry-names" title={[...added, ...removed].join(", ")}>
-						{t("tool registry names")}:{" "}
+						{t("general.toolRegistryNames")}:{" "}
 						{[...added.map(n => `+${n}`), ...removed.map(n => `−${n}`)].join(" ") || current.join(", ")}
 					</span>
 				</div>
@@ -1081,7 +1081,7 @@ const EntryRow = memo(function EntryRow({
 							<Row
 								kind="user"
 								id={entry.id}
-								gutter={userGutter ?? t("host")}
+								gutter={userGutter ?? t("settings.host")}
 								title={entry.timestamp}
 								turnStart
 								onQuote={onQuote}
@@ -1104,7 +1104,7 @@ const EntryRow = memo(function EntryRow({
 							<Row
 								kind="assistant"
 								id={entry.id}
-								gutter={agentGutter ?? t("agent")}
+								gutter={agentGutter ?? t("settings.agent")}
 								title={entry.timestamp}
 								onQuote={onQuote}
 								onRetry={onRetry}
@@ -1164,13 +1164,13 @@ const EntryRow = memo(function EntryRow({
 			case "compaction":
 				return (
 					<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
-						<span>{t("context compacted · {count} tokens", { count: fmtTokens(entry.tokensBefore) })}</span>
+						<span>{t("transcript.contextCompactedTokensWithCount", { count: fmtTokens(entry.tokensBefore) })}</span>
 					</div>
 				);
 			case "branch_summary":
 				return (
 					<div className="tr-divider" title={entry.summary}>
-						<span>{t("branch summary")}</span>
+						<span>{t("settings.branchSummary")}</span>
 					</div>
 				);
 			case "model_change":
@@ -2116,10 +2116,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					key="compacted-fold"
 					type="button"
 					className="tr-divider tr-compacted-fold"
-					title={t("show pre-compaction history")}
+					title={t("transcript.showPreCompactionHistory")}
 					onClick={() => setCompactedOpen(true)}
 				>
-					<span>{t("show pre-compaction history ({count})", { count: String(firstCompactionIdx) })}</span>
+					<span>{t("transcript.showPreCompactionHistoryWithCount", { count: String(firstCompactionIdx) })}</span>
 				</button>
 			);
 		}
@@ -2256,9 +2256,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// row, so it scrolls away with the work it describes instead of
 		// stranding a count at the top of a long turn.
 		const liveMoreLine = liveMoreHere ? (
-			<Row key={`live-more-${entry.id}`} kind="assistant" gutter={agentGutter ?? t("agent")}>
+			<Row key={`live-more-${entry.id}`} kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 				<div className="tr-live-more">
-					{t("⋯ {count} more lines", { count: String(liveTrim?.hiddenCount ?? 0) })}
+					{t("tools.moreLinesWithCount", { count: String(liveTrim?.hiddenCount ?? 0) })}
 				</div>
 			</Row>
 		) : null;
@@ -2267,12 +2267,12 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				{liveMoreLine}
 				{headerStandalone ? (
 					// Inside the message column, so it aligns with the reply.
-					<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+					<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 						{foldHeader}
 					</Row>
 				) : null}
 				{runSummaryHere ? (
-					<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+					<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 						{headerStandalone ? null : foldHeader}
 						<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
 					</Row>
@@ -2327,7 +2327,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		) : null;
 		const headerStandaloneRow = headerStandalone ? (
 			// Inside the message column, so it aligns with the reply.
-			<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+			<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 				{foldHeader}
 			</Row>
 		) : null;
@@ -2385,7 +2385,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			{entries.length === 0 &&
 				stream === null &&
 				!working &&
-				(emptySlot ?? <div className="tr-empty">{t("no activity yet")}</div>)}
+				(emptySlot ?? <div className="tr-empty">{t("transcript.noActivityYet")}</div>)}
 			{/* Slim sentinel at the top of the list: paging trigger only.
 			 *  Spacing above the mounted window comes from the virtual
 			 *  spacer below — the scrollbar now reflects the FULL loaded
@@ -2395,7 +2395,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			 *  leaving the user staring at a transcript that silently stops growing. */}
 			{historyBlocked && (
 				<div className="tr-window-blocked" role="status">
-					{t("older history unavailable")}
+					{t("settings.olderHistoryUnavailable")}
 				</div>
 			)}
 			<div ref={sentinelRef} className="tr-window-top" aria-hidden="true" />
@@ -2451,14 +2451,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			 * where the reply will land — instead of hanging off the
 			 * previous round's message. */}
 			{working && stream === null && lastUserTs !== undefined && !lastAssistantInRound && (
-				<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 					<div className="tr-ghost-working">
 						<WorkingLine start={lastUserTs} meta={modelLevelMeta(undefined, thinkingLevel)} />
 					</div>
 				</Row>
 			)}
 			{stream !== null && (
-				<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 					<AssistantBody
 						message={stream}
 						results={results}
@@ -2482,7 +2482,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				</Row>
 			)}
 			{tailTools.length > 0 && !hideToolActivity && (
-				<Row kind="assistant" gutter={stream === null ? (agentGutter ?? t("agent")) : ""}>
+				<Row kind="assistant" gutter={stream === null ? (agentGutter ?? t("settings.agent")) : ""}>
 					{tailTools.map(tool => (
 						<ToolCard
 							key={tool.toolCallId}
@@ -2511,8 +2511,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					type="button"
 					className="tr-back-bottom"
 					onClick={backToBottom}
-					aria-label={t("back to bottom")}
-					title={t("back to bottom")}
+					aria-label={t("transcript.backBottom")}
+					title={t("transcript.backBottom")}
 				>
 					<ArrowDown size={15} strokeWidth={2.2} />
 				</button>

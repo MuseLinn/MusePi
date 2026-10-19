@@ -81,8 +81,8 @@ export function ThinkingBlock({
 		<div className="tr-think">
 			<button type="button" className="tr-think-head" onClick={toggle}>
 				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
-				<span className={redacted ? undefined : "tr-think-label"}>{t("thinking")}</span>
-				{redacted ? t(" · redacted") : ""}
+				<span className={redacted ? undefined : "tr-think-label"}>{t("settings.thinking2")}</span>
+				{redacted ? t("transcript.redacted") : ""}
 			</button>
 			<div
 				ref={bodyRef}
@@ -90,7 +90,7 @@ export function ThinkingBlock({
 				style={collapseStyle(open)}
 			>
 				{redacted ? (
-					t("(redacted by provider)")
+					t("transcript.text")
 				) : shownSentences.length > 1 ? (
 					shownSentences.map((s, i) => (
 						// Sentences are anonymous text splits — the index is their identity.
@@ -106,7 +106,7 @@ export function ThinkingBlock({
 				)}
 				{thinkTruncated && (
 					<button type="button" className="tr-think-more" onClick={() => setShowAll(true)}>
-						{t("expand all")}（{sentences.length.toLocaleString()}）
+						{t("settings.expandAll")}（{sentences.length.toLocaleString()}）
 					</button>
 				)}
 			</div>
@@ -327,7 +327,7 @@ export function MsgContent({
 		if (typeof content === "string") return [];
 		return content
 			.filter((b): b is ImageContent => b.type === "image")
-			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("attachment") }));
+			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("settings.attachment") }));
 	}, [content]);
 	if (typeof content === "string") {
 		// ACP-mode `/usage` report (buildUsageReportText) renders as a card,
@@ -434,7 +434,7 @@ export function UserText({ text, plain, collapse }: { text: string; plain: boole
 					}
 				}}
 			>
-				{t(open ? "collapse" : "expand")}
+				{t(open ? "tools.collapse" : "tools.expand")}
 			</button>
 		</div>
 	);
@@ -458,7 +458,7 @@ export function UserMsgContent({
 		if (typeof content === "string") return [];
 		return content
 			.filter((b): b is ImageContent => b.type === "image")
-			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("attachment") }));
+			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("settings.attachment") }));
 	}, [content]);
 	if (typeof content === "string") return <UserText text={content} plain={plain} collapse={collapse} />;
 	return (
@@ -496,13 +496,13 @@ export function workingLabel(kind: "working" | "took", seconds: number): string 
 	const s = seconds % 60;
 	if (h > 0)
 		return kind === "working"
-			? t("working for {hours}h {minutes}m {seconds}s", { hours: h, minutes: m, seconds: s })
-			: t("took {hours}h {minutes}m {seconds}s", { hours: h, minutes: m, seconds: s });
+			? t("settings.workingHMSWithHoursWithMinutesWithSeconds", { hours: h, minutes: m, seconds: s })
+			: t("settings.tookHMSWithHoursWithMinutesWithSeconds", { hours: h, minutes: m, seconds: s });
 	if (m > 0)
 		return kind === "working"
-			? t("working for {minutes}m {seconds}s", { minutes: m, seconds: s })
-			: t("took {minutes}m {seconds}s", { minutes: m, seconds: s });
-	return kind === "working" ? t("working for {seconds}s", { seconds }) : t("took {seconds}s", { seconds });
+			? t("settings.workingMSWithMinutesWithSeconds", { minutes: m, seconds: s })
+			: t("settings.tookMSWithMinutesWithSeconds", { minutes: m, seconds: s });
+	return kind === "working" ? t("settings.workingSWithSeconds", { seconds }) : t("settings.tookSWithSeconds", { seconds });
 }
 
 /** `model · level` badge for the work-timer row — the model id plus the
@@ -591,19 +591,19 @@ export function RoundFoldHeader({
 		segments.push(
 			<span key="changes" className="tr-round-fold-changes">
 				<span className="tr-round-fold-changes-files">
-					{t("round changed {count}", { count: String(fold.filesChanged) })}
+					{t("transcript.roundChangedWithCount", { count: String(fold.filesChanged) })}
 				</span>
 				{fold.added > 0 && <span className="tr-round-fold-add">+{fold.added}</span>}
 				{fold.removed > 0 && <span className="tr-round-fold-remove">−{fold.removed}</span>}
 			</span>,
 		);
 	}
-	if (fold.exploreCount > 0) segments.push(<span key="explore">{t("explored the codebase")}</span>);
+	if (fold.exploreCount > 0) segments.push(<span key="explore">{t("transcript.exploredCodebase")}</span>);
 	if (fold.commandCount > 0) {
-		segments.push(<span key="cmds">{t("round commands {count}", { count: String(fold.commandCount) })}</span>);
+		segments.push(<span key="cmds">{t("transcript.roundCommandsWithCount", { count: String(fold.commandCount) })}</span>);
 	}
 	if (segments.length === 0 && fold.toolCount > 0) {
-		segments.push(<span key="tools">{t("round tools {count}", { count: String(fold.toolCount) })}</span>);
+		segments.push(<span key="tools">{t("transcript.roundToolsWithCount", { count: String(fold.toolCount) })}</span>);
 	}
 	return (
 		<button
@@ -618,7 +618,7 @@ export function RoundFoldHeader({
 			<span className="tr-round-fold-icon" aria-hidden>
 				<ChevronRight size={12} />
 			</span>
-			<span className="tr-round-fold-label">{t("activity")}</span>
+			<span className="tr-round-fold-label">{t("agents.activity")}</span>
 			<span className="tr-round-fold-bar" aria-hidden />
 			{segments.map((seg, i) => (
 				// segments are authored above, each with its own stable key —
@@ -637,8 +637,8 @@ export function RoundFoldHeader({
 					role="button"
 					tabIndex={0}
 					className="tr-round-fold-undo"
-					title={t("revert message")}
-					aria-label={t("revert message")}
+					title={t("general.revertMessage")}
+					aria-label={t("general.revertMessage")}
 					onClick={e => {
 						e.stopPropagation();
 						onRevert(fold.userId!, "");
@@ -674,16 +674,16 @@ export function ToolRunLine({
 }): ReactNode {
 	const segments: ReactNode[] = [];
 	if (run.reads > 0) {
-		segments.push(<span key="reads">{t("run read {count}", { count: String(run.reads) })}</span>);
+		segments.push(<span key="reads">{t("transcript.runReadWithCount", { count: String(run.reads) })}</span>);
 	}
 	if (run.edits > 0) {
-		segments.push(<span key="edits">{t("run edit {count}", { count: String(run.edits) })}</span>);
+		segments.push(<span key="edits">{t("transcript.runEditWithCount", { count: String(run.edits) })}</span>);
 	}
 	if (run.commands > 0) {
-		segments.push(<span key="cmds">{t("run command {count}", { count: String(run.commands) })}</span>);
+		segments.push(<span key="cmds">{t("transcript.runCommandWithCount", { count: String(run.commands) })}</span>);
 	}
 	if (run.other > 0) {
-		segments.push(<span key="other">{t("run other {count}", { count: String(run.other) })}</span>);
+		segments.push(<span key="other">{t("transcript.runOtherWithCount", { count: String(run.other) })}</span>);
 	}
 	return (
 		<button
@@ -717,7 +717,7 @@ export function TtsrBlock({ rules }: { rules: { name: string; description?: stri
 				<span className="tr-ttsr-icon" aria-hidden="true">
 					⚠
 				</span>
-				<span className="tr-ttsr-title">{t("rules injected")}</span>
+				<span className="tr-ttsr-title">{t("settings.rulesInjected")}</span>
 				<span className="tr-ttsr-names">{rules.map(r => r.name).join("、")}</span>
 				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
 			</button>
@@ -726,7 +726,7 @@ export function TtsrBlock({ rules }: { rules: { name: string; description?: stri
 				className={`tr-ttsr-body${open ? "" : " tr-ttsr-body--closed"}`}
 				style={collapseStyle(open)}
 			>
-				<div className="tr-ttsr-desc">{t("rules injected desc")}</div>
+				<div className="tr-ttsr-desc">{t("settings.rulesInjectedDesc")}</div>
 				{rules.map(r => (
 					<div key={r.name} className="tr-ttsr-rule">
 						<span className="tr-ttsr-rule-name">{r.name}</span>
@@ -767,10 +767,10 @@ export function AdvisorBlock({
 	return (
 		<div className="tr-advisor" role="status">
 			<button type="button" className="tr-advisor-head" onClick={onToggle} aria-expanded={open}>
-				<span className="tr-advisor-tag">{t("advisor")}</span>
+				<span className="tr-advisor-tag">{t("general.advisor")}</span>
 				<span className="tr-advisor-meta">
-					{t("advisor notes", { count: notes.length })}
-					{blockers > 0 ? ` · ${t("advisor blockers", { count: blockers })}` : ""}
+					{t("general.advisorNotes", { count: notes.length })}
+					{blockers > 0 ? ` · ${t("general.advisorBlockers", { count: blockers })}` : ""}
 				</span>
 				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
 			</button>
@@ -793,7 +793,7 @@ export function AdvisorBlock({
 						</div>
 					</div>
 				))}
-				{hidden > 0 ? <div className="tr-advisor-more">{t("advisor more", { count: hidden })}</div> : null}
+				{hidden > 0 ? <div className="tr-advisor-more">{t("general.advisorMore", { count: hidden })}</div> : null}
 			</div>
 		</div>
 	);
@@ -920,7 +920,7 @@ export function AssistantBody({
 					// Anonymous content blocks have no stable id — index is identity.
 					return (
 						<div key={`k${i}`} className="tr-think tr-think--pending" role="status">
-							<span className="tr-think-label">{t("thinking")}</span>
+							<span className="tr-think-label">{t("settings.thinking2")}</span>
 							<span className="tr-think-dots" aria-hidden>
 								<i />
 								<i />

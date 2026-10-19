@@ -177,10 +177,10 @@ export function SessionErrorDock({ entries, working, verifyTranscript }: Session
 	if (banner !== null) {
 		return (
 			<SessionErrorBanner
-				title={t("model error")}
+				title={t("general.modelError")}
 				raw={banner.reason}
 				meta={
-					banner.attempt === undefined ? undefined : t("retry attempt {count}", { count: String(banner.attempt) })
+					banner.attempt === undefined ? undefined : t("general.retryAttemptWithCount", { count: String(banner.attempt) })
 				}
 			/>
 		);
@@ -191,8 +191,8 @@ export function SessionErrorDock({ entries, working, verifyTranscript }: Session
 
 	return (
 		<SessionErrorBanner
-			title={t("no reply")}
-			raw={t("no reply detail")}
+			title={t("general.noReply")}
+			raw={t("general.noReplyDetail")}
 			action={
 				<button
 					type="button"
@@ -202,7 +202,7 @@ export function SessionErrorDock({ entries, working, verifyTranscript }: Session
 						void Promise.resolve(verifyTranscript()).then(() => setVerifiedKey(candidateKey));
 					}}
 				>
-					{t("check again")}
+					{t("general.checkAgain")}
 				</button>
 			}
 		/>

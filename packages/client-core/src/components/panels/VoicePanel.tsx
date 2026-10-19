@@ -66,7 +66,7 @@ function SupportRow({ label, supported }: { label: string; supported: boolean })
 				<div className="sh-vp-row-label">{label}</div>
 			</div>
 			<span className={`sh-vp-chip sh-vp-chip--${supported ? "ok" : "no"}`}>
-				{supported ? t("voice native status ok") : t("voice native status no")}
+				{supported ? t("settings.voiceNativeStatusOk") : t("settings.voiceNativeStatusNo")}
 			</span>
 		</div>
 	);
@@ -232,14 +232,14 @@ function ModelDownloadCard({ client }: { client: SessionClient }): ReactNode {
 	if (failed && !error) {
 		return (
 			<section className="sh-vp-section">
-				<p className="sh-vp-section-title">{t("speech models")}</p>
-				<p className="sh-vp-section-desc">{t("voice needs daemon backend")}</p>
+				<p className="sh-vp-section-title">{t("settings.speechModels")}</p>
+				<p className="sh-vp-section-desc">{t("composer.voiceNeedsDaemonBackend")}</p>
 			</section>
 		);
 	}
 	return (
 		<section className="sh-vp-section">
-			<p className="sh-vp-section-title">{t("speech models")}</p>
+			<p className="sh-vp-section-title">{t("settings.speechModels")}</p>
 			{models === null && <p className="sh-vp-section-desc">…</p>}
 			{models?.map(m => {
 				const running = active?.modelKey === m.key;
@@ -247,7 +247,7 @@ function ModelDownloadCard({ client }: { client: SessionClient }): ReactNode {
 					<div key={m.key} className="sh-vp-row">
 						<div className="min-w-0 flex-1">
 							<div className="sh-vp-row-label">{m.label}</div>
-							{m.cached && !running && <div className="sh-vp-row-desc">{t("model ready offline")}</div>}
+							{m.cached && !running && <div className="sh-vp-row-desc">{t("settings.modelReadyOffline")}</div>}
 							{running && (
 								<>
 									<div className="sh-vp-row-desc">
@@ -270,15 +270,15 @@ function ModelDownloadCard({ client }: { client: SessionClient }): ReactNode {
 							// RPC returned) ⇒ no percentage to show.
 							<span className="sh-vp-chip">
 								{active && (active.percent > 0 || active.total > 0)
-									? t("voice model percent", { percent: Math.round(active.percent) })
-									: t("voice model downloading")}
+									? t("settings.voiceModelPercent", { percent: Math.round(active.percent) })
+									: t("settings.voiceModelDownloading")}
 							</span>
 						) : m.cached ? (
 							<span className="sh-vp-chip sh-vp-chip--ok">✓</span>
 						) : (
 							<button type="button" className="sh-btn sh-vp-dl" onClick={() => download(m.key)}>
 								<Download size={12} aria-hidden />
-								<span>{t("download")}</span>
+								<span>{t("settings.download")}</span>
 							</button>
 						)}
 					</div>
@@ -286,7 +286,7 @@ function ModelDownloadCard({ client }: { client: SessionClient }): ReactNode {
 			})}
 			{error && (
 				<p className="sh-vp-note sh-vp-note--err">
-					{models?.find(m => m.key === error.modelKey)?.label ?? t("voice model download failed")}: {error.message}
+					{models?.find(m => m.key === error.modelKey)?.label ?? t("settings.voiceModelDownloadFailed")}: {error.message}
 				</p>
 			)}
 		</section>
@@ -348,7 +348,7 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 		}
 		setTtsResult("idle");
 		ttsPendingRef.current = true;
-		tts.speak(t("speech test phrase"));
+		tts.speak(t("settings.speechTestPhrase"));
 	}, [tts, ttsSnap.phase]);
 
 	// STT test: record ~3s (manual re-tap stops early), then transcribe.
@@ -415,25 +415,25 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 	return (
 		<div className="sh-vp">
 			<div className="sh-panel-head">
-				<h2 className="sh-panel-title">{t("voice")}</h2>
-				<span className="sh-panel-muted">{t("voice input output")}</span>
+				<h2 className="sh-panel-title">{t("settings.voice")}</h2>
+				<span className="sh-panel-muted">{t("settings.voiceInputOutput")}</span>
 			</div>
 
 			<section className="sh-vp-section">
-				<p className="sh-vp-section-title">{t("voice output engine")}</p>
+				<p className="sh-vp-section-title">{t("settings.voiceOutputEngine")}</p>
 				<SegmentGroup
 					options={ENGINES}
 					value={ttsSnap.engine}
 					onChange={id => tts.setEngine(id)}
-					ariaLabel={t("voice output engine")}
+					ariaLabel={t("settings.voiceOutputEngine")}
 				/>
-				{ttsSnap.engine === "auto" && <p className="sh-vp-section-desc">{t("voice engine auto desc")}</p>}
+				{ttsSnap.engine === "auto" && <p className="sh-vp-section-desc">{t("settings.voiceEngineAutoDesc")}</p>}
 			</section>
 
 			<section className="sh-vp-section">
-				<p className="sh-vp-section-title">{t("voice output voice")}</p>
-				<p className="sh-vp-section-desc">{t("voice output description")}</p>
-				<div className="sh-vp-chips" role="radiogroup" aria-label={t("voice output voice")}>
+				<p className="sh-vp-section-title">{t("settings.voiceOutputVoice")}</p>
+				<p className="sh-vp-section-desc">{t("settings.voiceOutputDescription")}</p>
+				<div className="sh-vp-chips" role="radiogroup" aria-label={t("settings.voiceOutputVoice")}>
 					<span
 						className={`sh-vp-voice${ttsSnap.voice === "" ? " sh-vp-voice--on" : ""}`}
 						role="radio"
@@ -441,7 +441,7 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 						onClick={() => tts.setVoice("")}
 						onKeyDown={e => e.key === "Enter" && tts.setVoice("")}
 					>
-						{t("voice default")}
+						{t("settings.voiceDefault")}
 					</span>
 					{KOKORO_VOICES.map(v => (
 						<span
@@ -456,11 +456,11 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 							<button
 								type="button"
 								className="sh-vp-voice-play"
-								aria-label={`${t("voice preview")}: ${v.label}`}
-								title={t("voice preview")}
+								aria-label={`${t("settings.voicePreview")}: ${v.label}`}
+								title={t("settings.voicePreview")}
 								onClick={e => {
 									e.stopPropagation();
-									tts.speak(t("voice output sample"), undefined, { voice: v.id });
+									tts.speak(t("settings.voiceOutputSample"), undefined, { voice: v.id });
 								}}
 							>
 								<Play size={10} aria-hidden />
@@ -472,8 +472,8 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 
 			{ttsSnap.engine === "native" && sysVoices.length > 0 && (
 				<section className="sh-vp-section">
-					<p className="sh-vp-section-title">{t("voice native voices")}</p>
-					<div className="sh-vp-chips" role="radiogroup" aria-label={t("voice native voices")}>
+					<p className="sh-vp-section-title">{t("settings.voiceNativeVoices")}</p>
+					<div className="sh-vp-chips" role="radiogroup" aria-label={t("settings.voiceNativeVoices")}>
 						<span
 							className={`sh-vp-voice${ttsSnap.nativeVoice === "" ? " sh-vp-voice--on" : ""}`}
 							role="radio"
@@ -481,7 +481,7 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 							onClick={() => tts.setNativeVoice("")}
 							onKeyDown={e => e.key === "Enter" && tts.setNativeVoice("")}
 						>
-							{t("voice system default")}
+							{t("settings.voiceSystemDefault")}
 						</span>
 						{sysVoices.map(v => (
 							<span
@@ -501,7 +501,7 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 
 			<section className="sh-vp-section">
 				<div className="sh-vp-row">
-					<div className="sh-vp-row-label">{t("voice output rate")}</div>
+					<div className="sh-vp-row-label">{t("settings.voiceOutputRate")}</div>
 					<span className="sh-vp-rate-value">×{ttsSnap.rate.toFixed(1)}</span>
 				</div>
 				<input
@@ -511,81 +511,81 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 					max={2}
 					step={0.1}
 					value={ttsSnap.rate}
-					aria-label={t("voice output rate")}
+					aria-label={t("settings.voiceOutputRate")}
 					onChange={e => tts.setRate(Number.parseFloat(e.target.value))}
 				/>
 			</section>
 
 			<section className="sh-vp-section">
-				<p className="sh-vp-section-title">{t("voice input language")}</p>
+				<p className="sh-vp-section-title">{t("settings.voiceInputLanguage")}</p>
 				<SegmentGroup
 					options={STT_LANGS}
 					value={sttLang}
 					onChange={pickSttLang}
-					ariaLabel={t("voice input language")}
+					ariaLabel={t("settings.voiceInputLanguage")}
 				/>
-				<p className="sh-vp-section-desc">{t("voice input description")}</p>
+				<p className="sh-vp-section-desc">{t("settings.voiceInputDescription")}</p>
 			</section>
 
 			<ModelDownloadCard client={client} />
 
 			<section className="sh-vp-section">
-				<p className="sh-vp-section-title">{t("speech test")}</p>
+				<p className="sh-vp-section-title">{t("settings.speechTest")}</p>
 				<p className="sh-vp-section-desc">
-					{t("speech test hint")} — {t("speech test local note")}
+					{t("settings.speechTestHint")} — {t("settings.speechTestLocalNote")}
 				</p>
 				<div className="sh-vp-actions">
-					<button type="button" className="sh-btn" onClick={runTtsTest} title={t("speech test tts title")}>
+					<button type="button" className="sh-btn" onClick={runTtsTest} title={t("settings.speechTestTtsTitle")}>
 						<Volume2 size={13} aria-hidden />
-						<span>{ttsSnap.phase !== "idle" ? t("read aloud stop") : t("speech test tts")}</span>
+						<span>{ttsSnap.phase !== "idle" ? t("settings.readAloudStop") : t("settings.speechTestTts")}</span>
 					</button>
-					<button type="button" className="sh-btn" onClick={runSttTest} title={t("speech test stt title")}>
+					<button type="button" className="sh-btn" onClick={runSttTest} title={t("settings.speechTestSttTitle")}>
 						<Mic size={13} aria-hidden />
-						<span>{sttState === "recording" ? t("voice recording stop") : t("speech test stt")}</span>
+						<span>{sttState === "recording" ? t("settings.voiceRecordingStop") : t("settings.speechTestStt")}</span>
 					</button>
 				</div>
-				{ttsSnap.phase === "loading" && <p className="sh-vp-note">{t("voice output testing…")}</p>}
-				{ttsResult === "ok" && <p className="sh-vp-note sh-vp-note--ok">{t("speech test tts ok")}</p>}
+				{ttsSnap.phase === "loading" && <p className="sh-vp-note">{t("settings.voiceOutputTesting")}</p>}
+				{ttsResult === "ok" && <p className="sh-vp-note sh-vp-note--ok">{t("settings.speechTestTtsOk")}</p>}
 				{ttsResult === "error" && (
 					<p className="sh-vp-note sh-vp-note--err">
-						{t("voice output unavailable")}
+						{t("settings.voiceOutputUnavailable")}
 						{ttsSnap.error !== null ? ` — ${ttsSnap.error}` : ""}
 					</p>
 				)}
-				{sttState === "recording" && <p className="sh-vp-note">{t("recording…")}</p>}
-				{sttState === "transcribing" && <p className="sh-vp-note">{t("voice transcribing")}</p>}
+				{sttState === "recording" && <p className="sh-vp-note">{t("settings.recording")}</p>}
+				{sttState === "transcribing" && <p className="sh-vp-note">{t("settings.voiceTranscribing")}</p>}
 				{sttState === "ok" && (
 					<p className="sh-vp-note sh-vp-note--ok">
-						{t("speech test stt ok")}: “{sttResult || "—"}”
+						{t("settings.speechTestSttOk")}: “{sttResult || "—"}”
 					</p>
 				)}
 				{sttState === "error" && (
-					<p className="sh-vp-note sh-vp-note--err">{sttError || t("voice needs daemon backend")}</p>
+					<p className="sh-vp-note sh-vp-note--err">{sttError || t("composer.voiceNeedsDaemonBackend")}</p>
 				)}
 			</section>
 
 			<section className="sh-vp-section">
 				<div className="sh-vp-row">
 					<div className="min-w-0 flex-1">
-						<div className="sh-vp-row-label">{t("voice output auto read")}</div>
-						<div className="sh-vp-row-desc">{t("voice output description")}</div>
+						<div className="sh-vp-row-label">{t("settings.voiceOutputAutoRead")}</div>
+						<div className="sh-vp-row-desc">{t("settings.voiceOutputDescription")}</div>
 					</div>
 					<button
 						type="button"
 						className={`sh-btn${ttsSnap.autoRead ? " sh-vp-toggle--on" : ""}`}
 						onClick={() => tts.toggleAutoRead()}
 						aria-pressed={ttsSnap.autoRead}
-						title={t("voice output auto read")}
+						title={t("settings.voiceOutputAutoRead")}
 					>
-						{ttsSnap.autoRead ? t("on") : t("off")}
+						{ttsSnap.autoRead ? t("settings.on") : t("settings.off")}
 					</button>
 				</div>
 			</section>
 
 			<section className="sh-vp-section">
-				<p className="sh-vp-section-title">{t("voice input")}</p>
-				<SupportRow label={t("voice native stt")} supported={support.recognition} />
-				<SupportRow label={t("voice native tts")} supported={support.synthesis} />
+				<p className="sh-vp-section-title">{t("settings.voiceInput")}</p>
+				<SupportRow label={t("settings.voiceNativeStt")} supported={support.recognition} />
+				<SupportRow label={t("settings.voiceNativeTts")} supported={support.synthesis} />
 			</section>
 		</div>
 	);

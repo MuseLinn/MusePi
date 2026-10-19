@@ -39,7 +39,7 @@ function resolvePairCodeOnLan(code: string, host: string): Promise<string> {
 		const ws = new WebSocket(url);
 		const timer = setTimeout(() => {
 			ws.close();
-			reject(new Error(t("pair code timed out — check the address")));
+			reject(new Error(t("settings.pairCodeTimedOut")));
 		}, 6000);
 		ws.onopen = () => ws.send(JSON.stringify({ method: "pair.resolve", params: { code } }));
 		ws.onmessage = e => {
@@ -51,14 +51,14 @@ function resolvePairCodeOnLan(code: string, host: string): Promise<string> {
 					error?: { message?: string };
 				};
 				if (msg.result?.webLink) resolve(msg.result.webLink);
-				else reject(new Error(msg.error?.message ?? t("invalid or expired pair code")));
+				else reject(new Error(msg.error?.message ?? t("settings.invalidExpiredPairCode")));
 			} catch {
-				reject(new Error(t("invalid pair response")));
+				reject(new Error(t("settings.invalidPairResponse")));
 			}
 		};
 		ws.onerror = () => {
 			clearTimeout(timer);
-			reject(new Error(t("cannot reach the computer — same Wi-Fi?")));
+			reject(new Error(t("settings.cannotReachComputerSame")));
 		};
 	});
 }
@@ -148,11 +148,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		e.preventDefault();
 		const trimmed = link.trim();
 		if (!trimmed) {
-			setLocalError(t("paste a join link first"));
+			setLocalError(t("shell.pasteJoinLinkFirst"));
 			return;
 		}
 		setLocalError(null);
-		connect(trimmed, name.trim() || t("my phone"));
+		connect(trimmed, name.trim() || t("settings.myPhone"));
 	};
 
 	const skip = (): void => {
@@ -195,7 +195,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 
 	const onScanResult = (value: string): void => {
 		setScanning(false);
-		connect(value, name.trim() || t("my phone"));
+		connect(value, name.trim() || t("settings.myPhone"));
 	};
 
 	const onScanCancel = (): void => {
@@ -207,7 +207,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		const code = pairCode.trim();
 		const host = pairHost.trim();
 		if (!code || !host) {
-			setLocalError(t("enter the pair code and computer address"));
+			setLocalError(t("settings.enterPairCodeComputer"));
 			return;
 		}
 		setPairBusy(true);
@@ -216,7 +216,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 			const webLink = await resolvePairCodeOnLan(code, host);
 			localStorage.setItem(PAIR_HOST_KEY, host);
 			void secureSet(PAIR_HOST_KEY, host);
-			connect(webLink, name.trim() || t("my phone"));
+			connect(webLink, name.trim() || t("settings.myPhone"));
 		} catch (err) {
 			setLocalError(err instanceof Error ? err.message : String(err));
 			haptic([20, 60, 20]);
@@ -239,21 +239,21 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					<div className="sh-connect-head">
 						<div className="sh-lockup">
 							<span className="sh-lockup-mark" aria-hidden="true" />
-							<span className="sh-lockup-pi">π</span> <BlurText text={t("musepi collab")} />
+							<span className="sh-lockup-pi">π</span> <BlurText text={t("shell.musepiCollab")} />
 						</div>
 						<ThemeToggle />
 						<AccentToggle />
 						<LanguageToggle />
 					</div>
 					<div className="sh-connect-sub">
-						<ShinyText text={t("live agent session, in your browser")} speed={3.4} spread={120} />
+						<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
 					</div>
 					<p className="sh-connect-empty-text">
-						{t("not connected yet — connect to a computer to view sessions")}
+						{t("settings.notConnectedYetConnect")}
 					</p>
 					{recent.length > 0 && (
 						<div className="sh-connect-recent">
-							<span className="sh-field-label">{t("recent connections")}</span>
+							<span className="sh-field-label">{t("settings.recentConnections")}</span>
 							{recent.map(r => (
 								<div key={r.link} className="sh-connect-recent-item">
 									<button
@@ -268,7 +268,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									<button
 										type="button"
 										className="sh-btn sh-btn-icon sh-connect-recent-rm"
-										title={t("remove")}
+										title={t("general.remove")}
 										onClick={() => {
 											removeConnection(r.link);
 											setRecent(loadConnections());
@@ -281,7 +281,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 						</div>
 					)}
 					<button type="button" className="sh-btn sh-btn-primary sh-connect-submit" onClick={returnToGuide}>
-						{t("connect to a computer")}
+						{t("settings.connectComputer")}
 					</button>
 				</div>
 			</div>
@@ -297,23 +297,23 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 				<div className="sh-connect-head">
 					<div className="sh-lockup">
 						<span className="sh-lockup-mark" aria-hidden="true" />
-						<span className="sh-lockup-pi">π</span> <BlurText text={t("musepi collab")} />
+						<span className="sh-lockup-pi">π</span> <BlurText text={t("shell.musepiCollab")} />
 					</div>
 					<ThemeToggle />
 					<AccentToggle />
 					<LanguageToggle />
 				</div>
 				<div className="sh-connect-sub">
-					<ShinyText text={t("connect to a computer on your network")} speed={3.4} spread={120} />
+					<ShinyText text={t("settings.connectComputerYourNetwork")} speed={3.4} spread={120} />
 				</div>
 				{offline && (
 					<div className="sh-connect-offline" role="status">
-						{t("offline — showing cached content, connecting needs a network")}
+						{t("settings.offlineShowingCached.info")}
 					</div>
 				)}
 				{recent.length > 0 && (
 					<div className="sh-connect-recent">
-						<span className="sh-field-label">{t("recent connections")}</span>
+						<span className="sh-field-label">{t("settings.recentConnections")}</span>
 						{recent.map(r => (
 							<div key={r.link} className="sh-connect-recent-item">
 								<button
@@ -328,7 +328,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 								<button
 									type="button"
 									className="sh-btn sh-btn-icon sh-connect-recent-rm"
-									title={t("remove")}
+									title={t("general.remove")}
 									onClick={() => {
 										removeConnection(r.link);
 										setRecent(loadConnections());
@@ -351,8 +351,8 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					>
 						<span className="sh-connect-method-ico">▣</span>
 						<span className="sh-connect-method-body">
-							<span className="sh-connect-method-title">{t("scan the QR code")}</span>
-							<span className="sh-connect-method-desc">{t("scan the desktop share QR with your camera")}</span>
+							<span className="sh-connect-method-title">{t("settings.scanQrCode")}</span>
+							<span className="sh-connect-method-desc">{t("settings.scanDesktopShareQr")}</span>
 						</span>
 					</button>
 				)}
@@ -369,9 +369,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					>
 						<span className="sh-connect-method-ico">⌘</span>
 						<span className="sh-connect-method-body">
-							<span className="sh-connect-method-title">{t("pair code")}</span>
+							<span className="sh-connect-method-title">{t("settings.pairCode")}</span>
 							<span className="sh-connect-method-desc">
-								{t("enter the 6-digit code from the desktop share panel")}
+								{t("settings.enter6DigitCode")}
 							</span>
 						</span>
 						<span className="sh-connect-method-chev" aria-hidden="true">
@@ -408,7 +408,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									type="text"
 									value={pairHost}
 									onChange={e => setPairHost(e.target.value)}
-									placeholder={t("computer address (192.168.x.x)")}
+									placeholder={t("settings.computerAddress")}
 									autoComplete="off"
 									spellCheck={false}
 								/>
@@ -418,11 +418,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									disabled={pairBusy || !pairCode.trim() || !pairHost.trim()}
 									data-morph-id="composer-send"
 								>
-									{pairBusy ? t("connecting…") : t("pair")}
+									{pairBusy ? t("settings.connecting2") : t("settings.pair")}
 								</button>
 							</div>
 							<p className="sh-field-hint">
-								{t("no address shown? share with a public tunnel and scan the link instead")}
+								{t("settings.noAddressShown.info")}
 							</p>
 						</form>
 					</div>
@@ -440,8 +440,8 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					>
 						<span className="sh-connect-method-ico">🔗</span>
 						<span className="sh-connect-method-body">
-							<span className="sh-connect-method-title">{t("paste a join link")}</span>
-							<span className="sh-connect-method-desc">{t("ws://host:port/r/room.key")}</span>
+							<span className="sh-connect-method-title">{t("settings.pasteJoinLink")}</span>
+							<span className="sh-connect-method-desc">{t("shell.wsHostPortR")}</span>
 						</span>
 						<span className="sh-connect-method-chev" aria-hidden="true">
 							›
@@ -459,19 +459,19 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 								type="text"
 								value={link}
 								onChange={e => setLink(e.target.value)}
-								placeholder={t("paste a /collab link from any musepi session")}
+								placeholder={t("shell.pasteCollabLinkAny")}
 								spellCheck={false}
 								autoComplete="off"
 								data-morph-id="composer-input"
 							/>
 							<label className="sh-field">
-								<span className="sh-field-label">{t("display name")}</span>
+								<span className="sh-field-label">{t("shell.displayName")}</span>
 								<input
 									className="sh-input"
 									type="text"
 									value={name}
 									onChange={e => setName(e.target.value)}
-									placeholder={t("my phone")}
+									placeholder={t("settings.myPhone")}
 									spellCheck={false}
 									autoComplete="off"
 									maxLength={32}
@@ -482,7 +482,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 								type="submit"
 								data-morph-id="composer-send"
 							>
-								{t("Connect")}
+								{t("settings.connect")}
 							</button>
 						</form>
 					</div>
@@ -494,7 +494,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					</div>
 				)}
 				<button type="button" className="sh-connect-skip" onClick={skip}>
-					{t("skip for now")}
+					{t("settings.skipNow")}
 				</button>
 			</div>
 			{scanning && <QrScanner onCancel={onScanCancel} onResult={onScanResult} />}

@@ -27,7 +27,7 @@ export function GalleryCard({
 	);
 	const [active, setActive] = useState(0);
 	if (items.length === 0) {
-		return <div className="gui-widget-gallery-empty">{t("widget gallery empty")}</div>;
+		return <div className="gui-widget-gallery-empty">{t("settings.widgetGalleryEmpty")}</div>;
 	}
 	return (
 		<div className="gui-widget-gallery">

@@ -44,14 +44,14 @@ export function CalcCard({
 					className={`gui-widget-calc-toggle${mode === "pre" ? " gui-widget-calc-toggle--active" : ""}`}
 					onClick={() => update({ mode: "pre" })}
 				>
-					{t("widget pre-tax")}
+					{t("settings.widgetPreTax")}
 				</button>
 				<button
 					type="button"
 					className={`gui-widget-calc-toggle${mode === "post" ? " gui-widget-calc-toggle--active" : ""}`}
 					onClick={() => update({ mode: "post" })}
 				>
-					{t("widget post-tax")}
+					{t("settings.widgetPostTax")}
 				</button>
 			</div>
 			<input
@@ -64,41 +64,41 @@ export function CalcCard({
 			<div className="gui-widget-calc-bar">
 				<div className="gui-widget-calc-bar-fill" style={{ width: `${pct}%` }} />
 				<span className="gui-widget-calc-bar-label">
-					{t("widget take-home")} {pct.toFixed(1)}%
+					{t("settings.widgetTakeHome")} {pct.toFixed(1)}%
 				</span>
 			</div>
 			<div className="gui-widget-calc-grid">
 				<div className="gui-widget-calc-cell">
-					<span className="gui-widget-calc-cell-label">{t("widget gross")}</span>
+					<span className="gui-widget-calc-cell-label">{t("settings.widgetGross")}</span>
 					<span className="gui-widget-calc-cell-val">{r.gross.toFixed(2)}</span>
 				</div>
 				<div className="gui-widget-calc-cell gui-widget-calc-cell--tax">
-					<span className="gui-widget-calc-cell-label">{t("widget tax")}</span>
+					<span className="gui-widget-calc-cell-label">{t("settings.widgetTax")}</span>
 					<span className="gui-widget-calc-cell-val">{r.tax.toFixed(2)}</span>
 				</div>
 				<div className="gui-widget-calc-cell gui-widget-calc-cell--net">
-					<span className="gui-widget-calc-cell-label">{t("widget net")}</span>
+					<span className="gui-widget-calc-cell-label">{t("settings.widgetNet")}</span>
 					<span className="gui-widget-calc-cell-val">{r.net.toFixed(2)}</span>
 				</div>
 				<div className="gui-widget-calc-cell">
-					<span className="gui-widget-calc-cell-label">{t("widget rate")}</span>
+					<span className="gui-widget-calc-cell-label">{t("settings.widgetRate")}</span>
 					<span className="gui-widget-calc-cell-val">{r.rate.toFixed(2)}%</span>
 				</div>
 			</div>
 			<div className="gui-widget-calc-rules">
-				<div className="gui-widget-calc-rules-title">{t("widget rules")}</div>
+				<div className="gui-widget-calc-rules-title">{t("settings.widgetRules")}</div>
 				<div className="gui-widget-calc-rule">
-					<span>{t("widget taxable")}</span>
-					<span className="gui-widget-calc-rule-val">{t("widget income minus 800")}</span>
+					<span>{t("settings.widgetTaxable")}</span>
+					<span className="gui-widget-calc-rule-val">{t("settings.widgetIncomeMinus800")}</span>
 				</div>
 				<div className="gui-widget-calc-rule">
-					<span>{t("widget rate label")}</span>
+					<span>{t("settings.widgetRateLabel")}</span>
 					<span className="gui-widget-calc-rule-val">20%</span>
 				</div>
 			</div>
 
 			<SendChip
-				text={`${t("widget gross")} ${r.gross.toFixed(2)} → ${t("widget net")} ${r.net.toFixed(2)}（${t("widget rate")} ${r.rate.toFixed(1)}%）`}
+				text={`${t("settings.widgetGross")} ${r.gross.toFixed(2)} → ${t("settings.widgetNet")} ${r.net.toFixed(2)}（${t("settings.widgetRate")} ${r.rate.toFixed(1)}%）`}
 				onSend={sendPrompt}
 			/>
 		</div>

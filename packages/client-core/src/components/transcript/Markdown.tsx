@@ -2,7 +2,13 @@ import { Marked } from "@musepi/pi-utils/marked";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { t } from "../../i18n/index.js";
+import { type TranslationKey, t } from "../../i18n/index.js";
+
+const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
+	"blocker": "general.advisoryBlocker",
+	"concern": "general.advisoryConcern",
+	"nit": "general.advisoryNit",
+};
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
 import { useDeepScrollShadow, useScrollShadow } from "../../lib/scroll-shadow";
@@ -82,9 +88,9 @@ const md = new Marked({
 					out.push(
 						`<aside class="tr-advisory tr-advisory--${sev}">` +
 							`<div class="tr-advisory-head">` +
-							`<span class="tr-advisory-tag">${t("advisor")}</span>` +
+							`<span class="tr-advisory-tag">${t("general.advisor")}</span>` +
 							(advisor ? `<span class="tr-advisory-name">${escapeHtml(advisor)}</span>` : "") +
-							`<span class="tr-advisory-sev">${t(`advisory ${sev}`)}</span>` +
+							`<span class="tr-advisory-sev">${t(ADVISORY_SEV_KEY[sev] ?? sev)}</span>` +
 							`</div>` +
 							`<div class="tr-advisory-note">${note}</div>` +
 							`</aside>`,
@@ -120,7 +126,7 @@ const md = new Marked({
 		// chat setting) and never reach the highlighter.
 		code({ text, lang, escaped }) {
 			const l = (lang ?? "").trim().toLowerCase();
-			if (l === "mermaid" || l === "mmd") {
+			if (l === "settings.mermaid" || l === "mmd") {
 				return renderMermaidHtml(text, mermaidMode());
 			}
 			const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
@@ -137,8 +143,8 @@ const md = new Marked({
 			// source even after tree-sitter spans replace the body.
 			const head =
 				`<div class="tr-code-head">` +
-				`<span class="tr-code-lang">${lang ? escapeHtml(lang) : "text"}</span>` +
-				`<button type="button" class="tr-code-copy" data-copy-hash="${hash}">${t("copy")}</button>` +
+				`<span class="tr-code-lang">${lang ? escapeHtml(lang) : "tools.text"}</span>` +
+				`<button type="button" class="tr-code-copy" data-copy-hash="${hash}">${t("settings.copy")}</button>` +
 				`</div>`;
 			return `<div class="tr-code">${head}<pre><code${langAttr} data-hl-hash="${hash}">${lines}\n</code></pre></div>`;
 		},
@@ -191,7 +197,7 @@ function tableToMarkdown({ headers, rows }: { headers: string[]; rows: string[][
 /**
  * Table toolbar HTML: hover-revealed copy
  * (CSV/TSV/Markdown) + download (CSV/Markdown) menus. The copy button
- * shares the code-block hash scheme so its label flips to "copied"; menu
+ * shares the code-block hash scheme so its label flips to "settings.copied"; menu
  * items are delegated in the component below.
  */
 function tableToolbarHtml(hash: string): string {
@@ -199,18 +205,18 @@ function tableToolbarHtml(hash: string): string {
 	return (
 		`<div class="tr-table-bar">` +
 		menuWrap(
-			`<button type="button" class="tr-table-btn tr-code-copy" data-copy-hash="${hash}">${t("copy")}</button>` +
+			`<button type="button" class="tr-table-btn tr-code-copy" data-copy-hash="${hash}">${t("settings.copy")}</button>` +
 				`<span class="tr-table-menu" role="menu">` +
 				`<button type="button" role="menuitem" data-table-copy="csv">CSV</button>` +
 				`<button type="button" role="menuitem" data-table-copy="tsv">TSV</button>` +
-				`<button type="button" role="menuitem" data-table-copy="markdown">Markdown</button>` +
+				`<button type="button" role="menuitem" data-table-copy="settings.markdown">Markdown</button>` +
 				`</span>`,
 		) +
 		menuWrap(
-			`<button type="button" class="tr-table-btn tr-code-copy">${t("download")}</button>` +
+			`<button type="button" class="tr-table-btn tr-code-copy">${t("settings.download")}</button>` +
 				`<span class="tr-table-menu" role="menu">` +
 				`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
-				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>` +
+				`<button type="button" role="menuitem" data-table-download="settings.markdown">Markdown</button>` +
 				`</span>`,
 		) +
 		`</div>`
@@ -571,35 +577,35 @@ function MermaidLightbox({
 	};
 	return createPortal(
 		<div className="tr-img-lb tr-mm-lb" onClick={onClose}>
-			<button type="button" className="tr-img-lb-x" aria-label={t("close")} title={t("close")} onClick={onClose}>
+			<button type="button" className="tr-img-lb-x" aria-label={t("settings.close")} title={t("settings.close")} onClick={onClose}>
 				✕
 			</button>
 			<div className="tr-mm-lb-body" onClick={e => e.stopPropagation()}>
 				<div className="tr-mm-lb-toolbar">
-					<button type="button" className="tr-mm-lb-btn" title={t("zoom out")} onClick={() => step(-1)}>
+					<button type="button" className="tr-mm-lb-btn" title={t("settings.zoomOut")} onClick={() => step(-1)}>
 						−
 					</button>
 					<span className="tr-mm-lb-zoom">{Math.round(zoom * 100)}%</span>
-					<button type="button" className="tr-mm-lb-btn" title={t("zoom in")} onClick={() => step(1)}>
+					<button type="button" className="tr-mm-lb-btn" title={t("settings.zoomIn")} onClick={() => step(1)}>
 						+
 					</button>
 					<button
 						type="button"
 						className="tr-mm-lb-btn"
-						title={t("copy")}
+						title={t("settings.copy")}
 						onClick={() => {
 							if (value.source) void navigator.clipboard.writeText(value.source).catch(() => {});
 						}}
 					>
-						{t("copy")}
+						{t("settings.copy")}
 					</button>
 					<button
 						type="button"
 						className="tr-mm-lb-btn"
-						title={t("download")}
+						title={t("settings.download")}
 						onClick={() => downloadBlob("diagram.svg", value.html, "image/svg+xml;charset=utf-8")}
 					>
-						{t("download")}
+						{t("settings.download")}
 					</button>
 				</div>
 				<div ref={lbScrollRef} className="tr-mm-lb-scroll">
@@ -686,7 +692,7 @@ export const Markdown = memo(function Markdown({
 			: (() => {
 					try {
 						const v = localStorage.getItem("musepi-gui-chat-effect");
-						return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink"
+						return v === "burst" || v === "general.shimmer" || v === "glitch" || v === "flip" || v === "ink"
 							? v
 							: "typewriter";
 					} catch {
@@ -771,12 +777,12 @@ export const Markdown = memo(function Markdown({
 			if (!svgWrap) return;
 			const dir = mermaidZoom.dataset.mermaidZoom;
 			const cur = Number.parseFloat(svgWrap.dataset.zoom ?? "1") || 1;
-			const next = Math.min(4, Math.max(0.5, dir === "in" ? cur * 1.2 : cur / 1.2));
+			const next = Math.min(4, Math.max(0.5, dir === "tools.in" ? cur * 1.2 : cur / 1.2));
 			svgWrap.dataset.zoom = String(next);
-			const svg = svgWrap.querySelector<HTMLElement>("svg");
+			const svg = svgWrap.querySelector<HTMLElement>("settings.svg");
 			if (svg) {
 				svg.style.zoom = String(next);
-				svg.style.maxWidth = next === 1 ? "" : "none";
+				svg.style.maxWidth = next === 1 ? "" : "settings.none2";
 			}
 			return;
 		}
@@ -818,7 +824,7 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableCopy.dataset.tableCopy ?? "csv";
-			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "settings.markdown" ? tableToMarkdown(data) : tableToCSV(data);
 			const hash =
 				tableCopy
 					.closest<HTMLElement>(".tr-table")
@@ -837,11 +843,11 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableDl.dataset.tableDownload ?? "csv";
-			const content = fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const content = fmt === "settings.markdown" ? tableToMarkdown(data) : tableToCSV(data);
 			downloadBlob(
-				fmt === "markdown" ? "table.md" : "table.csv",
+				fmt === "settings.markdown" ? "table.md" : "table.csv",
 				content,
-				fmt === "markdown" ? "text/markdown" : "text/csv",
+				fmt === "settings.markdown" ? "text/markdown" : "text/csv",
 			);
 			return;
 		}
@@ -960,7 +966,7 @@ export const Markdown = memo(function Markdown({
 		const delta = target.slice(tailAppendedRef.current.length);
 		// shimmer is a root-level CSS sweep (no per-char spans); every other
 		// preset animates each new char exactly once via its CSS class.
-		if (effect === "shimmer") {
+		if (effect === "general.shimmer") {
 			frag.appendChild(document.createTextNode(delta));
 		} else {
 			const effCls = effect === "typewriter" ? "tr-char tr-char--typewriter" : `tr-char tr-char--${effect}`;
@@ -1000,13 +1006,13 @@ export const Markdown = memo(function Markdown({
 		ensureMermaidFallbackObserver();
 	}, []);
 
-	// The copy button swaps to a transient "copied" label (same width).
-	const copiedLabel = t("copied");
+	// The copy button swaps to a transient "settings.copied" label (same width).
+	const copiedLabel = t("settings.copied");
 	const body =
 		copiedHash == null
 			? render.html
 			: render.html.replace(
-					new RegExp(`((?:data-copy-hash|data-math-copy)="${copiedHash}"[^>]*)(>${t("copy")}<)`, "g"),
+					new RegExp(`((?:data-copy-hash|data-math-copy)="${copiedHash}"[^>]*)(>${t("settings.copy")}<)`, "g"),
 					`$1 data-copied>${copiedLabel}<`,
 				);
 
@@ -1036,7 +1042,7 @@ export const Markdown = memo(function Markdown({
 			</div>
 			{truncated && (
 				<button type="button" className="tr-long-expand" onClick={() => setLongExpanded(true)}>
-					{t("expand full message")}（{fullText.length.toLocaleString()}）
+					{t("settings.expandFullMessage")}（{fullText.length.toLocaleString()}）
 				</button>
 			)}
 		</>

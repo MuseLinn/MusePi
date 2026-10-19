@@ -92,6 +92,60 @@ function placeholderSuffix(text: string): string {
 	return names.map(n => "With" + n.charAt(0).toUpperCase() + n.slice(1)).join("");
 }
 
+/**
+ * Label text → { tab, group } from the settings schema — the product tree.
+ *
+ * The join is on LABEL TEXT, not on the setting key: a dictionary entry's key is
+ * the label the UI shows ("Advisor Sync Backlog"), while the schema identifies
+ * the same thing by its setting key ("advisor.syncBacklog"). Only strings that
+ * appear as a schema label get a product path; everything else (tool copy,
+ * prose) keeps the flat form.
+ */
+function readSettingGroups(): Map<string, { tab: string; group: string }> {
+	const map = new Map<string, { tab: string; group: string }>();
+	const schemaPath = path.resolve(root, "packages/coding-agent/src/config/settings-schema.ts");
+	if (!fs.existsSync(schemaPath)) return map;
+	const src = fs.readFileSync(schemaPath, "utf8");
+	const re = /"[\w.]+":\s*\{([\s\S]{0,900}?)\n\t\},/g;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(src)) !== null) {
+		const body = m[1]!;
+		const tab = /tab:\s*"([^"]+)"/.exec(body)?.[1];
+		const group = /group:\s*"([^"]+)"/.exec(body)?.[1];
+		const label = /label:\s*"((?:[^"\\]|\\.)*)"/.exec(body)?.[1];
+		if (tab && group && label) map.set(label, { tab, group });
+	}
+	return map;
+}
+
+/** "Startup & Updates" → "startupUpdates"; "Power (macOS)" → "powerMacos". */
+function segment(text: string): string {
+	return text
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.map((w, i) => {
+			const lower = w.toLowerCase();
+			return i === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+		})
+		.join("");
+}
+
+/** Drop camelCase words already carried by a path segment, and re-case. */
+function stripPathWords(tail: string, pathWords: Set<string>): string {
+	if (pathWords.size === 0) return tail;
+	const kept = tail
+		.split(/(?=[A-Z])/)
+		.filter(Boolean)
+		.filter(w => !pathWords.has(w.toLowerCase()));
+	const joined = kept.join("");
+	if (!joined) return "";
+	return joined.charAt(0).toLowerCase() + joined.slice(1);
+}
+
+const SETTING_GROUPS = readSettingGroups();
+
 function slugifyAt(text: string, wordCap: number): { tail: string; kind: "plain" | "info" | "desc" } {
 	const w = words(text);
 	if (w.length === 0) return { tail: "text", kind: "plain" };
@@ -157,7 +211,19 @@ function buildMapping(files: DictFile[]): Map<string, string> {
 
 	for (const file of files) {
 		for (const key of file.keys) {
-			const candidates = slugCandidates(key).map(c => `${file.domain}.${c}`);
+			// A known settings label carries its product path (domain.tab.group);
+			// everything else stays flat. Words already in the path are dropped
+			// from the tail ("Mnemopi DB Path" → mnemopi.dbPath, not mnemopi.mnemopiDbPath).
+			const group = SETTING_GROUPS.get(key);
+			const pathWords = group
+				? new Set([segment(group.tab).toLowerCase(), segment(group.group).toLowerCase()].filter(Boolean))
+				: new Set<string>();
+			const prefix = group ? `${file.domain}.${segment(group.tab)}.${segment(group.group)}` : file.domain;
+			const candidates = slugCandidates(key).map(c => {
+				const [head, ...rest] = c.split(".");
+				const trimmed = pathWords.size > 0 ? stripPathWords(head, pathWords) || head : head;
+				return `${prefix}.${[trimmed, ...rest].join(".")}`;
+			});
 			// First candidate free, else widen; numeric suffix only after the ladder
 			// is exhausted (two genuinely identical phrases in one domain).
 			let candidate = candidates.find(c => !used.has(c)) ?? "";

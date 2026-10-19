@@ -38,7 +38,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	const details = detailsRecord(result);
 	const shots = shotsOf(args, result);
 	const parts: string[] = [];
-	if (details?.readOnly === true || args?.read_only === true) parts.push(t("computer read-only"));
+	if (details?.readOnly === true || args?.read_only === true) parts.push(t("tools.computerReadOnly"));
 	if (typeof details?.backend === "string" && details.backend) parts.push(details.backend);
 	const shotCount =
 		shots.length > 0
@@ -47,7 +47,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 				? details.screenshotCount
 				: 0;
 	parts.push(
-		shotCount > 0 ? t("computer screenshots {count}", { count: String(shotCount) }) : t("computer no screenshots"),
+		shotCount > 0 ? t("tools.computerScreenshotsWithCount", { count: String(shotCount) }) : t("tools.computerNoScreenshots"),
 	);
 	const code = typeof args?.code === "string" ? args.code : typeof details?.code === "string" ? details.code : "";
 	return (
@@ -80,7 +80,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 								key={i}
 								className="tv-img"
 								src={src}
-								alt={t("computer screenshot {count}", { count: String(i + 1) })}
+								alt={t("tools.computerScreenshotWithCount", { count: String(i + 1) })}
 								loading="lazy"
 								decoding="async"
 							/>
@@ -89,10 +89,10 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				</div>
 			)}
 			{code && (
-				<Output text={code} maxLines={8} lang="js" title={t("computer action")} error={error} variant="code" />
+				<Output text={code} maxLines={8} lang="js" title={t("tools.computerAction")} error={error} variant="code" />
 			)}
 			{details?.returnValue !== undefined && str(details.returnValue) !== "" && (
-				<Row k={t("return value")}>{str(details.returnValue)}</Row>
+				<Row k={t("tools.returnValue")}>{str(details.returnValue)}</Row>
 			)}
 			{perms.length > 0 && (
 				<KvGrid>
@@ -103,7 +103,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					))}
 				</KvGrid>
 			)}
-			{error && <Note tone="err">{t("computer failed")}</Note>}
+			{error && <Note tone="err">{t("tools.computerFailed")}</Note>}
 		</>
 	);
 }

@@ -71,14 +71,14 @@ const FS_ICON =
  */
 const mermaidToolbar = (source: string, mode: MermaidMode): string => {
 	const hash = fnv1a(source).toString(36);
-	const copy = `<button type="button" class="tr-mermaid-copy tr-code-copy" data-copy-hash="${hash}" data-mermaid-src="${escapeHtml(source)}">${t("copy")}</button>`;
+	const copy = `<button type="button" class="tr-mermaid-copy tr-code-copy" data-copy-hash="${hash}" data-mermaid-src="${escapeHtml(source)}">${t("settings.copy")}</button>`;
 	if (mode === "ascii") {
 		return `<div class="tr-mermaid-bar">${copy}</div>`;
 	}
-	const zoomIn = `<button type="button" class="tr-mermaid-zoom tr-code-copy" data-mermaid-zoom="in" title="${t("zoom in")}">+</button>`;
-	const zoomOut = `<button type="button" class="tr-mermaid-zoom tr-code-copy" data-mermaid-zoom="out" title="${t("zoom out")}">−</button>`;
-	const fs = `<button type="button" class="tr-mermaid-fs tr-code-copy" data-mermaid-fullscreen title="${t("fullscreen")}">${FS_ICON}</button>`;
-	const dl = `<button type="button" class="tr-mermaid-dl tr-code-copy" data-mermaid-download>${t("download")}</button>`;
+	const zoomIn = `<button type="button" class="tr-mermaid-zoom tr-code-copy" data-mermaid-zoom="in" title="${t("settings.zoomIn")}">+</button>`;
+	const zoomOut = `<button type="button" class="tr-mermaid-zoom tr-code-copy" data-mermaid-zoom="out" title="${t("settings.zoomOut")}">−</button>`;
+	const fs = `<button type="button" class="tr-mermaid-fs tr-code-copy" data-mermaid-fullscreen title="${t("settings.fullscreen")}">${FS_ICON}</button>`;
+	const dl = `<button type="button" class="tr-mermaid-dl tr-code-copy" data-mermaid-download>${t("settings.download")}</button>`;
 	return `<div class="tr-mermaid-bar">${copy}${zoomIn}${zoomOut}${fs}${dl}</div>`;
 };
 
@@ -123,7 +123,7 @@ export function renderMermaidHtml(source: string, mode: MermaidMode): string {
 	// Outside beautiful-mermaid coverage or unparseable → async official
 	// mermaid fallback placeholder (filled by Markdown's effect).
 	const hash = fnv1a(source).toString(36);
-	return `<div class="tr-mermaid-block">${bar}<div class="tr-mermaid-async" data-mermaid-hash="${hash}" data-mermaid-code="${escapeHtml(source)}"><div class="tr-mermaid-loading">${t("rendering diagram")}…</div></div></div>`;
+	return `<div class="tr-mermaid-block">${bar}<div class="tr-mermaid-async" data-mermaid-hash="${hash}" data-mermaid-code="${escapeHtml(source)}"><div class="tr-mermaid-loading">${t("settings.renderingDiagram")}…</div></div></div>`;
 }
 
 let mermaidPromise: Promise<typeof import("mermaid")> | null = null;

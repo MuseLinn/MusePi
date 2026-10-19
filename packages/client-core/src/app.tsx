@@ -236,7 +236,7 @@ export function App(): ReactNode {
 	}, [connect]);
 
 	useEffect(() => {
-		if (!client) document.title = t("musepi collab");
+		if (!client) document.title = t("shell.musepiCollab");
 	}, [client]);
 
 	useMobileNotifications(client, credsRef.current?.link ?? null);
@@ -327,8 +327,8 @@ function useMobileNotifications(client: SessionClient | null, link: string | nul
 						notifications: [
 							{
 								id: ts % 2147483647,
-								title: t("musepi session update"),
-								body: text.slice(0, 140) || t("session update"),
+								title: t("settings.musepiSessionUpdate"),
+								body: text.slice(0, 140) || t("settings.sessionUpdate"),
 								smallIcon: "ic_stat_musepi",
 								// Deep-link payload: tapping the notification routes
 								// back to this session via DEEP_LINK_EVENT (see
@@ -366,7 +366,7 @@ function useMobileNotifications(client: SessionClient | null, link: string | nul
 function PlaintextBanner(): ReactNode {
 	return (
 		<div className="plaintext-banner" role="alert">
-			{t("plaintext session: not encrypted — anyone on this network can read it")}
+			{t("collab.plaintextSessionNot.info")}
 		</div>
 	);
 }
@@ -574,9 +574,9 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 		}
 	}, [subCount]);
 
-	const title = header?.title ?? state?.sessionName ?? t("session");
+	const title = header?.title ?? state?.sessionName ?? t("settings.session2");
 	useEffect(() => {
-		document.title = `${title} · ${t("musepi collab")}`;
+		document.title = `${title} · ${t("shell.musepiCollab")}`;
 	}, [title]);
 
 	const drawerAgent = selectedId != null ? agents.find(a => a.id === selectedId) : undefined;

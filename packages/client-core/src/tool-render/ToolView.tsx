@@ -176,7 +176,7 @@ export function ToolView(props: ToolViewProps): ReactNode {
 				title={intent || undefined}
 			>
 				{status === "run" ? (
-					<span className="tv-spin" aria-label={t("running")} />
+					<span className="tv-spin" aria-label={t("tools.running")} />
 				) : (
 					<span className={`tv-status tv-status--${status}`} aria-hidden="true" />
 				)}

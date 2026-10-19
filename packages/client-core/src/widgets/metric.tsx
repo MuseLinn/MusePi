@@ -37,8 +37,8 @@ export function MetricCard({
 				<button
 					type="button"
 					className="gui-widget-metric-tick"
-					title={t("widget refresh")}
-					aria-label={t("widget refresh")}
+					title={t("settings.widgetRefresh")}
+					aria-label={t("settings.widgetRefresh")}
 					onClick={() => {
 						const next = value + Math.round(Math.random() * 500 - 200);
 						setHistory(prev => [...prev.slice(1), next / 1000 + 3]);

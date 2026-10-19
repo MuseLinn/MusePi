@@ -32,7 +32,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	const first = items[0] ? truncate(normalizeWs(items[0].content), 80) : "";
 	return (
 		<>
-			<Badge tone="accent">{t("{count} memory(ies)", { count: String(count) })}</Badge>
+			<Badge tone="accent">{t("tools.memoryWithCount", { count: String(count) })}</Badge>
 			{first && <span className="tv-trunc">{first}</span>}
 		</>
 	);
@@ -46,7 +46,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	let confirmation: string | null = null;
 	if (result && result.isError !== true) {
 		const text = resultTextOf(result).trim().replace(/\.$/, "");
-		confirmation = text || (count !== null ? t("{count} memory(ies) retained", { count: String(count) }) : null);
+		confirmation = text || (count !== null ? t("tools.memoryRetainedWithCount", { count: String(count) }) : null);
 	}
 	return (
 		<>

@@ -50,12 +50,12 @@ export interface HeaderBarProps {
 }
 
 const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [
-	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "board" },
-	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "scheduled tasks" },
-	{ panel: "files", icon: <FolderGit2 size={14} />, title: "workspace" },
-	{ panel: "marketplace", icon: <Package size={14} />, title: "marketplace" },
-	{ panel: "workbench", icon: <PanelRight size={14} />, title: "workbench" },
-	{ panel: "voice", icon: <AudioLines size={14} />, title: "voice" },
+	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "settings.board" },
+	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "settings.scheduledTasks" },
+	{ panel: "files", icon: <FolderGit2 size={14} />, title: "tools.workspace" },
+	{ panel: "marketplace", icon: <Package size={14} />, title: "guest.marketplace" },
+	{ panel: "workbench", icon: <PanelRight size={14} />, title: "settings.workbench" },
+	{ panel: "voice", icon: <AudioLines size={14} />, title: "settings.voice" },
 ];
 
 export function HeaderBar({
@@ -79,7 +79,7 @@ export function HeaderBar({
 	const phase = useGuestSelector(client, s => s.phase);
 	const readOnly = useGuestSelector(client, s => s.readOnly);
 	const subCount = useGuestSelector(client, s => s.agents.filter(a => a.kind === "sub").length);
-	const title = header?.title ?? state?.sessionName ?? t("session");
+	const title = header?.title ?? state?.sessionName ?? t("settings.session2");
 	// Mobile 列表↔会话 morph target (M1.10 §3.3 批次 B): the title flies in
 	// from the tapped workspace card's title (shared session-title id). The
 	// id is absent on the directory view, where no counterpart exists. The
@@ -103,7 +103,7 @@ export function HeaderBar({
 	const [sheetOpen, setSheetOpen] = useState(false);
 
 	// Narrow phones: 4 panel buttons + theme + server + rail + leave overflow
-	// a 390px header. Collapse the panel buttons into one "panels" menu
+	// a 390px header. Collapse the panel buttons into one "general.panels" menu
 	// (design doc §4.3: panels are core entries, kept — but folded).
 	const [narrow, setNarrow] = useState(() => {
 		if (typeof window === "undefined" || !window.matchMedia) return false;
@@ -143,13 +143,13 @@ export function HeaderBar({
 						type="button"
 						className="sh-btn sh-btn-icon"
 						onClick={() => onSelectPanel(null)}
-						title={t("back to chat")}
+						title={t("guest.backChat")}
 					>
 						<MessageSquare size={14} />
 					</button>
 				)}
 				{onBack && (
-					<button type="button" className="sh-btn sh-btn-icon" onClick={onBack} title={t("back to workspace")}>
+					<button type="button" className="sh-btn sh-btn-icon" onClick={onBack} title={t("settings.backWorkspace")}>
 						<ArrowLeft size={14} />
 					</button>
 				)}
@@ -160,7 +160,7 @@ export function HeaderBar({
 						data-morph-id={titleMorphId ?? undefined}
 						className={`sh-title sh-title-btn${sheetOpen ? " sh-title--open" : ""}`}
 						onClick={() => setSheetOpen(open => !open)}
-						title={t("sessions")}
+						title={t("general.sessions")}
 					>
 						{title}
 					</button>
@@ -182,8 +182,8 @@ export function HeaderBar({
 			</div>
 			<div className="sh-header-right">
 				{readOnly && (
-					<span className="sh-chip" title={t("read-only link — watching only")}>
-						{t("read-only")}
+					<span className="sh-chip" title={t("shell.readOnlyLinkWatching")}>
+						{t("shell.readOnly")}
 					</span>
 				)}
 				{state?.model && <span className="sh-chip sh-chip-meta">{state.model.name}</span>}
@@ -191,7 +191,7 @@ export function HeaderBar({
 				{pct != null && (
 					<span
 						className={pct > 80 ? "sh-gauge sh-gauge-warn" : "sh-gauge"}
-						title={`${t("context · {pct}", { pct: fmtPercent(pct) })}`}
+						title={`${t("shell.contextWithPct", { pct: fmtPercent(pct) })}`}
 					>
 						<span className="sh-gauge-track">
 							<span className="sh-gauge-fill" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
@@ -205,7 +205,7 @@ export function HeaderBar({
 							<span
 								key={`${p.name}:${i}`}
 								className={p.role === "host" ? "sh-avatar sh-avatar-host" : "sh-avatar"}
-								title={`${p.name} · ${p.role}${p.readOnly ? ` · ${t("view-only")}` : ""}`}
+								title={`${p.name} · ${p.role}${p.readOnly ? ` · ${t("composer.viewOnly")}` : ""}`}
 							>
 								{(p.name[0] ?? "?").toUpperCase()}
 							</span>
@@ -219,15 +219,15 @@ export function HeaderBar({
 							type="button"
 							className={activePanel !== null ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
 							onClick={() => setPanelMenuOpen(open => !open)}
-							title={t("panels")}
+							title={t("general.panels")}
 						>
 							<LayoutDashboard size={14} />
 						</button>
 						{panelMenuOpen && (
 							<>
 								<div className="sh-switcher-overlay" onClick={() => setPanelMenuOpen(false)} />
-								<div className="sh-switcher-pop sh-panel-menu-pop" role="menu" aria-label={t("panels")}>
-									<div className="sh-switcher-title">{t("panels")}</div>
+								<div className="sh-switcher-pop sh-panel-menu-pop" role="menu" aria-label={t("general.panels")}>
+									<div className="sh-switcher-title">{t("general.panels")}</div>
 									{PANEL_BUTTONS.map(({ panel, icon, title }) => (
 										<button
 											key={panel}
@@ -271,12 +271,12 @@ export function HeaderBar({
 					type="button"
 					className={railOpen ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
 					onClick={onToggleRail}
-					title={railOpen ? t("hide agents") : t("show agents")}
+					title={railOpen ? t("shell.hideAgents") : t("shell.showAgents")}
 				>
 					<PanelRight size={14} />
 					{subCount > 0 && <span className="sh-badge">{subCount}</span>}
 				</button>
-				<button type="button" className="sh-btn sh-btn-icon" onClick={onLeave} title={t("leave session")}>
+				<button type="button" className="sh-btn sh-btn-icon" onClick={onLeave} title={t("shell.leaveSession")}>
 					<LogOut size={14} />
 				</button>
 			</div>

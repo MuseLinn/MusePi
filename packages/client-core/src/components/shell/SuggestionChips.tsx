@@ -18,25 +18,25 @@ interface SuggestionDef {
 
 /** Default collapsed set — the first 8 chips. */
 const DEFAULT_SUGGESTIONS: SuggestionDef[] = [
-	{ labelKey: "chip explore codebase", promptKey: "suggest explore codebase" },
-	{ labelKey: "chip catch me up", promptKey: "suggest catch me up" },
-	{ labelKey: "chip weigh options", promptKey: "suggest weigh options" },
-	{ labelKey: "chip start feature planning", promptKey: "suggest start feature planning" },
-	{ labelKey: "chip create goal", promptKey: "suggest create goal" },
-	{ labelKey: "chip schedule task", promptKey: "suggest schedule task" },
-	{ labelKey: "chip debug issue", promptKey: "suggest debug issue" },
-	{ labelKey: "chip review changes", promptKey: "suggest review changes" },
+	{ labelKey: "general.chipExploreCodebase", promptKey: "general.suggestExploreCodebase" },
+	{ labelKey: "general.chipCatchMeUp", promptKey: "general.suggestCatchMeUp" },
+	{ labelKey: "general.chipWeighOptions", promptKey: "general.suggestWeighOptions" },
+	{ labelKey: "general.chipStartFeaturePlanning", promptKey: "general.suggestStartFeaturePlanning" },
+	{ labelKey: "general.chipCreateGoal", promptKey: "general.suggestCreateGoal" },
+	{ labelKey: "general.chipScheduleTask", promptKey: "general.suggestScheduleTask" },
+	{ labelKey: "general.chipDebugIssue", promptKey: "general.suggestDebugIssue" },
+	{ labelKey: "general.chipReviewChanges", promptKey: "general.suggestReviewChanges" },
 ];
 
 /** Extra suggestions revealed by the `+` expansion. */
 const EXTRA_SUGGESTIONS: SuggestionDef[] = [
-	{ labelKey: "chip write tests", promptKey: "suggest write tests" },
-	{ labelKey: "chip refactor", promptKey: "suggest refactor" },
-	{ labelKey: "chip performance", promptKey: "suggest performance" },
-	{ labelKey: "chip web search", promptKey: "suggest web search" },
-	{ labelKey: "chip generate image", promptKey: "suggest generate image" },
-	{ labelKey: "chip create board", promptKey: "suggest create board" },
-	{ labelKey: "chip draw diagram", promptKey: "suggest draw diagram" },
+	{ labelKey: "general.chipWriteTests", promptKey: "general.suggestWriteTests" },
+	{ labelKey: "general.chipRefactor", promptKey: "general.suggestRefactor" },
+	{ labelKey: "general.chipPerformance", promptKey: "general.suggestPerformance" },
+	{ labelKey: "general.chipWebSearch", promptKey: "general.suggestWebSearch" },
+	{ labelKey: "general.chipGenerateImage", promptKey: "general.suggestGenerateImage" },
+	{ labelKey: "general.chipCreateBoard", promptKey: "general.suggestCreateBoard" },
+	{ labelKey: "general.chipDrawDiagram", promptKey: "general.suggestDrawDiagram" },
 ];
 
 export function SuggestionChips({ onPick }: { onPick(prompt: string): void }): ReactNode {
@@ -65,8 +65,8 @@ export function SuggestionChips({ onPick }: { onPick(prompt: string): void }): R
 			<button
 				type="button"
 				className="sh-suggest-chip sh-suggest-chip--more"
-				title={expanded ? t("collapse suggestions") : t("more suggestions")}
-				aria-label={expanded ? t("collapse suggestions") : t("more suggestions")}
+				title={expanded ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
+				aria-label={expanded ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
 				onClick={() => setExpanded(e => !e)}
 			>
 				{expanded ? "✕" : "+"}

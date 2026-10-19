@@ -128,7 +128,7 @@ export function SessionsSheet({
 				className={`ss-card${stage === "closing" ? " ss-closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
-				aria-label={t("sessions")}
+				aria-label={t("general.sessions")}
 				style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
 				onClick={e => e.stopPropagation()}
 				onAnimationEnd={onExitAnimEnd}
@@ -142,14 +142,14 @@ export function SessionsSheet({
 				>
 					<div className="ss-grabber" aria-hidden />
 					<div className="ss-card-head">
-						<h2 className="ss-card-title">{t("sessions")}</h2>
-						<button type="button" className="ss-close" onClick={onClose} title={t("close")}>
+						<h2 className="ss-card-title">{t("general.sessions")}</h2>
+						<button type="button" className="ss-close" onClick={onClose} title={t("settings.close")}>
 							<X size={15} />
 						</button>
 					</div>
 				</div>
 				<div className="ss-list">
-					{sessions.length === 0 && <p className="ss-empty">{t("no sessions yet")}</p>}
+					{sessions.length === 0 && <p className="ss-empty">{t("transcript.noSessionsYet")}</p>}
 					{sessions.map(session => {
 						const active = session.id === currentId;
 						return (
@@ -312,7 +312,7 @@ function SwipeableRow({
 					}}
 				>
 					<Pencil size={13} aria-hidden />
-					<span>{t("rename")}</span>
+					<span>{t("settings.rename")}</span>
 				</button>
 				<button
 					type="button"
@@ -320,7 +320,7 @@ function SwipeableRow({
 					onClick={() => void doDelete()}
 				>
 					<Trash2 size={13} aria-hidden />
-					<span>{confirming ? t("confirm delete?") : t("delete")}</span>
+					<span>{confirming ? t("settings.confirmDelete") : t("settings.delete")}</span>
 				</button>
 			</div>
 			{renaming ? (
@@ -335,7 +335,7 @@ function SwipeableRow({
 							if (e.key === "Escape") setRenaming(false);
 						}}
 						onBlur={() => void commitRename()}
-						aria-label={t("rename")}
+						aria-label={t("settings.rename")}
 					/>
 				</div>
 			) : (
@@ -368,7 +368,7 @@ function SwipeableRow({
 						)}
 					</span>
 					<span className="ss-item-body">
-						<span className="ss-item-title">{session.title ?? t("untitled session")}</span>
+						<span className="ss-item-title">{session.title ?? t("transcript.untitledSession")}</span>
 						{session.cwd && (
 							<span className="ss-item-cwd" title={session.cwd}>
 								{shortenPath(session.cwd)}
@@ -377,7 +377,7 @@ function SwipeableRow({
 					</span>
 					<span className="ss-item-meta">
 						<span className="ss-item-count">
-							{t("{count} messages", { count: String(session.messageCount) })}
+							{t("transcript.messagesWithCount", { count: String(session.messageCount) })}
 						</span>
 						<span className="ss-item-when">{formatWhen(session.updatedAt)}</span>
 					</span>

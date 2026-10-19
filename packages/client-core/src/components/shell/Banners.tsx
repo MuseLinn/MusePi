@@ -14,7 +14,7 @@ export function Banners({ phase, endedReason, onRejoin, onNewLink }: BannersProp
 		return (
 			<div className="sh-banner" role="status">
 				<span className="sh-banner-dot" />
-				{t(phase === "connecting" ? "connecting to relay…" : "joining session…")}
+				{t(phase === "connecting" ? "shell.connectingRelay" : "shell.joiningSession")}
 			</div>
 		);
 	}
@@ -22,22 +22,22 @@ export function Banners({ phase, endedReason, onRejoin, onNewLink }: BannersProp
 		return (
 			<div className="sh-banner" role="status">
 				<span className="sh-banner-dot" />
-				{t("reconnecting…")}
+				{t("shell.reconnecting")}
 			</div>
 		);
 	}
 	if (phase === "ended") {
 		return (
-			<div className="sh-ended" role="alertdialog" aria-label={t("session ended")}>
+			<div className="sh-ended" role="alertdialog" aria-label={t("shell.sessionEnded")}>
 				<div className="sh-ended-card">
-					<div className="sh-ended-title">{t("session ended")}</div>
+					<div className="sh-ended-title">{t("shell.sessionEnded")}</div>
 					{endedReason && <div className="sh-ended-reason">{endedReason}</div>}
 					<div className="sh-ended-actions">
 						<button type="button" className="sh-btn sh-btn-primary" onClick={onRejoin}>
-							{t("Rejoin")}
+							{t("settings.rejoin")}
 						</button>
 						<button type="button" className="sh-btn" onClick={onNewLink}>
-							{t("New link")}
+							{t("shell.newLink")}
 						</button>
 					</div>
 				</div>

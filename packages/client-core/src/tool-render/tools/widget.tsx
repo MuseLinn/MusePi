@@ -60,7 +60,7 @@ export function InlineWidget({
 		setLocal(data);
 	}
 	const def = widgetDef(type);
-	if (!def) return <span className="tv-row-val">{t("widget unknown")}</span>;
+	if (!def) return <span className="tv-row-val">{t("settings.widgetUnknown")}</span>;
 	return (
 		<div className="tv-widget">
 			<div className="tv-widget-head">
@@ -70,7 +70,7 @@ export function InlineWidget({
 			</div>
 			<div className="tv-widget-body">
 				{codeView ? (
-					<pre className="tv-widget-code" data-lang={codeView.lang} aria-label={t("widget source")}>
+					<pre className="tv-widget-code" data-lang={codeView.lang} aria-label={t("settings.widgetSource")}>
 						{codeView.text}
 					</pre>
 				) : (
@@ -103,14 +103,14 @@ export const widgetRenderer: ToolRenderer = {
 		// the running state where the result has not landed yet.
 		const details = detailsRecord(result);
 		const type = str(details?.type) ?? str((isRecord(args) ? args : null)?.type) ?? "";
-		return `${t("widget")}${type ? ` · ${type}` : ""}`;
+		return `${t("settings.widget")}${type ? ` · ${type}` : ""}`;
 	},
 	Body: ({ args, result, host }: ToolRenderProps): ReactNode => {
 		const details = detailsRecord(result);
 		const type = str(details?.type) ?? str((isRecord(args) ? args : null)?.type) ?? "";
 		const def = widgetDef(type);
 		if (!def) {
-			return <span className="tv-row-val">{t("widget unknown")}</span>;
+			return <span className="tv-row-val">{t("settings.widgetUnknown")}</span>;
 		}
 		// Failed calls (validation errors, aborted runs) carry no widget to
 		// render — surface the error text instead of a blank card.

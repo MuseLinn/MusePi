@@ -35,14 +35,14 @@ export function fmtDuration(ms: number): string {
 export function relTime(tsMs: number): string {
 	if (!Number.isFinite(tsMs)) return "";
 	const delta = Date.now() - tsMs;
-	if (delta < 10_000) return t("now");
+	if (delta < 10_000) return t("sessions.now");
 	const s = Math.floor(delta / 1000);
-	if (s < 60) return t("{count}s ago", { count: String(s) });
+	if (s < 60) return t("sessions.sAgoWithCount", { count: String(s) });
 	const min = Math.floor(s / 60);
-	if (min < 60) return t("{count}m ago", { count: String(min) });
+	if (min < 60) return t("sessions.mAgoWithCount", { count: String(min) });
 	const h = Math.floor(min / 60);
-	if (h < 24) return t("{count}h ago", { count: String(h) });
-	return t("{count}d ago", { count: String(Math.floor(h / 24)) });
+	if (h < 24) return t("sessions.hAgoWithCount", { count: String(h) });
+	return t("sessions.dAgoWithCount", { count: String(Math.floor(h / 24)) });
 }
 
 /** "73%" from a 0–100 percent; em dash for null/non-finite. */
@@ -56,12 +56,12 @@ export function fmtPercent(p: number | null | undefined): string {
  *  relTime's second-granularity set). */
 export function formatWhen(ts: number): string {
 	const delta = Date.now() - ts;
-	if (delta < 60_000) return t("just now");
+	if (delta < 60_000) return t("transcript.justNow");
 	const minutes = Math.floor(delta / 60_000);
-	if (minutes < 60) return t("{count} min ago", { count: String(minutes) });
+	if (minutes < 60) return t("transcript.minAgoWithCount", { count: String(minutes) });
 	const hours = Math.floor(minutes / 60);
-	if (hours < 24) return t("{count} h ago", { count: String(hours) });
-	return t("{count} d ago", { count: String(Math.floor(hours / 24)) });
+	if (hours < 24) return t("transcript.hAgoWithCount", { count: String(hours) });
+	return t("transcript.dAgoWithCount", { count: String(Math.floor(hours / 24)) });
 }
 
 /**

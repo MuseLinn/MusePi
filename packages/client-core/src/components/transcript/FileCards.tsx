@@ -53,7 +53,7 @@ function extBadge(path: string): string {
 export const FileCards = memo(function FileCards({ items }: { items: FileCardItem[] }): ReactNode | null {
 	if (items.length === 0) return null;
 	return (
-		<div className="tr-file-cards" role="list" aria-label={t("files created")}>
+		<div className="tr-file-cards" role="list" aria-label={t("general.filesCreated")}>
 			{items.map(item => {
 				const badge = extBadge(item.path);
 				return (
@@ -73,26 +73,26 @@ export const FileCards = memo(function FileCards({ items }: { items: FileCardIte
 							<button
 								type="button"
 								className="tr-file-card-btn"
-								title={t("preview in right panel")}
+								title={t("general.previewRightPanel")}
 								onClick={() => openFileInPanel(item.path)}
 							>
-								{t("open preview")}
+								{t("general.openPreview")}
 							</button>
 							<button
 								type="button"
 								className="tr-file-card-btn"
-								title={t("copy path")}
+								title={t("settings.copyPath")}
 								onClick={() => void copyPath(item.path)}
 							>
-								{t("copy path")}
+								{t("settings.copyPath")}
 							</button>
 							<button
 								type="button"
 								className="tr-file-card-btn"
-								title={t("open with app")}
+								title={t("general.openApp")}
 								onClick={() => openFileExternally(item.path)}
 							>
-								{t("open")}
+								{t("settings.open")}
 							</button>
 						</span>
 					</div>

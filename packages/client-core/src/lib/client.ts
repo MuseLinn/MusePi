@@ -235,7 +235,7 @@ export class GuestClient {
 		this.#socket.onOpen = () => this.#handleOpen();
 		this.#socket.onFrame = frame => this.#applyFrameSafe(frame);
 		this.#socket.onControl = msg => {
-			if (msg.t === "room-closed") this.#end(t("room closed"));
+			if (msg.t === "room-closed") this.#end(t("sessions.roomClosed"));
 		};
 		this.#socket.onClose = (reason, willReconnect) => this.#handleClose(reason, willReconnect);
 		this.#snapshot = this.#buildSnapshot();
@@ -251,7 +251,7 @@ export class GuestClient {
 		if (!this.#welcomed && this.#welcomeTimer === null) {
 			this.#welcomeTimer = setTimeout(() => {
 				this.#welcomeTimer = null;
-				if (!this.#welcomed) this.#end(t("timed out waiting for the host's welcome"));
+				if (!this.#welcomed) this.#end(t("sessions.timedOutWaitingHost"));
 			}, WELCOME_TIMEOUT_MS);
 		}
 	}
@@ -430,7 +430,7 @@ export class GuestClient {
 	#translateCloseReason(reason: string): string {
 		const codeMatch = /^connection lost \(code (\d+)\)$/.exec(reason);
 		if (codeMatch) {
-			return t("connection lost (code {code})", { code: codeMatch[1]! });
+			return t("sessions.connectionLostWithCode", { code: codeMatch[1]! });
 		}
 		return t(reason as TranslationKey);
 	}
@@ -466,7 +466,7 @@ export class GuestClient {
 		this.#clearSnapshotProgressTimer();
 		this.#snapshotProgressTimer = setTimeout(() => {
 			this.#snapshotProgressTimer = null;
-			this.#end(t("timed out waiting for the host's session snapshot"));
+			this.#end(t("sessions.timedOutWaitingHostSSession"));
 		}, SNAPSHOT_PROGRESS_TIMEOUT_MS);
 	}
 
@@ -485,13 +485,13 @@ export class GuestClient {
 			console.warn("collab: failed to apply frame", frame.t, err);
 			if (frame.t === "welcome" && !this.#welcomed) {
 				this.#end(
-					t("failed to apply session snapshot: {reason}", {
+					t("sessions.failedApplySessionSnapshotWithReason", {
 						reason: err instanceof Error ? err.message : String(err),
 					}),
 				);
 				return;
 			}
-			this.#pushNotice("error", t("failed to apply {frame} frame", { frame: frame.t }));
+			this.#pushNotice("error", t("sessions.failedApplyFrameWithFrame", { frame: frame.t }));
 			this.#commit();
 		}
 	}
@@ -748,7 +748,7 @@ export class GuestClient {
 			case "auto_retry_start":
 				this.#pushNotice(
 					"info",
-					t("retry {attempt}/{max}: {reason}", {
+					t("sessions.retryWithAttemptWithMaxWithReason", {
 						attempt: String(event.attempt),
 						max: String(event.maxAttempts),
 						reason: event.errorMessage,
@@ -756,11 +756,11 @@ export class GuestClient {
 				);
 				break;
 			case "auto_retry_end":
-				if (!event.success) this.#pushNotice("error", event.finalError ?? t("retry failed"));
+				if (!event.success) this.#pushNotice("error", event.finalError ?? t("sessions.retryFailed"));
 				break;
 			case "auto_compaction_start":
 				this.#compacting = true;
-				this.#pushNotice("info", t("compacting context ({reason})", { reason: event.reason }));
+				this.#pushNotice("info", t("sessions.compactingContextWithReason", { reason: event.reason }));
 				break;
 			case "auto_compaction_end":
 				this.#compacting = false;
@@ -768,10 +768,10 @@ export class GuestClient {
 					this.#pushNotice(
 						"info",
 						event.aborted
-							? t("compaction aborted")
+							? t("sessions.compactionAborted")
 							: event.errorMessage
-								? t("compaction failed: {reason}", { reason: event.errorMessage })
-								: t("context compacted"),
+								? t("sessions.compactionFailedWithReason", { reason: event.errorMessage })
+								: t("sessions.contextCompacted"),
 					);
 				}
 				break;

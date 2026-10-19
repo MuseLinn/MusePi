@@ -87,11 +87,11 @@ export function MarketplaceCard({
 						<span className="mp-card-desc">{entry.description}</span>
 					)}
 					<span className="mp-card-meta">
-						{isInstalled && <span className="mp-card-badge">✓ {t("plugin installed badge")}</span>}
+						{isInstalled && <span className="mp-card-badge">✓ {t("guest.pluginInstalledBadge")}</span>}
 						{/* 设计体系内容标识（M3.7d）：catalog 声明 category/tags =
 						 *  design-system 的包在能力中心市场 tab 带徽章，可发现。 */}
 						{hasDesignSystemContent(entry) && (
-							<span className="mp-card-badge mp-card-badge--ds">{t("mp badge design system")}</span>
+							<span className="mp-card-badge mp-card-badge--ds">{t("guest.mpBadgeDesignSystem")}</span>
 						)}
 						{entry.author !== undefined && entry.author.length > 0 && (
 							<span className="mp-card-meta-item">by {entry.author}</span>
@@ -111,17 +111,17 @@ export function MarketplaceCard({
 			<footer className="mp-card-actions">
 				{openable && (
 					<button type="button" className="mp-btn mp-btn--ghost" onClick={fire("open")} disabled={isBusy}>
-						{t("plugin details")}
+						{t("guest.pluginDetails")}
 					</button>
 				)}
 				{installable && (
 					<button type="button" className="mp-btn mp-btn--accent" onClick={fire("install")} disabled={isBusy}>
-						{isBusy ? t("plugin installing") : t("plugin install")}
+						{isBusy ? t("guest.pluginInstalling") : t("guest.pluginInstall")}
 					</button>
 				)}
 				{removable && (
 					<button type="button" className="mp-btn mp-btn--warn" onClick={fire("remove")} disabled={isBusy}>
-						{isBusy ? t("plugin removing") : t("plugin remove")}
+						{isBusy ? t("guest.pluginRemoving") : t("guest.pluginRemove")}
 					</button>
 				)}
 			</footer>

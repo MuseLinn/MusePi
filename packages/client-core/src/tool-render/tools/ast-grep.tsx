@@ -52,27 +52,27 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				{lang}
 			</Badge>
 		),
-		glob && <Badge key="glob">{t("glob={value}", { value: glob })}</Badge>,
-		sel && <Badge key="sel">{t("sel={value}", { value: sel })}</Badge>,
-		skip !== null && skip > 0 && <Badge key="skip">{t("skip:{count}", { count: String(skip) })}</Badge>,
+		glob && <Badge key="glob">{t("tools.globWithValue", { value: glob })}</Badge>,
+		sel && <Badge key="sel">{t("tools.selWithValue", { value: sel })}</Badge>,
+		skip !== null && skip > 0 && <Badge key="skip">{t("tools.skipWithCount", { count: String(skip) })}</Badge>,
 	];
 	const resultBadges: ReactNode[] =
 		result && !result.isError
 			? [
 					matchCount !== null && (
 						<Badge key="matches" tone={matchCount === 0 ? "warn" : "ok"}>
-							{t("{count} match(es)", { count: String(matchCount) })}
+							{t("tools.matchWithCount", { count: String(matchCount) })}
 						</Badge>
 					),
 					fileCount !== null && fileCount > 0 && (
-						<Badge key="files">{t("{count} file(s)", { count: String(fileCount) })}</Badge>
+						<Badge key="files">{t("tools.fileWithCount", { count: String(fileCount) })}</Badge>
 					),
 					filesSearched !== null && (
-						<Badge key="searched">{t("searched {count}", { count: String(filesSearched) })}</Badge>
+						<Badge key="searched">{t("tools.searchedWithCount", { count: String(filesSearched) })}</Badge>
 					),
 					limitReached && (
 						<Badge key="limit" tone="warn">
-							{t("limit reached")}
+							{t("tools.limitReached")}
 						</Badge>
 					),
 				]
@@ -89,7 +89,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 						key={i}
 						code={pat}
 						lang={lang ?? undefined}
-						title={patterns.length > 1 ? t("pattern {count}", { count: String(i + 1) }) : t("pattern")}
+						title={patterns.length > 1 ? t("tools.patternWithCount", { count: String(i + 1) }) : t("tools.pattern")}
 						maxLines={12}
 					/>
 				))
@@ -97,7 +97,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			{(paths.length > 0 || scopePath) && (
 				<KvGrid>
 					{paths.length > 0 && (
-						<Kv k={paths.length === 1 ? t("path") : t("paths")}>
+						<Kv k={paths.length === 1 ? t("tools.path") : t("tools.paths")}>
 							{paths.map((p, i) => (
 								<span key={i}>
 									{i > 0 && ", "}
@@ -119,8 +119,8 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					maxLines={6}
 					title={
 						parseErrorsTotal > parseErrors.length
-							? t("parse issues ({count} total)", { count: String(parseErrorsTotal) })
-							: t("parse issues")
+							? t("tools.parseIssuesWithCount2", { count: String(parseErrorsTotal) })
+							: t("tools.parseIssues")
 					}
 				/>
 			)}

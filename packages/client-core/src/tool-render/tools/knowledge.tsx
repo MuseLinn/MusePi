@@ -68,12 +68,12 @@ function Summary({ result }: ToolRenderProps): ReactNode {
 			.map(block => (block.type === "text" && "text" in block ? String(block.text) : ""))
 			.join(" ")
 			.trim();
-		return <span className="tv-knowledge-failed">{text || t("knowledge call failed")}</span>;
+		return <span className="tv-knowledge-failed">{text || t("settings.knowledgeCallFailed")}</span>;
 	}
 	const details = detailsOf(result);
 	if (details.action === "show" && details.showPlan) {
 		const title = details.showPlan.title ?? details.showPlan.id ?? "";
-		return <span>{t("knowledge plan opened", { title })}</span>;
+		return <span>{t("settings.knowledgePlanOpened", { title })}</span>;
 	}
 	if (details.todo) {
 		return <span>{`${details.todo.done ? "✓" : "○"} ${details.todo.text ?? ""}`}</span>;
@@ -81,13 +81,13 @@ function Summary({ result }: ToolRenderProps): ReactNode {
 	const kind = details.kind ? `${details.kind} ` : "";
 	switch (details.action) {
 		case "list":
-			return <span>{t("knowledge")}</span>;
+			return <span>{t("settings.knowledge")}</span>;
 		case "save":
 			return <span>{`saved ${kind}`.trim()}</span>;
 		case "delete":
 			return <span>{`deleted ${kind}`.trim()}</span>;
 		default:
-			return <span>{t("knowledge")}</span>;
+			return <span>{t("settings.knowledge")}</span>;
 	}
 }
 
@@ -112,7 +112,7 @@ function Body({ result }: ToolRenderProps): ReactNode {
 			</span>
 			<span className="tr-canvas-jump-text">
 				<span className="tr-canvas-jump-title">{plan.title}</span>
-				<span className="tr-canvas-jump-sub">{t("knowledge open in panel")}</span>
+				<span className="tr-canvas-jump-sub">{t("settings.knowledgeOpenPanel")}</span>
 			</span>
 			<span className="tr-canvas-jump-arrow" aria-hidden="true">
 				→

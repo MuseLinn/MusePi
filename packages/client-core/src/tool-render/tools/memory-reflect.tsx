@@ -19,9 +19,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const failedSilently = result?.isError === true && !resultTextOf(result);
 	return (
 		<>
-			{query && <Output text={query} title={t("query")} maxLines={4} />}
-			{context && <Output text={context} title={t("context")} maxLines={6} />}
-			{failedSilently ? <Note tone="err">{t("Reflect failed")}</Note> : <ResultText result={result} maxLines={12} />}
+			{query && <Output text={query} title={t("tools.query")} maxLines={4} />}
+			{context && <Output text={context} title={t("settings.context")} maxLines={6} />}
+			{failedSilently ? <Note tone="err">{t("tools.reflectFailed")}</Note> : <ResultText result={result} maxLines={12} />}
 		</>
 	);
 }

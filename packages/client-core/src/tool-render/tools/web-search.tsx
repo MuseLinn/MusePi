@@ -33,12 +33,12 @@ function formatAge(seconds: unknown): string {
 	const s = num(seconds);
 	if (s === null || s < 0) return "";
 	const m = Math.floor(s / 60);
-	if (m < 60) return t("{count}m ago", { count: String(m) });
+	if (m < 60) return t("sessions.mAgoWithCount", { count: String(m) });
 	const h = Math.floor(m / 60);
-	if (h < 24) return t("{count}h ago", { count: String(h) });
+	if (h < 24) return t("sessions.hAgoWithCount", { count: String(h) });
 	const d = Math.floor(h / 24);
-	if (d < 365) return t("{count}d ago", { count: String(d) });
-	return t("{count}y ago", { count: String(Math.floor(d / 365)) });
+	if (d < 365) return t("sessions.dAgoWithCount", { count: String(d) });
+	return t("sessions.yAgoWithCount", { count: String(Math.floor(d / 365)) });
 }
 
 function Summary({ args }: ToolRenderProps): ReactNode {
@@ -58,7 +58,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 
 function SourceRow({ source, n }: { source: Record<string, unknown>; n: number }): ReactNode {
 	const url = str(source.url) ?? "";
-	const title = str(source.title)?.trim() || url || t("Untitled");
+	const title = str(source.title)?.trim() || url || t("tools.untitled");
 	const domain = url ? getDomain(url) : url;
 	const age = formatAge(source.ageSeconds) || (str(source.publishedDate) ?? "");
 	// aicss web-search compact list: title-ish first line highlighted,
@@ -141,7 +141,7 @@ function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 
 	let providerInfo = model && providerLabel ? `${model} @ ${providerLabel}` : (model ?? providerLabel ?? "");
 	if (providerInfo && authMode) {
-		providerInfo += ` (${authMode === "oauth" ? t("OAuth") : authMode === "api_key" ? t("API") : authMode})`;
+		providerInfo += ` (${authMode === "oauth" ? t("tools.oauth") : authMode === "api_key" ? t("tools.api") : authMode})`;
 	}
 
 	const usage = response && isRecord(response.usage) ? response.usage : null;
@@ -151,10 +151,10 @@ function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 		const outTok = num(usage.outputTokens);
 		const totalTok = num(usage.totalTokens);
 		const searchReqs = num(usage.searchRequests);
-		if (inTok !== null) usageParts.push(t("input {count}", { count: String(inTok) }));
-		if (outTok !== null) usageParts.push(t("output {count}", { count: String(outTok) }));
-		if (totalTok !== null) usageParts.push(t("total {count}", { count: String(totalTok) }));
-		if (searchReqs !== null) usageParts.push(t("search {count}", { count: String(searchReqs) }));
+		if (inTok !== null) usageParts.push(t("tools.inputWithCount", { count: String(inTok) }));
+		if (outTok !== null) usageParts.push(t("tools.outputWithCount", { count: String(outTok) }));
+		if (totalTok !== null) usageParts.push(t("tools.totalWithCount", { count: String(totalTok) }));
+		if (searchReqs !== null) usageParts.push(t("tools.searchWithCount", { count: String(searchReqs) }));
 	}
 
 	// aicss web-search: while the search runs, show a shimmering query
@@ -163,7 +163,7 @@ function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 		running && !response ? (
 			<div className="tr-search-placeholder">
 				<div className="tr-search-shimmer" aria-hidden="true" />
-				<div className="tr-search-ph-title">{t("searching")}</div>
+				<div className="tr-search-ph-title">{t("settings.searching")}</div>
 				{query && (
 					<div className="tr-search-ph-query">“{query.length > 140 ? `${query.slice(0, 140)}…` : query}”</div>
 				)}
@@ -185,17 +185,17 @@ function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 				<>
 					<Badges
 						items={[
-							recency && t("recency={value}", { value: recency }),
-							limit !== null && t("limit={count}", { count: String(limit) }),
-							numResults !== null && t("results={count}", { count: String(numResults) }),
-							response && t("{count} source(s)", { count: String(sources.length) }),
+							recency && t("tools.recencyWithValue", { value: recency }),
+							limit !== null && t("tools.limitWithCount2", { count: String(limit) }),
+							numResults !== null && t("tools.resultsWithCount", { count: String(numResults) }),
+							response && t("tools.sourceWithCount", { count: String(sources.length) }),
 						]}
 					/>
 					{(query !== null || providerInfo || usageParts.length > 0) && (
 						<KvGrid>
-							{query !== null && <Kv k={t("query")}>{query}</Kv>}
-							{providerInfo && <Kv k={t("provider")}>{providerInfo}</Kv>}
-							{usageParts.length > 0 && <Kv k={t("usage")}>{usageParts.join(" · ")}</Kv>}
+							{query !== null && <Kv k={t("tools.query")}>{query}</Kv>}
+							{providerInfo && <Kv k={t("tools.provider")}>{providerInfo}</Kv>}
+							{usageParts.length > 0 && <Kv k={t("tools.usage")}>{usageParts.join(" · ")}</Kv>}
 						</KvGrid>
 					)}
 					{errorMsg ? (
@@ -204,7 +204,7 @@ function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 						// detail, and offer a jump to the provider settings when the
 						// host owns a settings surface.
 						<Note tone="err">
-							<div className="tv-note-title">{t("web search failed")}</div>
+							<div className="tv-note-title">{t("tools.webSearchFailed")}</div>
 							<div>{errorMsg}</div>
 							{host?.openSettings && (
 								<button
@@ -212,7 +212,7 @@ function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 									className="tv-board-open"
 									onClick={() => host.openSettings?.("providers")}
 								>
-									{t("open search settings")}
+									{t("tools.openSearchSettings")}
 									<span className="tv-board-open-arrow">→</span>
 								</button>
 							)}

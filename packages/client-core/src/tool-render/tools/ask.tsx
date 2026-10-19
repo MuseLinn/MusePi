@@ -27,7 +27,7 @@ interface AskAnswer {
 }
 
 /** The TUI appends this to the recommended option's label before selection. */
-const RECOMMENDED_SUFFIX = ` (${t("(Recommended)")})`;
+const RECOMMENDED_SUFFIX = ` (${t("composer.text")})`;
 
 function stripRecommended(label: string): string {
 	return label.endsWith(RECOMMENDED_SUFFIX) ? label.slice(0, -RECOMMENDED_SUFFIX.length) : label;
@@ -158,7 +158,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<span>{truncate(normalizeWs(first.question), 70)}</span>
-			{questions.length > 1 && <Badge>{t("{count} question(s)", { count: String(questions.length) })}</Badge>}
+			{questions.length > 1 && <Badge>{t("tools.questionWithCount", { count: String(questions.length) })}</Badge>}
 		</>
 	);
 }
@@ -170,7 +170,7 @@ function QuestionBlock({ q, answer }: { q: AskQuestion; answer: AskAnswer | unde
 			<Row>
 				{q.id !== "?" && <span className="tv-faint">[{q.id}] </span>}
 				{q.question ? <span>{q.question}</span> : <InvalidArg what="question" />}
-				{q.multi && <Badge>{t("multi")}</Badge>}
+				{q.multi && <Badge>{t("composer.multi")}</Badge>}
 			</Row>
 			{q.options.map((opt, i) => {
 				const isSelected = selected.has(stripRecommended(opt.label));
@@ -192,10 +192,10 @@ function QuestionBlock({ q, answer }: { q: AskQuestion; answer: AskAnswer | unde
 			)}
 			{answer && answer.selectedOptions.length === 0 && answer.customInput === undefined && (
 				<Row k="—">
-					<span className="tv-warn-text">{t("no selection")}</span>
+					<span className="tv-warn-text">{t("composer.noSelection")}</span>
 				</Row>
 			)}
-			{answer?.timedOut && <Note tone="warn">{t("auto-selected after timeout — not a user choice")}</Note>}
+			{answer?.timedOut && <Note tone="warn">{t("composer.autoSelectedAfterTimeout")}</Note>}
 		</div>
 	);
 }

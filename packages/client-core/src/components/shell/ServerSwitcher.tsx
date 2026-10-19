@@ -49,7 +49,7 @@ export function ServerSwitcher({
 				type="button"
 				className={open ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
 				onClick={() => setOpen(!open)}
-				title={t("switch connection")}
+				title={t("settings.switchConnection")}
 			>
 				<Server size={14} />
 			</button>
@@ -57,9 +57,9 @@ export function ServerSwitcher({
 				<>
 					<div className="sh-switcher-overlay" onClick={() => setOpen(false)} />
 					<div className="sh-switcher-pop" role="menu">
-						<div className="sh-switcher-title">{t("saved connections")}</div>
+						<div className="sh-switcher-title">{t("settings.savedConnections")}</div>
 						{connections.length === 0 && (
-							<div className="sh-switcher-empty">{t("no saved connections yet — connect once to save one")}</div>
+							<div className="sh-switcher-empty">{t("settings.noSavedConnectionsYet")}</div>
 						)}
 						{connections.map(c => {
 							const isCurrent = c.link === currentLink;
@@ -105,11 +105,11 @@ export function ServerSwitcher({
 											</>
 										)}
 									</button>
-									{isCurrent && <span className="sh-switcher-cur-chip">{t("current")}</span>}
+									{isCurrent && <span className="sh-switcher-cur-chip">{t("settings.current")}</span>}
 									<button
 										type="button"
 										className="sh-btn sh-btn-icon sh-switcher-act"
-										title={t("rename")}
+										title={t("settings.rename")}
 										onClick={() => {
 											if (editing === c.link) return;
 											setDraft(c.label || c.name);
@@ -121,7 +121,7 @@ export function ServerSwitcher({
 									<button
 										type="button"
 										className="sh-btn sh-btn-icon sh-switcher-act"
-										title={t("remove")}
+										title={t("general.remove")}
 										onClick={() => {
 											removeConnection(c.link);
 											setOpen(true);

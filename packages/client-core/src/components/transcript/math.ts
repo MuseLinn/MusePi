@@ -57,7 +57,7 @@ const renderDisplay = (source: string): string => {
 	const hash = fnv1a(source).toString(36);
 	return (
 		`<span class="tr-math">${body}` +
-		`<button type="button" class="tr-math-copy tr-code-copy" data-math-copy="${hash}">${t("copy")}</button>` +
+		`<button type="button" class="tr-math-copy tr-code-copy" data-math-copy="${hash}">${t("settings.copy")}</button>` +
 		`</span>`
 	);
 };

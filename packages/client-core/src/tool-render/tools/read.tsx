@@ -71,12 +71,12 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 	const { path } = readArgs(args);
 	const d = readDetails(detailsRecord(result));
 	const conflictBadge = d.conflictCount !== null && d.conflictCount > 0 && (
-		<Badge tone="warn">{t("{count} conflict(s)", { count: String(d.conflictCount) })}</Badge>
+		<Badge tone="warn">{t("tools.conflictWithCount", { count: String(d.conflictCount) })}</Badge>
 	);
 	const elidedBadge = d.elidedSpans !== null && d.elidedSpans > 0 && (
-		<Badge>{t("{count} elided span(s)", { count: String(d.elidedSpans) })}</Badge>
+		<Badge>{t("tools.elidedSpanWithCount", { count: String(d.elidedSpans) })}</Badge>
 	);
-	const truncatedBadge = d.truncated && <Badge tone="warn">{t("truncated")}</Badge>;
+	const truncatedBadge = d.truncated && <Badge tone="warn">{t("tools.truncated")}</Badge>;
 	const resolved = d.suffixTo ?? d.resolvedPath;
 	// read with a diff/patch intent (transcript ToolCard kind): the result
 	// text is a diff body — render it with the aicss diff treatment.
@@ -96,11 +96,11 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 			{(resolved !== null || d.suffixFrom !== null) && (
 				<KvGrid>
 					{resolved !== null && (
-						<Kv k={t("resolved")}>
+						<Kv k={t("tools.resolved")}>
 							<PathText path={resolved} />
 						</Kv>
 					)}
-					{d.suffixFrom !== null && <Kv k={t("corrected from")}>{homePath(d.suffixFrom)}</Kv>}
+					{d.suffixFrom !== null && <Kv k={t("tools.correctedFrom")}>{homePath(d.suffixFrom)}</Kv>}
 				</KvGrid>
 			)}
 			<Badges items={[conflictBadge, elidedBadge, truncatedBadge]} />

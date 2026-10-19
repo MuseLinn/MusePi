@@ -10,9 +10,9 @@ import { Segmented, type SegmentedOption } from "./Segmented";
  * forced two extra clicks to get back). Icons mirror the flip overlay's
  * morph targets. */
 const THEME_OPTIONS: readonly { value: ThemePreference; label: TranslationKey; icon: LucideIcon }[] = [
-	{ value: "system", label: "System theme", icon: Monitor },
-	{ value: "light", label: "Light theme", icon: Sun },
-	{ value: "dark", label: "Dark theme", icon: Moon },
+	{ value: "system", label: "shell.systemTheme", icon: Monitor },
+	{ value: "light", label: "shell.lightTheme", icon: Sun },
+	{ value: "dark", label: "shell.darkTheme", icon: Moon },
 ];
 
 export function ThemeToggle(): ReactNode {
@@ -42,7 +42,7 @@ export function ThemeToggle(): ReactNode {
 			iconOnly
 			shake={shake}
 			onShakeEnd={() => setShake(false)}
-			ariaLabel={t("theme")}
+			ariaLabel={t("settings.theme")}
 			value={preference}
 			options={options}
 			onChange={setPreference}

@@ -88,7 +88,7 @@ export function TickerCard({
 					disabled={code === ""}
 					onClick={() => setTick(n => n + 1)}
 				>
-					{t("widget refresh")}
+					{t("settings.widgetRefresh")}
 				</button>
 			</div>
 		</div>

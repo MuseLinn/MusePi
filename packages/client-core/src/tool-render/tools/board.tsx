@@ -49,7 +49,7 @@ export const boardRenderer: ToolRenderer = {
 	Summary: ({ args, result }: ToolRenderProps): string => {
 		const action = str((isRecord(args) ? args : null)?.action) ?? "board";
 		const title = boardTitleOf(args, result);
-		return `${t("board")}${action !== "board" ? ` · ${action}` : ""}${title ? ` · ${title}` : ""}`;
+		return `${t("settings.board")}${action !== "board" ? ` · ${action}` : ""}${title ? ` · ${title}` : ""}`;
 	},
 	Body: ({ args, result }: ToolRenderProps): ReactNode => {
 		const a = isRecord(args) ? args : null;
@@ -64,14 +64,14 @@ export const boardRenderer: ToolRenderer = {
 		return (
 			<div className="tv-board">
 				<div className="tv-board-head">
-					<span className="tv-board-title">{title || t("board")}</span>
-					<span className="tv-board-tag">{t("board saved")}</span>
+					<span className="tv-board-title">{title || t("settings.board")}</span>
+					<span className="tv-board-tag">{t("settings.boardSaved")}</span>
 				</div>
-				<div className="tv-board-meta">{count > 0 ? `${count} ${t("widgets count")}` : ""}</div>
+				<div className="tv-board-meta">{count > 0 ? `${count} ${t("settings.widgetsCount")}` : ""}</div>
 				{id ? (
 					<button type="button" className="tv-board-open" onClick={() => openBoardFromChat(id, title)}>
 						<span>▦</span>
-						{t("board open")}
+						{t("settings.boardOpen")}
 						<span className="tv-board-open-arrow">→</span>
 					</button>
 				) : null}

@@ -72,7 +72,7 @@ export function LongErrorText({ text, children }: LongErrorTextProps): ReactNode
 				aria-controls={contentId}
 				onClick={() => setExpandedText(expanded ? null : text)}
 			>
-				{expanded ? t("show less") : t("show more")}
+				{expanded ? t("settings.showLess") : t("settings.showMore")}
 			</button>
 		</div>
 	);

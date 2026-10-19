@@ -113,7 +113,7 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 					.catch(() => {});
 				raf = requestAnimationFrame(tick);
 			} catch {
-				if (alive) setError(t("camera unavailable — use the pair code instead"));
+				if (alive) setError(t("settings.cameraUnavailableUsePair"));
 			}
 		};
 		void start();
@@ -145,7 +145,7 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 	};
 
 	return (
-		<div className="qr-overlay" role="dialog" aria-modal="true" aria-label={t("scan the QR code")}>
+		<div className="qr-overlay" role="dialog" aria-modal="true" aria-label={t("settings.scanQrCode")}>
 			<video ref={videoRef} className="qr-video" playsInline muted autoPlay={false} />
 			<canvas ref={canvasRef} className="qr-canvas" aria-hidden="true" />
 			<div className="qr-shade" aria-hidden="true" />
@@ -160,23 +160,23 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 			</div>
 
 			<header className="qr-top">
-				<button type="button" className="qr-close" onClick={onCancel} aria-label={t("close")}>
+				<button type="button" className="qr-close" onClick={onCancel} aria-label={t("settings.close")}>
 					✕
 				</button>
-				<span className="qr-title">{t("scan the QR code")}</span>
+				<span className="qr-title">{t("settings.scanQrCode")}</span>
 				<span className="qr-spacer" aria-hidden="true" />
 			</header>
 
 			<footer className="qr-bottom">
 				<button type="button" className="qr-torch" onClick={() => void toggleTorch()} aria-pressed={torch}>
-					{torch ? "💡" : "🔦"} <span>{t("torch")}</span>
+					{torch ? "💡" : "🔦"} <span>{t("settings.torch")}</span>
 				</button>
 				{hasMultiCam && (
-					<button type="button" className="qr-flip" onClick={flipCamera} aria-label={t("switch camera")}>
-						🔄 <span>{t("switch camera")}</span>
+					<button type="button" className="qr-flip" onClick={flipCamera} aria-label={t("settings.switchCamera")}>
+						🔄 <span>{t("settings.switchCamera")}</span>
 					</button>
 				)}
-				<p className="qr-hint">{error ?? t("align the QR code in the frame")}</p>
+				<p className="qr-hint">{error ?? t("settings.alignQrCodeFrame")}</p>
 			</footer>
 		</div>
 	);

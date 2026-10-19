@@ -15,14 +15,14 @@ function pathsOf(args: Record<string, unknown>): string[] {
 function argBadges(args: Record<string, unknown>): ReactNode[] {
 	const badges: ReactNode[] = [];
 	const glob = str(args.glob);
-	if (glob) badges.push(t("glob={value}", { value: glob }));
+	if (glob) badges.push(t("tools.globWithValue", { value: glob }));
 	const type = str(args.type);
-	if (type) badges.push(t("type={value}", { value: type }));
+	if (type) badges.push(t("tools.typeWithValue", { value: type }));
 	if (args.i === true) badges.push("i");
-	if (args.multiline === true) badges.push(t("multiline"));
-	if (args.gitignore === false) badges.push(t("no-gitignore"));
+	if (args.multiline === true) badges.push(t("tools.multiline"));
+	if (args.gitignore === false) badges.push(t("tools.noGitignore"));
 	const skip = num(args.skip);
-	if (skip !== null && skip > 0) badges.push(t("skip={count}", { count: String(skip) }));
+	if (skip !== null && skip > 0) badges.push(t("tools.skipWithCount2", { count: String(skip) }));
 	return badges;
 }
 
@@ -35,7 +35,7 @@ function Pattern({ args }: { args: Record<string, unknown> }): ReactNode {
 function Summary({ args }: ToolRenderProps): ReactNode {
 	return (
 		<span>
-			<Pattern args={args} /> <span className="tv-muted">{t("in")}</span>{" "}
+			<Pattern args={args} /> <span className="tv-muted">{t("tools.in")}</span>{" "}
 			<span className="tv-path">{pathsOf(args).join(", ")}</span> <Badges items={argBadges(args)} />
 		</span>
 	);
@@ -54,21 +54,21 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 		}
 	}
 	const badges = argBadges(args);
-	if (matchCount !== null) badges.push(t("{count} match(es)", { count: String(matchCount) }));
-	if (fileCount !== null) badges.push(t("{count} file(s)", { count: String(fileCount) }));
+	if (matchCount !== null) badges.push(t("tools.matchWithCount", { count: String(matchCount) }));
+	if (fileCount !== null) badges.push(t("tools.fileWithCount", { count: String(fileCount) }));
 	return (
 		<>
 			<div>
-				<Pattern args={args} /> <span className="tv-muted">{t("in")}</span>{" "}
+				<Pattern args={args} /> <span className="tv-muted">{t("tools.in")}</span>{" "}
 				<span className="tv-path">{pathsOf(args).join(", ")}</span> <Badges items={badges} />
 				{truncated && (
 					<>
 						{" "}
-						<Badge tone="warn">{t("truncated")}</Badge>
+						<Badge tone="warn">{t("tools.truncated")}</Badge>
 					</>
 				)}
 			</div>
-			{missing.length > 0 && <Note tone="warn">{t("skipped missing: {path}", { path: missing.join(", ") })}</Note>}
+			{missing.length > 0 && <Note tone="warn">{t("tools.skippedMissingWithPath", { path: missing.join(", ") })}</Note>}
 			{error !== null && !resultTextOf(result).trim() && <Note tone="err">{error}</Note>}
 			<ResultText result={result} maxLines={14} variant="code" />
 		</>

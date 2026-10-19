@@ -162,10 +162,10 @@ export function MarketplaceGrid({
 				<input
 					type="search"
 					className="mp-search"
-					placeholder={t("plugin search placeholder")}
+					placeholder={t("guest.pluginSearchPlaceholder")}
 					value={filter}
 					onChange={e => setFilter(e.target.value)}
-					aria-label={t("plugin search label")}
+					aria-label={t("guest.pluginSearchLabel")}
 				/>
 				<button
 					type="button"
@@ -174,18 +174,18 @@ export function MarketplaceGrid({
 					disabled={!client || showLoading}
 					data-loading={showLoading ? "true" : "false"}
 				>
-					{showLoading ? t("plugin refreshing") : t("plugin refresh")}
+					{showLoading ? t("guest.pluginRefreshing") : t("guest.pluginRefresh")}
 				</button>
 			</header>
 
 			{allCategories.length > 0 && (
-				<div className="mp-filter-bar" role="group" aria-label={t("filter by category")}>
+				<div className="mp-filter-bar" role="group" aria-label={t("guest.filterCategory")}>
 					<button
 						type="button"
 						className={`mp-chip ${category === null ? "mp-chip--active" : ""}`}
 						onClick={() => setCategory(null)}
 					>
-						{t("all categories")}
+						{t("guest.allCategories")}
 					</button>
 					{allCategories.map(c => (
 						<button
@@ -220,8 +220,8 @@ export function MarketplaceGrid({
 					<span className="mp-empty-icon" aria-hidden="true">
 						🧩
 					</span>
-					<span>{t("plugin empty title")}</span>
-					<span>{t("plugin empty hint")}</span>
+					<span>{t("guest.pluginEmptyTitle")}</span>
+					<span>{t("guest.pluginEmptyHint")}</span>
 				</div>
 			)}
 

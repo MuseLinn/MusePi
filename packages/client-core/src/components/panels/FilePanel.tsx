@@ -78,7 +78,7 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 
 	const del = useCallback(
 		async (entry: WorkspaceEntry): Promise<void> => {
-			if (!window.confirm(t("delete file? {name}", { name: entry.name }))) return;
+			if (!window.confirm(t("guest.deleteFileWithName.info", { name: entry.name }))) return;
 			setBusy(true);
 			try {
 				await client.rpc("fs.delete", { path: entry.path });
@@ -128,7 +128,7 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 	return (
 		<div className="sh-files">
 			<div className="sh-panel-head">
-				<h2 className="sh-panel-title">{t("files")}</h2>
+				<h2 className="sh-panel-title">{t("settings.files")}</h2>
 				<span className="sh-panel-muted sh-files-root" title={rootPath || cwd || ""}>
 					{rootPath || cwd || ""}
 				</span>
@@ -137,14 +137,14 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 				<div className="sh-panel-state">
 					<p className="sh-panel-error">{error}</p>
 					<button type="button" className="sh-btn" onClick={() => void load()}>
-						{t("retry")}
+						{t("settings.retry")}
 					</button>
 				</div>
 			)}
 			<div className="sh-files-body">
 				<div className="sh-files-tree">
 					{tree === null ? (
-						<p className="sh-panel-state">{t("loading…")}</p>
+						<p className="sh-panel-state">{t("settings.loading2")}</p>
 					) : (
 						<ul className="sh-tree">
 							{tree.map(node => (
@@ -174,11 +174,11 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 				</div>
 				<div className="sh-files-preview">
 					{selected === null ? (
-						<p className="sh-panel-muted">{t("select a file to preview")}</p>
+						<p className="sh-panel-muted">{t("guest.selectFilePreview")}</p>
 					) : previewErr !== null ? (
 						<p className="sh-panel-error">{previewErr}</p>
 					) : preview === null ? (
-						<p className="sh-panel-state">{t("loading…")}</p>
+						<p className="sh-panel-state">{t("settings.loading2")}</p>
 					) : (
 						<>
 							<div className="sh-files-preview-head">
@@ -196,12 +196,12 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 				<div className="sh-files-actions">
 					<input
 						className="sh-input"
-						placeholder={t("new file name")}
+						placeholder={t("guest.newFileName")}
 						value={newFileName}
 						onChange={e => setNewFileName(e.target.value)}
 					/>
 					<button type="button" className="sh-btn" disabled={busy} onClick={() => void createFile()}>
-						{t("create file")}
+						{t("guest.createFile")}
 					</button>
 				</div>
 			)}
@@ -279,7 +279,7 @@ function TreeRow({
 					<button
 						type="button"
 						className="sh-btn-icon sh-tree-op"
-						title={t("rename")}
+						title={t("settings.rename")}
 						disabled={busy}
 						onClick={e => {
 							e.stopPropagation();
@@ -291,7 +291,7 @@ function TreeRow({
 					<button
 						type="button"
 						className="sh-btn-icon sh-tree-op sh-tree-op--danger"
-						title={t("delete")}
+						title={t("settings.delete")}
 						disabled={busy}
 						onClick={e => {
 							e.stopPropagation();

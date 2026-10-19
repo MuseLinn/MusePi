@@ -100,9 +100,9 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	const mediaItems = [
 		...images.map((img, i) => ({
 			src: `data:${img.mimeType};base64,${img.data}`,
-			alt: t("tool result {count}", { count: String(i + 1) }),
+			alt: t("tools.toolResultWithCount", { count: String(i + 1) }),
 		})),
-		...shotSrcs.map((src, i) => ({ src, alt: t("computer screenshot {count}", { count: String(i + 1) }) })),
+		...shotSrcs.map((src, i) => ({ src, alt: t("tools.computerScreenshotWithCount", { count: String(i + 1) }) })),
 	];
 	return (
 		<>

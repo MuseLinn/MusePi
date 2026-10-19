@@ -78,7 +78,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 	const labels = order.map(op => (counts[op] > 1 ? `${op}×${counts[op]}` : op));
 	return (
 		<>
-			<Badges items={labels.length > 0 ? labels : [t("update")]} />
+			<Badges items={labels.length > 0 ? labels : [t("tools.update")]} />
 			{firstTask !== null && <span> {truncate(normalizeWs(firstTask), 60)}</span>}
 		</>
 	);
@@ -93,14 +93,14 @@ function opRow(entry: unknown, key: number): ReactNode {
 	if (task !== null) parts.push(task);
 	if (phase !== null) parts.push(phase);
 	if (Array.isArray(entry.items) && entry.items.length > 0) {
-		parts.push(t("{count} item(s)", { count: String(entry.items.length) }));
+		parts.push(t("tools.itemWithCount", { count: String(entry.items.length) }));
 	}
 	if (Array.isArray(entry.list) && entry.list.length > 0) {
 		let tasks = 0;
 		for (const phaseEntry of entry.list) {
 			if (isRecord(phaseEntry) && Array.isArray(phaseEntry.items)) tasks += phaseEntry.items.length;
 		}
-		parts.push(t("{phases} phase(s) · {tasks} tasks", { phases: String(entry.list.length), tasks: String(tasks) }));
+		parts.push(t("tools.phaseTasksWithPhasesWithTasks", { phases: String(entry.list.length), tasks: String(tasks) }));
 	}
 	return (
 		<Row key={key} k={str(entry.op) ?? "update"}>

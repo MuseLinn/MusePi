@@ -56,7 +56,7 @@ export function Toasts({ client }: { client: SessionClient }): ReactNode {
 				<div key={n.id} className={`sh-toast sh-toast-${n.level}`} role="status">
 					<span className="sh-toast-msg">{n.message}</span>
 					{n.level === "error" && (
-						<button type="button" className="sh-toast-close" onClick={() => close(n.id)} title={t("dismiss")}>
+						<button type="button" className="sh-toast-close" onClick={() => close(n.id)} title={t("settings.dismiss")}>
 							<X size={12} />
 						</button>
 					)}

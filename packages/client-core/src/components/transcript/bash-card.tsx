@@ -37,7 +37,7 @@ export function BashCard({ message }: { message: BashExecutionMessage }): ReactN
 				</span>
 				<code>{message.command}</code>
 				{message.excludeFromContext && (
-					<span className="tr-bash-excluded">{t("bash output excluded from context")}</span>
+					<span className="tr-bash-excluded">{t("composer.bashOutputExcludedContext")}</span>
 				)}
 			</div>
 			{message.output.length > 0 && (
@@ -49,15 +49,15 @@ export function BashCard({ message }: { message: BashExecutionMessage }): ReactN
 			<div className="tr-bash-meta">
 				<span className={`tr-bash-badge tr-bash-badge--${status}`}>
 					{message.cancelled
-						? t("cancelled")
+						? t("composer.cancelled")
 						: message.exitCode === undefined
 							? "?"
-							: `${t("exit code")} ${message.exitCode}`}
+							: `${t("tools.exitCode")} ${message.exitCode}`}
 				</span>
-				{message.truncated && <span className="tr-bash-truncated">{t("output truncated")}</span>}
+				{message.truncated && <span className="tr-bash-truncated">{t("tools.outputTruncated")}</span>}
 				{hasMore && (
 					<button type="button" className="tr-bash-toggle" onClick={() => setExpanded(v => !v)}>
-						{expanded ? t("collapse") : `${t("show all")} (${message.output.split("\n").length} ${t("lines")})`}
+						{expanded ? t("tools.collapse") : `${t("composer.showAll")} (${message.output.split("\n").length} ${t("composer.lines")})`}
 					</button>
 				)}
 			</div>

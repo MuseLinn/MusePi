@@ -10,31 +10,31 @@ import { type TranslationKey, t } from "../../i18n/index.js";
 /** Time-aware greeting: seven brackets — 凌晨 / 清晨 / 早上 /
  * 中午 / 下午 / 晚上 / 深夜. */
 function greeting(hour: number): string {
-	if (hour < 5) return t("it is late, take care");
-	if (hour < 8) return t("early morning");
-	if (hour < 12) return t("good morning");
-	if (hour < 14) return t("good noon");
-	if (hour < 18) return t("good afternoon");
-	if (hour < 22) return t("good evening");
-	return t("it is late, take care");
+	if (hour < 5) return t("settings.lateTakeCare");
+	if (hour < 8) return t("settings.earlyMorning");
+	if (hour < 12) return t("settings.goodMorning");
+	if (hour < 14) return t("settings.goodNoon");
+	if (hour < 18) return t("settings.goodAfternoon");
+	if (hour < 22) return t("settings.goodEvening");
+	return t("settings.lateTakeCare");
 }
 
 /** Rotating tips shown under the greeting. Keys are translated at render
  *  time (t is locale-aware), so a locale switch updates the tip line. */
 const TIP_KEYS: TranslationKey[] = [
-	"try / for commands and @ for context",
-	"ask the agent to explain a file with @",
-	"approval cards appear when a tool needs your ok",
-	"dictate with the mic button in the composer",
-	"annotate images before sending them",
-	"schedule idle-window tasks from the task center",
-	"type /autoresearch to run experiments",
-	"favorite models pin to the top of the model picker",
-	"plan mode makes the agent outline before editing",
-	"goal mode turns your next message into a goal",
-	"paused sessions survive daemon restarts",
-	"pick a preset mode for the new session",
-	"customize the scrollbar skin in appearance settings",
+	"settings.tryCommandsContext",
+	"settings.askAgentExplainFile",
+	"settings.approvalCardsAppearTool",
+	"settings.dictateMicButtonComposer",
+	"settings.annotateImagesBeforeSending",
+	"settings.scheduleIdleWindowTasks",
+	"settings.typeAutoresearchRunExperiments",
+	"settings.favoriteModelsPinTop",
+	"settings.planModeMakesAgent",
+	"settings.goalModeTurnsYour",
+	"settings.pausedSessionsSurviveDaemon",
+	"settings.pickPresetModeNew",
+	"settings.customizeScrollbarSkinAppearance",
 ] as const;
 
 function nextTip(current: TranslationKey): TranslationKey {

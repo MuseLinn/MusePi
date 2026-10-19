@@ -26,9 +26,9 @@ function Summary(props: ToolRenderProps): ReactNode {
 				<>
 					{" "}
 					{found > 0 ? (
-						<Badge tone="accent">{t("{count} found", { count: String(found) })}</Badge>
+						<Badge tone="accent">{t("tools.foundWithCount", { count: String(found) })}</Badge>
 					) : (
-						<Badge tone="warn">{t("no matches")}</Badge>
+						<Badge tone="warn">{t("tools.noMatches")}</Badge>
 					)}
 				</>
 			)}
@@ -77,10 +77,10 @@ function Body(props: ToolRenderProps): ReactNode {
 	}
 	return (
 		<>
-			{query && <Output text={query} title={t("query")} maxLines={4} />}
+			{query && <Output text={query} title={t("tools.query")} maxLines={4} />}
 			{entries.length > 0 ? (
 				<>
-					{asOf && <Badges items={[t("as of {value} UTC", { value: asOf })]} />}
+					{asOf && <Badges items={[t("tools.asOfUtcWithValue", { value: asOf })]} />}
 					<div className="tv-list">
 						{entries.map((entry, i) => (
 							<Row key={i}>

@@ -51,15 +51,15 @@ describe("i18n API (split surface)", () => {
 
 	test("t resolves zh-CN values with named params", () => {
 		setLocale("zh-CN");
-		expect(t("usage")).toBe("用量");
-		expect(t("resets in {time}", { time: "1h" })).toBe("1h 后重置");
-		expect(t("{count} sessions active", { count: 2 })).toBe("2 个会话活跃");
+		expect(t("tools.usage")).toBe("用量");
+		expect(t("general.resetsInWithTime", { time: "1h" })).toBe("1h 后重置");
+		expect(t("general.sessionsActiveWithCount", { count: 2 })).toBe("2 个会话活跃");
 	});
 
 	test("t resolves en-US values and falls back to the key", () => {
 		setLocale("en-US");
-		expect(t("usage")).toBe("Usage");
-		expect(t("resets in {time}", { time: "1h" })).toBe("Resets in 1h");
+		expect(t("tools.usage")).toBe("Usage");
+		expect(t("general.resetsInWithTime", { time: "1h" })).toBe("Resets in 1h");
 	});
 
 	test("registerTranslations overlays new + existing keys for the locale", () => {
@@ -69,10 +69,10 @@ describe("i18n API (split surface)", () => {
 			usage: "自定义用量",
 		});
 		expect(tLoose("plugin.custom.greeting")).toBe("插件你好");
-		expect(t("usage")).toBe("自定义用量");
+		expect(t("tools.usage")).toBe("自定义用量");
 		// Other locale untouched.
 		setLocale("en-US");
-		expect(t("usage")).toBe("Usage");
+		expect(t("tools.usage")).toBe("Usage");
 	});
 
 	test("registerTranslations adds a brand-new locale", () => {
@@ -80,7 +80,7 @@ describe("i18n API (split surface)", () => {
 		setLocale("fr-FR");
 		expect(tLoose("plugin.custom.greeting")).toBe("Bonjour");
 		// Fallback for unregistered keys in the new locale.
-		expect(t("usage")).toBe("usage");
+		expect(t("tools.usage")).toBe("usage");
 		setLocale("en-US");
 	});
 });

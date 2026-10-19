@@ -115,11 +115,11 @@ export function WidgetFullscreen({
 	}, [onClose]);
 	return createPortal(
 		<div className="tr-widget-fs" role="dialog" aria-modal="true">
-			<button type="button" className="tr-widget-fs-x" aria-label={t("close")} onClick={onClose}>
+			<button type="button" className="tr-widget-fs-x" aria-label={t("settings.close")} onClick={onClose}>
 				<X size={16} />
 			</button>
 			<div className="tr-widget-fs-head">
-				<span className="tr-widget-fs-title">{payload.title ?? t("widget")}</span>
+				<span className="tr-widget-fs-title">{payload.title ?? t("settings.widget")}</span>
 			</div>
 			<div className="tr-widget-fs-body">
 				<InlineWidget
@@ -219,8 +219,8 @@ function WidgetCardMenu({
 				ref={btnRef}
 				type="button"
 				className="tv-widget-fs-btn"
-				title={t("widget actions")}
-				aria-label={t("widget actions")}
+				title={t("settings.widgetActions")}
+				aria-label={t("settings.widgetActions")}
 				aria-expanded={at !== null}
 				onClick={() => {
 					if (at) {
@@ -254,7 +254,7 @@ function WidgetCardMenu({
 							}}
 						>
 							<Download size={13} />
-							{t("download")}
+							{t("settings.download")}
 						</button>
 						{saveImage && (
 							<button
@@ -266,7 +266,7 @@ function WidgetCardMenu({
 								}}
 							>
 								<ImageDown size={13} />
-								{t("widget download image")}
+								{t("settings.widgetDownloadImage")}
 							</button>
 						)}
 						{copyImage && (
@@ -279,12 +279,12 @@ function WidgetCardMenu({
 								}}
 							>
 								<Images size={13} />
-								{t("copy as image")}
+								{t("settings.copyImage2")}
 							</button>
 						)}
 						<button type="button" role="menuitem" onClick={copySource}>
 							{copied ? <Check size={13} /> : <Copy size={13} />}
-							{copied ? t("copied") : t("copy")}
+							{copied ? t("settings.copied") : t("settings.copy")}
 						</button>
 						<button
 							type="button"
@@ -295,7 +295,7 @@ function WidgetCardMenu({
 							}}
 						>
 							{showCode ? <Eye size={13} /> : <Code2 size={13} />}
-							{showCode ? t("widget view ui") : t("widget view code")}
+							{showCode ? t("settings.widgetViewUi") : t("settings.widgetViewCode")}
 						</button>
 					</div>,
 					document.body,
@@ -355,8 +355,8 @@ export function WidgetCard({
 						<button
 							type="button"
 							className="tv-widget-fs-btn"
-							title={t("widget fullscreen")}
-							aria-label={t("widget fullscreen")}
+							title={t("settings.widgetFullscreen")}
+							aria-label={t("settings.widgetFullscreen")}
 							onClick={() => setFullscreen(true)}
 						>
 							<Maximize2 size={12} />
@@ -384,7 +384,7 @@ export function WidgetStandaloneCards({
 	const payloads = collectWidgetPayloads(content, results);
 	if (payloads.length === 0) return null;
 	return (
-		<div className="tr-widget-standalone" aria-label={t("widget preview")}>
+		<div className="tr-widget-standalone" aria-label={t("settings.widgetPreview")}>
 			{payloads.map(payload => (
 				<WidgetCard key={JSON.stringify(payload)} payload={payload} host={host} />
 			))}

@@ -26,7 +26,7 @@ export function GaugeCard({
 		<div className="gui-widget-gauge">
 			<div className="gui-widget-gauge-head">
 				<span className="gui-widget-gauge-title">{label}</span>
-				<span className="gui-widget-gauge-sub">{t("widget gauge sub")}</span>
+				<span className="gui-widget-gauge-sub">{t("settings.widgetGaugeSub")}</span>
 			</div>
 			<div className="gui-widget-gauge-body">
 				<Gauge value={value} className="gui-widget-gauge-svg" />
@@ -102,7 +102,7 @@ export function KlineCard({
 	const delta = typeof data.delta === "number" ? data.delta : 0;
 	const symbol = stocks[active] ?? (typeof data.symbol === "string" ? data.symbol : "—");
 	if (candles.length === 0) {
-		return <div className="gui-widget-kline-empty">{t("widget kline empty")}</div>;
+		return <div className="gui-widget-kline-empty">{t("settings.widgetKlineEmpty")}</div>;
 	}
 	const last = candles[candles.length - 1];
 	return (
@@ -123,15 +123,15 @@ export function KlineCard({
 				</span>
 			</div>
 			<div className="gui-widget-kline-data">
-				<span>{t("widget kline ohlc")}</span>
+				<span>{t("settings.widgetKlineOhlc")}</span>
 				<span>
 					开 {last.o.toFixed(2)} 高 {last.h.toFixed(2)} 低 {last.l.toFixed(2)} 收 {last.c.toFixed(2)}
 				</span>
 			</div>
 			<KLine candles={candles} className="gui-widget-kline-svg" />
 			<div className="gui-widget-kline-foot">
-				<span>MA5 · MA20 · {t("widget kline vol")}</span>
-				<span>{t("widget kline range")}</span>
+				<span>MA5 · MA20 · {t("settings.widgetKlineVol")}</span>
+				<span>{t("settings.widgetKlineRange")}</span>
 			</div>
 		</div>
 	);
@@ -182,7 +182,7 @@ export function HeatwallCard({
 	return (
 		<div className="gui-widget-heatwall">
 			<div className="gui-widget-heatwall-head">
-				<span className="gui-widget-heatwall-title">HEAT WALL · {t("widget heatwall sub")}</span>
+				<span className="gui-widget-heatwall-title">HEAT WALL · {t("settings.widgetHeatwallSub")}</span>
 				<span className="gui-widget-heatwall-count">{tiles.length} · REFRESH</span>
 			</div>
 			<div className="gui-widget-heatwall-grid">
@@ -204,7 +204,7 @@ export function HeatwallCard({
 					);
 				})}
 			</div>
-			<div className="gui-widget-heatwall-foot">{t("widget heatwall foot")}</div>
+			<div className="gui-widget-heatwall-foot">{t("settings.widgetHeatwallFoot")}</div>
 		</div>
 	);
 }
@@ -258,7 +258,7 @@ export function IndextapeCard({
 				</span>
 			</div>
 			<Sparkline data={series} height={40} strokeWidth={1.2} className="gui-widget-indextape-svg" />
-			<div className="gui-widget-indextape-foot">{t("widget indextape foot")}</div>
+			<div className="gui-widget-indextape-foot">{t("settings.widgetIndextapeFoot")}</div>
 		</div>
 	);
 }

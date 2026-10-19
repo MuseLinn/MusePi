@@ -84,14 +84,14 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 			{first ? <PathText path={first} /> : <InvalidArg what="paths" />}
 			{paths.length > 1 && (
 				<span className="tv-faint">
-					+{paths.length - 1} {t("more")}
+					+{paths.length - 1} {t("tools.more")}
 				</span>
 			)}
-			<Badge tone="accent">{t("{count} op(s)", { count: String(opCount) })}</Badge>
+			<Badge tone="accent">{t("tools.opWithCount", { count: String(opCount) })}</Badge>
 			{total != null && (
-				<Badge tone={total > 0 ? "ok" : "warn"}>{t("{count} replacement(s)", { count: String(total) })}</Badge>
+				<Badge tone={total > 0 ? "ok" : "warn"}>{t("tools.replacementWithCount", { count: String(total) })}</Badge>
 			)}
-			{details?.limitReached && <Badge tone="warn">{t("limit")}</Badge>}
+			{details?.limitReached && <Badge tone="warn">{t("tools.limit")}</Badge>}
 		</>
 	);
 }
@@ -100,14 +100,14 @@ function OpCell({ op, lang }: { op: AstEditOp; lang: string | null }): ReactNode
 	return (
 		<div className="tv-cell">
 			{op.pat ? (
-				<CodeBlock code={op.pat} lang={lang} title={t("pattern")} maxLines={10} />
+				<CodeBlock code={op.pat} lang={lang} title={t("tools.pattern")} maxLines={10} />
 			) : (
 				<InvalidArg what="pattern" />
 			)}
 			{op.out ? (
-				<CodeBlock code={op.out} lang={lang} title={t("replacement")} maxLines={10} />
+				<CodeBlock code={op.out} lang={lang} title={t("tools.replacement")} maxLines={10} />
 			) : (
-				<div className="tv-muted">{t("deletion — matched code is removed")}</div>
+				<div className="tv-muted">{t("tools.deletionMatchedCodeRemoved")}</div>
 			)}
 		</div>
 	);
@@ -142,17 +142,17 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				<span className="tv-badges">
 					{details.totalReplacements != null && (
 						<Badge tone={details.totalReplacements > 0 ? "ok" : "warn"}>
-							{t("{count} replacement(s)", { count: String(details.totalReplacements) })}
+							{t("tools.replacementWithCount", { count: String(details.totalReplacements) })}
 						</Badge>
 					)}
 					{details.filesTouched != null && (
-						<Badge>{t("{count} file(s)", { count: String(details.filesTouched) })}</Badge>
+						<Badge>{t("tools.fileWithCount", { count: String(details.filesTouched) })}</Badge>
 					)}
 					{details.filesSearched != null && (
-						<Badge>{t("searched {count}", { count: String(details.filesSearched) })}</Badge>
+						<Badge>{t("tools.searchedWithCount", { count: String(details.filesSearched) })}</Badge>
 					)}
-					{details.scopePath && <Badge>{t("in {path}", { path: homePath(details.scopePath) })}</Badge>}
-					{details.limitReached && <Badge tone="warn">{t("limit reached")}</Badge>}
+					{details.scopePath && <Badge>{t("tools.inWithPath", { path: homePath(details.scopePath) })}</Badge>}
+					{details.limitReached && <Badge tone="warn">{t("tools.limitReached")}</Badge>}
 				</span>
 			)}
 			{details && details.fileReplacements.length > 0 && (
@@ -164,12 +164,12 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					))}
 				</div>
 			)}
-			{details?.limitReached && <Note tone="warn">{t("limit reached; narrow path")}</Note>}
+			{details?.limitReached && <Note tone="warn">{t("tools.limitReachedNarrowPath")}</Note>}
 			{details && details.parseErrors.length > 0 && (
 				<Output
 					text={details.parseErrors.join("\n")}
 					maxLines={6}
-					title={t("parse issues ({count})", { count: String(parseErrorsTotal) })}
+					title={t("tools.parseIssuesWithCount", { count: String(parseErrorsTotal) })}
 					variant="plain"
 				/>
 			)}

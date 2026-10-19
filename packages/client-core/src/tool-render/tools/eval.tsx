@@ -339,7 +339,7 @@ function Summary({ name, args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{label && <span>{truncate(label, 72)}</span>}
-			<Badges items={[cells.length > 1 ? t("{count} cells", { count: String(cells.length) }) : null, ...langs]} />
+			<Badges items={[cells.length > 1 ? t("tools.cellsWithCount", { count: String(cells.length) }) : null, ...langs]} />
 		</>
 	);
 }
@@ -388,7 +388,7 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 						}
 						if (dc.status === "error")
 							titleParts.push(
-								dc.exitCode !== null ? t("error (exit {code})", { code: String(dc.exitCode) }) : t("error"),
+								dc.exitCode !== null ? t("tools.errorWithCode", { code: String(dc.exitCode) }) : t("tools.error"),
 							);
 					}
 					return (
@@ -399,7 +399,7 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 					);
 				})}
 			</div>
-			{jsonText && <Output text={jsonText} lang="json" variant="code" maxLines={12} title={t("display")} />}
+			{jsonText && <Output text={jsonText} lang="json" variant="code" maxLines={12} title={t("tools.display")} />}
 			{notice && <Note>{notice}</Note>}
 			<ResultImages result={result} />
 			{detailCells.length === 0 && <ResultText result={result} maxLines={12} />}

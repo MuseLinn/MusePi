@@ -117,14 +117,14 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 				<>
 					{" "}
 					<Badge>
-						+{paths.length - 1} {t("more")}
+						+{paths.length - 1} {t("tools.more")}
 					</Badge>
 				</>
 			)}
 			{opCount > 0 && (
 				<>
 					{" "}
-					<Badge>{t("{count} op(s)", { count: String(opCount) })}</Badge>
+					<Badge>{t("tools.opWithCount", { count: String(opCount) })}</Badge>
 				</>
 			)}
 			{stats !== null && stats.added > 0 && (
@@ -142,7 +142,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 			{result?.isError === true && (
 				<>
 					{" "}
-					<Badge tone="err">{t("failed")}</Badge>
+					<Badge tone="err">{t("tools.failed")}</Badge>
 				</>
 			)}
 		</>
@@ -187,7 +187,7 @@ function FileSection({ entry, fallbackPath }: { entry: FileEntry; fallbackPath?:
 						{entry.isError && (
 							<>
 								{" "}
-								<Badge tone="err">{t("failed")}</Badge>
+								<Badge tone="err">{t("tools.failed")}</Badge>
 							</>
 						)}
 					</span>
@@ -247,7 +247,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 					)}
 				</KvGrid>
 			)}
-			{input !== null && input.length > 0 && <Output text={input} variant="code" maxLines={10} title={t("input")} />}
+			{input !== null && input.length > 0 && <Output text={input} variant="code" maxLines={10} title={t("tools.input")} />}
 			{input === null && !running && (args.input !== undefined || args._input !== undefined) && (
 				<InvalidArg what="input" />
 			)}

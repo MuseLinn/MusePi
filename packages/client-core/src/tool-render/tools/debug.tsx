@@ -5,7 +5,7 @@ import { Badge, CodeBlock, Kv, KvGrid, PathText, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, display, isRecord, normalizeWs, num, str, truncate } from "../util";
 
-/** Session snapshot the TUI renders as its "Session" section (details.snapshot). */
+/** Session snapshot the TUI renders as its "settings.session" section (details.snapshot). */
 interface SessionSnapshot {
 	id: string | null;
 	adapter: string | null;
@@ -42,7 +42,7 @@ function snapshotOf(result: ToolRenderProps["result"]): SessionSnapshot | null {
 
 function actionOf(props: ToolRenderProps): string {
 	const action = str(props.args.action) ?? str(detailsRecord(props.result)?.action);
-	return action ? action.replace(/_/g, " ") : t("request");
+	return action ? action.replace(/_/g, " ") : t("tools.request");
 }
 
 /** Mirrors the TUI's summarizeDebugCall target priority. */
@@ -80,35 +80,35 @@ function Summary(props: ToolRenderProps): ReactNode {
 
 /** Scalar args worth a KvGrid row, in display order (program/file/expression are special-cased). */
 const SCALAR_ARGS = [
-	["adapter", "adapter"],
-	["cwd", "cwd"],
-	["function", "function"],
-	["name", "name"],
-	["condition", "condition"],
-	["hit_condition", "hit condition"],
-	["context", "context"],
-	["frame_id", "frame id"],
-	["scope_id", "scope id"],
-	["variable_ref", "variable ref"],
-	["pid", "pid"],
-	["host", "host"],
-	["port", "port"],
-	["levels", "levels"],
-	["memory_reference", "memory ref"],
-	["instruction_reference", "instruction ref"],
-	["instruction_count", "instruction count"],
-	["instruction_offset", "instruction offset"],
-	["offset", "offset"],
-	["count", "count"],
-	["data", "data"],
-	["data_id", "data id"],
-	["access_type", "access"],
-	["command", "command"],
-	["resolve_symbols", "resolve symbols"],
-	["allow_partial", "allow partial"],
-	["start_module", "start module"],
-	["module_count", "module count"],
-	["timeout", "timeout"],
+	["tools.adapter", "tools.adapter"],
+	["settings.cwd", "settings.cwd"],
+	["tools.function", "tools.function"],
+	["tools.name", "tools.name"],
+	["tools.condition", "tools.condition"],
+	["hit_condition", "tools.hitCondition"],
+	["settings.context", "settings.context"],
+	["frame_id", "tools.frameId"],
+	["scope_id", "tools.scopeId"],
+	["variable_ref", "tools.variableRef"],
+	["tools.pid", "tools.pid"],
+	["settings.host", "settings.host"],
+	["tools.port", "tools.port"],
+	["tools.levels", "tools.levels"],
+	["memory_reference", "tools.memoryRef"],
+	["instruction_reference", "tools.instructionRef"],
+	["instruction_count", "tools.instructionCount"],
+	["instruction_offset", "tools.instructionOffset"],
+	["tools.offset", "tools.offset"],
+	["tools.count", "tools.count"],
+	["tools.data", "tools.data"],
+	["data_id", "tools.dataId"],
+	["access_type", "tools.access"],
+	["tools.command", "tools.command"],
+	["resolve_symbols", "tools.resolveSymbols"],
+	["allow_partial", "tools.allowPartial"],
+	["start_module", "tools.startModule"],
+	["module_count", "tools.moduleCount"],
+	["tools.timeout", "tools.timeout"],
 ] as const;
 
 function Body(props: ToolRenderProps): ReactNode {
@@ -122,27 +122,27 @@ function Body(props: ToolRenderProps): ReactNode {
 	const argRows: ReactNode[] = [];
 	if (program !== null) {
 		argRows.push(
-			<Kv key="program" k="program">
+			<Kv key="tools.program" k="tools.program">
 				<PathText path={program} />
 			</Kv>,
 		);
 	}
 	if (programArgs.length > 0) {
 		argRows.push(
-			<Kv key="args" k="args">
+			<Kv key="tools.args" k="tools.args">
 				{truncate(programArgs.join(" "), 160)}
 			</Kv>,
 		);
 	}
 	if (file !== null) {
 		argRows.push(
-			<Kv key="file" k="file">
+			<Kv key="tools.file" k="tools.file">
 				<PathText path={file} from={line ?? undefined} />
 			</Kv>,
 		);
 	} else if (line !== null) {
 		argRows.push(
-			<Kv key="line" k="line">
+			<Kv key="tools.line" k="tools.line">
 				{line}
 			</Kv>,
 		);
@@ -170,35 +170,35 @@ function Body(props: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{argRows.length > 0 && <KvGrid>{argRows}</KvGrid>}
-			{expression !== null && <CodeBlock code={expression} title={t("expression")} maxLines={8} />}
-			{customArgsJson && <CodeBlock code={customArgsJson} lang="json" title={t("arguments")} maxLines={10} />}
+			{expression !== null && <CodeBlock code={expression} title={t("tools.expression")} maxLines={8} />}
+			{customArgsJson && <CodeBlock code={customArgsJson} lang="json" title={t("tools.arguments")} maxLines={10} />}
 			{snapshot && (
 				<KvGrid>
-					{snapshot.id !== null && <Kv k={t("session")}>{snapshot.id}</Kv>}
-					{snapshot.adapter !== null && <Kv k={t("adapter")}>{snapshot.adapter}</Kv>}
+					{snapshot.id !== null && <Kv k={t("settings.session2")}>{snapshot.id}</Kv>}
+					{snapshot.adapter !== null && <Kv k={t("tools.adapter")}>{snapshot.adapter}</Kv>}
 					{snapshot.status !== null && (
-						<Kv k={t("status")}>
+						<Kv k={t("tools.status")}>
 							<Badge tone={snapshot.status === "exited" ? "warn" : "ok"}>{snapshot.status}</Badge>
 						</Kv>
 					)}
 					{snapshot.program !== null && (
-						<Kv k={t("program")}>
+						<Kv k={t("tools.program")}>
 							<PathText path={snapshot.program} />
 						</Kv>
 					)}
-					{snapshot.stopReason !== null && <Kv k={t("stop reason")}>{snapshot.stopReason}</Kv>}
-					{snapshot.frameName !== null && <Kv k={t("frame")}>{snapshot.frameName}</Kv>}
+					{snapshot.stopReason !== null && <Kv k={t("tools.stopReason")}>{snapshot.stopReason}</Kv>}
+					{snapshot.frameName !== null && <Kv k={t("tools.frame")}>{snapshot.frameName}</Kv>}
 					{snapshot.sourcePath !== null && snapshot.line !== null && (
-						<Kv k={t("location")}>
+						<Kv k={t("tools.location")}>
 							<PathText
 								path={snapshot.sourcePath}
 								sel={snapshot.column !== null ? `${snapshot.line}:${snapshot.column}` : String(snapshot.line)}
 							/>
 						</Kv>
 					)}
-					{snapshot.exitCode !== null && <Kv k={t("exit code")}>{snapshot.exitCode}</Kv>}
+					{snapshot.exitCode !== null && <Kv k={t("tools.exitCode")}>{snapshot.exitCode}</Kv>}
 					{snapshot.needsConfigurationDone && (
-						<Kv k={t("configuration")}>{t("pending configurationDone — set breakpoints, then continue")}</Kv>
+						<Kv k={t("tools.configuration")}>{t("tools.pendingConfigurationdoneSet.info")}</Kv>
 					)}
 				</KvGrid>
 			)}

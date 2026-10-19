@@ -129,7 +129,7 @@ export function Output({ text, maxLines = 10, lang, error, variant = "plain", ti
 			)}
 			{collapsible && (
 				<button type="button" className="tv-expand" onClick={() => setExpanded(v => !v)}>
-					{expanded ? t("collapse") : t("⋯ {count} more lines", { count: String(lines.length - maxLines) })}
+					{expanded ? t("tools.collapse") : t("tools.moreLinesWithCount", { count: String(lines.length - maxLines) })}
 				</button>
 			)}
 		</div>
@@ -208,12 +208,12 @@ export function ResultImages({ result }: { result: ToolResultLike | undefined })
 					type="button"
 					style={{ all: "unset", display: "inline-flex" }}
 					onClick={() => openImage(img)}
-					aria-label={t("Open tool result image {count}", { count: String(i + 1) })}
+					aria-label={t("tools.openToolResultImageWithCount", { count: String(i + 1) })}
 				>
 					<img
 						className="tv-img"
 						src={`data:${img.mimeType};base64,${img.data}`}
-						alt={t("tool result {count}", { count: String(i + 1) })}
+						alt={t("tools.toolResultWithCount", { count: String(i + 1) })}
 						loading="lazy"
 						decoding="async"
 					/>
@@ -241,7 +241,7 @@ export function Row({ k, children }: { k?: ReactNode; children: ReactNode }): Re
 
 /** Marker for arguments that arrived with the wrong JSON type. */
 export function InvalidArg({ what }: { what?: string }): ReactNode {
-	return <span className="tv-err-text">{t("[invalid {value}]", { value: what ?? "arg" })}</span>;
+	return <span className="tv-err-text">{t("tools.invalidWithValue", { value: what ?? "arg" })}</span>;
 }
 
 /**
@@ -747,7 +747,7 @@ export function DiffBlock({
 			)}
 			{collapsible && (
 				<button type="button" className="tv-expand" onClick={() => setExpanded(v => !v)}>
-					{expanded ? t("collapse") : t("⋯ {count} more lines", { count: String(lines.length - maxLines) })}
+					{expanded ? t("tools.collapse") : t("tools.moreLinesWithCount", { count: String(lines.length - maxLines) })}
 				</button>
 			)}
 		</div>

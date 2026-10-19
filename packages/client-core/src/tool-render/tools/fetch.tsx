@@ -50,13 +50,13 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 			{args.raw === true && (
 				<>
 					{" "}
-					<Badge>{t("raw")}</Badge>
+					<Badge>{t("tools.raw")}</Badge>
 				</>
 			)}
 			{details?.truncated && (
 				<>
 					{" "}
-					<Badge tone="warn">{t("truncated")}</Badge>
+					<Badge tone="warn">{t("tools.truncated")}</Badge>
 				</>
 			)}
 		</>
@@ -72,15 +72,15 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<KvGrid>
-				<Kv k={t("url")}>{url ?? <InvalidArg what="url" />}</Kv>
-				<Kv k={t("method")}>{method && method !== "GET" && <Badge tone="accent">{method}</Badge>}</Kv>
-				<Kv k={t("raw")}>{args.raw === true && <Badge>{t("raw")}</Badge>}</Kv>
-				<Kv k={t("timeout")}>{timeout != null && `${timeout}s`}</Kv>
-				<Kv k={t("final url")}>{redirected && details?.finalUrl}</Kv>
-				<Kv k={t("content-type")}>{details?.contentType}</Kv>
-				<Kv k={t("via")}>{details?.method}</Kv>
-				<Kv k={t("notes")}>{details && details.notes.length > 0 && details.notes.join("; ")}</Kv>
-				<Kv k={t("truncated")}>{details?.truncated && <Badge tone="warn">{t("output truncated")}</Badge>}</Kv>
+				<Kv k={t("tools.url")}>{url ?? <InvalidArg what="url" />}</Kv>
+				<Kv k={t("tools.method")}>{method && method !== "GET" && <Badge tone="accent">{method}</Badge>}</Kv>
+				<Kv k={t("tools.raw")}>{args.raw === true && <Badge>{t("tools.raw")}</Badge>}</Kv>
+				<Kv k={t("tools.timeout")}>{timeout != null && `${timeout}s`}</Kv>
+				<Kv k={t("tools.finalUrl")}>{redirected && details?.finalUrl}</Kv>
+				<Kv k={t("tools.contentType")}>{details?.contentType}</Kv>
+				<Kv k={t("tools.via")}>{details?.method}</Kv>
+				<Kv k={t("tools.notes")}>{details && details.notes.length > 0 && details.notes.join("; ")}</Kv>
+				<Kv k={t("tools.truncated")}>{details?.truncated && <Badge tone="warn">{t("tools.outputTruncated")}</Badge>}</Kv>
 			</KvGrid>
 			<ResultText result={result} maxLines={12} lang="markdown" />
 		</>

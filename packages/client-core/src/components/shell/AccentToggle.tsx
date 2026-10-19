@@ -19,7 +19,7 @@ export function AccentToggle(): ReactNode {
 	const current = ACCENT_PRESETS.find(p => p.id === accent) ?? ACCENT_PRESETS[0];
 	const next =
 		ACCENT_PRESETS[(ACCENT_PRESETS.findIndex(p => p.id === accent) + 1) % ACCENT_PRESETS.length] ?? ACCENT_PRESETS[0];
-	const title = `${PRESET_LABEL[current.id] ?? current.id} — ${t("click for {name}", { name: PRESET_LABEL[next.id] ?? next.id })}`;
+	const title = `${PRESET_LABEL[current.id] ?? current.id} — ${t("shell.clickForWithName", { name: PRESET_LABEL[next.id] ?? next.id })}`;
 	return (
 		<button
 			type="button"

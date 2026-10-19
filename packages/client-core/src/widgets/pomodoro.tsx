@@ -99,7 +99,7 @@ export function PomodoroCard({
 					<div className="gui-widget-pomodoro-center">
 						<span className="gui-widget-pomodoro-time">{fmt(left)}</span>
 						<span className="gui-widget-pomodoro-state">
-							{running ? t("widget pomodoro running") : t("widget pomodoro ready")}
+							{running ? t("settings.widgetPomodoroRunning") : t("settings.widgetPomodoroReady")}
 						</span>
 					</div>
 				</Donut>
@@ -110,7 +110,7 @@ export function PomodoroCard({
 					className="gui-widget-pomodoro-btn gui-widget-pomodoro-btn--primary"
 					onClick={() => setRunning(r => !r)}
 				>
-					{running ? t("widget pomodoro pause") : t("widget pomodoro start")}
+					{running ? t("settings.widgetPomodoroPause") : t("settings.widgetPomodoroStart")}
 				</button>
 				<button
 					type="button"
@@ -120,21 +120,21 @@ export function PomodoroCard({
 						setLeft(mode.minutes * 60);
 					}}
 				>
-					{t("widget pomodoro reset")}
+					{t("settings.widgetPomodoroReset")}
 				</button>
 			</div>
 			<div className="gui-widget-pomodoro-stats">
 				<span>
-					{t("widget pomodoro rounds")} {rounds}
+					{t("settings.widgetPomodoroRounds")} {rounds}
 				</span>
 				<span>
-					{t("widget pomodoro minutes")} {minutes}
+					{t("settings.widgetPomodoroMinutes")} {minutes}
 				</span>
 			</div>
-			<div className="gui-widget-pomodoro-hint">{t("widget pomodoro reward")}</div>
+			<div className="gui-widget-pomodoro-hint">{t("settings.widgetPomodoroReward")}</div>
 			{tick >= 0 && null}
 
-			<SendChip text={`${t("widget pomodoro done")} ${rounds} ${t("widget pomodoro rounds")}`} onSend={sendPrompt} />
+			<SendChip text={`${t("settings.widgetPomodoroDone")} ${rounds} ${t("settings.widgetPomodoroRounds")}`} onSend={sendPrompt} />
 		</div>
 	);
 }

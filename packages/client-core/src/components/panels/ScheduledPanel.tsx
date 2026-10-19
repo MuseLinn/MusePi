@@ -15,7 +15,7 @@ import { relTime } from "../../lib/format";
 
 const POLL_MS = 30_000;
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
-const WEEKDAY_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const WEEKDAY_KEYS = ["guest.sun", "guest.mon", "guest.tue", "guest.wed", "guest.thu", "guest.fri", "guest.sat"] as const;
 
 interface ScheduledPanelProps {
 	client: SessionClient;
@@ -65,25 +65,25 @@ export function ScheduledPanel({ client, cwd, readOnly }: ScheduledPanelProps): 
 	if (error !== null) {
 		return (
 			<div className="sh-panel-state">
-				<p className="sh-panel-error">{t("load failed: {error}", { error })}</p>
+				<p className="sh-panel-error">{t("guest.loadFailedWithError", { error })}</p>
 				<button type="button" className="sh-btn" onClick={() => void load()}>
-					{t("retry")}
+					{t("settings.retry")}
 				</button>
 			</div>
 		);
 	}
 	if (tasks === null) {
-		return <div className="sh-panel-state">{t("loading…")}</div>;
+		return <div className="sh-panel-state">{t("settings.loading2")}</div>;
 	}
 
 	return (
 		<div className="sh-scheduled">
 			<div className="sh-panel-head">
-				<h2 className="sh-panel-title">{t("scheduled tasks")}</h2>
+				<h2 className="sh-panel-title">{t("settings.scheduledTasks")}</h2>
 			</div>
 			{!readOnly && <TaskForm client={client} cwd={cwd} onAdded={load} />}
 			{tasks.length === 0 ? (
-				<p className="sh-panel-muted">{t("no tasks yet")}</p>
+				<p className="sh-panel-muted">{t("guest.noTasksYet")}</p>
 			) : (
 				<ul className="sh-task-list">
 					{tasks.map(task => (
@@ -98,9 +98,9 @@ export function ScheduledPanel({ client, cwd, readOnly }: ScheduledPanelProps): 
 				</ul>
 			)}
 			<details className="sh-runs">
-				<summary className="sh-runs-summary">{t("run history")}</summary>
+				<summary className="sh-runs-summary">{t("guest.runHistory")}</summary>
 				{runs.length === 0 ? (
-					<p className="sh-panel-muted">{t("no runs yet")}</p>
+					<p className="sh-panel-muted">{t("guest.noRunsYet")}</p>
 				) : (
 					<table className="sh-runs-table">
 						<tbody>
@@ -141,7 +141,7 @@ function TaskForm({
 	const submit = useCallback(async (): Promise<void> => {
 		const text = prompt.trim();
 		if (!text) {
-			setError(t("task prompt required"));
+			setError(t("guest.taskPromptRequired"));
 			return;
 		}
 		const schedule: CronSchedule =
@@ -181,34 +181,34 @@ function TaskForm({
 			}}
 		>
 			<label className="sh-field">
-				<span className="sh-field-label">{t("task prompt")}</span>
+				<span className="sh-field-label">{t("guest.taskPrompt")}</span>
 				<input
 					className="sh-input"
 					value={prompt}
 					onChange={e => setPrompt(e.target.value)}
-					placeholder={t("task prompt")}
+					placeholder={t("guest.taskPrompt")}
 				/>
 			</label>
 			<div className="sh-task-form-row">
 				<label className="sh-field">
-					<span className="sh-field-label">{t("schedule kind")}</span>
+					<span className="sh-field-label">{t("guest.scheduleKind")}</span>
 					<select
 						className="sh-input"
 						value={kind}
 						onChange={e => setKind(e.target.value as CronSchedule["kind"])}
 					>
-						<option value="once">{t("once")}</option>
-						<option value="daily">{t("daily")}</option>
-						<option value="weekly">{t("weekly")}</option>
+						<option value="guest.once">{t("guest.once")}</option>
+						<option value="guest.daily">{t("guest.daily")}</option>
+						<option value="guest.weekly">{t("guest.weekly")}</option>
 					</select>
 				</label>
 				<label className="sh-field">
-					<span className="sh-field-label">{t("time")}</span>
-					<input className="sh-input" type="time" value={time} onChange={e => setTime(e.target.value)} />
+					<span className="sh-field-label">{t("guest.time")}</span>
+					<input className="sh-input" type="guest.time" value={time} onChange={e => setTime(e.target.value)} />
 				</label>
 				{kind === "weekly" && (
 					<label className="sh-field">
-						<span className="sh-field-label">{t("weekday")}</span>
+						<span className="sh-field-label">{t("guest.weekday")}</span>
 						<select className="sh-input" value={weekday} onChange={e => setWeekday(Number(e.target.value))}>
 							{WEEKDAYS.map((d, i) => (
 								<option key={d} value={d}>
@@ -221,7 +221,7 @@ function TaskForm({
 			</div>
 			{error !== null && <p className="sh-panel-error">{error}</p>}
 			<button type="submit" className="sh-btn sh-btn-primary" disabled={busy}>
-				{t("add task")}
+				{t("guest.addTask")}
 			</button>
 		</form>
 	);
@@ -251,7 +251,7 @@ function TaskRow({
 					<button
 						type="button"
 						className={task.enabled ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
-						title={task.enabled ? t("disable task") : t("enable task")}
+						title={task.enabled ? t("guest.disableTask") : t("guest.enableTask")}
 						onClick={() => onToggle(task.id)}
 					>
 						{task.enabled ? "●" : "○"}
@@ -259,7 +259,7 @@ function TaskRow({
 					<button
 						type="button"
 						className="sh-btn sh-btn-icon sh-btn-stop"
-						title={confirming ? t("confirm delete task?") : t("delete task")}
+						title={confirming ? t("guest.confirmDeleteTask") : t("guest.deleteTask")}
 						onClick={() => {
 							if (confirming) {
 								onDelete(task.id);
@@ -270,7 +270,7 @@ function TaskRow({
 						}}
 						onBlur={() => setConfirming(false)}
 					>
-						{confirming ? t("confirm delete task?") : "✕"}
+						{confirming ? t("guest.confirmDeleteTask") : "✕"}
 					</button>
 				</div>
 			)}
@@ -289,12 +289,12 @@ function todayISO(): string {
 }
 
 function describeSchedule(s: CronSchedule): string {
-	if (s.kind === "once") return `${t("once")} ${s.date ?? ""} ${s.time ?? ""}`.trim();
-	if (s.kind === "daily") return `${t("daily")} ${s.time ?? ""}`.trim();
+	if (s.kind === "once") return `${t("guest.once")} ${s.date ?? ""} ${s.time ?? ""}`.trim();
+	if (s.kind === "daily") return `${t("guest.daily")} ${s.time ?? ""}`.trim();
 	if (s.kind === "weekly") {
-		const days = (s.weekdays ?? []).map(d => t(WEEKDAY_KEYS[d] ?? "Sun")).join(" ");
-		return `${t("weekly")} ${days} ${s.time ?? ""}`.trim();
+		const days = (s.weekdays ?? []).map(d => t(WEEKDAY_KEYS[d] ?? "guest.sun")).join(" ");
+		return `${t("guest.weekly")} ${days} ${s.time ?? ""}`.trim();
 	}
-	if (s.kind === "monthly") return `${t("monthly")} ${s.time ?? ""}`.trim();
+	if (s.kind === "monthly") return `${t("guest.monthly")} ${s.time ?? ""}`.trim();
 	return s.cron ?? s.kind;
 }

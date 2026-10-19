@@ -71,15 +71,15 @@ function StatusIcon({ pending }: { pending: boolean }): ReactNode {
 function Summary(props: ToolRenderProps): ReactNode {
 	const details = detailsRecord(props.result);
 	const pending = isPending(props.args, props.result);
-	const status = pending ? t("vibe pending") : t("vibe settled");
+	const status = pending ? t("tools.vibePending") : t("tools.vibeSettled");
 	const extra: string[] = [];
 	const wait = details?.wait;
 	if (isRecord(wait)) {
 		if (Array.isArray(wait.settled) && (wait.settled as VibeSettled[]).length > 0)
-			extra.push(t("vibe settled {count}", { count: String((wait.settled as VibeSettled[]).length) }));
+			extra.push(t("tools.vibeSettledWithCount", { count: String((wait.settled as VibeSettled[]).length) }));
 		if (Array.isArray(wait.stillRunning) && (wait.stillRunning as string[]).length > 0)
-			extra.push(t("vibe running {count}", { count: String((wait.stillRunning as string[]).length) }));
-		if (wait.timedOut === true) extra.push(t("vibe timed out"));
+			extra.push(t("tools.vibeRunningWithCount", { count: String((wait.stillRunning as string[]).length) }));
+		if (wait.timedOut === true) extra.push(t("tools.vibeTimedOut"));
 	}
 	return (
 		<div className="tv-kv-line">
@@ -109,11 +109,11 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					<span className="tv-vibe-status">
 						{pending
 							? op === "spawn"
-								? t("vibe booting")
-								: t("vibe delivering")
+								? t("tools.vibeBooting")
+								: t("tools.vibeDelivering")
 							: op === "spawn"
-								? t("vibe spawned")
-								: t("vibe sent")}
+								? t("tools.vibeSpawned")
+								: t("tools.vibeSent")}
 					</span>
 				</div>
 			</div>
@@ -138,9 +138,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 						</div>
 					))}
 				{Array.isArray(wait.stillRunning) && wait.stillRunning.length > 0 && (
-					<Note tone="warn">{t("vibe still running {list}", { list: wait.stillRunning.join(", ") })}</Note>
+					<Note tone="warn">{t("tools.vibeStillRunningWithList", { list: wait.stillRunning.join(", ") })}</Note>
 				)}
-				{wait.timedOut === true && <Note tone="warn">{t("vibe timed out")}</Note>}
+				{wait.timedOut === true && <Note tone="warn">{t("tools.vibeTimedOut")}</Note>}
 			</>
 		);
 	}

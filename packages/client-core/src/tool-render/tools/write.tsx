@@ -38,7 +38,7 @@ function Summary({ args, running }: ToolRenderProps): ReactNode {
 			{lines > 1 && (
 				<>
 					{" "}
-					<Badge>{t("{count} lines", { count: String(lines) })}</Badge>
+					<Badge>{t("tools.linesWithCount", { count: String(lines) })}</Badge>
 				</>
 			)}
 		</>
@@ -54,7 +54,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 		<>
 			<Badges
 				items={[
-					details?.madeExecutable === true && <Badge tone="ok">{t("made executable")}</Badge>,
+					details?.madeExecutable === true && <Badge tone="ok">{t("tools.madeExecutable")}</Badge>,
 					diagnostics?.summary && (
 						<Badge tone={diagnostics.errored ? "err" : "warn"}>
 							{diagnostics.server ? `${diagnostics.server}: ` : ""}
@@ -68,10 +68,10 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 					// Args still streaming — the content field has not arrived. A
 					// fault badge here is the picture the user reported: a write in
 					// progress looked like a broken write.
-					<Note>{t("preparing content…")}</Note>
+					<Note>{t("tools.preparingContent")}</Note>
 				) : (
 					<Note tone="err">
-						<InvalidArg what="content" /> {t("— expected string")}
+						<InvalidArg what="content" /> {t("tools.expectedString")}
 					</Note>
 				)
 			) : (
@@ -81,7 +81,7 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 			{diagnostics && diagnostics.messages.length > 0 && (
 				<Output
 					text={diagnostics.messages.join("\n")}
-					title={t("diagnostics")}
+					title={t("tools.diagnostics")}
 					error={diagnostics.errored}
 					maxLines={8}
 				/>

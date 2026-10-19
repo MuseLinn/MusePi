@@ -7,7 +7,7 @@ export function LanguageToggle() {
 	const locale = useLocale();
 	const isZh = locale.toLowerCase().startsWith("zh");
 	const next = isZh ? "en-US" : "zh-CN";
-	const label = isZh ? t("Switch to English") : t("Switch to Chinese");
+	const label = isZh ? t("settings.switchEnglish") : t("settings.switchChinese");
 
 	return (
 		<button

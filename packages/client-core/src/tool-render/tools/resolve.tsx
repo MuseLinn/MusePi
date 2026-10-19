@@ -19,14 +19,14 @@ import { detailsRecord, isRecord, normalizeWs, str, truncate } from "../util";
 type ResolveKind = "apply" | "discard" | "propose";
 
 /** Short badge word (summary) and full transition badge (body) per card kind. */
-const KIND_WORD = { apply: "apply", discard: "discard", propose: "propose" } as const satisfies Record<
+const KIND_WORD = { apply: "tools.apply", discard: "general.discard", propose: "propose" } as const satisfies Record<
 	ResolveKind,
 	string
 >;
 const KIND_TRANSITION = {
-	apply: "proposed → resolved",
-	discard: "proposed → rejected",
-	propose: "plan proposed",
+	apply: "tools.proposedResolved",
+	discard: "tools.proposedRejected",
+	propose: "tools.planProposed",
 } as const satisfies Record<ResolveKind, string>;
 const KIND_TONE: Record<ResolveKind, Tone> = { apply: "ok", discard: "warn", propose: "accent" };
 
@@ -116,14 +116,14 @@ function Body(props: ToolRenderProps): ReactNode {
 					card.sourceToolName && <Badge key="source">{card.sourceToolName}</Badge>,
 					card.label && <span key="label">{truncate(normalizeWs(card.label), 120)}</span>,
 					card.kind === "propose" && card.title && (
-						<span key="title">{truncate(normalizeWs(card.title), 120)}</span>
+						<span key="settings.title">{truncate(normalizeWs(card.title), 120)}</span>
 					),
 				]}
 			/>
 			{card.kind !== "propose" && card.reason && <Note>{card.reason}</Note>}
 			{card.kind === "propose" && card.planFilePath && (
 				<KvGrid>
-					<Kv k={t("plan")}>{card.planFilePath}</Kv>
+					<Kv k={t("tools.plan")}>{card.planFilePath}</Kv>
 				</KvGrid>
 			)}
 			{extraRows.length > 0 && <KvGrid>{extraRows}</KvGrid>}

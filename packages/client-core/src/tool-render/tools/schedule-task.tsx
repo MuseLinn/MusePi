@@ -59,11 +59,11 @@ function taskOf(args: unknown, result: unknown): TaskView {
 }
 
 function fmtNextRun(at: number | undefined): string {
-	if (at === undefined) return t("not scheduled");
+	if (at === undefined) return t("settings.notScheduled");
 	try {
 		return new Date(at).toLocaleString();
 	} catch {
-		return t("not scheduled");
+		return t("settings.notScheduled");
 	}
 }
 
@@ -73,15 +73,15 @@ export const scheduleTaskRenderer: ToolRenderer = {
 		const action = str((isRecord(args) ? args : null)?.action) ?? "create";
 		// `scheduled tasks` already means the 任务中心 page; the card title
 		// uses the singular task label.
-		if (action === "list") return t("scheduled task");
-		return `${t("scheduled task")}${task.name ? ` · ${task.name}` : ""}`;
+		if (action === "list") return t("settings.scheduledTask");
+		return `${t("settings.scheduledTask")}${task.name ? ` · ${task.name}` : ""}`;
 	},
 	Body: ({ args, result }: ToolRenderProps): ReactNode => {
 		const action = str((isRecord(args) ? args : null)?.action) ?? "create";
 		if (action === "list") {
 			const d = detailsOf(result);
 			const rows = Array.isArray(d?.tasks) ? (d.tasks as Array<Record<string, unknown>>) : [];
-			if (rows.length === 0) return <span className="tv-row-val">{t("no scheduled tasks")}</span>;
+			if (rows.length === 0) return <span className="tv-row-val">{t("settings.noScheduledTasks")}</span>;
 			return (
 				<div className="tv-board">
 					{rows.map((row, i) => (
@@ -97,14 +97,14 @@ export const scheduleTaskRenderer: ToolRenderer = {
 		return (
 			<div className="tv-board">
 				<div className="tv-board-head">
-					<span className="tv-board-title">{task.name || t("scheduled task")}</span>
-					<span className="tv-board-tag">{t("scheduled task created")}</span>
+					<span className="tv-board-title">{task.name || t("settings.scheduledTask")}</span>
+					<span className="tv-board-tag">{t("settings.scheduledTaskCreated")}</span>
 				</div>
-				<div className="tv-board-meta">{task.summary ?? (schedule ? t("schedule pending") : "")}</div>
+				<div className="tv-board-meta">{task.summary ?? (schedule ? t("settings.schedulePending") : "")}</div>
 				{task.idleWindow?.start && task.idleWindow.end ? (
-					<div className="tv-board-meta">{`🌙 ${t("idle window")} ${task.idleWindow.start}–${task.idleWindow.end}`}</div>
+					<div className="tv-board-meta">{`🌙 ${t("settings.idleWindow")} ${task.idleWindow.start}–${task.idleWindow.end}`}</div>
 				) : null}
-				<div className="tv-board-meta">{`${t("next run")}: ${fmtNextRun(task.nextRunAt)}`}</div>
+				<div className="tv-board-meta">{`${t("settings.nextRun")}: ${fmtNextRun(task.nextRunAt)}`}</div>
 				{task.id ? (
 					<button
 						type="button"
@@ -112,7 +112,7 @@ export const scheduleTaskRenderer: ToolRenderer = {
 						onClick={() => openScheduledTaskFromChat(task.id as string, task.name)}
 					>
 						<span>◷</span>
-						{t("open task center")}
+						{t("settings.openTaskCenter")}
 						<span className="tv-board-open-arrow">→</span>
 					</button>
 				) : null}

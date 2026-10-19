@@ -27,13 +27,13 @@ export function TodoCard({
 	return (
 		<div className="gui-widget-todo">
 			<div className="gui-widget-todo-list">
-				{items.length === 0 && <div className="gui-widget-todo-empty">{t("widget todo empty")}</div>}
+				{items.length === 0 && <div className="gui-widget-todo-empty">{t("settings.widgetTodoEmpty")}</div>}
 				{items.map(item => (
 					<div key={item.id} className="gui-widget-todo-item">
 						<button
 							type="button"
 							className={`gui-widget-todo-check${item.done ? " gui-widget-todo-check--done" : ""}`}
-							aria-label={t("widget todo toggle")}
+							aria-label={t("settings.widgetTodoToggle")}
 							onClick={() => setItems(items.map(i => (i.id === item.id ? { ...i, done: !i.done } : i)))}
 						>
 							{item.done ? "✓" : ""}
@@ -44,7 +44,7 @@ export function TodoCard({
 						<button
 							type="button"
 							className="gui-widget-todo-del"
-							aria-label={t("widget todo remove")}
+							aria-label={t("settings.widgetTodoRemove")}
 							onClick={() => setItems(items.filter(i => i.id !== item.id))}
 						>
 							×
@@ -56,7 +56,7 @@ export function TodoCard({
 				<input
 					className="gui-widget-todo-input"
 					value={draft}
-					placeholder={t("widget todo add")}
+					placeholder={t("settings.widgetTodoAdd")}
 					onChange={e => setDraft(e.target.value)}
 					onKeyDown={e => {
 						if (e.key === "Enter" && draft.trim()) {
@@ -79,7 +79,7 @@ export function TodoCard({
 			</div>
 
 			<SendChip
-				text={`${t("widget todo done")} ${items.filter(i => i.done).length}/${items.length}`}
+				text={`${t("settings.widgetTodoDone")} ${items.filter(i => i.done).length}/${items.length}`}
 				onSend={sendPrompt}
 			/>
 		</div>

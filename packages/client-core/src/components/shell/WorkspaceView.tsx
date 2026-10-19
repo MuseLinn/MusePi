@@ -59,14 +59,14 @@ export function WorkspaceView({
 					type="button"
 					className="sh-ws-sidebar-toggle"
 					onClick={() => setSidebarOpen(v => !v)}
-					aria-label={sidebarOpen ? t("collapse session list") : t("expand session list")}
-					title={sidebarOpen ? t("collapse session list") : t("expand session list")}
+					aria-label={sidebarOpen ? t("settings.collapseSessionList") : t("settings.expandSessionList")}
+					title={sidebarOpen ? t("settings.collapseSessionList") : t("settings.expandSessionList")}
 				>
 					{sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeft size={14} />}
 				</button>
 				{sidebarOpen && (
 					<>
-						<div className="sh-ws-sidebar-head">{t("projects")}</div>
+						<div className="sh-ws-sidebar-head">{t("settings.projects")}</div>
 						<div className="sh-ws-sidebar-list">
 							{groups.map(group => {
 								const key = group.cwd ?? "";
@@ -88,7 +88,7 @@ export function WorkspaceView({
 										>
 											<ChevronRight size={11} className={`tr-chev${collapsed ? "" : " tr-chev--open"}`} />
 											<span className="sh-ws-group-name" title={group.cwd ?? undefined}>
-												{group.cwd ? projectName(group.cwd) : t("uncategorized")}
+												{group.cwd ? projectName(group.cwd) : t("settings.uncategorized")}
 											</span>
 											<span className="sh-ws-group-count">{group.rows.length}</span>
 										</button>
@@ -99,26 +99,26 @@ export function WorkspaceView({
 									</section>
 								);
 							})}
-							{sessions.length === 0 && <p className="sh-ws-sidebar-empty">{t("no sessions yet")}</p>}
+							{sessions.length === 0 && <p className="sh-ws-sidebar-empty">{t("transcript.noSessionsYet")}</p>}
 						</div>
 					</>
 				)}
 			</aside>
 			<div className="sh-ws-main">
 				<div className="sh-workspace-head">
-					<h1 className="sh-workspace-title">{t("workspace")}</h1>
-					<p className="sh-workspace-desc">{t("sessions on this machine — tap one to watch it live")}</p>
+					<h1 className="sh-workspace-title">{t("tools.workspace")}</h1>
+					<p className="sh-workspace-desc">{t("transcript.sessionsMachineTapOne")}</p>
 					<div className="sh-workspace-actions">
 						{archived.size > 0 && (
 							<button
 								type="button"
 								className="sh-ws-create"
 								onClick={() => setArchivedView(v => !v)}
-								title={archivedView ? t("show active sessions") : t("show archived")}
+								title={archivedView ? t("settings.showActiveSessions") : t("settings.showArchived")}
 							>
 								<Archive size={14} />
 								<span>
-									{archivedView ? t("active") : t("archived")} ({archived.size})
+									{archivedView ? t("settings.active") : t("settings.archived")} ({archived.size})
 								</span>
 							</button>
 						)}
@@ -127,10 +127,10 @@ export function WorkspaceView({
 								type="button"
 								className="sh-ws-create"
 								onClick={() => void onCreateSession()}
-								title={t("new session")}
+								title={t("settings.newSession")}
 							>
 								<Plus size={14} />
-								<span>{t("new session")}</span>
+								<span>{t("settings.newSession")}</span>
 							</button>
 						)}
 					</div>
@@ -148,7 +148,7 @@ export function WorkspaceView({
 						/>
 					))}
 				</div>
-				{sessions.length === 0 && <p className="sh-workspace-empty">{t("no sessions yet")}</p>}
+				{sessions.length === 0 && <p className="sh-workspace-empty">{t("transcript.noSessionsYet")}</p>}
 			</div>
 		</div>
 	);
@@ -162,13 +162,13 @@ function WorkspaceSideItem({
 	session: WorkspaceSessionInfo;
 	onSelect(sessionId: string): void;
 }): ReactNode {
-	const title = session.title ?? t("untitled session");
+	const title = session.title ?? t("transcript.untitledSession");
 	return (
 		<button
 			type="button"
 			className={`sh-ws-side-item${session.working ? " sh-ws-side-item--working" : ""}`}
 			onClick={() => onSelect(session.id)}
-			title={t("open session")}
+			title={t("transcript.openSession")}
 		>
 			{session.working ? (
 				<Loader2 size={10} className="sh-ws-spin" />
@@ -201,7 +201,7 @@ function WorkspaceCard({
 }): ReactNode {
 	const [renaming, setRenaming] = useState(false);
 	const [draft, setDraft] = useState(session.title ?? "");
-	const title = session.title ?? t("untitled session");
+	const title = session.title ?? t("transcript.untitledSession");
 	const when = formatWhen(session.updatedAt);
 	// Mobile 列表→会话 morph source/target (M1.10 §3.3 批次 B): the card
 	// title shares the header title's morph id — on the way into a session
@@ -219,7 +219,7 @@ function WorkspaceCard({
 				type="button"
 				className="sh-ws-card-main"
 				onClick={() => onSelect(session.id)}
-				title={t("open session")}
+				title={t("transcript.openSession")}
 			>
 				<div className="sh-ws-card-top">
 					{renaming ? (
@@ -247,23 +247,23 @@ function WorkspaceCard({
 					{session.working ? (
 						<span className="sh-ws-status sh-ws-status--working">
 							<Loader2 size={11} className="sh-ws-spin" />
-							{t("working")}
+							{t("settings.working")}
 						</span>
 					) : session.paused ? (
-						<span className="sh-ws-status sh-ws-status--paused">{t("paused")}</span>
+						<span className="sh-ws-status sh-ws-status--paused">{t("tools.paused")}</span>
 					) : (
-						<span className="sh-ws-status">{t("idle")}</span>
+						<span className="sh-ws-status">{t("settings.idle")}</span>
 					)}
 				</div>
 				<div className="sh-ws-card-meta">
 					<span className="sh-ws-meta">{when}</span>
-					<span className="sh-ws-meta">{t("{count} messages", { count: String(session.messageCount) })}</span>
+					<span className="sh-ws-meta">{t("transcript.messagesWithCount", { count: String(session.messageCount) })}</span>
 					{session.cwd && (
 						<span className="sh-ws-meta sh-ws-meta-cwd" title={session.cwd}>
 							{shortenPath(session.cwd)}
 						</span>
 					)}
-					{!session.live && <span className="sh-chip">{t("history")}</span>}
+					{!session.live && <span className="sh-chip">{t("transcript.history")}</span>}
 				</div>
 			</button>
 			<div className="sh-ws-card-actions">
@@ -271,7 +271,7 @@ function WorkspaceCard({
 					<button
 						type="button"
 						className="sh-ws-action-btn"
-						title={t("stop the current turn")}
+						title={t("composer.stopCurrentTurn")}
 						onClick={e => {
 							e.stopPropagation();
 							void onStopSession(session.id);
@@ -283,7 +283,7 @@ function WorkspaceCard({
 				<button
 					type="button"
 					className="sh-ws-action-btn"
-					title={t("archive")}
+					title={t("settings.archive")}
 					onClick={e => {
 						e.stopPropagation();
 						onArchive?.(session.id);
@@ -295,7 +295,7 @@ function WorkspaceCard({
 					<button
 						type="button"
 						className="sh-ws-action-btn"
-						title={t("rename")}
+						title={t("settings.rename")}
 						onClick={e => {
 							e.stopPropagation();
 							setDraft(title);
@@ -309,10 +309,10 @@ function WorkspaceCard({
 					<button
 						type="button"
 						className="sh-ws-action-btn"
-						title={t("delete")}
+						title={t("settings.delete")}
 						onClick={e => {
 							e.stopPropagation();
-							if (window.confirm(t("confirm delete session"))) void onDeleteSession(session.id);
+							if (window.confirm(t("general.confirmDeleteSession"))) void onDeleteSession(session.id);
 						}}
 					>
 						<Trash2 size={12} />

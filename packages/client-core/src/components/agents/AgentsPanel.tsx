@@ -63,11 +63,11 @@ function AgentRow(props: {
 			<span className="ag-row-head">
 				<span className={`ag-dot ag-dot--${agent.status}`} />
 				<span className="ag-row-name">{agent.displayName}</span>
-				<span className="ag-chip">{t(agent.kind)}</span>
+				<span className="ag-chip">{t(agent.kind === "main" ? "agents.main" : "agents.sub")}</span>
 			</span>
 			<span className="ag-row-activity">{activityLine(agent, p, lifecycle, now)}</span>
 			<span className="ag-row-meta">
-				{p ? <span>{t("{count} tok", { count: fmtTokens(p.tokens) })}</span> : null}
+				{p ? <span>{t("agents.tokWithCount", { count: fmtTokens(p.tokens) })}</span> : null}
 				{p ? <span>{fmtCost(p.cost)}</span> : null}
 				<span className="ag-row-meta-when">{relTime(agent.lastActivity)}</span>
 			</span>
@@ -125,7 +125,7 @@ export function AgentsPanel(props: {
 					onSelect={onSelect}
 				/>
 			))}
-			{sorted.subs.length === 0 ? <div className="ag-empty">{t("no subagents")}</div> : null}
+			{sorted.subs.length === 0 ? <div className="ag-empty">{t("agents.noSubagents")}</div> : null}
 		</div>
 	);
 }

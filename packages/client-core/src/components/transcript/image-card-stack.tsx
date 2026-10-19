@@ -54,7 +54,7 @@ export function ImageCardStack({
 	};
 
 	return (
-		<div className="tr-img-stack" role="group" aria-label={t("preview image")}>
+		<div className="tr-img-stack" role="group" aria-label={t("settings.previewImage")}>
 			{items.map((item, i) => {
 				const pos = (((i - index + count) % count) + count) % count;
 				const depth = count > 1 ? pos / (count - 1) : 0;
@@ -73,7 +73,7 @@ export function ImageCardStack({
 						style={style}
 						role={pos === 0 ? "button" : undefined}
 						tabIndex={pos === 0 ? 0 : -1}
-						title={pos === 0 ? t("preview image") : undefined}
+						title={pos === 0 ? t("settings.previewImage") : undefined}
 						aria-hidden={pos !== 0}
 						onPointerDown={pos === 0 ? onPointerDown : undefined}
 						onPointerMove={pos === 0 ? onPointerMove : undefined}

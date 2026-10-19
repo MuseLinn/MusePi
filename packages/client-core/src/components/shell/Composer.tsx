@@ -39,14 +39,14 @@ import { SuggestionChips } from "./SuggestionChips";
 const THINKING_LADDER = ["off", "minimal", "low", "medium", "high", "xhigh", "max", "auto"] as const;
 type ThinkingLadder = (typeof THINKING_LADDER)[number];
 const THINKING_KEY: Record<ThinkingLadder, Parameters<typeof t>[0]> = {
-	off: "thinking off",
-	minimal: "thinking minimal",
-	low: "thinking low",
-	medium: "thinking medium",
-	high: "thinking high",
-	xhigh: "thinking xhigh",
-	max: "thinking max",
-	auto: "thinking auto",
+	off: "transcript.thinkingOff",
+	minimal: "transcript.thinkingMinimal",
+	low: "transcript.thinkingLow",
+	medium: "transcript.thinkingMedium",
+	high: "transcript.thinkingHigh",
+	xhigh: "transcript.thinkingXhigh",
+	max: "transcript.thinkingMax",
+	auto: "transcript.thinkingAuto",
 };
 
 export interface ComposerProps {
@@ -63,7 +63,7 @@ function autosize(el: HTMLTextAreaElement | null): void {
 	el.style.height = "0px";
 	const max = MAX_ROWS * LINE_PX + PAD_Y;
 	el.style.height = `${Math.max(LINE_PX + PAD_Y, Math.min(el.scrollHeight, max))}px`;
-	el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+	el.style.overflowY = el.scrollHeight > max ? "general.auto" : "hidden";
 }
 
 /**
@@ -216,7 +216,7 @@ function useVoiceInput(
 			})
 			.catch((err: unknown) => {
 				const reason = err instanceof Error ? err.message : String(err);
-				setVoice({ kind: "error", message: t("voice failed: {reason}", { reason }) });
+				setVoice({ kind: "error", message: t("composer.voiceFailedWithReason", { reason }) });
 				haptic(30);
 			});
 	}, []);
@@ -267,7 +267,7 @@ function useVoiceInput(
 					}, 450);
 					return { ...prev, phase: "downloading", percent: 100, loaded: prev.total, total: prev.total };
 				}
-				return { ...prev, phase: "error", error: payload.message ?? t("voice setup download failed") };
+				return { ...prev, phase: "error", error: payload.message ?? t("settings.voiceSetupDownloadFailed") };
 			});
 		});
 	}, [client, beginCapture]);
@@ -290,7 +290,7 @@ function useVoiceInput(
 			onError: message => {
 				nativeRef.current = null;
 				if (epoch !== epochRef.current) return;
-				setVoice({ kind: "error", message: t("voice failed: {reason}", { reason: message }) });
+				setVoice({ kind: "error", message: t("composer.voiceFailedWithReason", { reason: message }) });
 				haptic(30);
 			},
 		});
@@ -395,7 +395,7 @@ function useVoiceInput(
 				if (msg === "rpc failed" || msg === "stt timeout") {
 					setVoice({ kind: "guide" });
 				} else {
-					setVoice({ kind: "error", message: t("voice failed: {reason}", { reason: msg }) });
+					setVoice({ kind: "error", message: t("composer.voiceFailedWithReason", { reason: msg }) });
 				}
 				haptic(30);
 			});
@@ -463,7 +463,7 @@ function VoiceBar({
 		const mm = Math.floor(voice.seconds / 60);
 		const ss = String(voice.seconds % 60).padStart(2, "0");
 		return (
-			<div className="sh-voice sh-voice--recording" role="status" aria-label={t("recording…")}>
+			<div className="sh-voice sh-voice--recording" role="status" aria-label={t("settings.recording")}>
 				<span className="sh-voice-pulse" aria-hidden>
 					<Mic size={14} />
 				</span>
@@ -478,19 +478,19 @@ function VoiceBar({
 				<span className="sh-voice-timer">
 					{mm}:{ss}
 				</span>
-				{voice.native && <span className="sh-voice-native">{t("voice native badge")}</span>}
+				{voice.native && <span className="sh-voice-native">{t("settings.voiceNativeBadge")}</span>}
 				<span className="sh-voice-flex" aria-hidden />
 				<button
 					type="button"
 					className="sh-voice-btn sh-voice-btn--danger"
 					onClick={onCancel}
-					title={t("voice discard")}
-					aria-label={t("voice discard")}
+					title={t("composer.voiceDiscard")}
+					aria-label={t("composer.voiceDiscard")}
 				>
 					<X size={13} />
 				</button>
-				<button type="button" className="sh-voice-stop" onClick={onStop} title={t("voice recording stop")}>
-					<Square size={9} /> <span>{t("voice done")}</span>
+				<button type="button" className="sh-voice-stop" onClick={onStop} title={t("settings.voiceRecordingStop")}>
+					<Square size={9} /> <span>{t("composer.voiceDone")}</span>
 				</button>
 			</div>
 		);
@@ -499,14 +499,14 @@ function VoiceBar({
 		return (
 			<div className="sh-voice sh-voice--transcribing" role="status">
 				<span className="sh-voice-spinner" aria-hidden />
-				<span className="sh-voice-label">{t("voice transcribing")}</span>
+				<span className="sh-voice-label">{t("settings.voiceTranscribing")}</span>
 				<span className="sh-voice-flex" aria-hidden />
 				<button
 					type="button"
 					className="sh-voice-btn sh-voice-btn--muted"
 					onClick={onDiscard}
-					title={t("voice discard")}
-					aria-label={t("voice discard")}
+					title={t("composer.voiceDiscard")}
+					aria-label={t("composer.voiceDiscard")}
 				>
 					<X size={13} />
 				</button>
@@ -522,8 +522,8 @@ function VoiceBar({
 					type="button"
 					className="sh-voice-btn sh-voice-btn--muted"
 					onClick={onCancel}
-					title={t("close")}
-					aria-label={t("close")}
+					title={t("settings.close")}
+					aria-label={t("settings.close")}
 				>
 					<X size={13} />
 				</button>
@@ -538,18 +538,18 @@ function VoiceBar({
  *  the daemon entirely (openchamber Web Speech parity). */
 function VoiceGuide({ onDismiss, onRetry }: { onDismiss(): void; onRetry?: () => void }): ReactNode {
 	return (
-		<div className="sh-voice-guide" role="alertdialog" aria-label={t("voice needs daemon backend")}>
+		<div className="sh-voice-guide" role="alertdialog" aria-label={t("composer.voiceNeedsDaemonBackend")}>
 			<MicOff size={20} aria-hidden />
-			<p className="sh-voice-guide-title">{t("voice needs daemon backend")}</p>
-			<p className="sh-voice-guide-sub">{t("voice needs daemon body")}</p>
+			<p className="sh-voice-guide-title">{t("composer.voiceNeedsDaemonBackend")}</p>
+			<p className="sh-voice-guide-sub">{t("composer.voiceNeedsDaemonBody")}</p>
 			<div className="sh-voice-guide-actions">
 				{onRetry && (
 					<button type="button" className="sh-voice-guide-btn" onClick={onRetry}>
-						{t("voice guide native retry")}
+						{t("settings.voiceGuideNativeRetry")}
 					</button>
 				)}
 				<button type="button" className="sh-voice-guide-btn" onClick={onDismiss}>
-					{t("voice guide ok")}
+					{t("composer.voiceGuideOk")}
 				</button>
 			</div>
 		</div>
@@ -575,12 +575,12 @@ function VoiceSetupCard({
 	onNative?(): void;
 }): ReactNode {
 	return (
-		<div className="sh-voice-guide sh-voice-setup" role="alertdialog" aria-label={t("voice setup title")}>
-			<p className="sh-voice-guide-title">{t("voice setup title")}</p>
+		<div className="sh-voice-guide sh-voice-setup" role="alertdialog" aria-label={t("settings.voiceSetupTitle")}>
+			<p className="sh-voice-guide-title">{t("settings.voiceSetupTitle")}</p>
 			{state.phase === "prompt" && (
 				<>
-					<p className="sh-voice-guide-sub">{t("voice setup desc", { model: state.label, size: state.size })}</p>
-					<p className="sh-voice-setup-note">{t("voice setup note")}</p>
+					<p className="sh-voice-guide-sub">{t("settings.voiceSetupDesc", { model: state.label, size: state.size })}</p>
+					<p className="sh-voice-setup-note">{t("settings.voiceSetupNote")}</p>
 				</>
 			)}
 			{state.phase === "downloading" && (
@@ -595,29 +595,29 @@ function VoiceSetupCard({
 						<div className="sh-voice-setup-bar-fill" style={{ width: `${state.percent}%` }} />
 					</div>
 					<p className="sh-voice-setup-note">
-						{state.label} · {state.percent > 0 ? `${state.percent}%` : t("voice setup preparing")}
+						{state.label} · {state.percent > 0 ? `${state.percent}%` : t("settings.voiceSetupPreparing")}
 					</p>
 				</>
 			)}
 			{state.phase === "error" && <p className="sh-voice-guide-sub sh-voice-err">{state.error}</p>}
 			<div className="sh-voice-guide-actions">
 				<button type="button" className="sh-voice-guide-btn" onClick={onDismiss}>
-					{t("later")}
+					{t("settings.later")}
 				</button>
 				{state.phase === "prompt" && (
 					<button type="button" className="sh-voice-guide-btn sh-voice-guide-btn--primary" onClick={onInstall}>
-						{t("voice setup install")}
+						{t("settings.voiceSetupInstall")}
 					</button>
 				)}
 				{state.phase === "error" && (
 					<button type="button" className="sh-voice-guide-btn sh-voice-guide-btn--primary" onClick={onRetry}>
-						{t("retry")}
+						{t("settings.retry")}
 					</button>
 				)}
 			</div>
 			{state.phase === "prompt" && onNative && (
 				<button type="button" className="sh-voice-setup-native" onClick={onNative}>
-					{t("voice guide native retry")}
+					{t("settings.voiceGuideNativeRetry")}
 				</button>
 			)}
 		</div>
@@ -635,10 +635,10 @@ function TtsBar({ snap, tts }: { snap: TtsSnapshot; tts: ReturnType<typeof useTt
 		return (
 			<div className="sh-tts sh-tts--guide" role="status">
 				<MicOff size={14} aria-hidden />
-				<span className="sh-tts-label sh-tts-label--muted">{t("tts needs daemon backend")}</span>
+				<span className="sh-tts-label sh-tts-label--muted">{t("composer.ttsNeedsDaemonBackend")}</span>
 				<span className="sh-voice-flex" aria-hidden />
 				<button type="button" className="sh-voice-guide-btn" onClick={() => tts.dismissGuide()}>
-					{t("voice guide ok")}
+					{t("composer.voiceGuideOk")}
 				</button>
 			</div>
 		);
@@ -647,15 +647,15 @@ function TtsBar({ snap, tts }: { snap: TtsSnapshot; tts: ReturnType<typeof useTt
 		return (
 			<div className="sh-tts sh-tts--error" role="alert">
 				<span className="sh-voice-label sh-voice-err">
-					{t("voice output unavailable")} — {snap.error}
+					{t("settings.voiceOutputUnavailable")} — {snap.error}
 				</span>
 				<span className="sh-voice-flex" aria-hidden />
 				<button
 					type="button"
 					className="sh-voice-btn sh-voice-btn--muted"
 					onClick={() => tts.dismissError()}
-					title={t("close")}
-					aria-label={t("close")}
+					title={t("settings.close")}
+					aria-label={t("settings.close")}
 				>
 					<X size={13} />
 				</button>
@@ -666,14 +666,14 @@ function TtsBar({ snap, tts }: { snap: TtsSnapshot; tts: ReturnType<typeof useTt
 		return (
 			<div className="sh-tts" role="status">
 				<span className="sh-voice-spinner" aria-hidden />
-				<span className="sh-tts-label">{t("voice output testing…")}</span>
+				<span className="sh-tts-label">{t("settings.voiceOutputTesting")}</span>
 				<span className="sh-voice-flex" aria-hidden />
 				<button
 					type="button"
 					className="sh-voice-btn sh-voice-btn--muted"
 					onClick={() => tts.stop()}
-					title={t("read aloud stop")}
-					aria-label={t("read aloud stop")}
+					title={t("settings.readAloudStop")}
+					aria-label={t("settings.readAloudStop")}
 				>
 					<X size={13} />
 				</button>
@@ -684,7 +684,7 @@ function TtsBar({ snap, tts }: { snap: TtsSnapshot; tts: ReturnType<typeof useTt
 		const mm = Math.floor(snap.elapsedSec / 60);
 		const ss = String(snap.elapsedSec % 60).padStart(2, "0");
 		return (
-			<div className="sh-tts sh-tts--playing" role="status" aria-label={t("read aloud")}>
+			<div className="sh-tts sh-tts--playing" role="status" aria-label={t("settings.readAloud")}>
 				<span className="sh-tts-chip sh-tts-chip--pulse" aria-hidden>
 					<Volume2 size={14} />
 				</span>
@@ -701,8 +701,8 @@ function TtsBar({ snap, tts }: { snap: TtsSnapshot; tts: ReturnType<typeof useTt
 					type="button"
 					className="sh-tts-btn-stop"
 					onClick={() => tts.stop()}
-					title={t("read aloud stop")}
-					aria-label={t("read aloud stop")}
+					title={t("settings.readAloudStop")}
+					aria-label={t("settings.readAloudStop")}
 				>
 					<Square size={9} />
 				</button>
@@ -748,7 +748,7 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 				onKeyDown={onKeyDown}
 				onCompositionStart={onCompositionStart}
 				onCompositionEnd={onCompositionEnd}
-				placeholder={t("type your response…")}
+				placeholder={t("composer.typeYourResponse")}
 				rows={1}
 				spellCheck={false}
 			/>
@@ -757,9 +757,9 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 					type="button"
 					className="sh-btn sh-btn-primary"
 					onClick={() => onSubmit(draft)}
-					title={t("submit response")}
+					title={t("composer.submitResponse")}
 				>
-					<SendHorizontal size={12} /> <span className="sh-btn-label">{t("Submit")}</span>
+					<SendHorizontal size={12} /> <span className="sh-btn-label">{t("settings.submit")}</span>
 				</button>
 			</div>
 		</div>
@@ -805,7 +805,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	// disabled until the follow-up frame replaces it (no double-submit).
 	const uiRequestPending = useGuestSelector(client, s => s.uiRequestPending);
 	const busy = useGuestSelector(client, s => s.working);
-	/** Design doc §B (M1.2): the animated "working" pill is a MODEL-liveness
+	/** Design doc §B (M1.2): the animated "settings.working" pill is a MODEL-liveness
 	 *  signal — while a blocking card owns the wait (host tool approval,
 	 *  pending `ask` question, auto-compaction, goal verifier), it must not
 	 *  also claim progress. Each flag is snapshot state; the combination is
@@ -929,7 +929,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						})}
 						{multi && uiRequest.helpText && (
 							<p className="sh-ask-hint" role="status">
-								{t("select multiple — choose each option, then pick Next")}
+								{t("composer.selectMultipleChoose.info")}
 							</p>
 						)}
 					</div>
@@ -947,10 +947,10 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						disabled={multi && uiRequestPending}
 						onClick={() => client.sendUiResponse(uiRequest.reqId, "Next →")}
 					>
-						{t("Next")}
+						{t("composer.next")}
 					</button>
 					<button type="button" className="sh-btn" onClick={() => client.sendUiResponse(uiRequest.reqId)}>
-						{t("cancel ask")}
+						{t("composer.cancelAsk")}
 					</button>
 					{busy && (
 						<button
@@ -961,9 +961,9 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								haptic(15);
 							}}
 							disabled={!live}
-							title={t("stop the current turn")}
+							title={t("composer.stopCurrentTurn")}
 						>
-							<Square size={11} /> <span className="sh-btn-label">{t("Stop")}</span>
+							<Square size={11} /> <span className="sh-btn-label">{t("settings.stop2")}</span>
 						</button>
 					)}
 				</div>
@@ -985,7 +985,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 				</div>
 			)}
 			{canPrompt && pending.length > 0 && (
-				<div ref={attachChipsRef} className="sh-attach-chips" role="list" aria-label={t("add images")}>
+				<div ref={attachChipsRef} className="sh-attach-chips" role="list" aria-label={t("general.addImages")}>
 					{pending.map(p => (
 						<div key={p.id} className="sh-attach-chip" role="listitem">
 							<img src={p.previewUrl} alt={p.name} className="sh-attach-thumb" />
@@ -993,8 +993,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								type="button"
 								className="sh-attach-remove"
 								onClick={() => removePending(p.id)}
-								title={t("remove attachment")}
-								aria-label={`${t("remove attachment")}: ${p.name}`}
+								title={t("composer.removeAttachment")}
+								aria-label={`${t("composer.removeAttachment")}: ${p.name}`}
 							>
 								<X size={9} />
 							</button>
@@ -1031,10 +1031,10 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						onCompositionEnd={onCompositionEnd}
 						placeholder={
 							readOnly
-								? t("read-only session — watching only")
+								? t("composer.readOnlySessionWatching")
 								: live
-									? t("ask anything, / for commands, @ for context…")
-									: t("waiting for session…")
+									? t("composer.askAnythingCommands.info")
+									: t("composer.waitingSession")
 						}
 						disabled={!canPrompt}
 						rows={1}
@@ -1047,8 +1047,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							type="button"
 							className="sh-btn sh-attach-btn"
 							onClick={voiceCtl.start}
-							title={t("voice input")}
-							aria-label={t("voice input")}
+							title={t("settings.voiceInput")}
+							aria-label={t("settings.voiceInput")}
 						>
 							<Mic size={15} />
 						</button>
@@ -1059,8 +1059,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							className={`sh-btn sh-attach-btn${ttsSnap.autoRead ? " sh-tts-toggle--on" : ""}`}
 							onClick={() => tts.toggleAutoRead()}
 							aria-pressed={ttsSnap.autoRead}
-							title={t("voice output auto read")}
-							aria-label={t("voice output auto read")}
+							title={t("settings.voiceOutputAutoRead")}
+							aria-label={t("settings.voiceOutputAutoRead")}
 						>
 							<Volume2 size={15} />
 						</button>
@@ -1070,14 +1070,14 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							type="button"
 							className="sh-btn sh-attach-btn"
 							onClick={() => setAttachOpen(true)}
-							title={t("add images")}
-							aria-label={t("add images")}
+							title={t("general.addImages")}
+							aria-label={t("general.addImages")}
 						>
 							<Plus size={15} />
 						</button>
 					)}
 					{canPrompt && (model || thinking) && (
-						<div className="sh-mt-capsule" role="group" aria-label={t("model & thinking")}>
+						<div className="sh-mt-capsule" role="group" aria-label={t("composer.modelThinking")}>
 							{model && (
 								<button
 									type="button"
@@ -1100,7 +1100,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 									setModelSheetOpen(true);
 									haptic(8);
 								}}
-								title={t("thinking level")}
+								title={t("transcript.thinkingLevel")}
 							>
 								<Brain size={13} aria-hidden />
 								<span>
@@ -1118,7 +1118,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					<ContextRing client={client} />
 					{busy && queued > 0 && (
 						<span className="sh-queued">
-							<span className="sh-queued-label">{t("queued")} </span>×{queued}
+							<span className="sh-queued-label">{t("settings.queued")} </span>×{queued}
 						</span>
 					)}
 					{busy && !readOnly ? (
@@ -1134,12 +1134,12 @@ export function Composer({ client }: ComposerProps): ReactNode {
 									haptic(15);
 								}}
 								disabled={!live}
-								title={t("stop the current turn")}
-								aria-label={t("stop the current turn")}
+								title={t("composer.stopCurrentTurn")}
+								aria-label={t("composer.stopCurrentTurn")}
 							>
 								<span className="sh-send-work">
 									<MatrixLoader className="sh-send-matrix" />
-									<span className="sh-send-label">{t("working active")}</span>
+									<span className="sh-send-label">{t("composer.workingActive")}</span>
 								</span>
 							</button>
 						) : (
@@ -1155,8 +1155,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 									haptic(15);
 								}}
 								disabled={!live}
-								title={t("stop the current turn")}
-								aria-label={t("stop the current turn")}
+								title={t("composer.stopCurrentTurn")}
+								aria-label={t("composer.stopCurrentTurn")}
 							>
 								<Square size={12} />
 							</button>
@@ -1169,9 +1169,9 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							data-morph-id="composer-send"
 							onClick={send}
 							disabled={!canSend}
-							title={t("send (Enter)")}
+							title={t("composer.send")}
 						>
-							<SendHorizontal size={12} /> <span className="sh-btn-label">{t("Send")}</span>
+							<SendHorizontal size={12} /> <span className="sh-btn-label">{t("settings.send")}</span>
 						</button>
 					)}
 				</div>
@@ -1180,7 +1180,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 			 * attach sheet can trigger them and unmount freely. */}
 			<input
 				ref={galleryRef}
-				type="file"
+				type="tools.file"
 				accept="image/*"
 				multiple
 				hidden
@@ -1191,7 +1191,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 			/>
 			<input
 				ref={cameraRef}
-				type="file"
+				type="tools.file"
 				accept="image/*"
 				capture="environment"
 				hidden
@@ -1231,9 +1231,9 @@ function AttachSheet({
 }): ReactNode {
 	// Always mounted; the visible/closing stage drives the CSS animations so
 	// a close never pops the card off screen (SessionsSheet convention).
-	const [stage, setStage] = useState<"hidden" | "open" | "closing">(open ? "open" : "hidden");
+	const [stage, setStage] = useState<"hidden" | "settings.open" | "closing">(open ? "settings.open" : "hidden");
 	useEffect(() => {
-		setStage(prev => (open ? "open" : prev === "open" ? "closing" : "hidden"));
+		setStage(prev => (open ? "settings.open" : prev === "settings.open" ? "closing" : "hidden"));
 	}, [open]);
 	useEffect(() => {
 		if (!open) return;
@@ -1270,7 +1270,7 @@ function AttachSheet({
 				className={`ss-card sh-attach-card${closing ? " ss-closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
-				aria-label={t("add images")}
+				aria-label={t("general.addImages")}
 				onClick={e => e.stopPropagation()}
 				onAnimationEnd={() => {
 					if (closing) setStage("hidden");
@@ -1278,8 +1278,8 @@ function AttachSheet({
 			>
 				<div className="ss-grabber" aria-hidden />
 				<div className="ss-card-head">
-					<h2 className="ss-card-title">{t("add images")}</h2>
-					<button type="button" className="ss-close" onClick={onClose} title={t("close")}>
+					<h2 className="ss-card-title">{t("general.addImages")}</h2>
+					<button type="button" className="ss-close" onClick={onClose} title={t("settings.close")}>
 						<X size={16} />
 					</button>
 				</div>
@@ -1293,7 +1293,7 @@ function AttachSheet({
 						}}
 					>
 						<Camera size={18} />
-						<span>{t("take photo")}</span>
+						<span>{t("composer.takePhoto")}</span>
 					</button>
 					<button
 						type="button"
@@ -1304,10 +1304,10 @@ function AttachSheet({
 						}}
 					>
 						<Images size={18} />
-						<span>{t("choose from library")}</span>
+						<span>{t("composer.chooseLibrary")}</span>
 					</button>
 				</div>
-				<p className="sh-attach-hint">{t("attach images hint")}</p>
+				<p className="sh-attach-hint">{t("composer.attachImagesHint")}</p>
 			</div>
 		</div>
 	);
@@ -1329,14 +1329,14 @@ function ModelThinkingSheet({
 	open: boolean;
 	onClose(): void;
 }): ReactNode {
-	const [stage, setStage] = useState<"hidden" | "open" | "closing">(open ? "open" : "hidden");
+	const [stage, setStage] = useState<"hidden" | "settings.open" | "closing">(open ? "settings.open" : "hidden");
 	const model = useGuestSelector(client, s => s.state?.model ?? null);
 	const thinking = useGuestSelector(client, s => s.state?.thinkingLevel ?? null);
 	const current: ThinkingLadder = (THINKING_LADDER as readonly string[]).includes(thinking ?? "")
 		? (thinking as ThinkingLadder)
 		: "auto";
 	useEffect(() => {
-		setStage(prev => (open ? "open" : prev === "open" ? "closing" : "hidden"));
+		setStage(prev => (open ? "settings.open" : prev === "settings.open" ? "closing" : "hidden"));
 	}, [open]);
 	useEffect(() => {
 		if (!open) return;
@@ -1369,7 +1369,7 @@ function ModelThinkingSheet({
 				className={`ss-card${closing ? " ss-closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
-				aria-label={t("model & thinking")}
+				aria-label={t("composer.modelThinking")}
 				onClick={e => e.stopPropagation()}
 				onAnimationEnd={() => {
 					if (closing) setStage("hidden");
@@ -1377,8 +1377,8 @@ function ModelThinkingSheet({
 			>
 				<div className="ss-grabber" aria-hidden />
 				<div className="ss-card-head">
-					<h2 className="ss-card-title">{t("model & thinking")}</h2>
-					<button type="button" className="ss-close" onClick={onClose} title={t("close")}>
+					<h2 className="ss-card-title">{t("composer.modelThinking")}</h2>
+					<button type="button" className="ss-close" onClick={onClose} title={t("settings.close")}>
 						<X size={16} />
 					</button>
 				</div>
@@ -1391,8 +1391,8 @@ function ModelThinkingSheet({
 						</span>
 					</div>
 				)}
-				<p className="sh-mt-divider">{t("thinking level")}</p>
-				<div className="sh-mt-list" role="listbox" aria-label={t("thinking level")}>
+				<p className="sh-mt-divider">{t("transcript.thinkingLevel")}</p>
+				<div className="sh-mt-list" role="listbox" aria-label={t("transcript.thinkingLevel")}>
 					{THINKING_LADDER.map(level => (
 						<button
 							key={level}

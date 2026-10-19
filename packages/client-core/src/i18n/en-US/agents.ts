@@ -2,29 +2,29 @@ import type { AgentsKey } from "../zh-CN/agents.js";
 
 export const agents = {
 	// ── Agents ────────────────────────────────────────────────────────────────
-	"context {count}": "Context {count}",
-	"transcript unavailable: {reason}": "Transcript unavailable: {reason}",
-	"no transcript available": "No transcript available",
-	"message {name}…": "Message {name}…",
-	"{count} tok": "{count} tok",
-	"no subagents": "No subagents",
-	main: "Main",
-	sub: "Sub",
+	"agents.contextWithCount": "Context {count}",
+	"agents.transcriptUnavailableWithReason": "Transcript unavailable: {reason}",
+	"agents.noTranscriptAvailable": "No transcript available",
+	"agents.messageWithName": "Message {name}…",
+	"agents.tokWithCount": "{count} tok",
+	"agents.noSubagents": "No subagents",
+	"agents.main": "Main",
+	"agents.sub": "Sub",
 
 	// ── Agents center (desktop full-page roster) ─────────────────────────────
-	"agents center": "Agents Center",
-	activity: "Activity",
-	"last activity": "Last activity",
-	"open a session to view its agents": "Open a session to view its agents",
-	"{count} running · {total} total": "{count} running · {total} total",
-	"{count} agents": "{count} agents",
+	"agents.agentsCenter": "Agents Center",
+	"agents.activity": "Activity",
+	"agents.lastActivity": "Last activity",
+	"agents.openSessionViewAgents": "Open a session to view its agents",
+	"agents.runningTotalWithCountWithTotal": "{count} running · {total} total",
+	"agents.agentsWithCount": "{count} agents",
 	// 侧栏会话行展开名册的状态点提示。
-	"agent status running": "Running",
-	"agent status idle": "Idle",
-	"agent status parked": "Parked",
-	"agent status aborted": "Aborted",
+	"agents.agentStatusRunning": "Running",
+	"agents.agentStatusIdle": "Idle",
+	"agents.agentStatusParked": "Parked",
+	"agents.agentStatusAborted": "Aborted",
 	// Completed while the user wasn't looking — cleared on open.
-	new: "New",
+	"agents.new": "New",
 	// Sub-session row action: dock the subagent's full conversation over the panel.
-	"preview subagent in panel": "Preview in panel",
+	"agents.previewSubagentPanel": "Preview in panel",
 } as const satisfies Record<AgentsKey, string>;

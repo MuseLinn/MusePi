@@ -48,8 +48,8 @@ function actionTone(action: string): Tone | undefined {
 
 /** Mirrors the TUI's `describeBrowser`: explicit app args win over reported mode. */
 function describeBrowser(app: AppArg | null, details: BrowserDetails): string | null {
-	if (app?.cdpUrl) return t("connected {value}", { value: app.cdpUrl });
-	if (app?.path) return t("spawned {path}", { path: homePath(app.path) });
+	if (app?.cdpUrl) return t("tools.connectedWithValue", { value: app.cdpUrl });
+	if (app?.path) return t("tools.spawnedWithPath", { path: homePath(app.path) });
 	return details.browser;
 }
 
@@ -62,8 +62,8 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<Badge tone={actionTone(action)}>{action}</Badge>
-			<span>{closeAll ? t("all tabs") : tab}</span>
-			{args.kill === true && <Badge tone="err">{t("kill")}</Badge>}
+			<span>{closeAll ? t("tools.allTabs") : tab}</span>
+			{args.kill === true && <Badge tone="err">{t("settings.kill")}</Badge>}
 			{url && <span className="tv-faint">{truncate(homePath(url), 72)}</span>}
 		</>
 	);
@@ -84,12 +84,12 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<span className="tv-badges">
-				{tab !== null && <Badge>{t("tab {value}", { value: tab })}</Badge>}
+				{tab !== null && <Badge>{t("tools.tabWithValue", { value: tab })}</Badge>}
 				{url && <Badge tone="accent">{truncate(homePath(url), 120)}</Badge>}
 				{browserDesc && <Badge>{browserDesc}</Badge>}
-				{app?.target && <Badge>{t("target {value}", { value: app.target })}</Badge>}
-				{args.all === true && <Badge tone="warn">{t("all")}</Badge>}
-				{args.kill === true && <Badge tone="err">{t("kill")}</Badge>}
+				{app?.target && <Badge>{t("tools.targetWithValue", { value: app.target })}</Badge>}
+				{args.all === true && <Badge tone="warn">{t("tools.all")}</Badge>}
+				{args.kill === true && <Badge tone="err">{t("settings.kill")}</Badge>}
 				{vpWidth !== null && vpHeight !== null && (
 					<Badge>
 						{vpWidth}×{vpHeight}

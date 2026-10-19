@@ -65,14 +65,14 @@ function fmtCount(n: number): string {
 
 /** Outcome of one agent, mirroring the TUI's aborted / merge-failed / done / failed split. */
 function resultStatus(res: Record<string, unknown>): {
-	label: "aborted" | "merge failed" | "done" | "failed";
+	label: "tools.aborted" | "tools.mergeFailed" | "tools.done" | "tools.failed";
 	tone: "ok" | "err" | "warn";
 } {
-	if (res.aborted === true) return { label: "aborted", tone: "err" };
+	if (res.aborted === true) return { label: "tools.aborted", tone: "err" };
 	if (num(res.exitCode) === 0) {
-		return str(res.error) ? { label: "merge failed", tone: "warn" } : { label: "done", tone: "ok" };
+		return str(res.error) ? { label: "tools.mergeFailed", tone: "warn" } : { label: "tools.done", tone: "ok" };
 	}
-	return { label: "failed", tone: "err" };
+	return { label: "tools.failed", tone: "err" };
 }
 
 /** Phase of a finished result row (drives the member dot + segment color). */
@@ -81,11 +81,11 @@ function resultPhase(res: Record<string, unknown>): "ok" | "warn" | "err" {
 }
 
 /** Phase of a live progress row. */
-function progressPhase(p: Record<string, unknown>): "ok" | "run" | "err" {
-	const status = str(p.status) ?? "running";
-	if (status === "completed") return "ok";
-	if (status === "failed" || status === "aborted") return "err";
-	return "run";
+function progressPhase(p: Record<string, unknown>): "ok" | "tools.run" | "err" {
+	const status = str(p.status) ?? "tools.running";
+	if (status === "tools.completed") return "ok";
+	if (status === "tools.failed" || status === "tools.aborted") return "err";
+	return "tools.run";
 }
 
 /**
@@ -95,8 +95,8 @@ function progressPhase(p: Record<string, unknown>): "ok" | "run" | "err" {
  * (coding-agent `computeProgress`), and both surfaces must read the same.
  */
 export function agentProgressFraction(p: { status?: unknown; toolCount?: unknown }): number {
-	const status = typeof p.status === "string" ? p.status : "running";
-	if (status === "completed" || status === "failed" || status === "aborted") return 1;
+	const status = typeof p.status === "string" ? p.status : "tools.running";
+	if (status === "tools.completed" || status === "tools.failed" || status === "tools.aborted") return 1;
 	const toolCount = typeof p.toolCount === "number" ? p.toolCount : 0;
 	if (status === "pending" || toolCount <= 0) return 0;
 	return Math.min(1, toolCount / (toolCount + 2));
@@ -122,17 +122,17 @@ function swarmCounts(results: Record<string, unknown>[], progress: Record<string
 	if (results.length > 0) {
 		for (const res of results) {
 			const { label } = resultStatus(res);
-			if (label === "done") c.done++;
-			else if (label === "merge failed") c.mergeFailed++;
-			else if (label === "aborted") c.aborted++;
+			if (label === "tools.done") c.done++;
+			else if (label === "tools.mergeFailed") c.mergeFailed++;
+			else if (label === "tools.aborted") c.aborted++;
 			else c.failed++;
 		}
 	} else {
 		for (const p of progress) {
-			const status = str(p.status) ?? "running";
-			if (status === "completed") c.done++;
-			else if (status === "failed") c.failed++;
-			else if (status === "aborted") c.aborted++;
+			const status = str(p.status) ?? "tools.running";
+			if (status === "tools.completed") c.done++;
+			else if (status === "tools.failed") c.failed++;
+			else if (status === "tools.aborted") c.aborted++;
 			else c.running++;
 		}
 	}
@@ -159,9 +159,9 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{agent && <Badge tone="accent">{agent}</Badge>}
-			{!agent && resume && <Badge>{t("resume {name}", { name: resume })}</Badge>}
+			{!agent && resume && <Badge>{t("tools.resumeWithName", { name: resume })}</Badge>}
 			{label && <span className="tv-muted">{truncate(normalizeWs(label), 72)}</span>}
-			{tasks.length > 1 && <Badge>{t("{count} tasks", { count: String(tasks.length) })}</Badge>}
+			{tasks.length > 1 && <Badge>{t("tools.tasksWithCount", { count: String(tasks.length) })}</Badge>}
 			{total > 0 && (
 				<Badge tone={anyFailure ? "err" : undefined}>
 					{counts.done + counts.mergeFailed + counts.failed + counts.aborted} / {total}
@@ -213,12 +213,12 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 	if (results.length > 0) {
 		footer = (
 			<Row>
-				{counts.done > 0 && <Badge tone="ok">{t("{count} succeeded", { count: String(counts.done) })}</Badge>}{" "}
+				{counts.done > 0 && <Badge tone="ok">{t("tools.succeededWithCount", { count: String(counts.done) })}</Badge>}{" "}
 				{counts.mergeFailed > 0 && (
-					<Badge tone="warn">{t("{count} merge failed", { count: String(counts.mergeFailed) })}</Badge>
+					<Badge tone="warn">{t("tools.mergeFailedWithCount", { count: String(counts.mergeFailed) })}</Badge>
 				)}{" "}
-				{counts.failed > 0 && <Badge tone="err">{t("{count} failed", { count: String(counts.failed) })}</Badge>}{" "}
-				{counts.aborted > 0 && <Badge tone="err">{t("{count} aborted", { count: String(counts.aborted) })}</Badge>}{" "}
+				{counts.failed > 0 && <Badge tone="err">{t("tools.failedWithCount", { count: String(counts.failed) })}</Badge>}{" "}
+				{counts.aborted > 0 && <Badge tone="err">{t("tools.abortedWithCount", { count: String(counts.aborted) })}</Badge>}{" "}
 				{totalDurationMs != null && <span className="tv-faint">{fmtDuration(totalDurationMs)}</span>}
 			</Row>
 		);
@@ -258,7 +258,7 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 }
 
 /** Phase overview: progress line + segmented bar + legend (Kimi parity). */
-type SwarmPhase = "done" | "merge failed" | "running" | "failed" | "aborted";
+type SwarmPhase = "tools.done" | "tools.mergeFailed" | "tools.running" | "tools.failed" | "tools.aborted";
 
 function SwarmOverview({
 	counts,
@@ -274,24 +274,24 @@ function SwarmOverview({
 	const push = (phase: SwarmPhase, count: number, cls: string): void => {
 		if (count > 0) segments.push({ phase, count, cls });
 	};
-	push("done", counts.done, "s-ok");
-	push("merge failed", counts.mergeFailed, "s-warn");
-	push("running", counts.running, "s-run");
-	push("failed", counts.failed, "s-fail");
-	push("aborted", counts.aborted, "s-abort");
+	push("tools.done", counts.done, "s-ok");
+	push("tools.mergeFailed", counts.mergeFailed, "s-warn");
+	push("tools.running", counts.running, "s-run");
+	push("tools.failed", counts.failed, "s-fail");
+	push("tools.aborted", counts.aborted, "s-abort");
 	const doneTotal = counts.done + counts.mergeFailed + counts.failed + counts.aborted;
 	return (
 		<div className="tv-swarm-overview">
 			<div className="tv-swarm-line">
 				<span className="tv-swarm-big">
-					{t("swarm progress", { done: String(doneTotal), total: String(counts.total) })}
+					{t("tools.swarmProgress", { done: String(doneTotal), total: String(counts.total) })}
 				</span>
 				{counts.running > 0 ? (
-					<span className="tv-swarm-lbl">{t("swarm running", { count: String(counts.running) })}</span>
+					<span className="tv-swarm-lbl">{t("tools.swarmRunning", { count: String(counts.running) })}</span>
 				) : (
 					(counts.failed > 0 || counts.aborted > 0) && (
 						<span className="tv-swarm-lbl">
-							{t("swarm done summary", {
+							{t("tools.swarmDoneSummary", {
 								completed: String(counts.done + counts.mergeFailed),
 								failed: String(counts.failed + counts.aborted),
 							})}
@@ -303,7 +303,7 @@ function SwarmOverview({
 					type="button"
 					className="tv-swarm-chev tv-swarm-chev--fold"
 					aria-expanded={open}
-					aria-label={t(open ? "collapse" : "expand")}
+					aria-label={t(open ? "tools.collapse" : "tools.expand")}
 					onClick={onToggle}
 				>
 					<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
@@ -337,7 +337,7 @@ function SwarmOverview({
 const SWARM_MATRIX_DOTS = 16;
 const SWARM_MATRIX_COLS = 8;
 
-function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "warn" | "err" | "run" }): ReactNode {
+function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "warn" | "err" | "tools.run" }): ReactNode {
 	const filled = Math.round(Math.min(1, Math.max(0, fraction)) * SWARM_MATRIX_DOTS);
 	return (
 		<span
@@ -350,7 +350,7 @@ function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "war
 					key={i}
 					className={
 						i < filled
-							? `tv-swarm-matrix-dot tv-swarm-matrix-dot--on${i === filled - 1 && phase === "run" ? " tv-swarm-matrix-dot--tip" : ""}`
+							? `tv-swarm-matrix-dot tv-swarm-matrix-dot--on${i === filled - 1 && phase === "tools.run" ? " tv-swarm-matrix-dot--tip" : ""}`
 							: "tv-swarm-matrix-dot"
 					}
 				/>
@@ -368,7 +368,7 @@ function SwarmFoot({
 	status,
 	children,
 }: {
-	phase: "ok" | "warn" | "err" | "run";
+	phase: "ok" | "warn" | "err" | "tools.run";
 	fraction: number;
 	status: string;
 	children?: ReactNode;
@@ -407,13 +407,13 @@ function SwarmAgentResult({
 }): ReactNode {
 	const { label, tone } = resultStatus(res);
 	const phase = resultPhase(res);
-	const id = str(res.id) ?? t("agent");
+	const id = str(res.id) ?? t("settings.agent");
 	const description = str(res.description);
 	const stats: string[] = [];
 	const tokens = num(res.tokens);
-	if (tokens) stats.push(t("{count} tok", { count: fmtCount(tokens) }));
+	if (tokens) stats.push(t("agents.tokWithCount", { count: fmtCount(tokens) }));
 	const requests = num(res.requests);
-	if (requests) stats.push(t("{count} req", { count: String(requests) }));
+	if (requests) stats.push(t("tools.reqWithCount", { count: String(requests) }));
 	const durationMs = num(res.durationMs);
 	if (durationMs != null) stats.push(fmtDuration(durationMs));
 	const model = str(res.resolvedModel);
@@ -451,7 +451,7 @@ function SwarmAgentResult({
 							{taskIdLabel(id)}
 						</AgentLink>
 						<Badge tone={tone}>{t(label)}</Badge>{" "}
-						{res.truncated === true && <Badge tone="warn">{t("truncated")}</Badge>}
+						{res.truncated === true && <Badge tone="warn">{t("tools.truncated")}</Badge>}
 						{/* Batch index (kimiwork role-card parity: 01/02…) — the
 						 * card's fixed identity slot, right-aligned. */}
 						<span className="tv-swarm-index">{String(index + 1).padStart(2, "0")}</span>
@@ -464,7 +464,7 @@ function SwarmAgentResult({
 								type="button"
 								className="tv-swarm-chev"
 								aria-expanded={open}
-								aria-label={t(open ? "collapse" : "expand")}
+								aria-label={t(open ? "tools.collapse" : "tools.expand")}
 								onClick={onToggle}
 							>
 								<span
@@ -484,8 +484,8 @@ function SwarmAgentResult({
 					{error && !aborted && error !== abortReason && (
 						<Note tone={tone === "warn" ? "warn" : "err"}>{error}</Note>
 					)}
-					{patchPath && <div className="tv-faint">{t("patch: {path}", { path: patchPath })}</div>}
-					{!patchPath && branchName && <div className="tv-faint">{t("branch: {name}", { name: branchName })}</div>}
+					{patchPath && <div className="tv-faint">{t("tools.patchWithPath", { path: patchPath })}</div>}
+					{!patchPath && branchName && <div className="tv-faint">{t("tools.branchWithName", { name: branchName })}</div>}
 				</div>
 			)}
 		</div>
@@ -505,34 +505,34 @@ function SwarmAgentProgressRow({
 	host?: ToolRenderHost;
 	index: number;
 }): ReactNode {
-	const status = str(p.status) ?? "running";
+	const status = str(p.status) ?? "tools.running";
 	const tone =
-		status === "completed"
+		status === "tools.completed"
 			? ("ok" as const)
-			: status === "failed" || status === "aborted"
+			: status === "tools.failed" || status === "tools.aborted"
 				? ("err" as const)
-				: status === "running"
+				: status === "tools.running"
 					? ("accent" as const)
 					: undefined;
 	const phase = progressPhase(p);
-	const id = str(p.id) ?? t("agent");
+	const id = str(p.id) ?? t("settings.agent");
 	const description = str(p.description);
 	const intent = str(p.lastIntent) ?? str(p.currentTool);
 	const bits: string[] = [];
 	const toolCount = num(p.toolCount) ?? 0;
-	if (toolCount) bits.push(t("{count} tools", { count: String(toolCount) }));
+	if (toolCount) bits.push(t("tools.toolsWithCount", { count: String(toolCount) }));
 	const tokens = num(p.tokens);
-	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
+	if (tokens) bits.push(t("agents.tokWithCount", { count: fmtCount(tokens) }));
 	const durationMs = num(p.durationMs);
 	if (durationMs) bits.push(fmtDuration(durationMs));
 	// Foot status, kimiwork semantics: what the agent is doing right now.
 	const footStatus =
-		status === "running"
-			? t("swarm working")
-			: status === "completed"
+		status === "tools.running"
+			? t("tools.swarmWorking")
+			: status === "tools.completed"
 				? toolCount > 0
-					? t("{count} tools", { count: String(toolCount) })
-					: t("completed")
+					? t("tools.toolsWithCount", { count: String(toolCount) })
+					: t("tools.completed")
 				: status;
 	return (
 		<div className={`tv-swarm-member tv-swarm-member--${phase}`}>
@@ -554,7 +554,7 @@ function SwarmAgentProgressRow({
 					)}
 					{bits.length > 0 && <div className="tv-swarm-member-stats">{bits.join(" · ")}</div>}
 					<SwarmFoot
-						phase={phase === "ok" ? "ok" : phase === "err" ? "err" : "run"}
+						phase={phase === "ok" ? "ok" : phase === "err" ? "err" : "tools.run"}
 						fraction={agentProgressFraction(p)}
 						status={footStatus}
 					/>
@@ -580,13 +580,13 @@ function AgentResult({
 	onToggle(): void;
 }): ReactNode {
 	const { label, tone } = resultStatus(res);
-	const id = str(res.id) ?? t("agent");
+	const id = str(res.id) ?? t("settings.agent");
 	const description = str(res.description);
 	const stats: string[] = [];
 	const tokens = num(res.tokens);
-	if (tokens) stats.push(t("{count} tok", { count: fmtCount(tokens) }));
+	if (tokens) stats.push(t("agents.tokWithCount", { count: fmtCount(tokens) }));
 	const requests = num(res.requests);
-	if (requests) stats.push(t("{count} req", { count: String(requests) }));
+	if (requests) stats.push(t("tools.reqWithCount", { count: String(requests) }));
 	const durationMs = num(res.durationMs);
 	if (durationMs != null) stats.push(fmtDuration(durationMs));
 	const model = str(res.resolvedModel);
@@ -620,7 +620,7 @@ function AgentResult({
 				}
 			>
 				<Badge tone={tone}>{t(label)}</Badge>{" "}
-				{res.truncated === true && <Badge tone="warn">{t("truncated")}</Badge>}{" "}
+				{res.truncated === true && <Badge tone="warn">{t("tools.truncated")}</Badge>}{" "}
 				{description && <span>{truncate(normalizeWs(description), 96)}</span>}{" "}
 				{stats.length > 0 && <span className="tv-faint">{stats.join(" · ")}</span>}
 				{hasDetails && (
@@ -628,7 +628,7 @@ function AgentResult({
 						type="button"
 						className="tv-swarm-chev"
 						aria-expanded={open}
-						aria-label={t(open ? "collapse" : "expand")}
+						aria-label={t(open ? "tools.collapse" : "tools.expand")}
 						onClick={onToggle}
 					>
 						<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
@@ -643,8 +643,8 @@ function AgentResult({
 					{error && !aborted && error !== abortReason && (
 						<Note tone={tone === "warn" ? "warn" : "err"}>{error}</Note>
 					)}
-					{patchPath && <div className="tv-faint">{t("patch: {path}", { path: patchPath })}</div>}
-					{!patchPath && branchName && <div className="tv-faint">{t("branch: {name}", { name: branchName })}</div>}
+					{patchPath && <div className="tv-faint">{t("tools.patchWithPath", { path: patchPath })}</div>}
+					{!patchPath && branchName && <div className="tv-faint">{t("tools.branchWithName", { name: branchName })}</div>}
 				</>
 			)}
 		</>
@@ -664,23 +664,23 @@ function AgentProgressRow({
 	open: boolean;
 	onToggle(): void;
 }): ReactNode {
-	const status = str(p.status) ?? "running";
+	const status = str(p.status) ?? "tools.running";
 	const tone =
-		status === "completed"
+		status === "tools.completed"
 			? ("ok" as const)
-			: status === "failed" || status === "aborted"
+			: status === "tools.failed" || status === "tools.aborted"
 				? ("err" as const)
-				: status === "running"
+				: status === "tools.running"
 					? ("accent" as const)
 					: undefined;
-	const id = str(p.id) ?? t("agent");
+	const id = str(p.id) ?? t("settings.agent");
 	const description = str(p.description);
 	const intent = str(p.lastIntent) ?? str(p.currentTool);
 	const bits: string[] = [];
 	const toolCount = num(p.toolCount) ?? 0;
-	if (toolCount) bits.push(t("{count} tools", { count: String(toolCount) }));
+	if (toolCount) bits.push(t("tools.toolsWithCount", { count: String(toolCount) }));
 	const tokens = num(p.tokens);
-	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
+	if (tokens) bits.push(t("agents.tokWithCount", { count: fmtCount(tokens) }));
 	const durationMs = num(p.durationMs);
 	if (durationMs) bits.push(fmtDuration(durationMs));
 	return (
@@ -699,7 +699,7 @@ function AgentProgressRow({
 					type="button"
 					className="tv-swarm-chev"
 					aria-expanded={open}
-					aria-label={t(open ? "collapse" : "expand")}
+					aria-label={t(open ? "tools.collapse" : "tools.expand")}
 					onClick={onToggle}
 				>
 					<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
@@ -738,12 +738,12 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 	if (results.length > 0) {
 		footer = (
 			<Row>
-				{counts.done > 0 && <Badge tone="ok">{t("{count} succeeded", { count: String(counts.done) })}</Badge>}{" "}
+				{counts.done > 0 && <Badge tone="ok">{t("tools.succeededWithCount", { count: String(counts.done) })}</Badge>}{" "}
 				{counts.mergeFailed > 0 && (
-					<Badge tone="warn">{t("{count} merge failed", { count: String(counts.mergeFailed) })}</Badge>
+					<Badge tone="warn">{t("tools.mergeFailedWithCount", { count: String(counts.mergeFailed) })}</Badge>
 				)}{" "}
-				{counts.failed > 0 && <Badge tone="err">{t("{count} failed", { count: String(counts.failed) })}</Badge>}{" "}
-				{counts.aborted > 0 && <Badge tone="err">{t("{count} aborted", { count: String(counts.aborted) })}</Badge>}{" "}
+				{counts.failed > 0 && <Badge tone="err">{t("tools.failedWithCount", { count: String(counts.failed) })}</Badge>}{" "}
+				{counts.aborted > 0 && <Badge tone="err">{t("tools.abortedWithCount", { count: String(counts.aborted) })}</Badge>}{" "}
 				{totalDurationMs != null && <span className="tv-faint">{fmtDuration(totalDurationMs)}</span>}
 			</Row>
 		);
@@ -756,8 +756,8 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 
 	return (
 		<>
-			{resume && <Badge>{t("resume {name}", { name: resume })}</Badge>}
-			{context && <Output text={context} maxLines={4} title={t("context")} />}
+			{resume && <Badge>{t("tools.resumeWithName", { name: resume })}</Badge>}
+			{context && <Output text={context} maxLines={4} title={t("settings.context")} />}
 			{tasks.length > 0 && tasks.some(task => task.description || task.assignment || task.isolated || task.id) && (
 				<div className="tv-list">
 					{tasks.map((task, i) =>
@@ -777,7 +777,7 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 										)
 									}
 								>
-									{task.isolated && <Badge>{t("isolated")}</Badge>}{" "}
+									{task.isolated && <Badge>{t("tools.isolated")}</Badge>}{" "}
 									{task.description && <span>{truncate(normalizeWs(task.description), 120)}</span>}
 								</Row>
 								{task.assignment && <Output text={task.assignment} maxLines={6} title={task.assignment} />}

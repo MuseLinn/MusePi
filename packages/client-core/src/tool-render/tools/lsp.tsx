@@ -79,8 +79,8 @@ function DiagnosticRows({ text, rows }: { text: string; rows: DiagRow[] }): Reac
 		<>
 			{(errMatch || warnMatch) && (
 				<span className="tv-badges">
-					{errMatch && <Badge tone="err">{t("{count} error(s)", { count: errMatch[1] })}</Badge>}
-					{warnMatch && <Badge tone="warn">{t("{count} warning(s)", { count: warnMatch[1] })}</Badge>}
+					{errMatch && <Badge tone="err">{t("tools.errorWithCount", { count: errMatch[1] })}</Badge>}
+					{warnMatch && <Badge tone="warn">{t("tools.warningWithCount", { count: warnMatch[1] })}</Badge>}
 				</span>
 			)}
 			<div className="tv-list">
@@ -92,7 +92,7 @@ function DiagnosticRows({ text, rows }: { text: string; rows: DiagRow[] }): Reac
 				))}
 				{rows.length > shown.length && (
 					<Row>
-						<span className="tv-faint">{t("… {count} more", { count: String(rows.length - shown.length) })}</span>
+						<span className="tv-faint">{t("tools.moreWithCount", { count: String(rows.length - shown.length) })}</span>
 					</Row>
 				)}
 			</div>
@@ -107,7 +107,7 @@ function LocationRows({ text, rows }: { text: string; rows: LocRow[] }): ReactNo
 		<>
 			{refMatch && (
 				<span className="tv-badges">
-					<Badge tone="accent">{t("{count} reference(s)", { count: refMatch[1] })}</Badge>
+					<Badge tone="accent">{t("tools.referenceWithCount", { count: refMatch[1] })}</Badge>
 				</span>
 			)}
 			<div className="tv-list">
@@ -118,7 +118,7 @@ function LocationRows({ text, rows }: { text: string; rows: LocRow[] }): ReactNo
 				))}
 				{rows.length > shown.length && (
 					<Row>
-						<span className="tv-faint">{t("… {count} more", { count: String(rows.length - shown.length) })}</span>
+						<span className="tv-faint">{t("tools.moreWithCount", { count: String(rows.length - shown.length) })}</span>
 					</Row>
 				)}
 			</div>
@@ -135,10 +135,10 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 	const newName = str(args.new_name);
 	return (
 		<>
-			<Badge tone="accent">{action ? action.replace(/_/g, " ") : t("request")}</Badge>
-			{file === "*" && <Badge>{t("workspace")}</Badge>}
+			<Badge tone="accent">{action ? action.replace(/_/g, " ") : t("tools.request")}</Badge>
+			{file === "*" && <Badge>{t("tools.workspace")}</Badge>}
 			{file && file !== "*" && <PathText path={file} from={line} />}
-			{!file && line != null && <span className="tv-faint">{t("line {count}", { count: String(line) })}</span>}
+			{!file && line != null && <span className="tv-faint">{t("tools.lineWithCount", { count: String(line) })}</span>}
 			{symbol && <span className="tv-pattern">{truncate(normalizeWs(symbol), 48)}</span>}
 			{query && <span className="tv-muted">{truncate(normalizeWs(query), 48)}</span>}
 			{newName && <span className="tv-muted">→ {truncate(normalizeWs(newName), 48)}</span>}
@@ -169,26 +169,26 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<KvGrid>
-				<ArgKv k={t("action")} raw={args.action} val={str(args.action)?.replace(/_/g, " ")} />
+				<ArgKv k={t("general.action")} raw={args.action} val={str(args.action)?.replace(/_/g, " ")} />
 				<ArgKv
-					k={t("file")}
+					k={t("tools.file")}
 					raw={args.file}
-					val={file === "*" ? <Badge>{t("workspace")}</Badge> : file && <PathText path={file} from={line} />}
+					val={file === "*" ? <Badge>{t("tools.workspace")}</Badge> : file && <PathText path={file} from={line} />}
 				/>
-				{!file && <ArgKv k={t("line")} raw={args.line} val={line} />}
-				<ArgKv k={t("symbol")} raw={args.symbol} val={symbol && truncate(normalizeWs(symbol), 120)} />
-				<ArgKv k={t("query")} raw={args.query} val={query && truncate(normalizeWs(query), 120)} />
-				<ArgKv k={t("new name")} raw={args.new_name} val={newName && truncate(normalizeWs(newName), 120)} />
-				<ArgKv k={t("apply")} raw={args.apply} val={apply == null ? null : apply ? t("yes") : t("no")} />
-				<ArgKv k={t("timeout")} raw={args.timeout} val={timeout != null && `${timeout}s`} />
+				{!file && <ArgKv k={t("tools.line")} raw={args.line} val={line} />}
+				<ArgKv k={t("tools.symbol")} raw={args.symbol} val={symbol && truncate(normalizeWs(symbol), 120)} />
+				<ArgKv k={t("tools.query")} raw={args.query} val={query && truncate(normalizeWs(query), 120)} />
+				<ArgKv k={t("tools.newName")} raw={args.new_name} val={newName && truncate(normalizeWs(newName), 120)} />
+				<ArgKv k={t("tools.apply")} raw={args.apply} val={apply == null ? null : apply ? t("tools.yes") : t("tools.no")} />
+				<ArgKv k={t("tools.timeout")} raw={args.timeout} val={timeout != null && `${timeout}s`} />
 				{args.payload !== undefined && payload == null && (
-					<Kv k={t("payload")}>
+					<Kv k={t("tools.payload")}>
 						<InvalidArg what="payload" />
 					</Kv>
 				)}
-				{serverName && <Kv k={t("server")}>{serverName}</Kv>}
+				{serverName && <Kv k={t("tools.server")}>{serverName}</Kv>}
 			</KvGrid>
-			{payload && <Output text={payload} lang="json" variant="code" maxLines={8} title={t("payload")} />}
+			{payload && <Output text={payload} lang="json" variant="code" maxLines={8} title={t("tools.payload")} />}
 			{diags.length > 0 ? (
 				<DiagnosticRows text={text} rows={diags} />
 			) : locs.length > 0 ? (

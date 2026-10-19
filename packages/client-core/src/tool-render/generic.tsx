@@ -83,7 +83,7 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{argText && argText !== "{}" && (
-				<Output text={argText} lang="json" variant="code" maxLines={12} title={t("args")} />
+				<Output text={argText} lang="json" variant="code" maxLines={12} title={t("tools.args")} />
 			)}
 			<ResultImages result={result} />
 			<ResultText result={result} maxLines={10} />

@@ -11,7 +11,7 @@ export function SendChip({ text, onSend }: { text: string; onSend?: (text: strin
 	return (
 		<button type="button" className="gui-widget-send" onClick={() => onSend(text)}>
 			<span className="gui-widget-send-arrow">↗</span>
-			{t("widget send")}
+			{t("settings.widgetSend")}
 		</button>
 	);
 }

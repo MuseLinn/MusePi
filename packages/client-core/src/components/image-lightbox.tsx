@@ -429,7 +429,7 @@ export function ImageLightbox({
 			}`}
 			role="dialog"
 			aria-modal="true"
-			aria-label={t("preview image")}
+			aria-label={t("settings.previewImage")}
 			onMouseDown={isClosing || morphClosing ? undefined : onClose}
 		>
 			{/* Backdrop plate: the dimmed/blurred floor is NOT a shared element,
@@ -445,8 +445,8 @@ export function ImageLightbox({
 					<button
 						type="button"
 						className="tr-img-lb-x"
-						aria-label={t("sketch")}
-						title={t("sketch")}
+						aria-label={t("composer.sketch")}
+						title={t("composer.sketch")}
 						onClick={() => {
 							onClose();
 							onEdit(shownItem.src);
@@ -458,8 +458,8 @@ export function ImageLightbox({
 				<button
 					type="button"
 					className="tr-img-lb-x"
-					aria-label={t("download image")}
-					title={t("download image")}
+					aria-label={t("settings.downloadImage")}
+					title={t("settings.downloadImage")}
 					onClick={() => downloadImage(shownItem)}
 				>
 					<Download size={16} />
@@ -467,7 +467,7 @@ export function ImageLightbox({
 				<button
 					type="button"
 					className="tr-img-lb-x"
-					aria-label={t("close")}
+					aria-label={t("settings.close")}
 					onClick={annotateMode ? cancelAnnotate : onClose}
 				>
 					<X size={16} />
@@ -477,22 +477,22 @@ export function ImageLightbox({
 				<div className="tr-img-lb-tools" onMouseDown={e => e.stopPropagation()}>
 					{annotateMode ? (
 						<>
-							<span className="tr-img-lb-annotate-hint">{t("click on image to place a pin")}</span>
+							<span className="tr-img-lb-annotate-hint">{t("settings.clickImagePlacePin")}</span>
 							<button
 								type="button"
 								className="tr-img-lb-tool tr-img-lb-tool--primary"
 								onClick={finishAnnotate}
 								disabled={pins.length === 0}
 							>
-								{t("send annotations")}
+								{t("settings.sendAnnotations")}
 							</button>
 							<button type="button" className="tr-img-lb-tool" onClick={cancelAnnotate}>
-								{t("cancel")}
+								{t("settings.cancel")}
 							</button>
 						</>
 					) : (
 						<button type="button" className="tr-img-lb-tool" onClick={startAnnotate}>
-							{t("annotate image")}
+							{t("settings.annotateImage")}
 						</button>
 					)}
 				</div>
@@ -502,7 +502,7 @@ export function ImageLightbox({
 					<button
 						type="button"
 						className="tr-img-lb-nav tr-img-lb-nav--prev"
-						aria-label={t("previous image")}
+						aria-label={t("settings.previousImage")}
 						onMouseDown={e => e.stopPropagation()}
 						onClick={prev}
 					>
@@ -511,7 +511,7 @@ export function ImageLightbox({
 					<button
 						type="button"
 						className="tr-img-lb-nav tr-img-lb-nav--next"
-						aria-label={t("next image")}
+						aria-label={t("settings.nextImage")}
 						onMouseDown={e => e.stopPropagation()}
 						onClick={next}
 					>
@@ -545,7 +545,7 @@ export function ImageLightbox({
 							ref={imgRef}
 							className="tr-img-lb-img"
 							src={shownItem.src}
-							alt={shownItem.alt ?? t("attachment")}
+							alt={shownItem.alt ?? t("settings.attachment")}
 							draggable={false}
 						/>
 						{pins.map(p => (
@@ -554,7 +554,7 @@ export function ImageLightbox({
 								key={p.index}
 								className="tr-img-lb-pin"
 								style={{ left: `${p.x}%`, top: `${p.y}%` }}
-								aria-label={t("annotation {index}", { index: String(p.index) })}
+								aria-label={t("settings.annotationWithIndex", { index: String(p.index) })}
 								onMouseDown={e => e.stopPropagation()}
 								onClick={e => {
 									e.stopPropagation();
@@ -575,7 +575,7 @@ export function ImageLightbox({
 									className="tr-img-lb-note-input"
 									value={noteDraft}
 									autoFocus
-									placeholder={t("annotation note placeholder")}
+									placeholder={t("settings.annotationNotePlaceholder")}
 									onChange={e => setNoteDraft(e.target.value)}
 									onKeyDown={e => {
 										if (e.key === "Enter") commitPinNote();
