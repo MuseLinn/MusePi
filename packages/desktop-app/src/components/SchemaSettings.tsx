@@ -285,7 +285,9 @@ export function SchemaSettings({
 															const opts = item.ui.options.map(opt => ({
 																value: opt.value,
 																label: t(opt.label as TranslationKey),
-																description: opt.description,
+																description: opt.description
+																	? t(opt.description as TranslationKey)
+																	: undefined,
 															}));
 															for (const v of current) {
 																if (!opts.some(o => o.value === v))
