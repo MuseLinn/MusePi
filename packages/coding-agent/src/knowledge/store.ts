@@ -11,9 +11,8 @@
  *    the agent could never read them AT ALL, and a session with no window (a
  *    scheduled task, a dispatched subagent) had nothing to read.
  *
- * The panel UI needing a browser to own project knowledge is the same mistake
- * openchamber removed ("The client used to own this... A session started
- * without a UI got nothing at all"). So todos move here, next to their
+ * The panel UI needing a browser to own project knowledge means a session
+ * started without a UI gets nothing at all. So todos live here, next to their
  * siblings, and the tool + RPC share this one implementation.
  *
  * Layout mirrors the existing on-disk shape so notes/plans keep working
@@ -301,8 +300,7 @@ export async function createTodo(slug: string, text: string): Promise<KnowledgeT
 
 /**
  * Update a todo. `text` and `done` are independent: the panel toggles
- * completion without resending the label, and the tool may send only `done`
- * (openchamber's `knowledge.save` allows exactly that).
+ * completion without resending the label, and the tool may send only `done`.
  */
 export async function updateTodo(
 	slug: string,

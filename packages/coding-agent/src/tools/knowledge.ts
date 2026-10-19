@@ -41,15 +41,15 @@ const knowledgeSchema = type({
 	"body?": type("string").describe("note text, or the whole markdown document for a plan (starts with a # title)"),
 	"text?": type("string").describe("todo text (save a todo)"),
 	"done?": type("boolean").describe("todo completion state"),
-	// Project addressing (openchamber parity). `directory` is an absolute
-	// workspace path; `projectId` is the slug `list` reports. One or the other;
-	// both is refused because they can disagree.
+	// Project addressing. `directory` is an absolute workspace path;
+	// `projectId` is the slug `list` reports. One or the other; both is
+	// refused because they can disagree.
 	"directory?": type("string").describe(
 		"absolute path of the project to address (defaults to this session's workspace)",
 	),
 	"projectId?": type("string").describe("project id as reported by list (alternative to directory)"),
-	// Optimistic concurrency (openchamber parity): the exact text previously
-	// read, so a concurrent edit fails instead of being overwritten.
+	// Optimistic concurrency: the exact text previously read, so a concurrent
+	// edit fails instead of being overwritten.
 	"expected?": type("string").describe(
 		"the note or plan text you last read; required to safely replace a long-lived document",
 	),

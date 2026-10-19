@@ -338,7 +338,12 @@ export function parseCssColor(value: string): ColorRGBA | undefined {
 		r: channel(rgb[1]!),
 		g: channel(rgb[2]!),
 		b: channel(rgb[3]!),
-		a: alpha === undefined ? 1 : alpha.endsWith("%") ? Number(alpha.slice(0, -1)) / 100 : Math.max(0, Math.min(1, Number(alpha))),
+		a:
+			alpha === undefined
+				? 1
+				: alpha.endsWith("%")
+					? Number(alpha.slice(0, -1)) / 100
+					: Math.max(0, Math.min(1, Number(alpha))),
 	};
 }
 
@@ -417,8 +422,6 @@ export function ensureReadableColor(foreground: string, background: string, mini
 			low = amount;
 		}
 	}
-	const hex = [result.r, result.g, result.b]
-		.map(v => Math.round(v).toString(16).padStart(2, "0"))
-		.join("");
+	const hex = [result.r, result.g, result.b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
 	return `#${hex}`;
 }
