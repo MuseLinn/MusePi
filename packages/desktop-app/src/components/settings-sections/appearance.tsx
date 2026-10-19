@@ -67,7 +67,6 @@ import { ColorPickerPanel } from "../ColorPicker";
 import { GuiSelect } from "../GuiSelect";
 import { MockConversationPreview } from "../MockConversationPreview";
 import { Reveal } from "../Reveal";
-import { setStatusBarEnabled } from "../statusbar-info";
 import {
 	TURN_RAIL_CHANGED_EVENT,
 	TURN_RAIL_SIDE_KEY,
@@ -167,9 +166,16 @@ export function AppearanceSection({
 		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
-	const [statusBarInfo, setStatusBarInfo] = useState<boolean>(
-		() => localStorage.getItem("musepi-gui-statusbar-info") === "1",
-	);
+	// The output-style preset is chosen on the 聊天 page; this page previews it.
+	// Both read the same key, so the two sections cannot disagree about which
+	// typography the sample is showing.
+	const [outputStyle] = useState<string>(() => {
+		try {
+			return localStorage.getItem("musepi-gui-chat-output-style") ?? "muse";
+		} catch {
+			return "muse";
+		}
+	});
 	const [fontScale, setFontScale] = useState<number>(() =>
 		Number(localStorage.getItem("musepi-gui-font-scale") ?? 15),
 	);
@@ -572,26 +578,6 @@ export function AppearanceSection({
 					/>
 				</div>
 				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("info status bar")}</div>
-						<div className="gui-settings-row-desc">{t("info status bar desc")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={statusBarInfo}
-						className={`gui-toggle${statusBarInfo ? " gui-toggle--on" : ""}`}
-						aria-label={t("info status bar")}
-						onClick={() => {
-							const next = !statusBarInfo;
-							setStatusBarInfo(next);
-							setStatusBarEnabled(next);
-						}}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
 					<div className="flex-1">
 						<div className="gui-settings-row-label">{t("show avatars")}</div>
 						<div className="gui-settings-row-desc">
@@ -618,7 +604,7 @@ export function AppearanceSection({
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("effects preview")}</div>
 				<div className="gui-settings-section-desc">{t("effects preview description")}</div>
-				<MockConversationPreview showAvatars={showAvatars} statusBarInfo={statusBarInfo} />
+				<MockConversationPreview showAvatars={showAvatars} outputStyle={outputStyle} streamingDemo />
 			</div>
 			{/* ── 图片 — the GUI inline-images toggle + the daemon schema's
 			 * Images group (auto-resize / block images) in one place. ── */}

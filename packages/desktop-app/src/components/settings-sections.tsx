@@ -4,15 +4,11 @@
  *  components now live one-per-file in ./settings-sections/; this barrel
  *  keeps the original import surface — every public symbol is re-exported
  *  here unchanged. */
+
+export { TypewriterPreview, useTypewriterSample } from "./MockConversationPreview";
 export { AppearanceSection, CodePreviewCard } from "./settings-sections/appearance";
 export { BrowserSection } from "./settings-sections/browser";
-export {
-	ChatSection,
-	PrefSegmented,
-	PrefToggle,
-	TypewriterPreview,
-	useTypewriterSample,
-} from "./settings-sections/chat";
+export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
 export { CommandsSection } from "./settings-sections/commands";
 export { ContextSection } from "./settings-sections/context";
 export { FilesLspSection } from "./settings-sections/files";

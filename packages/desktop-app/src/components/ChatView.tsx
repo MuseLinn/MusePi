@@ -67,7 +67,6 @@ import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { StatusCards } from "./StatusCards";
-import { SessionStatusBar } from "./statusbar-info";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
@@ -2356,8 +2355,6 @@ export function ChatView({
 				 * full-surface). The wrapper itself is IN FLOW — the terminal
 				 * dock after it genuinely pushes the scenes up instead of the
 				 * dock becoming the only in-flow child and landing on top. */}
-				{/* Optional informational status bar (settings → 外观 → 信息状态条). */}
-				<SessionStatusBar rpc={rpc} sessionId={store?.sessionId ?? ""} state={snap?.state ?? null} />
 				<div className="gui-scenes relative min-h-0 flex-1">
 					{showWelcome && (
 						<div

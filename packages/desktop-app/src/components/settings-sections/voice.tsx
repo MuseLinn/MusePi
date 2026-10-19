@@ -769,13 +769,6 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			return true;
 		}
 	})();
-	const statusBarInfo = (() => {
-		try {
-			return localStorage.getItem("musepi-gui-statusbar-info") === "1";
-		} catch {
-			return false;
-		}
-	})();
 
 	useEffect(() => {
 		void enumerateMicDevices()
@@ -896,7 +889,6 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 				<MockConversationPreview
 					showAvatars={showAvatars}
-					statusBarInfo={statusBarInfo}
 					assistantMarkdown={TTS_SAMPLE_MARKDOWN}
 					assistantActions={ttsOn ? <SpeakAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} /> : undefined}
 					extraMessages={dictatedMessages.map((text, i) => (

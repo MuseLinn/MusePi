@@ -12,7 +12,10 @@
  *    (the voice test mounts its read-aloud button there, same .tr-action
  *    slot the transcript's speak button uses)
  *  - a collapsed-round 活动 summary row (.tr-round-fold, the real fold
- *    classes) between the sample turns
+ *    classes) between the sample turns, in BOTH fold states
+ *  - optional output-style scoping (`outputStyle`): the presets are --tr-*
+ *    variable overrides keyed off [data-output-style], so wrapping the sample
+ *    in that attribute previews the exact transcript typography
  *  - the composer card mock (.gui-effect-preview-composer, the frosted-glass
  *    look of the real input frame); voice overrides it with a live mic
  *
@@ -20,9 +23,19 @@
  * renderer chat uses — so the preview shows real markdown (the voice TTS
  * sample leans on this for its code block).
  */
-import { Markdown, t } from "@musepi/client-core";
+import {
+	countGraphemes,
+	graphemeSpans,
+	Markdown,
+	nextStep,
+	STREAMING_REVEAL_FRAME_MS,
+	sliceGraphemes,
+	TAIL_RENDERERS,
+	t,
+} from "@musepi/client-core";
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import "../i18n/preview";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
@@ -111,7 +124,7 @@ export function MockActivityFoldRow({ open = false }: { open?: boolean }): React
  *  the fold toggle actually moves between were never both on screen — the
  *  expanded side is where the header's rotated chevron, the revealed tool
  *  rows and the tail count live, and a styling change there was invisible. */
-export function MockExpandedActivity(): ReactNode {
+function MockExpandedActivity(): ReactNode {
 	return (
 		<div className="tr-activity-preview-expanded" role="presentation">
 			<MockActivityFoldRow open />
@@ -154,18 +167,16 @@ export function MockComposer({
  *  `composer` replaces the static mock input card with a live one. */
 export function MockConversationPreview({
 	showAvatars = true,
-	statusBarInfo = false,
 	userMarkdown,
 	assistantMarkdown,
 	assistantActions,
 	extraMessages,
 	composer,
+	outputStyle,
+	streamingDemo = false,
 }: {
 	/** 显示头像 toggle — drives both gutters. */
 	showAvatars?: boolean;
-	/** 信息状态条 toggle — renders the real status-bar strip above the
-	 *  conversation when on. */
-	statusBarInfo?: boolean;
 	/** Sample user message (defaults to the appearance sample). */
 	userMarkdown?: string;
 	/** Sample assistant reply (defaults to the appearance sample). */
@@ -176,19 +187,14 @@ export function MockConversationPreview({
 	extraMessages?: ReactNode;
 	/** Composer footer override (voice passes a live-mic composer). */
 	composer?: ReactNode;
+	/** Draw the streaming motion demo under the sample (chat settings). */
+	streamingDemo?: boolean;
+	/** Output-style preset id — scopes the sample to that preset's --tr-*
+	 *  typography. Omitted by hosts that do not offer the setting. */
+	outputStyle?: string;
 }): ReactNode {
 	return (
-		<div className="gui-effect-preview">
-			{/* 信息状态条 on → the preview carries the same strip above the
-			 * mock conversation (real gui-statusbar-info classes, sample
-			 * segments — model / context tokens), so the toggle reads here
-			 * exactly as it lands in the chat. */}
-			{statusBarInfo && (
-				<div className="gui-statusbar-info" role="presentation">
-					<span className="gui-statusbar-info-seg">{t("preview statusbar model")}</span>
-					<span className="gui-statusbar-info-seg">{t("preview statusbar context")}</span>
-				</div>
-			)}
+		<div className="gui-effect-preview" data-output-style={outputStyle}>
 			<MockUserRow markdown={userMarkdown ?? t("preview user message")} showAvatar={showAvatars} />
 			<MockActivityFoldRow />
 			{/* Both fold states, so a styling change to either is visible here:
@@ -200,8 +206,148 @@ export function MockConversationPreview({
 				showAvatar={showAvatars}
 				actions={assistantActions}
 			/>
+			{/* The streaming motion demo lives with the sample it animates: the
+			 * output-style presets and the typing effect are both judged on this
+			 * text, so drawing them in one place keeps the two readings honest. */}
+			{streamingDemo && (
+				<div className="gui-effect-preview-stream">
+					<div className="gui-chat-preview-label">{t("typing effect")}</div>
+					<TypewriterPreview />
+				</div>
+			)}
 			{extraMessages}
 			{composer ?? <MockComposer />}
 		</div>
 	);
+}
+
+/**
+ * Looping typewriter demo for the output-style preview — driven by the SAME
+ * reveal engine the transcript uses (proportional nextStep catch-up +
+ * grapheme slicing), so the preview shows the real 逐字输出 motion: a token
+ * burst drains over ~8 frames, a trickle advances 1 grapheme/frame. Follows
+ * the 平滑流式渲染 toggle: off → the full text appears instantly.
+ */
+export function TypewriterPreview(): ReactNode {
+	const text = useTypewriterSample();
+	const smoothOn = (() => {
+		// display.smoothStreaming is the single source of truth (the old
+		// musepi-gui-chat-smooth localStorage key is dead — the toggle
+		// merged into 外观). ChatView flips the html class from the daemon
+		// setting; the preview follows the same class so the demo shows the
+		// real behavior instead of a stale default.
+		try {
+			return !document.documentElement.classList.contains("gui-chat-no-smooth");
+		} catch {
+			return true;
+		}
+	})();
+	const effect = (() => {
+		try {
+			const v = localStorage.getItem("musepi-gui-chat-effect");
+			return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "typewriter";
+		} catch {
+			return "typewriter";
+		}
+	})();
+	const total = countGraphemes(text);
+	const [arrived, setArrived] = useState(0);
+	const [shown, setShown] = useState(0);
+	const [done, setDone] = useState(false);
+	// Replay cycle: increments 1.8s after each demo settles; the arrival
+	// effect below depends on it, so the demo restarts (the preview loops).
+	const [cycle, setCycle] = useState(0);
+	const arrivedRef = useRef(0);
+	useEffect(() => {
+		arrivedRef.current = arrived;
+	}, [arrived]);
+	useEffect(() => {
+		if (!smoothOn) {
+			setArrived(total);
+			setShown(total);
+			setDone(true);
+			return;
+		}
+		setArrived(0);
+		setShown(0);
+		setDone(false);
+		// Simulated model token stream: 2–3 graphemes arrive every 110ms
+		// (~23 chars/s, like a real model), while the reveal eats the
+		// backlog at the transcript's own cadence (3/frame floor, catch-up
+		// on bursts) — so the preview shows the ACTUAL smooth-streaming
+		// motion at a readable pace, not a one-shot dump.
+		const arrival = setInterval(() => {
+			setArrived(a => {
+				if (a >= total) {
+					clearInterval(arrival);
+					return a;
+				}
+				return Math.min(total, a + 2 + Math.floor(Math.random() * 2));
+			});
+		}, 110);
+		const reveal = setInterval(() => {
+			setShown(s => {
+				const target = arrivedRef.current;
+				return Math.min(target, s + nextStep(target - s));
+			});
+		}, STREAMING_REVEAL_FRAME_MS);
+		return () => {
+			clearInterval(arrival);
+			clearInterval(reveal);
+		};
+		// effect in deps: switching the typing-effect preset restarts the
+		// demo immediately (the preview must track the engine's selection).
+		// cycle: replay loop — each increment restarts the demo.
+	}, [smoothOn, total, cycle]);
+	useEffect(() => {
+		if (!done || !smoothOn) return;
+		const id = setTimeout(() => setCycle(c => c + 1), 1800);
+		return () => clearTimeout(id);
+	}, [done, smoothOn]);
+	useEffect(() => {
+		if (smoothOn && arrived >= total && shown >= total) setDone(true);
+	}, [arrived, shown, total, smoothOn]);
+	const display = smoothOn ? sliceGraphemes(text, shown) : text;
+	// The effect only applies while the demo is "typing" — once done, the
+	// full text shows plain (no gradient/spans/jitter), same contract as
+	// the real transcript: finished output is never colored.
+	const eff = done ? "typewriter" : effect;
+	// shimmer applies via the CSS class on this .tr-md root (the only
+	// preset with pure-CSS styling); the rest render per-grapheme spans
+	// through TAIL_RENDERERS. typewriter carries no class.
+	const effectCls = eff === "shimmer" ? " gui-chat-effect-shimmer" : "";
+	return (
+		<div className={`tr-md gui-typewriter${done ? "" : " gui-typewriter--live"}${effectCls}`}>
+			<p>
+				{(() => {
+					const cfg = TAIL_RENDERERS[eff];
+					if (!cfg || !smoothOn || done || countGraphemes(display) <= cfg.windowSize) return display;
+					const n = countGraphemes(display);
+					const head = sliceGraphemes(display, n - cfg.windowSize);
+					const tail = graphemeSpans(display.slice(head.length));
+					return (
+						<>
+							{head}
+							{tail.map(({ word }, i) => {
+								const r = cfg.render(i, word);
+								return r ? (
+									<span key={i} className={r.cls} style={r.style}>
+										{r.text}
+									</span>
+								) : (
+									<span key={i}>{word}</span>
+								);
+							})}
+						</>
+					);
+				})()}
+				{eff === "typewriter" && !done && <span className="gui-typewriter-caret" />}
+			</p>
+		</div>
+	);
+}
+
+/** Sample sentence the typewriter demo types out (i18n, keeps it localized). */
+export function useTypewriterSample(): string {
+	return t("preview paragraph");
 }
