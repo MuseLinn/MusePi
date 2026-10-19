@@ -1,4 +1,8 @@
-import { MAX_WIDGET_HTML, ensureReadableColor } from "@musepi/pi-utils";
+// Sub-path imports, NOT the barrel: `@musepi/pi-utils` re-exports Bun-only
+// modules (frontmatter/glob/process-name/stderr-guard) and this file ships in a
+// browser bundle, where those fail to build.
+import { ensureReadableColor } from "@musepi/pi-utils/color";
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils/widget-html-limit";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -109,7 +113,14 @@ const FACE_TOKENS = [
 /** The subset of {@link FACE_TOKENS} that must stay legible on the face's
  *  surface. Backgrounds are the reference and radii are lengths, so only text
  *  and border colors are corrected. */
-const READABLE_FACE_TOKENS = ["--fg", "--fg-muted", "--fg-faint", "--border-strong", "--color-success", "--color-danger"] as const;
+const READABLE_FACE_TOKENS = [
+	"--fg",
+	"--fg-muted",
+	"--fg-faint",
+	"--border-strong",
+	"--color-success",
+	"--color-danger",
+] as const;
 
 /**
  * Read the host tokens a face needs, correcting any that would be unreadable.
@@ -118,8 +129,7 @@ const READABLE_FACE_TOKENS = ["--fg", "--fg-muted", "--fg-faint", "--border-stro
  * surface: an author ships one blue accent, and the face paints it on a tinted
  * card. The face cannot fix this itself — the sandbox is a null origin, so it
  * has no access to the theme to check against. The host measures before sending
- * and nudges whatever fails toward black or white (keeping the author's hue),
- * which is the same correction openchamber applies to its own theme colors.
+ * and nudges whatever fails toward black or white (keeping the author's hue).
  *
  * Unparseable values pass through untouched: a token the host cannot measure is
  * one it must not silently rewrite, and `color-mix()`/`oklch()` declarations
