@@ -2346,10 +2346,19 @@ export class DaemonServer {
 				// providers/extensions/modes 广播事件重拉，无需新事件。
 				const registry = await this.#host.ensureRegistry();
 				const storage = registry?.authStorage;
-				const oauthLoggedIn = storage
-					? getOAuthProviders().some(info => storage.has(info.storeCredentialsAs ?? info.id))
+				// Readiness answers "is anything usable", so an extension's own
+				// pool counts: its providers work while AuthStorage stays empty.
+				const oauthLoggedIn = registry
+					? getOAuthProviders().some(
+							info =>
+								storage?.has(info.storeCredentialsAs ?? info.id) === true ||
+								registry.hasRuntimeCredentials(info.id) ||
+								registry.hasRuntimeCredentials(info.storeCredentialsAs ?? info.id),
+						)
 					: false;
-				const apiConfigured = storage ? getBundledProviders().some(id => storage.has(id)) : false;
+				const apiConfigured = registry
+					? getBundledProviders().some(id => storage?.has(id) === true || registry.hasRuntimeCredentials(id))
+					: false;
 				// 自定义供应商（models.yml providers 块）与 models.listCustom 同源
 				// 读取；文件缺失/损坏按 0 处理——就绪态不做诊断，只回答"有没有"。
 				let customCount = 0;
@@ -6240,13 +6249,21 @@ export class DaemonServer {
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) throw new Error("No model registry yet — create a session first");
 				const storage = registry.authStorage;
-				const oauth = getOAuthProviders().map(info => ({
-					id: info.id,
-					name: info.name,
-					available: info.available,
-					storeCredentialsAs: info.storeCredentialsAs,
-					loggedIn: storage.has(info.storeCredentialsAs ?? info.id),
-				}));
+				const oauth = getOAuthProviders().map(info => {
+					const id = info.storeCredentialsAs ?? info.id;
+					return {
+						id: info.id,
+						name: info.name,
+						available: info.available,
+						storeCredentialsAs: info.storeCredentialsAs,
+						// An extension-registered provider with an OAuth flow keeps
+						// its accounts in its own pool, so AuthStorage is empty while
+						// the provider works. Counting only AuthStorage marked those
+						// "not logged in" next to a model picker that was using them.
+						loggedIn:
+							storage.has(id) || registry.hasRuntimeCredentials(info.id) || registry.hasRuntimeCredentials(id),
+					};
+				});
 				// Registry order (curated display order), only providers that
 				// actually ship catalog models.
 				const registryOrder: Record<string, number> = {};
@@ -6260,7 +6277,7 @@ export class DaemonServer {
 							name: PROVIDER_REGISTRY[registryOrder[id]!]!.name,
 							modelCount: models.length,
 							models: models.slice(0, 5).map(model => model.id),
-							configured: storage.has(id),
+							configured: storage.has(id) || registry.hasRuntimeCredentials(id),
 						};
 					})
 					.sort((a, b) => registryOrder[a.id]! - registryOrder[b.id]!);

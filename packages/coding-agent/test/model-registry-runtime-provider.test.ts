@@ -1226,6 +1226,47 @@ describe("ModelRegistry runtime provider registration", () => {
 		expect(registry.getAvailable().some(model => model.provider === "pool-provider")).toBe(false);
 	});
 
+	test("hasRuntimeCredentials answers the same question as the availability gate", async () => {
+		// The login/logout faces used to consult AuthStorage alone and marked a
+		// working pool provider "not logged in" — the settings page said that
+		// while the model picker was using the provider. Both now read one rule;
+		// this pins that they cannot drift apart again.
+		let serve: boolean = true;
+		registry.registerProvider(
+			"pool-visible",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				fetchDynamicModels: async () => (serve ? [{ ...baseModel, id: "pool-model" }] : []),
+			},
+			"ext://runtime",
+		);
+		// Host storage never holds anything for it.
+		expect(authStorage.hasAuth("pool-visible")).toBe(false);
+
+		// Before discovery has run there is nothing to attest to.
+		expect(registry.hasRuntimeCredentials("pool-visible")).toBe(false);
+
+		await registry.refreshRuntimeProviders("online");
+		expect(registry.hasRuntimeCredentials("pool-visible")).toBe(true);
+		expect(registry.getAvailable().some(model => model.provider === "pool-visible")).toBe(true);
+
+		// Symmetric close: emptied discovery closes both, so a provider whose
+		// pool ran dry stops claiming to be logged in.
+		serve = false;
+		await registry.refreshRuntimeProviders("online");
+		expect(registry.hasRuntimeCredentials("pool-visible")).toBe(false);
+		expect(registry.getAvailable().some(model => model.provider === "pool-visible")).toBe(false);
+	});
+
+	test("hasRuntimeCredentials is false for a provider the host never registered", () => {
+		// The callers (providers.list, the readiness summary) iterate every known
+		// provider id, most of which are built-in and have no runtime manager.
+		expect(registry.hasRuntimeCredentials("anthropic")).toBe(false);
+		expect(registry.hasRuntimeCredentials("no-such-provider")).toBe(false);
+	});
+
 	test("an extension credential resolver makes a pool provider's models usable", async () => {
 		// The other half of the pool story: the availability gate above proves
 		// the models are LISTED, and this proves a turn can actually

@@ -213,6 +213,14 @@ export class ModelRegistry {
 	// Runtime model managers registered by extensions via fetchDynamicModels.
 	// Keyed by provider name; use the same SQLite cache path as builtins.
 	#runtimeModelManagers: Map<string, { options: ModelManagerOptions<Api>; sourceId: string }> = new Map();
+	// Extension-owned credential resolvers for POOL-style providers (the
+	// extension keeps its accounts in its own encrypted store, so the host's
+	// one-credential-per-provider AuthStorage never sees them). Consulted
+	// before AuthStorage in getApiKey()/getApiKeyForProvider().
+	#runtimeApiKeyResolvers: Map<string, ProviderConfigInput["resolveApiKey"]> = new Map();
+	// Display labels for extension-registered providers. The picker renders
+	// these instead of the registration id; identity stays the id itself.
+	#runtimeProviderLabels: Map<string, string> = new Map();
 	#ignoreLocalModelConfig: boolean;
 	#fetch: FetchImpl;
 	#settings: Settings | undefined;
@@ -1929,6 +1937,37 @@ export class ModelRegistry {
 	}
 
 	/**
+	 * Display name for a provider, or undefined when it has none.
+	 *
+	 * Extension-registered providers carry a `label` so the model picker can
+	 * show a channel name instead of the registration id (which for a
+	 * namespaced extension reads as an identifier). Built-in providers resolve
+	 * through {@link getProviderDefinition}; extension labels win because the
+	 * extension owns its own naming.
+	 */
+	getProviderLabel(provider: string): string | undefined {
+		return this.#runtimeProviderLabels.get(provider) ?? getProviderDefinition(provider)?.name;
+	}
+
+	/**
+	 * Whether a provider has credentials the HOST cannot see.
+	 *
+	 * An extension that keeps its own account pool resolves keys through
+	 * `resolveApiKey`, so `authStorage.hasAuth(provider)` is false even while the
+	 * provider works — every list that answered "logged in?" from AuthStorage
+	 * alone marked those providers as unconfigured, and the settings page showed
+	 * "not logged in" for a provider the model picker was happily using.
+	 *
+	 * {@link #hasLiveRuntimeModels} is the same signal the availability gate
+	 * already trusts (discovery produced models ⇒ the extension resolved
+	 * credentials from its pool). This exposes it for the login/logout faces that
+	 * used to consult AuthStorage directly, so both read one rule.
+	 */
+	hasRuntimeCredentials(provider: string): boolean {
+		return this.#hasLiveRuntimeModels(provider);
+	}
+
+	/**
 	 * Get the base URL associated with a provider.
 	 *
 	 * Runtime and config overrides lead because a model-derived answer only
@@ -1965,6 +2004,15 @@ export class ModelRegistry {
 	): Promise<string | undefined> {
 		const commandKey = this.#resolveCommandBackedApiKey(model.provider);
 		if (commandKey.configured) return commandKey.value;
+		// Extension-owned credentials (POOL-style providers) come first and
+		// REPLACE the AuthStorage lookup: the host's store holds one credential
+		// per provider, which cannot represent an account pool, so falling
+		// through to it would resolve `undefined` and fail every turn with
+		// "No API key found" even though the extension has usable accounts.
+		const resolver = this.#runtimeApiKeyResolvers.get(model.provider);
+		if (resolver) {
+			return resolver({ model, sessionId, signal: options?.signal });
+		}
 		if (this.#keylessProviders.has(model.provider) && !this.authStorage.hasAuth(model.provider)) {
 			return kNoAuth;
 		}
@@ -2006,6 +2054,18 @@ export class ModelRegistry {
 			options?.forceRefresh ? { forceCommandRefresh: true } : undefined,
 		);
 		if (commandKey.configured) return commandKey.value;
+		// Extension-owned credentials, same contract as getApiKey(). This path
+		// has no Model in hand (usage probes, discovery), so the resolver gets a
+		// minimal one — the extension's own routing decides the account.
+		const resolver = this.#runtimeApiKeyResolvers.get(provider);
+		if (resolver) {
+			const model = {
+				id: options?.modelId ?? "",
+				provider,
+				...(options?.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
+			} as Model<Api>;
+			return resolver({ model, sessionId, signal: options?.signal });
+		}
 		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(provider)) {
 			return kNoAuth;
 		}
@@ -2041,6 +2101,17 @@ export class ModelRegistry {
 	async #peekApiKeyForProvider(provider: string): Promise<string | undefined> {
 		const commandKey = this.#resolveCommandBackedApiKey(provider);
 		if (commandKey.configured) return commandKey.value;
+		// A pool provider resolves its own credential; peek it so discovery
+		// sees the extension as authenticated (the peek must not block on a
+		// refresh, which is why this is a peek and not getApiKey).
+		const resolver = this.#runtimeApiKeyResolvers.get(provider);
+		if (resolver) {
+			try {
+				return await resolver({ model: { id: "", provider } as Model<Api> });
+			} catch {
+				return undefined;
+			}
+		}
 		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(provider)) {
 			return kNoAuth;
 		}
@@ -2060,6 +2131,8 @@ export class ModelRegistry {
 		this.#runtimeModelOverlays = this.#runtimeModelOverlays.filter(overlay => overlay.provider !== providerName);
 		this.#runtimeModelManagers.delete(providerName);
 		this.#runtimeModelModifiers.delete(providerName);
+		this.#runtimeApiKeyResolvers.delete(providerName);
+		this.#runtimeProviderLabels.delete(providerName);
 		this.#lastModelModifierWarnings.delete(providerName);
 		this.authStorage.removeConfigApiKey(providerName);
 	}
@@ -2144,6 +2217,7 @@ export class ModelRegistry {
 				apiKey: config.apiKey,
 				api: config.api,
 				oauthConfigured: Boolean(config.oauth),
+				resolverConfigured: Boolean(config.resolveApiKey),
 				models: (config.models ?? []) as ProviderValidationModel[],
 			},
 			"runtime-register",
@@ -2162,6 +2236,21 @@ export class ModelRegistry {
 				id: providerName,
 				sourceId,
 			});
+		}
+
+		// Extension-owned credentials (POOL-style providers). Stored before any
+		// early return below so a provider that registers ONLY a resolver still
+		// authenticates — the resolver is what makes the models usable.
+		if (config.resolveApiKey) {
+			this.#runtimeApiKeyResolvers.set(providerName, config.resolveApiKey);
+		} else {
+			this.#runtimeApiKeyResolvers.delete(providerName);
+		}
+
+		if (config.label !== undefined && config.label !== "") {
+			this.#runtimeProviderLabels.set(providerName, config.label);
+		} else {
+			this.#runtimeProviderLabels.delete(providerName);
 		}
 
 		let sourceHandoff = false;
@@ -2373,6 +2462,12 @@ export class ModelRegistry {
  */
 export interface ProviderConfigInput {
 	baseUrl?: string;
+	/**
+	 * Display name for the model picker's provider sections. Display-only:
+	 * model identity stays `provider` + `id`, so changing a label never
+	 * invalidates a stored favorite, role pin, or session selection.
+	 */
+	label?: string;
 	apiKey?: string;
 	api?: Api;
 	streamSimple?: (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
@@ -2398,6 +2493,17 @@ export interface ProviderConfigInput {
 	fetchDynamicModels?: (
 		apiKey: string | undefined,
 	) => Promise<readonly NonNullable<ProviderConfigInput["models"]>[number][]>;
+	/**
+	 * Extension-owned credential resolution for a POOL-style provider, whose
+	 * accounts live in the extension's own store rather than the host's
+	 * one-credential-per-provider AuthStorage. Consulted before AuthStorage;
+	 * when present, AuthStorage is skipped for this provider entirely.
+	 */
+	resolveApiKey?: (context: {
+		model: Model<Api>;
+		sessionId?: string;
+		signal?: AbortSignal;
+	}) => Promise<string | undefined>;
 	/**
 	 * Cache lifetime for this provider's dynamic-model discovery, in ms.
 	 * Default 24 h — see {@link ExtensionProviderConfigInput.discoveryTtlMs}
