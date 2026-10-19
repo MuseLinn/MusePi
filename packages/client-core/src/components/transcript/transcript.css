@@ -781,9 +781,24 @@
 	font-weight: 600;
 }
 
-.tr-think-body .tr-md blockquote {
-	padding-left: 0.8em;
-	border-left: 2px solid var(--border);
+.tr-think-body /* A quote reads as a distinct aside: tinted surface, a wider accent rule and
+ * evenly padded text. The bare rule alone left quoted text looking like a
+ * slightly indented paragraph. */
+.tr-md blockquote {
+	margin: 10px 0;
+	padding: 2px 12px;
+	border-left: 3px solid color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+	background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+	color: var(--color-text-secondary);
+}
+
+.tr-md blockquote > :first-child {
+	margin-top: 0;
+}
+
+.tr-md blockquote > :last-child {
+	margin-bottom: 0;
 }
 
 .tr-think-body .tr-md code,
@@ -947,32 +962,75 @@
 
 /* Heading sizes scale off the message font size (设置 → 外观 → 消息字号),
  * so the ladder stays proportional at any --tr-font-size. */
+/* Headings: size AND weight AND breathing room.
+ *
+ * Size alone left the levels nearly indistinguishable — the shipped steps were
+ * +3/+1/0/-1px, so an h2 read as body text with a slightly taller glyph. Weight
+ * carries the hierarchy and the asymmetric margins (more above than below keep a
+ * heading attached to the text it introduces) do the rest. */
+.tr-md h1,
+.tr-md h2,
+.tr-md h3,
+.tr-md h4,
+.tr-md h5,
+.tr-md h6 {
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--color-text);
+	text-wrap: balance;
+}
+
 .tr-md h1 {
-	font-size: var(--tr-h1, calc(var(--tr-font-size, 14px) + 3px));
+	font-size: var(--tr-h1, calc(var(--tr-font-size, 14px) + 5px));
+	margin: 18px 0 8px;
+	letter-spacing: -0.01em;
 }
 
 .tr-md h2 {
-	font-size: var(--tr-h2, calc(var(--tr-font-size, 14px) + 1px));
+	font-size: var(--tr-h2, calc(var(--tr-font-size, 14px) + 3px));
+	margin: 16px 0 7px;
+	letter-spacing: -0.005em;
 }
 
 .tr-md h3 {
-	font-size: var(--tr-h3, var(--tr-font-size, 14px));
+	font-size: var(--tr-h3, calc(var(--tr-font-size, 14px) + 1px));
+	margin: 14px 0 6px;
 }
 
 .tr-md h4,
 .tr-md h5,
 .tr-md h6 {
-	font-size: var(--tr-h4, calc(var(--tr-font-size, 14px) - 1px));
+	font-size: var(--tr-h4, var(--tr-font-size, 14px));
+	margin: 12px 0 5px;
+	color: var(--color-text-secondary);
+}
+
+/* First/last child margins would otherwise push the bubble away from its own
+ * edge — the first thing in a message starts flush. */
+.tr-md > :first-child {
+	margin-top: 0;
+}
+
+.tr-md > :last-child {
+	margin-bottom: 0;
 }
 
 .tr-md ul,
 .tr-md ol {
-	margin: 6px 0;
-	padding-left: 22px;
+	margin: 8px 0;
+	padding-left: 24px;
 }
 
+/* List items get real leading, not just a 2px gap: a wrapped bullet at 2px
+ * spacing reads as one grey block, which is what made long lists skimmable
+ * only by counting bullets. */
 .tr-md li {
-	margin: 2px 0;
+	margin: 4px 0;
+	line-height: 1.62;
+}
+
+.tr-md li::marker {
+	color: var(--color-text-faint);
 }
 
 .tr-md li > ul,

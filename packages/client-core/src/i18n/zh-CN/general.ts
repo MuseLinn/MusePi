@@ -592,7 +592,11 @@ export const general = {
 	plain: "简洁",
 	"effects preview": "效果预览",
 	"effects preview description": "模拟会话视图，实时反映上方各项设置",
-	"preview agent message": "正在分析项目结构…",
+	// Rich sample: the preview exists to show how markdown RENDERS, so it carries
+	// the constructs whose styling people actually judge — a table, a fenced
+	// code block, a list and inline emphasis — not a single plain sentence.
+	"preview agent message":
+		"已读完 **3 个文件**，改动集中在折叠逻辑里：\n\n| 文件 | 改动 |\n| --- | --- |\n| `round-collapse.ts` | +33 −4 |\n| `Transcript.tsx` | +18 −9 |\n\n```ts\nconst trim = planLiveActivityTrim(rows, visibleRows);\n```\n\n- 折叠状态按会话保留\n- *运行中*的行数可调",
 	"preview user message": "帮我检查一下这段代码",
 	"preview activity edit": "编辑了 widget.tsx",
 	"preview activity command": "运行了 bun test",

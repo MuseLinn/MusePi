@@ -598,7 +598,8 @@ export const general = {
 	plain: "Plain",
 	"effects preview": "Effects preview",
 	"effects preview description": "Simulated session view reflecting the settings above live",
-	"preview agent message": "Analyzing project structure…",
+	"preview agent message":
+		"Read **3 files**; the change is concentrated in the fold logic:\n\n| File | Change |\n| --- | --- |\n| `round-collapse.ts` | +33 −4 |\n| `Transcript.tsx` | +18 −9 |\n\n```ts\nconst trim = planLiveActivityTrim(rows, visibleRows);\n```\n\n- Fold state is kept per session\n- The number of *running* rows is adjustable",
 	"preview user message": "Check this code for me",
 	"preview activity edit": "edited widget.tsx",
 	"preview activity command": "ran bun test",

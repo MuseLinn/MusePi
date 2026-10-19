@@ -358,7 +358,9 @@ interface StringDef extends CredentialMarker {
 }
 
 interface NumberDef extends CredentialMarker {
-	type: "number";
+	/** `integer` renders as a whole-number field; both store a JS number, so they
+	 *  share this definition and differ only in the UI affordance. */
+	type: "number" | "integer";
 	default: number | undefined;
 	ui?: UiNumber;
 }
@@ -1463,14 +1465,25 @@ export const SETTINGS_SCHEMA = {
 	},
 
 	"display.liveActivityRows": {
-		type: "integer",
-		default: 0,
+		// An enum of NAMED choices rather than a bare number: "0" reads to a user
+		// as "show nothing", not as "no limit", and a free integer lets a stray
+		// keystroke hide the whole running turn.
+		type: "enum",
+		values: ["all", "3", "5", "7", "10"] as const,
+		default: "all",
 		ui: {
 			tab: "appearance",
 			group: "Display",
-			label: "Live Activity Rows",
+			label: "Running Turn Detail",
 			description:
-				"How many recent activity rows a RUNNING turn keeps visible; earlier ones fold into a '+N more' line. 0 (default) keeps the running turn fully expanded — watching the agent work is the transcript; a smaller number holds the tail still on a long task",
+				"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to",
+			options: [
+				{ value: "all", label: "Show all", description: "Every row stays visible while the agent works." },
+				{ value: "3", label: "Latest 3 rows" },
+				{ value: "5", label: "Latest 5 rows" },
+				{ value: "7", label: "Latest 7 rows", description: "Holds a long task's tail in view." },
+				{ value: "10", label: "Latest 10 rows" },
+			],
 		},
 	},
 

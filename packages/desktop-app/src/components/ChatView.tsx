@@ -92,6 +92,21 @@ function formatPauseElapsed(pausedAt: number): string {
 }
 
 /**
+ * `display.liveActivityRows` → the row count the transcript wants.
+ *
+ * The setting is a NAMED choice ("all" | "3" | "5" | "7" | "10"), not a bare
+ * integer: "0" reads to a user as "show nothing" rather than "no limit", and an
+ * enum also stops a typo from blanking the running turn. `0` is what the
+ * transcript means by unlimited.
+ */
+function activityRowsToNumber(value: unknown): number {
+	if (typeof value !== "string") return 0;
+	if (value === "all") return 0;
+	const n = Number.parseInt(value, 10);
+	return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
  * User gutter avatar — GitHub avatar (synced by the settings Git tab via
  * `musepi-gui-user-avatar`, `https://github.com/<login>.png`) with the git
  * identity's initial as fallback; the title carries the git name/email
@@ -2600,16 +2615,9 @@ export function ChatView({
 																	displaySettings["display.collapseCompacted"] === true
 																}
 																liveActivityRows={
-																	// 0 (the schema default) = unlimited: watching the agent work IS
-																	// the transcript, so the trim stays opt-in.
-																	Number.isFinite(displaySettings["display.liveActivityRows"])
-																		? Math.max(
-																				0,
-																				Math.trunc(
-																					Number(displaySettings["display.liveActivityRows"]),
-																				),
-																			)
-																		: 0
+																	// The setting is a NAMED choice ('all' | '3' | '5' | '7' | '10'), so a
+																	// bare 0 can never be mistaken for 'show nothing'.
+																	activityRowsToNumber(displaySettings["display.liveActivityRows"])
 																}
 																taskCardStyle={
 																	displaySettings["display.taskCardStyle"] === "classic"
