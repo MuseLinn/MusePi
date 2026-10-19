@@ -646,43 +646,13 @@
 	transition: box-shadow 200ms ease;
 }
 
-/* Card tones (kimi hello-world boards mix dark/light/blue cards — not
- * one uniform theme surface). The shell overrides the surface + text
- * tokens so every widget inside adapts automatically. */
-.gui-board-card[data-tone="dark"] .gui-board-card-inner,
-.gui-board-focus-card[data-tone="dark"],
-.gui-pin[data-tone="dark"] {
-	background: #1b1b20;
-	border-color: #2c2c34;
-	--color-text: #e8e8ea;
-	--color-text-secondary: #9c9ca4;
-	--color-surface-sunken: #232329;
-	--color-surface-hover: #2a2a31;
-	--border: #2c2c34;
-}
-
-.gui-board-card[data-tone="blue"] .gui-board-card-inner,
-.gui-board-focus-card[data-tone="blue"],
-.gui-pin[data-tone="blue"] {
-	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
-	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
-	--color-text: #1c2b3a;
-	--color-text-secondary: #40566c;
-	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
-	--color-surface-hover: color-mix(in oklab, #b8d8f5 60%, #fff 40%);
-	--border: color-mix(in oklab, #8fb8e0 55%, transparent);
-}
-
-.gui-board-card[data-tone="light"] .gui-board-card-inner,
-.gui-board-focus-card[data-tone="light"],
-.gui-pin[data-tone="light"] {
-	background: color-mix(in oklab, #f5f5f2 90%, var(--color-surface-raised));
-	border-color: color-mix(in oklab, #d8d8d2 70%, var(--border));
-	--color-text: #1f1f24;
-	--color-text-secondary: #6b6b74;
-	--color-surface-sunken: color-mix(in oklab, #ecece8 80%, transparent);
-	--color-surface-hover: #e2e2de;
-	--border: color-mix(in oklab, #d8d8d2 60%, transparent);
+/* Card tones (dark/blue/light) live in gui-tone.css: one ramp plus four tone
+ * assignments, instead of a hand-written theme per tone repeated here AND in
+ * the collection preview. This block only covers what the board adds over the
+ * shared contract (the card's own inner surface). */
+.gui-board-card[data-tone] .gui-board-card-inner,
+.gui-board-focus-card[data-tone] {
+	background: var(--gui-tone-step);
 }
 
 .gui-board-card-inner:hover {
@@ -2530,23 +2500,8 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	padding: 8px;
 }
 
-.gui-widget-editor-preview-stage[data-tone="dark"] {
-	background: #1b1b20;
-	border-color: #2c2c34;
-	--color-text: #e8e8ea;
-	--color-text-secondary: #9c9ca4;
-	--color-surface-sunken: #232329;
-	--color-surface-hover: #2a2a31;
-	--border: #2c2c34;
-}
-
-.gui-widget-editor-preview-stage[data-tone="blue"] {
-	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
-	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
-	--color-text: #1c2b3a;
-	--color-text-secondary: #40566c;
-	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
-}
+/* Editor preview stage: same tone contract as the card it previews, so what
+ * the user sees while editing is what the board will render. */
 
 .gui-widget-editor-label {
 	font-size: 11px;

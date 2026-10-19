@@ -1,0 +1,114 @@
+/* Card tone semantics — the one place a card's surface + text + separator
+ * are defined.
+ *
+ * A card used to carry a whole hand-written theme: `data-tone="dark"` set a
+ * literal background, border, four text/surface tokens and a separator, and the
+ * board, the collection preview and the pinned card each repeated that block
+ * verbatim. Two consequences: a palette fix had to be made in three files, and
+ * a tone could not be composed (there was no way to ask for "the same card,
+ * one step deeper").
+ *
+ * The layer is a MIX ALONG ONE AXIS — how far the card is lifted off the app
+ * surface — so tones compose and a new one costs a single `--gui-tone-*` line:
+ *
+ *   --gui-tone-fill-N     the card's own surface, N steps from the app surface
+ *   --gui-tone-label-1..4 text on it, strongest first
+ *   --gui-tone-separator  the hairline that defines the card's edge
+ *
+ * Everything downstream reads those, so a board card, a collection preview and
+ * a pinned card cannot drift apart: they all resolve the same custom property.
+ *
+ * The tint is a single accent-driven hue rather than a per-tone literal, so the
+ * whole set follows the user's accent (the brand axis) instead of freezing the
+ * palette that happened to ship.
+ */
+
+:root {
+	/* Four steps of surface, from the app's own to a card that reads as a
+	 * distinct object. Interpolated in oklab so the mid steps stay neutral
+	 * instead of drifting through grey. */
+	--gui-tone-step-1: color-mix(in oklab, var(--color-surface-raised) 92%, var(--fg) 8%);
+	--gui-tone-step-2: color-mix(in oklab, var(--color-surface-raised) 84%, var(--fg) 16%);
+	--gui-tone-step-3: color-mix(in oklab, var(--color-surface-raised) 74%, var(--fg) 26%);
+	--gui-tone-step-4: color-mix(in oklab, var(--color-surface-raised) 62%, var(--fg) 38%);
+
+	/* Hairline. One alpha, tuned so it reads on every step above; a fixed
+	 * literal was invisible on the deepest step and doubled up on the shallowest. */
+	--gui-tone-separator: color-mix(in oklab, var(--fg) 14%, transparent);
+
+	/* A card's own tint. Accent-driven so the palette tracks the brand axis,
+	 * and cleared to fully transparent for `default`/`plain` tones. */
+	--gui-tone-tint: transparent;
+
+	/* Text ramp: derived from the card's own surface rather than from --fg, so
+	 * a tinted card keeps readable text instead of inheriting the app's. */
+	--gui-tone-label-1: color-mix(in oklab, var(--fg) 94%, var(--gui-tone-tint));
+	--gui-tone-label-2: color-mix(in oklab, var(--fg) 70%, var(--gui-tone-tint));
+	--gui-tone-label-3: color-mix(in oklab, var(--fg) 52%, var(--gui-tone-tint));
+	--gui-tone-label-4: color-mix(in oklab, var(--fg) 38%, var(--gui-tone-tint));
+}
+
+/* Tones are ONE switch: they choose a step on the same ramp, not a separate
+ * theme. Adding a tone is a line here and nothing else.
+ *
+ * Each block maps the tone onto the ramp AND supplies the token overrides that
+ * the widget surface contract reads (`--color-text*`, `--color-surface-*`,
+ * `--border`), so every widget inside a card adapts without knowing its tone. */
+[data-tone="default"],
+[data-tone="plain"] {
+	--gui-tone-step: var(--gui-tone-step-1);
+	--gui-tone-tint: transparent;
+}
+
+[data-tone="blue"] {
+	/* Accent at a readable strength — the "tinted card" people reach for when a
+	 * card should feel related to the current work without claiming attention. */
+	--gui-tone-step: color-mix(in oklab, var(--color-accent) 22%, var(--color-surface-raised));
+	--gui-tone-tint: color-mix(in oklab, var(--color-accent) 30%, transparent);
+}
+
+[data-tone="light"] {
+	/* Away from the app surface in the OPPOSITE direction, so a light card on a
+	 * dark board reads as paper rather than as another dark card. */
+	--gui-tone-step: color-mix(in oklab, #f5f5f2 90%, var(--color-surface-raised));
+	--gui-tone-tint: color-mix(in oklab, #d8d8d2 40%, transparent);
+	/* On a near-white card the app's own text is unreadable, so the ramp runs
+	 * dark. This is the one tone that flips the label axis. */
+	--gui-tone-label-1: #1f1f24;
+	--gui-tone-label-2: #6b6b74;
+	--gui-tone-label-3: #8b8b94;
+	--gui-tone-label-4: #a6a6ae;
+}
+
+[data-tone="dark"] {
+	/* The immersive face: a fixed deep surface rather than a mix, because the
+	 * widgets painted on it (vinyl player, clock) carry their own lighting. */
+	--gui-tone-step: #1b1b20;
+	--gui-tone-tint: transparent;
+	--gui-tone-label-1: #e8e8ea;
+	--gui-tone-label-2: #9c9ca4;
+	--gui-tone-label-3: #7a7a82;
+	--gui-tone-label-4: #5c5c64;
+	--gui-tone-separator: #2c2c34;
+}
+
+/* The card surface contract: the four widgets-visible tokens every tone must
+ * provide, resolved ONCE from the ramp. Consumers (board card, collection
+ * preview, pinned card, editor preview stage, widget shell) read these and stay
+ * tone-agnostic — which is what makes a tone a data attribute instead of a
+ * duplicated block. */
+.gui-board-card,
+.gui-board-focus-card,
+.gui-pin,
+.gui-board-home-preview-cell,
+.gui-widget-editor-preview-stage {
+	background: var(--gui-tone-step);
+	border-color: var(--gui-tone-separator);
+	--color-text: var(--gui-tone-label-1);
+	--color-text-secondary: var(--gui-tone-label-2);
+	--color-text-muted: var(--gui-tone-label-3);
+	--color-text-faint: var(--gui-tone-label-4);
+	--color-surface-sunken: color-mix(in oklab, var(--gui-tone-step) 92%, var(--fg) 8%);
+	--color-surface-hover: color-mix(in oklab, var(--gui-tone-step) 88%, var(--fg) 14%);
+	--border: var(--gui-tone-separator);
+}

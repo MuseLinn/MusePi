@@ -300,3 +300,125 @@ export function relativeLuminance(value: string | number): number | undefined {
 	if (!rgb) return undefined;
 	return 0.2126 * linearizeChannel(rgb.r) + 0.7152 * linearizeChannel(rgb.g) + 0.0722 * linearizeChannel(rgb.b);
 }
+
+/** RGBA in 0..255 / 0..1. */
+export interface ColorRGBA {
+	r: number;
+	g: number;
+	b: number;
+	a: number;
+}
+
+/**
+ * Parse a CSS color for measurement, including the forms {@link toRgb} skips.
+ *
+ * `toRgb` covers the theme palette's own values (hex, palette index); this adds
+ * `rgb()`/`rgba()` and 8-digit hex, because a measured color arrives from
+ * `getComputedStyle` — which resolves a token to whatever the theme actually
+ * declared, not necessarily hex. Values that still cannot be parsed (var refs,
+ * `color-mix()`, named colors, `oklch()`) return undefined; callers decide
+ * whether to keep the original.
+ */
+export function parseCssColor(value: string): ColorRGBA | undefined {
+	if (typeof value !== "string") return undefined;
+	const text = value.trim();
+	const hex = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.exec(text);
+	if (hex) {
+		const full = hex[1]!.length <= 4 ? [...hex[1]!].map(c => c + c).join("") : hex[1]!;
+		const rgb = hexToRgb(`#${full.slice(0, 6)}`);
+		if (Number.isNaN(rgb.r) || Number.isNaN(rgb.g) || Number.isNaN(rgb.b)) return undefined;
+		const a = full.length === 8 ? Number.parseInt(full.slice(6), 16) / 255 : 1;
+		return { r: rgb.r, g: rgb.g, b: rgb.b, a };
+	}
+	const rgb = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.%]+))?\s*\)$/i.exec(text);
+	if (!rgb) return undefined;
+	const channel = (raw: string): number => Math.max(0, Math.min(255, Number(raw)));
+	const alpha = rgb[4];
+	return {
+		r: channel(rgb[1]!),
+		g: channel(rgb[2]!),
+		b: channel(rgb[3]!),
+		a: alpha === undefined ? 1 : alpha.endsWith("%") ? Number(alpha.slice(0, -1)) / 100 : Math.max(0, Math.min(1, Number(alpha))),
+	};
+}
+
+/** Composite a possibly-translucent color over an opaque backdrop. */
+export function compositeOver(front: ColorRGBA, back: ColorRGBA): ColorRGBA {
+	return {
+		r: front.r * front.a + back.r * (1 - front.a),
+		g: front.g * front.a + back.g * (1 - front.a),
+		b: front.b * front.a + back.b * (1 - front.a),
+		a: 1,
+	};
+}
+
+/** WCAG 2.x contrast ratio between two colors, or undefined if unparseable. */
+export function contrastRatio(foreground: string, background: string, canvas?: string): number | undefined {
+	const fg = parseCssColor(foreground);
+	const under = parseCssColor(background);
+	if (!fg || !under) return undefined;
+	// A translucent background must be composited first: measuring its own
+	// channels would score a tinted surface as if it were solid.
+	const back = canvas ? parseCssColor(canvas) : undefined;
+	const surface = back ? compositeOver(under, back) : under;
+	return ratioOf(compositeOver(fg, surface), surface);
+}
+
+function ratioOf(foreground: ColorRGBA, background: ColorRGBA): number {
+	const lum = (c: ColorRGBA): number =>
+		0.2126 * linearizeChannel(c.r) + 0.7152 * linearizeChannel(c.g) + 0.0722 * linearizeChannel(c.b);
+	const x = lum(foreground);
+	const y = lum(background);
+	return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+/**
+ * Nudge a color until it is readable on `background`, keeping as much of the
+ * author's own hue as possible.
+ *
+ * A theme can ship a semantic color that reads fine on the app surface but
+ * disappears on a tinted one (a blue accent on a blue card). Binary-searching
+ * the blend toward whichever of black/white contrasts more preserves the hue —
+ * the result is still recognizably the author's color, just legible.
+ *
+ * Returns the input unchanged when it is already readable, or when either color
+ * cannot be parsed: a token the host cannot measure is a token it must not
+ * silently rewrite.
+ */
+export function ensureReadableColor(foreground: string, background: string, minimum = 4.5, canvas?: string): string {
+	const fg = parseCssColor(foreground);
+	const under = parseCssColor(background);
+	if (!fg || !under) return foreground;
+	const back = canvas ? parseCssColor(canvas) : undefined;
+	const surface = back ? compositeOver(under, back) : under;
+	if (ratioOf(compositeOver(fg, surface), surface) >= minimum) return foreground;
+
+	const black: ColorRGBA = { r: 0, g: 0, b: 0, a: 1 };
+	const white: ColorRGBA = { r: 255, g: 255, b: 255, a: 1 };
+	const target = ratioOf(black, surface) >= ratioOf(white, surface) ? black : white;
+	const mix = (amount: number): ColorRGBA => ({
+		r: fg.r + (target.r - fg.r) * amount,
+		g: fg.g + (target.g - fg.g) * amount,
+		b: fg.b + (target.b - fg.b) * amount,
+		a: 1,
+	});
+	let low = 0;
+	let high = 1;
+	let result = target;
+	for (let step = 0; step < 16; step += 1) {
+		const amount = (low + high) / 2;
+		const candidate = mix(amount);
+		// Overshoot slightly so the returned color clears the bar after
+		// rounding to 8-bit, which can land a hair under it.
+		if (ratioOf(candidate, surface) >= minimum + 0.1) {
+			result = candidate;
+			high = amount;
+		} else {
+			low = amount;
+		}
+	}
+	const hex = [result.r, result.g, result.b]
+		.map(v => Math.round(v).toString(16).padStart(2, "0"))
+		.join("");
+	return `#${hex}`;
+}

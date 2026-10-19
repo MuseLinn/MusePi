@@ -6,6 +6,10 @@
  * appear here in source order.
  */
 @import "./gui-base.css";
+/* Card tone semantics: the ramp + the four tone assignments that the board,
+ * the collection preview and the widget editor stage all resolve. Declared
+ * before them so their own rules read the tokens they set. */
+@import "./gui-tone.css";
 @import "./gui-chrome.css";
 @import "./gui-composer.css";
 @import "./gui-settings.css";

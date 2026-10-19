@@ -1101,38 +1101,9 @@
 	font-size: var(--ui-font-size-xs);
 }
 
-/* Collection previews honor the widget tone (dark/blue/light) exactly
- * like the board cards — no forced recolor. */
-.gui-board-home-preview-cell[data-tone="dark"] {
-	background: #1b1b20;
-	border-color: #2c2c34;
-	--color-text: #e8e8ea;
-	--color-text-secondary: #9c9ca4;
-	--color-text-muted: #9c9ca4;
-	--color-surface-sunken: #232329;
-	--color-surface-hover: #2a2a31;
-	--border: #2c2c34;
-}
-.gui-board-home-preview-cell[data-tone="blue"] {
-	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
-	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
-	--color-text: #1c2b3a;
-	--color-text-secondary: #40566c;
-	--color-text-muted: #40566c;
-	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
-	--color-surface-hover: color-mix(in oklab, #b8d8f5 60%, #fff 40%);
-	--border: color-mix(in oklab, #8fb8e0 55%, transparent);
-}
-.gui-board-home-preview-cell[data-tone="light"] {
-	background: color-mix(in oklab, #f5f5f2 90%, var(--color-surface-raised));
-	border-color: color-mix(in oklab, #d8d8d2 70%, var(--border));
-	--color-text: #1f1f24;
-	--color-text-secondary: #6b6b74;
-	--color-text-muted: #6b6b74;
-	--color-surface-sunken: color-mix(in oklab, #ecece8 80%, transparent);
-	--color-surface-hover: #e2e2de;
-	--border: color-mix(in oklab, #d8d8d2 60%, transparent);
-}
+/* Collection previews honor the widget tone (dark/blue/light) through the
+ * shared tone contract in gui-tone.css — the same custom properties the board
+ * card resolves, so a preview and the card it previews cannot drift. */
 
 /* ── widget card faces (kimi immersive parity) ──────────────────────────
  * Every widget carries its own card surface — dark widgets get the deep
