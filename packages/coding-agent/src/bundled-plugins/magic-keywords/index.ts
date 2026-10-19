@@ -28,6 +28,33 @@ import { renderOrchestrateNotice } from "../../modes/orchestrate";
 import { ULTRATHINK_NOTICE } from "../../modes/ultrathink";
 import { renderWorkflowNotice } from "../../modes/workflow";
 
+/** Plugin identity in the cordis runtime and the extension center. */
+export const name = "musepi-magic-keywords";
+
+/**
+ * Declared, because the entry declares the cordis shape: a module that exports
+ * `apply` is how a plugin states its identity, and that is what this is. It
+ * requires nothing from the host (`inject` empty) and publishes nothing others
+ * can consume (`provide` empty) — its whole effect is `registerMagicKeyword`
+ * calls on the API it is handed.
+ */
+export const inject = [] as const;
+export const provide = [] as const;
+
+/**
+ * Cordis entry point.
+ *
+ * The same registrations as {@link magicKeywords}, reached through the shape the
+ * plugin system is built around. Kept as a thin wrapper rather than folding the
+ * two together: the default export is still what the compiled-in loader calls
+ * for the built-in keyword package, and turning it into a second copy of the
+ * registration list is exactly the two-implementations drift this codebase
+ * treats as a bug.
+ */
+export function apply(pi: ExtensionAPI): void {
+	magicKeywords(pi);
+}
+
 export default function magicKeywords(pi: ExtensionAPI): void {
 	pi.setLabel("MusePi Magic Keywords");
 

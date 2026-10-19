@@ -37,10 +37,10 @@ import type { Extension, ExtensionAPI } from "../extensions/types";
 import {
 	type CordisPluginEntry,
 	hostOnlyRegistry,
-	isBareFactory,
 	isCordisPluginEntry,
 	missingServiceDependencies,
 	type PluginEntryFactory,
+	resolvePluginEntry,
 	type ServiceRegistry,
 	toFactory,
 } from "./cordis-entry";
@@ -213,13 +213,13 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
  *  structured load error rather than a throw (one malformed plugin must not take
  *  down the rest of the set). */
 function resolveFactory(module: unknown): PluginEntryFactory | null {
-	const inner =
-		typeof module === "object" && module !== null && "default" in module
-			? (module as { default?: unknown }).default
-			: module;
-	if (isBareFactory(inner)) return inner;
-	if (isCordisPluginEntry(inner)) return toFactory(inner);
-	return null;
+	const entry = resolvePluginEntry(module as never);
+	if (entry === null) return null;
+	// One adapter for both shapes: it preserves the calling convention, so a
+	// class is constructed rather than called. Dispatching here on `isBareFactory`
+	// and returning the value as-is bypassed that and handed a class to the
+	// pipeline as if it were a plain factory.
+	return toFactory(entry);
 }
 
 /**

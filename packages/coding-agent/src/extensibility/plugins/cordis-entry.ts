@@ -107,29 +107,40 @@ export function hostOnlyRegistry(): ServiceRegistry {
 }
 
 /**
- * Names in `inject` that cannot be satisfied. Empty = mountable.
+ * A plugin's declared service dependencies, in either entry shape.
  *
- * This is the gate that turns "a plugin half-loads and fails on first call"
- * into a clean refusal at load time: a plugin that lists a service nobody
- * provides never registers anything, so there is no half-configured state to
- * reason about afterwards.
+ * An object entry carries them as `inject`; a class carries them as
+ * `static inject` (the upstream convention, because a class cannot have an
+ * instance field before it is constructed). Reading only the object shape made a
+ * class-shaped plugin's dependencies invisible, so the gate let it mount and it
+ * failed later on first use instead of being refused at load.
  */
+export function declaredInject(entry: CordisPluginEntry | PluginEntryFactory | null): readonly string[] {
+	if (entry === null) return [];
+	const raw = (entry as { inject?: unknown }).inject;
+	if (!Array.isArray(raw)) return [];
+	return raw.filter((name): name is string => typeof name === "string");
+}
+
+/** A plugin's declared provided services, in either entry shape. */
+export function declaredProvide(entry: CordisPluginEntry | PluginEntryFactory | null): readonly string[] {
+	if (entry === null) return [];
+	const raw = (entry as { provide?: unknown }).provide;
+	if (!Array.isArray(raw)) return [];
+	return raw.filter((name): name is string => typeof name === "string" && name.length > 0);
+}
+
+/** Names in `inject` that cannot be satisfied. Empty = mountable. */
 export function missingServiceDependencies(
-	entry: CordisPluginEntry | null,
+	entry: CordisPluginEntry | PluginEntryFactory | null,
 	registry: ServiceRegistry = hostOnlyRegistry(),
 ): string[] {
-	if (entry === null) return [];
-	const inject = entry.inject;
-	if (!Array.isArray(inject)) return [];
-	return inject.filter(name => typeof name === "string" && !registry.host.has(name) && !registry.hasProvided(name));
+	return declaredInject(entry).filter(name => !registry.host.has(name) && !registry.hasProvided(name));
 }
 
 /** Names a plugin's `provide` declares, normalized (non-strings dropped). */
-export function providedServices(entry: CordisPluginEntry | null): string[] {
-	if (entry === null) return [];
-	const provide = entry.provide;
-	if (!Array.isArray(provide)) return [];
-	return provide.filter((name): name is string => typeof name === "string" && name.length > 0);
+export function providedServices(entry: CordisPluginEntry | PluginEntryFactory | null): string[] {
+	return [...declaredProvide(entry)];
 }
 
 /** Whether a module value is a cordis triple (has `apply`). */
@@ -140,6 +151,28 @@ export function isCordisPluginEntry(value: unknown): value is CordisPluginEntry 
 /** Whether a value is a bare legacy factory. */
 export function isBareFactory(value: unknown): value is PluginEntryFactory {
 	return typeof value === "function";
+}
+
+/**
+ * Whether a function value must be invoked with `new` rather than called.
+ *
+ * The predicate is the CORDIS one, deliberately, so a plugin's shape means the
+ * same thing here as in the runtime that specification targets. A plain
+ * `function (ctx)` and a `class` both have a `prototype` and are constructed;
+ * an arrow function and a generator do not and are called.
+ *
+ * The distinction matters because plugins are written the class way upstream —
+ * `class Foo extends Service { static inject = [...]; constructor(ctx) {
+ * super(ctx, 'name') } }` — and calling that without `new` throws
+ * "Class constructor cannot be invoked without 'new'" instead of loading.
+ */
+export function isConstructorPlugin(value: PluginEntryFactory): boolean {
+	if (value.prototype === undefined) return false;
+	const GeneratorFunction = function* () {}.constructor;
+	if (value instanceof GeneratorFunction) return false;
+	const AsyncGeneratorFunction = async function* () {}.constructor;
+	if (AsyncGeneratorFunction !== Function && value instanceof AsyncGeneratorFunction) return false;
+	return true;
 }
 
 /**
@@ -173,9 +206,20 @@ export function entryName(entry: CordisPluginEntry | PluginEntryFactory, fallbac
  * A cordis entry's `apply` is bound so it can be called as a plain factory; the
  * `config` argument is threaded separately by the caller (see
  * `readPluginEntryConfig`).
+ *
+ * A function entry keeps its CALLING CONVENTION: one that must be constructed is
+ * constructed. A plugin written as a class is the upstream default shape, and
+ * flattening it to a call throws before any of its code runs — so the adapter
+ * preserves `new` instead of assuming every function is a plain factory.
  */
 export function toFactory(entry: CordisPluginEntry | PluginEntryFactory): PluginEntryFactory {
-	if (isBareFactory(entry)) return entry;
+	if (isBareFactory(entry)) {
+		if (!isConstructorPlugin(entry)) return entry;
+		// Wrapped so the pipeline keeps one calling convention; `new` happens here.
+		const Ctor = entry as unknown as new (ctx: unknown, config?: unknown) => unknown;
+		const constructed: PluginEntryFactory = (ctx, config) => new Ctor(ctx, config);
+		return constructed;
+	}
 	return entry.apply.bind(entry) as PluginEntryFactory;
 }
 
