@@ -36,7 +36,14 @@ export const USER_AGENT = `musepi/${VERSION}`;
 export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");
 
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const PROFILE_ENV_KEYS = ["MUSEPI_PROFILE"] as const;
+/**
+ * Environment keys that carry the ACTIVE STATE HOME.
+ *
+ * `MUSEPI_HOME` is the name; `MUSEPI_PROFILE` is the pre-rename spelling and is
+ * still read so an existing shell, a saved script or a parent process keeps
+ * working. Both are cleared together, so a process never inherits a stale one.
+ */
+const PROFILE_ENV_KEYS = ["MUSEPI_HOME", "MUSEPI_PROFILE"] as const;
 
 /**
  * Names Windows treats as reserved device aliases. Matches the basename
@@ -110,9 +117,21 @@ function getProfileConfigRoot(profile: string | undefined): string {
 	return profile ? path.join(root, "profiles", profile) : root;
 }
 
+/**
+ * The state home named by the environment, if any.
+ *
+ * `MUSEPI_HOME` wins; `MUSEPI_PROFILE` is the pre-rename spelling and is still
+ * honoured so an existing shell or a parent process keeps selecting the same
+ * state. Reading them in one place is what keeps the two spellings from
+ * disagreeing mid-process.
+ */
+function readStateHomeFromEnv(): string | undefined {
+	return process.env.MUSEPI_HOME ?? process.env.MUSEPI_PROFILE;
+}
+
 function readProfileFromEnvSafe(): string | undefined {
 	try {
-		return normalizeProfileName(process.env.MUSEPI_PROFILE);
+		return normalizeProfileName(readStateHomeFromEnv());
 	} catch {
 		return undefined;
 	}
@@ -368,7 +387,7 @@ let activeProfile = readProfileFromEnvSafe();
 function resolveActiveAgentDirOverride(): string | undefined {
 	return activeProfile
 		? undefined
-		: resolvePreProfileAgentDir(undefined, process.env.PI_CODING_AGENT_DIR, process.env.MUSEPI_PROFILE);
+		: resolvePreProfileAgentDir(undefined, process.env.PI_CODING_AGENT_DIR, readStateHomeFromEnv());
 }
 
 let dirs = new DirResolver({
@@ -462,24 +481,38 @@ export function __resetDirsFromEnvForTests(): void {
 	refreshDirsFromEnv();
 }
 
-/** Activate a named profile. Passing undefined or "default" returns to the default profile. */
-export function setProfile(profile: string | undefined): void {
-	const next = normalizeProfileName(profile);
+/**
+ * Activate a named STATE HOME: which directory holds this run's sessions,
+ * settings and credentials.
+ *
+ * The name used to be "profile", which is now the word for something else — a
+ * composition of plugins. The two are different axes: a state home says where
+ * state lives, a profile says what is installed. This function only ever did the
+ * first, so it is named for it.
+ *
+ * Passing undefined or "default" returns to the default home.
+ */
+export function setHome(home: string | undefined): void {
+	const next = normalizeProfileName(home);
 	if (next && !activeProfile) {
-		// First activation of a named profile in this process: snapshot the
+		// First activation of a named home in this process: snapshot the
 		// current PI_CODING_AGENT_DIR so a later reset can restore the user's
-		// explicit override. Subsequent profile switches keep the original
-		// snapshot — the "pre-profile" baseline is the state before profiles
-		// entered the picture, not the state between two activations.
+		// explicit override. Subsequent switches keep the original snapshot — the
+		// "pre-home" baseline is the state before homes entered the picture, not
+		// the state between two activations.
 		preProfileAgentDirEnv = resolvePreProfileAgentDir(
 			undefined,
 			process.env.PI_CODING_AGENT_DIR,
-			process.env.MUSEPI_PROFILE,
+			readStateHomeFromEnv(),
 		);
 	}
 	activeProfile = next;
 	if (activeProfile) {
 		dirs = new DirResolver({ profile: activeProfile });
+		// Both spellings are written: the new one is what this host reads, the old
+		// one keeps a child process (or a user's own script) that still says
+		// MUSEPI_PROFILE pointed at the same state.
+		process.env.MUSEPI_HOME = activeProfile;
 		process.env.MUSEPI_PROFILE = activeProfile;
 		process.env.PI_CODING_AGENT_DIR = dirs.agentDir;
 	} else {
@@ -495,10 +528,27 @@ export function setProfile(profile: string | undefined): void {
 	}
 }
 
-/** Get the active named profile. Undefined means the default profile. */
-export function getActiveProfile(): string | undefined {
+/**
+ * Activate a named state home.
+ *
+ * @deprecated Use {@link setHome}. "Profile" now means a plugin composition; this
+ * alias exists so callers outside this package keep working, and it will be
+ * removed once they move.
+ */
+export const setProfile = setHome;
+
+/** Get the active state home. Undefined means the default home. */
+export function getActiveHome(): string | undefined {
 	return activeProfile;
 }
+
+/**
+ * Get the active state home.
+ *
+ * @deprecated Use {@link getActiveHome}. Kept for the same reason as
+ * {@link setProfile}.
+ */
+export const getActiveProfile = getActiveHome;
 
 /** Resolve the config root that backs a profile without activating it. */
 export function getProfileRootDir(profile: string | undefined): string {

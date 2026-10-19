@@ -52,8 +52,10 @@ export function getExtraHelpText(): string {
   ANTHROPIC_SEARCH_BASE_URL  - Anthropic web search base URL (override; pairs with ANTHROPIC_SEARCH_API_KEY)
 
   ${chalk.dim("# Configuration")}
-  MUSEPI_PROFILE              - Named profile for isolated agent state (same as --profile)
-  Use \`musepi --profile <name> --alias <command>\` to create a shell shortcut for a profile
+  MUSEPI_HOME                 - Named state home: isolated agent state (same as --home)
+  MUSEPI_PROFILE              - Older spelling of MUSEPI_HOME; still honoured
+  Use \`musepi --home <name> --alias <command>\` to create a shell shortcut for a state home
+  \`--profile <name>\` selects a plugin composition, not a state home
   PI_CODING_AGENT_DIR        - Session storage directory (default: ~/${CONFIG_DIR_NAME}/agent)
   PI_PACKAGE_DIR             - Override package directory (for Nix/Guix store paths)
   PI_SMOL_MODEL              - Override smol/fast model (see --smol)

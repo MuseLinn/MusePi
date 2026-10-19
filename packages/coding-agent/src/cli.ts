@@ -14,14 +14,18 @@ try {
  * CLI entry point — registers all commands explicitly and delegates to the
  * lightweight CLI runner from pi-utils.
  */
+import { stat } from "node:fs/promises";
+import * as path from "node:path";
 import { parentPort } from "node:worker_threads";
+import { logger } from "@musepi/pi-utils";
 import type { CliConfig, CommandMetadata } from "@musepi/pi-utils/cli";
 import {
 	APP_NAME,
-	getActiveProfile,
+	getActiveHome,
+	getProfileRootDir,
 	MIN_BUN_VERSION,
 	resolveProfileEnv,
-	setProfile,
+	setHome,
 	VERSION,
 } from "@musepi/pi-utils/dirs";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
@@ -59,9 +63,32 @@ const isProcessEntry = import.meta.main || process.env.PI_COMPILED === "true";
 
 // Worker-host entry declaration (Worker threads and worker subprocesses
 // re-enter `Bun.main` with a hidden argv selector instead of loading separate
-// worker entrypoints) happens inside `runCli` after profile bootstrap:
+// worker entrypoints) happens inside `runCli` after state-home bootstrap:
 // `@musepi/pi-utils/env` eagerly loads `.env` from the agent directory at
-// import time, so it must not be imported before `setProfile` runs.
+// import time, so it must not be imported before `setHome` runs.
+
+/**
+ * Whether a name has state written under the pre-rename `--profile` meaning.
+ *
+ * Before the rename, `--profile <name>` pointed the agent dir at
+ * `~/.musepi/profiles/<name>/agent`. A user running the same command after the
+ * rename expects those sessions, so the directory's existence is what says "this
+ * name is legacy state", not a version number or a marker file we would have had
+ * to write back then.
+ */
+async function hasLegacyProfileState(name: string): Promise<boolean> {
+	try {
+		const root = getProfileRootDir(name);
+		// `agent` is a DIRECTORY; `Bun.file().exists()` answers for files and
+		// returns false for a directory, which would silently disable the whole
+		// migration path.
+		return (await stat(path.join(root, "agent"))).isDirectory();
+	} catch {
+		// An invalid name is rejected by setHome with its own message; there is no
+		// legacy state to adopt.
+		return false;
+	}
+}
 
 async function showHelp(config: CliConfig<CommandMetadata>): Promise<void> {
 	// Root help historically loads the selected profile's environment. The
@@ -345,23 +372,42 @@ export async function runCli(argv: string[]): Promise<void> {
 	try {
 		const extracted = extractProfileFlags(resolvedArgv);
 		resolvedArgv = extracted.argv;
-		if (extracted.profile !== undefined) {
-			setProfile(extracted.profile);
+		// `--home` selects the state home (sessions, settings, credentials).
+		// `--profile` no longer does: it names a plugin composition, which is a
+		// different axis, and moving a user's sessions because they picked a
+		// different set of plugins was the confusion this rename removes.
+		const explicitHome = extracted.stateHome;
+		if (explicitHome !== undefined) {
+			setHome(explicitHome);
 		} else {
-			// No explicit --profile: activate MUSEPI_PROFILE inherited from the
-			// environment. Module-load resolution deliberately swallows an invalid
-			// value to avoid an uncaught throw before this try/catch is in scope
-			// (see `readProfileFromEnvSafe` in dirs.ts), and callers may set
-			// MUSEPI_PROFILE after importing this module (profile aliases/tests).
-			// Surfacing validation here turns `MUSEPI_PROFILE=.. musepi --version`
-			// into a clean error; calling setProfile keeps every later path helper
-			// on the env-selected profile instead of the default agent directory.
-			setProfile(resolveProfileEnv(process.env.MUSEPI_PROFILE));
+			// No explicit --home: honour the env. Module-load resolution
+			// deliberately swallows an invalid value to avoid an uncaught throw
+			// before this try/catch is in scope (see `readProfileFromEnvSafe` in
+			// dirs.ts), and callers may set it after importing this module (profile
+			// aliases/tests). Surfacing validation here turns
+			// `MUSEPI_HOME=.. musepi --version` into a clean error; calling setHome
+			// keeps every later path helper on the env-selected home instead of the
+			// default agent directory.
+			setHome(resolveProfileEnv(process.env.MUSEPI_HOME ?? process.env.MUSEPI_PROFILE));
+		}
+		// Legacy data: before this rename `--profile <name>` created
+		// `~/.musepi/profiles/<name>/agent`. A user who runs `--profile <name>`
+		// today expects their existing sessions, so an existing state directory
+		// under that name is adopted as the state home and the rename is stated
+		// once, rather than silently starting them in an empty default home.
+		if (explicitHome === undefined && extracted.profile !== undefined && getActiveHome() === undefined) {
+			if (await hasLegacyProfileState(extracted.profile)) {
+				setHome(extracted.profile);
+				logger.warn("--profile now selects a plugin composition; using it as the state home too", {
+					profile: extracted.profile,
+					hint: "use --home for the state home and --profile for the composition",
+				});
+			}
 		}
 		if (extracted.aliasName !== undefined) {
-			const profile = extracted.profile ?? getActiveProfile();
+			const profile = extracted.profile ?? getActiveHome();
 			if (!profile) {
-				throw new Error("--alias requires --profile <name> or MUSEPI_PROFILE");
+				throw new Error("--alias requires --profile <name> or MUSEPI_HOME");
 			}
 			const result = await installProfileAlias({
 				profile,

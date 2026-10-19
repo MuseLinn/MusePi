@@ -26,7 +26,10 @@ export interface Args {
 	cwd?: string;
 	/** Workspace directories beyond cwd for this session (repeatable `--add-dir`). */
 	addDir?: string[];
+	/** Plugin composition to launch with (`--profile`); not a state location. */
 	profile?: string;
+	/** State home holding sessions, settings and credentials (`--home`). */
+	home?: string;
 	alias?: string;
 	/** 会话预设(mode)id:`--preset <id>`(Modes v1;与运行模式 Args.mode 区分)。 */
 	preset?: string;
@@ -236,6 +239,12 @@ export function parseArgs(inputArgs: string[], extensionFlags?: Map<string, { ty
 			result.profile = args[++i];
 		} else if (arg.startsWith("--profile=")) {
 			result.profile = arg.slice("--profile=".length);
+		} else if (arg === "--home" && i + 1 < args.length) {
+			// Also normally stripped by `extractProfileFlags`; the fallback keeps
+			// direct parseArgs callers on the same state-home contract.
+			result.home = args[++i];
+		} else if (arg.startsWith("--home=")) {
+			result.home = arg.slice("--home=".length);
 		} else if (arg === "--alias" && i + 1 < args.length) {
 			result.alias = args[++i];
 		} else if (arg.startsWith("--alias=")) {

@@ -60,6 +60,8 @@ function needsBoundaryAfterGlobalStrip(stripped: readonly string[]): boolean {
 export interface ProfileBootstrapResult {
 	argv: string[];
 	profile?: string;
+	/** State home: which directory holds sessions, settings and credentials. */
+	stateHome?: string;
 	aliasName?: string;
 }
 
@@ -81,6 +83,7 @@ export interface ProfileBootstrapResult {
 export function extractProfileFlags(argv: readonly string[]): ProfileBootstrapResult {
 	const stripped: string[] = [];
 	let profile: string | undefined;
+	let stateHome: string | undefined;
 	let aliasName: string | undefined;
 	let passThrough = false;
 	let sawSubcommand = false;
@@ -110,6 +113,11 @@ export function extractProfileFlags(argv: readonly string[]): ProfileBootstrapRe
 			continue;
 		}
 
+		// `--profile` selects a plugin COMPOSITION, not a state home. It is
+		// recorded and forwarded (the composition is read later, once the plugin
+		// system is up), and it does NOT redirect the agent dir: choosing a
+		// different set of plugins must not move a user's sessions out from under
+		// them.
 		if (arg === "--profile") {
 			const value = argv[index + 1];
 			if (!value || value.startsWith("-")) {
@@ -126,6 +134,28 @@ export function extractProfileFlags(argv: readonly string[]): ProfileBootstrapRe
 				throw new Error("--profile requires a profile name");
 			}
 			profile = value;
+			insertBoundaryBeforeNextValue = needsBoundaryAfterGlobalStrip(stripped);
+			continue;
+		}
+		// `--home` selects the STATE HOME: which directory holds sessions,
+		// settings and credentials. This is what `--profile` used to do, and it
+		// still has to run before any module reads `getAgentDir()`.
+		if (arg === "--home") {
+			const value = argv[index + 1];
+			if (!value || value.startsWith("-")) {
+				throw new Error("--home requires a home name");
+			}
+			stateHome = value;
+			insertBoundaryBeforeNextValue = needsBoundaryAfterGlobalStrip(stripped);
+			index += 1;
+			continue;
+		}
+		if (arg.startsWith("--home=")) {
+			const value = arg.slice("--home=".length);
+			if (!value) {
+				throw new Error("--home requires a home name");
+			}
+			stateHome = value;
 			insertBoundaryBeforeNextValue = needsBoundaryAfterGlobalStrip(stripped);
 			continue;
 		}
@@ -229,5 +259,5 @@ export function extractProfileFlags(argv: readonly string[]): ProfileBootstrapRe
 		stripped.push(arg);
 	}
 
-	return { argv: stripped, profile, aliasName };
+	return { argv: stripped, profile, stateHome, aliasName };
 }
