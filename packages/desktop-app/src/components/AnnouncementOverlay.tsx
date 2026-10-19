@@ -138,7 +138,7 @@ function OlderVersionRow({
 				<Chevron size={13} aria-hidden />
 				<span style={{ fontWeight: 600, color: "var(--fg)" }}>v{entry.version}</span>
 				{entry.date && <span style={DATE_STYLE}>{entry.date}</span>}
-				<span style={COUNT_BADGE_STYLE}>{t("announcement.announcementChangeswithcount", { count: total })}</span>
+				<span style={COUNT_BADGE_STYLE}>{t("announcement.changesWithCount", { count: total })}</span>
 			</button>
 			{expanded && <Markdown text={entry.markdown} />}
 		</div>
@@ -362,17 +362,17 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					<div className="gui-onboarding-topbar">
 						<div className="gui-onboarding-badge">
 							<Sparkles size={14} />
-							{t("settings.whatSNew")}
+							{t("what's new")}
 						</div>
 						<button className="gui-btn gui-btn-icon" type="button" onClick={requestClose} aria-label={t("close")}>
 							<X size={16} />
 						</button>
 					</div>
 					<div className="gui-announcement-title">
-						{t("settings.whatSNewMusepi")}
+						{t("what's new in MusePi")}
 						{latest && (
 							<span className="gui-announcement-latest">
-								{t("settings.discoverNewVersion")} v{latest}
+								{t("discover new version")} v{latest}
 							</span>
 						)}
 					</div>
@@ -381,7 +381,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					</div>
 					<div className="gui-onboarding-actions">
 						<button className="gui-btn gui-btn-primary" type="button" onClick={requestClose}>
-							{t("settings.gotIt")}
+							{t("got it")}
 						</button>
 					</div>
 				</div>
@@ -402,13 +402,13 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 				tabIndex={-1}
 				role="dialog"
 				aria-modal="true"
-				aria-label={t("settings.whatSNew")}
+				aria-label={t("what's new")}
 				className={`gui-onboarding-card gui-announcement-card${closing ? " gui-onboarding-card--closing" : ""}`}
 			>
 				<div className="gui-onboarding-topbar">
 					<div className="gui-onboarding-badge">
 						<Sparkles size={14} />
-						{t("settings.whatSNew")}
+						{t("what's new")}
 					</div>
 					<button className="gui-btn gui-btn-icon" type="button" onClick={requestClose} aria-label={t("close")}>
 						<X size={16} />
@@ -427,13 +427,13 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					)}
 					<div style={{ minWidth: 0, display: "grid", gap: 4 }}>
 						<div style={{ fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em", color: "var(--fg)" }}>
-							{t("announcement.announcementUpdatedtoversionwithversion", { version: current.version })}
+							{t("announcement.updatedToVersionWithVersion", { version: current.version })}
 						</div>
 						<div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
 							{current.date && <span style={DATE_STYLE}>{current.date}</span>}
 							{latest && (
 								<span className="gui-announcement-latest">
-									{t("settings.discoverNewVersion")} v{latest}
+									{t("discover new version")} v{latest}
 								</span>
 							)}
 						</div>
@@ -451,7 +451,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 							aria-expanded={showFullLog}
 						>
 							{showFullLog ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
-							{t("announcement.announcementMorefixeswithcount", { count: remaining })}
+							{t("announcement.moreFixesWithCount", { count: remaining })}
 						</button>
 					)}
 					{/* The full log mounts lazily — only after the fold opens. */}
@@ -459,7 +459,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					{older.length > 0 && (
 						<div>
 							<div style={{ ...DATE_STYLE, margin: "6px 0 2px", fontWeight: 600 }}>
-								{t("announcement.announcementOlderreleases")}
+								{t("announcement.olderReleases")}
 							</div>
 							{older.map(entry => (
 								<OlderVersionRow
@@ -475,10 +475,10 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 				<div className="gui-onboarding-actions">
 					<button className="gui-btn" type="button" onClick={() => void openExternalUrl(RELEASES_PAGE)}>
 						<ExternalLink size={14} aria-hidden />
-						{t("announcement.announcementViewfullchangelog")}
+						{t("announcement.viewFullChangelog")}
 					</button>
 					<button className="gui-btn gui-btn-primary" type="button" onClick={requestClose}>
-						{t("settings.gotIt")}
+						{t("got it")}
 					</button>
 				</div>
 			</div>
