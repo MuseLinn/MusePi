@@ -39,13 +39,28 @@ export function useCollapseHeight(
 		optsRef.current = opts;
 	});
 	const animVer = useRef(0);
-	const first = useRef(true);
+	// The state the last setup ran for. An effect can be cleaned up while its
+	// DOM survives and then replayed on reveal (StrictMode's double invoke, a
+	// suspense boundary revealing, a virtualizer re-mounting the row): the
+	// previous run's animation was cancelled but this ref still records its
+	// target. Without the short-circuit below, the replayed setup would take the
+	// measure branch and pin the CURRENT rendered height — which on a collapsed
+	// element is the collapsed one — leaving a blank region at the old height.
+	//
+	// Seeded with `open`, which also covers the first mount: it lands directly on
+	// the target with no measure and no animation, so no separate `first` flag
+	// is needed.
+	const previous = useRef(open);
 	useEffect(() => {
 		const el = ref.current;
 		if (!el) return;
-		const ver = ++animVer.current;
-		const setH = (v: string): void => el.style.setProperty("--h", v);
 		const closed = optsRef.current.closedHeight;
+		const setH = (v: string): void => el.style.setProperty("--h", v);
+		// Claim this run's version immediately: `settle` below ignores a call
+		// from a superseded run, so a stale `transitionend` (from the animation
+		// this run may cancel) cannot land on the new state.
+		const ver = animVer.current + 1;
+		animVer.current = ver;
 		let done = false;
 		const settle = (isOpen: boolean): void => {
 			if (done || animVer.current !== ver) return;
@@ -56,14 +71,20 @@ export function useCollapseHeight(
 			// intermediate auto on the still-unclamped body would paint one
 			// full-height frame).
 			if (isOpen) setH("auto");
+			else if (closed) setH(`${closed()}px`);
 			optsRef.current.onSettled?.(isOpen);
 		};
-		if (first.current) {
-			// Initial mount: land at the open/closed state directly.
-			first.current = false;
-			setH(open || closed ? "auto" : "0px");
+		if (previous.current === open) {
+			// Nothing changed since the last setup: settle onto the target instead
+			// of measuring. Covers both the first mount and an effect replay.
+			// Settling (not just writing the closed value) matters after an
+			// expand — a body left pinned at a measured pixel height stops
+			// growing, so streamed content would be clipped for the rest of the
+			// turn.
+			settle(open);
 			return;
 		}
+		previous.current = open;
 		const to = closed ? `${closed()}px` : "0px";
 		if (open) {
 			setH(to);

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { openPlanFromChat } from "../../components/transcript/canvas-jump.js";
+import { t } from "../../i18n/index.js";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { isRecord, str } from "../util";
 
@@ -67,11 +68,12 @@ function Summary({ result }: ToolRenderProps): ReactNode {
 			.map(block => (block.type === "text" && "text" in block ? String(block.text) : ""))
 			.join(" ")
 			.trim();
-		return <span className="tv-knowledge-failed">{text || "knowledge call failed"}</span>;
+		return <span className="tv-knowledge-failed">{text || t("knowledge call failed")}</span>;
 	}
 	const details = detailsOf(result);
 	if (details.action === "show" && details.showPlan) {
-		return <span>{`已打开计划「${details.showPlan.title ?? details.showPlan.id}」`}</span>;
+		const title = details.showPlan.title ?? details.showPlan.id ?? "";
+		return <span>{t("knowledge plan opened", { title })}</span>;
 	}
 	if (details.todo) {
 		return <span>{`${details.todo.done ? "✓" : "○"} ${details.todo.text ?? ""}`}</span>;
@@ -79,13 +81,13 @@ function Summary({ result }: ToolRenderProps): ReactNode {
 	const kind = details.kind ? `${details.kind} ` : "";
 	switch (details.action) {
 		case "list":
-			return <span>project knowledge</span>;
+			return <span>{t("knowledge")}</span>;
 		case "save":
 			return <span>{`saved ${kind}`.trim()}</span>;
 		case "delete":
 			return <span>{`deleted ${kind}`.trim()}</span>;
 		default:
-			return <span>knowledge</span>;
+			return <span>{t("knowledge")}</span>;
 	}
 }
 
@@ -100,13 +102,17 @@ function Body({ result }: ToolRenderProps): ReactNode {
 	// Same visual language as the board / scheduled-task jump cards: one chat →
 	// panel affordance, so all three read as one family.
 	return (
-		<button type="button" className="tr-canvas-jump" onClick={() => openPlanFromChat(plan.directory, plan.id, plan.title)}>
+		<button
+			type="button"
+			className="tr-canvas-jump"
+			onClick={() => openPlanFromChat(plan.directory, plan.id, plan.title)}
+		>
 			<span className="tr-canvas-jump-icon" aria-hidden="true">
 				▤
 			</span>
 			<span className="tr-canvas-jump-text">
 				<span className="tr-canvas-jump-title">{plan.title}</span>
-				<span className="tr-canvas-jump-sub">在项目知识中打开</span>
+				<span className="tr-canvas-jump-sub">{t("knowledge open in panel")}</span>
 			</span>
 			<span className="tr-canvas-jump-arrow" aria-hidden="true">
 				→
