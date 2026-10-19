@@ -86,34 +86,55 @@ src/extensibility/
 
 ---
 
-## 3. HMR 现状（两条轨道各有一套，机制不同）
-
-### Track A（cordis 插件）
+## 3. HMR（一条变更判定，两个重载动作）
 
 ```
-文件变更 → daemon watcher（500ms 防抖）
-  → extensionEntriesNeedingReload() 比对各入口源码图 mtime
-  → runtime.reloadPlugin(name)
-      → #unloadRecord()：fiber.dispose()，效果账本反向回收全部登记
-      → #mount(..., fresh=true)：重新 import + apply
+文件变更 → chokidar watcher（500ms 防抖 + 120ms settle）
+  ├─ Track A  host-level reconcile → PluginGraphIdentities.stale()
+  │             → runtime.reloadPlugin(name)
+  │                 → #unloadRecord()：fiber.dispose()，效果账本反向回收全部登记
+  │                 → #mount(..., fresh=true)：重新 import + apply
+  └─ Track B  每个活跃会话 → agent-session
+                → runner.reloadExtension(path)      ← 同样 fresh: true
 ```
+
+### 变更判定的唯一实现：`PluginGraphIdentities`
+
+两条轨道都用它决定「哪个入口要重载」，规则集中在
+`extensibility/plugins/plugin-graph-identities.ts`：
+
+- **记录的是整张源码图**（入口 + 它 import 到的每个模块），不是入口一个文件。
+  改子模块必须能重载插件——`quota.ts` 改了而入口没改，仍是这个插件的改动。
+- **身份 = `inode:size:mtime`**。同尺寸改写靠 inode 抓（编辑器落盘常是写临时
+  文件再 rename）；`ctime` 刻意不计入——包管理器装包会建硬链接，ctime 变而内容
+  不变，计进去等于每次安装都让所有插件看起来改了。
+- **2000ms 时间戳容差**（FAT 只存 2 秒精度）；观测时钟取自标记文件而非
+  `Date.now()`（系统钟与文件钟可能差一个 tick）。
+- **依赖排除按插件根目录判定，不按路径文本**：安装态插件自己就住在
+  `node_modules/` 下，"路径含 node_modules 就排除"会把每个已安装插件的全部源文件
+  排除掉、记录变成空集——症状是「改了没反应」，而不是报错。
+
+**图从哪来**：`legacy-pi-compat.ts` 的 `collectExtensionModules` 走图，
+`extensionGraphFiles(entry)` 把同一次 walk 的结果交给记录方，避免二次遍历与两处
+对「图是什么」的判断分叉。Track A 的 `mount.ts` 必须**静态** import 该模块：
+动态 import 曾解析到第二个实例，loader 写一份、runtime 读另一份，记录永远是空。
+
+### watcher 用 chokidar，不用 `fs.watch({ recursive: true })`
+
+Windows 下 `fs.watch` 的 recursive 形式对**嵌套较深的文件**不投递事件：实测从
+另一个进程写 `plugins/node_modules/<pkg>/src/helper.ts` 得到 **0 个事件**，同样
+的写入经 chokidar 立即触发。插件包正是这个形状，用 recursive 会「监视了每个已
+安装插件，却永远收不到它们任何模块的改动」。
 
 **模块身份**：首次装载走**不带查询串**的 import，取进程内同一实例——
 `ext.call`（面板）与活跃会话因此看到同一份插件状态。reload 时才附加
 `?mtime=` 重新求值（Bun 无法只失效单个模块，见 `plugins/legacy-pi-compat.ts` 文档）。
 
-### Track B（legacy 扩展）
-
-```
-文件变更 → 同一 watcher
-  → session-host 对每个活跃会话比对源码图 mtime
-  → agent-session：#reloadChangedSessionExtensions()
-      → runner.reloadExtension(path)   ← 同样 fresh: true
-```
-
-两条轨道**共用** `extensionEntriesNeedingReload`（mtime 图快照判定）与
-`loadLegacyPiModule`（模块装载机制），但重载动作各自走自己的 runtime。
-这是刻意的：机制只有一份，策略各归各轨道。
+**范围差异（与 dsh 的 `boot/hmr` 比）**：dsh 跟踪整个 profile 的模块依赖图并做
+accepted/declined 反向传播（externals 不重载）。这里以**插件自己的图**为重载单元，
+不做全局反向传播——因为重载动作是「重新求值入口」，入口重载会把整张图带上；
+依赖（`node_modules/` 内的、以及宿主经 shim 解析到的模块）不计入记录，它们靠重装
+或宿主升级变化，重载插件也改变不了。
 
 ---
 

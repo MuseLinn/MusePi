@@ -47,6 +47,7 @@ import type {
 } from "@musepi/pi-wire";
 import { messageKey } from "@musepi/sdk";
 import { YAML } from "bun";
+import { type FSWatcher, watch } from "chokidar";
 import { reset as resetCapabilities } from "../capability";
 import {
 	ChannelCommandHandler,
@@ -616,6 +617,13 @@ export class DaemonServer {
 	/** 拆卸 cordis 根 Context（daemon close 路径调用；双跑期幂等且不触碰
 	 *  服务 stop——回滚后 P1 代码路径不受影响）。 */
 	async disposeHostContext(): Promise<void> {
+		// The watcher holds OS handles; leaving it open keeps the process alive and
+		// keeps reacting to edits after the daemon said it was gone.
+		if (this.#extensionWatcher !== null) {
+			const watcher = this.#extensionWatcher;
+			this.#extensionWatcher = null;
+			await watcher.close().catch(() => {});
+		}
 		await this.#hostContext.dispose();
 	}
 
@@ -1157,6 +1165,8 @@ export class DaemonServer {
 
 	#extensionWatcherStarted = false;
 	#extensionWatcherTimer: Timer | null = null;
+	/** The live chokidar watcher (closed on daemon shutdown). */
+	#extensionWatcher: FSWatcher | null = null;
 
 	/** HMR: watch extension source/config directories; on change invalidate
 	 *  the extension scan + component compile/load caches and broadcast
@@ -1173,18 +1183,45 @@ export class DaemonServer {
 	#startExtensionWatcher(): void {
 		if (this.#extensionWatcherStarted) return;
 		this.#extensionWatcherStarted = true;
-		const attach = (roots: readonly string[]): void => {
-			for (const root of roots) {
-				try {
-					fs.watch(root, { recursive: true }, () => this.#scheduleExtensionReload());
-				} catch {
-					// Root absent/unwatchable — the discovery scan still picks up
-					// changes when its TTL expires.
-				}
-			}
-		};
+		// chokidar, not `fs.watch({ recursive: true })`.
+		//
+		// The recursive form does not reliably deliver events for files nested
+		// several directories deep on Windows — measured here: a write from another
+		// process to `plugins/node_modules/<pkg>/src/helper.ts` produced ZERO events
+		// from `fs.watch`, while the same write through chokidar fired immediately.
+		// A plugin package is exactly that shape, so the recursive form would watch
+		// every installed plugin and never notice an edit to any of its modules —
+		// which reads as "HMR is broken" rather than "the watcher missed it".
 		void resolveExtensionWatchRoots(this.#host.cwd())
-			.then(attach)
+			.then(async roots => {
+				const usable = roots.filter(root => {
+					try {
+						// A root that does not exist yet is not an error: discovery's TTL
+						// scan still picks the plugin up once it appears.
+						fs.statSync(root);
+						return true;
+					} catch {
+						return false;
+					}
+				});
+				if (usable.length === 0) return;
+				try {
+					this.#extensionWatcher = watch(usable, {
+						// Recursive over the whole tree; the watcher itself walks nested
+						// directories on every platform.
+						ignoreInitial: true,
+						// Editors write through rename, which shows up as an add+unlink of
+						// the same path; a short settle window collapses that into one
+						// reload instead of three.
+						awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
+						ignored: /(?:^|[/\\])(?:\.git|node_modules[/\\]\.cache)(?:[/\\]|$)/,
+					});
+					this.#extensionWatcher.on("all", () => this.#scheduleExtensionReload());
+					logger.info("extension watcher attached", { roots: usable });
+				} catch (err) {
+					logger.warn("extension watcher attach failed; discovery TTL still applies", { err: String(err) });
+				}
+			})
 			.catch(err => {
 				logger.warn("daemon: extension watch roots unresolved; discovery TTL still applies", { err });
 			});
@@ -1213,6 +1250,16 @@ export class DaemonServer {
 			// unreliable (empty/short names on Windows recursive watch), so
 			// the per-entry mtime comparison decides what changed.
 			this.#reloadChangedSessionExtensions();
+			// Host-level (cordis) plugins reconcile on the same tick. Clearing the
+			// TTL caches above only means "recompute next time someone asks" — and
+			// the RPC that ends up asking (design.systems.list) may not arrive for
+			// minutes. Without this the watcher fires, the caches clear, and the
+			// plugin keeps running its old code until an unrelated call happens to
+			// reconcile it, which looks exactly like HMR being broken.
+			void this.#services
+				.get<ExtensionService>("extensions")
+				.getExtensionRuntimeLoad()
+				.catch(err => logger.warn("host-level plugin reconcile after a watched change failed", { err }));
 		}, 500);
 	}
 

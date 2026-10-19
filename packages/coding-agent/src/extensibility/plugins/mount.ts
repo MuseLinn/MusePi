@@ -45,6 +45,12 @@ import {
 	toFactory,
 } from "./cordis-entry";
 import { registerEffect, stateDelete, stateGet, stateHas, stateKeys, stateSet } from "./cordis-primitives";
+// STATIC, not `await import()`: this module holds process-wide state (the source
+// graph snapshot the loader records, and the module cache it keys imports on). A
+// dynamic import resolved to a second instance in practice — the loader wrote
+// into one copy while the runtime read the other and saw no record at all, so
+// every plugin looked like a one-file graph and no edit was ever detected.
+import { entryNeedsGraphSnapshot, loadLegacyPiModule } from "./legacy-pi-compat";
 
 /** A mount that could not proceed, with the reason and a stable code. */
 export interface MountFailure {
@@ -225,8 +231,6 @@ function resolveFactory(module: unknown): PluginEntryFactory | null {
  * installed" and "this plugin is installed but half of it is missing".
  */
 export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
-	const { loadLegacyPiModule, entryNeedsGraphSnapshot } = await import("./legacy-pi-compat");
-
 	let module: unknown;
 	try {
 		// The graph snapshot rewrites `@(scope)/pi-*` shims in the entry's own

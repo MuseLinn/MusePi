@@ -8,6 +8,7 @@ import type { ParseResult, ParserPlugin } from "@babel/parser";
 import { parse as parseBabel } from "@babel/parser";
 import { isCompiledBinary, stripWindowsExtendedLengthPathPrefix } from "@musepi/pi-utils";
 import { registerPluginCacheInvalidator } from "../../discovery/helpers";
+import { PluginGraphIdentities } from "./plugin-graph-identities";
 
 const IS_COMPILED_BINARY = isCompiledBinary();
 
@@ -1856,7 +1857,13 @@ const extensionGraphCacheBustResolvedImportModules = new Map<string, Set<string>
 // *that* a reload is due: the daemon compared the entry file's mtime alone,
 // so editing any other file in the graph scheduled nothing and the edit
 // stayed invisible until someone touched the entry by hand.
-const extensionGraphMtimes = new Map<string, Map<string, number>>();
+//
+// The identities now live in `PluginGraphIdentities` (extensibility/plugins), so
+// the cordis track and this one compare with the same rules — identity tuple,
+// timestamp resolution, file-clock observation. This module keeps the graph
+// WALK (which files the entry reached), which is the part only it knows.
+const extensionGraphFilesByEntry = new Map<string, string[]>();
+const extensionGraphIdentities = new PluginGraphIdentities();
 
 /** Sync realpath with the async path's cache, for the watcher-facing probe. */
 const extensionGraphRealpathCache = new Map<string, string>();
@@ -1876,15 +1883,35 @@ function realpathSyncOrSelf(target: string): string {
 /** Snapshot the graph mtimes for one entry. Best-effort per file: a module that
  *  vanished between the walk and the stat simply leaves the snapshot. */
 function recordExtensionGraphMtimes(entryRealPath: string, modulePaths: Iterable<string>): void {
-	const snapshot = new Map<string, number>();
+	const files: string[] = [];
 	for (const modulePath of modulePaths) {
-		try {
-			snapshot.set(modulePath, fs.statSync(modulePath).mtimeMs);
-		} catch {
-			// Vanished mid-walk — not part of the graph that got loaded.
-		}
+		// Keep the WALK's result even for a file that vanished mid-walk: the
+		// identity layer treats a missing file as changed, which is exactly what
+		// should happen when the next comparison runs.
+		files.push(modulePath);
 	}
-	extensionGraphMtimes.set(entryRealPath, snapshot);
+	extensionGraphFilesByEntry.set(entryRealPath, files);
+	extensionGraphIdentities.observe(entryRealPath, files);
+}
+
+/** Whether the recorded graph of one entry differs from disk. */
+function extensionGraphChanged(entryRealPath: string): boolean {
+	return extensionGraphIdentities.stale([entryRealPath]).size > 0;
+}
+
+/**
+ * The files a plugin entry was last loaded from, entry included.
+ *
+ * Two callers want this list for different reasons and both need the SAME list:
+ * the reload comparison (is any file in the graph different?) and the cordis
+ * track, which records it against its own precision rules. Returning the
+ * snapshot's keys keeps them from walking the graph a second time and, more
+ * importantly, from disagreeing about what the graph was.
+ *
+ * Returns `undefined` when the entry has not been loaded through this path yet.
+ */
+export function extensionGraphFiles(entryPath: string): string[] | undefined {
+	return extensionGraphFilesByEntry.get(realpathSyncOrSelf(path.resolve(entryPath)));
 }
 
 /**
@@ -1904,28 +1931,17 @@ export function extensionEntriesNeedingReload(entryPaths: Iterable<string>): str
 	const changed: string[] = [];
 	for (const entryPath of entryPaths) {
 		const entryRealPath = realpathSyncOrSelf(path.resolve(entryPath));
-		const snapshot = extensionGraphMtimes.get(entryRealPath);
-		if (!snapshot) {
+		if (!extensionGraphFilesByEntry.has(entryRealPath)) {
 			changed.push(entryPath);
 			continue;
 		}
-		for (const [modulePath, recordedMtime] of snapshot) {
-			let nextMtime: number;
-			try {
-				nextMtime = fs.statSync(modulePath).mtimeMs;
-			} catch {
-				// Deleted or renamed out from under the graph: the next load
-				// re-walks and re-resolves, which is the point of reloading.
-				changed.push(entryPath);
-				break;
-			}
-			// Not `>`: an edit landing in the same millisecond as the load still
-			// has to be seen, and a checkout that moves mtime backwards is a
-			// change too.
-			if (nextMtime !== recordedMtime) {
-				changed.push(entryPath);
-				break;
-			}
+		// The comparison itself lives in the shared graph-identity module so both
+		// plugin tracks use ONE set of rules (identity tuple, timestamp resolution,
+		// file-clock observation). This function keeps its own role: mapping the
+		// caller's path spelling to the recorded real path, and deciding what a
+		// missing graph means.
+		if (extensionGraphChanged(entryRealPath)) {
+			changed.push(entryPath);
 		}
 	}
 	return changed;

@@ -66,11 +66,12 @@ import {
 	providedServices,
 	type ServiceRegistry,
 } from "../extensibility/plugins/cordis-entry";
+import { extensionGraphFiles } from "../extensibility/plugins/legacy-pi-compat";
 import {
 	compatibilityGateForExtensionPath,
 	pluginCompatibilityWarning,
 } from "../extensibility/plugins/plugin-compatibility";
-import { PluginFileIdentities } from "../extensibility/plugins/plugin-file-identities";
+import { PluginGraphIdentities } from "../extensibility/plugins/plugin-graph-identities";
 import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
 
@@ -162,6 +163,10 @@ interface DynamicPluginRecord {
 	error?: string;
 	/** 清单版本（兼容性豁免键 `name@version` 的输入）。 */
 	version?: string;
+	/** 插件自己的根目录（清单目录）。source-graph 记录靠它区分「插件源码」与
+	 *  「插件依赖」——安装态的插件本身就住在 `node_modules/` 下，根目录不能从
+	 *  路径文本推断。单文件插件（无清单）缺席，按入口所在目录处理。 */
+	manifestDir?: string;
 	/** 兼容性预检判定（回退保护②）：拒绝时 = 结构化证据,随记录与
 	 *  inspect() 下发;exempted = 放行但标注。兼容 = 无此项。 */
 	compatibility?: PluginCompatibility;
@@ -545,8 +550,8 @@ export class CordisDynamicPluginRuntime {
 	readonly #eventBus = new EventBus();
 	/** 在役插件入口的磁盘身份——reconcile 靠它判断哪个插件的文件变了
 	 *  （HMR）。判定口径（inode+size+mtime、2 秒容差、标记文件取时钟）
-	 *  见 PluginFileIdentities 的模块注释。 */
-	readonly #files = new PluginFileIdentities();
+	 *  见 PluginGraphIdentities 的模块注释。 */
+	readonly #graphs = new PluginGraphIdentities();
 
 	constructor(host: DaemonHostContext) {
 		this.#host = host;
@@ -652,6 +657,7 @@ export class CordisDynamicPluginRuntime {
 		record.sourcePath = extPath;
 		record.entryKey = target.entry;
 		record.version = target.version;
+		record.manifestDir = target.manifestDir;
 		record.compatibility = undefined;
 		record.components = new Map();
 		this.#records.set(record.name, record);
@@ -666,11 +672,19 @@ export class CordisDynamicPluginRuntime {
 		}
 		if (gate) logger.warn("compatibility exemption active, loading anyway", { plugin: gate.plugin.name });
 		await this.#mount(record, target, disabledComponents);
-		// Record what the entry looked like as it was evaluated, so a later
-		// reconcile can tell an edit from a no-op. `observe` takes the whole
-		// active set: it replaces every record, so passing one entry would forget
-		// the others and make them all look newly-loaded.
-		this.#files.observe([...this.#records.values()].filter(r => r.status === "active").map(r => r.entryKey));
+		// Record the source GRAPH this load was evaluated from — the entry plus
+		// every module its imports reached — so an edit to a helper file reloads
+		// the plugin, not just an edit to the entry. The walk is the one the
+		// loader already did for this entry; asking it again would be a second
+		// traversal that could disagree with what was actually loaded.
+		if (target.entry !== undefined) {
+			const files = extensionGraphFiles(target.entry) ?? [target.entry];
+			// The plugin's own root scopes "its source" vs "its dependencies"
+			// (see isDependencyOf): an installed plugin lives under a
+			// `node_modules/` tree itself, so the root cannot be inferred from the
+			// path text.
+			this.#graphs.observe(record.entryKey, files, target.manifestDir ?? path.dirname(target.entry));
+		}
 		return this.#buildHandle(record);
 	}
 
@@ -682,7 +696,7 @@ export class CordisDynamicPluginRuntime {
 	 * 第三项是 HMR 的核心：watcher 只报「这些根下面有东西动了」，要决定
 	 * 重载哪个插件，必须把在役入口与它被求值时的磁盘身份比一次。比较规则
 	 * （inode+size+mtime、不含 ctime、2 秒时间戳容差、标记文件取时钟）
-	 * 见 {@link PluginFileIdentities}。
+	 * 见 {@link PluginGraphIdentities}。
 	 *
 	 * 变更判定放在这里而不是 watcher 里，是因为 cordis 的装载是惰性的：
 	 * watcher 只清缓存，真正 reconcile 的时机由下一次 RPC 决定——那时才知道
@@ -707,22 +721,28 @@ export class CordisDynamicPluginRuntime {
 		const activeEntries = [...this.#records.values()]
 			.filter(record => record.status === "active")
 			.map(record => record.entryKey);
-		const { stale } = this.#files.compare(activeEntries);
+		const stale = this.#graphs.stale(activeEntries);
 
 		for (const record of [...this.#records.values()]) {
 			if (record.status === "active" && !targets.has(record.entryKey)) {
 				await this.#unloadRecord(record);
 			}
 		}
-		// 在役但文件变了：就地重载（同一 record，不重新发现）。
+		// 在役但源码图变了：就地重载（同一 record，不重新发现）。
 		for (const record of [...this.#records.values()]) {
-			if (record.status !== "active" || !stale.has(record.entryKey)) continue;
+			const reason = stale.get(record.entryKey);
+			if (record.status !== "active" || reason === undefined) continue;
 			try {
 				await this.reloadPlugin(record.name);
 				// 重载后记录新身份，否则下一轮比对仍判它 stale —— 会变成每次
-				// reconcile 都重载一次。
-				this.#files.refresh([record.entryKey]);
-				logger.info("plugin reloaded after its entry changed on disk", { plugin: record.name });
+				// reconcile 都重载一次。重载后图可能新增/减少模块，所以重新取图。
+				const files = extensionGraphFiles(record.entryKey) ?? [record.entryKey];
+				this.#graphs.refresh(record.entryKey, files, record.manifestDir ?? path.dirname(record.entryKey));
+				logger.info("plugin reloaded after its source graph changed on disk", {
+					plugin: record.name,
+					file: reason.file,
+					reason: reason.reason,
+				});
 			} catch (err) {
 				errors.push({
 					path: record.entryKey,
@@ -1197,6 +1217,6 @@ export class CordisDynamicPluginRuntime {
 		}
 		this.#group = undefined;
 		this.#records.clear();
-		this.#files.clear();
+		this.#graphs.clear();
 	}
 }

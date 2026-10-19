@@ -79,6 +79,7 @@
 		"arktype": "catalog:",
 		"bun-pty": "^0.4.10",
 		"chalk": "catalog:",
+		"chokidar": "catalog:",
 		"fflate": "^0.8.3",
 		"node-pty": "^1.2.0-beta.15",
 		"onnxruntime-node": "catalog:",
