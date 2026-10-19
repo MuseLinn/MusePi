@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import type { Extension } from "../extensibility/extensions/types";
+import type { PresetPluginRow } from "../presets/resolve";
 
 /**
  * Renderer-side slot components: the daemon
@@ -264,6 +265,8 @@ export interface ExtensionModeItem {
 	hasPrompt: boolean;
 	promptComplete: boolean;
 	settingsKeys: string[];
+	/** Composition declared by the extension, same shape as a file preset's. */
+	plugins: PresetPluginRow[];
 	source: "extension";
 }
 
@@ -298,6 +301,7 @@ export async function collectExtensionModes(
 					hasPrompt: (mode.prompt?.length ?? 0) > 0,
 					promptComplete: mode.promptComplete === true,
 					settingsKeys: Object.keys(mode.settings ?? {}),
+					plugins: mode.plugins ?? [],
 					source: "extension",
 				});
 			} catch (err) {

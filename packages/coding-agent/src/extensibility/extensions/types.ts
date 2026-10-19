@@ -82,6 +82,7 @@ import type { MCPServerConfig } from "../../mcp/types";
 import type { MemoryRuntimeContext } from "../../memory-backend";
 import type { CustomEditor } from "../../modes/components/custom-editor";
 import type { Theme } from "../../modes/theme/theme";
+import type { PresetPluginRow } from "../../presets/resolve";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
@@ -2340,6 +2341,15 @@ export interface ExtensionModeDefinition {
 	/** 创建会话时的默认模型档位(settings.modelRoles 键或内置角色;§6.1)。 */
 	modelRole?: string;
 	extensions?: string[];
+	/**
+	 * Cordis plugins this preset composes, in order.
+	 *
+	 * Same shape a file-declared preset carries (`presets/resolve.ts`), because a
+	 * preset is a composition wherever it is declared — an extension that ships one
+	 * must be able to state the same thing a file can, or the two sources would
+	 * produce presets with different powers.
+	 */
+	plugins?: PresetPluginRow[];
 	prompt?: ExtensionPromptSection[];
 	promptComplete?: boolean;
 	runtimeContext?: boolean;

@@ -2469,6 +2469,11 @@ export class DaemonServer {
 						hasPrompt: (def?.prompt?.length ?? 0) > 0,
 						promptComplete: def?.promptComplete === true,
 						settingsKeys: Object.keys(def?.settings ?? {}),
+						// The composition travels with the preset: which plugins it stacks,
+						// in order, with the enable switch. A preset IS a plugin composition,
+						// and a summary that carried only its prompt/settings could not answer
+						// "what does switching to this preset install?".
+						plugins: def?.plugins ?? [],
 					};
 				});
 				// Modes v2 §5.5:扩展声明预设(registerMode)合并进列表 ——
