@@ -28,8 +28,8 @@ import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { roundTimerKeyByRow } from "./render-units";
-import { buildToolRuns, type RoundFold, type ToolRunSummary } from "./round-collapse";
-import { hasTextBlock } from "./row-kinds";
+import { buildToolRuns, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
+import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
 	createShouldAdjustForItemSizeChange,
@@ -223,6 +223,10 @@ export interface TranscriptProps {
 	/** TUI display.hideToolActivity parity: suppress model-initiated tool
 	 *  call cards and running tail tools from the transcript. */
 	hideToolActivity?: boolean;
+	/** How many recent rows a RUNNING turn keeps visible; earlier ones fold
+	 *  into a "+N more" line. 0 (default) = unlimited — watching the agent work
+	 *  is the transcript. */
+	liveActivityRows?: number;
 	/** TUI display.showTokenUsage parity: show the per-turn token usage row
 	 *  under settled assistant messages. */
 	showTokenUsage?: boolean;
@@ -1224,6 +1228,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		smoothStreaming = true,
 		taskCardStyle = "swarm",
 		hideToolActivity = false,
+		liveActivityRows = 0,
 		sessionKey,
 		showTokenUsage = false,
 		collapseCompacted = false,
@@ -1504,6 +1509,18 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}
 		return Number.MAX_SAFE_INTEGER;
 	}, [entries, working]);
+	// Optional tail trim for the in-flight span (0 = unlimited, the default):
+	// a turn that runs for minutes streams a row per tool call and scrolls the
+	// work away. Only that span qualifies — a settled turn belongs to its round
+	// fold, and trimming it too would swap content under the fold's animation.
+	const liveTrim = useMemo(() => {
+		if (!working || liveActivityRows <= 0 || liveFromIdx >= entries.length) return null;
+		const rows: number[] = [];
+		for (let i = liveFromIdx; i < entries.length; i++) {
+			if (classifyTranscriptRow(entries[i]) === "work") rows.push(i);
+		}
+		return planLiveActivityTrim(rows, liveActivityRows);
+	}, [entries, working, liveFromIdx, liveActivityRows]);
 
 	// Session switch → land on the latest message (see `sessionKey`).
 	useEffect(() => {
@@ -2222,78 +2239,92 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// (b) during the live round, where the activity is the point.
 		// Completed rounds are what the fold + the setting govern.
 		const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
+		// Tail trim (opt-in): rows the running turn already scrolled past are
+		// suppressed and counted on the first visible one. Only work rows and
+		// only in the in-flight span (absIdx >= liveFromIdx) — a settled turn
+		// belongs to its fold, and trimming it too would swap content under the
+		// fold's own animation.
+		const inLiveSpan = working && absIdx >= liveFromIdx;
+		const trimmedByLiveTail = liveTrim !== null && inLiveSpan && absIdx < liveTrim.firstVisibleIdx;
+		const liveMoreHere = liveTrim !== null && inLiveSpan && absIdx === liveTrim.firstVisibleIdx;
 		// The row body: mounted for hidden-span rows too (the slot collapses
 		// them), suppressed only for a closed fold's non-reply header row —
 		// and for a summarized run head, whose body the summary line replaces
 		// (an expanded run keeps its full rows below the summary).
 		const runSummaryHere = isRunHead && run !== undefined;
-		const body =
-			collapsible || !hideRowContent ? (
-				<Fragment key={entry.id}>
-					{headerStandalone ? (
-						// Inside the message column, so it aligns with the reply.
-						<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
-							{foldHeader}
-						</Row>
-					) : null}
-					{runSummaryHere ? (
-						<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
-							{headerStandalone ? null : foldHeader}
-							<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
-						</Row>
-					) : null}
-					{hideRowContent && !collapsible ? null : runSummaryHere && !runOpen ? null : (
-						<EntryRow
-							entry={entry}
-							foldHeader={isAssistantMessage && !runSummaryHere ? (foldHeader ?? undefined) : undefined}
-							results={results}
-							active={activeTools}
-							host={host}
-							userGutter={userGutter}
-							agentGutter={
-								// The reply of a COLLAPSED turn owns the orb: its predecessor is the
-								// hidden header row, so the usual "consecutive assistant rows drop the
-								// avatar" rule must not apply here. An OPEN fold's header owns the orb
-								// for the whole span instead (spanAvatarOwnedByHeader above).
-								isAssistantMessage &&
-								(prevIsAssistant || spanAvatarOwnedByHeader) &&
-								!(foldClosed && isReplyRow)
-									? ""
-									: agentGutter
-							}
-							userPlain={userPlain}
-							collapseLongUserMessages={collapseLongUserMessages}
-							hideToolActivity={rowHideTools || rowTextOnly}
-							textOnly={rowTextOnly}
-							showTokenUsage={showTokenUsage}
-							smoothStreaming={smoothStreaming}
-							taskCardStyle={taskCardStyle}
-							artifacts={turnArtifactsByFinal.get(entry.id)}
-							errorAttempt={
-								entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined
-							}
-							thinkingLevel={thinkingLevel}
-							streamingLast={streamingLast}
-							runStartTs={streamingLast ? lastUserTs : undefined}
-							roundDuration={roundDuration}
-							onQuote={onQuote}
-							onEdit={onEdit}
-							onRetry={onRetry}
-							onRevert={onRevert}
-							onFork={onFork}
-							onSpeak={onSpeak}
-							onSaveImage={onSaveImage}
-							onPreviewImage={openPreview}
-							speaking={speakingId != null && speakingId === entry.id}
-							onStopSpeak={onStopSpeak}
-							retryTarget={retryTargets.get(entry.id) ?? null}
-							advisorOpen={advisorOpenIds.has(advisorKeyOf(entry))}
-							onToggleAdvisor={toggleAdvisorOpen}
-							renderTranscriptNode={renderTranscriptNode}
-						/>
-					)}
-				</Fragment>
-			) : null;
+		// The "+N more" line the trim counts behind: it rides the first VISIBLE
+		// row, so it scrolls away with the work it describes instead of
+		// stranding a count at the top of a long turn.
+		const liveMoreLine = liveMoreHere ? (
+			<Row key={`live-more-${entry.id}`} kind="assistant" gutter={agentGutter ?? t("agent")}>
+				<div className="tr-live-more">
+					{t("⋯ {count} more lines", { count: String(liveTrim?.hiddenCount ?? 0) })}
+				</div>
+			</Row>
+		) : null;
+		const body = trimmedByLiveTail ? null : collapsible || !hideRowContent ? (
+			<Fragment key={entry.id}>
+				{liveMoreLine}
+				{headerStandalone ? (
+					// Inside the message column, so it aligns with the reply.
+					<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+						{foldHeader}
+					</Row>
+				) : null}
+				{runSummaryHere ? (
+					<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+						{headerStandalone ? null : foldHeader}
+						<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
+					</Row>
+				) : null}
+				{hideRowContent && !collapsible ? null : runSummaryHere && !runOpen ? null : (
+					<EntryRow
+						entry={entry}
+						foldHeader={isAssistantMessage && !runSummaryHere ? (foldHeader ?? undefined) : undefined}
+						results={results}
+						active={activeTools}
+						host={host}
+						userGutter={userGutter}
+						agentGutter={
+							// The reply of a COLLAPSED turn owns the orb: its predecessor is the
+							// hidden header row, so the usual "consecutive assistant rows drop the
+							// avatar" rule must not apply here. An OPEN fold's header owns the orb
+							// for the whole span instead (spanAvatarOwnedByHeader above).
+							isAssistantMessage && (prevIsAssistant || spanAvatarOwnedByHeader) && !(foldClosed && isReplyRow)
+								? ""
+								: agentGutter
+						}
+						userPlain={userPlain}
+						collapseLongUserMessages={collapseLongUserMessages}
+						hideToolActivity={rowHideTools || rowTextOnly}
+						textOnly={rowTextOnly}
+						showTokenUsage={showTokenUsage}
+						smoothStreaming={smoothStreaming}
+						taskCardStyle={taskCardStyle}
+						artifacts={turnArtifactsByFinal.get(entry.id)}
+						errorAttempt={entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined}
+						thinkingLevel={thinkingLevel}
+						streamingLast={streamingLast}
+						runStartTs={streamingLast ? lastUserTs : undefined}
+						roundDuration={roundDuration}
+						onQuote={onQuote}
+						onEdit={onEdit}
+						onRetry={onRetry}
+						onRevert={onRevert}
+						onFork={onFork}
+						onSpeak={onSpeak}
+						onSaveImage={onSaveImage}
+						onPreviewImage={openPreview}
+						speaking={speakingId != null && speakingId === entry.id}
+						onStopSpeak={onStopSpeak}
+						retryTarget={retryTargets.get(entry.id) ?? null}
+						advisorOpen={advisorOpenIds.has(advisorKeyOf(entry))}
+						onToggleAdvisor={toggleAdvisorOpen}
+						renderTranscriptNode={renderTranscriptNode}
+					/>
+				)}
+			</Fragment>
+		) : null;
 		const headerStandaloneRow = headerStandalone ? (
 			// Inside the message column, so it aligns with the reply.
 			<Row kind="assistant" gutter={agentGutter ?? t("agent")}>

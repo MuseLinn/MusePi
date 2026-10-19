@@ -3315,6 +3315,21 @@ a.tr-tool-search-title:hover {
 	overflow: visible;
 }
 
+/* "+N more" for a trimmed running turn (display.liveActivityRows). A COUNT,
+ * not a control — the rows it names are not retained, so unlike the fold
+ * headers above it takes no border, no fill and no pointer: it reads as
+ * "there was more", not "click here". */
+.tr-live-more {
+	margin: 4px 0 2px;
+	padding: 2px 10px;
+	color: var(--color-text-faint, var(--text-faint, var(--fg-faint)));
+	font-size: 11.5px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .tr-round-fold,
 .tr-run-summary {
 	display: flex;

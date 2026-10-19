@@ -1462,6 +1462,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"display.liveActivityRows": {
+		type: "integer",
+		default: 0,
+		ui: {
+			tab: "appearance",
+			group: "Display",
+			label: "Live Activity Rows",
+			description:
+				"How many recent activity rows a RUNNING turn keeps visible; earlier ones fold into a '+N more' line. 0 (default) keeps the running turn fully expanded — watching the agent work is the transcript; a smaller number holds the tail still on a long task",
+		},
+	},
+
 	"display.collapseCompacted": {
 		type: "boolean",
 		default: false,

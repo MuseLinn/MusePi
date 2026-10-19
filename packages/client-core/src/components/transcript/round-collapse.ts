@@ -447,3 +447,36 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 	flush();
 	return runs;
 }
+
+/** Default: a running turn keeps every row visible. */
+export const LIVE_ACTIVITY_ROWS_UNLIMITED = 0;
+
+/** What the in-flight trim hides, and what the "+N more" line must say. */
+export interface LiveActivityTrim {
+	/** Absolute index of the first VISIBLE row; rows before it are folded. */
+	firstVisibleIdx: number;
+	/** How many rows the "+N more" line counts. */
+	hiddenCount: number;
+}
+
+/**
+ * Keep a running turn's tail in view and fold the rest behind a count.
+ *
+ * A turn that runs for minutes streams a row per tool call, so the transcript
+ * scrolls away from the work. Showing only its latest rows holds the tail still
+ * while the count keeps the earlier ones reachable.
+ *
+ * Only the IN-FLIGHT span qualifies: a settled turn is governed by its round
+ * fold, and trimming it as well would change the content under the fold's own
+ * animation. Callers pass exactly that span, so this is a pure count.
+ *
+ * `visibleRows <= 0` means unlimited (the default) — watching the agent work is
+ * the transcript, and the fold belongs to the FINISHED turn.
+ */
+export function planLiveActivityTrim(rows: readonly number[], visibleRows: number): LiveActivityTrim | null {
+	// `visibleRows <= 0` is a real branch: 0 is the schema default and means
+	// "unlimited", not a literal the compiler can fold.
+	if (visibleRows <= 0 || rows.length <= visibleRows) return null;
+	const hiddenCount = rows.length - visibleRows;
+	return { firstVisibleIdx: rows[hiddenCount] ?? rows[rows.length - 1]!, hiddenCount };
+}

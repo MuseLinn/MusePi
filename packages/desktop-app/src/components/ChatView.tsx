@@ -504,6 +504,7 @@ export function ChatView({
 						"display.hideToolActivity",
 						"display.showTokenUsage",
 						"display.collapseCompacted",
+						"display.liveActivityRows",
 						"display.taskCardStyle",
 						"tts.autoRead",
 						"tts.rate",
@@ -2597,6 +2598,18 @@ export function ChatView({
 																showTokenUsage={displaySettings["display.showTokenUsage"] === true}
 																collapseCompacted={
 																	displaySettings["display.collapseCompacted"] === true
+																}
+																liveActivityRows={
+																	// 0 (the schema default) = unlimited: watching the agent work IS
+																	// the transcript, so the trim stays opt-in.
+																	Number.isFinite(displaySettings["display.liveActivityRows"])
+																		? Math.max(
+																				0,
+																				Math.trunc(
+																					Number(displaySettings["display.liveActivityRows"]),
+																				),
+																			)
+																		: 0
 																}
 																taskCardStyle={
 																	displaySettings["display.taskCardStyle"] === "classic"

@@ -81,10 +81,13 @@ export function MockAssistantRow({
 
 /** Mock 活动 fold header — the real .tr-round-fold summary row (boxed
  *  chevron + 活动 label + what-happened segments) a completed round folds
- *  into, so the preview shows the current collapsed-round styling. */
-export function MockActivityFoldRow(): ReactNode {
+ *  into, so the preview shows the current collapsed-round styling.
+ *  `open` renders the OPENED form (rotated chevron + expanded class), so the
+ *  preview shows both states of the control rather than only the collapsed
+ *  one the user actually clicks on. */
+export function MockActivityFoldRow({ open = false }: { open?: boolean }): ReactNode {
 	return (
-		<div className="tr-round-fold" role="presentation">
+		<div className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`} role="presentation">
 			<span className="tr-round-fold-icon" aria-hidden>
 				<ChevronRight size={12} />
 			</span>
@@ -97,6 +100,27 @@ export function MockActivityFoldRow(): ReactNode {
 			</span>
 			<span className="tr-round-fold-sep">·</span>
 			<span>{t("round commands {count}", { count: "2" })}</span>
+		</div>
+	);
+}
+
+/** Mock EXPANDED round: the opened 活动 header plus the process rows it
+ *  reveals, then the "+N more" count a trimmed running turn shows.
+ *
+ *  The preview previously showed only the collapsed header, so the two states
+ *  the fold toggle actually moves between were never both on screen — the
+ *  expanded side is where the header's rotated chevron, the revealed tool
+ *  rows and the tail count live, and a styling change there was invisible. */
+export function MockExpandedActivity(): ReactNode {
+	return (
+		<div className="tr-activity-preview-expanded" role="presentation">
+			<MockActivityFoldRow open />
+			<div className="tr-activity-preview-rows">
+				<div className="tr-activity-preview-row">{t("preview activity edit")}</div>
+				<div className="tr-activity-preview-row">{t("preview activity command")}</div>
+				<div className="tr-activity-preview-row">{t("preview activity read")}</div>
+				<div className="tr-live-more">{t("⋯ {count} more lines", { count: "6" })}</div>
+			</div>
 		</div>
 	);
 }
@@ -167,6 +191,10 @@ export function MockConversationPreview({
 			)}
 			<MockUserRow markdown={userMarkdown ?? t("preview user message")} showAvatar={showAvatars} />
 			<MockActivityFoldRow />
+			{/* Both fold states, so a styling change to either is visible here:
+			 * the collapsed header above is what a finished turn rests as, and
+			 * the expanded block below is what clicking it reveals. */}
+			<MockExpandedActivity />
 			<MockAssistantRow
 				markdown={assistantMarkdown ?? t("preview agent message")}
 				showAvatar={showAvatars}

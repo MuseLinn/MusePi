@@ -920,6 +920,34 @@ body.gui-resizing .gui-pane-resize-x::after {
 	opacity: 1;
 }
 
+/* The expanded 活动 fold in the preview: the opened header plus the process
+ * rows it reveals, indented into the same column the transcript puts them in.
+ * Static by design — the preview shows both fold STATES so a change to either
+ * is visible without opening a session, and a control here would invite a click
+ * that does nothing. */
+.tr-activity-preview-expanded {
+	display: flex;
+	flex-direction: column;
+}
+
+.tr-activity-preview-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 2px 0 4px 12px;
+	padding-left: 10px;
+	border-left: 1px solid var(--border);
+}
+
+.tr-activity-preview-row {
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .gui-effect-preview-composer {
 	display: flex;
 	align-items: center;
