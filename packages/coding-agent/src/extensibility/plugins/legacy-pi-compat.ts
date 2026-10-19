@@ -2656,15 +2656,90 @@ async function ensureExtensionGraphHook(entryRealPath: string): Promise<{ clear(
  * temp-directory mirroring and no asset copying. An `onLoad` hook scoped to the
  * entry's source graph rewrites only host-resolved compatibility imports in the
  * extension's own source; everything else resolves natively.
+ *
+ * ## Why `fresh` exists (module identity vs. hot reload)
+ *
+ * Bun caches ESM by specifier and offers no way to invalidate ONE module: a bare
+ * `import(path)` serves the cached module, while `import(path?tag)` re-evaluates
+ * it as a NEW module instance (verified: the same path with two different query
+ * tags yields two objects). Those are the only two behaviours available.
+ *
+ * That forces a choice per load:
+ *
+ * - **`fresh: false` (default) — shared identity.** Every loader that imports
+ *   the entry sees ONE module instance, so module-level state is shared. This is
+ *   what makes `ext.call` and a live session agree about a plugin's captured
+ *   context; before this, the artifact compiler's copy and the session's copy
+ *   were separate objects and a plugin that stored state in a module variable
+ *   saw `null` through its RPC.
+ * - **`fresh: true` — re-evaluated instance.** Required for HMR: new bytes on
+ *   disk must produce new code, and Bun will not re-read a cached module. The
+ *   cost is a new module instance, which is acceptable *because a reload is
+ *   itself the moment we intend to replace the old one*.
+ *
+ * Callers therefore pass `fresh: true` only on an explicit reload, and take the
+ * default everywhere else.
  */
-export async function loadLegacyPiModule(resolvedPath: string): Promise<unknown> {
+/**
+ * Load a legacy Pi extension module from its real on-disk location.
+ *
+ * The extension runs in place, so its `import.meta.url` is the real source file
+ * and `__dirname`-relative `readFileSync` asset loads (HTML/CSS bundled next to
+ * the entry) resolve exactly as they do under the original Pi runtime — no
+ * temp-directory mirroring and no asset copying. An `onLoad` hook scoped to the
+ * entry's source graph rewrites only host-resolved compatibility imports in the
+ * extension's own source; everything else resolves natively.
+ *
+ * ## Why `fresh` exists (module identity vs. hot reload)
+ *
+ * Bun caches ESM by specifier and offers no way to invalidate ONE module: a bare
+ * `import(path)` serves the cached module, while `import(path?tag)` re-evaluates
+ * it as a NEW module instance (verified: the same path with two different query
+ * tags yields two objects). Those are the only two behaviours available.
+ *
+ * That forces a choice per load:
+ *
+ * - **`fresh: false` (default) — shared identity.** Every loader that imports
+ *   the entry sees ONE module instance, so module-level state is shared. This is
+ *   what makes `ext.call` and a live session agree about a plugin's captured
+ *   context; before this, the artifact compiler's copy and the session's copy
+ *   were separate objects and a plugin that stored state in a module variable
+ *   saw `null` through its RPC.
+ * - **`fresh: true` — re-evaluated instance.** Required for HMR: new bytes on
+ *   disk must produce new code, and Bun will not re-read a cached module. The
+ *   cost is a new module instance, which is acceptable *because a reload is
+ *   itself the moment we intend to replace the old one*.
+ *
+ * Callers therefore pass `fresh: true` only on an explicit reload, and take the
+ * default everywhere else.
+ *
+ * ## Why `snapshot` exists (graph rewrites are not free)
+ *
+ * `ensureExtensionGraphHook` reads and rewrites the entry's ENTIRE import graph.
+ * For a third-party plugin that graph is small (its own files plus a few
+ * dependencies), and the rewrite is what makes `@(scope)/pi-*` shims resolve.
+ *
+ * For a first-party package that ships inside the host repo the graph is the
+ * host's own — importing `../../modes/orchestrate` pulls in a large slice of
+ * `src/`, and snapshotting it costs ~55s per load (measured). Those packages
+ * also do not need the rewrite: their `@musepi/pi-*` imports already resolve,
+ * because they are compiled as part of the host.
+ *
+ * So the snapshot is opt-out, decided by whether the entry imports host-internal
+ * modules rather than by which directory it sits in: a plugin that needs the
+ * rewrite keeps it, one that cannot benefit from it skips it.
+ */
+export async function loadLegacyPiModule(
+	resolvedPath: string,
+	options?: { fresh?: boolean; snapshot?: boolean },
+): Promise<unknown> {
 	// Bun reports the realpath of a loaded module to `onLoad` and exposes it as
 	// `import.meta.url`. Resolve symlinks here too (macOS `/var`→`/private/var`,
 	// `bun link`/pnpm installs) so the rewrite filter matches the path Bun
 	// actually hands the hook.
 	const entryRealPath = await realpathOrSelf(path.resolve(resolvedPath));
 	await ensureLegacyPiOverridesReady();
-	const pendingSources = await ensureExtensionGraphHook(entryRealPath);
+	const pendingSources = options?.snapshot === false ? null : await ensureExtensionGraphHook(entryRealPath);
 	try {
 		// Dynamic import is required: legacy extension entry paths are user/plugin supplied at runtime.
 		// Use the raw filesystem path so Bun keys the `?mtime` suffix as part of
@@ -2676,6 +2751,8 @@ export async function loadLegacyPiModule(resolvedPath: string): Promise<unknown>
 		const entrySpecifier = isBundledVirtualSpecifier(entryRealPath)
 			? toImportSpecifier(entryRealPath)
 			: stripWindowsExtendedLengthPathPrefix(entryRealPath);
+		// Untagged import = the process-wide module instance (see the doc above).
+		if (options?.fresh !== true) return await import(entrySpecifier);
 		return await import(`${entrySpecifier}?mtime=${nextLegacyPiLoadTag()}`);
 	} finally {
 		// Drop whatever the initial import didn't consume: graph modules only
@@ -2683,6 +2760,37 @@ export async function loadLegacyPiModule(resolvedPath: string): Promise<unknown>
 		// import time, not served from this load-time snapshot.
 		pendingSources?.clear();
 	}
+}
+
+/**
+ * Whether an entry's own source imports host-internal modules.
+ *
+ * The check is textual and deliberately cheap: an entry that reaches into the
+ * host's `src/` tree is compiled as part of the host, so its `@musepi/pi-*`
+ * specifiers already resolve and the compatibility rewrite has nothing to do.
+ * Snapshotting it would read the host's graph for no benefit (~55s measured for
+ * the bundled keyword package).
+ *
+ * This replaces a directory-based test ("is it under bundled-plugins/"), which
+ * was wrong in kind: shipping location is not the property that decides the
+ * cost — what the entry imports is.
+ */
+export async function entryNeedsGraphSnapshot(entryPath: string): Promise<boolean> {
+	let source: string;
+	try {
+		source = await Bun.file(entryPath).text();
+	} catch {
+		// Unreadable entry: assume the snapshot is needed (the safe default —
+		// a missing rewrite shows up as a load error, a needless one only costs
+		// time).
+		return true;
+	}
+	// Only the entry's own imports are inspected. A sub-import that reaches into
+	// the host is still covered: the hook rewrites by path, so those resolve
+	// natively without a snapshot anyway.
+	return !/(?:from|import)\s*["'](?:\.\.?\/)+(?:modes|extensibility|session|tools|config|presets|daemon|mcp|internal)\//.test(
+		source,
+	);
 }
 
 function getLoader(path: string): "js" | "jsx" | "ts" | "tsx" {

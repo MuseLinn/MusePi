@@ -2,12 +2,12 @@
  * M2-2.9 收编第二刀：user 插件宿主级 cordis 装载运行时（生产接线）。
  *
  * 能力缝声明（M2-2.4）：
- * - 名称+ns：`cordis-dynamic-extensions`（daemon 装配面，宿主级）
+ * - 名称+ns：`cordis-dynamic-plugins`（daemon 装配面，宿主级）
  * - 输入：扩展入口路径清单（discoverExtensionPaths 同源发现分支输出）+
  *   宿主 cwd + DaemonHostContext 根 Context
  * - 输出：LoadExtensionsResult（extensions/errors/runtime——与 loadExtensions
- *   同形状，供 session-less RPC 消费）+ DynamicExtensionHandle（invoke/
- *   检视/unload/reload）+ 结构化加载错误 + DynamicExtensionInspection[]
+ *   同形状，供 session-less RPC 消费）+ DynamicPluginHandle（invoke/
+ *   检视/unload/reload）+ 结构化加载错误 + DynamicPluginInspection[]
  * - 生命周期：每个 user 插件 = `musepi-dynamic-extensions` 组 fiber 下的
  *   独立子 fiber；每次 register 类动词/on 登记 = fiber 效果账本（ctx.effect）
  *   一条带标签 effect，卸载即 fiber.dispose() 反向回收。清单
@@ -61,6 +61,12 @@ import type {
 } from "../extensibility/extensions/types";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../extensibility/plugins/compatibility-store";
 import {
+	type CordisPluginEntry,
+	HOST_SERVICES,
+	providedServices,
+	type ServiceRegistry,
+} from "../extensibility/plugins/cordis-entry";
+import {
 	compatibilityGateForExtensionPath,
 	pluginCompatibilityWarning,
 } from "../extensibility/plugins/plugin-compatibility";
@@ -112,7 +118,7 @@ export interface DynamicComponentInspection {
 	error?: string;
 }
 
-export interface DynamicExtensionInspection {
+export interface DynamicPluginInspection {
 	name: string;
 	status: "active" | "unloaded" | "failed";
 	/** 清单版本（兼容面豁免键/版本标注的输入）。 */
@@ -129,7 +135,7 @@ export interface DynamicExtensionInspection {
 	components: DynamicComponentInspection[];
 }
 
-export interface DynamicExtensionHandle {
+export interface DynamicPluginHandle {
 	readonly name: string;
 	/** 调用该扩展登记的命令（不存在 = 结构化「能力缺席」错误——禁用兜底的渲染输入）。
 	 *  handler 签名为 (args, ctx)——宿主级无会话 ctx，默认存根在访问任何
@@ -140,7 +146,7 @@ export interface DynamicExtensionHandle {
 	reload(): Promise<void>;
 }
 
-interface DynamicExtensionRecord {
+interface DynamicPluginRecord {
 	name: string;
 	/** 原始输入路径（reload 重解析入口用）。 */
 	sourcePath: string;
@@ -158,6 +164,9 @@ interface DynamicExtensionRecord {
 	/** 兼容性预检判定（回退保护②）：拒绝时 = 结构化证据,随记录与
 	 *  inspect() 下发;exempted = 放行但标注。兼容 = 无此项。 */
 	compatibility?: PluginCompatibility;
+	/** 插件入口用 cordis 三件套声明且携带 Config 时，已钳制的配置值。
+	 *  供 inspect() 暴露"这个插件实际拿到了什么配置"；未声明 = 无此项。 */
+	declaredConfig?: Record<string, unknown>;
 	/** 清单声明组件的装载记录（键 = 组件 id）。 */
 	components: Map<string, DynamicComponentRecord>;
 }
@@ -518,26 +527,72 @@ function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension,
 	}
 }
 
-export class CordisDynamicExtensionRuntime {
+export class CordisDynamicPluginRuntime {
 	readonly #host: DaemonHostContext;
 	#group?: Fiber & PromiseLike<Fiber>;
-	readonly #records = new Map<string, DynamicExtensionRecord>();
+	readonly #records = new Map<string, DynamicPluginRecord>();
 	/** 全局登记命名空间：command:name → owner 扩展（跨扩展碰撞守卫）。 */
 	readonly #registrations = new Map<string, string>();
 	/** 宿主级共享装配面：与 loadExtensions 每调用新建不同，fiber 运行时跨
 	 *  reconcile 持久——登记随 fiber 生命周期走，TTL 重入不重复登记。 */
 	#runtime: LoadExtensionsResult["runtime"] | null = null;
+	/** 插件间服务面：service name → provider plugin name。只收**在役**插件的
+	 *  `provide`，卸载即摘除——一个名字只有在提供者活着时才可被 inject。 */
+	/** 插件间服务面：service name → 提供者与它发布的对象。只收**在役**插件的
+	 *  `provide`，卸载即整条摘除——一个名字只有在提供者活着时才可被 inject。 */
+	readonly #providedServices = new Map<string, { owner: string; service?: unknown }>();
 	readonly #eventBus = new EventBus();
 
 	constructor(host: DaemonHostContext) {
 		this.#host = host;
 	}
 
+	/**
+	 * The `inject` resolution surface for mounts in progress.
+	 *
+	 * Reads {@link #providedServices}, so a plugin mounted AFTER its provider
+	 * sees it and one mounted BEFORE does not (and is refused with the
+	 * provider's name in the message, so the ordering problem is diagnosable
+	 * instead of looking like a typo).
+	 */
+	#serviceRegistry(): ServiceRegistry {
+		const provided = this.#providedServices;
+		return {
+			host: HOST_SERVICES,
+			hasProvided: (name: string) => provided.has(name),
+			providerOf: (name: string) => provided.get(name)?.owner,
+			// The object the PROVIDER published. Reading it here (rather than
+			// keeping a second map) means there is exactly one place a service
+			// object lives, so a provider cannot publish a name and forget the
+			// object, or vice versa.
+			resolve: <T>(name: string): T | undefined => provided.get(name)?.service as T | undefined,
+		};
+	}
+
+	/** 记录一个在役插件提供的服务名与对象（装载成功后调用；卸载由
+	 *  #forgetProvidedServices 反向摘除——名字和对象一起消失）。
+	 *
+	 *  `published` 是 `apply` 的返回值：一个以 `provide` 名为键的对象。每个名字
+	 *  取自己那一个字段，所以 `pi.service("a")` 得到的是 `published.a` 而不是整个
+	 *  返回值——否则一个只 provide 一个名字的插件也会让消费者拿到多余的东西。 */
+	#rememberProvidedServices(name: string, entry: CordisPluginEntry | null, published?: Record<string, unknown>): void {
+		for (const service of providedServices(entry)) {
+			this.#providedServices.set(service, { owner: name, service: published?.[service] });
+		}
+	}
+
+	/** 卸载时摘除该插件提供的全部服务名（连同它发布的对象）。 */
+	#forgetProvidedServices(name: string): void {
+		for (const [service, entry] of [...this.#providedServices]) {
+			if (entry.owner === name) this.#providedServices.delete(service);
+		}
+	}
+
 	/** 动态插件组 fiber：首个 load 时创建，
 	 *  所有动态扩展的子 fiber 挂在它下面，拆卸整组 = dispose 它一个。 */
 	async #ensureGroup(): Promise<Fiber> {
 		if (!this.#group) {
-			const fiber = this.#host.plugin({ name: "musepi-dynamic-extensions", apply: () => {} });
+			const fiber = this.#host.plugin({ name: "musepi-dynamic-plugins", apply: () => {} });
 			this.#group = fiber;
 			// startHostHalf parity：先等组落定再挂子 fiber。
 			await fiber.await();
@@ -572,13 +627,13 @@ export class CordisDynamicExtensionRuntime {
 	 *  状态（failed/unloaded）时复用记录重载。
 	 *  disabledComponents：清单组件的禁用集合（`<plugin>/<component>` 复合键，
 	 *  由调用方从 settings 读入）——命中的 entry 组件不挂 fiber,如实记 disabled。 */
-	async load(extPath: string, cwd: string, disabledComponents?: ReadonlySet<string>): Promise<DynamicExtensionHandle> {
+	async load(extPath: string, cwd: string, disabledComponents?: ReadonlySet<string>): Promise<DynamicPluginHandle> {
 		const target = await resolveExtensionTarget(extPath);
 		const existing = this.#records.get(target.name);
 		if (existing?.status === "active") {
 			throw new DynamicExtensionLoadError("collision", `extension "${target.name}" is already loaded`);
 		}
-		const record: DynamicExtensionRecord = existing ?? {
+		const record: DynamicPluginRecord = existing ?? {
 			name: target.name,
 			sourcePath: extPath,
 			entryKey: target.entry,
@@ -656,36 +711,63 @@ export class CordisDynamicExtensionRuntime {
 		};
 	}
 
-	/** 装配落核：组 fiber 下挂子 fiber，apply = 同源 import/bind（loadLegacyPiModule
-	 *  每次装载自带单调 mtime 标签，Windows 下 raw-path 查询串即缓存新键——
-	 *  入口与子模块改写 reload 即拾取）+ 效果账本壳。bind 失败结构化上抛 →
+	/** 装配落核：组 fiber 下挂子 fiber，apply = Track A 自有装载管线
+	 *  （plugins/mount.ts：读入口形态 → inject 依赖门 → bind → 账本壳）。
+	 *  `loadLegacyPiModule` 首次装载取进程内同一实例，reload 才重新求值——
+	 *  于是 ext.call 与活跃会话看到同一份插件状态。bind 失败结构化上抛 →
 	 *  fiber FAILED → 立即 dispose 不留半挂载。主 fiber 落定后按清单声明
 	 *  挂组件子 fiber（层隔离：单组件失败只记 FAILED，插件与其余组件无损）。 */
 	async #mount(
-		record: DynamicExtensionRecord,
+		record: DynamicPluginRecord,
 		target: ExtensionTarget,
 		disabledComponents?: ReadonlySet<string>,
+		/** Reload re-evaluates the entry module; a first mount shares identity. */
+		fresh = false,
 	): Promise<void> {
 		const group = await this.#ensureGroup();
 		const fiber = group.ctx.plugin({
 			name: `dynamic-extension:${record.name}`,
 			apply: async ctx => {
-				const { importAndBindExtension } = await import("../extensibility/extensions/loader");
-				const bound = await importAndBindExtension(
-					target.entry,
-					record.cwd,
-					this.#eventBus,
-					await this.#sharedRuntime(),
-					(api, extension) => this.#ledgerApi(record.name, api, extension, ctx),
-				);
-				if (bound.error || !bound.extension) {
-					throw new DynamicExtensionLoadError(
-						bound.code ?? "factory-threw",
-						bound.error ?? `extension "${record.name}" failed to bind`,
-					);
+				const { mountPlugin } = await import("../extensibility/plugins/mount");
+				const { readPluginConfigStore } = await import("../extensibility/extensions-center/plugin-config-store");
+				const { coerceConfigValues } = await import("@musepi/pi-wire");
+				const { readExtensionPluginMeta } = await import("../extensibility/extensions/plugin-manifest");
+				// Track A owns its own import + bind, so the entry's declared shape
+				// (`inject` / `Config`) is honoured here instead of in the legacy
+				// loader that Track B keeps byte-identical to upstream.
+				const mounted = await mountPlugin({
+					entryPath: target.entry,
+					cwd: record.cwd,
+					eventBus: this.#eventBus,
+					runtime: await this.#sharedRuntime(),
+					fresh,
+					serviceRegistry: this.#serviceRegistry(),
+					wrapApi: (api, extension) => this.#ledgerApi(record.name, api, extension, ctx),
+					readConfig: async entryPath => {
+						const meta = await readExtensionPluginMeta(entryPath);
+						const store = await readPluginConfigStore();
+						const id = `extension-module:${getExtensionNameFromPath(entryPath)}`;
+						return {
+							fields: meta?.fields ?? [],
+							values: coerceConfigValues(meta?.fields ?? [], store[id]),
+						};
+					},
+				});
+				if (!mounted.ok) {
+					// The mount pipeline's codes are already the structured ones
+					// the management surface understands (it propagates a
+					// ledger-thrown code verbatim rather than flattening it), so
+					// this is a re-throw, not a translation.
+					throw new DynamicExtensionLoadError(mounted.code, mounted.message);
 				}
-				record.extension = bound.extension;
+				record.extension = mounted.extension;
 				record.ctx = ctx;
+				record.declaredConfig = mounted.config;
+				// Publish the services this plugin provides ONLY after a
+				// successful mount: a name is real while its provider lives, so
+				// recording it earlier would let a later plugin inject a service
+				// whose provider then failed to load.
+				this.#rememberProvidedServices(record.name, mounted.entry, mounted.published);
 			},
 		} satisfies Plugin.Object);
 		record.fiber = fiber;
@@ -694,6 +776,13 @@ export class CordisDynamicExtensionRuntime {
 		} catch (err) {
 			// 失败不留挂载：dispose 后结构化记录（latestRun attempt 形状）。
 			await fiber.dispose();
+			// A plugin that threw may have written state before failing. Nothing
+			// was registered past the throw, so there are no cleanups to run —
+			// but the state is meaningless now and must not outlive the attempt.
+			if (record.extension) {
+				const { disposeFailedPluginPrimitives } = await import("../extensibility/plugins/cordis-primitives");
+				disposeFailedPluginPrimitives(record.extension);
+			}
 			record.status = "failed";
 			record.fiber = undefined;
 			record.ctx = undefined;
@@ -705,7 +794,7 @@ export class CordisDynamicExtensionRuntime {
 						`extension "${record.name}" failed to load: ${record.error}`,
 					);
 		}
-		await this.#mountComponents(record, target, disabledComponents);
+		await this.#mountComponents(record, target, disabledComponents, fresh);
 	}
 
 	/** 组件子 fiber 挂载：每个带 entry 且
@@ -714,9 +803,11 @@ export class CordisDynamicExtensionRuntime {
 	 *  名 = `<plugin>/<component>`,跨组件命令碰撞结构化拒绝）。无 entry 的
 	 *  组件如实记 disabled（只读展示声明,不发明启停语义）。 */
 	async #mountComponents(
-		record: DynamicExtensionRecord,
+		record: DynamicPluginRecord,
 		target: ExtensionTarget,
 		disabledComponents?: ReadonlySet<string>,
+		/** Reload re-evaluates each component entry too; a first mount shares. */
+		fresh = false,
 	): Promise<void> {
 		for (const decl of target.components) {
 			const component: DynamicComponentRecord = {
@@ -733,15 +824,16 @@ export class CordisDynamicExtensionRuntime {
 				continue;
 			}
 			const entryAbs = path.resolve(target.manifestDir ?? path.dirname(target.entry), decl.entry);
-			await this.#mountComponent(record, component, entryAbs);
+			await this.#mountComponent(record, component, entryAbs, fresh);
 		}
 	}
 
 	/** 挂单个组件 fiber（装载与热启用共用）；失败层隔离为 FAILED 记录。 */
 	async #mountComponent(
-		record: DynamicExtensionRecord,
+		record: DynamicPluginRecord,
 		component: DynamicComponentRecord,
 		entryAbs: string,
+		fresh = false,
 	): Promise<void> {
 		const owner = `${record.name}/${component.id}`;
 		const ctx = record.ctx;
@@ -753,21 +845,35 @@ export class CordisDynamicExtensionRuntime {
 		const fiber = ctx.plugin({
 			name: `dynamic-extension-component:${owner}`,
 			apply: async cctx => {
-				const { importAndBindExtension } = await import("../extensibility/extensions/loader");
-				const bound = await importAndBindExtension(
-					entryAbs,
-					record.cwd,
-					this.#eventBus,
-					await this.#sharedRuntime(),
-					(api, extension) => this.#ledgerApi(owner, api, extension, cctx),
-				);
-				if (bound.error || !bound.extension) {
-					throw new DynamicExtensionLoadError(
-						bound.code ?? "factory-threw",
-						bound.error ?? `component "${owner}" failed to bind`,
-					);
+				// Components mount through Track A's pipeline too: they are part of
+				// the same plugin, so identity, dependency gating and config all
+				// follow the entry's rules rather than the legacy extension's.
+				const { mountPlugin } = await import("../extensibility/plugins/mount");
+				const mounted = await mountPlugin({
+					entryPath: entryAbs,
+					cwd: record.cwd,
+					eventBus: this.#eventBus,
+					runtime: await this.#sharedRuntime(),
+					fresh,
+					wrapApi: (api, extension) => this.#ledgerApi(owner, api, extension, cctx),
+					readConfig: async entryPath => {
+						const { readPluginConfigStore } = await import(
+							"../extensibility/extensions-center/plugin-config-store"
+						);
+						const { coerceConfigValues } = await import("@musepi/pi-wire");
+						const { readExtensionPluginMeta } = await import("../extensibility/extensions/plugin-manifest");
+						const meta = await readExtensionPluginMeta(entryPath);
+						const store = await readPluginConfigStore();
+						const id = `extension-module:${getExtensionNameFromPath(entryPath)}`;
+						const fields = meta?.fields ?? [];
+						return { fields, values: coerceConfigValues(fields, store[id]) };
+					},
+				});
+				if (!mounted.ok) {
+					// Same as the plugin entry: re-throw, do not translate.
+					throw new DynamicExtensionLoadError(mounted.code, mounted.message);
 				}
-				component.extension = bound.extension;
+				component.extension = mounted.extension;
 			},
 		} satisfies Plugin.Object);
 		component.fiber = fiber;
@@ -812,7 +918,9 @@ export class CordisDynamicExtensionRuntime {
 			}
 			const entryAbs = path.resolve(target.manifestDir ?? path.dirname(target.entry), decl.entry);
 			component.status = "disabled";
-			await this.#mountComponent(record, component, entryAbs);
+			// Re-enabling is a re-mount of an entry that may have been edited while
+			// disabled, so it re-evaluates like any other reload.
+			await this.#mountComponent(record, component, entryAbs, true);
 			return;
 		}
 		if (component.status !== "active") return;
@@ -843,7 +951,7 @@ export class CordisDynamicExtensionRuntime {
 		record.status = "active";
 		record.error = undefined;
 		record.components = new Map();
-		await this.#mount(record, target);
+		await this.#mount(record, target, undefined, true);
 	}
 
 	/** 效果账本壳：register 类动词/on 每次登记 = ctx.effect 一条带标签 effect，
@@ -885,13 +993,19 @@ export class CordisDynamicExtensionRuntime {
 		}) as ExtensionAPI;
 	}
 
-	async #unloadRecord(record: DynamicExtensionRecord): Promise<void> {
+	async #unloadRecord(record: DynamicPluginRecord): Promise<void> {
 		if (record.status !== "active" || !record.fiber) return;
+		const extension = record.extension;
+		const components = [...record.components.values()];
 		await record.fiber.dispose();
-		record.status = "unloaded";
-		record.fiber = undefined;
-		record.ctx = undefined;
-		record.extension = undefined;
+		// Services go first: nothing may inject a name whose provider is gone.
+		this.#forgetProvidedServices(record.name);
+		// The ledger undoes registrations; `pi.effect` cleanups are NOT
+		// registrations, so they need their own pass. Running them after the
+		// fiber is gone is deliberate: a cleanup that touches a registration
+		// must see the world as it was, not a half-torn-down one.
+		const { disposePluginPrimitives } = await import("../extensibility/plugins/cordis-primitives");
+		if (extension) await disposePluginPrimitives(extension);
 		// The component DECLARATIONS survive the unload: a package toggle is an
 		// install/uninstall of the whole plugin, and the management surface
 		// must keep listing what the plugin declares (with each row reading
@@ -899,14 +1013,19 @@ export class CordisDynamicExtensionRuntime {
 		// component list that disappears with the toggle cannot be managed.
 		// Only the per-component runtime references are dropped; the map keys
 		// are the manifest's declaration and stay put.
-		for (const component of record.components.values()) {
+		for (const component of components) {
+			if (component.extension) await disposePluginPrimitives(component.extension);
 			component.status = "unloaded";
 			component.fiber = undefined;
 			component.extension = undefined;
 		}
+		record.status = "unloaded";
+		record.fiber = undefined;
+		record.ctx = undefined;
+		record.extension = undefined;
 	}
 
-	#buildHandle(record: DynamicExtensionRecord): DynamicExtensionHandle {
+	#buildHandle(record: DynamicPluginRecord): DynamicPluginHandle {
 		return {
 			name: record.name,
 			invoke: async (commandName, args = "") => {
@@ -938,7 +1057,7 @@ export class CordisDynamicExtensionRuntime {
 				record.status = "active";
 				record.error = undefined;
 				record.components = new Map();
-				await this.#mount(record, target);
+				await this.#mount(record, target, undefined, true);
 			},
 		};
 	}
@@ -959,9 +1078,48 @@ export class CordisDynamicExtensionRuntime {
 		}
 	}
 
+	/**
+	 * Dispatch a `registerRpc` method on the CORDIS-MANAGED instance.
+	 *
+	 * Why this belongs here rather than in the artifact compiler: the compiler
+	 * loads plugin entries through `loadLegacyPiModule`, which stamps every load
+	 * with `?mtime=<tag>` so Bun rekeys the module (that is what makes HMR work).
+	 * Two loaders therefore hold TWO module instances of the same plugin, and a
+	 * module-level value written by one is invisible to the other — a real bug
+	 * this session hit: a plugin captured the session context on one instance
+	 * and its `ext.call` handler (other instance) saw `null`.
+	 *
+	 * Routing the RPC through the fiber-managed extension keeps ONE instance for
+	 * both faces: registration state, closures and module-level caches are the
+	 * same objects the session uses. Unload/reload dispose the fiber and this
+	 * path follows automatically.
+	 *
+	 * Returns `undefined` when the name is not a cordis-managed plugin, so the
+	 * caller can fall back to its own load path (e.g. a bare extension file that
+	 * was never installed as a plugin package).
+	 */
+	async invokeRpc(
+		entryPath: string,
+		method: string,
+		params: unknown,
+		ctx: { cwd: string; sessionId?: string },
+	): Promise<{ found: false } | { found: true; value: unknown }> {
+		const target = path.resolve(entryPath);
+		for (const record of this.#records.values()) {
+			if (record.status !== "active" || !record.extension) continue;
+			if (path.resolve(record.entryKey) !== target && path.resolve(record.sourcePath) !== target) {
+				continue;
+			}
+			const handler = record.extension.rpcs.get(method);
+			if (!handler) throw new Error(`unknown extension rpc method "${method}" (extension ${entryPath})`);
+			return { found: true, value: await handler(params, ctx) };
+		}
+		return { found: false };
+	}
+
 	/** 检视面：每个动态扩展的状态 + fiber 效果账本标签 + 错误归因 +
 	 *  组件装载面（fiber 状态机/效果账本,无 fiber 的组件如实缺项）。 */
-	inspect(): DynamicExtensionInspection[] {
+	inspect(): DynamicPluginInspection[] {
 		return [...this.#records.values()].map(record => ({
 			name: record.name,
 			status: record.status,
@@ -994,7 +1152,7 @@ export class CordisDynamicExtensionRuntime {
 		try {
 			await this.#group.dispose();
 		} catch (err) {
-			logger.warn("CordisDynamicExtensionRuntime: dispose non-fatal", { err });
+			logger.warn("CordisDynamicPluginRuntime: dispose non-fatal", { err });
 		}
 		this.#group = undefined;
 		this.#records.clear();

@@ -34,10 +34,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
-	CordisDynamicExtensionRuntime,
-	type DynamicExtensionHandle,
+	CordisDynamicPluginRuntime,
 	DynamicExtensionLoadError,
-} from "../src/daemon/cordis-dynamic-extensions";
+	type DynamicPluginHandle,
+} from "../src/daemon/cordis-dynamic-plugins";
 import { DaemonHostContext } from "../src/daemon/host-context";
 
 function probeManifest(name: string): string {
@@ -81,7 +81,7 @@ const PROBE_BROKEN_INDEX = `export default function extension(_pi: any) {
 
 let rootDir = "";
 let host: DaemonHostContext;
-let runtime: CordisDynamicExtensionRuntime;
+let runtime: CordisDynamicPluginRuntime;
 
 async function writeExtension(name: string, files: Record<string, string>): Promise<string> {
 	const dir = path.join(rootDir, name);
@@ -112,7 +112,7 @@ beforeAll(async () => {
 		"index.ts": PROBE_BROKEN_INDEX,
 	});
 	host = new DaemonHostContext();
-	runtime = new CordisDynamicExtensionRuntime(host);
+	runtime = new CordisDynamicPluginRuntime(host);
 });
 
 afterAll(async () => {
@@ -139,7 +139,7 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 	test("遗留 omp 清单字段仍可读（musepi 权威前的旧上游扩展不掉队）", async () => {
 		const localHost = new DaemonHostContext();
-		const legacyRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const legacyRuntime = new CordisDynamicPluginRuntime(localHost);
 		const dir = await writeExtension("legacy-omp-manifest", {
 			"package.json": JSON.stringify({
 				name: "legacy-omp-manifest",
@@ -168,7 +168,7 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 		// 失败模式若回归（碰撞覆盖静默成功）：后加载者抢走命令、检视无 failed 记录。
 		const host2 = new DaemonHostContext();
-		const runtime2 = new CordisDynamicExtensionRuntime(host2);
+		const runtime2 = new CordisDynamicPluginRuntime(host2);
 		const dir = await writeExtension("collision-order-a", {
 			"package.json": probeManifest("collision-order-a"),
 			"index.ts": probeAIndex("v1"),
@@ -188,7 +188,7 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 	test("事件分发：宿主事件送达所有在役订阅扩展，卸载后即退出分发", async () => {
 		const host2 = new DaemonHostContext();
-		const runtime2 = new CordisDynamicExtensionRuntime(host2);
+		const runtime2 = new CordisDynamicPluginRuntime(host2);
 		const dir = await writeExtension("event-a", {
 			"package.json": probeManifest("event-a"),
 			"index.ts": probeAIndex("v1"),
@@ -231,7 +231,7 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 	test("生命周期：loadAll reconcile——清单消失的路径自动卸载且效果回收（provider 排队注册注销）", async () => {
 		const host2 = new DaemonHostContext();
-		const runtime2 = new CordisDynamicExtensionRuntime(host2);
+		const runtime2 = new CordisDynamicPluginRuntime(host2);
 		const dir = await writeExtension("reconcile-a", {
 			"package.json": probeManifest("reconcile-a"),
 			"index.ts": probeAIndex("v1"),
@@ -257,7 +257,7 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 	test("生命周期：reload 拾取入口文件改写的新代码", async () => {
 		const host2 = new DaemonHostContext();
-		const runtime2 = new CordisDynamicExtensionRuntime(host2);
+		const runtime2 = new CordisDynamicPluginRuntime(host2);
 		const dir = await writeExtension("hmr-probe", {
 			"package.json": probeManifest("hmr-probe"),
 			"index.ts": probeAIndex("v1"),
@@ -275,7 +275,7 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 	test("HMR 实测：reload 经 mtime 标签口径拾取改写——子模块改写同样生效", async () => {
 		const host2 = new DaemonHostContext();
-		const runtime2 = new CordisDynamicExtensionRuntime(host2);
+		const runtime2 = new CordisDynamicPluginRuntime(host2);
 		const dir = await writeExtension("hmr-submodule-probe", {
 			"package.json": probeManifest("hmr-submodule-probe"),
 			"index.ts": probeAIndex("v2"),
@@ -327,9 +327,9 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 
 describe("组件对齐刀 清单组件子 fiber（dsh `- insert:` 子插件 parity / 独立启停 / 检视）", () => {
 	let compsHost: DaemonHostContext;
-	let compsRuntime: CordisDynamicExtensionRuntime;
+	let compsRuntime: CordisDynamicPluginRuntime;
 	let compsDir = "";
-	let compsHandle: DynamicExtensionHandle;
+	let compsHandle: DynamicPluginHandle;
 
 	function compsManifest(): string {
 		return JSON.stringify({
@@ -365,7 +365,7 @@ describe("组件对齐刀 清单组件子 fiber（dsh `- insert:` 子插件 pari
 
 	beforeAll(async () => {
 		compsHost = new DaemonHostContext();
-		compsRuntime = new CordisDynamicExtensionRuntime(compsHost);
+		compsRuntime = new CordisDynamicPluginRuntime(compsHost);
 		compsDir = await writeExtension("probe-comps", {
 			"package.json": compsManifest(),
 			"index.ts": COMPS_MAIN,
@@ -418,7 +418,7 @@ describe("组件对齐刀 清单组件子 fiber（dsh `- insert:` 子插件 pari
 
 	test("禁用集装载：disabledComponents 命中的组件不挂 fiber,其余照常", async () => {
 		const localHost = new DaemonHostContext();
-		const localRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const localRuntime = new CordisDynamicPluginRuntime(localHost);
 		const handle = await localRuntime.load(compsDir, rootDir, new Set(["probe-comps/beta"]));
 		const missing = await handle.invoke("probe-comps-beta").catch(err => err);
 		expect(missing).toBeInstanceOf(DynamicExtensionLoadError);
@@ -451,7 +451,7 @@ describe("组件对齐刀 清单组件子 fiber（dsh `- insert:` 子插件 pari
 			"broken.ts": `export default function extension(_pi: any) { throw new Error("boom from component"); }\n`,
 		});
 		const localHost = new DaemonHostContext();
-		const localRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const localRuntime = new CordisDynamicPluginRuntime(localHost);
 		const handle = await localRuntime.load(dir, rootDir);
 		expect(await handle.invoke("probe-comps-alpha")).toBe("alpha");
 		const entry = localRuntime.inspect().find(r => r.name === "probe-comps-fragile");
@@ -488,7 +488,7 @@ describe("组件对齐刀 清单组件子 fiber（dsh `- insert:` 子插件 pari
 `,
 		});
 		const localHost = new DaemonHostContext();
-		const localRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const localRuntime = new CordisDynamicPluginRuntime(localHost);
 		const handle = await localRuntime.load(dir, rootDir);
 		expect(await handle.invoke("probe-comps-main")).toBe("main");
 		const usurper = localRuntime

@@ -219,7 +219,7 @@ export class ExtensionRuntime implements IExtensionRuntime {
 
 /**
  * 同源工厂：ConcreteExtensionAPI 的唯一构造入口（收编第二刀）——会话装载
- * （bindExtension）与 cordis 宿主级动态装载（cordis-dynamic-extensions）
+ * （bindExtension）与 cordis 宿主级动态装载（cordis-dynamic-plugins）
  * 共用同一 API 实例来源，换实现处只此一点，两条加载路径不会漂移。
  */
 export function createConcreteExtensionAPI(
@@ -784,7 +784,22 @@ interface ImportedExtensionModule {
 	error: string | null;
 }
 
-async function importExtensionModule(extensionPath: string, cwd: string): Promise<ImportedExtensionModule> {
+/**
+ * Import one extension entry.
+ *
+ * `fresh` decides module identity. A first load must take the process-wide
+ * instance so the session, the `ext.call` compiler and any other consumer all
+ * see ONE module object (each holding its own copy splits module-level state —
+ * a plugin that captured the session context in one saw `null` through its
+ * RPC). A reload must re-evaluate: Bun caches ESM by specifier and will not
+ * re-read a cached module, so new bytes only take effect through a query-tagged
+ * import. There is no third behaviour available, hence one option.
+ */
+async function importExtensionModule(
+	extensionPath: string,
+	cwd: string,
+	options?: { fresh?: boolean },
+): Promise<ImportedExtensionModule> {
 	const resolvedPath = resolvePath(extensionPath, cwd);
 	try {
 		// Bundled plugin packages load through a plain dynamic import. They ship
@@ -806,7 +821,9 @@ async function importExtensionModule(extensionPath: string, cwd: string): Promis
 			}
 			return { factory, resolvedPath, error: null };
 		}
-		const module = (await withHostGuard(() => loadLegacyPiModule(resolvedPath))) as LoadedExtensionModule;
+		const module = (await withHostGuard(() =>
+			loadLegacyPiModule(resolvedPath, { fresh: options?.fresh === true }),
+		)) as LoadedExtensionModule;
 		const factory = getExtensionFactory(module);
 
 		if (typeof factory !== "function") {
@@ -872,8 +889,9 @@ export async function importAndBindExtension(
 	eventBus: EventBus,
 	runtime: IExtensionRuntime,
 	wrapApi?: (api: ExtensionAPI, extension: Extension) => ExtensionAPI,
+	options?: { fresh?: boolean },
 ): Promise<{ extension: Extension | null; error: string | null; code?: DynamicExtensionLoadErrorCode }> {
-	const imported = await importExtensionModule(extensionPath, cwd);
+	const imported = await importExtensionModule(extensionPath, cwd, options);
 	return bindExtension(extensionPath, imported, cwd, eventBus, runtime, wrapApi);
 }
 
@@ -916,7 +934,12 @@ export function assertKnownComponentSlot(slot: string): void {
  * sequentially in the original path order, so registration semantics
  * (last-wins collisions, shared runtime flag defaults) stay deterministic.
  */
-export async function loadExtensions(paths: string[], cwd: string, eventBus?: EventBus): Promise<LoadExtensionsResult> {
+export async function loadExtensions(
+	paths: string[],
+	cwd: string,
+	eventBus?: EventBus,
+	options?: { fresh?: boolean },
+): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 	const resolvedEventBus = eventBus ?? new EventBus();
@@ -949,7 +972,7 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 		}
 	}
 
-	const imported = await Promise.all(admissible.map(extPath => importExtensionModule(extPath, cwd)));
+	const imported = await Promise.all(admissible.map(extPath => importExtensionModule(extPath, cwd, options)));
 
 	for (let i = 0; i < admissible.length; i++) {
 		const extPath = admissible[i]!;

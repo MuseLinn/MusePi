@@ -18,7 +18,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { getProjectAgentDir, VERSION } from "@musepi/pi-utils";
-import { CordisDynamicExtensionRuntime } from "../../src/daemon/cordis-dynamic-extensions";
+import { CordisDynamicPluginRuntime } from "../../src/daemon/cordis-dynamic-plugins";
 import { DaemonHostContext } from "../../src/daemon/host-context";
 import { ExtensionService } from "../../src/daemon/services/extension-service";
 import { DynamicExtensionLoadError } from "../../src/extensibility/extensions/dynamic-extension-error";
@@ -36,7 +36,7 @@ describe("插件兼容性预检（回退保护② · 宿主 runtime 整链）", 
 	let agentDir: string;
 	let projectDir: string;
 	let host: DaemonHostContext;
-	let dynamic: CordisDynamicExtensionRuntime;
+	let dynamic: CordisDynamicPluginRuntime;
 	let extService: ExtensionService;
 	let pluginDir: string;
 
@@ -59,7 +59,7 @@ describe("插件兼容性预检（回退保护② · 宿主 runtime 整链）", 
 			`export default function (pi) { pi.registerCommand("${PLUGIN}-probe", { handler: async () => "ok" }); }\n`,
 		);
 		host = new DaemonHostContext();
-		dynamic = new CordisDynamicExtensionRuntime(host);
+		dynamic = new CordisDynamicPluginRuntime(host);
 		extService = new ExtensionService({
 			settings: () => Settings.isolated(),
 			ensureRegistry: async () => ({}),

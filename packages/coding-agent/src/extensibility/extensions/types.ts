@@ -553,7 +553,7 @@ export interface ExtensionContext {
 	/** Clear a timer scheduled via {@link setInterval} or {@link setTimeout}. */
 	clearTimer(timer: Timer): void;
 	/**
-	 * Register an MCP server with the session (dsh one-plugin-per-server
+	 * Register an MCP server with the session (one plugin per server
 	 * parity at session scope).
 	 *
 	 * The config passes the manager's own validation; tools from the server
@@ -569,8 +569,7 @@ export interface ExtensionContext {
 	 * Resolves false for names this session never registered. */
 	unregisterMcpServer(name: string): Promise<boolean>;
 	/**
-	 * Register a subagent type for this session's task tool (dsh
-	 * `ctx.subagents` parity at session scope).
+	 * Register a subagent type for this session's task tool.
 	 *
 	 * The definition is everything an agent markdown file carries minus
 	 * provenance (`source` is always `"extension"`). Resolution consults
@@ -584,9 +583,8 @@ export interface ExtensionContext {
 	 * Resolves false for unknown names. */
 	unregisterSubagent(name: string): boolean;
 	/**
-	 * Register an internal-URL scheme for this session (the applicable half
-	 * of dsh's "protocol drivers": new `scheme://` namespaces for read,
-	 * write and completion).
+	 * Register an internal-URL scheme for this session: new `scheme://`
+	 * namespaces for read, write and completion.
 	 *
 	 * Schemes already handled — built-ins or another party's — fail instead
 	 * of hijacking; re-registering our own installed handler replaces it
@@ -599,7 +597,7 @@ export interface ExtensionContext {
 	 * Resolves false for names this session never registered. */
 	unregisterUrlScheme(scheme: string): boolean;
 	/**
-	 * Session-scoped reminders (dsh `ctx.schedule` parity at session scope).
+	 * Session-scoped reminders.
 	 *
 	 * One-shots (`afterSeconds`/`at`) fire once and are consumed; `everySeconds`
 	 * recurs until deleted. Firing delivers the prompt into this session as a
@@ -1566,7 +1564,7 @@ export interface ExtensionAPI {
 	getFlag(name: string): boolean | string | undefined;
 
 	// =========================================================================
-	// Plugin Config (manifest-declared, dsh-style management page)
+	// Plugin Config (manifest-declared, surfaced in the management page)
 	// =========================================================================
 
 	/** Manifest-declared plugin configuration. The extension's package.json
@@ -1637,6 +1635,68 @@ export interface ExtensionAPI {
 	 *  renderers for a segment id. Dropped on unload so a re-added extension
 	 *  re-registers it. */
 	registerStatusBarSegment(id: string, options: { label: string; order?: number; renderKey?: string }): void;
+
+	// Cordis primitives (Track A only — see the note below)
+	// =========================================================================
+
+	/**
+	 * Register a cleanup for ANY side effect, not just a registration.
+	 *
+	 * The `register*` verbs are already undone on unload, but a plugin that
+	 * opens something itself — a `setInterval`, a socket, a file watcher, an
+	 * `AbortController` — had no way to have it reclaimed. Those leaks survived
+	 * reload and accumulated: a plugin reloaded five times left four orphaned
+	 * timers.
+	 *
+	 * The cleanup runs on unload, session shutdown and registration rollback,
+	 * and a throw inside it is isolated so one bad cleanup cannot strand the
+	 * rest. State stays readable while cleanups run, so a cleanup can flush what
+	 * the plugin accumulated.
+	 *
+	 * ⚠️ **Track A (cordis plugins) only.** A legacy extension has no fiber to
+	 * scope this to, so it is absent there — check `"effect" in pi` before use,
+	 * or ship as a cordis plugin. See `docs/plugin-tracks.md`.
+	 */
+	effect?(cleanup: () => void | Promise<void>, label?: string): void;
+
+	/**
+	 * Fiber-scoped state for this plugin.
+	 *
+	 * Module-level variables are the wrong home for plugin state: the same
+	 * module can be instantiated more than once per process (the session loader,
+	 * the `ext.call` compiler and the cordis runtime each hold their own), so a
+	 * module variable is silently split into several values — a plugin that
+	 * captured the session context in one saw `null` through its own RPC.
+	 *
+	 * State here is per-plugin-instance (shared across every face of one plugin)
+	 * and cleared on unload (so a reload does not inherit the previous life).
+	 *
+	 * ⚠️ **Track A (cordis plugins) only**, for the same reason as
+	 * {@link effect}.
+	 */
+	readonly state?: {
+		get<T>(key: string): T | undefined;
+		set<T>(key: string, value: T): void;
+		has(key: string): boolean;
+		delete(key: string): boolean;
+		keys(): string[];
+	};
+
+	/**
+	 * Read a service another plugin `provide`s — the delivery half of `inject`.
+	 *
+	 * Declaring the name in `inject` is what makes a missing service a LOAD-time
+	 * error; this returns `undefined` at runtime when the provider has since
+	 * unloaded, so a plugin must handle that case anyway (a provider can go away
+	 * at any moment). Host service names (`credentials`, `llm`, …) resolve to
+	 * `undefined` here — those are capabilities you already hold as
+	 * `pi.credentials` etc.
+	 *
+	 * ⚠️ **Track A (cordis plugins) only**, for the same reason as
+	 * {@link effect}.
+	 */
+	service?<T = unknown>(name: string): T | undefined;
+
 	// Actions
 	// =========================================================================
 
@@ -1834,6 +1894,33 @@ export interface ProviderConfig {
 	 * cadence for a tiered catalog is 5 minutes; pass that here.
 	 */
 	discoveryTtlMs?: number;
+	/**
+	 * Human-readable provider name for the model selector and settings UI.
+	 *
+	 * Without it the UI shows the raw registration id, which for a plugin that
+	 * registers several channels of one vendor is indistinguishable noise
+	 * (`auth-hub-codebuddy`, `auth-hub-workbuddy`, …).
+	 */
+	label?: string;
+	/**
+	 * Per-request credential resolution.
+	 *
+	 * Picks the credential for THIS request instead of using one fixed `apiKey` —
+	 * the whole point of a multi-account pool, where the account that answers may
+	 * differ per request and per session.
+	 *
+	 * Returning `undefined` means "no credential for this request"; the host
+	 * then reports the provider as unavailable rather than sending an
+	 * unauthenticated request.
+	 *
+	 * Async, and carries the abort signal so a slow credential lookup is
+	 * cancelled with the request it belongs to.
+	 */
+	resolveApiKey?: (context: {
+		model: Model<Api>;
+		sessionId?: string;
+		signal?: AbortSignal;
+	}) => Promise<string | undefined>;
 }
 
 /** Media generation backends an extension contributes via registerMediaProvider. */

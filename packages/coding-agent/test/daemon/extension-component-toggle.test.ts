@@ -19,7 +19,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { getProjectAgentDir } from "@musepi/pi-utils";
-import { CordisDynamicExtensionRuntime } from "../../src/daemon/cordis-dynamic-extensions";
+import { CordisDynamicPluginRuntime } from "../../src/daemon/cordis-dynamic-plugins";
 import { DaemonHostContext } from "../../src/daemon/host-context";
 import { ExtensionService } from "../../src/daemon/services/extension-service";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
@@ -34,7 +34,7 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 	let agentDir: string;
 	let projectDir: string;
 	let host: DaemonHostContext;
-	let dynamic: CordisDynamicExtensionRuntime;
+	let dynamic: CordisDynamicPluginRuntime;
 	let extService: ExtensionService;
 	let settings: Settings;
 
@@ -70,7 +70,7 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 			`export default function (pi) { pi.registerCommand("${PLUGIN}-beta", { handler: async () => "beta" }); }\n`,
 		);
 		host = new DaemonHostContext();
-		dynamic = new CordisDynamicExtensionRuntime(host);
+		dynamic = new CordisDynamicPluginRuntime(host);
 		settings = Settings.isolated();
 		extService = new ExtensionService({
 			settings: () => settings,
@@ -143,7 +143,7 @@ describe("plugins.setEnabled 的组件联动（包开关 = 总闸）", () => {
 	let agentDir: string;
 	let projectDir: string;
 	let host: DaemonHostContext;
-	let dynamic: CordisDynamicExtensionRuntime;
+	let dynamic: CordisDynamicPluginRuntime;
 	let extService: ExtensionService;
 	let settings: Settings;
 
@@ -179,7 +179,7 @@ describe("plugins.setEnabled 的组件联动（包开关 = 总闸）", () => {
 			`export default function (pi) { pi.registerCommand("${PKG_PLUGIN}-beta", { handler: async () => "beta" }); }\n`,
 		);
 		host = new DaemonHostContext();
-		dynamic = new CordisDynamicExtensionRuntime(host);
+		dynamic = new CordisDynamicPluginRuntime(host);
 		settings = Settings.isolated();
 		extService = new ExtensionService({
 			settings: () => settings,

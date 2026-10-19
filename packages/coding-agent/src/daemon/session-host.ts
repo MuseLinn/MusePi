@@ -57,8 +57,8 @@ import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { validateProjectMetadata, writeProjectMirror } from "./creation";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
-import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
+import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./plugin-runtime-tools";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -1422,11 +1422,11 @@ export class DaemonSessionHost {
 	}
 
 	/** P2 动态自举:会话级动态插件工具链(ext_define/ext_run/ext_stop/
-	 *  ext_undefine/ext_inspect)——实现见 extension-runtime-tools.ts。
+	 *  ext_undefine/ext_inspect)——实现见 plugin-runtime-tools.ts。
 	 *  每会话独立 registry,沙箱(vm)承载 host 半体。 */
 	#dynamicRegistries = new Map<string, RuntimeToolRegistry>();
 
-	#dynamicExtensionTools(): CustomTool[] {
+	#dynamicPluginTools(): CustomTool[] {
 		return createExtensionRuntimeTools(
 			ctx => {
 				const id = ctx.sessionManager.getSessionId();
@@ -1498,7 +1498,7 @@ export class DaemonSessionHost {
 				preloadedExtensionPaths: discovery.extensionPaths,
 				mcpManager,
 				// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-				customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
+				customTools: [...this.#extensionManagerTools(), ...this.#dynamicPluginTools()],
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
 				...(await desktopSessionPromptInputs(cwd)),
@@ -1620,7 +1620,7 @@ export class DaemonSessionHost {
 				preloadedExtensionPaths: discovery.extensionPaths,
 				mcpManager,
 				// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-				customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
+				customTools: [...this.#extensionManagerTools(), ...this.#dynamicPluginTools()],
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
 				...(await desktopSessionPromptInputs(resumeCwd)),

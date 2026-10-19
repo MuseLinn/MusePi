@@ -23,7 +23,7 @@ export const EXTENSION_META_TOOL_NAMES: readonly string[] = [
 	"extension_status",
 	"extension_validate",
 	"extension_rollback",
-	// Runtime bootstrap (extension-runtime-tools.ts)
+	// Runtime bootstrap (plugin-runtime-tools.ts)
 	"ext_define",
 	"ext_run",
 	"ext_stop",

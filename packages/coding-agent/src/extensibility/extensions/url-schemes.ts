@@ -1,13 +1,12 @@
 /**
  * Extension-contributed internal URL schemes (`ctx.registerUrlScheme`).
  *
- * This is the applicable half of dsh's "protocol drivers" surface. dsh's
- * other half — adapting a wire peer into an agent provider (their ACP
- * worked example) — has no musepi counterpart to plug into: ACP here is a
- * full session mode, not a pluggable driver seam, and MCP's resource
- * fallback already serves custom-scheme *resources*. What extensions were
- * actually missing is new `scheme://` namespaces for the internal-URL
- * router (read/write/complete), which this provides.
+ * Scope: new `scheme://` namespaces for the internal-URL router
+ * (read/write/complete). The neighbouring seam — adapting a wire peer into
+ * an agent provider — has no counterpart to plug into here: ACP is a full
+ * session mode, not a pluggable driver seam, and MCP's resource fallback
+ * already serves custom-scheme *resources*. The namespace half is what
+ * extensions were missing, and it is what this provides.
  *
  * The router is process-global, so ownership is by object identity, never
  * by name alone:

@@ -76,15 +76,39 @@ export interface StatusBarSegmentItem {
 	extensionPath: string;
 }
 
-/** Raw-extension load cache: entry path → loaded extension (factory runs once per TTL window). */
+/** Raw-extension load cache: entry path → loaded extension (factory runs once
+ *  per cache window).
+ *
+ *  Load-once is the lifecycle contract: a session-less RPC caller (a settings
+ *  panel, a status-bar segment collector) must dispatch to the SAME loaded
+ *  module instance across calls, exactly the way a live session does. Loading
+ *  the entry per call cost seconds (Bun transpiles the module graph) and made
+ *  every slot-panel RPC time out. Invalidation is explicit — see
+ *  {@link invalidateExtensionLoadCache} — instead of a short TTL, so a panel
+ *  refresh never pays the load again while an install/enable/disable still
+ *  takes effect immediately. */
 const extensionLoadCache = new Map<string, { at: number; extension: Extension }>();
+
+/** Safety net for entries whose invalidation was missed; long enough that a
+ *  panel's repeated RPCs reuse the instance. */
+const EXTENSION_LOAD_TTL_MS = 30 * 60_000;
+
+/** Drop every cached entry (install / uninstall / enable / disable / HMR). */
+export function invalidateExtensionLoadCache(): void {
+	extensionLoadCache.clear();
+}
+
+/** Drop one entry (its factory or a module in its graph changed). */
+export function invalidateExtensionLoad(entryPath: string): void {
+	extensionLoadCache.delete(entryPath);
+}
 
 /** Compile cache: abs path + mtime → compiled code + extracted css. */
 const compileCache = new Map<string, { mtimeMs: number; code: string; css?: string }>();
 
 async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extension | null> {
 	const cached = extensionLoadCache.get(entryPath);
-	if (cached && Date.now() - cached.at < 10_000) return cached.extension;
+	if (cached && Date.now() - cached.at < EXTENSION_LOAD_TTL_MS) return cached.extension;
 	const result = await loadExtensions([entryPath], cwd);
 	const extension = result.extensions[0] ?? null;
 	extensionLoadCache.set(entryPath, { at: Date.now(), extension });
@@ -274,10 +298,39 @@ export async function collectExtensionModes(
 
 /**
  * Invoke a daemon-side JSON-RPC method registered by an extension
- * (registerRpc). Loaded through the shared
- * 10s load-once cache; unknown methods throw so the daemon surfaces a
- * JSON-RPC error to the GUI caller.
+ * (registerRpc). Unknown methods throw so the daemon surfaces a JSON-RPC error
+ * to the GUI caller.
+ *
+ * Dispatch prefers a CORDIS-MANAGED instance when the host registered a lookup
+ * for it. That matters for correctness, not just efficiency: plugin entries are
+ * loaded through `loadLegacyPiModule`, which stamps every load with
+ * `?mtime=<tag>` so Bun rekeys the module (the mechanism HMR depends on). Two
+ * loaders therefore produce TWO module instances, and module-level state written
+ * by one is invisible to the other — a plugin that captures the session context
+ * on the session instance would have its `ext.call` handler (different instance)
+ * see `null`.
+ *
+ * Registering the resolver from the daemon (which owns the cordis runtime) keeps
+ * one instance for both faces. When no resolver is registered — a bare
+ * extension file, a test, a host without the runtime — this falls back to the
+ * artifact-compiler cache, which stays correct for RPCs that hold no module
+ * state.
  */
+let rpcDispatcher: ExtensionRpcDispatcher | null = null;
+
+/** Route an RPC to the host's own (cordis-managed) extension instance. */
+export type ExtensionRpcDispatcher = (
+	entryPath: string,
+	method: string,
+	params: unknown,
+	ctx: { cwd: string; sessionId?: string },
+) => Promise<{ found: false } | { found: true; value: unknown }>;
+
+/** Install the host's dispatcher (called once by the daemon at boot). */
+export function setExtensionRpcDispatcher(dispatcher: ExtensionRpcDispatcher | null): void {
+	rpcDispatcher = dispatcher;
+}
+
 export async function invokeExtensionRpc(
 	entryPath: string,
 	cwd: string,
@@ -285,6 +338,10 @@ export async function invokeExtensionRpc(
 	params: unknown,
 	ctx: { cwd: string; sessionId?: string },
 ): Promise<unknown> {
+	if (rpcDispatcher !== null) {
+		const routed = await rpcDispatcher(entryPath, method, params, ctx);
+		if (routed.found) return routed.value;
+	}
 	const extension = await loadExtensionOnce(entryPath, cwd);
 	if (!extension) throw new Error(`extension not loadable: ${entryPath}`);
 	const handler = extension.rpcs.get(method);

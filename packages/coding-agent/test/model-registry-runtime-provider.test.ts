@@ -1225,4 +1225,148 @@ describe("ModelRegistry runtime provider registration", () => {
 		await registry.refreshRuntimeProviders("online");
 		expect(registry.getAvailable().some(model => model.provider === "pool-provider")).toBe(false);
 	});
+
+	test("an extension credential resolver makes a pool provider's models usable", async () => {
+		// The other half of the pool story: the availability gate above proves
+		// the models are LISTED, and this proves a turn can actually
+		// authenticate. Without the resolver, `getApiKey` consults the host
+		// AuthStorage, finds nothing (a pool cannot live in a
+		// one-credential-per-provider store) and every turn dies with
+		// "No API key found for <provider>".
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				models: [{ ...baseModel, id: "pool-model" }],
+				resolveApiKey: async ({ model }) => `key-for-${model.id}`,
+			},
+			"ext://runtime",
+		);
+		const model = registry.find("pool-provider", "pool-model");
+		expect(model).toBeDefined();
+		expect(authStorage.hasAuth("pool-provider")).toBe(false);
+		await expect(registry.getApiKey(model!)).resolves.toBe("key-for-pool-model");
+		// Provider-scoped resolution (usage probes, discovery) takes the same
+		// path — it must not fall through to the empty AuthStorage either.
+		await expect(registry.getApiKeyForProvider("pool-provider")).resolves.toBe("key-for-");
+	});
+
+	test("a resolver that returns undefined surfaces as a missing credential", async () => {
+		// A drained pool must read as an auth problem the user can act on,
+		// not as a crash or a silently-wrong key.
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				models: [{ ...baseModel, id: "pool-model" }],
+				resolveApiKey: async () => undefined,
+			},
+			"ext://runtime",
+		);
+		const model = registry.find("pool-provider", "pool-model");
+		await expect(registry.getApiKey(model!)).resolves.toBeUndefined();
+		const resolved = await registry.getApiKeyAndHeaders(model!);
+		expect(resolved.ok).toBe(false);
+		if (!resolved.ok) expect(resolved.error).toContain("No API key found");
+	});
+
+	test("a resolver replaces the AuthStorage lookup instead of falling back to it", async () => {
+		// The host store CAN hold a credential for the same provider id (the
+		// extension's own oauth.login writes one). If the extension resolver
+		// ran second, a stale host credential would win over the pool's live
+		// account — the resolver must be consulted first and exclusively.
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				models: [{ ...baseModel, id: "pool-model" }],
+				resolveApiKey: async () => "pool-key",
+			},
+			"ext://runtime",
+		);
+		authStorage.setConfigApiKey("pool-provider", "stale-host-key");
+		const model = registry.find("pool-provider", "pool-model");
+		await expect(registry.getApiKey(model!)).resolves.toBe("pool-key");
+	});
+
+	test("unregistering the extension drops its credential resolver", async () => {
+		// A reloaded extension must not leave the old resolver answering for
+		// the provider id — the pool it closed over is gone.
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				models: [{ ...baseModel, id: "pool-model" }],
+				resolveApiKey: async () => "pool-key",
+			},
+			"ext://runtime",
+		);
+		const model = registry.find("pool-provider", "pool-model");
+		await expect(registry.getApiKey(model!)).resolves.toBe("pool-key");
+		registry.unregisterProvider("pool-provider");
+		authStorage.setConfigApiKey("pool-provider", "host-key");
+		const after = registry.find("pool-provider", "pool-model");
+		if (after) await expect(registry.getApiKey(after)).resolves.toBe("host-key");
+	});
+
+	test("discovery sees a pool provider as authenticated through its resolver", async () => {
+		// `fetchDynamicModels(apiKey)` receives the resolved key. A pool
+		// provider whose discovery returned [] because the key peeked as
+		// undefined would contribute no models at all.
+		const seenKeys: Array<string | undefined> = [];
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				resolveApiKey: async () => "pool-key",
+				fetchDynamicModels: async apiKey => {
+					seenKeys.push(apiKey);
+					return [{ ...baseModel, id: "pool-model" }];
+				},
+			},
+			"ext://runtime",
+		);
+		await registry.refreshRuntimeProviders("online");
+		expect(seenKeys).toEqual(["pool-key"]);
+		expect(registry.getAvailable().some(model => model.provider === "pool-provider")).toBe(true);
+	});
+
+	test("a registered label is what the picker shows, and the id stays the identity", () => {
+		// An extension-registered provider's id is a namespaced identifier;
+		// without a label the picker renders that verbatim. The label is
+		// display-only, so a stored favorite/pin keyed on provider/id must
+		// survive it.
+		registry.registerProvider(
+			"pool-provider",
+			{
+				api: "custom-pool-api",
+				baseUrl: "https://example.invalid/",
+				streamSimple,
+				label: "CodeBuddy (Auth Hub)",
+				resolveApiKey: async () => "pool-key",
+				models: [{ ...baseModel, id: "pool-model" }],
+			},
+			"ext://runtime",
+		);
+		expect(registry.getProviderLabel("pool-provider")).toBe("CodeBuddy (Auth Hub)");
+		expect(registry.find("pool-provider", "pool-model")?.provider).toBe("pool-provider");
+		// A provider that declares no label falls back to its builtin name, and
+		// an unknown one to undefined — never to an empty section header.
+		expect(registry.getProviderLabel("openai")).toBe("OpenAI");
+		expect(registry.getProviderLabel("no-such-provider")).toBeUndefined();
+		// Dropping the registration drops the label with it, so a reloaded
+		// extension cannot leave a stale name behind.
+		registry.unregisterProvider("pool-provider");
+		expect(registry.getProviderLabel("pool-provider")).toBeUndefined();
+	});
 });

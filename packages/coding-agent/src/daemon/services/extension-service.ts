@@ -14,7 +14,7 @@ import {
 	setVersionExemption,
 } from "../../extensibility/plugins/compatibility-store";
 import type { ResolvedMode } from "../../presets/resolve";
-import type { CordisDynamicExtensionRuntime } from "../cordis-dynamic-extensions";
+import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { DaemonService } from "./types";
 
 /**
@@ -70,9 +70,9 @@ export interface ExtensionServiceDeps {
 	 *  缺省回退 {}——user 插件与会话装载面无 fiber,不编造 runtime）。 */
 	builtinRuntime?(): Record<string, { fiberState: string; effects: number }>;
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀：DaemonServer 惰性装配
-	 *  CordisDynamicExtensionRuntime；缺省走直接 loadExtensions——会话装载
+	 *  CordisDynamicPluginRuntime；缺省走直接 loadExtensions——会话装载
 	 *  语义不变的 fail-soft 回退）。 */
-	dynamicRuntime?(): Promise<CordisDynamicExtensionRuntime | undefined>;
+	dynamicRuntime?(): Promise<CordisDynamicPluginRuntime | undefined>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
 	/**
@@ -763,10 +763,20 @@ export class ExtensionService implements DaemonService {
 	/** RPC ext.call：扩展贡献的 daemon 侧 JSON-RPC（registerRpc）回调入口。 */
 	async call(params: unknown) {
 		// 扩展贡献的 daemon 侧 JSON-RPC(registerRpc):GUI 槽位组件
-		// 经此回调自己的 daemon 侧逻辑。仅限 active extension-module
-		// 条目 —— 与
-		// collectSlotComponents 同源过滤,未知扩展/方法抛 JSON-RPC
-		// 错误给调用方。
+		// 经此回调自己的 daemon 侧逻辑。
+		//
+		// Fast path: load the entry DIRECTLY instead of validating it against a
+		// full extension inventory scan. `getExtensions()` runs
+		// `loadAllExtensions` — it evaluates every extension factory — and one
+		// entry alone costs seconds to load (Bun transpiles the module graph
+		// each time). A panel that fires four RPCs on mount paid that scan four
+		// times and timed out at the caller's 15s budget, which read as "the
+		// plugin never loads its own data".
+		//
+		// The guard that actually matters survives: `invokeExtensionRpc` throws
+		// for a path it cannot load and for a method the entry never
+		// registered. A path that merely exists but is disabled in settings is
+		// rejected here from the settings list without a scan.
 		const p = (params ?? {}) as { extensionId?: string; method?: string; params?: unknown; sessionId?: string };
 		if (typeof p.extensionId !== "string" || p.extensionId.length === 0) {
 			throw new Error("ext.call: extensionId required");
@@ -774,13 +784,16 @@ export class ExtensionService implements DaemonService {
 		if (typeof p.method !== "string" || p.method.length === 0) {
 			throw new Error("ext.call: method required");
 		}
-		const extensions = await this.getExtensions();
-		const entry = extensions.find(
-			e => e.kind === "extension-module" && e.state === "active" && e.path === p.extensionId,
-		);
-		if (!entry) throw new Error(`extension not active: ${p.extensionId}`);
+		const entryPath = p.extensionId;
+		const disabled = new Set((this.#deps.settings()?.get("disabledExtensions") ?? []) as string[]);
+		if (disabled.has(entryPath) || disabled.has(`path:${entryPath}`)) {
+			throw new Error(`extension disabled: ${entryPath}`);
+		}
+		if (!fs.existsSync(entryPath)) {
+			throw new Error(`extension not active: ${entryPath}`);
+		}
 		const { invokeExtensionRpc } = await import("../extension-artifact-compiler");
-		return await invokeExtensionRpc(entry.path, this.#deps.cwd(), p.method, p.params ?? {}, {
+		return await invokeExtensionRpc(entryPath, this.#deps.cwd(), p.method, p.params ?? {}, {
 			cwd: this.#deps.cwd(),
 			sessionId: p.sessionId,
 		});
@@ -1076,10 +1089,15 @@ export class ExtensionService implements DaemonService {
 
 	/** 宿主侧 skills.delete/skills.install 与 marketplace.install/remove 的
 	 *  扩展缓存失效入口：清 #extensionsCache + 宿主运行时加载缓存
-	 *  （设计体系重放依赖后者重载，M3 §3.7d），不动插件缓存。 */
+	 *  （设计体系重放依赖后者重载，M3 §3.7d），不动插件缓存。
+	 *
+	 *  同时清扩展加载缓存（extension-artifact-compiler 的 load-once 缓存）：
+	 *  装包/卸包/启停之后，session-less RPC 的 `ext.call` 必须拿到新实例，
+	 *  否则一个被卸载的插件还能继续应答自己的 daemon 侧 RPC。 */
 	invalidateExtensionsCache(): void {
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;
+		void import("../extension-artifact-compiler").then(m => m.invalidateExtensionLoadCache());
 	}
 
 	/** 插件清单声明式配置写入:params = { id, key, value }。

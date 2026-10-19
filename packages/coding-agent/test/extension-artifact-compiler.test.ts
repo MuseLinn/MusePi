@@ -105,6 +105,52 @@ describe("extension rpc + skills + toolviews", () => {
 		}
 	}, 60_000);
 
+	test("a session-less RPC reuses the loaded extension instead of re-running the factory", async () => {
+		// A settings panel fires several RPCs on mount. Each `ext.call` used to
+		// re-import the entry (seconds on a real plugin graph), so the panel's
+		// own timeout fired before its first row rendered. The load-once cache
+		// is what makes repeated dispatch cheap — and the factory counter is
+		// the observable proof.
+		const { invokeExtensionRpc, invalidateExtensionLoadCache } = await import(
+			"../src/daemon/extension-artifact-compiler.js"
+		);
+		const dir = await mkdtemp(path.join(tmpdir(), "ext-rpc-cache-"));
+		const modPath = `${dir}/counter.ts`;
+		// The counter lives on globalThis so it survives a module re-import:
+		// after invalidation the entry is loaded as a NEW module instance, and
+		// an in-module counter would reset and hide whether the factory re-ran.
+		await writeFile(
+			modPath,
+			`const box = ((globalThis as any).__extRpcLoads ??= { n: 0 });
+export default function (pi: any): void {
+	box.n += 1;
+	pi.registerRpc("loads", () => box.n);
+	pi.registerRpc("touch", () => box.n);
+}
+`,
+		);
+		try {
+			invalidateExtensionLoadCache();
+			(globalThis as { __extRpcLoads?: { n: number } }).__extRpcLoads = { n: 0 };
+			const first = await invokeExtensionRpc(modPath, process.cwd(), "loads", {}, { cwd: "/tmp" });
+			expect(first).toBe(1);
+			// Second dispatch: the SAME loaded module instance serves it, so the
+			// factory does not run again.
+			const second = await invokeExtensionRpc(modPath, process.cwd(), "touch", {}, { cwd: "/tmp" });
+			expect(second).toBe(first);
+
+			// Invalidation re-runs the factory, so a reloaded/installed entry
+			// takes effect immediately.
+			invalidateExtensionLoadCache();
+			const after = await invokeExtensionRpc(modPath, process.cwd(), "loads", {}, { cwd: "/tmp" });
+			expect(after).toBe(2);
+		} finally {
+			invalidateExtensionLoadCache();
+			delete (globalThis as { __extRpcLoads?: { n: number } }).__extRpcLoads;
+			await rm(dir, { recursive: true, force: true });
+		}
+	}, 60_000);
+
 	test("collectExtensionSkills returns virtual skills with extension identity", async () => {
 		const { collectExtensionSkills } = await import("../src/daemon/extension-artifact-compiler.js");
 		const dir = await mkdtemp(path.join(tmpdir(), "ext-skills-"));

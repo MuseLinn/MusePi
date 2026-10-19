@@ -3,10 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createExtensionManagerTools } from "@musepi/pi-coding-agent/daemon/extension-lifecycle-tools";
-import {
-	createExtensionRuntimeTools,
-	RuntimeToolRegistry,
-} from "@musepi/pi-coding-agent/daemon/extension-runtime-tools";
+import { createExtensionRuntimeTools, RuntimeToolRegistry } from "@musepi/pi-coding-agent/daemon/plugin-runtime-tools";
 import {
 	EXTENSION_META_TOOL_NAMES,
 	isExtensionMetaToolName,

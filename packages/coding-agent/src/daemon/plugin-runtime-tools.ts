@@ -18,7 +18,7 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentToolResult, CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 import type { AgentSession } from "../session/agent-session";
-import { createSandbox, evaluateHostCode, precheckCode, type SandboxToolDefinition } from "./extension-sandbox";
+import { createSandbox, evaluateHostCode, precheckCode, type SandboxToolDefinition } from "./plugin-sandbox";
 
 /** 动态工具注册名前缀(与 isMCPToolName 同族约定)。 */
 export const DYNAMIC_TOOL_PREFIX = "extdyn__";

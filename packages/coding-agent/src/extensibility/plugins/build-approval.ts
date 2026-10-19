@@ -20,9 +20,9 @@
  * manifest; a failed install never revokes a granted approval (the grant is
  * written before the rollback snapshot is taken).
  *
- * This mirrors dsh's pnpm `allowBuilds` flow in shape, but bun never fails
- * the install for blocked scripts (pnpm exits non-zero with
- * `ERR_PNPM_IGNORED_BUILDS`) — hence detection is a post-install probe
+ * Approval is an allowlist the installer itself enforces, but bun does NOT
+ * fail the install for blocked scripts (unlike pnpm, which exits non-zero
+ * with `ERR_PNPM_IGNORED_BUILDS`) — hence detection is a post-install probe
  * rather than a failure classifier.
  */
 

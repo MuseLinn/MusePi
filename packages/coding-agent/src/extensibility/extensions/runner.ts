@@ -400,6 +400,35 @@ export type SwitchSessionHandler = (sessionPath: string) => Promise<{ cancelled:
 export type ShutdownHandler = () => void;
 
 /**
+ * Emit `session_start` for a freshly constructed session.
+ *
+ * The counterpart to {@link emitSessionShutdownEvent}, and the hook a plugin
+ * uses to capture the `ExtensionContext`: it is the FIRST place the session's
+ * full context (including `modelRegistry`) is reachable, before any turn runs.
+ *
+ * Why this had to be added: `SessionStartEvent` existed in the event union and
+ * `pi.on("session_start", …)` type-checked, but nothing ever dispatched it —
+ * `agent-session.ts` emitted only the in-turn events. A plugin that registered
+ * the handler simply never ran, which is a silent failure (no error, no log),
+ * so the gap was invisible until a feature depended on it.
+ *
+ * Emissions are ordered and isolated: one throwing handler must not stop the
+ * rest, and a failure is logged rather than failing session construction —
+ * starting a session must never depend on an extension behaving.
+ */
+export async function emitSessionStartEvent(extensionRunner: ExtensionRunner | undefined): Promise<boolean> {
+	if (!extensionRunner) return false;
+	if (!extensionRunner.hasHandlers("session_start")) return false;
+	try {
+		await extensionRunner.emit({ type: "session_start" });
+		return true;
+	} catch (error) {
+		logger.warn("Failed to emit session_start event", { error: String(error) });
+		return false;
+	}
+}
+
+/**
  * Emit `session_shutdown` and clear timers owned by an extension runner.
  *
  * Returns whether any shutdown handlers were present. Fallback disposal and timer
@@ -1123,7 +1152,12 @@ export class ExtensionRunner {
 			return { removedTools: [], errors: [] };
 		}
 		const oldExt = this.extensions[index]!;
-		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd);
+		// `fresh: true` — a reload MUST re-evaluate the entry module. Bun caches
+		// ESM by specifier and a cached copy never sees the new bytes, so the only
+		// way new code takes effect is a query-tagged import. The resulting new
+		// module instance is fine HERE (the old one is being replaced); a first
+		// load shares identity so plugin state is not split between loaders.
+		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd, undefined, { fresh: true });
 		const replacement = loadResult.extensions[0];
 		if (!replacement) {
 			// Failed load: keep the old instance untouched (no rollback needed —

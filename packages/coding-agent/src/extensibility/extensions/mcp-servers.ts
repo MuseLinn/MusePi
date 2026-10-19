@@ -1,6 +1,6 @@
 /**
- * Extension-owned MCP servers (`ctx.registerMcpServer`, dsh
- * one-plugin-per-server parity at session scope).
+ * Extension-owned MCP servers (`ctx.registerMcpServer`): one plugin
+ * contributes one server, and the registration is session-scoped.
  *
  * The runner never touches the `MCPManager` class: it talks to the session's
  * manager through {@link ExtensionMcpHost}, a structural seam the host fills

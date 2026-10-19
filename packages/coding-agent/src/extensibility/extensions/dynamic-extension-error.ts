@@ -13,7 +13,9 @@ export type DynamicExtensionLoadErrorCode =
 	| "factory-threw"
 	| "incompatible-version"
 	| "incompatible-peer"
-	| "malformed-manifest";
+	| "malformed-manifest"
+	/** 插件声明了本宿主不提供的服务依赖（inject 门）。 */
+	| "service-missing";
 
 export class DynamicExtensionLoadError extends Error {
 	constructor(

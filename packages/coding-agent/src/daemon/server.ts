@@ -116,7 +116,7 @@ import { ToolError } from "../tools/tool-errors";
 import { restore as gitRestore, worktree as gitWorktrees } from "../utils/git";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
-import type { CordisDynamicExtensionRuntime } from "./cordis-dynamic-extensions";
+import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
 import { resolveExtensionWatchRoots } from "./extension-watch-roots";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
@@ -590,10 +590,10 @@ export class DaemonServer {
 	 *  startDaemon 在开监听前 await）。见 settleHostServices。 */
 	readonly #hostServicesMounted: Promise<unknown>;
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性动态 import
-	 *  （cordis-dynamic-extensions 静态引 loader 会拉进 ../../index 大环，
+	 *  （cordis-dynamic-plugins 静态引 loader 会拉进 ../../index 大环，
 	 *  与 getExtensionRuntimeLoad 保持同一惰性口径）；组 fiber 挂在根
 	 *  Context 下，宿主拆卸随根 fiber 回收。 */
-	#dynamicExtensions?: Promise<CordisDynamicExtensionRuntime>;
+	#dynamicPlugins?: Promise<CordisDynamicPluginRuntime>;
 	/** Speech-model downloads currently running (keyed by model tier key).
 	 *  Guards against two windows (or a double-click race) starting parallel
 	 *  fetches into the same cache directory. */
@@ -649,18 +649,18 @@ export class DaemonServer {
 		// extension files keep the old path.
 		const { setExtensionRpcDispatcher } = await import("./extension-artifact-compiler");
 		setExtensionRpcDispatcher(async (entryPath, method, params, ctx) => {
-			const runtime = await this.#getDynamicExtensions().catch(() => null);
+			const runtime = await this.#getDynamicPlugins().catch(() => null);
 			if (runtime === null) return { found: false as const };
 			return runtime.invokeRpc(entryPath, method, params, ctx);
 		});
 	}
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性装配：首个
 	 *  session-less 装载请求到达时才动态 import 并挂到宿主根 Context。 */
-	#getDynamicExtensions(): Promise<CordisDynamicExtensionRuntime> {
-		this.#dynamicExtensions ??= import("./cordis-dynamic-extensions").then(
-			module => new module.CordisDynamicExtensionRuntime(this.#hostContext),
+	#getDynamicPlugins(): Promise<CordisDynamicPluginRuntime> {
+		this.#dynamicPlugins ??= import("./cordis-dynamic-plugins").then(
+			module => new module.CordisDynamicPluginRuntime(this.#hostContext),
 		);
-		return this.#dynamicExtensions;
+		return this.#dynamicPlugins;
 	}
 	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
 	 *  performance-report parity: profile spans two RPC calls so the GUI can
@@ -762,7 +762,7 @@ export class DaemonServer {
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
 				builtinRuntime: () => this.#hostContext.builtinInspect(),
-				dynamicRuntime: () => this.#getDynamicExtensions(),
+				dynamicRuntime: () => this.#getDynamicPlugins(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
 		);

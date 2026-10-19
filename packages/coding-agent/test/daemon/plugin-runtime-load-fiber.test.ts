@@ -20,7 +20,7 @@ import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { clearExtensionDesignSystems } from "@musepi/pi-coding-agent/presets/design-systems";
 import { getProjectAgentDir } from "@musepi/pi-utils";
-import { CordisDynamicExtensionRuntime } from "../../src/daemon/cordis-dynamic-extensions";
+import { CordisDynamicPluginRuntime } from "../../src/daemon/cordis-dynamic-plugins";
 import { DaemonHostContext } from "../../src/daemon/host-context";
 import { DesignSystemsService } from "../../src/daemon/services/design-systems-service";
 import { ExtensionService } from "../../src/daemon/services/extension-service";
@@ -35,7 +35,7 @@ describe("getExtensionRuntimeLoad cordis fiber 接线（收编第二刀）", () 
 	let fixturePath: string;
 	let fixtureSourceId = "";
 	let host: DaemonHostContext;
-	let dynamic: CordisDynamicExtensionRuntime;
+	let dynamic: CordisDynamicPluginRuntime;
 	let extService: ExtensionService;
 	let dsService: DesignSystemsService;
 
@@ -61,7 +61,7 @@ export default function (pi) {
 `,
 		);
 		host = new DaemonHostContext();
-		dynamic = new CordisDynamicExtensionRuntime(host);
+		dynamic = new CordisDynamicPluginRuntime(host);
 		const settings = Settings.isolated();
 		extService = new ExtensionService({
 			settings: () => settings,
@@ -84,6 +84,9 @@ export default function (pi) {
 		await restoreAgentDirForTest(agentDir);
 	}, 30_000);
 
+	// The first runtime load boots every discovered plugin (the real
+	// `~/.musepi/plugins` tree is in scope under ambient discovery), which is
+	// seconds of module work — the 5s default is not enough for a cold cache.
 	it("fiber 路径装载：设计体系经宿主重放可见（与直接装载同形状）", async () => {
 		const { systems } = await dsService.listDesignSystems();
 		const row = systems.find(s => s.id === FIXTURE_ID);
@@ -98,7 +101,7 @@ export default function (pi) {
 		// fiber 装载的在役扩展同样进入 extensions 聚合面。
 		expect(load.errors).toEqual([]);
 		expect(load.extensions.length).toBeGreaterThan(0);
-	});
+	}, 60_000);
 
 	it("TTL 重入不重复登记：连续两次 list 不抛冲突、列表去重", async () => {
 		const first = await dsService.listDesignSystems();

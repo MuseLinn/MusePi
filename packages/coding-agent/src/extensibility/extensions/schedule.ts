@@ -4,16 +4,16 @@
  * This is the lightweight sibling of the daemon cron store (`daemon/crons.ts`,
  * durable across restarts, runs prompts in fresh sessions): schedules live
  * and die with the owning session, need no daemon, and deliver into the
- * session itself as a follow-up user turn — the shape dsh's `ctx.schedule`
- * established. Calendar-grade recurrence (daily/weekly/cron/timezone) stays
- * with daemon cron; this covers one-shots (`afterSeconds`/`at`) and fixed
- * intervals (`everySeconds`).
+ * session itself as a follow-up user turn. Calendar-grade recurrence
+ * (daily/weekly/cron/timezone) stays with daemon cron; this covers one-shots
+ * (`afterSeconds`/`at`) and fixed intervals (`everySeconds`).
  *
  * The driver is owned by the extension runner: a 1s managed timer calls
  * {@link ExtensionScheduler.drive}, which fires due records through the
  * supplied `deliver` (the runner's `sendUserMessage` with
  * `deliverAs: "followUp"`). One-shot records are consumed on fire; recurring
- * ones advance to the next slot past now (latest-missed-only, like dsh).
+ * ones advance to the next slot past now, so downtime collapses to a single
+ * delivery instead of a backlog.
  * A delivery throw keeps the record due and moves on to the rest.
  */
 
