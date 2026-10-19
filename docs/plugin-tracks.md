@@ -163,12 +163,15 @@ accepted/declined 反向传播（externals 不重载）。这里以**插件自�
 
 ### 未完成（已知债，不阻塞）
 
-- [ ] `daemon/` 下剩余 `extension-*` 的逐一定性（`extension-lifecycle-tools.ts`
-      已确认归 Track B；`extension-service` / `-artifact-compiler` / `-watch-roots`
-      是两轨共用）
-- [ ] `plugins/` 内 `dsh-*` 系列与 cordis 机制系列的边界文档
-- [ ] Track B 为何没有 `effect` / `state`：它没有 fiber 可挂，给了反而是谎言。
-      **这个边界应写进 `extensions-dev.md`，目前只在类型注释里**
+- [x] `plugins/` 内 `dsh-*` 系列与 cordis 机制系列的边界文档 →
+      `extensibility/plugins/README.md`（分组规则 + `dsh/` 命名说明，中英双语）
+- [x] Track B 为何没有 `effect` / `state` → `extensions-dev.md` §18：
+      两者都需要 fiber 才能成立，legacy 侧没有可挂的生命周期对象，
+      发一个不会触发回收的 `effect` 就是静默泄漏
+- [ ] `daemon/` 下剩余 `extension-*` 的逐一定性：`extension-lifecycle-tools.ts`
+      是 Track B（会话级 extension_* 工具集），`extension-service` /
+      `-artifact-compiler` / `-watch-roots` 是两轨共用。**归轨尚未逐文件写进头部注释**——
+      读文件时仍要先自行判断，这是下一个人最容易走错的一处
 - [ ] `provide` 的真实消费者：机制已通且有测试覆盖，但除 auth-hub 自己外还没有
       第二个插件实际 `inject` 它——属于「未被真实使用验证」而非「未实现」
 
