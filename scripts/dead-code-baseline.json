@@ -301,6 +301,6 @@
 	"types packages/tui/test/render-stress-harness.ts StressEnvSnapshot",
 	"types packages/tui/test/render-stress-harness.ts StressScenarioSuccess",
 	"types packages/utils/test/fixtures/logger-cache-snapshot.ts CacheFamily",
-	"unlisted packages/coding-agent/src/extensibility/plugins/legacy-pi-compat.ts omp-legacy-pi-modules",
+	"unlisted packages/coding-agent/src/extensibility/plugins/compat/legacy-pi-compat.ts omp-legacy-pi-modules",
 	"unlisted packages/harmony/hvigorfile.ts @ohos/hvigor-ohos-plugin"
 ]
