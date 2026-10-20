@@ -129,6 +129,9 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--btn-bg);
   border: 1px solid var(--btn-bd);
   border-radius: var(--radius-sm);
+  /* A button label is one phrase: it wraps inside the button and the button
+     grows a second line, which stretched the mobile topbar. */
+  white-space: nowrap;
   box-shadow: inset 0 1px 0 var(--line-inner);
   transition: transform 180ms var(--spring), box-shadow 200ms var(--ease),
     background 200ms var(--ease), border-color 200ms var(--ease), opacity 200ms ease;
@@ -308,7 +311,15 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: 999px;
+  /* The badge is one line on a wide screen. On a narrow one the platform list
+     is the long part, and without wrapping the flex row squeezed the text
+     until individual words broke mid-character. */
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
+
+/* The platform list is a single phrase — it must not break inside a name. */
+.mp-badge-platforms { white-space: nowrap; }
 .mp-badge-sep { width: 1px; height: 12px; background: var(--line-strong); }
 .mp-pulse {
   width: 8px; height: 8px; border-radius: 50%;
@@ -775,6 +786,13 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   .mp-cta-band-inner { flex-direction: column; align-items: flex-start; }
   .mp-log-item { flex-direction: column; gap: 10px; align-items: flex-start; }
   .mp-footer-bottom { flex-direction: column; gap: 6px; }
+
+  /* The topbar carried four controls (language, GitHub, CTA, menu) and
+     overflowed the viewport by 22px at 390px wide. The repository link is
+     reachable from the menu and the footer, so it is the one that goes. */
+  .mp-topbar-gh { display: none; }
+  .mp-topbar-actions { gap: 8px; }
+  .mp-topbar-actions .mp-btn { padding: 9px 14px; font-size: 14px; }
 }
 
 @media (max-width: 420px) {
@@ -782,6 +800,14 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   .mp-cta-row { flex-direction: column; align-items: stretch; }
   .mp-cta-row .mp-btn { width: 100%; }
   .mp-cta-row .mp-dl { width: 100%; }
+
+  /* At 360px the topbar still overflowed by 25px. The brand word is the
+     largest removable piece — the mark alone identifies the product, and the
+     full word sits in the page title and the footer. */
+  .mp-brand-word { display: none; }
+  .mp-lang-opt { padding: 4px 8px; }
+  .mp-topbar-actions { gap: 6px; }
+  .mp-topbar-actions .mp-btn { padding: 9px 11px; font-size: 13.5px; }
 }
 
 /* ===== 尊重减少动效 ===== */

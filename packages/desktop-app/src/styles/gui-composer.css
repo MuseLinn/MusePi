@@ -195,6 +195,12 @@
 	padding: 6px 2px;
 	max-height: 176px;
 	transition: height 160ms ease;
+	/* Per-line direction: each line takes the direction of its first strong
+	 * character, so a line mixing Chinese and Latin (or Arabic) reads
+	 * correctly. The box itself keeps the app's direction — with dir=auto on
+	 * the box, the caret and the selection would flip with the first
+	 * character of the draft. */
+	unicode-bidi: plaintext;
 }
 
 .gui-composer textarea::placeholder {
@@ -2560,6 +2566,10 @@ button.gui-stats-pill {
 	white-space: pre-wrap;
 	word-break: break-word;
 	color: var(--color-text);
+	/* Must match the textarea's rule exactly: the overlay paints the same text
+	 * over the textarea, so a different bidi resolution would put the
+	 * highlights at the wrong offsets. */
+	unicode-bidi: plaintext;
 }
 
 /* Session composer variant — MUST equal `.gui-composer textarea`

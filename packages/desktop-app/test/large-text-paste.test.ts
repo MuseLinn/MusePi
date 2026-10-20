@@ -82,18 +82,18 @@ describe("large paste gesture", () => {
 		gesture.beginPaste(BIG, snapshot("", 0));
 		gesture.change(snapshot(BIG, BIG.length));
 		const candidate = gesture.beginPaste(BIG, snapshot(BIG, BIG.length), Date.now() + 100);
-		let replaced: { from: number; to: number; citation: string } | null = null;
+		const replaced: Array<{ from: number; to: number; citation: string }> = [];
 		const ok = await gesture.convert(
 			candidate!,
 			async () => true,
 			() => snapshot(BIG, BIG.length),
 			(from, to, citation) => {
-				replaced = { from, to, citation };
+				replaced.push({ from, to, citation });
 			},
 			"[附件]",
 		);
 		expect(ok).toBe(true);
-		expect(replaced).toEqual({ from: 0, to: BIG.length, citation: "[附件]" });
+		expect(replaced).toEqual([{ from: 0, to: BIG.length, citation: "[附件]" }]);
 	});
 
 	it("leaves the text alone when the attachment could not be made", async () => {
