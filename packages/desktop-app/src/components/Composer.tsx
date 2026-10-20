@@ -92,6 +92,7 @@ import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
+import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModes } from "./composer/use-modes";
 import { useSessionDesignSystem } from "./composer/use-session-design-system";
@@ -367,6 +368,11 @@ export function Composer({
 		[sketch.editId, closeSketch, setAttachments, addFiles],
 	);
 	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
+	// The large-paste gesture: the first big paste lands inline, a second
+	// identical one inside the window turns it into an attachment. It lives for
+	// the composer's lifetime, and the pending long-paste dialog is the
+	// explicit version of the same choice.
+	const largePasteGesture = useRef(new LargeTextPasteGesture()).current;
 
 	// Trailing "+" card in the attachment row (composer-frame): opens the
 	// all-types picker directly, skipping the attach menu.
@@ -2474,15 +2480,64 @@ export function Composer({
 							onPaste(e);
 							if (e.defaultPrevented) return;
 							const pastedText = e.clipboardData.getData("text");
-							if (isLongPastedText(pastedText)) {
+							if (!isLongPastedText(pastedText)) {
+								largePasteGesture.invalidate();
+								return;
+							}
+							// The first large paste lands normally — the user sees what
+							// they pasted. Pasting the SAME text again within a second
+							// is the signal that inline was not wanted: it becomes an
+							// attachment and the inline copy is replaced by a citation.
+							const ta = taRef.current;
+							if (!ta) return;
+							const candidate = largePasteGesture.beginPaste(pastedText, {
+								value: ta.value,
+								selectionStart: ta.selectionStart ?? ta.value.length,
+								selectionEnd: ta.selectionEnd ?? ta.value.length,
+							});
+							if (candidate) {
 								e.preventDefault();
-								requestLongPaste(pastedText);
+								void largePasteGesture.convert(
+									candidate,
+									async () => {
+										const file = new File([candidate.clipboardText], `paste-${Date.now()}.md`, {
+											type: "text/markdown",
+										});
+										await addFiles([file]);
+										return true;
+									},
+									() => {
+										const el = taRef.current;
+										if (!el) return null;
+										return {
+											value: el.value,
+											selectionStart: el.selectionStart ?? el.value.length,
+											selectionEnd: el.selectionEnd ?? el.value.length,
+										};
+									},
+									(from, to, citation) => {
+										const el = taRef.current;
+										if (!el) return;
+										el.setRangeText(citation, from, to, "end");
+										el.dispatchEvent(new Event("input", { bubbles: true }));
+									},
+									"[附件]",
+								);
 							}
 						}}
 						onDragOver={onDragOver}
 						onDrop={onDrop}
 						onChange={e => {
 							setText(e.target.value);
+							// The large-paste gesture needs to see the text AFTER the
+							// browser inserted it: the insertion is the first half of
+							// the gesture, and knowing where it landed is what lets the
+							// second paste of the same text replace it.
+							largePasteGesture.change({
+								value: e.target.value,
+								selectionStart: e.target.selectionStart ?? e.target.value.length,
+								selectionEnd: e.target.selectionEnd ?? e.target.value.length,
+							});
 							// A genuine keystroke that edits the box exits input-history
 							// browsing (programmatic history recall sets state, never
 							// fires onChange — so browse stays until the user edits).
