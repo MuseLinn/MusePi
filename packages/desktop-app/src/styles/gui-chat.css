@@ -652,6 +652,54 @@ body.gui-resizing .gui-pane-resize-x::after {
 	position: relative;
 }
 
+/* ── Floating composer (openchamber parity) ─────────────────────────────
+ * The composer leaves the document flow and sits over the transcript, so a
+ * row can scroll UNDER it and the glass reads as floating rather than as the
+ * floor of a box. The scroller keeps `flex: 1` and therefore fills the whole
+ * body — which is only safe because the list reserves a tail band of exactly
+ * this composer's height (`--chat-composer-inset`, written by the
+ * ResizeObserver in ChatView) plus whatever docks above it.
+ *
+ * Focus mode keeps the in-flow variant: there the composer IS the surface,
+ * and the morph animation measures its parent to grow into. */
+.gui-composer-wrap--floating {
+	position: absolute;
+	inset-inline: 0;
+	bottom: 0;
+	z-index: 5;
+	pointer-events: none;
+}
+
+/* The wrap is a positioning shell; its children take the pointer back. A
+ * transparent shell must never eat clicks meant for the transcript behind it
+ * (the composer's own card, dock and chips do opt in below). */
+.gui-composer-wrap--floating > * {
+	pointer-events: auto;
+}
+
+/* Dock layer: what floats ABOVE the composer (approvals, asks, jump-back).
+ * It is opaque to clicks as a column but the empty stretch above a short dock
+ * must not block the transcript. */
+.gui-composer-dock-layer {
+	pointer-events: none;
+}
+.gui-composer-dock-layer > * {
+	pointer-events: auto;
+}
+
+/* ── End fade: rows thin out under the composer's glass ────────────────
+ * Static CSS mask, no animation timeline. At rest the fade runs from the
+ * composer's top edge to the scroller's end, so rows slide under the glass.
+ * While a live reply streams AND the view follows it (`data-live-tail`), the
+ * fade band is pulled up so the newest line is fully transparent at the
+ * composer's edge instead of being cut in half by it. */
+.gui-transcript {
+	--chat-tail-fade: 32px;
+}
+.gui-chat-body[data-live-tail="true"] .gui-transcript {
+	--chat-tail-fade: 64px;
+}
+
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
 /* The transcript column hides via visibility (NOT display:none): a
  * display removal would collapse it out of the flex column, the composer

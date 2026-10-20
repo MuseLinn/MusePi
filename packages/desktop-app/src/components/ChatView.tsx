@@ -2260,6 +2260,36 @@ export function ChatView({
 	// competing 280ms curves fighting every frame (the frame-rate collapse).
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
 	const wrapMorphVer = useRef(0);
+
+	/**
+	 * Publish the floating composer's measured height as `--chat-composer-inset`
+	 * on the chat body.
+	 *
+	 * The composer floats over the transcript, so the list needs to reserve the
+	 * band it covers — otherwise the last line sits under it. The height is
+	 * written as a CSS variable rather than passed as a prop because the value
+	 * changes without any React state change we want to schedule: a growing
+	 * textarea, a queue row appearing, an attachment chip wrapping. An observer
+	 * writing a variable resizes the footer spacer without re-rendering the
+	 * list (the reference implementation's composerInsetReaders).
+	 *
+	 * Everything that docks above the input (approvals, asks, the jump-back
+	 * dock, the session-tree nav) is a CHILD of this wrap, so its height is
+	 * already in the measurement — one observer covers the whole floating
+	 * stack and the spacer needs no second variable.
+	 */
+	useEffect(() => {
+		const body = chatBodyRef.current;
+		const wrap = composerWrapRef.current;
+		if (!body || !wrap || typeof ResizeObserver === "undefined") return;
+		const publish = (): void => {
+			body.style.setProperty("--chat-composer-inset", `${Math.round(wrap.getBoundingClientRect().height)}px`);
+		};
+		publish();
+		const observer = new ResizeObserver(publish);
+		observer.observe(wrap);
+		return () => observer.disconnect();
+	}, []);
 	// Pre-toggle wrap top, captured during render (the DOM still shows the
 	// previous commit's layout). The morph animates translateY against it:
 	// the morph-window layout seats the wrap at its STEADY-STATE top, so a
@@ -2416,6 +2446,13 @@ export function ChatView({
 												? "gui-chat-body--focused-hidden"
 												: "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
 										}
+										/* A live reply the view follows: the end fade deepens
+										 * (see --chat-tail-fade, gui-chat.css) so the newest line
+										 * is fully transparent where the floating composer meets
+										 * it instead of being cut in half. At rest and while
+										 * reading history the rows slide under the glass, which
+										 * is what makes it read as floating. */
+										data-live-tail={snap?.working ? "true" : undefined}
 									>
 										{paused === true && (
 											<div className="gui-pause-banner" role="status" aria-live="polite">
@@ -2783,6 +2820,23 @@ export function ChatView({
 															</button>
 														</div>
 													)}
+													{/* Tail spacer. The composer floats over this
+													 * scroller, so without a reserved band the last
+													 * row would sit under it. The height is a CSS
+													 * variable the composer's ResizeObserver writes
+													 * (see the --chat-composer-inset effect), so a
+													 * growing textarea or a queue row resizes the
+													 * footer without re-rendering the list.
+													 * The band is exactly the floating stack's height,
+													 * because every dock (approvals, asks, jump-back,
+													 * session-tree nav) is a child of the wrap. */}
+													<div
+														className="gui-chat-tail-spacer flex-shrink-0"
+														style={{
+															height: "calc(var(--chat-composer-inset, 0px) + 16px)",
+														}}
+														aria-hidden="true"
+													/>
 												</>
 											)}
 										</div>
@@ -2826,7 +2880,7 @@ export function ChatView({
 										className={
 											focusMode
 												? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
-												: "gui-composer-wrap flex flex-shrink-0 flex-col px-5 pb-3"
+												: "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-3"
 										}
 									>
 										{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):

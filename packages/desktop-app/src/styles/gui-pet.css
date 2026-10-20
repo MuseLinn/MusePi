@@ -740,9 +740,13 @@
 	left:12px;
 	right:12px;
 }
+/* The end fade's length comes from `--chat-tail-fade` (gui-chat.css). With the
+ * floating composer the fade has to be tall enough for rows to thin out under
+ * the glass instead of stopping dead at its top edge; the base 32px is what a
+ * normal scroll shadow wants, so the variable defaults to that. */
 .gui-transcript[data-bottom-scroll=true]:not([data-top-scroll=true])
 {
-	mask-image:linear-gradient(0deg,#0000 0,#000 32px);
+	mask-image:linear-gradient(0deg,#0000 0,#000 var(--chat-tail-fade, 32px));
 }
 .gui-transcript[data-top-scroll=true]:not([data-bottom-scroll=true])
 {
@@ -750,7 +754,7 @@
 }
 .gui-transcript[data-top-scroll=true][data-bottom-scroll=true]
 {
-	mask-image:linear-gradient(#0000 0,#000 24px calc(100% - 32px),#0000 100%);
+	mask-image:linear-gradient(#0000 0,#000 24px calc(100% - var(--chat-tail-fade, 32px)),#0000 100%);
 }
 .gui-turn-rail--pacman[data-side=left] .gui-turn-tick--active .gui-turn-tick-bar
 {

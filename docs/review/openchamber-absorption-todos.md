@@ -80,6 +80,36 @@ fit 永不放大（16px 图标保持原大小），缩放跟随指针，放大�
   纯算术放在 `client-core` 是为了能在无 DOM 的测试环境里验证 —— 面板里的
   缩放手势本身需要浏览器，那里由 GUI 的手动验证覆盖。
 
+## 已落地（2026-10-20，悬浮 composer 布局模型）
+
+吸收 openchamber `ChatContainer.tsx` 的**布局模型**（不是材质）——此前我们的
+composer 是 flex 兄弟，滚动区在它上方就结束，内容**物理上不可能**走到 composer
+背后，所以只能是"贴底的块"而不是"浮在玻璃上的卡片"。
+
+- **流内 → 绝对定位** — `.gui-composer-wrap--floating`（`gui-chat.css`）：
+  `position: absolute; inset-inline: 0; bottom: 0`。scroller 因此天然铺满整列。
+- **点击穿透** — 浮动壳是整列宽的空盒子，`pointer-events: none`；壳的子元素
+  （composer 卡、dock、chip）`pointer-events: auto` 各自取回。不做这条，整个
+  下半栏对选择/滚动失活。
+- **尾 spacer** — scroller 内一个高度为
+  `calc(var(--chat-composer-inset, 0px) + 16px)` 的空 div；变量由 `ChatView`
+  里 composer wrap 的 `ResizeObserver` 实测写入。用变量而非 prop 是因为高度在
+  **没有值得调度的 React 状态变化**时会变（textarea 长高、队列行出现、附件换行）
+  —— observer 写变量，列表不重渲染就重排了 footer。
+- **审批/ask/jump-back/session-tree nav 全部是 wrap 的子元素**，所以那一个
+  observer 已经覆盖整个浮动栈，spacer 不需要第二个变量。（这也顺手修掉了
+  「每次审批弹出都挤压一次 transcript」——现在 dock 浮着，不参与流。）
+- **`data-live-tail` 羽化** — 挂在 `.gui-chat-body`，`working` 时置 `"true"`。
+  `--chat-tail-fade` 默认 32px、live 时 64px；`gui-pet.css` 里三条 transcript
+  scroll-shadow 规则从硬编码 32px 改成消费该变量，末端羽化才跟着变深。
+- **焦点模式保留流内变体**（`.gui-composer-wrap--bottom-anchor`）：那里
+  composer 就是整个面，且 morph 动画靠测父元素高度长进去，改绝对定位会撞车。
+
+**测试** — `test/floating-composer.test.ts` 4 例，用 happy-dom 挂真样式表后读
+`getComputedStyle`：绝对定位与 bottom 锚定、壳点击穿透而卡片取回、静止/流式
+两档 `--chat-tail-fade`、以及 `--chat-composer-inset` 的发布值。**不读 CSS 文本**
+（仓库禁 source-grep 测试——那种断言会因无害重排而失败，且规则被别处覆盖时照样过）。
+
 ## 已落地（2026-10-20，markdown 本地导航 + 表格预览收尾）
 
 吸收 openchamber `useMarkdownLocalAssets.ts`（205 行）与 `TableArtifact.tsx`
@@ -121,7 +151,7 @@ text viewer 之前** —— 宿主对 tsv 常报 `text/plain`，不抢先就退�
 | 9   | git 按 hunk 暂存/丢弃             | 未动     | `git.stage` = `git add -- <paths>`（`server.ts:2516-2540`），无 `git.apply`/`git.discard`/hunk 参数；`git-panel.tsx` 只传 `{paths}`                             |
 | 10  | 后台任务实时日志 + detach         | 未动     | `ContextPanel.tsx:1514-1540` 5s 轮询 + 只有 cancel；无流式日志、无 detach RPC                                                                                   |
 | 11  | 文件预览 audio/video/字体/mermaid | **已落地** | 2026-10-20：三个新 viewer（media / font / mermaid）进 `builtin-file-viewers.ts`，渲染在 `FilePanePreviews.tsx`，映射经 `preview-from-viewer.ts`；详见下方「已落地（2026-10-20）」小节 |
-| 12  | 悬浮磨砂 composer + 羽化          | 未动     | 布局模型未动：composer 仍是 flex 兄弟（`ChatView.tsx:2741-2775`），`--chat-composer-inset`/`data-live-tail` 全仓零命中                                          |
+| 12  | 悬浮磨砂 composer + 羽化          | **已落地** | 2026-10-20：布局模型已改（`ChatView.tsx` + `gui-chat.css`）——composer 绝对浮底、scroller 铺满、尾 spacer 由实测 CSS 变量驱动、`data-live-tail` 加深末端羽化。见下方小节。磨砂材质本身仍走既有 `gui-float-card` |
 | 13  | 引用悬浮面板                      | 未动     | `quote-cards.tsx` 仍 27 行、`quotes: string[]`、12px X；发出时仍拍平成 `> ` 纯文本                                                                              |
 | 14  | 滚动条交互打磨 5 点               | 已落地   | 2026-10-05 重写 `FloatingScrollbar.tsx`（见 gui-implementation §28b）：measure/position 拆分后热路径零布局读只写 transform、单 last-scrolled 实例换成按容器 keyed 的 6 槽轨池、程序化滚动按意图闸抑制（滚轮/触摸/滚动按键/悬停才点亮）、双轴比例 thumb（pacman 的已吃豆串改 `scaleY`）、always-show 开关进外观页；契约测试 `test/floating-scrollbar.test.tsx` 16 例 |
 | 15  | 「In work」会话分区               | 未动     | 侧栏仍只有 pinned/projects/archived/cron，无第四轴                                                                                                              |
