@@ -9,6 +9,7 @@ export const composer = {
 	"composer.workingActive": "工作中",
 	"composer.stopTurn": "停止",
 	"composer.stopCurrentTurn": "停止当前回合",
+	"composer.queueForNextTurn": "排到下一回合",
 	"composer.compactContext": "压缩上下文",
 	"composer.compacting": "压缩中…",
 	"composer.stopCompaction": "停止压缩",

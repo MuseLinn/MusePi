@@ -11,6 +11,7 @@ export const composer = {
 	"composer.workingActive": "Working",
 	"composer.stopTurn": "Stop",
 	"composer.stopCurrentTurn": "Stop the current turn",
+	"composer.queueForNextTurn": "composer.queueForNextTurn",
 	"composer.compactContext": "Compact context",
 	"composer.compacting": "Compacting…",
 	"composer.stopCompaction": "Stop compaction",

@@ -1352,7 +1352,7 @@ export function Composer({
 	);
 
 	const send = useCallback(
-		(accelerated = false): void => {
+		(accelerated = false, forceQueue = false): void => {
 			const trimmed = text.trim();
 			if (!trimmed && quotes.length === 0 && attachments.length === 0) return;
 			// GUI-native /usage: show the structured quota panel instead of
@@ -1431,7 +1431,11 @@ export function Composer({
 			//    steer covers the race).
 			//  - "/queue <msg>" / "=> <msg>" → followUp explicitly.
 			let payload = trimmed;
-			const effectiveBusy = accelerated ? (busyEnter === "queue" ? "steer" : "queue") : busyEnter;
+			// `forceQueue` is the explicit queue button: it queues the message for
+			// after the current turn, whatever the busyEnter setting says. The
+			// setting decides what a plain Enter does; the button states the
+			// intent outright.
+			const effectiveBusy = forceQueue ? "queue" : accelerated ? (busyEnter === "queue" ? "steer" : "queue") : busyEnter;
 			let delivery: "steer" | "followUp" | undefined = working
 				? effectiveBusy === "queue"
 					? "followUp"
@@ -2319,7 +2323,9 @@ export function Composer({
 							canSend={canSend}
 							busy={enhance === "enhancing"}
 							working={working}
+							hasContent={text.trim().length > 0 || quotes.length > 0 || attachments.length > 0}
 							onPress={() => send()}
+							onQueue={() => send(false, true)}
 							onStop={() => {
 								tapFeedback(2);
 								onStop();

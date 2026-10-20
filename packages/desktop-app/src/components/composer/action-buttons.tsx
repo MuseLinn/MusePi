@@ -1,5 +1,5 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
-import { SendHorizontal, Square, WandSparkles } from "lucide-react";
+import { ListPlus, SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -249,19 +249,33 @@ function MatrixLoader({ className }: { className?: string }): ReactNode {
 /** 三合一 send control (user direction, opendesign parity): idle renders the
  *  plain send button; while the agent works the SAME button becomes the live
  *  state display — a capsule with the dot-matrix bloom + a morphing label
- *  ("工作中" at rest, "停止" on hover/focus). Click aborts the turn. */
+ *  ("工作中" at rest, "停止" on hover/focus). Click aborts the turn.
+ *
+ *  While the agent works AND the draft has content, a SECOND button appears
+ *  beside it: queueing the message for after the turn instead of steering the
+ *  running one. The capability already existed (settings.busyEnter chooses
+ *  between steering and queueing on Enter) but was invisible — a user who did
+ *  not know the setting could not discover it, and a message that steers the
+ *  agent mid-turn is not always what someone typing during a long run wants.
+ *  openchamber shows the same two actions side by side. */
 export function SendOrStopButton({
 	canSend,
 	busy,
 	working,
+	hasContent,
 	onPress,
 	onStop,
+	onQueue,
 }: {
 	canSend: boolean;
 	busy: boolean;
 	working: boolean;
+	/** Whether the draft holds anything to send. */
+	hasContent: boolean;
 	onPress(): void;
 	onStop(): void;
+	/** Queue the draft for after the current turn. */
+	onQueue?(): void;
 }): ReactNode {
 	// Hover/focus drives the label morph (工作中 ↔ 停止) so the swap reads as
 	// a rolling text transition instead of a hard visibility toggle.
@@ -281,30 +295,43 @@ export function SendOrStopButton({
 		);
 	}
 	return (
-		<button
-			type="button"
-			className="gui-composer-send gui-composer-send--working"
-			onClick={onStop}
-			onMouseEnter={() => setInteracting(true)}
-			onMouseLeave={() => setInteracting(false)}
-			onFocus={() => setInteracting(true)}
-			onBlur={() => setInteracting(false)}
-			title={t("composer.stopCurrentTurn")}
-			aria-label={t("composer.stopCurrentTurn")}
-		>
-			<span className="gui-send-work">
-				<MatrixLoader className="gui-send-matrix" />
-				<span className="gui-send-labels">
-					{/* Invisible widest label reserves constant pill width across the
-					 * morph (工作中 is longer than 停止), so the button never
-					 * nudges the composer on hover. */}
-					<span aria-hidden className="gui-send-label gui-send-label--sizer">
-						{t("composer.workingActive")}
+		<>
+			{onQueue && hasContent && (
+				<button
+					type="button"
+					className="gui-composer-queue"
+					onClick={onQueue}
+					title={t("composer.queueForNextTurn")}
+					aria-label={t("composer.queueForNextTurn")}
+				>
+					<ListPlus size={14} />
+				</button>
+			)}
+			<button
+				type="button"
+				className="gui-composer-send gui-composer-send--working"
+				onClick={onStop}
+				onMouseEnter={() => setInteracting(true)}
+				onMouseLeave={() => setInteracting(false)}
+				onFocus={() => setInteracting(true)}
+				onBlur={() => setInteracting(false)}
+				title={t("composer.stopCurrentTurn")}
+				aria-label={t("composer.stopCurrentTurn")}
+			>
+				<span className="gui-send-work">
+					<MatrixLoader className="gui-send-matrix" />
+					<span className="gui-send-labels">
+						{/* Invisible widest label reserves constant pill width across the
+						 * morph (工作中 is longer than 停止), so the button never
+						 * nudges the composer on hover. */}
+						<span aria-hidden className="gui-send-label gui-send-label--sizer">
+							{t("composer.workingActive")}
+						</span>
+						<TextMorph text={interacting ? t("composer.stopTurn") : t("composer.workingActive")} className="gui-send-morph" />
 					</span>
-					<TextMorph text={interacting ? t("composer.stopTurn") : t("composer.workingActive")} className="gui-send-morph" />
 				</span>
-			</span>
-		</button>
+			</button>
+		</>
 	);
 }
 

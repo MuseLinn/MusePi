@@ -981,6 +981,32 @@ button.gui-stats-pill {
 	cursor: default;
 }
 
+/* Queue button: appears beside the stop button while the agent works and the
+ * draft holds something. It states the intent outright — queue the message for
+ * after the turn — where the busyEnter setting only decides what Enter does. */
+.gui-composer-queue {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: color 150ms ease-out, border-color 150ms ease-out, transform 120ms ease-out;
+}
+
+.gui-composer-queue:hover {
+	color: var(--color-text);
+	border-color: var(--color-text-muted);
+}
+
+.gui-composer-queue:active {
+	transform: scale(0.96);
+}
+
 /* 三合一 send control (working state, opendesign capsule parity):
  * expands into a pill showing the dot-matrix bloom + a two-label grid
  * (工作中 / 停止). Hover/focus swaps visibility so the button size
