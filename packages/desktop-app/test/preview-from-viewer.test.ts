@@ -71,4 +71,24 @@ describe("previewMappingFor", () => {
 		const sheets = [{ name: "S", html: "<table>", truncated: false }];
 		expect(previewMappingFor({ kind: "sheets", sheets }).fields).toEqual({ officeSheets: sheets });
 	});
+
+	test("a media result carries the element kind and its url", () => {
+		// The pane has to know whether to mount an <audio> or a <video>; the
+		// url alone would leave it guessing from the file name.
+		expect(previewMappingFor({ kind: "media", media: "video", blobUrl: "blob:2" }).fields).toEqual({
+			media: { kind: "video", url: "blob:2" },
+		});
+	});
+
+	test("a font result carries only the url", () => {
+		expect(previewMappingFor({ kind: "font", blobUrl: "blob:3", mime: "font/ttf" }).fields).toEqual({
+			fontUrl: "blob:3",
+		});
+	});
+
+	test("a mermaid result carries the diagram source", () => {
+		expect(previewMappingFor({ kind: "mermaid", source: "graph TD; A-->B;" }).fields).toEqual({
+			mermaidSource: "graph TD; A-->B;",
+		});
+	});
 });

@@ -6227,5 +6227,8 @@ export const settings = {
 	"knowledge call failed": "knowledge call failed",
 	"knowledge plan opened": "knowledge plan opened",
 	"knowledge open in panel": "knowledge open in panel",
+	"settings.previewMediaUnplayable": "settings.previewMediaUnplayable",
+	"settings.previewFontLoadFailed": "settings.previewFontLoadFailed",
+	"settings.previewFontSample": "settings.previewFontSample",
 
 } as const satisfies Record<SettingsKey, string>;

@@ -28,6 +28,33 @@
 见 `gui-implementation.md` §45 / `gui-design.md` §5x：⌘F 会话内查找、归档撤销 toast、
 命令面板增量（Reload UI / 粘贴 session id 精确命中 / 记住 query）。
 
+## 已落地（2026-10-20，文件预览三类）
+
+吸收 openchamber `packages/ui/src/components/views/files/previews/` 的 media /
+font / mermaid 三类文件预览，落在我们自己的 viewer 注册表上（对方没有这个注册表，
+`ArtifactMetaBar` 在 `FilePane` 外自行挂载）：
+
+- **`desktop-app/src/lib/builtin-file-viewers.ts`** — `mediaViewer()` /
+  `fontViewer()` / `mermaidViewer()` 三个新 viewer。mermaid viewer **排在 text viewer
+  之前**：`.mmd` 被宿主识别为 `text/plain`，若不抢先就永远退化成源码预览。
+  media 的 audio/video 判定以 mime 为准、扩展名兜底（`.mkv` 报 `video/mp4`
+  时按 video 走）；font 只认 `font/*` mime 与四个扩展名。
+- **`desktop-app/src/components/FilePanePreviews.tsx`** — `MediaPreview`（原生
+  `<audio>/<video>`，`onError` 转「无法播放」文案而非死播放器；视频头部显示
+  `m:ss` 与 `宽 × 高`）、`FontPreview`（`FontFace` 注册一次性 family，
+  `document.fonts.delete` 卸载；五档字号取样 + 三行字形表）、`MermaidPreview`
+  （复用 `client-core` 的 `renderMermaidHtml`，与对话内 mermaid 同一个渲染器）。
+- **`desktop-app/src/lib/preview-from-viewer.ts`** + `FilePane.tsx` 的
+  `PreviewState` 各自新增 `media` / `fontUrl` / `mermaidSource` 字段；blob URL
+  的 `revokeObjectURL` 覆盖新增两类（此前只管图片）。
+- **CSS** — `styles/gui-chrome.css` 新增 `.gui-filepane-preview-media-*` /
+  `-font-*` / `-mermaid` 一节。
+- **i18n** — `settings.previewMediaUnplayable` / `previewFontLoadFailed` /
+  `previewFontSample` 进 GUI 双语词典（TUI 无文件面板，不需要）。
+- **测试** — `test/file-viewers.test.ts` +4 例（audio 走媒体而非外开、
+  mime 覆盖扩展名判定 video、font 出 specimen、`.mmd` 走 diagram 渲染器），
+  `test/preview-from-viewer.test.ts` +3 例（三个新 field 的映射形状）。
+
 ## 核查（2026-10-04，代码为唯一真相）
 
 18 条逐项读码：**16 条完全未动，3 条部分落地**（下表标「部分」的三条）。除上面那批已落地项外没有别的存量收口——不要按梯队顺序推断"第一梯队做了一半"，第一梯队实际也只有零星几处沾边。
@@ -44,7 +71,7 @@
 | 8   | 命令面板 query 过滤               | **部分** | 分组标题已有（`CommandPalette.tsx:318,337,359`），但 `:319` `actions.map` 与 `:338` `panels.map` **仍无过滤**；query 只驱动 session 搜索与 exact-id             |
 | 9   | git 按 hunk 暂存/丢弃             | 未动     | `git.stage` = `git add -- <paths>`（`server.ts:2516-2540`），无 `git.apply`/`git.discard`/hunk 参数；`git-panel.tsx` 只传 `{paths}`                             |
 | 10  | 后台任务实时日志 + detach         | 未动     | `ContextPanel.tsx:1514-1540` 5s 轮询 + 只有 cancel；无流式日志、无 detach RPC                                                                                   |
-| 11  | 文件预览 audio/video/字体/mermaid | 未动     | `FilePane.tsx:74-97` `PreviewState` 九态不含这四类；mermaid 只在 Markdown 里渲染                                                                                |
+| 11  | 文件预览 audio/video/字体/mermaid | **已落地** | 2026-10-20：三个新 viewer（media / font / mermaid）进 `builtin-file-viewers.ts`，渲染在 `FilePanePreviews.tsx`，映射经 `preview-from-viewer.ts`；详见下方「已落地（2026-10-20）」小节 |
 | 12  | 悬浮磨砂 composer + 羽化          | 未动     | 布局模型未动：composer 仍是 flex 兄弟（`ChatView.tsx:2741-2775`），`--chat-composer-inset`/`data-live-tail` 全仓零命中                                          |
 | 13  | 引用悬浮面板                      | 未动     | `quote-cards.tsx` 仍 27 行、`quotes: string[]`、12px X；发出时仍拍平成 `> ` 纯文本                                                                              |
 | 14  | 滚动条交互打磨 5 点               | 已落地   | 2026-10-05 重写 `FloatingScrollbar.tsx`（见 gui-implementation §28b）：measure/position 拆分后热路径零布局读只写 transform、单 last-scrolled 实例换成按容器 keyed 的 6 槽轨池、程序化滚动按意图闸抑制（滚轮/触摸/滚动按键/悬停才点亮）、双轴比例 thumb（pacman 的已吃豆串改 `scaleY`）、always-show 开关进外观页；契约测试 `test/floating-scrollbar.test.tsx` 16 例 |

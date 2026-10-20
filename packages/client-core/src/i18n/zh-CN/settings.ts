@@ -6084,6 +6084,9 @@ export const settings = {
 	"knowledge call failed": "知识操作失败",
 	"knowledge plan opened": "已打开计划「{title}」",
 	"knowledge open in panel": "在项目知识中打开",
+	"settings.previewMediaUnplayable": "这个媒体文件无法播放：当前环境缺少对应的解码器。",
+	"settings.previewFontLoadFailed": "字体加载失败。",
+	"settings.previewFontSample": "预览字体：中文与 Latin 字符 AaBbGg 0123",
 
 } as const;
 

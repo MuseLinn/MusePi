@@ -174,4 +174,45 @@ describe("built-in viewers", () => {
 			await renderWithViewers(input({ ext: "pdf", mime: "application/pdf", bytes: bytes("%PDF") })),
 		).toBeUndefined();
 	});
+
+	it("plays an audio file instead of opening it in the system app", async () => {
+		// A media file the pane cannot play is a dead player, not an error — but
+		// a media file that opens externally is a worse answer than a player
+		// that may work.
+		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
+		const result = await renderWithViewers(
+			input({ name: "clip.mp3", ext: "mp3", mime: "audio/mpeg", bytes: bytes("ID3") }),
+		);
+		expect(result?.kind).toBe("media");
+		if (result?.kind === "media") expect(result.media).toBe("audio");
+	});
+
+	it("takes the media kind from the mime when the extension only guesses", async () => {
+		// A `.mkv` the host reports as `video/mp4` is a video file either way;
+		// the mime is what the browser will actually try to decode.
+		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
+		const result = await renderWithViewers(
+			input({ name: "clip.mkv", ext: "mkv", mime: "video/mp4", bytes: bytes("ftyp") }),
+		);
+		if (result?.kind === "media") expect(result.media).toBe("video");
+		else expect(result).toBeUndefined();
+	});
+
+	it("shows a font file as a specimen rather than dumping its bytes", async () => {
+		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
+		const result = await renderWithViewers(
+			input({ name: "Sans.ttf", ext: "ttf", mime: "font/ttf", bytes: bytes("wOFF") }),
+		);
+		expect(result?.kind).toBe("font");
+	});
+
+	it("renders a mermaid diagram file with the diagram renderer", async () => {
+		// A `.mmd` file is a diagram, not source text: showing it verbatim is
+		// the one answer that is never what the person opened it for.
+		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
+		const result = await renderWithViewers(
+			input({ name: "flow.mmd", ext: "mmd", mime: "text/plain", bytes: bytes("graph TD; A-->B;") }),
+		);
+		expect(result).toEqual({ kind: "mermaid", source: "graph TD; A-->B;" });
+	});
 });

@@ -53,7 +53,24 @@ export type ViewerResult =
 	| { readonly kind: "image"; readonly blobUrl: string }
 	| { readonly kind: "pdf"; readonly pages: readonly string[] }
 	| { readonly kind: "docx"; readonly bytes: ArrayBuffer }
-	| { readonly kind: "sheets"; readonly sheets: readonly { name: string; html: string; truncated: boolean }[] };
+	| { readonly kind: "sheets"; readonly sheets: readonly { name: string; html: string; truncated: boolean }[] }
+	/**
+	 * An audio or video file, handed to the browser's own media element.
+	 *
+	 * The bytes are not decoded here: what plays depends on the codecs the
+	 * runtime has, and a file it cannot decode surfaces as the element's own
+	 * error event — which the pane reports, rather than a dead player.
+	 */
+	| { readonly kind: "media"; readonly media: "audio" | "video"; readonly blobUrl: string }
+	/**
+	 * A font file, shown as a type specimen.
+	 *
+	 * The URL is the font's own bytes; the pane registers them under a
+	 * throwaway family name for as long as the preview is open.
+	 */
+	| { readonly kind: "font"; readonly blobUrl: string; readonly mime: string }
+	/** A Mermaid diagram source, rendered by the transcript's diagram renderer. */
+	| { readonly kind: "mermaid"; readonly source: string };
 
 export interface FileViewer {
 	/** Stable id, for diagnostics and for a plugin to claim a slot by name. */

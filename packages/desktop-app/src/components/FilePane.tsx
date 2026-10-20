@@ -44,6 +44,7 @@ import { previewMappingFor } from "../lib/preview-from-viewer";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import { FontPreview, MediaPreview, MermaidPreview } from "./FilePanePreviews";
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
 const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
@@ -139,6 +140,12 @@ interface PreviewState {
 	/** xlsx/xls/csv sheets rendered to standalone HTML tables. Readonly: the
 	 *  sheet builder's output is handed to the pane to render, never edited. */
 	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
+	/** an audio/video file, played by the browser's own media element */
+	media?: { kind: "audio" | "video"; url: string };
+	/** a font file, shown as a type specimen */
+	fontUrl?: string;
+	/** a Mermaid diagram source, rendered by the transcript's diagram renderer */
+	mermaidSource?: string;
 	error?: string;
 	/** preview shown but content opens externally (unsupported binaries) */
 	external?: boolean;
@@ -509,8 +516,13 @@ export function FilePane({
 	useEffect(() => {
 		return () => {
 			if (preview?.imageUrl) URL.revokeObjectURL(preview.imageUrl);
+			// Media and font previews hold their bytes in a blob URL for as long
+			// as the preview is open; without this a long session of opening
+			// clips and fonts would pin every one of them in memory.
+			if (preview?.media) URL.revokeObjectURL(preview.media.url);
+			if (preview?.fontUrl) URL.revokeObjectURL(preview.fontUrl);
 		};
-	}, [preview?.imageUrl]);
+	}, [preview?.imageUrl, preview?.media, preview?.fontUrl]);
 
 	// Editor buffer cache keyed by path (see `unsavedBufferCache`): leaving a
 	// tab unmounts the pane, so the unsaved textarea would reset to the
@@ -1270,6 +1282,11 @@ export function FilePane({
 							)}
 							{preview.docxBytes && <DocxPreview data={preview.docxBytes} path={preview.path} />}
 							{preview.officeSheets && <SheetPreview name={preview.name} sheets={preview.officeSheets} />}
+							{preview.media && (
+								<MediaPreview kind={preview.media.kind} url={preview.media.url} name={preview.name} />
+							)}
+							{preview.fontUrl && <FontPreview url={preview.fontUrl} name={preview.name} />}
+							{preview.mermaidSource !== undefined && <MermaidPreview source={preview.mermaidSource} />}
 							{preview.imageUrl && (
 								<div className="gui-filepane-preview-img-wrap">
 									<button

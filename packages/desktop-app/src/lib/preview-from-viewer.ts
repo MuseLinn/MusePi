@@ -28,6 +28,9 @@ interface PreviewFields {
 	pdfPages?: readonly string[];
 	docxBytes?: ArrayBuffer;
 	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
+	media?: { kind: "audio" | "video"; url: string };
+	fontUrl?: string;
+	mermaidSource?: string;
 }
 
 /** What the pane must do with a viewer result: what to show, plus the two
@@ -76,5 +79,11 @@ export function previewMappingFor(result: ViewerResult): PreviewMapping {
 			return { fields: { docxBytes: result.bytes } };
 		case "sheets":
 			return { fields: { officeSheets: result.sheets } };
+		case "media":
+			return { fields: { media: { kind: result.media, url: result.blobUrl } } };
+		case "font":
+			return { fields: { fontUrl: result.blobUrl } };
+		case "mermaid":
+			return { fields: { mermaidSource: result.source } };
 	}
 }

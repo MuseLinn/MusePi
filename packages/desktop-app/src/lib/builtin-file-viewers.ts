@@ -238,7 +238,91 @@ function sheetsViewer(deps: BuiltinViewerDeps): FileViewer {
 	};
 }
 
-/** Every built-in viewer, in the order they should be tried. */
+/** Extensions the media viewer claims. The mime decides too — a `.mp3` served
+ *  as `application/octet-stream` is still a media file the browser can play. */
+const AUDIO_EXT = new Set(["mp3", "wav", "ogg", "oga", "m4a", "flac", "aac", "opus", "weba"]);
+const VIDEO_EXT = new Set(["mp4", "webm", "mov", "m4v", "ogv", "mkv"]);
+
+/**
+ * Audio and video, played by the browser's own media element.
+ *
+ * The mime is authoritative when it is specific: a `.mkv` the host reports as
+ * `video/mp4` is a video file either way, and a `.mp3` served as octet-stream
+ * is still audio. Only when the host says nothing does the extension decide.
+ */
+function mediaViewer(): FileViewer {
+	return {
+		id: "media",
+		priority: VIEWER_PRIORITY.builtin,
+		matches: input => {
+			const mime = input.mime ?? "";
+			if (mime.startsWith("audio/")) return true;
+			if (mime.startsWith("video/")) return true;
+			if (mime && mime !== "application/octet-stream") return false;
+			return AUDIO_EXT.has(input.ext) || VIDEO_EXT.has(input.ext);
+		},
+		render: async (input: ViewerInput) => {
+			const mime = input.mime ?? "";
+			const media: "audio" | "video" = mime.startsWith("video/") || VIDEO_EXT.has(input.ext)
+				? "video"
+				: "audio";
+			return {
+				kind: "media",
+				media,
+				blobUrl: URL.createObjectURL(new Blob([input.bytes], { type: mime || undefined })),
+			};
+		},
+	};
+}
+
+/** Font files, shown as a type specimen. */
+const FONT_EXT = new Set(["ttf", "otf", "woff", "woff2"]);
+
+function fontViewer(): FileViewer {
+	return {
+		id: "font",
+		priority: VIEWER_PRIORITY.builtin,
+		matches: input => {
+			const mime = input.mime ?? "";
+			if (mime.startsWith("font/")) return true;
+			if (mime && mime !== "application/octet-stream" && mime !== "application/x-font-ttf") return false;
+			return FONT_EXT.has(input.ext);
+		},
+		render: async (input: ViewerInput) => ({
+			kind: "font",
+			blobUrl: URL.createObjectURL(new Blob([input.bytes], { type: input.mime || undefined })),
+			mime: input.mime ?? "",
+		}),
+	};
+}
+
+/** Mermaid diagram sources — the same renderer the transcript uses. */
+function mermaidViewer(): FileViewer {
+	return {
+		id: "mermaid",
+		priority: VIEWER_PRIORITY.builtin,
+		matches: input => input.ext === "mmd" || input.ext === "mermaid",
+		render: async (input: ViewerInput) => ({
+			kind: "mermaid",
+			source: decode(input.bytes),
+		}),
+	};
+}
+
+/** Every built-in viewer, in the order they should be tried.
+ *
+ *  The mermaid viewer comes first: a `.mmd` file is served as `text/plain`,
+ *  which the text viewer claims — and a diagram shown as its source is the one
+ *  answer that is never what the person opened it for. */
 export function builtinFileViewers(deps: BuiltinViewerDeps): FileViewer[] {
-	return [plainTextViewer(deps), imageViewer(), pdfViewer(deps), docxViewer(), sheetsViewer(deps)];
+	return [
+		mermaidViewer(),
+		plainTextViewer(deps),
+		imageViewer(),
+		pdfViewer(deps),
+		docxViewer(),
+		sheetsViewer(deps),
+		mediaViewer(),
+		fontViewer(),
+	];
 }

@@ -1237,6 +1237,124 @@
 	color: var(--color-text-muted);
 }
 
+/* ── Media / font / mermaid file previews ──────────────────────────── */
+
+.gui-filepane-preview-media {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	overflow: auto;
+	flex: 1;
+}
+
+.gui-filepane-preview-media-video {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 0;
+	flex: 1;
+	background: var(--color-bg);
+	border-radius: var(--radius-xs);
+}
+
+.gui-filepane-preview-media-video video {
+	max-height: 100%;
+	max-width: 100%;
+	border-radius: var(--radius-xs);
+}
+
+.gui-filepane-preview-media-audio {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 24px;
+}
+
+.gui-filepane-preview-media-audio audio {
+	width: 100%;
+	max-width: 560px;
+}
+
+.gui-filepane-preview-media-name {
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text);
+	word-break: break-all;
+	text-align: center;
+}
+
+.gui-filepane-preview-media-fail {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 24px;
+	text-align: center;
+}
+
+.gui-filepane-preview-font {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	overflow: auto;
+	flex: 1;
+}
+
+.gui-filepane-preview-font-row {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+}
+
+.gui-filepane-preview-font-size {
+	width: 32px;
+	flex-shrink: 0;
+	text-align: end;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-filepane-preview-font-sample {
+	min-width: 0;
+	word-break: break-word;
+	line-height: 1.2;
+	color: var(--color-text);
+}
+
+.gui-filepane-preview-font-glyphs {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 8px;
+	padding-top: 16px;
+	border-top: 1px solid var(--color-border);
+	font-size: 20px;
+	color: var(--color-text);
+}
+
+.gui-filepane-preview-font-glyphrow {
+	word-break: break-all;
+	line-height: 1.5;
+}
+
+.gui-filepane-preview-mermaid {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	overflow: auto;
+	flex: 1;
+	background: var(--color-bg);
+}
+
+.gui-filepane-preview-mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
 .gui-glass-seg .gui-seg-btn {
 	flex: 1;
 	justify-content: center;
