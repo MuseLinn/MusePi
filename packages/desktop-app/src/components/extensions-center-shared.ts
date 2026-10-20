@@ -1,4 +1,5 @@
 export const EXTENSION_KINDS = [
+	"plugin-module",
 	"extension-module",
 	"skill",
 	"rule",

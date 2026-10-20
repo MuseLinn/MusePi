@@ -8,7 +8,10 @@ import { getMCPConfigPath, getProjectDir, logger } from "@musepi/pi-utils";
 import type { PluginConfigValues } from "@musepi/pi-wire";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import type { ContextFile } from "../../capability/context-file";
-import type { ExtensionModule } from "../../capability/extension-module";
+import {
+	type ExtensionModule,
+	moduleEntryId,
+} from "../../capability/extension-module";
 import type { GuiMotion } from "../../capability/gui-motion";
 import type { Hook } from "../../capability/hook";
 import type { MCPServer } from "../../capability/mcp";
@@ -87,6 +90,21 @@ export async function loadAllExtensions(
 		items: T[],
 		kind: ExtensionKind,
 		opts?: {
+			/**
+			 * Per-item kind override. The module capability carries BOTH plugin
+			 * tracks in one list — `track` picks which kind the row reports
+			 * (`plugin-module` vs `extension-module`). Other capabilities have a
+			 * single track and leave this undefined.
+			 */
+			kindOf?: (item: T) => ExtensionKind;
+			/**
+			 * Per-item enable/disable/config key. For module entries this stays
+			 * `extension-module:<name>` for BOTH tracks — it is the persisted
+			 * key space (`disabledExtensions`, the plugin config store), and
+			 * re-keying it would silently reset every user's toggles. The
+			 * displayed `kind` and this key are deliberately independent.
+			 */
+			entryIdOf?: (item: T) => string;
 			getDescription?: (item: T) => string | undefined;
 			getTrigger?: (item: T) => string | undefined;
 			getShadowedBy?: (item: T) => string | undefined;
@@ -95,7 +113,10 @@ export async function loadAllExtensions(
 		},
 	): void {
 		for (const item of items) {
-			const id = makeExtensionId(kind, item.name);
+			const itemKind = opts?.kindOf?.(item) ?? kind;
+			// Default keeps the historical `kind:name` identity; the module call
+			// site overrides it to the shared legacy prefix (see moduleEntryId).
+			const id = opts?.entryIdOf?.(item) ?? makeExtensionId(itemKind, item.name);
 			const isDisabled = disabledExtensions.has(id);
 			const isShadowed = (item as { _shadowed?: boolean })._shadowed;
 			const providerEnabled = isProviderEnabled(item._source.provider);
@@ -119,7 +140,7 @@ export async function loadAllExtensions(
 
 			extensions.push({
 				id,
-				kind,
+				kind: itemKind,
 				name: item.name,
 				displayName: item.name,
 				description: opts?.getDescription?.(item),
@@ -216,12 +237,18 @@ export async function loadAllExtensions(
 		);
 		const configStore = await readPluginConfigStore();
 		addItems(loadableModules, "extension-module", {
+			// The kind reports the LOADER (plugin-module = cordis track,
+			// extension-module = legacy track) so the list can tell the two
+			// systems apart; the enable/config key stays on the shared legacy
+			// prefix for both — that is the persisted key space.
+			kindOf: item => item.track,
+			entryIdOf: item => moduleEntryId(item.name),
 			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 			getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
 			getPluginConfigValues: item => {
 				const meta = pluginMetaByPath.get(item.path);
 				if (!meta || meta.fields.length === 0) return undefined;
-				const stored = configStore[makeExtensionId("extension-module", item.name)];
+				const stored = configStore[moduleEntryId(item.name)];
 				return coerceConfigValues(meta.fields, stored);
 			},
 		});

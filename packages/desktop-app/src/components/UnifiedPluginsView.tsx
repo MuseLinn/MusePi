@@ -76,7 +76,8 @@ export function sourceLevelLabel(provider: string, level: string): string {
  *   避免与能力清单 tab 整屏重复。
  */
 export function isPluginLaneEntry(e: ExtensionItem): boolean {
-	if (e.kind === "extension-module") return true;
+	// 两条轨道都算插件模块行（kind 拆分见 capability/module-entry.ts）。
+	if (e.kind === "plugin-module" || e.kind === "extension-module") return true;
 	return e.source.provider === "musepi-extensions" && e.source.level === "native" && e.kind !== "skill";
 }
 

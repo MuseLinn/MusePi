@@ -12,8 +12,16 @@ import { sfxFor } from "../lib/sfx";
 import { eventMatches } from "../lib/shortcut-registry";
 import type { SketchScene } from "../lib/sketch-scene";
 import {
+	COMPOSER_ACTIVITY_SLOT,
+	COMPOSER_ATTACHMENTS_SLOT,
 	COMPOSER_DOCK_SLOT,
+	COMPOSER_FOR_SLOT,
 	COMPOSER_LEFT_SLOT,
+	COMPOSER_MODEL_SLOT,
+	COMPOSER_OVERLAY_SLOT,
+	COMPOSER_PERMISSION_SLOT,
+	COMPOSER_PLAN_SLOT,
+	COMPOSER_REQUEST_DRAFT_SLOT,
 	COMPOSER_RIGHT_SLOT,
 	SlotComponentHost,
 	useSlotComponents,
@@ -1882,7 +1890,17 @@ export function Composer({
 			{compacting && <CompactionStatusLine onCancel={cancelCompaction} />}
 			<ComposerFrame
 				flipAnchor="session"
-				belowRow={<StatsPillsRow stats={windowStats} usage={contextUsage?.usage ?? null} mode={statsMode} />}
+				belowRow={
+					<>
+						<StatsPillsRow stats={windowStats} usage={contextUsage?.usage ?? null} mode={statsMode} />
+						{/* composer.overlay / composer.requestDraft / composer.for 座位槽:
+						 * DSH conversation.input.overlay / .requestDraftInitialization / .for 的对应位。
+						 * 输入区的浮层与草稿类扩展内容,排在统计行之后。 */}
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_OVERLAY_SLOT} sessionId={sessionId} cwd={cwd} />
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_REQUEST_DRAFT_SLOT} sessionId={sessionId} cwd={cwd} />
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_FOR_SLOT} sessionId={sessionId} cwd={cwd} />
+					</>
+				}
 				onAnnotated={text => {
 					setText(prev => (prev ? `${prev}\n${text}` : text));
 					requestAnimationFrame(() => autosize(taRef.current));
@@ -2025,6 +2043,22 @@ export function Composer({
 										)}
 									/>
 								)}
+								{/* composer.activity 座位槽(DSH conversation.input.activity 对齐):
+								 * 进行中的活动(子代理、后台任务)的扩展视图。 */}
+								<SlotComponentHost
+									rpc={rpc}
+									slot={COMPOSER_ACTIVITY_SLOT}
+									sessionId={sessionId}
+									cwd={cwd}
+								/>
+								{/* composer.plan 座位槽(DSH conversation.input.plan 对齐):
+								 * 计划模式旁的扩展控件。 */}
+								<SlotComponentHost
+									rpc={rpc}
+									slot={COMPOSER_PLAN_SLOT}
+									sessionId={sessionId}
+									cwd={cwd}
+								/>
 								{composerDockItems.length > 0 && (
 									<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
 								)}
@@ -2106,6 +2140,14 @@ export function Composer({
 						{/* composer.left 座位槽(DSH conversation.input.left 对齐):
 						 * 扩展声明 composer.left 槽位即注入工具栏左端。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
+						{/* composer.attachments 座位槽(DSH conversation.input.attachments 对齐):
+						 * 附件区——待发附件的清单、扫描、批量操作。 */}
+						<SlotComponentHost
+							rpc={rpc}
+							slot={COMPOSER_ATTACHMENTS_SLOT}
+							sessionId={sessionId}
+							cwd={cwd}
+						/>
 						<AttachMenu
 							goalMode={modes?.goalMode?.enabled === true || goalArmed}
 							planMode={modes?.planMode === true}
@@ -2177,6 +2219,15 @@ export function Composer({
 							}}
 							onSetThinking={onSetThinking}
 						/>
+						{/* composer.model 座位槽(DSH conversation.input.model 对齐):
+						 * 模型选择器旁的事实位——积分余额、模型配额、该模型的
+						 * 专属控件都挂这里,而不是挤进模型菜单里。 */}
+						<SlotComponentHost
+							rpc={rpc}
+							slot={COMPOSER_MODEL_SLOT}
+							sessionId={sessionId}
+							cwd={cwd}
+						/>
 						{/* Design-style select (M3.7b §3, WorkBuddy footer-pill
 						 * parity): the pick writes via session.setDesignSystem;
 						 * the daemon injects the resolved system's brief
@@ -2230,6 +2281,14 @@ export function Composer({
 						{/* Approval mode (openchamber input permission-picker parity):
 						 * the daemon re-reads tools.approvalMode on every tool call. */}
 						<ApprovalModeButton rpc={rpc} />
+						{/* composer.permission 座位槽(DSH conversation.input.permission 对齐):
+						 * 权限模式旁——与「本次调用允许什么」相关的扩展控件。 */}
+						<SlotComponentHost
+							rpc={rpc}
+							slot={COMPOSER_PERMISSION_SLOT}
+							sessionId={sessionId}
+							cwd={cwd}
+						/>
 						{contextUsage != null && (
 							<ContextRing
 								percent={contextUsage.percent}

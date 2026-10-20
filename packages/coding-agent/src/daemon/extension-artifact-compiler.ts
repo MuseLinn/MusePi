@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import type { Extension } from "../extensibility/extensions/types";
 import type { PresetPluginRow } from "../presets/resolve";
+import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../capability/extension-module";
 
 /**
  * Renderer-side slot components: the daemon
@@ -198,7 +199,7 @@ export async function collectSlotComponents(
 ): Promise<SlotComponent[]> {
 	const out: SlotComponent[] = [];
 	for (const entry of extensions) {
-		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		if (entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND || entry.state !== "active") continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const component of extension.components ?? []) {
@@ -290,7 +291,7 @@ export async function collectExtensionModes(
 ): Promise<ExtensionModeItem[]> {
 	const out: ExtensionModeItem[] = [];
 	for (const entry of extensions) {
-		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		if (entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND || entry.state !== "active") continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		// 单模式防御:畸形 mode 项(缺 id/类型错)只跳过该模式,不影响
@@ -384,7 +385,7 @@ export async function collectExtensionSkills(
 ): Promise<ExtensionSkillItem[]> {
 	const out: ExtensionSkillItem[] = [];
 	for (const entry of extensions) {
-		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		if (entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND || entry.state !== "active") continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const skill of extension.skills ?? []) {
@@ -424,7 +425,7 @@ export async function collectStatusBarSegments(
 ): Promise<StatusBarSegmentItem[]> {
 	const out: StatusBarSegmentItem[] = [];
 	for (const entry of extensions) {
-		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		if (entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND || entry.state !== "active") continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const seg of extension.statusBarSegments ?? []) {
@@ -452,7 +453,7 @@ export async function collectToolViews(
 ): Promise<ToolViewItem[]> {
 	const out: ToolViewItem[] = [];
 	for (const entry of extensions) {
-		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		if (entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND || entry.state !== "active") continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const view of extension.toolViews ?? []) {

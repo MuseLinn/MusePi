@@ -247,6 +247,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 				name: getExtensionNameFromPath(extPath),
 				path: extPath,
 				level,
+				track: "extension-module" as const,
 				_source: createSourceMeta(PROVIDER_ID, extPath, level),
 			});
 		}

@@ -10,7 +10,12 @@ import { getManagedSkillsDir, MANAGED_SKILLS_PROVIDER_ID } from "../autolearn/ma
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type Extension, type ExtensionManifest, extensionCapability } from "../capability/extension";
-import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
+import {
+	type ExtensionModule,
+	extensionModuleCapability,
+	LEGACY_EXTENSION_MODULE_KIND,
+	PLUGIN_MODULE_KIND,
+} from "../capability/extension-module";
 import { readDirEntries, readFile } from "../capability/fs";
 import { type Hook, hookCapability } from "../capability/hook";
 import { type Instruction, instructionCapability } from "../capability/instruction";
@@ -477,10 +482,24 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		return path.resolve(ctx.cwd, expanded);
 	};
 
-	const createExtensionModule = (extPath: string, level: ExtensionModule["level"]): ExtensionModule => ({
+	/**
+	 * One module-list row.
+	 *
+	 * `track` records which loader loaded the entry — the cordis plugin track
+	 * (`plugin-module`) or the legacy extension track (`extension-module`).
+	 * The management face uses it to show which system a row belongs to
+	 * without following the path; the enable/disable key is shared by both
+	 * tracks (moduleEntryId) and is NOT affected.
+	 */
+	const createExtensionModule = (
+		extPath: string,
+		level: ExtensionModule["level"],
+		track: ExtensionModule["track"] = LEGACY_EXTENSION_MODULE_KIND,
+	): ExtensionModule => ({
 		name: getExtensionNameFromPath(extPath),
 		path: extPath,
 		level,
+		track,
 		_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, extPath, level),
 	});
 
@@ -577,7 +596,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		// not list as if it were installed machine-wide, because that is the fact a
 		// user acts on when deciding whether to remove it.
 		for (const entry of await getScopedPluginExtensionPaths(ctx.cwd)) {
-			items.push(createExtensionModule(entry.path, entry.scope));
+			items.push(createExtensionModule(entry.path, entry.scope, PLUGIN_MODULE_KIND));
 		}
 	} catch (error) {
 		// Fail-soft: a plugin tree problem must not take the whole extension
@@ -595,7 +614,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 			// `native`, not `user`: the distribution ships these. Listing them as the
 			// user's own makes the removal affordance lie — there is nothing for the
 			// user to remove.
-			items.push(createExtensionModule(extPath, "native"));
+			items.push(createExtensionModule(extPath, "native", PLUGIN_MODULE_KIND));
 		}
 	} catch (error) {
 		// Fail-soft for the same reason: a malformed bundled package must not

@@ -28,13 +28,25 @@ import type { RpcClient } from "./rpc";
  * shows up in the extension center instead of silently missing.
  */
 
-/** First slot id — the settings page's extension-contributed section.
- *  EXTENSION_SLOT_DECLARATION.exact order: [panel.right, rail.right, settings.extensions, composer.dock, composer.left, composer.right] */
-export const SETTINGS_EXTENSION_SLOT = EXTENSION_SLOT_DECLARATION.exact[2]; // "settings.extensions"
+/**
+ * Look a slot id up by name.
+ *
+ * The exact list is ordered by UI position, so an index would silently point at
+ * the wrong slot the moment a seat is added — a name lookup cannot. The
+ * `!` is safe: every name below is declared in EXTENSION_SLOT_DECLARATION.
+ */
+function slot(name: string): string {
+	const found = EXTENSION_SLOT_DECLARATION.exact.find(candidate => candidate === name);
+	if (found === undefined) throw new Error(`Unknown extension slot: ${name}`);
+	return found;
+}
+
+/** First slot id — the settings page's extension-contributed section. */
+export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
 /** Right-side workspace panel slot. */
-export const RIGHT_PANEL_SLOT = EXTENSION_SLOT_DECLARATION.exact[0]; // "panel.right"
+export const RIGHT_PANEL_SLOT = slot("panel.right");
 /** Right-edge 44px icon rail slot. */
-export const RIGHT_RAIL_SLOT = EXTENSION_SLOT_DECLARATION.exact[1]; // "rail.right"
+export const RIGHT_RAIL_SLOT = slot("rail.right");
 /** 内核级 slot 命名空间(P1 架构开放):slot 名是开放命名空间,前缀决定挂载位置。 */
 export const PANEL_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[0]; // "panel.tab."
 export const SETTINGS_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[1]; // "settings.tab."
@@ -43,14 +55,22 @@ export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2]; // "rail
 export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
 /** 单行偏好槽。 */
 export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
-/** Composer 座位槽。 */
-export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3]; // "composer.dock"
-export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4]; // "composer.left"
-export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5]; // "composer.right"
+/** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的 DSH 对应表）。 */
+export const COMPOSER_DOCK_SLOT = slot("composer.dock");
+export const COMPOSER_LEFT_SLOT = slot("composer.left");
+export const COMPOSER_RIGHT_SLOT = slot("composer.right");
+export const COMPOSER_MODEL_SLOT = slot("composer.model");
+export const COMPOSER_ATTACHMENTS_SLOT = slot("composer.attachments");
+export const COMPOSER_PERMISSION_SLOT = slot("composer.permission");
+export const COMPOSER_PLAN_SLOT = slot("composer.plan");
+export const COMPOSER_ACTIVITY_SLOT = slot("composer.activity");
+export const COMPOSER_OVERLAY_SLOT = slot("composer.overlay");
+export const COMPOSER_REQUEST_DRAFT_SLOT = slot("composer.requestDraft");
+export const COMPOSER_FOR_SLOT = slot("composer.for");
 /** transcript.node seat slot —— DSH `conversation.chat.node` 粒度:单一
  *  聊天节点 seat,按节点 kind(entryKey)分发;turn-tail/tool/user/assistant
  *  都是该 seat 的节点 kind,而非独立槽。 */
-export const TRANSCRIPT_NODE_SLOT = EXTENSION_SLOT_DECLARATION.exact[6]; // "transcript.node"
+export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
 
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
  *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */

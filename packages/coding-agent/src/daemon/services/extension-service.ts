@@ -13,6 +13,7 @@ import {
 	resolveCompatibilityPath,
 	setVersionExemption,
 } from "../../extensibility/plugins/compat/compatibility-store";
+import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { DaemonService } from "./types";
@@ -361,7 +362,7 @@ export class ExtensionService implements DaemonService {
 		}
 		const { readExtensionPluginMeta } = await import("../../extensibility/extensions/plugin-manifest");
 		for (const ext of extensions) {
-			if (ext.kind !== "extension-module") continue;
+			if (ext.kind !== LEGACY_EXTENSION_MODULE_KIND && ext.kind !== PLUGIN_MODULE_KIND) continue;
 			let meta: Awaited<ReturnType<typeof readExtensionPluginMeta>>;
 			try {
 				meta = await readExtensionPluginMeta(ext.path);
@@ -394,7 +395,7 @@ export class ExtensionService implements DaemonService {
 		// 零豁免,exempted 全部降级,不阻塞清单。
 		const liveExemptions = readCompatibilityExemptions(resolveCompatibilityPath()).exemptions;
 		for (const ext of extensions) {
-			if (ext.kind !== "extension-module") continue;
+			if (ext.kind !== LEGACY_EXTENSION_MODULE_KIND && ext.kind !== PLUGIN_MODULE_KIND) continue;
 			const inspected = inspectedByName?.get(ext.name);
 			if (!inspected) continue;
 			if (inspected.version) ext.version = inspected.version;
@@ -469,7 +470,7 @@ export class ExtensionService implements DaemonService {
 				}
 			}
 			for (const ext of extensions) {
-				if (ext.kind !== "extension-module") continue;
+				if (ext.kind !== LEGACY_EXTENSION_MODULE_KIND && ext.kind !== PLUGIN_MODULE_KIND) continue;
 				const labels = enabledInByName.get(getExtensionNameFromPath(ext.path));
 				if (labels && labels.length > 0) ext.enabledInPresets = labels;
 			}
@@ -674,7 +675,7 @@ export class ExtensionService implements DaemonService {
 			// （校验声明 + 真实挂载/拆卸,效果账本随 fiber 回收）,成功才持久化
 			// 黑名单;运行时未装载该插件时先 reconcile 一次再重试,仍失败结构化
 			// 上抛且不落盘。
-			if (p.id.startsWith("extension-module:")) {
+			if (p.id.startsWith(LEGACY_EXTENSION_MODULE_KIND + ":")) {
 				const pluginName = p.id.slice("extension-module:".length);
 				const component = p.component;
 				const enabled = p.enabled;

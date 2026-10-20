@@ -13,8 +13,15 @@ import type { SourceMeta } from "../../capability/types";
 
 /**
  * Extension kinds matching capability types.
+ *
+ * Module entries carry TWO kinds, one per loader track (see
+ * `capability/module-entry.ts` for the full rationale): `plugin-module` is a
+ * cordis-track plugin, `extension-module` a legacy Pi/omp extension. The two
+ * share one enable/config key space (`extension-module:<name>`) — kind and
+ * key are deliberately independent.
  */
 export type ExtensionKind =
+	| "plugin-module"
 	| "extension-module"
 	| "skill"
 	| "rule"

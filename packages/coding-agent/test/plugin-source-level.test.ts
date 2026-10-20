@@ -25,6 +25,7 @@ describe("source level vocabulary", () => {
 				name: "x",
 				path: "/x/index.ts",
 				level,
+				track: "plugin-module",
 				_source: { provider: "p", providerName: "", path: "/x/index.ts", level },
 			};
 			expect(module.level).toBe(level);
