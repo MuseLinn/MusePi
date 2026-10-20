@@ -2131,7 +2131,8 @@ export const settings = {
 	"Disabled": "已禁用",
 	"Embedded": "内嵌",
 	"Expanded": "展开",
-	"Friendly": "友好",	"Accent Rail": "强调导轨",
+	"Friendly": "友好",
+	"Accent Rail": "强调导轨",
 	"Also refresh between runs while the expected savings stay above the cost floor": "在预期节省仍高于成本下限时，轮次之间也刷新",
 	"Annotated": "标注式",
 	"Annotated line with the context percentage and window embedded in the gauge": "标注式线条：上下文百分比与窗口内嵌在仪表里",
@@ -2200,6 +2201,7 @@ export const settings = {
 	"Unexpected Stops": "意外中止",
 	"Update Channel": "更新通道",
 	"Word Autocomplete (macOS)": "词语自动补全（macOS）",
+	"Accent Rail": "强调导轨",
 
 } as const;
 
