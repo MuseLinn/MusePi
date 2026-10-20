@@ -27,7 +27,7 @@
       'Your <span class="mp-accent">AI partner</span> —<br />it does more than write code:<br class="mp-only-desktop" />rebuild it around your workflow.',
     "hero.sub":
       "MusePi is a hands-on AI partner: it writes code, runs commands, reads up and drives the browser. Switch between the desktop app, the command line and your phone anytime — sessions and settings follow you. Models, tools and surfaces are swappable parts, so you can rebuild it around the way you work instead of accepting one more browser tab.",
-    "hero.cta.discord": "Join Discord",
+    "hero.cta.community": "Ask / Report",
     "hero.cta.dl": "Download desktop",
     "hero.cta.look": "See the interface",
     "hero.term.aria": "Install commands",
@@ -48,46 +48,11 @@
     "preview.kicker": "Product preview",
     "preview.h2": "One screen that shows every step of the work",
     "preview.desc":
-      "Independent floating glass cards assemble a cockpit: on the left a session tree you can walk, in the middle a conversation with live tool rows and a usage ring, on the right a long task broken into phased checkpoints with a filled progress bar showing how far the whole thing has come.",
-    "preview.mock.aria":
-      "MusePi desktop collaboration UI: session tree on the left, conversation with tool rows in the center, composer at the bottom, task list and progress on the right",
-    "preview.note":
-      "The preview is an interface illustration for layout and information hierarchy; it does not represent data from any real session.",
-
-    /* mock 内部文案 */
-    "mock.project": "musepi-omp",
-    "mock.status.working": "Working",
-    "mock.search": "Search sessions…",
-    "mock.byproject": "By project",
-    "mock.s1": "FilePane autosave",
-    "mock.s1t": "Just now",
-    "mock.s2": "Rewind before refactor",
-    "mock.s2t": "5m ago",
-    "mock.s3": "Migrate to flex column",
-    "mock.s3t": "1h ago",
-    "mock.s4": "Subagent · tab focus bug",
-    "mock.s4t": "Yesterday",
-    "mock.contextused": "Context · 72% used",
-    "mock.chatTitle": "Refactor FilePane, add autosave",
-    "mock.msgUser": "Refactor FilePane into a flex column and add autosave.",
-    "mock.activityTools": "3 tools",
-    "mock.activityFiles": "2 files changed +96 −41",
-    "mock.running": "Running",
-    "mock.msgAI":
-      "Three files updated: the editor column keeps the flex chain; unsaved edits now mark a dot on the tab, and you confirm before switching or closing.",
-    "mock.composerPh": "Ask anything, / for commands, @ for context…",
-    "mock.chipThinking": "High",
-    "mock.chipPlan": "Plan",
-    "mock.todoTitle": "Todo progress",
-    "mock.todoCount": "2/5",
-    "mock.phase1": "Refactor",
-    "mock.phase2": "Verify",
-    "mock.t1": "Map the current FilePane layout",
-    "mock.t2": "Extract the autosave module",
-    "mock.t3": "Wire dirty markers into tabs",
-    "mock.t4": "Add autosave tests",
-    "mock.t5": "Update the GUI docs",
-    "mock.todoAdd": "Add a task…",
+      "The welcome workspace, for real: sessions and tasks on the left, an input box always at the ready in the middle — with models, tools and surfaces all swappable. This is no illustration — every release regenerates it automatically from the real interface.",
+    "preview.shot.aria":
+      "MusePi desktop app welcome screen in the brand dark theme",
+    "preview.shot.note":
+      "Real interface capture — the welcome workspace in the brand dark theme; sessions and settings sync across devices.",
 
     /* 三个核心功能 */
     "feat.kicker": "Why MusePi",
@@ -110,9 +75,9 @@
 
     /* 迭代进行时 */
     "mom.kicker": "Momentum",
-    "mom.h2": "Built on open source, moving every day",
+    "mom.h2": "An independent product, moving every day",
     "mom.desc":
-      "The desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work; the Agent engine stands on the shoulders of the open-source oh-my-pi project and stays in sync with it. What follows aren't roadmap promises — they're things already shipped in recent releases.",
+      "The desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work; the whole stack is our own and ships on its own release line. What follows aren't roadmap promises — they're things already shipped in recent releases.",
     "mom.stat1": "LLM providers",
     "mom.stat2": "Supported platforms",
     "mom.stat3": "Extension hubs",
@@ -180,7 +145,7 @@
       "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion pairs over the LAN by QR code, and remote control is end-to-end encrypted the whole way — no third-party server in between. The only outbound network request is to the model provider you configure.",
     "faq.q5": "Where does MusePi come from?",
     "faq.a5":
-      "MusePi is an AI workspace: the desktop GUI, the terminal, the mobile companion and the resident desktop pet share one background service, with models, tools and surfaces all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; the Agent engine stands on the shoulders of the open-source oh-my-pi project (see its repo for details), and everything is MIT-licensed.",
+      "MusePi is an AI workspace: the desktop GUI, the terminal, the mobile companion and the resident desktop pet share one background service, with models, tools and surfaces all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; everything is MIT-licensed.",
     "faq.q6": "How do I get started?",
     "faq.a6":
       "One command installs the background service, the terminal TUI and the desktop app: <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Requires Node ≥ 22 or Bun. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
@@ -188,8 +153,8 @@
     /* CTA band */
     "cta.h2": "Connect it to the machines you have",
     "cta.sub":
-      "One command installs the background service and the desktop app, or pick your package from the platform menu in the first screen. Questions, ideas or just want to poke around? Join us on Discord.",
-    "cta.discord": "Join Discord",
+      "One command installs the background service and the desktop app, or pick your package from the platform menu in the first screen. Hit a problem or want a capability that is not there yet? Open an issue on GitHub.",
+    "cta.community": "Ask / Report",
     "cta.dl": "Download",
 
     /* 页脚 */
@@ -205,6 +170,7 @@
     "footer.changelog": "Changelog",
     "footer.contrib": "Contributing",
     "footer.colStart": "Get started",
+    "footer.issues": "Issues",
     "footer.faq": "FAQ",
     "footer.get": "Get the installer",
     "footer.rights": " · MIT License",

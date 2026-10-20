@@ -20,7 +20,7 @@ import { classifyProviderHttpError, withHardTimeout } from "./utils";
 
 const EXA_API_URL = "https://api.exa.ai/search";
 const EXA_MCP_URL = "https://mcp.exa.ai/mcp";
-const EXA_MCP_SOURCE = "oh-my-pi";
+const EXA_MCP_SOURCE = "musepi";
 const MAX_EXA_SNIPPET_CHARS = 500;
 const DEFAULT_EXA_SEARCH_DELAY_MS = getDefault("exa.searchDelayMs");
 

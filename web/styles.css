@@ -503,149 +503,18 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-section-desc { margin-top: 16px; font-size: 1.05rem; color: var(--text-muted); text-wrap: pretty; }
 .mp-section-desc a { color: var(--accent); border-bottom: 1px solid var(--accent-line); }
 
-/* ===== 产品界面预览 mock：协作驾驶舱 =====
- * 三块独立浮动的玻璃卡片拼成一个工作台，而非一个被分割线切开的整体：
- * 左会话树 / 中对话与工具行 / 右任务清单与进度。克制：单一环境光来自外层容器，
- * 强调色只在活动项、工具名、进度与用量环上出现。 */
-.mp-app {
-  padding: clamp(12px, 1.8vw, 20px);
+/* ===== 产品界面预览：真实应用截图 ===== */
+.mp-shot {
+  margin: 0 auto;
+  max-width: 1080px;
   background: var(--bg);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
   box-shadow: inset 0 1px 0 var(--line-inner), 0 40px 90px -40px rgba(0, 0, 0, 0.9), 0 0 60px -30px var(--accent-glow);
-}
-
-/* 窗口 chrome：交通灯 + 项目/分支 + 状态 + 面板开关 */
-.mp-app-chrome {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 9px 13px;
-  margin-bottom: 12px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-}
-.mp-lights { display: flex; gap: 7px; flex: none; }
-.mp-lights i { width: 11px; height: 11px; border-radius: 50%; background: var(--line-strong); }
-.mp-lights i:first-child { background: var(--danger); opacity: 0.75; }
-.mp-lights i:nth-child(2) { background: var(--accent); opacity: 0.75; }
-.mp-lights i:nth-child(3) { background: var(--ok); opacity: 0.75; }
-.mp-app-cr-title { font-weight: 700; font-size: 13px; letter-spacing: -0.01em; color: var(--text); }
-.mp-app-cr-proj {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--mono); font-size: 11.5px; color: var(--text-muted);
-  padding: 3px 9px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 7px;
-}
-.mp-app-cr-proj b { color: var(--text); font-weight: 600; }
-.mp-app-cr-branch { color: var(--accent); font-size: 10.5px; padding: 1px 6px; background: var(--accent-soft); border-radius: 5px; }
-.mp-app-cr-right { margin-left: auto; display: inline-flex; align-items: center; gap: 12px; }
-.mp-app-cr-status { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
-.mp-app-cr-toggle { position: relative; width: 34px; height: 16px; border-radius: 999px; background: var(--bg-1); border: 1px solid var(--line-strong); }
-.mp-app-cr-toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--text-faint); }
-
-.mp-dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: mp-blink 2.2s var(--ease) infinite; }
-@keyframes mp-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-
-.mp-app-work {
-  display: grid;
-  grid-template-columns: 208px minmax(0, 1fr) 250px;
-  gap: 12px;
-}
-.mp-pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 440px;
-  padding: 14px;
-  background: var(--bg-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: inset 0 1px 0 var(--line-inner);
   overflow: hidden;
 }
-.mp-pane--chat { border-color: var(--line-strong); box-shadow: inset 0 1px 0 var(--line-inner), 0 0 40px -26px var(--accent-glow); }
-
-/* 左：会话树 */
-.mp-side-search { font-size: 12px; color: var(--text-faint); padding: 8px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
-.mp-side-group { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; padding-left: 2px; }
-.mp-sess { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 9px; border: 1px solid transparent; }
-.mp-sess.is-active { background: var(--accent-soft); border-color: var(--accent-line); }
-.mp-sess--branch { position: relative; margin-left: 16px; }
-.mp-sess--branch::before { content: ""; position: absolute; left: -10px; top: -6px; bottom: 50%; width: 10px; border-left: 1.5px solid var(--line-strong); border-bottom: 1.5px solid var(--line-strong); border-bottom-left-radius: 7px; }
-.mp-sess-sq { width: 9px; height: 9px; border-radius: 3px; flex: none; background: var(--line-strong); }
-.mp-sess-sq.is-work { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
-.mp-sess-sq.is-done { background: var(--ok); }
-.mp-sess-sq.is-sub { background: var(--accent); opacity: 0.55; }
-.mp-sess-txt { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
-.mp-sess-txt b { font-size: 12.5px; font-weight: 600; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-sess.is-active .mp-sess-txt b { color: var(--text); }
-.mp-sess-txt small { font-size: 10.5px; color: var(--text-faint); }
-.mp-sess-ico { margin-left: auto; font-size: 11px; color: var(--text-faint); flex: none; }
-.mp-side-context { margin-top: auto; display: flex; align-items: center; gap: 10px; padding-top: 14px; }
-.mp-ring { flex: none; }
-.mp-ring circle { fill: none; stroke-width: 3.4; stroke-linecap: round; }
-.mp-ring .ring-bg { stroke: var(--line-strong); }
-.mp-ring .ring-fg { stroke: var(--accent); stroke-dasharray: 97; stroke-dashoffset: 27; transform: rotate(-90deg); transform-origin: 18px 18px; }
-.mp-side-context-txt { display: flex; flex-direction: column; gap: 1px; }
-.mp-side-context-txt b { font-family: var(--mono); font-size: 13px; color: var(--text); }
-.mp-side-context-txt small { font-size: 10.5px; color: var(--text-faint); }
-
-/* 中：对话 */
-.mp-chat-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
-.mp-chat-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-chat-tools { display: flex; gap: 6px; flex: none; }
-.mp-chat-tools i { width: 20px; height: 20px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); }
-.mp-chat-body { display: flex; flex-direction: column; gap: 11px; flex: 1; min-height: 0; }
-.mp-msg { font-size: 12.5px; line-height: 1.55; padding: 9px 13px; border-radius: 12px; max-width: 88%; }
-.mp-msg--user { align-self: flex-end; background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--text); }
-.mp-msg--ai { align-self: stretch; max-width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text-muted); }
-.mp-activity { display: flex; align-items: center; gap: 8px; padding: 2px 2px; font-size: 11.5px; color: var(--text-faint); }
-.mp-activity-ico { flex: none; width: 16px; height: 16px; border-radius: 5px; background: var(--bg-2); border: 1px solid var(--line); }
-.mp-activity-label b { color: var(--text-muted); font-weight: 600; }
-.mp-tool {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 11px;
-  font-family: var(--mono); font-size: 11.5px;
-  background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px;
-}
-.mp-tool-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); flex: none; }
-.mp-tool-dot.is-ok { background: var(--ok); box-shadow: 0 0 6px rgba(70, 167, 88, 0.5); }
-.mp-tool-name { color: var(--accent); font-weight: 600; flex: none; }
-.mp-tool-sum { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.mp-tool-meta { color: var(--text-faint); justify-self: end; white-space: nowrap; }
-.mp-tool-spin { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line-strong); border-top-color: var(--accent); animation: mp-spin 0.8s linear infinite; flex: none; }
-@keyframes mp-spin { to { transform: rotate(360deg); } }
-.mp-tool--run { border-color: var(--accent-line); }
-.mp-tool--run .mp-tool-meta { color: var(--accent); animation: mp-blink 1.3s var(--ease) infinite; }
-.mp-composer { margin-top: auto; padding-top: 13px; }
-.mp-composer-input { font-size: 12.5px; color: var(--text-faint); padding: 11px 13px; background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: 12px; }
-.mp-composer-bar { display: flex; align-items: center; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
-.mp-chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); padding: 3px 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; }
-.mp-chip--model { color: var(--text); border-color: var(--accent-line); }
-.mp-chip-key { color: var(--text-faint); }
-.mp-chip-div { color: var(--line-strong); }
-.mp-chip--mode { color: var(--accent); }
-.mp-chip-ring { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--accent); }
-.mp-chip-send { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; }
-
-/* 右：任务清单 + 进度 */
-.mp-todo-head { display: flex; align-items: baseline; justify-content: space-between; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 10px; }
-.mp-todo-count { color: var(--accent); font-size: 12px; letter-spacing: 0; }
-.mp-progress-track { height: 7px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 16px; }
-.mp-progress-fill { display: block; height: 100%; width: var(--p); background: var(--accent); box-shadow: 0 0 12px var(--accent-glow); border-radius: 999px; }
-.mp-phase { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin: 6px 0 8px; }
-.mp-phase-mark { color: var(--accent); font-weight: 600; }
-.mp-todo { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: var(--text-muted); padding: 5px 2px; line-height: 1.45; }
-.mp-glyph { flex: none; font-size: 11px; line-height: 1.5; color: var(--line-strong); }
-.mp-todo.is-done { color: var(--text-faint); }
-.mp-todo.is-done .mp-glyph { color: var(--ok); }
-.mp-todo.is-doing { color: var(--text); }
-.mp-todo.is-doing .mp-glyph { color: var(--accent); }
-.mp-todo-add { margin-top: auto; font-size: 12px; color: var(--text-faint); padding: 8px 10px; border: 1px dashed var(--line-strong); border-radius: 8px; }
-.mp-app-note { margin-top: 16px; text-align: center; font-size: 12.5px; color: var(--text-faint); }
+.mp-shot img { width: 100%; height: auto; display: block; }
+.mp-shot-note { margin-top: 14px; padding: 0 16px 2px; text-align: center; font-size: 12.5px; color: var(--text-faint); }
 
 /* ===== 语言切换 ===== */
 .mp-lang { display: inline-flex; align-items: center; padding: 3px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 999px; }
@@ -865,11 +734,6 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-reveal.is-in { opacity: 1; transform: none; }
 
 /* ===== 移动端 ===== */
-@media (max-width: 1080px) {
-  .mp-app-work { grid-template-columns: minmax(0, 1fr) 240px; }
-  .mp-pane--side { display: none; }
-}
-
 @media (max-width: 900px) {
   .mp-nav-toggle { display: flex; }
   .mp-topbar-gh { padding: 8px; }
@@ -908,10 +772,6 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 
 @media (max-width: 680px) {
   .mp-hero-title br { display: none; }
-  .mp-app-work { grid-template-columns: 1fr; }
-  .mp-pane { min-height: 0; }
-  .mp-pane--side { display: flex; }
-  .mp-pane--chat { min-height: 360px; }
   .mp-cta-band-inner { flex-direction: column; align-items: flex-start; }
   .mp-log-item { flex-direction: column; gap: 10px; align-items: flex-start; }
   .mp-footer-bottom { flex-direction: column; gap: 6px; }

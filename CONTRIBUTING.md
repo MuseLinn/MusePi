@@ -18,8 +18,8 @@ straight to a pull request.
 
 ### Major changes
 
-Discuss major features and broad architectural or behavioral changes in
-[Discord](https://discord.gg/4NMW9cdXZa) **before writing the implementation**.
+Discuss major features and broad architectural or behavioral changes in a
+[GitHub issue](https://github.com/MuseLinn/MusePi/issues) **before writing the implementation**.
 This includes new subsystems, large UI changes, new dependencies, and changes
 that span several packages. A GitHub issue is not a substitute for this
 discussion, and prior discussion does not guarantee that a pull request will be

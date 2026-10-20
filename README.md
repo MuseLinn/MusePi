@@ -18,7 +18,6 @@
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-DEA584?style=flat&colorA=222222&logo=rust&logoColor=white" alt="Rust"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
-  <a href="https://discord.gg/4NMW9cdXZa"><img src="https://img.shields.io/badge/Discord-5865F2?style=flat&colorA=222222&logo=discord&logoColor=white" alt="Discord"></a></p>
 
 <p align="center">
   <em>English | <a href="README.zh-CN.md">中文</a></em>
@@ -252,4 +251,4 @@ Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bund
 
 ## Lineage & references
 
-- [Upstream sync notes](UPSTREAM.md) · [Changelog](packages/coding-agent/CHANGELOG.musepi.md) · [npm](https://www.npmjs.com/package/@musepi/pi-coding-agent) · [Discord](https://discord.gg/4NMW9cdXZa)
+- [Upstream sync notes](UPSTREAM.md) · [Changelog](packages/coding-agent/CHANGELOG.musepi.md) · [npm](https://www.npmjs.com/package/@musepi/pi-coding-agent)

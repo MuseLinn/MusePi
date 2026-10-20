@@ -50,7 +50,11 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
  */
 const FLUSH_INTERVAL_MS = 30_000;
 
-const SERVICE_NAME = "oh-my-pi";
+/**
+ * Service name reported to the OTel collector. It is an outbound identifier:
+ * whatever the collector is, it labels every span and log this process emits.
+ */
+const SERVICE_NAME = "musepi";
 
 type TelemetrySignal = "trace" | "log" | "metric";
 type OtelLogLevel = "none" | logger.LogLevel;
