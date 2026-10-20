@@ -2059,6 +2059,17 @@ export interface ProviderModelConfig {
 	reasoning: boolean;
 	/** Optional canonical thinking capability metadata for per-model effort support. */
 	thinking?: Model["thinking"];
+	/**
+	 * Whether this model accepts native tool calls on the wire.
+	 *
+	 * `tools.format=auto` reads it: `false` makes the host inject an inband
+	 * dialect prompt instead of sending provider-side `tools`, `true`/omitted
+	 * keeps native tool calling. A provider that routes to a backend which
+	 * silently drops `tools` (leaving the model to improvise markup) must
+	 * declare `false` here — without it the model's own invented format leaks
+	 * into the transcript and the turn stops with no tool result.
+	 */
+	supportsTools?: boolean;
 	/** Supported input types. */
 	input: ("text" | "image" | "video")[];
 	/** Cost per million tokens. */

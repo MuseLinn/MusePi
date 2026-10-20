@@ -108,6 +108,19 @@ export const isGemmaModelId = memo((modelId: string): boolean => {
 	return /(^|\/)gemma[-.]?\d/i.test(modelId);
 });
 
+/**
+ * Tencent Hunyuan family: the `hunyuan*` ids plus the short `hy<N>` forms this
+ * catalog's CodeBuddy route serves (`hy3`, `hy3-x`, `hy4-preview`).
+ *
+ * The short form needs its own matcher because it carries no vendor token at
+ * all — and it is exactly the id whose tool markup nothing else recognizes.
+ */
+export const isHunyuanModelId = memo((modelId: string): boolean => {
+	const bare = bareModelId(modelId);
+	if (/hunyuan/i.test(bare)) return true;
+	return /^hy\d/i.test(bare);
+});
+
 /** DeepSeek family by id or display name (proxies often rename the id but keep the name). */
 export const isDeepseekModelIdOrName = memo((value: string): boolean => {
 	return value.toLowerCase().includes("deepseek");
@@ -363,6 +376,7 @@ export const modelFamilyToken = memo((modelId: string): string => {
 	if (isOpenAIGptOssModelId(modelId)) return "gpt-oss";
 	if (isMimoModelIdOrName(modelId)) return "mimo";
 	if (isGemmaModelId(modelId)) return "gemma";
+	if (isHunyuanModelId(modelId)) return "hunyuan";
 	if (parseGlmModel(bareModelId(modelId))) return "glm";
 	return "";
 });

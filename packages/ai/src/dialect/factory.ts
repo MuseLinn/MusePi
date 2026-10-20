@@ -5,6 +5,7 @@ import gemmaDefinition from "./gemma";
 import glmDefinition from "./glm";
 import harmonyDefinition from "./harmony";
 import hermesDefinition from "./hermes";
+import hunyuanDefinition from "./hunyuan";
 import kimiDefinition from "./kimi";
 import minimaxDefinition from "./minimax";
 import qwen3Definition from "./qwen3";
@@ -23,6 +24,7 @@ const DIALECT_DEFINITIONS: Record<Dialect, DialectDefinition> = {
 	qwen3: qwen3Definition,
 	gemini: geminiDefinition,
 	gemma: gemmaDefinition,
+	hunyuan: hunyuanDefinition,
 };
 
 export function getDialectDefinition(dialect: Dialect): DialectDefinition {

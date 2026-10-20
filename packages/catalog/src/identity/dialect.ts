@@ -11,7 +11,8 @@ export type Dialect =
 	| "qwen3"
 	| "gemini"
 	| "gemma"
-	| "minimax";
+	| "minimax"
+	| "hunyuan";
 
 export const FALLBACK_DIALECT: Dialect = "xml";
 
@@ -33,6 +34,8 @@ export function preferredDialect(modelId: string): Dialect {
 			return "deepseek";
 		case "minimax":
 			return "minimax";
+		case "hunyuan":
+			return "hunyuan";
 		case "openai":
 		case "gpt-oss":
 			return "harmony";

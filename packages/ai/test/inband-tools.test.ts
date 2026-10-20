@@ -44,6 +44,7 @@ const DIALECTS: readonly Dialect[] = [
 	"qwen3",
 	"gemini",
 	"gemma",
+	"hunyuan",
 ];
 
 function usage(): Usage {

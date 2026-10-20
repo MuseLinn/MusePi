@@ -29,6 +29,8 @@ const RESPONSE_OPEN_TOKENS: Record<Dialect, readonly string[]> = {
 	qwen3: ["<tool_response>"],
 	gemini: ["```tool_outputs"],
 	gemma: ["<|tool_response>"],
+	// Hunyuan tool feedback is a plain-text line, not a tag: no open token exists.
+	hunyuan: [],
 };
 
 function firstTokenIndex(text: string, tokens: readonly string[]): number {
