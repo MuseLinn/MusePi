@@ -31,7 +31,7 @@ export class LogoutAccountSelectorComponent extends Container {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new TruncatedText(theme.bold(t("Select {0} account to log out:", providerName))));
+		this.addChild(new TruncatedText(theme.bold(t("commands.selectAccountLogOutWith0", providerName))));
 		this.addChild(new Spacer(1));
 		this.#listContainer = new Container();
 		this.addChild(this.#listContainer);
@@ -55,7 +55,7 @@ export class LogoutAccountSelectorComponent extends Container {
 		for (let i = startIndex; i < endIndex; i++) {
 			const account = this.#accounts[i];
 			if (!account) continue;
-			const activeTag = account.active ? theme.fg("muted", t(" (active)")) : "";
+			const activeTag = account.active ? theme.fg("muted", t("commands.text5")) : "";
 			const detail = account.detail ? theme.fg("dim", `  ${account.detail}`) : "";
 			if (i === this.#selectedIndex) {
 				rows.push(`${theme.fg("accent", `${theme.nav.cursor} ${account.label}`)}${activeTag}${detail}`);
@@ -77,12 +77,12 @@ export class LogoutAccountSelectorComponent extends Container {
 
 		if (total === 0) {
 			this.#listContainer.addChild(
-				new TruncatedText(theme.fg("muted", `  ${t("No stored accounts to log out")}`), 0, 0),
+				new TruncatedText(theme.fg("muted", `  ${t("commands.noStoredAccountsLog")}`), 0, 0),
 			);
 		}
 
 		this.#listContainer.addChild(
-			new TruncatedText(theme.fg("muted", `  ${t("↑/↓ select · ↵ log out account · Esc cancel")}`), 0, 0),
+			new TruncatedText(theme.fg("muted", `  ${t("commands.selectLogOutAccount")}`), 0, 0),
 		);
 
 		if (this.#statusMessage) {

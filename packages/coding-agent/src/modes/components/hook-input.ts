@@ -57,7 +57,7 @@ export class HookInputComponent extends Container {
 		this.#input = new Input();
 		this.addChild(this.#input);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", t("enter submit  esc cancel")), 1, 0));
+		this.addChild(new Text(theme.fg("dim", t("commands.enterSubmitEscCancel")), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
 	}

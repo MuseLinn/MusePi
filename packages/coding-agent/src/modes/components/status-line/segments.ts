@@ -129,7 +129,7 @@ const modelSegment: StatusLineSegment = {
 		const state = ctx.session.state;
 		const opts = ctx.options.model ?? {};
 
-		let modelName = state.model?.name || state.model?.id || t("no-model");
+		let modelName = state.model?.name || state.model?.id || t("mcp.noModel");
 		if (modelName.startsWith("Claude ")) {
 			modelName = modelName.slice(7);
 		}
@@ -234,7 +234,7 @@ function renderGoalMode(ctx: SegmentContext, mode: { enabled: boolean; paused: b
 			break;
 	}
 
-	const parts: string[] = [withIcon(icon, t("Goal"))];
+	const parts: string[] = [withIcon(icon, t("commands.goal"))];
 	const showBudget = ctx.session.settings.get("goal.statusInFooter") === true;
 	if (showBudget && goal) {
 		parts.push(formatGoalBudget(goal.tokensUsed, goal.tokenBudget));
@@ -251,24 +251,24 @@ function formatLoopLimit(limit: NonNullable<SegmentContext["loopMode"]>["limit"]
 	const minutes = Math.floor((totalSeconds % 3_600) / 60);
 	const seconds = totalSeconds % 60;
 	if (hours > 0) {
-		if (minutes > 0) return t("{0}h{1}m left", String(hours), String(minutes));
-		return t("{0}h left", String(hours));
+		if (minutes > 0) return t("commands.hMLeftWith0With1", String(hours), String(minutes));
+		return t("commands.hLeftWith0", String(hours));
 	}
 	if (minutes > 0) {
-		if (seconds > 0) return t("{0}m{1}s left", String(minutes), String(seconds));
-		return t("{0}m left", String(minutes));
+		if (seconds > 0) return t("commands.mSLeftWith0With1", String(minutes), String(seconds));
+		return t("commands.mLeftWith0", String(minutes));
 	}
-	return t("{0}s left", String(seconds));
+	return t("commands.sLeftWith0", String(seconds));
 }
 
 const modeSegment: StatusLineSegment = {
 	id: "mode",
 	render(ctx) {
-		const pauseSuffix = theme.icon.pause ? ` ${theme.icon.pause}` : ` ${t("(paused)")}`;
+		const pauseSuffix = theme.icon.pause ? ` ${theme.icon.pause}` : ` ${t("commands.text18")}`;
 
 		const plan = ctx.planMode;
 		if (plan && (plan.enabled || plan.paused)) {
-			const label = plan.paused ? `${t("Plan")}${pauseSuffix}` : t("Plan");
+			const label = plan.paused ? `${t("commands.plan")}${pauseSuffix}` : t("commands.plan");
 			const content = withIcon(theme.icon.plan, label);
 			const color = plan.paused ? "warning" : "accent";
 			return { content: theme.fg(color, content), visible: true };
@@ -276,7 +276,7 @@ const modeSegment: StatusLineSegment = {
 
 		const prewalk = ctx.prewalk;
 		if (prewalk?.enabled) {
-			const content = withIcon(theme.icon.prewalk, t("Prewalk"));
+			const content = withIcon(theme.icon.prewalk, t("settings.prewalk"));
 			return { content: theme.fg("accent", content), visible: true };
 		}
 
@@ -287,7 +287,7 @@ const modeSegment: StatusLineSegment = {
 
 		const vibe = ctx.vibeMode;
 		if (vibe?.enabled) {
-			const content = withIcon(theme.icon.agents, t("Vibe"));
+			const content = withIcon(theme.icon.agents, t("commands.vibe"));
 			return { content: theme.fg("accent", content), visible: true };
 		}
 
@@ -295,7 +295,7 @@ const modeSegment: StatusLineSegment = {
 		if (loop) {
 			const icon = loop.state === "paused" ? theme.icon.pause || theme.icon.loop : theme.icon.loop;
 			const color: ThemeColor = loop.state === "paused" ? "warning" : "customMessageLabel";
-			const parts = [withIcon(icon, `${t("Loop")} ${t(loop.state)}`)];
+			const parts = [withIcon(icon, `${t("commands.loop")} ${t(loop.state)}`)];
 			const limit = formatLoopLimit(loop.limit);
 			if (limit) parts.push(limit);
 			return { content: theme.fg(color, parts.join(" ")), visible: true };
@@ -481,10 +481,10 @@ const costSegment: StatusLineSegment = {
 		const billingParts: string[] = [];
 		if (cost) billingParts.push(`$${cost.toFixed(2)}`);
 		if (normalizedPremiumRequests) billingParts.push(`★ ${formatNumber(normalizedPremiumRequests)}`);
-		if (usingSubscription) billingParts.push(t("(sub)"));
+		if (usingSubscription) billingParts.push(t("shell.text2"));
 		if (advisorCost) {
 			const prefix = billingParts.length ? "+ " : "";
-			billingParts.push(`${prefix}$${advisorCost.toFixed(2)} ${t("(adv)")}`);
+			billingParts.push(`${prefix}$${advisorCost.toFixed(2)} ${t("commands.text12")}`);
 		}
 
 		return { content: theme.fg("statusLineCost", billingParts.join(" ")), visible: true };
@@ -544,7 +544,7 @@ const timeSegment: StatusLineSegment = {
 		let hours = now.getHours();
 		let suffix = "";
 		if (opts.format === "12h") {
-			suffix = hours >= 12 ? t("pm") : t("am");
+			suffix = hours >= 12 ? t("commands.pm") : t("commands.am");
 			hours = hours % 12 || 12;
 		}
 
@@ -564,7 +564,7 @@ const sessionSegment: StatusLineSegment = {
 	render(ctx) {
 		const sessionManager = ctx.session.sessionManager;
 		const sessionId = sessionManager?.getSessionId?.();
-		const display = sessionId?.slice(0, 8) || t("new");
+		const display = sessionId?.slice(0, 8) || t("shell.new");
 
 		return { content: withIcon(theme.icon.session, display), visible: true };
 	},
@@ -640,8 +640,8 @@ const collabSegment: StatusLineSegment = {
 		if (!ctx.collab) return { content: "", visible: false };
 		const label =
 			ctx.collab.role === "host"
-				? `⇄ ${t("collab:{0}", String(ctx.collab.participantCount))}`
-				: `⇄ ${t("collab guest:{0}", String(ctx.collab.participantCount))}`;
+				? `⇄ ${t("commands.collabWith0", String(ctx.collab.participantCount))}`
+				: `⇄ ${t("commands.collabGuestWith0", String(ctx.collab.participantCount))}`;
 		return { content: theme.fg("accent", label), visible: true };
 	},
 };

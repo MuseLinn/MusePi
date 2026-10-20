@@ -263,7 +263,7 @@ export class HookSelectorComponent extends Container {
 			this.addChild(this.#listContainer);
 		}
 		this.addChild(new Spacer(1));
-		const controlsHint = opts?.helpText ?? t("up/down navigate  enter select  esc cancel");
+		const controlsHint = opts?.helpText ?? t("commands.upDownNavigateEnter");
 		this.addChild(new Text(theme.fg("dim", controlsHint), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());

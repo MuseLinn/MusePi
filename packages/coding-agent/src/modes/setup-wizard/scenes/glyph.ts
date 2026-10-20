@@ -19,8 +19,8 @@ const GLYPH_SAMPLES: Readonly<Record<SymbolPreset, string>> = {
 
 /** One picker row per preset; the description column shows live sample glyphs instead of prose. */
 class GlyphSceneController implements SetupSceneController {
-	title = t("Choose glyph mode");
-	subtitle = t("Pick the row that renders cleanly in your terminal.");
+	title = t("setup.chooseGlyphMode");
+	subtitle = t("setup.pickRowRendersCleanly");
 	#selectList: SelectList;
 	#previewRequest = 0;
 	#committing = false;
@@ -70,7 +70,7 @@ class GlyphSceneController implements SetupSceneController {
 	}
 
 	render(width: number): readonly string[] {
-		const lines = [theme.fg("muted", t("If a row shows boxes, tofu, or misaligned icons, pick another.")), ""];
+		const lines = [theme.fg("muted", t("setup.rowShowsBoxes.info")), ""];
 		this.#listRowStart = lines.length;
 		lines.push(...this.#selectList.render(width));
 		return lines;
@@ -99,7 +99,7 @@ class GlyphSceneController implements SetupSceneController {
 export const glyphSetupScene: SetupScene = {
 	id: "glyph-mode",
 	get title() {
-		return t("Choose glyph mode");
+		return t("setup.chooseGlyphMode");
 	},
 	minVersion: 1,
 	mount: host => new GlyphSceneController(host),

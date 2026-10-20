@@ -41,7 +41,7 @@ export class ErrorBannerComponent extends Container {
 				0,
 			),
 		);
-		this.addChild(new Text(theme.fg("dim", t("Dismissed when you send your next message.")), 1, 0));
+		this.addChild(new Text(theme.fg("dim", t("errors.dismissedYouSendYour")), 1, 0));
 		this.addChild(new DynamicBorder(str => theme.fg("error", str)));
 	}
 }

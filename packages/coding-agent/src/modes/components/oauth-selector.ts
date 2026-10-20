@@ -96,7 +96,7 @@ export class OAuthSelectorComponent extends Container {
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 		// Add title
-		const title = mode === "login" ? t("Select provider to login:") : t("Select provider to logout:");
+		const title = mode === "login" ? t("settings.selectProviderLogin") : t("auth.selectProviderLogout");
 		this.addChild(new TruncatedText(theme.bold(title)));
 		this.addChild(new Spacer(1));
 		// Create list container
@@ -234,16 +234,16 @@ export class OAuthSelectorComponent extends Container {
 		if (state === "checking") {
 			const frameCount = theme.spinnerFrames.length;
 			const spinner = frameCount > 0 ? theme.spinnerFrames[this.#spinnerFrame % frameCount] : theme.status.pending;
-			return theme.fg("warning", ` ${spinner} ${t("checking")}`) + source;
+			return theme.fg("warning", ` ${spinner} ${t("commands.checking")}`) + source;
 		}
 		if (state === "invalid") {
-			return theme.fg("error", ` ${theme.status.error} ${t("invalid")}`) + source;
+			return theme.fg("error", ` ${theme.status.error} ${t("commands.invalid")}`) + source;
 		}
 		if (state === "valid") {
-			return theme.fg("success", ` ${theme.status.enabled} ${t("logged in")}`) + source;
+			return theme.fg("success", ` ${theme.status.enabled} ${t("commands.loggedIn")}`) + source;
 		}
 		return this.#hasSelectableAuth(providerId)
-			? theme.fg("success", ` ${theme.status.enabled} ${t("logged in")}`) + source
+			? theme.fg("success", ` ${theme.status.enabled} ${t("commands.loggedIn")}`) + source
 			: "";
 	}
 
@@ -257,7 +257,7 @@ export class OAuthSelectorComponent extends Container {
 
 	#renderStatusLine(_total: number): string {
 		const query = this.#searchQuery.trim();
-		const suffix = query ? t("Search: {0}", this.#searchQuery) : t("Type to search");
+		const suffix = query ? t("settings.searchWith0", this.#searchQuery) : t("setup.typeSearch");
 		return theme.fg("muted", `  ${suffix}`);
 	}
 
@@ -265,11 +265,11 @@ export class OAuthSelectorComponent extends Container {
 		let text = `${provider.name} ${provider.id}`;
 		const origin = this.#authStorage.getCredentialOrigin(provider.id);
 		if (origin) {
-			text += ` ${t("logged in authenticated {0}", ORIGIN_LABELS[origin.kind])}`;
+			text += ` ${t("commands.loggedAuthenticatedWith0", ORIGIN_LABELS[origin.kind])}`;
 			if (origin.envVar) text += ` ${origin.envVar}`;
 		}
 		if (!provider.available) {
-			text += ` ${t("unavailable")}`;
+			text += ` ${t("commands.unavailable")}`;
 		}
 		return text;
 	}
@@ -359,9 +359,9 @@ export class OAuthSelectorComponent extends Container {
 			const message =
 				this.#allProviders.length === 0
 					? this.#mode === "login"
-						? t("No OAuth providers available")
-						: t("No stored provider credentials to log out")
-					: t("No matching providers");
+						? t("settings.noOauthProvidersAvailable")
+						: t("settings.noStoredProviderCredentials")
+					: t("settings.noMatchingProviders");
 			this.#listContainer.addChild(new TruncatedText(theme.fg("muted", `  ${message}`), 0, 0));
 		}
 		if (this.#statusMessage) {
@@ -429,7 +429,7 @@ export class OAuthSelectorComponent extends Container {
 			this.stopValidation();
 			this.#onSelectCallback(selectedProvider.id);
 		} else if (selectedProvider) {
-			this.#statusMessage = t("Provider unavailable in this environment.");
+			this.#statusMessage = t("settings.providerUnavailableEnvironment");
 			this.#updateList();
 		}
 	}

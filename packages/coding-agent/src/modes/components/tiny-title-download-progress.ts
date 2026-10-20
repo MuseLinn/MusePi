@@ -38,13 +38,13 @@ function currentFile(event: TinyTitleProgressEvent | undefined): string | undefi
 }
 
 function statusLabel(event: TinyTitleProgressEvent | undefined): string {
-	if (!event) return t("Preparing");
-	if (event.status === "error") return t("Failed");
-	if (event.status === "ready") return t("Ready");
-	if (event.status === "done") return t("Downloaded");
-	if (event.status === "download") return t("Downloading");
-	if (event.status === "progress" || event.status === "progress_total") return t("Downloading");
-	return t("Preparing");
+	if (!event) return t("commands.preparing");
+	if (event.status === "error") return t("commands.failed");
+	if (event.status === "ready") return t("commands.ready2");
+	if (event.status === "done") return t("commands.downloaded");
+	if (event.status === "download") return t("commands.downloading");
+	if (event.status === "progress" || event.status === "progress_total") return t("commands.downloading");
+	return t("commands.preparing");
 }
 
 function byteLabel(event: TinyTitleProgressEvent | undefined): string | undefined {
@@ -81,7 +81,7 @@ export class TinyTitleDownloadProgressComponent implements Component {
 		const pct =
 			this.#event?.progress === undefined ? "" : `${Math.floor(this.#event.progress).toString().padStart(3, " ")}%`;
 		const bytes = byteLabel(this.#event);
-		const title = `${theme.fg("accent", t("Tiny model"))} ${theme.fg("muted", status)} ${spec.label}`;
+		const title = `${theme.fg("accent", t("commands.tinyModel"))} ${theme.fg("muted", status)} ${spec.label}`;
 		const details = [progressBar(this.#event?.progress, Math.max(8, width - 36)), pct, bytes, file]
 			.filter((part): part is string => Boolean(part))
 			.join(" ");

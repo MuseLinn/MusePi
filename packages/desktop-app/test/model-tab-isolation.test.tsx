@@ -14,8 +14,8 @@ import { ModelSection } from "../src/components/settings-sections/model";
 // 回归背景:该区块曾无条件渲染,于是"角色模型/模型行为/供应商"三个 tab 底部
 // 也会长出整个自定义供应商区块(标题+列表+添加按钮),与第四个同名 tab 重复。
 
-const paneMarker = t("custom providers hint");
-const paneButton = t("add custom provider");
+const paneMarker = t("settings.customProvidersHint");
+const paneButton = t("settings.addCustomProvider");
 
 function sectionHtml(): string {
 	return renderToStaticMarkup(
@@ -49,7 +49,7 @@ describe("模型与供应商 tab 隔离", () => {
 		const html = sectionHtml();
 		// tab bar 本身存在(含第 4 个"自定义供应商" tab 标签)。
 		expect(html).toContain("gui-model-tabs");
-		expect(html).toContain(t("custom providers"));
+		expect(html).toContain(t("settings.customProviders"));
 		// 但区块本体(副标题 + 添加按钮)不得泄漏到其它 tab。
 		expect(html).not.toContain(paneMarker);
 		expect(html).not.toContain(paneButton);

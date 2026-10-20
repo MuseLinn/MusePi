@@ -199,7 +199,7 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 
 	#renderScene(width: number, height: number): string[] {
 		const scene = this.scenes[this.#sceneIndex];
-		const title = this.#activeScene?.title ?? scene?.title ?? t("Setup");
+		const title = this.#activeScene?.title ?? scene?.title ?? t("commands.setup");
 		const subtitle = this.#activeScene?.subtitle;
 		const contentWidth = Math.max(MIN_CONTENT_WIDTH, width - SCENE_MARGIN_X * 2);
 		const logo = gradientLogo(PI_LOGO, 0);
@@ -208,7 +208,7 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 			...logo.map(line => centerLine(line, width)),
 			centerLine(theme.bold(theme.fg("accent", APP_NAME)), width),
 			centerLine(
-				theme.fg("muted", t("Setup step {0} of {1}", String(this.#sceneIndex + 1), String(this.scenes.length))),
+				theme.fg("muted", t("commands.setupStepWith0With1", String(this.#sceneIndex + 1), String(this.scenes.length))),
 				width,
 			),
 			"",
@@ -222,7 +222,7 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 
 		const footer = [
 			"",
-			centerLine(theme.fg("dim", t("↑/↓ select · enter confirm · esc skip · ctrl+c exit setup")), width),
+			centerLine(theme.fg("dim", t("commands.selectEnterConfirmEsc")), width),
 		];
 		const maxBodyLines = Math.max(0, height - header.length - footer.length);
 		const body = this.#activeScene?.render(contentWidth, maxBodyLines).slice(0, maxBodyLines) ?? [];

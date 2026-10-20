@@ -437,10 +437,10 @@ export class ModelHubComponent implements Component {
 			{
 				id: "roles",
 				kind: "roles",
-				label: t("Roles"),
+				label: t("mcp.roles"),
 				annotation: `${assignedCount}/${visibleRoles.length}`,
 			},
-			{ id: "all", kind: "all", label: t("All models"), annotation: String(availableModels.length) },
+			{ id: "all", kind: "all", label: t("mcp.allModels"), annotation: String(availableModels.length) },
 		];
 
 		this.#fixedEntries = fixed;
@@ -745,8 +745,8 @@ export class ModelHubComponent implements Component {
 	#formatDiscoveryAge(fetchedAt: number | undefined): string | undefined {
 		if (!fetchedAt) return undefined;
 		const ageMs = Math.max(0, Date.now() - fetchedAt);
-		if (ageMs < 60_000) return t("less than a minute ago");
-		return t("{0}m ago", String(Math.round(ageMs / 60_000)));
+		if (ageMs < 60_000) return t("commands.lessThanMinuteAgo");
+		return t("commands.mAgoWith0", String(Math.round(ageMs / 60_000)));
 	}
 
 	#emptyStateMessage(): string | undefined {
@@ -903,14 +903,14 @@ export class ModelHubComponent implements Component {
 			styled: theme.fg("muted", `fallbacks:${item.model.provider}/*`),
 			action: "fallbackProvider",
 		});
-		chips.push({ label: t("fallback"), styled: theme.fg("muted", t("retry-fallback")), action: "fallback" });
+		chips.push({ label: t("mcp.fallback"), styled: theme.fg("muted", t("commands.retryFallback")), action: "fallback" });
 		this.#strip = { kind: "role", item, chips, index: 0, returnToRoles: false };
 	}
 
 	#openScopeStrip(item: ModelBrowserItem, role: string, returnToRoles: boolean): void {
 		const chips: StripChip[] = [
-			{ label: t("project"), styled: theme.fg("accent", t("project")), action: "scope", scope: "project" },
-			{ label: t("global"), styled: theme.fg("muted", t("global")), action: "scope", scope: "global" },
+			{ label: t("mcp.project"), styled: theme.fg("accent", t("mcp.project")), action: "scope", scope: "project" },
+			{ label: t("mcp.global"), styled: theme.fg("muted", t("mcp.global")), action: "scope", scope: "global" },
 		];
 		this.#strip = { kind: "scope", item, role, chips, index: 0, returnToRoles };
 	}
@@ -1704,21 +1704,21 @@ export class ModelHubComponent implements Component {
 		if (this.#assigning !== null) {
 			if (this.#assigning.kind === "fallbackKey") {
 				return truncateToWidth(
-					theme.fg("accent", t(" New fallback chain — Enter picks the model it protects, Esc cancels")),
+					theme.fg("accent", t("settings.newFallbackChain.info")),
 					width,
 				);
 			}
 			const info = getRoleInfo(this.#assigning.role, this.#settings);
 			const label = info.tag ?? info.name ?? this.#assigning.role;
 			if (this.#assigning.kind === "fallback") {
-				const verb = this.#assigning.index === null ? t("Adding fallback for") : t("Replacing fallback of");
+				const verb = this.#assigning.index === null ? t("settings.addingFallback") : t("settings.replacingFallback");
 				return truncateToWidth(
 					theme.fg("accent", ` ${verb} ${theme.bold(label)} — Enter picks the fallback model, Esc cancels`),
 					width,
 				);
 			}
 			return truncateToWidth(
-				theme.fg("accent", t(" Assigning {0} — Enter assigns, Esc cancels").replace("{0}", theme.bold(label))),
+				theme.fg("accent", t("settings.assigningEnterAssignsEscWith0").replace("{0}", theme.bold(label))),
 				width,
 			);
 		}
@@ -1727,10 +1727,10 @@ export class ModelHubComponent implements Component {
 		let text: string;
 		switch (entry.kind) {
 			case "recent":
-				text = t("Recently used models") + scopedSuffix;
+				text = t("settings.recentlyUsedModels") + scopedSuffix;
 				break;
 			case "roles":
-				text = t("Model roles — f adds a retry fallback, cleared roles fall back to auto-selection");
+				text = t("settings.modelRolesF.info");
 				break;
 			case "provider":
 				if (entry.locked) {
@@ -1929,20 +1929,20 @@ export class ModelHubComponent implements Component {
 		const strip = this.#strip;
 		if (strip) {
 			if (strip.kind === "roleName") {
-				return t("Enter create + pick model · Esc cancel");
+				return t("settings.enterCreatePickModel");
 			}
-			if (strip.kind === "role") return t("←/→ choose · Enter assign/clear · Esc cancel");
-			if (strip.kind === "scope") return t("←/→ save scope · Enter choose · Esc cancel");
-			return t("←/→ thinking level · Enter apply · Esc keep");
+			if (strip.kind === "role") return t("settings.chooseEnterAssignClear");
+			if (strip.kind === "scope") return t("settings.saveScopeEnterChoose");
+			return t("settings.thinkingLevelEnterApply");
 		}
 		if (this.#assigning !== null) {
 			switch (this.#assigning.kind) {
 				case "fallback":
-					return t("Enter pick fallback · ↑/↓ providers · type to search · Esc cancel");
+					return t("settings.enterPickFallbackProviders");
 				case "fallbackKey":
-					return t("Enter pick the protected model · ↑/↓ providers · type to search · Esc cancel");
+					return t("settings.enterPickProtectedModel");
 				default:
-					return t("Enter assign · ↑/↓ providers · type to search · Esc cancel");
+					return t("settings.enterAssignProvidersType");
 			}
 		}
 		const entry = this.#activeEntry();
@@ -1963,7 +1963,7 @@ export class ModelHubComponent implements Component {
 			return "↑/↓ rows · Enter pick · f fallback · x clear · t thinking · c cycle · [/] reorder · n new";
 		}
 		if (entry.kind === "provider" && entry.locked) {
-			return entry.oauth ? t("Enter log in · ↑/↓ providers · Esc close") : t("↑/↓ providers · Esc close");
+			return entry.oauth ? t("settings.enterLogProvidersEsc") : t("settings.providersEscClose");
 		}
 		const arrows = this.#focus === "scope" ? "↑/↓ providers · → models" : "↑/↓ models · ← providers";
 		const refresh = entry.kind === "provider" ? " · F5 refresh" : "";
@@ -1979,7 +1979,7 @@ export class ModelHubComponent implements Component {
 		}
 
 		if (strip.kind === "roleName") {
-			const label = theme.fg("accent", t("New role name:"));
+			const label = theme.fg("accent", t("settings.newRoleName"));
 			const inputWidth = Math.max(8, Math.min(32, width - visibleWidth("New role name:") - 24));
 			const inputLine = strip.input.render(inputWidth)[0] ?? "";
 			return truncateToWidth(`${label} ${inputLine} ${theme.fg("dim", "(letters, digits, - and _)")}`, width);
@@ -2062,7 +2062,7 @@ export class ModelHubComponent implements Component {
 		const sidebarLines = this.#renderSidebar(sidebarWidth, contentRows);
 
 		const out: string[] = [];
-		out.push(topBorderSplit(width, t("Models"), sidebarWidth));
+		out.push(topBorderSplit(width, t("settings.models"), sidebarWidth));
 		this.#contentRowStart = out.length;
 		for (let i = 0; i < contentRows; i++) {
 			out.push(splitRow(sidebarLines[i] ?? "", bodyLines[i] ?? "", width, sidebarWidth));

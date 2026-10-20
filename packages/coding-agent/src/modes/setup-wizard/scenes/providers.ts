@@ -12,8 +12,8 @@ import { WebSearchTab } from "./web-search";
  * temporarily suppress tab switching.
  */
 class ProvidersSceneController implements SetupSceneController {
-	title = t("Set up your providers");
-	subtitle = t("Sign in and pick a web search provider. Press Esc when you're done.");
+	title = t("setup.setUpYourProviders");
+	subtitle = t("setup.signPickWeb.info");
 
 	#tabs: SetupTab[];
 	#tabBar: TabBar;
@@ -23,7 +23,7 @@ class ProvidersSceneController implements SetupSceneController {
 	constructor(host: SetupSceneHost) {
 		this.#tabs = [new SignInTab(host), new WebSearchTab(host)];
 		this.#tabBar = new TabBar(
-			t("Providers"),
+			t("settings.settingsProviders"),
 			this.#tabs.map(tab => ({ id: tab.id, label: tab.label })),
 			getTabBarTheme(),
 		);
@@ -100,7 +100,7 @@ class ProvidersSceneController implements SetupSceneController {
 
 export const providersSetupScene: SetupScene = {
 	id: "providers",
-	title: t("Set up your providers"),
+	title: t("setup.setUpYourProviders"),
 	minVersion: 1,
 	mount: host => new ProvidersSceneController(host),
 };

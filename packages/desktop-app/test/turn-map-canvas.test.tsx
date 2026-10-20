@@ -212,18 +212,18 @@ describe("TurnMapCanvas SSR 冒烟", () => {
 		const html = renderToStaticMarkup(<TurnMapCanvas entries={[]} />);
 		expect(html).toContain("tm-empty");
 		// 词表文案在 SSR 里被 HTML 转义(撇号 → &#x27;),断言转义安全前缀。
-		expect(html).toContain(t("trajectory empty").split("'")[0]!);
+		expect(html).toContain(t("settings.trajectoryEmpty").split("'")[0]!);
 	});
 
 	it("右键菜单动作的可达性契约:两类导航动作不共用一个文案", () => {
 		// 回归(自 SessionTreeCanvas contracts 迁移):两个不同动作共用一个
 		// 标签会让屏幕阅读器播报错误的动作。地图右键 = 跳转(纯导航)与
 		// 切换到此分支(移动 leaf)必须可区分。
-		expect(t("trajectory jump")).not.toBe(t("map switch to branch"));
-		expect(t("branch re-answer here")).not.toBe(t("map switch to branch"));
-		expect(t("fork session here")).not.toBe(t("map switch to branch"));
+		expect(t("settings.trajectoryJump")).not.toBe(t("transcript.mapSwitchBranch"));
+		expect(t("transcript.branchReAnswerHere")).not.toBe(t("transcript.mapSwitchBranch"));
+		expect(t("transcript.forkSessionHere")).not.toBe(t("transcript.mapSwitchBranch"));
 		// 搜索导航(既有回归,保持覆盖)。
-		expect(t("trajectory search previous")).not.toBe(t("trajectory search next"));
-		expect(t("trajectory search previous")).not.toBe(t("trajectory clear filter"));
+		expect(t("settings.trajectorySearchPrevious")).not.toBe(t("settings.trajectorySearchNext"));
+		expect(t("settings.trajectorySearchPrevious")).not.toBe(t("settings.trajectoryClearFilter"));
 	});
 });

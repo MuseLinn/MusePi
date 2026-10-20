@@ -113,18 +113,18 @@ export class PluginListComponent extends Container {
 
 		// Title
 		this.addChild(new DynamicBorder());
-		this.addChild(new Text(theme.bold(theme.fg("accent", t("  Plugins"))), 0, 0));
+		this.addChild(new Text(theme.bold(theme.fg("accent", t("settings.plugins2"))), 0, 0));
 		this.addChild(new Spacer(1));
 
 		if (entries.length === 0) {
-			this.addChild(new Text(theme.fg("muted", t("  No plugins installed")), 0, 0));
+			this.addChild(new Text(theme.fg("muted", t("settings.noPluginsInstalled")), 0, 0));
 			this.addChild(new Spacer(1));
 			this.addChild(
-				new Text(theme.fg("dim", t("  Install npm plugins:        musepi plugin install <package>")), 0, 0),
+				new Text(theme.fg("dim", t("settings.installNpmPlugins.info")), 0, 0),
 			);
 			this.addChild(
 				new Text(
-					theme.fg("dim", t("  Install marketplace plugins: musepi plugin install <name>@<marketplace>")),
+					theme.fg("dim", t("settings.installMarketplacePlugins.info")),
 					0,
 					0,
 				),
@@ -159,7 +159,7 @@ export class PluginListComponent extends Container {
 
 		this.addChild(this.#selectList);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to configure · Esc to go back")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.enterConfigureEscGo")}`), 0, 0));
 		this.addChild(new DynamicBorder());
 	}
 
@@ -195,7 +195,7 @@ export class PluginListComponent extends Container {
 
 		let details = `${kindBadge} ${scopeTag} ${theme.sep.dot} v${version}`;
 		if (summary.shadowedBy) {
-			details += ` ${theme.sep.dot} ${t("shadowed by {0}", summary.shadowedBy)}`;
+			details += ` ${theme.sep.dot} ${t("commands.shadowedByWith0", summary.shadowedBy)}`;
 		}
 
 		return {
@@ -259,8 +259,8 @@ export class PluginDetailComponent extends Container {
 		// Enable/disable toggle
 		items.push({
 			id: "__enabled__",
-			label: t("Enabled"),
-			description: t("Enable or disable this plugin"),
+			label: t("settings.enabled"),
+			description: t("commands.enableDisablePlugin"),
 			currentValue: plugin.enabled ? "true" : "false",
 			values: ["true", "false"],
 		});
@@ -378,7 +378,7 @@ export class PluginDetailComponent extends Container {
 
 		this.addChild(this.#settingsList);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to edit · Esc to go back")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.enterEditEscGo")}`), 0, 0));
 		this.addChild(new DynamicBorder());
 	}
 
@@ -419,15 +419,15 @@ export class MarketplacePluginDetailComponent extends Container {
 		this.addChild(new Text(theme.bold(theme.fg("accent", `  ${plugin.id}`)), 0, 0));
 
 		const subtitleParts = [`[${plugin.scope}]`];
-		if (plugin.shadowedBy) subtitleParts.push(`${theme.status.shadowed} ${t("shadowed by {0}", plugin.shadowedBy)}`);
+		if (plugin.shadowedBy) subtitleParts.push(`${theme.status.shadowed} ${t("commands.shadowedByWith0", plugin.shadowedBy)}`);
 		this.addChild(new Text(theme.fg("muted", `  ${subtitleParts.join(" ")}`), 0, 0));
 		this.addChild(new Spacer(1));
 
 		const items: SettingItem[] = [
 			{
 				id: "__enabled__",
-				label: t("Enabled"),
-				description: t("Enable or disable this marketplace plugin"),
+				label: t("settings.enabled"),
+				description: t("commands.enableDisableMarketplacePlugin"),
 				currentValue: enabled ? "true" : "false",
 				values: ["true", "false"],
 			},
@@ -455,26 +455,26 @@ export class MarketplacePluginDetailComponent extends Container {
 
 		// Read-only metadata. SettingsList rejects items without `values`/`submenu`,
 		// so we render the metadata as plain text rows beneath the toggle.
-		this.addChild(new Text(theme.fg("dim", `  ${t("version")}       ${entry?.version ?? t("(unknown)")}`), 0, 0));
-		this.addChild(new Text(theme.fg("dim", `  ${t("scope")}         ${plugin.scope}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.version")}       ${entry?.version ?? t("commands.text19")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("shell.scope")}         ${plugin.scope}`), 0, 0));
 		this.addChild(
 			new Text(
 				theme.fg(
 					"dim",
-					`  ${t("install path")}  ${entry?.installPath ? shortenPath(entry.installPath) : t("(unknown)")}`,
+					`  ${t("commands.installPath")}  ${entry?.installPath ? shortenPath(entry.installPath) : t("commands.text19")}`,
 				),
 				0,
 				0,
 			),
 		);
-		this.addChild(new Text(theme.fg("dim", `  ${t("installed at")}  ${entry?.installedAt ?? t("(unknown)")}`), 0, 0));
-		this.addChild(new Text(theme.fg("dim", `  ${t("last updated")}  ${entry?.lastUpdated ?? t("(unknown)")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.installedAt")}  ${entry?.installedAt ?? t("commands.text19")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.lastUpdated")}  ${entry?.lastUpdated ?? t("commands.text19")}`), 0, 0));
 		if (entry?.gitCommitSha) {
-			this.addChild(new Text(theme.fg("dim", `  ${t("git sha")}       ${entry.gitCommitSha}`), 0, 0));
+			this.addChild(new Text(theme.fg("dim", `  ${t("commands.gitSha")}       ${entry.gitCommitSha}`), 0, 0));
 		}
 
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to toggle · Esc to go back")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.enterToggleEscGo")}`), 0, 0));
 		this.addChild(new DynamicBorder());
 	}
 
@@ -523,7 +523,7 @@ class ConfigEnumSubmenu extends Container {
 
 		this.addChild(this.#selectList);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to select · Esc to cancel")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.enterSelectEscCancel")}`), 0, 0));
 	}
 
 	handleInput(data: string): void {
@@ -581,7 +581,7 @@ class ConfigInputSubmenu extends Container {
 
 		this.addChild(this.#input);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to save · Esc to cancel")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("commands.enterSaveEscCancel2")}`), 0, 0));
 	}
 
 	handleInput(data: string): void {

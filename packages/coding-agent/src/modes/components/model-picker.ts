@@ -57,10 +57,10 @@ const MIN_VISIBLE = 5;
 /** Fraction of the terminal height the floating overlay occupies. */
 const HEIGHT_FRACTION = 0.4;
 
-const STATUS_HINT = t("Session-only switch — role models stay unchanged");
-const QUICK_ROLE_STATUS_HINT = t("Quick role switch — applies its model and thinking for this session");
-const FOOTER_HINT = t("↑/↓ models · Enter use for this session · type to search · @ quick roles · Esc close");
-const QUICK_ROLE_FOOTER_HINT = t("↑/↓ roles · Enter apply role model · type to search · Esc close");
+const STATUS_HINT = t("settings.sessionOnlySwitchRole");
+const QUICK_ROLE_STATUS_HINT = t("settings.quickRoleSwitchApplies");
+const FOOTER_HINT = t("settings.modelsEnterUse.info");
+const QUICK_ROLE_FOOTER_HINT = t("settings.rolesEnterApplyRole");
 
 /**
  * The alt+p picker component. Hosted as a non-fullscreen bottom-anchored
@@ -226,7 +226,7 @@ export class ModelPickerComponent implements Component {
 			: theme.fg("muted", ` ${this.#roleMode ? QUICK_ROLE_STATUS_HINT : STATUS_HINT}`);
 
 		const out: string[] = [];
-		out.push(topBorder(width, t("Switch Model")));
+		out.push(topBorder(width, t("mcp.switchModel")));
 		out.push(row(status, width));
 		for (const line of this.#browser.render(inner)) {
 			out.push(row(line, width));

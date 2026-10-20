@@ -43,7 +43,7 @@ export const WELCOME_LSP_SLOTS = 4;
 const NEW_TIP_MARKER = /\s*\[NEW\]\s*$/;
 
 /** Visible text rendered in place of {@link NEW_TIP_MARKER}. */
-const NEW_TAG_TEXT = (): string => t("NEW!");
+const NEW_TAG_TEXT = (): string => t("welcome.new");
 
 /** Milliseconds for one full hue rotation of the rainbow "NEW!" tag. */
 const NEW_GLOW_PERIOD_MS = 1500;
@@ -91,7 +91,7 @@ function renderNewTag(phase: number, encoding: ColorEncoding): string {
 	return out + reset;
 }
 export function renderWelcomeTip(tip: string, boxWidth: number, phase = 0): string[] {
-	const label = t("Tip: ");
+	const label = t("welcome.tip");
 	const labelWidth = visibleWidth(label);
 	const bodyBudget = boxWidth - 1 - labelWidth; // 1 = leading indent
 	if (bodyBudget < 8) return [];
@@ -167,7 +167,7 @@ export class WelcomeComponent implements Component {
 	get tip(): string | undefined {
 		if (this.#selectedTip === undefined) {
 			if (theme.getSymbolPreset() === "unicode" && Math.random() < 0.1) {
-				this.#selectedTip = t("Please use nerdfont 😭.");
+				this.#selectedTip = t("welcome.pleaseUseNerdfont");
 			} else {
 				this.#selectedTip = pickWeightedTip(
 					getLocale().toLowerCase().startsWith("zh") ? TIPS_ZH : TIPS,
@@ -285,7 +285,7 @@ export class WelcomeComponent implements Component {
 		// Dynamic model/provider labels are truncated inside the fixed column.
 		// Letting them influence the responsive breakpoint changes the box height
 		// when authoritative session data replaces the empty prepaint labels.
-		const leftMinContentWidth = Math.max(minLeftCol, visibleWidth(t("Welcome back!")));
+		const leftMinContentWidth = Math.max(minLeftCol, visibleWidth(t("welcome.welcomeBack")));
 		const desiredLeftCol = Math.min(preferredLeftCol, Math.max(minLeftCol, Math.floor(dualContentWidth * 0.35)));
 		const dualLeftCol =
 			dualContentWidth >= minRightCol + 1
@@ -302,7 +302,7 @@ export class WelcomeComponent implements Component {
 		// Left column - centered content
 		const leftLines = [
 			"",
-			this.#centerText(theme.bold(t("Welcome back!")), leftCol),
+			this.#centerText(theme.bold(t("welcome.welcomeBack")), leftCol),
 			"",
 			...logoColored.map(l => this.#centerText(l, leftCol)),
 			"",
@@ -317,7 +317,7 @@ export class WelcomeComponent implements Component {
 		// Recent sessions content
 		const sessionLines: string[] = [];
 		if (this.recentSessions.length === 0) {
-			sessionLines.push(` ${theme.fg("dim", t("No recent sessions"))}`);
+			sessionLines.push(` ${theme.fg("dim", t("welcome.noRecentSessions"))}`);
 		} else {
 			// Reserve width for the bullet prefix (" • ") and the trailing " (timeAgo)"
 			// so the relative time is never the part that gets truncated. The name
@@ -343,7 +343,7 @@ export class WelcomeComponent implements Component {
 		// LSP servers content
 		const lspLines: string[] = [];
 		if (this.lspServers.length === 0) {
-			lspLines.push(` ${theme.fg("dim", t("No LSP servers"))}`);
+			lspLines.push(` ${theme.fg("dim", t("welcome.noLspServers"))}`);
 		} else {
 			for (const server of this.lspServers.slice(0, WELCOME_LSP_SLOTS)) {
 				const icon =
@@ -365,16 +365,16 @@ export class WelcomeComponent implements Component {
 
 		// Right column
 		const rightLines = [
-			` ${theme.bold(theme.fg("accent", t("Tips")))}`,
-			` ${theme.fg("dim", "#")}${theme.fg("muted", t(" for prompt actions"))}`,
-			` ${theme.fg("dim", "/")}${theme.fg("muted", t(" for commands"))}`,
-			` ${theme.fg("dim", "!")}${theme.fg("muted", t(" to run bash"))}`,
-			` ${theme.fg("dim", "$")}${theme.fg("muted", t(" to run python"))}`,
+			` ${theme.bold(theme.fg("accent", t("errors.tips")))}`,
+			` ${theme.fg("dim", "#")}${theme.fg("muted", t("errors.promptActions"))}`,
+			` ${theme.fg("dim", "/")}${theme.fg("muted", t("errors.forCommands"))}`,
+			` ${theme.fg("dim", "!")}${theme.fg("muted", t("errors.runBash"))}`,
+			` ${theme.fg("dim", "$")}${theme.fg("muted", t("errors.runPython"))}`,
 			separator,
-			` ${theme.bold(theme.fg("accent", t("LSP Servers")))}`,
+			` ${theme.bold(theme.fg("accent", t("errors.lspServers")))}`,
 			...lspLines,
 			separator,
-			` ${theme.bold(theme.fg("accent", t("Recent sessions")))}`,
+			` ${theme.bold(theme.fg("accent", t("errors.recentSessions")))}`,
 			...sessionLines,
 			"",
 		];

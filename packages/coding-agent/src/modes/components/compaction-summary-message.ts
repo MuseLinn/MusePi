@@ -92,8 +92,8 @@ export class CompactionSummaryMessageComponent implements Component {
 			// the full text lives in the ctrl+o detail block below.
 			label: () =>
 				this.message.warning
-					? `${theme.icon.camera} ${t("compacted")} ${theme.fg("warning", theme.icon.warning)}`
-					: `${theme.icon.camera} ${t("compacted")}`,
+					? `${theme.icon.camera} ${t("commands.compacted")} ${theme.fg("warning", theme.icon.warning)}`
+					: `${theme.icon.camera} ${t("commands.compacted")}`,
 			detailMarkdown: () => this.#detailMarkdown(),
 		});
 	}
@@ -115,12 +115,12 @@ export class CompactionSummaryMessageComponent implements Component {
 		const frameCount = this.message.images?.length ?? 0;
 		const frameNote =
 			frameCount > 0
-				? `\n\n_${frameCount === 1 ? t("{0} snapcompact frame attached", String(frameCount)) : t("{0} snapcompact frames attached", String(frameCount))}_`
+				? `\n\n_${frameCount === 1 ? t("commands.snapcompactFrameAttachedWith0", String(frameCount)) : t("commands.snapcompactFramesAttachedWith0", String(frameCount))}_`
 				: "";
 		const warningNote = this.message.warning
-			? `\n\n${theme.icon.warning} **${t("Warning:")}** ${this.message.warning}`
+			? `\n\n${theme.icon.warning} **${t("commands.warning")}** ${this.message.warning}`
 			: "";
-		return `**${t("Compacted from {0} tokens", tokenStr)}**${warningNote}\n\n${this.message.summary}${frameNote}`;
+		return `**${t("commands.compactedTokensWith0", tokenStr)}**${warningNote}\n\n${this.message.summary}${frameNote}`;
 	}
 }
 
@@ -134,7 +134,7 @@ export class HandoffSummaryMessageComponent implements Component {
 
 	constructor(private readonly message: CustomMessage<unknown>) {
 		this.#divider = new SummaryDividerComponent({
-			label: () => `${theme.icon.context} ${t("handoff")}`,
+			label: () => `${theme.icon.context} ${t("commands.handoff")}`,
 			detailMarkdown: () => this.#detailMarkdown(),
 		});
 	}
@@ -153,7 +153,7 @@ export class HandoffSummaryMessageComponent implements Component {
 
 	#detailMarkdown(): string {
 		const document = extractHandoffDocument(getCustomMessageText(this.message));
-		return `**${t("Handoff context")}**\n\n${document || `_${t("No handoff content.")}_`}`;
+		return `**${t("commands.handoffContext")}**\n\n${document || `_${t("commands.noHandoffContent")}_`}`;
 	}
 }
 
@@ -177,8 +177,8 @@ export class BranchSummaryMessageComponent implements Component {
 
 	constructor(private readonly message: BranchSummaryMessage) {
 		this.#divider = new SummaryDividerComponent({
-			label: () => `${theme.icon.branch} ${t("branch")}`,
-			detailMarkdown: () => `**${t("Branch summary")}**\n\n${this.message.summary}`,
+			label: () => `${theme.icon.branch} ${t("commands.branch")}`,
+			detailMarkdown: () => `**${t("commands.branchSummary")}**\n\n${this.message.summary}`,
 		});
 	}
 

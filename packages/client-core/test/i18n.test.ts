@@ -24,7 +24,7 @@ describe("i18n t()", () => {
 		// en-US has no dict entry — the key (with {name}) is the fallback and
 		// must still be interpolated, not rendered raw.
 		setLocale("en-US");
-		expect(t("general.stagedCount", { count: 2 })).toBe("general.stagedCount");
+		expect(t("general.stagedCount", { count: 2 })).toBe("staged count");
 		expect(t("tools.watchingRunWithIdWithRepo", { id: 7, repo: "a/b" })).toBe("watching run #7 on a/b");
 		setLocale("zh-CN");
 	});

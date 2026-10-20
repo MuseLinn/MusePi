@@ -19,7 +19,7 @@ export class BorderedLoader extends Container {
 		);
 		this.addChild(this.#loader);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("muted", t("esc cancel")), 1, 0));
+		this.addChild(new Text(theme.fg("muted", t("selector.escCancel")), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder(borderColor));
 	}

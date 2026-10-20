@@ -4,15 +4,15 @@ import { getSelectListTheme } from "../../theme/theme.js";
 import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 
 class LanguageSceneController implements SetupSceneController {
-	title = t("Language / 语言");
-	subtitle = t("Choose the interface language for setup and the TUI.");
+	title = t("settings.language语言");
+	subtitle = t("settings.chooseInterfaceLanguageSetup");
 	#selectList: SelectList;
 	#disposed = false;
 
 	constructor(private readonly host: SetupSceneHost) {
 		// Evaluated at mount so the locale is resolved when the scene opens.
 		const items: readonly SelectItem[] = [
-			{ value: "en-US", label: "English", description: t("Use English for setup and the TUI") },
+			{ value: "en-US", label: "English", description: t("commands.useEnglishSetupTui") },
 			{ value: "zh-CN", label: "简体中文", description: "使用中文进行设置和界面显示" },
 		];
 		const current = (host.ctx.settings.get("settings.locale") as string | undefined) ?? "en-US";
@@ -75,7 +75,7 @@ class LanguageSceneController implements SetupSceneController {
 export const languageSetupScene: SetupScene = {
 	id: "language",
 	get title() {
-		return t("Language / 语言");
+		return t("settings.language语言");
 	},
 	minVersion: 1,
 	mount: host => new LanguageSceneController(host),

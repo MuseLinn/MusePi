@@ -176,11 +176,11 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		const cards = railCards();
 		// 内置 + 扩展各一张（RPC 合并视图直渲染）。
 		expect(cards.map(c => c.dataset.designSystem)).toEqual(["minimal", "acme-brand"]);
-		expect(railCard("minimal").textContent).toContain(t("design system builtin"));
-		expect(railCard("acme-brand").textContent).toContain(t("design system extension"));
+		expect(railCard("minimal").textContent).toContain(t("composer.designSystemBuiltin"));
+		expect(railCard("acme-brand").textContent).toContain(t("composer.designSystemExtension"));
 		// 扩展体系用 RPC 原样 label；内置走 i18n 词表。
 		expect(railCard("acme-brand").textContent).toContain("Acme Brand");
-		expect(railCard("minimal").textContent).toContain(t("design style minimal"));
+		expect(railCard("minimal").textContent).toContain(t("composer.designStyleMinimal"));
 		// 色卡条：前 4 色拼接。
 		const bars = railCard("minimal").querySelectorAll(".gui-ds-swatchbar--rail > span");
 		expect(bars).toHaveLength(4);
@@ -199,7 +199,7 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		expect(railCard("acme-brand").classList.contains("gui-ds-card--on")).toBe(false);
 		// 同源：胶囊按钮显示同一选中体系名。
 		const pill = document.body.querySelector<HTMLButtonElement>(".gui-style-select-btn");
-		expect(pill?.textContent).toContain(t("design style minimal"));
+		expect(pill?.textContent).toContain(t("composer.designStyleMinimal"));
 		// 再点同一卡 = 取消（跟随既有）。
 		act(() => {
 			railCard("minimal").click();
@@ -216,7 +216,7 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		await settle();
 		// sessionDraft 跨文件共享：归位 prototype，kind 断言与执行顺序无关。
 		act(() => {
-			chipButton(t("creation tab prototype")).click();
+			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		// 未选中：M3.1 占位 null，buildProjectMetadata 形状不被破坏。
 		await typeAndSend("做一个落地页");
@@ -254,7 +254,7 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 			"neubrutalism",
 			"darkneon",
 		]);
-		expect(cards.every(c => c.textContent?.includes(t("design system builtin")))).toBe(true);
+		expect(cards.every(c => c.textContent?.includes(t("composer.designSystemBuiltin")))).toBe(true);
 		root.unmount();
 		document.body.innerHTML = "";
 	});

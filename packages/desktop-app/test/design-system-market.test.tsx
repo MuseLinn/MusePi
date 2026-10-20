@@ -91,8 +91,8 @@ describe("M3.7d ＋市场卡（rail 排尾 + 跳能力中心市场 tab）", () =
 		expect(group.querySelectorAll("[role='radio']")).toHaveLength(SYSTEMS.length);
 		expect(group.contains(marketCard())).toBe(false);
 		// 文案 + aria。
-		expect(marketCard().textContent).toContain(t("design system market cta"));
-		expect(marketCard().getAttribute("aria-label")).toBe(t("design system market aria"));
+		expect(marketCard().textContent).toContain(t("composer.designSystemMarketCta"));
+		expect(marketCard().getAttribute("aria-label")).toBe(t("composer.designSystemMarketAria"));
 		root.unmount();
 		document.body.innerHTML = "";
 	});
@@ -148,7 +148,7 @@ describe("M3.7d 能力中心落地 tab", () => {
 		});
 		await settle();
 		const tabs = [...document.body.querySelectorAll<HTMLButtonElement>(".gui-capability-tab")];
-		const marketTab = tabs.find(b => b.textContent === t("marketplace"))!;
+		const marketTab = tabs.find(b => b.textContent === t("guest.marketplace"))!;
 		expect(marketTab.getAttribute("aria-selected")).toBe("true");
 		// 市场网格挂载 = 数据源走 marketplace.list（发现面即能力中心的安装通路）。
 		expect(calls).toContain("marketplace.list");
@@ -191,7 +191,7 @@ describe("M3.7d 设计体系内容标识（能力中心市场卡徽章）", () =
 		expect(cards).toHaveLength(2);
 		const dsBadge = cards[0]!.querySelector(".mp-card-badge--ds");
 		expect(dsBadge).not.toBeNull();
-		expect(dsBadge!.textContent).toContain(t("mp badge design system"));
+		expect(dsBadge!.textContent).toContain(t("guest.mpBadgeDesignSystem"));
 		expect(cards[1]!.querySelector(".mp-card-badge--ds")).toBeNull();
 		root.unmount();
 		document.body.innerHTML = "";

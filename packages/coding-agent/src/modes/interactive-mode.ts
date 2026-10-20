@@ -484,7 +484,7 @@ export function renderSubagentHudLines(sessions: ObservableSession[], columns: n
 	if (hiddenCount > 0) {
 		rows.push(theme.fg("dim", `… ${hiddenCount} more running — open Agent Hub for full list`));
 	}
-	return ["", theme.bold(theme.fg("accent", t("Subagents"))), ...rows.map(line => ` ${line}`)];
+	return ["", theme.bold(theme.fg("accent", t("settings.subagents"))), ...rows.map(line => ` ${line}`)];
 }
 
 const CTRL_L_APPEARANCE_RESPONSE_DEADLINE_MS = 2000;
@@ -584,7 +584,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#workingMessageAccentCacheValue?: WorkingMessageAccent;
 	#workingMessageAccentCacheHasValue = false;
 	get #defaultWorkingMessage(): string {
-		return `${t("Working…")}${interruptHint()}`;
+		return `${t("commands.working")}${interruptHint()}`;
 	}
 	unsubscribe?: () => void;
 	onInputCallback?: (input: SubmittedUserInput) => void;
@@ -824,7 +824,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.editor.setHistoryStorage(this.historyStorage);
 			this.historyStorage.setSessionResolver(() => this.sessionManager.getSessionId());
 		} catch (error) {
-			logger.warn(t("History storage unavailable"), { error: String(error) });
+			logger.warn(t("commands.historyStorageUnavailable"), { error: String(error) });
 		}
 		this.hookWidgetContainerAbove = new Container();
 		this.hookWidgetContainerAbove.addChild(new Spacer(1));
@@ -1191,7 +1191,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.ui.requestRender();
 			}
 		} catch (err) {
-			logger.warn(t("Failed to restore session draft"), { error: String(err) });
+			logger.warn(t("commands.failedRestoreSessionDraft"), { error: String(err) });
 		}
 
 		// Subscribe to agent events
@@ -2874,7 +2874,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				try {
 					await this.#restorePlanPreviousModel(planModeModelState);
 				} catch (rollbackError) {
-					logger.warn(t("Failed to restore plan model after plan exit failure"), { error: String(rollbackError) });
+					logger.warn(t("commands.failedRestorePlanModel"), { error: String(rollbackError) });
 				}
 			}
 			const enabledTools = this.session.getEnabledToolNames();
@@ -2888,7 +2888,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				try {
 					await this.session.setActiveToolPresentation(planModeTools, planModeMountedTools);
 				} catch (rollbackError) {
-					logger.warn(t("Failed to restore plan tools after plan exit failure"), { error: String(rollbackError) });
+					logger.warn(t("commands.failedRestorePlanTools"), { error: String(rollbackError) });
 				}
 			}
 			throw error;
@@ -3129,7 +3129,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	#formatKeepContextLabel(contextUsage: ContextUsage | undefined): string {
 		if (!contextUsage) {
-			return t("Approve and keep context");
+			return t("commands.approveKeepContext");
 		}
 		const tokens = formatContextTokenCount(contextUsage.tokens);
 		const contextWindow = formatContextTokenCount(contextUsage.contextWindow);
@@ -3669,7 +3669,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// objective — start goal mode with it directly (mirrors /goal set).
 		const objective =
 			subRest ||
-			(await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true }))?.trim();
+			(await this.showHookEditor(t("commands.goalObjective"), undefined, undefined, { promptStyle: true }))?.trim();
 		if (!objective) return false;
 		return await this.#startGoalFromObjective(objective, input);
 	}
@@ -3775,12 +3775,12 @@ export class InteractiveMode implements InteractiveModeContext {
 		const title = state === "active" ? `Goal: ${summary} (${goal.status})` : `Goal paused: ${summary}`;
 		const items =
 			state === "active"
-				? [t("Show details"), "Adjust budget…", "Pause", "Drop"]
-				: ["Resume", t("Show details"), "Adjust budget…", "Drop"];
+				? [t("commands.showDetails"), "Adjust budget…", "Pause", "Drop"]
+				: ["Resume", t("commands.showDetails"), "Adjust budget…", "Drop"];
 		const choice = await this.showHookSelector(title, items);
 		if (!choice) return;
 		switch (choice) {
-			case t("Show details"):
+			case t("commands.showDetails"):
 				this.#showGoalDetails();
 				return;
 			case "Adjust budget…":
@@ -3923,7 +3923,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		const objective = rest.trim()
 			? rest.trim()
-			: (await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true }))?.trim();
+			: (await this.showHookEditor(t("commands.goalObjective"), undefined, undefined, { promptStyle: true }))?.trim();
 		if (!objective) return false;
 		if (this.goalModeEnabled) {
 			await this.#replaceGoalFromObjective(objective, _input);
@@ -4032,7 +4032,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const choice = await this.showPlanReview(
 			planContent,
 			"Plan mode - next step",
-			[t("Approve and execute"), t("Approve and compact context"), keepContextLabel, t("Refine plan")],
+			[t("commands.approveExecute"), t("commands.approveCompactContext"), keepContextLabel, t("commands.refinePlan")],
 			{
 				helpText,
 				onExternalEditor: () => void this.#openPlanInExternalEditor(planFilePath),
@@ -4058,8 +4058,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		};
 
 		if (
-			choice === t("Approve and execute") ||
-			choice === t("Approve and compact context") ||
+			choice === t("commands.approveExecute") ||
+			choice === t("commands.approveCompactContext") ||
 			choice === keepContextLabel
 		) {
 			try {
@@ -4106,8 +4106,8 @@ export class InteractiveMode implements InteractiveModeContext {
 				const executionDispatched = await this.#approvePlan(latestPlanContent, {
 					planFilePath,
 					title: details.title,
-					preserveContext: choice !== t("Approve and execute"),
-					compactBeforeExecute: choice === t("Approve and compact context"),
+					preserveContext: choice !== t("commands.approveExecute"),
+					compactBeforeExecute: choice === t("commands.approveCompactContext"),
 					executionModel,
 				});
 				if (executionDispatched) this.#planReviewAnnotationState.delete(annotationStateKey);
@@ -4120,7 +4120,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 
-		if (choice === t("Refine plan")) {
+		if (choice === t("commands.refinePlan")) {
 			const refinement = feedback.trim();
 			try {
 				if (refinement) {
@@ -4358,7 +4358,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#inputController.setupEditorSubmitHandler();
 
 		void this.refreshSlashCommandState().catch(error => {
-			logger.warn(t("Failed to refresh slash command state for custom editor"), { error: String(error) });
+			logger.warn(t("commands.failedRefreshSlashCommand"), { error: String(error) });
 		});
 
 		this.updateEditorBorderColor();

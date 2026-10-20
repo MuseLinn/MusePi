@@ -91,7 +91,7 @@ export function formatErrorBlock(
 		.split("\n")
 		.map(line => line.trim())
 		.filter(line => line.length > 0);
-	if (lines.length === 0) lines.push(t("Unknown error"));
+	if (lines.length === 0) lines.push(t("swarm.unknownError"));
 
 	// A wrapped row carries the indent, so the text has to fit in what is left.
 	const wrapWidth = Math.max(1, contentWidth - CONTINUATION_INDENT.length);

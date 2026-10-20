@@ -270,7 +270,7 @@ export class AgentHubOverlayComponent extends Container implements SelectListMou
 						if (!this.#disposed) this.#refreshRows();
 					})
 					.catch((error: unknown) => {
-						logger.warn(t("Failed to register persisted subagents"), { error });
+						logger.warn(t("commands.failedRegisterPersistedSubagents"), { error });
 					})
 					.finally(() => {
 						this.#loadingPersistedSubagents = false;
@@ -516,7 +516,7 @@ export class AgentHubOverlayComponent extends Container implements SelectListMou
 			const detailWidth = splitBodyWidth(width, split);
 			const roster = this.#renderRosterPanel(split, contentRows, observedById);
 			const details = this.#renderDetailPanel(selected, detailWidth, contentRows, observedById);
-			lines.push(topBorderSplit(width, t("Agent Hub"), split));
+			lines.push(topBorderSplit(width, t("settings.agentHub"), split));
 			for (let i = 0; i < contentRows; i++) {
 				const hit = roster.hitRows[i];
 				if (hit !== undefined) this.#hitRows[lines.length] = hit;
@@ -531,11 +531,11 @@ export class AgentHubOverlayComponent extends Container implements SelectListMou
 		const innerWidth = Math.max(1, width - 4);
 		if (this.#narrowDetailsOpen && selected) {
 			const details = this.#renderDetailPanel(selected, innerWidth, contentRows, observedById);
-			lines.push(topBorder(width, `${t("Agent Hub")} · ${selected.id}`));
+			lines.push(topBorder(width, `${t("settings.agentHub")} · ${selected.id}`));
 			for (const detail of details) lines.push(row(detail, width));
 		} else {
 			const roster = this.#renderRosterPanel(innerWidth, contentRows, observedById);
-			lines.push(topBorder(width, t("Agent Hub")));
+			lines.push(topBorder(width, t("settings.agentHub")));
 			for (let i = 0; i < contentRows; i++) {
 				const hit = roster.hitRows[i];
 				if (hit !== undefined) this.#hitRows[lines.length] = hit;
@@ -883,7 +883,7 @@ export class AgentHubOverlayComponent extends Container implements SelectListMou
 			fields.push(theme.fg("dim", `↳ ${sanitizeDisplayText(ref.parentId)}`));
 		}
 		if (ref.kind === "advisor") {
-			fields.push(theme.fg("warning", t("read-only")));
+			fields.push(theme.fg("warning", t("commands.readOnly")));
 		}
 		const unread = this.#irc.unreadCount(ref.id);
 		if (unread > 0) {

@@ -7,7 +7,7 @@ export async function runProviderSetupWizard(ctx: InteractiveModeContext): Promi
 	const { ALL_SCENES, runSetupWizard } = await import("./index");
 	const providersScene = ALL_SCENES.find(scene => scene.id === "providers");
 	if (!providersScene) {
-		ctx.showError(t("Provider setup is unavailable."));
+		ctx.showError(t("commands.providerSetupUnavailable"));
 		return;
 	}
 	await runSetupWizard(ctx, [providersScene], {

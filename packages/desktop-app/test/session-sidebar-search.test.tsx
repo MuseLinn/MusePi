@@ -35,6 +35,8 @@ type Meta = {
 	paused?: boolean;
 	working?: boolean;
 	status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
+	modeId?: string;
+	agentCount?: number;
 };
 
 /** Full sidebar render (groups tab by default) — the search box, the sections
@@ -51,7 +53,6 @@ function sidebarHtml(options: {
 			selectedId={null}
 			onSelect={() => {}}
 			onNewSession={() => {}}
-			status="open"
 			onDisconnect={() => {}}
 			onOpenConnect={() => {}}
 			onOpenSettings={() => {}}
@@ -143,23 +144,23 @@ describe("filterSessionTree", () => {
 describe("session search box", () => {
 	test("reports the match count and the Escape affordance", () => {
 		const html = barHtml({ query: "deep", matchCount: 3 });
-		expect(html).toContain(t("search match count", { count: 3 }));
-		expect(html).toContain(t("esc to clear or close"));
+		expect(html).toContain(t("settings.searchMatchCount", { count: 3 }));
+		expect(html).toContain(t("settings.escClearClose"));
 		expect(html).toContain('value="deep"');
-		expect(html).toContain(t("clear"));
+		expect(html).toContain(t("settings.clear"));
 	});
 
 	test("renders the empty state when the query matches nothing", () => {
 		const html = barHtml({ query: "zzz", matchCount: 0 });
-		expect(html).toContain(t("no matching sessions"));
-		expect(html).not.toContain(t("search match count", { count: 0 }));
+		expect(html).toContain(t("settings.noMatchingSessions"));
+		expect(html).not.toContain(t("settings.searchMatchCount", { count: 0 }));
 	});
 
 	test("shows neither a count nor the empty state without a query", () => {
 		const html = barHtml({ query: "", matchCount: 0 });
 		expect(html).toContain("<input");
-		expect(html).not.toContain(t("no matching sessions"));
-		expect(html).not.toContain(t("search match count", { count: 0 }));
+		expect(html).not.toContain(t("settings.noMatchingSessions"));
+		expect(html).not.toContain(t("settings.searchMatchCount", { count: 0 }));
 	});
 
 	test("stays out of the tree while closed", () => {
@@ -190,7 +191,7 @@ describe("sidebar search affordance", () => {
 		// The toggle carries its own accelerator hint and reports the collapsed
 		// state, so the box is reachable without a pointer.
 		expect(/data-search-toggle="true"[^>]*aria-expanded="false"/.test(html)).toBe(true);
-		expect(html).toContain(`aria-label="${t("search sessions…")}"`);
+		expect(html).toContain(`aria-label="${t("settings.searchSessions")}"`);
 	});
 });
 
@@ -199,7 +200,7 @@ describe("date-grouped list under search", () => {
 		const html = renderToStaticMarkup(
 			<GroupedSessionList nodes={[]} selectedId={null} onSelect={() => {}} searchQuery="" />,
 		);
-		expect(html).toContain(t("no sessions yet"));
+		expect(html).toContain(t("transcript.noSessionsYet"));
 	});
 
 	test("drops the fallback while a query owns the result", () => {
@@ -209,6 +210,6 @@ describe("date-grouped list under search", () => {
 		const html = renderToStaticMarkup(
 			<GroupedSessionList nodes={[]} selectedId={null} onSelect={() => {}} searchQuery="deep" />,
 		);
-		expect(html).not.toContain(t("no sessions yet"));
+		expect(html).not.toContain(t("transcript.noSessionsYet"));
 	});
 });

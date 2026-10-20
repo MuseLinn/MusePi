@@ -137,27 +137,27 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 	test("默认选中 prototype,placeholder 随 chip 变化", async () => {
 		const root = renderWelcome(makeRpc());
 		await settle();
-		expect(onChip(chipButton(t("creation tab prototype")))).toBe(true);
-		expect(onChip(chipButton(t("creation tab other")))).toBe(false);
+		expect(onChip(chipButton(t("creation.creationTabPrototype")))).toBe(true);
+		expect(onChip(chipButton(t("creation.creationTabOther")))).toBe(false);
 		const textarea = document.body.querySelector("textarea")!;
-		expect(textarea.placeholder).toBe(t("creation placeholder prototype"));
+		expect(textarea.placeholder).toBe(t("creation.creationPlaceholderPrototype"));
 		act(() => {
-			chipButton(t("creation media video")).click();
+			chipButton(t("creation.creationMediaVideo")).click();
 		});
-		expect(textarea.placeholder).toBe(t("creation placeholder video"));
+		expect(textarea.placeholder).toBe(t("creation.creationPlaceholderVideo"));
 		root.unmount();
 		document.body.innerHTML = "";
 	});
 
 	test("六类 chip 均可建会话,metadata 与 M3.2 编译管线逐字段一致", async () => {
 		const cases: { chip: (typeof CREATION_CHIPS)[number]; label: TranslationKey }[] = [
-			{ chip: "prototype", label: "creation tab prototype" },
-			{ chip: "live-artifact", label: "creation tab live artifact" },
-			{ chip: "deck", label: "creation tab deck" },
-			{ chip: "image", label: "creation media image" },
-			{ chip: "video", label: "creation media video" },
-			{ chip: "audio", label: "creation media audio" },
-			{ chip: "other", label: "creation tab other" },
+			{ chip: "prototype", label: "creation.creationTabPrototype" },
+			{ chip: "live-artifact", label: "creation.creationTabLiveArtifact" },
+			{ chip: "deck", label: "creation.creationTabDeck" },
+			{ chip: "image", label: "creation.creationMediaImage" },
+			{ chip: "video", label: "creation.creationMediaVideo" },
+			{ chip: "audio", label: "creation.creationMediaAudio" },
+			{ chip: "other", label: "creation.creationTabOther" },
 		];
 		for (const { chip, label } of cases) {
 			captured.length = 0;
@@ -203,7 +203,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		const root = renderWelcome(makeRpc([tpl]));
 		await settle();
 		act(() => {
-			chipButton(t("creation tab template")).click();
+			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle(); // 等模板列表 RPC 回填并渲染 rail
 		// opendesign 铁律：composer 是创建页永久锚点——template chip 选中时
@@ -228,7 +228,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		expect(captured[0]!.metadata.kind).toBe("deck");
 		// 共享 sessionDraft 归位,不影响其他用例/文件的 chip 起点。
 		act(() => {
-			chipButton(t("creation tab prototype")).click();
+			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		root.unmount();
 		document.body.innerHTML = "";
@@ -246,7 +246,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		});
 		const before = document.body.querySelector("textarea")!;
 		act(() => {
-			chipButton(t("creation tab template")).click();
+			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
 		const after = document.body.querySelector("textarea")!;
@@ -254,7 +254,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		expect(after).toBe(before);
 		expect(after.value).toBe("写了一半的需求");
 		act(() => {
-			chipButton(t("creation tab prototype")).click();
+			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		root.unmount();
 		document.body.innerHTML = "";
@@ -264,12 +264,12 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		const root = renderWelcome(makeRpc());
 		await settle();
 		act(() => {
-			chipButton(t("creation tab template")).click();
+			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
 		const rail = document.body.querySelector("[data-testid='gui-template-rail']")!;
 		// 来源指引（怎么造模板）保留。
-		expect(rail.textContent).toContain(t("creation templates empty"));
+		expect(rail.textContent).toContain(t("creation.creationTemplatesEmpty"));
 		// 空白起步等价路径：点击聚焦 composer，直接输入发送即可建会话。
 		const blank = rail.querySelector<HTMLButtonElement>(".gui-creation-template-blank");
 		expect(blank).not.toBeNull();
@@ -278,7 +278,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		});
 		expect(document.activeElement).toBe(document.body.querySelector("textarea"));
 		act(() => {
-			chipButton(t("creation tab prototype")).click();
+			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		root.unmount();
 		document.body.innerHTML = "";
@@ -304,14 +304,14 @@ describe("M3.7a 模式页骨架契约", () => {
 		const root = renderWelcome(makeRpc());
 		await settle();
 		act(() => {
-			chipButton(t("creation tab deck")).click();
+			chipButton(t("creation.creationTabDeck")).click();
 		});
-		expect(onChip(chipButton(t("creation tab deck")))).toBe(true);
+		expect(onChip(chipButton(t("creation.creationTabDeck")))).toBe(true);
 		root.unmount();
 		document.body.innerHTML = "";
 		const root2 = renderWelcome(makeRpc());
 		await settle();
-		expect(onChip(chipButton(t("creation tab deck")))).toBe(true);
+		expect(onChip(chipButton(t("creation.creationTabDeck")))).toBe(true);
 		root2.unmount();
 		document.body.innerHTML = "";
 	});

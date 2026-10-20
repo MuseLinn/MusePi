@@ -256,8 +256,8 @@ export class AdvisorConfigOverlayComponent implements Component {
 		if (lines.length > rows) {
 			const marker =
 				start + rows < lines.length
-					? theme.fg("dim", `  ↓ ${t("{0} more", String(lines.length - rows - start))}`)
-					: theme.fg("dim", t("  (end)"));
+					? theme.fg("dim", `  ↓ ${t("commands.moreWith0", String(lines.length - rows - start))}`)
+					: theme.fg("dim", t("commands.text4"));
 			window[rows - 1] = marker;
 		}
 		return window;
@@ -272,59 +272,59 @@ export class AdvisorConfigOverlayComponent implements Component {
 			if (advisor) return this.#advisorPreview(advisor, bodyWidth);
 		}
 		if (value === "shared") {
-			const lines = [theme.bold(t("Shared instructions")), ""];
+			const lines = [theme.bold(t("commands.sharedInstructions")), ""];
 			const text = this.#doc.instructions?.trim();
-			lines.push(...(text ? wrap(text, bodyWidth) : [theme.fg("muted", t("(none)"))]));
+			lines.push(...(text ? wrap(text, bodyWidth) : [theme.fg("muted", t("common.text4"))]));
 			return lines.map(line => truncateToWidth(line, bodyWidth));
 		}
 		const help =
 			value === "add"
-				? t("Create a new advisor entry, then edit its model, tools, and instructions.")
+				? t("commands.createNewAdvisor.info")
 				: value === "scope"
 					? t(
-							"Switch between the project and user WATCHDOG.yml. Currently editing the {0}-level file.",
+							"commands.switchBetweenProjectWith0.info",
 							this.#scope,
 						)
 					: value === "save"
-						? t("Write this scope's WATCHDOG.yml and reload the live advisors without a restart.")
+						? t("commands.writeScopeS.info")
 						: value === "close"
-							? t("Close the editor. Unsaved changes are discarded.")
+							? t("commands.closeEditorUnsaved.info")
 							: "";
 		return wrap(help, bodyWidth).map(line => truncateToWidth(theme.fg("muted", line), bodyWidth));
 	}
 
 	#advisorPreview(advisor: AdvisorConfig, bodyWidth: number): string[] {
-		const model = advisor.model?.trim() || this.#defaultModelLabel || t("advisor role default");
-		const tools = formatAdvisorTools(advisor.tools, t("no tools"));
+		const model = advisor.model?.trim() || this.#defaultModelLabel || t("commands.advisorRoleDefault");
+		const tools = formatAdvisorTools(advisor.tools, t("commands.noTools"));
 		const lines = [
-			theme.bold(advisor.name || t("(unnamed)")),
+			theme.bold(advisor.name || t("commands.text20")),
 			"",
-			`${theme.fg("dim", t("Enabled:"))} ${advisor.enabled === false ? `○ ${t("off")}` : `● ${t("on")}`}`,
-			`${theme.fg("dim", t("Model:"))} ${model}`,
-			`${theme.fg("dim", t("Tools:"))} ${tools}`,
+			`${theme.fg("dim", t("commands.enabled"))} ${advisor.enabled === false ? `○ ${t("settings.off")}` : `● ${t("settings.on")}`}`,
+			`${theme.fg("dim", t("dashboard.model"))} ${model}`,
+			`${theme.fg("dim", t("dashboard.tools"))} ${tools}`,
 			"",
-			theme.fg("dim", t("Instructions:")),
+			theme.fg("dim", t("commands.instructions")),
 		];
 		const instr = advisor.instructions?.trim();
-		lines.push(...(instr ? wrap(instr, bodyWidth) : [theme.fg("muted", t("(none)"))]));
+		lines.push(...(instr ? wrap(instr, bodyWidth) : [theme.fg("muted", t("common.text4"))]));
 		// Show live usage stats when available from the session.
 		const liveStat = this.#cb.getAdvisorStats?.()?.find(s => s.name === (advisor.name || "default"));
 		if (liveStat && (liveStat.status === "running" || liveStat.status === "quota_exhausted")) {
-			lines.push("", theme.fg("dim", t("Usage:")));
+			lines.push("", theme.fg("dim", t("commands.usage")));
 			const spendParts: string[] = [
-				`${liveStat.tokens.input.toLocaleString()} ${t("in")}`,
-				`${liveStat.tokens.output.toLocaleString()} ${t("out")}`,
+				`${liveStat.tokens.input.toLocaleString()} ${t("commands.in")}`,
+				`${liveStat.tokens.output.toLocaleString()} ${t("commands.out")}`,
 			];
 			if (liveStat.tokens.cacheRead > 0)
-				spendParts.push(`${liveStat.tokens.cacheRead.toLocaleString()} ${t("cache")}`);
-			lines.push(theme.fg("dim", `  ${t("Tokens:")} ${spendParts.join(", ")}`));
-			if (liveStat.cost > 0) lines.push(theme.fg("dim", `  ${t("Cost:")} $${liveStat.cost.toFixed(4)}`));
+				spendParts.push(`${liveStat.tokens.cacheRead.toLocaleString()} ${t("commands.cache")}`);
+			lines.push(theme.fg("dim", `  ${t("settings.tokens")} ${spendParts.join(", ")}`));
+			if (liveStat.cost > 0) lines.push(theme.fg("dim", `  ${t("settings.cost2")} $${liveStat.cost.toFixed(4)}`));
 			if (liveStat.contextWindow > 0) {
 				const pct = Math.round((liveStat.contextTokens / liveStat.contextWindow) * 100);
 				lines.push(
 					theme.fg(
 						"dim",
-						`  ${t("Context:")} ${liveStat.contextTokens.toLocaleString()}/${liveStat.contextWindow.toLocaleString()} (${pct}%)`,
+						`  ${t("settings.context2")} ${liveStat.contextTokens.toLocaleString()}/${liveStat.contextWindow.toLocaleString()} (${pct}%)`,
 					),
 				);
 			}
@@ -371,8 +371,8 @@ export class AdvisorConfigOverlayComponent implements Component {
 	}
 
 	#advisorSummary(advisor: AdvisorConfig): string {
-		const model = advisor.model?.trim() || this.#defaultModelLabel || t("advisor role default");
-		const tools = formatAdvisorTools(advisor.tools, t("no tools"));
+		const model = advisor.model?.trim() || this.#defaultModelLabel || t("commands.advisorRoleDefault");
+		const tools = formatAdvisorTools(advisor.tools, t("commands.noTools"));
 		return `${model} · ${tools}`;
 	}
 
@@ -380,22 +380,22 @@ export class AdvisorConfigOverlayComponent implements Component {
 		this.#ensureRosterVisible();
 		const items: SelectItem[] = this.#doc.advisors.map((advisor, index) => ({
 			value: `advisor:${index}`,
-			label: `${advisor.enabled === false ? "○" : "●"} ${advisor.name || t("(unnamed)")}`,
+			label: `${advisor.enabled === false ? "○" : "●"} ${advisor.name || t("commands.text20")}`,
 			description: this.#advisorSummary(advisor),
 		}));
-		items.push({ value: "add", label: t("+ Add advisor") });
+		items.push({ value: "add", label: t("commands.addAdvisor") });
 		items.push({
 			value: "shared",
-			label: t("Shared instructions"),
+			label: t("commands.sharedInstructions"),
 			description: previewLine(this.#doc.instructions),
 		});
 		items.push({
 			value: "scope",
-			label: `${t("Scope: ")}${t(this.#scope)}`,
+			label: `${t("commands.scope2")}${t(this.#scope)}`,
 			description: `→ ${t(this.#otherScope())}`,
 		});
-		items.push({ value: "save", label: t("Save & apply") });
-		items.push({ value: "close", label: t("Close") });
+		items.push({ value: "save", label: t("commands.saveApply") });
+		items.push({ value: "close", label: t("commands.close") });
 
 		// Show every row (no internal overflow-search); the split frame supplies height.
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
@@ -405,10 +405,10 @@ export class AdvisorConfigOverlayComponent implements Component {
 		};
 		list.onSelect = item =>
 			void this.#onListSelect(item.value).catch(err => {
-				this.#cb.notify(t("Advisor config: {0}", err instanceof Error ? err.message : String(err)));
+				this.#cb.notify(t("commands.advisorConfigWith0", err instanceof Error ? err.message : String(err)));
 			});
 		list.onCancel = () => this.#cb.close();
-		this.#setScreen("list", list, t("↑↓ move · Enter / click select · scroll preview on the right · Esc close"));
+		this.#setScreen("list", list, t("commands.moveEnterClickSelect"));
 	}
 
 	async #onListSelect(value: string): Promise<void> {
@@ -454,25 +454,25 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#showList();
 			return;
 		}
-		const modelDescription = advisor.model?.trim() || this.#defaultModelLabel || t("advisor role default");
-		const toolsDescription = formatAdvisorTools(advisor.tools, t("no tools"));
+		const modelDescription = advisor.model?.trim() || this.#defaultModelLabel || t("commands.advisorRoleDefault");
+		const toolsDescription = formatAdvisorTools(advisor.tools, t("commands.noTools"));
 		const items: SelectItem[] = [
-			{ value: "name", label: t("Name"), description: advisor.name },
+			{ value: "name", label: t("commands.name"), description: advisor.name },
 			{
 				value: "toggleEnabled",
-				label: t("Enabled"),
-				description: advisor.enabled === false ? `○ ${t("off")}` : `● ${t("on")}`,
+				label: t("settings.enabled"),
+				description: advisor.enabled === false ? `○ ${t("settings.off")}` : `● ${t("settings.on")}`,
 			},
-			{ value: "model", label: t("Model"), description: modelDescription },
+			{ value: "model", label: t("setup.model"), description: modelDescription },
 		];
 		if (advisor.model?.trim()) {
-			items.push({ value: "resetModel", label: t("Reset model to advisor-role default") });
+			items.push({ value: "resetModel", label: t("commands.resetModelAdvisorRole") });
 		}
 		items.push(
-			{ value: "tools", label: t("Tools"), description: toolsDescription },
-			{ value: "instructions", label: t("Instructions"), description: previewLine(advisor.instructions) },
-			{ value: "delete", label: t("Delete this advisor") },
-			{ value: "back", label: t("Back") },
+			{ value: "tools", label: t("settings.settingsTools"), description: toolsDescription },
+			{ value: "instructions", label: t("settings.instructions"), description: previewLine(advisor.instructions) },
+			{ value: "delete", label: t("commands.deleteAdvisor") },
+			{ value: "back", label: t("commands.back") },
 		);
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
 		list.onSelect = item => this.#onDetailSelect(index, item.value);
@@ -532,7 +532,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#showDetail(index);
 		};
 		input.onEscape = () => this.#showDetail(index);
-		this.#setScreen("name", input, t("Type a name · Enter save · Esc cancel"));
+		this.#setScreen("name", input, t("commands.typeNameEnterSave"));
 	}
 
 	#showModelPicker(index: number): void {
@@ -566,11 +566,11 @@ export class AdvisorConfigOverlayComponent implements Component {
 			}
 		};
 		picker.onCancel = () => this.#showDetail(index);
-		this.#setScreen("model", picker, t("Type to search · Enter / click twice picks · Esc back"));
+		this.#setScreen("model", picker, t("commands.typeSearchEnterClick"));
 	}
 
 	#showThinkingPicker(index: number, selector: string, efforts: readonly string[]): void {
-		const items: SelectItem[] = [{ value: "", label: t("(model default thinking)") }];
+		const items: SelectItem[] = [{ value: "", label: t("commands.text15") }];
 		for (const effort of efforts) items.push({ value: effort, label: effort });
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
 		list.onSelect = item => {
@@ -582,7 +582,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#showDetail(index);
 		};
 		list.onCancel = () => this.#showModelPicker(index);
-		this.#setScreen("thinking", list, t("Thinking effort for {0} · Enter / click pick · Esc back", selector));
+		this.#setScreen("thinking", list, t("commands.thinkingEffortEnterClickWith0", selector));
 	}
 
 	#showToolsEditor(index: number, selected: Set<string>, cursor: number): void {
@@ -591,7 +591,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			value: name,
 			label: `${selected.has(name) ? "[x]" : "[ ]"} ${name}`,
 		}));
-		items.push({ value: "__done", label: t("Done") });
+		items.push({ value: "__done", label: t("commands.done") });
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
 		list.setSelectedIndex(cursor);
 		let cursorIndex = cursor;
@@ -617,7 +617,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 		this.#setScreen(
 			"tools",
 			list,
-			t("Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)"),
+			t("commands.enterClickToggle.info"),
 		);
 	}
 
@@ -625,7 +625,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 	#showInstructionsEditor(index: number): void {
 		const shared = index < 0;
 		const current = shared ? this.#doc.instructions : this.#doc.advisors[index].instructions;
-		const title = shared ? t("Shared advisor instructions") : t("Instructions — {0}", this.#doc.advisors[index].name);
+		const title = shared ? t("commands.sharedAdvisorInstructions") : t("commands.instructionsWith0", this.#doc.advisors[index].name);
 		const editor = new HookEditorComponent(
 			this.#tui,
 			title,

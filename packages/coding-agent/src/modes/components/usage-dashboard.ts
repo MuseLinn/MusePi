@@ -59,15 +59,15 @@ const BODY_TOP_ROW = 1;
 function usageValue(limit: UsageLimit): string {
 	const fraction = resolveUsedFraction(limit);
 	if (fraction !== undefined) {
-		return t("{0}% free").replace("{0}", formatNumber(Math.max(0, (1 - fraction) * 100)));
+		return t("settings.freeWith0").replace("{0}", formatNumber(Math.max(0, (1 - fraction) * 100)));
 	}
-	return formatAbsoluteOnlyAmount([limit]) ?? t("no data");
+	return formatAbsoluteOnlyAmount([limit]) ?? t("dashboard.noData");
 }
 
 function usageReset(limit: UsageLimit, nowMs: number): string {
 	const resetsAt = limit.window?.resetsAt;
 	if (resetsAt === undefined || resetsAt <= nowMs) return "";
-	return t("resets in {0}").replace("{0}", formatDuration(resetsAt - nowMs));
+	return t("dashboard.resetsInWith0").replace("{0}", formatDuration(resetsAt - nowMs));
 }
 
 export class UsageDashboard implements Component {
@@ -152,7 +152,7 @@ export class UsageDashboard implements Component {
 			const balanceMeters = report.limits.filter(limit => isRemainingOnlyAbsoluteAmount(limit));
 			const prepaid = formatRemainingOnlyTotal(balanceMeters);
 			if (prepaid !== undefined && balanceMeters.length > 1) {
-				const label = t("prepaid: {0}").replace("{0}", prepaid);
+				const label = t("dashboard.prepaidWith0").replace("{0}", prepaid);
 				this.#trackCell(lines.length, LIMIT_INDENT.length, width - BOX_INSET * 2, label);
 				lines.push(`${LIMIT_INDENT}${theme.fg("dim", label)}`);
 			}
@@ -202,17 +202,17 @@ export class UsageDashboard implements Component {
 		const innerWidth = Math.max(0, width - BOX_INSET * 2);
 		this.#refresh(innerWidth);
 		const body = this.#viewport.render(innerWidth).map(line => row(line, width));
-		const title = this.#view === "detail" ? t("Usage · Details") : t("Usage");
+		const title = this.#view === "detail" ? t("dashboard.usageDetails") : t("dashboard.usage");
 		// A hovered cell's full text replaces the key hint: the hint bar is the one
 		// row the reader is looking at anyway, and a second line would shrink the
 		// body on exactly the frames where the text is worth reading.
 		const footer =
 			this.#hoverText === undefined
 				? this.#view === "detail"
-					? t("Enter summary · Esc close")
+					? t("dashboard.enterSummaryEscClose")
 					: this.#viewport.getMaxScrollOffset() > 0
-						? t("Enter details · wheel scrolls · Esc close")
-						: t("Enter details · Esc close")
+						? t("dashboard.enterDetailsWheelScrolls")
+						: t("dashboard.enterDetailsEscClose")
 				: this.#hoverText;
 		return [topBorder(width, title), ...body, "", row(footer, width), bottomBorder(width)];
 	}

@@ -873,13 +873,13 @@ export class PlanReviewOverlay implements Component {
 		}
 		let feedback = t("Refinement feedback on the plan:\n");
 		if (this.#deleted.length > 0) {
-			feedback += `\n${t("Remove these sections:")}\n`;
+			feedback += `\n${t("commands.removeTheseSections")}\n`;
 			for (const title of this.#deleted) feedback += `- ${title}\n`;
 		}
 		for (const section of annotated) {
-			feedback += `\n## ${section.title || t("Plan preamble")}\n`;
+			feedback += `\n## ${section.title || t("commands.planPreamble")}\n`;
 			for (const annotation of section.annotations) {
-				if (annotation.target.kind === "line") feedback += `${t("> Line: ")}${annotation.target.context}\n`;
+				if (annotation.target.kind === "line") feedback += `${t("commands.line")}${annotation.target.context}\n`;
 				feedback += this.#formatAnnotationFeedback(annotation.note);
 			}
 		}
@@ -1067,7 +1067,7 @@ export class PlanReviewOverlay implements Component {
 		for (let i = 0; i < noteLines.length; i++) {
 			const prefix =
 				i === 0
-					? `${theme.fg("warning", "▎ ")}${theme.fg("dim", t("note: "))}`
+					? `${theme.fg("warning", "▎ ")}${theme.fg("dim", t("commands.note2"))}`
 					: `${theme.fg("warning", "▎ ")}${theme.fg("dim", "      ")}`;
 			const available = Math.max(0, bodyContentWidth - visibleWidth(prefix));
 			const displayLine = truncateToWidth(
@@ -1124,7 +1124,7 @@ export class PlanReviewOverlay implements Component {
 		const indent = " ".repeat(Math.max(0, section.level - this.#tocBaseLevel));
 		const ann = section.annotations.length > 0 ? " ✎" : "";
 		const avail = Math.max(0, width - 1 - indent.length - visibleWidth(ann));
-		const title = truncateToWidth(section.title || t("(untitled)"), avail, Ellipsis.Unicode);
+		const title = truncateToWidth(section.title || t("commands.text21"), avail, Ellipsis.Unicode);
 		const body = indent + title + ann;
 		// Single-column gutter glyph: a cursor `›` on the focused selection, an
 		// accent bar `▎` on the current scrolled section, otherwise blank. The
@@ -1141,17 +1141,17 @@ export class PlanReviewOverlay implements Component {
 		if (this.#annotating) {
 			const target = this.#annotationTarget;
 			const section = target ? this.#sections[target.sectionIndex] : undefined;
-			const title = sanitizeStatusText(section?.title || t("Plan preamble"));
+			const title = sanitizeStatusText(section?.title || t("commands.planPreamble"));
 			const location =
 				target?.row === null
 					? `‹${title}›`
 					: `‹${title}› · ${truncateToWidth(target?.context ?? "", Math.max(1, innerWidth - 16), Ellipsis.Unicode)}`;
 			const caption = truncateToWidth(
-				`${theme.fg("dim", t("Annotate"))} ${theme.fg("accent", location)}`,
+				`${theme.fg("dim", t("commands.annotate"))} ${theme.fg("accent", location)}`,
 				innerWidth,
 				Ellipsis.Unicode,
 			);
-			const hintParts = [t("enter save"), t("esc cancel")];
+			const hintParts = [t("selector.enterSave"), t("selector.escCancel")];
 			if (this.#externalEditorLabel) hintParts.push(`${this.#externalEditorLabel} editor`);
 			return [caption, this.#input.render(innerWidth)[0] ?? "", theme.fg("dim", hintParts.join(" · "))];
 		}
@@ -1172,7 +1172,7 @@ export class PlanReviewOverlay implements Component {
 		const optionLines = committed ? [theme.bold(theme.fg("accent", submittingLabel))] : this.#renderOptionLines();
 		const promptLines = this.#promptTitle ? [theme.bold(theme.fg("accent", this.#promptTitle))] : [];
 		const footerLines = committed
-			? [theme.fg("dim", t("Applying your selection — this can take a moment while context is prepared."))]
+			? [theme.fg("dim", t("commands.applyingYourSelection.info"))]
 			: this.#renderFooterLines(innerWidth);
 
 		// Chrome rows: top border, two dividers, bottom border, plus the

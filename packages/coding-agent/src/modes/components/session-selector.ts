@@ -539,7 +539,7 @@ class SessionList implements Component {
 				// "Current folder" scope - hint to try "all"
 				lines.push(
 					truncateToWidth(
-						theme.fg("muted", `  ${t("No sessions in current folder. Press Tab to view all.")}`),
+						theme.fg("muted", `  ${t("commands.noSessionsCurrent.info")}`),
 						width,
 					),
 				);
@@ -813,7 +813,7 @@ export class SessionSelectorComponent extends Container {
 		this.#globalSessions = options.allSessions ?? null;
 		this.#getTerminalRows = options.getTerminalRows ?? (() => 24);
 		this.#fillHeight = options.fillHeight ?? false;
-		this.#title = options.title ?? t("Resume Session");
+		this.#title = options.title ?? t("mcp.resumeSession");
 		this.#scopeLabel = options.scopeLabel;
 		// Add header
 		this.addChild(new Spacer(1));
@@ -880,7 +880,7 @@ export class SessionSelectorComponent extends Container {
 				if (!this.#loadAllSessions) return;
 				this.#toggling = true;
 				this.#messageContainer.clear();
-				this.#messageContainer.addChild(new Text(theme.fg("muted", `  ${t("Loading all projects…")}`), 1, 0));
+				this.#messageContainer.addChild(new Text(theme.fg("muted", `  ${t("commands.loadingAllProjects")}`), 1, 0));
 				this.#onRequestRender?.();
 				try {
 					global = await this.#loadAllSessions();
@@ -932,7 +932,7 @@ export class SessionSelectorComponent extends Container {
 
 	#showError(message: string): void {
 		this.#messageContainer.clear();
-		this.#messageContainer.addChild(new Text(theme.fg("error", t("Error: {0}", replaceTabs(message))), 1, 0));
+		this.#messageContainer.addChild(new Text(theme.fg("error", t("commands.errorWith0", replaceTabs(message))), 1, 0));
 		this.#messageContainer.addChild(new Spacer(1));
 	}
 

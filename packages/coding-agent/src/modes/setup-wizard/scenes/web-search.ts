@@ -31,7 +31,7 @@ type Availability = "checking" | boolean;
  */
 export class WebSearchTab implements SetupTab {
 	readonly id = "web-search";
-	readonly label = t("Web search");
+	readonly label = t("setup.webSearch");
 	readonly modal = false;
 
 	#list: SelectList;
@@ -80,7 +80,7 @@ export class WebSearchTab implements SetupTab {
 	}
 
 	render(width: number, maxLines?: number): readonly string[] {
-		const lines = [theme.fg("muted", t("Choose the provider the web_search tool should prefer.")), ""];
+		const lines = [theme.fg("muted", t("setup.chooseProviderWebSearch")), ""];
 		this.#listRowStart = lines.length;
 		if (maxLines !== undefined) {
 			// Above: hint + blank. Below: the list's own search-status row plus
@@ -129,23 +129,23 @@ export class WebSearchTab implements SetupTab {
 		this.host.ctx.settings.set("providers.webSearchOrder", order);
 		setSearchProviderOrder(order);
 		const label = this.#items.find(item => item.value === value)?.label ?? value;
-		this.#status = [theme.fg("success", `${theme.status.success} ${t("Web search set to {0}", label)}`)];
+		this.#status = [theme.fg("success", `${theme.status.success} ${t("commands.webSearchSetWith0", label)}`)];
 		if (value !== "auto" && this.#availability.get(value as SearchProviderId) === false) {
-			this.#status.push(theme.fg("dim", t("Not configured yet — add its API key or sign in to enable it.")));
+			this.#status.push(theme.fg("dim", t("setup.notConfiguredYet.info")));
 		}
 		this.host.requestRender();
 	}
 
 	#readinessLines(value: string): string[] {
 		if (value === "auto") {
-			return [theme.fg("dim", t("Automatically uses the first configured provider."))];
+			return [theme.fg("dim", t("setup.automaticallyUsesFirstConfigured"))];
 		}
 		const state = this.#availability.get(value as SearchProviderId);
 		if (state === undefined || state === "checking") {
-			return [theme.fg("dim", t("Checking availability…"))];
+			return [theme.fg("dim", t("setup.checkingAvailability"))];
 		}
 		return state
-			? [theme.fg("success", `${theme.status.success} ${t("Ready to use")}`)]
-			: [theme.fg("warning", `${theme.status.pending} ${t("Needs credentials")}`)];
+			? [theme.fg("success", `${theme.status.success} ${t("commands.readyUse")}`)]
+			: [theme.fg("warning", `${theme.status.pending} ${t("commands.needsCredentials")}`)];
 	}
 }

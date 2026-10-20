@@ -135,7 +135,7 @@ function clamp(value: number, min: number, max: number): number {
 
 function stripRecommendedSuffix(label: string): string {
 	// Rendered suffix (localized) — added by #optionLabel at display time
-	const localizedSuffix = ` ${t("(Recommended)")}`;
+	const localizedSuffix = ` ${t("tools.recommended")}`;
 	if (label.endsWith(localizedSuffix)) return label.slice(0, -localizedSuffix.length);
 	// English wire-format suffix (extension UI select items, ask.ts)
 	const englishSuffix = " (Recommended)";
@@ -263,12 +263,12 @@ function renderAnswerSummary(question: ExtensionAskDialogQuestion, state: Questi
 	const selected = question.options.map(option => option.label).filter(label => state.selectedOptions.has(label));
 	if (question.multi) {
 		const answers = [...selected];
-		if (state.customInput !== undefined) answers.push(t("Other: “{0}”", normalizedInlineInput(state.customInput)));
-		return answers.length > 0 ? answers.join(", ") : theme.fg("warning", t("unanswered"));
+		if (state.customInput !== undefined) answers.push(t("commands.otherWith0", normalizedInlineInput(state.customInput)));
+		return answers.length > 0 ? answers.join(", ") : theme.fg("warning", t("commands.unanswered"));
 	}
 	if (state.customInput !== undefined) return `“${normalizedInlineInput(state.customInput)}”`;
-	if (selected.length === 0) return theme.fg("warning", t("unanswered"));
-	return selected[0] ?? theme.fg("warning", t("unanswered"));
+	if (selected.length === 0) return theme.fg("warning", t("commands.unanswered"));
+	return selected[0] ?? theme.fg("warning", t("commands.unanswered"));
 }
 
 function clearNote(state: QuestionState): void {
@@ -316,7 +316,7 @@ function renderRowLabel(
 	const marker = `${theme.fg(checked ? "success" : "dim", optionMarker(question, checked))} `;
 	const cursor = selected ? theme.fg("accent", `${theme.nav.cursor} `) : "  ";
 	const label = renderInlineMarkdown(rowItem.label, mdTheme, t => theme.fg(color, t));
-	const noteMarker = state.note && state.noteRowKey === rowItem.key ? theme.fg("success", `  ${t("✎ note")}`) : "";
+	const noteMarker = state.note && state.noteRowKey === rowItem.key ? theme.fg("success", `  ${t("commands.note3")}`) : "";
 	const firstLine = `${cursor}${marker}${label}${noteMarker}`;
 	const lines = [truncateToWidth(firstLine, width, Ellipsis.Unicode)];
 	if (rowItem.kind === "option") {
@@ -544,7 +544,7 @@ export class AskDialogComponent implements Component {
 	}
 
 	#titleText(): string {
-		return this.#remainingSeconds === undefined ? t("Ask") : t("Ask ({0}s)", String(this.#remainingSeconds));
+		return this.#remainingSeconds === undefined ? t("mcp.tools.availableTools.ask") : t("commands.askWith0", String(this.#remainingSeconds));
 	}
 
 	#hasSubmitTab(): boolean {
@@ -578,14 +578,14 @@ export class AskDialogComponent implements Component {
 					id: String(index),
 					label: questionTabLabel(question, index),
 				})),
-				{ id: "submit", label: t("Submit") },
+				{ id: "submit", label: t("mcp.submit") },
 			];
 			this.#tabBar = new TabBar("", tabs, getTabBarTheme(), this.#activeTabIndex);
 			this.#tabBar.showHint = false;
 			lines.push(...this.#tabBar.render(width));
 		}
 		if (this.#isSubmitTab()) {
-			lines.push(theme.bold(theme.fg("accent", t("Review answers"))));
+			lines.push(theme.bold(theme.fg("accent", t("commands.reviewAnswers"))));
 			return lines;
 		}
 		const questionIndex = this.#currentQuestionIndex();
@@ -606,7 +606,7 @@ export class AskDialogComponent implements Component {
 		const question = this.#questions[this.#currentQuestionIndex()];
 		// Enter advances in multi-question dialogs and submits single-question ones.
 		const enterAction = this.#questions.length > 1 ? "next" : "submit";
-		const action = question?.multi ? t(`Space toggle · Enter ${enterAction}`) : t("Enter select · n note");
+		const action = question?.multi ? t(`Space toggle · Enter ${enterAction}`) : t("commands.enterSelectNNote");
 		const tabs = this.#hasSubmitTab() ? " · Tab/←/→" : "";
 		if (this.#questionCanPage && indicator) {
 			return `${action} · ↑/↓${tabs} · ${cancel} · ${pageKeysLabel()} ${indicator}`;
@@ -622,12 +622,12 @@ export class AskDialogComponent implements Component {
 			label: this.#optionLabel(question, option.label, index),
 			optionIndex: index,
 		}));
-		rows.push({ kind: "other", key: "other", label: t("Other (type your own)"), optionIndex: undefined });
+		rows.push({ kind: "other", key: "other", label: t("mcp.other"), optionIndex: undefined });
 		return rows;
 	}
 
 	#optionLabel(question: ExtensionAskDialogQuestion, label: string, index: number): string {
-		return question.recommended === index ? `${label} ${t("(Recommended)")}` : label;
+		return question.recommended === index ? `${label} ${t("tools.recommended")}` : label;
 	}
 
 	#activeQuestionState(): { question: ExtensionAskDialogQuestion; state: QuestionState } | undefined {
@@ -749,7 +749,7 @@ export class AskDialogComponent implements Component {
 		this.#promptActive = true;
 		try {
 			const input = await this.callbacks.onPrompt(
-				boundPromptTitle(t("Custom answer: "), question.question),
+				boundPromptTitle(t("commands.customAnswer"), question.question),
 				state.customInput,
 			);
 			if (input === undefined || this.#closed) return;
@@ -780,7 +780,7 @@ export class AskDialogComponent implements Component {
 		this.#promptActive = true;
 		try {
 			const input = await this.callbacks.onPrompt(
-				boundPromptTitle(t("Note for {0}: ", rowItem.label), question.question),
+				boundPromptTitle(t("commands.noteForWith0", rowItem.label), question.question),
 				state.noteRowKey === rowItem.key ? state.note : undefined,
 			);
 			if (input === undefined || this.#closed) return;
@@ -877,7 +877,7 @@ export class AskDialogComponent implements Component {
 			allLines.push(
 				theme.fg(
 					"warning",
-					t("{0} unanswered question{1}; Enter still submits.", String(unanswered), unanswered === 1 ? "" : "s"),
+					t("commands.unansweredQuestionEnterStillWith0With1", String(unanswered), unanswered === 1 ? "" : "s"),
 				),
 			);
 			allLines.push("");
@@ -893,12 +893,12 @@ export class AskDialogComponent implements Component {
 			if (submittedNote?.trim()) {
 				const note = normalizedInlineInput(submittedNote);
 				allLines.push(
-					theme.fg("muted", `   ${t("Note: ")}${truncateToWidth(note, Math.max(1, width - 9), Ellipsis.Unicode)}`),
+					theme.fg("muted", `   ${t("commands.note")}${truncateToWidth(note, Math.max(1, width - 9), Ellipsis.Unicode)}`),
 				);
 			}
 		}
 		allLines.push("");
-		allLines.push(theme.fg("accent", `${theme.nav.cursor} ${t("Submit")}`));
+		allLines.push(theme.fg("accent", `${theme.nav.cursor} ${t("mcp.submit")}`));
 		this.#submitScrollOffset = clamp(this.#submitScrollOffset, 0, Math.max(0, allLines.length - rows));
 		const scrollView = new ScrollView(allLines, {
 			height: rows,

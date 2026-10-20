@@ -57,8 +57,8 @@ function renderMockEditor(width: number): string[] {
 	const horizontal = box.horizontal.repeat(innerWidth);
 	const top = theme.fg("borderAccent", `${box.topLeft}${horizontal}${box.topRight}`);
 	const bottom = theme.fg("borderMuted", `${box.bottomLeft}${horizontal}${box.bottomRight}`);
-	const prompt = `${theme.fg("accent", ">")} ${theme.fg("text", t("Ask anything, edit files, run tools"))}${theme.inverse(" ")}`;
-	const hint = theme.fg("dim", t("enter send · shift+enter newline · / commands"));
+	const prompt = `${theme.fg("accent", ">")} ${theme.fg("text", t("commands.askAnythingEdit.info"))}${theme.inverse(" ")}`;
+	const hint = theme.fg("dim", t("commands.enterSendShiftEnter"));
 	return [
 		top,
 		`${theme.fg("borderAccent", box.vertical)}${fitLine(prompt, innerWidth)}${theme.fg("borderAccent", box.vertical)}`,
@@ -70,19 +70,19 @@ function renderMockEditor(width: number): string[] {
 function renderThemePreview(width: number): string[] {
 	const previewWidth = Math.max(24, Math.min(width, 88));
 	return [
-		theme.bold(t("Preview")),
-		`${theme.fg("success", `${theme.status.success} ${t("success")}`)}  ${theme.fg("warning", `${theme.status.warning} ${t("warning")}`)}  ${theme.fg("error", `${theme.status.error} ${t("error")}`)}  ${theme.fg("accent", t("accent"))}`,
+		theme.bold(t("mcp.preview")),
+		`${theme.fg("success", `${theme.status.success} ${t("commands.success")}`)}  ${theme.fg("warning", `${theme.status.warning} ${t("commands.warning2")}`)}  ${theme.fg("error", `${theme.status.error} ${t("commands.error2")}`)}  ${theme.fg("accent", t("commands.accent"))}`,
 		"",
-		theme.fg("muted", t("Status line")),
+		theme.fg("muted", t("commands.statusLine")),
 		renderMockStatusLine(previewWidth),
-		theme.fg("muted", t("Editor")),
+		theme.fg("muted", t("commands.editor")),
 		...renderMockEditor(previewWidth),
 	];
 }
 
 class ThemeSceneController implements SetupSceneController {
-	title = t("Pick a theme");
-	subtitle = t("Move through the list to preview; Enter saves the highlighted choice.");
+	title = t("setup.pickTheme");
+	subtitle = t("commands.moveThroughList.info");
 	#mode: ThemeMode = "curated";
 	#selectList: SelectList;
 	/** Curated picker rows; evaluated at mount so the locale is resolved when the scene opens. */
@@ -103,14 +103,14 @@ class ThemeSceneController implements SetupSceneController {
 		this.#curatedItems = [
 			{
 				value: "auto",
-				label: t("Match terminal"),
-				description: t("Titanium in dark terminals, Light in light terminals"),
+				label: t("commands.matchTerminal"),
+				description: t("commands.titaniumDarkTerminals.info"),
 			},
-			{ value: "theme:titanium", label: t("Titanium"), description: t("Default dark theme") },
-			{ value: "theme:light", label: t("Light"), description: t("Default light theme") },
-			{ value: "colorblind", label: t("Colorblind colors"), description: t("Adjust red/green contrast") },
-			{ value: "ansi", label: t("ANSI-safe"), description: t("ASCII glyphs with the dark terminal theme") },
-			{ value: "browse", label: t("Browse all…"), description: t("Show every built-in and custom theme") },
+			{ value: "theme:titanium", label: t("commands.titanium"), description: t("commands.defaultDarkTheme") },
+			{ value: "theme:light", label: t("settings.light"), description: t("commands.defaultLightTheme") },
+			{ value: "colorblind", label: t("commands.colorblindColors"), description: t("commands.adjustRedGreenContrast") },
+			{ value: "ansi", label: t("commands.ansiSafe"), description: t("commands.asciiGlyphsDarkTerminal") },
+			{ value: "browse", label: t("commands.browseAll"), description: t("commands.showEveryBuiltCustom") },
 		];
 		this.#selectList = this.#createSelectList(this.#curatedItems, this.#currentCuratedIndex());
 	}
@@ -145,10 +145,10 @@ class ThemeSceneController implements SetupSceneController {
 	render(width: number, maxLines?: number): readonly string[] {
 		const budget = maxLines ?? Number.POSITIVE_INFINITY;
 		const lines = [
-			theme.fg("muted", t("Theme changes preview live. Nothing is saved until you press Enter.")),
+			theme.fg("muted", t("commands.themeChangesPreview.info")),
 			this.#mode === "all"
-				? theme.fg("dim", t("Browsing all themes · Esc returns to curated choices"))
-				: theme.fg("dim", t("Esc skips this step")),
+				? theme.fg("dim", t("commands.browsingAllThemesEsc"))
+				: theme.fg("dim", t("commands.escSkipsStep")),
 			"",
 		];
 		// The mock status-line/editor block is decorative — the wizard itself
@@ -161,7 +161,7 @@ class ThemeSceneController implements SetupSceneController {
 		}
 		if (this.#loadingAllThemes) {
 			this.#listRowStart = -1;
-			lines.push(theme.fg("dim", t("Loading themes…")));
+			lines.push(theme.fg("dim", t("commands.loadingThemes")));
 		} else {
 			this.#listRowStart = lines.length;
 			if (maxLines !== undefined) {
@@ -230,14 +230,14 @@ class ThemeSceneController implements SetupSceneController {
 			const items = themes.map(name => ({
 				value: `theme:${name}`,
 				label: name,
-				description: name === this.#originalTheme ? t("current") : undefined,
+				description: name === this.#originalTheme ? t("commands.current") : undefined,
 			}));
 			const selectedIndex = Math.max(0, themes.indexOf(this.#originalTheme ?? ""));
 			this.#mode = "all";
 			this.#selectList = this.#createSelectList(items, selectedIndex);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			this.#message = theme.fg("error", t("Failed to load themes: {0}", message));
+			this.#message = theme.fg("error", t("commands.failedLoadThemesWith0", message));
 		} finally {
 			this.#loadingAllThemes = false;
 			this.host.requestRender();
@@ -301,7 +301,7 @@ class ThemeSceneController implements SetupSceneController {
 		}
 		if (request !== this.#previewRequest || this.#disposed) return;
 		if (!result.success) {
-			this.#message = theme.fg("error", result.error ?? t("Theme preview failed"));
+			this.#message = theme.fg("error", result.error ?? t("commands.themePreviewFailed"));
 		}
 		this.host.ctx.ui.invalidate();
 		this.host.requestRender();
@@ -331,7 +331,7 @@ class ThemeSceneController implements SetupSceneController {
 export const themeSetupScene: SetupScene = {
 	id: "theme",
 	get title() {
-		return t("Pick a theme");
+		return t("setup.pickTheme");
 	},
 	minVersion: 1,
 	mount: host => new ThemeSceneController(host),

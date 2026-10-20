@@ -53,11 +53,11 @@ export class PluginSelectorComponent extends Container {
 		if (items.length === 0) {
 			items.push({
 				value: "__empty__",
-				label: t("No plugins available"),
+				label: t("commands.noPluginsAvailable"),
 				description:
 					marketplaceCount === 0
-						? t("Add a marketplace first: /marketplace add <source>")
-						: t("Configured marketplaces have no plugins"),
+						? t("commands.addMarketplaceFirst.info")
+						: t("commands.configuredMarketplacesHaveNo"),
 			});
 		}
 

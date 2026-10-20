@@ -45,12 +45,12 @@ export class SkillMessageComponent extends Container {
 		this.#box.setBorder({ chars: theme.boxRound, color: t => theme.fg("borderMuted", t) });
 
 		const details = this.message.details;
-		const name = details?.name?.trim() || t("unknown");
+		const name = details?.name?.trim() || t("common.unknown");
 		// Collapse args to one line: a stray newline/tab in user-supplied args would split the header.
 		const args = details?.args?.replace(/\s+/g, " ").trim() ?? "";
 
 		// Header: icon-tag + skill name, with the invocation args trailing dimmed.
-		const tag = theme.fg("customMessageLabel", theme.bold(`${theme.icon.extensionSkill} ${t("skill")}`));
+		const tag = theme.fg("customMessageLabel", theme.bold(`${theme.icon.extensionSkill} ${t("commands.skill")}`));
 		let header = `${tag} ${theme.fg("customMessageText", theme.bold(name))}`;
 		if (args) {
 			header += ` ${theme.fg("dim", args)}`;
@@ -72,7 +72,7 @@ export class SkillMessageComponent extends Container {
 		}
 
 		this.#box.addChild(new Spacer(1));
-		this.#box.addChild(new Text(theme.fg("muted", t("prompt")), 0, 0));
+		this.#box.addChild(new Text(theme.fg("muted", t("commands.prompt")), 0, 0));
 		this.#box.addChild(new Spacer(1));
 
 		this.#contentComponent = new Markdown(text, 0, 0, getMarkdownTheme(), {
@@ -94,8 +94,8 @@ export class SkillMessageComponent extends Container {
 				theme.fg(
 					"muted",
 					details.lineCount === 1
-						? t("{0} line", String(details.lineCount))
-						: t("{0} lines", String(details.lineCount)),
+						? t("commands.lineWith0", String(details.lineCount))
+						: t("commands.linesWith0", String(details.lineCount)),
 				),
 			);
 		}

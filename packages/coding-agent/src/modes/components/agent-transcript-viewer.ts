@@ -129,13 +129,13 @@ function sentinelsFromFile(file: string, size: number): LocalTranscriptSentinel[
 function statusBadge(status: AgentStatus): string {
 	switch (status) {
 		case "running":
-			return theme.fg("success", t("running"));
+			return theme.fg("success", t("commands.running"));
 		case "idle":
-			return theme.fg("accent", t("idle"));
+			return theme.fg("accent", t("commands.idle"));
 		case "parked":
-			return theme.fg("muted", t("parked"));
+			return theme.fg("muted", t("commands.parked"));
 		case "aborted":
-			return theme.fg("error", t("aborted"));
+			return theme.fg("error", t("commands.aborted"));
 	}
 }
 
@@ -653,10 +653,10 @@ export class AgentTranscriptViewer implements Component {
 	#placeholder(maxWidth: number): string {
 		if (this.deps.remote) {
 			if (this.#remoteError) return sanitizeErrorLine(this.#remoteError, maxWidth);
-			if (this.#remoteUnavailable) return t("Transcript lives on the host — not available.");
-			return this.#hasRemoteData ? t("No messages yet.") : t("Loading transcript from host…");
+			if (this.#remoteUnavailable) return t("commands.transcriptLivesHostNot");
+			return this.#hasRemoteData ? t("commands.noMessagesYet") : t("commands.loadingTranscriptHost");
 		}
-		if (!this.deps.registry.get(this.deps.agentId)?.sessionFile) return t("No session file available yet.");
-		return t("No messages yet.");
+		if (!this.deps.registry.get(this.deps.agentId)?.sessionFile) return t("commands.noSessionFileAvailable");
+		return t("commands.noMessagesYet");
 	}
 }

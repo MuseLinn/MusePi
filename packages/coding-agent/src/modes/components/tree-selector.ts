@@ -671,29 +671,29 @@ class TreeList implements Component {
 				if (role === "user") {
 					const msgWithContent = msg as { content?: unknown };
 					const content = normalize(this.#extractContent(msgWithContent.content));
-					result = theme.fg("accent", t("user: ")) + content;
+					result = theme.fg("accent", t("selector.user")) + content;
 				} else if (role === "developer") {
 					const msgWithContent = msg as { content?: unknown };
 					const content = normalize(this.#extractContent(msgWithContent.content));
-					result = theme.fg("dim", t("developer: ")) + theme.fg("muted", content);
+					result = theme.fg("dim", t("commands.developer")) + theme.fg("muted", content);
 				} else if (role === "assistant") {
 					const presentation = resolveAssistantErrorPresentation(msg);
 					if (presentation.kind === "compact-recovered") {
-						result = theme.fg("success", t("assistant: ")) + theme.fg("dim", presentation.text);
+						result = theme.fg("success", t("selector.assistant")) + theme.fg("dim", presentation.text);
 						break;
 					}
 					const msgWithContent = msg as { content?: unknown; stopReason?: string; errorMessage?: string };
 					const textContent = normalize(this.#extractContent(msgWithContent.content));
 					if (textContent) {
-						result = theme.fg("success", t("assistant: ")) + textContent;
+						result = theme.fg("success", t("selector.assistant")) + textContent;
 					} else if (presentation.kind === "full") {
 						result =
-							theme.fg("success", t("assistant: ")) +
+							theme.fg("success", t("selector.assistant")) +
 							theme.fg("error", normalize(presentation.text).slice(0, 80));
 					} else if (msgWithContent.stopReason === "aborted") {
-						result = theme.fg("success", t("assistant: ")) + theme.fg("muted", t("(aborted)"));
+						result = theme.fg("success", t("selector.assistant")) + theme.fg("muted", t("selector.text"));
 					} else {
-						result = theme.fg("success", t("assistant: ")) + theme.fg("muted", t("(no content)"));
+						result = theme.fg("success", t("selector.assistant")) + theme.fg("muted", t("selector.text4"));
 					}
 				} else if (role === "toolResult") {
 					const toolMsg = msg as { toolCallId?: string; toolName?: string };
@@ -1062,9 +1062,9 @@ class SearchLine implements Component {
 	render(width: number): readonly string[] {
 		const query = this.treeList.getSearchQuery();
 		if (query) {
-			return [truncateToWidth(`  ${theme.fg("muted", t("Search:"))} ${theme.fg("accent", query)}`, width)];
+			return [truncateToWidth(`  ${theme.fg("muted", t("commands.search"))} ${theme.fg("accent", query)}`, width)];
 		}
-		return [truncateToWidth(`  ${theme.fg("muted", t("Search:"))}`, width)];
+		return [truncateToWidth(`  ${theme.fg("muted", t("commands.search"))}`, width)];
 	}
 
 	handleInput(_keyData: string): void {}
@@ -1092,9 +1092,9 @@ class LabelInput implements Component {
 		const lines: string[] = [];
 		const indent = "  ";
 		const availableWidth = width - indent.length;
-		lines.push(truncateToWidth(`${indent}${theme.fg("muted", t("Label (empty to remove):"))}`, width));
+		lines.push(truncateToWidth(`${indent}${theme.fg("muted", t("commands.label"))}`, width));
 		lines.push(...this.#input.render(availableWidth).map(line => truncateToWidth(`${indent}${line}`, width)));
-		lines.push(truncateToWidth(`${indent}${theme.fg("dim", t("enter: save  esc: cancel"))}`, width));
+		lines.push(truncateToWidth(`${indent}${theme.fg("dim", t("commands.enterSaveEscCancel3"))}`, width));
 		return lines;
 	}
 

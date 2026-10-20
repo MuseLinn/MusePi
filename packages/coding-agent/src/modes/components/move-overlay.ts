@@ -234,12 +234,12 @@ export class MoveOverlay implements Component, Focusable {
 		const w = width;
 		const lines: string[] = [];
 
-		lines.push(topBorder(w, t("Move to directory")));
+		lines.push(topBorder(w, t("commands.moveDirectory")));
 		lines.push(row(this.#renderInput(), w));
 		lines.push(row("", w));
 
 		if (this.#results.length === 0 && this.#input.length > 0) {
-			lines.push(row(theme.fg("dim", t("No matching directories")), w));
+			lines.push(row(theme.fg("dim", t("commands.noMatchingDirectories")), w));
 		} else {
 			for (let i = 0; i < Math.min(this.#results.length, MAX_RESULTS); i++) {
 				const item = this.#results[i]!;
@@ -251,7 +251,7 @@ export class MoveOverlay implements Component, Focusable {
 		}
 
 		lines.push(row("", w));
-		lines.push(row(theme.fg("dim", t("Type to filter · ↑↓ navigate · Tab accept · Enter confirm · Esc cancel")), w));
+		lines.push(row(theme.fg("dim", t("commands.typeFilterNavigateTab")), w));
 		lines.push(bottomBorder(w));
 		return lines;
 	}
@@ -259,9 +259,9 @@ export class MoveOverlay implements Component, Focusable {
 	invalidate(): void {}
 
 	#renderInput(): string {
-		const prompt = theme.fg("dim", t("Path: "));
+		const prompt = theme.fg("dim", t("commands.path"));
 		if (this.#input.length === 0) {
-			const placeholder = theme.fg("dim", t("Type a directory path…"));
+			const placeholder = theme.fg("dim", t("commands.typeDirectoryPath"));
 			const marker = this.#focused ? CURSOR_MARKER : "";
 			return `${prompt}${placeholder}${marker}\x1b[7m \x1b[27m`;
 		}

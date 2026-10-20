@@ -86,8 +86,8 @@ export class HookEditorComponent extends Container implements Focusable {
 
 		// Hint
 		const hint = this.#promptStyle
-			? t("enter or ctrl+q submit  esc cancel  ctrl+g external editor")
-			: t("ctrl+q/ctrl+enter submit  esc cancel  ctrl+g external editor");
+			? t("commands.enterCtrlQSubmit")
+			: t("commands.ctrlQCtrlEnter");
 		this.addChild(new Text(theme.fg("dim", hint), chromePadX, 0));
 
 		this.addChild(new Spacer(1));

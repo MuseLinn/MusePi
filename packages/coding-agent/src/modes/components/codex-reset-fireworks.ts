@@ -179,10 +179,10 @@ function drawBanner(
 		event.kind === "unscheduled-weekly-reset" ? " O P E N A I   R E S E T " : " S A V E D   R E S E T ";
 	const subtitleText =
 		event.kind === "unscheduled-weekly-reset"
-			? t("Weekly usage cleared early · ESC to return")
+			? t("commands.weeklyUsageClearedEarly")
 			: event.added === 1
-				? t("New reset banked · {0} available · ESC to return", String(event.available))
-				: t("{0} resets banked · {1} available · ESC to return", String(event.added), String(event.available));
+				? t("commands.newResetBankedAvailableWith0", String(event.available))
+				: t("commands.resetsBankedAvailableEscWith0With1", String(event.added), String(event.available));
 	const title = truncateToWidth(titleText, innerWidth, "");
 	const subtitle = truncateToWidth(subtitleText, innerWidth, "");
 	const titleOffset = Math.floor((innerWidth - visibleWidth(title)) / 2);

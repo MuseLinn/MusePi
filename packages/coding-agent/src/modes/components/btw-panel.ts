@@ -130,33 +130,33 @@ export class BtwPanelComponent extends Container {
 	#footerLine(): string {
 		switch (this.#state) {
 			case "running":
-				return theme.fg("muted", t("Esc cancel /btw"));
+				return theme.fg("muted", t("commands.escCancelBtw"));
 			case "complete": {
-				if (!this.isCopyable()) return theme.fg("muted", t("Esc dismiss"));
+				if (!this.isCopyable()) return theme.fg("muted", t("commands.escDismiss"));
 				const actions = ["c copy"];
 				if (this.#canBranch?.() ?? this.isBranchable()) actions.push("b branch to chat");
-				actions.push(t("Esc dismiss"));
+				actions.push(t("commands.escDismiss"));
 				return theme.fg("muted", actions.join(" · "));
 			}
 			case "branching":
 				return theme.fg("muted", `${theme.status.pending} Branching to chat…`);
 			case "aborted":
-				return theme.fg("warning", `${theme.status.warning} ${t("Cancelled · Esc dismiss")}`);
+				return theme.fg("warning", `${theme.status.warning} ${t("commands.cancelledEscDismiss")}`);
 			case "error":
-				return theme.fg("error", `${theme.status.error} ${t("Error · Esc dismiss")}`);
+				return theme.fg("error", `${theme.status.error} ${t("commands.errorEscDismiss")}`);
 		}
 	}
 
 	#contentComponent(): Component {
 		if (this.#state === "error") {
-			return new Text(theme.fg("error", replaceTabs(this.#errorMessage ?? t("Unknown error"))), 1, 0);
+			return new Text(theme.fg("error", replaceTabs(this.#errorMessage ?? t("swarm.unknownError"))), 1, 0);
 		}
 		const text = this.#visibleAnswer;
 		if (!text) {
 			const waiting =
 				this.#state === "running"
-					? `${theme.status.pending} ${t("Waiting for response…")}`
-					: t("No text returned.");
+					? `${theme.status.pending} ${t("commands.waitingResponse")}`
+					: t("commands.noTextReturned");
 			return new Text(theme.fg("dim", waiting), 1, 0);
 		}
 		return new Markdown(text, 1, 0, getMarkdownTheme());

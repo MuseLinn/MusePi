@@ -218,7 +218,7 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		});
 		expect(advancedToggle().getAttribute("aria-expanded")).toBe("true");
 		// 依次切媒体/演示稿/原型 chip,展开态保持。
-		for (const label of [t("creation media video"), t("creation tab deck"), t("creation tab prototype")]) {
+		for (const label of [t("creation.creationMediaVideo"), t("creation.creationTabDeck"), t("creation.creationTabPrototype")]) {
 			act(() => {
 				chipButton(label).click();
 			});
@@ -234,11 +234,11 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		await settle();
 		// deck:打开高级,点演讲者备注 toggle。
 		act(() => {
-			chipButton(t("creation tab deck")).click();
+			chipButton(t("creation.creationTabDeck")).click();
 		});
 		ensureAdvancedOpen();
 		act(() => {
-			chipButton(t("creation speaker notes")).click();
+			chipButton(t("creation.creationSpeakerNotes")).click();
 		});
 		await typeAndSend("做一份演示稿");
 		expect(captured).toHaveLength(1);
@@ -254,11 +254,11 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		// prototype:平台多选加 iOS（默认 responsive 之上追加）。草稿缓存的
 		// 选中 chip 是上一段的 deck——先点回 prototype,平台字段才出现。
 		act(() => {
-			chipButton(t("creation tab prototype")).click();
+			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		ensureAdvancedOpen();
 		act(() => {
-			chipButton(t("creation platform mobile-ios")).click();
+			chipButton(t("creation.creationPlatformMobileIos")).click();
 		});
 		await typeAndSend("画一个落地页");
 		expect(captured).toHaveLength(1);
@@ -272,7 +272,7 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		const root = renderWelcome(makeRpc(VIDEO_PROVIDERS));
 		await settle();
 		act(() => {
-			chipButton(t("creation media video")).click();
+			chipButton(t("creation.creationMediaVideo")).click();
 		});
 		await settle(); // media.providers 回填 + 已配置优先自动选中
 		ensureAdvancedOpen();
@@ -303,13 +303,13 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		const root = renderWelcome(makeRpc());
 		await settle();
 		act(() => {
-			chipButton(t("creation tab template")).click();
+			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
 		expect(document.body.querySelector("[data-testid='gui-creation-assetrow']")).toBeNull();
 		// 切回非 template chip,行恢复（portal 随 chip 派生）。
 		act(() => {
-			chipButton(t("creation tab prototype")).click();
+			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		expect(document.body.querySelector("[data-testid='gui-creation-assetrow']")).not.toBeNull();
 		root.unmount();

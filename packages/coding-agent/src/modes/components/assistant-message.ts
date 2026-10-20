@@ -459,7 +459,7 @@ export class AssistantMessageComponent extends Container {
 						contentWidth,
 						maxRows,
 						(line, index) =>
-							index === 0 ? theme.fg("error", `${t("Error: ")}${line}`) : theme.fg("error", line),
+							index === 0 ? theme.fg("error", `${t("commands.error")}${line}`) : theme.fg("error", line),
 						hidden => `… +${hidden} more line${hidden === 1 ? "" : "s"} (${expandKeyHint()} to expand)`,
 					),
 				1,
@@ -552,7 +552,7 @@ export class AssistantMessageComponent extends Container {
 				);
 				continue;
 			}
-			this.#contentContainer.addChild(new Text(theme.fg("toolOutput", t("[Image: {0}]", image.mimeType)), 1, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("toolOutput", t("commands.imageWith0", image.mimeType)), 1, 0));
 		}
 	}
 

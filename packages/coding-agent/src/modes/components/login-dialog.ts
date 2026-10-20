@@ -32,7 +32,7 @@ export class LoginDialogComponent extends Container {
 		this.addChild(new DynamicBorder());
 
 		// Title
-		this.addChild(new Text(theme.fg("warning", t("Login to {0}", providerName)), 1, 0));
+		this.addChild(new Text(theme.fg("warning", t("commands.loginToWith0", providerName)), 1, 0));
 
 		// Dynamic content area
 		this.#contentContainer = new Container();
@@ -62,11 +62,11 @@ export class LoginDialogComponent extends Container {
 	#cancel(): void {
 		this.#abortController.abort();
 		if (this.#inputRejecter) {
-			this.#inputRejecter(new Error(t("Login cancelled")));
+			this.#inputRejecter(new Error(t("commands.loginCancelled")));
 			this.#inputResolver = undefined;
 			this.#inputRejecter = undefined;
 		}
-		this.onComplete(false, t("Login cancelled"));
+		this.onComplete(false, t("commands.loginCancelled"));
 	}
 
 	/**
@@ -94,13 +94,13 @@ export class LoginDialogComponent extends Container {
 			),
 		);
 
-		const clickHint = process.platform === "darwin" ? t("Cmd+click to open") : t("Ctrl+click to open");
+		const clickHint = process.platform === "darwin" ? t("setup.cmdClickOpen") : t("setup.ctrlClickOpen");
 		const hyperlink = `\x1b]8;;${url}\x07${clickHint}\x1b]8;;\x07`;
 		this.#contentContainer.addChild(new Text(theme.fg("dim", hyperlink), 1, 0));
 
 		if (launchUrl && launchUrl !== url) {
 			this.#contentContainer.addChild(
-				new Text(theme.fg("dim", t("Local shortcut (this machine only): {0}", launchUrl)), 1, 0),
+				new Text(theme.fg("dim", t("commands.localShortcutWith0", launchUrl)), 1, 0),
 			);
 		}
 
@@ -126,7 +126,7 @@ export class LoginDialogComponent extends Container {
 			this.#contentContainer.addChild(new Spacer(1));
 			this.#contentContainer.addChild(new Text(theme.fg("dim", prompt), 1, 0));
 			this.#contentContainer.addChild(this.#input);
-			this.#contentContainer.addChild(new Text(theme.fg("dim", t("(Escape to cancel)")), 1, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("dim", t("commands.text7")), 1, 0));
 		}
 		this.#input.setValue("");
 		this.#tui.requestRender();
@@ -145,12 +145,12 @@ export class LoginDialogComponent extends Container {
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(new Text(theme.fg("text", message), 1, 0));
 		if (placeholder) {
-			this.#contentContainer.addChild(new Text(theme.fg("dim", t("e.g., {0}", placeholder)), 1, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("dim", t("commands.eGWith0", placeholder)), 1, 0));
 		}
 		if (!this.#contentContainer.children.includes(this.#input)) {
 			this.#contentContainer.addChild(this.#input);
 		}
-		this.#contentContainer.addChild(new Text(theme.fg("dim", t("(Escape to cancel, Enter to submit)")), 1, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("dim", t("commands.text8")), 1, 0));
 
 		this.#input.setValue("");
 		this.#tui.requestRender();
@@ -167,7 +167,7 @@ export class LoginDialogComponent extends Container {
 	showWaiting(message: string): void {
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(new Text(theme.fg("dim", message), 1, 0));
-		this.#contentContainer.addChild(new Text(theme.fg("dim", t("(Escape to cancel)")), 1, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("dim", t("commands.text7")), 1, 0));
 		this.#tui.requestRender();
 	}
 

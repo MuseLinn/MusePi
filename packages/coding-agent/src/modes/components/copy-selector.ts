@@ -207,7 +207,7 @@ export class CopySelectorComponent implements Component {
 		].join(theme.fg("dim", " · "));
 
 		return [
-			topBorder(width, t("Copy to clipboard")),
+			topBorder(width, t("commands.copyClipboard")),
 			...this.#renderTree(width, flat, cursorIdx, treeRows),
 			divider(width),
 			...this.#renderPreview(width, selected, previewRows),

@@ -20,10 +20,10 @@ export class QueueModeSelectorComponent extends Container {
 		const queueModes: SelectItem[] = [
 			{
 				value: "one-at-a-time",
-				label: t("one-at-a-time"),
-				description: t("Process queued messages one by one (recommended)"),
+				label: t("common.oneTime"),
+				description: t("commands.processQueuedMessagesOne"),
 			},
-			{ value: "all", label: t("all"), description: t("Process all queued messages at once") },
+			{ value: "all", label: t("commands.all"), description: t("commands.processAllQueuedMessages") },
 		];
 
 		// Add top border

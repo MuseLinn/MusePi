@@ -95,7 +95,7 @@ export class FooterComponent implements Component {
 
 		const headState = git.head.resolveSync(getProjectDir());
 		this.#cachedBranch =
-			headState === null ? null : headState.kind === "ref" ? (headState.branchName ?? headState.ref) : t("detached");
+			headState === null ? null : headState.kind === "ref" ? (headState.branchName ?? headState.ref) : t("commands.detached");
 		return this.#cachedBranch;
 	}
 
@@ -163,13 +163,13 @@ export class FooterComponent implements Component {
 			const billingParts: string[] = [];
 			if (totalCost) billingParts.push(`$${totalCost.toFixed(3)}`);
 			if (normalizedPremiumRequests) billingParts.push(`★ ${formatNumber(normalizedPremiumRequests)}`);
-			if (usingSubscription) billingParts.push(t("(sub)"));
+			if (usingSubscription) billingParts.push(t("shell.text2"));
 			if (billingParts.length > 0) statsParts.push(billingParts.join(" "));
 		}
 
 		// Colorize context percentage based on usage
 		let contextPercentStr: string;
-		const autoIndicator = this.#autoCompactEnabled ? ` ${t("(auto)")}` : "";
+		const autoIndicator = this.#autoCompactEnabled ? ` ${t("shell.text")}` : "";
 		const contextPercentDisplay = `${formatContextUsage(contextPercentValue, contextWindow, contextTokens)}${autoIndicator}`;
 		if (contextUsage && contextPercentValue !== null) {
 			const color = getContextUsageThemeColor(getContextUsageLevel(contextPercentValue, contextWindow));
@@ -183,7 +183,7 @@ export class FooterComponent implements Component {
 		let statsLeft = statsParts.join(" ");
 
 		// Add model name on the right side, plus thinking level if model supports it
-		const modelName = state.model?.id || t("no-model");
+		const modelName = state.model?.id || t("mcp.noModel");
 
 		// Add thinking level hint when the current model advertises supported efforts
 		let rightSide = modelName;

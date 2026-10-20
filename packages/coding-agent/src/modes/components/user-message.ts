@@ -178,7 +178,7 @@ function summarizeSyntheticInput(text: string): string {
 	const size = formatBytes(Buffer.byteLength(text, "utf-8"));
 	const lineCount = text === "" ? 0 : text.split("\n").length;
 	const dot = theme.sep.dot.trim();
-	return `${syntheticInputLabel(text)} ${dot} ${size} ${dot} ${lineCount === 1 ? t("{0} line", String(lineCount)) : t("{0} lines", String(lineCount))}`;
+	return `${syntheticInputLabel(text)} ${dot} ${size} ${dot} ${lineCount === 1 ? t("commands.lineWith0", String(lineCount)) : t("commands.linesWith0", String(lineCount))}`;
 }
 
 /** First Markdown heading text in `text`, else `Synthetic input`. */
@@ -187,7 +187,7 @@ function syntheticInputLabel(text: string): string {
 		const line = raw.trim();
 		if (!line) continue;
 		const heading = /^#{1,6}\s+(.*)$/.exec(line);
-		return heading ? heading[1]!.trim() || t("Synthetic input") : t("Synthetic input");
+		return heading ? heading[1]!.trim() || t("mcp.syntheticInput") : t("mcp.syntheticInput");
 	}
-	return t("Synthetic input");
+	return t("mcp.syntheticInput");
 }

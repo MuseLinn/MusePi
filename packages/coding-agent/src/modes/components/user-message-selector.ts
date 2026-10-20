@@ -52,7 +52,7 @@ class UserMessageList implements Component {
 
 	#renderStatusLine(_total: number): string {
 		const query = this.#searchQuery.trim();
-		const suffix = query ? t("Search: {0}", this.#searchQuery) : t("Type to search");
+		const suffix = query ? t("settings.searchWith0", this.#searchQuery) : t("setup.typeSearch");
 		return theme.fg("muted", `  ${suffix}`);
 	}
 
@@ -199,8 +199,8 @@ export class UserMessageSelectorComponent extends Container {
 
 		// Add header
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.bold(t("Branch from Message")), 1, 0));
-		this.addChild(new Text(theme.fg("muted", t("Select a message to create a new branch from that point")), 1, 0));
+		this.addChild(new Text(theme.bold(t("commands.branchMessage")), 1, 0));
+		this.addChild(new Text(theme.fg("muted", t("commands.selectMessageCreateNew")), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));

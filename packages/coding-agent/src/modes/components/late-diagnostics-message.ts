@@ -64,7 +64,7 @@ export class LateDiagnosticsMessageComponent extends Container {
 			this.#expanded,
 			theme,
 			fp => theme.getLangIcon(getLanguageFromPath(fp)),
-			{ title: t("Late diagnostics") },
+			{ title: t("commands.lateDiagnostics") },
 		);
 		const body = text.replace(/^\n+/, "");
 		if (body) this.addChild(new Text(body, 1, 0));

@@ -25,13 +25,13 @@ export class SessionAccountSelectorComponent extends Container {
 			return {
 				value,
 				label: account.label,
-				description: account.active ? t("active for this session") : undefined,
+				description: account.active ? t("commands.activeSession") : undefined,
 			};
 		});
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new TruncatedText(theme.bold(t("Select a {0} account for this session:", providerName))));
+		this.addChild(new TruncatedText(theme.bold(t("commands.selectAccountSessionWith0", providerName))));
 		this.addChild(new Spacer(1));
 
 		this.#selectList = new SelectList(

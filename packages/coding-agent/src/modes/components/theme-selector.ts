@@ -26,7 +26,7 @@ export class ThemeSelectorComponent extends Container {
 		const themeItems: SelectItem[] = themes.map(name => ({
 			value: name,
 			label: name,
-			description: name === currentTheme ? t("(current)") : undefined,
+			description: name === currentTheme ? t("common.text3") : undefined,
 		}));
 
 		// Add top border

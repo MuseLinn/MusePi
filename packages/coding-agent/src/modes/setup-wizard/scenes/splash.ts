@@ -24,7 +24,7 @@ const MIN_SCENE_HEIGHT = 22;
 
 /** Rendered at draw time so the locale is resolved per frame. */
 function skipHint(): string {
-	return t("press enter to skip");
+	return t("commands.pressEnterSkip");
 }
 
 /** Density ramp for the rippling water, lightest → heaviest. */

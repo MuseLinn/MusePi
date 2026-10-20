@@ -31,7 +31,7 @@ export class ResetUsageSelectorComponent extends Container {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new TruncatedText(theme.bold(t("Spend a saved rate-limit reset:"))));
+		this.addChild(new TruncatedText(theme.bold(t("commands.spendSavedRateLimit"))));
 		this.addChild(new Spacer(1));
 		this.#listContainer = new Container();
 		this.addChild(this.#listContainer);
@@ -146,7 +146,7 @@ export class ResetUsageSelectorComponent extends Container {
 			const account = this.#accounts[this.#selectedIndex];
 			if (!account) return;
 			if (account.availableCount <= 0) {
-				this.#statusMessage = t("That account has no saved resets to spend.");
+				this.#statusMessage = t("commands.accountHasNoSaved");
 				this.#updateList();
 				return;
 			}
