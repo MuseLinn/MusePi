@@ -1216,17 +1216,19 @@
 	min-width: 100%;
 	font-size: var(--ui-font-size-xs);
 }
-.gui-filepane-sheet-table td {
+.gui-filepane-sheet-table td,
+.gui-filepane-sheet-table th {
 	border: 1px solid var(--border);
 	padding: 3px 6px;
 	white-space: pre;
 	vertical-align: top;
 }
-.gui-filepane-sheet-table tr:first-child td {
+.gui-filepane-sheet-table th {
 	position: sticky;
 	top: 0;
 	background: var(--color-surface-raised);
 	font-weight: 600;
+	text-align: start;
 }
 
 

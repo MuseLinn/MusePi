@@ -215,4 +215,18 @@ describe("built-in viewers", () => {
 		);
 		expect(result).toEqual({ kind: "mermaid", source: "graph TD; A-->B;" });
 	});
+
+	it("claims a tsv for the sheet grid rather than opening it externally", async () => {
+		// A tab-separated export was the one table format the pane did not
+		// preview: it fell to the system app while its csv sibling rendered.
+		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
+		// The mime is the ambiguous one a host reports for tsv; the extension
+		// decides, exactly as it will in the pane.
+		expect(
+			selectFileViewer(input({ name: "rows.tsv", ext: "tsv", mime: "application/octet-stream" }))?.id,
+		).toBe("sheets");
+		// A host that reports text/plain must not hand a table to the text
+		// viewer either — the sheets viewer outranks it for this extension.
+		expect(selectFileViewer(input({ name: "rows.tsv", ext: "tsv", mime: "text/plain" }))?.id).toBe("sheets");
+	});
 });

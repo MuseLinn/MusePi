@@ -228,7 +228,7 @@ function sheetsViewer(deps: BuiltinViewerDeps): FileViewer {
 	return {
 		id: "sheets",
 		priority: VIEWER_PRIORITY.builtin,
-		matches: input => input.ext === "xlsx" || input.ext === "xls" || input.ext === "csv",
+		matches: input => input.ext === "xlsx" || input.ext === "xls" || input.ext === "csv" || input.ext === "tsv",
 		render: async (input: ViewerInput) => {
 			if (!deps.buildSheets) return undefined;
 			const sheets = deps.buildSheets(input.bytes);
@@ -311,17 +311,18 @@ function mermaidViewer(): FileViewer {
 
 /** Every built-in viewer, in the order they should be tried.
  *
- *  The mermaid viewer comes first: a `.mmd` file is served as `text/plain`,
- *  which the text viewer claims — and a diagram shown as its source is the one
- *  answer that is never what the person opened it for. */
+ *  The mermaid and sheets viewers come first: a `.mmd` or `.tsv` file is
+ *  served as `text/plain`, which the text viewer claims — and a diagram shown
+ *  as its source (or a table as its raw text) is the one answer that is never
+ *  what the person opened it for. */
 export function builtinFileViewers(deps: BuiltinViewerDeps): FileViewer[] {
 	return [
 		mermaidViewer(),
+		sheetsViewer(deps),
 		plainTextViewer(deps),
 		imageViewer(),
 		pdfViewer(deps),
 		docxViewer(),
-		sheetsViewer(deps),
 		mediaViewer(),
 		fontViewer(),
 	];

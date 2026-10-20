@@ -80,6 +80,30 @@ fit 永不放大（16px 图标保持原大小），缩放跟随指针，放大�
   纯算术放在 `client-core` 是为了能在无 DOM 的测试环境里验证 —— 面板里的
   缩放手势本身需要浏览器，那里由 GUI 的手动验证覆盖。
 
+## 已落地（2026-10-20，markdown 本地导航 + 表格预览收尾）
+
+吸收 openchamber `useMarkdownLocalAssets.ts`（205 行）与 `TableArtifact.tsx`
+（73 行）+ `delimitedText.ts`（101 行）中我们没有的部分。
+
+**markdown 文件预览的本地导航**（`FilePaneMarkdownNav.ts`）：相对链接在本面板
+打开目标文件（按被预览文件的目录解析，`..` 原样拼接交给 daemon 规范化）；
+`#fragment` 滚动到本预览内的标题（GitHub slug 匹配）——渲染器给所有链接标了
+`target=_blank`，没有这条 fragment 会把整个应用开在新窗口。openchamber 的
+另外两块我们已有：相对图片路径（`resolveLocalImages` + 有界缓存）、http(s)
+进应用内浏览器。挂载点在 FilePane 侧而非共享 Markdown 组件 —— 转录消息没有
+"所在文件"可解析。
+
+**表格预览收尾**：`.tsv` 是唯一没被预览的表格格式（落到系统默认应用，而它的
+csv 兄弟正常渲染）。sheets viewer 认领 `.tsv`（SheetJS 原生解析），并**排在
+text viewer 之前** —— 宿主对 tsv 常报 `text/plain`，不抢先就退化成原始文本。
+同时吸收 TableArtifact 的两个 UX 点：表头行 `thead` + sticky（此前是
+`tr:first-child td`，thead 化后滚动时列名不再消失）。命名保留 `SheetPreview`
+—— 多 sheet 的 xlsx 是 TableArtifact 的超集，改名反而丢信息。
+
+**测试** — `test/file-viewers.test.ts` +1（tsv 两种 mime 形态都归 sheets），
+`test/markdown-file-links.test.tsx` 4 例（sibling 解析、`..` 拼接、fragment
+滚动、http 留给共享组件）。
+
 ## 核查（2026-10-04，代码为唯一真相）
 
 18 条逐项读码：**16 条完全未动，3 条部分落地**（下表标「部分」的三条）。除上面那批已落地项外没有别的存量收口——不要按梯队顺序推断"第一梯队做了一半"，第一梯队实际也只有零星几处沾边。

@@ -328,7 +328,7 @@ function TypeIcon({ name }: { name: string }): ReactElement {
 	else if (ext === "json") IconCmp = FileJson;
 	else if (["md", "txt", "toml", "yml", "yaml"].includes(ext)) IconCmp = FileText;
 	else if (["ttf", "otf", "woff", "woff2"].includes(ext)) IconCmp = FileType;
-	else if (["xlsx", "xls", "csv"].includes(ext)) IconCmp = FileSpreadsheet;
+	else if (["xlsx", "xls", "csv", "tsv"].includes(ext)) IconCmp = FileSpreadsheet;
 	else if (["docx", "doc"].includes(ext)) IconCmp = FileText;
 	else if (["pptx", "ppt"].includes(ext)) IconCmp = Presentation;
 	return <IconCmp size={12} className="gui-filepane-icon" />;
@@ -1608,11 +1608,17 @@ function buildSheetHtml(rows: string[][]): string {
 			.replaceAll("<", "&lt;")
 			.replaceAll(">", "&gt;");
 	const lines: string[] = ['<table class="gui-filepane-sheet-table">'];
-	for (const row of rows) {
+	if (rows.length > 0) {
+		lines.push("<thead><tr>");
+		for (const cell of rows[0]) lines.push(`<th>${escapeCell(cell)}</th>`);
+		lines.push("</tr></thead>");
+	}
+	lines.push("<tbody>");
+	for (const row of rows.slice(1)) {
 		lines.push("<tr>");
 		for (const cell of row) lines.push(`<td>${escapeCell(cell)}</td>`);
 		lines.push("</tr>");
 	}
-	lines.push("</table>");
+	lines.push("</tbody></table>");
 	return lines.join("");
 }
