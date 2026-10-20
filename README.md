@@ -72,7 +72,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ## Screenshots
 
-No bitmaps that go stale — the [website's interface preview](https://muselinn.github.io/MusePi/#preview) draws the app's layout in-page (session tree, conversation with tool rows, task progress) as an illustration rather than a screenshot.
+A real capture, not an illustration that goes stale — the [website's interface preview](https://muselinn.github.io/MusePi/#preview) shows the actual client, regenerated from the running renderer for each release.
 
 ## Features
 

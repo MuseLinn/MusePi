@@ -21,6 +21,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/jekyll-build-pages@v1
+      # The sitemap lists every published document, and the documents change
+      # far more often than the landing page does. Generating it here rather
+      # than committing it keeps it in step with whatever is in docs/ right
+      # now, and keeps the repository free of a file that would go stale.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4"
+      - name: Generate sitemap and robots.txt
+        run: bun scripts/build-site-sitemap.ts
       # docs/ keeps the Jekyll layout; the landing itself is the standalone
       # site in web/, so its files replace the generated root pages here.
       - name: Overlay web/ as the site root
