@@ -3486,5 +3486,10 @@ export const settings = {
 	"50 KB": "50 KB",
 	"500 KB": "500 KB",
 	"75 KB": "75 KB",
+	"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps": "Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps",
+	"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16": "On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16",
+	"Solid accent line, no context feedback": "Solid accent line, no context feedback",
+	"Used portion in accent color, remainder dimmed": "Used portion in accent color, remainder dimmed",
+	"Visual layout of the input editor and status line": "Visual layout of the input editor and status line",
 
 } as const satisfies Record<SettingsKey, string>;

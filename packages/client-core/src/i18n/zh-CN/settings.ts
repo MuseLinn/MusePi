@@ -3343,6 +3343,11 @@ export const settings = {
 	"50 KB": "50 KB",
 	"500 KB": "500 KB",
 	"75 KB": "75 KB",
+	"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps": "把压缩点之前的历史折叠进摘要分隔线之后；关闭（默认）则完整保留对话并在每个压缩点显示分隔线——折叠会把这些条目从导航树和轨迹跳转里隐藏",
+	"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16": "端侧神经语音（Kokoro-82M / MeloTTS 中文）；输出为 WAV/PCM16",
+	"Solid accent line, no context feedback": "纯强调色线条，无上下文反馈",
+	"Used portion in accent color, remainder dimmed": "已用部分强调色，其余变暗",
+	"Visual layout of the input editor and status line": "输入编辑器与状态线的视觉形态",
 
 } as const;
 
