@@ -64,7 +64,6 @@ import { QueuePanel } from "./composer/queue-panel";
 import { QuoteCards } from "./composer/quote-cards";
 import { SessionModeToggles } from "./composer/session-mode-toggles";
 import { SlashCommandTip } from "./composer/slash-command-tip";
-import { StatsPillsRow, useStatsMode } from "./composer/stats-pills";
 import { QueueToggleChip, SwarmChip, TodoChip } from "./composer/status-chips";
 import { SwarmCardPreview } from "./composer/swarm-card-preview";
 import { TodoPanel } from "./composer/todo-panel";
@@ -537,7 +536,6 @@ export function Composer({
 	// `session.contextUsage` projection state above. The memoized row
 	// re-renders only when the derived figures move, so stream deltas on
 	// `entries` stay invisible to it.
-	const statsMode = useStatsMode();
 	const windowStats = useMemo(() => deriveWindowStats(entries ?? []), [entries]);
 
 	// ── Manual context compaction (TUI /compact parity) ────────────────────
@@ -1892,10 +1890,12 @@ export function Composer({
 				flipAnchor="session"
 				belowRow={
 					<>
-						<StatsPillsRow stats={windowStats} usage={contextUsage?.usage ?? null} mode={statsMode} />
-						{/* composer.overlay / composer.requestDraft / composer.for 座位槽:
-						 * DSH conversation.input.overlay / .requestDraftInitialization / .for 的对应位。
-						 * 输入区的浮层与草稿类扩展内容,排在统计行之后。 */}
+						{/* 性能与用量读数由插件提供（bundled-plugins/stats-pills，挂在
+						 * composer.dock）。宿主不再硬编码这一行：它属于会话的观测面，
+						 * 不是输入区的结构，用户应当可以停用或替换它。
+						 * composer.overlay / composer.requestDraft / composer.for 座位槽：
+						 * DSH conversation.input.overlay / .requestDraftInitialization / .for 的对应位。 */}
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_OVERLAY_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_REQUEST_DRAFT_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_FOR_SLOT} sessionId={sessionId} cwd={cwd} />

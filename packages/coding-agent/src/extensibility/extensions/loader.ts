@@ -22,6 +22,7 @@ import { hasFsCode, isEacces, isEnoent, logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc } from "@musepi/pi-wire";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
+import { isPluginDisabled } from "../../capability/plugin-identity";
 import { type Hook, hookCapability } from "../../capability/hook";
 import { isServiceTierFamily, isServiceTierForFamily } from "../../config/service-tier";
 import { loadCapability } from "../../discovery";
@@ -1174,7 +1175,10 @@ export async function discoverExtensionPaths(
 	const disabled = new Set(disabledExtensionIds ?? []);
 	const loadOptions = disabledExtensionIds ? { cwd, disabledExtensions: disabledExtensionIds } : { cwd };
 
-	const isDisabledName = (name: string): boolean => disabled.has(`extension-module:${name}`);
+	// Accepts the current identity (plugin name) and both historical `kind:name`
+	// forms: a toggle saved before the identity change must still apply, or the
+	// user's disabled extension silently starts loading again.
+	const isDisabledName = (name: string): boolean => isPluginDisabled(disabled, name);
 
 	const addPath = (extPath: string): void => {
 		const resolved = path.resolve(extPath);
@@ -1205,7 +1209,10 @@ export async function discoverExtensionPaths(
 			providers: ["native", "musepi-extensions"],
 		});
 		for (const ext of discovered.items) {
-			addPath(ext.path);
+			// Through `addPaths`, not `addPath`: the capability does not filter by
+			// the user's disable list, so adding directly here started a disabled
+			// extension anyway (the row showed disabled while it kept loading).
+			addPaths([ext.path]);
 		}
 	}
 

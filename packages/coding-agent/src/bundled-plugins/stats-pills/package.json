@@ -1,0 +1,13 @@
+{
+	"name": "musepi-stats-pills",
+	"version": "0.1.0",
+	"private": true,
+	"description": "MusePi composer performance and usage readout as a plugin.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "📊",
+		"description": "Per-turn performance and usage readout above the composer: token totals, spend and cache-hit rate.",
+		"extensions": ["./index.ts"]
+	}
+}

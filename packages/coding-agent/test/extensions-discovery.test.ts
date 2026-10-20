@@ -720,7 +720,11 @@ describe("extensions discovery", () => {
 		});
 		initializeWithSettings(settings);
 
-		const result = await discoverForTest();
+		// Through the settings-aware entry point: the disable list lives in
+		// settings, and the convenience wrapper (`discoverForTest`) does not read
+		// them, so it could never observe a disabled extension at all.
+		const disabledPaths = await discoverSessionExtensionPaths({}, tempDir.path(), settings);
+		const result = await loadExtensions(disabledPaths, tempDir.path());
 		const loadedHook = result.extensions.find(extension => extension.path === hookPath);
 
 		expect(result.errors).toHaveLength(0);
