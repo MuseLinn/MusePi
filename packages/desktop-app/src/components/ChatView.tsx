@@ -44,6 +44,8 @@ import { surfaceById } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
 import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
+import { publishComposerInsets, registerComposerInsetReader, withdrawComposerInsets } from "../lib/composer-inset-readers";
+import { forgetComposerSlot, recordComposerSlotHeight } from "../lib/composer-tail-inset";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
@@ -743,6 +745,15 @@ export function ChatView({
 	}, [terminalOpen, dockSessionKey]);
 	const terminalPanelMounted = terminalOpen || terminalEverOpened.size > 0;
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
+	// The scroller is the element whose mask IS the end fade, so it is the
+	// reader for --chat-composer-inset. Its ref is shared with useScrollShadow
+	// and two children, hence a callback that fans out rather than a swap.
+	const releaseTranscriptInsetReader = useRef<(() => void) | undefined>(undefined);
+	const transcriptScrollerRef = useCallback((el: HTMLDivElement | null) => {
+		releaseTranscriptInsetReader.current?.();
+		releaseTranscriptInsetReader.current = registerComposerInsetReader(el) ?? undefined;
+		transcriptRef.current = el;
+	}, []);
 	// 内容边界羽化:纵向上下羽化(transcript 自身,修复静态 data 属性从不
 	// 更新的死接线)+ 深扫描消息内的工具渲染横向滚动块(tv-pre / diff,
 	// 同 mask 配方,只在横向溢出时显示左右羽化)。
@@ -2262,33 +2273,35 @@ export function ChatView({
 	const wrapMorphVer = useRef(0);
 
 	/**
-	 * Publish the floating composer's measured height as `--chat-composer-inset`
-	 * on the chat body.
+	 * Publish the floating composer's geometry.
 	 *
-	 * The composer floats over the transcript, so the list needs to reserve the
-	 * band it covers — otherwise the last line sits under it. The height is
-	 * written as a CSS variable rather than passed as a prop because the value
-	 * changes without any React state change we want to schedule: a growing
-	 * textarea, a queue row appearing, an attachment chip wrapping. An observer
-	 * writing a variable resizes the footer spacer without re-rendering the
-	 * list (the reference implementation's composerInsetReaders).
+	 * Two values, and they are not interchangeable:
+	 * `--chat-composer-inset` is the slot's current height (the end fade matches
+	 * the glass it meets), `--chat-composer-tail-inset` is what the list footer
+	 * reserves — the RESTING height plus a gap, so a composer that grows takes
+	 * the gap first instead of shoving the transcript on every keystroke.
 	 *
-	 * Everything that docks above the input (approvals, asks, the jump-back
-	 * dock, the session-tree nav) is a CHILD of this wrap, so its height is
-	 * already in the measurement — one observer covers the whole floating
-	 * stack and the spacer needs no second variable.
+	 * They are written onto the readers (the tail spacer and the fade band), not
+	 * onto this column: a custom property on the column inherits into every
+	 * virtualized row and restyles all of them. See composer-inset-readers.
 	 */
 	useEffect(() => {
 		const body = chatBodyRef.current;
 		const wrap = composerWrapRef.current;
 		if (!body || !wrap || typeof ResizeObserver === "undefined") return;
 		const publish = (): void => {
-			body.style.setProperty("--chat-composer-inset", `${Math.round(wrap.getBoundingClientRect().height)}px`);
+			const height = Math.round(wrap.getBoundingClientRect().height);
+			const { tailInset } = recordComposerSlotHeight(body, height);
+			publishComposerInsets(body, { inset: height, tailInset });
 		};
 		publish();
 		const observer = new ResizeObserver(publish);
 		observer.observe(wrap);
-		return () => observer.disconnect();
+		return () => {
+			observer.disconnect();
+			forgetComposerSlot(body);
+			withdrawComposerInsets(body);
+		};
 	}, []);
 	// Pre-toggle wrap top, captured during render (the DOM still shows the
 	// previous commit's layout). The morph animates translateY against it:
@@ -2581,7 +2594,7 @@ export function ChatView({
 											) : (
 												<>
 													<div
-														ref={transcriptRef}
+														ref={transcriptScrollerRef}
 														className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
 														data-top-scroll="false"
 														data-bottom-scroll="false"
@@ -2832,8 +2845,9 @@ export function ChatView({
 													 * session-tree nav) is a child of the wrap. */}
 													<div
 														className="gui-chat-tail-spacer flex-shrink-0"
+														ref={registerComposerInsetReader}
 														style={{
-															height: "calc(var(--chat-composer-inset, 0px) + 16px)",
+															height: "var(--chat-composer-tail-inset, 208px)",
 														}}
 														aria-hidden="true"
 													/>

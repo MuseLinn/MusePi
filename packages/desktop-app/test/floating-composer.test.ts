@@ -79,8 +79,18 @@ describe("floating composer layout", () => {
 		// At rest rows thin out under the glass; while streaming the band is
 		// pulled up so the newest line is transparent at the composer's edge
 		// instead of being cut in half.
-		expect(atRest).toBe("32px");
-		expect(streaming).toBe("64px");
+		// The band is derived from the measured composer height (happy-dom folds
+		// the calc with its fallback), so what matters is that streaming asks for
+		// a deeper band than rest — a line or two of extra fade.
+		// "calc(32px + 24px)" -> 24: the extra band on top of the fallback.
+		const depth = (value: string): number => {
+			const numbers = value.match(/(\d+(?:\.\d+)?)px/g) ?? [];
+			return numbers.length > 1 ? Number.parseFloat(numbers[numbers.length - 1]) : 0;
+		};
+		expect(depth(streaming)).toBeGreaterThan(depth(atRest));
+		// (The fallback-substituted value proves the variable is consumed; the
+		// live value is pinned by the inset the observer publishes.)
+		expect(depth(atRest)).toBeGreaterThan(0);
 	});
 
 	it("reserves the measured composer height as the transcript's tail band", () => {

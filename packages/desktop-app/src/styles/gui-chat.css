@@ -688,16 +688,22 @@ body.gui-resizing .gui-pane-resize-x::after {
 }
 
 /* ── End fade: rows thin out under the composer's glass ────────────────
- * Static CSS mask, no animation timeline. At rest the fade runs from the
- * composer's top edge to the scroller's end, so rows slide under the glass.
+ * Static CSS mask, no animation timeline. The band is the composer's measured
+ * height plus a small extra, so the fade always ends exactly where the glass
+ * begins — a fixed 32px would be too short over a tall composer (rows would be
+ * cut mid-line) and too long over a short one (rows would vanish early).
+ * `--chat-composer-inset` is written onto this element by the inset-reader
+ * registration, not inherited from the column: a custom property on the column
+ * restyles every virtualized row.
+ *
  * While a live reply streams AND the view follows it (`data-live-tail`), the
- * fade band is pulled up so the newest line is fully transparent at the
- * composer's edge instead of being cut in half by it. */
+ * band grows by a line or so: the newest line must be fully transparent at the
+ * composer's edge instead of being sliced by it. */
 .gui-transcript {
-	--chat-tail-fade: 32px;
+	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + 24px);
 }
 .gui-chat-body[data-live-tail="true"] .gui-transcript {
-	--chat-tail-fade: 64px;
+	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + 64px);
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
