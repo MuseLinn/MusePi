@@ -1,8 +1,41 @@
+import { getComposerHeightLimit, isComposerContentCapped } from "./composer-height-limit";
+
 const LINE_PX = 20;
 const PAD_Y = 16;
 /** Minimum textarea rows; shared with the session composer markup. */
 export const MIN_ROWS = 2;
 const MAX_ROWS = 8;
+
+/**
+ * Breathing room between the composer's top edge and the surface it floats
+ * over — enough that the fade band reads as glass rather than as a cut.
+ */
+const BOUND_GAP_PX = 96;
+
+/**
+ * The height cap for this textarea, in px.
+ *
+ * The line cap is what keeps the input an input rather than a document. The
+ * available-height cap is what keeps it from eating the conversation on a short
+ * window: the composer now floats over the transcript, so eight rows of input on
+ * a short pane would leave nothing to read.
+ *
+ * Resolved by walking up to the chat body rather than passed in, because every
+ * autosize call site already holds the element and only some of them know the
+ * layout. One extra layout read per autosize, which already measures twice.
+ */
+function heightCap(el: HTMLTextAreaElement): number {
+	const lineCap = MAX_ROWS * LINE_PX + PAD_Y;
+	const bound = el.closest<HTMLElement>(".gui-chat-body");
+	if (!bound) return lineCap;
+	const transcript = bound.querySelector<HTMLElement>(".gui-transcript");
+	return getComposerHeightLimit({
+		maxLinesHeight: lineCap,
+		boundHeight: bound.clientHeight,
+		surroundingHeight: transcript?.offsetHeight ?? 0,
+		boundGapPx: BOUND_GAP_PX,
+	});
+}
 
 /** Shared by the session and welcome composers. */
 export function autosize(el: HTMLTextAreaElement | null): void {
@@ -13,7 +46,7 @@ export function autosize(el: HTMLTextAreaElement | null): void {
 		el.style.overflowY = "auto";
 		return;
 	}
-	const max = MAX_ROWS * LINE_PX + PAD_Y;
+	const max = heightCap(el);
 	// Measure the content height with transitions OFF. While a height
 	// transition is running (fast typing, then clearing), the computed
 	// height sits at its interpolated value and scrollHeight reads as
@@ -24,8 +57,12 @@ export function autosize(el: HTMLTextAreaElement | null): void {
 	const from = el.getBoundingClientRect().height;
 	el.style.height = "0px";
 	void el.offsetHeight;
-	const target = Math.max(MIN_ROWS * LINE_PX + PAD_Y, Math.min(el.scrollHeight, max));
-	el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+	const contentHeight = el.scrollHeight;
+	const target = Math.max(MIN_ROWS * LINE_PX + PAD_Y, Math.min(contentHeight, max));
+	// A scrollbar only when the content genuinely overflows: content that exactly
+	// fits still reports a pixel or two (the drawn caret, font metrics,
+	// rounding), and that sliver is a control that cannot scroll anywhere.
+	el.style.overflowY = isComposerContentCapped(contentHeight, max, LINE_PX) ? "auto" : "hidden";
 	if (Math.abs(target - from) < 1) {
 		// No size change (same line count): restore the height while
 		// transitions are still disabled AND commit it with a reflow —
