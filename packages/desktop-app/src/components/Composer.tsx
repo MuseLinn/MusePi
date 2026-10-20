@@ -2452,6 +2452,11 @@ export function Composer({
 						}}
 						value={text}
 						rows={MIN_ROWS}
+						/* Marks the session composer for the type-anywhere redirect:
+						 * a keystroke with nothing focused lands here. The welcome
+						 * composer is deliberately not marked — it is not a session's
+						 * input and must not silently capture stray typing. */
+						data-composer-input=""
 						onScroll={e => {
 							// Mirror the textarea's scroll onto the highlight overlay
 							// (previousElementSibling inside the shared stack) so the

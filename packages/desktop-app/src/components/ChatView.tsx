@@ -44,6 +44,7 @@ import { surfaceById } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
 import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
+import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import { publishComposerInsets, registerComposerInsetReader, withdrawComposerInsets } from "../lib/composer-inset-readers";
 import { forgetComposerSlot, recordComposerSlotHeight } from "../lib/composer-tail-inset";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -759,6 +760,34 @@ export function ChatView({
 	// 同 mask 配方,只在横向溢出时显示左右羽化)。
 	useScrollShadow(transcriptRef);
 	useDeepScrollShadow(transcriptRef, ".tv-pre, .tv-diff, .tv-diff-sbs-cell");
+
+	/**
+	 * Type anywhere, land in the composer.
+	 *
+	 * With nothing focused — after scrolling the conversation, or coming back
+	 * to the window — a keystroke should start a message. The guards live in
+	 * `composer-input-redirect`: a field, a page, a focused control, a floating
+	 * layer or an active text selection all keep their own input. Paste goes
+	 * through the composer's own handler so attachments and large-text gating
+	 * still apply.
+	 *
+	 * Capture phase on the window: by the time a bubble-phase listener runs, a
+	 * focused element has already acted on the key.
+	 */
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent): void => {
+			redirectKeyToComposer(event);
+		};
+		const onPaste = (event: ClipboardEvent): void => {
+			redirectPasteToComposer(event);
+		};
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("paste", onPaste, true);
+		return () => {
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("paste", onPaste, true);
+		};
+	}, []);
 	// Jump requests (message tree / trajectory / canvas / branch bar): the
 	// Transcript owns window expansion — a jump into the folded window
 	// mounts the target row first, then scrolls + flashes (previously the
