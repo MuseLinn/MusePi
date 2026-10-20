@@ -45,6 +45,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { ImagePreview } from "./FilePaneImagePreview";
+import { useMarkdownFileNavigation } from "./FilePaneMarkdownNav";
 import { FontPreview, MediaPreview, MermaidPreview } from "./FilePanePreviews";
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
@@ -386,6 +387,12 @@ export function FilePane({
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
+	// The markdown FILE preview's container: its relative links open the target
+	// file in this pane and #fragment links scroll within it (openchamber
+	// useMarkdownLocalAssets parity, minus what resolveLocalImages already
+	// covers). The transcript's Markdown has no such concept — a chat message
+	// has no file to resolve against.
+	const mdPreviewRef = useRef<HTMLDivElement | null>(null);
 	// Manifest awareness (M3-3.4): one daemon scan, shared with the artifacts
 	// panel, consulted when a preview opens so the header can name the artifact
 	// the file belongs to.
@@ -741,6 +748,27 @@ export function FilePane({
 		void openPreview({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [openRequest, openPreview, cwd.endsWith, cwd]);
+
+	// A markdown FILE preview's relative links open the target here; the
+	// hook takes the previewed file's workspace-relative path so the link
+	// resolves against its directory, not the workspace root.
+	const mdFileNavigation = useCallback(
+		(absoluteTarget: string): void => {
+			const prefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
+			const rel = absoluteTarget.startsWith(prefix) ? absoluteTarget.slice(prefix.length) : absoluteTarget;
+			const name = rel.slice(Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\")) + 1);
+			void openPreview({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
+		},
+		[cwd, openPreview],
+	);
+	const mdPreviewPath = useMemo(
+		() =>
+			preview && extOf(preview.name) === "md" && preview.path.startsWith(`${cwd}/`)
+				? preview.path.slice(cwd.length + 1)
+				: null,
+		[preview, cwd],
+	);
+	useMarkdownFileNavigation(mdPreviewRef.current, mdPreviewPath, mdFileNavigation);
 
 	const toggleDir = useCallback((path: string): void => {
 		setCollapsed(prev => {
@@ -1253,7 +1281,7 @@ export function FilePane({
 								<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
 							)}
 							{preview.text !== undefined && extOf(preview.name) === "md" && mdRender && !edit ? (
-								<div className="gui-filepane-preview-md">
+								<div className="gui-filepane-preview-md" ref={mdPreviewRef}>
 									<Markdown text={preview.text} basePath={cwd} />
 								</div>
 							) : preview.text !== undefined && !edit ? (
