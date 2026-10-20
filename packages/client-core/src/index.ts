@@ -43,6 +43,15 @@ export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript
 export { Markdown } from "./components/transcript/Markdown";
 export { type MermaidMode, mermaidMode, renderMermaidHtml } from "./components/transcript/mermaid";
 export {
+	clampImageScale,
+	fitImageScale,
+	IMAGE_VIEWPORT_PADDING,
+	type GestureEventLike,
+	type Size as ImageSize,
+	stepImageScale,
+	wheelZoomFactor,
+} from "./components/image-zoom";
+export {
 	BlockUnitCounter,
 	BURST_WINDOW,
 	burstStyleFor,

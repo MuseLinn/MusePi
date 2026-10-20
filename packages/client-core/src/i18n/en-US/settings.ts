@@ -6230,5 +6230,10 @@ export const settings = {
 	"settings.previewMediaUnplayable": "settings.previewMediaUnplayable",
 	"settings.previewFontLoadFailed": "settings.previewFontLoadFailed",
 	"settings.previewFontSample": "settings.previewFontSample",
+	"settings.previewImageZoomOut": "settings.previewImageZoomOut",
+	"settings.previewImageZoomIn": "settings.previewImageZoomIn",
+	"settings.previewImageActualSize": "settings.previewImageActualSize",
+	"settings.previewImageFit": "settings.previewImageFit",
+	"settings.previewImageExpand": "settings.previewImageExpand",
 
 } as const satisfies Record<SettingsKey, string>;

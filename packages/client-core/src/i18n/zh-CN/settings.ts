@@ -6087,6 +6087,11 @@ export const settings = {
 	"settings.previewMediaUnplayable": "这个媒体文件无法播放：当前环境缺少对应的解码器。",
 	"settings.previewFontLoadFailed": "字体加载失败。",
 	"settings.previewFontSample": "预览字体：中文与 Latin 字符 AaBbGg 0123",
+	"settings.previewImageZoomOut": "缩小",
+	"settings.previewImageZoomIn": "放大",
+	"settings.previewImageActualSize": "实际大小",
+	"settings.previewImageFit": "适应窗口",
+	"settings.previewImageExpand": "全屏查看",
 
 } as const;
 

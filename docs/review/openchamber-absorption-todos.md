@@ -55,6 +55,31 @@ font / mermaid 三类文件预览，落在我们自己的 viewer 注册表上（
   mime 覆盖扩展名判定 video、font 出 specimen、`.mmd` 走 diagram 渲染器），
   `test/preview-from-viewer.test.ts` +3 例（三个新 field 的映射形状）。
 
+## 已落地（2026-10-20，面板内图片缩放）
+
+吸收 openchamber `views/files/previews/ImageArtifact.tsx`（313 行）+ `imageZoom.ts`
+（42 行）—— 对方是**文件面板内**的缩放预览（不是全屏灯箱）：fit 优先、再放大，
+fit 永不放大（16px 图标保持原大小），缩放跟随指针，放大后溢出可拖拽平移。
+
+- **`client-core/src/components/image-zoom.ts`** — 纯算术（`fitImageScale` /
+  `clampImageScale` / `stepImageScale` / `wheelZoomFactor`）+ WebKit 专有的
+  `GestureEventLike` 类型（DOM lib 里没有 `gesturestart`）。从 client-core 导出。
+- **`desktop-app/src/components/FilePaneImagePreview.tsx`** — 面板内预览：
+  Ctrl/⌘+滚轮、触控双指捏合、Safari `gesture*` 事件、`−`/`+` 档位步进、
+  双击在 fit 与 1:1 间切换、放大后拖拽平移（指针捕获）、缩放锚点跟随
+  （`flushSync` + layout effect 回正）。
+  **平移用原生滚动容器而非 transform** —— 图片保持清晰，滚动条也诚实。
+- **接入** — `FilePane.tsx` 的图片预览从静态 `<img>` 换成 `ImagePreview`，
+  灯箱入口保留为「全屏查看」按钮（灯箱另有标注/编辑/画廊/下载能力）。
+- **CSS** — `.gui-filepane-preview-image-*` 一节（含 `is-pannable` / `is-dragging`
+  两种光标）。
+- **i18n** — `settings.previewImageZoomOut` / `ZoomIn` / `Fit` / `Expand` 进 GUI
+  双语词典。
+- **测试** — `test/image-zoom.test.ts` 4 例（fit 不放大小图且为放大图留出内边距、
+  clamp 的下限取 fit 与 10% 中更紧的一个、档位步进两端不动、滚轮 delta 上限）。
+  纯算术放在 `client-core` 是为了能在无 DOM 的测试环境里验证 —— 面板里的
+  缩放手势本身需要浏览器，那里由 GUI 的手动验证覆盖。
+
 ## 核查（2026-10-04，代码为唯一真相）
 
 18 条逐项读码：**16 条完全未动，3 条部分落地**（下表标「部分」的三条）。除上面那批已落地项外没有别的存量收口——不要按梯队顺序推断"第一梯队做了一半"，第一梯队实际也只有零星几处沾边。

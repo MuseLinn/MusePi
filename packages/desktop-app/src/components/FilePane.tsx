@@ -44,6 +44,7 @@ import { previewMappingFor } from "../lib/preview-from-viewer";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import { ImagePreview } from "./FilePaneImagePreview";
 import { FontPreview, MediaPreview, MermaidPreview } from "./FilePanePreviews";
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
@@ -1288,16 +1289,11 @@ export function FilePane({
 							{preview.fontUrl && <FontPreview url={preview.fontUrl} name={preview.name} />}
 							{preview.mermaidSource !== undefined && <MermaidPreview source={preview.mermaidSource} />}
 							{preview.imageUrl && (
-								<div className="gui-filepane-preview-img-wrap">
-									<button
-										type="button"
-										className="gui-filepane-preview-img-btn"
-										title={t("general.openImageViewer")}
-										onClick={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
-									>
-										<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
-									</button>
-								</div>
+								<ImagePreview
+									src={preview.imageUrl}
+									name={preview.name}
+									onOpenLightbox={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
+								/>
 							)}
 							{preview.pdfPages && (
 								<div className="gui-filepane-preview-img-wrap">

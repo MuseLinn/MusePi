@@ -1355,6 +1355,112 @@
 	height: auto;
 }
 
+/* ── Zoomable image preview ────────────────────────────────────────── */
+
+.gui-filepane-preview-image {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-filepane-preview-image-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--color-border);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-filepane-preview-image-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-filepane-preview-image-scale {
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-filepane-preview-image-btn {
+	padding: 2px 8px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-xs);
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-filepane-preview-image-btn:hover:not(:disabled) {
+	background: var(--color-surface-raised);
+}
+
+.gui-filepane-preview-image-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gui-filepane-preview-image-btn[aria-pressed="true"] {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+}
+
+.gui-filepane-preview-image-viewport {
+	position: relative;
+	min-height: 0;
+	flex: 1;
+	overflow: auto;
+	background: var(--color-bg);
+}
+
+.gui-filepane-preview-image-viewport.is-pannable {
+	cursor: grab;
+}
+
+.gui-filepane-preview-image-viewport.is-dragging {
+	cursor: grabbing;
+}
+
+.gui-filepane-preview-image-inner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 12px;
+}
+
+.gui-filepane-preview-image-inner.is-fit {
+	height: 100%;
+	width: 100%;
+}
+
+.gui-filepane-preview-image-inner.is-zoomed {
+	min-height: 100%;
+	min-width: 100%;
+	width: max-content;
+}
+
+.gui-filepane-preview-image-img {
+	display: block;
+	border-radius: var(--radius-xs);
+	user-select: none;
+	-webkit-user-drag: none;
+}
+
+.gui-filepane-preview-image-inner.is-fit .gui-filepane-preview-image-img {
+	max-height: 100%;
+	max-width: 100%;
+	object-fit: contain;
+}
+
+.gui-filepane-preview-image-inner.is-zoomed .gui-filepane-preview-image-img {
+	max-width: none;
+	flex-shrink: 0;
+}
+
 .gui-glass-seg .gui-seg-btn {
 	flex: 1;
 	justify-content: center;
