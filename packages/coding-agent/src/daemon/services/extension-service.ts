@@ -14,6 +14,11 @@ import {
 	setVersionExemption,
 } from "../../extensibility/plugins/compat/compatibility-store";
 import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
+import {
+	legacyModuleEntryIds,
+	pluginNameOfEntryId,
+	setPluginEnabledIn,
+} from "../../capability/plugin-identity";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { DaemonService } from "./types";
@@ -632,6 +637,16 @@ export class ExtensionService implements DaemonService {
 				settings.set("disabledExtensions", stored);
 				await settings.flush();
 			}
+		} else if (pluginNameOfEntryId(p.id) !== undefined) {
+			// Plugin module row: identity is the plugin NAME (matching the
+			// reference's `PluginEntryId`), so the toggle is stored under that name
+			// and any legacy `kind:name` record for the same plugin is dropped in
+			// the same write. Leaving both would leave two records that can
+			// disagree, and the next read could not tell which one wins.
+			const stored = [...((settings.get("disabledExtensions") ?? []) as string[])];
+			const name = pluginNameOfEntryId(p.id) as string;
+			settings.set("disabledExtensions", setPluginEnabledIn(stored, name, p.enabled));
+			await settings.flush();
 		} else {
 			const disabled = [...((settings.get("disabledExtensions") ?? []) as string[])];
 			const i = disabled.indexOf(p.id);
@@ -937,22 +952,19 @@ export class ExtensionService implements DaemonService {
 			settings = this.#deps.settings();
 		}
 		if (settings) {
-			// 1) The extension-module row id — the second switch's storage.
-			//    Keeping it in lockstep with the package flag is what makes the
-			//    package toggle authoritative: whichever surface the user
-			//    flipped, both stores agree afterwards.
-			const rowId = `extension-module:${pluginName}`;
-			const disabled = [...((settings.get(extensionsKey) ?? []) as string[])];
-			const i = disabled.indexOf(rowId);
-			let changed = false;
-			if (!enabled && i < 0) {
-				disabled.push(rowId);
-				changed = true;
-			} else if (enabled && i >= 0) {
-				disabled.splice(i, 1);
-				changed = true;
-			}
-			if (changed) {
+			// 1) The module row's key — the second switch's storage. Keeping it in
+			//    lockstep with the package flag is what makes the package toggle
+			//    authoritative: whichever surface the user flipped, both stores
+			//    agree afterwards. Identity is the plugin NAME (the reference's
+			//    `PluginEntryId`), and the write also clears any legacy `kind:name`
+			//    record for the same plugin so no two records can disagree.
+			const disabled = setPluginEnabledIn(
+				(settings.get(extensionsKey) ?? []) as string[],
+				pluginName,
+				enabled,
+			);
+			const before = (settings.get(extensionsKey) ?? []) as string[];
+			if (disabled.length !== before.length || disabled.some((id, i) => id !== before[i])) {
 				settings.set(extensionsKey, disabled as never);
 				await settings.flush();
 			}
@@ -1021,8 +1033,13 @@ export class ExtensionService implements DaemonService {
 			const { readExtensionPluginMeta } = await import("../../extensibility/extensions/plugin-manifest");
 			const { getExtensionNameFromPath } = await import("../../discovery/helpers");
 			const settings = this.#deps.settings();
-			const rowId = `extension-module:${pluginName}`;
-			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(id => id !== rowId);
+			// This plugin's records under BOTH forms (bare name + legacy `kind:name`):
+			// the inspection preview must drop every one of them, or a disabled
+			// plugin would be treated as some other plugin's stale entry and shown.
+			const ownIds = new Set(legacyModuleEntryIds(pluginName));
+			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(
+				id => !ownIds.has(id),
+			);
 			const paths = await discoverExtensionPaths(
 				(settings?.get("extensions") ?? []) as string[],
 				this.#deps.cwd(),
@@ -1169,14 +1186,22 @@ export class ExtensionService implements DaemonService {
 			return { ok: true as const, restart: desc.restart ?? ("none" as const), values: undefined };
 		}
 		const extensions = await this.getExtensions();
-		const ext = extensions.find(e => e.id === p.id);
+		// Accept both the current identity (plugin name) and a legacy `kind:name`
+		// id from an older caller: the row exists under one of them, and refusing
+		// the other would report "not a declared config field" for a field that is
+		// declared on the very plugin the caller named.
+		const wantedName = pluginNameOfEntryId(p.id) ?? p.id;
+		const ext = extensions.find(e => e.id === p.id) ?? extensions.find(e => e.id === wantedName);
 		const desc = ext?.config?.find(f => f.key === p.key);
 		if (!desc) {
 			throw new Error(`extensions.setConfig: "${p.key}" is not a declared config field of ${p.id}`);
 		}
 		const coerced = coerceConfigFieldValue(desc, p.value);
 		const { writePluginConfigValue } = await import("../../extensibility/extensions-center/plugin-config-store");
-		const values = await writePluginConfigValue(p.id, p.key, coerced);
+		// Store under the plugin's NAME. A caller may still hand us a legacy
+		// `kind:name` id (older GUI builds, saved RPC params); normalizing here
+		// keeps one record per plugin instead of splitting its config in two.
+		const values = await writePluginConfigValue(pluginNameOfEntryId(p.id) ?? p.id, p.key, coerced);
 		this.invalidateExtensionsCache();
 		this.#deps.onChanged();
 		return { ok: true as const, restart: desc.restart ?? ("none" as const), values };

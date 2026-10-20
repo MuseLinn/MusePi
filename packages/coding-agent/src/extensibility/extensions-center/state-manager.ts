@@ -15,6 +15,7 @@ import {
 import type { GuiMotion } from "../../capability/gui-motion";
 import type { Hook } from "../../capability/hook";
 import type { MCPServer } from "../../capability/mcp";
+import { isPluginDisabled } from "../../capability/plugin-identity";
 import type { Prompt } from "../../capability/prompt";
 import type { Rule } from "../../capability/rule";
 import type { Skill } from "../../capability/skill";
@@ -98,13 +99,18 @@ export async function loadAllExtensions(
 			 */
 			kindOf?: (item: T) => ExtensionKind;
 			/**
-			 * Per-item enable/disable/config key. For module entries this stays
-			 * `extension-module:<name>` for BOTH tracks — it is the persisted
-			 * key space (`disabledExtensions`, the plugin config store), and
-			 * re-keying it would silently reset every user's toggles. The
-			 * displayed `kind` and this key are deliberately independent.
+			 * Per-item enable/disable/config key. Module entries key on the plugin
+			 * NAME (`plugin-identity.ts`), matching the reference's `PluginEntryId`;
+			 * the displayed `kind` is a classification label and is deliberately
+			 * absent from the identity, so changing it cannot orphan a toggle.
 			 */
 			entryIdOf?: (item: T) => string;
+			/**
+			 * Per-item disabled check. Module rows funnel through
+			 * `isPluginDisabled` so a toggle stored under a legacy `kind:name`
+			 * key still applies after the identity change.
+			 */
+			isDisabledOf?: (item: T) => boolean;
 			getDescription?: (item: T) => string | undefined;
 			getTrigger?: (item: T) => string | undefined;
 			getShadowedBy?: (item: T) => string | undefined;
@@ -114,10 +120,15 @@ export async function loadAllExtensions(
 	): void {
 		for (const item of items) {
 			const itemKind = opts?.kindOf?.(item) ?? kind;
-			// Default keeps the historical `kind:name` identity; the module call
-			// site overrides it to the shared legacy prefix (see moduleEntryId).
+			// Module rows identify by plugin name (`plugin-identity.ts`), other
+			// capabilities keep the `kind:name` composite — their ids are not
+			// migrated and carry no track ambiguity.
 			const id = opts?.entryIdOf?.(item) ?? makeExtensionId(itemKind, item.name);
-			const isDisabled = disabledExtensions.has(id);
+			// A module's toggle may still live under a legacy `kind:name` key (data
+			// written before the identity model matched dsh's). Read through the
+			// plugin-name helper so those toggles keep working; every other kind
+			// keeps the plain composite lookup.
+			const isDisabled = opts?.isDisabledOf?.(item) ?? disabledExtensions.has(id);
 			const isShadowed = (item as { _shadowed?: boolean })._shadowed;
 			const providerEnabled = isProviderEnabled(item._source.provider);
 
@@ -243,6 +254,7 @@ export async function loadAllExtensions(
 			// prefix for both — that is the persisted key space.
 			kindOf: item => item.track,
 			entryIdOf: item => moduleEntryId(item.name),
+			isDisabledOf: item => isPluginDisabled(disabledExtensions, item.name),
 			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 			getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
 			getPluginConfigValues: item => {

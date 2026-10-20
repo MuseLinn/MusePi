@@ -1,7 +1,5 @@
 /**
- * 模块条目的 kind 与 id 前缀 —— 两条加载轨道在这里分名。
- *
- * ## 为什么要两个 kind（不能共用一个）
+ * 模块条目的 kind —— 两条加载轨道在清单上分名。
  *
  * 本仓库有两条插件加载轨道（`docs/plugin-tracks.md` 是权威说明）：
  *
@@ -11,16 +9,17 @@
  * - **legacy extension**（兼容轨）：`extensibility/extensions/` 的旧 Pi/omp
  *   加载器装载的条目，仅为既有 `.omp`/`.pi` 目录保留，不新增能力。
  *
- * 两条轨道此前在 `extensions.list` 上共用 `extension-module` 一个 kind——
- * 用户与代码都无法从一条清单行分辨它是哪条轨道装载的，排查加载问题时
- * 「去看哪个加载器的日志」这一步就成了猜测。拆成两个 kind 后：
+ * 两条轨道在 `extensions.list` 上共用过一个 `extension-module` kind，于是
+ * 一条清单行无法说明自己是哪条轨道装载的——排查加载问题只能靠猜去哪边的
+ * 日志里找。现在 kind 按轨道分名，这是**显示属性**，与身份无关（见下行）。
  *
- * - wire 上可分辨（`kind: "plugin-module"` vs `"extension-module"`）；
- * - 启停键（`disabledExtensions` / 插件配置存储）**不迁移**：两条轨道继续
- *   共用 `extension-module:<name>` 的存量键位（见 `moduleEntryId`）——
- *   改键会让用户已保存的启停状态静默失效，而「哪条轨道装载」不是启停
- *   语义的一部分，不值得为它付迁移成本。
+ * ⚠️ **身份与状态都不在这里**：条目身份是插件名（`plugin-identity.ts` 的
+ * `pluginEntryId`），启停是这个名字上的一个布尔值——与 dsh 的
+ * `PluginEntryId` + `entry.disabled` 同模型。kind 只是分类标签，改它不会让
+ * 任何用户状态失配。
  */
+
+import { pluginEntryId, pluginNameOfEntryId } from "./plugin-identity";
 
 /** kind 值：cordis 轨（Track A）。`extensions.list` 的 `kind` 字段。 */
 export const PLUGIN_MODULE_KIND = "plugin-module";
@@ -29,22 +28,20 @@ export const PLUGIN_MODULE_KIND = "plugin-module";
 export const LEGACY_EXTENSION_MODULE_KIND = "extension-module";
 
 /**
- * 一个模块条目的启停/配置键（两条轨道**共用**）。
+ * 一个模块条目的身份键 = 插件名本身（与 dsh 的 `PluginEntryId` 同模型）。
  *
- * ⚠️ 这是**存量键位**：`disabledExtensions` 设置与插件配置存储里的既有数据
- * 都以 `extension-module:<name>` 记录。改成按 kind 分前缀等于要求用户重新
- * 启停一遍所有插件——不做。新的 kind 只改变清单行的分类显示与筛选，
- * 不改变「这个模块叫什么」的身份。
+ * 历史包袱：存量 `disabledExtensions` 用 `extension-module:<name>` 拼接串记录，
+ * 于是「分类」被焊进了「身份」——改分类就会让用户的启停状态失配。身份不该含
+ * 轨道信息，这里改为裸名。存量两种前缀仍被读取（`plugin-identity.ts` 的
+ * `legacyModuleEntryIds`），写入只写裸名，老数据在用户下一次切换时自然迁移。
  */
 export function moduleEntryId(name: string): string {
-	return `extension-module:${name}`;
+	return pluginEntryId(name);
 }
 
-/** 从一个模块条目 id 里取模块名（两种 kind 前缀都认）。 */
+/** 从一个模块条目 id 里取模块名（裸名与两种历史前缀都认）。 */
 export function moduleEntryName(id: string): string {
-	const marker = ":";
-	const idx = id.indexOf(marker);
-	return idx === -1 ? id : id.slice(idx + 1);
+	return pluginNameOfEntryId(id) ?? id;
 }
 
 /**

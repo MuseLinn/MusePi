@@ -17,6 +17,8 @@ import { resetPluginConfigStoreCache } from "../../src/extensibility/extensions-
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const EXT_ID = "extension-module:voice-input";
+/** The plugin name — the identity rows report (legacy id still accepted on input). */
+const NAME = "voice-input";
 
 async function writeFixtureExtension(agentDir: string): Promise<void> {
 	const dir = path.join(agentDir, "extensions", "voice-input");
@@ -82,14 +84,16 @@ describe("extensions.setConfig 写入链路", () => {
 		expect(changedCount).toBe(1);
 
 		const listed = await service.getExtensions();
-		const ext = listed.find(e => e.id === EXT_ID);
+		// The row's identity is the plugin NAME now (the reference's PluginEntryId);
+		// the call above still passes a legacy id on purpose — old callers must work.
+		const ext = listed.find(e => e.id === NAME);
 		expect(ext?.config?.map(f => f.key)).toEqual(["enabled", "threshold", "model"]);
 		expect(ext?.configValues).toMatchObject({ enabled: true, threshold: 0.5, model: "large" });
 	});
 
 	test("越界数字在写入时被夹取到声明区间", async () => {
 		await service.setConfig({ id: EXT_ID, key: "threshold", value: 42 });
-		const ext = (await service.getExtensions()).find(e => e.id === EXT_ID);
+		const ext = (await service.getExtensions()).find(e => e.id === NAME);
 		expect(ext?.configValues?.threshold).toBe(1);
 	});
 

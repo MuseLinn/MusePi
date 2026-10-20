@@ -106,7 +106,7 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 
 	it("list 组件面：enabled/canToggle/disabledReason + 组件级 fiber runtime 如实下发", async () => {
 		const { extensions } = await extService.list();
-		const entry = extensions.find(e => e.id === `extension-module:${PLUGIN}`);
+		const entry = extensions.find(e => e.id === PLUGIN);
 		expect(entry).toBeDefined();
 		const byId = new Map(entry?.components?.map(c => [c.id, c]));
 		expect(byId.get("alpha")?.enabled).toBe(false);
@@ -216,7 +216,7 @@ describe("plugins.setEnabled 的组件联动（包开关 = 总闸）", () => {
 		await extService.setPluginEnabled({ name: PKG_PLUGIN, enabled: false });
 
 		// 1) 两套存储同步：条目 id 进 disabledExtensions，组件键进黑名单。
-		expect(settings.get("disabledExtensions") as string[]).toContain(`extension-module:${PKG_PLUGIN}`);
+		expect(settings.get("disabledExtensions") as string[]).toContain(PKG_PLUGIN);
 		const denylist = settings.get("disabledExtensionComponents") as string[];
 		expect(denylist).toContain(`${PKG_PLUGIN}/alpha`);
 		expect(denylist).toContain(`${PKG_PLUGIN}/beta`);
@@ -233,7 +233,7 @@ describe("plugins.setEnabled 的组件联动（包开关 = 总闸）", () => {
 
 		// 4) list 组件面同样不消失（enabled=false 如实标，canToggle 保持）。
 		const { extensions } = await extService.list();
-		const entry = extensions.find(e => e.id === `extension-module:${PKG_PLUGIN}`);
+		const entry = extensions.find(e => e.id === PKG_PLUGIN);
 		expect(entry?.state).toBe("disabled");
 		expect(entry?.components?.map(c => c.id).sort()).toEqual(["alpha", "beta"]);
 		expect(entry?.components?.every(c => c.enabled === false)).toBe(true);
@@ -242,7 +242,7 @@ describe("plugins.setEnabled 的组件联动（包开关 = 总闸）", () => {
 
 	it("重新启用：条目 id 与黑名单摘除，组件 fiber 重挂", async () => {
 		await extService.setPluginEnabled({ name: PKG_PLUGIN, enabled: true });
-		expect(settings.get("disabledExtensions") as string[]).not.toContain(`extension-module:${PKG_PLUGIN}`);
+		expect(settings.get("disabledExtensions") as string[]).not.toContain(PKG_PLUGIN);
 		expect(settings.get("disabledExtensionComponents") as string[]).not.toContain(`${PKG_PLUGIN}/alpha`);
 
 		const record = dynamic.inspect().find(r => r.name === PKG_PLUGIN);
