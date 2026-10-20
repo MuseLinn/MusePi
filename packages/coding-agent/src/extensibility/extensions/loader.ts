@@ -4,7 +4,7 @@
 import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import { type } from "@musepi/musepi-type";
 import * as zod from "@musepi/musepi-type/zod";
 import type { ThinkingLevel } from "@musepi/pi-agent-core";
@@ -913,7 +913,7 @@ export async function loadExtensionFromFactory(
 
 /** 已知组件槽位(单一权威 @musepi/collab-proto/extension-slots,与 GUI 侧共用)。
  *  daemon 是校验权威,GUI 按同样规则挂载。 */
-const KNOWN_SLOTS = new Set<string>(EXTENSION_SLOT_DECLARATION.exact);
+const KNOWN_SLOTS = new Set<string>(EXTENSION_SLOT_NAMES);
 
 /** 校验组件槽位是否在已知命名空间内;未知槽名抛错(fail-loud)。
  *  抛错在 factory 执行路径 → bindExtension 捕获 → 进 load errors,

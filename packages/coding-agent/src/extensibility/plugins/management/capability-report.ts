@@ -27,7 +27,7 @@
  */
 
 import * as path from "node:path";
-import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import { logger } from "@musepi/pi-utils";
 import { describeDshBundle } from "../dsh/dsh-bundle";
 import type { InstalledPlugin } from "../runtime/types";
@@ -105,7 +105,7 @@ const ENTRY_SUFFIXES: readonly string[] = [".ts", ".tsx", ".js", ".jsx", ".mjs"]
  * `incompatible`.
  */
 function isHostedSlot(slot: string): boolean {
-	if ((EXTENSION_SLOT_DECLARATION.exact as readonly string[]).includes(slot)) return true;
+	if (EXTENSION_SLOT_NAMES.includes(slot as never)) return true;
 	return EXTENSION_SLOT_DECLARATION.prefixes.some(prefix => slot.startsWith(prefix));
 }
 

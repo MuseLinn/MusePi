@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import { logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
@@ -521,7 +521,7 @@ export class ExtensionService implements DaemonService {
 			presets,
 			// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
 			slots: {
-				exact: [...EXTENSION_SLOT_DECLARATION.exact],
+				exact: [...EXTENSION_SLOT_NAMES],
 				prefixes: [...EXTENSION_SLOT_DECLARATION.prefixes],
 			},
 		};

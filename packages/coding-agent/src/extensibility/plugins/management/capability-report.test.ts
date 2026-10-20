@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import type { InstalledPlugin } from "../runtime/types";
 import { describePluginCapability } from "./capability-report";
 
@@ -200,7 +200,7 @@ describe("describePluginCapability", () => {
 		// reported here as having nowhere to appear. Driving the case from the
 		// declaration itself means a newly declared slot is covered the moment it
 		// exists, and a slot removed from it stops being accepted.
-		for (const slot of EXTENSION_SLOT_DECLARATION.exact) {
+		for (const slot of EXTENSION_SLOT_NAMES) {
 			const { plugin } = await writeFixture({
 				"package.json": JSON.stringify({
 					name: "slot-probe",

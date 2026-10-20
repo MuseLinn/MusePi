@@ -1,5 +1,9 @@
 import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/client-core";
-import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import {
+	EXTENSION_SLOT_DECLARATION,
+	EXTENSION_SLOT_NAMES,
+	slotKindOf,
+} from "@musepi/collab-proto/extension-slots";
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
@@ -36,9 +40,10 @@ import type { RpcClient } from "./rpc";
  * `!` is safe: every name below is declared in EXTENSION_SLOT_DECLARATION.
  */
 function slot(name: string): string {
-	const found = EXTENSION_SLOT_DECLARATION.exact.find(candidate => candidate === name);
-	if (found === undefined) throw new Error(`Unknown extension slot: ${name}`);
-	return found;
+	if (!Object.hasOwn(EXTENSION_SLOT_DECLARATION.exact, name)) {
+		throw new Error(`Unknown extension slot: ${name}`);
+	}
+	return name;
 }
 
 /** First slot id — the settings page's extension-contributed section. */
@@ -77,10 +82,8 @@ export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
 /** 桌面端实际挂载的槽位(与 EXTENSION_SLOT_DECLARATION 对齐,诊断未挂载)。
  *  Values derived from the collab-proto single source of truth. */
 export const GUI_SLOT_HOSTS = {
-	exact: EXTENSION_SLOT_DECLARATION.exact.map(s => s as string) as unknown as typeof EXTENSION_SLOT_DECLARATION.exact,
-	prefixes: EXTENSION_SLOT_DECLARATION.prefixes.map(
-		s => s as string,
-	) as unknown as typeof EXTENSION_SLOT_DECLARATION.prefixes,
+	exact: EXTENSION_SLOT_NAMES,
+	prefixes: EXTENSION_SLOT_DECLARATION.prefixes,
 } as const;
 
 /**
@@ -494,9 +497,15 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 	const data = useExtensionRegistry(rpc);
 	return useMemo(() => {
 		const all = data?.components ?? [];
-		return all
+		const matching = all
 			.filter(c => c.slot === slot && (c.code.length > 0 || c.error))
 			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+		// `single` seats hold ONE occupant: the last contributor (by order, then
+		// registration order) takes the seat, the earlier ones give way. Rendering
+		// both would put two competing readouts in one place — e.g. two model
+		// balances side by side with no way to tell which is authoritative.
+		if (slotKindOf(slot) === "single") return matching.slice(-1);
+		return matching;
 	}, [data, slot]);
 }
 
