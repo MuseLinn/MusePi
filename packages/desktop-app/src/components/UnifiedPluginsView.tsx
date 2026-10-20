@@ -559,6 +559,24 @@ export function UnifiedPluginsView({
 				.filter(group => group.packages.length > 0 || group.modules.length > 0),
 		[presets, filteredPackages, modules],
 	);
+	/**
+	 * Modules whose load FAILED, pulled out of whatever group they belong to.
+	 *
+	 * A plugin that threw is still a row — it appears where its composition puts
+	 * it, which is the honest answer to "what does this preset install". But a
+	 * broken plugin is not a browsing result: it is the one thing on this page
+	 * that needs acting on, and burying it three groups down (or behind a preset
+	 * the user is not looking at) is how a failure goes unnoticed. So it is
+	 * listed once, up top, and stays in its own group as well.
+	 */
+	const failedModules = useMemo(
+		() =>
+			modules.filter(
+				e =>
+					e.loadError !== undefined && matchesQuery([e.name, e.displayName, e.id, e.description], normalizedQuery),
+			),
+		[modules, normalizedQuery],
+	);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
 	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
@@ -752,6 +770,29 @@ export function UnifiedPluginsView({
 				</div>
 			) : (
 				<div className="gui-ext-list-scroll">
+					{/* Failures first, and separately. A plugin that threw is listed in
+					 * its own group too (its composition is still the truth about what
+					 * it installs), but a broken plugin is the one row on this page that
+					 * needs acting on — leaving it only where its group put it is how a
+					 * failure goes unnoticed. Reuses the per-row "load failed" label as
+					 * the group title: a second string would be saying the same thing. */}
+					{failedModules.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("tools.extLoadFailed")} · {failedModules.length}
+							</div>
+							{failedModules.map(e => (
+								<ModuleRow
+									key={`failed:${e.id}`}
+									e={e}
+									rpc={rpc}
+									busy={busyId !== null}
+									onToggle={toggleModule}
+									onOpen={item => setDetailId(item.id)}
+								/>
+							))}
+						</div>
+					)}
 					{/* Presets first: they are what a user switches between, and the flat
 					 * groups below cannot answer "which plugins does this preset bring".
 					 * Read-only membership — a preset's rows are edited in its own
