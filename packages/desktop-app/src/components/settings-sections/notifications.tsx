@@ -82,15 +82,15 @@ export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
 			<div className="min-w-0 flex-1">
 				<div className="gui-settings-row-label">{t(SFX_EVENT_KEY[ev] ?? ev)}</div>
 				<div className="gui-settings-row-desc">
-					{t(SFX_EVENT_DESC_KEY[ev] ?? ev)} · {t("default")}: {DEFAULT_SFX[ev]}
+					{t(SFX_EVENT_DESC_KEY[ev] ?? ev)} · {t("transcript.default")}: {DEFAULT_SFX[ev]}
 				</div>
 			</div>
 			<button
 				type="button"
 				className="gui-sfx-preview"
 				onClick={() => previewSound(name)}
-				aria-label={`${t("preview")} ${name}`}
-				title={`${t("preview")} ${name}`}
+				aria-label={`${t("companion.preview")} ${name}`}
+				title={`${t("companion.preview")} ${name}`}
 			>
 				<Icon name="play" className="h-3.5 w-3.5" />
 			</button>
@@ -173,14 +173,14 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 	}, [rpc]);
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("notifications & sound")}</h2>
-			<p className="gui-settings-page-desc">{t("notifications settings")}</p>
+			<h2 className="gui-settings-page-title">{t("settings.notificationsSound")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.notificationsSettings")}</p>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("notification delivery")}</div>
+				<div className="gui-settings-section-title">{t("settings.notificationDelivery")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("enable notifications")}</div>
-						<div className="gui-settings-row-desc">{t("enable notifications description")}</div>
+						<div className="gui-settings-row-label">{t("settings.enableNotifications")}</div>
+						<div className="gui-settings-row-desc">{t("settings.enableNotificationsDescription")}</div>
 					</div>
 					<button
 						type="button"
@@ -192,7 +192,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							setNotify(next);
 							localStorage.setItem("musepi-gui-notify", next ? "1" : "0");
 						}}
-						aria-label={t("enable notifications")}
+						aria-label={t("settings.enableNotifications")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -200,8 +200,8 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 				<Reveal open={notify}>
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("notify when focused")}</div>
-							<div className="gui-settings-row-desc">{t("notify when focused description")}</div>
+							<div className="gui-settings-row-label">{t("settings.notifyFocused")}</div>
+							<div className="gui-settings-row-desc">{t("settings.notifyFocusedDescription")}</div>
 						</div>
 						<button
 							type="button"
@@ -213,15 +213,15 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								setFocused(next);
 								localStorage.setItem("musepi-gui-notify-focused", next ? "1" : "0");
 							}}
-							aria-label={t("notify when focused")}
+							aria-label={t("settings.notifyFocused")}
 						>
 							<span className="gui-toggle-knob" />
 						</button>
 					</div>
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("send test notification")}</div>
-							<div className="gui-settings-row-desc">{t("send test notification description")}</div>
+							<div className="gui-settings-row-label">{t("settings.sendTestNotification")}</div>
+							<div className="gui-settings-row-desc">{t("settings.sendTestNotificationDescription")}</div>
 						</div>
 						<button
 							type="button"
@@ -233,7 +233,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							}}
 						>
 							<Icon name="notification-3" className="h-3.5 w-3.5" />
-							{t("send test notification")}
+							{t("settings.sendTestNotification")}
 						</button>
 						{testResult && (
 							<p
@@ -243,7 +243,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 										: "text-[13px] text-[var(--color-error)]"
 								}
 							>
-								{testResult.ok ? t("notification sent") : (testResult.reason ?? t("delivery failed"))}
+								{testResult.ok ? t("settings.notificationSent") : (testResult.reason ?? t("settings.deliveryFailed"))}
 							</p>
 						)}
 					</div>
@@ -251,7 +251,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 			</div>
 			<Reveal open={notify}>
 				<div className="gui-settings-section">
-					<div className="gui-settings-section-title">{t("notification events")}</div>
+					<div className="gui-settings-section-title">{t("settings.notificationEvents")}</div>
 					{NOTIFY_EVENTS.map(ev => (
 						<div key={ev} className="gui-settings-row">
 							<div className="gui-settings-row-label">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
@@ -273,9 +273,9 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					))}
 				</div>
 				<div className="gui-settings-section">
-					<div className="gui-settings-section-title">{t("notification templates")}</div>
+					<div className="gui-settings-section-title">{t("settings.notificationTemplates")}</div>
 					<div className="gui-settings-row-desc">
-						{t("template variables")}:{" "}
+						{t("settings.templateVariables")}:{" "}
 						{TEMPLATE_VARIABLES.map(v => (
 							<code key={v} className="gui-tpl-var">{`{${v}}`}</code>
 						))}
@@ -286,7 +286,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								<div className="gui-notify-tpl-name">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
 								<div>
 									<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-title`}>
-										{t("title")}
+										{t("settings.title")}
 									</label>
 									<input
 										id={`omp-tpl-${ev}-title`}
@@ -302,7 +302,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								</div>
 								<div>
 									<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-message`}>
-										{t("message")}
+										{t("settings.message")}
 									</label>
 									<input
 										id={`omp-tpl-${ev}-message`}
@@ -322,11 +322,11 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 				</div>
 			</Reveal>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("sound effects")}</div>
+				<div className="gui-settings-section-title">{t("settings.soundEffects")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("sound effects")}</div>
-						<div className="gui-settings-row-desc">{t("send chime, tool clicks")}</div>
+						<div className="gui-settings-row-label">{t("settings.soundEffects")}</div>
+						<div className="gui-settings-row-desc">{t("settings.sendChimeToolClicks")}</div>
 					</div>
 					<button
 						type="button"
@@ -338,7 +338,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							setSound(next);
 							localStorage.setItem("musepi-gui-sound", next ? "1" : "0");
 						}}
-						aria-label={t("sound effects")}
+						aria-label={t("settings.soundEffects")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -348,8 +348,8 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					 * live so the preview buttons double as an audible check. */}
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("master volume")}</div>
-							<div className="gui-settings-row-desc">{t("master volume description")}</div>
+							<div className="gui-settings-row-label">{t("settings.masterVolume")}</div>
+							<div className="gui-settings-row-desc">{t("settings.masterVolumeDescription")}</div>
 						</div>
 						<div className="flex items-center gap-2">
 							<input
@@ -358,7 +358,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								max={100}
 								value={Math.round(volume * 100)}
 								className="gui-range w-36"
-								aria-label={t("master volume")}
+								aria-label={t("settings.masterVolume")}
 								onChange={e => {
 									const next = Number(e.target.value) / 100;
 									setVolume(next);
@@ -374,11 +374,11 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					 * window (overnight wrap supported); previews stay audible. */}
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("quiet hours")}</div>
-							<div className="gui-settings-row-desc">{t("quiet hours description")}</div>
+							<div className="gui-settings-row-label">{t("settings.quietHours")}</div>
+							<div className="gui-settings-row-desc">{t("settings.quietHoursDescription")}</div>
 							{quiet !== null && inQuiet && (
 								<div className="gui-settings-row-desc text-[var(--color-warning)]">
-									{t("quiet hours active")}
+									{t("settings.quietHoursActive")}
 								</div>
 							)}
 						</div>
@@ -387,7 +387,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								type="time"
 								className="gui-input !w-auto"
 								value={quiet?.from ?? ""}
-								aria-label={t("quiet hours from")}
+								aria-label={t("settings.quietHours2")}
 								onChange={e => {
 									const from = e.target.value;
 									if (!from) {
@@ -405,7 +405,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								type="time"
 								className="gui-input !w-auto"
 								value={quiet?.to ?? ""}
-								aria-label={t("quiet hours to")}
+								aria-label={t("settings.quietHours3")}
 								onChange={e => {
 									const to = e.target.value;
 									if (!to || !quiet) {
@@ -422,8 +422,8 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					</div>
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("haptic feedback")}</div>
-							<div className="gui-settings-row-desc">{t("haptic feedback description")}</div>
+							<div className="gui-settings-row-label">{t("settings.hapticFeedback")}</div>
+							<div className="gui-settings-row-desc">{t("settings.hapticFeedbackDescription")}</div>
 						</div>
 						<button
 							type="button"
@@ -435,12 +435,12 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								setHapticOn(next);
 								localStorage.setItem("musepi-gui-haptic", next ? "1" : "0");
 							}}
-							aria-label={t("haptic feedback")}
+							aria-label={t("settings.hapticFeedback")}
 						>
 							<span className="gui-toggle-knob" />
 						</button>
 					</div>
-					<div className="gui-settings-row-desc">{t("sfx choose per activity")}</div>
+					<div className="gui-settings-row-desc">{t("settings.sfxChoosePerActivity")}</div>
 					<Reveal open={sound}>
 						<div className="gui-sfx-event-list">
 							{SFX_EVENTS.map(ev => (
@@ -452,8 +452,8 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					 * stops the remaining sequence. */}
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("audition all wired sounds")}</div>
-							<div className="gui-settings-row-desc">{t("audition all wired sounds description")}</div>
+							<div className="gui-settings-row-label">{t("settings.auditionAllWiredSounds")}</div>
+							<div className="gui-settings-row-desc">{t("settings.auditionAllWiredSoundsDescription")}</div>
 						</div>
 						<button
 							type="button"
@@ -471,7 +471,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							}}
 						>
 							<StateIcon on={auditionTimer !== null} pair={["stop", "play"]} className="h-3.5 w-3.5" />
-							{auditionTimer !== null ? t("stop") : t("audition all")}
+							{auditionTimer !== null ? t("settings.stop") : t("settings.auditionAll")}
 						</button>
 					</div>
 				</Reveal>
@@ -479,7 +479,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 				 * wired ones are already expressed by the per-event rows above,
 				 * so the old full-grid duplicated them (user: 设计有点问题). */}
 				{(ALL_SOUNDS.filter(name => !WIRED_SOUNDS.has(name)).length > 0 && (
-					<div className="gui-settings-row-desc">{t("unwired palette reference")}</div>
+					<div className="gui-settings-row-desc">{t("settings.unwiredPaletteReference")}</div>
 				)) ||
 					null}
 				<div className="gui-sound-grid">
@@ -489,14 +489,14 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								type="button"
 								className="gui-sound-preview"
 								onClick={() => previewSound(name)}
-								aria-label={`${t("preview")} ${name}`}
-								title={`${t("preview")} ${name}`}
+								aria-label={`${t("companion.preview")} ${name}`}
+								title={`${t("companion.preview")} ${name}`}
 							>
 								<Icon name="play" className="h-3.5 w-3.5" />
 							</button>
 							<div className="min-w-0">
 								<div className="gui-sound-name">{name}</div>
-								<div className="gui-sound-usage">{t("not wired to the UI yet")}</div>
+								<div className="gui-sound-usage">{t("companion.notWiredUiYet")}</div>
 							</div>
 						</div>
 					))}
@@ -506,12 +506,12 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 			 * config.yml — the same recap.enabled / recap.idleSeconds keys
 			 * the terminal uses. */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("idle recap")}</div>
+				<div className="gui-settings-section-title">{t("settings.idleRecap")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("Idle Recap")}</div>
+						<div className="gui-settings-row-label">{t("settings.interaction.notifications.idleRecap")}</div>
 						<div className="gui-settings-row-desc">
-							{t("Generate a brief LLM recap of where things stand after the terminal has been idle")}
+							{t("settings.generateBriefLlm.info")}
 						</div>
 					</div>
 					<button
@@ -529,7 +529,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 									.catch(() => setRecapEnabled(recapEnabled));
 							}
 						}}
-						aria-label={t("Idle Recap")}
+						aria-label={t("settings.interaction.notifications.idleRecap")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -537,9 +537,9 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 				<Reveal open={recapEnabled !== false}>
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("Idle Recap Delay")}</div>
+							<div className="gui-settings-row-label">{t("settings.interaction.notifications.idleRecapDelay")}</div>
 							<div className="gui-settings-row-desc">
-								{t("Seconds to wait while idle before showing the recap")}
+								{t("settings.secondsWaitWhileIdle")}
 							</div>
 						</div>
 						<GuiSelect
@@ -552,10 +552,10 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 									void rpc.request("settings.set", { key: "recap.idleSeconds", value: next }).catch(() => {});
 								}
 							}}
-							ariaLabel={t("Idle Recap Delay")}
+							ariaLabel={t("settings.interaction.notifications.idleRecapDelay")}
 							options={[60, 120, 240, 300, 600].map(seconds => ({
 								value: String(seconds),
-								label: t("idle recap delay option", { count: String(seconds / 60) }),
+								label: t("settings.idleRecapDelayOption", { count: String(seconds / 60) }),
 							}))}
 						/>
 					</div>
