@@ -24,5 +24,20 @@ export const update = {
 	"update.installingUpdate": "Installing the update — the app will restart automatically when done",
 	// 下载末段相位文案（§3.3-1 阶梯语义）。
 	"update.preparingUpdate": "Preparing update…",
-	"update.verifyingUpdate": "Verifying package…",
+	"update.verifyingUpdate": "Verifying package…",	"update ready title": "update ready title",
+	"update ready body": "update ready body",
+	"update failed title download": "update failed title download",
+	"update failed title install": "update failed title install",
+	"update error check": "update error check",
+	"update error check-network": "update error check-network",
+	"update error download": "update error download",
+	"update error download-network": "update error download-network",
+	"update error install": "update error install",
+	"update error install-network": "update error install-network",
+	"technical details": "technical details",
+	"update later": "update later",
+	"installing update": "installing update",
+	"preparing update": "preparing update",
+	"verifying update": "verifying update",
+
 } as const satisfies Record<UpdateKey, string>;

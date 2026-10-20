@@ -26,7 +26,22 @@ export const update = {
 	"update.installingUpdate": "正在安装更新，安装完成后将自动重启",
 	// 下载末段相位文案（§3.3-1 阶梯语义）。
 	"update.preparingUpdate": "正在准备更新…",
-	"update.verifyingUpdate": "正在校验安装包…",
+	"update.verifyingUpdate": "正在校验安装包…",	"update ready title": "更新已就绪",
+	"update ready body": "新版本 {version} 已下载完成，重启应用即可完成安装。",
+	"update failed title download": "更新下载失败",
+	"update failed title install": "更新安装失败",
+	"update error check": "检查更新失败。",
+	"update error check-network": "检查更新失败：网络不可用或无法连接更新服务器。",
+	"update error download": "下载更新失败。",
+	"update error download-network": "下载更新失败：网络中断或不稳定，可稍后重试。",
+	"update error install": "安装更新失败。",
+	"update error install-network": "安装更新失败：无法连接更新服务器。",
+	"technical details": "技术详情",
+	"update later": "暂不",
+	"installing update": "正在安装更新，安装完成后将自动重启",
+	"preparing update": "正在准备更新…",
+	"verifying update": "正在校验安装包…",
+
 } as const;
 
 /** Key union for the update domain (source of truth). */

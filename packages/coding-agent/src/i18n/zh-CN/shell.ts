@@ -54,7 +54,30 @@ export const shell = {
 
 	// ── Footer ──────────────────────────────────────────────
 	"shell.text": "（自动）",
-	"shell.text2": "（子）",
+	"shell.text2": "（子）",	"next step": "下一步",
+	"Esc done": "Esc 完成",
+	"new": "新建",
+	"switch mode": "切换模式",
+	"skip setup": "跳过设置",
+	"external editor": "外部编辑器",
+	"to cancel": "取消",
+	"to cancel,": "取消，",
+	"to close": "关闭",
+	"to submit": "提交",
+	"to collapse": "折叠",
+	"to expand": "展开",
+	"to queue follow-up": "排队跟进",
+	"to run bash": "运行 Bash",
+	"to run python": "运行 Python",
+	"prompt actions": "提示操作",
+	"for commands": "用于命令",
+	"for prompt actions": "用于提示操作",
+	"provider list": "提供商列表",
+	"model list": "模型列表",
+	"cycle inherit/+/-": "循环继承/+/-",
+	"(auto)": "（自动）",
+	"(sub)": "（子）",
+
 } as const;
 
 /** Key union for the shell domain (mirrors the guest-client locale split). */
