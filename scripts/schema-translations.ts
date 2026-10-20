@@ -1,0 +1,199 @@
+/**
+ * Schema string translations, reviewed as code.
+ *
+ * `TRANSLATIONS` maps the English schema string to its zh-CN value; the batch
+ * tool writes it to BOTH dictionaries (en-US gets the English text back as its
+ * identity value).
+ *
+ * `LOCALE_NEUTRAL` lists strings a zh UI shows verbatim — pure numbers,
+ * percentages, byte sizes, model codenames, protocol names. They leave the
+ * baseline without a dictionary entry.
+ */
+
+export const TRANSLATIONS: Record<string, string> = {
+	// ── Tabs / groups ──────────────────────────────────────────────────
+	"Appearance": "外观",
+	"Interaction": "交互",
+	"Memory": "记忆",
+	"Context": "上下文",
+	"Shell": "Shell",
+	"Tools": "工具",
+	"Tasks": "任务",
+	"Providers": "供应商",
+	"Model": "模型",
+
+	// ── Display group ──────────────────────────────────────────────────
+	"Unicode": "Unicode 字符",
+	"ASCII": "ASCII 字符",
+	"Rebuild": "重绘",
+	"Streaming": "流式渲染",
+
+	// ── Composer shapes ────────────────────────────────────────────────
+	"Accent Rail": "强调导轨",
+	"Borderless": "无边框",
+	"Compact Field": "紧凑输入区",
+	"Top Rule Dock": "顶线停靠",
+	"Rounded Box (Default)": "圆角框（默认）",
+
+	// ── Status line ────────────────────────────────────────────────────
+	"Context-Reactive Line": "上下文响应线",
+	"Annotated": "标注式",
+	"Embedded": "内嵌式",
+
+	// ── Terminal / pty ─────────────────────────────────────────────────
+	"Auto (bun-pty → node-pty fallback)": "自动（bun-pty，回退 node-pty）",
+	"Bun pty (native, lowest latency)": "Bun pty（原生，延迟最低）",
+	"Node pty (bridge process, more portable)": "Node pty（桥接进程，兼容性更好）",
+	"Terminal Provider": "终端提供方",
+
+	// ── Isolation backends ─────────────────────────────────────────────
+	"Overlayfs": "Overlayfs 覆盖层",
+	"ProjFS": "ProjFS 提供程序",
+	"Reflink": "Reflink 硬链接",
+	"Copy": "复制",
+
+	// ── Compaction ─────────────────────────────────────────────────────
+	"Async Compaction": "异步压缩",
+	"Parallel": "并行",
+
+	// ── Thinking / effort ──────────────────────────────────────────────
+	"External Thinking": "外部思考",
+	"Extended Context": "扩展上下文",
+
+	// ── Updates / channels ─────────────────────────────────────────────
+	"Update Channel": "更新通道",
+	"Canary": "Canary 先行版",
+	"Stable": "稳定版",
+
+	// ── Tools / surfaces ───────────────────────────────────────────────
+	"Bash": "Bash",
+	"Board": "看板",
+	"Branch": "分支",
+	"Glob": "文件通配",
+	"Grep": "内容搜索",
+	"Patch": "补丁",
+	"Widgets": "组件",
+	"Project knowledge": "项目知识",
+	"Extension Meta Tools": "扩展元工具",
+	"GUI Managed Browser": "GUI 托管浏览器",
+	"GUI Managed Browser URL": "GUI 托管浏览器地址",
+	"Public Internet Only": "仅限公共互联网",
+	"Image URL Backends": "图片 URL 后端",
+	"Image URL Bind Host": "图片 URL 绑定主机",
+	"Image URL Public Base": "图片 URL 公网前缀",
+	"Image URL Lifetime (hours)": "图片 URL 有效期（小时）",
+	"Image URL SSH Remote Port": "图片 URL SSH 远程端口",
+	"Image URL SSH Target": "图片 URL SSH 目标",
+	"Image Upload Command": "图片上传命令",
+	"Serving window for locally hosted image URLs, measured from the last time a conversation referenced one":
+		"本地托管图片 URL 的服务窗口，从会话最后一次引用图片起计",
+	"Serve Images as URLs": "以 URL 形式提供图片",
+	"Speech Language Hint": "语音语言提示",
+	"Custom prompt sections": "自定义提示词区块",
+	"Codex Reset Fireworks": "Codex 重置烟花",
+	"Cache Warming": "缓存预热",
+	"Compaction Method Order": "压缩方式顺序",
+	"Composer Shape": "输入框形态",
+	"Computer": "计算机控制",
+	"Auto-Repair Syntax Errors": "自动修复语法错误",
+	"Autocorrect (macOS)": "自动纠错（macOS）",
+	"Record Parse Regressions": "记录解析回归",
+
+	// ── Approval / safety ──────────────────────────────────────────────
+	"Append": "追加完整前后文",
+	"Append full before/after source when an edit introduces an AST parse failure":
+		"编辑引入 AST 解析错误时，在补丁中附加完整的前后源码",
+	"Preserve": "保留原样",
+
+	// ── Misc settings ──────────────────────────────────────────────────
+	"Tool Call Handler Timeout (ms)": "工具调用处理超时（毫秒）",
+	"Unexpected Stops": "意外中止",
+	"Typo Detection (macOS)": "拼写检查（macOS）",
+	"Word Autocomplete (macOS)": "词语自动补全（macOS）",
+	"Web UI URL": "Web 界面地址",
+	"Interactive sessions": "交互会话",
+
+	// ── Effort / presets ───────────────────────────────────────────────
+	"Balanced": "均衡",
+	"Creative": "创意",
+	"Friendly": "友好",
+	"Mechanical": "机械",
+	"Nerd": "极客",
+	"Harmony": "Harmony",
+	"Hermes": "Hermes",
+	"Gemma": "Gemma",
+	"Qwen3": "Qwen3",
+	"MiniMax": "MiniMax",
+	"Jina": "Jina",
+	"Lynx": "Lynx",
+	"Trafilatura": "Trafilatura",
+
+	// ── Compaction / context labels ────────────────────────────────────
+	"Top K": "Top K",
+	"Top P": "Top P",
+	"Percentage": "百分比",
+	"Idle": "空闲",
+
+	// ── XML / formats ──────────────────────────────────────────────────
+	"XML": "XML",
+	"AGENTS.md": "AGENTS.md",
+	"APFS": "APFS",
+	"ZFS": "ZFS",
+	"btrfs": "btrfs",
+
+	// ── Model / provider names that get a suffix ───────────────────────
+	"Claude Code": "Claude Code",
+	"DeepSeek": "DeepSeek",
+	"Gemini": "Gemini",
+	"Kimi": "Kimi",
+	"OpenAI": "OpenAI",
+	"OpenAI WebSockets": "OpenAI WebSocket",
+	"Pi": "Pi",
+	"Generic": "通用",
+	"English": "英语",
+
+	// ── Descriptions (short) ───────────────────────────────────────────
+	"Default.": "默认。",
+	"Disabled": "已禁用",
+	"Expanded": "展开",
+	"Check for musepi updates on startup": "启动时检查 musepi 更新",
+	"Disable cache warming": "关闭缓存预热",
+	"Auto-continue active goals in terminal/GUI sessions": "在终端/GUI 会话中自动继续进行中的目标",
+	"Apply confident macOS spelling corrections after completed words": "完成的词语自动套用 macOS 确信度高的拼写纠正",
+	"Enable the widget tool: draw a live card inline in the transcript":
+		"启用组件工具：在对话中内联绘制实时卡片",
+	"Enable the board tool: read and write the desktop board's card wall":
+		"启用看板工具：读写桌面看板的卡片墙",
+	"Enable the knowledge tool: read and write the project's notes, todos and plans":
+		"启用知识工具：读写项目的笔记、待办与计划",
+	"Erase all terminal scrollback, then replay one current-width transcript":
+		"清空全部终端回滚区，再以当前宽度重放一份对话",
+	"Also refresh between runs while the expected savings stay above the cost floor":
+		"在预期节省仍高于成本下限时，轮次之间也刷新",
+	"Annotated line with the context percentage and window embedded in the gauge":
+		"标注式线条：上下文百分比与窗口内嵌在仪表里",
+	"Filled one-row field anchored by a single accent rail": "单行填充输入区，一侧由强调导轨收边",
+	"Filled one-row field with accent end caps": "单行填充输入区，两端强调帽",
+	"Framed horizontal rules with status line at bottom": "上下横线框住，状态线在底部",
+	"Full-width horizontal rules above and below, status line at bottom": "上下整宽横线，状态线在底部",
+	"Clean prompt glyph with status line at bottom, no box borders": "干净提示符 + 底部状态线，无边框",
+	"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving":
+		"blob 服务器绑定主机；走隧道用 loopback，直连服务用 0.0.0.0",
+	"Externally reachable base URL fronting the blob server (required for ssh, optional otherwise)":
+		"blob 服务器对外的公网基础地址（ssh 方式必填，其余可选）",
+};
+
+/**
+ * Strings a zh UI shows verbatim: pure numbers, percentages, byte sizes,
+ * durations, version-ish tokens, model codenames. They leave the baseline
+ * without a dictionary entry — no key, no translation.
+ */
+export const LOCALE_NEUTRAL: string[] = [
+	"0", "1", "2", "20", "40", "100", "256", "512", "1024", "2048",
+	"0 KB", "1 KB", "2 KB", "10 KB", "20 KB", "30 KB", "50 KB", "100 KB", "200 KB",
+	"0.1", "0.2", "0.3", "0.5", "0.7", "0.8", "0.9", "0.01", "0.05", "0.85", "0.90",
+	"0.95", "0.98", "1.1", "1.2", "1.5", "2.5 KB", "5%", "10%", "15%", "20%", "25%",
+	"30%", "40%", "50%", "60%", "70%", "80%", "90%", "95%", "190K tokens", "1 minute",
+	"10 lines", "10 items", "15 items", "20 items", "50 lines", "16 tasks", "32 tasks",
+	"64 tasks", "0 lines", "0 turns", "XML",
+];
