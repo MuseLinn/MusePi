@@ -257,7 +257,12 @@ function CreationSavedToast({
 					{t("creation.creationTemplateSaveAction")}
 				</button>
 			)}
-			<button type="button" className="gui-creation-saved-close" aria-label={t("creation.creationClose")} onClick={onDone}>
+			<button
+				type="button"
+				className="gui-creation-saved-close"
+				aria-label={t("creation.creationClose")}
+				onClick={onDone}
+			>
 				<Icon name="close" className="h-3.5 w-3.5" />
 			</button>
 		</div>

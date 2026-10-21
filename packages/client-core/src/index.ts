@@ -17,6 +17,15 @@ export { KLine, type KLineCandle, type KLineProps } from "./components/charts/KL
 export { LineChart, type LineChartProps, type LineChartSerie } from "./components/charts/LineChart";
 export { Sparkline, type SparklineProps } from "./components/charts/Sparkline";
 export { ImageLightbox } from "./components/image-lightbox";
+export {
+	clampImageScale,
+	fitImageScale,
+	type GestureEventLike,
+	IMAGE_VIEWPORT_PADDING,
+	type Size as ImageSize,
+	stepImageScale,
+	wheelZoomFactor,
+} from "./components/image-zoom";
 /** Marketplace plugin store (GUI ↔ guest-client shared). The Marketplace
  *  panel itself stays in-app (it binds to SessionClient); the Grid + Card
  *  + Entry types are host-agnostic so the Electron GUI reuses them. */
@@ -42,15 +51,6 @@ export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcri
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
 export { Markdown } from "./components/transcript/Markdown";
 export { type MermaidMode, mermaidMode, renderMermaidHtml } from "./components/transcript/mermaid";
-export {
-	clampImageScale,
-	fitImageScale,
-	IMAGE_VIEWPORT_PADDING,
-	type GestureEventLike,
-	type Size as ImageSize,
-	stepImageScale,
-	wheelZoomFactor,
-} from "./components/image-zoom";
 export {
 	BlockUnitCounter,
 	BURST_WINDOW,

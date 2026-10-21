@@ -641,7 +641,7 @@ export function orbFromSession(
  *  header reads only these flags, not the transcript) can derive the orb
  *  without holding the whole snapshot — passing a fabricated array just to
  *  reach the length check would be worse. */
-export function orbFromFlags(signal: { working: boolean; streaming: boolean; hasApprovals: boolean }): OrbState {
+function orbFromFlags(signal: { working: boolean; streaming: boolean; hasApprovals: boolean }): OrbState {
 	if (signal.hasApprovals) return "waiting";
 	if (signal.working) return signal.streaming ? "composing" : "working";
 	return "listening";

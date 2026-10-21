@@ -263,9 +263,7 @@ function mediaViewer(): FileViewer {
 		},
 		render: async (input: ViewerInput) => {
 			const mime = input.mime ?? "";
-			const media: "audio" | "video" = mime.startsWith("video/") || VIDEO_EXT.has(input.ext)
-				? "video"
-				: "audio";
+			const media: "audio" | "video" = mime.startsWith("video/") || VIDEO_EXT.has(input.ext) ? "video" : "audio";
 			return {
 				kind: "media",
 				media,

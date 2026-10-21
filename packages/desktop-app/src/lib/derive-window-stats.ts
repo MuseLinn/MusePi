@@ -129,22 +129,6 @@ export function decodeTokensPerSecond(stats: WindowStats): number | null {
 	return stats.decodeMs > 0 ? stats.decodeTokens / (stats.decodeMs / 1000) : null;
 }
 
-/** Compact token count (128K / 45.2M) for pill surfaces; exact counts in
- * popovers go through toLocaleString instead. */
-export function formatTokenCount(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1000) return `${Math.round(n / 1000)}K`;
-	return String(n);
-}
-
-/** Compact duration: 45.2s under a minute, 2m42s from there on. */
-export function formatDurationMs(ms: number): string {
-	const s = ms / 1000;
-	if (s < 60) return `${Math.round(s * 10) / 10}s`;
-	const whole = Math.round(s);
-	return `${Math.floor(whole / 60)}m${whole % 60}s`;
-}
-
 /** Props the memoized stats row renders from. */
 export interface StatsRowProps {
 	stats: WindowStats;

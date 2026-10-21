@@ -497,9 +497,12 @@ export function ComposerFrame({
 								let fileNo = 0;
 								return attachments.map(a => {
 									const no = a.kind === "file" ? ++fileNo : ++imageNo;
-									const mentionLabel = t(a.kind === "file" ? "composer.mentionFileWithN" : "composer.mentionImageWithN", {
-										n: String(no),
-									});
+									const mentionLabel = t(
+										a.kind === "file" ? "composer.mentionFileWithN" : "composer.mentionImageWithN",
+										{
+											n: String(no),
+										},
+									);
 									return (
 										<SortableAttachmentChip
 											key={a.id}

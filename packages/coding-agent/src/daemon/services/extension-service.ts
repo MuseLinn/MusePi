@@ -5,6 +5,8 @@ import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab
 import { logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
+import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
+import { legacyModuleEntryIds, pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -13,12 +15,6 @@ import {
 	resolveCompatibilityPath,
 	setVersionExemption,
 } from "../../extensibility/plugins/compat/compatibility-store";
-import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
-import {
-	legacyModuleEntryIds,
-	pluginNameOfEntryId,
-	setPluginEnabledIn,
-} from "../../capability/plugin-identity";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { DaemonService } from "./types";
@@ -958,11 +954,7 @@ export class ExtensionService implements DaemonService {
 			//    agree afterwards. Identity is the plugin NAME (the reference's
 			//    `PluginEntryId`), and the write also clears any legacy `kind:name`
 			//    record for the same plugin so no two records can disagree.
-			const disabled = setPluginEnabledIn(
-				(settings.get(extensionsKey) ?? []) as string[],
-				pluginName,
-				enabled,
-			);
+			const disabled = setPluginEnabledIn((settings.get(extensionsKey) ?? []) as string[], pluginName, enabled);
 			const before = (settings.get(extensionsKey) ?? []) as string[];
 			if (disabled.length !== before.length || disabled.some((id, i) => id !== before[i])) {
 				settings.set(extensionsKey, disabled as never);
@@ -1037,9 +1029,7 @@ export class ExtensionService implements DaemonService {
 			// the inspection preview must drop every one of them, or a disabled
 			// plugin would be treated as some other plugin's stale entry and shown.
 			const ownIds = new Set(legacyModuleEntryIds(pluginName));
-			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(
-				id => !ownIds.has(id),
-			);
+			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(id => !ownIds.has(id));
 			const paths = await discoverExtensionPaths(
 				(settings?.get("extensions") ?? []) as string[],
 				this.#deps.cwd(),

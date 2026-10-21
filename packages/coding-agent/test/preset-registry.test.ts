@@ -6,12 +6,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { EventBus } from "../src/utils/event-bus";
+import { type PresetEntryResolver, PresetRegistry } from "../src/extensibility/plugins/preset-registry";
 import type { ResolvedMode } from "../src/presets/resolve";
-import {
-	type PresetEntryResolver,
-	PresetRegistry,
-} from "../src/extensibility/plugins/preset-registry";
+import { EventBus } from "../src/utils/event-bus";
 
 const eventBus = new EventBus();
 const cwd = "/virtual";
@@ -48,7 +45,7 @@ function loaderOf(errors: Array<{ path: string; error: string }> = []) {
 		loaded,
 		async loadSessionPlugins(paths: readonly string[]) {
 			loaded.push([...paths]);
-			return { extensions: paths.map((p) => ({ path: p } as never)), errors, runtime: {} as never };
+			return { extensions: paths.map(p => ({ path: p }) as never), errors, runtime: {} as never };
 		},
 	};
 }
@@ -114,7 +111,7 @@ describe("PresetRegistry", () => {
 		const registry = new PresetRegistry({
 			eventBus,
 			cwd,
-			entryResolver: resolverOf({ "a": ["/a/index.ts"], "b": ["/b/index.ts"] }),
+			entryResolver: resolverOf({ a: ["/a/index.ts"], b: ["/b/index.ts"] }),
 			loadSessionPlugins: failingLoader,
 		});
 		const bad = definitionOf("bad");
@@ -148,6 +145,11 @@ describe("PresetRegistry", () => {
 		});
 		await registry.register(definitionOf("one"), []);
 		await registry.register(definitionOf("two"), []);
-		expect(registry.list().map((r) => r.id).sort()).toEqual(["one", "two"]);
+		expect(
+			registry
+				.list()
+				.map(r => r.id)
+				.sort(),
+		).toEqual(["one", "two"]);
 	});
 });

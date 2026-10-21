@@ -177,7 +177,9 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 			<header className="gui-tray-menu__head">
 				<span className="gui-tray-menu__brand">MusePi</span>
 				{active > 0 && (
-					<span className="gui-tray-menu__live">{t("general.sessionsActiveWithCount", { count: String(active) })}</span>
+					<span className="gui-tray-menu__live">
+						{t("general.sessionsActiveWithCount", { count: String(active) })}
+					</span>
 				)}
 			</header>
 
@@ -251,7 +253,9 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 								className="gui-tray-menu__session"
 								onClick={() => trayApi?.action("focus-session", { sessionId: s.id })}
 							>
-								<span className="gui-tray-menu__session-title">{s.title || t("transcript.untitledSession")}</span>
+								<span className="gui-tray-menu__session-title">
+									{s.title || t("transcript.untitledSession")}
+								</span>
 								<span className="gui-tray-menu__session-meta">
 									{s.paused ? `${t("tools.paused")} · ` : ""}
 									{timeLabel(s.timestamp)}
