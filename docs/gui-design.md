@@ -761,6 +761,25 @@ The sidebar's session list re-sorted and re-grouped every session on **every** r
 
 Non-goals (deliberate): no list virtualization (memoized rows + memoized pipelines keep per-render cost linear in visible rows; revisit only if hundreds-of-sessions profiles still hurt), no daemon-side pagination of `session.list` (the payload is small metadata; the cost was client-side re-derivation, not the RPC).
 
+## 5ad. Unified annotation tool: browser pages and widget cards (2026-10-21)
+
+One annotation surface serves every visual host — the managed browser's live page and any HTML widget card — with the same three tools (element pick, region box, free draw) plus numbered comment pins. Picking an element in the browser used to be a separate one-shot "element picker" mode; it is gone, absorbed into the same overlay.
+
+- **Kernel in client-core** (`packages/client-core/src/annotation/`): an injected script builds the overlay DOM inside the guest document (all classes prefixed `musepi-ann-`). The prompt text is always English regardless of UI locale. The payload contract (`contract.ts`) validates every field on arrival — a half-valid payload is dropped and the overlay torn down rather than half-applied.
+- **Screenshot compositing in client-core** (`screenshot.ts`, pure canvas): the base capture is drawn first, then each shape re-stroked at the payload's own coordinates so annotations survive compression; output capped at 1600px on the long edge. The host only supplies the base raster — the browser via a new `managed-browser:capturePage` IPC, widget cards via `ToolRenderHost.rasterizeCard` (implemented in `ChatView`, background color read from computed style, pixelRatio 2).
+- **Attachment channel**: a completed annotation dispatches `musepi-gui-attach-annotation` on its host window. `Composer` and `WelcomeComposer` listen, append the comment text to the draft and register the PNG through `addFiles` — the listener effect lives after `addFiles` is defined (a forward reference dies as a TDZ error), and both register through refs so the DOM listener is not torn down on every render.
+- **Browser bar**: the managed browser's main row gains three glass icon buttons — 标注 (pencil), 开发者工具 (code-slash, `openDevTools()` on the webview), 外部打开 (external-link, `shell.openExternal`) — grouped as `gui-browser-tools`; the zoom trio moves into the ⋯ menu (`gui-browser-menu-zoom`). The old pick-element menu item, the picked-selector chip and the `pickElement` host export were removed.
+- **Widget card entry**: `HtmlCard` hosts a floating liquid-glass button (`.gui-widget-annotate-btn`) in its top-right corner; srcdoc cards handshake over postMessage. The ContextPanel fallback panel's legacy picker is untouched.
+- **i18n**: `annotation.*` (13 keys) + `tools.browserDevTools` in the tools domain, zh/en.
+
+## 5ae. Working-tail reservation & floating-panel clearance (2026-10-21)
+
+Two fixes for "the newest message ends up under the floating composer", one while working, one from the ask card.
+
+- **Working tail** (`ChatView.tsx` tail spacer): while the session works, the reserved band stops tracking the growth allowance and instead reserves `max(--chat-composer-tail-inset, --chat-composer-inset + 8px)` — the gap between the composer glass and the last row is exactly the floating gap again. The strip (working status / live-end fade) lives in that gap; without the max, a composer that had grown into the allowance (queued message, working strip) kept the last line under the glass for the whole turn.
+- **Floating-panel clearance** (`lib/composer-inset-readers.ts`): the ask card above the composer is `position: absolute; bottom: calc(100% + 4px)` — its height never enters the wrap's ResizeObserver measurement, so without an extra channel it covered the last rows whenever it was up. The panel publishes `ceil(height + 4px)` as `--chat-floating-panel-clearance` while mounted (ResizeObserver on the panel, withdraw on unmount); the tail spacer and the end-fade band add the variable. Both channels are written onto the reader leaves, never the column (a custom property on the column restyles every virtualized row).
+- **Deliberate non-goals**: no `--chat-status-row-clearance` — the working strip is a child of the wrap and already measured; no clearance offset on the jump-to-bottom button (an open ask card may overlap it; edge case, accepted).
+
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

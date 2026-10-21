@@ -83,6 +83,9 @@ export interface WidgetDef {
 		 *  board (no conversation) simply never passes it, and components
 		 *  hide their send affordance when absent. */
 		sendPrompt?(text: string): void;
+		/** 统一标注:宿主把整张卡片 rasterize 成图(html 卡片用;桌面渲染器
+		 *  提供,棋盘/导出等无 rasterizer 的宿主不传,标注入口随之隐藏)。 */
+		annotateCapture?(): Promise<Blob | null>;
 	}): ReactNode;
 }
 

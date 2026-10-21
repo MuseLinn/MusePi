@@ -5,6 +5,17 @@ import { ensureReadableColor } from "@musepi/pi-utils/color";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils/widget-html-limit";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	ANNOTATION_TEARDOWN_SCRIPT,
+	type AnnotationOverlayTheme,
+	buildAnnotationOverlayScript,
+	dispatchAnnotationAttach,
+	formatAnnotationPrompt,
+	isAnnotationPayload,
+	renderAnnotationScreenshotFromBlob,
+	resolveAnnotationOverlayTheme,
+} from "../annotation/index.js";
+import { t } from "../i18n/index.js";
 
 /**
  * Custom HTML widget face (kimi blueprint-widget parity) — the agent
@@ -274,6 +285,33 @@ window.addEventListener("message", function (e) {
     try { parent.postMessage({ type: "musepi-widget-face-updated", canvasId: window.DaimonCanvas && window.DaimonCanvas.canvasId, mountId: window.DaimonCanvas && window.DaimonCanvas.mountId }, "*"); } catch (err) {}
   }
 });
+// 统一标注握手:宿主把 overlay 脚本经 postMessage 送进来(不透明源沙箱挡住
+// 了宿主对 frame document 的直接访问,只能靠消息)。overlay 在 frame 内部
+// 自己的 document 上跑,元素拾取/区域/绘制与内置浏览器是同一份实现。
+window.__musepiAnnotateRunning = false;
+window.addEventListener("message", function (e) {
+  var d = e.data;
+  if (d && d.type === "musepi-widget-annotate" && typeof d.script === "string") {
+    if (window.__musepiAnnotateRunning) return;
+    window.__musepiAnnotateRunning = true;
+    var done = function (payload) {
+      window.__musepiAnnotateRunning = false;
+      try { parent.postMessage({ type: "musepi-widget-annotated", payload: payload }, "*"); } catch (err) {}
+    };
+    try {
+      var running = eval(d.script);
+      if (running && typeof running.then === "function") {
+        running.then(done, function () { done(null); });
+      } else {
+        done(null);
+      }
+    } catch (err) { done(null); }
+  }
+  if (d && d.type === "musepi-widget-annotate-cancel" && typeof d.teardown === "string") {
+    try { eval(d.teardown); } catch (err) {}
+    window.__musepiAnnotateRunning = false;
+  }
+});
 </script>`;
 }
 
@@ -284,6 +322,7 @@ export function HtmlCard({
 	mountId,
 	interactive = true,
 	sendPrompt,
+	annotateCapture,
 }: {
 	data: Record<string, unknown>;
 	update(patch: Record<string, unknown>): void;
@@ -294,6 +333,9 @@ export function HtmlCard({
 	/** Submit a face's answer into the conversation as a user prompt.
 	 * Absent in hosts that do not accept widget input (board canvas). */
 	sendPrompt?: (text: string) => void;
+	/** 统一标注(桌面渲染器提供卡片 rasterize 时才出现入口):宿主把卡片
+	 * 拍成图,标注截图的合成由本组件完成。缺省时隐藏标注按钮。 */
+	annotateCapture?: () => Promise<Blob | null>;
 }): ReactNode {
 	const raw = typeof data.html === "string" ? data.html : "";
 	const oversize = raw.length > MAX_HTML;
@@ -313,6 +355,12 @@ export function HtmlCard({
 		mo.observe(root, { attributes: true, attributeFilter: ["data-theme", "data-color-scheme"] });
 		return () => mo.disconnect();
 	}, []);
+	// 统一标注会话状态。srcdoc 重建(主题翻转/数据更新)会把 frame 里的
+	// overlay 一起杀掉,宿主侧必须同步退出,否则按钮永远停在"标注中"。
+	const [annotating, setAnnotating] = useState(false);
+	useEffect(() => {
+		setAnnotating(false);
+	}, [data.data, theme, raw]);
 
 	const doc = useMemo(() => {
 		if (!raw || oversize) return "";
@@ -370,6 +418,89 @@ export function HtmlCard({
 		);
 	}, [data.data, raw]);
 
+	// ── 统一标注(与内置浏览器同一份 overlay,经 postMessage 握手进沙箱) ──
+
+	const startCardAnnotation = (): void => {
+		const frame = frameRef.current;
+		if (!frame?.contentWindow || annotating) return;
+		const overlayTheme: AnnotationOverlayTheme = resolveAnnotationOverlayTheme(theme);
+		frame.contentWindow.postMessage(
+			{
+				type: "musepi-widget-annotate",
+				script: buildAnnotationOverlayScript(overlayTheme, {
+					select: t("annotation.tool.element"),
+					marquee: t("annotation.tool.region"),
+					draw: t("annotation.tool.draw"),
+					commentPlaceholder: t("annotation.commentPlaceholder"),
+					submit: t("annotation.submit"),
+				}),
+			},
+			"*",
+		);
+		setAnnotating(true);
+	};
+
+	const cancelCardAnnotation = (): void => {
+		frameRef.current?.contentWindow?.postMessage(
+			{ type: "musepi-widget-annotate-cancel", teardown: ANNOTATION_TEARDOWN_SCRIPT },
+			"*",
+		);
+		setAnnotating(false);
+	};
+
+	/** overlay 的 payload 回来(或取消)后的收尾:校验 → 补页面信息 →
+	 *  宿主截图 → 合成带标记的图 → 附图 + prompt 一起进 composer。 */
+	const finishCardAnnotation = async (rawPayload: unknown): Promise<void> => {
+		if (!isAnnotationPayload(rawPayload) || !annotateCapture) return;
+		const frame = frameRef.current;
+		if (!frame) return;
+		// 沙箱里的 location 是 about:srcdoc,没有信息量;换成卡片身份。
+		const payload = {
+			...rawPayload,
+			pageUrl: "",
+			pageTitle: t("annotation.cardPageTitle"),
+		};
+		const overlayTheme = resolveAnnotationOverlayTheme(theme);
+		const capture = await annotateCapture().catch(() => null);
+		const screenshot = capture
+			? await renderAnnotationScreenshotFromBlob({
+					blob: capture,
+					cssWidth: frame.clientWidth || payload.viewport.width,
+					cssHeight: frame.clientHeight || payload.viewport.height,
+					payload,
+					accentColor: overlayTheme.primary,
+					accentFill: overlayTheme.primarySoft,
+				})
+			: null;
+		dispatchAnnotationAttach({
+			text: formatAnnotationPrompt({
+				payload,
+				screenshotAttached: screenshot !== null,
+				intro: t("annotation.cardIntro"),
+			}),
+			...(screenshot ? { image: screenshot } : {}),
+		});
+	};
+	// 消息监听只注册一次([raw] 依赖),经 ref 拿最新实现,避免闭包陈旧。
+	const finishCardAnnotationRef = useRef(finishCardAnnotation);
+	finishCardAnnotationRef.current = finishCardAnnotation;
+
+	// 标注完成(含 frame 内取消):来源必须是本卡 frame —— 与
+	// readWidgetFaceMessage 同一道来源校验,邻居卡片发来的同形消息不能替
+	// 这张卡收尾。
+	useEffect(() => {
+		if (!raw) return;
+		const onMsg = (e: MessageEvent): void => {
+			if (e.source !== (frameRef.current?.contentWindow ?? null)) return;
+			const annotated = e.data as { type?: string; payload?: unknown } | null;
+			if (annotated?.type !== "musepi-widget-annotated") return;
+			setAnnotating(false);
+			void finishCardAnnotationRef.current(annotated.payload);
+		};
+		window.addEventListener("message", onMsg);
+		return () => window.removeEventListener("message", onMsg);
+	}, [raw]);
+
 	// The sandbox face reports its content height (musepi-widget-resize) so the
 	// iframe grows to fit instead of clamping to the 320px inline floor —
 	// tall faces stop being cut off, short faces stop leaving dead space.
@@ -399,24 +530,38 @@ export function HtmlCard({
 		return <div className="gui-widget-html-empty">html</div>;
 	}
 	return (
-		<iframe
-			ref={frameRef}
-			className="gui-widget-html"
-			title="widget"
-			sandbox="allow-scripts"
-			srcDoc={doc}
-			// A rebuilt frame (theme flip rewrites the srcdoc) starts blank;
-			// replay the accepted answer so the face still shows its settled
-			// state instead of looking answerable again.
-			onLoad={() => {
-				const answer = answerRef.current;
-				if (answer)
-					frameRef.current?.contentWindow?.postMessage({ type: "musepi-widget-answered", ...answer }, "*");
-			}}
-			style={{
-				height: frameHeight !== null ? `${frameHeight}px` : undefined,
-				...(interactive ? {} : { pointerEvents: "none" }),
-			}}
-		/>
+		<div className="gui-widget-html-wrap">
+			{annotateCapture && (
+				<button
+					type="button"
+					className={`gui-widget-annotate-btn${annotating ? " gui-widget-annotate-btn--active" : ""}`}
+					title={annotating ? t("annotation.stop") : t("annotation.toggle")}
+					aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
+					aria-pressed={annotating}
+					onClick={() => (annotating ? cancelCardAnnotation() : startCardAnnotation())}
+				>
+					{annotating ? "✕" : "✎"}
+				</button>
+			)}
+			<iframe
+				ref={frameRef}
+				className="gui-widget-html"
+				title="widget"
+				sandbox="allow-scripts"
+				srcDoc={doc}
+				// A rebuilt frame (theme flip rewrites the srcdoc) starts blank;
+				// replay the accepted answer so the face still shows its settled
+				// state instead of looking answerable again.
+				onLoad={() => {
+					const answer = answerRef.current;
+					if (answer)
+						frameRef.current?.contentWindow?.postMessage({ type: "musepi-widget-answered", ...answer }, "*");
+				}}
+				style={{
+					height: frameHeight !== null ? `${frameHeight}px` : undefined,
+					...(interactive ? {} : { pointerEvents: "none" }),
+				}}
+			/>
+		</div>
 	);
 }

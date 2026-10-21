@@ -22,10 +22,17 @@ import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useR
 import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import {
 	publishComposerInsets,
+	publishFloatingPanelClearance,
 	registerComposerInsetReader,
 	withdrawComposerInsets,
+	withdrawFloatingPanelClearance,
 } from "../lib/composer-inset-readers";
-import { forgetComposerSlot, recordComposerSlotHeight } from "../lib/composer-tail-inset";
+import {
+	FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX,
+	FLOATING_COMPOSER_GAP_PX,
+	forgetComposerSlot,
+	recordComposerSlotHeight,
+} from "../lib/composer-tail-inset";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { HISTORY_PAGE_MESSAGES, loadAlignedHistoryBatch } from "../lib/history-batch";
@@ -2220,6 +2227,13 @@ export function ChatView({
 				}
 			})();
 		},
+		// The annotation tool's card-capture step: rasterize the card element
+		// to a PNG blob; the overlay compositor merges it with the annotation
+		// marks. The card hides the annotate action when this is absent.
+		rasterizeCard: (element: HTMLElement) => {
+			const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
+			return rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
+		},
 	};
 	const fetchThinkingInfo = useCallback((): void => {
 		if (!rpc || !store) return;
@@ -2339,6 +2353,29 @@ export function ChatView({
 			withdrawComposerInsets(body);
 		};
 	}, []);
+
+	// The ask card floats ABOVE the composer (`bottom: calc(100% + 4px)` in
+	// gui-misc.css — the 4px gap is part of the clearance). Its box never
+	// enters the wrap, so the wrap's ResizeObserver cannot measure it; without
+	// a published clearance it would cover the last transcript rows. Publish
+	// its height + gap as `--chat-floating-panel-clearance` (the tail spacer
+	// and the end fade add it) while it is mounted.
+	const askFloatRef = useRef<HTMLDivElement | null>(null);
+	useLayoutEffect(() => {
+		const panel = askFloatRef.current;
+		const column = chatBodyRef.current;
+		if (!panel || !column) return;
+		const publish = (): void => {
+			publishFloatingPanelClearance(column, Math.ceil(panel.getBoundingClientRect().height + 4));
+		};
+		publish();
+		const observer = new ResizeObserver(publish);
+		observer.observe(panel);
+		return () => {
+			observer.disconnect();
+			withdrawFloatingPanelClearance(column);
+		};
+	}, [ask]);
 	// Pre-toggle wrap top, captured during render (the DOM still shows the
 	// previous commit's layout). The morph animates translateY against it:
 	// the morph-window layout seats the wrap at its STEADY-STATE top, so a
@@ -2878,12 +2915,23 @@ export function ChatView({
 													 * footer without re-rendering the list.
 													 * The band is exactly the floating stack's height,
 													 * because every dock (approvals, asks, jump-back,
-													 * session-tree nav) is a child of the wrap. */}
+													 * session-tree nav) is a child of the wrap.
+													 * While the session works the growth allowance is
+													 * off: the working strip and the live-end fade sit
+													 * in the gap, so a composer grown into it (a queued
+													 * message, the working strip) left the last line
+													 * under the glass. The ask card above the composer is
+													 * absolutely anchored (not part of the wrap), so its
+													 * published clearance is added on top. */}
 													<div
 														className="gui-chat-tail-spacer flex-shrink-0"
 														ref={registerComposerInsetReader}
 														style={{
-															height: "var(--chat-composer-tail-inset, 208px)",
+															height: `calc(${
+																(snap?.working ?? false)
+																	? `max(var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px), calc(var(--chat-composer-inset, 0px) + ${FLOATING_COMPOSER_GAP_PX}px))`
+																	: `var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px)`
+															} + var(--chat-floating-panel-clearance, 0px))`,
 														}}
 														aria-hidden="true"
 													/>
@@ -3031,7 +3079,7 @@ export function ChatView({
 											/>
 										))}
 										{ask && onAskAnswer && (
-											<div className="gui-ask-float">
+											<div className="gui-ask-float" ref={askFloatRef}>
 												<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
 											</div>
 										)}

@@ -646,6 +646,25 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 
 明确不做的事：不做列表虚拟化（memo 行 + memo 管线已让单次渲染开销随可见行数线性增长；仅当数百会话的 profile 仍显示吃紧时再回头做）；不做 `session.list` 的守护进程侧分页（载荷本就很小，成本在客户端重复派生，不在 RPC）。
 
+## 5ad. 统一标注工具：浏览器页面与 widget 卡片共用一套（2026-10-21）
+
+一套标注界面服务所有可视宿主——受管浏览器的实时页面和任何 HTML widget 卡片——工具相同（选元素、框选区域、自由绘制）外加带序号的注释钉。浏览器里"选元素"不再是独立的一次性拾取模式，已并入同一套叠加层。
+
+- **内核在 client-core**（`packages/client-core/src/annotation/`）：注入脚本在访客文档内构建叠加层 DOM（类名全部带 `musepi-ann-` 前缀）。提示词正文不论界面语言恒为英文。载荷契约（`contract.ts`）在到达时逐字段校验——半合法的载荷直接丢弃并拆除叠加层，不做半吊子应用。
+- **截图合成在 client-core**（`screenshot.ts`，纯 canvas）：先铺底基础截图，再按载荷自身坐标重描每个形状，注释扛得住压缩；长边上限 1600px。宿主只提供底图——浏览器走新增的 `managed-browser:capturePage` IPC，widget 卡片走 `ToolRenderHost.rasterizeCard`（ChatView 实现，底色取 computed style，pixelRatio 2）。
+- **附图通道**：标注完成时在宿主 window 上派发 `musepi-gui-attach-annotation`。`Composer` 与 `WelcomeComposer` 监听后把注释文本追加进草稿、经 `addFiles` 登记 PNG——监听 effect 必须写在 `addFiles` 定义之后（前向引用会以 TDZ 错误暴毙），且双方经 ref 注册，避免每次渲染都重挂 DOM 监听。
+- **浏览器栏**：受管浏览器主行新增三个玻璃图标按钮——标注（铅笔）、开发者工具（code-slash，对 webview 调 `openDevTools()`）、外部打开（external-link，`shell.openExternal`）——归入 `gui-browser-tools` 组；缩放三件套收进 ⋯ 菜单（`gui-browser-menu-zoom`）。旧的选元素菜单项、选中选择器 chip 与 `pickElement` 宿主导出已删除。
+- **卡片入口**：`HtmlCard` 右上角挂液态玻璃悬浮按钮（`.gui-widget-annotate-btn`）；srcdoc 卡片经 postMessage 握手。ContextPanel 回退面板的旧拾取器不动。
+- **i18n**：`annotation.*`（13 个 key）+ `tools.browserDevTools`，tools 域，中英同步。
+
+## 5ae. 工作态尾部预留与悬浮面板 clearance（2026-10-21）
+
+"最新消息被悬浮输入框盖住"的两个修复：一个处理工作态，一个处理提问卡。
+
+- **工作态尾部**（`ChatView.tsx` 尾部 spacer）：会话工作中，预留带不再跟随增长余量，改为预留 `max(--chat-composer-tail-inset, --chat-composer-inset + 8px)`——输入框玻璃与最后一行的间距重新等于悬浮间隙。状态条（工作中 / 实时尾部渐隐）住在那个间隙里；没有这条 max，长进余量区的输入框（排队消息、状态条）会让最后一行整场回合都压在玻璃下。
+- **悬浮面板 clearance**（`lib/composer-inset-readers.ts`）：提问卡位于输入框上方，`position: absolute; bottom: calc(100% + 4px)`——高度永远进不了 wrap 的 ResizeObserver 测量，不另开通道就会在它弹出时盖住末尾消息。面板挂载期间发布 `ceil(height + 4px)` 为 `--chat-floating-panel-clearance`（ResizeObserver 监听面板，卸载时 withdraw）；尾部 spacer 与末尾渐隐带都加上这个变量。两条通道都只写到 reader 叶子上，绝不写列（列上的自定义属性会让每个虚拟行重排样式）。
+- **明确不做**：不移植 `--chat-status-row-clearance`——工作条是 wrap 的子节点，已被测量；回到底部按钮不做 clearance 偏移（提问卡弹出时可能与之重叠，边缘场景，接受）。
+
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。

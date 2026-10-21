@@ -1878,6 +1878,31 @@ class ManagedBrowserController {
 			this.emitState({ agentActivity: false });
 			return { ok: true };
 		});
+		// 标注截图:对指定 guest 截整页可见区。capturePage() 在没有合成表面
+		// 的 guest 上永不返回(与 CDP 路径相同的坑),所以同样加超时。
+		ipcMain.handle("managed-browser:capture-page", async (_e, input) => {
+			const webContentsId = Number(input?.webContentsId);
+			if (!Number.isInteger(webContentsId)) return null;
+			const wc = webContents.fromId(webContentsId);
+			if (!wc || wc.isDestroyed()) return null;
+			try {
+				const image = await Promise.race([
+					wc.capturePage(),
+					new Promise((_resolve, reject) => {
+						setTimeout(() => reject(new Error("capture-page timed out")), CAPTURE_TIMEOUT_MS);
+					}),
+				]);
+				if (!image) return null;
+				return {
+					mime: "image/png",
+					base64: image.toPNG().toString("base64"),
+					width: image.getSize().width,
+					height: image.getSize().height,
+				};
+			} catch {
+				return null;
+			}
+		});
 	}
 }
 

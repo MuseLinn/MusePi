@@ -82,13 +82,28 @@ const composerInsets = createReaderChannel<ComposerInsets>("data-composer-inset-
 });
 
 /**
- * Registers an element that reads the composer insets. Use as a ref callback:
- * the spacer and the end-fade band both consume both values. Until its column
- * publishes, the reader keeps its CSS fallbacks.
+ * Panels that float ABOVE the composer (the ask card) are absolutely
+ * anchored, so their height never lands in the wrap measurement. They
+ * publish their own height + gap as this clearance; the tail spacer and the
+ * end fade add it so a docked panel never covers the last rows.
+ */
+const floatingPanelClearance = createReaderChannel<number>("data-floating-panel-clearance-column", (reader, px) => {
+	setPx(reader, "--chat-floating-panel-clearance", px);
+});
+
+/**
+ * Registers an element that reads the composer insets AND the floating
+ * panel clearance (the tail spacer and the end-fade band; use as a ref
+ * callback). Until its column publishes, the reader keeps its CSS fallbacks.
  */
 export function registerComposerInsetReader(reader: HTMLElement | null): Release | undefined {
 	if (!reader) return undefined;
-	return composerInsets.register(reader);
+	const releaseInsets = composerInsets.register(reader);
+	const releaseClearance = floatingPanelClearance.register(reader);
+	return () => {
+		releaseInsets();
+		releaseClearance();
+	};
 }
 
 /** The column's composer measured these insets; its readers take them. */
@@ -99,4 +114,14 @@ export function publishComposerInsets(column: HTMLElement, insets: ComposerInset
 /** The column's composer stopped floating: its readers fall back to CSS. */
 export function withdrawComposerInsets(column: HTMLElement): void {
 	composerInsets.withdraw(column);
+}
+
+/** A panel floating above the column's composer measured this clearance, px. */
+export function publishFloatingPanelClearance(column: HTMLElement, clearance: number): void {
+	floatingPanelClearance.publish(column, clearance);
+}
+
+/** No panel is floating above the column's composer any more. */
+export function withdrawFloatingPanelClearance(column: HTMLElement): void {
+	floatingPanelClearance.withdraw(column);
 }

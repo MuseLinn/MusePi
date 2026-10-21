@@ -36,6 +36,7 @@ export function InlineWidget({
 	data,
 	title,
 	sendPrompt,
+	rasterizeCard,
 	actions,
 	codeView = null,
 }: {
@@ -43,6 +44,9 @@ export function InlineWidget({
 	data: Record<string, unknown>;
 	title: string;
 	sendPrompt?: (text: string) => void;
+	/** 统一标注(桌面渲染器提供卡片 rasterize 时才有):把卡片元素拍成图,
+	 *  html 卡片的标注截图由它合成。 */
+	rasterizeCard?: (element: HTMLElement) => Promise<Blob | null>;
 	actions?: ReactNode;
 	/** Source view: when set, the body renders this text instead of the
 	 *  registry component (null = normal UI view). */
@@ -59,10 +63,13 @@ export function InlineWidget({
 		lastDataRef.current = data;
 		setLocal(data);
 	}
+	// 卡片根元素:标注截图 rasterize 的对象(frame 里的 face 由 rasterizer
+	// 重建同源影子后拍进图里)。
+	const rootRef = useRef<HTMLDivElement | null>(null);
 	const def = widgetDef(type);
 	if (!def) return <span className="tv-row-val">{t("settings.widgetUnknown")}</span>;
 	return (
-		<div className="tv-widget">
+		<div className="tv-widget" ref={rootRef}>
 			<div className="tv-widget-head">
 				<span className="tv-widget-title">{title}</span>
 				<span className="tv-widget-tag">{type}</span>
@@ -79,6 +86,11 @@ export function InlineWidget({
 							data={local}
 							update={patch => setLocal(prev => ({ ...prev, ...patch }))}
 							sendPrompt={sendPrompt}
+							annotateCapture={
+								rasterizeCard && rootRef.current
+									? () => rasterizeCard(rootRef.current as HTMLElement)
+									: undefined
+							}
 						/>
 					</WidgetErrorBoundary>
 				)}
@@ -119,6 +131,14 @@ export const widgetRenderer: ToolRenderer = {
 		}
 		const data = isRecord(details?.data) ? (details.data as Record<string, unknown>) : {};
 		const title = str(details?.title) ?? t(def.nameKey as never);
-		return <InlineWidget type={type} data={data} title={title} sendPrompt={host?.sendPrompt} />;
+		return (
+			<InlineWidget
+				type={type}
+				data={data}
+				title={title}
+				sendPrompt={host?.sendPrompt}
+				rasterizeCard={host?.rasterizeCard}
+			/>
+		);
 	},
 };

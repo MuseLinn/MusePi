@@ -324,6 +324,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserGuestGone: (tabId) => ipcRenderer.invoke("managed-browser:guest-gone", tabId),
 	managedBrowserActiveTab: (tabId) => ipcRenderer.invoke("managed-browser:active-tab", tabId),
 	managedBrowserVisibility: (visible) => ipcRenderer.invoke("managed-browser:visibility", { visible }),
+	/** 标注截图:整页可见区捕获(未合成/已销毁返回 null)。 */
+	managedBrowserCapturePage: (input) => ipcRenderer.invoke("managed-browser:capture-page", input),
 	/** Managed browser state pushed on any change (port/activity/agentActivity). */
 	onManagedBrowserState: (cb) => {
 		const listener = (_e, state) => cb(state);

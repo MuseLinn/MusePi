@@ -1,3 +1,4 @@
+import { ANNOTATION_ATTACH_EVENT } from "@musepi/client-core/src/annotation";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -271,6 +272,22 @@ export function Composer({
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
 	const { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop } = useAttachments(rpc);
+	// 统一标注(浏览器页 / 会话内卡片):文本追加进草稿,标记截图走普通图片
+	// 附件管线 —— 一条事件同时带两样,发送时随消息一起给模型。addFiles 每个
+	// 渲染都是新函数,经 ref 引用,避免每次按键都重挂监听。
+	const addFilesRef = useRef(addFiles);
+	addFilesRef.current = addFiles;
+	useEffect(() => {
+		const onAttach = (e: Event): void => {
+			const detail = (e as CustomEvent<{ text?: string; image?: File }>).detail;
+			const insertion = detail?.text;
+			if (!insertion) return;
+			setText(prev => (prev.length === 0 ? insertion : `${prev}\n\n${insertion}`));
+			if (detail?.image) void addFilesRef.current([detail.image]);
+		};
+		window.addEventListener(ANNOTATION_ATTACH_EVENT, onAttach);
+		return () => window.removeEventListener(ANNOTATION_ATTACH_EVENT, onAttach);
+	}, []);
 	// SketchPad (Codex 绘画 parity): open from the attach menu, from clicking
 	// a sketch chip (re-edit), or from an image lightbox's edit button
 	// (musepi-gui-sketch-open, wired by ChatView). editId targets an existing

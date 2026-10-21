@@ -290,6 +290,54 @@
 	opacity: 0.45;
 }
 
+/* 统一标注入口(液态玻璃圆钮):悬浮在 HTML 卡片右上角,宿主提供卡片截图
+ * 能力(annotateCapture)时才渲染。--active = 标注进行中(✕)。 */
+.gui-widget-html-wrap {
+	position: relative;
+}
+.gui-widget-annotate-btn {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 20;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+	border-radius: var(--radius);
+	background: var(--glass-bg);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		0 2px 8px color-mix(in oklab, var(--color-shadow, black) 18%, transparent);
+	color: var(--color-text-muted);
+	font-size: 13px;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 140ms ease-out,
+		color 120ms ease-out,
+		transform 120ms var(--spring-liquid);
+}
+.gui-widget-html-wrap:hover .gui-widget-annotate-btn,
+.gui-widget-annotate-btn--active {
+	opacity: 1;
+}
+.gui-widget-annotate-btn:hover {
+	color: var(--color-text);
+	transform: scale(1.06);
+}
+.gui-widget-annotate-btn--active {
+	background: color-mix(in oklab, var(--color-accent) 18%, var(--glass-bg));
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	color: var(--color-accent);
+}
+
 .gui-widget-editor-textarea {
 	min-height: 120px;
 	resize: vertical;

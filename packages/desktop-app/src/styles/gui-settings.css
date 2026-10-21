@@ -5156,6 +5156,7 @@ body.gui-resizing {
 	z-index: 500;
 }
 .gui-browser-nav,
+.gui-browser-tools,
 .gui-browser-actions {
 	display: inline-flex;
 	align-items: center;
@@ -5744,18 +5745,14 @@ body.gui-resizing {
 /* ── B1: zoom / viewport frame / loading / agent occupancy (§3.2) ───── */
 /* Pane root carries the container query for the narrow-panel collapse
  * (§3.2.4). Tiered (user 2026-09-22: 窄面板下地址栏按钮全消失只剩输入框):
- * ≤480px hides ONLY the zoom group (the widest, lowest-frequency control —
- * its entry survives as "reset zoom" in the ⋯ menu); nav and actions stay
- * live at every width. The old rule hid everything under 480px, which was
- * the panel's normal docked width. */
+ * ≤480px tightens the chrome padding; nav, tools and actions stay live at
+ * every width. The standing − 100% ＋ zoom group moved into the ⋯ menu
+ * (gui-browser-menu-zoom), so there is nothing left to hide. */
 .gui-browser-pane {
 	container-type: inline-size;
 }
 
 @container (max-width: 480px) {
-	.gui-browser-pane .gui-browser-zoom {
-		display: none;
-	}
 	.gui-browser-pane .gui-browser-chrome {
 		gap: 4px;
 		padding-left: 6px;
@@ -5763,13 +5760,15 @@ body.gui-resizing {
 	}
 }
 
-/* Zoom group: address-row tier, − 100% ＋. */
-.gui-browser-zoom {
-	display: inline-flex;
+/* Zoom group: now a row inside the ⋯ menu (address-row tier is annotate /
+ * devtools / external-open). The percent label still resets to 100%. */
+.gui-browser-menu-zoom {
+	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: 1px;
-	flex: 0 0 auto;
-	min-width: 0;
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--border);
 }
 
 .gui-browser-zoom-value {

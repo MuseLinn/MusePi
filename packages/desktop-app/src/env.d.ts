@@ -65,6 +65,10 @@ interface Window {
 		managedBrowserGuestGone(tabId: string): Promise<unknown>;
 		managedBrowserActiveTab(tabId: string): Promise<unknown>;
 		managedBrowserVisibility(visible: boolean): Promise<unknown>;
+		/** 标注截图:整页可见区捕获(未合成/已销毁返回 null)。 */
+		managedBrowserCapturePage(input: {
+			webContentsId: number;
+		}): Promise<{ mime: string; base64: string; width: number; height: number } | null>;
 		onManagedBrowserState(cb: (state: ManagedBrowserState) => void): () => void;
 		onManagedBrowserConfirm(cb: (input: ManagedBrowserConfirmRequest) => void): () => void;
 		/** Agent-created tab (CDP `Target.createTarget`): mount a `<webview>`. */

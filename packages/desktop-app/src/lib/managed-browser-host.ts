@@ -55,6 +55,7 @@ export interface HostWebview extends HTMLElement {
 	stop(): void;
 	isLoading(): boolean;
 	executeJavaScript(code: string, userGesture?: boolean): Promise<unknown>;
+	openDevTools(): void;
 	addEventListener(event: string, listener: (event: Event) => void, useCapture?: boolean): void;
 	removeEventListener(event: string, listener: (event: Event) => void, useCapture?: boolean): void;
 }
@@ -581,18 +582,6 @@ export function enforceResidency(): void {
 	pool.sort((a, b) => a.lastActivityAt - b.lastActivityAt);
 	const excess = tabs.length - RESIDENCY_LIMIT;
 	for (const victim of pool.slice(0, excess)) freezeTab(victim.id);
-}
-
-/** Element picker: the script runs inside the guest (cross-origin safe). */
-export async function pickElement(script: string): Promise<unknown> {
-	const tab = activeTab();
-	const el = tab ? elements.get(tab.id) : null;
-	if (!el) return null;
-	try {
-		return await el.executeJavaScript(script, true);
-	} catch {
-		return null;
-	}
 }
 
 export async function stopAgentOp(tabId?: string): Promise<void> {

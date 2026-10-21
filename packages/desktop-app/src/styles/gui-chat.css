@@ -698,12 +698,15 @@ body.gui-resizing .gui-pane-resize-x::after {
  *
  * While a live reply streams AND the view follows it (`data-live-tail`), the
  * band grows by a line or so: the newest line must be fully transparent at the
- * composer's edge instead of being sliced by it. */
+ * composer's edge instead of being sliced by it.
+ * `--chat-floating-panel-clearance` covers the absolute panels above the
+ * composer (the ask card): they are not part of the wrap measurement, so the
+ * fade must grow by their height too. */
 .gui-transcript {
-	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + 24px);
+	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + 24px);
 }
 .gui-chat-body[data-live-tail="true"] .gui-transcript {
-	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + 64px);
+	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + 64px);
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */

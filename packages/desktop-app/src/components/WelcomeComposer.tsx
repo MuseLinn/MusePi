@@ -1,4 +1,5 @@
 import { BlurText, DotMatrixMark, t } from "@musepi/client-core";
+import { ANNOTATION_ATTACH_EVENT } from "@musepi/client-core/src/annotation";
 import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
@@ -1216,6 +1217,24 @@ export function WelcomeComposer({
 			return [...prev, ...named];
 		});
 	};
+	// 统一标注(浏览器页 / 会话内卡片):文本追加进草稿,标记截图走图片附件
+	// 管线。放在 addFiles 定义之后 —— ref 赋值在渲染期执行,提前引用会 TDZ。
+	// addFiles 每个渲染都是新函数,经 ref 引用,避免每次按键都重挂监听。
+	const addFilesForAnnotationRef = useRef(addFiles);
+	addFilesForAnnotationRef.current = addFiles;
+	useEffect(() => {
+		const onAttach = (e: Event): void => {
+			const detail = (e as CustomEvent<{ text?: string; image?: File }>).detail;
+			const insertion = detail?.text;
+			if (!insertion) return;
+			setText(prev => (prev.length === 0 ? insertion : `${prev}\n\n${insertion}`));
+			if (detail?.image) void addFilesForAnnotationRef.current([detail.image]);
+			requestAnimationFrame(() => autosize(taRef.current));
+			requestAnimationFrame(() => taRef.current?.focus());
+		};
+		window.addEventListener(ANNOTATION_ATTACH_EVENT, onAttach);
+		return () => window.removeEventListener(ANNOTATION_ATTACH_EVENT, onAttach);
+	}, []);
 
 	// Board → chip, one path for every entry point (attach menu, chip click,
 	// lightbox edit). `sketch.editId` decides whether this extends an existing

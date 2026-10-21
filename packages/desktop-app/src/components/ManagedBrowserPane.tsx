@@ -17,9 +17,15 @@
  * auto-open the panel (ContextPanel listens for agentActivity).
  */
 import { t } from "@musepi/client-core";
+import {
+	dispatchAnnotationAttach,
+	formatAnnotationPrompt,
+	resolveAnnotationOverlayTheme,
+} from "@musepi/client-core/src/annotation";
+import { widgetHostTheme } from "@musepi/client-core/src/widgets/html";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
+import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
 import { fitViewport } from "../lib/browser-viewport";
 import { openExternalUrl } from "../lib/electron";
 import {
@@ -30,8 +36,8 @@ import {
 	getHostState,
 	goBack,
 	goForward,
+	hostElement,
 	navigate as navigateInStore,
-	pickElement as pickElementInPage,
 	reload,
 	selectTab,
 	setPaneRect,
@@ -235,8 +241,8 @@ export function ManagedBrowserPane({
 	// 页面状态在宿主 store 里(`<webview>` 元素由常驻的 ManagedBrowserHost 持有);
 	// 本组件只渲染 chrome,并把内容槽位的 rect 报给宿主定位。
 	const host = useSyncExternalStore(subscribeHost, getHostState);
-	const [picking, setPicking] = useState(false);
-	const [pickedSelector, setPickedSelector] = useState<string | null>(null);
+	const [annotating, setAnnotating] = useState(false);
+	const annotationHostRef = useRef<AnnotationHost | null>(null);
 	// Address omnibox state: editing shows the raw URL,
 	// idle shows `host / title` display parts.
 	const [addressValue, setAddressValue] = useState("");
@@ -424,23 +430,80 @@ export function ManagedBrowserPane({
 		});
 	}, [activeTab]);
 
-	/** Element picker (bitfun/openchamber parity): the inspecting script runs
-	 *  INSIDE the guest, so cross-origin pages can be picked as well. */
-	const pickElement = useCallback(async (): Promise<void> => {
-		if (picking) return;
-		setPicking(true);
-		setPickedSelector(null);
-		try {
-			const picked = (await pickElementInPage(BROWSER_INSPECT_SCRIPT)) as PickedElement | null;
-			if (picked?.selector) {
-				setPickedSelector(picked.selector);
-				const insertion = `${t("transcript.insertedElement", { tag: picked.tag, text: picked.text.slice(0, 80) })} ${t("transcript.pickedElement")}: ${picked.selector}`;
-				window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
-			}
-		} finally {
-			setPicking(false);
+	/** 统一标注(与会话内 HTML 卡片同一份 overlay):注入页面 → 用户选元素/
+	 *  区域/绘制+注释 → 拆 chrome → 页面截图 → 合成带标记的图 → 附图+prompt
+	 *  一起进 composer。页面本身从不被修改 —— 标注只标记已有内容。 */
+	const handleAnnotate = useCallback((): void => {
+		if (annotating) {
+			setAnnotating(false);
+			if (annotationHostRef.current) void cancelAnnotationSession(annotationHostRef.current);
+			return;
 		}
-	}, [picking]);
+		const tabId = host.activeId;
+		const webview = tabId ? hostElement(tabId) : null;
+		if (isBlank || !webview) {
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.noPage") }));
+			return;
+		}
+		const sessionHost: AnnotationHost = {
+			executeJavaScript: (code, userGesture) => webview.executeJavaScript(code, userGesture),
+			capturePage: async () => {
+				const webContentsId = webview.getWebContentsId();
+				if (!Number.isFinite(webContentsId)) return null;
+				try {
+					return (await window.electronAPI?.managedBrowserCapturePage({ webContentsId })) ?? null;
+				} catch {
+					return null;
+				}
+			},
+		};
+		annotationHostRef.current = sessionHost;
+		const theme = resolveAnnotationOverlayTheme(widgetHostTheme());
+		setAnnotating(true);
+		void runAnnotationSession({
+			host: sessionHost,
+			theme,
+			labels: {
+				select: t("annotation.tool.element"),
+				marquee: t("annotation.tool.region"),
+				draw: t("annotation.tool.draw"),
+				commentPlaceholder: t("annotation.commentPlaceholder"),
+				submit: t("annotation.submit"),
+			},
+		})
+			.then(result => {
+				setAnnotating(false);
+				if (!result) return;
+				dispatchAnnotationAttach({
+					text: formatAnnotationPrompt({
+						payload: result.payload,
+						screenshotAttached: result.screenshot !== null,
+						intro: t("annotation.browserIntro"),
+					}),
+					...(result.screenshot ? { image: result.screenshot } : {}),
+				});
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.attached") }));
+			})
+			.catch(() => {
+				setAnnotating(false);
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.failed") }));
+			});
+	}, [annotating, host.activeId, isBlank]);
+
+	// Escape 从应用侧退出标注:overlay 自己处理页面内的 Escape,但焦点可能在
+	// 面板上而不是页面里。
+	useEffect(() => {
+		if (!annotating) return;
+		const handler = (event: globalThis.KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			setAnnotating(false);
+			if (annotationHostRef.current) void cancelAnnotationSession(annotationHostRef.current);
+		};
+		window.addEventListener("keydown", handler, true);
+		return () => window.removeEventListener("keydown", handler, true);
+	}, [annotating]);
 
 	// First open with no tabs: give the host one to mount (main learns about it
 	// through guest-ready, so no IPC call is needed here).
@@ -828,37 +891,42 @@ export function ManagedBrowserPane({
 						</div>,
 					)}
 				</form>
-				{/* Zoom controls (§3.2.1): address-row tier, − 100% ＋; the
-				 * percent label resets to 100%. Per-tab, persisted. */}
-				<div className="gui-browser-zoom">
+				{/* 统一标注 / 开发者工具 / 外部打开:地址行右侧的一等公民。
+				 *  缩放收进 ⋯ 菜单,主行保持简洁。 */}
+				<div className="gui-browser-tools">
 					<button
 						type="button"
-						className="gui-browser-icon-btn"
-						aria-label={t("tools.browserZoomOut")}
-						title={t("tools.browserZoomOut")}
-						disabled={isBlank}
-						onClick={() => setActiveZoom(activeZoom - 0.1)}
+						className={`gui-browser-icon-btn${annotating ? " gui-browser-icon-btn--active" : ""}`}
+						aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
+						title={annotating ? t("annotation.stop") : t("annotation.toggle")}
+						aria-pressed={annotating}
+						onClick={handleAnnotate}
 					>
-						<Icon name="subtract" className="h-3.5 w-3.5" />
-					</button>
-					<button
-						type="button"
-						className="gui-browser-zoom-value"
-						title={t("tools.browserResetZoom")}
-						disabled={isBlank}
-						onClick={() => setActiveZoom(1)}
-					>
-						{Math.round(activeZoom * 100)}%
+						<Icon name="pencil" className="h-4 w-4" />
 					</button>
 					<button
 						type="button"
 						className="gui-browser-icon-btn"
-						aria-label={t("tools.browserZoom")}
-						title={t("tools.browserZoom")}
+						aria-label={t("tools.browserDevTools")}
+						title={t("tools.browserDevTools")}
 						disabled={isBlank}
-						onClick={() => setActiveZoom(activeZoom + 0.1)}
+						onClick={() => {
+							const tabId = host.activeId;
+							const webview = tabId ? hostElement(tabId) : null;
+							webview?.openDevTools();
+						}}
 					>
-						<Icon name="add" className="h-3.5 w-3.5" />
+						<Icon name="code-sslash" className="h-4 w-4" />
+					</button>
+					<button
+						type="button"
+						className="gui-browser-icon-btn"
+						aria-label={t("tools.browserOpenSystem")}
+						title={t("tools.browserOpenSystem")}
+						disabled={!/^https?:\/\//i.test(activeUrl)}
+						onClick={() => void openExternalUrl(activeUrl).catch(() => {})}
+					>
+						<Icon name="external-link" className="h-4 w-4" />
 					</button>
 				</div>
 				<div className="gui-browser-actions">
@@ -913,20 +981,41 @@ export function ManagedBrowserPane({
 						</button>
 						{renderActionsMenu(
 							<div role="menu">
-								{/* Low-frequency tools live here (§3.2.4), not as
-								 * standing chrome buttons. */}
-								<button
-									type="button"
-									role="menuitem"
-									disabled={picking || isBlank}
-									onClick={() => {
-										setMenuOpen(false);
-										void pickElement();
-									}}
-								>
-									<Icon name="target" className="h-3.5 w-3.5" />
-									{t("transcript.pickElement")}
-								</button>
+								{/* Zoom (§3.2.1): moved off the address row into the
+								 * menu — the standing − 100% ＋ group is gone; the
+								 * percent label still resets to 100%. Per-tab,
+								 * persisted. */}
+								<div className="gui-browser-menu-zoom" role="group">
+									<button
+										type="button"
+										className="gui-browser-icon-btn"
+										aria-label={t("tools.browserZoomOut")}
+										title={t("tools.browserZoomOut")}
+										disabled={isBlank}
+										onClick={() => setActiveZoom(activeZoom - 0.1)}
+									>
+										<Icon name="subtract" className="h-3.5 w-3.5" />
+									</button>
+									<button
+										type="button"
+										className="gui-browser-zoom-value"
+										title={t("tools.browserResetZoom")}
+										disabled={isBlank}
+										onClick={() => setActiveZoom(1)}
+									>
+										{Math.round(activeZoom * 100)}%
+									</button>
+									<button
+										type="button"
+										className="gui-browser-icon-btn"
+										aria-label={t("tools.browserZoom")}
+										title={t("tools.browserZoom")}
+										disabled={isBlank}
+										onClick={() => setActiveZoom(activeZoom + 0.1)}
+									>
+										<Icon name="add" className="h-3.5 w-3.5" />
+									</button>
+								</div>
 								<button
 									type="button"
 									role="menuitem"
@@ -959,21 +1048,6 @@ export function ManagedBrowserPane({
 								>
 									<Icon name="refresh" className="h-3.5 w-3.5" />
 									{t("tools.browserHardReload")}
-								</button>
-								{/* Zoom entry for narrow panels: the standing zoom
-								 * group hides under the 480px container tier, so
-								 * the ⋯ menu carries the reset path (§3.2.4). */}
-								<button
-									type="button"
-									role="menuitem"
-									disabled={isBlank || activeZoom === 1}
-									onClick={() => {
-										setActiveZoom(1);
-										setMenuOpen(false);
-									}}
-								>
-									<Icon name="expand-up-down" className="h-3.5 w-3.5" />
-									{t("tools.browserResetZoom")}
 								</button>
 								<span className="gui-browser-menu-sep" />
 								<button type="button" role="menuitem" disabled={history.length === 0} onClick={clearHistory}>
@@ -1108,36 +1182,6 @@ export function ManagedBrowserPane({
 							<Icon name="stop" className="h-3 w-3" />
 						</button>
 					)}
-				</div>
-			)}
-			{pickedSelector && (
-				<div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--color-accent)]/[0.06] px-2 py-1">
-					<span className="flex-shrink-0 text-[11px] font-medium text-[var(--color-accent)]">
-						{t("transcript.pickedElement")}
-					</span>
-					<code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--color-text)]">
-						{pickedSelector}
-					</code>
-					<button
-						type="button"
-						className="gui-pane-action !w-auto px-1.5 text-[11px]"
-						aria-label={t("settings.copy")}
-						title={t("settings.copy")}
-						onClick={() => {
-							void navigator.clipboard.writeText(pickedSelector).catch(() => {});
-						}}
-					>
-						<Icon name="clipboard" className="h-3 w-3" />
-					</button>
-					<button
-						type="button"
-						className="gui-pane-action !w-auto px-1.5"
-						aria-label={t("settings.close")}
-						title={t("settings.close")}
-						onClick={() => setPickedSelector(null)}
-					>
-						<Icon name="close" className="h-3 w-3" />
-					</button>
 				</div>
 			)}
 			{host.error && (
