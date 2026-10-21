@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **Windows 安装器换上了品牌化的安装向导**：安装过程不再是一屏灰白的默认界面，而是带着 MusePi 配色的分步向导——欢迎、选择安装位置、进度、完成，每一步都是应用自己的视觉。界面由 WebView2 承载、资源名带内容哈希，卸载界面同样换了品牌外观。
+  - EN: The Windows installer now runs a branded wizard. Setup is no longer a plain default screen but a MusePi-styled step-by-step flow — welcome, install location, progress, finish — every step in the app's own visual language. The UI rides on WebView2 with content-hashed assets, and the uninstaller gets matching branding.
 - **长任务的画面不再一路往上滚，你可以选择只保留最近几行**：一个回合跑上几分钟时，每个工具调用都占一行，正在做的事很快被顶出视野。设置→外观→显示里新增「运行中回合显示多少」：默认「全部显示」和现在一样；选「最近 7 行」就只留最近 7 行，更早的折成「⋯ 还有 N 行」。选项是写清楚的档位而不是一个数字，不需要猜 0 是什么意思。只作用于正在运行的那个回合：跑完的回合照旧折进活动摘要行，两者互不干扰。
   - EN: A long task no longer scrolls its own work off the screen, and you can choose how much of it stays visible. A turn that runs for minutes puts one row on screen per tool call, so what is happening right now gets pushed out of view. Settings → Appearance → Display gains "Running Turn Detail": the default "Show all" matches today; pick "Latest 7 rows" and only those stay, with the earlier ones folded into a "⋯ N more lines" row. The choices are named levels rather than a bare number, so nothing has to be guessed. It applies only to the turn that is running: a finished turn still folds into its activity summary, and the two do not interfere.
 - **设置里的效果预览现在画的是真实内容的样子**：以前示例只有一句纯文本，看不出表格、代码块、列表这些实际排出来什么样。现在示例本身就是一段带表格、代码、列表和强调的回复，折叠和展开两种状态也并排画出来。顺带把正文的标题层级、引用块和列表间距调好了：以前标题只比正文大 1–3 像素又没有字重，层级几乎看不出来。
@@ -75,6 +77,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **插件有了两个自己的原语：effect 和 state**：`pi.effect(cleanup)` 给任意副作用登记回收——插件自己开的定时器、监听、连接以前没人管，重载几次就留下几个孤儿；现在卸载、会话结束、登记回滚时都会调用它，其中一个抛错也不影响其余。`pi.state` 是插件私有的作用域存储，按插件实例隔离、随卸载清空——替代了模块级变量那种"同一份代码被加载几遍就分成几份"的写法。
   - EN: Plugins gained two primitives of their own: `effect` and `state`. `pi.effect(cleanup)` registers a reclamation for any side effect — timers, listeners and connections a plugin opens itself used to have no owner, so a few reloads left a few orphans behind; it now runs on unload, session shutdown and registration rollback, with one throwing cleanup unable to stop the rest. `pi.state` is per-plugin-instance storage that is cleared on unload, replacing the module-level variable that silently split into one copy per load of the same code.
 ### Fixed
+- **悬浮输入框回到会话栏里面，不再压住右侧面板**：悬浮输入框的定位参照物选错了层级，锚到了整个窗口——它因此画出了会话栏，盖住右侧面板，输入区一行的连接器胶囊也随之看不见。现在它锚在会话栏内，连接器和用量读数都回到输入框旁边。
+  - EN: The floating composer no longer spills over the right panel. Its anchor resolved to the whole window instead of the conversation column, so it painted outside the conversation, covered the right panel, and the connector capsule in the input row vanished with it. It now anchors inside the column, and the connector and usage readouts sit back beside the input.
+- **「性能与用量」不再出现两行，缓存命中率保留一位小数**：统计行被挂进了输入区的两个位置，同一组读数画了两遍；命中率还只显示整数，85.4% 和 84.6% 看起来一样。现在读数只出一行，命中率精确到小数点后一位。
+  - EN: The usage stats row no longer renders twice, and the cache hit rate keeps one decimal. The row was mounted into two places in the composer, so the same numbers painted twice, and the hit rate rounded to a whole percent, making 85.4% and 84.6% indistinguishable. One row now, with the hit rate precise to one decimal.
 - **设置项的英文文案不会再漏翻而没人发现**：设置清单里的每一条标签和描述都要在界面词表里有中文，之前没有任何检查盯着这件事——新增一个设置项忘了翻译、或者大小写和词表对不上，都会静默显示英文。现在有了门禁，新漏翻译的会直接挡在提交前；同时把已知的存量记成了基线，只会减不会增。顺带修好一处选项说明的提示框（鼠标悬停时那段小字）一直显示英文的问题。
   - EN: A settings label can no longer go untranslated without anyone noticing. Every label and description in the settings schema needs a Chinese entry, and nothing was checking that — a newly added setting with no translation, or a key whose capitalisation drifted from the dictionary, silently rendered in English. A gate now blocks a new untranslated string at commit time, with the existing backlog recorded as a baseline that can only shrink. Also fixed an options tooltip (the small text shown on hover) that had always rendered in English.
 - **设置页里几个开关的描述一直是英文，现在都跟界面语言走了**：「显示」分组下有七行说明没翻译（重整历史滚动区、渲染 Mermaid 图表、流式渲染等），连同新加的「运行中回合显示多少」和它的档位选项。原因是这些文案来自设置清单，而桌面端读的是界面词表——之前只把中文加到了终端那份词表里，桌面端自然读不到。现在两份都齐了。
@@ -118,6 +124,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The component list no longer vanishes with the plugin's toggle. Disabling a plugin used to make the whole "included components" section disappear from its detail view — there was no way to see what was switched off, and after re-enabling the section stayed empty. A component's declared surface is now independent of whether its plugin is in service: a disable unloads the runtime only, the component rows stay listed, and each reads its real not-mounted state.
 - **扩展文件变动不再让守护进程的会话重载崩溃**：监视器防抖回调假设宿主一定能枚举会话；宿主面不全（或正在拆卸）时这次重掷异常直接中断整批后续刷新。现在缺该能力时跳过重载——没有会话可重载，本来就不该抛。
   - EN: An extension file change no longer crashes the daemon's session reload. The watcher's debounced callback assumed the host could always enumerate sessions; when that surface was absent (or mid-teardown) the throw aborted the whole follow-up refresh. Reload is now skipped when the capability is missing — no sessions to reload means nothing to throw about.
+
+### Removed
+- **模型胶囊旁的积分余额读数移除了**：这个读数只在一部分登录渠道上有值，其余渠道永远空着，占位却让胶囊行显得拥挤。与其留着半份功能，不如先撤下。
+  - EN: The credit balance readout beside the model capsule is removed. It had a value on only some sign-in channels, stayed blank on the rest, and the reserved space crowded the capsule row. Rather than leaving a half-working feature, it is withdrawn for now.
 
 ## [0.5.6] - 2026-10-13
 
