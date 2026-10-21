@@ -66,6 +66,7 @@ function renderRail(): HTMLDivElement {
 				sessionId: null,
 				cwd: "C:\\proj",
 				rightPanelOpen: true,
+				terminalOpen: false,
 				onSelect: () => {},
 			}),
 		);

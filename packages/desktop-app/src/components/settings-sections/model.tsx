@@ -1490,6 +1490,17 @@ export function ModelSection({
 										ariaLabel={t("settings.sideChannelModel")}
 										options={[
 											{ value: "", label: t("settings.followSessionModel") },
+											// Role aliases resolve through the role assignment
+											// (modelRoles.<role>) at use time — a side-channel pick
+											// tracks the role instead of freezing one model id.
+											{ value: "@tiny", label: t("settings.followRoleModel", { role: "TINY" }) },
+											...Object.entries(BUILTIN_ROLE_TAGS)
+												.filter(([role]) => role !== "tiny")
+												.map(([role, tag]) => ({
+													value: `@${role}`,
+													label: t("settings.followRoleModel", { role: tag }),
+												})),
+											// Legacy plain ids stay selectable for existing configs.
 											...(catalogModels ?? []).map(m => ({ value: m.id, label: m.name ?? m.id })),
 										]}
 									/>

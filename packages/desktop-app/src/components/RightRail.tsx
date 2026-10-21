@@ -43,6 +43,8 @@ export function RightRail({
 	sessionId,
 	cwd,
 	rightPanelOpen,
+	terminalOpen,
+	onToggleTerminal,
 	onSelect,
 	onSelectNew,
 	onToggleRightPanel,
@@ -53,6 +55,10 @@ export function RightRail({
 	sessionId?: string | null;
 	cwd?: string;
 	rightPanelOpen: boolean;
+	/** Bottom terminal dock state: the toggle lives in the right rail,
+	 *  not the header. */
+	terminalOpen: boolean;
+	onToggleTerminal?(): void;
 	onSelect(tool: string): void;
 	/** Middle-click / ⌘-click on a rail item: open another instance of that
 	 *  surface rather than focusing the one already open (M1.12). Optional so a
@@ -455,6 +461,16 @@ export function RightRail({
 			) : null}
 			<div className="gui-right-rail-spacer" />
 			<div className="gui-right-rail-group">
+				<button
+					type="button"
+					className={`gui-right-rail-btn${terminalOpen ? " gui-right-rail-btn--active" : ""}`}
+					title={t("general.toggleTerminal")}
+					aria-label={t("general.toggleTerminal")}
+					aria-pressed={terminalOpen}
+					onClick={() => onToggleTerminal?.()}
+				>
+					<Icon name="terminal-box" className="h-4 w-4" />
+				</button>
 				<button
 					type="button"
 					className="gui-right-rail-btn"

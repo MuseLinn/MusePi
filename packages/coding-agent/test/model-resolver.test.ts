@@ -6,6 +6,7 @@ import {
 	expandRoleAlias,
 	extractExplicitThinkingSelector,
 	filterAvailableModelsByEnabledPatterns,
+	isModelRoleAliasValue,
 	parseModelPattern,
 	parseModelString,
 	pickDefaultAvailableModel,
@@ -817,6 +818,39 @@ describe("resolveModelRoleValue", () => {
 
 		expect(result.thinkingLevel).toBe("auto");
 		expect(result.explicitThinkingLevel).toBe(true);
+	});
+});
+
+describe("isModelRoleAliasValue (side-channel selector routing)", () => {
+	// Contract: a stored sideChannelModel that looks like a role alias routes
+	// through role resolution (so it tracks modelRoles), while a plain catalog
+	// id keeps direct lookup. A regression freezes the role pick into one id
+	// or sends a raw id down the role path and loses it.
+	const settings = {
+		getModelRole: (role: string) => (role === "tiny" ? "anthropic/claude-sonnet-4-5" : undefined),
+	} as NonNullable<Parameters<typeof resolveModelRoleValue>[2]>["settings"];
+
+	test("@tiny is a role alias and resolves the tiny role's model", () => {
+		expect(isModelRoleAliasValue("@tiny", settings)).toBe(true);
+		const resolved = resolveModelRoleValue("@tiny", allModels, { settings });
+		expect(resolved.model?.provider).toBe("anthropic");
+		expect(resolved.model?.id).toBe("claude-sonnet-4-5");
+	});
+
+	test("legacy pi/tiny prefix is still detected as a role alias", () => {
+		expect(isModelRoleAliasValue(`${LEGACY_MODEL_ROLE_ALIAS_PREFIX}tiny`, settings)).toBe(true);
+	});
+
+	test("the * default alias counts as a role alias", () => {
+		expect(isModelRoleAliasValue(DEFAULT_MODEL_ROLE_ALIAS, settings)).toBe(true);
+	});
+
+	test("a plain catalog id is not a role alias", () => {
+		expect(isModelRoleAliasValue("anthropic/claude-sonnet-4-5", settings)).toBe(false);
+	});
+
+	test("an @-prefixed unknown role without a configured assignment is not a role alias", () => {
+		expect(isModelRoleAliasValue("@nosuchrole", settings)).toBe(false);
 	});
 });
 describe("resolveAgentPrewalkPattern", () => {

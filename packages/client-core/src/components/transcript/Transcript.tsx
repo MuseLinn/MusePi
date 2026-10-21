@@ -2045,7 +2045,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	useEffect(() => {
 		const content = rootRef.current;
 		if (!content) return;
-		const ro = new ResizeObserver(() => {
+		const pinIfFollowing = (): void => {
 			// Geometry first: a fold collapse while the user reads must drop the
 			// back-to-bottom button even when the pin below no-ops (!following).
 			syncScrolledAwayFromDom();
@@ -2060,8 +2060,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			scroller.scrollTop = scroller.scrollHeight;
 			lastObservedScrollTopRef.current = scroller.scrollTop;
 			syncScrolledAwayFromDom();
-		});
+		};
+		const ro = new ResizeObserver(pinIfFollowing);
 		ro.observe(content);
+		// The scroller's own box too: a window resize shrinks the viewport
+		// without touching the content box — scrollTop stays put and the last
+		// rows slide under the composer until something else re-pins. While
+		// following, any viewport change must re-anchor the live edge.
+		const scroller = scrollerRef.current;
+		if (scroller) ro.observe(scroller);
 		return () => {
 			ro.disconnect();
 		};

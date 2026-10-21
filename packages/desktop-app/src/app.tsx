@@ -34,6 +34,7 @@ import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
+import { type ActionToastKind, pushActionToast } from "./lib/action-toast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMethods } from "./lib/daemon-version";
 import { openMiniChat, pickDirectory } from "./lib/electron";
@@ -456,13 +457,19 @@ function AppInner(): ReactNode {
 			clearTimeout(id);
 		};
 	}, [error]);
-	// Shared in-app error toast: WelcomeComposer's branch checkout (and any
-	// other pane far from the banner) dispatches `musepi-gui-toast` — route
-	// it into the same banner instead of dropping it (was listener-less).
+	// Shared in-app toast: any pane (welcome branch checkout, browser
+	// annotation, image copy, …) dispatches `musepi-gui-toast` — route it into
+	// the unified bottom-right toast stack instead of the top error banner:
+	// these are transient action feedbacks, not daemon failures. Detail is the
+	// message string, or `{ message, kind }` to carry a visual kind.
 	useEffect(() => {
 		const onToast = (e: Event): void => {
-			const detail = (e as CustomEvent<string>).detail;
-			if (typeof detail === "string" && detail) setError(detail);
+			const detail = (e as CustomEvent<string | { message?: string; kind?: ActionToastKind }>).detail;
+			const message = typeof detail === "string" ? detail : detail?.message;
+			if (!message) return;
+			// 历史语义：未带 kind 的事件原本一律进错误横幅，默认 error 保持
+			// 该信号；成功的反馈（标注已附加、已移入 worktree）显式传 kind 覆盖。
+			pushActionToast({ kind: typeof detail === "object" ? (detail.kind ?? "error") : "error", message });
 		};
 		window.addEventListener("musepi-gui-toast", onToast);
 		return () => window.removeEventListener("musepi-gui-toast", onToast);
@@ -3821,6 +3828,13 @@ function AppInner(): ReactNode {
 							onDeleteSession={deleteSession}
 							onExportSession={exportSessionById}
 							onRetitleSession={retitleSessionById}
+							connected={status === "open"}
+							daemonUrl={url}
+							onReconnect={() => void boot()}
+							hosts={hosts}
+							onSwitchHost={switchHost}
+							onAddHost={addHost}
+							onRemoveHost={removeHost}
 						/>
 					</div>
 					{settingsActive && (
@@ -3864,17 +3878,9 @@ function AppInner(): ReactNode {
 								globalPaused={globalPause.paused}
 								onToggleGlobalPause={() => void toggleGlobalPause()}
 								onNewSession={startNewTask}
-								onOpenBoard={() => viewSwapRef.current("board")}
 								onOpenSettings={openSettings}
 								terminalOpen={bottomTerminal}
 								onToggleTerminal={toggleTerminalDock}
-								rightPanelOpen={!rightCollapsed}
-								onToggleRightPanel={() => {
-									setRightCollapsed(v => {
-										localStorage.setItem("musepi-gui-right", v ? "1" : "0");
-										return !v;
-									});
-								}}
 								project={project}
 								// Reuse pickProjectFolder: a bare pickDirectory here updated
 								// musepi-gui-project (welcome chip) but never announced the
@@ -3886,19 +3892,12 @@ function AppInner(): ReactNode {
 								onRenameSession={renameSession}
 								sessionLabel={activeSessionLabel}
 								remote={activeSessionRemote}
-								connected={status === "open"}
-								daemonUrl={url}
-								onReconnect={() => void boot()}
 								onOpenCollab={() => setCollabOpen(true)}
 								onDeleteSession={deleteSession}
 								tabs={sessionTabRows}
 								onSelectTab={handleSelectTab}
 								onCloseTab={handleCloseTab}
 								onReorderTabs={handleReorderTabs}
-								hosts={hosts}
-								onSwitchHost={switchHost}
-								onAddHost={addHost}
-								onRemoveHost={removeHost}
 							/>
 							{/* 表面区(会话 / 看板 / 任务中心 / 智能体 / 能力中心):chat
 							 * keeper 绝对定位填满本区,alt 页面在流内替换——二者互不争抢
@@ -3976,6 +3975,7 @@ function AppInner(): ReactNode {
 											panelSelectRequest={panelSelect}
 											terminalOpen={bottomTerminal}
 											onCloseTerminal={closeTerminalDock}
+											onToggleTerminal={toggleTerminalDock}
 											focusMode={focusMode}
 											onToggleFocus={() => setFocusMode(v => !v)}
 											reminders={reminders}
@@ -4296,12 +4296,14 @@ function AppInner(): ReactNode {
 			 * here so they survive panel close/switch — the pane only positions
 			 * itself over them, and the agent keeps driving the same pages. */}
 			<ManagedBrowserHost />
-			{/* Auto-checked update notice (toast; main.cjs
-			 * pushes update-available ~12s after boot). */}
-			<UpdateToast />
-			{/* Undo-action toasts (archive → Undo). Bottom-center: clear of
-			 * the update toast (bottom-right, z 900) and .sh-toasts. */}
-			<ActionToastStack />
+			{/* Bottom-right corner stack: the auto-checked update notice
+			 * (main.cjs pushes update-available ~12s after boot) and the
+			 * undo-action toasts share one anchored column, so they stack
+			 * instead of fighting over the same corner. */}
+			<div className="gui-toast-corner">
+				<UpdateToast />
+				<ActionToastStack />
+			</div>
 			{/* Update L-dialog layer: 待重启确认卡 + 失败决策卡 (design
 			 * §3.2 — 分层共存 on top of the toast, not a replacement). */}
 			<UpdateDialog />

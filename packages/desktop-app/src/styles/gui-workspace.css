@@ -11,7 +11,10 @@
 .gui-composer-dock {
 	display: flex;
 	flex-direction: column;
-	align-items: stretch;
+	/* Content-sized rows: the connector chip reads as a capsule — stretch
+	 * parked it as a full-width bar. Components that want the whole row
+	 * (status bars, error cards) opt back in with width: 100%. */
+	align-items: flex-start;
 	gap: 4px;
 	padding: 4px 14px 0;
 }
@@ -37,6 +40,10 @@
 	flex-shrink: 0;
 	white-space: pre-wrap;
 	word-break: break-word;
+	/* The dock is content-width now (capsule rows); an error must still
+	 * read full-width — a 60-char compile error in a content-width box
+	 * wraps into dozens of lines. */
+	align-self: stretch;
 }
 .gui-slot-error strong {
 	font-weight: 600;
@@ -4458,6 +4465,33 @@
 	}
 }
 
+/* 通用骨架行：任意列表首拉未就绪的占位（PR/问题面板等），与诊断骨架同
+ * 配方，高度随内容（默认 PR/问题行高）。 */
+.gui-skeleton-row {
+	height: 34px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background:
+		linear-gradient(
+			90deg,
+			color-mix(in oklab, var(--color-text-faint) 6%, transparent) 0%,
+			color-mix(in oklab, var(--color-text-faint) 14%, transparent) 40%,
+			color-mix(in oklab, var(--color-text-faint) 6%, transparent) 80%
+		)
+		0 0 / 200% 100%;
+	animation: gui-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.gui-skeleton-row + .gui-skeleton-row {
+	margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-skeleton-row {
+		animation: none;
+	}
+}
+
 .gui-ext-overview-section {
 	display: flex;
 	flex-direction: column;
@@ -4543,6 +4577,37 @@
 	border-bottom-color: var(--color-accent);
 }
 
+/* 技能子分段条在页头（滚动体外）：左右与 tab 条对齐，底部分隔。 */
+.gui-capability-subtabs {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 20px 10px;
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+}
+
+/* 表头吸顶：各面板的工具行（搜索/筛选/添加）不随列表滚走。玻璃底 +
+ * 背景模糊盖住下方滑过的内容，底部分隔线标明它是粘附层。技能市场的
+ * 「全部技能」计数行与筛选 chips 同属表头，一并粘附。 */
+.gui-skill-market-bar,
+.gui-ext-plugins-toolbar {
+	position: sticky;
+	top: 0;
+	z-index: 6;
+	padding-top: 12px;
+	background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+	backdrop-filter: blur(14px) saturate(1.4);
+	-webkit-backdrop-filter: blur(14px) saturate(1.4);
+	border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+/* 能力中心滚动体上缘有 14px 内边距：吸顶行向上探入其中，粘住时不留缝。 */
+.gui-capability-body .gui-skill-market-bar,
+.gui-capability-body .gui-ext-plugins-toolbar {
+	top: -14px;
+}
+
 .gui-capability-body {
 	flex: 1;
 	min-height: 0;
@@ -4573,14 +4638,9 @@
 	}
 }
 
-/* 技能 tab 的子分段条（发现 / 我安装的 N）:pill 形,与分类 chips 同一语言。 */
-.gui-capability-subtabs {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	margin-bottom: 12px;
-}
-
+/* 技能 tab 的子分段条（发现 / 我安装的 N）:pill 形,与分类 chips 同一语言。
+ * 几何在上方「页头」规则（.gui-capability-subtabs，带分隔线）；此处只留
+ * pill 配色，两个规则同特异性、后者补色。 */
 .gui-capability-subtab {
 	padding: 4px 12px;
 	border: 1px solid transparent;
@@ -6187,6 +6247,23 @@ button.traj-error-note:hover {
 .gui-prboard-title {
 	font-size: 15px;
 	font-weight: 600;
+}
+
+/* 看板搜索行：胶囊占满内容宽（面板是横向 flex，继承 200px 基准宽）。 */
+.gui-pr-search-row {
+	display: flex;
+	align-items: center;
+	padding: 0 1px 6px;
+}
+
+.gui-pr-search-row .gui-pr-search {
+	flex: 1 1 auto;
+	max-width: none;
+	height: 30px;
+}
+
+.gui-pr-search-row .gui-pr-search input {
+	font-size: 12.5px;
 }
 
 .gui-prboard-body {

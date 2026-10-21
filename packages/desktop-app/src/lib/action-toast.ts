@@ -1,6 +1,8 @@
 /**
- * Undo-action toasts (openchamber parity: "archive … every archive message
- * offers Undo").
+ * In-app toast stack: every transient notice the app raises — undo offers,
+ * action feedback (branch moved, annotation attached), and error reports
+ * routed from `musepi-gui-toast` — lands in ONE bottom-right floating
+ * surface with an icon, the message, and one optional action button.
  *
  * Destructive sidebar/session actions need a reversal, and the reversal here
  * is always cheap: archiving is a localStorage list edit
@@ -8,12 +10,17 @@
  * row without a round trip and without a confirmation dialog.
  *
  * Plain module state + listener set — no React, no external store (mirrors
- * lib/update-ux.ts). Components subscribe via useEffect and re-read
+ * lib/update-ux.ts). Components subscribe via useSyncExternalStore and re-read
  * getToasts(); the toast itself owns its dismissal timer.
  */
 
+/** Visual kind: drives the leading icon and the tint. */
+export type ActionToastKind = "info" | "success" | "error";
+
 export interface ActionToast {
 	id: number;
+	/** Visual kind; "info" is a neutral notice. */
+	kind: ActionToastKind;
 	/** Localized body copy, e.g. "已归档会话". */
 	message: string;
 	/** Localized button copy. Omitted → a plain notice with no button. */
@@ -43,9 +50,12 @@ export function getToasts(): readonly ActionToast[] {
 /** Show a toast. A new toast replaces any earlier one carrying the same
  *  message — repeated archiving of different sessions should not stack up
  *  identical rows, and the newest undo is the relevant one. */
-export function pushActionToast(toast: Omit<ActionToast, "id" | "expiresAt">): number {
+export function pushActionToast(
+	toast: Omit<ActionToast, "id" | "expiresAt" | "kind"> & { kind?: ActionToastKind },
+): number {
 	const id = ++seq;
 	const next: ActionToast = {
+		kind: "info",
 		...toast,
 		id,
 		expiresAt: Date.now() + ACTION_TOAST_TTL_MS,

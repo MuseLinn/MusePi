@@ -229,7 +229,7 @@ function PrCreateForm({
 /** PR tab: the current branch's PR card (or the create form when there is
  *  none) over the repo's open PR list. All gh calls go through the daemon
  *  with the machine's own credentials. */
-function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: string }): ReactNode {
 	const [data, setData] = useState<{
 		pr: GhPr | null;
 		prs: GhPr[];
@@ -238,10 +238,8 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		branches: string[];
 	} | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(true);
 	const load = useCallback((): void => {
 		if (!rpc) return;
-		setLoading(true);
 		void Promise.all([
 			rpc.request<{ pr?: GhPr | null; error?: string }>("github.prStatus", { cwd }).catch(() => null),
 			rpc.request<{ prs?: GhPr[]; error?: string }>("github.prs", { cwd }).catch(() => null),
@@ -258,12 +256,14 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				ahead: gitRes?.ahead ?? 0,
 				branches: branchesRes?.branches ?? [],
 			});
-			setLoading(false);
 		});
 	}, [rpc, cwd]);
 	useEffect(load, [load]);
 	const refresh = useCallback((): void => load(), [load]);
 	const pr = data?.pr ?? null;
+	// 搜索词过滤（编号/标题）；链接形态不改列表，交给「打开链接」行。
+	const filteredPrs = (data?.prs ?? []).filter(p2 => matchesQuery(query, p2.number, p2.title));
+	const linkQuery = isLinkQuery(query);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
@@ -275,8 +275,6 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			</div>
 			{error ? (
 				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
-			) : loading ? (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 			) : data ? (
 				<FadeScroll className="min-h-0 flex-1 overflow-y-auto">
 					{pr ? (
@@ -325,11 +323,26 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							}}
 						/>
 					)}
-					{data.prs.length > 0 && (
+					{linkQuery && (
+						<div className="m-1.5">
+							<button
+								type="button"
+								className="gui-changes-row"
+								onClick={() => void openExternalUrl(query.trim())}
+							>
+								<Icon name="external-link" className="h-3.5 w-3.5 flex-shrink-0" />
+								<span className="min-w-0 flex-1 truncate text-left">{t("general.prOpenLink")}</span>
+								<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
+									{query.trim()}
+								</span>
+							</button>
+						</div>
+					)}
+					{filteredPrs.length > 0 && (
 						<>
 							<div className="gui-group-label px-3 pb-1 pt-2">{t("open pull requests")}</div>
 							<div className="m-1.5 rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
-								{data.prs.map(pr => (
+								{filteredPrs.map(pr => (
 									<button
 										key={pr.number}
 										type="button"
@@ -376,7 +389,13 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						</>
 					)}
 				</FadeScroll>
-			) : null}
+			) : (
+				<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
+					{[0, 1, 2, 3].map(i => (
+						<div key={i} className="gui-skeleton-row" />
+					))}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -401,27 +420,25 @@ const ISSUE_STATE_SEGMENTS: SegmentedOption<"open" | "closed" | "all">[] = [
 
 /** Issues subtab: state filter + the repo's issue list (gh CLI via the
  *  daemon, same credentials as the PR tab). */
-function IssuesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: string }): ReactNode {
 	const [state, setState] = useState<"open" | "closed" | "all">("open");
 	const [issues, setIssues] = useState<GhIssue[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(true);
 	const load = useCallback((): void => {
 		if (!rpc) return;
-		setLoading(true);
 		void rpc
 			.request<{ issues?: GhIssue[]; error?: string }>("github.issues", { cwd, state })
 			.then(res => {
 				setIssues(res?.issues ?? []);
 				setError(res?.error ?? null);
-				setLoading(false);
 			})
 			.catch(err => {
 				setError(err instanceof Error ? err.message : String(err));
-				setLoading(false);
 			});
 	}, [rpc, cwd, state]);
 	useEffect(load, [load]);
+	const filteredIssues = (issues ?? []).filter(i => matchesQuery(query, i.number, i.title));
+	const linkQuery = isLinkQuery(query);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between gap-2 px-1 pb-1 pt-1">
@@ -435,11 +452,16 @@ function IssuesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			</div>
 			{error ? (
 				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
-			) : loading ? (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
-			) : issues && issues.length > 0 ? (
+			) : issues && (linkQuery || filteredIssues.length > 0) ? (
 				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
-					{issues.map(issue => (
+					{linkQuery && (
+						<button type="button" className="gui-changes-row" onClick={() => void openExternalUrl(query.trim())}>
+							<Icon name="external-link" className="h-3.5 w-3.5 flex-shrink-0" />
+							<span className="min-w-0 flex-1 truncate text-left">{t("general.prOpenLink")}</span>
+							<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{query.trim()}</span>
+						</button>
+					)}
+					{filteredIssues.map(issue => (
 						<button
 							key={issue.number}
 							type="button"
@@ -479,11 +501,31 @@ function IssuesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						</button>
 					))}
 				</FadeScroll>
-			) : (
+			) : issues ? (
 				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no open issues")}</div>
+			) : (
+				<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
+					{[0, 1, 2, 3].map(i => (
+						<div key={i} className="gui-skeleton-row" />
+					))}
+				</div>
 			)}
 		</div>
 	);
+}
+
+/** 搜索过滤：普通文本按标题子串过滤；`#123` 精确匹配编号；http(s) 链接不
+ * 过滤列表，由面板渲染一行「打开链接」。 */
+export function matchesQuery(query: string, number: number, title: string): boolean {
+	const q = query.trim().toLowerCase();
+	if (!q) return true;
+	const num = /^#(\d+)$/.exec(query.trim());
+	if (num) return number === Number(num[1]);
+	return title.toLowerCase().includes(q);
+}
+
+export function isLinkQuery(query: string): boolean {
+	return /^https?:\/\/\S+$/i.test(query.trim());
 }
 
 /** PR surface tabs: pull requests / issues (choice persisted locally). */
@@ -499,6 +541,8 @@ export function PrCenter({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 			return "prs";
 		}
 	});
+	// 搜索词在两个子页间共享：切换 tab 不换词，列表各自解释（编号/标题/链接）。
+	const [query, setQuery] = useState("");
 	const pick = (next: PrCenterTab): void => {
 		setTab(next);
 		try {
@@ -509,6 +553,17 @@ export function PrCenter({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 	};
 	return (
 		<div className="flex h-full min-h-0 flex-col">
+			<div className="gui-pr-search-row">
+				<label className="gui-ext-plugins-search gui-pr-search">
+					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
+					<input
+						value={query}
+						onChange={e => setQuery(e.target.value)}
+						placeholder={t("general.prSearchPlaceholder")}
+						aria-label={t("general.prSearchPlaceholder")}
+					/>
+				</label>
+			</div>
 			<div className="gui-pane-subtabs" role="tablist" aria-label={t("settings.pullRequests")}>
 				<button
 					type="button"
@@ -530,7 +585,11 @@ export function PrCenter({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 				</button>
 			</div>
 			<div className="min-h-0 flex-1">
-				{tab === "prs" ? <PrPane rpc={rpc} cwd={cwd} /> : <IssuesPane rpc={rpc} cwd={cwd} />}
+				{tab === "prs" ? (
+					<PrPane rpc={rpc} cwd={cwd} query={query} />
+				) : (
+					<IssuesPane rpc={rpc} cwd={cwd} query={query} />
+				)}
 			</div>
 		</div>
 	);

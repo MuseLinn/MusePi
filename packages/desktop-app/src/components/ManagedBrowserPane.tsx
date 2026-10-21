@@ -482,7 +482,9 @@ export function ManagedBrowserPane({
 					}),
 					...(result.screenshot ? { image: result.screenshot } : {}),
 				});
-				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.attached") }));
+				window.dispatchEvent(
+					new CustomEvent("musepi-gui-toast", { detail: { message: t("annotation.attached"), kind: "success" } }),
+				);
 			})
 			.catch(() => {
 				setAnnotating(false);

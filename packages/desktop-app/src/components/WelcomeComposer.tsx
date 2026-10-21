@@ -728,10 +728,14 @@ export function WelcomeComposer({
 	// features (web search / images / boards / diagrams) so the empty
 	// composer teaches what the agent can do.
 	const [tipIdx, setTipIdx] = useState(0);
+	// The carousel only runs while the cursor is IN the composer: a marquee
+	// nobody is looking at still composites every 4s and made focus-mode
+	// transitions jank. Blurred → static base hint.
 	useEffect(() => {
+		if (!focused) return;
 		const id = setInterval(() => setTipIdx(i => (i + 1) % PLACEHOLDER_TIPS.length), 4000);
 		return () => clearInterval(id);
-	}, []);
+	}, [focused]);
 	const applySuggestion = (prompt: string): void => {
 		setText(prompt);
 		requestAnimationFrame(() => autosize(taRef.current));
@@ -2358,7 +2362,7 @@ export function WelcomeComposer({
 												? railState.placeholder
 												: isDesignArmed
 													? t("composer.designEmptyPlaceholder")
-													: t(PLACEHOLDER_TIPS[tipIdx]!))
+													: t(PLACEHOLDER_TIPS[focused ? tipIdx : 0]!))
 										}
 										spellCheck={(() => {
 											try {

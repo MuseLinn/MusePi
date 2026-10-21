@@ -2173,6 +2173,12 @@
 	border-color: var(--color-accent);
 	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
 }
+/* 该搜索胶囊在工具条（横向 flex）里以 200px 基准宽收缩；安装弹窗的拖放区是
+ * 纵向 flex，不覆盖的话同一 flex 基准会被当成高度，胶囊被拉成占满宽高的椭圆。 */
+.gui-plugin-drop .gui-ext-plugins-search {
+	flex: none;
+	align-self: stretch;
+}
 .gui-plugin-drop-hint {
 	font-size: 11px;
 	color: var(--color-text-tertiary);

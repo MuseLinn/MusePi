@@ -159,30 +159,34 @@ export function CapabilityCenterPage({
 					</button>
 				))}
 			</div>
+			{/* 技能子分段条放在滚动体外：与主 tab 同处页头，各面板工具行才能
+			 * 以统一偏移吸顶（subtabs 若在滚动体内，吸顶偏移随面板层级而变）。 */}
+			{tab === "skills" && (
+				<div className="gui-capability-subtabs" role="tablist">
+					{(
+						[
+							["discover", t("general.discover")],
+							["installed", t("general.installedWithCount", { count: installedCount })],
+						] as [SkillPane, string][]
+					).map(([id, label]) => (
+						<button
+							key={id}
+							type="button"
+							role="tab"
+							aria-selected={skillPane === id}
+							className={`gui-capability-subtab${skillPane === id ? " gui-capability-subtab--on" : ""}`}
+							onClick={() => setSkillPane(id)}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+			)}
 			<div className="gui-capability-body">
 				{/* 三个面板常驻挂载、display 切换（gui-capability-pane）：切 tab
 				 * 不丢各面板的滚动位置/输入态/已拉取数据，切入面板有淡入上浮动效
 				 * （display none→block 会重放 keyframes）。 */}
 				<div className={`gui-capability-pane${tab === "skills" ? " gui-capability-pane--on" : ""}`}>
-					<div className="gui-capability-subtabs" role="tablist">
-						{(
-							[
-								["discover", t("general.discover")],
-								["installed", t("general.installedWithCount", { count: installedCount })],
-							] as [SkillPane, string][]
-						).map(([id, label]) => (
-							<button
-								key={id}
-								type="button"
-								role="tab"
-								aria-selected={skillPane === id}
-								className={`gui-capability-subtab${skillPane === id ? " gui-capability-subtab--on" : ""}`}
-								onClick={() => setSkillPane(id)}
-							>
-								{label}
-							</button>
-						))}
-					</div>
 					<div className={`gui-capability-pane${skillPane === "discover" ? " gui-capability-pane--on" : ""}`}>
 						<SkillMarketView rpc={rpc} onInstalled={loadInstalledCount} />
 					</div>

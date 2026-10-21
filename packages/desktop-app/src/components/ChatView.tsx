@@ -332,6 +332,7 @@ export function ChatView({
 	panelSelectRequest,
 	terminalOpen,
 	onCloseTerminal,
+	onToggleTerminal,
 	focusMode,
 	onToggleFocus,
 	paused,
@@ -430,6 +431,9 @@ export function ChatView({
 	terminalOpen: boolean;
 	/** Last terminal tab closed → fold the dock (TerminalPanel onAllClosed). */
 	onCloseTerminal?(): void;
+	/** Right-rail terminal toggle: the rail button replaces the old
+	 *  header one (the header keeps none). */
+	onToggleTerminal?(): void;
 	/** Focus mode: composer fills the surface. */
 	focusMode: boolean;
 	onToggleFocus(): void;
@@ -3021,7 +3025,7 @@ export function ChatView({
 										className={
 											focusMode
 												? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
-												: "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-3"
+												: "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
 										}
 									>
 										{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):
@@ -3246,6 +3250,8 @@ export function ChatView({
 									rpc={rpc}
 									openSurfaces={openSurfaces}
 									rightPanelOpen={rightPanelOpen && !focusMode}
+									terminalOpen={terminalOpen}
+									onToggleTerminal={onToggleTerminal}
 									extTabs={extTabs}
 									onSelect={id => {
 										// Same view while open → collapse (Chrome side-panel

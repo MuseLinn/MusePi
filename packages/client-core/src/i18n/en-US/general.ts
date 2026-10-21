@@ -46,6 +46,11 @@ export const general = {
 	"general.identityName": "Identity name",
 	"general.identityEmail": "Identity email",
 	"general.noIdentitiesYet": "No identities yet — click “New” to add one",
+	"general.prSearchPlaceholder": "Search, or paste a link or #number",
+	"general.prOpenLink": "Open link",
+	"general.systemIdentity": "System identity",
+	"general.systemIdentityDescription":
+		"The machine commit identity resolved from git config; used when no custom identity is chosen",
 	"general.confirmDeleteIdentity": "Delete this identity?",
 	"general.setDefault": "Set as default",
 	"general.gitPreferences": "Git preferences",

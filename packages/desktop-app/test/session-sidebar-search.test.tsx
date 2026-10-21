@@ -60,6 +60,13 @@ function sidebarHtml(options: {
 			collapsed={false}
 			onDeleteArchived={async () => true}
 			unread={options.unread}
+			connected
+			daemonUrl="ws://localhost:8300"
+			onReconnect={() => {}}
+			hosts={[]}
+			onSwitchHost={() => {}}
+			onAddHost={() => {}}
+			onRemoveHost={() => {}}
 		/>,
 	);
 }

@@ -1,6 +1,6 @@
 import { t, unarchiveSession, archiveSession as writeArchivedSession } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
 import {
 	copyToClipboard,
@@ -12,7 +12,6 @@ import {
 	projectName,
 	shellPlatform,
 } from "../lib/electron";
-import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { orbFromSession } from "../lib/pet";
 import {
 	type ProjectAction,
@@ -21,7 +20,6 @@ import {
 	writeProjectActions,
 } from "../lib/project-actions";
 import { usePrompt } from "../lib/prompt-dialog";
-import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { buildSessionMarkdown, markdownFileName } from "../lib/session-markdown";
 import type { GuiSessionStore } from "../lib/session-store";
@@ -82,32 +80,10 @@ function formatPauseElapsed(pausedAt: number): string {
  * Full-width drag region; floating sidebar controls on the left (sidebar
  * toggle + project-actions capsule), the session title as a switcher
  * trigger in the middle, and the
- * top-right cluster (terminal, right panel, mini chat, open-in, instance
- * info, more) on the right. No divider line in the welcome state.
+ * top-right cluster (mini chat, open-in, more) on the right; the terminal
+ * toggle lives in the right rail and instance info in the sidebar footer.
+ * No divider line in the welcome state.
  */
-/** Probe a daemon ws endpoint: resolve true if it answers within the timeout. */
-function probeDaemon(url: string, timeoutMs = 2000): Promise<boolean> {
-	const { promise, resolve } = Promise.withResolvers<boolean>();
-	let settled = false;
-	let ws: WebSocket | null = null;
-	const finish = (ok: boolean): void => {
-		if (settled) return;
-		settled = true;
-		clearTimeout(timer);
-		ws?.close();
-		resolve(ok);
-	};
-	const timer = setTimeout(() => finish(false), timeoutMs);
-	try {
-		ws = new WebSocket(url);
-	} catch {
-		finish(false);
-		return promise;
-	}
-	ws.onopen = () => finish(true);
-	ws.onerror = () => finish(false);
-	return promise;
-}
 
 export function GuiHeader({
 	store,
@@ -124,25 +100,15 @@ export function GuiHeader({
 	onOpenSettings,
 	terminalOpen,
 	onToggleTerminal,
-	rightPanelOpen,
-	onToggleRightPanel,
 	project,
 	onOpenFolder,
 	sessions,
 	onSelectSession,
 	onRenameSession,
-	onOpenBoard,
 	sessionLabel,
 	remote,
-	connected,
-	daemonUrl,
-	onReconnect,
 	onOpenCollab,
 	onDeleteSession,
-	hosts,
-	onSwitchHost,
-	onAddHost,
-	onRemoveHost,
 	tabs,
 	onSelectTab,
 	onCloseTab,
@@ -168,8 +134,6 @@ export function GuiHeader({
 	onOpenSettings(): void;
 	terminalOpen: boolean;
 	onToggleTerminal(): void;
-	rightPanelOpen: boolean;
-	onToggleRightPanel(): void;
 	project: string | null;
 	onOpenFolder(): void;
 	/** Recent sessions for the header switcher, newest first. */
@@ -177,33 +141,16 @@ export function GuiHeader({
 	onSelectSession(id: string): void;
 	/** Persist a user-set session title (daemon session.rename). */
 	onRenameSession(sessionId: string, title: string): void;
-	/** Open the board/dashboard view (kimi-work parity). */
-	onOpenBoard?(): void;
 	/** Tree label of the active session — reflects renames. */
 	sessionLabel?: string | null;
 	/** Session cwd lives under the sshfs remote mount dir — show the
 	 *  remote-workspace chip next to the title. */
 	remote?: boolean;
-	/** Daemon connection state (instance menu status dot). */
-	connected: boolean;
-	/** WebSocket endpoint URL of the connected daemon (instance menu host
-	 *  row). */
-	daemonUrl: string;
-	/** Re-run the daemon boot/connect chain (instance menu 重新连接). */
-	onReconnect(): void;
 	/** Open the collab remote-control dialog (session 分享). */
 	onOpenCollab(): void;
 	/** Permanently delete a session (journal + index); the caller also
 	 *  resets the UI when it was the active session. Returns success. */
 	onDeleteSession(sessionId: string): Promise<boolean>;
-	/** Saved remote daemon hosts for the instance switcher . */
-	hosts: RemoteHost[];
-	/** Switch the GUI to a host (remote or the implicit local daemon). */
-	onSwitchHost(host: RemoteHost | null): void;
-	/** Persist a new host entry from the add form. */
-	onAddHost(host: { label: string; url: string; token?: string }): void;
-	/** Remove a saved host by id. */
-	onRemoveHost(id: string): void;
 	/** Header tab strip rows (multi-session tabs); empty/undefined renders the
 	 *  single-session title only. The active tab hosts the title switcher
 	 *  block; closing a tab never deletes the session. */
@@ -218,9 +165,6 @@ export function GuiHeader({
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
 	const orb = orbFromSession(snap);
-	// Managed-browser bridge state (batch C): port / tab count / last error
-	// for the instance-menu diagnostics row.
-	const browserHost = useSyncExternalStore(subscribeHost, getHostState);
 	const statusText = snap?.working
 		? snap.streaming
 			? t("settings.replying")
@@ -245,7 +189,6 @@ export function GuiHeader({
 	const switcherBtnRef = useRef<HTMLButtonElement | null>(null);
 	const titleMenuBtnRef = useRef<HTMLButtonElement | null>(null);
 	const openInBtnRef = useRef<HTMLButtonElement | null>(null);
-	const instanceBtnRef = useRef<HTMLButtonElement | null>(null);
 	// §5t titlebar avoidance: the fixed float cluster publishes its measured
 	// width as --gui-float-controls-width; the collapsed-sidebar spacer carves
 	// exactly that much.
@@ -265,24 +208,6 @@ export function GuiHeader({
 	const [projOpen, setProjOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [titleMenuOpen, setTitleMenuOpen] = useState(false);
-	const [instanceOpen, setInstanceOpen] = useState(false);
-	// Instance switcher add form.
-	const [addHostOpen, setAddHostOpen] = useState(false);
-	const [hostDraft, setHostDraft] = useState({ label: "", url: "", token: "" });
-	// Host reachability: each saved host
-	// gets a live ping when the list changes; the instance menu marks it.
-	const [hostReach, setHostReach] = useState<Record<string, boolean>>({});
-	useEffect(() => {
-		let alive = true;
-		for (const h of hosts) {
-			void probeDaemon(buildWsUrl(h)).then(ok => {
-				if (alive) setHostReach(r => ({ ...r, [h.id]: ok }));
-			});
-		}
-		return () => {
-			alive = false;
-		};
-	}, [hosts]);
 	const openInDir = store?.cwd ?? project ?? "";
 	const [devRunning, setDevRunning] = useState(false);
 	const [devStopping, setDevStopping] = useState(false);
@@ -486,47 +411,6 @@ export function GuiHeader({
 		};
 	}, [rpc, store]);
 
-	// Instance info:
-	// real version + round-trip latency from system.meta, refreshed whenever
-	// the menu opens or the refresh button is hit.
-	const [daemonVersion, setDaemonVersion] = useState<string | null>(null);
-	const [daemonLatency, setDaemonLatency] = useState<number | null>(null);
-	const [metaLoading, setMetaLoading] = useState(false);
-	const refreshMeta = useCallback((): void => {
-		if (!rpc) return;
-		setMetaLoading(true);
-		const t0 = performance.now();
-		void rpc
-			.request<{ version?: string }>("system.meta")
-			.then(meta => {
-				setDaemonVersion(meta?.version ?? null);
-				setDaemonLatency(Math.max(0, Math.round(performance.now() - t0)));
-			})
-			.catch(() => {
-				setDaemonLatency(null);
-			})
-			.finally(() => setMetaLoading(false));
-	}, [rpc]);
-	useEffect(() => {
-		if (instanceOpen) refreshMeta();
-	}, [instanceOpen, refreshMeta]);
-	// Remote-update badge (§3.1 A2): compare the daemon's version against
-	// the latest MusePi GitHub release; shown on the instance menu host row.
-	const [latestVersion, setLatestVersion] = useState<string | null>(null);
-	useEffect(() => {
-		if (!instanceOpen) return;
-		let cancelled = false;
-		void fetch("https://api.github.com/repos/MuseLinn/MusePi/releases/latest")
-			.then(r => (r.ok ? (r.json() as Promise<{ tag_name?: string }>) : null))
-			.then(rel => {
-				if (!cancelled && rel?.tag_name) setLatestVersion(rel.tag_name.replace(/^v/, ""));
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [instanceOpen]);
-
 	// ── Header chips (§3.1 A2): context-window usage + git branch ──────
 	// Read-only summaries of existing daemon RPCs. The ctx chip shares
 	// the Composer's value-compare discipline so a poll tick that changed
@@ -668,6 +552,7 @@ export function GuiHeader({
 		// the archive is a local list edit, so the reverse is free (no daemon
 		// round trip, no confirm dialog).
 		pushActionToast({
+			kind: "success",
 			message: t("general.sessionArchived"),
 			actionLabel: t("general.undo"),
 			onAction: () => unarchiveSession(archivedId),
@@ -683,8 +568,8 @@ export function GuiHeader({
 		void onDeleteSession(store.sessionId);
 	};
 
-	const toast = (text: string): void => {
-		window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: text }));
+	const toast = (text: string, kind?: "info" | "success" | "error"): void => {
+		window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: { message: text, kind } }));
 	};
 
 	/** Move this session into a fresh isolated git worktree . Two existing pieces do the work: the
@@ -726,14 +611,14 @@ export function GuiHeader({
 			toast(t("general.worktreeFailed"));
 			return;
 		}
-		toast(t("general.movedWorktree"));
+		toast(t("general.movedWorktree"), "success");
 	};
 
 	// Outside click / Escape closes every open header popup (base-ui
 	// DropdownMenu semantics). Clicking a trigger closes the OTHER menus and
 	// lets its own onClick toggle (single-open); clicks inside a popup are
 	// left to the item handlers.
-	const anyMenuOpen = projOpen || switcherOpen || titleMenuOpen || openInOpen || instanceOpen;
+	const anyMenuOpen = projOpen || switcherOpen || titleMenuOpen || openInOpen;
 	useEffect(() => {
 		if (!anyMenuOpen) return;
 		const closeAll = (except?: string): void => {
@@ -741,7 +626,6 @@ export function GuiHeader({
 			if (except !== "switcher") setSwitcherOpen(false);
 			if (except !== "titleMenu") setTitleMenuOpen(false);
 			if (except !== "openIn") setOpenInOpen(false);
-			if (except !== "instance") setInstanceOpen(false);
 		};
 		const onDoc = (e: MouseEvent): void => {
 			const path = e.composedPath();
@@ -773,6 +657,10 @@ export function GuiHeader({
 
 	// The session-title switcher block: rendered bare in single-session mode,
 	// or as the active tab's content when the multi-session tab strip is on.
+	// Tab mode subtracts: the active tab is a plain
+	// title — no avatar, no remote/ceiling chips, no second row. Those
+	// details live in the sidebar row and the right rail, not on every tab.
+	const tabbed = tabs !== undefined && tabs.length > 0;
 	const titleBlock = (
 		<>
 			<div className="gui-header-title">
@@ -786,41 +674,43 @@ export function GuiHeader({
 					onClick={() => setSwitcherOpen(v => !v)}
 				>
 					<span className="gui-header-title-row">
-						{store && <AgentAvatar state={orb} size={20} />}
+						{store && !tabbed && <AgentAvatar state={orb} size={20} />}
 						<span className="min-w-0 truncate text-[14px] font-medium text-[var(--color-text)]" title={title}>
 							{title}
 						</span>
-						{remote && (
+						{remote && !tabbed && (
 							<span className="gui-remote-chip" title={t("settings.remoteWorkspace")}>
 								<Icon name="server" className="h-3 w-3" />
 								{t("settings.remote2")}
 							</span>
 						)}
-						{ceiling && (
+						{ceiling && !tabbed && (
 							<span className="hidden text-[12px] text-[var(--color-text-faint)] md:inline">
 								{t("settings.thinking2")} · {ceiling}
 							</span>
 						)}
 					</span>
-					<span className="gui-header-subrow">
-						{gitBranch && (
-							<span className="gui-header-chip" title={`${t("general.gitBranch")} · ${gitBranch}`}>
-								<Icon name="git-branch" className="h-2.5 w-2.5" />
-								{gitBranch}
+					{!tabbed && (
+						<span className="gui-header-subrow">
+							{gitBranch && (
+								<span className="gui-header-chip" title={`${t("general.gitBranch")} · ${gitBranch}`}>
+									<Icon name="git-branch" className="h-2.5 w-2.5" />
+									{gitBranch}
+								</span>
+							)}
+							<span
+								className="min-w-0 truncate text-[10.5px] text-[var(--color-text-faint)]"
+								title={store ? projectLabel : project ? projectName(project) : t("general.local")}
+							>
+								{store ? projectLabel : project ? projectName(project) : t("general.local")}
 							</span>
-						)}
-						<span
-							className="min-w-0 truncate text-[10.5px] text-[var(--color-text-faint)]"
-							title={store ? projectLabel : project ? projectName(project) : t("general.local")}
-						>
-							{store ? projectLabel : project ? projectName(project) : t("general.local")}
+							{ctxChip && (
+								<span className="gui-header-chip" title={t("general.contextUsage")}>
+									{t("ctx percent", { percent: Math.round(ctxChip.percent) })}
+								</span>
+							)}
 						</span>
-						{ctxChip && (
-							<span className="gui-header-chip" title={t("general.contextUsage")}>
-								{t("ctx percent", { percent: Math.round(ctxChip.percent) })}
-							</span>
-						)}
-					</span>
+					)}
 				</button>
 				<MenuPopup
 					open={switcherOpen}
@@ -1307,37 +1197,6 @@ export function GuiHeader({
 						<StateIcon on={globalPaused} pair={["play", "stop"]} className="h-3.5 w-3.5" />
 					</button>
 				)}
-				<button
-					type="button"
-					className={`gui-tool-btn h-7 w-7${terminalOpen ? " gui-tool-btn--active" : ""}`}
-					title={t("general.toggleTerminal")}
-					aria-label={t("general.toggleTerminal")}
-					onClick={onToggleTerminal}
-				>
-					<Icon name="terminal-box" className="h-4 w-4" />
-				</button>
-				{onOpenBoard && (
-					<button
-						type="button"
-						className="gui-tool-btn gui-tool-btn--p2 h-7 w-7"
-						title={t("settings.board")}
-						aria-label={t("settings.board")}
-						onClick={onOpenBoard}
-					>
-						<Icon name="layout-column" className="h-4 w-4" />
-					</button>
-				)}
-				{store && (
-					<button
-						type="button"
-						className={`gui-tool-btn h-7 w-7${rightPanelOpen ? " gui-tool-btn--active" : ""}`}
-						title={t("settings.togglePanel")}
-						aria-label={t("settings.togglePanel")}
-						onClick={onToggleRightPanel}
-					>
-						<Icon name="equalizer-2" className="h-4 w-4" />
-					</button>
-				)}
 				{/* Mini chat (picture-in-picture). */}
 				<button
 					type="button"
@@ -1469,260 +1328,6 @@ export function GuiHeader({
 						</MenuPopup>
 					</div>
 				)}
-				{/* Instance info: real daemon
-				 * state (system.meta version, connection status) plus actions. */}
-				<button
-					type="button"
-					data-header-trigger="instance"
-					ref={instanceBtnRef}
-					className="gui-instance-btn gui-instance-btn--recessed"
-					title={t("general.instanceInfo")}
-					aria-label={t("general.instanceInfo")}
-					onClick={() => setInstanceOpen(v => !v)}
-				>
-					<Icon name="stack" className="h-4 w-4" />
-					<span>{t("general.local")}</span>
-					<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-				</button>
-				<MenuPopup
-					open={instanceOpen}
-					className="gui-instance-menu"
-					portal
-					anchor={instanceBtnRef.current}
-					align="right"
-					onOpenChange={setInstanceOpen}
-				>
-					{/* Current-instance header row:
-					 * local daemon + manual re-probe. */}
-					<div className="flex items-center gap-2 px-2 py-1.5">
-						<span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-surface-sunken)]">
-							<Icon name="stack" className="h-3.5 w-3.5" />
-						</span>
-						<div className="min-w-0 flex-1">
-							<div className="flex items-center gap-1.5 text-[12.5px] font-medium">
-								{t("settings.localDaemon")}
-								{connected && (
-									<span className="rounded-full bg-[var(--color-success)]/15 px-1.5 text-[10px] font-semibold text-[var(--color-success)]">
-										current
-									</span>
-								)}
-							</div>
-							<div className="truncate text-[11px] text-[var(--color-text-faint)]">
-								{connected
-									? daemonLatency !== null
-										? t("general.connectedMsWithMs", { ms: String(daemonLatency) })
-										: t("transcript.connected")
-									: t("settings.disconnected")}
-							</div>
-						</div>
-						<button
-							type="button"
-							className="gui-view-opt !w-auto px-1.5"
-							aria-label={t("settings.refresh")}
-							title={t("settings.refresh")}
-							onClick={refreshMeta}
-						>
-							<Icon
-								name={metaLoading ? "loader-4" : "refresh"}
-								className={`h-3.5 w-3.5${metaLoading ? " animate-spin" : ""}`}
-							/>
-						</button>
-					</div>
-					{/* Host row: the single local host with
-					 * status dot + version + endpoint URL. */}
-					<div className="mx-2 mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--color-surface-sunken)]">
-						<span
-							className={`h-2 w-2 shrink-0 rounded-full ${connected ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]"}`}
-						/>
-						<div className="min-w-0 flex-1">
-							<div className="truncate text-[12.5px]">{t("general.local")}</div>
-							<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">{daemonUrl}</div>
-						</div>
-						<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
-						{latestVersion && daemonVersion && latestVersion !== daemonVersion && (
-							<span
-								className="gui-update-badge"
-								title={t("general.updateAvailable", {
-									version: `v${latestVersion}`,
-								})}
-							>
-								{t("general.updateAvailable", { version: `v${latestVersion}` })}
-							</span>
-						)}
-					</div>
-					{/* Managed-browser bridge diagnostics: port + tab count + last error, visible
-					 * without opening the browser panel. */}
-					<div className="mx-2 mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5">
-						<span
-							className={`h-2 w-2 shrink-0 rounded-full ${browserHost.port ? "bg-[var(--color-success)]" : "bg-[var(--color-text-faint)]"}`}
-						/>
-						<div className="min-w-0 flex-1">
-							<div className="truncate text-[12.5px]">{t("tools.browserBridge")}</div>
-							<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">
-								{browserHost.port
-									? t("tools.browserBridgeInfo", {
-											port: String(browserHost.port),
-											tabs: String(browserHost.tabs.length),
-										})
-									: t("tools.browserBridgeOffline")}
-							</div>
-						</div>
-					</div>
-					{browserHost.error && (
-						<div
-							className="mx-2 mb-1 truncate rounded-lg bg-[var(--color-danger)]/10 px-2 py-1 font-mono text-[10.5px] text-[var(--color-danger)]"
-							title={browserHost.error}
-						>
-							{browserHost.error}
-						</div>
-					)}
-					{hosts.length > 0 && (
-						<>
-							<div className="my-1 border-t border-[var(--border)]" />
-							<div className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-[var(--color-text-faint)]">
-								{t("settings.instances")}
-							</div>
-							{hosts.map(h => {
-								const active = buildWsUrl(h) === daemonUrl;
-								return (
-									<div
-										key={h.id}
-										className="group mx-2 mb-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--color-surface-sunken)]"
-										role="button"
-										tabIndex={0}
-										onClick={() => {
-											if (!active) {
-												setInstanceOpen(false);
-												onSwitchHost(h);
-											}
-										}}
-										onKeyDown={e => {
-											if (e.key === "Enter" && !active) {
-												setInstanceOpen(false);
-												onSwitchHost(h);
-											}
-										}}
-									>
-										<span
-											className={`h-2 w-2 shrink-0 rounded-full ${active ? "bg-[var(--color-success)]" : hostReach[h.id] === true ? "bg-[var(--color-warning)]" : "bg-[var(--color-text-faint)]"}`}
-										/>
-										<div className="min-w-0 flex-1">
-											<div className="flex items-center gap-1.5">
-												<span className="truncate text-[12.5px]">{h.label}</span>
-												{active && (
-													<span className="rounded-full bg-[var(--color-success)]/15 px-1.5 text-[10px] font-semibold text-[var(--color-success)]">
-														current
-													</span>
-												)}
-											</div>
-											<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">
-												{h.url}
-											</div>
-										</div>
-										<button
-											type="button"
-											className="gui-view-opt !w-auto px-1.5 opacity-0 group-hover:opacity-100"
-											aria-label={t("general.remove")}
-											title={t("general.remove")}
-											onClick={e => {
-												e.stopPropagation();
-												onRemoveHost(h.id);
-											}}
-										>
-											<Icon name="close" className="h-3 w-3" />
-										</button>
-									</div>
-								);
-							})}
-						</>
-					)}
-					<div className="my-1 border-t border-[var(--border)]" />
-					{addHostOpen ? (
-						<div className="mx-2 mb-1 flex flex-col gap-1.5 rounded-lg bg-[var(--color-surface-sunken)] p-2">
-							<input
-								className="gui-input w-full"
-								placeholder={t("settings.instanceLabel")}
-								value={hostDraft.label}
-								onChange={e => setHostDraft(d => ({ ...d, label: e.target.value }))}
-							/>
-							<input
-								className="gui-input w-full font-mono"
-								placeholder="ws://host:8300"
-								value={hostDraft.url}
-								onChange={e => setHostDraft(d => ({ ...d, url: e.target.value }))}
-							/>
-							<input
-								className="gui-input w-full font-mono"
-								placeholder={t("settings.remoteToken")}
-								type="password"
-								value={hostDraft.token}
-								onChange={e => setHostDraft(d => ({ ...d, token: e.target.value }))}
-							/>
-							<div className="flex gap-1.5">
-								<button
-									type="button"
-									className="gui-btn gui-btn-primary gui-btn-sm flex-1"
-									disabled={!hostDraft.label.trim() || !hostDraft.url.trim()}
-									onClick={() => {
-										onAddHost({
-											label: hostDraft.label.trim(),
-											url: hostDraft.url.trim(),
-											token: hostDraft.token.trim() || undefined,
-										});
-										setHostDraft({ label: "", url: "", token: "" });
-										setAddHostOpen(false);
-									}}
-								>
-									{t("settings.add")}
-								</button>
-								<button type="button" className="gui-btn gui-btn-sm" onClick={() => setAddHostOpen(false)}>
-									{t("settings.cancel")}
-								</button>
-							</div>
-						</div>
-					) : (
-						<button type="button" className="gui-view-opt" onClick={() => setAddHostOpen(true)}>
-							<Icon name="add-circle" className="h-3.5 w-3.5" />
-							<span>{t("settings.addInstance")}</span>
-						</button>
-					)}
-					<div className="my-1 border-t border-[var(--border)]" />
-					<button
-						type="button"
-						className="gui-view-opt"
-						onClick={() => {
-							setInstanceOpen(false);
-							onOpenSettings();
-						}}
-					>
-						<Icon name="settings-3" className="h-3.5 w-3.5" />
-						<span>{t("settings.settings")}</span>
-					</button>
-					<button
-						type="button"
-						className="gui-view-opt"
-						onClick={() => {
-							setInstanceOpen(false);
-							onReconnect();
-						}}
-					>
-						<Icon name="restart" className="h-3.5 w-3.5" />
-						<span>{t("general.reconnect")}</span>
-					</button>
-					<div className="my-1 border-t border-[var(--border)]" />
-					<button
-						type="button"
-						className="gui-view-opt"
-						onClick={() => {
-							setInstanceOpen(false);
-							// Electron: closing the only window quits the app.
-							window.close();
-						}}
-					>
-						<Icon name="close" className="h-3.5 w-3.5" />
-						<span>{t("general.quitApp")}</span>
-					</button>
-				</MenuPopup>
 			</div>
 			{/* statusText mirrors the orb state for screen readers. */}
 			<span className="sr-only">{statusText}</span>

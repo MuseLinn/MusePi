@@ -80,7 +80,7 @@ Semantics: three-dot status colors green active / gray disabled / orange shadowe
 - **RPC reconnect-window deadlock fix** (rpc.ts, 2026-08-06): on connection failure `#retry()` **rejects all pending requests** and clears them — otherwise requests issued during a reload/daemon-restart window **hang forever** (responses from the old ws never come, and new-connection response ids don't match), leaving the Git tab's authLoading stuck true (one source of the user's "loading takes forever"). **Measured**: after killing the daemon, the Git tab shows a `(not connected)` error within 3s instead of spinning forever. GUI Git tab loading behavior: `authLoading && !auth` shows a "loading" row, **and simultaneously** the "Add account" button also renders (`!auth?.authenticated` holds for null) — an expected combination, not a bug.
 - **Provider login card** (SettingsView provider tab, 2026-08-06): the `loginState` panel was upgraded from a bare version (URL link + text) to a **native card identical to device flow** (`.gui-github-flow` style family) — title + "Open login page" primary button (external-link) + cancel link + "Waiting for sign-in…" spinner (when not waitingInput) + paste code/URL input (when waitingInput). Render path is isomorphic to the git device-flow card (event-driven provider-login → loginState).
 - **Add account** = GitHub OAuth Device Flow (client_id `178c6fc778ccc68e1d6a`, the gh CLI public client; `github.authStart` POST /login/device/code → GUI shows the user_code + opens verification_uri + polls `github.authPoll` at interval (pending/slow_down keep polling; once the access_token arrives, `gh auth login --with-token` imports it into the gh keyring via stdin — **all gh RPCs take effect immediately**)). Note gh config lives in `$HOME/.config/gh` (token in the macOS Keychain) — **a daemon with an isolated HOME cannot see the user's gh auth** (tests combine mock gh + GH_CONFIG_DIR).
-- **Identities** = commit identity list (localStorage `musepi-gui-git-identities` + `musepi-gui-git-default-identity`, two-step prompt creation, default badge, confirm-on-delete) — **consumed by git.commit** (`-c` injection).
+- **Identities** = commit identity list (localStorage `musepi-gui-git-identities` + `musepi-gui-git-default-identity`, two-step prompt creation, default badge, confirm-on-delete) — **consumed by git.commit** (`-c` injection). **System identity row** (2026-10-22): the settings Git tab's identity section opens with a read-only row for the machine-level git config — daemon RPC `git.identity` (spawnSync `git config user.name` / `user.email`, resolved local→global; a `--local --get` probe reports the source) returns `{name, email, source}`; outside a repo it degrades to the global config without erroring. The row carries the "default" badge while no custom identity exists and a "current project" badge when `source === "local"`.
 - **Workspace changes panel** (openchamber GitView/ChangesPanel parity): three groups (staged/unstaged/untracked + optional ignored), per-row hover stage/unstage (`git.stage` = `git add -- <paths>`; `git.unstage` = `git restore --staged --` with fallback `git reset HEAD --`), header with flat/tree view toggle + Gitignored toggle (`git.status {ignored}` → `--ignored` flag parsing `!!` lines) + commit button.
 - **Project notes panel** (ContextPanel NotesPane, 2026-08-06 openchamber alignment): quick notes (daemon notes.get/set, 3000-char cap + `{n}/3000` counter, **400ms debounce autosave + blur flushes immediately**) + **todo list** (localStorage `musepi-gui-todos:<cwd>`; **openchamber semantics**: header "{count} todos", 120 chars per item, additions insert before the first completed item, checked items move to the end (completed-last), clear-completed button (disabled at 0 completed), delete ✕) + **plan files** (daemon `plans.list/get/save/delete`, stored at `agentDir/plans/<cwdHash>/<timestamp>-<slug>.md`, format `# Title\n\nBody` — title parsed from the leading `# heading` line; GUI: "Plans ({count} files)" header + `+` new (two-step prompt: title+body) + list (title+date+delete) + open viewer (monospace pre)). **Storage design**: unlike openchamber's `~/.config/openchamber/projects/<id>.json` — musepi uses agentDir files (same style as notes, never touching user projects). **Not done** (documented): dnd drag reorder, sending todos into a session, file import, chat-message "Save as plan" button, CodeMirror PlanView.
 - **prompt dialog fix** (prompt-dialog.tsx, 2026-08-06): the confirm button on the prompt branch used to `finish(true)` → returning **null (equal to cancel)** — prompt could only be confirmed via Enter, clicking confirm did nothing — changed to `state.kind === "prompt" ? finish(value.trim()) : finish(true)`. **bun build CSS pitfall**: bun's CSS parser **does not support bare `@layer` statements** (`@layer a, b, c;` throws Unexpected token with the error position drifting onto a `*` inside comments, misleading debugging) — the **block form** `@layer a {} @layer b {}` works (semantically equivalent, declares layer order). base.css's layer-order declaration was replaced with four empty blocks.
@@ -701,7 +701,7 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 - `following` = 用户滚动权：**仅真实用户输入**（wheel/touch/keydown）可翻转；程序化贴底/布局 scroll 只记几何账。
 - commit 前 `reconcile` 用户意图：wheel 上滚领先 scroll 事件一帧，不得被流式 commit 吞掉。
 - 内容增长动作 stick/hold：释放后绝不拉回。
-- Transcript 接线：scroll 监听按 programmatic/user 分类；follow effect 先 reconcile 再贴底；ResizeObserver 跟随期尾部重钉（流式 delta/图片/高亮撑高，rAF 合并）。
+- Transcript 接线：scroll 监听按 programmatic/user 分类；follow effect 先 reconcile 再贴底；ResizeObserver 跟随期尾部重钉（流式 delta/图片/高亮撑高，rAF 合并）。**2026-10-21 补 scroller 盒观察**：RO 同时 observe 滚动视口自身——窗口 resize/布局切换只改视口盒不动内容盒，底部消息会滑进 composer 底下直到别的动作触发重钉（"切走再切回又好了"症状的根因）；视口盒变化在跟随期必须同样重锚。
 - 未移植：virtualizer 测高补偿（无虚拟化时 native overflow-anchor 兜底）。
 - 「回到底部」按钮（M1.10 批次 A）：`shouldShowBackToBottom(followingUi, entries.length)` 语义驱动显隐（L2 float 规格）；点击平滑滚回 + `smoothScrollRef` 裁决——动画中间帧不计为用户上滚，落底 re-arm。**唯一入口**：desktop ChatView 曾叠过本地 `JumpToBottomButton.tsx`，已删（重复设计清扫，ffb4bf915）。
 
@@ -733,6 +733,7 @@ seq 单一权威 = daemon journal：journal 打开时从文件尾部恢复 `#seq
 - **B2 复验结论（四路径状态一致，无需改码）**：rail ⇄ panel ⇄ 视图已是单一派生状态——`activeView` 由 `panelTabs.activeId` 的 tab surface 派生（ChatView:677-682，§3.3.2 tab 模型重构时落地），usePanelTabs 挂在 ChatView 折叠不卸载；tab 布局按 cwd 持久化（`musepi-gui-panel-tabs-${cwd}`，含 activeId）——设计稿设想的 `musepi-gui-right-tab` 全局键被 per-cwd 持久化取代，不加死代码；最大化几何测 session column 而非 surface（ContextPanel:443-447），面板永不遮 rail；welcome/session 侧栏同一条 `sideCollapsed` 规则（app.tsx:3091）。**缓办**：拖把手共享 hook 抽象（B1 把手自包含 pointer-capture，app.tsx/ContextPanel 两处旧把手各有历史包袱，抽象收益 < 回归风险，待下次触碰时再做）。
 - **B1 §23 回归**：全部为 slot 的 overlay 兄弟节点——webview 元素的 display/reparent/零尺寸三禁零触碰。
 - **C 诊断入口**：instance 菜单新增浏览器桥诊断行（端口 + tab 数 + 最近错误，`host.port/tabs/error` 经 useSyncExternalStore 订阅），不开面板即可见桥状态。
+- **2026-10-21 减法与迁移**：顶栏右簇只留工作状态与运行控制——P1 的 terminal/right-panel 按钮与 P2 的 board 按钮全部移除（终端开关迁至 RightRail 底部组、与面板折叠钮相邻；board 保留侧栏菜单入口；面板折叠由 RightRail 底部钮兜底）。实例按钮（含 C 诊断、host 切换、版本/延迟、设置/重连/退出）整块迁出 GuiHeader，落成自包含组件 `InstanceButton.tsx`，挂侧栏 footer 左侧（`justify-between`，右侧仍为设置/协作/断开组）；GuiHeader 随之卸下 `connected/daemonUrl/onReconnect/hosts/onSwitchHost/onAddHost/onRemoveHost` 七个 prop，宿主可达性从 `gui-instance-btn` 改由 `data-` 属性-free 的自管 MenuPopup 承担。tab 模式下标题块减法：有 `tabs` 时 GuiHeader 不渲染 AgentAvatar、remote chip、ceiling 文字与整个 subrow（标签即标题，一行字）。
 - **已知边界（B1 遗留）**：agent 占用提示的人类输入暂停未接线——Electron `before-input-event` 无法区分真实输入与 CDP 派发（agent 自身的输入也会触发），接了会自我抑制；待找到可靠判别器再做。
 
 ## 41. Settings shell: slot replacement retires the chat-column overlay (2026-09-24)
@@ -824,6 +825,18 @@ that archives _and immediately leaves the session_).
 sessions in a row must not build a wall of identical toasts and the newest undo is the only
 still-actionable one. `dismissActionToast` on an unknown id is a no-op (no notification):
 the toast's own timer and the click handler can both fire.
+
+**Update (2026-10-22) — corner stack, kinds, app-notice routing.** The stack moved into the
+bottom-right `.gui-toast-corner` wrapper (app.tsx renders `<UpdateToast/>` and
+`<ActionToastStack/>` inside it): app notices share one anchored column with the OTA card —
+the card sits at the corner, pills stack above it — instead of two independent fixed
+elements overlapping the same coordinates. Toasts gained a `kind` (`info` | `success` |
+`error`, default `info`) rendered as a leading icon with kind-tinted icon/border (the
+surface stays neutral glass). The app-level `musepi-gui-toast` event now routes into this
+stack (previously `setError`'s top banner): its detail accepts a plain string or
+`{message, kind}`, defaulting to `error` to preserve the old banner semantics;
+daemon-connection errors still use the top banner. `pushActionToast` stayed
+backwards-compatible (kind optional).
 
 ### 45.4 Palette deltas
 

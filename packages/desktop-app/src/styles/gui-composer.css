@@ -1442,6 +1442,21 @@ button.gui-stats-pill {
 	animation: gui-tip-shimmer 1.2s ease-out;
 }
 
+/* The tip re-appears the moment data-focused drops (blur), while the form's
+ * height morph is still animating with an explicit px height — the column is
+ * mid-squeeze and the sentence wraps into a narrow strip at the column's
+ * stale edge. Keep it out until the morph class lifts (form is the
+ * immediately preceding sibling). */
+.gui-welcome-form.gui-morphing + .gui-tip {
+	visibility: hidden;
+}
+
+/* Long tip sentences read better balanced than ragged-right single words. */
+.gui-tip {
+	max-width: 100%;
+	text-wrap: balance;
+}
+
 @keyframes gui-tip-shimmer {
 	0% {
 		opacity: 0;

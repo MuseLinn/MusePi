@@ -105,7 +105,7 @@ import { ASYNC_JOB_MANAGER_SHUTDOWN_REASON, type AsyncJob, AsyncJobManager } fro
 import { reset as resetCapabilities } from "../capability";
 import { shouldEnableAppendOnlyContext } from "../config/append-only-context-mode";
 import type { ModelRegistry } from "../config/model-registry";
-import type { ResolvedModelRoleValue } from "../config/model-resolver";
+import { isModelRoleAliasValue, type ResolvedModelRoleValue, resolveModelRoleValue } from "../config/model-resolver";
 import { expandPromptTemplate, type PromptTemplate } from "../config/prompt-templates";
 import { buildServiceTierByFamily } from "../config/service-tier";
 import type { Settings, SkillsSettings } from "../config/settings";
@@ -4494,14 +4494,21 @@ export class AgentSession {
 	/**
 	 * Side-channel model override (settings.sideChannelModel): empty means
 	 * "follow the session model" — the TUI-parity default for /btw, /omfg,
-	 * idle recap and the ephemeral-ask channel. A configured id resolves
-	 * from the available catalog; unknown ids fall back to the session
+	 * idle recap and the ephemeral-ask channel. A role alias (`@tiny`,
+	 * legacy `pi/tiny`, `*`) resolves through the role assignment so the
+	 * side channel tracks the role's model instead of a frozen id; a plain
+	 * catalog id resolves directly. Unknown values fall back to the session
 	 * model so a stale config never breaks a side turn.
 	 */
 	#sideChannelModel(): Model | undefined {
 		const id = (this.settings.get as (key: string) => unknown)("sideChannelModel") as string | undefined;
 		if (!id?.trim()) return this.model;
-		const m = this.getAvailableModels().find(m => m.id === id.trim());
+		const trimmed = id.trim();
+		if (isModelRoleAliasValue(trimmed, this.settings)) {
+			const resolved = resolveModelRoleValue(trimmed, this.getAvailableModels(), { settings: this.settings });
+			return resolved.model ?? this.model;
+		}
+		const m = this.getAvailableModels().find(m => m.id === trimmed);
 		return m ?? this.model;
 	}
 

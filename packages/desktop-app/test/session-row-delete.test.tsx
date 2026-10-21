@@ -45,6 +45,13 @@ function baseProps(extra: Record<string, unknown> = {}) {
 		onOpenSearch: () => {},
 		collapsed: false,
 		onDeleteArchived: async () => true,
+		connected: true,
+		daemonUrl: "ws://localhost:8300",
+		onReconnect: () => {},
+		hosts: [],
+		onSwitchHost: () => {},
+		onAddHost: () => {},
+		onRemoveHost: () => {},
 		...extra,
 	};
 }

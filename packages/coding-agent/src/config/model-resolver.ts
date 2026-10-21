@@ -926,6 +926,12 @@ function getModelRoleAlias(value: string, settings?: ModelRoleLookup): string | 
 	return undefined;
 }
 
+/** Exported for call sites that need alias detection without the role name
+ *  (e.g. routing a stored selector through role resolution). */
+export function isModelRoleAliasValue(value: string, settings?: ModelRoleLookup): boolean {
+	return getModelRoleAlias(value, settings) !== undefined;
+}
+
 /** Normalize comma-separated or array model selectors into an ordered pattern list. */
 export function normalizeModelPatternList(value: string | string[] | undefined): string[] {
 	if (!value) return [];

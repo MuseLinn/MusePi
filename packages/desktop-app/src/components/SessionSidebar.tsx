@@ -5,6 +5,7 @@ import { pushActionToast } from "../lib/action-toast";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
+import type { RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -12,6 +13,7 @@ import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { GroupedSessionList } from "./GroupedSessionList";
+import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionHoverCard } from "./SessionHoverCard";
@@ -79,6 +81,13 @@ export function SessionSidebar({
 	onImportSessions,
 	modeCatalog,
 	rpc,
+	connected,
+	daemonUrl,
+	onReconnect,
+	hosts,
+	onSwitchHost,
+	onAddHost,
+	onRemoveHost,
 }: {
 	nodes: SessionListNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
@@ -168,6 +177,20 @@ export function SessionSidebar({
 	/** Daemon RPC client — the projects-tab ghost sweep probes each persisted
 	 *  folder with fs.stat; absent (non-Electron dev hosts) the sweep skips. */
 	rpc?: RpcClient;
+	/** Daemon connection state (footer instance button status dot). */
+	connected: boolean;
+	/** WebSocket endpoint URL of the connected daemon (instance menu host row). */
+	daemonUrl: string;
+	/** Re-run the daemon boot/connect chain (instance menu 重新连接). */
+	onReconnect(): void;
+	/** Saved remote daemon hosts for the instance switcher. */
+	hosts: RemoteHost[];
+	/** Switch the GUI to a host (remote or the implicit local daemon). */
+	onSwitchHost(host: RemoteHost | null): void;
+	/** Persist a new host entry from the add form. */
+	onAddHost(host: { label: string; url: string; token?: string }): void;
+	/** Remove a saved host by id. */
+	onRemoveHost(id: string): void;
 }): ReactNode {
 	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
 	// this whole subtree, so in-memory state silently reset to "groups" on
@@ -1412,47 +1435,58 @@ export function SessionSidebar({
 						)}
 					</div>
 				</div>
-				{/* User footer: settings and session actions (theme/language moved
-				 * into the settings dialog). Connection state is NOT here — the
-				 * header's instance menu already carries it, with latency, a
-				 * refresh, the status dot and the daemon URL. */}
-				<div className="gui-sidebar-footer flex items-center justify-end gap-1.5 border-t border-[var(--border)] px-3 py-2">
-					<button
-						type="button"
-						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-						onClick={onOpenShortcuts}
-						title={t("general.keyboardShortcuts")}
-						aria-label={t("general.keyboardShortcuts")}
-					>
-						<Icon name="command" className="h-4 w-4" />
-					</button>{" "}
-					<button
-						type="button"
-						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-						onClick={onOpenSettings}
-						title={t("settings.settings")}
-						aria-label={t("settings.settings")}
-					>
-						<Icon name="settings-3" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-						onClick={onOpenCollab}
-						title={t("settings.mobileRemoteControl")}
-						aria-label={t("settings.mobileRemoteControl")}
-					>
-						<Icon name="smartphone" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-						onClick={onDisconnect}
-						title={t("settings.disconnect")}
-						aria-label={t("settings.disconnect")}
-					>
-						<Icon name="close" className="h-4 w-4" />
-					</button>
+				{/* User footer: instance info (connection state, latency, host
+				 * switcher) on the left; settings/session actions on the right. */}
+				<div className="gui-sidebar-footer flex items-center justify-between gap-1.5 border-t border-[var(--border)] px-3 py-2">
+					<InstanceButton
+						rpc={rpc ?? null}
+						connected={connected}
+						daemonUrl={daemonUrl}
+						hosts={hosts}
+						onSwitchHost={onSwitchHost}
+						onAddHost={onAddHost}
+						onRemoveHost={onRemoveHost}
+						onOpenSettings={onOpenSettings}
+						onReconnect={onReconnect}
+					/>
+					<div className="flex items-center gap-1.5">
+						<button
+							type="button"
+							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+							onClick={onOpenShortcuts}
+							title={t("general.keyboardShortcuts")}
+							aria-label={t("general.keyboardShortcuts")}
+						>
+							<Icon name="command" className="h-4 w-4" />
+						</button>{" "}
+						<button
+							type="button"
+							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+							onClick={onOpenSettings}
+							title={t("settings.settings")}
+							aria-label={t("settings.settings")}
+						>
+							<Icon name="settings-3" className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+							onClick={onOpenCollab}
+							title={t("settings.mobileRemoteControl")}
+							aria-label={t("settings.mobileRemoteControl")}
+						>
+							<Icon name="smartphone" className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+							onClick={onDisconnect}
+							title={t("settings.disconnect")}
+							aria-label={t("settings.disconnect")}
+						>
+							<Icon name="close" className="h-4 w-4" />
+						</button>
+					</div>
 				</div>
 			</div>
 			{/* Session right-click menu: archive, copy id. */}
@@ -1495,6 +1529,7 @@ export function SessionSidebar({
 														setRetitlingId(cur => (cur === id ? null : cur));
 														if (!r.ok)
 															pushActionToast({
+																kind: "error",
 																message: t(
 																	r.reason === "empty"
 																		? "general.aiRenameEmpty"
@@ -1524,6 +1559,7 @@ export function SessionSidebar({
 									onSelect: () => {
 										archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd);
 										pushActionToast({
+											kind: "success",
 											message: t("general.sessionArchived"),
 											actionLabel: t("general.undo"),
 											onAction: () => unarchiveSession(sessionCtx.id),
@@ -1599,7 +1635,8 @@ export function SessionSidebar({
 												onSelect: () => {
 													const id = sessionCtx.id;
 													void onExportSession(id, sessionLabelOf(id)).then(ok => {
-														if (!ok) pushActionToast({ message: t("general.exportFailed") });
+														if (!ok)
+															pushActionToast({ kind: "error", message: t("general.exportFailed") });
 													});
 												},
 											},

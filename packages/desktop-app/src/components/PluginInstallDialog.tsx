@@ -340,7 +340,7 @@ export function PluginInstallDialog({
 							<button type="button" className="gui-btn" onClick={onClose}>
 								{t("settings.close")}
 							</button>
-							<button type="button" className="gui-btn-primary" onClick={() => start(spec)}>
+							<button type="button" className="gui-btn gui-btn-primary" onClick={() => start(spec)}>
 								{phase === "failed" || phase === "cancelled"
 									? t("settings.retry")
 									: t("settings.pluginInstallStart")}

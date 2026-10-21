@@ -79,7 +79,7 @@ daemon RPC:
 - **RPC 重连窗口死挂修复**(rpc.ts,2026-08-06):`#retry()` 连接失败时**reject 全部 pending 请求**并清空——否则 reload/daemon 重启窗口发出的请求**永久挂起**(旧 ws 的响应永远不来,新连接响应 id 匹配不上),Git tab 的 authLoading 永 true(用户「loading 加载蛮久」的一个来源)。**实测**:kill daemon 后 Git tab 3s 内显示 `(not connected)` 错误而非永转圈。GUI Git tab 的 loading 行为:`authLoading && !auth` 显示「loading」行,**同时**「添加账号」按钮也渲染(`!auth?.authenticated` 对 null 成立)——是预期组合,非 bug。
 - **Provider 登录卡片**(SettingsView 供应商 tab,2026-08-06):`loginState` 面板从简陋版(URL 链接 + 文本)升级为 **device-flow 同款原生卡片**(`.gui-github-flow` 样式族)——标题 + 「打开登录页」主按钮(external-link)+ 取消链接 + 「等待登录…」spinner(非 waitingInput 时)+ 粘贴 code/URL 输入框(waitingInput 时)。渲染路径与 git device flow 卡片同构(事件驱动 provider-login → loginState)。
 - **添加账号** = GitHub OAuth Device Flow(client_id `178c6fc778ccc68e1d6a` 即 gh CLI 公开客户端;`github.authStart` POST /login/device/code → GUI 显示 user_code + 打开 verification_uri + 按 interval 轮询 `github.authPoll`(pending/slow_down 续轮询;拿到 access_token 后 `gh auth login --with-token` stdin 导入 gh keyring——**所有 gh RPC 立即生效**))。注意 gh 配置在 `$HOME/.config/gh`(token 在 macOS Keychain)——**隔离 HOME 的 daemon 看不到用户 gh 认证**(测试用 mock gh + GH_CONFIG_DIR 组合)。
-- **身份** = 提交身份列表(localStorage `musepi-gui-git-identities` + `musepi-gui-git-default-identity`,两步 prompt 新建,默认徽章,confirm 删除)——**git.commit 消费**(`-c` 注入)。
+- **身份** = 提交身份列表(localStorage `musepi-gui-git-identities` + `musepi-gui-git-default-identity`,两步 prompt 新建,默认徽章,confirm 删除)——**git.commit 消费**(`-c` 注入)。**系统身份行**(2026-10-22):设置 Git tab 的身份区顶部新增一行只读的系统身份——daemon RPC `git.identity`(spawnSync `git config user.name` / `user.email`,local→global 链解析;`--local --get` 探测来源)返回 `{name, email, source}`;非仓库目录退化为全局配置且不报错。未写自定义身份时该行挂「默认」徽章,`source === "local"` 时挂「当前项目」徽章。
 - **工作区变更面板**(openchamber GitView/ChangesPanel parity):三组(已暂存/未暂存/未跟踪 + 可选已忽略),每行 hover stage/unstage(`git.stage` = `git add -- <paths>`;`git.unstage` = `git restore --staged --` fallback `git reset HEAD --`),header 有平铺/树形视图切换 + Gitignored 开关(`git.status {ignored}` → `--ignored` 标志解析 `!!` 行)+ 提交按钮。
 - **项目笔记面板**(ContextPanel NotesPane,2026-08-06 openchamber 对齐):快速笔记(daemon notes.get/set,3000 字符上限 + `{n}/3000` 计数,**400ms debounce 自动保存 + blur 立即落盘**)+ **待办列表**(localStorage `musepi-gui-todos:<cwd>`;**openchamber 语义**:header「待办 {count} 项」、每项 120 字符、添加插入到第一个已完成项之前、勾选完成移到末尾(completed-last)、清除已完成按钮(0 完成时 disabled)、删除 ✕)+ **计划文件**(daemon `plans.list/get/save/delete`,存 `agentDir/plans/<cwdHash>/<时间戳>-<slug>.md`,格式 `# 标题\n\n内容`——标题从首行 `# heading` 解析;GUI:「计划 {count} 个文件」header + `+` 新建(两步 prompt:标题+内容)+ 列表(标题+日期+删除)+ 打开查看(等宽 pre))。**存储设计**:与 openchamber 的 `~/.config/openchamber/projects/<id>.json` 不同——musepi 用 agentDir 文件(与 notes 同款,不碰用户项目)。**未做**(说明):dnd 拖拽排序、待办发送到会话、文件导入、聊天消息「保存为计划」按钮、CodeMirror PlanView。
 - **prompt 对话框修复**(prompt-dialog.tsx,2026-08-06):确定按钮对 prompt 分支原来 `finish(true)` → 返回 **null(等于取消)**——prompt 只能靠 Enter 确认,点确定无效——改为 `state.kind === "prompt" ? finish(value.trim()) : finish(true)`。**bun build CSS 坑**:bun 的 CSS 解析器**不支持 `@layer` 裸语句**(`@layer a, b, c;` 报 Unexpected token,错误位置漂移到注释里的 `*` 误导调试)——**块形式** `@layer a {} @layer b {}` 可以(语义等价,声明层顺序)。base.css 的层顺序声明已用四空块替代。
@@ -762,6 +762,14 @@ timestamp** 变化时跳转，而不是随 query 变化，因此打字时不会�
 toast，而最新那条撤销是唯一仍可操作的。`dismissActionToast` 对未知 id 是静默 no-op
 （不发通知）：toast 自身的定时器与点击处理都可能触发。
 
+**更新（2026-10-22）——角落同柱、kind、应用通知路由。** 浮窗栈迁入右下角 `.gui-toast-corner`
+包装器（app.tsx 把 `<UpdateToast/>` 与 `<ActionToastStack/>` 一起渲染进去）：应用通知与
+OTA 卡片共享一根锚定列——卡片落在角落、药丸叠在其上方——而不是两个独立 fixed 元素在同一组
+坐标上互相覆盖。toast 新增 `kind`（`info` | `success` | `error`，默认 `info`），渲染为
+前导图标，图标与描边按 kind 微染（玻璃底色保持中性）。应用级 `musepi-gui-toast` 事件改
+路由进这条栈（此前进 `setError` 的顶部横幅）：detail 接受纯字符串或 `{message, kind}`，
+缺省 `error` 以保留旧横幅语义；守护进程连接类错误仍走顶部横幅。`pushActionToast` 保持
+向后兼容（kind 可选）。
 ### 45.4 面板增量
 
 `CommandPalette.tsx`：面板组新增 Reload UI；**粘贴 session id 精确命中**（`exactSession`
@@ -969,3 +977,15 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 慢请求 tick 且 elapsed 递增；失败仍以自身错误拒绝（提示是附加的，不是替代）；
 请求结束后没有 ticker 存活；秒数助手按展示取整。
 
+
+## 54. 滚动锚定补 scroller 盒观察、顶栏减法与实例迁移、侧边通道角色语义（2026-10-21）
+
+**最新消息被 composer 遮挡的根因与修复**（`client-core` Transcript 跟随钉底 effect）：原 ResizeObserver 只 observe 内容盒（`.tr-root`）。视口尺寸变化——拖窗口、切布局、新开会话——只改滚动视口盒、不动内容盒，scrollTop 保持原位，底部几条消息滑进输入框底下；切走再切回之所以"又好了"，是重挂时的一次性重钉盖住了症状。修复：RO 同时 observe `scrollerRef`（视口盒），跟随期任何视口变化都重锚 live edge。EN 版滚动锚定条目已同步。
+
+**空态提示语轮播纪律**（`WelcomeComposer.tsx`）：placeholder 轮播 interval 依赖加 `focused`——失焦即停、聚焦回第 0 条；否则切专注模式时轮播与形态动画叠加造成卡顿。专注模式 tips 换行：形态动画期间隐藏 `.gui-tip`（`gui-morphing` 兄弟选择器）+ `max-width:100% text-wrap:balance`。
+
+**composer 停靠栏胶囊几何**（`gui-workspace.css`）：`.gui-composer-dock` 从 `align-items: stretch` 改 `flex-start`——连接器胶囊按内容自适应宽、靠左，不再整行铺满（`.gui-slot-error` 单独 `align-self: stretch` 保全宽）；ChatView 悬浮 composer 包裹 `pb-3 → pb-1`，「性能与用量」胶囊与底部间距收紧。
+
+**顶栏减法**：GuiHeader 移除 terminal / board / 右侧面板三个按钮；terminal 开关迁至 RightRail 底部组（新增 `terminalOpen`/`onToggleTerminal` prop，激活态 `gui-right-rail-btn--active`）；实例菜单整块迁出为 `InstanceButton.tsx`（自包含：system.meta 轮询、GitHub latest release 角标、hosts `/healthz` 可达性探测、browserHost 诊断，props 仅连接事实 + 增删改回调；`useSyncExternalStore` 第三参 getServerSnapshot 必填——静态渲染测试走 renderToStaticMarkup 会炸），挂侧栏 footer 左侧。GuiHeader 保留 `terminalOpen/onToggleTerminal`（开发服务器/项目动作要先开 dock）。app.tsx 实例 props 从 GuiHeader 调用点迁到 SessionSidebar 调用点。
+
+**侧边通道模型角色语义**（daemon `agent-session.ts #sideChannelModel` + 设置页选择器）：`sideChannelModel` 现在接受角色别名（`@tiny`、legacy `pi/tiny`、`*`）——经 `resolveModelRoleValue` 按角色分配实时解析，改角色模型即生效；纯 catalog id 仍走直查（旧配置兼容）；未知值回落会话模型。角色形状判定用新导出的 `isModelRoleAliasValue`（`model-resolver.ts`）。设置页选择器改为「跟随会话模型 / 跟随 TINY 角色 / 其余八个角色 / 具体模型」的顺序，存量具体模型仍可显示与选择。测试：`test/model-resolver.test.ts` 新增 `isModelRoleAliasValue` 5 例（@tiny 解析、legacy 前缀、* 别名、纯 id 否定、未配置自定义角色否定）。

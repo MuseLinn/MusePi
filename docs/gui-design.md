@@ -481,7 +481,7 @@ A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部�
 2. **折叠 spacer** `.gui-header-spacer`：仅 `data-collapsed="true"` 时渲染宽度——win/linux `calc(var(--gui-float-controls-width, 86px) + 8px)`；mac `calc(68px + var(--gui-float-controls-width, 86px) + 8px)`（84 − 16 基础 padding + 簇宽 + 8 间隙），220ms 宽度过渡。**禁止**再用内联 `paddingLeft` 凑数（已删除的 mac 172 / win 16 hack 即为反面教材——win 折叠态 16px 让标题 pill 被浮动簇压住）。
 3. **簇宽变量** `--gui-float-controls-width`：GuiHeader 内 ResizeObserver 实测簇宽发布到 `document.documentElement`。簇宽随运行态变化（devRunning 时多出预览按钮），必须实测而非常量。
 
-右侧避让：`hasOverlay`（win/linux）时头部 `paddingRight: 150`，与 `titleBarOverlay` 命中区对齐；右侧功能簇（暂停组 → 终端 → board → 右侧面板 → mini-chat → openin → 实例按钮）层级与 P-tier 退避维持 §3.1 既有约定，不在顶栏加新常驻项。
+右侧避让：`hasOverlay`（win/linux）时头部 `paddingRight: 150`，与 `titleBarOverlay` 命中区对齐；右侧功能簇（暂停组 → mini-chat → openin）层级与 P-tier 退避维持 §3.1 既有约定，不在顶栏加新常驻项。**2026-10-21 减法**：「终端」「board」「右侧面板」三个按钮已移出顶栏——终端开关改居会话右缘 RightRail 底部组（与面板折叠钮相邻，dsh 位置）；board 入口在侧栏菜单；右侧面板折叠仍由 RightRail 底部钮兜底。原实例按钮（本地/远程守护进程、版本、延迟、浏览器桥诊断）整块迁至侧栏底栏左侧（`InstanceButton`，状态点 + 「本地」胶囊，菜单内容不变），侧栏 footer 呈「实例在左、设置在右」两段布局。
 
 ### 会话导航回归 switcher
 
@@ -676,9 +676,16 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
 
 ### Undo-action toast (archive)
 
-- **Geometry**: bottom-center, `z-index: 880` — deliberately _below_ the update toast
-  (bottom-right, z 900) and clear of `.sh-toasts` (bottom strip, z 60). An OTA card and an
-  undo must never share a corner.
+- **Geometry**: the bottom-right corner, sharing one anchored column with the update
+  toast (`.gui-toast-corner`, z 910) — the OTA card and undo pills stack vertically in the
+  corner instead of competing for it, so they can never overlap. The corner is the single
+  home for app-initiated notices; `.sh-toasts` (bottom strip, z 60) stays clear.
+- **Kinds**: every toast carries a `kind` — `info` (default), `success`, `error` — drawn as
+  a leading icon with the icon and border tinted by kind while the surface stays neutral
+  glass. The app-level `musepi-gui-toast` event routes into this stack instead of the top
+  error banner: its detail may be a plain string or `{message, kind}`, and it defaults to
+  `error` to preserve the old banner semantics. Daemon-connection errors keep the top
+  banner.
 - **Content**: message + accent action button. Glass at 88% + shadow-overlay, 200ms
   enter (`translateY(8px)` → 0).
 - **Rule — same message replaces, never stacks.** Archiving three sessions in a row must
@@ -745,11 +752,19 @@ The PR/issue center is a **main-view page**, not a right-panel tab (the right gi
 - **Pages**: `PrBoardPage.tsx` is the page chrome (header + back-to-workspace); `pr-center.tsx` owns the shared body (`PrCenter` with PR / issues subtabs, tab choice persisted under `musepi-gui-prcenter-tab`). The body is width-capped (`.gui-prboard-body`, 880px) for reading comfort in the wide main column.
 - **PR subtab**: `Promise.all` of prStatus + prs + git.status + git.branches in one load. Current-branch PR card (state badge, check dots, mergeability, review decision, open/copy actions), or the create form when the branch has none (title prefilled from the branch, base pick main→master→first, remembered draft switch, push-then-create with abort on push failure, ahead-count hint); below it the repo's open PR list with per-row check dots and head→base refs.
 - **Issues subtab**: `Segmented` open/closed/all filter; label chips tinted with the label's own color; comment count; click opens the issue in the system browser.
+- **Search**: a query box atop the shared body filters both subtabs — title substring
+  (case-insensitive) or an exact `#number`; pasting a PR/issue URL surfaces a pinned
+  "open link" row above the list (`isLinkQuery` accepts http(s) only). Pure helpers
+  `matchesQuery` / `isLinkQuery` live in `pr-center.tsx`, covered by `test/pr-search.test.ts`.
+  i18n: `general.prSearchPlaceholder`, `general.prOpenLink`.
+- **Refresh behaviour**: reloads keep rendering the previous payload while refetching;
+  skeleton rows (`.gui-skeleton-row`) appear only on the very first load with nothing
+  cached — a refresh never blanks the pane.
 - **Daemon RPCs** (`packages/coding-agent/src/daemon/server.ts`): shared `runGh(cwd, args, timeoutMs)` helper (token injection + default 15s timeout; `exitCode === null` = gh missing). `github.prStatus` (current-branch PR; `{pr: null}` instead of an error when none), `github.issues` (open/closed/all, `--label`/`--author` filters), `github.prCreate` (title required, body defaults to title, `--draft` opt-in, 30s timeout, PR URL parsed from stdout with a URL regex), `git.push` (retries `-u origin HEAD` when the push reports no upstream).
 - **Pure helpers** (`packages/desktop-app/src/lib/pr-status.ts`): `rollupCheckState` (FAILURE/TIMED_OUT/ACTION_REQUIRED/CANCELLED/STARTUP_FAILURE → failure; SUCCESS/SKIPPED/NEUTRAL → pass; malformed/missing → pending/null), `prVisualState` ({isDraft, state} → draft/open/merged/closed badge tier), `branchToTitle` (branch name → Title Case, separators incl. `/`). Covered by `test/pr-status.test.ts`.
 - **Subtab persistence**: `musepi-gui-prcenter-tab` storage key; the PR draft checkbox persists under `musepi-gui-pr-draft`.
 - **i18n** (general domain): `pr board`, `open pull requests`, `issues`, `state open/closed/all`, `no open issues`, `no pr for branch`, `pr no checks`, `pr checks passing/failing/pending`, `pr mergeable`, `pr has conflicts`, `pr review approved/changes/required`, `pr title placeholder`, `pr base branch`, `pr description`, `create as draft`, `push and create`, `pr ahead count`.
-- **CSS** (`gui-workspace.css`): `gui-pr-card`, `gui-pr-meta`, `gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`, `gui-pr-merge--ok/--conflict`, `gui-pr-review`, `gui-pr-actions`, `gui-pr-create*` form family, `gui-issue-label`, `gui-prboard-title/body`; badge tiers reuse `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`. Radius tokens only (`--radius-xl/lg`, pills 999px).
+- **CSS** (`gui-workspace.css`): `gui-pr-card`, `gui-pr-meta`, `gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`, `gui-pr-merge--ok/--conflict`, `gui-pr-review`, `gui-pr-actions`, `gui-pr-create*` form family, `gui-issue-label`, `gui-prboard-title/body`, `gui-pr-search-row` + the reused `gui-ext-plugins-search` capsule, `gui-skeleton-row` (first-load skeleton, same recipe as `gui-cap-diag-skeleton`); badge tiers reuse `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`. Radius tokens only (`--radius-xl/lg`, pills 999px).
 
 ## 5ab. Session list rendering stability: field-level meta merge + memoized pipelines (2026-10-21)
 

@@ -3259,6 +3259,39 @@ export class DaemonServer {
 					branches,
 				};
 			}
+			case "git.identity": {
+				// Commit identity the way git resolves it: `git config user.*`
+				// walks local → global → system, so one read reports the
+				// effective value. `source` says whether the repo pins its
+				// own identity (local) or inherits the machine's (global).
+				const p = (params ?? {}) as { cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const read = (args: string[]): { exitCode: number; stdout: string } => {
+					const res = Bun.spawnSync({
+						cmd: ["git", ...args],
+						cwd,
+						stdout: "pipe",
+						stderr: "pipe",
+						windowsHide: true,
+					});
+					return { exitCode: res.exitCode ?? 1, stdout: res.stdout.toString().trim() };
+				};
+				const root = read(["rev-parse", "--show-toplevel"]);
+				// Outside a repo git still knows the machine-wide identity —
+				// `git config user.*` resolves global/system without a
+				// repository, so a non-repo cwd degrades to that instead of
+				// reporting nothing.
+				const name = read(["config", "user.name"]).stdout || null;
+				const email = read(["config", "user.email"]).stdout || null;
+				const localEmail = read(["config", "--local", "--get", "user.email"]);
+				const source =
+					root.exitCode !== 0
+						? ("global" as const)
+						: localEmail.exitCode === 0 && localEmail.stdout
+							? ("local" as const)
+							: ("global" as const);
+				return { name, email, source };
+			}
 			case "git.push": {
 				// Push the repo's current branch. First try a plain `git
 				// push`; a branch with no upstream asks for `-u`, so retry

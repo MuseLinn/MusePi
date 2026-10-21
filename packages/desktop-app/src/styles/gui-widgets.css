@@ -4470,23 +4470,40 @@
 /* Undo-action toasts (openchamber "every archive message offers Undo").
  * Bottom-center, below the update toast's z-index, so an OTA card and an
  * undo never land in the same corner. */
-.gui-action-toasts {
+/* 统一内部通知浮窗：右下角贴边堆叠，位于更新提示（bottom:20, z 900）
+ * 之上（z 910），同一时刻两者都出现的概率极低，真重叠时通知在上。 */
+.gui-toast-corner {
 	position: fixed;
-	left: 50%;
-	bottom: 24px;
-	transform: translateX(-50%);
-	z-index: 880;
+	right: 20px;
+	bottom: 20px;
+	z-index: 910;
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	align-items: flex-end;
+	gap: 8px;
+	pointer-events: none;
+}
+.gui-toast-corner .gui-update-toast {
+	position: relative;
+	right: auto;
+	bottom: auto;
+	z-index: auto;
+	pointer-events: auto;
+}
+.gui-action-toasts {
+	position: relative;
+	z-index: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
 	gap: 8px;
 	pointer-events: none;
 }
 .gui-action-toast {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	padding: 8px 10px 8px 14px;
+	gap: 10px;
+	padding: 9px 12px;
 	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
@@ -4497,6 +4514,24 @@
 	font-size: var(--ui-font-size-sm);
 	pointer-events: auto;
 	animation: gui-action-toast-in 200ms var(--spring, ease);
+}
+/* 状态色：图标与描边随 kind 微染，底色保持玻璃中性——浮窗不尖叫。 */
+.gui-action-toast--success .gui-action-toast-icon {
+	color: var(--color-success, #4ade80);
+}
+.gui-action-toast--error {
+	border-color: color-mix(in oklab, var(--color-danger, #f87171) 45%, transparent);
+}
+.gui-action-toast--error .gui-action-toast-icon {
+	color: var(--color-danger, #f87171);
+}
+.gui-action-toast--info .gui-action-toast-icon {
+	color: var(--color-text-muted);
+}
+.gui-action-toast-icon {
+	flex-shrink: 0;
+	width: 15px;
+	height: 15px;
 }
 .gui-action-toast-msg {
 	white-space: nowrap;

@@ -44,6 +44,8 @@ export const settings = {
 	"settings.multilingual": "Multilingual (multilingual-e5-large)",
 	"settings.instanceLabel": "Instance label",
 	"settings.instances": "Instances",
+	"settings.currentInstanceBadge": "Current",
+	"settings.hostUrlPlaceholder": "ws://host:8300",
 	"settings.intfloatMultilingualE5.info": "intfloat/multilingual-e5-large (1024d), cross-language recall",
 	"settings.memory.mnemopi.autoRecall": "Mnemopi Auto Recall",
 	"settings.recallLocalMemoriesFirst": "Recall local memories into the first turn of each session",
@@ -261,8 +263,10 @@ export const settings = {
 	"settings.sideChannelModel": "Side-channel model",
 	"settings.sideChannelModelDescription":
 		"Model for side-channel turns: selection→ask, prompt enhance, idle recap and auto titles",
-	"settings.sideChannelModelLabel": "Leave empty to follow the session model (same as the terminal)",
+	"settings.sideChannelModelLabel":
+		"Leave empty to follow the session model; pick a role to follow that role's model assignment (role changes apply immediately)",
 	"settings.followSessionModel": "Follow session model",
+	"settings.followRoleModel": "Follow the {role} role",
 	"settings.busyEnterBehavior": "Enter behavior while busy",
 	"settings.busyEnterBehaviorDescription": "Busy only; Cmd/Ctrl+Enter uses the other behavior",
 	"settings.busyEnterQueue": "Queue",

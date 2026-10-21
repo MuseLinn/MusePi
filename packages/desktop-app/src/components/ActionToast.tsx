@@ -2,11 +2,13 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { dismissActionToast, getToasts, subscribeActionToasts } from "../lib/action-toast";
+import { Icon } from "../vendor/oc-icons";
 
 /**
- * Undo-action toast stack. Sits bottom-center, clear of
- * the update toast (bottom-right, z-index 900) and the shell's `.sh-toasts`
- * (bottom strip, z-index 60) so a notice and an undo never overlap.
+ * The unified in-app toast stack: icon + message + one optional action,
+ * bottom-right above the update toast's slot. Every transient notice —
+ * undo offers, action feedback, routed `musepi-gui-toast` reports — lands
+ * here so the app has ONE internal notification surface.
  */
 export function ActionToastStack(): ReactNode {
 	const toasts = useSyncExternalStore(subscribeActionToasts, getToasts);
@@ -27,7 +29,11 @@ export function ActionToastStack(): ReactNode {
 	return (
 		<div className="gui-action-toasts" role="status" aria-live="polite">
 			{toasts.map(toast => (
-				<div key={toast.id} className="gui-action-toast">
+				<div key={toast.id} className={`gui-action-toast gui-action-toast--${toast.kind}`}>
+					<Icon
+						name={toast.kind === "success" ? "check" : toast.kind === "error" ? "error-warning" : "information"}
+						className="gui-action-toast-icon"
+					/>
 					<span className="gui-action-toast-msg">{toast.message}</span>
 					{toast.actionLabel && (
 						<button

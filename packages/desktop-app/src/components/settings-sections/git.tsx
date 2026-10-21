@@ -186,6 +186,26 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	};
 
 	// ── Identities ───────────────────────────────────────────────────────
+	// 系统身份：git config 解析出的本机身份（git.identity RPC，daemon 侧
+	// local→global 链解析）。只读，列在自定义身份之前；没有自定义默认身份时
+	// 它就是实际使用的身份，所以带「默认」徽标。
+	const [systemIdentity, setSystemIdentity] = useState<{
+		name: string | null;
+		email: string | null;
+		source: "local" | "global";
+	} | null>(null);
+	useEffect(() => {
+		if (!rpc) return;
+		void rpc
+			.request<{ name?: string | null; email?: string | null; source?: "local" | "global" }>("git.identity", {})
+			.then(res => {
+				if (!res) return;
+				setSystemIdentity({ name: res.name ?? null, email: res.email ?? null, source: res.source ?? "global" });
+			})
+			.catch(() => {
+				// 守护进程版本早于 git.identity：不显示系统身份行。
+			});
+	}, [rpc]);
 	const [identities, setIdentities] = useState<GitIdentity[]>(() => {
 		try {
 			const raw = localStorage.getItem("musepi-gui-git-identities");
@@ -375,7 +395,26 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						{t("general.newIdentity")}
 					</button>
 				</div>
-				{identities.length === 0 ? (
+				{systemIdentity && (systemIdentity.name || systemIdentity.email) && (
+					<div className="gui-identity-row" title={t("general.systemIdentityDescription")}>
+						<Icon name="key" className="h-4 w-4 text-[var(--color-text-faint)]" />
+						<div className="min-w-0 flex-1">
+							<div className="text-[13.5px]">
+								{t("general.systemIdentity")}
+								{!defaultIdentity && <span className="gui-identity-default">{t("transcript.default")}</span>}
+								{systemIdentity.source === "local" && (
+									<span className="gui-identity-default">{t("settings.currentProject")}</span>
+								)}
+							</div>
+							<div className="truncate text-[12px] text-[var(--color-text-muted)]">
+								{systemIdentity.name && systemIdentity.email
+									? `${systemIdentity.name} · ${systemIdentity.email}`
+									: (systemIdentity.name ?? systemIdentity.email)}
+							</div>
+						</div>
+					</div>
+				)}
+				{identities.length === 0 && !(systemIdentity && (systemIdentity.name || systemIdentity.email)) ? (
 					<div className="gui-settings-row">
 						<div className="gui-settings-row-desc">{t("general.noIdentitiesYet")}</div>
 					</div>

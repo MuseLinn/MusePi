@@ -573,8 +573,13 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
 
 ### 撤销 toast（归档）
 
-- **位置**：底部居中，`z-index: 880` —— 刻意**低于**更新 toast（右下，z 900），并避开
-  `.sh-toasts`（底部条带，z 60）。OTA 卡片与撤销不得共用同一角。
+- **位置**：右下角——与更新 toast 同柱共存（`.gui-toast-corner`，z 910）：OTA 卡片落在角落，
+  撤销小药丸叠在它上方，二者不再争夺同一角落，因此**绝无重叠**（不再是「底居中避开右下」
+  的两角分居）。这个角落是应用主动通知的唯一归处；`.sh-toasts`（底部条带，z 60）保持让开。
+- **种类**：每条 toast 带一个 `kind`——`info`（默认）/ `success` / `error`——画成前导图标，
+  图标与描边按 kind 微染，玻璃底色保持中性。应用级 `musepi-gui-toast` 事件改路由进这条
+  栈（此前走顶部错误横幅）：detail 允许纯字符串或 `{message, kind}`，缺省 `error` 以保留
+  旧横幅语义；守护进程连接类错误仍用顶部横幅。
 - **内容**：文案 + accent 动作按钮。88% 玻璃 + shadow-overlay，200ms 入场
   （`translateY(8px)` → 0）。
 - **规则——同文案替换，绝不堆叠**。连续归档三个会话不该立起一堵一模一样的 toast；
@@ -621,6 +626,7 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
 - **标签带行为**：dnd-kit 横向排序（整个标签即拖拽把手，8px 触发距离保证单击仍是单击）；纵向滚轮映射为横向滚动（Shift/Cmd-滚轮与原生横向增量放行）；滚动容器两端 24px 渐隐（`SESSION_TAB_EDGE_FADE_PX`），激活标签自动滚入视野且在渐隐前停住（`lib/session-tab-reveal.ts`）。
 - **状态**：`working` 在标签上转小加载图标；`unread`（非当前）显示强调色小圆点——两者与侧栏同源（`sessionMeta` / `unreadSessions`）。
 - **当前标签内容**：标签带的当前标签承载原有顶栏标题/切换器整块（GuiHeader 的 `titleBlock`）；设置关闭时顶栏渲染与以前完全一致。i18n：`settings.sessionTabs*`、`session tabs`、`session tab working/unread`、`ctx percent`、`tab next/prev shortcut*`。
+- **标签减法（2026-10-21 同批）**：tab 模式下 GuiHeader 不渲染 AgentAvatar、remote chip、ceiling 文字与整个 `gui-header-subrow`——一条标签就是一行字，工作/未读状态由 spinner 与小圆点表达，省下的横向空间留给长标题。
 - **测试**：`packages/desktop-app/test/session-tabs.test.ts`（16 例：上限挤出、邻居激活、幽灵 id、环绕邻接、重排、持久化 round-trip + 损坏 JSON）。
 
 ## 5aa. PR/问题面板：侧栏入口 → 主视图整页（2026-10-21）
@@ -630,11 +636,21 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **页面拆分**：`PrBoardPage.tsx` 是页面骨架（页头 + 返回工作区）；`pr-center.tsx` 承载共享主体（`PrCenter`，PR / 问题两个子页签，选择记在 `musepi-gui-prcenter-tab`）。主体限宽（`.gui-prboard-body`，880px），在宽阔的主视图列里保持阅读舒适。
 - **PR 子页签**：一次 `Promise.all`（prStatus + prs + git.status + git.branches）。当前分支的 PR 卡片（状态徽章、检查圆点、可合并性、评审结论、打开/复制操作）；分支没有 PR 时是创建表单（标题从分支名预填、目标分支偏好 main→master→第一个、记住的草稿开关、先推送后创建且推送失败即中止、待推送计数提示）；下方是仓库打开的 PR 列表，每行带检查圆点和 head→base 分支。
 - **问题子页签**：`Segmented` 打开/已关闭/全部过滤；标签按各自原色着色；带评论数；点击在系统浏览器打开。
+- **搜索**：共享主体顶部一个搜索框同时过滤两个子页签——标题子串（不分大小写）或 `#编号`
+  精确命中；粘贴一条 PR/问题链接会在列表上方浮出钉住的「打开链接」行（`isLinkQuery` 只认
+  http(s)）。纯函数 `matchesQuery` / `isLinkQuery` 在 `pr-center.tsx`，`test/pr-search.test.ts`
+  覆盖。i18n：`general.prSearchPlaceholder`、`general.prOpenLink`。
+- **刷新行为**：重新加载时沿用上一份数据继续渲染、后台重取；骨架行（`.gui-skeleton-row`）
+  只在首次加载且无任何缓存时出现——刷新绝不把面板清空。
 - **daemon RPC**（`packages/coding-agent/src/daemon/server.ts`）：共享助手 `runGh(cwd, args, timeoutMs)`（token 注入 + 默认 15s 超时；`exitCode === null` 表示 gh 未安装）。`github.prStatus`（当前分支 PR；无 PR 返回 `{pr: null}` 而非报错）、`github.issues`（打开/已关闭/全部，支持 `--label`/`--author`）、`github.prCreate`（标题必填；正文缺省用标题；可选 `--draft`；30s 超时；PR URL 用正则从 stdout 解析）、`git.push`（报无上游时以 `-u origin HEAD` 重试）。
 - **纯函数助手**（`packages/desktop-app/src/lib/pr-status.ts`）：`rollupCheckState`（FAILURE/TIMED_OUT/ACTION_REQUIRED/CANCELLED/STARTUP_FAILURE → 失败；SUCCESS/SKIPPED/NEUTRAL → 通过；畸形/缺省 → 进行中/null）；`prVisualState`（{isDraft, state} → draft/open/merged/closed 徽章档）；`branchToTitle`（分支名 → Title Case，含 `/` 的分隔符都转空格）。`test/pr-status.test.ts` 覆盖。
+
+## 5ab. 顶栏减法：按钮归位与实例入口迁移（2026-10-21）
+
+顶栏右上角只留工作状态与运行控制。本轮减法：**「终端」挪进会话右缘 RightRail 底部组**（与面板折叠钮相邻，dsh 同款位置；`RightRail` 新增 `terminalOpen`/`onToggleTerminal` prop，app.tsx 把 `toggleTerminalDock` 改喂 ChatView）；**「board」「切换面板」按钮移除**——board 入口仍在侧栏菜单，右侧面板折叠由 RightRail 底部钮兜底。**实例信息（本地/远程守护进程、版本、延迟、浏览器桥诊断）迁出顶栏**，落成自包含组件 `packages/desktop-app/src/components/InstanceButton.tsx`（状态全自管：meta 轮询、hosts 表单、browserHost 外部 store；props 只有连接事实与增删改回调），挂**侧栏 footer 左侧**（`justify-between`，右侧仍为设置/协作/断开组）；GuiHeader 卸下 `connected/daemonUrl/onReconnect/hosts/onSwitchHost/onAddHost/onRemoveHost` 七个 prop。header 的开发服务器按钮与项目动作仍保留 `terminalOpen/onToggleTerminal`（运行命令要先开 dock）。EN 版 §5t 右侧功能簇条目已同步。
 - **子页签持久化**：`musepi-gui-prcenter-tab` 存储键；PR 草稿勾选记在 `musepi-gui-pr-draft`。
-- **i18n**（general 域）：`pr board`、`open pull requests`、`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`。
-- **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`、`gui-prboard-title/body`；徽章档复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
+- **i18n**（general 域）：`pr board`、`open pull requests`、`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`、`pr search placeholder`、`pr open link`。
+- **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`、`gui-prboard-title/body`、`gui-pr-search-row` + 复用 `gui-ext-plugins-search` 胶囊、`gui-skeleton-row`（首载骨架，与 `gui-cap-diag-skeleton` 同配方）；徽章档复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
 
 ## 5ab. 会话列表渲染稳定性：字段级 meta 合并 + 管线 memo 化（2026-10-21）
 
