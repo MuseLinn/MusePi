@@ -5500,6 +5500,17 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 }
 
+/* The session column is the floating composer's containing block: the wrap is
+ * a direct child of this column (sibling of .gui-chat-body, outside the
+ * scroll box so focus mode can collapse the body to height 0) and is
+ * position:absolute with inset-inline:0. Without a positioned ancestor here
+ * the wrap's containing block falls through to .gui-scene — which spans the
+ * middle area INCLUDING the right panel's slot, so the composer painted
+ * across the open panel instead of staying inside the session view. */
+.gui-chat-column {
+	position: relative;
+}
+
 /* ── Workspace card gutters (user: 会话卡、右面板、rail 都拥有空态卡的
  * 那一层外距) — every card carries the gutter margin so card-to-card and
  * card-to-window spacing read as one uniform breath. Appended last so the
