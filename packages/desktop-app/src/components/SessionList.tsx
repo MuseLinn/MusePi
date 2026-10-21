@@ -168,10 +168,20 @@ const WORKING_RAYS = Array.from({ length: 8 }, (_, i) => {
 	);
 });
 
-/** Build the indent prefix for one flat node. Hierarchy is expressed by
- *  indentation alone — no ├─/└─ connector glyphs (redundant visual noise). */
-function treePrefix(indent: number): string {
-	return "  ".repeat(indent);
+/** Indent guides for one flat node: one vertical line per ancestor level
+ *  (sakura-branch styling lives in CSS). Replaces the old whitespace-only
+ *  prefix — width per level is still 1em so title alignment is unchanged.
+ *  The deepest guide (--branch) carries the blossom dot, i.e. the flower
+ *  sits on the branch the row hangs off. */
+function treeGuides(indent: number): ReactNode {
+	if (indent <= 0) return null;
+	return (
+		<span className="gui-tree-prefix" aria-hidden="true">
+			{Array.from({ length: indent }, (_, i) => (
+				<span key={i} className={`gui-tree-guide${i === indent - 1 ? " gui-tree-guide--branch" : ""}`} />
+			))}
+		</span>
+	);
 }
 
 /** 折叠态持久化(openchamber 文件夹层级 parity):父行 chevron 收起后整棵
@@ -344,7 +354,7 @@ const SessionRow = memo(function SessionRow({
 					style={fill ? { background: fill } : undefined}
 					title={status ? t(SESSION_STATUS_KEY[status] ?? status) : undefined}
 				/>
-				<span className="gui-tree-prefix">{treePrefix(indent)}</span>
+				{treeGuides(indent)}
 				<span className="gui-session-title">
 					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
 				</span>

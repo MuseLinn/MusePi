@@ -650,11 +650,68 @@
 }
 
 /* Tree prefixes in the sidebar */
+/* Indent guides: one vertical line per ancestor level, replacing the old
+ * whitespace-only prefix (width per level stays 1em — two monospace spaces —
+ * so title alignment is unchanged). The guides stretch through the row's
+ * vertical padding so adjacent rows read as one continuous trunk; the
+ * deepest guide (--branch) carries the sakura blossom. */
 .gui-tree-prefix {
-	color: var(--color-text-faint);
-	font-family: var(--font-mono);
-	font-size: var(--ui-font-size-sm);
-	white-space: pre;
+	display: inline-flex;
+	flex-direction: row;
+	align-self: stretch;
+	margin: -5px 0;
+}
+
+.gui-tree-guide {
+	position: relative;
+	width: 1em;
+	flex-shrink: 0;
+}
+
+.gui-tree-guide::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 0;
+	bottom: 0;
+	width: 1.5px;
+	transform: translateX(-50%);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-border) 72%, transparent);
+	transition: background 140ms ease-out;
+}
+
+/* The branch this row hangs off: a hair stronger line + the blossom dot
+ * (sakura pink, works on both schemes; brightens with the row). */
+.gui-tree-guide--branch::before {
+	width: 2px;
+	background: color-mix(in oklab, var(--color-border) 88%, var(--color-text-faint) 12%);
+}
+
+.gui-tree-guide--branch::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	height: 5px;
+	width: 5px;
+	transform: translate(-50%, -50%);
+	border-radius: 999px;
+	background: #f2a2bb;
+	box-shadow:
+		0 0 0 2px color-mix(in oklab, #f2a2bb 22%, transparent),
+		0 0 6px color-mix(in oklab, #f2a2bb 55%, transparent);
+	transition:
+		transform 140ms ease-out,
+		box-shadow 140ms ease-out;
+}
+
+.gui-session-row:hover .gui-tree-guide--branch::after,
+.gui-session-row-active .gui-tree-guide--branch::after {
+	transform: translate(-50%, -50%) scale(1.25);
+	box-shadow:
+		0 0 0 2px color-mix(in oklab, #f2a2bb 30%, transparent),
+		0 0 8px color-mix(in oklab, #f2a2bb 75%, transparent);
 }
 
 /* 折叠 chevron(openchamber 文件夹层级 parity):父行左侧 14px 占位,箭头

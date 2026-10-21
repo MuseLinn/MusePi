@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **子会话行左侧长出了樱花树枝**：侧栏会话树的子会话行现在用一条竖线挂在自己的父行下面，最深的那根线端带一朵小樱花，谁是谁的孩子一眼就能看出来；悬停或选中时线和花微微发亮。每级缩进宽度不变，标题对齐和以往完全一致。
+  - EN: Child session rows now grow a sakura branch: each row hangs off its parent on a vertical guide line ending in a small blossom, so parentage reads at a glance; the line and flower glow faintly on hover or selection. Per-level indent width is unchanged, so title alignment is exactly as before.
 - **窗口顶栏可以开多会话标签页了**：设置→外观→聊天里打开「多会话标签页」，最近打开的会话会以标签排在顶栏——点标签即切换，拖动能排序，悬停出现关闭钮、中键也能关。关标签不会删会话；关掉当前标签会自动切到旁边那个，旁边没有了就开一个全新的草稿会话。工作中的会话标签转着小圆圈，有未读消息的带小圆点。标签列表只存在本机，最多记住 10 个；快捷键 ⌘Tab / ⌘⇧Tab 左右切换（可在设置→快捷键里改）。
   - EN: The window header can now show session tabs. Enable "Session tabs" in Settings → Appearance → Chat: recently opened sessions line up as tabs in the header — click to switch, drag to reorder, close via the hover button or a middle click. Closing a tab never deletes the session; closing the active one activates its neighbour, and with no neighbour left it opens a fresh draft session. A working session spins a small circle on its tab, an unread one shows a dot. The tab list lives only on this machine and remembers up to 10; ⌘Tab / ⌘⇧Tab cycle left and right (rebindable in Settings → Shortcuts).
 - **Windows 安装器换上了品牌化的安装向导**：安装过程不再是一屏灰白的默认界面，而是带着 MusePi 配色的分步向导——欢迎、选择安装位置、进度、完成，每一步都是应用自己的视觉。界面由 WebView2 承载、资源名带内容哈希，卸载界面同样换了品牌外观。
