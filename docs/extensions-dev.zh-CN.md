@@ -484,6 +484,50 @@ musepi 的覆盖面**更广**，不必为了“对齐 DSH”补 P3 —— 补了
 
 **与 DSH 的实质差异只有钩子的执行模型**：DSH 桥的是 Claude Code 的 shell 命令钩子（带 `hookSpecificOutput.hookEventName` 事件门控、`${CLAUDE_PLUGIN_ROOT}` 替换、exit 2 阻断），而 musepi 的 hooks 是 JS/TS 模块（`HookFactory`），命令钩子另走 `.claude/hooks/{pre,post}/` 的目录约定。若要补 command 型钩子，应作为 hooks 引擎的一种新来源接进现有 `HookEvent` 联合，而不是新建一套与 DSH 对齐的独立桥。
 
+## 17. 模块身份契约：共享实例 vs 重新求值(2026-10-18)
+
+插件的**模块实例**有两个互相排斥的诉求，而 Bun 只提供两种行为、没有第三种：
+
+| 写法 | 行为 |
+|---|---|
+| `import(path)` | 命中 ESM 缓存，返回**已存在的实例** |
+| `import(path?tag)` | 重新求值，返回**新实例** |
+
+实测确认(`?t=1` 与 `?t=2` 是两个不同对象)，也印证了本文件的既有结论：裸
+`file://` 加查询串**不能**击穿缓存，必须用 raw path。
+
+### 两个语义各自的用途
+
+- **首次装载必须共享实例。** 会话装载、`ext.call` 的 artifact compiler、cordis
+  宿主级装载是三条独立入口；若各自 import 一份，模块级状态就有三份。真实缺陷：
+  插件在一个实例上捕获了会话的 `ExtensionContext`，而它的 RPC 在另一个实例上
+  读同一个模块变量，读到 `null`。
+- **重载必须重新求值。** 磁盘上新字节不重新求值就永远不生效——那是 HMR 的前提。
+
+### 落地方式
+
+`loadLegacyPiModule(path, { fresh })`：
+
+- `fresh` 缺省 → 不带查询串，取进程内同一实例
+- `fresh: true` → 附加单调 `?mtime=` 标签，重新求值
+
+调用方约定：**只有显式重载传 `fresh: true`**，其余一律缺省。已接线的重载点：
+
+- `ExtensionRunner.reloadExtension()`(会话内 HMR)
+- `CordisDynamicExtensionRuntime.reloadPlugin()` 与句柄 `reload()`(宿主级)
+
+### 顺带去掉的 bundled 特判
+
+原先 `isBundledPluginPath()` 给 `src/bundled-plugins/` 下的插件开第二条装载语义
+(裸 `import`、不做源码图快照)。`discovery/builtin.ts` 的注释自陈「a bundled unit
+is a package the distribution ships, **not a separate kind of thing**」——措辞与
+实现矛盾：随发行版交付不是「另一种插件」。该分支已删除，内置与用户插件走同一条
+`loadLegacyPiModule`；代价是首次装载多一次源码图快照，换来的是**单一插件身份类别**。
+
+**回归锚点**：`packages/coding-agent/test/extension-module-identity.test.ts`
+四条——两次独立装载只求值一次、`fresh` 重新求值、编辑后 `fresh` 拿到新字节而普通
+装载仍取旧字节、形似 bundled 目录的路径不再有第二类语义。
+
 ## 18. `pi.effect` / `pi.state` 只属于 cordis 插件(2026-10-19)
 
 宿主有两条插件装载路径，能力面**故意不同**：cordis 插件拿得到 `pi.effect` 与

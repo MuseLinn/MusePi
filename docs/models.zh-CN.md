@@ -365,17 +365,31 @@ providers:
 - 为新的 API ID 注册自定义 stream handler
 - 注册自定义 OAuth provider
 
+凭据不存放在宿主 AuthStorage 里的 provider 有两个专用字段：
+
+- **`label`** —— 模型选择器 provider 分组标题显示的展示名。注册 id 仍是身份
+  （收藏、角色 pin、`session.setModel` 都按 `provider` + `id` 取键），因此改
+  展示名不会让已存的选择失效。不传则选择器原样显示 id。
+- **`resolveApiKey`** —— 扩展自持的凭据解析，在 AuthStorage 级联**之前**查询，
+  并对该 provider 取代后者。多账号（「账号池」）扩展把账号存在自己的加密存储
+  里，宿主「一个 provider 一条凭据」的存储形态装不下；没有这个钩子，这类
+  provider 的模型能被发现、能进列表，但每一轮都会以 "No API key found" 失败。
+  返回 `undefined` 是合法答案，宿主同样报「缺少凭据」。
+
+`resolveApiKey` 与 `apiKey`、`oauth` 并列，满足「定义模型时必须提供认证」的校验。
+
 ## Auth 与 API key 解析顺序
 
 请求某个 provider 的密钥时，生效顺序为：
 
 1. 运行时覆盖（CLI `--api-key`）
 2. 配置覆盖（`models.yml` 的 `providers.<name>.apiKey`）
-3. 存储的 OAuth 凭据（含刷新）
-4. 登录来源的存储 API key
-5. 环境变量映射（`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等）
-6. 其他存储的 API key，例如 broker-migrated 副本
-7. ModelRegistry 回退解析器（`models.yml` 自定义 provider，使用 env-name-or-literal 语义）
+3. 扩展凭据解析器（`registerProvider({ resolveApiKey })`）
+4. 存储的 OAuth 凭据（含刷新）
+5. 登录来源的存储 API key
+6. 环境变量映射（`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等）
+7. 其他存储的 API key，例如 broker-migrated 副本
+8. ModelRegistry 回退解析器（`models.yml` 自定义 provider，使用 env-name-or-literal 语义）
 
 `models.yml` 的 `apiKey` 行为：
 

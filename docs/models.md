@@ -378,17 +378,36 @@ Extensions can register providers at runtime (`pi.registerProvider(...)`), inclu
 - custom stream handler registration for new API IDs
 - custom OAuth provider registration
 
+Two fields exist for providers whose credentials do not live in the host's
+AuthStorage:
+
+- **`label`** — the display name the model picker's provider section header
+  shows. The registration id stays the identity (favorites, role pins and
+  `session.setModel` key on `provider` + `id`), so renaming a label never
+  invalidates a stored pick. Omit it and the picker shows the id verbatim.
+- **`resolveApiKey`** — extension-owned credential resolution, consulted
+  BEFORE the AuthStorage cascade and replacing it for that provider. A
+  multi-account ("pool") extension keeps its accounts in its own encrypted
+  store, which the host's one-credential-per-provider store cannot represent;
+  without this hook such a provider's models are discovered and listed, then
+  every turn fails with "No API key found". Returning `undefined` is valid and
+  surfaces as that same missing-credential error.
+
+`resolveApiKey` also satisfies the "auth required when defining models"
+validation, alongside `apiKey` and `oauth`.
+
 ## Auth and API key resolution order
 
 When requesting a key for a provider, effective order is:
 
 1. Runtime override (CLI `--api-key`)
 2. Config override (`models.yml` `providers.<name>.apiKey`)
-3. Stored OAuth credential (with refresh)
-4. Login-sourced stored API key
-5. Environment variable mapping (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
-6. Other stored API key, such as a broker-migrated copy
-7. ModelRegistry fallback resolver (`models.yml` custom providers, using env-name-or-literal semantics)
+3. Extension credential resolver (`registerProvider({ resolveApiKey })`)
+4. Stored OAuth credential (with refresh)
+5. Login-sourced stored API key
+6. Environment variable mapping (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
+7. Other stored API key, such as a broker-migrated copy
+8. ModelRegistry fallback resolver (`models.yml` custom providers, using env-name-or-literal semantics)
 
 `models.yml` `apiKey` behavior:
 
