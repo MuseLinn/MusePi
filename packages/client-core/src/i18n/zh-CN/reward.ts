@@ -6,12 +6,12 @@ export const reward = {
 	"reward.rewardReadyDesc": "奖励已准备好，可以开始使用。",
 	"reward.rewardStart": "开始体验",
 	"reward.rewardShare": "分享",
-	"reward.rewardReplay": "重放动画",	"reward claim success": "领取成功",
+	"reward.rewardReplay": "重放动画",
+	"reward claim success": "领取成功",
 	"reward ready desc": "奖励已准备好，可以开始使用。",
 	"reward start": "开始体验",
 	"reward share": "分享",
 	"reward replay": "重放动画",
-
 } as const;
 
 export type RewardKey = keyof typeof reward;

@@ -487,7 +487,12 @@ function SkillDrawer({
 					>
 						<span className="gui-toggle-knob" />
 					</button>
-					<button type="button" className="gui-cap-drawer-close" aria-label={t("settings.close")} onClick={requestClose}>
+					<button
+						type="button"
+						className="gui-cap-drawer-close"
+						aria-label={t("settings.close")}
+						onClick={requestClose}
+					>
 						<Icon name="close" className="h-4 w-4" />
 					</button>
 				</div>
@@ -970,7 +975,9 @@ function InstalledSkillsPane({
 													{t("tools.skillDisabled")}
 												</span>
 											) : (
-												<span className="gui-ext-item-tag gui-ext-item-tag--gui">{t("tools.skillEnabled")}</span>
+												<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+													{t("tools.skillEnabled")}
+												</span>
 											)}
 											{!uninstallable(s) && skillLevel(s) === "builtin" && (
 												<span className="gui-cap-card-note">{t("tools.skillBundledNoUninstall")}</span>
@@ -1011,7 +1018,9 @@ function InstalledSkillsPane({
 											{skillLevelLabel(s)} · {skillOriginLabel(s)}
 										</span>
 										{s.ignored && (
-											<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("tools.skillDisabled")}</span>
+											<span className="gui-ext-item-tag gui-ext-item-tag--err">
+												{t("tools.skillDisabled")}
+											</span>
 										)}
 									</div>
 								);

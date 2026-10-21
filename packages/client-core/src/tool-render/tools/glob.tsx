@@ -40,11 +40,15 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					args.gitignore === false && <Badge>{t("tools.noGitignore")}</Badge>,
 					args.hidden === false && <Badge>{t("tools.noHidden")}</Badge>,
 					timeout !== null && <Badge>{t("tools.timeoutSWithSecs", { secs: String(timeout) })}</Badge>,
-					fileCount !== null && <Badge tone="accent">{t("tools.fileWithCount", { count: String(fileCount) })}</Badge>,
+					fileCount !== null && (
+						<Badge tone="accent">{t("tools.fileWithCount", { count: String(fileCount) })}</Badge>
+					),
 					scopePath !== null && <Badge>{t("tools.inWithPath", { path: homePath(scopePath) })}</Badge>,
 					truncated && (
 						<Badge tone="warn">
-							{resultLimit !== null ? t("tools.truncatedAtWithCount", { count: String(resultLimit) }) : t("tools.truncated")}
+							{resultLimit !== null
+								? t("tools.truncatedAtWithCount", { count: String(resultLimit) })
+								: t("tools.truncated")}
 						</Badge>
 					),
 				]}

@@ -121,7 +121,8 @@ export const transcript = {
 	"transcript.btwFailedCheckDaemon": "/btw 失败，请检查 daemon 连接",
 	"transcript.followUp": "追问…",
 	"transcript.enterAskEscCloses": "Enter 提问 — Esc 关闭",
-	"transcript.backBottom": "回到底部",	"round tools {count}": "工具 ×{count}",
+	"transcript.backBottom": "回到底部",
+	"round tools {count}": "工具 ×{count}",
 	"explored the codebase": "探索了代码库",
 	"round commands {count}": "命令 ×{count}",
 	"round changed {count}": "更改 {count} 文件",
@@ -235,7 +236,6 @@ export const transcript = {
 	"follow up…": "追问…",
 	"Enter to ask — Esc closes": "Enter 提问 — Esc 关闭",
 	"back to bottom": "回到底部",
-
 } as const;
 
 /** Key union for the transcript domain (source of truth). */

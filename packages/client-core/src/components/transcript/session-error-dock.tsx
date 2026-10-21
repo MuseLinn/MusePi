@@ -180,7 +180,9 @@ export function SessionErrorDock({ entries, working, verifyTranscript }: Session
 				title={t("general.modelError")}
 				raw={banner.reason}
 				meta={
-					banner.attempt === undefined ? undefined : t("general.retryAttemptWithCount", { count: String(banner.attempt) })
+					banner.attempt === undefined
+						? undefined
+						: t("general.retryAttemptWithCount", { count: String(banner.attempt) })
 				}
 			/>
 		);

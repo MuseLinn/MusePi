@@ -1219,8 +1219,12 @@ export function ContextPanel({
 															</button>
 															<button
 																type="button"
-																title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
-																aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
+																title={
+																	maximized ? t("settings.restorePanel") : t("settings.maximizePanel")
+																}
+																aria-label={
+																	maximized ? t("settings.restorePanel") : t("settings.maximizePanel")
+																}
 																className="gui-pane-tool"
 																onClick={toggleMaximized}
 															>
@@ -1555,7 +1559,7 @@ function SubSessionsSection({
 													row.status === "parked" ||
 													row.status === "aborted"
 														? row.status
-														: "settings.idle",
+														: "idle",
 												// The registry scan only lists
 												// refs that own a transcript file.
 												hasSessionFile: true,
@@ -1880,7 +1884,9 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 			 * capture a screenshot thumbnail. */}
 			{agentTabs.length > 0 && (
 				<div ref={agentTabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{t("tools.agentTabs")}:</span>
+					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
+						{t("tools.agentTabs")}:
+					</span>
 					{agentTabs.map(tab => (
 						<button
 							key={tab.targetId}

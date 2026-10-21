@@ -101,20 +101,20 @@ function greeting(hour: number): string {
 // English keys double as the en-US fallback (the i18n map only carries
 // zh-CN); zh translations live in guest-client/src/i18n/zh-CN.ts.
 const TIP_KEYS = [
-	"try / for commands and @ for context",
-	"press {mod}N to start a new session",
-	"ask the agent to explain a file with @",
-	"approval cards appear when a tool needs your ok",
-	"dictate with the mic button in the composer",
-	"annotate images before sending them",
-	"schedule idle-window tasks from the task center",
-	"type /autoresearch to run experiments",
-	"favorite models pin to the top of the model picker",
-	"plan mode makes the agent outline before editing",
-	"goal mode turns your next message into a goal",
-	"paused sessions survive daemon restarts",
-	"pick a preset mode for the new session",
-	"customize the scrollbar skin in appearance settings",
+	"settings.tryCommandsContext",
+	"settings.pressNStartNewWithMod",
+	"settings.askAgentExplainFile",
+	"settings.approvalCardsAppearTool",
+	"settings.dictateMicButtonComposer",
+	"settings.annotateImagesBeforeSending",
+	"settings.scheduleIdleWindowTasks",
+	"settings.typeAutoresearchRunExperiments",
+	"settings.favoriteModelsPinTop",
+	"settings.planModeMakesAgent",
+	"settings.goalModeTurnsYour",
+	"settings.pausedSessionsSurviveDaemon",
+	"settings.pickPresetModeNew",
+	"settings.customizeScrollbarSkinAppearance",
 ] as const;
 
 /** Pick a random tip key, avoiding the current one. */
@@ -692,12 +692,12 @@ export function WelcomeComposer({
 			: suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT);
 	// Empty-state placeholder carousel (new-task 空态 hints).
 	const PLACEHOLDER_TIPS = [
-		"ask anything, / for commands, @ for context…",
-		"welcome tip search web",
-		"welcome tip voice input",
-		"welcome tip task center",
-		"welcome tip annotate image",
-		"welcome tip autoresearch",
+		"composer.askAnythingCommands.info",
+		"settings.welcomeTipSearchWeb",
+		"settings.welcomeTipVoiceInput",
+		"settings.welcomeTipTaskCenter",
+		"settings.welcomeTipAnnotateImage",
+		"settings.welcomeTipAutoresearch",
 	] as const;
 	// Empty-state placeholder rotates through capability hints (new-task
 	// 空态): keep the base shortcut hint first, then surface the newer
@@ -1488,9 +1488,7 @@ export function WelcomeComposer({
 						<div className="gui-welcome-setup mb-3" role="status">
 							<div className="gui-welcome-setup-text">
 								<span className="gui-welcome-setup-title">{t("general.setUpModelStart")}</span>
-								<span className="gui-welcome-setup-desc">
-									{t("general.connectProviderAdd.info")}
-								</span>
+								<span className="gui-welcome-setup-desc">{t("general.connectProviderAdd.info")}</span>
 							</div>
 							<button
 								type="button"

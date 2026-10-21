@@ -286,7 +286,8 @@ function ModelDownloadCard({ client }: { client: SessionClient }): ReactNode {
 			})}
 			{error && (
 				<p className="sh-vp-note sh-vp-note--err">
-					{models?.find(m => m.key === error.modelKey)?.label ?? t("settings.voiceModelDownloadFailed")}: {error.message}
+					{models?.find(m => m.key === error.modelKey)?.label ?? t("settings.voiceModelDownloadFailed")}:{" "}
+					{error.message}
 				</p>
 			)}
 		</section>
@@ -541,7 +542,9 @@ export function VoicePanel({ client }: { client: SessionClient }): ReactNode {
 					</button>
 					<button type="button" className="sh-btn" onClick={runSttTest} title={t("settings.speechTestSttTitle")}>
 						<Mic size={13} aria-hidden />
-						<span>{sttState === "recording" ? t("settings.voiceRecordingStop") : t("settings.speechTestStt")}</span>
+						<span>
+							{sttState === "recording" ? t("settings.voiceRecordingStop") : t("settings.speechTestStt")}
+						</span>
 					</button>
 				</div>
 				{ttsSnap.phase === "loading" && <p className="sh-vp-note">{t("settings.voiceOutputTesting")}</p>}

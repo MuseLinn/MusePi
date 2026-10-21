@@ -26,7 +26,8 @@ export const agents = {
 	// Completed while the user wasn't looking — cleared on open.
 	"agents.new": "New",
 	// Sub-session row action: dock the subagent's full conversation over the panel.
-	"agents.previewSubagentPanel": "Preview in panel",	"context {count}": "context {count}",
+	"agents.previewSubagentPanel": "Preview in panel",
+	"context {count}": "context {count}",
 	"transcript unavailable: {reason}": "transcript unavailable: {reason}",
 	"no transcript available": "no transcript available",
 	"message {name}…": "message {name}…",
@@ -42,5 +43,4 @@ export const agents = {
 	"agent status parked": "agent status parked",
 	"agent status aborted": "agent status aborted",
 	"preview subagent in panel": "preview subagent in panel",
-
 } as const satisfies Record<AgentsKey, string>;

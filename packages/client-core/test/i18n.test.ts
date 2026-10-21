@@ -9,7 +9,9 @@ describe("i18n t()", () => {
 	test("named-param replacement works on the localized string", () => {
 		setLocale("zh-CN");
 		expect(t("general.stagedCount", { count: 3 })).toBe("已暂存 3 个文件");
-		expect(t("sessions.retryWithAttemptWithMaxWithReason", { attempt: 2, max: 3, reason: "boom" })).toBe("重试 2/3：boom");
+		expect(t("sessions.retryWithAttemptWithMaxWithReason", { attempt: 2, max: 3, reason: "boom" })).toBe(
+			"重试 2/3：boom",
+		);
 	});
 
 	test("all {name} placeholders are replaceable from call-site params", () => {

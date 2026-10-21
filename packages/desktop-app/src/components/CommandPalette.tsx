@@ -308,7 +308,9 @@ export function CommandPalette({
 								}}
 								className="h-3.5 w-3.5"
 							/>
-							<span>{id === "all" ? t("tools.all") : id === "actions" ? t("general.actions") : t("general.tasks")}</span>
+							<span>
+								{id === "all" ? t("tools.all") : id === "actions" ? t("general.actions") : t("general.tasks")}
+							</span>
 						</button>
 					))}
 				</div>
@@ -356,7 +358,9 @@ export function CommandPalette({
 					)}
 					{showTasks && (
 						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">{query.trim() ? t("general.tasks") : t("general.recentSessions")}</div>
+							<div className="gui-palette-section-title">
+								{query.trim() ? t("general.tasks") : t("general.recentSessions")}
+							</div>
 							{searching ? (
 								<div className="gui-palette-empty">…</div>
 							) : query.trim() && rows !== null && rows.length === 0 ? (

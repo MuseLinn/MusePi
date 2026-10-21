@@ -247,7 +247,9 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 					)}
 				</KvGrid>
 			)}
-			{input !== null && input.length > 0 && <Output text={input} variant="code" maxLines={10} title={t("tools.input")} />}
+			{input !== null && input.length > 0 && (
+				<Output text={input} variant="code" maxLines={10} title={t("tools.input")} />
+			)}
 			{input === null && !running && (args.input !== undefined || args._input !== undefined) && (
 				<InvalidArg what="input" />
 			)}

@@ -537,12 +537,7 @@ class SessionList implements Component {
 				lines.push(truncateToWidth(theme.fg("muted", "  No sessions found"), width));
 			} else {
 				// "Current folder" scope - hint to try "all"
-				lines.push(
-					truncateToWidth(
-						theme.fg("muted", `  ${t("commands.noSessionsCurrent.info")}`),
-						width,
-					),
-				);
+				lines.push(truncateToWidth(theme.fg("muted", `  ${t("commands.noSessionsCurrent.info")}`), width));
 			}
 			return lines;
 		}
@@ -932,7 +927,9 @@ export class SessionSelectorComponent extends Container {
 
 	#showError(message: string): void {
 		this.#messageContainer.clear();
-		this.#messageContainer.addChild(new Text(theme.fg("error", t("commands.errorWith0", replaceTabs(message))), 1, 0));
+		this.#messageContainer.addChild(
+			new Text(theme.fg("error", t("commands.errorWith0", replaceTabs(message))), 1, 0),
+		);
 		this.#messageContainer.addChild(new Spacer(1));
 	}
 

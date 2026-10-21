@@ -218,7 +218,11 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		});
 		expect(advancedToggle().getAttribute("aria-expanded")).toBe("true");
 		// 依次切媒体/演示稿/原型 chip,展开态保持。
-		for (const label of [t("creation.creationMediaVideo"), t("creation.creationTabDeck"), t("creation.creationTabPrototype")]) {
+		for (const label of [
+			t("creation.creationMediaVideo"),
+			t("creation.creationTabDeck"),
+			t("creation.creationTabPrototype"),
+		]) {
 			act(() => {
 				chipButton(label).click();
 			});

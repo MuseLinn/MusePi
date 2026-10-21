@@ -113,7 +113,9 @@ export function AutoresearchPanel({
 				<div className="gui-ar-title">
 					<span className="gui-ar-title-name">{t("settings.autoresearch")}</span>
 					{status?.active && (
-						<span className="gui-ar-title-branch">{status.active.branch ?? t("settings.autoresearchNoBranch")}</span>
+						<span className="gui-ar-title-branch">
+							{status.active.branch ?? t("settings.autoresearchNoBranch")}
+						</span>
 					)}
 				</div>
 				{loading ? (
@@ -169,7 +171,9 @@ export function AutoresearchPanel({
 											{r.exitCode !== null && r.exitCode !== 0 && (
 												<span className="gui-ar-run-err">exit {r.exitCode}</span>
 											)}
-											{r.timedOut && <span className="gui-ar-run-err">{t("settings.autoresearchTimedOut")}</span>}
+											{r.timedOut && (
+												<span className="gui-ar-run-err">{t("settings.autoresearchTimedOut")}</span>
+											)}
 										</div>
 									</div>
 								))

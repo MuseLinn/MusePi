@@ -336,7 +336,9 @@ export function BranchBar({
 		<div className="tr-branch">
 			<button type="button" className="tr-branch-bar" onClick={() => setOpen(v => !v)} aria-expanded={open}>
 				<span className="tr-branch-line" aria-hidden />
-				<span className="tr-branch-count">{t("transcript.nodeHasBranchesWithCount", { count: String(count) })}</span>
+				<span className="tr-branch-count">
+					{t("transcript.nodeHasBranchesWithCount", { count: String(count) })}
+				</span>
 				<span className="tr-branch-line" aria-hidden />
 			</button>
 			{/* Kept mounted while closed so BOTH directions animate (the list is
@@ -1164,7 +1166,9 @@ const EntryRow = memo(function EntryRow({
 			case "compaction":
 				return (
 					<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
-						<span>{t("transcript.contextCompactedTokensWithCount", { count: fmtTokens(entry.tokensBefore) })}</span>
+						<span>
+							{t("transcript.contextCompactedTokensWithCount", { count: fmtTokens(entry.tokensBefore) })}
+						</span>
 					</div>
 				);
 			case "branch_summary":

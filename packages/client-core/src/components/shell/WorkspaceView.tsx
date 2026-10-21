@@ -257,7 +257,9 @@ function WorkspaceCard({
 				</div>
 				<div className="sh-ws-card-meta">
 					<span className="sh-ws-meta">{when}</span>
-					<span className="sh-ws-meta">{t("transcript.messagesWithCount", { count: String(session.messageCount) })}</span>
+					<span className="sh-ws-meta">
+						{t("transcript.messagesWithCount", { count: String(session.messageCount) })}
+					</span>
 					{session.cwd && (
 						<span className="sh-ws-meta sh-ws-meta-cwd" title={session.cwd}>
 							{shortenPath(session.cwd)}

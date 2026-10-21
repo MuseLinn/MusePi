@@ -248,9 +248,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					<div className="sh-connect-sub">
 						<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
 					</div>
-					<p className="sh-connect-empty-text">
-						{t("settings.notConnectedYetConnect")}
-					</p>
+					<p className="sh-connect-empty-text">{t("settings.notConnectedYetConnect")}</p>
 					{recent.length > 0 && (
 						<div className="sh-connect-recent">
 							<span className="sh-field-label">{t("settings.recentConnections")}</span>
@@ -370,9 +368,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 						<span className="sh-connect-method-ico">⌘</span>
 						<span className="sh-connect-method-body">
 							<span className="sh-connect-method-title">{t("settings.pairCode")}</span>
-							<span className="sh-connect-method-desc">
-								{t("settings.enter6DigitCode")}
-							</span>
+							<span className="sh-connect-method-desc">{t("settings.enter6DigitCode")}</span>
 						</span>
 						<span className="sh-connect-method-chev" aria-hidden="true">
 							›
@@ -421,9 +417,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									{pairBusy ? t("settings.connecting2") : t("settings.pair")}
 								</button>
 							</div>
-							<p className="sh-field-hint">
-								{t("settings.noAddressShown.info")}
-							</p>
+							<p className="sh-field-hint">{t("settings.noAddressShown.info")}</p>
 						</form>
 					</div>
 				</div>

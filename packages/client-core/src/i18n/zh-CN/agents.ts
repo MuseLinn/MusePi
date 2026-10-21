@@ -24,7 +24,8 @@ export const agents = {
 	// Completed while the user wasn't looking — cleared on open.
 	"agents.new": "新",
 	// 子会话行的内嵌预览动作：在右侧面板就地停靠子代理完整会话。
-	"agents.previewSubagentPanel": "在面板中预览",	"context {count}": "上下文 {count}",
+	"agents.previewSubagentPanel": "在面板中预览",
+	"context {count}": "上下文 {count}",
 	"transcript unavailable: {reason}": "无法获取记录：{reason}",
 	"no transcript available": "暂无可用记录",
 	"message {name}…": "给 {name} 发消息…",
@@ -40,7 +41,6 @@ export const agents = {
 	"agent status parked": "已挂起",
 	"agent status aborted": "已终止",
 	"preview subagent in panel": "在面板中预览",
-
 } as const;
 
 /** Key union for the agents domain (source of truth). */

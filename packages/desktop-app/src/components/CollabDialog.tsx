@@ -379,7 +379,12 @@ export function CollabDialog({
 			: t("settings.shareSessionLiveLocal");
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("settings.mobileRemoteControl")} className="gui-collab-dialog">
+		<DialogFrame
+			open={open}
+			onClose={onClose}
+			label={t("settings.mobileRemoteControl")}
+			className="gui-collab-dialog"
+		>
 			<div className="gui-dialog-head">
 				<span className="text-[14px] font-semibold">{t("settings.mobileRemoteControl")}</span>
 				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
@@ -627,7 +632,9 @@ export function CollabDialog({
 							);
 						})}
 						{(channels ?? []).length === 0 && (
-							<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.noChannelsConfigured")}</div>
+							<div className="text-[12px] text-[var(--color-text-faint)]">
+								{t("settings.noChannelsConfigured")}
+							</div>
 						)}
 					</div>
 					{/* Plugin inventory (game-mod style): builtin + hot-plugged

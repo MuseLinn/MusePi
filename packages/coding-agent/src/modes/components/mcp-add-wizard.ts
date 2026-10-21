@@ -284,9 +284,7 @@ export class MCPAddWizard extends Container {
 			this.#contentContainer.addChild(new Spacer(1));
 		}
 
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.onlyLettersNumbers.info")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.onlyLettersNumbers.info")), 0, 0));
 		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.enterContinueEsc.info")), 0, 0));
 	}
 
@@ -311,9 +309,7 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.navigateEnterSelect.info")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info")), 0, 0));
 	}
 
 	#renderCommandStep(): void {
@@ -381,9 +377,7 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0));
 	}
 
 	#renderEnvVarNameStep(): void {
@@ -434,9 +428,7 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0));
 	}
 
 	#renderConfirmStep(): void {
@@ -487,9 +479,7 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0));
 	}
 
 	handleInput(keyData: string): void {
@@ -858,9 +848,7 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0));
 	}
 
 	#renderOAuthAuthUrlStep(): void {
@@ -873,9 +861,7 @@ export class MCPAddWizard extends Container {
 		this.#inputField.setValue(this.#state.oauthAuthUrl);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.eGHttps.info")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.eGHttps.info")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.enterContinueEsc.info2")), 0, 0));
 	}
@@ -890,9 +876,7 @@ export class MCPAddWizard extends Container {
 		this.#inputField.setValue(this.#state.oauthTokenUrl);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.eGHttps.info2")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.eGHttps.info2")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.enterContinueEsc.info2")), 0, 0));
 	}
@@ -954,9 +938,7 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0));
 	}
 
 	#renderApiKeyStep(): void {
@@ -1186,9 +1168,7 @@ export class MCPAddWizard extends Container {
 		this.#contentContainer.addChild(new Text(t("auth.launchingOauthFlow"), 0, 0));
 		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.browserWillOpenAutomatically")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(
-			new Text(theme.fg("warning", t("commands.browserDoesnT.info")), 0, 0),
-		);
+		this.#contentContainer.addChild(new Text(theme.fg("warning", t("commands.browserDoesnT.info")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.text10")), 0, 0));
 		this.#requestRender();
@@ -1224,7 +1204,11 @@ export class MCPAddWizard extends Container {
 			this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.runningConnectionHealthCheck")), 0, 0));
 			const spinnerFrames = theme.spinnerFrames;
 			const initialFrame = spinnerFrames[0] ?? "|";
-			const healthText = new Text(theme.fg("muted", `${initialFrame} ${t("commands.checkingServerConnection")}`), 0, 0);
+			const healthText = new Text(
+				theme.fg("muted", `${initialFrame} ${t("commands.checkingServerConnection")}`),
+				0,
+				0,
+			);
 			this.#contentContainer.addChild(healthText);
 
 			let spinnerIndex = 0;
@@ -1244,10 +1228,7 @@ export class MCPAddWizard extends Container {
 			if (this.#onTestConnectionCallback) {
 				try {
 					const { promise: timeoutPromise, reject: timeoutReject } = Promise.withResolvers<never>();
-					const timer = setTimeout(
-						() => timeoutReject(new Error(t("commands.healthCheckTimedOut"))),
-						10_000,
-					);
+					const timer = setTimeout(() => timeoutReject(new Error(t("commands.healthCheckTimedOut"))), 10_000);
 					try {
 						await Promise.race([
 							this.#onTestConnectionCallback(this.#buildServerConfigWithAuth(true)),
@@ -1304,30 +1285,22 @@ export class MCPAddWizard extends Container {
 
 			// Provide helpful tips based on error type
 			if (cancelled) {
-				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", t("commands.tipChooseRetry.info")), 0, 0),
-				);
+				this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.tipChooseRetry.info")), 0, 0));
 			} else if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
 				this.#contentContainer.addChild(
 					new Text(theme.fg("muted", t("commands.tipCompleteAuthorization.info")), 0, 0),
 				);
 			} else if (errorMsg.includes("Invalid OAuth URLs")) {
-				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", t("commands.tipCheckOauth.info")), 0, 0),
-				);
+				this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.tipCheckOauth.info")), 0, 0));
 			} else if (errorMsg.includes("ECONNREFUSED")) {
-				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", t("commands.tipVerifyOauth.info")), 0, 0),
-				);
+				this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.tipVerifyOauth.info")), 0, 0));
 			}
 
 			this.#contentContainer.addChild(new Spacer(1));
 			this.#contentContainer.addChild(new Text(`${theme.fg("accent", "→ ")}${t("commands.retry")}`, 0, 0));
 			this.#contentContainer.addChild(new Text(t("auth.editOauthSettings"), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
-			this.#contentContainer.addChild(
-				new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0),
-			);
+			this.#contentContainer.addChild(new Text(theme.fg("muted", t("commands.navigateEnterSelect.info2")), 0, 0));
 			this.#requestRender();
 
 			// Set up as a selector step

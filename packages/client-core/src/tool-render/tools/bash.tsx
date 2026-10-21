@@ -79,7 +79,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			<Badges
 				items={[
 					cwd && <Badge>{t("tools.cwdWithCwd", { cwd: homePath(cwd) })}</Badge>,
-					timeoutSeconds !== null && <Badge>{t("tools.timeoutSWithSecs", { secs: String(timeoutSeconds) })}</Badge>,
+					timeoutSeconds !== null && (
+						<Badge>{t("tools.timeoutSWithSecs", { secs: String(timeoutSeconds) })}</Badge>
+					),
 					args.pty === true && <Badge tone="accent">{t("tools.pty")}</Badge>,
 					!job && args.async === true && <Badge tone="accent">{t("tools.async")}</Badge>,
 					head !== null && <Badge>{t("tools.headWithCount", { count: String(head) })}</Badge>,

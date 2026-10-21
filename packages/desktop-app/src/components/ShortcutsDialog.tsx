@@ -130,7 +130,12 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 	);
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("general.keyboardShortcuts")} className="gui-dialog--shortcuts">
+		<DialogFrame
+			open={open}
+			onClose={onClose}
+			label={t("general.keyboardShortcuts")}
+			className="gui-dialog--shortcuts"
+		>
 			<div className="gui-dialog-head">
 				<div className="flex items-center gap-2.5">
 					<Icon name="command" className="h-5 w-5 text-[var(--color-text-muted)]" />

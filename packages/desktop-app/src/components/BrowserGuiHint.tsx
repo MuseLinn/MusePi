@@ -91,11 +91,7 @@ export function BrowserGuiHint({
 					×
 				</button>
 			</div>
-			<div className="gui-update-toast-notes">
-				{t(
-					"settings.managedBrowserPages.info",
-				)}
-			</div>
+			<div className="gui-update-toast-notes">{t("settings.managedBrowserPages.info")}</div>
 			<div className="gui-update-toast-actions">
 				<button type="button" className="gui-btn gui-btn-primary" onClick={enableAndWatch}>
 					{t("settings.enableWatch")}

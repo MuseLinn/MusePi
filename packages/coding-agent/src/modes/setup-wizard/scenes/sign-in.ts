@@ -228,8 +228,7 @@ export class SignInTab implements SetupTab {
 					this.#statusLines.push(theme.fg("dim", message));
 					this.host.requestRender();
 				},
-				onManualCodeInput: () =>
-					this.#showPrompt({ message: t("setup.pasteAuthorizationCode") }),
+				onManualCodeInput: () => this.#showPrompt({ message: t("setup.pasteAuthorizationCode") }),
 			});
 			// Provider-scoped online refresh so the just-persisted credential re-runs
 			// discovery instead of reusing a fresh authoritative cache row (#5780).

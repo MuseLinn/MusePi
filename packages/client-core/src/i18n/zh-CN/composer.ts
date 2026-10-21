@@ -138,7 +138,8 @@ export const composer = {
 	"composer.plusPickerNoPlugins": "还没有已启用的插件",
 	"composer.plusPickerNoFiles": "工作区还没有文件",
 	"composer.plusPickerNoResults": "没有匹配的结果",
-	"composer.plusPickerTruncated": "已显示前 {n} 条 — 输入更多字符缩小范围",	"type your response…": "输入您的回复…",
+	"composer.plusPickerTruncated": "已显示前 {n} 条 — 输入更多字符缩小范围",
+	"type your response…": "输入您的回复…",
 	"read-only session — watching only": "只读会话 — 仅观看",
 	"ask anything, / for commands, @ for context…": "问任何事，/ 命令，@ 上下文…",
 	"waiting for session…": "等待会话…",
@@ -248,7 +249,6 @@ export const composer = {
 	"plus picker no files": "工作区还没有文件",
 	"plus picker no results": "没有匹配的结果",
 	"plus picker truncated": "已显示前 {n} 条 — 输入更多字符缩小范围",
-
 } as const;
 
 /** Key union for the composer domain (source of truth). */

@@ -12,8 +12,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parse as parseBabel } from "@babel/parser";
-import type * as Babel from "@babel/types";
 import _traverse from "@babel/traverse";
+import type * as Babel from "@babel/types";
+
 const traverse = _traverse as unknown as typeof import("@babel/traverse").default;
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -25,7 +26,19 @@ const DOMAIN_RE = new RegExp(`^(${DOMAINS.join("|")})\\.(.+)$`);
 /** JSX attribute names whose value is an id/enum, not copy. */
 const VALUE_ATTRS = new Set(["name", "tone", "pair", "value", "kind", "type", "icon", "mode", "status", "role"]);
 /** Object property names that carry enum values. */
-const VALUE_PROPS = new Set(["kind", "type", "value", "phase", "status", "tone", "role", "action", "mode", "availability", "severity"]);
+const VALUE_PROPS = new Set([
+	"kind",
+	"type",
+	"value",
+	"phase",
+	"status",
+	"tone",
+	"role",
+	"action",
+	"mode",
+	"availability",
+	"severity",
+]);
 
 /** Strip the domain prefix: "settings.close" → "close". */
 function bare(text: string): string | null {
@@ -38,7 +51,11 @@ function collectFiles(): string[] {
 	const args = process.argv.slice(2).filter(a => !a.startsWith("--"));
 	if (args.length > 0) return args.map(a => path.resolve(a));
 	let stdin = "";
-	try { stdin = fs.readFileSync(".tmp-error-files.txt", "utf8"); } catch { stdin = fs.readFileSync(0, "utf8"); }
+	try {
+		stdin = fs.readFileSync(".tmp-error-files.txt", "utf8");
+	} catch {
+		stdin = fs.readFileSync(0, "utf8");
+	}
 	const files = new Set<string>();
 	for (const line of stdin.split("\n")) {
 		const line0 = line.trim();

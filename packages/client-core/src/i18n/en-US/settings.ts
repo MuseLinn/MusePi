@@ -3,17 +3,14 @@ import type { SettingsKey } from "../zh-CN/settings.js";
 export const settings = {
 	// ── Memory + Files & LSP settings (schema-driven; keys = schema ui labels) ──
 	"settings.memory.general.backend": "Memory Backend",
-	"settings.offLocalSummary.info":
-		"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+	"settings.offLocalSummary.info": "Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
 	"settings.general": "General",
 	"settings.noMemorySubsystemRuns": "No memory subsystem runs",
-	"settings.localRolloutSummarisationPipeline":
-		"Local rollout summarisation pipeline (memory_summary.md)",
+	"settings.localRolloutSummarisationPipeline": "Local rollout summarisation pipeline (memory_summary.md)",
 	"settings.hindsight": "Hindsight",
 	"settings.vectorizeHindsightRemoteMemory": "Vectorize Hindsight remote memory service",
 	"settings.mnemopi": "Mnemopi",
-	"settings.localSqliteRecallRetain":
-		"Local SQLite recall/retain backend with optional embeddings",
+	"settings.localSqliteRecallRetain": "Local SQLite recall/retain backend with optional embeddings",
 	"settings.memory.autoLearn.autoLearn": "Auto-Learn (experimental)",
 	"settings.afterAgentStops.info":
 		"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills",
@@ -22,8 +19,7 @@ export const settings = {
 	"settings.autoRunOne.desc":
 		"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.",
 	"settings.memory.mnemopi.dbPath": "Mnemopi DB Path",
-	"settings.optionalSqliteDb.info":
-		"Optional SQLite DB path. Defaults to the agent memories directory.",
+	"settings.optionalSqliteDb.info": "Optional SQLite DB path. Defaults to the agent memories directory.",
 	"settings.memory.mnemopi.bank": "Mnemopi Bank",
 	"settings.optionalSharedBank.info":
 		"Optional shared bank base name. Per-project modes derive project-local banks from it.",
@@ -39,8 +35,7 @@ export const settings = {
 	"settings.perProject": "Per project",
 	"settings.projectLocalMnemopiBank": "Project-local Mnemopi bank per cwd basename",
 	"settings.perProject2": "Per project (tagged)",
-	"settings.writeProjectLocal.info":
-		"Write to a project-local bank but merge project + shared recall results",
+	"settings.writeProjectLocal.info": "Write to a project-local bank but merge project + shared recall results",
 	"settings.memory.mnemopi.embeddingVariant": "Embedding variant",
 	"settings.localEmbeddingModel.desc":
 		"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.",
@@ -49,32 +44,26 @@ export const settings = {
 	"settings.multilingual": "Multilingual (multilingual-e5-large)",
 	"settings.instanceLabel": "Instance label",
 	"settings.instances": "Instances",
-	"settings.intfloatMultilingualE5.info":
-		"intfloat/multilingual-e5-large (1024d), cross-language recall",
+	"settings.intfloatMultilingualE5.info": "intfloat/multilingual-e5-large (1024d), cross-language recall",
 	"settings.memory.mnemopi.autoRecall": "Mnemopi Auto Recall",
-	"settings.recallLocalMemoriesFirst":
-		"Recall local memories into the first turn of each session",
+	"settings.recallLocalMemoriesFirst": "Recall local memories into the first turn of each session",
 	"settings.memory.mnemopi.autoRetain": "Mnemopi Auto Retain",
-	"settings.retainCompletedConversationTurns":
-		"Retain completed conversation turns into local Mnemopi memory",
+	"settings.retainCompletedConversationTurns": "Retain completed conversation turns into local Mnemopi memory",
 	"settings.memory.mnemopi.polyphonicRecall": "Mnemopi Polyphonic Recall",
 	"settings.enable4Voice.info":
 		"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion",
 	"settings.memory.mnemopi.enhancedRecall": "Mnemopi Enhanced Recall",
-	"settings.enableTieredQuery.info":
-		"Enable the tiered query result cache for repeated and similar recall queries",
+	"settings.enableTieredQuery.info": "Enable the tiered query result cache for repeated and similar recall queries",
 	"settings.memory.mnemopi.proactiveLinking": "Mnemopi Proactive Linking",
 	"settings.ingestNewMemories.info":
 		"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories",
 	"settings.memory.mnemopi.disableEmbeddings": "Mnemopi Disable Embeddings",
-	"settings.forceDeterministicFtsOnly":
-		"Force deterministic FTS-only recall instead of vector embeddings",
+	"settings.forceDeterministicFtsOnly": "Force deterministic FTS-only recall instead of vector embeddings",
 	"settings.memory.mnemopi.embeddingModel": "Mnemopi Embedding Model",
 	"settings.advancedExplicitEmbedding.info":
 		"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.",
 	"settings.memory.mnemopi.embeddingApiUrl": "Mnemopi Embedding API URL",
-	"settings.optionalOpenaiCompatibleEmbedding":
-		"Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
+	"settings.optionalOpenaiCompatibleEmbedding": "Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
 	"settings.memory.mnemopi.embeddingApiKey": "Mnemopi Embedding API Key",
 	"settings.optionalEmbeddingApiKey": "Optional embedding API key passed to Mnemopi",
 	"settings.memory.mnemopi.llmMode": "Mnemopi LLM Mode",
@@ -83,13 +72,11 @@ export const settings = {
 	"settings.none": "None",
 	"settings.disableMnemopiLlmBacked": "Disable Mnemopi LLM-backed extraction",
 	"settings.online": "Online (tiny)",
-	"settings.useOnlineTinyModel":
-		"Use the online tiny model (the TINY role from /models, else @smol)",
+	"settings.useOnlineTinyModel": "Use the online tiny model (the TINY role from /models, else @smol)",
 	"settings.remote": "Remote",
 	"settings.useMnemopiRemoteLlm": "Use the Mnemopi remote LLM settings below",
 	"settings.memory.mnemopi.llmBaseUrl": "Mnemopi LLM Base URL",
-	"settings.optionalOpenaiCompatibleLlm":
-		"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
+	"settings.optionalOpenaiCompatibleLlm": "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
 	"settings.memory.mnemopi.llmApiKey": "Mnemopi LLM API Key",
 	"settings.optionalLlmApiKey": "Optional LLM API key for Mnemopi remote mode",
 	"settings.memory.mnemopi.llmModel": "Mnemopi LLM Model",
@@ -104,18 +91,15 @@ export const settings = {
 	"settings.globalOneShared.desc2":
 		"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
 	"settings.oneSharedBankEvery": "One shared bank — every project sees the same memories",
-	"settings.isolatedBankPer.info":
-		"Isolated bank per cwd basename — projects cannot see each other's memories",
+	"settings.isolatedBankPer.info": "Isolated bank per cwd basename — projects cannot see each other's memories",
 	"settings.sharedBankRetains.info":
 		"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together",
 	"settings.memory.hindsight.autoRecall": "Hindsight Auto Recall",
 	"settings.recallMemoriesFirstTurn": "Recall memories on the first turn of each session",
 	"settings.memory.hindsight.autoRetain": "Hindsight Auto Retain",
-	"settings.retainTranscriptEveryN":
-		"Retain transcript every N turns and at session boundaries",
+	"settings.retainTranscriptEveryN": "Retain transcript every N turns and at session boundaries",
 	"settings.memory.hindsight.retainMode": "Hindsight Retain Mode",
-	"settings.fullSessionUpsert.info":
-		"full-session = upsert one document per session, last-turn = chunked",
+	"settings.fullSessionUpsert.info": "full-session = upsert one document per session, last-turn = chunked",
 	"settings.fullSession": "Full session",
 	"settings.upsertOneDocumentPer": "Upsert one document per session (recommended)",
 	"settings.lastTurn": "Last turn",
@@ -127,12 +111,10 @@ export const settings = {
 	"settings.sessionStartCreate.desc":
 		"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.",
 	"settings.files.editing.editMode": "Edit Mode",
-	"settings.selectEditToolVariant":
-		"Select the edit tool variant (replace, patch, hashline, or apply_patch)",
+	"settings.selectEditToolVariant": "Select the edit tool variant (replace, patch, hashline, or apply_patch)",
 	"settings.editing": "Editing",
 	"settings.files.editing.fuzzyMatch": "Fuzzy Match",
-	"settings.acceptHighConfidenceFuzzy":
-		"Accept high-confidence fuzzy matches for whitespace differences",
+	"settings.acceptHighConfidenceFuzzy": "Accept high-confidence fuzzy matches for whitespace differences",
 	"settings.files.editing.fuzzyMatchThreshold": "Fuzzy Match Threshold",
 	"settings.similarityThresholdAcceptingFuzzy": "Similarity threshold (0-1) for accepting fuzzy matches",
 	"settings.lenient": "Lenient",
@@ -140,20 +122,17 @@ export const settings = {
 	"settings.default": "Default",
 	"settings.strict": "Strict",
 	"settings.files.editing.abortFailedPreview": "Abort on Failed Preview",
-	"settings.abortStreamingEditTool":
-		"Abort streaming edit tool calls when patch preview fails",
+	"settings.abortStreamingEditTool": "Abort streaming edit tool calls when patch preview fails",
 	"settings.files.editing.blockAutoGenerated": "Block Auto-Generated Files",
 	"settings.preventEditingFiles.info":
 		"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)",
 	"settings.files.editing.enforceSeenLineGuard": "Enforce Seen-Line Guard",
-	"settings.rejectEditsAnchored.info":
-		"Reject edits anchored on lines a prior read/search never displayed in full",
+	"settings.rejectEditsAnchored.info": "Reject edits anchored on lines a prior read/search never displayed in full",
 	"settings.lineNumbers": "Line Numbers",
 	"settings.prependLineNumbersRead": "Prepend line numbers to read tool output by default",
 	"settings.reading": "Reading",
 	"settings.files.reading.defaultReadLimit": "Default Read Limit",
-	"settings.defaultNumberLines.info":
-		"Default number of lines returned when agent calls read without a limit",
+	"settings.defaultNumberLines.info": "Default number of lines returned when agent calls read without a limit",
 	"settings.files.reading.markdownPreviews": "Markdown Previews",
 	"settings.renderMarkdownRead.info":
 		"Render Markdown read results as formatted terminal Markdown previews instead of raw source",
@@ -161,17 +140,13 @@ export const settings = {
 	"settings.returnStructuralCode.info":
 		"Return structural code summaries when read is called without an explicit selector",
 	"settings.files.readSummaries.proseSummaries": "Prose Summaries",
-	"settings.returnStructuralSummariesMarkdown":
-		"Return structural summaries for Markdown and plain text reads",
+	"settings.returnStructuralSummariesMarkdown": "Return structural summaries for Markdown and plain text reads",
 	"settings.files.readSummaries.readSummaryBodyLines": "Read Summary Body Lines",
-	"settings.minimumMultilineBodyLiteral":
-		"Minimum multiline body or literal length before read summaries collapse it",
+	"settings.minimumMultilineBodyLiteral": "Minimum multiline body or literal length before read summaries collapse it",
 	"settings.files.readSummaries.readSummaryCommentLines": "Read Summary Comment Lines",
-	"settings.minimumMultilineBlockComment":
-		"Minimum multiline block comment length before read summaries collapse it",
+	"settings.minimumMultilineBlockComment": "Minimum multiline block comment length before read summaries collapse it",
 	"settings.files.readSummaries.readSummaryMinimumFile": "Read Summary Minimum File Length",
-	"settings.filesFewerTotal.info":
-		"Files with fewer total lines are read verbatim instead of structurally summarized",
+	"settings.filesFewerTotal.info": "Files with fewer total lines are read verbatim instead of structurally summarized",
 	"settings.files.readSummaries.readSummaryUnfoldTarget": "Read Summary Unfold Target",
 	"settings.bfsUnfoldElidable.info":
 		"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.",
@@ -179,8 +154,7 @@ export const settings = {
 	"settings.hardCeilingSummary.desc":
 		"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.",
 	"settings.files.reading.inlineReadPreviews": "Inline Read Previews",
-	"settings.renderReadTool.info":
-		"Render read tool results inline in the transcript instead of summary rows",
+	"settings.renderReadTool.info": "Render read tool results inline in the transcript instead of summary rows",
 	"settings.files.lsp.lsp": "LSP",
 	"settings.enableLspTool.info":
 		"Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)",
@@ -215,11 +189,9 @@ export const settings = {
 	"settings.bestConsolidationDedup.info":
 		"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.",
 	"settings.qwen2515b": "Qwen2.5 1.5B",
-	"settings.bestExtractionGranularityWeaker":
-		"Best extraction granularity (atomic facts); weaker consolidation.",
+	"settings.bestExtractionGranularityWeaker": "Best extraction granularity (atomic facts); weaker consolidation.",
 	"settings.lfm212b": "LFM2 1.2B",
-	"settings.fastestLoadSolid.info":
-		"Fastest load; solid all-rounder, slightly noisier extraction labels.",
+	"settings.fastestLoadSolid.info": "Fastest load; solid all-rounder, slightly noisier extraction labels.",
 	"settings.keepStoredCredentialUnless": "Keep stored credential unless replaced",
 	"settings.commaSeparatedValues": "Comma separated values",
 	"settings.moveEarlier": "Move earlier",
@@ -325,8 +297,7 @@ export const settings = {
 	"settings.askOfficialRegistry.info":
 		"Ask the official registry first, then try the public mirror if the failure is one it could answer",
 	"settings.alwaysUseUrlConfigured": "Always use the URL configured below",
-	"settings.useWhateverPackage.info":
-		"Use whatever the package manager is configured with (.npmrc, bunfig.toml)",
+	"settings.useWhateverPackage.info": "Use whatever the package manager is configured with (.npmrc, bunfig.toml)",
 	"settings.registryUrlUsed.info":
 		"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
 	"settings.speechTest": "Speech test",
@@ -403,8 +374,7 @@ export const settings = {
 	"settings.adoptedModels": "Adopted models",
 	"settings.addModel": "Add model",
 	"settings.addModelHint": "Manually add a model row and type its ID / name by hand",
-	"settings.providerNameBase.info2":
-		"Provider name, base URL, and at least one model are required",
+	"settings.providerNameBase.info2": "Provider name, base URL, and at least one model are required",
 	"settings.editCustomProvider": "Edit custom provider",
 	"settings.saveChanges": "Save changes",
 	"settings.providerSaved": "Provider saved",
@@ -472,8 +442,7 @@ export const settings = {
 	"settings.mobileRemoteControl": "Mobile remote control",
 	"settings.settings": "Settings",
 	"settings.scanConnect": "Scan to connect",
-	"settings.scanYourPhoneCamera":
-		"Scan with your phone camera to open this workspace on your phone.",
+	"settings.scanYourPhoneCamera": "Scan with your phone camera to open this workspace on your phone.",
 	"settings.waitingPhoneConnection": "Waiting for phone connection",
 	"settings.ready": "Ready",
 	"settings.stop": "Stop",
@@ -488,8 +457,7 @@ export const settings = {
 		"Share the current session “{title}” live on the local network; scan with your phone to join.",
 	"settings.openCreateSessionFirst": "Open or create a session first, then start sharing.",
 	"settings.publicTunnel": "Public tunnel",
-	"settings.publicTunnelAnyone.info":
-		"Public tunnel — anyone with the link can join; stop sharing to close it.",
+	"settings.publicTunnelAnyone.info": "Public tunnel — anyone with the link can join; stop sharing to close it.",
 	"settings.useBotChannel": "Use Bot Channel",
 	"settings.connectChatBotLonger": "Connect a chat bot for longer mobile access.",
 	"settings.openWorkspaceWithName": "Open this workspace from {name}.",
@@ -584,17 +552,14 @@ export const settings = {
 	"settings.interaction.speech.silenceThreshold": "Silence threshold (ms)",
 	"settings.howLongPauseCounts": "How long of a pause counts as the end of dictation.",
 	"settings.interaction.speech.autoReadNewReplies": "Auto-read new replies",
-	"settings.automaticallyReadAloudNew":
-		"Automatically read aloud new assistant replies via the local TTS engine",
+	"settings.automaticallyReadAloudNew": "Automatically read aloud new assistant replies via the local TTS engine",
 	"settings.interaction.speech.rate": "Speech rate (0.5–2)",
-	"settings.playbackRateLocal.info":
-		"Playback rate for local TTS — 0.8× is common for reading aloud.",
+	"settings.playbackRateLocal.info": "Playback rate for local TTS — 0.8× is common for reading aloud.",
 	"settings.interaction.speech.readContent": "Read content",
 	"settings.howAssistantReply.info":
 		"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
 	"settings.interaction.speech.dictationBarge": "Dictation barge-in",
-	"settings.whatHappensPlayback.info":
-		"What happens to playback when dictation starts: duck (drop volume) or pause.",
+	"settings.whatHappensPlayback.info": "What happens to playback when dictation starts: duck (drop volume) or pause.",
 	"settings.terminal": "Terminal",
 	"settings.files": "Files",
 	"settings.edit": "Edit",
@@ -672,7 +637,8 @@ export const settings = {
 	"settings.showLineNumbers": "Show line numbers",
 	"settings.showLineNumbersDescription": "Show line numbers in code content and diff views.",
 	"settings.wrapLongLines": "Wrap long lines",
-	"settings.wrapLongLinesDescription": "Wrap long lines in code and diff content automatically; off = horizontal scroll.",
+	"settings.wrapLongLinesDescription":
+		"Wrap long lines in code and diff content automatically; off = horizontal scroll.",
 	"settings.codeFontSize": "Code font size",
 	"settings.codeFontSizeDescription":
 		"Adjust the default font size for code in file previews and diff views (transcript code blocks follow the message font size).",
@@ -713,8 +679,7 @@ export const settings = {
 	"settings.groupColorWithColor": "Group color: {color}",
 	"settings.botManagement": "Bot management",
 	"settings.showAvatars": "Show avatars",
-	"settings.agentOrbAvatar.info":
-		"Animated orb avatar beside agent replies; your avatar at the message bubble",
+	"settings.agentOrbAvatar.info": "Animated orb avatar beside agent replies; your avatar at the message bubble",
 	"settings.previewImage": "Preview image",
 	"settings.previewStatusbarModel": "GLM-5.3-Flash",
 	"settings.previewStatusbarContext": "12.4K / 200K",
@@ -888,7 +853,8 @@ export const settings = {
 	"settings.previousMonth": "Previous month",
 	"settings.taskCenterBoard": "Board",
 	"settings.taskCenterCalendar": "Calendar",
-	"settings.idleWindowHint": "Runs only inside the window (cross-midnight OK); due runs outside defer to the window start",
+	"settings.idleWindowHint":
+		"Runs only inside the window (cross-midnight OK); due runs outside defer to the window start",
 	"settings.idleWindowClear": "Clear idle window",
 	"settings.idleWindowEnd": "Window end",
 	"settings.idleWindowStart": "Window start",
@@ -1371,15 +1337,12 @@ export const settings = {
 	"settings.sessionUpdate": "session update",
 	"settings.connectComputerYourNetwork": "Connect to a computer on your network",
 	"settings.scanQrCode": "Scan the QR code",
-	"settings.scanDesktopShareQr":
-		"Scan the QR on the desktop share panel — this app or any phone browser works",
+	"settings.scanDesktopShareQr": "Scan the QR on the desktop share panel — this app or any phone browser works",
 	"settings.pairCode": "Pair code",
-	"settings.enter6DigitCode":
-		"6-digit code + computer address, both shown on the share panel",
+	"settings.enter6DigitCode": "6-digit code + computer address, both shown on the share panel",
 	"settings.pasteJoinLink": "Paste a join link",
 	"settings.skipNow": "Skip for now",
-	"settings.notConnectedYetConnect":
-		"Not connected yet — connect to a computer to view sessions",
+	"settings.notConnectedYetConnect": "Not connected yet — connect to a computer to view sessions",
 	"settings.connectComputer": "Connect to a computer",
 	"settings.scanFailedUsePair": "Scan failed — use the pair code instead",
 	"settings.cameraUnavailableUsePair": "Camera unavailable — use the pair code instead",
@@ -1403,10 +1366,8 @@ export const settings = {
 	"settings.invalidExpiredPairCode": "Invalid or expired pair code",
 	"settings.invalidPairResponse": "Invalid pair response",
 	"settings.cannotReachComputerSame": "Cannot reach the computer — same Wi-Fi?",
-	"settings.noAddressShown.info":
-		"No address shown? Share with a public tunnel and scan the link instead",
-	"settings.offlineShowingCached.info":
-		"Offline — showing cached content, connecting needs a network",
+	"settings.noAddressShown.info": "No address shown? Share with a public tunnel and scan the link instead",
+	"settings.offlineShowingCached.info": "Offline — showing cached content, connecting needs a network",
 	"settings.noChannelsConfigured": "No channels configured",
 	"settings.start": "Start",
 	"settings.unlink": "Unlink",
@@ -1469,7 +1430,8 @@ export const settings = {
 	"settings.indexNewFolders": "Index new folders",
 	"settings.indexNewFoldersDescription": "Automatically index new folders with fewer than 50,000 files",
 	"settings.indexRepositories": "Index repositories for instant search (beta)",
-	"settings.indexRepositoriesDescription": "Automatically index repositories for faster search. All data is stored locally",
+	"settings.indexRepositoriesDescription":
+		"Automatically index repositories for faster search. All data is stored locally",
 	"settings.instantSearchPlaceholder": "Instant file content search (at least 2 characters)…",
 	"settings.indexedFiles": "Indexed files",
 	"settings.lastScan": "Last scan",
@@ -1547,7 +1509,8 @@ export const settings = {
 	"settings.apiKeyImport": "API key import",
 	"settings.quickProviders": "Quick fill",
 	"settings.providerAdded": "Provider added",
-	"settings.providerAddedBody": "{name} is ready; models are immediately available. You can modify it anytime in settings.",
+	"settings.providerAddedBody":
+		"{name} is ready; models are immediately available. You can modify it anytime in settings.",
 	"settings.getStarted": "Get started",
 	"settings.login": "Login",
 	"settings.logout": "Logout",
@@ -1624,7 +1587,8 @@ export const settings = {
 	"settings.toolCallSummary": "Tool call summary",
 	"settings.toolCallSummaryDescription":
 		"While answering, consecutive tool calls summarize into a one-line abstract; click it to reveal the full process.",
-	"settings.collapseLongUserMessagesDescription": "Overly long messages collapse to two lines by default; click to expand",
+	"settings.collapseLongUserMessagesDescription":
+		"Overly long messages collapse to two lines by default; click to expand",
 	"settings.showReasoningTraces": "Show reasoning traces",
 	"settings.showReasoningTracesDescription": "Show the model's thinking process in replies",
 	"settings.preserveDraftMessages": "Preserve draft messages",
@@ -1725,10 +1689,12 @@ export const settings = {
 	"settings.petDisplayInput": "Top-right of input box",
 	"settings.petDisplayDesktop": "Floating desktop pet",
 	"settings.companionAppearance": "Companion appearance",
-	"settings.companionAppearanceDescription": "Choose a preset character, or import a Petdex zip downloaded from petdex.dev",
+	"settings.companionAppearanceDescription":
+		"Choose a preset character, or import a Petdex zip downloaded from petdex.dev",
 	"settings.importPetdex": "Import Petdex zip",
 	"settings.importCodexSprite": "Import Codex sprite",
-	"settings.petImportFailed": "Import failed: the file is corrupt or in an unsupported format. Try another Petdex package.",
+	"settings.petImportFailed":
+		"Import failed: the file is corrupt or in an unsupported format. Try another Petdex package.",
 	"settings.desktopPetNeedsDesktop": "Floating desktop pets and imports require the desktop version of MusePi",
 	"settings.builtinPet": "Built-in MusePi",
 	"settings.builtinPetDescription": "The MusePi brand companion — a note-bot animated in pure vector, silky smooth",
@@ -1747,7 +1713,8 @@ export const settings = {
 	"settings.petDecorGlossDescription":
 		"Specular highlight and drifting sheen on the shell — makes the ball read as lit. Off leaves a flat silhouette.",
 	"settings.petAccessory": "Accessory",
-	"settings.petAccessoryDescription": "A wearable drawn on the built-in orb — it scales with the ball and rides its motion.",
+	"settings.petAccessoryDescription":
+		"A wearable drawn on the built-in orb — it scales with the ball and rides its motion.",
 	"settings.petAccessoryNone": "None",
 	"settings.petAccessoryNote": "Music note",
 	"settings.petAccessoryHeadphones": "Headphones",
@@ -1762,8 +1729,7 @@ export const settings = {
 	"settings.renderMermaidFenced.desc":
 		"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.",
 	"settings.appearance.display.streamingRendering": "Streaming rendering",
-	"settings.revealAssistantTextStreamed":
-		"Reveal assistant text and streamed tool input smoothly while chunks arrive",
+	"settings.revealAssistantTextStreamed": "Reveal assistant text and streamed tool input smoothly while chunks arrive",
 	"settings.runningTurnDetail": "Running Turn Detail",
 	"settings.howMuchRunning.desc":
 		"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to",
@@ -1774,8 +1740,7 @@ export const settings = {
 	"settings.latest7Rows": "Latest 7 rows",
 	"settings.holdsLongTaskS": "Holds a long task's tail in view.",
 	"settings.latest10Rows": "Latest 10 rows",
-	"settings.hideModelInitiatedTool":
-		"Hide model-initiated tool calls and results from the transcript",
+	"settings.hideModelInitiatedTool": "Hide model-initiated tool calls and results from the transcript",
 	"settings.tools.availableTools.agnesVideoGeneration": "Agnes Video Generation",
 	"settings.slash": "Slash",
 	"settings.pipe": "Pipe",
@@ -1848,10 +1813,8 @@ export const settings = {
 		"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.",
 	"settings.nvidiaParakeetTdt.desc":
 		"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
-	"settings.neverAutomaticallySubmit.info":
-		"Never automatically submit; insert dictation and remain in editor.",
-	"settings.submitReleaseUtterance.info":
-		"Submit on release if the utterance has 2+ words to avoid accidental sends.",
+	"settings.neverAutomaticallySubmit.info": "Never automatically submit; insert dictation and remain in editor.",
+	"settings.submitReleaseUtterance.info": "Submit on release if the utterance has 2+ words to avoid accidental sends.",
 	"settings.submitReleaseUtterance.info2":
 		"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).",
 	"settings.submitUtteranceEndsWord":
@@ -1864,8 +1827,7 @@ export const settings = {
 		"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
 	"settings.driveYourOwn.desc":
 		"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
-	"settings.musepiBrowserRelayEndpoint":
-		"musepi browser relay endpoint (default http://127.0.0.1:9224).",
+	"settings.musepiBrowserRelayEndpoint": "musepi browser relay endpoint (default http://127.0.0.1:9224).",
 	"settings.mountRarelyUsed.desc":
 		"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
@@ -1876,25 +1838,20 @@ export const settings = {
 		"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
 		'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.',
-	"settings.usesAuthConfigured.info":
-		"Uses auth when configured; explicit selection falls back to anonymous search",
+	"settings.usesAuthConfigured.info": "Uses auth when configured; explicit selection falls back to anonymous search",
 	"settings.googleSearchGroundingVia":
 		"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)",
-	"settings.claudeSNativeWeb":
-		"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)",
-	"settings.openaiSNativeWeb":
-		"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
+	"settings.claudeSNativeWeb": "Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)",
+	"settings.openaiSNativeWeb": "OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
 	"settings.grokWebSearch.info":
 		"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)",
 	"settings.callsZAiWebsearchprime": "Calls Z.AI webSearchPrime MCP",
-	"settings.apiViaLogin.info":
-		"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP",
+	"settings.apiViaLogin.info": "API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP",
 	"settings.requiresTinyfishApiKey": "Requires TINYFISH_API_KEY",
 	"settings.requiresJinaApiKey": "Requires JINA_API_KEY",
 	"settings.requiresKagiApiKey": "Requires KAGI_API_KEY and Kagi Search API beta access",
 	"settings.requiresTavilyApiKey": "Requires TAVILY_API_KEY",
-	"settings.usesFirecrawlApi.info":
-		"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode",
+	"settings.usesFirecrawlApi.info": "Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode",
 	"settings.requiresBraveApiKey": "Requires BRAVE_API_KEY",
 	"settings.kimiCodeSearch":
 		"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)",
@@ -1904,10 +1861,8 @@ export const settings = {
 		"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
 	"settings.credentialFreeBest.info":
 		"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs",
-	"settings.credentialFreeBrowserBacked":
-		"Credential-free browser-backed scrape of Ecosia (Google-backed) results",
-	"settings.credentialFreeBrowser.info":
-		"Credential-free browser-backed fallback; slower and may be bot-challenged",
+	"settings.credentialFreeBrowserBacked": "Credential-free browser-backed scrape of Ecosia (Google-backed) results",
+	"settings.credentialFreeBrowser.info": "Credential-free browser-backed fallback; slower and may be bot-challenged",
 	"settings.credentialFreeBrowserBackedScrapeMojeek":
 		"Credential-free browser-backed scrape of Mojeek's independent index",
 	"settings.queriesEveryCredentialFree":
@@ -1916,26 +1871,19 @@ export const settings = {
 	"settings.requiresAgnesGlobalApi": "Requires AGNES_GLOBAL_API_KEY",
 	"settings.openaiApiKey.info":
 		"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription",
-	"settings.usesConnectedCodexChatgpt":
-		"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed",
+	"settings.usesConnectedCodexChatgpt": "Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed",
 	"settings.requiresGoogleAntigravityOauth": "Requires google-antigravity OAuth",
 	"settings.requiresXaiGrokOauth": "Requires xAI Grok OAuth or XAI_API_KEY",
 	"settings.requiresGeminiApiKey": "Requires GEMINI_API_KEY",
 	"settings.requiresOpenrouterApiKey": "Requires OPENROUTER_API_KEY",
-	"settings.kokoro82mNeural.info":
-		"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local",
+	"settings.kokoro82mNeural.info": "Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local",
 	"settings.onlineTitleGeneration.desc":
 		"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.",
-	"settings.recommendedLocalModel.info":
-		"Recommended local model; best speed/quality balance, about 212 MB cached.",
-	"settings.mostRobustLocal.info":
-		"Most robust local option; slower first load, about 500 MB cached.",
-	"settings.smallestViableLocal.info":
-		"Smallest viable local option; lower quality, lowest cache footprint.",
-	"settings.balancedLocalFallback.info":
-		"Balanced local fallback; moderate quality and cache footprint.",
-	"settings.highestQualityLocal.info":
-		"Highest-quality local option; larger and slower than LFM2 350M.",
+	"settings.recommendedLocalModel.info": "Recommended local model; best speed/quality balance, about 212 MB cached.",
+	"settings.mostRobustLocal.info": "Most robust local option; slower first load, about 500 MB cached.",
+	"settings.smallestViableLocal.info": "Smallest viable local option; lower quality, lowest cache footprint.",
+	"settings.balancedLocalFallback.info": "Balanced local fallback; moderate quality and cache footprint.",
+	"settings.highestQualityLocal.info": "Highest-quality local option; larger and slower than LFM2 350M.",
 	"settings.spendSavedCodex.desc":
 		"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.",
 	"settings.onlyAutoRedeem.desc":
@@ -2077,24 +2025,18 @@ export const settings = {
 	"settings.allSegmentsIncludingTime": "All segments including time",
 	"settings.allowEveryConcernBlocker": "Allow every concern/blocker to interrupt.",
 	"settings.allowRepetition": "Allow repetition",
-	"settings.allowRetryRecoverySwitch":
-		"Allow retry recovery to switch to configured fallback models",
+	"settings.allowRetryRecoverySwitch": "Allow retry recovery to switch to configured fallback models",
 	"settings.allowSubagentsSpawned.desc":
 		"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.",
-	"settings.allowEvalTool.info":
-		"Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
-	"settings.allowEvalTool.info2":
-		"Allow the eval tool to dispatch Julia cells to the persistent Julia kernel",
-	"settings.allowEvalTool.info3":
-		"Allow the eval tool to dispatch Python cells to the IPython kernel",
-	"settings.allowEvalTool.info4":
-		"Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel",
+	"settings.allowEvalTool.info": "Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
+	"settings.allowEvalTool.info2": "Allow the eval tool to dispatch Julia cells to the persistent Julia kernel",
+	"settings.allowEvalTool.info3": "Allow the eval tool to dispatch Python cells to the IPython kernel",
+	"settings.allowEvalTool.info4": "Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel",
 	"settings.allowReadToolFetch": "Allow the read tool to fetch and process URLs",
 	"settings.alsoBlockAll.info":
 		"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)",
 	"settings.alsoEnableAdvisorSpawned": "Also enable the advisor on spawned task/eval subagents.",
-	"settings.alsoKeepDisplayIdle":
-		"Also keep the display from idle-sleeping (caffeinate -i -d)",
+	"settings.alsoKeepDisplayIdle": "Also keep the display from idle-sleeping (caffeinate -i -d)",
 	"settings.always": "Always",
 	"settings.always2": "Always",
 	"settings.alwaysAsk": "Always ask",
@@ -2103,20 +2045,16 @@ export const settings = {
 	"settings.alwaysSelectNextEligible": "Always select the next eligible configured fallback",
 	"settings.amountHeadContent.desc":
 		"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.",
-	"settings.amountTailContentKept":
-		"Amount of tail content kept inline when output spills to artifact",
+	"settings.amountTailContentKept": "Amount of tail content kept inline when output spills to artifact",
 	"settings.animationStyleWorkingLoading": "Animation style for working/loading messages",
 	"settings.model.retryFallback.anthropicServerSideFallback": "Anthropic Server-Side Fallback (Fable 5)",
 	"settings.providers.services.antigravityEndpointMode": "Antigravity Endpoint Mode",
-	"settings.apiFormatKimiCode":
-		"API format for Kimi Code provider (auto follows live model metadata)",
+	"settings.apiFormatKimiCode": "API format for Kimi Code provider (auto follows live model metadata)",
 	"settings.providers.protocol.appendOnlyContext": "Append-Only Context",
 	"settings.tasks.isolation.applyIsolatedChanges": "Apply Isolated Changes",
-	"settings.applyLoopGuard.info":
-		"Apply loop guard to assistant prose messages in addition to thinking logs",
+	"settings.applyLoopGuard.info": "Apply loop guard to assistant prose messages in addition to thinking logs",
 	"settings.approvals2": "Approvals",
-	"settings.archiveHistoryOnto.info":
-		"Archive history onto dense bitmap images the model reads back; no LLM call",
+	"settings.archiveHistoryOnto.info": "Archive history onto dense bitmap images the model reads back; no LLM call",
 	"settings.armPrewalkBundled.desc":
 		"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.",
 	"settings.artifactHeadSize": "Artifact Head Size (KB)",
@@ -2125,8 +2063,7 @@ export const settings = {
 	"settings.tools.outputLimits.artifactTailSize": "Artifact Tail Size (KB)",
 	"settings.tools.availableTools.ask": "Ask",
 	"settings.interaction.notifications.askNotification": "Ask Notification",
-	"settings.askAgentDescribe.info":
-		"Ask the agent to describe the intent of each tool call before executing it",
+	"settings.askAgentDescribe.info": "Ask the agent to describe the intent of each tool call before executing it",
 	"settings.interaction.notifications.askTimeout": "Ask Timeout",
 	"settings.assistantMessages": "Assistant messages",
 	"settings.tools.availableTools.astEdit": "AST Edit",
@@ -2141,8 +2078,7 @@ export const settings = {
 	"settings.model.thinking.auto": "Auto Thinking Model",
 	"settings.autoApproveRead.info":
 		"Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.",
-	"settings.autoApproveRead.info2":
-		"Auto-approve read-only tools; require confirmation for write and exec tools.",
+	"settings.autoApproveRead.info2": "Auto-approve read-only tools; require confirmation for write and exec tools.",
 	"settings.autoApproveRead.info3":
 		"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.",
 	"settings.context.compaction.autoCompact": "Auto-Compact",
@@ -2152,8 +2088,7 @@ export const settings = {
 		"Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed",
 	"settings.context.general.autoPromote": "Auto-Promote Context",
 	"settings.appearance.images.autoResize": "Auto-Resize Images",
-	"settings.autoSelectRecommendedAsk":
-		"Auto-select the recommended ask option after this many seconds (0 disables)",
+	"settings.autoSelectRecommendedAsk": "Auto-select the recommended ask option after this many seconds (0 disables)",
 	"settings.autocompleteItems": "Autocomplete Items",
 	"settings.automatedToolIssue.desc":
 		"Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly",
@@ -2162,10 +2097,8 @@ export const settings = {
 	"settings.automaticallyBackgroundLongRunning":
 		"Automatically background long-running bash commands and deliver the result later",
 	"settings.automaticallyCompactContextGets": "Automatically compact context when it gets too large",
-	"settings.automaticallyEnterPlanMode":
-		"Automatically enter plan mode at the start of every new session",
-	"settings.automaticallyResumeMostRecent":
-		"Automatically resume the most recent session in the current directory",
+	"settings.automaticallyEnterPlanMode": "Automatically enter plan mode at the start of every new session",
+	"settings.automaticallyResumeMostRecent": "Automatically resume the most recent session in the current directory",
 	"settings.availableTools": "Available Tools",
 	"settings.backendTtsTool.info":
 		"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice",
@@ -2174,8 +2107,7 @@ export const settings = {
 	"settings.balancedSafetyMargin": "Balanced safety margin",
 	"settings.baseDirectoryAgent.desc":
 		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
-	"settings.baseUrlSelf.info":
-		"Base URL of a self-hosted SearXNG instance used for web search",
+	"settings.baseUrlSelf.info": "Base URL of a self-hosted SearXNG instance used for web search",
 	"settings.shell.bash.approvalPatterns": "Bash Approval Patterns",
 	"settings.shell.bash.autoBackground": "Bash Auto-Background",
 	"settings.shell.bash.interceptor": "Bash Interceptor",
@@ -2201,8 +2133,7 @@ export const settings = {
 	"settings.catalogOnly": "Catalog Only",
 	"settings.celebrateUnscheduledCodex.desc":
 		"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape",
-	"settings.checkEligibilityThen.info":
-		"Check eligibility, then ask before spending the first saved reset.",
+	"settings.checkEligibilityThen.info": "Check eligibility, then ask before spending the first saved reset.",
 	"settings.checkOmpUpdatesStartup": "Check for omp updates on startup",
 	"settings.checkPluginUpdatesStartup": "Check for plugin updates on startup",
 	"settings.interaction.startupUpdates.checkUpdates": "Check for Updates",
@@ -2211,14 +2142,12 @@ export const settings = {
 	"settings.checkThresholdsSafe.info":
 		"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request",
 	"settings.tools.availableTools.checkpointRewind": "Checkpoint/Rewind",
-	"settings.cherryPickedHighQuality":
-		"Cherry-picked high-quality providers (only defined for select models)",
+	"settings.cherryPickedHighQuality": "Cherry-picked high-quality providers (only defined for select models)",
 	"settings.choosePlaceContext.desc":
 		"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
 	"settings.chooseSpeechDictation.desc":
 		"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.",
-	"settings.chooseWhetherUpdate.info":
-		"Choose whether update notes start as a summary, full details, or stay hidden",
+	"settings.chooseWhetherUpdate.info": "Choose whether update notes start as a summary, full details, or stay hidden",
 	"settings.chooseWhichMounted.desc":
 		"Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.",
 	"settings.classic": "Classic",
@@ -2249,14 +2178,12 @@ export const settings = {
 	"settings.colorBlindMode": "Color-Blind Mode",
 	"settings.combineDiffsGitApply": "Combine diffs and git apply",
 	"settings.commandsSkills": "Commands & Skills",
-	"settings.commitMessageStyleNested":
-		"Commit message style for nested repo changes (generic or AI-generated)",
+	"settings.commitMessageStyleNested": "Commit message style for nested repo changes (generic or AI-generated)",
 	"settings.commitPerTask.info": "Commit per task, merge with --no-ff",
 	"settings.communicationStyleRenderedSystem":
 		"Communication style rendered into the system prompt's personality block",
 	"settings.compact": "Compact",
-	"settings.compactContextWhileIdle":
-		"Compact context while idle when token count exceeds threshold",
+	"settings.compactContextWhileIdle": "Compact context while idle when token count exceeds threshold",
 	"settings.compactSessionContext.info": "Compact the session context, then re-submit the prompt",
 	"settings.appearance.statusLine.compactThinkingLevel": "Compact Thinking Level",
 	"settings.compaction": "Compaction",
@@ -2348,8 +2275,7 @@ export const settings = {
 	"settings.default25kTokens": "Default; ~2.5K tokens",
 	"settings.default5kTokens": "Default; ~5K tokens",
 	"settings.default2": "Default.",
-	"settings.delayBeforeCompleted.info":
-		"Delay before completed or abandoned todos are removed from the todo widget",
+	"settings.delayBeforeCompleted.info": "Delay before completed or abandoned todos are removed from the todo widget",
 	"settings.densestCellSentenceHue": "Densest cell with sentence-hue ink.",
 	"settings.model.vision.describeImagesTextModels": "Describe Images for Text Models",
 	"settings.detectConsecutiveIdentical.info":
@@ -2387,41 +2313,33 @@ export const settings = {
 	"settings.donTCheckPlugin": "Don't check for plugin updates",
 	"settings.double": "Double",
 	"settings.doubleEscapeAction": "Double-Escape Action",
-	"settings.dropHeavyContent.info":
-		"Drop heavy content (tool results + large blocks) in place; recover via artifact",
+	"settings.dropHeavyContent.info": "Drop heavy content (tool results + large blocks) in place; recover via artifact",
 	"settings.earlyMaintenance": "Early maintenance",
 	"settings.earlyProtection": "Early protection",
 	"settings.context.compaction.elideUneventfulResults": "Elide Uneventful Results",
 	"settings.embeddedSilverTruetype.info":
 		"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.",
-	"settings.emitOsc9.info":
-		"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
+	"settings.emitOsc9.info": "Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
 	"settings.emojiAutocomplete": "Emoji Autocomplete",
 	"settings.model.advisor.enable": "Enable Advisor",
-	"settings.enableAsyncBashCommands":
-		"Enable async bash commands and background task execution",
-	"settings.enableAutomaticStreamLoop":
-		"Enable automatic stream loop detection for model reasoning and prose",
+	"settings.enableAsyncBashCommands": "Enable async bash commands and background task execution",
+	"settings.enableAutomaticStreamLoop": "Enable automatic stream loop detection for model reasoning and prose",
 	"settings.enableKnownPrefixCache": "Enable for known prefix-cache providers (recommended)",
 	"settings.interaction.git.enableIntegration": "Enable Git Integration",
 	"settings.enableHiddenNotices.info":
 		"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords",
 	"settings.enableOpenrouterSWeb": "Enable OpenRouter's web-search plugin",
 	"settings.enablePerSessionGoal": "Enable per-session goal mode and the hidden goal tool",
-	"settings.enablePlanModeRead":
-		"Enable plan mode for read-only exploration and planning before execution",
+	"settings.enablePlanModeRead": "Enable plan mode for read-only exploration and planning before execution",
 	"settings.model.prewalk.enable": "Enable Prewalk",
 	"settings.enableSpeechTextInput": "Enable speech-to-text input via microphone",
-	"settings.enableAgnesVideoGen":
-		"Enable the agnes_video_gen tool for Agnes AI video generation",
+	"settings.enableAgnesVideoGen": "Enable the agnes_video_gen tool for Agnes AI video generation",
 	"settings.enableAskToolInteractive": "Enable the ask tool for interactive user questions",
 	"settings.enableAstEditTool": "Enable the ast_edit tool for structural AST rewrites",
 	"settings.enableAstGrepTool": "Enable the ast_grep tool for structural AST search",
 	"settings.enableBashToolShell": "Enable the bash tool for shell command execution",
-	"settings.enableBrowserToolScripted":
-		"Enable the browser tool for scripted Chromium automation (puppeteer)",
-	"settings.enableCheckpointRewindTools":
-		"Enable the checkpoint and rewind tools for context checkpointing",
+	"settings.enableBrowserToolScripted": "Enable the browser tool for scripted Chromium automation (puppeteer)",
+	"settings.enableCheckpointRewindTools": "Enable the checkpoint and rewind tools for context checkpointing",
 	"settings.enableDebugToolDap": "Enable the debug tool for DAP-based debugging",
 	"settings.enableGenerateImage.info":
 		"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.",
@@ -2432,8 +2350,7 @@ export const settings = {
 	"settings.enableLaunchToolSupervising":
 		"Enable the launch tool for supervising shared long-running project processes",
 	"settings.enableTodoToolTask": "Enable the todo tool for task tracking",
-	"settings.enableTtsTool.info":
-		"Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis",
+	"settings.enableTtsTool.info": "Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis",
 	"settings.enableVaultInternal.desc":
 		"Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.",
 	"settings.enableWebSearchTool": "Enable the web_search tool for live web results",
@@ -2466,8 +2383,7 @@ export const settings = {
 	"settings.providers.services.fetchProvider": "Fetch Provider",
 	"settings.finalMessageOnly": "Final message only",
 	"settings.providers.fireworks.tier": "Fireworks Tier",
-	"settings.fixedTokenLimit.info":
-		"Fixed token limit for context maintenance; overrides percentage if set",
+	"settings.fixedTokenLimit.info": "Fixed token limit for context maintenance; overrides percentage if set",
 	"settings.flex": "Flex",
 	"settings.followUpMode": "Follow-Up Mode",
 	"settings.forceProductionEndpointOnly": "Force production endpoint only",
@@ -2480,8 +2396,7 @@ export const settings = {
 	"settings.friendly": "Friendly",
 	"settings.full2": "Full",
 	"settings.fullStandardContextWindow": "Full standard context window",
-	"settings.fullUrlReceivingAuto":
-		"Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)",
+	"settings.fullUrlReceivingAuto": "Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)",
 	"settings.providers.services.geminiWebSearchModel": "Gemini web_search model",
 	"settings.generateHandoffContinueNew": "Generate handoff and continue in a new session",
 	"settings.tools.availableTools.generateImage": "Generate Image",
@@ -2490,8 +2405,7 @@ export const settings = {
 	"settings.tools.github.cacheHardTtl": "GitHub Cache Hard TTL",
 	"settings.tools.github.cacheSoftTtl": "GitHub Cache Soft TTL",
 	"settings.tools.github.viewCache": "GitHub View Cache",
-	"settings.glyphSetIcons.info":
-		"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
+	"settings.glyphSetIcons.info": "Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
 	"settings.tasks.modes.goalContinuation": "Goal Continuation Modes",
 	"settings.tasks.modes.goalMode": "Goal Mode",
 	"settings.tasks.modes.goalStatusFooter": "Goal Status in Footer",
@@ -2514,18 +2428,14 @@ export const settings = {
 	"settings.high2": "High",
 	"settings.highestEffortAuto.desc":
 		"Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.",
-	"settings.howIsolatedTaskChanges":
-		"How isolated task changes are integrated (patch apply or branch merge)",
+	"settings.howIsolatedTaskChanges": "How isolated task changes are integrated (patch apply or branch merge)",
 	"settings.howLongHub.desc":
 		"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.",
 	"settings.howLongIdle.desc":
 		"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.",
-	"settings.howManyLevelsDeep":
-		"How many levels deep subagents can spawn their own subagents",
-	"settings.howRulesCan.info":
-		"How rules can repeat: once per session or after a message gap",
-	"settings.howStronglyPush.info":
-		"How strongly to push automatic todo-list creation after the first message",
+	"settings.howManyLevelsDeep": "How many levels deep subagents can spawn their own subagents",
+	"settings.howRulesCan.info": "How rules can repeat: once per session or after a message gap",
+	"settings.howStronglyPush.info": "How strongly to push automatic todo-list creation after the first message",
 	"settings.howStronglyPushDelegating": "How strongly to push delegating work to subagents",
 	"settings.howDrainFollowUp": "How to drain follow-up messages after a turn completes",
 	"settings.howProcessQueuedMessages": "How to process queued messages while agent is working",
@@ -2542,10 +2452,8 @@ export const settings = {
 	"settings.injectMcpResourceUpdates": "Inject MCP resource updates into the agent conversation",
 	"settings.injectOneSteering.desc":
 		"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.",
-	"settings.inlineBuiltDocs.info":
-		"Inline built-in docs; fetch MCP and extension docs on demand.",
-	"settings.inlineDescriptorsGemini.info":
-		"Inline descriptors for Gemini models; keep them in tool schemas otherwise",
+	"settings.inlineBuiltDocs.info": "Inline built-in docs; fetch MCP and extension docs on demand.",
+	"settings.inlineDescriptorsGemini.info": "Inline descriptors for Gemini models; keep them in tool schemas otherwise",
 	"settings.inlineDocsSchemasEvery": "Inline docs and schemas for every mounted device.",
 	"settings.inlineToolDescriptors": "Inline Tool Descriptors",
 	"settings.input": "Input",
@@ -2573,33 +2481,27 @@ export const settings = {
 	"settings.keepDescriptorsProviderTool": "Keep descriptors in provider tool schemas only",
 	"settings.keepInteractiveSessions.info":
 		"Keep interactive sessions on the primary until confirmed; background agents auto-fallback",
-	"settings.keepIpythonKernel.info":
-		"Keep the IPython kernel alive across eval calls or start fresh each time",
-	"settings.keepSystemAwakeWhile":
-		"Keep the system awake while a session is open (caffeinate -i)",
+	"settings.keepIpythonKernel.info": "Keep the IPython kernel alive across eval calls or start fresh each time",
+	"settings.keepSystemAwakeWhile": "Keep the system awake while a session is open (caffeinate -i)",
 	"settings.keepSystemPromptText": "Keep the system prompt as text.",
 	"settings.providers.protocol.kimiApiFormat": "Kimi API Format",
 	"settings.kittScanner": "KITT Scanner",
 	"settings.knightRider1982Red": "Knight Rider 1982 red light bouncing left-right",
-	"settings.kokoroVoiceUsed.info":
-		"Kokoro voice used by the local TTS backend (American/British, female/male)",
-	"settings.kokoroVoiceUsedSpeaking":
-		"Kokoro voice used when speaking the assistant's output aloud",
+	"settings.kokoroVoiceUsed.info": "Kokoro voice used by the local TTS backend (American/British, female/male)",
+	"settings.kokoroVoiceUsedSpeaking": "Kokoro voice used when speaking the assistant's output aloud",
 	"settings.language2": "Language",
 	"settings.languageTuiSetupWizard": "Language for the TUI and the setup wizard",
 	"settings.largeContextWindow": "Large context window",
 	"settings.appearance.display.largeHeadings": "Large Headings (Kitty)",
 	"settings.interaction.input.largePasteMenu": "Large Paste Menu",
 	"settings.tools.availableTools.launch": "Launch",
-	"settings.launchBrowserHeadlessMode":
-		"Launch browser in headless mode (disable to show browser UI)",
+	"settings.launchBrowserHeadlessMode": "Launch browser in headless mode (disable to show browser UI)",
 	"settings.legacyReserveBasedThreshold": "Legacy reserve-based threshold",
 	"settings.letStandaloneOrchestrateAppend":
 		"Let standalone orchestrate append its hidden multi-agent orchestration notice",
 	"settings.letStandaloneUltrathink.info":
 		"Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
-	"settings.letStandaloneWorkflowzAppend":
-		"Let standalone workflowz append its hidden eval workflow notice",
+	"settings.letStandaloneWorkflowzAppend": "Let standalone workflowz append its hidden eval workflow notice",
 	"settings.letPalPickBest": "Let the PAL pick the best available backend",
 	"settings.lightReasoning": "Light reasoning (~2k tokens)",
 	"settings.appearance.theme.light": "Light Theme",
@@ -2646,16 +2548,14 @@ export const settings = {
 	"settings.maximumConcurrentOllama.info":
 		"Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit",
 	"settings.maximumInfoNerdFont": "Maximum info with Nerd Font icons",
-	"settings.maximumLinesTail.info":
-		"Maximum lines of tail content kept inline when output spills to artifact",
+	"settings.maximumLinesTail.info": "Maximum lines of tail content kept inline when output spills to artifact",
 	"settings.maximumNumberSubagentsRunning": "Maximum number of subagents running concurrently",
 	"settings.maximumNumberTodoReminders": "Maximum number of todo reminders before giving up",
 	"settings.tasks.subagents.maximumPerSpawnEffort": "Maximum Per-Spawn Effort",
 	"settings.maximumReasoningEffort.desc":
 		"Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.",
 	"settings.maximumRetryAttemptsApi": "Maximum retry attempts on API errors",
-	"settings.maximumTimeoutSecondsAgent":
-		"Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
+	"settings.maximumTimeoutSecondsAgent": "Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
 	"settings.maximumVariety": "Maximum variety",
 	"settings.maximumWaitBetween.desc":
 		"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).",
@@ -2674,12 +2574,10 @@ export const settings = {
 	"settings.minimal": "Minimal",
 	"settings.minimumDelayBetween.info":
 		"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing",
-	"settings.minimumProbabilityThreshold":
-		"Minimum probability threshold (0-1, -1 = provider default)",
+	"settings.minimumProbabilityThreshold": "Minimum probability threshold (0-1, -1 = provider default)",
 	"settings.modelDecidesDelegate": "Model decides when to delegate",
 	"settings.modelDecidesNo.info": "Model decides; no automatic todo list",
-	"settings.modelIdGemini.info":
-		"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.",
+	"settings.modelIdGemini.info": "Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.",
 	"settings.modelRoleStorage": "Model Role Storage",
 	"settings.modelGitCostContext": "Model, git, cost, context",
 	"settings.modelPathGit.info": "Model, path, git, context, tokens, cost",
@@ -2687,12 +2585,10 @@ export const settings = {
 	"settings.moderateReasoning": "Moderate reasoning (~8k tokens)",
 	"settings.moderatelyEarlyMaintenance": "Moderately early maintenance",
 	"settings.modes": "Modes",
-	"settings.moveFullSystem.info":
-		"Move the full system prompt to images, when that saves tokens.",
+	"settings.moveFullSystem.info": "Move the full system prompt to images, when that saves tokens.",
 	"settings.movePromptS.info":
 		"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it",
-	"settings.nameShownOther.info":
-		"Name shown to other collab participants (default: OS username)",
+	"settings.nameShownOther.info": "Name shown to other collab participants (default: OS username)",
 	"settings.native": "Native",
 	"settings.appearance.display.nativeTerminalProgress": "Native Terminal Progress",
 	"settings.nearContextLimit": "Near context limit",
@@ -2719,22 +2615,18 @@ export const settings = {
 	"settings.tools.availableTools.obsidianVault": "Obsidian Vault",
 	"settings.off2": "Off",
 	"settings.ollamaCloudMaxConcurrency": "Ollama Cloud Max Concurrency",
-	"settings.omitCodeBlocks.info":
-		"Omit code blocks from thinking summaries and replace them with an ellipsis",
+	"settings.omitCodeBlocks.info": "Omit code blocks from thinking summaries and replace them with an ellipsis",
 	"settings.omitPersonalityBlockEntirely": "Omit the personality block entirely",
 	"settings.omitThinkingSummaries": "Omit Thinking summaries",
 	"settings.on2": "On",
 	"settings.deviceNeuralTts.info": "On-device neural TTS (Kokoro-82M); output is WAV/PCM16",
-	"settings.deviceNeuralTtsModel":
-		"On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
-	"settings.onlyMoveLoaded.info":
-		"Only move loaded context-file instructions to images, when that saves tokens.",
+	"settings.deviceNeuralTtsModel": "On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
+	"settings.onlyMoveLoaded.info": "Only move loaded context-file instructions to images, when that saves tokens.",
 	"settings.onnxExecutionProvider.desc":
 		"ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.",
 	"settings.onnxQuantizationPrecision.desc":
 		"ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.",
-	"settings.openaiResponsesCodex.info":
-		"OpenAI Responses and Codex response verbosity (low, medium, or high)",
+	"settings.openaiResponsesCodex.info": "OpenAI Responses and Codex response verbosity (low, medium, or high)",
 	"settings.tasks.commandsSkills.opencodeProjectCommands": "OpenCode Project Commands",
 	"settings.tasks.commandsSkills.opencodeUserCommands": "OpenCode User Commands",
 	"settings.providers.protocol.openrouterRouting": "OpenRouter Routing",
@@ -2747,8 +2639,7 @@ export const settings = {
 	"settings.interaction.magicKeywords.orchestrateKeyword": "Orchestrate Keyword",
 	"settings.orderedBashCommand.info":
 		"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.",
-	"settings.originalXOrg.info":
-		"Original X.org 5x8 glyphs on the 2576px frame, black ink.",
+	"settings.originalXOrg.info": "Original X.org 5x8 glyphs on the 2576px frame, black ink.",
 	"settings.tools.outputLimits.outputColumnCap": "Output Column Cap",
 	"settings.outputLimits": "Output Limits",
 	"settings.pairSecondModel.info":
@@ -2773,19 +2664,16 @@ export const settings = {
 	"settings.percentThresholdContext.info":
 		"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior",
 	"settings.personality": "Personality",
-	"settings.picksShapeTuned.info":
-		"Picks a shape tuned for the current model, falling back to its provider family.",
+	"settings.picksShapeTuned.info": "Picks a shape tuned for the current model, falling back to its provider family.",
 	"settings.plainUnsciiSquareCell": "Plain unscii square cell with sentence-hue ink.",
-	"settings.plainUnsciiSquare.info":
-		"Plain unscii square cell, single-printed lines, black ink.",
+	"settings.plainUnsciiSquare.info": "Plain unscii square cell, single-printed lines, black ink.",
 	"settings.tasks.modes.planMode": "Plan Mode",
 	"settings.power": "Power (macOS)",
 	"settings.pragmatic": "Pragmatic",
 	"settings.preBuiltStatusLine": "Pre-built status line configurations",
 	"settings.preferConciseResponses": "Prefer concise responses",
 	"settings.preferDetailedResponses": "Prefer detailed responses",
-	"settings.preferLocalDevice.info":
-		"Prefer local on-device TTS; route .mp3 output to xAI when credentials exist",
+	"settings.preferLocalDevice.info": "Prefer local on-device TTS; route .mp3 output to xAI when credentials exist",
 	"settings.tasks.subagents.preferTaskDelegation": "Prefer Task Delegation",
 	"settings.preferred": "Preferred",
 	"settings.presencePenalty": "Presence Penalty",
@@ -2803,8 +2691,7 @@ export const settings = {
 	"settings.prioritizedProvidersWeb.info":
 		"Prioritized providers for the web_search tool; unlisted providers retain their default order afterward",
 	"settings.priority": "Priority",
-	"settings.priorityServingPath.info":
-		"Priority serving path: higher reliability, premium per-token pricing",
+	"settings.priorityServingPath.info": "Priority serving path: higher reliability, premium per-token pricing",
 	"settings.priorityNativeTrafilatura.info": "Priority: native > trafilatura > lynx > parallel > jina",
 	"settings.privacy": "Privacy",
 	"settings.processingTierGemini.desc":
@@ -2812,29 +2699,25 @@ export const settings = {
 	"settings.processingTierOpenai.desc":
 		"Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.",
 	"settings.productionOnly": "Production Only",
-	"settings.promoteLargerContext.info":
-		"Promote to a larger-context model on context overflow instead of compacting",
+	"settings.promoteLargerContext.info": "Promote to a larger-context model on context overflow instead of compacting",
 	"settings.prompt": "Prompt",
 	"settings.promptGuidancePlusFirst": "Prompt guidance plus a first-turn delegation reminder",
 	"settings.promptSummarizeLeavingBranch": "Prompt to summarize when leaving a branch",
 	"settings.proseOnlyThinking": "Prose Only Thinking",
 	"settings.proseOnly": "Prose only",
 	"settings.protocol": "Protocol",
-	"settings.providersWebSearch.info":
-		"Providers that web_search should never use, even as fallbacks",
+	"settings.providersWebSearch.info": "Providers that web_search should never use, even as fallbacks",
 	"settings.pruneOlderRead.info":
 		"Prune older read results when the same file is read again (cache-aware, runs every turn)",
 	"settings.pruneToolResults.info":
 		"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)",
-	"settings.pushSecretGist.info":
-		"Push to a secret gist (needs authenticated gh), falling back to the share server",
+	"settings.pushSecretGist.info": "Push to a secret gist (needs authenticated gh), falling back to the share server",
 	"settings.shell.evalRuntimes.pythonEvalBackend": "Python Eval Backend",
 	"settings.shell.evalRuntimes.pythonInterpreter": "Python Interpreter",
 	"settings.shell.evalRuntimes.pythonKernelMode": "Python Kernel Mode",
 	"settings.quarter200kWindow": "Quarter of a 200K window",
 	"settings.interaction.startupUpdates.quietStartup": "Quiet Startup",
-	"settings.reSubmitPromptFollow":
-		"Re-submit the prompt as a follow-up message (current behavior)",
+	"settings.reSubmitPromptFollow": "Re-submit the prompt as a follow-up message (current behavior)",
 	"settings.tools.availableTools.readUrls": "Read URLs",
 	"settings.readerBackendPriorityFetch": "Reader backend priority for the fetch/read URL tool",
 	"settings.reasoningDepthThinkingCapable": "Reasoning depth for thinking-capable models",
@@ -2858,12 +2741,10 @@ export const settings = {
 	"settings.renderMarkdownH1.desc":
 		"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.",
 	"settings.renderMermaidFencedCode": "Render Mermaid fenced code blocks as ASCII diagrams",
-	"settings.renderNonJsonMcp":
-		"Render non-JSON MCP text results as Markdown in the transcript",
+	"settings.renderNonJsonMcp": "Render non-JSON MCP text results as Markdown in the transcript",
 	"settings.renderWorkspaceDirectory.desc":
 		"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.",
-	"settings.repeatedGridInkCycling":
-		"Repeated grid with ink cycling six hues at sentence boundaries.",
+	"settings.repeatedGridInkCycling": "Repeated grid with ink cycling six hues at sentence boundaries.",
 	"settings.repetitionPenalty": "Repetition Penalty",
 	"settings.requiresLynxSystemPackage": "Requires lynx system package",
 	"settings.requiresNerdFont": "Requires Nerd Font",
@@ -2872,38 +2753,31 @@ export const settings = {
 	"settings.model.retryFallback.reserveMargin": "Reserve Margin",
 	"settings.model.retryFallback.reservePolicy": "Reserve Policy",
 	"settings.reset": "Reset",
-	"settings.resizeLargeImages2000x2000":
-		"Resize large images to 2000x2000 max for better model compatibility",
+	"settings.resizeLargeImages2000x2000": "Resize large images to 2000x2000 max for better model compatibility",
 	"settings.retryFallback": "Retry & Fallback",
 	"settings.model.retryFallback.retryAttempts": "Retry Attempts",
 	"settings.model.retryFallback.retryFallbackChains": "Retry Fallback Chains",
 	"settings.model.retryFallback.retryFallback": "Retry Model Fallback",
-	"settings.returnPrimaryModelAfter":
-		"Return to the primary model after its suppression window ends",
+	"settings.returnPrimaryModelAfter": "Return to the primary model after its suppression window ends",
 	"settings.rewriteAssistantOutput.desc":
 		"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
 	"settings.appearance.display.rewriteScrollback": "Rewrite Scrollback",
 	"settings.shell.evalRuntimes.rubyEvalBackend": "Ruby Eval Backend",
 	"settings.shell.evalRuntimes.rubyInterpreter": "Ruby Interpreter",
-	"settings.ruleNamesIgnoreEntirely":
-		"Rule names to ignore entirely (applies to bundled defaults and your own rules)",
+	"settings.ruleNamesIgnoreEntirely": "Rule names to ignore entirely (applies to bundled defaults and your own rules)",
 	"settings.rules": "Rules (TTSR)",
-	"settings.runModesWhereActive":
-		"Run modes where active goals may auto-continue between turns",
+	"settings.runModesWhereActive": "Run modes where active goals may auto-continue between turns",
 	"settings.runSecretObfuscatorOver":
 		"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)",
 	"settings.sampleTopKTokens": "Sample from top-K tokens (-1 = provider default)",
 	"settings.sampling": "Sampling",
-	"settings.samplingTemperature":
-		"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
+	"settings.samplingTemperature": "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
 	"settings.sandboxOnly": "Sandbox Only",
-	"settings.saveGeneratedHandoff.info":
-		"Save generated handoff documents to markdown files for the auto-handoff flow",
+	"settings.saveGeneratedHandoff.info": "Save generated handoff documents to markdown files for the auto-handoff flow",
 	"settings.context.compaction.saveHandoffDocs": "Save Handoff Docs",
 	"settings.saveProjectRole.info":
 		"Save project role models in .musepi/config.yml; missing project roles use global defaults",
-	"settings.saveRoleModelsActive":
-		"Save role models in the active profile config (current behavior)",
+	"settings.saveRoleModelsActive": "Save role models in the active profile config (current behavior)",
 	"settings.scale": "Scale",
 	"settings.tools.computer.screenGlowIndicator": "Screen Glow Indicator",
 	"settings.tools.grepBrowser.screenshotDirectory": "Screenshot Directory",
@@ -2945,8 +2819,7 @@ export const settings = {
 	"settings.showHardwareCursor": "Show Hardware Cursor",
 	"settings.appearance.statusLine.showHookStatus": "Show Hook Status",
 	"settings.appearance.images.showInline": "Show Inline Images",
-	"settings.showNewlyAddedOnboarding":
-		"Show newly added onboarding steps once per setup version",
+	"settings.showNewlyAddedOnboarding": "Show newly added onboarding steps once per setup version",
 	"settings.showPerTurnToken": "Show per-turn token usage on assistant messages",
 	"settings.showReleaseChangeCounts": "Show release and change counts with a /changelog hint",
 	"settings.appearance.display.showResolvedModelBadge": "Show Resolved Model Badge",
@@ -2959,8 +2832,7 @@ export const settings = {
 	"settings.showRecentReleaseNotes": "Show the recent release notes in full",
 	"settings.showThinkingLevel.info":
 		"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.",
-	"settings.showTokenBudgetAlongside":
-		"Show token budget alongside the goal indicator in the status line",
+	"settings.showTokenBudgetAlongside": "Show token budget alongside the goal indicator in the status line",
 	"settings.appearance.display.showTokenUsage": "Show Token Usage",
 	"settings.single": "Single",
 	"settings.tasks.commandsSkills.skillCommands": "Skill Commands",
@@ -2979,11 +2851,9 @@ export const settings = {
 	"settings.tasks.subagents.softSubagentRequestBudget": "Soft Subagent Request Budget",
 	"settings.solidArrows": "Solid arrows (Nerd Font)",
 	"settings.solidBlocks": "Solid blocks",
-	"settings.sourceOutlineMode.info":
-		"Source outline mode for cat/read of source files: default or aggressive",
+	"settings.sourceOutlineMode.info": "Source outline mode for cat/read of source files: default or aggressive",
 	"settings.spaceOnly": "Space only",
-	"settings.speakAssistantS.info":
-		"Speak the assistant's output aloud through the speakers as it streams",
+	"settings.speakAssistantS.info": "Speak the assistant's output aloud through the speakers as it streams",
 	"settings.speech": "Speech",
 	"settings.tools.availableTools.speechGeneration": "Speech Generation",
 	"settings.interaction.speech.model": "Speech Model",
@@ -3014,8 +2884,7 @@ export const settings = {
 	"settings.subagents": "Subagents",
 	"settings.suggestEmojisName.info":
 		"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
-	"settings.suggestsTodoList.info":
-		"Suggests a todo list on the first message (reminder, not forced)",
+	"settings.suggestsTodoList.info": "Suggests a todo list on the first message (reminder, not forced)",
 	"settings.summarizePlaceKeepCurrent": "Summarize in-place and keep the current session",
 	"settings.summary": "Summary",
 	"settings.context.compaction.supersedeStaleReads": "Supersede Stale Reads",
@@ -3027,12 +2896,10 @@ export const settings = {
 	"settings.temperature": "Temperature",
 	"settings.appearance.display.terminalHyperlinks": "Terminal Hyperlinks",
 	"settings.appearance.display.terminalTitleRunState": "Terminal Title Run State",
-	"settings.terseEvidenceFirst.info":
-		"Terse, evidence-first engineer; dense, action-oriented replies",
+	"settings.terseEvidenceFirst.info": "Terse, evidence-first engineer; dense, action-oriented replies",
 	"settings.textVerbosity": "Text Verbosity",
 	"settings.providers.services.textSpeechProvider": "Text-to-Speech Provider",
-	"settings.originalSnapcompactShape":
-		"The original snapcompact shape (pre-shape-table sessions rendered this).",
+	"settings.originalSnapcompactShape": "The original snapcompact shape (pre-shape-table sessions rendered this).",
 	"settings.theme2": "Theme",
 	"settings.themeUsedTerminalHas": "Theme used when the terminal has a dark background",
 	"settings.themeUsedTerminalHasLightBackground": "Theme used when the terminal has a light background",
@@ -3056,8 +2923,7 @@ export const settings = {
 	"settings.toolCallingMode": "Tool Calling Mode",
 	"settings.toolNamesMay.info":
 		"Tool names that may repeat consecutively without triggering the cross-turn loop guard",
-	"settings.toolOutputAbove.info":
-		"Tool output above this size is saved as an artifact; tail is kept inline",
+	"settings.toolOutputAbove.info": "Tool output above this size is saved as an artifact; tail is kept inline",
 	"settings.model.thinking.toolCallLoopExempt": "Tool-Call Loop Exempt Tools",
 	"settings.model.thinking.toolCallLoopGuard": "Tool-Call Loop Guard",
 	"settings.model.thinking.toolCallLoopThreshold": "Tool-Call Loop Threshold",
@@ -3066,29 +2932,24 @@ export const settings = {
 	"settings.treatCodingPlan.desc":
 		"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.",
 	"settings.triple": "Triple",
-	"settings.tryProductionEndpoint.info":
-		"Try production endpoint, fail over to sandbox on 5xx/429",
+	"settings.tryProductionEndpoint.info": "Try production endpoint, fail over to sandbox on 5xx/429",
 	"settings.context.rulesTtsr.ttsrMode": "TTSR Context Mode",
 	"settings.context.rulesTtsr.ttsrInterruptMode": "TTSR Interrupt Mode",
 	"settings.context.rulesTtsr.ttsrRepeatGap": "TTSR Repeat Gap",
 	"settings.context.rulesTtsr.ttsrRepeatMode": "TTSR Repeat Mode",
 	"settings.turbo": "Turbo (Whisper large-v3)",
-	"settings.twoWordWrapped.info":
-		"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
+	"settings.twoWordWrapped.info": "Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
 	"settings.twoColumnDocLayout": "Two-column doc layout with sentence-hue ink.",
-	"settings.twoColumnDoc.info":
-		"Two-column doc layout, sentence-hue ink, function words dimmed gray.",
+	"settings.twoColumnDoc.info": "Two-column doc layout, sentence-hue ink, function words dimmed gray.",
 	"settings.typicalThreshold": "Typical threshold",
 	"settings.interaction.magicKeywords.ultrathinkKeyword": "Ultrathink Keyword",
 	"settings.providers.tinyModel.unexpectedStopModel": "Unexpected Stop Model",
 	"settings.unlimited": "Unlimited",
 	"settings.unsciiSquareCell.info":
 		"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.",
-	"settings.unsciiSqueezed6x6.info":
-		"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.",
+	"settings.unsciiSqueezed6x6.info": "unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.",
 	"settings.unset": "Unset",
-	"settings.uploadShareServer":
-		"Upload to the share server (no GitHub account needed; avoids gist API rate limits)",
+	"settings.uploadShareServer": "Upload to the share server (no GitHub account needed; avoids gist API rate limits)",
 	"settings.model.retryFallback.usageAwareFallback": "Usage-Aware Fallback",
 	"settings.useSmallModel.desc":
 		"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.",
@@ -3104,8 +2965,7 @@ export const settings = {
 	"settings.useHermesStyleBand": "Use Hermes-style in-band tool calls.",
 	"settings.useKimiStyleBand": "Use Kimi-style in-band tool calls.",
 	"settings.useModelProviderDefault": "Use model/provider default websocket behavior",
-	"settings.useNativeTool.info":
-		"Use native tool calls unless the model is known not to support them.",
+	"settings.useNativeTool.info": "Use native tool calls unless the model is known not to support them.",
 	"settings.usePercentageBasedThreshold": "Use percentage-based threshold",
 	"settings.useProviderDefault": "Use provider default",
 	"settings.useProviderDefaultsPi": "Use provider defaults and PI_* timeout env vars",
@@ -3121,8 +2981,7 @@ export const settings = {
 	"settings.useMinimaxOwnedDialect": "Use the MiniMax owned dialect.",
 	"settings.useModelSServer": "Use the model's server-declared protocol",
 	"settings.useQwen3OwnedDialect": "Use the Qwen3 owned dialect.",
-	"settings.useSessionName.info":
-		"Use the session name color for the editor border and status line gap",
+	"settings.useSessionName.info": "Use the session name color for the editor border and status line gap",
 	"settings.useTerminalS.desc":
 		"Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.",
 	"settings.userDefinedSegments": "User-defined segments",
@@ -3137,17 +2996,14 @@ export const settings = {
 	"settings.veryPermissive": "Very permissive",
 	"settings.vision": "Vision",
 	"settings.voiceUsedCodexBacked": "Voice used by Codex-backed realtime voice sessions",
-	"settings.warmEncouragingCollaborator.info":
-		"Warm, encouraging collaborator focused on momentum and morale",
+	"settings.warmEncouragingCollaborator.info": "Warm, encouraging collaborator focused on momentum and morale",
 	"settings.tools.availableTools.webSearch": "Web Search",
 	"settings.providers.services.webSearchProviderOrder": "Web Search Provider Order",
 	"settings.providers.services.webSearchTimeout": "Web Search Timeout",
 	"settings.websocketPolicyOpenai.info":
 		"Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)",
-	"settings.whatHappensBetweenLoop":
-		"What happens between /loop iterations before re-submitting the prompt",
-	"settings.whatDoEvery.info":
-		"What to do when every same-provider coding-plan account is inside the reserve margin.",
+	"settings.whatHappensBetweenLoop": "What happens between /loop iterations before re-submitting the prompt",
+	"settings.whatDoEvery.info": "What to do when every same-provider coding-plan account is inside the reserve margin.",
 	"settings.whatDoPartialOutput": "What to do with partial output when TTSR triggers",
 	"settings.whatSpeakAll.desc":
 		"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end",
@@ -3161,8 +3017,7 @@ export const settings = {
 		"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it",
 	"settings.iSaySubmit": 'Say "Submit" to trigger',
 	"settings.steeringMessagesInterruptTool": "When steering messages interrupt tool execution",
-	"settings.interruptMidStreamVs":
-		"When to interrupt mid-stream vs inject warning after completion",
+	"settings.interruptMidStreamVs": "When to interrupt mid-stream vs inject warning after completion",
 	"settings.returnPrimaryModelAfterFallback": "When to return to the primary model after a fallback",
 	"settings.xdPromptDocs.desc":
 		"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.",
@@ -3177,8 +3032,7 @@ export const settings = {
 	"settings.wrapPathsUrls.desc":
 		"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)",
 	"settings.write": "Write",
-	"settings.xOrg6x12.info":
-		"X.org 6x12 glyphs, black ink, function words dimmed gray.",
+	"settings.xOrg6x12.info": "X.org 6x12 glyphs, black ink, function words dimmed gray.",
 	"settings.xOrg8x13.info": "X.org 8x13 glyphs, black ink.",
 	"settings.xaiGrokVoice": "xAI Grok Voice",
 	"settings.tools.discoveryMcp.xdInlineDevices": "xd:// Inline Devices",
@@ -3197,7 +3051,8 @@ export const settings = {
 	"settings.modesCompleteBadge": "Full prompt",
 	"settings.modesCoreOnlyBadge": "Core-only",
 	"settings.modesNew": "New preset",
-	"settings.modesCreatePlaceholder": "Describe the preset you want (e.g. a focus-coding one) — Creator designs & saves it…",
+	"settings.modesCreatePlaceholder":
+		"Describe the preset you want (e.g. a focus-coding one) — Creator designs & saves it…",
 	"settings.modesEdit": "Edit",
 	"settings.modesSave": "Save",
 	"settings.modesCancel": "Cancel",
@@ -3330,71 +3185,84 @@ export const settings = {
 	"settings.pluginInstallNoId": "The install request was not accepted. Try again.",
 	"settings.pluginInstallDoneWithName": "Installed {name}",
 	"settings.pluginInstallDropHint": "You can also drop a .tgz / .zip archive or a plugin folder here",
-	"settings.pluginInstallDropUnreadable": "Could not read the dropped file's path. Type the path in the field instead.",
-	"settings.pluginInstallDropUnsupported": "Only .tgz / .tar.gz / .zip archives and plugin folders can be dropped here.",
+	"settings.pluginInstallDropUnreadable":
+		"Could not read the dropped file's path. Type the path in the field instead.",
+	"settings.pluginInstallDropUnsupported":
+		"Only .tgz / .tar.gz / .zip archives and plugin folders can be dropped here.",
 	"settings.waitingSWithSeconds": "Waiting {seconds}s",
 	"settings.knowledge": "Project knowledge",
 	"settings.knowledgeCallFailed": "Knowledge call failed",
 	"settings.knowledgePlanOpened": "Opened plan “{title}”",
 	"settings.knowledgeOpenPanel": "Open in project knowledge",
 	"AGENTS.md": "AGENTS.md",
-	"APFS": "APFS",
-	"ASCII": "ASCII",
+	APFS: "APFS",
+	ASCII: "ASCII",
 	"Accent Rail": "Accent Rail",
-	"Also refresh between runs while the expected savings stay above the cost floor": "Also refresh between runs while the expected savings stay above the cost floor",
-	"Annotated": "Annotated",
-	"Annotated line with the context percentage and window embedded in the gauge": "Annotated line with the context percentage and window embedded in the gauge",
-	"Appearance": "Appearance",
-	"Append": "Append",
-	"Append full before/after source when an edit introduces an AST parse failure": "Append full before/after source when an edit introduces an AST parse failure",
-	"Apply confident macOS spelling corrections after completed words": "Apply confident macOS spelling corrections after completed words",
+	"Also refresh between runs while the expected savings stay above the cost floor":
+		"Also refresh between runs while the expected savings stay above the cost floor",
+	Annotated: "Annotated",
+	"Annotated line with the context percentage and window embedded in the gauge":
+		"Annotated line with the context percentage and window embedded in the gauge",
+	Appearance: "Appearance",
+	Append: "Append",
+	"Append full before/after source when an edit introduces an AST parse failure":
+		"Append full before/after source when an edit introduces an AST parse failure",
+	"Apply confident macOS spelling corrections after completed words":
+		"Apply confident macOS spelling corrections after completed words",
 	"Async Compaction": "Async Compaction",
 	"Auto (bun-pty → node-pty fallback)": "Auto (bun-pty → node-pty fallback)",
 	"Auto-Repair Syntax Errors": "Auto-Repair Syntax Errors",
 	"Auto-continue active goals in terminal/GUI sessions": "Auto-continue active goals in terminal/GUI sessions",
 	"Autocorrect (macOS)": "Autocorrect (macOS)",
-	"Bash": "Bash",
-	"Board": "Board",
-	"Borderless": "Borderless",
-	"Branch": "Branch",
+	Bash: "Bash",
+	Board: "Board",
+	Borderless: "Borderless",
+	Branch: "Branch",
 	"Bun pty (native, lowest latency)": "Bun pty (native, lowest latency)",
 	"Cache Warming": "Cache Warming",
-	"Canary": "Canary",
+	Canary: "Canary",
 	"Check for musepi updates on startup": "Check for musepi updates on startup",
 	"Claude Code": "Claude Code",
-	"Clean prompt glyph with status line at bottom, no box borders": "Clean prompt glyph with status line at bottom, no box borders",
+	"Clean prompt glyph with status line at bottom, no box borders":
+		"Clean prompt glyph with status line at bottom, no box borders",
 	"Codex Reset Fireworks": "Codex Reset Fireworks",
 	"Compact Field": "Compact Field",
 	"Compaction Method Order": "Compaction Method Order",
 	"Composer Shape": "Composer Shape",
-	"Context": "Context",
+	Context: "Context",
 	"Context-Reactive Line": "Context-Reactive Line",
 	"Custom prompt sections": "Custom prompt sections",
-	"DeepSeek": "DeepSeek",
+	DeepSeek: "DeepSeek",
 	"Disable cache warming": "Disable cache warming",
-	"Enable the board tool: read and write the desktop board's card wall": "Enable the board tool: read and write the desktop board's card wall",
-	"Enable the knowledge tool: read and write the project's notes, todos and plans": "Enable the knowledge tool: read and write the project's notes, todos and plans",
-	"Enable the widget tool: draw a live card inline in the transcript": "Enable the widget tool: draw a live card inline in the transcript",
-	"English": "English",
-	"Erase all terminal scrollback, then replay one current-width transcript": "Erase all terminal scrollback, then replay one current-width transcript",
+	"Enable the board tool: read and write the desktop board's card wall":
+		"Enable the board tool: read and write the desktop board's card wall",
+	"Enable the knowledge tool: read and write the project's notes, todos and plans":
+		"Enable the knowledge tool: read and write the project's notes, todos and plans",
+	"Enable the widget tool: draw a live card inline in the transcript":
+		"Enable the widget tool: draw a live card inline in the transcript",
+	English: "English",
+	"Erase all terminal scrollback, then replay one current-width transcript":
+		"Erase all terminal scrollback, then replay one current-width transcript",
 	"Extended Context": "Extended Context",
 	"Extension Meta Tools": "Extension Meta Tools",
 	"External Thinking": "External Thinking",
 	"Filled one-row field anchored by a single accent rail": "Filled one-row field anchored by a single accent rail",
 	"Filled one-row field with accent end caps": "Filled one-row field with accent end caps",
 	"Framed horizontal rules with status line at bottom": "Framed horizontal rules with status line at bottom",
-	"Full-width horizontal rules above and below, status line at bottom": "Full-width horizontal rules above and below, status line at bottom",
+	"Full-width horizontal rules above and below, status line at bottom":
+		"Full-width horizontal rules above and below, status line at bottom",
 	"GUI Managed Browser": "GUI Managed Browser",
 	"GUI Managed Browser URL": "GUI Managed Browser URL",
-	"Gemini": "Gemini",
-	"Gemma": "Gemma",
-	"Generic": "Generic",
-	"Glob": "Glob",
-	"Grep": "Grep",
-	"Harmony": "Harmony",
-	"Hermes": "Hermes",
-	"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving": "Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving",
-	"Idle": "Idle",
+	Gemini: "Gemini",
+	Gemma: "Gemma",
+	Generic: "Generic",
+	Glob: "Glob",
+	Grep: "Grep",
+	Harmony: "Harmony",
+	Hermes: "Hermes",
+	"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving":
+		"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving",
+	Idle: "Idle",
 	"Image URL Backends": "Image URL Backends",
 	"Image URL Bind Host": "Image URL Bind Host",
 	"Image URL Lifetime (hours)": "Image URL Lifetime (hours)",
@@ -3402,57 +3270,57 @@ export const settings = {
 	"Image URL SSH Remote Port": "Image URL SSH Remote Port",
 	"Image URL SSH Target": "Image URL SSH Target",
 	"Image Upload Command": "Image Upload Command",
-	"Interaction": "Interaction",
+	Interaction: "Interaction",
 	"Interactive sessions": "Interactive sessions",
-	"Jina": "Jina",
-	"Kimi": "Kimi",
-	"Lynx": "Lynx",
-	"Mechanical": "Mechanical",
-	"Memory": "Memory",
-	"MiniMax": "MiniMax",
-	"Model": "Model",
-	"Nerd": "Nerd",
+	Jina: "Jina",
+	Kimi: "Kimi",
+	Lynx: "Lynx",
+	Mechanical: "Mechanical",
+	Memory: "Memory",
+	MiniMax: "MiniMax",
+	Model: "Model",
+	Nerd: "Nerd",
 	"Node pty (bridge process, more portable)": "Node pty (bridge process, more portable)",
-	"OpenAI": "OpenAI",
+	OpenAI: "OpenAI",
 	"OpenAI WebSockets": "OpenAI WebSockets",
-	"Overlayfs": "Overlayfs",
-	"Parallel": "Parallel",
-	"Patch": "Patch",
-	"Percentage": "Percentage",
-	"Pi": "Pi",
-	"Preserve": "Preserve",
-	"ProjFS": "ProjFS",
+	Overlayfs: "Overlayfs",
+	Parallel: "Parallel",
+	Patch: "Patch",
+	Percentage: "Percentage",
+	Pi: "Pi",
+	Preserve: "Preserve",
+	ProjFS: "ProjFS",
 	"Project knowledge": "Project knowledge",
-	"Providers": "Providers",
+	Providers: "Providers",
 	"Public Internet Only": "Public Internet Only",
-	"Qwen3": "Qwen3",
-	"Rebuild": "Rebuild",
+	Qwen3: "Qwen3",
+	Rebuild: "Rebuild",
 	"Record Parse Regressions": "Record Parse Regressions",
-	"Reflink": "Reflink",
+	Reflink: "Reflink",
 	"Rounded Box (Default)": "Rounded Box (Default)",
 	"Serve Images as URLs": "Serve Images as URLs",
-	"Shell": "Shell",
+	Shell: "Shell",
 	"Speech Language Hint": "Speech Language Hint",
-	"Stable": "Stable",
-	"Streaming": "Streaming",
-	"Tasks": "Tasks",
+	Stable: "Stable",
+	Streaming: "Streaming",
+	Tasks: "Tasks",
 	"Terminal Provider": "Terminal Provider",
 	"Tool Call Handler Timeout (ms)": "Tool Call Handler Timeout (ms)",
-	"Tools": "Tools",
+	Tools: "Tools",
 	"Top K": "Top K",
 	"Top P": "Top P",
 	"Top Rule Dock": "Top Rule Dock",
-	"Trafilatura": "Trafilatura",
+	Trafilatura: "Trafilatura",
 	"Typo Detection (macOS)": "Typo Detection (macOS)",
 	"Unexpected Stops": "Unexpected Stops",
-	"Unicode": "Unicode",
+	Unicode: "Unicode",
 	"Update Channel": "Update Channel",
 	"Web UI URL": "Web UI URL",
-	"Widgets": "Widgets",
+	Widgets: "Widgets",
 	"Word Autocomplete (macOS)": "Word Autocomplete (macOS)",
-	"XML": "XML",
-	"ZFS": "ZFS",
-	"btrfs": "btrfs",
+	XML: "XML",
+	ZFS: "ZFS",
+	btrfs: "btrfs",
 	"1 minute": "1 minute",
 	"10 items": "10 items",
 	"10 lines": "10 lines",
@@ -3464,14 +3332,14 @@ export const settings = {
 	"64 tasks": "64 tasks",
 	"AST Edit": "AST Edit",
 	"AST Grep": "AST Grep",
-	"Balanced": "Balanced",
-	"Computer": "Computer",
-	"Creative": "Creative",
+	Balanced: "Balanced",
+	Computer: "Computer",
+	Creative: "Creative",
 	"Default.": "Default.",
-	"Disabled": "Disabled",
-	"Embedded": "Embedded",
-	"Expanded": "Expanded",
-	"Friendly": "Friendly",
+	Disabled: "Disabled",
+	Embedded: "Embedded",
+	Expanded: "Expanded",
+	Friendly: "Friendly",
 	"0 KB": "0 KB",
 	"1 KB": "1 KB",
 	"1 MB": "1 MB",
@@ -3486,8 +3354,10 @@ export const settings = {
 	"50 KB": "50 KB",
 	"500 KB": "500 KB",
 	"75 KB": "75 KB",
-	"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps": "Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps",
-	"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16": "On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16",
+	"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps":
+		"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps",
+	"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16":
+		"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16",
 	"Solid accent line, no context feedback": "Solid accent line, no context feedback",
 	"Used portion in accent color, remainder dimmed": "Used portion in accent color, remainder dimmed",
 	"Visual layout of the input editor and status line": "Visual layout of the input editor and status line",
@@ -3495,70 +3365,118 @@ export const settings = {
 	":floor": ":floor",
 	":nitro": ":nitro",
 	":online": ":online",
-	"AI": "AI",
-	"Anthropic": "Anthropic",
-	"Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})": "Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})",
-	"Automatically fix syntax errors introduced by edits using AST-based localization and a small model": "Automatically fix syntax errors introduced by edits using AST-based localization and a small model",
-	"Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.": "Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.",
-	"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.": "BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.",
-	"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.": "Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace": "Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
-	"Exa": "Exa",
-	"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.": "Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.",
-	"Externally reachable base URL fronting the blob server (required for ssh, optional for direct)": "Externally reachable base URL fronting the blob server (required for ssh, optional for direct)",
-	"GLM": "GLM",
+	AI: "AI",
+	Anthropic: "Anthropic",
+	"Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})":
+		"Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})",
+	"Automatically fix syntax errors introduced by edits using AST-based localization and a small model":
+		"Automatically fix syntax errors introduced by edits using AST-based localization and a small model",
+	"Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.":
+		"Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.",
+	"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.":
+		"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.",
+	"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
+		"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
+	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
+		"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
+	Exa: "Exa",
+	"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.":
+		"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.",
+	"Externally reachable base URL fronting the blob server (required for ssh, optional for direct)":
+		"Externally reachable base URL fronting the blob server (required for ssh, optional for direct)",
+	GLM: "GLM",
 	"GitHub CLI": "GitHub CLI",
 	"GitHub Gist": "GitHub Gist",
-	"How the line between the left and right segments reflects context usage (box composer only)": "How the line between the left and right segments reflects context usage (box composer only)",
-	"Just under the 200K tier break some providers bill double past": "Just under the 200K tier break some providers bill double past",
-	"Mark misspelled prompt words with the active macOS dictionaries": "Mark misspelled prompt words with the active macOS dictionaries",
-	"Maximum concurrent LLM requests per provider id (for example \"openai\" or \"anthropic\"), shared across local OMP processes with this config root. Omitted providers are unlimited.": "Maximum concurrent LLM requests per provider id (for example \"openai\" or \"anthropic\"), shared across local OMP processes with this config root. Omitted providers are unlimited.",
-	"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).": "Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).",
-	"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).": "Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).",
-	"Mechanical + small-model classification of text-only stops": "Mechanical + small-model classification of text-only stops",
-	"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend": "On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend",
-	"Ordered destinations tried when publishing images for provider access": "Ordered destinations tried when publishing images for provider access",
-	"Percentage plus ticks at the speculative and auto-compaction boundaries": "Percentage plus ticks at the speculative and auto-compaction boundaries",
-	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count": "Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count",
-	"Powerline": "Powerline",
-	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice": "Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice",
-	"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning": "Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning",
-	"Protect expensive prefixes during long tool executions; stops when the agent settles": "Protect expensive prefixes during long tool executions; stops when the agent settles",
-	"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires": "Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires",
-	"Remote listen port of the ssh reverse forward that your web server proxies to": "Remote listen port of the ssh reverse forward that your web server proxies to",
-	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.": "Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.",
-	"Repaint only the viewport and keep history wrapped at its old width": "Repaint only the viewport and keep history wrapped at its old width",
-	"Replay the transcript at the new width below retained history": "Replay the transcript at the new width below retained history",
-	"Retry stops with no visible assistant message; tool calls are excluded (default)": "Retry stops with no visible assistant message; tool calls are excluded (default)",
-	"Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)": "Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)",
-	"Show macOS dictionary word completions as inline hints accepted with Tab": "Show macOS dictionary word completions as inline hints accepted with Tab",
+	"How the line between the left and right segments reflects context usage (box composer only)":
+		"How the line between the left and right segments reflects context usage (box composer only)",
+	"Just under the 200K tier break some providers bill double past":
+		"Just under the 200K tier break some providers bill double past",
+	"Mark misspelled prompt words with the active macOS dictionaries":
+		"Mark misspelled prompt words with the active macOS dictionaries",
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
+		'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.',
+	"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).":
+		"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).",
+	"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).":
+		"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).",
+	"Mechanical + small-model classification of text-only stops":
+		"Mechanical + small-model classification of text-only stops",
+	"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend":
+		"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend",
+	"Ordered destinations tried when publishing images for provider access":
+		"Ordered destinations tried when publishing images for provider access",
+	"Percentage plus ticks at the speculative and auto-compaction boundaries":
+		"Percentage plus ticks at the speculative and auto-compaction boundaries",
+	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count":
+		"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count",
+	Powerline: "Powerline",
+	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice":
+		"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice",
+	"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning":
+		"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning",
+	"Protect expensive prefixes during long tool executions; stops when the agent settles":
+		"Protect expensive prefixes during long tool executions; stops when the agent settles",
+	"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires":
+		"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires",
+	"Remote listen port of the ssh reverse forward that your web server proxies to":
+		"Remote listen port of the ssh reverse forward that your web server proxies to",
+	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.":
+		"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.",
+	"Repaint only the viewport and keep history wrapped at its old width":
+		"Repaint only the viewport and keep history wrapped at its old width",
+	"Replay the transcript at the new width below retained history":
+		"Replay the transcript at the new width below retained history",
+	"Retry stops with no visible assistant message; tool calls are excluded (default)":
+		"Retry stops with no visible assistant message; tool calls are excluded (default)",
+	"Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)":
+		"Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)",
+	"Show macOS dictionary word completions as inline hints accepted with Tab":
+		"Show macOS dictionary word completions as inline hints accepted with Tab",
 	"Silver 16, CJK": "Silver 16, CJK",
 	"Single top rule with status docked onto it and below": "Single top rule with status docked onto it and below",
-	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed": "Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed",
-	"Status line embedded in top border, compact 2-line prompt": "Status line embedded in top border, compact 2-line prompt",
-	"TTSR": "TTSR",
-	"Update channel used by omp update and the startup update check": "Update channel used by omp update and the startup update check",
-	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window": "Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window",
-	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections": "User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections",
-	"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)": "Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)",
-	"Yolo": "Yolo",
+	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed":
+		"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed",
+	"Status line embedded in top border, compact 2-line prompt":
+		"Status line embedded in top border, compact 2-line prompt",
+	TTSR: "TTSR",
+	"Update channel used by omp update and the startup update check":
+		"Update channel used by omp update and the startup update check",
+	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window":
+		"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window",
+	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections":
+		"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections",
+	"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)":
+		"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)",
+	Yolo: "Yolo",
 	"api.kimi.com": "api.kimi.com",
 	"api.moonshot.ai": "api.moonshot.ai",
 	"user@host destination for the ssh reverse forward": "user@host destination for the ssh reverse forward",
-	"使用中文界面": "使用中文界面",
-	"简体中文": "简体中文",
-	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.": "Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.",
-	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.": "Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.": "Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.",
-	"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).": "Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).",
-	"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.": "Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.",
-	"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.": "Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.",
-	"Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.": "Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.",
-	"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.": "Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.",
-	"Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).": "Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).",
-	"Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails": "Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails",
-	"Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.": "Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.",
-	"Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs": "Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs",
+	使用中文界面: "使用中文界面",
+	简体中文: "简体中文",
+	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
+		"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.",
+	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.":
+		"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.":
+		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.",
+	"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).":
+		"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).",
+	"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.":
+		"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.",
+	"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.":
+		"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.",
+	"Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.":
+		"Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.",
+	"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.":
+		"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.",
+	"Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).":
+		"Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).",
+	"Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails":
+		"Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails",
+	"Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.":
+		"Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.",
+	"Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs":
+		"Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs",
 	"0 lines": "0 lines",
 	"0 turns": "0 turns",
 	"1 hour": "1 hour",
@@ -3617,65 +3535,85 @@ export const settings = {
 	"8 tasks": "8 tasks",
 	"90 requests": "90 requests",
 	"AI-generated commit message from diff": "AI-generated commit message from diff",
-	"API format for Kimi Code provider (auto follows live model metadata)": "API format for Kimi Code provider (auto follows live model metadata)",
+	"API format for Kimi Code provider (auto follows live model metadata)":
+		"API format for Kimi Code provider (auto follows live model metadata)",
 	"Abort On Fabricated Tool Result": "Abort On Fabricated Tool Result",
 	"Abort on Failed Preview": "Abort on Failed Preview",
-	"Abort streaming edit tool calls when patch preview fails": "Abort streaming edit tool calls when patch preview fails",
-	"Accept high-confidence fuzzy matches for whitespace differences": "Accept high-confidence fuzzy matches for whitespace differences",
+	"Abort streaming edit tool calls when patch preview fails":
+		"Abort streaming edit tool calls when patch preview fails",
+	"Accept high-confidence fuzzy matches for whitespace differences":
+		"Accept high-confidence fuzzy matches for whitespace differences",
 	"Act only when nearly exhausted": "Act only when nearly exhausted",
 	"Action when pressing Escape twice with empty editor": "Action when pressing Escape twice with empty editor",
 	"Additional Workspace Dirs": "Additional Workspace Dirs",
 	"Adds delegation guidance to the system prompt": "Adds delegation guidance to the system prompt",
-	"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.": "Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.",
+	"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.":
+		"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.",
 	"Advisor Immune Turns": "Advisor Immune Turns",
 	"Advisor Sync Backlog": "Advisor Sync Backlog",
-	"After an advisor concern or blocker interrupts, route further concerns/blockers non-interruptingly for this many primary turns.": "After an advisor concern or blocker interrupts, route further concerns/blockers non-interruptingly for this many primary turns.",
-	"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills": "After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills",
+	"After an advisor concern or blocker interrupts, route further concerns/blockers non-interruptingly for this many primary turns.":
+		"After an advisor concern or blocker interrupts, route further concerns/blockers non-interruptingly for this many primary turns.",
+	"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills":
+		"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills",
 	"Agent Idle TTL": "Agent Idle TTL",
 	"Aggressive context usage": "Aggressive context usage",
 	"Agnes Video Generation": "Agnes Video Generation",
-	"All": "All",
+	All: "All",
 	"All (messages + thinking)": "All (messages + thinking)",
 	"All Devices": "All Devices",
 	"All segments including time": "All segments including time",
 	"Allow every concern/blocker to interrupt.": "Allow every concern/blocker to interrupt.",
 	"Allow repetition": "Allow repetition",
-	"Allow retry recovery to switch to configured fallback models": "Allow retry recovery to switch to configured fallback models",
-	"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.": "Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.",
-	"Allow the eval tool to dispatch JavaScript cells to the in-process runtime": "Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
-	"Allow the eval tool to dispatch Julia cells to the persistent Julia kernel": "Allow the eval tool to dispatch Julia cells to the persistent Julia kernel",
-	"Allow the eval tool to dispatch Python cells to the IPython kernel": "Allow the eval tool to dispatch Python cells to the IPython kernel",
-	"Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel": "Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel",
+	"Allow retry recovery to switch to configured fallback models":
+		"Allow retry recovery to switch to configured fallback models",
+	"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.":
+		"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.",
+	"Allow the eval tool to dispatch JavaScript cells to the in-process runtime":
+		"Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
+	"Allow the eval tool to dispatch Julia cells to the persistent Julia kernel":
+		"Allow the eval tool to dispatch Julia cells to the persistent Julia kernel",
+	"Allow the eval tool to dispatch Python cells to the IPython kernel":
+		"Allow the eval tool to dispatch Python cells to the IPython kernel",
+	"Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel":
+		"Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel",
 	"Allow the read tool to fetch and process URLs": "Allow the read tool to fetch and process URLs",
-	"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)": "Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)",
-	"Also keep the display from idle-sleeping (caffeinate -i -d)": "Also keep the display from idle-sleeping (caffeinate -i -d)",
-	"Always": "Always",
+	"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)":
+		"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)",
+	"Also keep the display from idle-sleeping (caffeinate -i -d)":
+		"Also keep the display from idle-sleeping (caffeinate -i -d)",
+	Always: "Always",
 	"Always ask": "Always ask",
 	"Always enable append-only context": "Always enable append-only context",
 	"Always inline descriptors in the system prompt": "Always inline descriptors in the system prompt",
 	"Always select the next eligible configured fallback": "Always select the next eligible configured fallback",
 	"Always use the URL configured below": "Always use the URL configured below",
-	"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.": "Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.",
-	"Amount of tail content kept inline when output spills to artifact": "Amount of tail content kept inline when output spills to artifact",
+	"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.":
+		"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.",
+	"Amount of tail content kept inline when output spills to artifact":
+		"Amount of tail content kept inline when output spills to artifact",
 	"Animation style for working/loading messages": "Animation style for working/loading messages",
 	"Anthropic Server-Side Fallback (Fable 5)": "Anthropic Server-Side Fallback (Fable 5)",
 	"Antigravity Endpoint Mode": "Antigravity Endpoint Mode",
 	"Append-Only Context": "Append-Only Context",
 	"Apply Isolated Changes": "Apply Isolated Changes",
-	"Apply loop guard to assistant prose messages in addition to thinking logs": "Apply loop guard to assistant prose messages in addition to thinking logs",
+	"Apply loop guard to assistant prose messages in addition to thinking logs":
+		"Apply loop guard to assistant prose messages in addition to thinking logs",
 	"Artifact Head Size (KB)": "Artifact Head Size (KB)",
 	"Artifact Spill Threshold (KB)": "Artifact Spill Threshold (KB)",
 	"Artifact Tail Lines": "Artifact Tail Lines",
 	"Artifact Tail Size (KB)": "Artifact Tail Size (KB)",
-	"Ask": "Ask",
+	Ask: "Ask",
 	"Ask Notification": "Ask Notification",
 	"Ask Timeout": "Ask Timeout",
-	"Ask the agent to describe the intent of each tool call before executing it": "Ask the agent to describe the intent of each tool call before executing it",
-	"Ask the official registry first, then try the public mirror if the failure is one it could answer": "Ask the official registry first, then try the public mirror if the failure is one it could answer",
+	"Ask the agent to describe the intent of each tool call before executing it":
+		"Ask the agent to describe the intent of each tool call before executing it",
+	"Ask the official registry first, then try the public mirror if the failure is one it could answer":
+		"Ask the official registry first, then try the public mirror if the failure is one it could answer",
 	"Assistant messages": "Assistant messages",
 	"Async Execution": "Async Execution",
-	"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.": "At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.",
-	"Auto": "Auto",
+	"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.":
+		"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.",
+	Auto: "Auto",
 	"Auto (only for models without vision)": "Auto (only for models without vision)",
 	"Auto QA": "Auto QA",
 	"Auto QA Push Endpoint": "Auto QA Push Endpoint",
@@ -3686,67 +3624,91 @@ export const settings = {
 	"Auto-Learn (experimental)": "Auto-Learn (experimental)",
 	"Auto-Promote Context": "Auto-Promote Context",
 	"Auto-Resize Images": "Auto-Resize Images",
-	"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.": "Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.",
-	"Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.": "Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.",
-	"Auto-approve read-only tools; require confirmation for write and exec tools.": "Auto-approve read-only tools; require confirmation for write and exec tools.",
+	"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.":
+		"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.",
+	"Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.":
+		"Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.",
+	"Auto-approve read-only tools; require confirmation for write and exec tools.":
+		"Auto-approve read-only tools; require confirmation for write and exec tools.",
 	"Auto-fallback": "Auto-fallback",
 	"Auto-installs via uv/pip": "Auto-installs via uv/pip",
-	"Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed": "Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed",
+	"Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed":
+		"Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed",
 	"Auto-read new replies": "Auto-read new replies",
 	"Auto-run capture at stop": "Auto-run capture at stop",
-	"Auto-select the recommended ask option after this many seconds (0 disables)": "Auto-select the recommended ask option after this many seconds (0 disables)",
+	"Auto-select the recommended ask option after this many seconds (0 disables)":
+		"Auto-select the recommended ask option after this many seconds (0 disables)",
 	"Autocomplete Items": "Autocomplete Items",
-	"Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly": "Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly",
-	"Automatically apply successful isolated task changes to the parent checkout; disable to retain patch or branch artifacts": "Automatically apply successful isolated task changes to the parent checkout; disable to retain patch or branch artifacts",
-	"Automatically background long-running bash commands and deliver the result later": "Automatically background long-running bash commands and deliver the result later",
+	"Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly":
+		"Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly",
+	"Automatically apply successful isolated task changes to the parent checkout; disable to retain patch or branch artifacts":
+		"Automatically apply successful isolated task changes to the parent checkout; disable to retain patch or branch artifacts",
+	"Automatically background long-running bash commands and deliver the result later":
+		"Automatically background long-running bash commands and deliver the result later",
 	"Automatically compact context when it gets too large": "Automatically compact context when it gets too large",
-	"Automatically enter plan mode at the start of every new session": "Automatically enter plan mode at the start of every new session",
+	"Automatically enter plan mode at the start of every new session":
+		"Automatically enter plan mode at the start of every new session",
 	"Automatically format code files using LSP after writing": "Automatically format code files using LSP after writing",
-	"Automatically read aloud new assistant replies via the local TTS engine": "Automatically read aloud new assistant replies via the local TTS engine",
-	"Automatically resume the most recent session in the current directory": "Automatically resume the most recent session in the current directory",
+	"Automatically read aloud new assistant replies via the local TTS engine":
+		"Automatically read aloud new assistant replies via the local TTS engine",
+	"Automatically resume the most recent session in the current directory":
+		"Automatically resume the most recent session in the current directory",
 	"BAAI/bge-base-en-v1.5 (768d), English-only": "BAAI/bge-base-en-v1.5 (768d), English-only",
-	"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.": "BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.",
-	"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice": "Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice",
+	"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.":
+		"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.",
+	"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice":
+		"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice",
 	"Balance brevity and detail (default)": "Balance brevity and detail (default)",
 	"Balanced safety margin": "Balanced safety margin",
-	"Base URL of a self-hosted SearXNG instance used for web search": "Base URL of a self-hosted SearXNG instance used for web search",
+	"Base URL of a self-hosted SearXNG instance used for web search":
+		"Base URL of a self-hosted SearXNG instance used for web search",
 	"Bash Approval Patterns": "Bash Approval Patterns",
 	"Bash Auto-Background": "Bash Auto-Background",
 	"Bash Interceptor": "Bash Interceptor",
 	"Batch Task Calls": "Batch Task Calls",
 	"Bearer token for authenticated Hindsight servers": "Bearer token for authenticated Hindsight servers",
-	"Block": "Block",
+	Block: "Block",
 	"Block Auto-Generated Files": "Block Auto-Generated Files",
 	"Block Images": "Block Images",
 	"Block clone": "Block clone",
 	"Block shell commands that have dedicated tools": "Block shell commands that have dedicated tools",
 	"Branch Summaries": "Branch Summaries",
-	"Broad": "Broad",
-	"Browser": "Browser",
+	Broad: "Broad",
+	Browser: "Browser",
 	"Browser CDP URL": "Browser CDP URL",
 	"Browser Relay": "Browser Relay",
 	"Browser Relay URL": "Browser Relay URL",
-	"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only": "Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only",
+	"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only":
+		"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only",
 	"Built-in Rules": "Built-in Rules",
 	"Built-ins Only": "Built-ins Only",
 	"Cache Miss Marker": "Cache Miss Marker",
-	"Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free": "Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free",
-	"Cache system prompt + tool specs and keep an append-only message log so provider prefix caches (DeepSeek, Xiaomi/SGLang, Anthropic) hit at maximum rate. Auto enables for known prefix-cache providers.": "Cache system prompt + tool specs and keep an append-only message log so provider prefix caches (DeepSeek, Xiaomi/SGLang, Anthropic) hit at maximum rate. Auto enables for known prefix-cache providers.",
+	"Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free":
+		"Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free",
+	"Cache system prompt + tool specs and keep an append-only message log so provider prefix caches (DeepSeek, Xiaomi/SGLang, Anthropic) hit at maximum rate. Auto enables for known prefix-cache providers.":
+		"Cache system prompt + tool specs and keep an append-only message log so provider prefix caches (DeepSeek, Xiaomi/SGLang, Anthropic) hit at maximum rate. Auto enables for known prefix-cache providers.",
 	"Catalog Only": "Catalog Only",
-	"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape": "Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape",
-	"Check eligibility, then ask before spending the first saved reset.": "Check eligibility, then ask before spending the first saved reset.",
+	"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape":
+		"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape",
+	"Check eligibility, then ask before spending the first saved reset.":
+		"Check eligibility, then ask before spending the first saved reset.",
 	"Check for Updates": "Check for Updates",
 	"Check for plugin updates on startup": "Check for plugin updates on startup",
 	"Check on startup and auto-install updates": "Check on startup and auto-install updates",
 	"Check on startup and notify when updates are available": "Check on startup and notify when updates are available",
-	"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request": "Check thresholds at safe mid-turn tool-loop boundaries before the next provider request",
+	"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request":
+		"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request",
 	"Checkpoint/Rewind": "Checkpoint/Rewind",
-	"Cherry-picked high-quality providers (only defined for select models)": "Cherry-picked high-quality providers (only defined for select models)",
-	"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.": "Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.",
-	"Choose whether update notes start as a summary, full details, or stay hidden": "Choose whether update notes start as a summary, full details, or stay hidden",
-	"Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.": "Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.",
+	"Cherry-picked high-quality providers (only defined for select models)":
+		"Cherry-picked high-quality providers (only defined for select models)",
+	"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.":
+		"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.",
+	"Choose whether update notes start as a summary, full details, or stay hidden":
+		"Choose whether update notes start as a summary, full details, or stay hidden",
+	"Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.":
+		"Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.",
 	"Chunked retention sliced by turn boundaries": "Chunked retention sliced by turn boundaries",
-	"Classic": "Classic",
+	Classic: "Classic",
 	"Classifier may resolve max where the model supports it": "Classifier may resolve max where the model supports it",
 	"Classifier stops at xhigh (default)": "Classifier stops at xhigh (default)",
 	"Claude Project Commands": "Claude Project Commands",
@@ -3758,58 +3720,75 @@ export const settings = {
 	"Collapse Compacted History": "Collapse Compacted History",
 	"Color-Blind Mode": "Color-Blind Mode",
 	"Combine diffs and git apply": "Combine diffs and git apply",
-	"Commit message style for nested repo changes (generic or AI-generated)": "Commit message style for nested repo changes (generic or AI-generated)",
+	"Commit message style for nested repo changes (generic or AI-generated)":
+		"Commit message style for nested repo changes (generic or AI-generated)",
 	"Commit per task, merge with --no-ff": "Commit per task, merge with --no-ff",
-	"Communication style rendered into the system prompt's personality block": "Communication style rendered into the system prompt's personality block",
-	"Compact": "Compact",
+	"Communication style rendered into the system prompt's personality block":
+		"Communication style rendered into the system prompt's personality block",
+	Compact: "Compact",
 	"Compact Thinking Level": "Compact Thinking Level",
-	"Compact context while idle when token count exceeds threshold": "Compact context while idle when token count exceeds threshold",
+	"Compact context while idle when token count exceeds threshold":
+		"Compact context while idle when token count exceeds threshold",
 	"Compact the session context, then re-submit the prompt": "Compact the session context, then re-submit the prompt",
 	"Compaction Threshold": "Compaction Threshold",
 	"Compaction Token Limit": "Compaction Token Limit",
 	"Completion Notification": "Completion Notification",
 	"Composite all displays or select a native display id": "Composite all displays or select a native display id",
-	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent": "Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent",
+	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent":
+		"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent",
 	"Computer Display": "Computer Display",
 	"Computer Screenshot Height": "Computer Screenshot Height",
 	"Computer Screenshot Width": "Computer Screenshot Width",
 	"Confirm interactively": "Confirm interactively",
-	"Consecutive identical tool calls required before the corrective steer is injected": "Consecutive identical tool calls required before the corrective steer is injected",
-	"Conservative": "Conservative",
-	"Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.": "Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.",
-	"Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.": "Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.",
+	"Consecutive identical tool calls required before the corrective steer is injected":
+		"Consecutive identical tool calls required before the corrective steer is injected",
+	Conservative: "Conservative",
+	"Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.":
+		"Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.",
+	"Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.":
+		"Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.",
 	"Cooldown expiry": "Cooldown expiry",
 	"Create Todos Automatically": "Create Todos Automatically",
-	"Custom": "Custom",
+	Custom: "Custom",
 	"Custom Plugin Registry URL": "Custom Plugin Registry URL",
 	"Dark Theme": "Dark Theme",
-	"Debounce window in milliseconds for MCP resource updates before injecting them into the conversation": "Debounce window in milliseconds for MCP resource updates before injecting them into the conversation",
-	"Debug": "Debug",
+	"Debounce window in milliseconds for MCP resource updates before injecting them into the conversation":
+		"Debounce window in milliseconds for MCP resource updates before injecting them into the conversation",
+	Debug: "Debug",
 	"Deduplicate Diagnostics": "Deduplicate Diagnostics",
-	"Default": "Default",
-	"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.": "Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.",
+	Default: "Default",
+	"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.":
+		"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.",
 	"Default Read Limit": "Default Read Limit",
-	"Default approval behavior for tool calls. 'Always ask' auto-approves read-only tools only. 'Write' auto-approves read and workspace-write tools. 'Yolo' auto-approves all tiers; user policy may still prompt or block.": "Default approval behavior for tool calls. 'Always ask' auto-approves read-only tools only. 'Write' auto-approves read and workspace-write tools. 'Yolo' auto-approves all tiers; user policy may still prompt or block.",
+	"Default approval behavior for tool calls. 'Always ask' auto-approves read-only tools only. 'Write' auto-approves read and workspace-write tools. 'Yolo' auto-approves all tiers; user policy may still prompt or block.":
+		"Default approval behavior for tool calls. 'Always ask' auto-approves read-only tools only. 'Write' auto-approves read and workspace-write tools. 'Yolo' auto-approves all tiers; user policy may still prompt or block.",
 	"Default filter mode when opening the session tree": "Default filter mode when opening the session tree",
-	"Default number of lines returned when agent calls read without a limit": "Default number of lines returned when agent calls read without a limit",
-	"Default routing-variant suffix appended to OpenRouter model IDs (overridden when the selector already names a variant)": "Default routing-variant suffix appended to OpenRouter model IDs (overridden when the selector already names a variant)",
+	"Default number of lines returned when agent calls read without a limit":
+		"Default number of lines returned when agent calls read without a limit",
+	"Default routing-variant suffix appended to OpenRouter model IDs (overridden when the selector already names a variant)":
+		"Default routing-variant suffix appended to OpenRouter model IDs (overridden when the selector already names a variant)",
 	"Default serving path (no service_tier)": "Default serving path (no service_tier)",
-	"Default timeout for hub message waits (and send await:true) in milliseconds; 0 disables the timeout": "Default timeout for hub message waits (and send await:true) in milliseconds; 0 disables the timeout",
+	"Default timeout for hub message waits (and send await:true) in milliseconds; 0 disables the timeout":
+		"Default timeout for hub message waits (and send await:true) in milliseconds; 0 disables the timeout",
 	"Default — adaptive 5s→5m, resets when you stop polling": "Default — adaptive 5s→5m, resets when you stop polling",
 	"Default; ~12.5K tokens": "Default; ~12.5K tokens",
 	"Default; ~2.5K tokens": "Default; ~2.5K tokens",
 	"Default; ~5K tokens": "Default; ~5K tokens",
-	"Delay before completed or abandoned todos are removed from the todo widget": "Delay before completed or abandoned todos are removed from the todo widget",
+	"Delay before completed or abandoned todos are removed from the todo widget":
+		"Delay before completed or abandoned todos are removed from the todo widget",
 	"Densest cell with sentence-hue ink.": "Densest cell with sentence-hue ink.",
 	"Describe Images for Text Models": "Describe Images for Text Models",
-	"Detect consecutive identical tool calls across turns and inject a corrective steer": "Detect consecutive identical tool calls across turns and inject a corrective steer",
-	"Deterministic": "Deterministic",
+	"Detect consecutive identical tool calls across turns and inject a corrective steer":
+		"Detect consecutive identical tool calls across turns and inject a corrective steer",
+	Deterministic: "Deterministic",
 	"Diagnostics on Edit": "Diagnostics on Edit",
 	"Diagnostics on Write": "Diagnostics on Write",
 	"Dictation barge-in": "Dictation barge-in",
-	"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model": "Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model",
+	"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model":
+		"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model",
 	"Direct, efficient engineer focused on clarity and rigor": "Direct, efficient engineer focused on clarity and rigor",
-	"Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)": "Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)",
+	"Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)":
+		"Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)",
 	"Disable Mnemopi LLM-backed extraction": "Disable Mnemopi LLM-backed extraction",
 	"Disable append-only context": "Disable append-only context",
 	"Disable first-event timeout": "Disable first-event timeout",
@@ -3819,106 +3798,138 @@ export const settings = {
 	"Disabled; tail-only truncation": "Disabled; tail-only truncation",
 	"Display Name": "Display Name",
 	"Display hook status messages below the status line": "Display hook status messages below the status line",
-	"Display the actual model ID used by each subagent in the task widget status line": "Display the actual model ID used by each subagent in the task widget status line",
+	"Display the actual model ID used by each subagent in the task widget status line":
+		"Display the actual model ID used by each subagent in the task widget status line",
 	"Do not prevent any sleep": "Do not prevent any sleep",
 	"Do not run the saved-reset auto-redeem check.": "Do not run the saved-reset auto-redeem check.",
 	"Do not show release notes on startup": "Do not show release notes on startup",
 	"Do not spend reserve quota or select a fallback": "Do not spend reserve quota or select a fallback",
 	"Doc 8on16, black": "Doc 8on16, black",
 	"Don't check for plugin updates": "Don't check for plugin updates",
-	"Double": "Double",
+	Double: "Double",
 	"Double-Escape Action": "Double-Escape Action",
-	"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.": "Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
+	"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.":
+		"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
 	"Early maintenance": "Early maintenance",
 	"Early protection": "Early protection",
 	"Edit Mode": "Edit Mode",
 	"Elide Uneventful Results": "Elide Uneventful Results",
-	"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.": "Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.",
+	"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.":
+		"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.",
 	"Embedding variant": "Embedding variant",
-	"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running": "Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
+	"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running":
+		"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
 	"Emoji Autocomplete": "Emoji Autocomplete",
-	"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion": "Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion",
+	"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion":
+		"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion",
 	"Enable Advisor": "Enable Advisor",
 	"Enable Git Integration": "Enable Git Integration",
 	"Enable OpenRouter's web-search plugin": "Enable OpenRouter's web-search plugin",
 	"Enable Prewalk": "Enable Prewalk",
-	"Enable async bash commands and background task execution": "Enable async bash commands and background task execution",
-	"Enable automatic stream loop detection for model reasoning and prose": "Enable automatic stream loop detection for model reasoning and prose",
+	"Enable async bash commands and background task execution":
+		"Enable async bash commands and background task execution",
+	"Enable automatic stream loop detection for model reasoning and prose":
+		"Enable automatic stream loop detection for model reasoning and prose",
 	"Enable for known prefix-cache providers (recommended)": "Enable for known prefix-cache providers (recommended)",
-	"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords": "Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords",
+	"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords":
+		"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords",
 	"Enable per-session goal mode and the hidden goal tool": "Enable per-session goal mode and the hidden goal tool",
-	"Enable plan mode for read-only exploration and planning before execution": "Enable plan mode for read-only exploration and planning before execution",
+	"Enable plan mode for read-only exploration and planning before execution":
+		"Enable plan mode for read-only exploration and planning before execution",
 	"Enable speech-to-text input via microphone": "Enable speech-to-text input via microphone",
 	"Enable the Exa web search provider": "Enable the Exa web search provider",
-	"Enable the agnes_video_gen tool for Agnes AI video generation": "Enable the agnes_video_gen tool for Agnes AI video generation",
+	"Enable the agnes_video_gen tool for Agnes AI video generation":
+		"Enable the agnes_video_gen tool for Agnes AI video generation",
 	"Enable the ask tool for interactive user questions": "Enable the ask tool for interactive user questions",
 	"Enable the ast_edit tool for structural AST rewrites": "Enable the ast_edit tool for structural AST rewrites",
 	"Enable the ast_grep tool for structural AST search": "Enable the ast_grep tool for structural AST search",
 	"Enable the bash tool for shell command execution": "Enable the bash tool for shell command execution",
-	"Enable the browser tool for scripted Chromium automation (puppeteer)": "Enable the browser tool for scripted Chromium automation (puppeteer)",
-	"Enable the checkpoint and rewind tools for context checkpointing": "Enable the checkpoint and rewind tools for context checkpointing",
+	"Enable the browser tool for scripted Chromium automation (puppeteer)":
+		"Enable the browser tool for scripted Chromium automation (puppeteer)",
+	"Enable the checkpoint and rewind tools for context checkpointing":
+		"Enable the checkpoint and rewind tools for context checkpointing",
 	"Enable the debug tool for DAP-based debugging": "Enable the debug tool for DAP-based debugging",
-	"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.": "Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.",
-	"Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)": "Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)",
+	"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.":
+		"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.",
+	"Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)":
+		"Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)",
 	"Enable the glob tool for glob-based file lookup": "Enable the glob tool for glob-based file lookup",
 	"Enable the grep tool for regex content search": "Enable the grep tool for regex content search",
-	"Enable the launch tool for supervising shared long-running project processes": "Enable the launch tool for supervising shared long-running project processes",
-	"Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)": "Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)",
-	"Enable the scriptable host-desktop control tool (screenshots, input, accessibility)": "Enable the scriptable host-desktop control tool (screenshots, input, accessibility)",
-	"Enable the tiered query result cache for repeated and similar recall queries": "Enable the tiered query result cache for repeated and similar recall queries",
+	"Enable the launch tool for supervising shared long-running project processes":
+		"Enable the launch tool for supervising shared long-running project processes",
+	"Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)":
+		"Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)",
+	"Enable the scriptable host-desktop control tool (screenshots, input, accessibility)":
+		"Enable the scriptable host-desktop control tool (screenshots, input, accessibility)",
+	"Enable the tiered query result cache for repeated and similar recall queries":
+		"Enable the tiered query result cache for repeated and similar recall queries",
 	"Enable the todo tool for task tracking": "Enable the todo tool for task tracking",
-	"Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis": "Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis",
-	"Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.": "Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.",
+	"Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis":
+		"Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis",
+	"Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.":
+		"Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.",
 	"Enable the web_search tool for live web results": "Enable the web_search tool for live web results",
 	"Encourage novelty": "Encourage novelty",
 	"Encrypted Blob": "Encrypted Blob",
-	"Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)": "Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)",
+	"Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)":
+		"Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)",
 	"Enforce Seen-Line Guard": "Enforce Seen-Line Guard",
 	"English (bge-base-en-v1.5)": "English (bge-base-en-v1.5)",
 	"Enhanced Speech Rewriting": "Enhanced Speech Rewriting",
-	"Erase and replay terminal scrollback when a block's final form replaces its live preview. When off (default), stale preview copies remain in history and the final content is appended below.": "Erase and replay terminal scrollback when a block's final form replaces its live preview. When off (default), stale preview copies remain in history and the final content is appended below.",
+	"Erase and replay terminal scrollback when a block's final form replaces its live preview. When off (default), stale preview copies remain in history and the final content is appended below.":
+		"Erase and replay terminal scrollback when a block's final form replaces its live preview. When off (default), stale preview copies remain in history and the final content is appended below.",
 	"Error Notification": "Error Notification",
 	"Every row stays visible while the agent works.": "Every row stays visible while the agent works.",
 	"Exa Search Delay": "Exa Search Delay",
 	"Excluded Web Search Providers": "Excluded Web Search Providers",
-	"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.": "Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.",
-	"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.": "Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.",
-	"Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level": "Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level",
-	"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.": "Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.",
+	"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.":
+		"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.",
+	"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.":
+		"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.",
+	"Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level":
+		"Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level",
+	"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.":
+		"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.",
 	"Extremely early maintenance": "Extremely early maintenance",
 	"Fail closed": "Fail closed",
 	"Fallback Revert Policy": "Fallback Revert Policy",
 	"Fetch Provider": "Fetch Provider",
-	"Files": "Files",
-	"Files with fewer total lines are read verbatim instead of structurally summarized": "Files with fewer total lines are read verbatim instead of structurally summarized",
+	Files: "Files",
+	"Files with fewer total lines are read verbatim instead of structurally summarized":
+		"Files with fewer total lines are read verbatim instead of structurally summarized",
 	"Final message only": "Final message only",
 	"Fireworks Tier": "Fireworks Tier",
-	"Focused": "Focused",
+	Focused: "Focused",
 	"Follow-Up Mode": "Follow-Up Mode",
-	"Force deterministic FTS-only recall instead of vector embeddings": "Force deterministic FTS-only recall instead of vector embeddings",
+	"Force deterministic FTS-only recall instead of vector embeddings":
+		"Force deterministic FTS-only recall instead of vector embeddings",
 	"Force production endpoint only": "Force production endpoint only",
 	"Force sandbox endpoint only": "Force sandbox endpoint only",
 	"Force websockets for OpenAI Codex models": "Force websockets for OpenAI Codex models",
 	"Forces a comprehensive todo list on the first message": "Forces a comprehensive todo list on the first message",
 	"Format on Write": "Format on Write",
 	"Forward slashes": "Forward slashes",
-	"Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.": "Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.",
-	"Full": "Full",
-	"Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)": "Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)",
+	"Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.":
+		"Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.",
+	Full: "Full",
+	"Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)":
+		"Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)",
 	"Full session": "Full session",
 	"Full standard context window": "Full standard context window",
 	"Fuzzy Match": "Fuzzy Match",
 	"Fuzzy Match Threshold": "Fuzzy Match Threshold",
 	"Gemini web_search model": "Gemini web_search model",
-	"General": "General",
+	General: "General",
 	"Generate Image": "Generate Image",
-	"Generate a brief LLM recap of where things stand after the terminal has been idle": "Generate a brief LLM recap of where things stand after the terminal has been idle",
+	"Generate a brief LLM recap of where things stand after the terminal has been idle":
+		"Generate a brief LLM recap of where things stand after the terminal has been idle",
 	"Generic Task Prewalk": "Generic Task Prewalk",
 	"GitHub Cache Hard TTL": "GitHub Cache Hard TTL",
 	"GitHub Cache Soft TTL": "GitHub Cache Soft TTL",
 	"GitHub View Cache": "GitHub View Cache",
-	"Global": "Global",
-	"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)": "Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
+	Global: "Global",
+	"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)":
+		"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
 	"Goal Continuation Modes": "Goal Continuation Modes",
 	"Goal Mode": "Goal Mode",
 	"Goal Status in Footer": "Goal Status in Footer",
@@ -3928,18 +3939,22 @@ export const settings = {
 	"Grep Context Before": "Grep Context Before",
 	"Half of a 200K window": "Half of a 200K window",
 	"Halfway point": "Halfway point",
-	"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.": "Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.",
-	"Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.": "Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.",
+	"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.":
+		"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.",
+	"Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.":
+		"Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.",
 	"Headless Browser": "Headless Browser",
-	"Hidden": "Hidden",
+	Hidden: "Hidden",
 	"Hide Secrets": "Hide Secrets",
 	"Hide Thinking Blocks": "Hide Thinking Blocks",
 	"Hide Tool Activity": "Hide Tool Activity",
-	"Hide model-initiated tool calls and results from the transcript": "Hide model-initiated tool calls and results from the transcript",
+	"Hide model-initiated tool calls and results from the transcript":
+		"Hide model-initiated tool calls and results from the transcript",
 	"Hide thinking blocks in assistant responses": "Hide thinking blocks in assistant responses",
-	"High": "High",
-	"Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.": "Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.",
-	"Hindsight": "Hindsight",
+	High: "High",
+	"Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.":
+		"Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.",
+	Hindsight: "Hindsight",
 	"Hindsight API Token": "Hindsight API Token",
 	"Hindsight API URL": "Hindsight API URL",
 	"Hindsight Auto Recall": "Hindsight Auto Recall",
@@ -3951,17 +3966,26 @@ export const settings = {
 	"Hindsight Scoping": "Hindsight Scoping",
 	"Hindsight server URL (Cloud or self-hosted)": "Hindsight server URL (Cloud or self-hosted)",
 	"Holds a long task's tail in view.": "Holds a long task's tail in view.",
-	"How a settled terminal resize refreshes transcript rows retained in terminal scrollback": "How a settled terminal resize refreshes transcript rows retained in terminal scrollback",
-	"How isolated task changes are integrated (patch apply or branch merge)": "How isolated task changes are integrated (patch apply or branch merge)",
-	"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.": "How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.",
-	"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.": "How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.",
+	"How a settled terminal resize refreshes transcript rows retained in terminal scrollback":
+		"How a settled terminal resize refreshes transcript rows retained in terminal scrollback",
+	"How isolated task changes are integrated (patch apply or branch merge)":
+		"How isolated task changes are integrated (patch apply or branch merge)",
+	"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.":
+		"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.",
+	"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.":
+		"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.",
 	"How long of a pause counts as the end of dictation.": "How long of a pause counts as the end of dictation.",
-	"How many levels deep subagents can spawn their own subagents": "How many levels deep subagents can spawn their own subagents",
-	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to": "How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to",
-	"How rules can repeat: once per session or after a message gap": "How rules can repeat: once per session or after a message gap",
-	"How strongly to push automatic todo-list creation after the first message": "How strongly to push automatic todo-list creation after the first message",
+	"How many levels deep subagents can spawn their own subagents":
+		"How many levels deep subagents can spawn their own subagents",
+	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to":
+		"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to",
+	"How rules can repeat: once per session or after a message gap":
+		"How rules can repeat: once per session or after a message gap",
+	"How strongly to push automatic todo-list creation after the first message":
+		"How strongly to push automatic todo-list creation after the first message",
 	"How strongly to push delegating work to subagents": "How strongly to push delegating work to subagents",
-	"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.": "How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
+	"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.":
+		"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
 	"How to drain follow-up messages after a turn completes": "How to drain follow-up messages after a turn completes",
 	"How to process queued messages while agent is working": "How to process queued messages while agent is working",
 	"IME-Safe Prompt Layout": "IME-Safe Prompt Layout",
@@ -3975,26 +3999,33 @@ export const settings = {
 	"In-process HTML→Markdown converter (always available)": "In-process HTML→Markdown converter (always available)",
 	"Include Model in Prompt": "Include Model in Prompt",
 	"Include Workspace Tree": "Include Workspace Tree",
-	"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories": "Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories",
+	"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories":
+		"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories",
 	"Inject MCP resource updates into the agent conversation": "Inject MCP resource updates into the agent conversation",
-	"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.": "Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.",
+	"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.":
+		"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.",
 	"Inline Read Previews": "Inline Read Previews",
 	"Inline Tool Descriptors": "Inline Tool Descriptors",
-	"Inline built-in docs; fetch MCP and extension docs on demand.": "Inline built-in docs; fetch MCP and extension docs on demand.",
-	"Inline descriptors for Gemini models; keep them in tool schemas otherwise": "Inline descriptors for Gemini models; keep them in tool schemas otherwise",
+	"Inline built-in docs; fetch MCP and extension docs on demand.":
+		"Inline built-in docs; fetch MCP and extension docs on demand.",
+	"Inline descriptors for Gemini models; keep them in tool schemas otherwise":
+		"Inline descriptors for Gemini models; keep them in tool schemas otherwise",
 	"Inline docs and schemas for every mounted device.": "Inline docs and schemas for every mounted device.",
 	"Inspect Image": "Inspect Image",
 	"Inspect Image Timeout": "Inspect Image Timeout",
-	"Instant": "Instant",
-	"Instruct upstream providers to completely omit thinking summaries from responses (where supported)": "Instruct upstream providers to completely omit thinking summaries from responses (where supported)",
+	Instant: "Instant",
+	"Instruct upstream providers to completely omit thinking summaries from responses (where supported)":
+		"Instruct upstream providers to completely omit thinking summaries from responses (where supported)",
 	"Intent Tracing": "Intent Tracing",
 	"Interface Language": "Interface Language",
 	"Interrupt Mode": "Interrupt Mode",
 	"Interrupt on prose and tool streams": "Interrupt on prose and tool streams",
 	"Interrupt only on reply/thinking matches": "Interrupt only on reply/thinking matches",
 	"Interrupt only on tool-call argument matches": "Interrupt only on tool-call argument matches",
-	"Interrupt the agent mid-stream when output matches rule patterns (Time-Traveling Stream Rules)": "Interrupt the agent mid-stream when output matches rule patterns (Time-Traveling Stream Rules)",
-	"Isolated bank per cwd basename — projects cannot see each other's memories": "Isolated bank per cwd basename — projects cannot see each other's memories",
+	"Interrupt the agent mid-stream when output matches rule patterns (Time-Traveling Stream Rules)":
+		"Interrupt the agent mid-stream when output matches rule patterns (Time-Traveling Stream Rules)",
+	"Isolated bank per cwd basename — projects cannot see each other's memories":
+		"Isolated bank per cwd basename — projects cannot see each other's memories",
 	"Isolation Commit Style": "Isolation Commit Style",
 	"Isolation Merge Strategy": "Isolation Merge Strategy",
 	"Isolation Mode": "Isolation Mode",
@@ -4003,14 +4034,18 @@ export const settings = {
 	"Julia Interpreter": "Julia Interpreter",
 	"KITT Scanner": "KITT Scanner",
 	"Keep descriptors in provider tool schemas only": "Keep descriptors in provider tool schemas only",
-	"Keep interactive sessions on the primary until confirmed; background agents auto-fallback": "Keep interactive sessions on the primary until confirmed; background agents auto-fallback",
-	"Keep the IPython kernel alive across eval calls or start fresh each time": "Keep the IPython kernel alive across eval calls or start fresh each time",
-	"Keep the system awake while a session is open (caffeinate -i)": "Keep the system awake while a session is open (caffeinate -i)",
+	"Keep interactive sessions on the primary until confirmed; background agents auto-fallback":
+		"Keep interactive sessions on the primary until confirmed; background agents auto-fallback",
+	"Keep the IPython kernel alive across eval calls or start fresh each time":
+		"Keep the IPython kernel alive across eval calls or start fresh each time",
+	"Keep the system awake while a session is open (caffeinate -i)":
+		"Keep the system awake while a session is open (caffeinate -i)",
 	"Keep the system prompt as text.": "Keep the system prompt as text.",
 	"Kimi API Format": "Kimi API Format",
 	"Knight Rider 1982 red light bouncing left-right": "Knight Rider 1982 red light bouncing left-right",
-	"Kokoro voice used when speaking the assistant's output aloud": "Kokoro voice used when speaking the assistant's output aloud",
-	"LSP": "LSP",
+	"Kokoro voice used when speaking the assistant's output aloud":
+		"Kokoro voice used when speaking the assistant's output aloud",
+	LSP: "LSP",
 	"LSP in Subagents": "LSP in Subagents",
 	"Language for the TUI and the setup wizard": "Language for the TUI and the setup wizard",
 	"Large Headings (Kitty)": "Large Headings (Kitty)",
@@ -4021,14 +4056,18 @@ export const settings = {
 	"Latest 3 rows": "Latest 3 rows",
 	"Latest 5 rows": "Latest 5 rows",
 	"Latest 7 rows": "Latest 7 rows",
-	"Launch": "Launch",
-	"Launch browser in headless mode (disable to show browser UI)": "Launch browser in headless mode (disable to show browser UI)",
+	Launch: "Launch",
+	"Launch browser in headless mode (disable to show browser UI)":
+		"Launch browser in headless mode (disable to show browser UI)",
 	"Lazy LSP Startup": "Lazy LSP Startup",
 	"Legacy reserve-based threshold": "Legacy reserve-based threshold",
-	"Lenient": "Lenient",
-	"Let standalone orchestrate append its hidden multi-agent orchestration notice": "Let standalone orchestrate append its hidden multi-agent orchestration notice",
-	"Let standalone ultrathink request maximum automatic thinking and append its hidden notice": "Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
-	"Let standalone workflowz append its hidden eval workflow notice": "Let standalone workflowz append its hidden eval workflow notice",
+	Lenient: "Lenient",
+	"Let standalone orchestrate append its hidden multi-agent orchestration notice":
+		"Let standalone orchestrate append its hidden multi-agent orchestration notice",
+	"Let standalone ultrathink request maximum automatic thinking and append its hidden notice":
+		"Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
+	"Let standalone workflowz append its hidden eval workflow notice":
+		"Let standalone workflowz append its hidden eval workflow notice",
 	"Let the PAL pick the best available backend": "Let the PAL pick the best available backend",
 	"Light Theme": "Light Theme",
 	"Line Numbers": "Line Numbers",
@@ -4042,19 +4081,23 @@ export const settings = {
 	"Load commands from .opencode/commands/": "Load commands from .opencode/commands/",
 	"Load commands from ~/.claude/commands/": "Load commands from ~/.claude/commands/",
 	"Load commands from ~/.config/opencode/commands/": "Load commands from ~/.config/opencode/commands/",
-	"Load the default rules shipped with the agent (override individually with ttsr.disabledRules)": "Load the default rules shipped with the agent (override individually with ttsr.disabledRules)",
-	"Local": "Local",
-	"Local SQLite recall/retain backend with optional embeddings": "Local SQLite recall/retain backend with optional embeddings",
+	"Load the default rules shipped with the agent (override individually with ttsr.disabledRules)":
+		"Load the default rules shipped with the agent (override individually with ttsr.disabledRules)",
+	Local: "Local",
+	"Local SQLite recall/retain backend with optional embeddings":
+		"Local SQLite recall/retain backend with optional embeddings",
 	"Local TTS Model": "Local TTS Model",
 	"Local TTS Voice": "Local TTS Voice",
-	"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.": "Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.",
-	"Local rollout summarisation pipeline (memory_summary.md)": "Local rollout summarisation pipeline (memory_summary.md)",
+	"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.":
+		"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.",
+	"Local rollout summarisation pipeline (memory_summary.md)":
+		"Local rollout summarisation pipeline (memory_summary.md)",
 	"Loop Guard": "Loop Guard",
 	"Loop Guard Scan Prose": "Loop Guard Scan Prose",
 	"Loop Guard Tool-Call Reminder": "Loop Guard Tool-Call Reminder",
 	"Loop Mode": "Loop Mode",
-	"Loose": "Loose",
-	"Low": "Low",
+	Loose: "Loose",
+	Low: "Low",
 	"MCP Markdown Results": "MCP Markdown Results",
 	"MCP Notification Debounce": "MCP Notification Debounce",
 	"MCP Project Config": "MCP Project Config",
@@ -4070,21 +4113,26 @@ export const settings = {
 	"Max Task Recursion": "Max Task Recursion",
 	"Max Tool Timeout": "Max Tool Timeout",
 	"Max visible items in autocomplete dropdown (3-20)": "Max visible items in autocomplete dropdown (3-20)",
-	"Max wait for the first `direnv export` (a cold devenv shell can be slow); on timeout the session runs without the direnv env": "Max wait for the first `direnv export` (a cold devenv shell can be slow); on timeout the session runs without the direnv env",
+	"Max wait for the first `direnv export` (a cold devenv shell can be slow); on timeout the session runs without the direnv env":
+		"Max wait for the first `direnv export` (a cold devenv shell can be slow); on timeout the session runs without the direnv env",
 	"Maximum Per-Spawn Effort": "Maximum Per-Spawn Effort",
 	"Maximum compatibility": "Maximum compatibility",
 	"Maximum composite screenshot height in pixels": "Maximum composite screenshot height in pixels",
 	"Maximum composite screenshot width in pixels": "Maximum composite screenshot width in pixels",
-	"Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit": "Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit",
+	"Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit":
+		"Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit",
 	"Maximum info with Nerd Font icons": "Maximum info with Nerd Font icons",
-	"Maximum lines of tail content kept inline when output spills to artifact": "Maximum lines of tail content kept inline when output spills to artifact",
+	"Maximum lines of tail content kept inline when output spills to artifact":
+		"Maximum lines of tail content kept inline when output spills to artifact",
 	"Maximum number of subagents running concurrently": "Maximum number of subagents running concurrently",
 	"Maximum number of todo reminders before giving up": "Maximum number of todo reminders before giving up",
-	"Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.": "Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.",
+	"Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.":
+		"Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.",
 	"Maximum retry attempts on API errors": "Maximum retry attempts on API errors",
 	"Maximum variety": "Maximum variety",
-	"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).": "Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).",
-	"Medium": "Medium",
+	"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).":
+		"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).",
+	Medium: "Medium",
 	"Memory Backend": "Memory Backend",
 	"Memory Model": "Memory Model",
 	"Memory bank identifier (default: project name)": "Memory bank identifier (default: project name)",
@@ -4093,12 +4141,16 @@ export const settings = {
 	"Mild novelty": "Mild novelty",
 	"Mild penalty": "Mild penalty",
 	"Min P": "Min P",
-	"Minimal": "Minimal",
-	"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing": "Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing",
-	"Minimum multiline block comment length before read summaries collapse it": "Minimum multiline block comment length before read summaries collapse it",
-	"Minimum multiline body or literal length before read summaries collapse it": "Minimum multiline body or literal length before read summaries collapse it",
-	"Minimum probability threshold (0-1, -1 = provider default)": "Minimum probability threshold (0-1, -1 = provider default)",
-	"Mnemopi": "Mnemopi",
+	Minimal: "Minimal",
+	"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing":
+		"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing",
+	"Minimum multiline block comment length before read summaries collapse it":
+		"Minimum multiline block comment length before read summaries collapse it",
+	"Minimum multiline body or literal length before read summaries collapse it":
+		"Minimum multiline body or literal length before read summaries collapse it",
+	"Minimum probability threshold (0-1, -1 = provider default)":
+		"Minimum probability threshold (0-1, -1 = provider default)",
+	Mnemopi: "Mnemopi",
 	"Mnemopi Auto Recall": "Mnemopi Auto Recall",
 	"Mnemopi Auto Retain": "Mnemopi Auto Retain",
 	"Mnemopi Bank": "Mnemopi Bank",
@@ -4112,32 +4164,39 @@ export const settings = {
 	"Mnemopi LLM Base URL": "Mnemopi LLM Base URL",
 	"Mnemopi LLM Mode": "Mnemopi LLM Mode",
 	"Mnemopi LLM Model": "Mnemopi LLM Model",
-	"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model": "Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model",
+	"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model":
+		"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model",
 	"Mnemopi Polyphonic Recall": "Mnemopi Polyphonic Recall",
 	"Mnemopi Proactive Linking": "Mnemopi Proactive Linking",
 	"Mnemopi Scoping": "Mnemopi Scoping",
-	"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.": "Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.",
+	"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.":
+		"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.",
 	"Model Role Storage": "Model Role Storage",
 	"Model decides when to delegate": "Model decides when to delegate",
 	"Model decides; no automatic todo list": "Model decides; no automatic todo list",
 	"Model, git, cost, context": "Model, git, cost, context",
 	"Model, path, git, context, tokens, cost": "Model, path, git, context, tokens, cost",
-	"Moderate": "Moderate",
+	Moderate: "Moderate",
 	"Moderate context usage": "Moderate context usage",
 	"Moderately early maintenance": "Moderately early maintenance",
-	"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.": "Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.",
-	"Move the full system prompt to images, when that saves tokens.": "Move the full system prompt to images, when that saves tokens.",
-	"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it": "Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it",
+	"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.":
+		"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.",
+	"Move the full system prompt to images, when that saves tokens.":
+		"Move the full system prompt to images, when that saves tokens.",
+	"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it":
+		"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it",
 	"Multilingual (multilingual-e5-large)": "Multilingual (multilingual-e5-large)",
-	"Name shown to other collab participants (default: OS username)": "Name shown to other collab participants (default: OS username)",
-	"Native": "Native",
+	"Name shown to other collab participants (default: OS username)":
+		"Name shown to other collab participants (default: OS username)",
+	Native: "Native",
 	"Native Terminal Progress": "Native Terminal Progress",
 	"Near context limit": "Near context limit",
 	"Nerd Font": "Nerd Font",
-	"Never": "Never",
-	"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.": "Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.",
+	Never: "Never",
+	"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.":
+		"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.",
 	"Never interrupt; inject warning after completion": "Never interrupt; inject warning after completion",
-	"No": "No",
+	No: "No",
 	"No animation; static muted text": "No animation; static muted text",
 	"No isolation": "No isolation",
 	"No limit": "No limit",
@@ -4147,109 +4206,149 @@ export const settings = {
 	"No per-line cap": "No per-line cap",
 	"No special characters": "No special characters",
 	"No suffix; use OpenRouter's default routing": "No suffix; use OpenRouter's default routing",
-	"None": "None",
-	"Notify": "Notify",
+	None: "None",
+	Notify: "Notify",
 	"Notify when the agent finishes a turn": "Notify when the agent finishes a turn",
 	"Notify when the agent stops with an error": "Notify when the agent stops with an error",
 	"Notify when the ask tool is waiting for input": "Notify when the ask tool is waiting for input",
 	"Nucleus sampling cutoff (0-1, -1 = provider default)": "Nucleus sampling cutoff (0-1, -1 = provider default)",
-	"ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.": "ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.",
-	"ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.": "ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.",
-	"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers": "Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers",
+	"ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.":
+		"ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.",
+	"ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.":
+		"ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.",
+	"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers":
+		"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers",
 	"Obsidian Vault": "Obsidian Vault",
-	"Off": "Off",
-	"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory": "Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+	Off: "Off",
+	"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory":
+		"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
 	"Ollama Cloud Max Concurrency": "Ollama Cloud Max Concurrency",
 	"Omit Thinking summaries": "Omit Thinking summaries",
-	"Omit code blocks from thinking summaries and replace them with an ellipsis": "Omit code blocks from thinking summaries and replace them with an ellipsis",
+	"Omit code blocks from thinking summaries and replace them with an ellipsis":
+		"Omit code blocks from thinking summaries and replace them with an ellipsis",
 	"Omit the personality block entirely": "Omit the personality block entirely",
-	"On": "On",
+	On: "On",
 	"One shared Mnemopi bank for every project": "One shared Mnemopi bank for every project",
 	"One shared bank — every project sees the same memories": "One shared bank — every project sees the same memories",
 	"Online (tiny)": "Online (tiny)",
-	"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.": "Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.",
-	"Only move loaded context-file instructions to images, when that saves tokens.": "Only move loaded context-file instructions to images, when that saves tokens.",
-	"OpenAI Responses and Codex response verbosity (low, medium, or high)": "OpenAI Responses and Codex response verbosity (low, medium, or high)",
+	"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.":
+		"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.",
+	"Only move loaded context-file instructions to images, when that saves tokens.":
+		"Only move loaded context-file instructions to images, when that saves tokens.",
+	"OpenAI Responses and Codex response verbosity (low, medium, or high)":
+		"OpenAI Responses and Codex response verbosity (low, medium, or high)",
 	"OpenCode Project Commands": "OpenCode Project Commands",
 	"OpenCode User Commands": "OpenCode User Commands",
 	"OpenRouter Routing": "OpenRouter Routing",
 	"Optional LLM API key for Mnemopi remote mode": "Optional LLM API key for Mnemopi remote mode",
 	"Optional LLM model name for Mnemopi remote mode": "Optional LLM model name for Mnemopi remote mode",
-	"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode": "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
-	"Optional OpenAI-compatible embedding endpoint passed to Mnemopi": "Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
-	"Optional SQLite DB path. Defaults to the agent memories directory.": "Optional SQLite DB path. Defaults to the agent memories directory.",
+	"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode":
+		"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
+	"Optional OpenAI-compatible embedding endpoint passed to Mnemopi":
+		"Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
+	"Optional SQLite DB path. Defaults to the agent memories directory.":
+		"Optional SQLite DB path. Defaults to the agent memories directory.",
 	"Optional embedding API key passed to Mnemopi": "Optional embedding API key passed to Mnemopi",
-	"Optional path to an exact Julia executable. When set, automatic Julia runtime discovery is skipped.": "Optional path to an exact Julia executable. When set, automatic Julia runtime discovery is skipped.",
-	"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.": "Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.",
-	"Optional path to an exact Ruby executable. When set, automatic Ruby runtime discovery is skipped.": "Optional path to an exact Ruby executable. When set, automatic Ruby runtime discovery is skipped.",
-	"Optional shared bank base name. Per-project modes derive project-local banks from it.": "Optional shared bank base name. Per-project modes derive project-local banks from it.",
+	"Optional path to an exact Julia executable. When set, automatic Julia runtime discovery is skipped.":
+		"Optional path to an exact Julia executable. When set, automatic Julia runtime discovery is skipped.",
+	"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.":
+		"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.",
+	"Optional path to an exact Ruby executable. When set, automatic Ruby runtime discovery is skipped.":
+		"Optional path to an exact Ruby executable. When set, automatic Ruby runtime discovery is skipped.",
+	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
+		"Optional shared bank base name. Per-project modes derive project-local banks from it.",
 	"Orchestrate Keyword": "Orchestrate Keyword",
-	"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.": "Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.",
+	"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.":
+		"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.",
 	"Output Column Cap": "Output Column Cap",
 	"Package manager": "Package manager",
-	"Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.": "Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.",
-	"Past the soft TTL the cached row is returned and refreshed in the background; past the hard TTL it is dropped (seconds; default 7 days)": "Past the soft TTL the cached row is returned and refreshed in the background; past the hard TTL it is dropped (seconds; default 7 days)",
+	"Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.":
+		"Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.",
+	"Past the soft TTL the cached row is returned and refreshed in the background; past the hard TTL it is dropped (seconds; default 7 days)":
+		"Past the soft TTL the cached row is returned and refreshed in the background; past the hard TTL it is dropped (seconds; default 7 days)",
 	"Path and git only": "Path and git only",
-	"Pause the main agent for up to 30 seconds if the advisor falls behind by this many turns. Off disables catch-up delays.": "Pause the main agent for up to 30 seconds if the advisor falls behind by this many turns. Off disables catch-up delays.",
-	"Penalty for introducing already-present tokens (-1 = provider default)": "Penalty for introducing already-present tokens (-1 = provider default)",
+	"Pause the main agent for up to 30 seconds if the advisor falls behind by this many turns. Off disables catch-up delays.":
+		"Pause the main agent for up to 30 seconds if the advisor falls behind by this many turns. Off disables catch-up delays.",
+	"Penalty for introducing already-present tokens (-1 = provider default)":
+		"Penalty for introducing already-present tokens (-1 = provider default)",
 	"Penalty for repeated tokens (-1 = provider default)": "Penalty for repeated tokens (-1 = provider default)",
 	"Per project": "Per project",
 	"Per project (tagged)": "Per project (tagged)",
 	"Per-Task Effort": "Per-Task Effort",
-	"Per-line byte cap for streaming tool outputs (bash, python, js eval) and `read`. Lines wider than this are ellipsis-truncated; remaining bytes up to the next newline are dropped. 0 disables.": "Per-line byte cap for streaming tool outputs (bash, python, js eval) and `read`. Lines wider than this are ellipsis-truncated; remaining bytes up to the next newline are dropped. 0 disables.",
+	"Per-line byte cap for streaming tool outputs (bash, python, js eval) and `read`. Lines wider than this are ellipsis-truncated; remaining bytes up to the next newline are dropped. 0 disables.":
+		"Per-line byte cap for streaming tool outputs (bash, python, js eval) and `read`. Lines wider than this are ellipsis-truncated; remaining bytes up to the next newline are dropped. 0 disables.",
 	"Per-project": "Per-project",
-	"Per-request timeout for the inspect_image vision-model call, in milliseconds. A stalled provider fails fast with a timeout error instead of blocking until manual abort. Set to 0 to disable the timeout.": "Per-request timeout for the inspect_image vision-model call, in milliseconds. A stalled provider fails fast with a timeout error instead of blocking until manual abort. Set to 0 to disable the timeout.",
-	"Per-tool approval policies. Set to 'allow' to auto-approve, 'prompt' to require confirmation, or 'deny' to block. Overrides are honored in every approval mode.": "Per-tool approval policies. Set to 'allow' to auto-approve, 'prompt' to require confirmation, or 'deny' to block. Overrides are honored in every approval mode.",
-	"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior": "Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior",
-	"Personality": "Personality",
-	"Picks a shape tuned for the current model, falling back to its provider family.": "Picks a shape tuned for the current model, falling back to its provider family.",
-	"Pipe": "Pipe",
+	"Per-request timeout for the inspect_image vision-model call, in milliseconds. A stalled provider fails fast with a timeout error instead of blocking until manual abort. Set to 0 to disable the timeout.":
+		"Per-request timeout for the inspect_image vision-model call, in milliseconds. A stalled provider fails fast with a timeout error instead of blocking until manual abort. Set to 0 to disable the timeout.",
+	"Per-tool approval policies. Set to 'allow' to auto-approve, 'prompt' to require confirmation, or 'deny' to block. Overrides are honored in every approval mode.":
+		"Per-tool approval policies. Set to 'allow' to auto-approve, 'prompt' to require confirmation, or 'deny' to block. Overrides are honored in every approval mode.",
+	"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior":
+		"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior",
+	Personality: "Personality",
+	"Picks a shape tuned for the current model, falling back to its provider family.":
+		"Picks a shape tuned for the current model, falling back to its provider family.",
+	Pipe: "Pipe",
 	"Plain unscii square cell with sentence-hue ink.": "Plain unscii square cell with sentence-hue ink.",
 	"Plan Mode": "Plan Mode",
-	"Playback rate for local TTS — 0.8× is common for reading aloud.": "Playback rate for local TTS — 0.8× is common for reading aloud.",
+	"Playback rate for local TTS — 0.8× is common for reading aloud.":
+		"Playback rate for local TTS — 0.8× is common for reading aloud.",
 	"Plugin Install Source": "Plugin Install Source",
-	"Pragmatic": "Pragmatic",
+	Pragmatic: "Pragmatic",
 	"Pre-built status line configurations": "Pre-built status line configurations",
 	"Prefer Task Delegation": "Prefer Task Delegation",
 	"Prefer concise responses": "Prefer concise responses",
 	"Prefer detailed responses": "Prefer detailed responses",
-	"Prefer local on-device TTS; route .mp3 output to xAI when credentials exist": "Prefer local on-device TTS; route .mp3 output to xAI when credentials exist",
-	"Preferred": "Preferred",
+	"Prefer local on-device TTS; route .mp3 output to xAI when credentials exist":
+		"Prefer local on-device TTS; route .mp3 output to xAI when credentials exist",
+	Preferred: "Preferred",
 	"Prepend line numbers to read tool output by default": "Prepend line numbers to read tool output by default",
 	"Presence Penalty": "Presence Penalty",
 	"Prevent Display Sleep": "Prevent Display Sleep",
 	"Prevent Idle Sleep": "Prevent Idle Sleep",
 	"Prevent System Sleep": "Prevent System Sleep",
-	"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)": "Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)",
+	"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)":
+		"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)",
 	"Prevent images from being sent to LLM providers": "Prevent images from being sent to LLM providers",
-	"Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.": "Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.",
+	"Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.":
+		"Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.",
 	"Prioritize cheapest available provider": "Prioritize cheapest available provider",
 	"Prioritize throughput / lowest latency": "Prioritize throughput / lowest latency",
-	"Prioritized providers for image generation; unlisted providers follow the active session provider and the built-in order": "Prioritized providers for image generation; unlisted providers follow the active session provider and the built-in order",
-	"Prioritized providers for the web_search tool; unlisted providers retain their default order afterward": "Prioritized providers for the web_search tool; unlisted providers retain their default order afterward",
-	"Priority": "Priority",
-	"Priority serving path: higher reliability, premium per-token pricing": "Priority serving path: higher reliability, premium per-token pricing",
+	"Prioritized providers for image generation; unlisted providers follow the active session provider and the built-in order":
+		"Prioritized providers for image generation; unlisted providers follow the active session provider and the built-in order",
+	"Prioritized providers for the web_search tool; unlisted providers retain their default order afterward":
+		"Prioritized providers for the web_search tool; unlisted providers retain their default order afterward",
+	Priority: "Priority",
+	"Priority serving path: higher reliability, premium per-token pricing":
+		"Priority serving path: higher reliability, premium per-token pricing",
 	"Priority: native > trafilatura > lynx > parallel > jina": "Priority: native > trafilatura > lynx > parallel > jina",
-	"Processing tier for Gemini (Google AI Studio + Vertex) requests, and Google-family models routed via OpenRouter (none = omit). Sent as the top-level `serviceTier` field.": "Processing tier for Gemini (Google AI Studio + Vertex) requests, and Google-family models routed via OpenRouter (none = omit). Sent as the top-level `serviceTier` field.",
-	"Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.": "Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.",
+	"Processing tier for Gemini (Google AI Studio + Vertex) requests, and Google-family models routed via OpenRouter (none = omit). Sent as the top-level `serviceTier` field.":
+		"Processing tier for Gemini (Google AI Studio + Vertex) requests, and Google-family models routed via OpenRouter (none = omit). Sent as the top-level `serviceTier` field.",
+	"Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.":
+		"Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.",
 	"Production Only": "Production Only",
 	"Project-local Mnemopi bank per cwd basename": "Project-local Mnemopi bank per cwd basename",
-	"Promote to a larger-context model on context overflow instead of compacting": "Promote to a larger-context model on context overflow instead of compacting",
-	"Prompt": "Prompt",
+	"Promote to a larger-context model on context overflow instead of compacting":
+		"Promote to a larger-context model on context overflow instead of compacting",
+	Prompt: "Prompt",
 	"Prompt guidance plus a first-turn delegation reminder": "Prompt guidance plus a first-turn delegation reminder",
 	"Prompt to summarize when leaving a branch": "Prompt to summarize when leaving a branch",
 	"Prose Only Thinking": "Prose Only Thinking",
 	"Prose Summaries": "Prose Summaries",
-	"Providers that web_search should never use, even as fallbacks": "Providers that web_search should never use, even as fallbacks",
-	"Prune older read results when the same file is read again (cache-aware, runs every turn)": "Prune older read results when the same file is read again (cache-aware, runs every turn)",
-	"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)": "Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)",
-	"Push to a secret gist (needs authenticated gh), falling back to the share server": "Push to a secret gist (needs authenticated gh), falling back to the share server",
+	"Providers that web_search should never use, even as fallbacks":
+		"Providers that web_search should never use, even as fallbacks",
+	"Prune older read results when the same file is read again (cache-aware, runs every turn)":
+		"Prune older read results when the same file is read again (cache-aware, runs every turn)",
+	"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)":
+		"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)",
+	"Push to a secret gist (needs authenticated gh), falling back to the share server":
+		"Push to a secret gist (needs authenticated gh), falling back to the share server",
 	"Python Eval Backend": "Python Eval Backend",
 	"Python Interpreter": "Python Interpreter",
 	"Python Kernel Mode": "Python Kernel Mode",
 	"Quarter of a 200K window": "Quarter of a 200K window",
 	"Quiet Startup": "Quiet Startup",
-	"Re-submit the prompt as a follow-up message (current behavior)": "Re-submit the prompt as a follow-up message (current behavior)",
+	"Re-submit the prompt as a follow-up message (current behavior)":
+		"Re-submit the prompt as a follow-up message (current behavior)",
 	"Read Summaries": "Read Summaries",
 	"Read Summary Body Lines": "Read Summary Body Lines",
 	"Read Summary Comment Lines": "Read Summary Comment Lines",
@@ -4258,32 +4357,45 @@ export const settings = {
 	"Read Summary Unfold Target": "Read Summary Unfold Target",
 	"Read URLs": "Read URLs",
 	"Read content": "Read content",
-	"Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.": "Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.",
+	"Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.":
+		"Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.",
 	"Reader backend priority for the fetch/read URL tool": "Reader backend priority for the fetch/read URL tool",
 	"Reasoning depth for thinking-capable models": "Reasoning depth for thinking-capable models",
-	"Recall local memories into the first turn of each session": "Recall local memories into the first turn of each session",
+	"Recall local memories into the first turn of each session":
+		"Recall local memories into the first turn of each session",
 	"Recall memories on the first turn of each session": "Recall memories on the first turn of each session",
 	"Recursive copy": "Recursive copy",
 	"Refresh Title on Replan": "Refresh Title on Replan",
-	"Refresh generated session titles after todo init replans unless the title was set by the user": "Refresh generated session titles after todo init replans unless the title was set by the user",
+	"Refresh generated session titles after todo init replans unless the title was set by the user":
+		"Refresh generated session titles after todo init replans unless the title was set by the user",
 	"Register skills as /skill:name commands": "Register skills as /skill:name commands",
-	"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.": "Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
-	"Reject edits anchored on lines a prior read/search never displayed in full": "Reject edits anchored on lines a prior read/search never displayed in full",
+	"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.":
+		"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
+	"Reject edits anchored on lines a prior read/search never displayed in full":
+		"Reject edits anchored on lines a prior read/search never displayed in full",
 	"Relay URL": "Relay URL",
 	"Relay used by /collab (wss://host[:port])": "Relay used by /collab (wss://host[:port])",
 	"Remind the agent to complete todos before stopping": "Remind the agent to complete todos before stopping",
-	"Remote": "Remote",
+	Remote: "Remote",
 	"Remote Compaction V2": "Remote Compaction V2",
-	"Remove the 1-character horizontal padding from the left and right of the terminal output": "Remove the 1-character horizontal padding from the left and right of the terminal output",
-	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.": "Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.",
-	"Render Markdown read results as formatted terminal Markdown previews instead of raw source": "Render Markdown read results as formatted terminal Markdown previews instead of raw source",
+	"Remove the 1-character horizontal padding from the left and right of the terminal output":
+		"Remove the 1-character horizontal padding from the left and right of the terminal output",
+	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.":
+		"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.",
+	"Render Markdown read results as formatted terminal Markdown previews instead of raw source":
+		"Render Markdown read results as formatted terminal Markdown previews instead of raw source",
 	"Render Mermaid Diagrams": "Render Mermaid Diagrams",
-	"Render full tool descriptors in the system prompt and strip top-level/nested descriptions from provider tool schemas so descriptor text is sent once. Auto enables this for Gemini models and disables it otherwise": "Render full tool descriptors in the system prompt and strip top-level/nested descriptions from provider tool schemas so descriptor text is sent once. Auto enables this for Gemini models and disables it otherwise",
+	"Render full tool descriptors in the system prompt and strip top-level/nested descriptions from provider tool schemas so descriptor text is sent once. Auto enables this for Gemini models and disables it otherwise":
+		"Render full tool descriptors in the system prompt and strip top-level/nested descriptions from provider tool schemas so descriptor text is sent once. Auto enables this for Gemini models and disables it otherwise",
 	"Render images inline in the terminal": "Render images inline in the terminal",
-	"Render non-JSON MCP text results as Markdown in the transcript": "Render non-JSON MCP text results as Markdown in the transcript",
-	"Render read tool results inline in the transcript instead of summary rows": "Render read tool results inline in the transcript instead of summary rows",
-	"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.": "Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.",
-	"Repeated grid with ink cycling six hues at sentence boundaries.": "Repeated grid with ink cycling six hues at sentence boundaries.",
+	"Render non-JSON MCP text results as Markdown in the transcript":
+		"Render non-JSON MCP text results as Markdown in the transcript",
+	"Render read tool results inline in the transcript instead of summary rows":
+		"Render read tool results inline in the transcript instead of summary rows",
+	"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.":
+		"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.",
+	"Repeated grid with ink cycling six hues at sentence boundaries.":
+		"Repeated grid with ink cycling six hues at sentence boundaries.",
 	"Repetition Penalty": "Repetition Penalty",
 	"Requires Nerd Font": "Requires Nerd Font",
 	"Requires PARALLEL_API_KEY": "Requires PARALLEL_API_KEY",
@@ -4291,46 +4403,66 @@ export const settings = {
 	"Requires xAI Grok OAuth or XAI_API_KEY; MP3 or WAV": "Requires xAI Grok OAuth or XAI_API_KEY; MP3 or WAV",
 	"Reserve Margin": "Reserve Margin",
 	"Reserve Policy": "Reserve Policy",
-	"Reset": "Reset",
+	Reset: "Reset",
 	"Resize Scrollback": "Resize Scrollback",
-	"Resize large images to 2000x2000 max for better model compatibility": "Resize large images to 2000x2000 max for better model compatibility",
-	"Retain completed conversation turns into local Mnemopi memory": "Retain completed conversation turns into local Mnemopi memory",
-	"Retain transcript every N turns and at session boundaries": "Retain transcript every N turns and at session boundaries",
+	"Resize large images to 2000x2000 max for better model compatibility":
+		"Resize large images to 2000x2000 max for better model compatibility",
+	"Retain completed conversation turns into local Mnemopi memory":
+		"Retain completed conversation turns into local Mnemopi memory",
+	"Retain transcript every N turns and at session boundaries":
+		"Retain transcript every N turns and at session boundaries",
 	"Retry Attempts": "Retry Attempts",
 	"Retry Fallback Chains": "Retry Fallback Chains",
 	"Retry Model Fallback": "Retry Model Fallback",
 	"Return LSP diagnostics after editing code files": "Return LSP diagnostics after editing code files",
 	"Return LSP diagnostics after writing code files": "Return LSP diagnostics after writing code files",
-	"Return structural code summaries when read is called without an explicit selector": "Return structural code summaries when read is called without an explicit selector",
-	"Return structural summaries for Markdown and plain text reads": "Return structural summaries for Markdown and plain text reads",
-	"Return to the primary model after its suppression window ends": "Return to the primary model after its suppression window ends",
-	"Reveal assistant text and streamed tool input smoothly while chunks arrive": "Reveal assistant text and streamed tool input smoothly while chunks arrive",
+	"Return structural code summaries when read is called without an explicit selector":
+		"Return structural code summaries when read is called without an explicit selector",
+	"Return structural summaries for Markdown and plain text reads":
+		"Return structural summaries for Markdown and plain text reads",
+	"Return to the primary model after its suppression window ends":
+		"Return to the primary model after its suppression window ends",
+	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
+		"Reveal assistant text and streamed tool input smoothly while chunks arrive",
 	"Rewrite Scrollback": "Rewrite Scrollback",
-	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure": "Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
+	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure":
+		"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
 	"Ruby Eval Backend": "Ruby Eval Backend",
 	"Ruby Interpreter": "Ruby Interpreter",
-	"Rule names to ignore entirely (applies to bundled defaults and your own rules)": "Rule names to ignore entirely (applies to bundled defaults and your own rules)",
-	"Run modes where active goals may auto-continue between turns": "Run modes where active goals may auto-continue between turns",
-	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)": "Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)",
+	"Rule names to ignore entirely (applies to bundled defaults and your own rules)":
+		"Rule names to ignore entirely (applies to bundled defaults and your own rules)",
+	"Run modes where active goals may auto-continue between turns":
+		"Run modes where active goals may auto-continue between turns",
+	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)":
+		"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)",
 	"Running Turn Detail": "Running Turn Detail",
 	"Sample from top-K tokens (-1 = provider default)": "Sample from top-K tokens (-1 = provider default)",
-	"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)": "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
+	"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)":
+		"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
 	"Sandbox Only": "Sandbox Only",
 	"Save Handoff Docs": "Save Handoff Docs",
-	"Save generated handoff documents to markdown files for the auto-handoff flow": "Save generated handoff documents to markdown files for the auto-handoff flow",
-	"Save project role models in .musepi/config.yml; missing project roles use global defaults": "Save project role models in .musepi/config.yml; missing project roles use global defaults",
-	"Save role models in the active profile config (current behavior)": "Save role models in the active profile config (current behavior)",
+	"Save generated handoff documents to markdown files for the auto-handoff flow":
+		"Save generated handoff documents to markdown files for the auto-handoff flow",
+	"Save project role models in .musepi/config.yml; missing project roles use global defaults":
+		"Save project role models in .musepi/config.yml; missing project roles use global defaults",
+	"Save role models in the active profile config (current behavior)":
+		"Save role models in the active profile config (current behavior)",
 	"Screen Glow Indicator": "Screen Glow Indicator",
 	"Screenshot Directory": "Screenshot Directory",
 	"SearXNG Endpoint": "SearXNG Endpoint",
-	"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog": "Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog",
-	"Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog": "Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog",
+	"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog":
+		"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog",
+	"Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog":
+		"Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog",
 	"Seconds to wait while idle before compacting": "Seconds to wait while idle before compacting",
 	"Seconds to wait while idle before showing the recap": "Seconds to wait while idle before showing the recap",
-	"Security": "Security",
-	"Select the edit tool variant (replace, patch, hashline, or apply_patch)": "Select the edit tool variant (replace, patch, hashline, or apply_patch)",
-	"Service Tier for spawned task/eval subagents. Inherit = match the main agent's live per-family tiers (tracks /fast); pick a value to apply it to whichever family the subagent's model belongs to.": "Service Tier for spawned task/eval subagents. Inherit = match the main agent's live per-family tiers (tracks /fast); pick a value to apply it to whichever family the subagent's model belongs to.",
-	"Service Tier for the advisor model. None = standard processing; Inherit = match the main agent's live per-family tiers; pick a value to apply it to the advisor model's family.": "Service Tier for the advisor model. None = standard processing; Inherit = match the main agent's live per-family tiers; pick a value to apply it to the advisor model's family.",
+	Security: "Security",
+	"Select the edit tool variant (replace, patch, hashline, or apply_patch)":
+		"Select the edit tool variant (replace, patch, hashline, or apply_patch)",
+	"Service Tier for spawned task/eval subagents. Inherit = match the main agent's live per-family tiers (tracks /fast); pick a value to apply it to whichever family the subagent's model belongs to.":
+		"Service Tier for spawned task/eval subagents. Inherit = match the main agent's live per-family tiers (tracks /fast); pick a value to apply it to whichever family the subagent's model belongs to.",
+	"Service Tier for the advisor model. None = standard processing; Inherit = match the main agent's live per-family tiers; pick a value to apply it to the advisor model's family.":
+		"Service Tier for the advisor model. None = standard processing; Inherit = match the main agent's live per-family tiers; pick a value to apply it to the advisor model's family.",
 	"Service Tier — Advisor": "Service Tier — Advisor",
 	"Service Tier — Anthropic": "Service Tier — Anthropic",
 	"Service Tier — Google": "Service Tier — Google",
@@ -4338,56 +4470,69 @@ export const settings = {
 	"Service Tier — Subagent": "Service Tier — Subagent",
 	"Session Accent": "Session Accent",
 	"Session Tree Filter": "Session Tree Filter",
-	"Session-title model: online (the TINY role from /models, else @smol) by default, or a local on-device model": "Session-title model: online (the TINY role from /models, else @smol) by default, or a local on-device model",
+	"Session-title model: online (the TINY role from /models, else @smol) by default, or a local on-device model":
+		"Session-title model: online (the TINY role from /models, else @smol) by default, or a local on-device model",
 	"Setup Wizard": "Setup Wizard",
 	"Share Secret Redaction": "Share Secret Redaction",
 	"Share Server": "Share Server",
 	"Share Store": "Share Store",
-	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)": "Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)",
+	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)":
+		"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)",
 	"Shared Language Servers": "Shared Language Servers",
-	"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together": "Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together",
+	"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together":
+		"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together",
 	"Shell Minimizer": "Shell Minimizer",
 	"Shell Minimizer Source Outline": "Shell Minimizer Source Outline",
-	"Shimmer": "Shimmer",
+	Shimmer: "Shimmer",
 	"Show Hardware Cursor": "Show Hardware Cursor",
 	"Show Hook Status": "Show Hook Status",
 	"Show Inline Images": "Show Inline Images",
 	"Show Resolved Model Badge": "Show Resolved Model Badge",
 	"Show Startup Splash": "Show Startup Splash",
 	"Show Token Usage": "Show Token Usage",
-	"Show a divider above an assistant turn whose request lost (missed) the prompt cache": "Show a divider above an assistant turn whose request lost (missed) the prompt cache",
+	"Show a divider above an assistant turn whose request lost (missed) the prompt cache":
+		"Show a divider above an assistant turn whose request lost (missed) the prompt cache",
 	"Show all": "Show all",
-	"Show git branch, status, and PR information in the TUI and watch repository metadata.": "Show git branch, status, and PR information in the TUI and watch repository metadata.",
-	"Show newly added onboarding steps once per setup version": "Show newly added onboarding steps once per setup version",
+	"Show git branch, status, and PR information in the TUI and watch repository metadata.":
+		"Show git branch, status, and PR information in the TUI and watch repository metadata.",
+	"Show newly added onboarding steps once per setup version":
+		"Show newly added onboarding steps once per setup version",
 	"Show per-turn token usage on assistant messages": "Show per-turn token usage on assistant messages",
 	"Show release and change counts with a /changelog hint": "Show release and change counts with a /changelog hint",
 	"Show terminal cursor for IME support": "Show terminal cursor for IME support",
-	"Show the agent run state in the terminal title's separator — an animated spinner while working (a static ':' on Windows), '>' when it's your turn, '!' when the agent is waiting on you": "Show the agent run state in the terminal title's separator — an animated spinner while working (a static ':' on Windows), '>' when it's your turn, '!' when the agent is waiting on you",
-	"Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.": "Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.",
+	"Show the agent run state in the terminal title's separator — an animated spinner while working (a static ':' on Windows), '>' when it's your turn, '!' when the agent is waiting on you":
+		"Show the agent run state in the terminal title's separator — an animated spinner while working (a static ':' on Windows), '>' when it's your turn, '!' when the agent is waiting on you",
+	"Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.":
+		"Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.",
 	"Show the recent release notes in full": "Show the recent release notes in full",
-	"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.": "Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.",
-	"Show token budget alongside the goal indicator in the status line": "Show token budget alongside the goal indicator in the status line",
+	"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.":
+		"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.",
+	"Show token budget alongside the goal indicator in the status line":
+		"Show token budget alongside the goal indicator in the status line",
 	"Silence threshold (ms)": "Silence threshold (ms)",
 	"Similarity threshold (0-1) for accepting fuzzy matches": "Similarity threshold (0-1) for accepting fuzzy matches",
-	"Single": "Single",
+	Single: "Single",
 	"Skill Commands": "Skill Commands",
 	"Skip welcome screen and startup status messages": "Skip welcome screen and startup status messages",
-	"Slash": "Slash",
+	Slash: "Slash",
 	"Sleep Prevention": "Sleep Prevention",
 	"Slightly aggressive": "Slightly aggressive",
-	"Smart": "Smart",
+	Smart: "Smart",
 	"Snapcompact Shape": "Snapcompact Shape",
 	"Snapcompact System Prompt": "Snapcompact System Prompt",
 	"Snapcompact Tool Results": "Snapcompact Tool Results",
 	"Soft Request Budget Notice": "Soft Request Budget Notice",
 	"Soft Subagent Request Budget": "Soft Subagent Request Budget",
 	"Soft cosine wave sweeping across the text": "Soft cosine wave sweeping across the text",
-	"Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up steering notice (see task.softRequestBudgetNotice); at 1.5x the budget the run is force-stopped and the agent must yield its partial findings. 0 disables the guard. Bundled scout/sonic agents cap out at a lower built-in budget, so a value below that cap still applies to them.": "Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up steering notice (see task.softRequestBudgetNotice); at 1.5x the budget the run is force-stopped and the agent must yield its partial findings. 0 disables the guard. Bundled scout/sonic agents cap out at a lower built-in budget, so a value below that cap still applies to them.",
+	"Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up steering notice (see task.softRequestBudgetNotice); at 1.5x the budget the run is force-stopped and the agent must yield its partial findings. 0 disables the guard. Bundled scout/sonic agents cap out at a lower built-in budget, so a value below that cap still applies to them.":
+		"Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up steering notice (see task.softRequestBudgetNotice); at 1.5x the budget the run is force-stopped and the agent must yield its partial findings. 0 disables the guard. Bundled scout/sonic agents cap out at a lower built-in budget, so a value below that cap still applies to them.",
 	"Solid arrows (Nerd Font)": "Solid arrows (Nerd Font)",
 	"Solid blocks": "Solid blocks",
-	"Source outline mode for cat/read of source files: default or aggressive": "Source outline mode for cat/read of source files: default or aggressive",
+	"Source outline mode for cat/read of source files: default or aggressive":
+		"Source outline mode for cat/read of source files: default or aggressive",
 	"Space only": "Space only",
-	"Speak the assistant's output aloud through the speakers as it streams": "Speak the assistant's output aloud through the speakers as it streams",
+	"Speak the assistant's output aloud through the speakers as it streams":
+		"Speak the assistant's output aloud through the speakers as it streams",
 	"Speech Generation": "Speech Generation",
 	"Speech Model": "Speech Model",
 	"Speech Vocalization": "Speech Vocalization",
@@ -4396,15 +4541,19 @@ export const settings = {
 	"Speech rate (0.5–2)": "Speech rate (0.5–2)",
 	"Speech-to-Text": "Speech-to-Text",
 	"Speech-to-Text Submit Trigger": "Speech-to-Text Submit Trigger",
-	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).": "Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).",
+	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).":
+		"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).",
 	"Spend eligible saved resets without prompting.": "Spend eligible saved resets without prompting.",
-	"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.": "Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.",
-	"Standard": "Standard",
+	"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.":
+		"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.",
+	Standard: "Standard",
 	"Standard symbols (default)": "Standard symbols (default)",
 	"Start a new session, then re-submit the prompt": "Start a new session, then re-submit the prompt",
 	"Start in Plan Mode": "Start in Plan Mode",
-	"Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup": "Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup",
-	"Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.": "Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.",
+	"Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup":
+		"Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup",
+	"Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.":
+		"Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.",
 	"Startup Changelog": "Startup Changelog",
 	"Static commit message": "Static commit message",
 	"Status Line Preset": "Status Line Preset",
@@ -4414,36 +4563,43 @@ export const settings = {
 	"Stream First Event Timeout": "Stream First Event Timeout",
 	"Stream Idle Timeout": "Stream Idle Timeout",
 	"Streaming rendering": "Streaming rendering",
-	"Strict": "Strict",
+	Strict: "Strict",
 	"Strong novelty": "Strong novelty",
 	"Strong penalty": "Strong penalty",
 	"Style of separators between segments": "Style of separators between segments",
-	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`": "Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
-	"Suggests a todo list on the first message (reminder, not forced)": "Suggests a todo list on the first message (reminder, not forced)",
-	"Summary": "Summary",
+	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`":
+		"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
+	"Suggests a todo list on the first message (reminder, not forced)":
+		"Suggests a todo list on the first message (reminder, not forced)",
+	Summary: "Summary",
 	"Supersede Stale Reads": "Supersede Stale Reads",
-	"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones": "Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones",
-	"Surface the active model identifier in the system prompt so the agent knows which model it is": "Surface the active model identifier in the system prompt so the agent knows which model it is",
-	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.": "Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.",
+	"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones":
+		"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones",
+	"Surface the active model identifier in the system prompt so the agent knows which model it is":
+		"Surface the active model identifier in the system prompt so the agent knows which model it is",
+	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.":
+		"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.",
 	"Symbol Preset": "Symbol Preset",
 	"TTSR Context Mode": "TTSR Context Mode",
 	"TTSR Interrupt Mode": "TTSR Interrupt Mode",
 	"TTSR Repeat Gap": "TTSR Repeat Gap",
 	"TTSR Repeat Mode": "TTSR Repeat Mode",
-	"Temperature": "Temperature",
+	Temperature: "Temperature",
 	"Terminal Hyperlinks": "Terminal Hyperlinks",
 	"Terminal Title Run State": "Terminal Title Run State",
-	"Terse, evidence-first engineer; dense, action-oriented replies": "Terse, evidence-first engineer; dense, action-oriented replies",
+	"Terse, evidence-first engineer; dense, action-oriented replies":
+		"Terse, evidence-first engineer; dense, action-oriented replies",
 	"Text Verbosity": "Text Verbosity",
 	"Text-to-Speech Provider": "Text-to-Speech Provider",
-	"The original snapcompact shape (pre-shape-table sessions rendered this).": "The original snapcompact shape (pre-shape-table sessions rendered this).",
+	"The original snapcompact shape (pre-shape-table sessions rendered this).":
+		"The original snapcompact shape (pre-shape-table sessions rendered this).",
 	"Theme used when the terminal has a dark background": "Theme used when the terminal has a dark background",
 	"Theme used when the terminal has a light background": "Theme used when the terminal has a light background",
 	"Thin arrows (Nerd Font)": "Thin arrows (Nerd Font)",
 	"Thin chevron": "Thin chevron",
 	"Thinking Level": "Thinking Level",
 	"Three-quarters of a 200K window": "Three-quarters of a 200K window",
-	"Tight": "Tight",
+	Tight: "Tight",
 	"Tight Layout": "Tight Layout",
 	"Tiny Model": "Tiny Model",
 	"Tiny Model Device": "Tiny Model Device",
@@ -4451,28 +4607,34 @@ export const settings = {
 	"Todo Auto-Clear Delay": "Todo Auto-Clear Delay",
 	"Todo Reminder Limit": "Todo Reminder Limit",
 	"Todo Reminders": "Todo Reminders",
-	"Todos": "Todos",
+	Todos: "Todos",
 	"Token count above which idle compaction triggers": "Token count above which idle compaction triggers",
 	"Tool Approval": "Tool Approval",
 	"Tool Approval Policies": "Tool Approval Policies",
 	"Tool Calling Mode": "Tool Calling Mode",
-	"Tool names that may repeat consecutively without triggering the cross-turn loop guard": "Tool names that may repeat consecutively without triggering the cross-turn loop guard",
-	"Tool output above this size is saved as an artifact; tail is kept inline": "Tool output above this size is saved as an artifact; tail is kept inline",
+	"Tool names that may repeat consecutively without triggering the cross-turn loop guard":
+		"Tool names that may repeat consecutively without triggering the cross-turn loop guard",
+	"Tool output above this size is saved as an artifact; tail is kept inline":
+		"Tool output above this size is saved as an artifact; tail is kept inline",
 	"Tool-Call Loop Exempt Tools": "Tool-Call Loop Exempt Tools",
 	"Tool-Call Loop Guard": "Tool-Call Loop Guard",
 	"Tool-Call Loop Threshold": "Tool-Call Loop Threshold",
 	"Transparent Status Line": "Transparent Status Line",
-	"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.": "Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.",
-	"Triple": "Triple",
-	"Try production endpoint, fail over to sandbox on 5xx/429": "Try production endpoint, fail over to sandbox on 5xx/429",
+	"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.":
+		"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.",
+	Triple: "Triple",
+	"Try production endpoint, fail over to sandbox on 5xx/429":
+		"Try production endpoint, fail over to sandbox on 5xx/429",
 	"Two-column doc layout with sentence-hue ink.": "Two-column doc layout with sentence-hue ink.",
-	"Two-column doc layout, sentence-hue ink, function words dimmed gray.": "Two-column doc layout, sentence-hue ink, function words dimmed gray.",
+	"Two-column doc layout, sentence-hue ink, function words dimmed gray.":
+		"Two-column doc layout, sentence-hue ink, function words dimmed gray.",
 	"Typical threshold": "Typical threshold",
 	"Ultrathink Keyword": "Ultrathink Keyword",
 	"Unexpected Stop Model": "Unexpected Stop Model",
-	"Unlimited": "Unlimited",
-	"Unset": "Unset",
-	"Upload to the share server (no GitHub account needed; avoids gist API rate limits)": "Upload to the share server (no GitHub account needed; avoids gist API rate limits)",
+	Unlimited: "Unlimited",
+	Unset: "Unset",
+	"Upload to the share server (no GitHub account needed; avoids gist API rate limits)":
+		"Upload to the share server (no GitHub account needed; avoids gist API rate limits)",
 	"Upsert one document per session (recommended)": "Upsert one document per session (recommended)",
 	"Usage-Aware Fallback": "Usage-Aware Fallback",
 	"Use Anthropic-style in-band tool calls.": "Use Anthropic-style in-band tool calls.",
@@ -4482,28 +4644,37 @@ export const settings = {
 	"Use Harmony-style in-band tool calls.": "Use Harmony-style in-band tool calls.",
 	"Use Hermes-style in-band tool calls.": "Use Hermes-style in-band tool calls.",
 	"Use Kimi-style in-band tool calls.": "Use Kimi-style in-band tool calls.",
-	"Use Responses streaming compaction for compatible remote compaction models": "Use Responses streaming compaction for compatible remote compaction models",
+	"Use Responses streaming compaction for compatible remote compaction models":
+		"Use Responses streaming compaction for compatible remote compaction models",
 	"Use blue instead of green for diff additions": "Use blue instead of green for diff additions",
-	"Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.": "Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.",
+	"Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.":
+		"Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.",
 	"Use generic XML in-band tool calls.": "Use generic XML in-band tool calls.",
 	"Use model/provider default websocket behavior": "Use model/provider default websocket behavior",
-	"Use native tool calls unless the model is known not to support them.": "Use native tool calls unless the model is known not to support them.",
-	"Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint": "Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint",
+	"Use native tool calls unless the model is known not to support them.":
+		"Use native tool calls unless the model is known not to support them.",
+	"Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint":
+		"Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint",
 	"Use percentage-based threshold": "Use percentage-based threshold",
 	"Use provider default": "Use provider default",
 	"Use provider defaults and PI_* timeout env vars": "Use provider defaults and PI_* timeout env vars",
 	"Use provider-native tool calls.": "Use provider-native tool calls.",
-	"Use reliable coding-plan quota reports to prefer same-provider accounts, then configured fallback models, before a hard usage limit. Ordinary configured API keys are excluded.": "Use reliable coding-plan quota reports to prefer same-provider accounts, then configured fallback models, before a hard usage limit. Ordinary configured API keys are excluded.",
+	"Use reliable coding-plan quota reports to prefer same-provider accounts, then configured fallback models, before a hard usage limit. Ordinary configured API keys are excluded.":
+		"Use reliable coding-plan quota reports to prefer same-provider accounts, then configured fallback models, before a hard usage limit. Ordinary configured API keys are excluded.",
 	"Use the Gemini owned dialect.": "Use the Gemini owned dialect.",
 	"Use the Gemma owned dialect.": "Use the Gemma owned dialect.",
 	"Use the MiniMax owned dialect.": "Use the MiniMax owned dialect.",
 	"Use the Mnemopi remote LLM settings below": "Use the Mnemopi remote LLM settings below",
 	"Use the Qwen3 owned dialect.": "Use the Qwen3 owned dialect.",
 	"Use the model's server-declared protocol": "Use the model's server-declared protocol",
-	"Use the online tiny model (the TINY role from /models, else @smol)": "Use the online tiny model (the TINY role from /models, else @smol)",
-	"Use the session name color for the editor border and status line gap": "Use the session name color for the editor border and status line gap",
-	"Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.": "Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.",
-	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)": "Use whatever the package manager is configured with (.npmrc, bunfig.toml)",
+	"Use the online tiny model (the TINY role from /models, else @smol)":
+		"Use the online tiny model (the TINY role from /models, else @smol)",
+	"Use the session name color for the editor border and status line gap":
+		"Use the session name color for the editor border and status line gap",
+	"Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.":
+		"Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.",
+	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)":
+		"Use whatever the package manager is configured with (.npmrc, bunfig.toml)",
 	"User-defined segments": "User-defined segments",
 	"Uses r.jina.ai reader (JINA_API_KEY optional)": "Uses r.jina.ai reader (JINA_API_KEY optional)",
 	"Vectorize Hindsight remote memory service": "Vectorize Hindsight remote memory service",
@@ -4515,67 +4686,91 @@ export const settings = {
 	"Very large context window": "Very large context window",
 	"Very permissive": "Very permissive",
 	"Voice used by Codex-backed realtime voice sessions": "Voice used by Codex-backed realtime voice sessions",
-	"Warm, encouraging collaborator focused on momentum and morale": "Warm, encouraging collaborator focused on momentum and morale",
+	"Warm, encouraging collaborator focused on momentum and morale":
+		"Warm, encouraging collaborator focused on momentum and morale",
 	"Web Search": "Web Search",
 	"Web Search Provider Order": "Web Search Provider Order",
 	"Web Search Timeout": "Web Search Timeout",
-	"Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)": "Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)",
-	"What happens between /loop iterations before re-submitting the prompt": "What happens between /loop iterations before re-submitting the prompt",
-	"What happens to playback when dictation starts: duck (drop volume) or pause.": "What happens to playback when dictation starts: duck (drop volume) or pause.",
-	"What to do when every same-provider coding-plan account is inside the reserve margin.": "What to do when every same-provider coding-plan account is inside the reserve margin.",
+	"Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)":
+		"Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)",
+	"What happens between /loop iterations before re-submitting the prompt":
+		"What happens between /loop iterations before re-submitting the prompt",
+	"What happens to playback when dictation starts: duck (drop volume) or pause.":
+		"What happens to playback when dictation starts: duck (drop volume) or pause.",
+	"What to do when every same-provider coding-plan account is inside the reserve margin.":
+		"What to do when every same-provider coding-plan account is inside the reserve margin.",
 	"What to do with partial output when TTSR triggers": "What to do with partial output when TTSR triggers",
-	"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end": "What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end",
-	"When a Claude Fable 5 / Mythos 5 request is blocked by Anthropic's safety classifier, retry it on Claude Opus 4.8 server-side (Anthropic `server-side-fallback-2026-06-01` beta). Opt-in — leaving this off preserves the pre-fallback behavior for every request.": "When a Claude Fable 5 / Mythos 5 request is blocked by Anthropic's safety classifier, retry it on Claude Opus 4.8 server-side (Anthropic `server-side-fallback-2026-06-01` beta). Opt-in — leaving this off preserves the pre-fallback behavior for every request.",
-	"When a Gemini reasoning stream emits many consecutive planning headers without calling a tool, interrupt it and inject a reminder to issue a tool call (requires Loop Guard)": "When a Gemini reasoning stream emits many consecutive planning headers without calling a tool, interrupt it and inject a reminder to issue a tool call (requires Loop Guard)",
-	"When a paste reaches this many lines, offer a menu to wrap it in a code block, wrap it in XML tags, or save it to a file. 0 disables the menu (large pastes still collapse to a [Paste] marker).": "When a paste reaches this many lines, offer a menu to wrap it in a code block, wrap it in XML tags, or save it to a file. 0 disables the menu (large pastes still collapse to a [Paste] marker).",
-	"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it": "When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it",
-	"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.": "When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.",
+	"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end":
+		"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end",
+	"When a Claude Fable 5 / Mythos 5 request is blocked by Anthropic's safety classifier, retry it on Claude Opus 4.8 server-side (Anthropic `server-side-fallback-2026-06-01` beta). Opt-in — leaving this off preserves the pre-fallback behavior for every request.":
+		"When a Claude Fable 5 / Mythos 5 request is blocked by Anthropic's safety classifier, retry it on Claude Opus 4.8 server-side (Anthropic `server-side-fallback-2026-06-01` beta). Opt-in — leaving this off preserves the pre-fallback behavior for every request.",
+	"When a Gemini reasoning stream emits many consecutive planning headers without calling a tool, interrupt it and inject a reminder to issue a tool call (requires Loop Guard)":
+		"When a Gemini reasoning stream emits many consecutive planning headers without calling a tool, interrupt it and inject a reminder to issue a tool call (requires Loop Guard)",
+	"When a paste reaches this many lines, offer a menu to wrap it in a code block, wrap it in XML tags, or save it to a file. 0 disables the menu (large pastes still collapse to a [Paste] marker).":
+		"When a paste reaches this many lines, offer a menu to wrap it in a code block, wrap it in XML tags, or save it to a file. 0 disables the menu (large pastes still collapse to a [Paste] marker).",
+	"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it":
+		"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it",
+	"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.":
+		"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.",
 	"When steering messages interrupt tool execution": "When steering messages interrupt tool execution",
-	"When to interrupt mid-stream vs inject warning after completion": "When to interrupt mid-stream vs inject warning after completion",
+	"When to interrupt mid-stream vs inject warning after completion":
+		"When to interrupt mid-stream vs inject warning after completion",
 	"When to return to the primary model after a fallback": "When to return to the primary model after a fallback",
-	"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.": "When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.",
+	"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.":
+		"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.",
 	"Where /share uploads the encrypted session blob": "Where /share uploads the encrypted session blob",
 	"Where model selector role assignments are saved": "Where model selector role assignments are saved",
-	"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.": "Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
-	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing": "While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing",
-	"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.": "With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.",
-	"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)": "Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)",
+	"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
+		"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
+	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing":
+		"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing",
+	"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.":
+		"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.",
+	"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)":
+		"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)",
 	"Workflow Keyword": "Workflow Keyword",
 	"Worktree Base Directory": "Worktree Base Directory",
-	"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)": "Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)",
-	"Write": "Write",
-	"Write to a project-local bank but merge project + shared recall results": "Write to a project-local bank but merge project + shared recall results",
-	"Yes": "Yes",
-	"always": "always",
+	"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)":
+		"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)",
+	Write: "Write",
+	"Write to a project-local bank but merge project + shared recall results":
+		"Write to a project-local bank but merge project + shared recall results",
+	Yes: "Yes",
+	always: "always",
 	"cmux Browser": "cmux Browser",
 	"direnv Auto-Load": "direnv Auto-Load",
 	"direnv Load Timeout (ms)": "direnv Load Timeout (ms)",
-	"full-session = upsert one document per session, last-turn = chunked": "full-session = upsert one document per session, last-turn = chunked",
+	"full-session = upsert one document per session, last-turn = chunked":
+		"full-session = upsert one document per session, last-turn = chunked",
 	"git worktree if available, otherwise recursive copy": "git worktree if available, otherwise recursive copy",
-	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility": "global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
-	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall": "global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
-	"intfloat/multilingual-e5-large (1024d), cross-language recall": "intfloat/multilingual-e5-large (1024d), cross-language recall",
-	"max": "max",
-	"musepi browser relay endpoint (default http://127.0.0.1:9224).": "musepi browser relay endpoint (default http://127.0.0.1:9224).",
-	"never": "never",
+	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
+		"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
+	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall":
+		"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
+	"intfloat/multilingual-e5-large (1024d), cross-language recall":
+		"intfloat/multilingual-e5-large (1024d), cross-language recall",
+	max: "max",
+	"musepi browser relay endpoint (default http://127.0.0.1:9224).":
+		"musepi browser relay endpoint (default http://127.0.0.1:9224).",
+	never: "never",
 	"prose-only": "prose-only",
 	"tool-only": "tool-only",
 	"xAI Grok Voice": "xAI Grok Voice",
 	"xd:// Inline Devices": "xd:// Inline Devices",
 	"xd:// Prompt Docs": "xd:// Prompt Docs",
 	"xd:// Tools": "xd:// Tools",
-	"xhigh": "xhigh",
-	"context": "context",
-	"files": "files",
-	"artifacts": "artifacts",
-	"trajectory": "trajectory",
-	"jobs": "jobs",
-	"git": "git",
-	"notes": "notes",
-	"browser": "browser",
-	"agents": "agents",
-	"widget": "widget",
-	"board": "board",
+	xhigh: "xhigh",
+	context: "context",
+	files: "files",
+	artifacts: "artifacts",
+	trajectory: "trajectory",
+	jobs: "jobs",
+	git: "git",
+	notes: "notes",
+	browser: "browser",
+	agents: "agents",
+	widget: "widget",
+	board: "board",
 	"scheduled cron ex every5": "scheduled cron ex every5",
 	"scheduled cron ex hourly": "scheduled cron ex hourly",
 	"scheduled cron ex monday9": "scheduled cron ex monday9",
@@ -4612,19 +4807,26 @@ export const settings = {
 	"Auto-Learn": "Auto-Learn",
 	"add instance": "add instance",
 	"instance label": "instance label",
-	"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)": "Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
+	"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)":
+		"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
 	"Online (TINY role, else @smol)": "Online (TINY role, else @smol)",
-	"Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.": "Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.",
+	"Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.":
+		"Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.",
 	"Qwen3 1.7B": "Qwen3 1.7B",
-	"Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.": "Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.",
+	"Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.":
+		"Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.",
 	"Llama 3.2 3B": "Llama 3.2 3B",
-	"Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.": "Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.",
+	"Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.":
+		"Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.",
 	"Gemma 3 1B": "Gemma 3 1B",
-	"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.": "Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.",
+	"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.":
+		"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.",
 	"Qwen2.5 1.5B": "Qwen2.5 1.5B",
-	"Best extraction granularity (atomic facts); weaker consolidation.": "Best extraction granularity (atomic facts); weaker consolidation.",
+	"Best extraction granularity (atomic facts); weaker consolidation.":
+		"Best extraction granularity (atomic facts); weaker consolidation.",
 	"LFM2 1.2B": "LFM2 1.2B",
-	"Fastest load; solid all-rounder, slightly noisier extraction labels.": "Fastest load; solid all-rounder, slightly noisier extraction labels.",
+	"Fastest load; solid all-rounder, slightly noisier extraction labels.":
+		"Fastest load; solid all-rounder, slightly noisier extraction labels.",
 	"keep stored credential unless replaced": "keep stored credential unless replaced",
 	"comma separated values": "comma separated values",
 	"move earlier": "move earlier",
@@ -4768,7 +4970,8 @@ export const settings = {
 	"adopted models": "adopted models",
 	"add model": "add model",
 	"add model hint": "add model hint",
-	"provider name, base URL and at least one model are required": "provider name, base URL and at least one model are required",
+	"provider name, base URL and at least one model are required":
+		"provider name, base URL and at least one model are required",
 	"edit custom provider": "edit custom provider",
 	"save changes": "save changes",
 	"provider saved": "provider saved",
@@ -4837,7 +5040,8 @@ export const settings = {
 	"share this session live on the local network": "share this session live on the local network",
 	"open or create a session first to share it": "open or create a session first to share it",
 	"public tunnel": "public tunnel",
-	"public tunnel — anyone with the link can join; stop sharing to close it": "public tunnel — anyone with the link can join; stop sharing to close it",
+	"public tunnel — anyone with the link can join; stop sharing to close it":
+		"public tunnel — anyone with the link can join; stop sharing to close it",
 	"use bot channel": "use bot channel",
 	"connect a chat bot for longer mobile access": "connect a chat bot for longer mobile access",
 	"open this workspace from {name}": "open this workspace from {name}",
@@ -4889,7 +5093,8 @@ export const settings = {
 	"menu popups, orb animation, splash pulse": "menu popups, orb animation, splash pulse",
 	"sound effects": "sound effects",
 	"motion effects": "motion effects",
-	"tool needs a daemon backend — coming with the desktop release": "tool needs a daemon backend — coming with the desktop release",
+	"tool needs a daemon backend — coming with the desktop release":
+		"tool needs a daemon backend — coming with the desktop release",
 	"project notes": "project notes",
 	"git graph": "git graph",
 	"subject column": "subject column",
@@ -5012,7 +5217,8 @@ export const settings = {
 	"group color {color}": "group color {color}",
 	"bot management": "bot management",
 	"show avatars": "show avatars",
-	"agent orb avatar beside replies, your avatar at the bubble": "agent orb avatar beside replies, your avatar at the bubble",
+	"agent orb avatar beside replies, your avatar at the bubble":
+		"agent orb avatar beside replies, your avatar at the bubble",
 	"preview image": "preview image",
 	"preview statusbar model": "preview statusbar model",
 	"preview statusbar context": "preview statusbar context",
@@ -5387,7 +5593,8 @@ export const settings = {
 	"widget source": "widget source",
 	"maximize panel": "maximize panel",
 	"watch the agent's browser live": "watch the agent's browser live",
-	"with the managed browser on, pages the agent opens show up in the side panel and share its login state": "with the managed browser on, pages the agent opens show up in the side panel and share its login state",
+	"with the managed browser on, pages the agent opens show up in the side panel and share its login state":
+		"with the managed browser on, pages the agent opens show up in the side panel and share its login state",
 	"enable & watch": "enable & watch",
 	"don't ask again": "don't ask again",
 	"restore panel": "restore panel",
@@ -5571,7 +5778,8 @@ export const settings = {
 	"enter the 6-digit code from the desktop share panel": "enter the 6-digit code from the desktop share panel",
 	"paste a join link": "paste a join link",
 	"skip for now": "skip for now",
-	"not connected yet — connect to a computer to view sessions": "not connected yet — connect to a computer to view sessions",
+	"not connected yet — connect to a computer to view sessions":
+		"not connected yet — connect to a computer to view sessions",
 	"connect to a computer": "connect to a computer",
 	"scan failed — use the pair code instead": "scan failed — use the pair code instead",
 	"camera unavailable — use the pair code instead": "camera unavailable — use the pair code instead",
@@ -5593,8 +5801,10 @@ export const settings = {
 	"invalid or expired pair code": "invalid or expired pair code",
 	"invalid pair response": "invalid pair response",
 	"cannot reach the computer — same Wi-Fi?": "cannot reach the computer — same Wi-Fi?",
-	"no address shown? share with a public tunnel and scan the link instead": "no address shown? share with a public tunnel and scan the link instead",
-	"offline — showing cached content, connecting needs a network": "offline — showing cached content, connecting needs a network",
+	"no address shown? share with a public tunnel and scan the link instead":
+		"no address shown? share with a public tunnel and scan the link instead",
+	"offline — showing cached content, connecting needs a network":
+		"offline — showing cached content, connecting needs a network",
 	"no channels configured": "no channels configured",
 	"configure channel": "configure channel",
 	"unlink channel confirm": "unlink channel confirm",
@@ -5854,7 +6064,8 @@ export const settings = {
 	"pet accessory note": "pet accessory note",
 	"pet accessory headphones": "pet accessory headphones",
 	"import svg": "import svg",
-	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.": "Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.",
+	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.":
+		"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.",
 	"Auto-detect per prompt": "Auto-detect per prompt",
 	"no-tools": "no-tools",
 	"user-only": "user-only",
@@ -5891,54 +6102,88 @@ export const settings = {
 	"WebNN GPU device": "WebNN GPU device",
 	"WebNN CPU device": "WebNN CPU device",
 	"WebNN NPU device": "WebNN NPU device",
-	"Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.": "Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.",
-	"Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.": "Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.",
-	"Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.": "Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.",
-	"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.": "Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.",
-	"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.": "NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
-	"Never automatically submit; insert dictation and remain in editor.": "Never automatically submit; insert dictation and remain in editor.",
-	"Submit on release if the utterance has 2+ words to avoid accidental sends.": "Submit on release if the utterance has 2+ words to avoid accidental sends.",
-	"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).": "Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).",
-	"Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).": "Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).",
-	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace": "Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
-	"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)": "Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
-	"Uses auth when configured; explicit selection falls back to anonymous search": "Uses auth when configured; explicit selection falls back to anonymous search",
-	"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)": "Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)",
-	"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)": "Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)",
-	"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)": "OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
-	"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)": "Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)",
+	"Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.":
+		"Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.",
+	"Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.":
+		"Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.",
+	"Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.":
+		"Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.",
+	"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.":
+		"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.",
+	"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.":
+		"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
+	"Never automatically submit; insert dictation and remain in editor.":
+		"Never automatically submit; insert dictation and remain in editor.",
+	"Submit on release if the utterance has 2+ words to avoid accidental sends.":
+		"Submit on release if the utterance has 2+ words to avoid accidental sends.",
+	"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).":
+		"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).",
+	"Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).":
+		"Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).",
+	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace":
+		"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
+	"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)":
+		"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
+	"Uses auth when configured; explicit selection falls back to anonymous search":
+		"Uses auth when configured; explicit selection falls back to anonymous search",
+	"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)":
+		"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)",
+	"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)":
+		"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)",
+	"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)":
+		"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
+	"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)":
+		"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)",
 	"Calls Z.AI webSearchPrime MCP": "Calls Z.AI webSearchPrime MCP",
-	"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP": "API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP",
+	"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP":
+		"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP",
 	"Requires TINYFISH_API_KEY": "Requires TINYFISH_API_KEY",
 	"Requires JINA_API_KEY": "Requires JINA_API_KEY",
 	"Requires KAGI_API_KEY and Kagi Search API beta access": "Requires KAGI_API_KEY and Kagi Search API beta access",
 	"Requires TAVILY_API_KEY": "Requires TAVILY_API_KEY",
-	"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode": "Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode",
+	"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode":
+		"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode",
 	"Requires BRAVE_API_KEY": "Requires BRAVE_API_KEY",
-	"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)": "Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)",
+	"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)":
+		"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)",
 	"Requires SYNTHETIC_API_KEY": "Requires SYNTHETIC_API_KEY",
 	"Requires SEARXNG_ENDPOINT or searxng.endpoint": "Requires SEARXNG_ENDPOINT or searxng.endpoint",
-	"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged": "Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
-	"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs": "Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs",
-	"Credential-free browser-backed scrape of Ecosia (Google-backed) results": "Credential-free browser-backed scrape of Ecosia (Google-backed) results",
-	"Credential-free browser-backed fallback; slower and may be bot-challenged": "Credential-free browser-backed fallback; slower and may be bot-challenged",
-	"Credential-free browser-backed scrape of Mojeek's independent index": "Credential-free browser-backed scrape of Mojeek's independent index",
-	"Queries every credential-free engine in parallel and consolidates deduplicated results": "Queries every credential-free engine in parallel and consolidates deduplicated results",
+	"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged":
+		"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
+	"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs":
+		"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs",
+	"Credential-free browser-backed scrape of Ecosia (Google-backed) results":
+		"Credential-free browser-backed scrape of Ecosia (Google-backed) results",
+	"Credential-free browser-backed fallback; slower and may be bot-challenged":
+		"Credential-free browser-backed fallback; slower and may be bot-challenged",
+	"Credential-free browser-backed scrape of Mojeek's independent index":
+		"Credential-free browser-backed scrape of Mojeek's independent index",
+	"Queries every credential-free engine in parallel and consolidates deduplicated results":
+		"Queries every credential-free engine in parallel and consolidates deduplicated results",
 	"Requires AGNES_API_KEY": "Requires AGNES_API_KEY",
 	"Requires AGNES_GLOBAL_API_KEY": "Requires AGNES_GLOBAL_API_KEY",
-	"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription": "OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription",
-	"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed": "Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed",
+	"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription":
+		"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription",
+	"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed":
+		"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed",
 	"Requires google-antigravity OAuth": "Requires google-antigravity OAuth",
 	"Requires xAI Grok OAuth or XAI_API_KEY": "Requires xAI Grok OAuth or XAI_API_KEY",
 	"Requires GEMINI_API_KEY": "Requires GEMINI_API_KEY",
 	"Requires OPENROUTER_API_KEY": "Requires OPENROUTER_API_KEY",
-	"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local": "Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local",
-	"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.": "Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.",
-	"Recommended local model; best speed/quality balance, about 212 MB cached.": "Recommended local model; best speed/quality balance, about 212 MB cached.",
-	"Most robust local option; slower first load, about 500 MB cached.": "Most robust local option; slower first load, about 500 MB cached.",
-	"Smallest viable local option; lower quality, lowest cache footprint.": "Smallest viable local option; lower quality, lowest cache footprint.",
-	"Balanced local fallback; moderate quality and cache footprint.": "Balanced local fallback; moderate quality and cache footprint.",
-	"Highest-quality local option; larger and slower than LFM2 350M.": "Highest-quality local option; larger and slower than LFM2 350M.",
+	"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local":
+		"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local",
+	"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.":
+		"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.",
+	"Recommended local model; best speed/quality balance, about 212 MB cached.":
+		"Recommended local model; best speed/quality balance, about 212 MB cached.",
+	"Most robust local option; slower first load, about 500 MB cached.":
+		"Most robust local option; slower first load, about 500 MB cached.",
+	"Smallest viable local option; lower quality, lowest cache footprint.":
+		"Smallest viable local option; lower quality, lowest cache footprint.",
+	"Balanced local fallback; moderate quality and cache footprint.":
+		"Balanced local fallback; moderate quality and cache footprint.",
+	"Highest-quality local option; larger and slower than LFM2 350M.":
+		"Highest-quality local option; larger and slower than LFM2 350M.",
 	"plugin install title": "plugin install title",
 	"plugin install hint": "plugin install hint",
 	"plugin install placeholder": "plugin install placeholder",
@@ -5981,9 +6226,11 @@ export const settings = {
 	"6x6 dense, sentence hues": "6x6 dense, sentence hues",
 	"700K tokens": "700K tokens",
 	"800K tokens": "800K tokens",
-	"8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.": "8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.",
+	"8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.":
+		"8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.",
 	"8x13 glyphs on an 8x16 cell (extra leading), black ink.": "8x13 glyphs on an 8x16 cell (extra leading), black ink.",
-	"8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.": "8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.",
+	"8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.":
+		"8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.",
 	"8x13 on 11px advance (tracking), black": "8x13 on 11px advance (tracking), black",
 	"8x13 on 16px pitch, black": "8x13 on 16px pitch, black",
 	"8x13 on 22px pitch (leading), black": "8x13 on 22px pitch (leading), black",
@@ -5995,18 +6242,26 @@ export const settings = {
 	"900K tokens": "900K tokens",
 	"Advisor for Subagents": "Advisor for Subagents",
 	"Also enable the advisor on spawned task/eval subagents.": "Also enable the advisor on spawned task/eval subagents.",
-	"Archive history onto dense bitmap images the model reads back; no LLM call": "Archive history onto dense bitmap images the model reads back; no LLM call",
-	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.": "Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.",
+	"Archive history onto dense bitmap images the model reads back; no LLM call":
+		"Archive history onto dense bitmap images the model reads back; no LLM call",
+	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.":
+		"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.",
 	"Available Tools": "Available Tools",
 	"Balanced (Whisper small)": "Balanced (Whisper small)",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.": "Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.":
+		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
 	"Check for omp updates on startup": "Check for omp updates on startup",
-	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)": "Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
-	"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.": "Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
-	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point": "Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
+	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)":
+		"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
+	"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
+		"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
+	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
+		"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
 	"Task Card Style": "Task Card Style",
-	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card": "Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
-	"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)": "Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
+	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card":
+		"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
+	"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
+		"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
 	"Plain tool-call card only — no swarm member grid": "Plain tool-call card only — no swarm member grid",
 	"MusePi Swarm": "MusePi Swarm",
 	"MusePi original (Classic)": "MusePi original (Classic)",
@@ -6061,27 +6316,36 @@ export const settings = {
 	"debug work profile desc": "debug work profile desc",
 	"Deep reasoning (~16k tokens)": "Deep reasoning (~16k tokens)",
 	"Detect unexpected stops": "Detect unexpected stops",
-	"Disable automatic context maintenance (same behavior as Auto-compact off)": "Disable automatic context maintenance (same behavior as Auto-compact off)",
+	"Disable automatic context maintenance (same behavior as Auto-compact off)":
+		"Disable automatic context maintenance (same behavior as Auto-compact off)",
 	"Discovery & MCP": "Discovery & MCP",
 	"Doc 8on16, sentence hues": "Doc 8on16, sentence hues",
 	"Doc 8on16, sentence hues + dimmed stopwords": "Doc 8on16, sentence hues + dimmed stopwords",
-	"Drop heavy content (tool results + large blocks) in place; recover via artifact": "Drop heavy content (tool results + large blocks) in place; recover via artifact",
+	"Drop heavy content (tool results + large blocks) in place; recover via artifact":
+		"Drop heavy content (tool results + large blocks) in place; recover via artifact",
 	"Eval & Runtimes": "Eval & Runtimes",
 	"Fast (Whisper base)": "Fast (Whisper base)",
-	"Fixed token limit for context maintenance; overrides percentage if set": "Fixed token limit for context maintenance; overrides percentage if set",
+	"Fixed token limit for context maintenance; overrides percentage if set":
+		"Fixed token limit for context maintenance; overrides percentage if set",
 	"Generate handoff and continue in a new session": "Generate handoff and continue in a new session",
 	"Grep & Browser": "Grep & Browser",
-	"Kokoro voice used by the local TTS backend (American/British, female/male)": "Kokoro voice used by the local TTS backend (American/British, female/male)",
+	"Kokoro voice used by the local TTS backend (American/British, female/male)":
+		"Kokoro voice used by the local TTS backend (American/British, female/male)",
 	"Light reasoning (~2k tokens)": "Light reasoning (~2k tokens)",
-	"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.": "Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
-	"Maximum timeout in seconds the agent can set for any tool (0 = no limit)": "Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
+	"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.":
+		"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
+	"Maximum timeout in seconds the agent can set for any tool (0 = no limit)":
+		"Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
 	"Moderate reasoning (~8k tokens)": "Moderate reasoning (~8k tokens)",
 	"On-device neural TTS (Kokoro-82M); output is WAV/PCM16": "On-device neural TTS (Kokoro-82M); output is WAV/PCM16",
-	"On-device neural TTS model (Kokoro-82M) used by the local TTS backend": "On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
-	"Original X.org 5x8 glyphs on the 2576px frame, black ink.": "Original X.org 5x8 glyphs on the 2576px frame, black ink.",
+	"On-device neural TTS model (Kokoro-82M) used by the local TTS backend":
+		"On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
+	"Original X.org 5x8 glyphs on the 2576px frame, black ink.":
+		"Original X.org 5x8 glyphs on the 2576px frame, black ink.",
 	"Output Limits": "Output Limits",
 	"Parakeet TDT v3 (SoTA)": "Parakeet TDT v3 (SoTA)",
-	"Plain unscii square cell, single-printed lines, black ink.": "Plain unscii square cell, single-printed lines, black ink.",
+	"Plain unscii square cell, single-printed lines, black ink.":
+		"Plain unscii square cell, single-printed lines, black ink.",
 	"Power (macOS)": "Power (macOS)",
 	"Release with complete sentence": "Release with complete sentence",
 	"Remote Compaction": "Remote Compaction",
@@ -6093,14 +6357,20 @@ export const settings = {
 	"Status Line": "Status Line",
 	"Summarize in-place and keep the current session": "Summarize in-place and keep the current session",
 	"Turbo (Whisper large-v3)": "Turbo (Whisper large-v3)",
-	"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.": "Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
-	"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.": "unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.",
-	"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.": "unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.",
-	"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.": "Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.",
-	"Use remote compaction endpoints when available instead of local summarization": "Use remote compaction endpoints when available instead of local summarization",
+	"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.":
+		"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
+	"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.":
+		"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.",
+	"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.":
+		"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.",
+	"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.":
+		"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.",
+	"Use remote compaction endpoints when available instead of local summarization":
+		"Use remote compaction endpoints when available instead of local summarization",
 	"Very brief reasoning (~1k tokens)": "Very brief reasoning (~1k tokens)",
 	"When I Say Submit": "When I Say Submit",
-	"X.org 6x12 glyphs, black ink, function words dimmed gray.": "X.org 6x12 glyphs, black ink, function words dimmed gray.",
+	"X.org 6x12 glyphs, black ink, function words dimmed gray.":
+		"X.org 6x12 glyphs, black ink, function words dimmed gray.",
 	"X.org 8x13 glyphs, black ink.": "X.org 8x13 glyphs, black ink.",
 	"modes title": "modes title",
 	"modes description": "modes description",
@@ -6235,5 +6505,4 @@ export const settings = {
 	"settings.previewImageActualSize": "settings.previewImageActualSize",
 	"settings.previewImageFit": "settings.previewImageFit",
 	"settings.previewImageExpand": "settings.previewImageExpand",
-
 } as const satisfies Record<SettingsKey, string>;

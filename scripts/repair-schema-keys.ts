@@ -10,9 +10,10 @@
  * keys, with the zh values recovered from the pre-migration dictionaries plus
  * the batches' translations.
  */
+
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execSync } from "node:child_process";
 
 const root = process.cwd();
 const apply = process.argv.includes("--apply");
@@ -47,7 +48,9 @@ const preTui = loadPreDict("coding-agent", "settings");
 console.log("pre-migration GUI zh entries:", preGui.size, " TUI zh entries:", preTui.size);
 
 // 2. Load the gate's baseline — every schema string still outstanding.
-const baseline = JSON.parse(fs.readFileSync(path.resolve(root, "scripts/verify-schema-labels-i18n-baseline.json"), "utf8"));
+const baseline = JSON.parse(
+	fs.readFileSync(path.resolve(root, "scripts/verify-schema-labels-i18n-baseline.json"), "utf8"),
+);
 const byDict = new Map<string, Set<string>>();
 for (const p of baseline.pairs) {
 	const parts = p.split("\u0000");
@@ -59,10 +62,10 @@ for (const p of baseline.pairs) {
 // 3. For each outstanding string, the zh value = pre-migration value, else
 //    the value my batches wrote under the dotted key.
 function currentZhValue(pkgDir: string, domain: string, dottedKey: string): string | null {
-	const text = fs.readFileSync(path.resolve(root, pkgDir, "zh-CN", domain + ".ts"), "utf8");
+	const text = fs.readFileSync(path.resolve(root, pkgDir, "zh-CN", `${domain}.ts`), "utf8");
 	const lines = text.split("\n");
 	for (let i = 0; i < lines.length; i++) {
-		const re = new RegExp("^\\t[\"']" + dottedKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\"']\\s*:");
+		const re = new RegExp(`^\\t["']${dottedKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']\\s*:`);
 		if (re.test(lines[i])) {
 			const inline = /:\s*["'](.+?)["'],?$/.exec(lines[i]);
 			if (inline) return inline[1];
@@ -89,15 +92,21 @@ for (const [dictLabel, strings] of byDict) {
 			continue;
 		}
 		const dotted = table[oldKey];
-		const current = dotted ? currentZhValue(isGui ? "packages/client-core/src/i18n" : "packages/coding-agent/src/i18n", "settings", dotted) : null;
+		const current = dotted
+			? currentZhValue(
+					isGui ? "packages/client-core/src/i18n" : "packages/coding-agent/src/i18n",
+					"settings",
+					dotted,
+				)
+			: null;
 		if (current && current !== oldKey) {
 			repaired += 1;
 			continue;
 		}
 		noValue += 1;
-		if (report.length < 12) report.push(dictLabel + " | " + oldKey.slice(0, 70));
+		if (report.length < 12) report.push(`${dictLabel} | ${oldKey.slice(0, 70)}`);
 	}
 }
 console.log("repairable (zh value known):", repaired);
 console.log("no zh value found:", noValue);
-for (const r of report) console.log("  " + r);
+for (const r of report) console.log(`  ${r}`);

@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/client-core";
+import { Markdown, type TranslationKey, t } from "@musepi/client-core";
 import { ArrowLeft, FileWarning, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
@@ -57,6 +57,13 @@ const VIEWPORTS = [
 ] as const;
 
 type ViewportId = (typeof VIEWPORTS)[number]["id"];
+
+/** Viewport labels are keyed per VIEWPORTS id, so the lookup is closed. */
+const VIEWPORT_KEY: Record<string, TranslationKey> = {
+	desktop: "tools.artifactsViewportDesktop",
+	tablet: "tools.artifactsViewportTablet",
+	mobile: "tools.artifactsViewportMobile",
+};
 
 function kindLabel(kind: string): string {
 	// kind/renderer are contract enums (page/component/poster/deck) — shown
@@ -179,10 +186,10 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 											key={v.id}
 											type="button"
 											className={`gui-art-viewport${viewport === v.id ? " gui-art-viewport--on" : ""}`}
-											title={t(`artifacts viewport ${v.id}`)}
+											title={t(VIEWPORT_KEY[v.id] ?? v.id)}
 											onClick={() => setViewport(v.id)}
 										>
-											{t(`artifacts viewport ${v.id}`)}
+											{t(VIEWPORT_KEY[v.id] ?? v.id)}
 										</button>
 									))}
 								</div>
@@ -222,7 +229,12 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 		<div className="gui-art-list">
 			<div className="gui-art-list-head">
 				<span className="gui-group-label">{t("tools.artifacts")}</span>
-				<button type="button" className="gui-btn gui-btn-icon" title={t("settings.refresh")} onClick={() => void load()}>
+				<button
+					type="button"
+					className="gui-btn gui-btn-icon"
+					title={t("settings.refresh")}
+					onClick={() => void load()}
+				>
 					<RefreshCw size={13} className={loading ? "gui-art-spinning" : undefined} />
 				</button>
 			</div>

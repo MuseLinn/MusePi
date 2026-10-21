@@ -2,19 +2,19 @@ import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { Icon } from "../vendor/oc-icons";
 
-export type NavView = "general.sessions" | "settings.search" | "general.tasks" | "settings.skills";
+export type NavView = "sessions" | "search" | "tasks" | "skills";
 
 export interface NavItemDef {
 	view: NavView;
-	icon: "chat-1" | "settings.search" | "checkbox-multiple" | "sparkling";
+	icon: "chat-1" | "search" | "checkbox-multiple" | "sparkling";
 	label: TranslationKey;
 }
 
 export const NAV_ITEMS: NavItemDef[] = [
-	{ view: "general.sessions", icon: "chat-1", label: "general.sessions" },
-	{ view: "settings.search", icon: "settings.search", label: "settings.search" },
-	{ view: "general.tasks", icon: "checkbox-multiple", label: "general.tasks" },
-	{ view: "settings.skills", icon: "sparkling", label: "settings.skills" },
+	{ view: "sessions", icon: "chat-1", label: "general.sessions" },
+	{ view: "search", icon: "search", label: "settings.search" },
+	{ view: "tasks", icon: "checkbox-multiple", label: "general.tasks" },
+	{ view: "skills", icon: "sparkling", label: "settings.skills" },
 ];
 
 /**

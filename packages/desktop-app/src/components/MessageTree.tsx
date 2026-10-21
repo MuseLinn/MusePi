@@ -319,7 +319,12 @@ export function MessageTreeButton({
 						onChange={e => setQ(e.target.value)}
 						placeholder={t("general.searchMessages2")}
 					/>
-					<button type="button" className="gui-mtree-close" aria-label={t("settings.close")} onClick={() => setOpen(false)}>
+					<button
+						type="button"
+						className="gui-mtree-close"
+						aria-label={t("settings.close")}
+						onClick={() => setOpen(false)}
+					>
 						<Icon name="close" className="h-3 w-3" />
 					</button>
 				</div>

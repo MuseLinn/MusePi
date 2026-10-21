@@ -178,7 +178,13 @@ function SortableQueueItem({
 			>
 				<Icon name="arrow-go-back" className="h-3 w-3" />
 			</button>
-			<button type="button" className="gui-queue-send" title={t("settings.edit")} aria-label={t("settings.edit")} onClick={onEdit}>
+			<button
+				type="button"
+				className="gui-queue-send"
+				title={t("settings.edit")}
+				aria-label={t("settings.edit")}
+				onClick={onEdit}
+			>
 				<Icon name="edit-2" className="h-3 w-3" />
 			</button>
 			<button

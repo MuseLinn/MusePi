@@ -75,10 +75,7 @@ function formatClock(ms: number): string {
  */
 export function renderPauseScreen(width: number, height: number, elapsedMs: number, sessionName?: string): string[] {
 	const TITLE = t("errors.pUSE");
-	const BODY_LINES = [
-		t("errors.mainAgentSubagents.info"),
-		t("errors.flightCallsFinish.info"),
-	] as const;
+	const BODY_LINES = [t("errors.mainAgentSubagents.info"), t("errors.flightCallsFinish.info")] as const;
 	const RESUME_HINT = t("errors.escEnterSpaceResume");
 	const compact = width < MIN_FULL_WIDTH || height < MIN_FULL_HEIGHT;
 	const content: string[] = [];
@@ -90,7 +87,9 @@ export function renderPauseScreen(width: number, height: number, elapsedMs: numb
 		}
 		content.push(centerLine(theme.bold(theme.fg("accent", `▌▌ ${TITLE}`)), width));
 		content.push("");
-		content.push(centerLine(theme.fg("dim", t("errors.pausedForWith0").replace("{0}", formatClock(elapsedMs))), width));
+		content.push(
+			centerLine(theme.fg("dim", t("errors.pausedForWith0").replace("{0}", formatClock(elapsedMs))), width),
+		);
 		content.push(centerLine(theme.fg("dim", t("errors.escResume")), width));
 	} else {
 		if (sessionName) {
@@ -110,7 +109,9 @@ export function renderPauseScreen(width: number, height: number, elapsedMs: numb
 			content.push(centerLine(theme.fg("muted", line), width));
 		}
 		content.push("");
-		content.push(centerLine(theme.fg("dim", t("errors.pausedForWith0").replace("{0}", formatClock(elapsedMs))), width));
+		content.push(
+			centerLine(theme.fg("dim", t("errors.pausedForWith0").replace("{0}", formatClock(elapsedMs))), width),
+		);
 		content.push("");
 		content.push(centerLine(theme.fg("dim", RESUME_HINT), width));
 	}

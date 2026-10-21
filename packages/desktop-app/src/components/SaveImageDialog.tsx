@@ -69,7 +69,9 @@ export function SaveImageDialog({
 			// is what made a CSP-blocked fetch read as "the button is broken"
 			// for a whole release — the user saw nothing, not even in console.
 			const detail = err instanceof Error ? err.message : String(err);
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: `${t("settings.copyImageFailed")}: ${detail}` }));
+			window.dispatchEvent(
+				new CustomEvent("musepi-gui-toast", { detail: `${t("settings.copyImageFailed")}: ${detail}` }),
+			);
 		} finally {
 			setBusy(false);
 		}
@@ -134,7 +136,9 @@ export function SaveImageDialog({
 						) : (
 							<MorphIcon icon={copied ? CheckIconData : CopyIconData} size={13} spring="snappy" />
 						)}
-						<span>{busy ? t("settings.savingImage") : copied ? t("settings.copied") : t("settings.copyImage")}</span>
+						<span>
+							{busy ? t("settings.savingImage") : copied ? t("settings.copied") : t("settings.copyImage")}
+						</span>
 					</button>
 				</div>
 			</div>

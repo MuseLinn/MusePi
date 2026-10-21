@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const KEY_DQ = /^\t"((?:[^"\\]|\\.)*)":/;
 const KEY_SQ = /^\t'((?:[^'\\]|\\.)*)':/;
 function unesc(raw, q) {
-	return q === "'" ? raw.replace(/\\'/g, "'").replace(/\\\\/g, "\\") : JSON.parse('"' + raw + '"');
+	return q === "'" ? raw.replace(/\\'/g, "'").replace(/\\\\/g, "\\") : JSON.parse(`"${raw}"`);
 }
 const files = [
 	"packages/client-core/src/i18n/zh-CN/settings.ts",
@@ -38,5 +38,5 @@ for (const f of files) {
 		const out = lines.filter((_, i) => !skip.has(i));
 		fs.writeFileSync(f, out.join("\n"));
 	}
-	console.log(f.split("/").slice(-2).join("/") + ": removed " + skip.size);
+	console.log(`${f.split("/").slice(-2).join("/")}: removed ${skip.size}`);
 }

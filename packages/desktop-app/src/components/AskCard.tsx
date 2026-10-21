@@ -547,7 +547,11 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 								onClick={() => toggleOption(qIndex, opt.label)}
 							>
 								{recommended && (
-									<span className="gui-ask-opt-rec" aria-label={t("composer.recommended")} title={t("composer.recommended")}>
+									<span
+										className="gui-ask-opt-rec"
+										aria-label={t("composer.recommended")}
+										title={t("composer.recommended")}
+									>
 										<Icon name="star-fill" className="h-2.5 w-2.5" />
 									</span>
 								)}

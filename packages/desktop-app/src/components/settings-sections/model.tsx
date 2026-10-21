@@ -1347,7 +1347,9 @@ export function ModelSection({
 											 * settings. The DEFAULT role below IS the default
 											 * model for new sessions. */}
 											{roleModels === null ? (
-												<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.loading")}…</div>
+												<div className="text-[13px] text-[var(--color-text-faint)]">
+													{t("settings.loading")}…
+												</div>
 											) : (
 												<>
 													<div className="gui-role-grid">
@@ -1359,11 +1361,13 @@ export function ModelSection({
 														type="button"
 														className="gui-connect-add"
 														onClick={() => {
-															void prompt({ title: t("general.newRoleName") }).then((role: string | null) => {
-																if (!role?.trim() || !rpc) return;
-																const next = { ...roleModels, [role.trim()]: "" };
-																applyRoleModels(next);
-															});
+															void prompt({ title: t("general.newRoleName") }).then(
+																(role: string | null) => {
+																	if (!role?.trim() || !rpc) return;
+																	const next = { ...roleModels, [role.trim()]: "" };
+																	applyRoleModels(next);
+																},
+															);
 														}}
 													>
 														<Icon name="add-circle" className="h-4 w-4" />
@@ -1396,7 +1400,9 @@ export function ModelSection({
 																	<div className="gui-project-overrides-title">
 																		<span>{t("general.projectOverrides")}</span>
 																		<span className="text-[12px] text-[var(--color-text-faint)]">
-																			{t("general.overridesCountWithCount", { count: String(real.length) })}
+																			{t("general.overridesCountWithCount", {
+																				count: String(real.length),
+																			})}
 																		</span>
 																	</div>
 																	{real.map(entry => (
@@ -1555,7 +1561,9 @@ export function ModelSection({
 																		/>
 																		{p.loggedIn
 																			? creds.length > 1
-																				? t("general.loggedInWithCount", { count: String(creds.length) })
+																				? t("general.loggedInWithCount", {
+																						count: String(creds.length),
+																					})
 																				: t("settings.loggedIn")
 																			: p.configured
 																				? t("settings.configured")
@@ -1591,7 +1599,9 @@ export function ModelSection({
 																				if (!open && credsMenu === p.id) setCredsMenu(null);
 																			}}
 																		>
-																			<div className="gui-creds-menu-label">{t("general.accounts")}</div>
+																			<div className="gui-creds-menu-label">
+																				{t("general.accounts")}
+																			</div>
 																			{creds.map(c => (
 																				<div key={c.id} className="gui-creds-row">
 																					<div className="min-w-0 flex-1">
@@ -1678,7 +1688,9 @@ export function ModelSection({
 																					void onLogout(p.id);
 																				}}
 																			>
-																				<span className="min-w-0 flex-1">{t("general.logoutAll")}</span>
+																				<span className="min-w-0 flex-1">
+																					{t("general.logoutAll")}
+																				</span>
 																			</button>
 																		</MenuPopup>
 																	</div>
@@ -1721,7 +1733,9 @@ export function ModelSection({
 																					}}
 																				>
 																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-																					<span className="min-w-0 flex-1">{t("settings.login")}</span>
+																					<span className="min-w-0 flex-1">
+																						{t("settings.login")}
+																					</span>
 																				</button>
 																			)}
 																			{p.canImport && (

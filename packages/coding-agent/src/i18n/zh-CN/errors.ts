@@ -11,17 +11,13 @@ export const errors = {
 	"errors.compactionCancelled": "压缩已取消",
 	"errors.handoffCancelled": "交接已取消",
 	"errors.hindsightBackendNotActive": "本会话未启用 Hindsight 后端。",
-	"errors.mentalModelsDisabled":
-		"心智模型已禁用（hindsight.mentalModelsEnabled = false）。",
-	"errors.usageMemoryView.info":
-		"用法：/memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>",
+	"errors.mentalModelsDisabled": "心智模型已禁用（hindsight.mentalModelsEnabled = false）。",
+	"errors.usageMemoryView.info": "用法：/memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>",
 	"errors.usageMemoryMmShow": "用法：/memory mm show <id>",
 	"errors.usageMemoryMmHistory": "用法：/memory mm history <id>",
 	"errors.usageMemoryMmDelete": "用法：/memory mm delete <id>",
-	"errors.usageMemoryMm.info":
-		"用法：/memory mm <list|show|refresh|history|seed|reload|delete>",
-	"errors.reloadFailed":
-		"重新加载失败（Hindsight 后端未激活或心智模型已禁用）。",
+	"errors.usageMemoryMm.info": "用法：/memory mm <list|show|refresh|history|seed|reload|delete>",
+	"errors.reloadFailed": "重新加载失败（Hindsight 后端未激活或心智模型已禁用）。",
 	"errors.autoShakeCompleted": "自动精简完成",
 	"errors.autoHandoffCompleted": "自动交接完成",
 	"errors.closingSession": "正在关闭会话…",
@@ -99,7 +95,8 @@ export const errors = {
 	"errors.unknownHubOp": "未知的 hub 操作。",
 	"errors.cannotSendMessageYourself": "不能给自己发送消息。",
 	"errors.noTurnsFlightWait": "没有正在进行的轮次需要等待。",
-	"errors.noVibeSessions.info": "没有 Vibe 会话。请使用 vibe_spawn 创建一个。",	"No messages to dump yet.": "暂无消息可导出。",
+	"errors.noVibeSessions.info": "没有 Vibe 会话。请使用 vibe_spawn 创建一个。",
+	"No messages to dump yet.": "暂无消息可导出。",
 	"Advisor is not active for this session.": "本会话未启用顾问。",
 	"Advisor has no history yet.": "顾问暂无历史记录。",
 	"Advisor is disabled.": "顾问已禁用。",
@@ -110,13 +107,17 @@ export const errors = {
 	"Compaction cancelled": "压缩已取消",
 	"Handoff cancelled": "交接已取消",
 	"Hindsight backend is not active for this session.": "本会话未启用 Hindsight 后端。",
-	"Mental models are disabled (hindsight.mentalModelsEnabled = false).": "Mental models are disabled (hindsight.mentalModelsEnabled = false).",
-	"Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>": "Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>",
+	"Mental models are disabled (hindsight.mentalModelsEnabled = false).":
+		"Mental models are disabled (hindsight.mentalModelsEnabled = false).",
+	"Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>":
+		"Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>",
 	"Usage: /memory mm show <id>": "用法：/memory mm show <id>",
 	"Usage: /memory mm history <id>": "用法：/memory mm history <id>",
 	"Usage: /memory mm delete <id>": "用法：/memory mm delete <id>",
-	"Usage: /memory mm <list|show|refresh|history|seed|reload|delete>": "Usage: /memory mm <list|show|refresh|history|seed|reload|delete>",
-	"Reload failed (Hindsight backend not active or mental models disabled).": "Reload failed (Hindsight backend not active or mental models disabled).",
+	"Usage: /memory mm <list|show|refresh|history|seed|reload|delete>":
+		"Usage: /memory mm <list|show|refresh|history|seed|reload|delete>",
+	"Reload failed (Hindsight backend not active or mental models disabled).":
+		"Reload failed (Hindsight backend not active or mental models disabled).",
 	"Auto-shake completed": "自动精简完成",
 	"Auto-handoff completed": "自动交接完成",
 	"Closing session…": "正在关闭会话…",
@@ -166,7 +167,6 @@ export const errors = {
 	"Cannot send a message to yourself.": "不能给自己发送消息。",
 	"No turns in flight to wait for.": "没有正在进行的轮次需要等待。",
 	"No vibe sessions. Spawn one with vibe_spawn.": "没有 Vibe 会话。请使用 vibe_spawn 创建一个。",
-
 } as const;
 
 /** Key union for the errors domain (mirrors the guest-client locale split). */

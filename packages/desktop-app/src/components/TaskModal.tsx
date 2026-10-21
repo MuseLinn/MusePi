@@ -95,7 +95,9 @@ export function TaskModal({
 					<div className="gui-task-field">
 						<span className="gui-task-label">{t("settings.widgetTaskRuns")}</span>
 						<div className="gui-task-runs">
-							{task.runs.length === 0 && <span className="gui-task-runs-empty">{t("settings.widgetTaskNoRuns")}</span>}
+							{task.runs.length === 0 && (
+								<span className="gui-task-runs-empty">{t("settings.widgetTaskNoRuns")}</span>
+							)}
 							{task.runs.map((run, i) => (
 								<div key={`${run.time}-${i}`} className="gui-task-run">
 									<span className="gui-task-run-time">{run.time}</span>

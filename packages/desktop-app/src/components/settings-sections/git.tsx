@@ -278,7 +278,9 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									<span className="text-[12px] text-[var(--color-text-muted)]">· {auth.email}</span>
 								)}
 							</div>
-							<div className="text-[12px] text-[var(--color-text-muted)]">{t("general.authenticatedViaGhCli")}</div>
+							<div className="text-[12px] text-[var(--color-text-muted)]">
+								{t("general.authenticatedViaGhCli")}
+							</div>
 						</div>
 						<button type="button" className="gui-btn" disabled={authLoading} onClick={() => void disableAuth()}>
 							{t("transcript.disable")}
@@ -384,7 +386,9 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							<div className="min-w-0 flex-1">
 								<div className="text-[13.5px]">
 									{idt.name}
-									{defaultIdentity === idt.id && <span className="gui-identity-default">{t("transcript.default")}</span>}
+									{defaultIdentity === idt.id && (
+										<span className="gui-identity-default">{t("transcript.default")}</span>
+									)}
 								</div>
 								<div className="text-[12px] text-[var(--color-text-muted)]">{idt.email}</div>
 							</div>

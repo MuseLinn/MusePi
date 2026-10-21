@@ -11,17 +11,17 @@ const root = process.cwd();
 const apply = process.argv.includes("--apply");
 
 const TRANSLATIONS: Record<string, string> = {
-	"context": "上下文",
-	"files": "文件",
-	"artifacts": "产物",
-	"trajectory": "轨迹",
-	"jobs": "任务",
-	"git": "Git",
-	"notes": "笔记",
-	"browser": "浏览器",
-	"agents": "子代理",
-	"widget": "组件",
-	"board": "看板",
+	context: "上下文",
+	files: "文件",
+	artifacts: "产物",
+	trajectory: "轨迹",
+	jobs: "任务",
+	git: "Git",
+	notes: "笔记",
+	browser: "浏览器",
+	agents: "子代理",
+	widget: "组件",
+	board: "看板",
 	"surface description context": "会话上下文与回合流",
 	"surface description files": "工作区文件树与编辑",
 	"surface description artifacts": "本轮产生的文件产物",
@@ -77,28 +77,55 @@ const TRANSLATIONS: Record<string, string> = {
 
 /** TUI-only keys (coding-agent components render them; GUI doesn't). */
 const TUI_ONLY = new Set([
-	"Copy current line", "Copy whole prompt", "Move cursor to end of message",
-	"Move cursor to beginning of message", "Move cursor to beginning of line",
-	"Move cursor to end of line", "Current message",
+	"Copy current line",
+	"Copy whole prompt",
+	"Move cursor to end of message",
+	"Move cursor to beginning of message",
+	"Move cursor to beginning of line",
+	"Move cursor to end of line",
+	"Current message",
 ]);
 /** GUI-only keys (desktop components; TUI has its own settings surface). */
 const GUI_ONLY = new Set([
-	"scheduled cron ex every5", "scheduled cron ex hourly", "scheduled cron ex monday9",
-	"scheduled cron ex 9and17", "scheduled cron ex month1", "workspace changes",
-	"commit history", "pull requests", "widget pomodoro focus", "widget pomodoro short",
-	"widget pomodoro long", "widget noise", "widget jitter", "widget frequency",
-	"widget amplitude", "voice engine auto", "voice engine daemon", "voice engine native",
-	"voice input lang auto", "Multilingual · default", "SoTA · EN/EU only",
-	"Chinese-optimized · zh/en", "Bot token", "Token (optional — QR login if empty)",
-	"Bot token (from @BotFather)", "App ID", "App Secret", "inherit provider protocol",
-	"Chat Completions (/chat/completions)", "Responses (/responses)",
-	"Anthropic Messages (/messages)", "Google Generative AI", "openai responses",
+	"scheduled cron ex every5",
+	"scheduled cron ex hourly",
+	"scheduled cron ex monday9",
+	"scheduled cron ex 9and17",
+	"scheduled cron ex month1",
+	"workspace changes",
+	"commit history",
+	"pull requests",
+	"widget pomodoro focus",
+	"widget pomodoro short",
+	"widget pomodoro long",
+	"widget noise",
+	"widget jitter",
+	"widget frequency",
+	"widget amplitude",
+	"voice engine auto",
+	"voice engine daemon",
+	"voice engine native",
+	"voice input lang auto",
+	"Multilingual · default",
+	"SoTA · EN/EU only",
+	"Chinese-optimized · zh/en",
+	"Bot token",
+	"Token (optional — QR login if empty)",
+	"Bot token (from @BotFather)",
+	"App ID",
+	"App Secret",
+	"inherit provider protocol",
+	"Chat Completions (/chat/completions)",
+	"Responses (/responses)",
+	"Anthropic Messages (/messages)",
+	"Google Generative AI",
+	"openai responses",
 ]);
 
 function insert(text: string, entries: Array<[string, string]>): string {
 	const topClose = text.lastIndexOf("} as const") >= 0 ? text.lastIndexOf("} as const") : text.lastIndexOf("}");
 	const lineEnd = text.lastIndexOf("\n", topClose);
-	const block = entries.map(([k, v]) => "\t" + JSON.stringify(k) + ": " + JSON.stringify(v) + ",").join("\n") + "\n";
+	const block = `${entries.map(([k, v]) => `\t${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n")}\n`;
 	return text.slice(0, lineEnd) + block + text.slice(lineEnd);
 }
 function existingKeys(file: string): Set<string> {

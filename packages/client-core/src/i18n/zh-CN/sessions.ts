@@ -31,7 +31,8 @@ export const sessions = {
 	"sessions.sessionStatusAborted": "已中止",
 	"sessions.sessionStatusError": "出错",
 	"sessions.sessionStatusPending": "处理中",
-	"sessions.sessionStatusUnknown": "未知状态",	"room closed": "房间已关闭",
+	"sessions.sessionStatusUnknown": "未知状态",
+	"room closed": "房间已关闭",
 	"no such room": "房间不存在",
 	"a host is already connected for this room": "该房间已有宿主连接",
 	"room is full": "房间已满",
@@ -58,7 +59,6 @@ export const sessions = {
 	"session status error": "出错",
 	"session status pending": "处理中",
 	"session status unknown": "未知状态",
-
 } as const;
 
 /** Key union for the sessions domain (source of truth). */

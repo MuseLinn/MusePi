@@ -358,9 +358,19 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-3">
 						{[
 							{ icon: "flashlight", label: t("settings.tokenUsage"), value: fmtCompact(tokensTotal), sub: null },
-							{ icon: "chat-3", label: t("settings.sessionCount"), value: String(stats.sessionCount ?? 0), sub: null },
+							{
+								icon: "chat-3",
+								label: t("settings.sessionCount"),
+								value: String(stats.sessionCount ?? 0),
+								sub: null,
+							},
 							{ icon: "chat-4", label: t("settings.messageCount"), value: fmtCompact(msgTotal), sub: null },
-							{ icon: "calendar-schedule", label: t("settings.activeDays"), value: String(activeDays), sub: null },
+							{
+								icon: "calendar-schedule",
+								label: t("settings.activeDays"),
+								value: String(activeDays),
+								sub: null,
+							},
 							{ icon: "bar-chart-box", label: t("settings.currentStreak"), value: String(streak), sub: null },
 							{
 								icon: "equalizer-2",

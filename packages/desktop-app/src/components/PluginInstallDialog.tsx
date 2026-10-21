@@ -249,8 +249,16 @@ export function PluginInstallDialog({
 		<DialogFrame open={open} onClose={onClose} label={t("settings.pluginInstallTitle")} className="gui-plugin-dialog">
 			<div className="gui-dialog-head">
 				<Icon name="download" className="h-4 w-4 opacity-70" />
-				<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{t("settings.pluginInstallTitle")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} disabled={busy} aria-label={t("settings.close")}>
+				<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+					{t("settings.pluginInstallTitle")}
+				</span>
+				<button
+					type="button"
+					className="gui-tool-btn"
+					onClick={onClose}
+					disabled={busy}
+					aria-label={t("settings.close")}
+				>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
@@ -318,7 +326,9 @@ export function PluginInstallDialog({
 				{phase === "failed" && (
 					<div className="gui-ext-plugins-error">{view?.message ?? t("settings.pluginInstallFailed")}</div>
 				)}
-				{phase === "cancelled" && <div className="gui-ext-plugins-desc">{t("settings.pluginInstallCancelled")}</div>}
+				{phase === "cancelled" && (
+					<div className="gui-ext-plugins-desc">{t("settings.pluginInstallCancelled")}</div>
+				)}
 
 				<div className="gui-plugin-dialog-actions">
 					{busy ? (
@@ -331,7 +341,9 @@ export function PluginInstallDialog({
 								{t("settings.close")}
 							</button>
 							<button type="button" className="gui-btn-primary" onClick={() => start(spec)}>
-								{phase === "failed" || phase === "cancelled" ? t("settings.retry") : t("settings.pluginInstallStart")}
+								{phase === "failed" || phase === "cancelled"
+									? t("settings.retry")
+									: t("settings.pluginInstallStart")}
 							</button>
 						</>
 					)}

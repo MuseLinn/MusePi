@@ -284,9 +284,7 @@ class MultiSelectSubmenu extends Container {
 		this.addChild(this.#selectList);
 
 		this.addChild(new Spacer(1));
-		const hint = this.ordered
-			? t("settings.enterSpaceToggle.info")
-			: t("settings.enterSpaceToggleEscGoBack");
+		const hint = this.ordered ? t("settings.enterSpaceToggle.info") : t("settings.enterSpaceToggleEscGoBack");
 		this.addChild(new Text(theme.fg("dim", hint), 0, 0));
 	}
 
@@ -376,18 +374,7 @@ class ProviderLimitsSubmenu extends Container {
 		this.clear();
 		this.addChild(new Text(theme.bold(theme.fg("accent", t("settings.providers.services.maxFlightRequests"))), 0, 0));
 		this.addChild(new Spacer(1));
-		this.addChild(
-			new Text(
-				theme.fg(
-					"muted",
-					t(
-						"settings.selectProviderEnter.info",
-					),
-				),
-				0,
-				0,
-			),
-		);
+		this.addChild(new Text(theme.fg("muted", t("settings.selectProviderEnter.info")), 0, 0));
 		this.addChild(new Spacer(1));
 
 		const limits = normalizeProviderMaxInFlightRequests(settings.get("providers.maxInFlightRequests"));
@@ -402,7 +389,13 @@ class ProviderLimitsSubmenu extends Container {
 		const clearItem: SelectItem[] =
 			Object.keys(limits).length === 0
 				? []
-				: [{ value: "__clear_all", label: t("settings.clearAllLimits"), description: t("settings.makeEveryProviderUnlimited") }];
+				: [
+						{
+							value: "__clear_all",
+							label: t("settings.clearAllLimits"),
+							description: t("settings.makeEveryProviderUnlimited"),
+						},
+					];
 		const items = [...providerItems, ...clearItem];
 		this.#selectList = new SelectList(items, Math.min(Math.max(items.length, 1), 12), getSelectListTheme());
 		this.#selectList.onSelect = item => {
@@ -645,7 +638,10 @@ export class SettingsSelectorComponent implements Component {
 	/** Single-line search banner: accent icon, editable query with live cursor, right-aligned match count. */
 	#renderSearchBanner(width: number): string {
 		const icon = theme.symbol("icon.search");
-		const countText = this.#searchMatchCount === 1 ? t("settings.1Match") : t("settings.matchesWith0", String(this.#searchMatchCount));
+		const countText =
+			this.#searchMatchCount === 1
+				? t("settings.1Match")
+				: t("settings.matchesWith0", String(this.#searchMatchCount));
 		const rightWidth = visibleWidth(countText) + 1; // trailing margin
 		const prefix = ` ${theme.fg("accent", icon)} `;
 		// The input pads itself to exactly this width and keeps the cursor in view.
@@ -667,7 +663,9 @@ export class SettingsSelectorComponent implements Component {
 		const tabLines = this.#tabBar.render(innerWidth);
 		const searching = this.#searchList !== null;
 		const showPreview = !searching && this.#currentTabId === "appearance";
-		const previewLines = showPreview ? ["", theme.fg("muted", t("selector.preview")), this.#getStatusPreviewString()] : [];
+		const previewLines = showPreview
+			? ["", theme.fg("muted", t("selector.preview")), this.#getStatusPreviewString()]
+			: [];
 
 		// Fixed chrome: top border, tabs, divider, [search row], divider, hint, bottom border.
 		const fixedRows = 1 + tabLines.length + 1 + (searching ? 1 : 0) + 1 + 1 + 1;
@@ -1332,7 +1330,12 @@ export class SettingsSelectorComponent implements Component {
 			() => this.callbacks.onCancel(),
 			// The selector owns type-to-search and the footer hint; pin the
 			// split sidebar width so the divider never jumps between tabs.
-			{ typeToSearch: false, hint: "", sidebarWidth: settingsSidebarWidth(), ungroupedSectionName: t("settings.other") },
+			{
+				typeToSearch: false,
+				hint: "",
+				sidebarWidth: settingsSidebarWidth(),
+				ungroupedSectionName: t("settings.other"),
+			},
 		);
 	}
 

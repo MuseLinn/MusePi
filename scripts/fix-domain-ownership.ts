@@ -27,12 +27,12 @@ for (const t of TARGETS) {
 	for (const l of lines) {
 		const m = KEY_LINE.exec(l);
 		if (m && others.has(m[1])) {
-			removed.push(m[1] + " (" + others.get(m[1]) + ")");
+			removed.push(`${m[1]} (${others.get(m[1])})`);
 			continue;
 		}
 		out.push(l);
 	}
 	fs.writeFileSync(path.resolve(t.settings), out.join("\n"));
-	console.log(t.settings.split("/").slice(-2).join("/") + ": removed " + removed.length);
-	for (const r of removed.slice(0, 8)) console.log("  " + r);
+	console.log(`${t.settings.split("/").slice(-2).join("/")}: removed ${removed.length}`);
+	for (const r of removed.slice(0, 8)) console.log(`  ${r}`);
 }

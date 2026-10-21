@@ -130,7 +130,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				{hasTokens && goal ? (
 					<Kv k={t("tools.tokens")}>{tokensLine(goal)}</Kv>
 				) : (
-					budgetArg !== null && <Kv k={t("tools.budget")}>{t("tools.tokensWithCount", { count: fmtNum(budgetArg) })}</Kv>
+					budgetArg !== null && (
+						<Kv k={t("tools.budget")}>{t("tools.tokensWithCount", { count: fmtNum(budgetArg) })}</Kv>
+					)
 				)}
 				{goal !== null && goal.timeUsedSeconds !== null && goal.timeUsedSeconds > 0 && (
 					<Kv k={t("tools.elapsed")}>{fmtDuration(goal.timeUsedSeconds)}</Kv>

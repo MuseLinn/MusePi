@@ -14,8 +14,7 @@ export const dashboard = {
 	"dashboard.generating": " 生成中...",
 	"dashboard.navigateSpaceToggle.info":
 		" ↑/↓: 导航  Space: 切换  Enter: 模型覆盖  P: 预走  N: 新 Agent  ←/→: 来源  Ctrl+R: 重新加载  Esc: 关闭",
-	"dashboard.ctrlQCtrl.info":
-		" Ctrl+Q/Ctrl+Enter: 生成  Enter: 换行  Tab: 切换范围  Esc: 取消",
+	"dashboard.ctrlQCtrl.info": " Ctrl+Q/Ctrl+Enter: 生成  Enter: 换行  Tab: 切换范围  Esc: 取消",
 	"dashboard.enterSaveTab.info": " Enter: 保存  Tab: 切换范围  R: 重新生成  Esc: 取消",
 
 	// ── Agent Dashboard ─────────────────────────────────────
@@ -62,7 +61,8 @@ export const dashboard = {
 	"dashboard.enterSummaryEscClose": "回车 摘要 · Esc 关闭",
 	"dashboard.noData": "无数据",
 	"dashboard.resetsInWith0": "{0} 后重置",
-	"dashboard.prepaidWith0": "预付费：{0}",	"  No agents found.": "  没有找到 Agent。",
+	"dashboard.prepaidWith0": "预付费：{0}",
+	"  No agents found.": "  没有找到 Agent。",
 	"Default resolves:": "默认解析:",
 	"Override:": "覆盖:",
 	"Effective pattern:": "有效模式:",
@@ -74,8 +74,10 @@ export const dashboard = {
 	" (agent default)": "（Agent 默认）",
 	"agent default": "Agent 默认",
 	" Generating...": " 生成中...",
-	" ↑/↓: navigate  Space: toggle  Enter: model override  P: prewalk  N: new agent  ←/→: source  Ctrl+R: reload  Esc: close": " ↑/↓: navigate  Space: toggle  Enter: model override  P: prewalk  N: new agent  ←/→: source  Ctrl+R: reload  Esc: close",
-	" Ctrl+Q/Ctrl+Enter: generate  Enter: newline  Tab: toggle scope  Esc: cancel": " Ctrl+Q/Ctrl+Enter: generate  Enter: newline  Tab: toggle scope  Esc: cancel",
+	" ↑/↓: navigate  Space: toggle  Enter: model override  P: prewalk  N: new agent  ←/→: source  Ctrl+R: reload  Esc: close":
+		" ↑/↓: navigate  Space: toggle  Enter: model override  P: prewalk  N: new agent  ←/→: source  Ctrl+R: reload  Esc: close",
+	" Ctrl+Q/Ctrl+Enter: generate  Enter: newline  Tab: toggle scope  Esc: cancel":
+		" Ctrl+Q/Ctrl+Enter: generate  Enter: newline  Tab: toggle scope  Esc: cancel",
 	" Enter: save  Tab: toggle scope  R: regenerate  Esc: cancel": " Enter: 保存  Tab: 切换范围  R: 重新生成  Esc: 取消",
 	"[m] edit": "[m] 编辑",
 	"[p] toggle": "[p] 切换",
@@ -114,7 +116,6 @@ export const dashboard = {
 	"no data": "无数据",
 	"resets in {0}": "{0} 后重置",
 	"prepaid: {0}": "预付费：{0}",
-
 } as const;
 
 /** Key union for the dashboard domain (mirrors the guest-client locale split). */

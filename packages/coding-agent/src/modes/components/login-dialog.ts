@@ -99,9 +99,7 @@ export class LoginDialogComponent extends Container {
 		this.#contentContainer.addChild(new Text(theme.fg("dim", hyperlink), 1, 0));
 
 		if (launchUrl && launchUrl !== url) {
-			this.#contentContainer.addChild(
-				new Text(theme.fg("dim", t("commands.localShortcutWith0", launchUrl)), 1, 0),
-			);
+			this.#contentContainer.addChild(new Text(theme.fg("dim", t("commands.localShortcutWith0", launchUrl)), 1, 0));
 		}
 
 		if (instructions) {

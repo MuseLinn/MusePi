@@ -129,7 +129,13 @@ export function CapabilityCenterPage({
 	return (
 		<div className="gui-agents-center gui-capability-page">
 			<header className="gui-agents-center-head">
-				<button type="button" className="gui-tool-btn" onClick={onBack} aria-label={t("settings.back")} title={t("settings.back")}>
+				<button
+					type="button"
+					className="gui-tool-btn"
+					onClick={onBack}
+					aria-label={t("settings.back")}
+					title={t("settings.back")}
+				>
 					<Icon name="arrow-left" className="h-4 w-4" />
 				</button>
 				<div className="gui-agents-center-title">

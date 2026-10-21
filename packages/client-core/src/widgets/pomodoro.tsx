@@ -134,7 +134,10 @@ export function PomodoroCard({
 			<div className="gui-widget-pomodoro-hint">{t("settings.widgetPomodoroReward")}</div>
 			{tick >= 0 && null}
 
-			<SendChip text={`${t("settings.widgetPomodoroDone")} ${rounds} ${t("settings.widgetPomodoroRounds")}`} onSend={sendPrompt} />
+			<SendChip
+				text={`${t("settings.widgetPomodoroDone")} ${rounds} ${t("settings.widgetPomodoroRounds")}`}
+				onSend={sendPrompt}
+			/>
 		</div>
 	);
 }

@@ -192,7 +192,12 @@ export function ConnectDialog({
 		onOpenWorkspace(cwd);
 	};
 
-	const steps = [t("settings.selectMethod"), t("settings.fillConfig"), t("settings.connecting2"), t("settings.selectDirectory")];
+	const steps = [
+		t("settings.selectMethod"),
+		t("settings.fillConfig"),
+		t("settings.connecting2"),
+		t("settings.selectDirectory"),
+	];
 	const canNext =
 		step === 0
 			? method !== null
@@ -250,7 +255,9 @@ export function ConnectDialog({
 								>
 									<Icon name="server" className="h-5 w-5" />
 									<span className="font-medium">SSH</span>
-									<span className="text-[13px] text-[var(--color-text-muted)]">{t("settings.remoteHost")}</span>
+									<span className="text-[13px] text-[var(--color-text-muted)]">
+										{t("settings.remoteHost")}
+									</span>
 								</button>
 								<button
 									type="button"
@@ -264,7 +271,9 @@ export function ConnectDialog({
 									</span>
 									<Icon name="archive-stack" className="h-5 w-5" />
 									<span className="font-medium">Docker</span>
-									<span className="text-[13px] text-[var(--color-text-muted)]">{t("settings.localContainer")}</span>
+									<span className="text-[13px] text-[var(--color-text-muted)]">
+										{t("settings.localContainer")}
+									</span>
 								</button>
 							</div>
 						</>
@@ -367,7 +376,9 @@ export function ConnectDialog({
 							) : (
 								<div className="flex min-h-0 flex-1 flex-col">
 									{hosts.length === 0 ? (
-										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">{t("settings.noSavedHosts")}</p>
+										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">
+											{t("settings.noSavedHosts")}
+										</p>
 									) : (
 										<FadeScroll className="max-h-56 min-h-0 overflow-y-auto pr-1">
 											{hosts.map(h => (
@@ -442,9 +453,7 @@ export function ConnectDialog({
 					{step === 3 && (
 						<>
 							<div className="mb-2 flex items-center gap-2">
-								<h2 className="text-[15px] font-semibold">
-									{t("settings.selectRemoteDirectoryOpen")}
-								</h2>
+								<h2 className="text-[15px] font-semibold">{t("settings.selectRemoteDirectoryOpen")}</h2>
 								<div className="ml-auto flex items-center gap-1">
 									{connected && (
 										<span className="mr-1 rounded-full bg-[var(--color-ok-soft)] px-2 py-0.5 text-[11px] text-[var(--color-ok)]">

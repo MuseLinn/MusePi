@@ -621,7 +621,12 @@ function PlanEditor({
 					placeholder={t("general.newPlanTitle")}
 					aria-label={t("general.newPlanTitle")}
 				/>
-				<button type="button" className="gui-btn gui-btn-icon" onClick={() => void save()} title={t("general.save")}>
+				<button
+					type="button"
+					className="gui-btn gui-btn-icon"
+					onClick={() => void save()}
+					title={t("general.save")}
+				>
 					<StateIcon on={saved} pair={["check", "download"]} className="h-3.5 w-3.5" />
 					<span className="text-[12px]">{saved ? t("general.saved") : t("general.save")}</span>
 				</button>

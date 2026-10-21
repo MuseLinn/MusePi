@@ -243,7 +243,9 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 										: "text-[13px] text-[var(--color-error)]"
 								}
 							>
-								{testResult.ok ? t("settings.notificationSent") : (testResult.reason ?? t("settings.deliveryFailed"))}
+								{testResult.ok
+									? t("settings.notificationSent")
+									: (testResult.reason ?? t("settings.deliveryFailed"))}
 							</p>
 						)}
 					</div>
@@ -510,9 +512,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("settings.interaction.notifications.idleRecap")}</div>
-						<div className="gui-settings-row-desc">
-							{t("settings.generateBriefLlm.info")}
-						</div>
+						<div className="gui-settings-row-desc">{t("settings.generateBriefLlm.info")}</div>
 					</div>
 					<button
 						type="button"
@@ -537,10 +537,10 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 				<Reveal open={recapEnabled !== false}>
 					<div className="gui-settings-row">
 						<div>
-							<div className="gui-settings-row-label">{t("settings.interaction.notifications.idleRecapDelay")}</div>
-							<div className="gui-settings-row-desc">
-								{t("settings.secondsWaitWhileIdle")}
+							<div className="gui-settings-row-label">
+								{t("settings.interaction.notifications.idleRecapDelay")}
 							</div>
+							<div className="gui-settings-row-desc">{t("settings.secondsWaitWhileIdle")}</div>
 						</div>
 						<GuiSelect
 							className="gui-settings-select"

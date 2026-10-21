@@ -215,7 +215,9 @@ export function SessionsSection({
 					<div>
 						<div className="gui-settings-row-label">{t("general.manualCleanup")}</div>
 						<div className="gui-settings-row-desc">
-							{running ? t("general.cleanupRunning") : t("general.archivableCount", { count: String(candidates.length) })}
+							{running
+								? t("general.cleanupRunning")
+								: t("general.archivableCount", { count: String(candidates.length) })}
 						</div>
 					</div>
 					<button

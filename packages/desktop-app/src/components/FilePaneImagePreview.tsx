@@ -12,10 +12,7 @@
  * pinch, the − and + steps, or a double-click between fit and 1:1 — and a zoomed
  * image larger than the viewer pans by dragging.
  */
-import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
-import { t } from "@musepi/client-core";
+
 import {
 	clampImageScale,
 	fitImageScale,
@@ -23,8 +20,12 @@ import {
 	IMAGE_VIEWPORT_PADDING,
 	type ImageSize as Size,
 	stepImageScale,
+	t,
 	wheelZoomFactor,
 } from "@musepi/client-core";
+import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 /** An image point that must stay under a screen point once a zoom renders. */
 interface ZoomAnchor {
@@ -234,7 +235,8 @@ export function ImagePreview({ src, name, natural: naturalProp = null, onOpenLig
 		const element = event.currentTarget;
 		// A press on the viewer's own scrollbar keeps scrolling the native way.
 		const bounds = element.getBoundingClientRect();
-		if (event.clientX - bounds.left >= element.clientWidth || event.clientY - bounds.top >= element.clientHeight) return;
+		if (event.clientX - bounds.left >= element.clientWidth || event.clientY - bounds.top >= element.clientHeight)
+			return;
 		event.preventDefault();
 		element.setPointerCapture(event.pointerId);
 		dragRef.current = {
@@ -321,9 +323,7 @@ export function ImagePreview({ src, name, natural: naturalProp = null, onOpenLig
 				onPointerCancel={handlePointerEnd}
 				onDoubleClick={handleDoubleClick}
 			>
-				<div
-					className={`gui-filepane-preview-image-inner${scale === null ? " is-fit" : " is-zoomed"}`}
-				>
+				<div className={`gui-filepane-preview-image-inner${scale === null ? " is-fit" : " is-zoomed"}`}>
 					<img
 						ref={imageRef}
 						key={src}

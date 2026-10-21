@@ -579,7 +579,9 @@ function VoiceSetupCard({
 			<p className="sh-voice-guide-title">{t("settings.voiceSetupTitle")}</p>
 			{state.phase === "prompt" && (
 				<>
-					<p className="sh-voice-guide-sub">{t("settings.voiceSetupDesc", { model: state.label, size: state.size })}</p>
+					<p className="sh-voice-guide-sub">
+						{t("settings.voiceSetupDesc", { model: state.label, size: state.size })}
+					</p>
 					<p className="sh-voice-setup-note">{t("settings.voiceSetupNote")}</p>
 				</>
 			)}

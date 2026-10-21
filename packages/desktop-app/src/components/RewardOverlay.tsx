@@ -159,7 +159,9 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 					<div className="gui-reward-success">
 						<CircleCheck className="gui-reward-check" size={22} />
 						<div className="min-w-0">
-							<div className="gui-reward-success-title">{payload.successTitle ?? t("reward.rewardClaimSuccess")}</div>
+							<div className="gui-reward-success-title">
+								{payload.successTitle ?? t("reward.rewardClaimSuccess")}
+							</div>
 							<div className="gui-reward-success-desc">{payload.successDesc ?? t("reward.rewardReadyDesc")}</div>
 						</div>
 					</div>

@@ -24,7 +24,8 @@ export const general = {
 	"general.gitSettings": "Git",
 	"general.gitSettingsDescription": "GitHub authentication and commit identity.",
 	"general.githubOauthToken": "GitHub OAuth token",
-	"general.githubOauthTokenDescription": "Authenticate with GitHub via the gh CLI for operations such as pull requests",
+	"general.githubOauthTokenDescription":
+		"Authenticate with GitHub via the gh CLI for operations such as pull requests",
 	"general.authenticatedViaGhCli": "Authenticated via gh CLI",
 	"general.notAuthenticatedViaGh": "Not authenticated via gh CLI",
 	"general.ghCliNotInstalled": "gh CLI not detected — install the GitHub CLI and log in first",
@@ -56,7 +57,8 @@ export const general = {
 	"general.enableGitmojiPicker": "Enable Gitmoji picker",
 	"general.enableGitmojiPickerDescription": "Insert Gitmoji emoji in commit messages",
 	"general.showGitignored": "Show gitignored files",
-	"general.showGitignoredDescription": "Show .gitignore-ignored files in the file pane and the changes list (on by default)",
+	"general.showGitignoredDescription":
+		"Show .gitignore-ignored files in the file pane and the changes list (on by default)",
 	"general.showHiddenFiles": "Show hidden files",
 	"general.showHiddenFilesDescription": "Show dotfiles (.env, .gitignore, …) in the file pane (on by default)",
 	"general.stage": "Stage",
@@ -147,9 +149,12 @@ export const general = {
 	"general.modeCreator": "Creator mode",
 	"general.modeDesign": "Design mode",
 	"general.modeWorkDescription": "Coding tasks: edits, runs, and verifies code against engineering conventions.",
-	"general.modeChatDescription": "Talk without touching: questions, discussion, and explanations — no workspace changes.",
-	"general.modeCreatorDescription": "Build assets: create new skills, extensions, and docs — durable, reusable capability.",
-	"general.modeDesignDescription": "Interface design: layout, visual restoration, and design review with renderable output.",
+	"general.modeChatDescription":
+		"Talk without touching: questions, discussion, and explanations — no workspace changes.",
+	"general.modeCreatorDescription":
+		"Build assets: create new skills, extensions, and docs — durable, reusable capability.",
+	"general.modeDesignDescription":
+		"Interface design: layout, visual restoration, and design review with renderable output.",
 	"general.sessionWorkspace": "Workspace",
 	"general.goalStatusActive": "active",
 	"general.goalStatusPaused": "paused",
@@ -254,8 +259,7 @@ export const general = {
 	"general.contextAutocompactBuffer": "Autocompact buffer",
 	"general.contextUsageUnavailable": "Context usage unavailable",
 	"general.contextOverWindow": "Context over window",
-	"general.overWindowCompact.info":
-		"Over window: compact the context or switch to a larger-context model",
+	"general.overWindowCompact.info": "Over window: compact the context or switch to a larger-context model",
 	"general.contextWindowWithTokensWithPercent": "Context window: {tokens} ({percent} used)",
 	"general.used": "Used",
 	"general.window": "Window",
@@ -316,8 +320,7 @@ export const general = {
 	"general.collapseSuggestions": "Collapse",
 	"general.customSupplement": "Customize",
 	"general.setUpModelStart": "Set up a model to start",
-	"general.connectProviderAdd.info":
-		"Connect a provider or add an API key — it takes a minute.",
+	"general.connectProviderAdd.info": "Connect a provider or add an API key — it takes a minute.",
 	"general.addModel": "Add a model",
 	"general.suggestionLabel": "Label",
 	"general.suggestionPrompt": "Prompt text",
@@ -464,7 +467,8 @@ export const general = {
 	"general.aiRenameEmpty": "This session has no content to name",
 	"general.reconnect": "Reconnect",
 	"general.restartDaemon": "Restart daemon",
-	"general.restartDaemonDescription": "Restart the background service to load new code (sessions are kept and recoverable)",
+	"general.restartDaemonDescription":
+		"Restart the background service to load new code (sessions are kept and recoverable)",
 	"general.quitApp": "Quit app",
 	"general.openPreview": "Open preview",
 	"general.openImageViewer": "Open image viewer",
@@ -710,8 +714,7 @@ export const general = {
 	"general.skillMarketInstallApprove": "Approve & continue",
 	"general.skillMarketInstallDecline": "Decline",
 	"general.skillMarketInstallRetry": "Retry",
-	"general.skillMarketInstallFailed":
-		"Install failed: network unreachable ({msg}). Check your connection and retry.",
+	"general.skillMarketInstallFailed": "Install failed: network unreachable ({msg}). Check your connection and retry.",
 	"general.skillMarketInstallFailedScriptDeclined": "Install failed: install scripts declined.",
 	// Card-click preview dialog (look before you install).
 	"general.skillMarketInstall": "Install",
@@ -724,7 +727,8 @@ export const general = {
 	"general.skillMarketSearchSkills": "skills.sh is a search source — type a keyword to query its catalog",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	"general.discover": "Discover",
-	"general.installedWithCount": "Installed {count}",	"sessions settings": "sessions settings",
+	"general.installedWithCount": "Installed {count}",
+	"sessions settings": "sessions settings",
 	"auto title": "auto title",
 	"auto title description": "auto title description",
 	"session defaults": "session defaults",
@@ -955,7 +959,8 @@ export const general = {
 	"context autocompact buffer": "context autocompact buffer",
 	"context usage unavailable": "context usage unavailable",
 	"context over window": "context over window",
-	"over window: compact or switch to a larger-context model": "over window: compact or switch to a larger-context model",
+	"over window: compact or switch to a larger-context model":
+		"over window: compact or switch to a larger-context model",
 	"context window {tokens} ({percent} used)": "context window {tokens} ({percent} used)",
 	"auto-compact threshold": "auto-compact threshold",
 	"cache hit": "cache hit",
@@ -1010,7 +1015,8 @@ export const general = {
 	"collapse suggestions": "collapse suggestions",
 	"custom supplement": "custom supplement",
 	"set up a model to start": "set up a model to start",
-	"connect a provider or add an api key — it takes a minute": "connect a provider or add an api key — it takes a minute",
+	"connect a provider or add an api key — it takes a minute":
+		"connect a provider or add an api key — it takes a minute",
 	"add a model": "add a model",
 	"suggestion label": "suggestion label",
 	"suggestion prompt": "suggestion prompt",
@@ -1204,7 +1210,8 @@ export const general = {
 	"slash completion hints": "slash completion hints",
 	"no open pull requests": "no open pull requests",
 	"connected · {ms} ms": "connected · {ms} ms",
-	"agent working — send steers the agent now, /queue waits for the turn to end…": "agent working — send steers the agent now, /queue waits for the turn to end…",
+	"agent working — send steers the agent now, /queue waits for the turn to end…":
+		"agent working — send steers the agent now, /queue waits for the turn to end…",
 	"steer message": "steer message",
 	"send now": "send now",
 	"After yield": "After yield",
@@ -1227,7 +1234,8 @@ export const general = {
 	"tree op interrupts work": "tree op interrupts work",
 	"interrupt and continue": "interrupt and continue",
 	"terminate current turn?": "terminate current turn?",
-	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)": "the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)",
+	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
+		"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)",
 	"message tree": "message tree",
 	"message tree filter": "message tree filter",
 	"search messages…": "search messages…",
@@ -1332,5 +1340,4 @@ export const general = {
 	"skill market preview security": "skill market preview security",
 	"skill market search skills.sh hint": "skill market search skills.sh hint",
 	"installed {count}": "installed {count}",
-
 } as const satisfies Record<GeneralKey, string>;

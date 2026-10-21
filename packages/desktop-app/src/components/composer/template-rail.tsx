@@ -108,7 +108,10 @@ export function TemplateRail({
 
 	const deleteTemplate = async (tpl: CreationTemplateRow): Promise<void> => {
 		const name = tpl.name ?? t("creation.creationTemplateUnnamed");
-		const ok = await confirm(t("creation.creationTemplateConfirmDelete", { name }), t("creation.creationTemplateDelete"));
+		const ok = await confirm(
+			t("creation.creationTemplateConfirmDelete", { name }),
+			t("creation.creationTemplateDelete"),
+		);
 		if (!ok) return;
 		try {
 			await rpc?.request("creation.templates.delete", { id: tpl.id });
@@ -142,7 +145,9 @@ export function TemplateRail({
 								disabled={busy}
 								onClick={() => void createFromTemplate(tpl)}
 							>
-								<span className="gui-creation-template-name">{tpl.name ?? t("creation.creationTemplateUnnamed")}</span>
+								<span className="gui-creation-template-name">
+									{tpl.name ?? t("creation.creationTemplateUnnamed")}
+								</span>
 								<span className="gui-creation-template-tab">{tabLabel(tpl.tab)}</span>
 							</button>
 							<button

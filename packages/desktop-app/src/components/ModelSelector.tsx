@@ -421,7 +421,8 @@ export function ModelSelector({
 			label: string;
 			rows: WireModel[];
 		}> = [];
-		if (favRows.length > 0) nextSections.push({ key: "fav", labelKey: "settings.favoriteModels", label: "", rows: favRows });
+		if (favRows.length > 0)
+			nextSections.push({ key: "fav", labelKey: "settings.favoriteModels", label: "", rows: favRows });
 		if (recentRows.length > 0)
 			nextSections.push({ key: "settings.recent", labelKey: "settings.recentModels", label: "", rows: recentRows });
 		for (const { provider, rows } of providerSections) {
@@ -555,7 +556,10 @@ export function ModelSelector({
 				// rides along so the daemon resolves the exact model, not the first
 				// provider that happens to serve the same id.
 				void rpc
-					.request("settings.sessionSetmodel", { sessionId, model: { id: selected.id, provider: selected.provider } })
+					.request("settings.sessionSetmodel", {
+						sessionId,
+						model: { id: selected.id, provider: selected.provider },
+					})
 					.then(() => onSelect?.(selected.id, selected.provider))
 					.catch(() => {});
 			} else {

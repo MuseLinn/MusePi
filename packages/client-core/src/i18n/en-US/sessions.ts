@@ -33,7 +33,8 @@ export const sessions = {
 	"sessions.sessionStatusAborted": "Aborted",
 	"sessions.sessionStatusError": "Error",
 	"sessions.sessionStatusPending": "Pending",
-	"sessions.sessionStatusUnknown": "Unknown",	"room closed": "room closed",
+	"sessions.sessionStatusUnknown": "Unknown",
+	"room closed": "room closed",
 	"no such room": "no such room",
 	"a host is already connected for this room": "a host is already connected for this room",
 	"room is full": "room is full",
@@ -60,5 +61,4 @@ export const sessions = {
 	"session status error": "session status error",
 	"session status pending": "session status pending",
 	"session status unknown": "session status unknown",
-
 } as const satisfies Record<SessionsKey, string>;

@@ -167,7 +167,9 @@ export function PlanPanel({
 					</div>
 				</div>
 			) : (
-				<div className="gui-quota-note">{plan?.enabled ? t("general.planNotWrittenYet") : t("general.planModeOff")}</div>
+				<div className="gui-quota-note">
+					{plan?.enabled ? t("general.planNotWrittenYet") : t("general.planModeOff")}
+				</div>
 			)}
 		</div>
 	);

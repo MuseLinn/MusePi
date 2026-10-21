@@ -551,8 +551,7 @@ export const general = {
 	"general.noOpenPullRequests": "没有打开的拉取请求",
 	"general.connectedMsWithMs": "已连接 · {ms} 毫秒",
 	// Working-state composer + pending queue (TUI /queue parity).
-	"general.agentWorkingSend.info":
-		"agent 工作中 — 发送将立即引导智能体；/queue 前缀可排队到本轮结束",
+	"general.agentWorkingSend.info": "agent 工作中 — 发送将立即引导智能体；/queue 前缀可排队到本轮结束",
 	"general.steerMessage": "立即引导发送",
 	"general.sendNow": "立即发送",
 	"general.steering": "引导中",
@@ -715,7 +714,8 @@ export const general = {
 	"general.skillMarketSearchSkills": "skills.sh 是搜索源：输入关键词即可检索其目录",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	"general.discover": "发现",
-	"general.installedWithCount": "我安装的 {count}",	"sessions settings": "设置会话的默认值和保留策略。",
+	"general.installedWithCount": "我安装的 {count}",
+	"sessions settings": "设置会话的默认值和保留策略。",
 	"auto title": "自动生成会话标题",
 	"auto title description": "用首条用户消息作为会话标题",
 	"session defaults": "会话默认值",
@@ -1195,7 +1195,8 @@ export const general = {
 	"slash completion hints": "↓↑ 导航 · Enter 选择 · Esc 关闭",
 	"no open pull requests": "没有打开的拉取请求",
 	"connected · {ms} ms": "已连接 · {ms} 毫秒",
-	"agent working — send steers the agent now, /queue waits for the turn to end…": "agent working — send steers the agent now, /queue waits for the turn to end…",
+	"agent working — send steers the agent now, /queue waits for the turn to end…":
+		"agent working — send steers the agent now, /queue waits for the turn to end…",
 	"steer message": "立即引导发送",
 	"send now": "立即发送",
 	"After yield": "本轮后",
@@ -1218,7 +1219,8 @@ export const general = {
 	"tree op interrupts work": "该操作会中断当前工作并改变分支锚点，是否继续？",
 	"interrupt and continue": "中断并继续",
 	"terminate current turn?": "终止当前回合?",
-	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)": "the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)",
+	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
+		"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)",
 	"message tree": "消息树",
 	"message tree filter": "消息树过滤",
 	"search messages…": "搜索消息…",
@@ -1323,7 +1325,6 @@ export const general = {
 	"skill market preview security": "安全审计",
 	"skill market search skills.sh hint": "skills.sh 是搜索源：输入关键词即可检索其目录",
 	"installed {count}": "我安装的 {count}",
-
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

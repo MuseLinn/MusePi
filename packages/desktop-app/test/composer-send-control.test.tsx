@@ -8,9 +8,9 @@
  */
 import "./happy-dom-shim"; // MUST be first: installs the DOM globals.
 import { describe, expect, it } from "bun:test";
-import { SendOrStopButton } from "../src/components/composer/action-buttons";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { SendOrStopButton } from "../src/components/composer/action-buttons";
 
 function render(props: Partial<Parameters<typeof SendOrStopButton>[0]>): {
 	queue: HTMLButtonElement | null;

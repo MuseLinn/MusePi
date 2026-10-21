@@ -46,7 +46,9 @@ export function ExtensionStatusCard({ rpc }: { rpc: RpcClient | null }): ReactNo
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="plug" className="h-3 w-3" />
-				<span className="max-w-[120px] truncate">{t("settings.extensionsRunning", { count: String(running) })}</span>
+				<span className="max-w-[120px] truncate">
+					{t("settings.extensionsRunning", { count: String(running) })}
+				</span>
 			</button>
 			{renderMenu(
 				<div role="menu" aria-orientation="vertical">
@@ -69,7 +71,9 @@ export function ExtensionStatusCard({ rpc }: { rpc: RpcClient | null }): ReactNo
 								/>
 								<span className="min-w-0 flex-1 truncate text-[12px]">{name}</span>
 								<span className="text-[11px] text-[var(--color-text-faint)]">
-									{ext.state === "active" ? t("settings.extensionsStateRunning") : t("settings.extensionsStateDisabled")}
+									{ext.state === "active"
+										? t("settings.extensionsStateRunning")
+										: t("settings.extensionsStateDisabled")}
 								</span>
 							</div>
 						);

@@ -81,7 +81,15 @@ export function useMarkdownFileNavigation(
 		};
 
 		const handleClick = (event: MouseEvent): void => {
-			if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+			if (
+				event.defaultPrevented ||
+				event.button !== 0 ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.shiftKey ||
+				event.altKey
+			)
+				return;
 			const target = event.target;
 			if (!(target instanceof Element)) return;
 			const anchor = target.closest("a[href]");

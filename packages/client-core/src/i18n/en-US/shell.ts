@@ -43,7 +43,8 @@ export const shell = {
 	"shell.approvalNeeded": "Approval needed",
 	"shell.approveTool": "Approve tool",
 	"shell.denyTool": "Deny tool",
-	"shell.waitingYourDecision": "Waiting for your decision",	"musepi collab": "musepi collab",
+	"shell.waitingYourDecision": "Waiting for your decision",
+	"musepi collab": "musepi collab",
 	"live agent session, in your browser": "live agent session, in your browser",
 	"join link": "join link",
 	"display name": "display name",
@@ -75,5 +76,4 @@ export const shell = {
 	"approve tool": "approve tool",
 	"deny tool": "deny tool",
 	"waiting for your decision": "waiting for your decision",
-
 } as const satisfies Record<ShellKey, string>;

@@ -25,7 +25,7 @@ export interface DesignSystemEntry {
 	swatches: readonly string[];
 	/** gui token 覆盖片段——hover 卡迷你 mock 渲染用。 */
 	tokens: Record<string, string>;
-	source: "general.builtin" | "extension";
+	source: "builtin" | "extension";
 }
 
 /** 内置五 id → i18n labelKey（词表 composer 域；扩展体系直接用 RPC label）。 */
@@ -62,7 +62,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--border": "oklch(0 0 0 / 8%)",
 			"--radius": "6px",
 		},
-		source: "general.builtin",
+		source: "builtin",
 	},
 	{
 		id: "glass",
@@ -76,7 +76,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--blur-3xl": "24px",
 			"--radius-2xl": "16px",
 		},
-		source: "general.builtin",
+		source: "builtin",
 	},
 	{
 		id: "editorial",
@@ -89,7 +89,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--border": "oklch(0 0 0 / 12%)",
 			"--radius": "2px",
 		},
-		source: "general.builtin",
+		source: "builtin",
 	},
 	{
 		id: "neubrutalism",
@@ -102,7 +102,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--bg": "#f7f7f7",
 			"--fg": "#1a1a1a",
 		},
-		source: "general.builtin",
+		source: "builtin",
 	},
 	{
 		id: "darkneon",
@@ -116,7 +116,7 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 			"--accent-muted": "oklch(0.83 0.15 195 / 18%)",
 			"--fg": "oklch(0.95 0.01 240)",
 		},
-		source: "general.builtin",
+		source: "builtin",
 	},
 ];
 

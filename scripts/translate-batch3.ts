@@ -1,10 +1,3 @@
-/**
- * Batch 3: real UI strings — labels and descriptions a zh UI must translate.
- * The translations live here, reviewed as code. Covers the settings schema's
- * remaining open strings, part 1 (settings-rendering surface).
- */
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { applyBatch } from "./schema-batch-apply.ts";
 
 const TRANSLATIONS: Record<string, string> = {
@@ -36,8 +29,7 @@ const TRANSLATIONS: Record<string, string> = {
 	"What happens to playback when dictation starts: duck (drop volume) or pause.":
 		"开始听写时朗读如何处理：降低音量或暂停。",
 	"Auto-read new replies": "自动朗读新回复",
-	"Automatically read aloud new assistant replies via the local TTS engine":
-		"通过本地语音引擎自动朗读新的助手回复",
+	"Automatically read aloud new assistant replies via the local TTS engine": "通过本地语音引擎自动朗读新的助手回复",
 	"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect":
 		"传给语音模型的 BCP-47 语言提示（如 zh、yue、en、ja）。留空自动检测",
 
@@ -82,7 +74,7 @@ const TRANSLATIONS: Record<string, string> = {
 	"Solid accent line, no context feedback": "纯强调色线条，无上下文反馈",
 	"Used portion in accent color, remainder dimmed": "已用部分强调色，其余变暗",
 	"Visual layout of the input editor and status line": "输入编辑器与状态线的视觉形态",
-	"Appearance": "外观",
+	Appearance: "外观",
 
 	// ── User-level prompts / system prompt ─────────────────────────────
 	"User-level system-prompt sections ({name, order, text}); applied to every session":

@@ -33,7 +33,13 @@ function entries(assistantReason: string, retryReason: string, attempt: number):
 			id: "assistant-err",
 			parentId: null,
 			timestamp: "2026-10-05T00:00:01Z",
-			message: { role: "general.assistant", content: [], stopReason: "tools.error", errorMessage: assistantReason, timestamp: 2 },
+			message: {
+				role: "general.assistant",
+				content: [],
+				stopReason: "tools.error",
+				errorMessage: assistantReason,
+				timestamp: 2,
+			},
 		} as unknown as SessionEntry,
 		{
 			type: "custom_message",

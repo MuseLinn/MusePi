@@ -66,7 +66,12 @@ export function ComputerPermissionsDialog({ rpc, open, onClose }: Props): ReactN
 	};
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("tools.computerPermissions")} className="w-[520px] max-w-[92vw]">
+		<DialogFrame
+			open={open}
+			onClose={onClose}
+			label={t("tools.computerPermissions")}
+			className="w-[520px] max-w-[92vw]"
+		>
 			<div className="gui-permissions-dialog">
 				<h3 className="gui-permissions-dialog-title">{t("tools.computerPermissionsOverlayTitle")}</h3>
 				<p className="gui-permissions-dialog-desc">{t("tools.computerPermissionsOverlayDescription")}</p>
@@ -113,7 +118,9 @@ export function ComputerPermissionsDialog({ rpc, open, onClose }: Props): ReactN
 						{t("tools.done")}
 					</button>
 				</div>
-				{!allGranted && <div className="gui-permissions-dialog-footer">{t("tools.computerPermissionsLaterHint")}</div>}
+				{!allGranted && (
+					<div className="gui-permissions-dialog-footer">{t("tools.computerPermissionsLaterHint")}</div>
+				)}
 			</div>
 		</DialogFrame>
 	);

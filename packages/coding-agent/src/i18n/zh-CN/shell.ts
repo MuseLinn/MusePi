@@ -54,7 +54,8 @@ export const shell = {
 
 	// ── Footer ──────────────────────────────────────────────
 	"shell.text": "（自动）",
-	"shell.text2": "（子）",	"next step": "下一步",
+	"shell.text2": "（子）",
+	"next step": "下一步",
 	"Esc done": "Esc 完成",
 	"new": "新建",
 	"switch mode": "切换模式",
@@ -77,7 +78,6 @@ export const shell = {
 	"cycle inherit/+/-": "循环继承/+/-",
 	"(auto)": "（自动）",
 	"(sub)": "（子）",
-
 } as const;
 
 /** Key union for the shell domain (mirrors the guest-client locale split). */

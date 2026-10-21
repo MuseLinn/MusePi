@@ -7,36 +7,36 @@ import { applyBatch } from "./schema-batch-apply.ts";
 
 const TRANSLATIONS: Record<string, string> = {
 	// ── Brands / tech names — identity values, both dictionaries ──────
-	"AI": "AI",
-	"Pi": "Pi",
-	"Gemini": "Gemini",
-	"Hermes": "Hermes",
-	"OpenAI": "OpenAI",
-	"Harmony": "Harmony",
-	"MiniMax": "MiniMax",
-	"DeepSeek": "DeepSeek",
+	AI: "AI",
+	Pi: "Pi",
+	Gemini: "Gemini",
+	Hermes: "Hermes",
+	OpenAI: "OpenAI",
+	Harmony: "Harmony",
+	MiniMax: "MiniMax",
+	DeepSeek: "DeepSeek",
 	"AGENTS.md": "AGENTS.md",
-	"Anthropic": "Anthropic",
-	"Powerline": "Powerline",
+	Anthropic: "Anthropic",
+	Powerline: "Powerline",
 	"GitHub CLI": "GitHub CLI",
 	"Claude Code": "Claude Code",
 	"GitHub Gist": "GitHub Gist",
-	"Trafilatura": "Trafilatura",
-	"Bash": "Bash",
-	"Exa": "Exa",
-	"GLM": "GLM",
-	"XML": "XML",
-	"ZFS": "ZFS",
-	"APFS": "APFS",
-	"btrfs": "btrfs",
-	"Kimi": "Kimi",
-	"Jina": "Jina",
-	"Lynx": "Lynx",
-	"TTSR": "TTSR",
-	"Yolo": "Yolo",
-	"Gemma": "Gemma",
-	"Qwen3": "Qwen3",
-	"Shell": "Shell",
+	Trafilatura: "Trafilatura",
+	Bash: "Bash",
+	Exa: "Exa",
+	GLM: "GLM",
+	XML: "XML",
+	ZFS: "ZFS",
+	APFS: "APFS",
+	btrfs: "btrfs",
+	Kimi: "Kimi",
+	Jina: "Jina",
+	Lynx: "Lynx",
+	TTSR: "TTSR",
+	Yolo: "Yolo",
+	Gemma: "Gemma",
+	Qwen3: "Qwen3",
+	Shell: "Shell",
 	"Top K": "Top K",
 	"Top P": "Top P",
 	"Silver 16, CJK": "Silver 16, CJK",
@@ -44,8 +44,8 @@ const TRANSLATIONS: Record<string, string> = {
 	"api.moonshot.ai": "api.moonshot.ai",
 
 	// ── Short labels ───────────────────────────────────────────────────
-	"简体中文": "简体中文",
-	"使用中文界面": "使用中文界面",
+	简体中文: "简体中文",
+	使用中文界面: "使用中文界面",
 	":floor": ":floor（下限）",
 	":nitro": ":nitro（极速）",
 	":exacto": ":exacto（精准）",
@@ -66,10 +66,14 @@ const TRANSLATIONS: Record<string, string> = {
 	"Repaint only the viewport and keep history wrapped at its old width": "只重绘视口，历史保持旧宽度换行",
 	"Ordered destinations tried when publishing images for provider access": "发布图片供供应商访问时按序尝试的目标列表",
 	"Percentage plus ticks at the speculative and auto-compaction boundaries": "百分比加上投机压缩与自动压缩边界的刻度",
-	"Show macOS dictionary word completions as inline hints accepted with Tab": "以行内提示显示 macOS 词典的补全，Tab 采纳",
-	"Remote listen port of the ssh reverse forward that your web server proxies to": "ssh 反向转发的远程监听端口，由你的 Web 服务器代理",
-	"Retry stops with no visible assistant message; tool calls are excluded (default)": "对没有可见助手消息的停更进行重试；工具调用除外（默认）",
-	"Protect expensive prefixes during long tool executions; stops when the agent settles": "长工具执行期间保护昂贵前缀；代理落定后停止",
+	"Show macOS dictionary word completions as inline hints accepted with Tab":
+		"以行内提示显示 macOS 词典的补全，Tab 采纳",
+	"Remote listen port of the ssh reverse forward that your web server proxies to":
+		"ssh 反向转发的远程监听端口，由你的 Web 服务器代理",
+	"Retry stops with no visible assistant message; tool calls are excluded (default)":
+		"对没有可见助手消息的停更进行重试；工具调用除外（默认）",
+	"Protect expensive prefixes during long tool executions; stops when the agent settles":
+		"长工具执行期间保护昂贵前缀；代理落定后停止",
 	"How the line between the left and right segments reflects context usage (box composer only)":
 		"左右分段之间的线条如何反映上下文用量（仅框式输入框）",
 	"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning":
@@ -116,10 +120,10 @@ const TRANSLATIONS: Record<string, string> = {
 		"命令后端的 argv 模板；{file} 是图片路径，{mime}/{ext} 可选。取 stdout 打印的最后一个 URL（如 pasta -b -f {file}）",
 	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window":
 		"对超过阈值加价的长上下文窗口使用premium档（如 GPT-5.6 1M 在 272K 以上输入按 2 倍计费）；关闭则限制在标准定价窗口",
-	"Processing tier for Claude requests. `priority` realizes fast mode (`speed: \"fast\"`) on supported direct Anthropic models; ignored on Bedrock/Vertex Claude and via OpenRouter.":
-		"Claude 请求的处理档位。priority 在受支持的 Anthropic 直连模型上实现 fast 模式（speed: \"fast\"）；Bedrock/Vertex Claude 与 OpenRouter 忽略。",
-	"Maximum concurrent LLM requests per provider id (for example \"openai\" or \"anthropic\"), shared across local OMP processes with this config root. Omitted providers are unlimited.":
-		"每个供应商 id 的最大并发 LLM 请求数（如 \"openai\"、\"anthropic\"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。",
+	'Processing tier for Claude requests. `priority` realizes fast mode (`speed: "fast"`) on supported direct Anthropic models; ignored on Bedrock/Vertex Claude and via OpenRouter.':
+		'Claude 请求的处理档位。priority 在受支持的 Anthropic 直连模型上实现 fast 模式（speed: "fast"）；Bedrock/Vertex Claude 与 OpenRouter 忽略。',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
+		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。',
 	"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.":
 		"保存的重置额度低于此数时不自动消耗（0 = 最后一份额度也可自动使用）。临期额度不受此限——保留到过期的额度什么也保不住。",
 };

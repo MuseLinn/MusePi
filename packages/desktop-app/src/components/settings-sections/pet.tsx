@@ -329,7 +329,9 @@ export function PetMarket({
 				/>
 			</div>
 			{error && <div className="gui-pet-market__error">{t("companion.petMarketError", { reason: error })}</div>}
-			{searching && !results ? <div className="gui-pet-market__status">{t("companion.petMarketSearching")}</div> : null}
+			{searching && !results ? (
+				<div className="gui-pet-market__status">{t("companion.petMarketSearching")}</div>
+			) : null}
 			{results && results.length === 0 && !searching ? (
 				<div className="gui-pet-market__status">{t("companion.petMarketEmpty")}</div>
 			) : null}
@@ -745,7 +747,9 @@ export function PetSection(): ReactNode {
 									className="gui-btn"
 									onClick={() => void importCodexPet()}
 									disabled={importing || !isDesktopShell}
-									title={isDesktopShell ? t("settings.importCodexSprite") : t("settings.desktopPetNeedsDesktop")}
+									title={
+										isDesktopShell ? t("settings.importCodexSprite") : t("settings.desktopPetNeedsDesktop")
+									}
 								>
 									<Icon name="download" className="h-3.5 w-3.5" />
 									{importing ? "…" : t("settings.importCodexSprite")}
@@ -811,7 +815,9 @@ export function PetSection(): ReactNode {
 						</button>
 						<Reveal open={expanded}>
 							<div className="gui-pet-grid" role="radiogroup" aria-label={t("settings.companionAppearance")}>
-								{userEntries.length > 0 && <div className="gui-pet-group-label">{t("settings.petImported")}</div>}
+								{userEntries.length > 0 && (
+									<div className="gui-pet-group-label">{t("settings.petImported")}</div>
+								)}
 								{userEntries.map(entry => (
 									<PetCard
 										key={entry.id}

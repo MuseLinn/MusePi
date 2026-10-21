@@ -80,7 +80,12 @@ const STEP_BODIES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
 const PROMO_FEATURES = {
 	"settings.onboardingStep3": ["settings.onboardingFeatS1", "settings.onboardingFeatS2", "settings.onboardingFeatS3"],
 	"settings.onboardingStep4": ["settings.onboardingFeatC1", "settings.onboardingFeatC2", "settings.onboardingFeatC3"],
-	"settings.onboardingStep5": ["settings.onboardingFeatT1", "settings.onboardingFeatT2", "settings.onboardingFeatT3", "settings.onboardingFeatT4"],
+	"settings.onboardingStep5": [
+		"settings.onboardingFeatT1",
+		"settings.onboardingFeatT2",
+		"settings.onboardingFeatT3",
+		"settings.onboardingFeatT4",
+	],
 } as const;
 
 /** Wire shapes from daemon providers.list (SettingsView parity). */
@@ -1305,7 +1310,7 @@ export function OnboardingOverlay({
 		try {
 			return localStorage.getItem("musepi-gui-pet-mode") === "desktop" ? "desktop" : "input";
 		} catch {
-			return "tools.input";
+			return "input";
 		}
 	});
 	// Stay mounted through the exit (Pop/DialogFrame parity): closing plays
@@ -1550,26 +1555,30 @@ export function OnboardingOverlay({
 										</button>
 										<Reveal open={branch === "features"}>
 											<div className="flex flex-col gap-3">
-												{(["settings.onboardingTitle3", "settings.onboardingTitle4", "settings.onboardingTitle5"] as const).map(
-													k => (
-														<div key={k}>
-															<div className="mb-1 text-[13px] font-medium">{t(k)}</div>
-															<FeatureList
-																keys={
-																	PROMO_FEATURES[
-																		(
-																			{
-																				"settings.onboardingTitle3": "settings.onboardingStep3",
-																				"settings.onboardingTitle4": "settings.onboardingStep4",
-																				"settings.onboardingTitle5": "settings.onboardingStep5",
-																			} as const
-																		)[k]
-																	] ?? []
-																}
-															/>
-														</div>
-													),
-												)}
+												{(
+													[
+														"settings.onboardingTitle3",
+														"settings.onboardingTitle4",
+														"settings.onboardingTitle5",
+													] as const
+												).map(k => (
+													<div key={k}>
+														<div className="mb-1 text-[13px] font-medium">{t(k)}</div>
+														<FeatureList
+															keys={
+																PROMO_FEATURES[
+																	(
+																		{
+																			"settings.onboardingTitle3": "settings.onboardingStep3",
+																			"settings.onboardingTitle4": "settings.onboardingStep4",
+																			"settings.onboardingTitle5": "settings.onboardingStep5",
+																		} as const
+																	)[k]
+																] ?? []
+															}
+														/>
+													</div>
+												))}
 											</div>
 										</Reveal>
 									</div>

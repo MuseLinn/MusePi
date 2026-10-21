@@ -61,7 +61,7 @@ export async function buildAvailableSlashCommands(
 		for (const skill of session.skills) {
 			appendCommand({
 				name: getSkillSlashCommandName(skill),
-				description: tr(skill.description) ?? t("Run {0} skill", skill.name),
+				description: tr(skill.description) ?? t("commands.runSkillWith0", skill.name),
 				input: { hint: "arguments" },
 				source: "skill",
 			});
@@ -74,7 +74,7 @@ export async function buildAvailableSlashCommands(
 			if (isAcpBuiltinShadowedName(command.name)) continue;
 			appendCommand({
 				name: command.name,
-				description: tr(command.description) ?? t("(extension command)"),
+				description: tr(command.description) ?? t("commands.text3"),
 				input: { hint: "arguments" },
 				source: "extension",
 			});

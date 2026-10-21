@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
@@ -46,7 +46,7 @@ export interface MediaProviderEntry {
 	id: string;
 	label: string;
 	kind: string;
-	source: "general.builtin" | "extension";
+	source: "builtin" | "extension";
 	configured: boolean;
 	description?: string;
 	baseUrl?: string | null;
@@ -85,7 +85,7 @@ function AdvancedFields({
 								})
 							}
 						>
-							{t(`creation platform ${p}` as const)}
+							{t(PLATFORM_KEY[p] ?? p)}
 						</button>
 					);
 				})}
@@ -107,7 +107,7 @@ function AdvancedFields({
 						className={`gui-creation-chip${draft.fidelity === f ? " gui-creation-chip--on" : ""}`}
 						onClick={() => updateDraft({ fidelity: f })}
 					>
-						{t(`creation fidelity ${f}` as const)}
+						{t(FIDELITY_KEY[f] ?? f)}
 					</button>
 				))}
 			</div>
@@ -150,7 +150,11 @@ function AdvancedFields({
 			{providers === null ? null : kindProviders.length === 0 ? (
 				<p className="gui-creation-empty">{t("creation.creationMediaNoProviders")}</p>
 			) : (
-				<div className="gui-creation-media-cards" role="radiogroup" aria-label={t("creation.creationMediaModelLabel")}>
+				<div
+					className="gui-creation-media-cards"
+					role="radiogroup"
+					aria-label={t("creation.creationMediaModelLabel")}
+				>
 					{kindProviders.map(p => {
 						const on = draft.mediaProvider === p.id;
 						return (
@@ -171,7 +175,9 @@ function AdvancedFields({
 											className={`gui-provider-status-dot${p.configured ? " gui-provider-status-dot--on" : ""}`}
 											aria-hidden="true"
 										/>
-										{p.configured ? t("creation.creationMediaConfigured") : t("creation.creationMediaNotConfigured")}
+										{p.configured
+											? t("creation.creationMediaConfigured")
+											: t("creation.creationMediaNotConfigured")}
 									</span>
 								</span>
 								{on && <Icon name="check" className="gui-creation-media-card-check" />}
@@ -284,7 +290,7 @@ function AdvancedFields({
 									className={`gui-creation-chip${draft.mediaAudioKind === k ? " gui-creation-chip--on" : ""}`}
 									onClick={() => updateDraft({ mediaAudioKind: k })}
 								>
-									{t(`creation media kind ${k}` as const)}
+									{t(MEDIA_KIND_KEY[k] ?? k)}
 								</button>
 							))}
 						</div>
@@ -309,6 +315,25 @@ function AdvancedFields({
 			return null;
 	}
 }
+
+/** Asset-policy labels are keyed per platform/fidelity/media-kind id; the ids
+ *  come from the policy type, so each lookup is closed over its set. */
+const PLATFORM_KEY: Record<string, TranslationKey> = {
+	responsive: "creation.creationPlatformResponsive",
+	"web-desktop": "creation.creationPlatformWebDesktop",
+	"mobile-ios": "creation.creationPlatformMobileIos",
+	"mobile-android": "creation.creationPlatformMobileAndroid",
+	tablet: "creation.creationPlatformTablet",
+	"desktop-app": "creation.creationPlatformDesktopApp",
+};
+const FIDELITY_KEY: Record<string, TranslationKey> = {
+	wireframe: "creation.creationFidelityWireframe",
+	"high-fidelity": "creation.creationFidelityHighFidelity",
+};
+const MEDIA_KIND_KEY: Record<string, TranslationKey> = {
+	speech: "creation.creationMediaKindSpeech",
+	sfx: "creation.creationMediaKindSfx",
+};
 
 export function AssetPolicyRow({
 	rpc,
@@ -360,7 +385,11 @@ export function AssetPolicyRow({
 		<div className="gui-creation-assetrow" data-testid="gui-creation-assetrow">
 			<div className="gui-creation-assetrow-main">
 				<span className="gui-creation-asset-label">{t("creation.creationAssetPolicyLabel")}</span>
-				<div className="gui-creation-asset-radios" role="radiogroup" aria-label={t("creation.creationAssetPolicyLabel")}>
+				<div
+					className="gui-creation-asset-radios"
+					role="radiogroup"
+					aria-label={t("creation.creationAssetPolicyLabel")}
+				>
 					{ASSET_POLICIES.map(policy => {
 						const on = draft.assetPolicy === policy;
 						return (

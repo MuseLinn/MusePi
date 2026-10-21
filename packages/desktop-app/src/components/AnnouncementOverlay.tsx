@@ -364,7 +364,12 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 							<Sparkles size={14} />
 							{t("settings.whatSNew")}
 						</div>
-						<button className="gui-btn gui-btn-icon" type="button" onClick={requestClose} aria-label={t("settings.close")}>
+						<button
+							className="gui-btn gui-btn-icon"
+							type="button"
+							onClick={requestClose}
+							aria-label={t("settings.close")}
+						>
 							<X size={16} />
 						</button>
 					</div>
@@ -410,7 +415,12 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 						<Sparkles size={14} />
 						{t("settings.whatSNew")}
 					</div>
-					<button className="gui-btn gui-btn-icon" type="button" onClick={requestClose} aria-label={t("settings.close")}>
+					<button
+						className="gui-btn gui-btn-icon"
+						type="button"
+						onClick={requestClose}
+						aria-label={t("settings.close")}
+					>
 						<X size={16} />
 					</button>
 				</div>

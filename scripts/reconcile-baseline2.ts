@@ -29,22 +29,43 @@ function dictKeys(dir: string): Set<string> {
 }
 const tables: Array<{ dict: string; gui: boolean; keys: Set<string> }> = [
 	{ dict: "client-core (GUI)", gui: true, keys: dictKeys(path.resolve(root, "packages/client-core/src/i18n/zh-CN")) },
-	{ dict: "coding-agent (TUI)", gui: false, keys: dictKeys(path.resolve(root, "packages/coding-agent/src/i18n/zh-CN")) },
+	{
+		dict: "coding-agent (TUI)",
+		gui: false,
+		keys: dictKeys(path.resolve(root, "packages/coding-agent/src/i18n/zh-CN")),
+	},
 ];
 
 // Unit-form generator (same as batch 2).
 const UNITS: Record<string, string> = {
-	tokens: "tokens", KB: "KB", MB: "MB", lines: "行", minutes: "分钟", seconds: "秒",
-	messages: "条消息", retries: "次重试", reminders: "次提醒", tasks: "个任务",
-	turns: "轮", items: "项", requests: "次请求", hour: "小时", hours: "小时",
+	tokens: "tokens",
+	KB: "KB",
+	MB: "MB",
+	lines: "行",
+	minutes: "分钟",
+	seconds: "秒",
+	messages: "条消息",
+	retries: "次重试",
+	reminders: "次提醒",
+	tasks: "个任务",
+	turns: "轮",
+	items: "项",
+	requests: "次请求",
+	hour: "小时",
+	hours: "小时",
 };
 function unitKeyTail(s: string): string | null {
-	const m = /^(~?)([\d.,]+)\s*(K|M)?\s*(tokens|KB|MB|lines|minutes|seconds|messages|retries|reminders|tasks|turns|items|requests|hours?)$/.exec(s.trim());
+	const m =
+		/^(~?)([\d.,]+)\s*(K|M)?\s*(tokens|KB|MB|lines|minutes|seconds|messages|retries|reminders|tasks|turns|items|requests|hours?)$/.exec(
+			s.trim(),
+		);
 	if (!m) return null;
 	return null; // translation handled in batch 2 — here we only need the shape
 }
 function isUnitForm(s: string): boolean {
-	return /^(~?)([\d.,]+)\s*(K|M)?\s*(tokens|KB|MB|lines|minutes|seconds|messages|retries|reminders|tasks|turns|items|requests|hours?|lines)$/.test(s.trim());
+	return /^(~?)([\d.,]+)\s*(K|M)?\s*(tokens|KB|MB|lines|minutes|seconds|messages|retries|reminders|tasks|turns|items|requests|hours?|lines)$/.test(
+		s.trim(),
+	);
 }
 function isNumber(s: string): boolean {
 	return /^[~\d.,%\s+x]+$/.test(s.trim()) && /\d/.test(s.trim());
@@ -75,13 +96,22 @@ for (const p of baseline.pairs) {
 console.log("resolved (translated/neutral/unit-form):", resolved.size);
 console.log("genuinely open:", open.size);
 const sorted = [...open.keys()].sort((a, b) => a.length - b.length);
-for (const s of sorted.slice(0, 30)) console.log("  [" + open.get(s)!.map((d) => (d.startsWith("client") ? "G" : "T")).join("") + "] " + JSON.stringify(s.slice(0, 80)));
+for (const s of sorted.slice(0, 30))
+	console.log(
+		"  [" +
+			open
+				.get(s)!
+				.map(d => (d.startsWith("client") ? "G" : "T"))
+				.join("") +
+			"] " +
+			JSON.stringify(s.slice(0, 80)),
+	);
 
 if (apply) {
 	const kept = baseline.pairs.filter((p: string) => {
 		const oldKey = p.split("\u0000").slice(1).join("\u0000");
 		return !resolved.has(oldKey);
 	});
-	fs.writeFileSync(BASELINE, JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t") + "\n");
+	fs.writeFileSync(BASELINE, `${JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t")}\n`);
 	console.log(`baseline: ${baseline.count} → ${kept.length}`);
 }

@@ -15,7 +15,7 @@ async function loadTranslations(file: string): Promise<Record<string, string>> {
 	const out: Record<string, string> = {};
 	// The scripts use `JSON.stringify(k) + ": " + JSON.stringify(v) + ","` — the
 	// translation table is a TS object literal; parse it with the runtime.
-	const mod = await import(path.resolve(root, file) + "?t=" + Date.now());
+	const mod = await import(`${path.resolve(root, file)}?t=${Date.now()}`);
 	// The scripts apply on import; re-derive the map by scanning the file's
 	// object literal instead (the import already wrote the GUI dictionary).
 	return out;
@@ -37,10 +37,10 @@ function parse(file: string): Map<string, string> {
 		let raw = m[2].trim();
 		if (!raw.startsWith('"')) {
 			const nm = /^\t"((?:[^"\\]|\\.)*)",?\s*$/.exec(lines[i + 1] ?? "");
-			raw = nm ? '"' + nm[1] + '"' : '""';
+			raw = nm ? `"${nm[1]}"` : '""';
 		}
 		const vm = /^"((?:[^"\\]|\\.)*)",?\s*$/.exec(raw);
-		out.set(key, vm ? JSON.parse('"' + vm[1] + '"') : "");
+		out.set(key, vm ? JSON.parse(`"${vm[1]}"`) : "");
 	}
 	return out;
 }
@@ -55,7 +55,9 @@ for (const entry of fs.readdirSync(path.resolve(root, "packages/coding-agent/src
 }
 // Only the strings the TUI settings page actually renders: the gate baseline
 // lists them per dictionary.
-const baseline = JSON.parse(fs.readFileSync(path.resolve(root, "scripts/verify-schema-labels-i18n-baseline.json"), "utf8"));
+const baseline = JSON.parse(
+	fs.readFileSync(path.resolve(root, "scripts/verify-schema-labels-i18n-baseline.json"), "utf8"),
+);
 const tuiStrings = new Set(
 	baseline.pairs
 		.filter((p: string) => p.startsWith("coding-agent (TUI)\u0000"))
@@ -80,9 +82,9 @@ if (apply && entries.length > 0) {
 	let s = fs.readFileSync(TUI_ZH, "utf8");
 	const topClose = s.lastIndexOf("} as const") >= 0 ? s.lastIndexOf("} as const") : s.lastIndexOf("}");
 	const lineEnd = s.lastIndexOf("\n", topClose);
-	const block = entries.map(([k, v]) => "\t" + JSON.stringify(k) + ": " + JSON.stringify(v) + ",").join("\n") + "\n";
+	const block = `${entries.map(([k, v]) => `\t${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n")}\n`;
 	s = s.slice(0, lineEnd) + block + s.slice(lineEnd);
 	fs.writeFileSync(TUI_ZH, s);
-	console.log("written " + entries.length + " entries to TUI zh");
+	console.log(`written ${entries.length} entries to TUI zh`);
 }
 if (!apply) console.log("(dry run)");

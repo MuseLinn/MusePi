@@ -10,7 +10,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { TRANSLATIONS, LOCALE_NEUTRAL } from "./schema-translations.ts";
+import { LOCALE_NEUTRAL, TRANSLATIONS } from "./schema-translations.ts";
 
 const root = process.cwd();
 const apply = process.argv.includes("--apply");
@@ -45,7 +45,7 @@ function dictKeys(file: string): Set<string> {
 function insert(text: string, entries: Array<[string, string]>): string {
 	const topClose = text.lastIndexOf("} as const") >= 0 ? text.lastIndexOf("} as const") : text.lastIndexOf("}");
 	const lineEnd = text.lastIndexOf("\n", topClose);
-	const block = entries.map(([k, v]) => "\t" + JSON.stringify(k) + ": " + JSON.stringify(v) + ",").join("\n") + "\n";
+	const block = `${entries.map(([k, v]) => `\t${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n")}\n`;
 	return text.slice(0, lineEnd) + block + text.slice(lineEnd);
 }
 
@@ -92,10 +92,13 @@ for (const dict of DICTS) {
 		}
 	}
 
-	console.log(`${dict.label}: +${zhEntries.length} zh, +${enEntries.length} en, ${strings.length - zhEntries.length} neutral/stale/open`);
+	console.log(
+		`${dict.label}: +${zhEntries.length} zh, +${enEntries.length} en, ${strings.length - zhEntries.length} neutral/stale/open`,
+	);
 	if (apply) {
 		if (zhEntries.length > 0) fs.writeFileSync(dict.zh, insert(fs.readFileSync(dict.zh, "utf8"), zhEntries));
-		if (dict.en && enEntries.length > 0) fs.writeFileSync(dict.en, insert(fs.readFileSync(dict.en, "utf8"), enEntries));
+		if (dict.en && enEntries.length > 0)
+			fs.writeFileSync(dict.en, insert(fs.readFileSync(dict.en, "utf8"), enEntries));
 	}
 }
 
@@ -105,9 +108,11 @@ if (apply) {
 		const oldKey = p.split("\u0000").slice(1).join("\u0000");
 		return !handled.has(oldKey);
 	});
-	fs.writeFileSync(BASELINE, JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t") + "\n");
+	fs.writeFileSync(BASELINE, `${JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t")}\n`);
 	console.log(`baseline: ${baseline.count} → ${kept.length}`);
 }
 
-console.log(`batch totals: ${batchTranslated} translated pair(s), ${batchNeutral} neutral string(s), ${stillOpen} still open`);
+console.log(
+	`batch totals: ${batchTranslated} translated pair(s), ${batchNeutral} neutral string(s), ${stillOpen} still open`,
+);
 if (!apply) console.log("(dry run — pass --apply)");

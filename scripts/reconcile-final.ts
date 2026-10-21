@@ -52,13 +52,15 @@ for (const p of baseline.pairs) {
 console.log("resolved:", resolved.size);
 console.log("open:", open.size);
 for (const [s, dicts] of open) {
-	console.log("  [" + dicts.map((d) => (d.startsWith("client") ? "G" : "T")).join("") + "] " + JSON.stringify(s.slice(0, 85)));
+	console.log(
+		`  [${dicts.map(d => (d.startsWith("client") ? "G" : "T")).join("")}] ${JSON.stringify(s.slice(0, 85))}`,
+	);
 }
 if (apply) {
 	const kept = baseline.pairs.filter((p: string) => {
 		const oldKey = p.split("\u0000").slice(1).join("\u0000");
 		return !resolved.has(oldKey);
 	});
-	fs.writeFileSync(BASELINE, JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t") + "\n");
+	fs.writeFileSync(BASELINE, `${JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t")}\n`);
 	console.log(`baseline: ${baseline.count} → ${kept.length}`);
 }

@@ -116,23 +116,23 @@ const MAX_SIZE = 24;
 
 /** Tools sharing the flyout; the first entry is the always-visible button. */
 const SHAPE_ITEMS = [
-	["line", Slash, "sketch tool line"],
-	["arrow", ArrowUpRight, "sketch tool arrow"],
-	["rect", Square, "sketch tool rect"],
-	["ellipse", Circle, "sketch tool ellipse"],
-	["diamond", Diamond, "sketch tool diamond"],
-	["triangle", Triangle, "sketch tool triangle"],
-	["star", Star, "sketch tool star"],
-	["heart", Heart, "sketch tool heart"],
+	["line", Slash, "composer.sketchToolLine"],
+	["arrow", ArrowUpRight, "composer.sketchToolArrow"],
+	["rect", Square, "composer.sketchToolRect"],
+	["ellipse", Circle, "composer.sketchToolEllipse"],
+	["diamond", Diamond, "composer.sketchToolDiamond"],
+	["triangle", Triangle, "composer.sketchToolTriangle"],
+	["star", Star, "composer.sketchToolStar"],
+	["heart", Heart, "composer.sketchToolHeart"],
 ] as const satisfies ReadonlyArray<readonly [ShapeTool, unknown, string]>;
 
 const SHAPE_TOOLS = SHAPE_ITEMS.map(item => item[0]) as readonly ShapeTool[];
 
 const TOOL_ITEMS = [
-	["select", MousePointer2, "sketch tool select"],
-	["pen", Pencil, "sketch tool pen"],
-	["eraser", Eraser, "sketch tool eraser"],
-	["text", Type, "sketch tool text"],
+	["select", MousePointer2, "composer.sketchToolSelect"],
+	["pen", Pencil, "composer.sketchToolPen"],
+	["eraser", Eraser, "composer.sketchToolEraser"],
+	["text", Type, "composer.sketchToolText"],
 ] as const;
 
 function themeCanvasColor(): string {
@@ -1029,7 +1029,12 @@ export function SketchPad({
 		<div className={`gui-sketch-veil${closing ? " gui-sketch-veil--closing" : ""}`} role="dialog" aria-modal="true">
 			<div className="gui-sketch-board">
 				<div className="gui-sketch-toolbar">
-					<button type="button" className="gui-btn gui-btn-icon" title={t("settings.close")} onClick={requestClose}>
+					<button
+						type="button"
+						className="gui-btn gui-btn-icon"
+						title={t("settings.close")}
+						onClick={requestClose}
+					>
 						<X size={14} />
 					</button>
 					<span className="gui-sketch-toolbar-sep" aria-hidden />

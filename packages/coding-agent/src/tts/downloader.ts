@@ -59,12 +59,12 @@ export async function downloadTtsModel(
 ): Promise<boolean> {
 	const spec = getTtsLocalModelSpec(modelKey);
 	if (!spec) return false;
-	onProgress?.({ stage: t("Preparing {0}...", spec.label) });
+	onProgress?.({ stage: t("commands.preparingWith0", spec.label) });
 	return ttsClient.downloadModel(spec.key, {
 		signal,
 		onProgress: event => {
 			if (event.status === "ready" || event.status === "done") {
-				onProgress?.({ stage: t("{0} ready", spec.label), percent: 100 });
+				onProgress?.({ stage: t("commands.readyWith0", spec.label), percent: 100 });
 				return;
 			}
 			const percent =
@@ -73,7 +73,7 @@ export async function downloadTtsModel(
 					: typeof event.progress === "number"
 						? Math.round(event.progress)
 						: undefined;
-			onProgress?.({ stage: t("Downloading {0}", spec.label), percent });
+			onProgress?.({ stage: t("commands.downloadingWith0", spec.label), percent });
 		},
 	});
 }

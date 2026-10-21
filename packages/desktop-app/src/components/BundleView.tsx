@@ -141,7 +141,9 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					{composition.profile ? `${tLoose("tools.bundleProfile")} ${composition.profile} · ` : ""}
 					{tLoose("tools.bundleRows", { count: counts.total })}
 					{counts.disabled > 0 ? ` · ${tLoose("tools.bundleDisabledCount", { count: counts.disabled })}` : ""}
-					{counts.conditional > 0 ? ` · ${tLoose("tools.bundleConditionalCount", { count: counts.conditional })}` : ""}
+					{counts.conditional > 0
+						? ` · ${tLoose("tools.bundleConditionalCount", { count: counts.conditional })}`
+						: ""}
 				</span>
 			</div>
 			{error && <div className="gui-ext-plugins-error">{error}</div>}
@@ -181,7 +183,9 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					</div>
 				) : (
 					<div className="gui-ext-group">
-						<div className="gui-ext-group-title">{tLoose("tools.bundleRows", { count: composition.rows.length })}</div>
+						<div className="gui-ext-group-title">
+							{tLoose("tools.bundleRows", { count: composition.rows.length })}
+						</div>
 						{composition.rows.map(row => (
 							<div key={row.id} className="gui-ext-provider">
 								<div className="gui-ext-provider-h">

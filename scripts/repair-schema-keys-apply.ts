@@ -7,9 +7,10 @@
  * untranslated. Those instead get recorded as neutral and the gate learns to
  * skip them.
  */
+
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execSync } from "node:child_process";
 
 const root = process.cwd();
 const apply = process.argv.includes("--apply");
@@ -66,7 +67,8 @@ function readDictFlat(file: string): Map<string, string> {
 const curGuiZh = readDictFlat(path.resolve(root, "packages/client-core/src/i18n/zh-CN/settings.ts"));
 const curTuiZh = readDictFlat(path.resolve(root, "packages/coding-agent/src/i18n/zh-CN/settings.ts"));
 
-const NEUTRAL_RE = /^(?:[~\d.,%\s+x]+|(?:\d+(?:\.\d+)?|~?\d+(?:\.\d+)?[KM]?)\s*(?:KB|MB|tokens|K tokens)(?:\s|$)?|\d+x\d+.*|.*black ink.*|.*sentence hues.*|.*dimmed stopwords.*|.*legacy,.*)$/;
+const NEUTRAL_RE =
+	/^(?:[~\d.,%\s+x]+|(?:\d+(?:\.\d+)?|~?\d+(?:\.\d+)?[KM]?)\s*(?:KB|MB|tokens|K tokens)(?:\s|$)?|\d+x\d+.*|.*black ink.*|.*sentence hues.*|.*dimmed stopwords.*|.*legacy,.*)$/;
 
 const byDict = new Map<string, Set<string>>();
 for (const p of baseline.pairs) {
@@ -80,7 +82,7 @@ for (const p of baseline.pairs) {
 function insert(text: string, entries: Array<[string, string]>): string {
 	const topClose = text.lastIndexOf("} as const") >= 0 ? text.lastIndexOf("} as const") : text.lastIndexOf("}");
 	const lineEnd = text.lastIndexOf("\n", topClose);
-	const block = entries.map(([k, v]) => "\t" + JSON.stringify(k) + ": " + JSON.stringify(v) + ",").join("\n") + "\n";
+	const block = `${entries.map(([k, v]) => `\t${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n")}\n`;
 	return text.slice(0, lineEnd) + block + text.slice(lineEnd);
 }
 
@@ -143,8 +145,11 @@ if (neutralOut.length > 0) {
 	const anchor = "export const LOCALE_NEUTRAL: string[] = [";
 	const at = s.indexOf(anchor);
 	const lineEnd = s.indexOf("\n", at) + 1;
-	const block = [...new Set(neutralOut)].sort().map((k) => "\t" + JSON.stringify(k) + ",").join("\n") + "\n";
+	const block = `${[...new Set(neutralOut)]
+		.sort()
+		.map(k => `\t${JSON.stringify(k)},`)
+		.join("\n")}\n`;
 	s = s.slice(0, lineEnd) + block + s.slice(lineEnd);
 	fs.writeFileSync(TRANS, s);
-	console.log("LOCALE_NEUTRAL: +" + neutralOut.length);
+	console.log(`LOCALE_NEUTRAL: +${neutralOut.length}`);
 }

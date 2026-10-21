@@ -226,11 +226,11 @@ let n = 0;
 const file = path.resolve(root, "packages/client-core/src/i18n/zh-CN/settings.ts");
 let s = fs.readFileSync(file, "utf8");
 for (const [k, v] of Object.entries(T)) {
-	const from = JSON.stringify(k) + ": " + JSON.stringify(k) + ",";
+	const from = `${JSON.stringify(k)}: ${JSON.stringify(k)},`;
 	if (s.includes(from)) {
-		s = s.split(from).join(JSON.stringify(k) + ": " + JSON.stringify(v) + ",");
+		s = s.split(from).join(`${JSON.stringify(k)}: ${JSON.stringify(v)},`);
 		n++;
 	}
 }
 if (apply) fs.writeFileSync(file, s);
-console.log("replaced " + n + " identity values (of " + Object.keys(T).length + " provided)" + (apply ? "" : " (dry run)"));
+console.log(`replaced ${n} identity values (of ${Object.keys(T).length} provided)${apply ? "" : " (dry run)"}`);

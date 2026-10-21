@@ -552,7 +552,9 @@ export class AssistantMessageComponent extends Container {
 				);
 				continue;
 			}
-			this.#contentContainer.addChild(new Text(theme.fg("toolOutput", t("commands.imageWith0", image.mimeType)), 1, 0));
+			this.#contentContainer.addChild(
+				new Text(theme.fg("toolOutput", t("commands.imageWith0", image.mimeType)), 1, 0),
+			);
 		}
 	}
 

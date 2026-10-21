@@ -824,7 +824,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											{isGuiKind(selected) && (
 												<span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>
 											)}
-											{selected.readonly && <span className="gui-ext-item-tag">{t("tools.extReadOnly")}</span>}
+											{selected.readonly && (
+												<span className="gui-ext-item-tag">{t("tools.extReadOnly")}</span>
+											)}
 										</div>
 										{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
 										{selected.trigger && (

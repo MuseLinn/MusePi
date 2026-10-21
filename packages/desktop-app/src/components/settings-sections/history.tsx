@@ -145,7 +145,9 @@ export function HistorySection({
 						{sessions === null ? (
 							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-faint)]">…</div>
 						) : visibleSessions.length === 0 ? (
-							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">{t("general.noResults")}</div>
+							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">
+								{t("general.noResults")}
+							</div>
 						) : (
 							visibleSessions.map(s => (
 								<button

@@ -80,7 +80,8 @@ export const guest = {
 	"guest.2BitWeightsFp16": "2 位权重 + fp16 激活",
 	"guest.1BitWeights": "1 位权重",
 	"guest.1BitWeightsFp16": "1 位权重 + fp16 激活",
-	"guest.letTransformersJsChoose": "让 transformers.js 按设备选择",	"back to chat": "返回聊天",
+	"guest.letTransformersJsChoose": "让 transformers.js 按设备选择",
+	"back to chat": "返回聊天",
 	"load failed: {error}": "加载失败：{error}",
 	"no boards yet": "暂无看板",
 	"no widgets yet": "暂无组件",
@@ -145,7 +146,6 @@ export const guest = {
 	"1-bit weights": "1 位权重",
 	"1-bit weights with fp16 activations": "1 位权重 + fp16 激活",
 	"Let transformers.js choose per device": "让 transformers.js 按设备选择",
-
 } as const;
 
 /** Key union for the guest domain (source of truth). */

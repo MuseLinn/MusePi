@@ -28,7 +28,8 @@ export const mcp = {
 	"mcp.enterServerUrl": "输入服务器 URL：",
 	"mcp.enterUniqueNameServer": "输入此服务器的唯一名称：",
 	"mcp.enterEnvironmentVariableName": "输入环境变量名称：",
-	"mcp.enterHttpHeaderName": "输入 HTTP 头名称：",	"Add MCP Server": "添加 MCP 服务器",
+	"mcp.enterHttpHeaderName": "输入 HTTP 头名称：",
+	"Add MCP Server": "添加 MCP 服务器",
 	"stdio (Local process)": "stdio（本地进程）",
 	"http (HTTP server)": "http（HTTP 服务器）",
 	"sse (Server-Sent Events)": "sse（服务器推送事件）",
@@ -47,7 +48,6 @@ export const mcp = {
 	"Enter a unique name for this server:": "输入此服务器的唯一名称：",
 	"Enter the environment variable name:": "输入环境变量名称：",
 	"Enter the HTTP header name:": "输入 HTTP 头名称：",
-
 } as const;
 
 /** Key union for the mcp domain (mirrors the guest-client locale split). */

@@ -5,23 +5,19 @@ export const companion = {
 	"companion.capy": "卡皮巴拉",
 	"companion.originalEmotionallyStable.info": "情绪稳定的原创水豚，头顶一颗小橘子。",
 	"companion.jiyi": "吉伊",
-	"companion.roundWhiteChibi.desc":
-		"圆滚滚的白色小熊，深巧克力描边、粉色脸颊、小短手小短脚、卷卷耳，挂着粉色小熊包。",
+	"companion.roundWhiteChibi.desc": "圆滚滚的白色小熊，深巧克力描边、粉色脸颊、小短手小短脚、卷卷耳，挂着粉色小熊包。",
 	"companion.hachiware": "小八",
-	"companion.tinyHachiwareInspired.info":
-		"蓝白花纹的小猫咪，大眼睛亮晶晶，元气满满的表情。",
+	"companion.tinyHachiwareInspired.info": "蓝白花纹的小猫咪，大眼睛亮晶晶，元气满满的表情。",
 	"companion.usagi": "乌萨奇",
 	"companion.tinyCreamRabbitCompanion": "奶油色的小兔子伙伴。",
 	"companion.hanLi": "韩立御剑飞行",
-	"companion.calmCautiousQ.info":
-		"谨慎淡定的 Q 版韩立，墨青道袍、腰间小绿瓶，御剑低调赶路的修仙者。",
+	"companion.calmCautiousQ.info": "谨慎淡定的 Q 版韩立，墨青道袍、腰间小绿瓶，御剑低调赶路的修仙者。",
 	"companion.doraemon": "哆啦A梦",
 	"companion.compactBlueRobotCat": "蓝色机器猫小伙伴。",
 	"companion.noirWebling": "Noir Webling",
 	"companion.tinyMonochromeSpiderDetective": "戴着软呢帽和风衣的单色蜘蛛侦探。",
 	"companion.feixue": "绯雪",
-	"companion.whiteHairedRed.info":
-		"绯雪，鸣潮中的白发红眼角色，像素风数字宠物。",
+	"companion.whiteHairedRed.info": "绯雪，鸣潮中的白发红眼角色，像素风数字宠物。",
 	"companion.petRefresh": "刷新列表",
 	"companion.petMarket": "Petdex 市场",
 	"companion.petMarketSearchPlaceholder": "搜索宠物（名字、动漫、风格）…",
@@ -41,17 +37,22 @@ export const companion = {
 	"companion.stopCurrentTurn": "停止当前任务",
 	"companion.approvalGranted": "审批通过",
 	"companion.toolResultArrived": "工具执行结果返回",
-	"companion.soundPalette": "音效库",	"A tiny cat tucked inside a cardboard box for cozy coding sessions.": "蜷在纸箱里的小猫，适合悠闲的编码时光。",
+	"companion.soundPalette": "音效库",
+	"A tiny cat tucked inside a cardboard box for cozy coding sessions.": "蜷在纸箱里的小猫，适合悠闲的编码时光。",
 	"An original emotionally stable capybara with a tiny orange on its head.": "情绪稳定的原创水豚，头顶一颗小橘子。",
-	"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.": "A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.",
-	"A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.": "A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.",
+	"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.":
+		"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.",
+	"A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.":
+		"A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.",
 	"A tiny cream rabbit companion based on the provided Usagi reference.": "奶油色的小兔子伙伴。",
 	"Han Li": "韩立御剑飞行",
-	"A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.": "A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.",
+	"A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.":
+		"A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.",
 	"A compact blue robot-cat pet inspired by Doraemon.": "蓝色机器猫小伙伴。",
 	"Noir Webling": "Noir Webling",
 	"A tiny monochrome spider detective in a fedora and trench coat.": "戴着软呢帽和风衣的单色蜘蛛侦探。",
-	"A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.": "A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.",
+	"A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.":
+		"A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.",
 	"pet refresh": "刷新列表",
 	"pet market": "Petdex 市场",
 	"pet market search placeholder": "搜索宠物（名字、动漫、风格）…",
@@ -71,7 +72,6 @@ export const companion = {
 	"approval granted": "审批通过",
 	"tool result arrived": "工具执行结果返回",
 	"sound palette": "音效库",
-
 } as const;
 
 /** Key union for the companion (桌宠/伙伴) domain (source of truth). */

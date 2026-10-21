@@ -210,13 +210,13 @@ const VIEWPORTS = [
 const QUICK_LINKS: Array<{
 	label: string;
 	url: string;
-	icon: "github" | "settings.search" | "book" | "settings.terminal" | "chat-1" | "compass-3";
+	icon: "github" | "search" | "book" | "terminal" | "chat-1" | "compass-3";
 }> = [
 	{ label: "GitHub", url: "https://github.com", icon: "github" },
-	{ label: "Google", url: "https://www.google.com", icon: "settings.search" },
-	{ label: "Bing", url: "https://www.bing.com", icon: "settings.search" },
+	{ label: "Google", url: "https://www.google.com", icon: "search" },
+	{ label: "Bing", url: "https://www.bing.com", icon: "search" },
 	{ label: "MDN", url: "https://developer.mozilla.org", icon: "book" },
-	{ label: "Stack Overflow", url: "https://stackoverflow.com", icon: "settings.terminal" },
+	{ label: "Stack Overflow", url: "https://stackoverflow.com", icon: "terminal" },
 	{ label: "DeepL", url: "https://www.deepl.com", icon: "chat-1" },
 ];
 
@@ -613,7 +613,7 @@ export function ManagedBrowserPane({
 			key: `history:${entry.url}`,
 			label: entry.title || labelFromUrl(entry.url),
 			detail: entry.url,
-			icon: "transcript.history" as const,
+			icon: "history" as const,
 			url: entry.url,
 		}));
 		if (showDefault || !query) return historySuggestions;
@@ -984,7 +984,7 @@ export function ManagedBrowserPane({
 									<Icon name="lock" className="h-3.5 w-3.5" />
 									{t("tools.browserClearCookies")}
 								</button>
-								<button type="button" role="menuitem" onClick={() => void clearBrowserData("tools.all")}>
+								<button type="button" role="menuitem" onClick={() => void clearBrowserData("all")}>
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
 									{t("tools.browserClearAllData")}
 								</button>
@@ -1064,7 +1064,9 @@ export function ManagedBrowserPane({
 									) : (
 										<Icon name="global" className="h-3 w-3 shrink-0 opacity-60" />
 									)}
-									<span className="max-w-[110px] truncate">{tab.title?.trim() || t("tools.browserEmptyTab")}</span>
+									<span className="max-w-[110px] truncate">
+										{tab.title?.trim() || t("tools.browserEmptyTab")}
+									</span>
 									{tab.agent && <span className="gui-browser-tab-badge">{t("tools.agentCreatedTab")}</span>}
 								</button>
 								<button
@@ -1226,7 +1228,9 @@ export function ManagedBrowserPane({
 					className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
 				>
 					<div className="max-w-[380px] rounded-lg border border-[var(--border)] bg-[var(--color-surface)] p-3 shadow-lg">
-						<div className="mb-1 text-[12px] font-medium text-[var(--color-text)]">{t("tools.riskyNavigation")}</div>
+						<div className="mb-1 text-[12px] font-medium text-[var(--color-text)]">
+							{t("tools.riskyNavigation")}
+						</div>
 						<div className="mb-2 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
 							{t("tools.riskyNavigationDescription")}
 						</div>

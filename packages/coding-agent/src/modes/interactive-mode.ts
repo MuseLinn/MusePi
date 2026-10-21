@@ -3923,7 +3923,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		const objective = rest.trim()
 			? rest.trim()
-			: (await this.showHookEditor(t("commands.goalObjective"), undefined, undefined, { promptStyle: true }))?.trim();
+			: (
+					await this.showHookEditor(t("commands.goalObjective"), undefined, undefined, { promptStyle: true })
+				)?.trim();
 		if (!objective) return false;
 		if (this.goalModeEnabled) {
 			await this.#replaceGoalFromObjective(objective, _input);
@@ -4032,7 +4034,12 @@ export class InteractiveMode implements InteractiveModeContext {
 		const choice = await this.showPlanReview(
 			planContent,
 			"Plan mode - next step",
-			[t("commands.approveExecute"), t("commands.approveCompactContext"), keepContextLabel, t("commands.refinePlan")],
+			[
+				t("commands.approveExecute"),
+				t("commands.approveCompactContext"),
+				keepContextLabel,
+				t("commands.refinePlan"),
+			],
 			{
 				helpText,
 				onExternalEditor: () => void this.#openPlanInExternalEditor(planFilePath),

@@ -84,7 +84,8 @@ export const composer = {
 	"composer.voiceDiscard": "Discard recording",
 	"composer.voiceFailedWithReason": "Voice input failed: {reason}",
 	"composer.voiceNeedsDaemonBackend": "Voice input needs the daemon backend",
-	"composer.voiceNeedsDaemonBody": "collab-direct sessions can't transcribe voice — connect through the daemon to use it",
+	"composer.voiceNeedsDaemonBody":
+		"collab-direct sessions can't transcribe voice — connect through the daemon to use it",
 	"composer.voiceGuideOk": "Got it",
 	"composer.ttsNeedsDaemonBackend": "Read-aloud needs the daemon backend",
 	// ── SketchPad (Codex 绘画 parity) ─────────────────────────────────────
@@ -141,7 +142,8 @@ export const composer = {
 	"composer.plusPickerNoPlugins": "No enabled plugins yet",
 	"composer.plusPickerNoFiles": "No files in the workspace yet",
 	"composer.plusPickerNoResults": "No matching results",
-	"composer.plusPickerTruncated": "Showing first {n} — type more to narrow it down",	"type your response…": "type your response…",
+	"composer.plusPickerTruncated": "Showing first {n} — type more to narrow it down",
+	"type your response…": "type your response…",
 	"read-only session — watching only": "read-only session — watching only",
 	"ask anything, / for commands, @ for context…": "ask anything, / for commands, @ for context…",
 	"waiting for session…": "waiting for session…",
@@ -251,5 +253,4 @@ export const composer = {
 	"plus picker no files": "plus picker no files",
 	"plus picker no results": "plus picker no results",
 	"plus picker truncated": "plus picker truncated",
-
 } as const satisfies Record<ComposerKey, string>;

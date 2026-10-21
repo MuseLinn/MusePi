@@ -885,7 +885,8 @@ export const tools = {
 	"tools.artifactsScanTruncated": "扫描在第 4 层截断——更深的产物目录未访问",
 	"tools.artifactsViewportDesktop": "桌面",
 	"tools.artifactsViewportTablet": "平板",
-	"tools.artifactsViewportMobile": "移动",	"final url": "最终 URL",
+	"tools.artifactsViewportMobile": "移动",
+	"final url": "最终 URL",
 	"content-type": "内容类型",
 	"output truncated": "输出已截断",
 	"limit reached": "已达限制",
@@ -1509,7 +1510,8 @@ export const tools = {
 	"{count} message(s)": "{count} 条消息",
 	"{count} peer(s)": "{count} 个对等代理",
 	"await reply": "等待回复",
-	"No reply yet — they may answer later; check inbox or wait again.": "No reply yet — they may answer later; check inbox or wait again.",
+	"No reply yet — they may answer later; check inbox or wait again.":
+		"No reply yet — they may answer later; check inbox or wait again.",
 	"to {name}": "发给 {name}",
 	"from {name}": "来自 {name}",
 	"{count} unread": "{count} 条未读",
@@ -1596,7 +1598,6 @@ export const tools = {
 	"artifacts viewport desktop": "桌面",
 	"artifacts viewport tablet": "平板",
 	"artifacts viewport mobile": "移动",
-
 } as const;
 
 /** Key union for the tools domain (source of truth). */

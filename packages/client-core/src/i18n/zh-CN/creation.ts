@@ -77,7 +77,8 @@ export const creation = {
 	"creation.creationMediaVoicePlaceholder": "音色名，如 warm-female",
 	"creation.creationMediaNoProviders": "暂无可用 provider，请在 设置 → 媒体生成 中配置。",
 	"creation.creationMediaNotConfigured": "未配置",
-	"creation.creationMediaConfigured": "已配置",	"creation title": "创建",
+	"creation.creationMediaConfigured": "已配置",
+	"creation title": "创建",
 	"creation close": "关闭创作面板",
 	"creation start from": "起点",
 	"creation start blank": "空白起步",
@@ -137,7 +138,6 @@ export const creation = {
 	"creation media no providers": "暂无可用 provider，请在 设置 → 媒体生成 中配置。",
 	"creation media not configured": "未配置",
 	"creation media configured": "已配置",
-
 } as const;
 
 /** Key union for the creation domain (source of truth). */

@@ -72,7 +72,8 @@ export const creation = {
 	"creation.creationMediaVoicePlaceholder": "Voice name, e.g. warm-female",
 	"creation.creationMediaNoProviders": "No providers available — configure one in Settings → Media Generation.",
 	"creation.creationMediaNotConfigured": "Not configured",
-	"creation.creationMediaConfigured": "Configured",	"creation title": "creation title",
+	"creation.creationMediaConfigured": "Configured",
+	"creation title": "creation title",
 	"creation close": "creation close",
 	"creation start from": "creation start from",
 	"creation start blank": "creation start blank",
@@ -132,5 +133,4 @@ export const creation = {
 	"creation media no providers": "creation media no providers",
 	"creation media not configured": "creation media not configured",
 	"creation media configured": "creation media configured",
-
 } as const satisfies Record<CreationKey, string>;

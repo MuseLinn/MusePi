@@ -28,8 +28,18 @@ const MENU = [
 	{ id: "memory", label: "settings.debugMemory", desc: "settings.debugMemoryDesc" },
 	{ id: "logs", label: "settings.debugLogs", desc: "settings.debugLogsDesc" },
 	{ id: "system", label: "settings.debugSystemInfo", desc: "settings.debugSystemInfoDesc" },
-	{ id: "settings.terminal", label: "settings.debugTerminalState", desc: "settings.debugTerminalStateDesc", terminalOnly: true },
-	{ id: "protocols", label: "settings.debugTerminalProtocols", desc: "settings.debugTerminalProtocolsDesc", terminalOnly: true },
+	{
+		id: "settings.terminal",
+		label: "settings.debugTerminalState",
+		desc: "settings.debugTerminalStateDesc",
+		terminalOnly: true,
+	},
+	{
+		id: "protocols",
+		label: "settings.debugTerminalProtocols",
+		desc: "settings.debugTerminalProtocolsDesc",
+		terminalOnly: true,
+	},
 	{ id: "raw-sse", label: "settings.debugRawSse", desc: "settings.debugRawSseDesc" },
 	{ id: "remote-debugger", label: "settings.debugRemoteDebugger", desc: "settings.debugRemoteDebuggerDesc" },
 	{ id: "transcript", label: "settings.debugTranscript", desc: "settings.debugTranscriptDesc" },
@@ -124,7 +134,10 @@ export function DebugToolsPanelBody({
 					else
 						setResult(id, {
 							kind: "error",
-							message: res.reason === "no-session-file" ? t("settings.debugNoSessionFile") : t("settings.debugNoArtifacts"),
+							message:
+								res.reason === "no-session-file"
+									? t("settings.debugNoSessionFile")
+									: t("settings.debugNoArtifacts"),
 						});
 					break;
 				}
@@ -176,7 +189,8 @@ export function DebugToolsPanelBody({
 					if (res.text.trim().length === 0) {
 						setResult(id, { kind: "text", text: t("settings.debugNoRawSse") });
 					} else {
-						const dropped = res.droppedChars > 0 ? `\n\n[${t("settings.debugDroppedChars")}: ${res.droppedChars}]` : "";
+						const dropped =
+							res.droppedChars > 0 ? `\n\n[${t("settings.debugDroppedChars")}: ${res.droppedChars}]` : "";
 						setResult(id, { kind: "text", text: `${res.text}${dropped}` });
 					}
 					break;

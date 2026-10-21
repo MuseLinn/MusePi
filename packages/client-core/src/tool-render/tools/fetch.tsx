@@ -80,7 +80,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				<Kv k={t("tools.contentType")}>{details?.contentType}</Kv>
 				<Kv k={t("tools.via")}>{details?.method}</Kv>
 				<Kv k={t("tools.notes")}>{details && details.notes.length > 0 && details.notes.join("; ")}</Kv>
-				<Kv k={t("tools.truncated")}>{details?.truncated && <Badge tone="warn">{t("tools.outputTruncated")}</Badge>}</Kv>
+				<Kv k={t("tools.truncated")}>
+					{details?.truncated && <Badge tone="warn">{t("tools.outputTruncated")}</Badge>}
+				</Kv>
 			</KvGrid>
 			<ResultText result={result} maxLines={12} lang="markdown" />
 		</>

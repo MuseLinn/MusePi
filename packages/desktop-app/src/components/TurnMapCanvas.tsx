@@ -111,11 +111,11 @@ const EVENT_KIND_ICON: Record<TrajectoryEvent["kind"], IconName> = {
 
 /** 事件卡 kind 标签(主行药丸,与图标同色系)。 */
 const EVENT_KIND_LABEL = {
-	user: "turn map kind user",
-	assistant: "turn map kind assistant",
-	tool: "turn map kind tool",
-	advisor: "turn map kind advisor",
-	system: "turn map kind system",
+	user: "transcript.turnMapKindUser",
+	assistant: "transcript.turnMapKindAssistant",
+	tool: "transcript.turnMapKindTool",
+	advisor: "transcript.turnMapKindAdvisor",
+	system: "transcript.turnMapKindSystem",
 } as const satisfies Record<TrajectoryEvent["kind"], string>;
 
 /** token 数缩写(1.2k 形态;TUI /trace 信息密度,GUI 排版)。 */

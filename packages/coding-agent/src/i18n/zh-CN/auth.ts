@@ -28,7 +28,8 @@ export const auth = {
 	"auth.noAuthenticationRequired": "无需认证",
 	"auth.saveConfiguration": "保存此配置？",
 	"auth.editOauthSettings": "  编辑 OAuth 设置",
-	"auth.chooseNextAction": "选择下一步操作：",	"API key configured": "API 密钥已配置",
+	"auth.chooseNextAction": "选择下一步操作：",
+	"API key configured": "API 密钥已配置",
 	"subscription configured": "订阅已配置",
 	"Select provider to configure:": "选择要配置的提供商:",
 	"Select provider to logout:": "选择要登出的提供商:",
@@ -54,7 +55,6 @@ export const auth = {
 	"Save this configuration?": "保存此配置？",
 	"  Edit OAuth settings": "  编辑 OAuth 设置",
 	"Choose next action:": "选择下一步操作：",
-
 } as const;
 
 /** Key union for the auth domain (mirrors the guest-client locale split). */

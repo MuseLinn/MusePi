@@ -12,9 +12,11 @@ export const context = {
 	"context.reasonImageBudget": "Reason: image budget",
 	"context.toolResultsImagedWithImagedWithSaved": "Tool results: {imaged} imaged (saves ~{saved})",
 	"context.toolResultsNoneImagedWithTotal": "Tool results: none imaged ({total} in history)",
-	"context.nextRequestTokensWithTokens.info": "Next request: ~{tokens} tokens on the wire",	"snapcompact savings": "snapcompact savings",
+	"context.nextRequestTokensWithTokens.info": "Next request: ~{tokens} tokens on the wire",
+	"snapcompact savings": "snapcompact savings",
 	"model does not support images": "model does not support images",
-	"system prompt imaged: {text} text → {frames} frames (saves ~{saved})": "system prompt imaged: {text} text → {frames} frames (saves ~{saved})",
+	"system prompt imaged: {text} text → {frames} frames (saves ~{saved})":
+		"system prompt imaged: {text} text → {frames} frames (saves ~{saved})",
 	"system prompt stays text ({reason})": "system prompt stays text ({reason})",
 	"reason: empty": "reason: empty",
 	"reason: insufficient savings": "reason: insufficient savings",
@@ -22,5 +24,4 @@ export const context = {
 	"tool results: {imaged} imaged (saves ~{saved})": "tool results: {imaged} imaged (saves ~{saved})",
 	"tool results: none imaged ({total} in history)": "tool results: none imaged ({total} in history)",
 	"next request: ~{tokens} tokens on the wire": "next request: ~{tokens} tokens on the wire",
-
 } as const satisfies Record<ContextKey, string>;

@@ -250,7 +250,7 @@ export function ChatSection(): ReactNode {
 		},
 	);
 	// 性能与用量 (§5w) — density of the composer stats row; the same key the
-	// StatsPillsRow reads, and the companion event wakes its external store.
+	// stats-pills plugin reads, and the companion event wakes its external store.
 	const [statsMode, setStatsMode] = useState<"detailed" | "compact">(() => {
 		try {
 			return localStorage.getItem(STATS_MODE_KEY) === "compact" ? "compact" : "detailed";

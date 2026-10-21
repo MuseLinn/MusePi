@@ -36,7 +36,8 @@ export const selector = {
 	"selector.projectUnload": "项目卸载",
 	"selector.inheritedGlobal": "继承的全局配置",
 	"selector.inheritedGlobal2": " · 继承的全局配置",
-	"selector.x": "[x]",	"  Enter to save · Esc to cancel · Clear field to unset": "  Enter: 保存 · Esc: 取消 · 清空以取消设置",
+	"selector.x": "[x]",
+	"  Enter to save · Esc to cancel · Clear field to unset": "  Enter: 保存 · Esc: 取消 · 清空以取消设置",
 	"  Enter to select · Esc to go back": "  Enter: 选择 · Esc: 返回",
 	"Preview:": "预览:",
 	"Plan Review": "计划审查",
@@ -66,7 +67,6 @@ export const selector = {
 	"inherited global": "继承的全局配置",
 	" · inherited global": " · 继承的全局配置",
 	"[x]": "[x]",
-
 } as const;
 
 /** Key union for the selector domain (mirrors the guest-client locale split). */

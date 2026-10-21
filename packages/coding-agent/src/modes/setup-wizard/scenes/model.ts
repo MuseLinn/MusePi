@@ -57,10 +57,7 @@ class ModelSceneController implements SetupSceneController {
 	}
 
 	render(width: number, maxLines?: number): readonly string[] {
-		const lines = [
-			this.#status ?? theme.fg("muted", t("setup.typeSearchEnter.info")),
-			"",
-		];
+		const lines = [this.#status ?? theme.fg("muted", t("setup.typeSearchEnter.info")), ""];
 		const budget = maxLines === undefined ? MAX_VISIBLE_MODELS : maxLines - lines.length - BROWSER_FRAME_ROWS;
 		this.#browser.setMaxVisible(Math.max(1, Math.min(MAX_VISIBLE_MODELS, budget)));
 		this.#browserRowStart = lines.length;

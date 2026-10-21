@@ -46,17 +46,14 @@ export const setup = {
 	"setup.pickThemeNavigate.info": "选择主题。用方向键浏览预览。",
 	"setup.detectedAppearance": "检测到的外观",
 	"setup.shareAnonymousUsageData": "分享匿名使用数据？",
-	"setup.optingStoresTracking.info":
-		"选择加入会在 settings.json 中存储跟踪标识符，并启用匿名使用分析。",
+	"setup.optingStoresTracking.info": "选择加入会在 settings.json 中存储跟踪标识符，并启用匿名使用分析。",
 
 	// ── Setup wizard ───────────────────────────────────────
 	"setup.chooseGlyphMode": "选择字形模式",
 	"setup.pickRowRendersCleanly": "选择在终端中清晰显示的行。",
-	"setup.rowShowsBoxes.info":
-		"如果某行显示方框、乱码或对齐错误的图标，请选另一行。",
+	"setup.rowShowsBoxes.info": "如果某行显示方框、乱码或对齐错误的图标，请选另一行。",
 	"setup.setUpYourProviders": "设置您的提供商",
-	"setup.signPickWeb.info":
-		"登录并选择网络搜索提供商。完成后按 Esc 继续。",
+	"setup.signPickWeb.info": "登录并选择网络搜索提供商。完成后按 Esc 继续。",
 	"setup.chooseYourDefaultModel2": "选择默认模型",
 	"setup.searchConfiguredModelsSave": "搜索已配置的模型并保存新会话使用的模型。",
 	"setup.discoveringAvailableModels": "正在发现可用模型…",
@@ -74,7 +71,8 @@ export const setup = {
 	"setup.checkingAvailability": "正在检查可用性…",
 	"setup.handingOffNormalCli": "正在移交给正常 CLI…",
 	"setup.cmdClickOpen": "Cmd+点击打开",
-	"setup.ctrlClickOpen": "Ctrl+点击打开",	"Sign in": "登录",
+	"setup.ctrlClickOpen": "Ctrl+点击打开",
+	"Sign in": "登录",
 	"OMP-aligned coding agent": "MusePi 对齐的编码助手",
 	"Welcome! Let's get you set up in a few quick steps.": "欢迎！让我们快速完成设置。",
 	"Press any key to begin...": "按任意键开始...",
@@ -97,12 +95,15 @@ export const setup = {
 	"Pick a theme. Navigate with arrow keys to preview.": "选择主题。用方向键浏览预览。",
 	"Detected appearance": "检测到的外观",
 	"Share anonymous usage data?": "分享匿名使用数据？",
-	"Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics.": "Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics.",
+	"Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics.":
+		"Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics.",
 	"Choose glyph mode": "选择字形模式",
 	"Pick the row that renders cleanly in your terminal.": "选择在终端中清晰显示的行。",
-	"If a row shows boxes, tofu, or misaligned icons, pick another.": "If a row shows boxes, tofu, or misaligned icons, pick another.",
+	"If a row shows boxes, tofu, or misaligned icons, pick another.":
+		"If a row shows boxes, tofu, or misaligned icons, pick another.",
 	"Set up your providers": "设置您的提供商",
-	"Sign in and pick a web search provider. Press Esc when you're done.": "Sign in and pick a web search provider. Press Esc when you're done.",
+	"Sign in and pick a web search provider. Press Esc when you're done.":
+		"Sign in and pick a web search provider. Press Esc when you're done.",
 	"Choose your default model": "选择默认模型",
 	"Search configured models and save the model used for new sessions.": "搜索已配置的模型并保存新会话使用的模型。",
 	"Discovering available models…": "正在发现可用模型…",
@@ -121,7 +122,6 @@ export const setup = {
 	"Handing off to the normal CLI…": "正在移交给正常 CLI…",
 	"Cmd+click to open": "Cmd+点击打开",
 	"Ctrl+click to open": "Ctrl+点击打开",
-
 } as const;
 
 /** Key union for the setup domain (mirrors the guest-client locale split). */

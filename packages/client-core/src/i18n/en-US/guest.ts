@@ -82,7 +82,8 @@ export const guest = {
 	"guest.2BitWeightsFp16": "2-bit weights with fp16 activations",
 	"guest.1BitWeights": "1-bit weights",
 	"guest.1BitWeightsFp16": "1-bit weights with fp16 activations",
-	"guest.letTransformersJsChoose": "Let transformers.js choose per device",	"back to chat": "back to chat",
+	"guest.letTransformersJsChoose": "Let transformers.js choose per device",
+	"back to chat": "back to chat",
 	"load failed: {error}": "load failed: {error}",
 	"no boards yet": "no boards yet",
 	"no widgets yet": "no widgets yet",
@@ -147,5 +148,4 @@ export const guest = {
 	"1-bit weights": "1-bit weights",
 	"1-bit weights with fp16 activations": "1-bit weights with fp16 activations",
 	"Let transformers.js choose per device": "Let transformers.js choose per device",
-
 } as const satisfies Record<GuestKey, string>;

@@ -57,8 +57,8 @@ function collabLinkHint(
 	const webLink = view ? host.webViewLink : host.webLink;
 	const rows = [
 		theme.fg("success", heading),
-		` ${bullet} ${theme.fg("muted", view ? t("Watch from another terminal:") : t("Join from another terminal:"))} ${APP_NAME} join "${link}"`,
-		` ${bullet} ${theme.fg("muted", t("or any web browser:"))} ${collabWebLinkClickable(webLink)}`,
+		` ${bullet} ${theme.fg("muted", view ? t("commands.watchAnotherTerminal") : t("commands.joinAnotherTerminal"))} ${APP_NAME} join "${link}"`,
+		` ${bullet} ${theme.fg("muted", t("commands.anyWebBrowser"))} ${collabWebLinkClickable(webLink)}`,
 	];
 	for (const a of alt) {
 		rows.push(` ${bullet} ${theme.fg("muted", a.label)}: ${collabWebLinkClickable(a.webLink)}`);
@@ -66,14 +66,7 @@ function collabLinkHint(
 	if (certHint) {
 		rows.push(theme.fg("dim", certHint));
 	}
-	rows.push(
-		theme.fg(
-			"dim",
-			view
-				? t("Anyone with this link can watch the session but cannot prompt the agent.")
-				: t("Anyone with the link can read the session and prompt the agent. Read-only link: /collab view"),
-		),
-	);
+	rows.push(theme.fg("dim", view ? t("commands.anyoneLinkCan.info") : t("commands.anyoneLinkCan.info2")));
 	return rows.join("\n");
 }
 
@@ -81,7 +74,7 @@ function showCollabQrCode(ctx: InteractiveModeContext, webLink: string): void {
 	try {
 		ctx.present([new Spacer(1), new CollabQrCodeComponent(webLink)]);
 	} catch (err) {
-		ctx.showError(t("Failed to render collab QR code: {0}", errorMessage(err)));
+		ctx.showError(t("commands.failedRenderCollabWith0.info", errorMessage(err)));
 	}
 }
 
@@ -130,14 +123,14 @@ async function startLocalShare(
 		// EADDRINUSE from a previous share that never got torn down, or a
 		// missing cloudflared binary (both common setup mistakes).
 		const hint = /Failed to listen/i.test(message)
-			? t(" (port already in use — stop a previous collab session first)")
+			? t("commands.text")
 			: /is not installed/i.test(message)
-				? t(" (cloudflared is not installed — see the error above for install instructions)")
+				? t("commands.text2")
 				: "";
 		ctx.showError(
 			tunnelProvider
-				? t("Failed to start tunnel collab: {0}", message + hint)
-				: t("Failed to start LAN collab: {0}", message + hint),
+				? t("commands.failedStartTunnelCollabWith0", message + hint)
+				: t("commands.failedStartLanCollabWith0", message + hint),
 		);
 		return null;
 	}
@@ -162,7 +155,7 @@ function presentLanShare(ctx: InteractiveModeContext, started: LocalShareStart, 
 	const lanIp = findLanIpv4();
 	if (lanIp && transport.relay) {
 		const local = `http://localhost:${transport.relay.port}/#${host.link.split(lanIp).join("localhost")}`;
-		ctx.showStatus(`${t("On this machine, open:")} ${collabWebLinkClickable(local)}`, { dim: true });
+		ctx.showStatus(`${t("commands.machineOpen")} ${collabWebLinkClickable(local)}`, { dim: true });
 		const webLink = host.webLink;
 		// A tailnet serve URL carries a real Let's Encrypt cert — no browser
 		// warning — and supersedes the raw Tailscale IP link.
@@ -190,18 +183,18 @@ function presentLanShare(ctx: InteractiveModeContext, started: LocalShareStart, 
 				// whose manual DNS shadows Tailscale's split-DNS, so the 100.x
 				// direct link is the reliable fallback.
 				return {
-					label: isTailscaleIpv4(ip) ? t("Tailscale IP") : ip,
+					label: isTailscaleIpv4(ip) ? t("commands.tailscaleIp") : ip,
 					webLink: webLink.split(lanIp).join(ip),
 				};
 			});
 		if (serveWebLink) {
-			alt.unshift({ label: t("Tailscale (no cert warning)"), webLink: serveWebLink });
+			alt.unshift({ label: t("commands.tailscale"), webLink: serveWebLink });
 		}
 		// No-encryption fallback: plain http is a non-secure context (no
 		// crypto.subtle), so the guest degrades to plaintext frames — zero
 		// warning, zero E2E.
 		alt.push({
-			label: t("Plaintext http (no encryption)"),
+			label: t("commands.plaintextHttp"),
 			webLink: `http://${lanIp}:${transport.relay.port}/#${host.link}`,
 		});
 		// QR is scanned by phones: prefer the zero-warning serve link, else the
@@ -212,7 +205,7 @@ function presentLanShare(ctx: InteractiveModeContext, started: LocalShareStart, 
 		// in-page guidance can load. (Serve links end in .ts.net and carry a real
 		// Let's Encrypt cert — excluded.)
 		certHint = [webLink, ...alt.map(a => a.webLink)].some(isSelfSignedWebLink)
-			? t("First visit shows a self-signed certificate warning — click Advanced → Continue")
+			? t("commands.firstVisitShowsSelf")
 			: undefined;
 	}
 	showCollabLink(ctx, host, heading, false, alt, qrWebLink, certHint);
@@ -243,11 +236,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 		getTuiAutocompleteDescription: runtime => {
 			const stats = runtime.ctx.session.getAdvisorStats();
 			if (stats.active && stats.advisors.length > 1)
-				return statusLine("Advisor", `${t("on")} (${stats.advisors.length} ${t("advisors")})`);
+				return statusLine("Advisor", `${t("settings.on")} (${stats.advisors.length} ${t("settings.advisors")})`);
 			if (stats.active && stats.model)
-				return statusLine("Advisor", `${t("on")} (${stats.model.provider}/${stats.model.id})`);
-			if (stats.configured) return statusLine("Advisor", t("configured, no model"));
-			return statusLine("Advisor", t("off"));
+				return statusLine("Advisor", `${t("settings.on")} (${stats.model.provider}/${stats.model.id})`);
+			if (stats.configured) return statusLine("Advisor", t("commands.configuredNoModel"));
+			return statusLine("Advisor", t("settings.off"));
 		},
 
 		handle: async (command, runtime) => {
@@ -447,12 +440,12 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			if (runtime.ctx.collabHost) {
 				return statusLine(
 					"Collab",
-					`${t("hosting")} (${Math.max(0, runtime.ctx.collabHost.participants.length - 1)} ${t("guests")})`,
+					`${t("commands.hosting")} (${Math.max(0, runtime.ctx.collabHost.participants.length - 1)} ${t("commands.guests")})`,
 				);
 			}
-			if (runtime.ctx.collabGuest?.readOnly) return statusLine("Collab", t("read-only guest"));
-			if (runtime.ctx.collabGuest) return statusLine("Collab", t("guest"));
-			return statusLine("Collab", t("off"));
+			if (runtime.ctx.collabGuest?.readOnly) return statusLine("Collab", t("commands.readOnlyGuest"));
+			if (runtime.ctx.collabGuest) return statusLine("Collab", t("commands.guest"));
+			return statusLine("Collab", t("settings.off"));
 		},
 		handleTui: async (command, runtime) => {
 			const ctx = runtime.ctx;
@@ -461,11 +454,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			const { verb, rest } = parseSubcommand(args);
 			if (verb === "stop") {
 				if (!ctx.collabHost) {
-					ctx.showStatus(t("Not hosting a collab session"));
+					ctx.showStatus(t("commands.notHostingCollabSession"));
 					return;
 				}
 				await stopCollabSharing(ctx);
-				ctx.showStatus(t("Collab stopped"));
+				ctx.showStatus(t("commands.collabStopped"));
 				return;
 			}
 			if (verb === "status") {
@@ -473,20 +466,20 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 					const names = ctx.collabHost.participants.map(p =>
 						p.role === "host" ? `${p.name} (host)` : p.readOnly ? `${p.name} (view-only)` : p.name,
 					);
-					ctx.showStatus(t("Collab: {0} — {1}", names.join(", "), collabWebLinkClickable(ctx.collabHost.webLink)));
+					ctx.showStatus(
+						t("commands.collabWith0With1", names.join(", "), collabWebLinkClickable(ctx.collabHost.webLink)),
+					);
 				} else if (ctx.collabGuest) {
 					ctx.showStatus(
-						ctx.collabGuest.readOnly
-							? t("In a collab session as a read-only guest (/leave to exit)")
-							: t("In a collab session as a guest (/leave to exit)"),
+						ctx.collabGuest.readOnly ? t("commands.collabSessionReadOnly") : t("commands.collabSessionGuest"),
 					);
 				} else {
-					ctx.showStatus(t("Not in a collab session"));
+					ctx.showStatus(t("commands.notCollabSession"));
 				}
 				return;
 			}
 			if (ctx.collabGuest) {
-				ctx.showError(t("Already in a collab session as a guest (/leave first)"));
+				ctx.showError(t("commands.alreadyCollabSessionGuest"));
 				return;
 			}
 			if (verb === "workspace") {
@@ -558,11 +551,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				const port = parseInt(portArg ?? "", 10) || undefined;
 				if (isTunnel) {
 					const started = await startLocalShare(ctx, { port, tunnelProvider: provider });
-					if (started) showCollabLink(ctx, started.host, t("Collab session started (tunnel)!"), false);
+					if (started) showCollabLink(ctx, started.host, t("commands.collabSessionStarted"), false);
 					return;
 				}
 				const started = await startLocalShare(ctx, { port });
-				if (started) presentLanShare(ctx, started, t("Collab session started (LAN)!"));
+				if (started) presentLanShare(ctx, started, t("commands.collabSessionStarted2"));
 				return;
 			}
 			const knownStartVerb = verb === "start" || verb === "view";
@@ -571,7 +564,7 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				showCollabLink(
 					ctx,
 					ctx.collabHost,
-					view ? t("Read-only collab session active") : t("Collab session active"),
+					view ? t("commands.readOnlyCollabSession") : t("commands.collabSessionActive"),
 					view,
 				);
 				return;
@@ -579,9 +572,7 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			const explicitUrl = knownStartVerb ? rest : args;
 			const relayInput = explicitUrl || ctx.settings.get("collab.relayUrl") || "";
 			if (!relayInput) {
-				ctx.showError(
-					t("No relay configured. Set collab.relayUrl in /settings or pass one: /collab relay.example.com"),
-				);
+				ctx.showError(t("commands.noRelayConfigured.info"));
 				return;
 			}
 			// Scheme-less relay args default to wss (ws:// must be spelled out for localhost).
@@ -591,11 +582,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			try {
 				await host.start(relayUrl, webUrl);
 			} catch (err) {
-				ctx.showError(t("Failed to start collab session: {0}", errorMessage(err)));
+				ctx.showError(t("commands.failedStartCollabSessionWith0", errorMessage(err)));
 				return;
 			}
 			ctx.collabHost = host;
-			showCollabLink(ctx, host, t("Collab session started!"), view);
+			showCollabLink(ctx, host, t("commands.collabSessionStarted3"), view);
 		},
 	},
 	{
@@ -603,8 +594,8 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 		icon: "broadcast",
 		description: "Pair the MusePi mobile app with this machine (shows a QR to scan)",
 		getTuiAutocompleteDescription: runtime => {
-			if (runtime.ctx.collabHost) return statusLine("Pair", t("ready to scan"));
-			return statusLine("Pair", t("not sharing yet"));
+			if (runtime.ctx.collabHost) return statusLine("Pair", t("commands.readyScan"));
+			return statusLine("Pair", t("commands.notSharingYet"));
 		},
 		// Guests never reach this handler: the dispatcher keeps every command
 		// outside COLLAB_GUEST_ALLOWED_COMMANDS host-only, and pairing starts a
@@ -615,11 +606,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			// The app reaches this machine through a LAN share, so pairing implies
 			// one: reuse the running share, otherwise start it.
 			if (ctx.collabHost) {
-				showCollabLink(ctx, ctx.collabHost, t("Scan this QR with the MusePi app"), false);
+				showCollabLink(ctx, ctx.collabHost, t("commands.scanQrMusepiApp"), false);
 				return;
 			}
 			const started = await startLocalShare(ctx, {});
-			if (started) presentLanShare(ctx, started, t("Scan this QR with the MusePi app"));
+			if (started) presentLanShare(ctx, started, t("commands.scanQrMusepiApp"));
 		},
 	},
 	{
@@ -656,9 +647,9 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 		icon: "signOut",
 		description: "Leave the collab session",
 		getTuiAutocompleteDescription: runtime => {
-			if (runtime.ctx.collabHost) return statusLine("Leave collab", t("hosting"));
-			if (runtime.ctx.collabGuest) return statusLine("Leave collab", t("guest"));
-			return statusLine("Leave collab", t("not in collab"));
+			if (runtime.ctx.collabHost) return statusLine("Leave collab", t("commands.hosting"));
+			if (runtime.ctx.collabGuest) return statusLine("Leave collab", t("commands.guest"));
+			return statusLine("Leave collab", t("commands.notCollab"));
 		},
 		handleTui: async (_command, runtime) => {
 			const ctx = runtime.ctx;
@@ -671,10 +662,10 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				// Host leaving = stop sharing entirely: leaving the relay up would
 				// leak the LAN ports and break the next /collab lan.
 				await stopCollabSharing(ctx);
-				ctx.showStatus(t("Collab stopped"));
+				ctx.showStatus(t("commands.collabStopped"));
 				return;
 			}
-			ctx.showStatus(t("Not in a collab session"));
+			ctx.showStatus(t("commands.notCollabSession"));
 		},
 	},
 	{
@@ -688,10 +679,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 		],
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => {
-			if (!runtime.ctx.settings.get("browser.enabled" as SettingPath)) return statusLine("Browser", t("disabled"));
+			if (!runtime.ctx.settings.get("browser.enabled" as SettingPath))
+				return statusLine("Browser", t("commands.disabled"));
 			return runtime.ctx.settings.get("browser.headless" as SettingPath)
-				? statusLine("Browser", t("headless"))
-				: statusLine("Browser", t("visible"));
+				? statusLine("Browser", t("commands.headless"))
+				: statusLine("Browser", t("commands.visible"));
 		},
 
 		handle: async (command, runtime) => {

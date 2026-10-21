@@ -68,7 +68,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					</>
 				)}
 			</div>
-			{missing.length > 0 && <Note tone="warn">{t("tools.skippedMissingWithPath", { path: missing.join(", ") })}</Note>}
+			{missing.length > 0 && (
+				<Note tone="warn">{t("tools.skippedMissingWithPath", { path: missing.join(", ") })}</Note>
+			)}
 			{error !== null && !resultTextOf(result).trim() && <Note tone="err">{error}</Note>}
 			<ResultText result={result} maxLines={14} variant="code" />
 		</>

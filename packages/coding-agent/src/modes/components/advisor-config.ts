@@ -281,10 +281,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			value === "add"
 				? t("commands.createNewAdvisor.info")
 				: value === "scope"
-					? t(
-							"commands.switchBetweenProjectWith0.info",
-							this.#scope,
-						)
+					? t("commands.switchBetweenProjectWith0.info", this.#scope)
 					: value === "save"
 						? t("commands.writeScopeS.info")
 						: value === "close"
@@ -614,18 +611,16 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#dirty = true;
 			this.#showDetail(index);
 		};
-		this.#setScreen(
-			"tools",
-			list,
-			t("commands.enterClickToggle.info"),
-		);
+		this.#setScreen("tools", list, t("commands.enterClickToggle.info"));
 	}
 
 	/** `index === -1` edits the shared top-level instructions; otherwise advisor[index]. */
 	#showInstructionsEditor(index: number): void {
 		const shared = index < 0;
 		const current = shared ? this.#doc.instructions : this.#doc.advisors[index].instructions;
-		const title = shared ? t("commands.sharedAdvisorInstructions") : t("commands.instructionsWith0", this.#doc.advisors[index].name);
+		const title = shared
+			? t("commands.sharedAdvisorInstructions")
+			: t("commands.instructionsWith0", this.#doc.advisors[index].name);
 		const editor = new HookEditorComponent(
 			this.#tui,
 			title,

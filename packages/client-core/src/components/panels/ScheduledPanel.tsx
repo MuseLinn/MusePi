@@ -15,7 +15,15 @@ import { relTime } from "../../lib/format";
 
 const POLL_MS = 30_000;
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
-const WEEKDAY_KEYS = ["guest.sun", "guest.mon", "guest.tue", "guest.wed", "guest.thu", "guest.fri", "guest.sat"] as const;
+const WEEKDAY_KEYS = [
+	"guest.sun",
+	"guest.mon",
+	"guest.tue",
+	"guest.wed",
+	"guest.thu",
+	"guest.fri",
+	"guest.sat",
+] as const;
 
 interface ScheduledPanelProps {
 	client: SessionClient;

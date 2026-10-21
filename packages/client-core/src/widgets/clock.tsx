@@ -71,7 +71,9 @@ export function ClockCard({
 						>
 							<span className={`gui-widget-dot${st.open ? " gui-widget-dot--open" : ""}`} />
 							{label}
-							<span className="gui-widget-clock-state">{st.open ? t("settings.open") : t("settings.closed")}</span>
+							<span className="gui-widget-clock-state">
+								{st.open ? t("settings.open") : t("settings.closed")}
+							</span>
 						</button>
 					);
 				})}

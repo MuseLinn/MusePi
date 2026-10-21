@@ -47,7 +47,9 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 				? details.screenshotCount
 				: 0;
 	parts.push(
-		shotCount > 0 ? t("tools.computerScreenshotsWithCount", { count: String(shotCount) }) : t("tools.computerNoScreenshots"),
+		shotCount > 0
+			? t("tools.computerScreenshotsWithCount", { count: String(shotCount) })
+			: t("tools.computerNoScreenshots"),
 	);
 	const code = typeof args?.code === "string" ? args.code : typeof details?.code === "string" ? details.code : "";
 	return (

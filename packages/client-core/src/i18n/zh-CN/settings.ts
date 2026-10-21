@@ -1,8 +1,7 @@
 export const settings = {
 	// ── Memory + Files & LSP settings (schema-driven; keys = schema ui labels) ──
 	"settings.memory.general.backend": "记忆后端",
-	"settings.offLocalSummary.info":
-		"关闭、本地摘要管线、Mnemopi SQLite 或 Hindsight 远程记忆",
+	"settings.offLocalSummary.info": "关闭、本地摘要管线、Mnemopi SQLite 或 Hindsight 远程记忆",
 	"settings.general": "常规",
 	"settings.noMemorySubsystemRuns": "不运行任何记忆子系统",
 	"settings.localRolloutSummarisationPipeline": "本地滚动摘要管线（memory_summary.md）",
@@ -11,17 +10,14 @@ export const settings = {
 	"settings.mnemopi": "Mnemopi",
 	"settings.localSqliteRecallRetain": "本地 SQLite 回忆/保留后端（可选嵌入）",
 	"settings.memory.autoLearn.autoLearn": "自动学习（实验性）",
-	"settings.afterAgentStops.info":
-		"智能体停止后，提示它将经验写入记忆，并创建/增强隔离的托管技能",
+	"settings.afterAgentStops.info": "智能体停止后，提示它将经验写入记忆，并创建/增强隔离的托管技能",
 	"settings.autoLearn": "自动学习",
 	"settings.memory.autoLearn.autoRunCaptureStop": "停止时自动捕获",
-	"settings.autoRunOne.desc":
-		"开启后，停止时自动运行一次私有捕获回合（消耗额外 token）；关闭时仅保留常驻指引",
+	"settings.autoRunOne.desc": "开启后，停止时自动运行一次私有捕获回合（消耗额外 token）；关闭时仅保留常驻指引",
 	"settings.memory.mnemopi.dbPath": "Mnemopi 数据库路径",
 	"settings.optionalSqliteDb.info": "可选 SQLite 数据库路径，默认在智能体记忆目录",
 	"settings.memory.mnemopi.bank": "Mnemopi 记忆库",
-	"settings.optionalSharedBank.info":
-		"可选共享库基础名，按项目模式据此派生项目本地库",
+	"settings.optionalSharedBank.info": "可选共享库基础名，按项目模式据此派生项目本地库",
 	"settings.memory.mnemopi.scoping": "Mnemopi 作用域",
 	"settings.active": "活跃",
 	"settings.add": "添加",
@@ -34,8 +30,7 @@ export const settings = {
 	"settings.perProject": "按项目",
 	"settings.projectLocalMnemopiBank": "按 cwd 目录名建项目本地库",
 	"settings.perProject2": "按项目（带标签）",
-	"settings.writeProjectLocal.info":
-		"写入项目本地库，回忆时合并项目与共享结果",
+	"settings.writeProjectLocal.info": "写入项目本地库，回忆时合并项目与共享结果",
 	"settings.memory.mnemopi.embeddingVariant": "嵌入模型变体",
 	"settings.localEmbeddingModel.desc":
 		"本地嵌入模型家族；en=更强英文模型，multilingual=跨语言模型。更改后下次启动重建已有嵌入",
@@ -44,38 +39,31 @@ export const settings = {
 	"settings.multilingual": "多语言（multilingual-e5-large）",
 	"settings.instanceLabel": "实例名称",
 	"settings.instances": "实例",
-	"settings.intfloatMultilingualE5.info":
-		"intfloat/multilingual-e5-large（1024 维），跨语言回忆",
+	"settings.intfloatMultilingualE5.info": "intfloat/multilingual-e5-large（1024 维），跨语言回忆",
 	"settings.memory.mnemopi.autoRecall": "Mnemopi 自动回忆",
 	"settings.recallLocalMemoriesFirst": "每个会话首轮注入本地记忆",
 	"settings.memory.mnemopi.autoRetain": "Mnemopi 自动保留",
 	"settings.retainCompletedConversationTurns": "完成的对话回合写入本地 Mnemopi 记忆",
 	"settings.memory.mnemopi.polyphonicRecall": "Mnemopi 复调回忆",
-	"settings.enable4Voice.info":
-		"启用 4 路回忆（向量/图谱/事实/时序），倒数排名融合",
+	"settings.enable4Voice.info": "启用 4 路回忆（向量/图谱/事实/时序），倒数排名融合",
 	"settings.memory.mnemopi.enhancedRecall": "Mnemopi 增强回忆",
-	"settings.enableTieredQuery.info":
-		"为重复与相似回忆查询启用分层结果缓存",
+	"settings.enableTieredQuery.info": "为重复与相似回忆查询启用分层结果缓存",
 	"settings.memory.mnemopi.proactiveLinking": "Mnemopi 主动链接",
-	"settings.ingestNewMemories.info":
-		"存储新记忆时同步摄入情景图谱并链接相关实体与记忆",
+	"settings.ingestNewMemories.info": "存储新记忆时同步摄入情景图谱并链接相关实体与记忆",
 	"settings.memory.mnemopi.disableEmbeddings": "Mnemopi 禁用嵌入",
 	"settings.forceDeterministicFtsOnly": "强制仅用确定性全文检索回忆，不用向量嵌入",
 	"settings.memory.mnemopi.embeddingModel": "Mnemopi 嵌入模型",
-	"settings.advancedExplicitEmbedding.info":
-		"高级：显式嵌入模型 ID 覆盖变体；留空则用 mnemopi.embeddingVariant",
+	"settings.advancedExplicitEmbedding.info": "高级：显式嵌入模型 ID 覆盖变体；留空则用 mnemopi.embeddingVariant",
 	"settings.memory.mnemopi.embeddingApiUrl": "Mnemopi 嵌入 API URL",
 	"settings.optionalOpenaiCompatibleEmbedding": "可选 OpenAI 兼容嵌入端点，传给 Mnemopi",
 	"settings.memory.mnemopi.embeddingApiKey": "Mnemopi 嵌入 API 密钥",
 	"settings.optionalEmbeddingApiKey": "可选嵌入 API 密钥，传给 Mnemopi",
 	"settings.memory.mnemopi.llmMode": "Mnemopi LLM 模式",
-	"settings.useNoLlm.info":
-		"不使用 LLM、用在线微小模型（/models 的 TINY 角色，否则 @smol）、或远程 OpenAI 兼容端点",
+	"settings.useNoLlm.info": "不使用 LLM、用在线微小模型（/models 的 TINY 角色，否则 @smol）、或远程 OpenAI 兼容端点",
 	"settings.none": "无",
 	"settings.disableMnemopiLlmBacked": "禁用 Mnemopi 基于 LLM 的抽取",
 	"settings.online": "在线（微小）",
-	"settings.useOnlineTinyModel":
-		"使用在线微小模型（/models 的 TINY 角色，否则 @smol）",
+	"settings.useOnlineTinyModel": "使用在线微小模型（/models 的 TINY 角色，否则 @smol）",
 	"settings.remote": "远程",
 	"settings.useMnemopiRemoteLlm": "使用下方 Mnemopi 远程 LLM 设置",
 	"settings.memory.mnemopi.llmBaseUrl": "Mnemopi LLM 基础 URL",
@@ -94,17 +82,14 @@ export const settings = {
 	"settings.globalOneShared.desc2":
 		"global=单一共享库；per-project=每个 cwd 独立库；per-project-tagged=共享库+项目标签，回忆时全局与项目记忆合并",
 	"settings.oneSharedBankEvery": "单一共享库——所有项目看到相同记忆",
-	"settings.isolatedBankPer.info":
-		"按 cwd 目录名隔离——项目间看不到对方记忆",
-	"settings.sharedBankRetains.info":
-		"共享库，保留内容带 project:<cwd> 标签；回忆时项目与未打标签的全局记忆一起出现",
+	"settings.isolatedBankPer.info": "按 cwd 目录名隔离——项目间看不到对方记忆",
+	"settings.sharedBankRetains.info": "共享库，保留内容带 project:<cwd> 标签；回忆时项目与未打标签的全局记忆一起出现",
 	"settings.memory.hindsight.autoRecall": "Hindsight 自动回忆",
 	"settings.recallMemoriesFirstTurn": "每个会话首轮回忆记忆",
 	"settings.memory.hindsight.autoRetain": "Hindsight 自动保留",
 	"settings.retainTranscriptEveryN": "每 N 轮及会话边界保留转录",
 	"settings.memory.hindsight.retainMode": "Hindsight 保留模式",
-	"settings.fullSessionUpsert.info":
-		"full-session=每会话 upsert 单文档；last-turn=分块",
+	"settings.fullSessionUpsert.info": "full-session=每会话 upsert 单文档；last-turn=分块",
 	"settings.fullSession": "完整会话",
 	"settings.upsertOneDocumentPer": "每会话 upsert 单文档（推荐）",
 	"settings.lastTurn": "最后回合",
@@ -116,8 +101,7 @@ export const settings = {
 	"settings.sessionStartCreate.desc":
 		"会话开始时创建库中缺失的内置心智模型（project-conventions、project-decisions、user-preferences）",
 	"settings.files.editing.editMode": "编辑模式",
-	"settings.selectEditToolVariant":
-		"选择 edit 工具变体（replace、patch、hashline 或 apply_patch）",
+	"settings.selectEditToolVariant": "选择 edit 工具变体（replace、patch、hashline 或 apply_patch）",
 	"settings.editing": "编辑",
 	"settings.files.editing.fuzzyMatch": "模糊匹配",
 	"settings.acceptHighConfidenceFuzzy": "接受空白差异的高置信模糊匹配",
@@ -130,22 +114,18 @@ export const settings = {
 	"settings.files.editing.abortFailedPreview": "预览失败中止",
 	"settings.abortStreamingEditTool": "补丁预览失败时中止流式 edit 调用",
 	"settings.files.editing.blockAutoGenerated": "阻止自动生成文件",
-	"settings.preventEditingFiles.info":
-		"阻止编辑疑似自动生成的文件（protoc、sqlc、swagger 等）",
+	"settings.preventEditingFiles.info": "阻止编辑疑似自动生成的文件（protoc、sqlc、swagger 等）",
 	"settings.files.editing.enforceSeenLineGuard": "强制已见行保护",
-	"settings.rejectEditsAnchored.info":
-		"拒绝锚定在先前 read/search 未完整显示的行上的编辑",
+	"settings.rejectEditsAnchored.info": "拒绝锚定在先前 read/search 未完整显示的行上的编辑",
 	"settings.lineNumbers": "行号",
 	"settings.prependLineNumbersRead": "read 输出默认带行号",
 	"settings.reading": "读取",
 	"settings.files.reading.defaultReadLimit": "默认读取上限",
 	"settings.defaultNumberLines.info": "智能体无限制调用 read 时默认返回的行数",
 	"settings.files.reading.markdownPreviews": "Markdown 预览",
-	"settings.renderMarkdownRead.info":
-		"将 Markdown 读取结果渲染为格式化预览，而非原始源码",
+	"settings.renderMarkdownRead.info": "将 Markdown 读取结果渲染为格式化预览，而非原始源码",
 	"settings.files.readSummaries.readSummaries": "读取摘要",
-	"settings.returnStructuralCode.info":
-		"read 未指定选择器时返回结构化代码摘要",
+	"settings.returnStructuralCode.info": "read 未指定选择器时返回结构化代码摘要",
 	"settings.files.readSummaries.proseSummaries": "散文摘要",
 	"settings.returnStructuralSummariesMarkdown": "对 Markdown 与纯文本读取返回结构化摘要",
 	"settings.files.readSummaries.readSummaryBodyLines": "摘要正文行数",
@@ -153,26 +133,19 @@ export const settings = {
 	"settings.files.readSummaries.readSummaryCommentLines": "摘要注释行数",
 	"settings.minimumMultilineBlockComment": "多行块注释超过该长度时摘要折叠",
 	"settings.files.readSummaries.readSummaryMinimumFile": "摘要最小文件长度",
-	"settings.filesFewerTotal.info":
-		"总行数更少的文件原样读取，不做结构化摘要",
+	"settings.filesFewerTotal.info": "总行数更少的文件原样读取，不做结构化摘要",
 	"settings.files.readSummaries.readSummaryUnfoldTarget": "摘要展开目标",
-	"settings.bfsUnfoldElidable.info":
-		"BFS 展开可省略片段直到达到该可见行数；0 只保留最外层省略",
+	"settings.bfsUnfoldElidable.info": "BFS 展开可省略片段直到达到该可见行数；0 只保留最外层省略",
 	"settings.files.readSummaries.readSummaryUnfoldCeiling": "摘要展开上限",
-	"settings.hardCeilingSummary.desc":
-		"BFS 展开时摘要大小硬上限；展开会超过的片段跳过（保持折叠），继续展开其余",
+	"settings.hardCeilingSummary.desc": "BFS 展开时摘要大小硬上限；展开会超过的片段跳过（保持折叠），继续展开其余",
 	"settings.files.reading.inlineReadPreviews": "内联读取预览",
-	"settings.renderReadTool.info":
-		"在转录中内联渲染 read 结果，而非摘要行",
+	"settings.renderReadTool.info": "在转录中内联渲染 read 结果，而非摘要行",
 	"settings.files.lsp.lsp": "LSP",
-	"settings.enableLspTool.info":
-		"启用 lsp 工具进行代码智能（定义、引用、诊断、重命名）",
+	"settings.enableLspTool.info": "启用 lsp 工具进行代码智能（定义、引用、诊断、重命名）",
 	"settings.files.lsp.lazyStartup": "LSP 懒启动",
-	"settings.startLanguageServersFirst":
-		"首次使用时才启动语言服务器，而非会话启动时",
+	"settings.startLanguageServersFirst": "首次使用时才启动语言服务器，而非会话启动时",
 	"settings.files.lsp.sharedLanguageServers": "共享语言服务器",
-	"settings.shareOneLanguage.desc":
-		"通过 daemon 代理在多个实例间共享每项目语言服务器（不可用时回退私有）",
+	"settings.shareOneLanguage.desc": "通过 daemon 代理在多个实例间共享每项目语言服务器（不可用时回退私有）",
 	"settings.files.lsp.formatWrite": "写入时格式化",
 	"settings.automaticallyFormatCodeFiles": "写入后用 LSP 自动格式化代码文件",
 	"settings.files.lsp.diagnosticsWrite": "写入时诊断",
@@ -180,23 +153,19 @@ export const settings = {
 	"settings.files.lsp.diagnosticsEdit": "编辑时诊断",
 	"settings.returnLspDiagnosticsAfterEditingCode": "编辑代码文件后返回 LSP 诊断",
 	"settings.files.lsp.deduplicateDiagnostics": "诊断去重",
-	"settings.suppressPostEdit.info":
-		"抑制已显示过的文件编辑后诊断，只呈现新增或变化的",
+	"settings.suppressPostEdit.info": "抑制已显示过的文件编辑后诊断，只呈现新增或变化的",
 	"settings.memory.general.model": "记忆模型",
 	"settings.mnemopiLlmFact.desc":
 		"事实抽取与合并用的 Mnemopi LLM：默认在线（/models 的 TINY 角色，否则 smol/远程），或本地设备端模型",
 	"settings.online2": "在线（TINY 角色，否则 @smol）",
-	"settings.useOnlineModel.desc":
-		"使用在线模型：设置了 TINY 角色则用之，否则 @smol；不下载本地模型",
+	"settings.useOnlineModel.desc": "使用在线模型：设置了 TINY 角色则用之，否则 @smol；不下载本地模型",
 	"settings.qwen317b": "Qwen3 1.7B",
 	"settings.disabledLocalInference.info":
 		"本地推理不可用：onnxruntime-node 无法运行此 ONNX 导出的 RotaryEmbedding 缓存更新",
 	"settings.llama323b": "Llama 3.2 3B",
-	"settings.largerLlama3.info":
-		"较大的 Llama 3.2 选项，质量潜力更高，磁盘/内存/延迟成本更大",
+	"settings.largerLlama3.info": "较大的 Llama 3.2 选项，质量潜力更高，磁盘/内存/延迟成本更大",
 	"settings.gemma31b": "Gemma 3 1B",
-	"settings.bestConsolidationDedup.info":
-		"合并/去重最佳；占用轻，但抽取时会混入闲谈",
+	"settings.bestConsolidationDedup.info": "合并/去重最佳；占用轻，但抽取时会混入闲谈",
 	"settings.qwen2515b": "Qwen2.5 1.5B",
 	"settings.bestExtractionGranularityWeaker": "抽取粒度最佳（原子事实）；合并较弱",
 	"settings.lfm212b": "LFM2 1.2B",
@@ -310,13 +279,10 @@ export const settings = {
 	"settings.packageManager": "包管理器",
 	"settings.whichPackageRegistry.desc":
 		"插件从哪个包源安装。自动：先问官方源，遇到「换源可能有救」的失败再试公开镜像；自定义：使用下方地址；包管理器：完全交给包管理器自己的配置（.npmrc / bunfig.toml）。",
-	"settings.askOfficialRegistry.info":
-		"先问官方源，遇到「换源可能有救」的失败再试公开镜像",
+	"settings.askOfficialRegistry.info": "先问官方源，遇到「换源可能有救」的失败再试公开镜像",
 	"settings.alwaysUseUrlConfigured": "始终使用下方配置的地址",
-	"settings.useWhateverPackage.info":
-		"使用包管理器自己的配置（.npmrc / bunfig.toml）",
-	"settings.registryUrlUsed.info":
-		"安装源设为「自定义」时使用的源地址。下次安装插件时生效。",
+	"settings.useWhateverPackage.info": "使用包管理器自己的配置（.npmrc / bunfig.toml）",
+	"settings.registryUrlUsed.info": "安装源设为「自定义」时使用的源地址。下次安装插件时生效。",
 	"settings.subAgents": "子智能体",
 	"settings.mcpServers": "MCP 服务器",
 	"settings.commands": "命令",
@@ -454,8 +420,7 @@ export const settings = {
 	'share session "{title}" live on the local network': "在局域网内实时共享当前会话「{title}」，手机扫码即可加入。",
 	"settings.openCreateSessionFirst": "请先打开或新建一个会话，再开始共享。",
 	"settings.publicTunnel": "公网隧道",
-	"settings.publicTunnelAnyone.info":
-		"公网隧道 — 任何人拿到链接都能加入；停止共享即关闭。",
+	"settings.publicTunnelAnyone.info": "公网隧道 — 任何人拿到链接都能加入；停止共享即关闭。",
 	"settings.useBotChannel": "使用 Bot Channel",
 	"settings.connectChatBotLonger": "连接聊天 Bot，适合更长时间的移动端访问。",
 	"settings.openWorkspaceWithName": "从 {name} 打开这个工作区。",
@@ -478,7 +443,8 @@ export const settings = {
 	"settings.later": "稍后",
 	"settings.voiceSetupTitle": "使用语音输入前需要安装",
 	"settings.voiceSetupDesc": "首次语音输入需要下载识别模型（{model}，约 {size}）。下载完成前语音输入不可用。",
-	"settings.voiceSetupNote": "模型保存在本机、无需重复下载；下载时长取决于网络（通常 1–10 分钟），期间可继续使用其他功能。",
+	"settings.voiceSetupNote":
+		"模型保存在本机、无需重复下载；下载时长取决于网络（通常 1–10 分钟），期间可继续使用其他功能。",
 	"settings.voiceSetupInstall": "前往安装",
 	"settings.voiceSetupPreparing": "正在准备下载…",
 	"settings.voiceSetupDownloadFailed": "模型下载失败，请检查网络后重试",
@@ -516,8 +482,7 @@ export const settings = {
 	"settings.soundEffects": "音效",
 	"settings.motionEffects": "动效",
 	"settings.effects": "效果",
-	"settings.toolNeedsDaemonBackend":
-		"该工具需要守护进程后端支持，将在桌面版发布时提供。",
+	"settings.toolNeedsDaemonBackend": "该工具需要守护进程后端支持，将在桌面版发布时提供。",
 	"settings.browser": "浏览器与 Computer Use",
 	"settings.projectNotes": "项目笔记",
 	"settings.workspaceChanges": "工作区更改",
@@ -547,11 +512,9 @@ export const settings = {
 	"settings.interaction.speech.rate": "语速（0.5–2）",
 	"settings.playbackRateLocal.info": "本地 TTS 的播放速率——朗读常用 0.8×。",
 	"settings.interaction.speech.readContent": "朗读内容",
-	"settings.howAssistantReply.info":
-		"合成语音前如何处理助手回复：原文、净化（去除代码/Markdown）或摘要。",
+	"settings.howAssistantReply.info": "合成语音前如何处理助手回复：原文、净化（去除代码/Markdown）或摘要。",
 	"settings.interaction.speech.dictationBarge": "听写打断播放",
-	"settings.whatHappensPlayback.info":
-		"开始听写时对正在播放的语音如何处理：压低音量或暂停。",
+	"settings.whatHappensPlayback.info": "开始听写时对正在播放的语音如何处理：压低音量或暂停。",
 	"settings.terminal": "终端",
 	"settings.files": "文件",
 	"settings.edit": "编辑",
@@ -671,7 +634,8 @@ export const settings = {
 	"settings.previewStatusbarModel": "GLM-5.3-Flash",
 	"settings.previewStatusbarContext": "12.4K / 200K",
 	"settings.workspaceMemory": "工作区记忆",
-	"settings.workspaceMemoryDescription": "在工作区中保存并复用长期上下文，新会话生效。开启后可能增加模型调用和 Token 成本。",
+	"settings.workspaceMemoryDescription":
+		"在工作区中保存并复用长期上下文，新会话生效。开启后可能增加模型调用和 Token 成本。",
 	"settings.memoriesCount": "{count} 条记忆",
 	"settings.searchMemoryFiles": "搜索记忆文件...",
 	"settings.memoryFiles": "文件",
@@ -1055,7 +1019,8 @@ export const settings = {
 	"settings.noScheduledTasks": "暂无定时任务",
 	"settings.boardSaved": "已保存",
 	"settings.boardGenerate": "AI 生成组件",
-	"settings.boardGeneratePlaceholder": "描述你想要的小组件，生成后直接放进当前看板（如：美股大盘仪表盘、系统资源监控）…",
+	"settings.boardGeneratePlaceholder":
+		"描述你想要的小组件，生成后直接放进当前看板（如：美股大盘仪表盘、系统资源监控）…",
 	"settings.boardGenerating": "生成中…",
 	"settings.boardGenerated": "已生成 {count} 个组件",
 	"settings.boardGenerateFail": "生成失败：{error}",
@@ -1082,7 +1047,8 @@ export const settings = {
 	"settings.widgetsExpanded": "widget 卡片默认展开",
 	"settings.widgetsExpandedDescription": "聊天中的可视化卡片默认展开显示（可折叠节省空间）",
 	"settings.widgetStandalone": "widget 独立展示",
-	"settings.widgetStandaloneDescription": "可视化组件以独立卡片展示在对话消息流中（类似文件预览卡片），工具调用处默认折叠",
+	"settings.widgetStandaloneDescription":
+		"可视化组件以独立卡片展示在对话消息流中（类似文件预览卡片），工具调用处默认折叠",
 	"settings.widgetFullscreen": "全屏查看",
 	"settings.widgetPreview": "组件预览",
 	"settings.widgetActions": "组件操作",
@@ -1340,14 +1306,14 @@ export const settings = {
 	"settings.invalidExpiredPairCode": "配对码无效或已过期",
 	"settings.invalidPairResponse": "配对响应无效",
 	"settings.cannotReachComputerSame": "无法连接电脑 — 是否在同一 Wi-Fi？",
-	"settings.noAddressShown.info":
-		"看不到电脑地址？改用公网隧道分享，直接扫码链接",
+	"settings.noAddressShown.info": "看不到电脑地址？改用公网隧道分享，直接扫码链接",
 	"settings.offlineShowingCached.info": "离线 — 已显示缓存内容，连接需要网络",
 	"settings.noChannelsConfigured": "尚未配置渠道",
 	"settings.start": "启动",
 	"settings.unlink": "解绑",
 	"settings.configureChannel": "配置渠道凭据",
-	"settings.unlinkChannelConfirm": "解绑会断开连接并清除该渠道已保存的登录凭证，下次启用需要重新扫码或配置。确定解绑？",
+	"settings.unlinkChannelConfirm":
+		"解绑会断开连接并清除该渠道已保存的登录凭证，下次启用需要重新扫码或配置。确定解绑？",
 	"settings.saveStart": "保存并启动",
 	"settings.channelPlugins": "渠道插件",
 	"settings.reloadPlugins": "重载插件",
@@ -1374,7 +1340,8 @@ export const settings = {
 	"settings.localContainer": "本地容器",
 	"settings.dockerComingSoon": "即将推出",
 	"settings.comingSoon": "即将推出",
-	"settings.usageStatisticsDescription": "跨会话的模型用量与成本统计（与终端 `musepi stats` 同源，由本机会话文件聚合）",
+	"settings.usageStatisticsDescription":
+		"跨会话的模型用量与成本统计（与终端 `musepi stats` 同源，由本机会话文件聚合）",
 	"settings.statsSync": "同步会话数据",
 	"settings.statsSyncDescription": "增量扫描全部历史会话（已同步的文件自动跳过）后刷新统计",
 	"settings.syncing": "同步中…",
@@ -1411,10 +1378,12 @@ export const settings = {
 	"settings.messageSearch": "历史消息搜索",
 	"settings.sessionHistory": "历史会话",
 	"settings.dataMigration": "数据迁移",
-	"settings.sessionHistoryDescription": "浏览全部历史会话的消息内容；搜索框可跨会话查找并定位到命中消息，点击右上角打开会话",
+	"settings.sessionHistoryDescription":
+		"浏览全部历史会话的消息内容；搜索框可跨会话查找并定位到命中消息，点击右上角打开会话",
 	"settings.noMessages": "该会话暂无消息",
 	"settings.searchMessagesPlaceholder": "搜索历史消息（至少 2 个字符）…",
-	"settings.hooksDescription": "工具执行前/后的钩子脚本（pre/post hooks）——与其他扩展一样来自扩展目录，可在此启用或禁用",
+	"settings.hooksDescription":
+		"工具执行前/后的钩子脚本（pre/post hooks）——与其他扩展一样来自扩展目录，可在此启用或禁用",
 	"settings.noHooks": "未发现钩子脚本",
 	"settings.onboardingBadge": "首次启动设置",
 	"settings.onboardingTitle": "欢迎使用 MusePi",
@@ -1454,7 +1423,8 @@ export const settings = {
 	"settings.onboardingFeatT2": "外观主题、字体、密度与玻璃效果",
 	"settings.onboardingFeatT3": "伙伴桌宠与技能扩展",
 	"settings.onboardingFeatT4": "定时任务、快捷键与通知",
-	"settings.onboardingStep6": "连接你的模型供应商：内置服务商一键授权，或添加任意 OpenAI 兼容接口。配置完即可开始对话。",
+	"settings.onboardingStep6":
+		"连接你的模型供应商：内置服务商一键授权，或添加任意 OpenAI 兼容接口。配置完即可开始对话。",
 	"settings.accentBrand": "品牌",
 	"settings.accentMono": "单色",
 	"settings.accentOcean": "海洋",
@@ -1573,8 +1543,10 @@ export const settings = {
 	"settings.rowActions": "消息操作按钮",
 	"settings.rowActionsDescription": "编辑 / 重试 / 引用 / 朗读",
 	"settings.smoothStreaming": "流式渲染",
-	"settings.onboardingStep7": "个性化你的体验：选择 Agent 头像样式、消息流式输出动效与桌面伙伴主题，随时可在设置中更改。",
-	"settings.onboardingStep8": "从其他 Agent 导入会话 — 选择 omp/pi/opencode/grok/kimi/claude/codex 的会话，导入到 MusePi。",
+	"settings.onboardingStep7":
+		"个性化你的体验：选择 Agent 头像样式、消息流式输出动效与桌面伙伴主题，随时可在设置中更改。",
+	"settings.onboardingStep8":
+		"从其他 Agent 导入会话 — 选择 omp/pi/opencode/grok/kimi/claude/codex 的会话，导入到 MusePi。",
 	"settings.petTheme": "伙伴主题",
 	"settings.petDisplayMode": "桌宠显示位置",
 	"settings.petModeInput": "输入框挂靠",
@@ -1584,7 +1556,8 @@ export const settings = {
 	"settings.messageFontSize": "消息字号",
 	"settings.messageFontSizeDescription": "调整聊天消息正文的字号，标题与代码随之缩放；独立于界面字体大小。",
 	"settings.outputStyle": "输出风格",
-	"settings.outputStyleDescription": "预设回复内容的排版与节奏（行距、段落间距、代码块密度）——字号由「消息字号」设置决定",
+	"settings.outputStyleDescription":
+		"预设回复内容的排版与节奏（行距、段落间距、代码块密度）——字号由「消息字号」设置决定",
 	"settings.outputStyleDefault": "MusePi 默认",
 	"settings.outputStyleKimi": "Kimi 紧凑",
 	"settings.outputStyleZcode": "ZCode 阅读",
@@ -1614,8 +1587,7 @@ export const settings = {
 	"settings.idleRecap": "空闲回顾",
 	"settings.interaction.notifications.idleRecap": "空闲回顾",
 	"settings.interaction.notifications.idleRecapDelay": "空闲回顾延迟",
-	"settings.generateBriefLlm.info":
-		"会话空闲一段时间后，生成简短的状态回顾",
+	"settings.generateBriefLlm.info": "会话空闲一段时间后，生成简短的状态回顾",
 	"settings.secondsWaitWhileIdle": "空闲多少秒后生成回顾",
 	"settings.idleRecapDelayOption": "{count} 分钟",
 	"settings.notificationEvents": "通知事件",
@@ -1665,14 +1637,12 @@ export const settings = {
 	"settings.appearance.display.hideToolActivity": "隐藏工具活动",
 	"settings.display": "显示",
 	"settings.appearance.display.resizeScrollback": "重整历史滚动区",
-	"settings.howSettledTerminal.info":
-		"终端窗口大小改变并稳定后，如何刷新仍留在终端滚动区里的对话内容",
+	"settings.howSettledTerminal.info": "终端窗口大小改变并稳定后，如何刷新仍留在终端滚动区里的对话内容",
 	"settings.appearance.display.renderMermaidDiagrams": "渲染 Mermaid 图表",
 	"settings.renderMermaidFenced.desc":
 		"把 Mermaid 代码块渲染成 ASCII 图（终端界面）。桌面端对话按自己的图表设置渲染成 SVG",
 	"settings.appearance.display.streamingRendering": "流式渲染",
-	"settings.revealAssistantTextStreamed":
-		"内容分块到达时平滑显示助手文字与流式工具输入",
+	"settings.revealAssistantTextStreamed": "内容分块到达时平滑显示助手文字与流式工具输入",
 	"settings.runningTurnDetail": "运行中回合显示多少",
 	"settings.howMuchRunning.desc":
 		"运行中的回合保留多少内容在视野里。默认「全部显示」会画每一行；选一个数字则只保留最近 N 行，更早的折成「⋯ 还有 N 行」，长任务时画面更稳。跑完的回合无论这里选什么都不受影响，照旧折进活动摘要行",
@@ -1748,95 +1718,70 @@ export const settings = {
 		'将模型角色、模型选择器（"provider/model-id"）或提供商通配符（"provider/*"）映射到有序回退选择器的 JSON 对象，例如 {"default":["openai/gpt-4o-mini"],"google-antigravity/*":["google/*","google-vertex/*"]}。模型维度键在对应模型/提供商激活时生效，与角色无关；"provider/*" 条目保留失败模型的 id 并更换提供商；带 id 前缀的通配符（"openrouter/google/*"）重写失败模型的裸 id（google-antigravity/gemini-x -> openrouter/google/gemini-x），用作键时仅匹配该前缀下该提供商的 id。',
 	"settings.classifyPromptDifficulty.desc":
 		"使用 TINY 角色模型（在 /models 中配置）或 @smol 在线分类提示难度；无需本地下载或端侧推理。",
-	"settings.whisperBaseMultilingual.info":
-		"Whisper base，多语言。最小最快；准确率最低。适合低配机器。",
-	"settings.whisperSmallMultilingual.info":
-		"Whisper small，多语言。比 Fast 更准确，CPU/内存占用仍低。",
-	"settings.whisperLargeV3.info":
-		"Whisper large-v3-turbo，99 种语言。语言覆盖最广；下载量大，速度较慢。",
+	"settings.whisperBaseMultilingual.info": "Whisper base，多语言。最小最快；准确率最低。适合低配机器。",
+	"settings.whisperSmallMultilingual.info": "Whisper small，多语言。比 Fast 更准确，CPU/内存占用仍低。",
+	"settings.whisperLargeV3.info": "Whisper large-v3-turbo，99 种语言。语言覆盖最广；下载量大，速度较慢。",
 	"settings.nvidiaParakeetTdt.desc":
 		"NVIDIA Parakeet TDT 0.6B v3，25 种语言。Open ASR 榜单领先——准确率最高且解码最快。默认。",
 	"settings.neverAutomaticallySubmit.info": "绝不自动提交；插入听写文本并停留在编辑器中。",
-	"settings.submitReleaseUtterance.info":
-		"若语句含 2 个以上单词，松开时提交，避免误发。",
-	"settings.submitReleaseUtterance.info2":
-		"若语句以句末标点（. ? ! 等）结尾，松开时提交。",
-	"settings.submitUtteranceEndsWord":
-		"若语句以包含 'submit' 的单词结尾则提交（提交前会去除该单词）。",
-	"settings.enableScriptableHost.info":
-		"启用可脚本化的主机桌面控制工具（截图、输入、辅助功能）",
+	"settings.submitReleaseUtterance.info": "若语句含 2 个以上单词，松开时提交，避免误发。",
+	"settings.submitReleaseUtterance.info2": "若语句以句末标点（. ? ! 等）结尾，松开时提交。",
+	"settings.submitUtteranceEndsWord": "若语句以包含 'submit' 的单词结尾则提交（提交前会去除该单词）。",
+	"settings.enableScriptableHost.info": "启用可脚本化的主机桌面控制工具（截图、输入、辅助功能）",
 	"settings.whileComputerTool.desc":
 		"当 computer 工具操作主机桌面时，在显示器上显示全屏辉光边缘、状态徽标和每次操作的目标高亮，让你始终看到智能体在做什么",
-	"settings.enableMusepiNative.info":
-		"启用 MusePi 原生安全扫描规划与执行，以及只读的 security:// 资源命名空间",
+	"settings.enableMusepiNative.info": "启用 MusePi 原生安全扫描规划与执行，以及只读的 security:// 资源命名空间",
 	"settings.driveYourOwn.desc":
 		"通过 musepi 浏览器中继驱动你自己的 Chrome 标签页。扩展只需安装一次（`musepi browser-relay install`）；浏览器工具需要时中继服务器会自动启动。优先于 Browser CDP URL；可设置 PI_BROWSER_RELAY=0 或 PI_BROWSER_RELAY=1 覆盖。",
-	"settings.musepiBrowserRelayEndpoint":
-		"musepi 浏览器中继端点（默认 http://127.0.0.1:9224）。",
+	"settings.musepiBrowserRelayEndpoint": "musepi 浏览器中继端点（默认 http://127.0.0.1:9224）。",
 	"settings.mountRarelyUsed.desc":
 		"将少用（可发现）工具挂载到 xd:// 设备 URL，通过 read/write 驱动，而非在每次请求时携带其 schema。未授予 write 工具的会话跳过挂载并顶层暴露所有工具。禁用后所有已启用工具均顶层暴露。",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		'子智能体的隔离后端。"auto" 让原生 PAL 选择最佳可用后端（CoW 文件系统，其次 overlayfs/ProjFS，再其次 git worktree / 递归复制回退）。',
 	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
 		'每个提供商 id（例如 "openai" 或 "anthropic"）的最大并发 LLM 请求数，在该配置根目录下的本地 MusePi 进程间共享。未列出的提供商不设限。',
-	"settings.hardTimeoutEach.desc":
-		"web_search 推进到下一个回退前，每个提供商搜索通道的硬超时（秒，最大 300）",
+	"settings.hardTimeoutEach.desc": "web_search 推进到下一个回退前，每个提供商搜索通道的硬超时（秒，最大 300）",
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
 		'Fireworks 请求的服务路径。Priority 在高流量期间发送 `service_tier: "priority"` 以获得更高可靠性，价格更高；Standard 省略该项。Fast（`-fast`）模型忽略此项——Fast 本身就是独立服务路径。',
-	"settings.usesAuthConfigured.info":
-		"配置了认证时使用认证；显式选择回退到匿名搜索",
+	"settings.usesAuthConfigured.info": "配置了认证时使用认证；显式选择回退到匿名搜索",
 	"settings.googleSearchGroundingVia":
 		"通过 Gemini 进行 Google 搜索 grounding（使用 google-gemini-cli 或 google-antigravity OAuth）",
-	"settings.claudeSNativeWeb":
-		"Claude 原生 web_search 工具（使用 Anthropic OAuth 或 ANTHROPIC_API_KEY）",
-	"settings.openaiSNativeWeb":
-		"OpenAI 原生 web_search（通过 /login openai-codex 使用 ChatGPT OAuth）",
+	"settings.claudeSNativeWeb": "Claude 原生 web_search 工具（使用 Anthropic OAuth 或 ANTHROPIC_API_KEY）",
+	"settings.openaiSNativeWeb": "OpenAI 原生 web_search（通过 /login openai-codex 使用 ChatGPT OAuth）",
 	"settings.grokWebSearch.info":
 		"通过 xAI Responses API 的 Grok 网络搜索（通过 /login xai-oauth 使用 SuperGrok/X Premium+ OAuth，或 XAI_API_KEY）",
 	"settings.callsZAiWebsearchprime": "调用 Z.AI webSearchPrime MCP",
-	"settings.apiViaLogin.info":
-		"通过 /login exa 或 EXA_API_KEY 使用 API；显式无密钥回退走 MCP",
+	"settings.apiViaLogin.info": "通过 /login exa 或 EXA_API_KEY 使用 API；显式无密钥回退走 MCP",
 	"settings.requiresTinyfishApiKey": "需要 TINYFISH_API_KEY",
 	"settings.requiresJinaApiKey": "需要 JINA_API_KEY",
 	"settings.requiresKagiApiKey": "需要 KAGI_API_KEY 与 Kagi Search API 测试版权限",
 	"settings.requiresTavilyApiKey": "需要 TAVILY_API_KEY",
-	"settings.usesFirecrawlApi.info":
-		"设置 FIRECRAWL_API_KEY 时使用 Firecrawl API；否则回退到无密钥模式",
+	"settings.usesFirecrawlApi.info": "设置 FIRECRAWL_API_KEY 时使用 Firecrawl API；否则回退到无密钥模式",
 	"settings.requiresBraveApiKey": "需要 BRAVE_API_KEY",
 	"settings.kimiCodeSearch":
 		"Kimi Code 搜索（需要 Kimi Code 控制台密钥，经 KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY 或 /login kimi-code；不是 MOONSHOT_API_KEY）",
 	"settings.requiresSyntheticApiKey": "需要 SYNTHETIC_API_KEY",
 	"settings.requiresSearxngEndpointSearxng": "需要 SEARXNG_ENDPOINT 或 searxng.endpoint",
-	"settings.credentialFreeScrape.info":
-		"无凭证抓取 Startpage（Google 支持）结果；可能遭遇机器人校验",
-	"settings.credentialFreeBest.info":
-		"无凭证尽力回退；数据中心/共享出口 IP 上可能遭遇机器人校验",
-	"settings.credentialFreeBrowserBacked":
-		"无凭证浏览器抓取 Ecosia（Google 支持）结果",
-	"settings.credentialFreeBrowser.info":
-		"无凭证浏览器回退；较慢且可能遭遇机器人校验",
+	"settings.credentialFreeScrape.info": "无凭证抓取 Startpage（Google 支持）结果；可能遭遇机器人校验",
+	"settings.credentialFreeBest.info": "无凭证尽力回退；数据中心/共享出口 IP 上可能遭遇机器人校验",
+	"settings.credentialFreeBrowserBacked": "无凭证浏览器抓取 Ecosia（Google 支持）结果",
+	"settings.credentialFreeBrowser.info": "无凭证浏览器回退；较慢且可能遭遇机器人校验",
 	"settings.credentialFreeBrowserBackedScrapeMojeek": "无凭证浏览器抓取 Mojeek 独立索引",
-	"settings.queriesEveryCredentialFree":
-		"并行查询所有无凭证引擎并合并去重结果",
+	"settings.queriesEveryCredentialFree": "并行查询所有无凭证引擎并合并去重结果",
 	"settings.requiresAgnesApiKey": "需要 AGNES_API_KEY",
 	"settings.requiresAgnesGlobalApi": "需要 AGNES_GLOBAL_API_KEY",
-	"settings.openaiApiKey.info":
-		"OPENAI_API_KEY（gpt-image-2）或激活的 GPT 模型；回退到已连接的 Codex 订阅",
-	"settings.usesConnectedCodexChatgpt":
-		"使用已连接的 Codex / ChatGPT 订阅——无需 OPENAI_API_KEY",
+	"settings.openaiApiKey.info": "OPENAI_API_KEY（gpt-image-2）或激活的 GPT 模型；回退到已连接的 Codex 订阅",
+	"settings.usesConnectedCodexChatgpt": "使用已连接的 Codex / ChatGPT 订阅——无需 OPENAI_API_KEY",
 	"settings.requiresGoogleAntigravityOauth": "需要 google-antigravity OAuth",
 	"settings.requiresXaiGrokOauth": "需要 xAI Grok OAuth 或 XAI_API_KEY",
 	"settings.requiresGeminiApiKey": "需要 GEMINI_API_KEY",
 	"settings.requiresOpenrouterApiKey": "需要 OPENROUTER_API_KEY",
-	"settings.kokoro82mNeural.info":
-		"Kokoro-82M 神经 TTS——端侧 SoTA 音质，多音色，完全本地",
+	"settings.kokoro82mNeural.info": "Kokoro-82M 神经 TTS——端侧 SoTA 音质，多音色，完全本地",
 	"settings.onlineTitleGeneration.desc":
 		"在线标题生成：已分配时使用 TINY 模型角色（在 /models 中配置），否则使用在线回退（commit 角色，然后 @smol）。无需本地下载或端侧推理。",
-	"settings.recommendedLocalModel.info":
-		"推荐的本地模型；速度/质量平衡最佳，缓存约 212 MB。",
+	"settings.recommendedLocalModel.info": "推荐的本地模型；速度/质量平衡最佳，缓存约 212 MB。",
 	"settings.mostRobustLocal.info": "最稳的本地选项；首次加载较慢，缓存约 500 MB。",
-	"settings.smallestViableLocal.info":
-		"最小的可用本地选项；质量较低，缓存占用最小。",
+	"settings.smallestViableLocal.info": "最小的可用本地选项；质量较低，缓存占用最小。",
 	"settings.balancedLocalFallback.info": "均衡的本地回退；质量与缓存占用适中。",
 	"settings.highestQualityLocal.info": "最高质量本地选项；比 LFM2 350M 更大更慢。",
 	"settings.spendSavedCodex.desc":
@@ -1850,7 +1795,8 @@ export const settings = {
 	"settings.enableExaWebSearch": "启用 Exa 网络搜索提供商",
 	// ── 插件安装（spec 安装：包名 / git / 压缩包 / 本地路径）──
 	"settings.pluginInstallTitle": "安装插件",
-	"settings.pluginInstallHint": "填入包名、git 地址、压缩包链接或本机绝对路径。安装完成后会检查此插件能否在当前环境运行。",
+	"settings.pluginInstallHint":
+		"填入包名、git 地址、压缩包链接或本机绝对路径。安装完成后会检查此插件能否在当前环境运行。",
 	"settings.pluginInstallPlaceholder": "包名、git 地址、.tgz 链接或绝对路径",
 	"settings.pluginInstallStart": "安装",
 	"settings.pluginInstallCancel": "取消安装",
@@ -1957,11 +1903,9 @@ export const settings = {
 	"settings.700kTokens": "700K token",
 	"settings.8Tasks": "8 个任务",
 	"settings.800kTokens": "800K token",
-	"settings.8x13Glyphs11x16.info":
-		"8x13 字形，11x16 单元格——额外字距以免字符重叠。Anthropic 的默认值。",
+	"settings.8x13Glyphs11x16.info": "8x13 字形，11x16 单元格——额外字距以免字符重叠。Anthropic 的默认值。",
 	"settings.8x13Glyphs8x16.info": "8x13 字形，8x16 单元格（额外行距），黑色墨水。",
-	"settings.8x13Glyphs8x22.info":
-		"8x13 字形，8x22 单元格——额外行距以免行拥挤。OpenAI/Google 的默认值。",
+	"settings.8x13Glyphs8x22.info": "8x13 字形，8x22 单元格——额外行距以免行拥挤。OpenAI/Google 的默认值。",
 	"settings.8x1311pxAdvanceBlack": "8x13 11px 字距，黑色",
 	"settings.8x1316pxPitchBlack": "8x13 16px 间距，黑色",
 	"settings.8x1322pxPitchBlack": "8x13 22px 行距，黑色",
@@ -1981,8 +1925,7 @@ export const settings = {
 	"settings.advisorSubagents": "子代理顾问",
 	"settings.model.advisor.immuneTurns": "顾问免疫轮次",
 	"settings.model.advisor.syncBacklog": "顾问同步积压",
-	"settings.afterAdvisorConcern.desc":
-		"当顾问关注或阻塞中断后，在此数量的主轮次中以非中断方式路由后续关注/阻塞。",
+	"settings.afterAdvisorConcern.desc": "当顾问关注或阻塞中断后，在此数量的主轮次中以非中断方式路由后续关注/阻塞。",
 	"settings.agent2": "智能体",
 	"settings.tasks.subagents.agentIdleTtl": "Agent 空闲 TTL",
 	"settings.aggressiveContextUsage": "激进上下文使用",
@@ -1996,17 +1939,12 @@ export const settings = {
 	"settings.allowRetryRecoverySwitch": "允许重试恢复切换到配置的备用模型",
 	"settings.allowSubagentsSpawned.desc":
 		"允许通过 task 工具生成的子代理使用 lsp 工具。默认关闭以节省开销；当 LSP 感知的委托值得额外消耗时再开启。",
-	"settings.allowEvalTool.info":
-		"允许 eval 工具将 JavaScript 单元分派到进程内运行时",
-	"settings.allowEvalTool.info2":
-		"允许 eval 工具将 Julia 单元分派到持久 Julia 内核",
-	"settings.allowEvalTool.info3":
-		"允许 eval 工具将 Python 单元分派到 IPython 内核",
-	"settings.allowEvalTool.info4":
-		"允许 eval 工具将 Ruby 单元分派到持久 Ruby 内核",
+	"settings.allowEvalTool.info": "允许 eval 工具将 JavaScript 单元分派到进程内运行时",
+	"settings.allowEvalTool.info2": "允许 eval 工具将 Julia 单元分派到持久 Julia 内核",
+	"settings.allowEvalTool.info3": "允许 eval 工具将 Python 单元分派到 IPython 内核",
+	"settings.allowEvalTool.info4": "允许 eval 工具将 Ruby 单元分派到持久 Ruby 内核",
 	"settings.allowReadToolFetch": "允许 read 工具获取和处理 URL",
-	"settings.alsoBlockAll.info":
-		"同时在 AC 电源下阻止系统休眠并声明用户活跃状态（caffeinate -i -d -s -u）",
+	"settings.alsoBlockAll.info": "同时在 AC 电源下阻止系统休眠并声明用户活跃状态（caffeinate -i -d -s -u）",
 	"settings.alsoEnableAdvisorSpawned": "也在生成的任务/eval 子代理上启用顾问。",
 	"settings.alsoKeepDisplayIdle": "同时阻止显示器空闲休眠（caffeinate -i -d）",
 	"settings.always": "总是",
@@ -2021,15 +1959,12 @@ export const settings = {
 	"settings.animationStyleWorkingLoading": "工作/加载消息的动画样式",
 	"settings.model.retryFallback.anthropicServerSideFallback": "Anthropic 服务端备用方案（Fable 5）",
 	"settings.providers.services.antigravityEndpointMode": "反重力端点模式",
-	"settings.apiFormatKimiCode":
-		"Kimi Code 提供商的 API 格式（自动遵循实时模型元数据）",
+	"settings.apiFormatKimiCode": "Kimi Code 提供商的 API 格式（自动遵循实时模型元数据）",
 	"settings.providers.protocol.appendOnlyContext": "仅追加上下文",
 	"settings.tasks.isolation.applyIsolatedChanges": "应用隔离变更",
-	"settings.applyLoopGuard.info":
-		"除思考日志外，对助手文本消息也应用循环防护",
+	"settings.applyLoopGuard.info": "除思考日志外，对助手文本消息也应用循环防护",
 	"settings.approvals2": "审批",
-	"settings.archiveHistoryOnto.info":
-		"将历史归档为模型可读的密集位图图像；无需 LLM 调用",
+	"settings.archiveHistoryOnto.info": "将历史归档为模型可读的密集位图图像；无需 LLM 调用",
 	"settings.armPrewalkBundled.desc":
 		"为捆绑的通用 `task` 子代理启用 prewalk：它以其解析后的模型启动，规划并开始实现，然后在首次编辑/写入时切换到 'smol' 角色。每代理覆盖（task.agentPrewalk，在 /agents 中用 P 切换）和用户代理 `prewalk` frontmatter 无论此开关状态均适用。",
 	"settings.artifactHeadSize": "Artifact 头部大小（KB）",
@@ -2038,8 +1973,7 @@ export const settings = {
 	"settings.tools.outputLimits.artifactTailSize": "Artifact 尾部大小（KB）",
 	"settings.tools.availableTools.ask": "询问",
 	"settings.interaction.notifications.askNotification": "询问通知",
-	"settings.askAgentDescribe.info":
-		"要求 Agent 在执行每个工具调用前描述其意图",
+	"settings.askAgentDescribe.info": "要求 Agent 在执行每个工具调用前描述其意图",
 	"settings.interaction.notifications.askTimeout": "询问超时",
 	"settings.assistantMessages": "助手消息",
 	"settings.tools.availableTools.astEdit": "AST 编辑",
@@ -2052,12 +1986,9 @@ export const settings = {
 	"settings.interaction.startupUpdates.autoResume": "自动恢复",
 	"settings.model.thinking.autoCeiling": "自动思考上限",
 	"settings.model.thinking.auto": "自动思考模型",
-	"settings.autoApproveRead.info":
-		"自动批准只读和写入工具；对 bash、eval、browser 和 task 等执行工具要求确认。",
-	"settings.autoApproveRead.info2":
-		"自动批准只读工具；对写入和执行工具要求确认。",
-	"settings.autoApproveRead.info3":
-		"自动批准读取、写入和执行工具。用户策略仍可能要求确认或阻止调用。",
+	"settings.autoApproveRead.info": "自动批准只读和写入工具；对 bash、eval、browser 和 task 等执行工具要求确认。",
+	"settings.autoApproveRead.info2": "自动批准只读工具；对写入和执行工具要求确认。",
+	"settings.autoApproveRead.info3": "自动批准读取、写入和执行工具。用户策略仍可能要求确认或阻止调用。",
 	"settings.context.compaction.autoCompact": "自动压缩",
 	"settings.autoFallback": "自动备用",
 	"settings.autoInstallsViaUv": "通过 uv/pip 自动安装",
@@ -2065,21 +1996,18 @@ export const settings = {
 		"自动将仓库的 direnv/devenv `.envrc` 加载到 bash Session 中，使 devenv 工具和环境变量无需手动执行 `direnv exec` 即可使用。遵循 direnv 允许列表：未经 `direnv allow` 的 `.envrc` 永远不会被执行",
 	"settings.context.general.autoPromote": "自动提升上下文",
 	"settings.appearance.images.autoResize": "自动调整图片大小",
-	"settings.autoSelectRecommendedAsk":
-		"经过这么多秒后自动选择推荐的询问选项（0 表示禁用）",
+	"settings.autoSelectRecommendedAsk": "经过这么多秒后自动选择推荐的询问选项（0 表示禁用）",
 	"settings.autocompleteItems": "自动完成条数",
 	"settings.automatedToolIssue.desc":
 		"自动化工具问题报告（xd://report_issue）。默认开启；首次报告会请求同意，拒绝后将禁用报告直至显式重新启用。",
 	"settings.automaticallyApplySuccessful.info":
 		"自动将成功的隔离任务变更应用到父级 checkout；禁用以保留 patch 或分支产物",
-	"settings.automaticallyBackgroundLongRunning":
-		"自动将长时间运行的 bash 命令置于后台运行，稍后返回结果",
+	"settings.automaticallyBackgroundLongRunning": "自动将长时间运行的 bash 命令置于后台运行，稍后返回结果",
 	"settings.automaticallyCompactContextGets": "上下文过大时自动压缩",
 	"settings.automaticallyEnterPlanMode": "在每个新 Session 开始时自动进入 plan 模式",
 	"settings.automaticallyResumeMostRecent": "自动恢复当前目录中的最近会话",
 	"settings.availableTools": "可用工具",
-	"settings.backendTtsTool.info":
-		"tts 工具的后端：本地设备端神经 TTS（Kokoro-82M）或 xAI Grok Voice",
+	"settings.backendTtsTool.info": "tts 工具的后端：本地设备端神经 TTS（Kokoro-82M）或 xAI Grok Voice",
 	"settings.balanceBrevityDetail": "平衡简洁与详细（默认）",
 	"settings.balanced2": "均衡（Whisper small）",
 	"settings.balancedSafetyMargin": "平衡安全边距",
@@ -2111,23 +2039,20 @@ export const settings = {
 	"settings.catalogOnly": "仅目录",
 	"settings.celebrateUnscheduledCodex.desc":
 		"在每周使用量重置和新存入的已保存重置时，以顶部三分之一烟花覆盖层庆祝，该层持续至按下 Escape",
-	"settings.checkEligibilityThen.info":
-		"检查资格，然后在花费第一个已保存的重置前询问。",
+	"settings.checkEligibilityThen.info": "检查资格，然后在花费第一个已保存的重置前询问。",
 	"settings.checkOmpUpdatesStartup": "启动时检查 omp 更新",
 	"settings.checkPluginUpdatesStartup": "启动时检查插件更新",
 	"settings.interaction.startupUpdates.checkUpdates": "检查更新",
 	"settings.checkStartupAutoInstall": "启动时检查并自动安装更新",
 	"settings.checkStartupNotifyUpdates": "启动时检查并在有更新时通知",
-	"settings.checkThresholdsSafe.info":
-		"在下一次 provider 请求前，在安全的轮中工具循环边界检查阈值",
+	"settings.checkThresholdsSafe.info": "在下一次 provider 请求前，在安全的轮中工具循环边界检查阈值",
 	"settings.tools.availableTools.checkpointRewind": "检查点/回退",
 	"settings.cherryPickedHighQuality": "精选的高质量提供商（仅针对特定模型定义）",
 	"settings.choosePlaceContext.desc":
 		"选择原地上下文满维护、自动交接、手术式抖动（丢弃重内容）、snapcompact（将历史记录存档为密集图像），或禁用自动维护（关闭）",
 	"settings.chooseSpeechDictation.desc":
 		"选择语音听写何时自动提交：从不、释放（2+ 词）、完整句子时释放，或当我说的提交时。",
-	"settings.chooseWhetherUpdate.info":
-		"选择更新说明是默认显示为摘要、完整详情还是保持隐藏",
+	"settings.chooseWhetherUpdate.info": "选择更新说明是默认显示为摘要、完整详情还是保持隐藏",
 	"settings.chooseWhichMounted.desc":
 		"选择哪些挂载设备文档和 schema 会内联到系统提示中。Built-ins 将核心工具内联，而 MCP 和扩展工具按需获取。",
 	"settings.classic": "经典",
@@ -2149,8 +2074,7 @@ export const settings = {
 	"settings.taskCardStyle": "任务卡样式",
 	"settings.taskSwarmCard.desc":
 		"task/swarm 卡片渲染样式：MusePi Swarm 显示成员网格（TUI 盲文进度条 / GUI 悬浮头像网格卡）；MusePi 原版（Classic）仅保留原生工具调用卡",
-	"settings.memberGridPer.info":
-		"成员网格：每个智能体的盲文进度条（TUI）与头像+进度悬浮卡（GUI）",
+	"settings.memberGridPer.info": "成员网格：每个智能体的盲文进度条（TUI）与头像+进度悬浮卡（GUI）",
 	"settings.plainToolCallCard": "仅普通工具调用卡，无 swarm 成员网格",
 	"settings.musepiSwarm": "MusePi Swarm",
 	"settings.musepiOriginal": "MusePi 原版 (Classic)",
@@ -2158,8 +2082,7 @@ export const settings = {
 	"settings.colorBlindMode": "色盲模式",
 	"settings.combineDiffsGitApply": "合并差异并使用 git apply",
 	"settings.commandsSkills": "命令与技能",
-	"settings.commitMessageStyleNested":
-		"嵌套仓库变更的提交信息风格（generic 或 AI-generated）",
+	"settings.commitMessageStyleNested": "嵌套仓库变更的提交信息风格（generic 或 AI-generated）",
 	"settings.commitPerTask.info": "每个任务提交一次，使用 --no-ff 合并",
 	"settings.communicationStyleRenderedSystem": "渲染到系统提示个性块中的沟通风格",
 	"settings.compact": "紧凑",
@@ -2172,15 +2095,13 @@ export const settings = {
 	"settings.compactionTokenLimit": "压缩 Token 限制",
 	"settings.interaction.notifications.completionNotification": "完成通知",
 	"settings.compositeAllDisplaysSelect": "合成所有显示器，或选择原生显示器 ID",
-	"settings.compressVerboseShell.info":
-		"在将冗长的 shell 输出返回给 Agent 前进行压缩（git、npm、cargo 等）",
+	"settings.compressVerboseShell.info": "在将冗长的 shell 输出返回给 Agent 前进行压缩（git、npm、cargo 等）",
 	"settings.tools.availableTools.computer": "电脑",
 	"settings.tools.computer.display": "计算机显示器",
 	"settings.tools.computer.screenshotHeight": "计算机截图高度",
 	"settings.tools.computer.screenshotWidth": "计算机截图宽度",
 	"settings.confirmInteractively": "交互式确认",
-	"settings.consecutiveIdenticalToolCalls":
-		"注入纠正引导前所需的连续相同工具调用次数",
+	"settings.consecutiveIdenticalToolCalls": "注入纠正引导前所需的连续相同工具调用次数",
 	"settings.contextFull": "上下文已满",
 	"settings.controlsHowTools.desc":
 		"控制工具如何暴露给模型。Auto 使用 provider 原生工具调用，除非所选模型被标记为不支持，此时回退到 GLM 自有方言。Native 强制使用 provider 原生工具；其他值强制使用指定自有方言。在会话开始时应用。",
@@ -2190,8 +2111,7 @@ export const settings = {
 	"settings.tools.todos.createAutomatically": "自动创建待办",
 	"settings.custom": "自定义",
 	"settings.appearance.theme.dark": "深色主题",
-	"settings.debounceWindowMilliseconds.info":
-		"将 MCP 资源更新注入对话之前的防抖窗口（毫秒）",
+	"settings.debounceWindowMilliseconds.info": "将 MCP 资源更新注入对话之前的防抖窗口（毫秒）",
 	"settings.debugAlreadyRunning": "已在运行",
 	"settings.debugCacheEmpty": "产物缓存为空。",
 	"settings.debugCacheStats": "{count} 个文件 · {size} · 最早 {date}",
@@ -2246,21 +2166,17 @@ export const settings = {
 	"settings.defaultFilterModeOpening": "打开会话树时的默认筛选模式",
 	"settings.defaultHttpCdp.desc":
 		"默认 HTTP CDP 发现端点（例如 http://127.0.0.1:9222），用于附加而非启动浏览器。工具调用中显式的 app.cdp_url 或 app.path 优先。",
-	"settings.defaultRoutingVariantSuffix":
-		"附加到 OpenRouter 模型 ID 的默认路由变体后缀（当选择器已命名变体时被覆盖）",
+	"settings.defaultRoutingVariantSuffix": "附加到 OpenRouter 模型 ID 的默认路由变体后缀（当选择器已命名变体时被覆盖）",
 	"settings.defaultServingPath": "默认服务路径（无 service_tier）",
-	"settings.defaultTimeoutHub.info":
-		"hub 消息等待（以及 send await:true）的默认超时时间（毫秒）；0 表示禁用超时",
+	"settings.defaultTimeoutHub.info": "hub 消息等待（以及 send await:true）的默认超时时间（毫秒）；0 表示禁用超时",
 	"settings.default125kTokens": "默认；约 12.5K token",
 	"settings.default25kTokens": "默认；约 2.5K token",
 	"settings.default5kTokens": "默认；约 5K token",
 	"settings.default2": "默认。",
-	"settings.delayBeforeCompleted.info":
-		"已完成或已放弃的待办事项从待办部件中移除前的延迟",
+	"settings.delayBeforeCompleted.info": "已完成或已放弃的待办事项从待办部件中移除前的延迟",
 	"settings.densestCellSentenceHue": "最密单元格，句子色调墨水。",
 	"settings.model.vision.describeImagesTextModels": "为文本模型描述图片",
-	"settings.detectConsecutiveIdentical.info":
-		"检测跨轮次的连续相同工具调用并注入纠正引导",
+	"settings.detectConsecutiveIdentical.info": "检测跨轮次的连续相同工具调用并注入纠正引导",
 	"settings.detectUnexpectedStops": "检测意外停止",
 	"settings.developer": "开发者",
 	"settings.difficultyClassifierAuto.desc":
@@ -2271,8 +2187,7 @@ export const settings = {
 	"settings.shell.bash.direnvAutoLoad": "direnv 自动加载",
 	"settings.shell.bash.direnvLoadTimeout": "direnv 加载超时（毫秒）",
 	"settings.disableAppendOnlyContext": "禁用仅追加上下文",
-	"settings.disableAutomaticContextMaintenance":
-		"禁用自动上下文维护（行为与关闭自动压缩相同）",
+	"settings.disableAutomaticContextMaintenance": "禁用自动上下文维护（行为与关闭自动压缩相同）",
 	"settings.disableFirstEventTimeout": "禁用首个事件超时",
 	"settings.disableIdleTimeout": "禁用空闲超时",
 	"settings.disableWebsocketsOpenaiCodex": "为 OpenAI Codex 模型禁用 websockets",
@@ -2282,8 +2197,7 @@ export const settings = {
 	"settings.discoveryMcp": "发现与 MCP",
 	"settings.displayHookStatusMessages": "在状态栏下方显示钩子状态消息",
 	"settings.interaction.collab.displayName": "显示名称",
-	"settings.displayActualModel.info":
-		"在任务部件状态栏中显示每个子代理实际使用的模型 ID",
+	"settings.displayActualModel.info": "在任务部件状态栏中显示每个子代理实际使用的模型 ID",
 	"settings.doNotPreventAny": "不阻止任何休眠",
 	"settings.doNotRunSaved": "不运行 saved-reset 自动兑换检查。",
 	"settings.doNotShowRelease": "启动时不显示版本说明",
@@ -2294,27 +2208,22 @@ export const settings = {
 	"settings.donTCheckPlugin": "不检查插件更新",
 	"settings.double": "双击",
 	"settings.doubleEscapeAction": "双击 Esc 行为",
-	"settings.dropHeavyContent.info":
-		"原地丢弃重内容（工具结果 + 大块内容）；通过产物恢复",
+	"settings.dropHeavyContent.info": "原地丢弃重内容（工具结果 + 大块内容）；通过产物恢复",
 	"settings.earlyMaintenance": "早期维护",
 	"settings.earlyProtection": "早期保护",
 	"settings.context.compaction.elideUneventfulResults": "省略无事件结果",
-	"settings.embeddedSilverTruetype.info":
-		"嵌入的 Silver TrueType 字体，16px 网格，用于 CJK 及其他非拉丁文本。",
-	"settings.emitOsc9.info":
-		"在 agent 或上下文维护运行时发出 OSC 9;4 不确定进度指示",
+	"settings.embeddedSilverTruetype.info": "嵌入的 Silver TrueType 字体，16px 网格，用于 CJK 及其他非拉丁文本。",
+	"settings.emitOsc9.info": "在 agent 或上下文维护运行时发出 OSC 9;4 不确定进度指示",
 	"settings.emojiAutocomplete": "Emoji 自动补全",
 	"settings.model.advisor.enable": "启用顾问",
 	"settings.enableAsyncBashCommands": "启用异步 bash 命令和后台任务执行",
 	"settings.enableAutomaticStreamLoop": "为模型推理和文本启用自动流式循环检测",
 	"settings.enableKnownPrefixCache": "为已知前缀缓存提供商启用（推荐）",
 	"settings.interaction.git.enableIntegration": "启用 Git 集成",
-	"settings.enableHiddenNotices.info":
-		"为独立的 ultrathink、orchestrate 和 workflowz 关键字启用隐藏通知",
+	"settings.enableHiddenNotices.info": "为独立的 ultrathink、orchestrate 和 workflowz 关键字启用隐藏通知",
 	"settings.enableOpenrouterSWeb": "启用 OpenRouter 的网络搜索插件",
 	"settings.enablePerSessionGoal": "启用每会话目标模式和隐藏的目标工具",
-	"settings.enablePlanModeRead":
-		"启用 plan 模式以在执行前进行只读探索和规划",
+	"settings.enablePlanModeRead": "启用 plan 模式以在执行前进行只读探索和规划",
 	"settings.model.prewalk.enable": "启用预走",
 	"settings.enableSpeechTextInput": "通过麦克风启用语音转文字输入",
 	"settings.enableAgnesVideoGen": "启用 agnes_video_gen 工具，用于 Agnes AI 视频生成",
@@ -2322,8 +2231,7 @@ export const settings = {
 	"settings.enableAstEditTool": "启用 ast_edit 工具进行结构化 AST 重写",
 	"settings.enableAstGrepTool": "启用 ast_grep 工具进行结构化 AST 搜索",
 	"settings.enableBashToolShell": "启用 bash 工具执行 shell 命令",
-	"settings.enableBrowserToolScripted":
-		"启用 browser 工具以进行脚本化 Chromium 自动化（puppeteer）",
+	"settings.enableBrowserToolScripted": "启用 browser 工具以进行脚本化 Chromium 自动化（puppeteer）",
 	"settings.enableCheckpointRewindTools": "启用 checkpoint 和 rewind 工具以进行上下文快照",
 	"settings.enableDebugToolDap": "启用 debug 工具进行基于 DAP 的调试",
 	"settings.enableGenerateImage.info":
@@ -2332,18 +2240,15 @@ export const settings = {
 		"启用 github 工具（基于 op 的分发，支持仓库、issue、pull request、diff、search、checkout、push 及 Actions watch 工作流）",
 	"settings.enableGlobToolGlob": "启用 glob 工具进行基于 glob 的文件查找",
 	"settings.enableGrepToolRegex": "启用 grep 工具进行正则表达式内容搜索",
-	"settings.enableLaunchToolSupervising":
-		"启用 launch 工具以监督共享的长期运行项目进程",
+	"settings.enableLaunchToolSupervising": "启用 launch 工具以监督共享的长期运行项目进程",
 	"settings.enableTodoToolTask": "启用 todo 工具进行任务跟踪",
-	"settings.enableTtsTool.info":
-		"启用 tts 工具，用于设备端（Kokoro）或 xAI Grok Voice 语音文件合成",
+	"settings.enableTtsTool.info": "启用 tts 工具，用于设备端（Kokoro）或 xAI Grok Voice 语音文件合成",
 	"settings.enableVaultInternal.desc":
 		"启用 vault:// 内部 URL，通过 Obsidian CLI 读写 Obsidian vault 内容。禁用时，将拒绝 vault:// 解析，且 vault:// 条目会从系统提示中省略。",
 	"settings.enableWebSearchTool": "启用 web_search 工具获取实时网络结果",
 	"settings.encourageNovelty": "鼓励创新",
 	"settings.encryptedBlob": "加密数据块",
-	"settings.endpointRoutingStrategy.info":
-		"google-antigravity 提供商的端点路由策略（chat、search、image、discovery）",
+	"settings.endpointRoutingStrategy.info": "google-antigravity 提供商的端点路由策略（chat、search、image、discovery）",
 	"settings.providers.services.enhancedSpeechRewriting": "增强语音重写",
 	"settings.eraseReplayTerminal.desc":
 		"当块的最终形式替换其实时预览时，擦除并重放终端滚动历史。关闭时（默认），过时的预览副本保留在历史中，最终内容追加在下方。",
@@ -2358,8 +2263,7 @@ export const settings = {
 		"实验性：将大型历史工具结果渲染为密集 PNG 图像而非文本（仅视觉模型）。节省累积读/搜索输出的 token。",
 	"settings.experimentalRenderSelected.desc":
 		"实验性：将选定的系统提示文本渲染为密集 PNG 图像并附加到第一条用户消息（仅视觉模型）。节省 token；图像文本失去提示缓存。",
-	"settings.exposeOptionalEffort.info":
-		"在 task 生成时公开可选的 effort 参数，允许调用方覆盖每个子代理的思考层级",
+	"settings.exposeOptionalEffort.info": "在 task 生成时公开可选的 effort 参数，允许调用方覆盖每个子代理的思考层级",
 	"settings.extraWorkspaceDirectories.desc":
 		"添加到每个会话作为额外根目录的工作区目录（多根工作区）。通过 /add-dir 和 /remove-dir 实时管理。路径相对于 cwd 解析；建议使用绝对路径。agent 被告知这些根目录存在并可以 read/grep/glob 它们。",
 	"settings.extremelyEarlyMaintenance": "极端早期维护",
@@ -2369,8 +2273,7 @@ export const settings = {
 	"settings.providers.services.fetchProvider": "获取提供商",
 	"settings.finalMessageOnly": "仅最终消息",
 	"settings.providers.fireworks.tier": "Fireworks 层级",
-	"settings.fixedTokenLimit.info":
-		"上下文维护的固定 token 限制；设置后覆盖百分比",
+	"settings.fixedTokenLimit.info": "上下文维护的固定 token 限制；设置后覆盖百分比",
 	"settings.flex": "弹性",
 	"settings.followUpMode": "跟进模式",
 	"settings.forceProductionEndpointOnly": "仅强制生产端点",
@@ -2383,8 +2286,7 @@ export const settings = {
 	"settings.friendly": "友好",
 	"settings.full2": "完整",
 	"settings.fullStandardContextWindow": "完整标准上下文窗口",
-	"settings.fullUrlReceivingAuto":
-		"接收 Auto QA JSON 报告的完整 URL（默认 https://qa.omp.sh/v1/grievances）",
+	"settings.fullUrlReceivingAuto": "接收 Auto QA JSON 报告的完整 URL（默认 https://qa.omp.sh/v1/grievances）",
 	"settings.providers.services.geminiWebSearchModel": "Gemini 网络搜索模型",
 	"settings.generateHandoffContinueNew": "生成交接并在新会话中继续",
 	"settings.tools.availableTools.generateImage": "生成图片",
@@ -2416,17 +2318,14 @@ export const settings = {
 	"settings.high2": "高",
 	"settings.highestEffortAuto.desc":
 		"`auto` 分类器可解析的最高 effort。`xhigh` 使分类器停留在顶端以下一级，只有明确的 `ultrathink` 才能达到 `max`；`max` 允许分类器判定为特殊的回合在支持该功能的模型上使用最高层级。",
-	"settings.howIsolatedTaskChanges":
-		"隔离任务变更的集成方式（patch apply 或 branch merge）",
+	"settings.howIsolatedTaskChanges": "隔离任务变更的集成方式（patch apply 或 branch merge）",
 	"settings.howLongHub.desc":
 		"`hub` wait 在返回当前状态前监视后台作业的时间长度。固定值每次等待确切时长。`smart` 自适应：从 5 秒开始，每次连续等待递增（最长 5 分钟），停止轮询约一分钟后重置为 5 秒。",
 	"settings.howLongIdle.desc":
 		"空闲子代理在写入磁盘驻留前可在内存中保留的最长时间（毫秒）。驻留代理会在收到消息或恢复时自动唤醒。设为 0 则保持空闲代理存活直至退出。",
 	"settings.howManyLevelsDeep": "子代理可生成其子代理的最大深度层级",
-	"settings.howRulesCan.info":
-		"规则重复方式：每个 Session 一次，或在消息间隔后重复",
-	"settings.howStronglyPush.info":
-		"首条消息后自动创建 todo 列表的推送强度",
+	"settings.howRulesCan.info": "规则重复方式：每个 Session 一次，或在消息间隔后重复",
+	"settings.howStronglyPush.info": "首条消息后自动创建 todo 列表的推送强度",
 	"settings.howStronglyPushDelegating": "将工作委托给子代理的倾向程度",
 	"settings.howDrainFollowUp": "一轮完成后如何排空后续消息",
 	"settings.howProcessQueuedMessages": "代理工作时如何处理排队消息",
@@ -2444,24 +2343,21 @@ export const settings = {
 	"settings.injectOneSteering.desc":
 		"当子代理超过其软请求预算时注入一次引导通知，要求其在 1.5 倍强制产出停止前完成收尾。",
 	"settings.inlineBuiltDocs.info": "内联内置文档；按需获取 MCP 和扩展文档。",
-	"settings.inlineDescriptorsGemini.info":
-		"对 Gemini 模型内联描述符；否则保留在工具模式中",
+	"settings.inlineDescriptorsGemini.info": "对 Gemini 模型内联描述符；否则保留在工具模式中",
 	"settings.inlineDocsSchemasEvery": "为每个挂载设备内联文档和 schema。",
 	"settings.inlineToolDescriptors": "内联工具描述符",
 	"settings.input": "输入",
 	"settings.tools.availableTools.inspectImage": "检查图像",
 	"settings.tools.execution.inspectImageTimeout": "检查图像超时",
 	"settings.instant": "即时",
-	"settings.instructUpstreamProvidersCompletely":
-		"指示上游提供商完全省略响应中的思维摘要（在支持的情况下）",
+	"settings.instructUpstreamProvidersCompletely": "指示上游提供商完全省略响应中的思维摘要（在支持的情况下）",
 	"settings.tools.execution.intentTracing": "意图追踪",
 	"settings.interaction.language.interface": "界面语言",
 	"settings.interruptMode": "中断模式",
 	"settings.interruptProseToolStreams": "在文本和工具流上中断",
 	"settings.interruptOnlyReplyThinking": "仅在回复/思考匹配时中断",
 	"settings.interruptOnlyToolCall": "仅在工具调用参数匹配时中断",
-	"settings.interruptAgentMidStream":
-		"当输出匹配规则模式（Time-Traveling Stream Rules）时，中途中断 Agent",
+	"settings.interruptAgentMidStream": "当输出匹配规则模式（Time-Traveling Stream Rules）时，中途中断 Agent",
 	"settings.tools.execution.ircTimeout": "IRC 超时",
 	"settings.isolation": "隔离",
 	"settings.tasks.isolation.commitStyle": "隔离提交风格",
@@ -2471,17 +2367,14 @@ export const settings = {
 	"settings.shell.evalRuntimes.juliaEvalBackend": "Julia 执行后端",
 	"settings.shell.evalRuntimes.juliaInterpreter": "Julia 解释器",
 	"settings.keepDescriptorsProviderTool": "仅保留描述符在提供商工具模式中",
-	"settings.keepInteractiveSessions.info":
-		"保持交互式会话在主模型上直到确认；后台 agent 自动回退",
-	"settings.keepIpythonKernel.info":
-		"在多次 eval 调用之间保持 IPython 内核存活，或每次都重新启动",
+	"settings.keepInteractiveSessions.info": "保持交互式会话在主模型上直到确认；后台 agent 自动回退",
+	"settings.keepIpythonKernel.info": "在多次 eval 调用之间保持 IPython 内核存活，或每次都重新启动",
 	"settings.keepSystemAwakeWhile": "会话打开时保持系统唤醒（caffeinate -i）",
 	"settings.keepSystemPromptText": "将系统提示保留为文本。",
 	"settings.providers.protocol.kimiApiFormat": "Kimi API 格式",
 	"settings.kittScanner": "KITT 扫描效果",
 	"settings.knightRider1982Red": "《霹雳游侠》1982 红色灯光左右弹跳",
-	"settings.kokoroVoiceUsed.info":
-		"本地 TTS 后端使用的 Kokoro 语音（美式/英式，女声/男声）",
+	"settings.kokoroVoiceUsed.info": "本地 TTS 后端使用的 Kokoro 语音（美式/英式，女声/男声）",
 	"settings.kokoroVoiceUsedSpeaking": "朗读助手输出时使用的 Kokoro 语音",
 	"settings.language2": "语言",
 	"settings.languageTuiSetupWizard": "TUI 和设置向导使用的语言。",
@@ -2491,12 +2384,9 @@ export const settings = {
 	"settings.tools.availableTools.launch": "启动",
 	"settings.launchBrowserHeadlessMode": "以无头模式启动浏览器（禁用可显示浏览器 UI）",
 	"settings.legacyReserveBasedThreshold": "基于预留的旧版阈值",
-	"settings.letStandaloneOrchestrateAppend":
-		"允许独立的 orchestrate 附加其隐藏的多代理编排通知",
-	"settings.letStandaloneUltrathink.info":
-		"允许独立的 ultrathink 请求最大自动思考并附加其隐藏通知",
-	"settings.letStandaloneWorkflowzAppend":
-		"允许独立的 workflowz 附加其隐藏的 eval 工作流通知",
+	"settings.letStandaloneOrchestrateAppend": "允许独立的 orchestrate 附加其隐藏的多代理编排通知",
+	"settings.letStandaloneUltrathink.info": "允许独立的 ultrathink 请求最大自动思考并附加其隐藏通知",
+	"settings.letStandaloneWorkflowzAppend": "允许独立的 workflowz 附加其隐藏的 eval 工作流通知",
 	"settings.letPalPickBest": "让 PAL 选择最佳可用后端",
 	"settings.lightReasoning": "轻度推理（~2k token）",
 	"settings.appearance.theme.light": "浅色主题",
@@ -2510,8 +2400,7 @@ export const settings = {
 	"settings.loadCommandsOpencodeCommands": "从 .opencode/commands/ 加载命令",
 	"settings.loadCommandsClaudeCommands2": "从 ~/.claude/commands/ 加载命令",
 	"settings.loadCommandsConfigOpencode": "从 ~/.config/opencode/commands/ 加载命令",
-	"settings.loadDefaultRulesShipped":
-		"加载 Agent 自带的默认规则（可通过 ttsr.disabledRules 单独覆盖）",
+	"settings.loadDefaultRulesShipped": "加载 Agent 自带的默认规则（可通过 ttsr.disabledRules 单独覆盖）",
 	"settings.local": "本地",
 	"settings.localDeviceSpeech.desc":
 		"本地设备端语音模型。Parakeet TDT v3（sherpa-onnx）是当前最佳默认模型；Whisper base/small/large-v3-turbo 层级（transformers.js）以大小换取多语言覆盖。首次使用时下载。",
@@ -2543,16 +2432,14 @@ export const settings = {
 	"settings.maximumConcurrentOllama.info":
 		"每个进程中 Ollama Cloud 子代理运行的最大并发数；设为 0 则禁用提供商特定限制",
 	"settings.maximumInfoNerdFont": "Nerd 字体图标的最大信息量",
-	"settings.maximumLinesTail.info":
-		"输出溢出到 artifact 时保留内联的最大尾部行数",
+	"settings.maximumLinesTail.info": "输出溢出到 artifact 时保留内联的最大尾部行数",
 	"settings.maximumNumberSubagentsRunning": "同时运行的子代理最大数量",
 	"settings.maximumNumberTodoReminders": "放弃前的最大 todo 提醒次数",
 	"settings.tasks.subagents.maximumPerSpawnEffort": "每次生成最大努力值",
 	"settings.maximumReasoningEffort.desc":
 		"task 工具每次生成时可用的最大推理 effort 提示。较低的值可防止调用方将子代理提升到此上限之上；默认值保留模型的完整范围。",
 	"settings.maximumRetryAttemptsApi": "API 错误时的最大重试次数",
-	"settings.maximumTimeoutSecondsAgent":
-		"Agent 可为任意工具设置的最大超时时间（秒）（0 = 无限制）",
+	"settings.maximumTimeoutSecondsAgent": "Agent 可为任意工具设置的最大超时时间（秒）（0 = 无限制）",
 	"settings.maximumVariety": "最大多样性",
 	"settings.maximumWaitBetween.desc":
 		"重试间最大等待时间（毫秒）。如果提供商要求等待超过此时间且没有凭证或模型回退成功，请求将快速失败而非休眠（例如 Anthropic 3 小时速率限制窗口）。",
@@ -2569,13 +2456,11 @@ export const settings = {
 	"settings.min": "最小",
 	"settings.minP": "最小 P",
 	"settings.minimal": "极简",
-	"settings.minimumDelayBetween.info":
-		"Exa 网络搜索请求之间的最小延迟（毫秒）；设为 0 则禁用限速",
+	"settings.minimumDelayBetween.info": "Exa 网络搜索请求之间的最小延迟（毫秒）；设为 0 则禁用限速",
 	"settings.minimumProbabilityThreshold": "最小概率阈值（0-1，-1 = 提供商默认值）",
 	"settings.modelDecidesDelegate": "由模型决定何时委派",
 	"settings.modelDecidesNo.info": "由模型决定；不自动创建待办列表",
-	"settings.modelIdGemini.info":
-		"Gemini Google Search grounding 的模型 ID。默认为 gemini-2.5-flash。",
+	"settings.modelIdGemini.info": "Gemini Google Search grounding 的模型 ID。默认为 gemini-2.5-flash。",
 	"settings.modelRoleStorage": "模型角色存储",
 	"settings.modelGitCostContext": "模型、git、成本、上下文",
 	"settings.modelPathGit.info": "模型、路径、git、上下文、tokens、成本",
@@ -2584,10 +2469,8 @@ export const settings = {
 	"settings.moderatelyEarlyMaintenance": "中等早期维护",
 	"settings.modes": "模式",
 	"settings.moveFullSystem.info": "在能节省 token 时，将完整系统提示移动到图像。",
-	"settings.movePromptS.info":
-		"将提示框底部边框移至单独行，使 macOS IME 预编辑无法位移它",
-	"settings.nameShownOther.info":
-		"向其他协作参与者显示的名称（默认：操作系统用户名）",
+	"settings.movePromptS.info": "将提示框底部边框移至单独行，使 macOS IME 预编辑无法位移它",
+	"settings.nameShownOther.info": "向其他协作参与者显示的名称（默认：操作系统用户名）",
 	"settings.native": "原生",
 	"settings.appearance.display.nativeTerminalProgress": "原生终端进度",
 	"settings.nearContextLimit": "接近上下文限制",
@@ -2609,8 +2492,7 @@ export const settings = {
 	"settings.notifyAgentStopsError": "代理因错误停止时通知",
 	"settings.notifyAskToolWaiting": "当询问工具等待输入时通知",
 	"settings.nucleusSamplingCutoff": "核采样截断值（0-1，-1 = 提供商默认值）",
-	"settings.obfuscateConfiguredSecrets.info":
-		"在发送给 AI 提供商前对已配置的密钥进行混淆，并删除凭证形态的令牌",
+	"settings.obfuscateConfiguredSecrets.info": "在发送给 AI 提供商前对已配置的密钥进行混淆，并删除凭证形态的令牌",
 	"settings.tools.availableTools.obsidianVault": "Obsidian 库",
 	"settings.off2": "关闭",
 	"settings.ollamaCloudMaxConcurrency": "Ollama Cloud 最大并发",
@@ -2619,41 +2501,32 @@ export const settings = {
 	"settings.omitThinkingSummaries": "省略思维摘要",
 	"settings.on2": "开启",
 	"settings.deviceNeuralTts.info": "设备端神经 TTS（Kokoro-82M）；输出为 WAV/PCM16",
-	"settings.deviceNeuralTtsModel":
-		"本地 TTS 后端使用的设备端神经 TTS 模型（Kokoro-82M）",
-	"settings.onlyMoveLoaded.info":
-		"仅在能节省 token 时，将已加载的上下文文件指令移动到图像。",
+	"settings.deviceNeuralTtsModel": "本地 TTS 后端使用的设备端神经 TTS 模型（Kokoro-82M）",
+	"settings.onlyMoveLoaded.info": "仅在能节省 token 时，将已加载的上下文文件指令移动到图像。",
 	"settings.onnxExecutionProvider.desc":
 		"本地 tiny 模型（标题 + 记忆）的 ONNX 执行提供商。默认使用仅 CPU 推理。PI_TINY_DEVICE 环境变量可覆盖此设置。",
 	"settings.onnxQuantizationPrecision.desc":
 		"本地 tiny 模型的 ONNX 量化/精度。默认使用各模型自带的 dtype（q4）；较低精度更快，较高精度更精确。PI_TINY_DTYPE 环境变量可覆盖此设置。",
-	"settings.openaiResponsesCodex.info":
-		"OpenAI Responses 和 Codex 响应详细程度（低、中或高）",
+	"settings.openaiResponsesCodex.info": "OpenAI Responses 和 Codex 响应详细程度（低、中或高）",
 	"settings.tasks.commandsSkills.opencodeProjectCommands": "OpenCode 项目命令",
 	"settings.tasks.commandsSkills.opencodeUserCommands": "OpenCode 用户命令",
 	"settings.providers.protocol.openrouterRouting": "OpenRouter 路由",
-	"settings.optionalPathExact.info":
-		"可选的精确 Julia 可执行文件路径。设置后，将跳过自动 Julia 运行时发现。",
-	"settings.optionalPathExact.info2":
-		"可选的精确 Python 可执行文件路径。设置后，将跳过自动 Python 运行时发现。",
-	"settings.optionalPathExact.info3":
-		"可选的精确 Ruby 可执行文件路径。设置后，将跳过自动 Ruby 运行时发现。",
+	"settings.optionalPathExact.info": "可选的精确 Julia 可执行文件路径。设置后，将跳过自动 Julia 运行时发现。",
+	"settings.optionalPathExact.info2": "可选的精确 Python 可执行文件路径。设置后，将跳过自动 Python 运行时发现。",
+	"settings.optionalPathExact.info3": "可选的精确 Ruby 可执行文件路径。设置后，将跳过自动 Ruby 运行时发现。",
 	"settings.interaction.magicKeywords.orchestrateKeyword": "Orchestrate 关键词",
 	"settings.orderedBashCommand.info":
 		"有序的 bash 命令审批规则。每个条目包含 match 和 approval 字段；仅支持 '*' 通配符。",
 	"settings.originalXOrg.info": "原始 X.org 5x8 字形，2576px 框架，黑色墨水。",
 	"settings.tools.outputLimits.outputColumnCap": "输出列上限",
 	"settings.outputLimits": "输出限制",
-	"settings.pairSecondModel.info":
-		"配对第二个模型（分配给'advisor'角色），被动审查每轮交互并注入备注。",
+	"settings.pairSecondModel.info": "配对第二个模型（分配给'advisor'角色），被动审查每轮交互并注入备注。",
 	"settings.parakeetTdtV3": "Parakeet TDT v3（SoTA）",
 	"settings.pastSoftTtl.desc":
 		"超过软 TTL 后，缓存行会被返回并在后台刷新；超过硬 TTL 后，缓存行会被丢弃（秒；默认 7 天）",
 	"settings.pathGitOnly": "仅路径和 git",
-	"settings.pauseMainAgent.info":
-		"如果顾问落后于此轮数，暂停主 agent 最多 30 秒。关闭则禁用追赶延迟。",
-	"settings.penaltyIntroducingAlreadyPresent":
-		"引入已存在 token 的惩罚（-1 = 提供商默认值）",
+	"settings.pauseMainAgent.info": "如果顾问落后于此轮数，暂停主 agent 最多 30 秒。关闭则禁用追赶延迟。",
+	"settings.penaltyIntroducingAlreadyPresent": "引入已存在 token 的惩罚（-1 = 提供商默认值）",
 	"settings.penaltyRepeatedTokens": "重复 token 的惩罚（-1 = 提供商默认值）",
 	"settings.perLineByte.desc":
 		"流式工具输出（bash、python、js eval）和`read`的每行字节上限。超过此宽度的行将被省略号截断；到下一个换行符的剩余字节被丢弃。设为 0 禁用。",
@@ -2663,11 +2536,9 @@ export const settings = {
 	"settings.tasks.subagents.perTaskEffort": "每任务努力值",
 	"settings.perToolApproval.desc":
 		"逐工具审批策略。设为 'allow' 自动批准，'prompt' 要求确认，'deny' 阻止。在所有审批模式下均会尊重覆盖设置。",
-	"settings.percentThresholdContext.info":
-		"上下文维护的百分比阈值；设置为默认值以使用传统的基于储备的行为",
+	"settings.percentThresholdContext.info": "上下文维护的百分比阈值；设置为默认值以使用传统的基于储备的行为",
 	"settings.personality": "性格",
-	"settings.picksShapeTuned.info":
-		"选择为当前模型调整的形状，失败时回退到其 provider 族。",
+	"settings.picksShapeTuned.info": "选择为当前模型调整的形状，失败时回退到其 provider 族。",
 	"settings.plainUnsciiSquareCell": "纯 unscii 方形单元格，句子色调墨水。",
 	"settings.plainUnsciiSquare.info": "纯 unscii 方形单元格，单行打印，黑色墨水。",
 	"settings.tasks.modes.planMode": "计划模式",
@@ -2676,27 +2547,22 @@ export const settings = {
 	"settings.preBuiltStatusLine": "预构建的状态栏配置",
 	"settings.preferConciseResponses": "偏好简洁回复",
 	"settings.preferDetailedResponses": "偏好详细回复",
-	"settings.preferLocalDevice.info":
-		"优先使用本地设备端 TTS；当存在凭证时将 .mp3 输出路由到 xAI",
+	"settings.preferLocalDevice.info": "优先使用本地设备端 TTS；当存在凭证时将 .mp3 输出路由到 xAI",
 	"settings.tasks.subagents.preferTaskDelegation": "偏好任务委派",
 	"settings.preferred": "首选",
 	"settings.presencePenalty": "存在惩罚",
 	"settings.preventDisplaySleep": "阻止显示器休眠",
 	"settings.preventIdleSleep": "阻止空闲休眠",
 	"settings.preventImagesBeingSent": "阻止图片发送到 LLM 提供商",
-	"settings.preventMacosSleep.info":
-		"在活跃会话期间阻止 macOS 休眠。每个级别都是累积的——添加所有较低级别的标志。",
+	"settings.preventMacosSleep.info": "在活跃会话期间阻止 macOS 休眠。每个级别都是累积的——添加所有较低级别的标志。",
 	"settings.preventSystemSleep": "阻止系统休眠",
 	"settings.prewalk": "预走查",
 	"settings.prioritizeCheapestAvailableProvider": "优先选择最便宜的可用提供商",
 	"settings.prioritizeThroughputLowestLatency": "优先吞吐量 / 最低延迟",
-	"settings.prioritizedProvidersImage.info":
-		"图像生成的优先提供商；未列出的提供商遵循当前会话提供商和内建顺序",
-	"settings.prioritizedProvidersWeb.info":
-		"web_search 工具的优先提供商；未列出的提供商在此之后保持其默认顺序",
+	"settings.prioritizedProvidersImage.info": "图像生成的优先提供商；未列出的提供商遵循当前会话提供商和内建顺序",
+	"settings.prioritizedProvidersWeb.info": "web_search 工具的优先提供商；未列出的提供商在此之后保持其默认顺序",
 	"settings.priority": "优先级",
-	"settings.priorityServingPath.info":
-		"优先服务路径：更高可靠性，按令牌计价的溢价定价",
+	"settings.priorityServingPath.info": "优先服务路径：更高可靠性，按令牌计价的溢价定价",
 	"settings.priorityNativeTrafilatura.info": "优先级：native > trafilatura > lynx > parallel > jina",
 	"settings.privacy": "隐私",
 	"settings.processingTierGemini.desc":
@@ -2704,8 +2570,7 @@ export const settings = {
 	"settings.processingTierOpenai.desc":
 		"OpenAI / OpenAI-Codex 请求和通过 OpenRouter 路由的 OpenAI 系列模型的处理层级（none = 省略）。作为 `service_tier` 发送。",
 	"settings.productionOnly": "仅生产环境",
-	"settings.promoteLargerContext.info":
-		"上下文溢出时提升到更大上下文模型，而不是压缩",
+	"settings.promoteLargerContext.info": "上下文溢出时提升到更大上下文模型，而不是压缩",
 	"settings.prompt": "提示",
 	"settings.promptGuidancePlusFirst": "提示引导及首轮委托提醒",
 	"settings.promptSummarizeLeavingBranch": "离开分支时提示摘要",
@@ -2713,12 +2578,9 @@ export const settings = {
 	"settings.proseOnly": "仅散文",
 	"settings.protocol": "协议",
 	"settings.providersWebSearch.info": "web_search 不应使用的提供商，即使作为后备也不行",
-	"settings.pruneOlderRead.info":
-		"再次读取同一文件时清理旧读取结果（感知缓存，每轮运行）",
-	"settings.pruneToolResults.info":
-		"标记为上下文无用（无匹配、超时等待）的工具结果在消费后清理（感知缓存）",
-	"settings.pushSecretGist.info":
-		"推送到私有 gist（需要已认证的 gh），失败时回退到共享服务器",
+	"settings.pruneOlderRead.info": "再次读取同一文件时清理旧读取结果（感知缓存，每轮运行）",
+	"settings.pruneToolResults.info": "标记为上下文无用（无匹配、超时等待）的工具结果在消费后清理（感知缓存）",
+	"settings.pushSecretGist.info": "推送到私有 gist（需要已认证的 gh），失败时回退到共享服务器",
 	"settings.shell.evalRuntimes.pythonEvalBackend": "Python 执行后端",
 	"settings.shell.evalRuntimes.pythonInterpreter": "Python 解释器",
 	"settings.shell.evalRuntimes.pythonKernelMode": "Python 内核模式",
@@ -2729,8 +2591,7 @@ export const settings = {
 	"settings.readerBackendPriorityFetch": "fetch/read URL 工具的读取后端优先级",
 	"settings.reasoningDepthThinkingCapable": "支持思维功能的模型的推理深度",
 	"settings.recursiveCopy": "递归复制",
-	"settings.refreshGeneratedSession.info":
-		"在 todo 初始化重排后刷新生成的 Session 标题，除非标题由用户设置",
+	"settings.refreshGeneratedSession.info": "在 todo 初始化重排后刷新生成的 Session 标题，除非标题由用户设置",
 	"settings.tasks.modes.refreshTitleReplan": "重新规划时刷新标题",
 	"settings.registerSkillsSkillName": "将技能注册为 /skill:name 命令",
 	"settings.interaction.collab.relayUrl": "中继 URL",
@@ -2740,16 +2601,14 @@ export const settings = {
 	"settings.remindAgentCompleteTodos": "在停止前提醒 Agent 完成 todos",
 	"settings.remoteCompaction": "远程压缩",
 	"settings.context.compaction.remoteV2": "远程压缩 V2",
-	"settings.remove1Character.info":
-		"移除终端输出左右两侧的 1 字符水平内边距",
+	"settings.remove1Character.info": "移除终端输出左右两侧的 1 字符水平内边距",
 	"settings.renderFullTool.desc":
 		"在系统提示中渲染完整工具描述符，并从提供商工具模式中移除顶层/嵌套描述，使描述文字只发送一次。对 Gemini 模型自动启用，其他情况下禁用",
 	"settings.renderImagesInlineTerminal": "在终端中内联渲染图片",
 	"settings.renderMarkdownH1.desc":
 		"使用 Kitty 的 OSC 66 文字大小协议以 2 倍比例渲染 Markdown H1 标题。仅在 Kitty 终端上生效；其他终端忽略。默认关闭。",
 	"settings.renderMermaidFencedCode": "将 Mermaid 围栏代码块渲染为 ASCII 图表",
-	"settings.renderNonJsonMcp":
-		"在转录文本中将非 JSON 的 MCP 文本结果渲染为 Markdown",
+	"settings.renderNonJsonMcp": "在转录文本中将非 JSON 的 MCP 文本结果渲染为 Markdown",
 	"settings.renderWorkspaceDirectory.desc":
 		"在系统提示中渲染工作区目录树。警告：当文件被修改时，这可能会破坏跨会话的提示缓存。",
 	"settings.repeatedGridInkCycling": "重复网格，墨水在句子边界循环六种色调。",
@@ -2761,8 +2620,7 @@ export const settings = {
 	"settings.model.retryFallback.reserveMargin": "预留余量",
 	"settings.model.retryFallback.reservePolicy": "预留策略",
 	"settings.reset": "重置",
-	"settings.resizeLargeImages2000x2000":
-		"将大图片调整为最大 2000x2000 以获得更好的模型兼容性",
+	"settings.resizeLargeImages2000x2000": "将大图片调整为最大 2000x2000 以获得更好的模型兼容性",
 	"settings.retryFallback": "重试与回退",
 	"settings.model.retryFallback.retryAttempts": "重试次数",
 	"settings.model.retryFallback.retryFallbackChains": "重试回退链",
@@ -2773,31 +2631,24 @@ export const settings = {
 	"settings.appearance.display.rewriteScrollback": "重写滚动历史",
 	"settings.shell.evalRuntimes.rubyEvalBackend": "Ruby 执行后端",
 	"settings.shell.evalRuntimes.rubyInterpreter": "Ruby 解释器",
-	"settings.ruleNamesIgnoreEntirely":
-		"完全忽略的规则名称（适用于内置默认规则和自定义规则）",
+	"settings.ruleNamesIgnoreEntirely": "完全忽略的规则名称（适用于内置默认规则和自定义规则）",
 	"settings.rules": "规则 (TTSR)",
 	"settings.runModesWhereActive": "运行模式，其中活跃目标可能在轮次间自动继续",
-	"settings.runSecretObfuscatorOver":
-		"上传前对 /share 快照运行密钥混淆器（使用 secrets.* 配置）",
+	"settings.runSecretObfuscatorOver": "上传前对 /share 快照运行密钥混淆器（使用 secrets.* 配置）",
 	"settings.sampleTopKTokens": "从 top-K tokens 中采样（-1 = 提供商默认值）",
 	"settings.sampling": "采样",
-	"settings.samplingTemperature":
-		"采样温度（0 = 确定性，1 = 创造性，-1 = 提供商默认值）",
+	"settings.samplingTemperature": "采样温度（0 = 确定性，1 = 创造性，-1 = 提供商默认值）",
 	"settings.sandboxOnly": "仅沙箱环境",
-	"settings.saveGeneratedHandoff.info":
-		"将生成的交接文档保存到 markdown 文件，用于自动交接流程",
+	"settings.saveGeneratedHandoff.info": "将生成的交接文档保存到 markdown 文件，用于自动交接流程",
 	"settings.context.compaction.saveHandoffDocs": "保存交接文档",
-	"settings.saveProjectRole.info":
-		"将项目角色模型保存在 .musepi/config.yml 中；缺失的项目角色使用全局默认值",
+	"settings.saveProjectRole.info": "将项目角色模型保存在 .musepi/config.yml 中；缺失的项目角色使用全局默认值",
 	"settings.saveRoleModelsActive": "将角色模型保存在当前个人配置中（当前行为）",
 	"settings.scale": "按比例",
 	"settings.tools.computer.screenGlowIndicator": "屏幕发光指示器",
 	"settings.tools.grepBrowser.screenshotDirectory": "截图目录",
 	"settings.providers.services.searxngEndpoint": "SearXNG 端点",
-	"settings.secondsModelStream.info":
-		"模型流在事件之间可保持静默的秒数；-1 使用提供商/环境默认值，0 禁用看门狗",
-	"settings.secondsWaitFirst.info":
-		"等待第一个模型流事件的秒数；-1 使用提供商/环境默认值，0 禁用看门狗",
+	"settings.secondsModelStream.info": "模型流在事件之间可保持静默的秒数；-1 使用提供商/环境默认值，0 禁用看门狗",
+	"settings.secondsWaitFirst.info": "等待第一个模型流事件的秒数；-1 使用提供商/环境默认值，0 禁用看门狗",
 	"settings.secondsWaitWhileIdleBeforeCompacting": "空闲等待多少秒后压缩",
 	"settings.tools.availableTools.security": "安全",
 	"settings.model.sampling.serviceTierAdvisor": "服务层级 — 顾问",
@@ -2824,10 +2675,8 @@ export const settings = {
 	"settings.shell.bash.minimizer": "Shell 精简器",
 	"settings.shell.bash.minimizerSourceOutline": "Shell 精简器源码大纲",
 	"settings.appearance.display.shimmer": "微光",
-	"settings.showDividerAbove.info":
-		"在请求未命中提示缓存的助手轮次上方显示分隔线",
-	"settings.showGitBranch.info":
-		"在 TUI 中显示 git 分支、状态和 PR 信息，并监听仓库元数据。",
+	"settings.showDividerAbove.info": "在请求未命中提示缓存的助手轮次上方显示分隔线",
+	"settings.showGitBranch.info": "在 TUI 中显示 git 分支、状态和 PR 信息，并监听仓库元数据。",
 	"settings.showHardwareCursor": "显示硬件光标",
 	"settings.appearance.statusLine.showHookStatus": "显示钩子状态",
 	"settings.appearance.images.showInline": "显示内联图片",
@@ -2839,11 +2688,9 @@ export const settings = {
 	"settings.showTerminalCursorIme": "显示终端光标以支持 IME",
 	"settings.showAgentRun.desc":
 		"在终端标题分隔符中显示 agent 运行状态——工作中显示动画旋转器（Windows 上为静态':'），轮到你时显示'>'，agent 等待你时显示'!'",
-	"settings.showFullAnimated.desc":
-		"在正常交互启动时显示完整动画设置启动画面，无需重新运行设置。静默启动仍会抑制它。",
+	"settings.showFullAnimated.desc": "在正常交互启动时显示完整动画设置启动画面，无需重新运行设置。静默启动仍会抑制它。",
 	"settings.showRecentReleaseNotes": "完整显示最近的版本说明",
-	"settings.showThinkingLevel.info":
-		"在模型名称上以单个图标显示思维层级，而非单独的` · <层级>`后缀。",
+	"settings.showThinkingLevel.info": "在模型名称上以单个图标显示思维层级，而非单独的` · <层级>`后缀。",
 	"settings.showTokenBudgetAlongside": "在状态行中目标指示器旁显示 token 预算",
 	"settings.appearance.display.showTokenUsage": "显示 Token 用量",
 	"settings.single": "单击",
@@ -2863,11 +2710,9 @@ export const settings = {
 	"settings.tasks.subagents.softSubagentRequestBudget": "软子代理请求预算",
 	"settings.solidArrows": "实心箭头（Nerd 字体）",
 	"settings.solidBlocks": "实心方块",
-	"settings.sourceOutlineMode.info":
-		"源码文件的 cat/read 大纲模式：default 或 aggressive",
+	"settings.sourceOutlineMode.info": "源码文件的 cat/read 大纲模式：default 或 aggressive",
 	"settings.spaceOnly": "仅空格",
-	"settings.speakAssistantS.info":
-		"在输出流式传输时通过扬声器将助手输出朗读出来",
+	"settings.speakAssistantS.info": "在输出流式传输时通过扬声器将助手输出朗读出来",
 	"settings.speech": "语音",
 	"settings.tools.availableTools.speechGeneration": "语音生成",
 	"settings.interaction.speech.model": "语音模型",
@@ -2896,14 +2741,12 @@ export const settings = {
 	"settings.strongPenalty": "重度惩罚",
 	"settings.styleSeparatorsBetweenSegments": "段落间分隔符样式",
 	"settings.subagents": "子智能体",
-	"settings.suggestEmojisName.info":
-		"建议来自 `:name:` 短代码的表情符号，并展开文本情感符号如 `:D` 或 `:-)`",
+	"settings.suggestEmojisName.info": "建议来自 `:name:` 短代码的表情符号，并展开文本情感符号如 `:D` 或 `:-)`",
 	"settings.suggestsTodoList.info": "在首条消息时建议 todo 列表（提醒，非强制）",
 	"settings.summarizePlaceKeepCurrent": "原地摘要并保持当前会话",
 	"settings.summary": "摘要",
 	"settings.context.compaction.supersedeStaleReads": "替代过期读取",
-	"settings.surfaceActiveModel.info":
-		"在系统提示中暴露当前模型标识，使 agent 知道当前是哪个模型",
+	"settings.surfaceActiveModel.info": "在系统提示中暴露当前模型标识，使 agent 知道当前是哪个模型",
 	"settings.switchTaskToolWithContexttasks.desc":
 		"将 task 工具切换为批量模式：一次调用携带 { context, tasks[] }——每个条目对应一个子代理，支持可选的条目级代理（默认使用会话的生成策略代理）、条目级隔离，以及为每个任务前置必需的共享上下文。当 async.enabled=true 时，每个生成作为独立后台代理运行，遵循常规空闲/驻留生命周期；否则调用会阻塞以合并结果。禁用可恢复扁平单生成模式。",
 	"settings.symbolPreset": "符号预设",
@@ -2913,8 +2756,7 @@ export const settings = {
 	"settings.terseEvidenceFirst.info": "简洁、证据优先的工程师；紧凑、面向行动的回复",
 	"settings.textVerbosity": "文字详细程度",
 	"settings.providers.services.textSpeechProvider": "文字转语音提供商",
-	"settings.originalSnapcompactShape":
-		"原始 snapcompact 形状（shape-table 前的会话渲染此形状）。",
+	"settings.originalSnapcompactShape": "原始 snapcompact 形状（shape-table 前的会话渲染此形状）。",
 	"settings.theme2": "主题",
 	"settings.themeUsedTerminalHas": "终端为深色背景时使用的主题",
 	"settings.themeUsedTerminalHasLightBackground": "终端为浅色背景时使用的主题",
@@ -2936,10 +2778,8 @@ export const settings = {
 	"settings.toolApproval": "工具审批",
 	"settings.interaction.approvals.toolApprovalPolicies": "工具审批策略",
 	"settings.toolCallingMode": "工具调用模式",
-	"settings.toolNamesMay.info":
-		"可连续重复而不触发跨轮次循环防护的工具名称",
-	"settings.toolOutputAbove.info":
-		"超过此大小的工具输出保存为 artifact；尾部保持内联",
+	"settings.toolNamesMay.info": "可连续重复而不触发跨轮次循环防护的工具名称",
+	"settings.toolOutputAbove.info": "超过此大小的工具输出保存为 artifact；尾部保持内联",
 	"settings.model.thinking.toolCallLoopExempt": "工具调用循环豁免工具",
 	"settings.model.thinking.toolCallLoopGuard": "工具调用循环防护",
 	"settings.model.thinking.toolCallLoopThreshold": "工具调用循环阈值",
@@ -2954,24 +2794,19 @@ export const settings = {
 	"settings.context.rulesTtsr.ttsrRepeatGap": "TTSR 重复间隔",
 	"settings.context.rulesTtsr.ttsrRepeatMode": "TTSR 重复模式",
 	"settings.turbo": "高速（Whisper large-v3）",
-	"settings.twoWordWrapped.info":
-		"两栏 word-wrapped 报纸版式，8x13 字形，16px 间距，黑色墨水。",
+	"settings.twoWordWrapped.info": "两栏 word-wrapped 报纸版式，8x13 字形，16px 间距，黑色墨水。",
 	"settings.twoColumnDocLayout": "双栏文档版式，句子色调墨水。",
 	"settings.twoColumnDoc.info": "双栏文档版式，句子色调墨水，功能词淡灰色。",
 	"settings.typicalThreshold": "典型阈值",
 	"settings.interaction.magicKeywords.ultrathinkKeyword": "Ultrathink 关键词",
 	"settings.providers.tinyModel.unexpectedStopModel": "意外停止模型",
 	"settings.unlimited": "不限",
-	"settings.unsciiSquareCell.info":
-		"unscii 方形单元格，黑色墨水，每行打印两次，副本位于浅色高亮带上。",
-	"settings.unsciiSqueezed6x6.info":
-		"unscii 压缩至 6x6——最密可读单元格，最少帧数——黑色墨水。",
+	"settings.unsciiSquareCell.info": "unscii 方形单元格，黑色墨水，每行打印两次，副本位于浅色高亮带上。",
+	"settings.unsciiSqueezed6x6.info": "unscii 压缩至 6x6——最密可读单元格，最少帧数——黑色墨水。",
 	"settings.unset": "未设置",
-	"settings.uploadShareServer":
-		"上传到共享服务器（无需 GitHub 账户；避免 gist API 速率限制）",
+	"settings.uploadShareServer": "上传到共享服务器（无需 GitHub 账户；避免 gist API 速率限制）",
 	"settings.model.retryFallback.usageAwareFallback": "用量感知回退",
-	"settings.useSmallModel.desc":
-		"使用小模型检测助手是否声明将继续但实际上停止且未发起工具调用；自动提示其继续。",
+	"settings.useSmallModel.desc": "使用小模型检测助手是否声明将继续但实际上停止且未发起工具调用；自动提示其继续。",
 	"settings.useAnthropicStyleBand": "使用 Anthropic 风格带内工具调用。",
 	"settings.useBlueInsteadGreen": "差异新增使用蓝色而非绿色",
 	"settings.useCmuxWkwebview.desc":
@@ -2991,17 +2826,14 @@ export const settings = {
 	"settings.useProviderNativeTool": "使用提供商原生工具调用。",
 	"settings.useReliableCoding.desc":
 		"使用可靠的编程计划配额报告，在硬性用量限制前优先使用同提供商账户，然后使用配置的回退模型。普通配置的 API 密钥被排除。",
-	"settings.useRemoteCompactionEndpoints":
-		"可用时使用远程压缩端点，而非本地摘要",
-	"settings.useResponsesStreamingCompaction":
-		"对兼容的远程压缩模型使用 Responses 流式压缩",
+	"settings.useRemoteCompactionEndpoints": "可用时使用远程压缩端点，而非本地摘要",
+	"settings.useResponsesStreamingCompaction": "对兼容的远程压缩模型使用 Responses 流式压缩",
 	"settings.useGeminiOwnedDialect": "使用 Gemini 专属方言。",
 	"settings.useGemmaOwnedDialect": "使用 Gemma 专属方言。",
 	"settings.useMinimaxOwnedDialect": "使用 MiniMax 专属方言。",
 	"settings.useModelSServer": "使用模型服务器声明的协议",
 	"settings.useQwen3OwnedDialect": "使用 Qwen3 专属方言。",
-	"settings.useSessionName.info":
-		"使用会话名称颜色作为编辑器边框和状态栏间隙的颜色",
+	"settings.useSessionName.info": "使用会话名称颜色作为编辑器边框和状态栏间隙的颜色",
 	"settings.useTerminalS.desc":
 		"使用终端的默认背景作为状态栏背景，而非主题的 `statusLineBg`。Powerline 端帽被丢弃，因为它们需要对比填充来桥接到周围终端。",
 	"settings.userDefinedSegments": "用户自定义段落",
@@ -3022,10 +2854,8 @@ export const settings = {
 	"settings.providers.services.webSearchTimeout": "网页搜索超时",
 	"settings.websocketPolicyOpenai.info":
 		"OpenAI Codex 模型的 Websocket 策略（auto 使用模型默认值，on 强制开启，off 禁用）",
-	"settings.whatHappensBetweenLoop":
-		"/loop 迭代之间、重新提交提示词之前发生什么",
-	"settings.whatDoEvery.info":
-		"当所有同提供商的编程计划账户都在预留余量内时的处理方式。",
+	"settings.whatHappensBetweenLoop": "/loop 迭代之间、重新提交提示词之前发生什么",
+	"settings.whatDoEvery.info": "当所有同提供商的编程计划账户都在预留余量内时的处理方式。",
 	"settings.whatDoPartialOutput": "TTSR 触发时如何处理部分输出",
 	"settings.whatSpeakAll.desc":
 		"朗读内容：all = 助手消息 + 思考内容；assistant = 仅消息；yield = 仅回合结束时的最终消息",
@@ -3047,8 +2877,7 @@ export const settings = {
 	"settings.whereModelSelectorRole": "模型选择器角色分配保存位置",
 	"settings.bandToolCalls.desc":
 		"使用带内工具调用时，当模型在轮次中途开始产生工具结果幻觉时立即停止。禁用后，让模型完成生成并丢弃伪造的后续内容。",
-	"settings.withinWindowCached.info":
-		"在此窗口内，直接返回缓存的 issue/PR 视图行（秒；默认 5 分钟）",
+	"settings.withinWindowCached.info": "在此窗口内，直接返回缓存的 issue/PR 视图行（秒；默认 5 分钟）",
 	"settings.interaction.magicKeywords.workflowKeyword": "Workflow 关键词",
 	"settings.tasks.isolation.worktreeBaseDirectory": "工作树基础目录",
 	"settings.wrapPathsUrls.desc":
@@ -3205,37 +3034,40 @@ export const settings = {
 	"64 tasks": "64 个任务",
 	"AST Edit": "AST 编辑",
 	"AST Grep": "AST 搜索",
-	"Balanced": "均衡",
-	"Computer": "计算机",
-	"Creative": "创意",
+	Balanced: "均衡",
+	Computer: "计算机",
+	Creative: "创意",
 	"Default.": "默认。",
-	"Disabled": "已禁用",
-	"Embedded": "内嵌",
-	"Expanded": "展开",
-	"Friendly": "友好",
+	Disabled: "已禁用",
+	Embedded: "内嵌",
+	Expanded: "展开",
+	Friendly: "友好",
 	"AGENTS.md": "AGENTS.md",
-	"APFS": "APFS",
-	"ASCII": "ASCII 字符",
+	APFS: "APFS",
+	ASCII: "ASCII 字符",
 	"Accent Rail": "强调导轨",
-	"Also refresh between runs while the expected savings stay above the cost floor": "在预期节省仍高于成本下限时，轮次之间也刷新",
-	"Annotated": "标注式",
-	"Annotated line with the context percentage and window embedded in the gauge": "标注式线条：上下文百分比与窗口内嵌在仪表里",
-	"Appearance": "外观",
-	"Append": "追加完整前后文",
-	"Append full before/after source when an edit introduces an AST parse failure": "编辑引入 AST 解析错误时，在补丁中附加完整的前后源码",
+	"Also refresh between runs while the expected savings stay above the cost floor":
+		"在预期节省仍高于成本下限时，轮次之间也刷新",
+	Annotated: "标注式",
+	"Annotated line with the context percentage and window embedded in the gauge":
+		"标注式线条：上下文百分比与窗口内嵌在仪表里",
+	Appearance: "外观",
+	Append: "追加完整前后文",
+	"Append full before/after source when an edit introduces an AST parse failure":
+		"编辑引入 AST 解析错误时，在补丁中附加完整的前后源码",
 	"Apply confident macOS spelling corrections after completed words": "完成的词语自动套用 macOS 确信度高的拼写纠正",
 	"Async Compaction": "异步压缩",
 	"Auto (bun-pty → node-pty fallback)": "自动（bun-pty，回退 node-pty）",
 	"Auto-Repair Syntax Errors": "自动修复语法错误",
 	"Auto-continue active goals in terminal/GUI sessions": "在终端/GUI 会话中自动继续进行中的目标",
 	"Autocorrect (macOS)": "自动纠错（macOS）",
-	"Bash": "Bash",
-	"Board": "看板",
-	"Borderless": "无边框",
-	"Branch": "分支",
+	Bash: "Bash",
+	Board: "看板",
+	Borderless: "无边框",
+	Branch: "分支",
 	"Bun pty (native, lowest latency)": "Bun pty（原生，延迟最低）",
 	"Cache Warming": "缓存预热",
-	"Canary": "Canary 先行版",
+	Canary: "Canary 先行版",
 	"Check for musepi updates on startup": "启动时检查 musepi 更新",
 	"Claude Code": "Claude Code",
 	"Clean prompt glyph with status line at bottom, no box borders": "干净提示符 + 底部状态线，无边框",
@@ -3243,16 +3075,18 @@ export const settings = {
 	"Compact Field": "紧凑输入区",
 	"Compaction Method Order": "压缩方式顺序",
 	"Composer Shape": "输入框形态",
-	"Context": "上下文",
+	Context: "上下文",
 	"Context-Reactive Line": "上下文响应线",
 	"Custom prompt sections": "自定义提示词区块",
-	"DeepSeek": "DeepSeek",
+	DeepSeek: "DeepSeek",
 	"Disable cache warming": "关闭缓存预热",
 	"Enable the board tool: read and write the desktop board's card wall": "启用看板工具：读写桌面看板的卡片墙",
-	"Enable the knowledge tool: read and write the project's notes, todos and plans": "启用知识工具：读写项目的笔记、待办与计划",
+	"Enable the knowledge tool: read and write the project's notes, todos and plans":
+		"启用知识工具：读写项目的笔记、待办与计划",
 	"Enable the widget tool: draw a live card inline in the transcript": "启用组件工具：在对话中内联绘制实时卡片",
-	"English": "英语",
-	"Erase all terminal scrollback, then replay one current-width transcript": "清空全部终端回滚区，再以当前宽度重放一份对话",
+	English: "英语",
+	"Erase all terminal scrollback, then replay one current-width transcript":
+		"清空全部终端回滚区，再以当前宽度重放一份对话",
 	"Extended Context": "扩展上下文",
 	"Extension Meta Tools": "扩展元工具",
 	"External Thinking": "外部思考",
@@ -3262,15 +3096,16 @@ export const settings = {
 	"Full-width horizontal rules above and below, status line at bottom": "上下整宽横线，状态线在底部",
 	"GUI Managed Browser": "GUI 托管浏览器",
 	"GUI Managed Browser URL": "GUI 托管浏览器地址",
-	"Gemini": "Gemini",
-	"Gemma": "Gemma",
-	"Generic": "通用",
-	"Glob": "文件通配",
-	"Grep": "内容搜索",
-	"Harmony": "Harmony",
-	"Hermes": "Hermes",
-	"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving": "blob 服务器绑定主机；走隧道用 loopback，直连服务用 0.0.0.0",
-	"Idle": "空闲",
+	Gemini: "Gemini",
+	Gemma: "Gemma",
+	Generic: "通用",
+	Glob: "文件通配",
+	Grep: "内容搜索",
+	Harmony: "Harmony",
+	Hermes: "Hermes",
+	"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving":
+		"blob 服务器绑定主机；走隧道用 loopback，直连服务用 0.0.0.0",
+	Idle: "空闲",
 	"Image URL Backends": "图片 URL 后端",
 	"Image URL Bind Host": "图片 URL 绑定主机",
 	"Image URL Lifetime (hours)": "图片 URL 有效期（小时）",
@@ -3278,57 +3113,57 @@ export const settings = {
 	"Image URL SSH Remote Port": "图片 URL SSH 远程端口",
 	"Image URL SSH Target": "图片 URL SSH 目标",
 	"Image Upload Command": "图片上传命令",
-	"Interaction": "交互",
+	Interaction: "交互",
 	"Interactive sessions": "交互会话",
-	"Jina": "Jina",
-	"Kimi": "Kimi",
-	"Lynx": "Lynx",
-	"Mechanical": "机械",
-	"Memory": "记忆",
-	"MiniMax": "MiniMax",
-	"Model": "模型",
-	"Nerd": "极客",
+	Jina: "Jina",
+	Kimi: "Kimi",
+	Lynx: "Lynx",
+	Mechanical: "机械",
+	Memory: "记忆",
+	MiniMax: "MiniMax",
+	Model: "模型",
+	Nerd: "极客",
 	"Node pty (bridge process, more portable)": "Node pty（桥接进程，兼容性更好）",
-	"OpenAI": "OpenAI",
+	OpenAI: "OpenAI",
 	"OpenAI WebSockets": "OpenAI WebSocket",
-	"Overlayfs": "Overlayfs 覆盖层",
-	"Parallel": "并行",
-	"Patch": "补丁",
-	"Percentage": "百分比",
-	"Pi": "Pi",
-	"Preserve": "保留原样",
-	"ProjFS": "ProjFS 提供程序",
+	Overlayfs: "Overlayfs 覆盖层",
+	Parallel: "并行",
+	Patch: "补丁",
+	Percentage: "百分比",
+	Pi: "Pi",
+	Preserve: "保留原样",
+	ProjFS: "ProjFS 提供程序",
 	"Project knowledge": "项目知识",
-	"Providers": "供应商",
+	Providers: "供应商",
 	"Public Internet Only": "仅限公共互联网",
-	"Qwen3": "Qwen3",
-	"Rebuild": "重绘",
+	Qwen3: "Qwen3",
+	Rebuild: "重绘",
 	"Record Parse Regressions": "记录解析回归",
-	"Reflink": "Reflink 硬链接",
+	Reflink: "Reflink 硬链接",
 	"Rounded Box (Default)": "圆角框（默认）",
 	"Serve Images as URLs": "以 URL 形式提供图片",
-	"Shell": "Shell",
+	Shell: "Shell",
 	"Speech Language Hint": "语音语言提示",
-	"Stable": "稳定版",
-	"Streaming": "流式渲染",
-	"Tasks": "任务",
+	Stable: "稳定版",
+	Streaming: "流式渲染",
+	Tasks: "任务",
 	"Terminal Provider": "终端提供方",
 	"Tool Call Handler Timeout (ms)": "工具调用处理超时（毫秒）",
-	"Tools": "工具",
+	Tools: "工具",
 	"Top K": "Top K",
 	"Top P": "Top P",
 	"Top Rule Dock": "顶线停靠",
-	"Trafilatura": "Trafilatura",
+	Trafilatura: "Trafilatura",
 	"Typo Detection (macOS)": "拼写检查（macOS）",
 	"Unexpected Stops": "意外中止",
-	"Unicode": "Unicode 字符",
+	Unicode: "Unicode 字符",
 	"Update Channel": "更新通道",
 	"Web UI URL": "Web 界面地址",
-	"Widgets": "组件",
+	Widgets: "组件",
 	"Word Autocomplete (macOS)": "词语自动补全（macOS）",
-	"XML": "XML",
-	"ZFS": "ZFS",
-	"btrfs": "btrfs",
+	XML: "XML",
+	ZFS: "ZFS",
+	btrfs: "btrfs",
 	"0 KB": "0 KB",
 	"1 KB": "1 KB",
 	"1 MB": "1 MB",
@@ -3343,8 +3178,10 @@ export const settings = {
 	"50 KB": "50 KB",
 	"500 KB": "500 KB",
 	"75 KB": "75 KB",
-	"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps": "把压缩点之前的历史折叠进摘要分隔线之后；关闭（默认）则完整保留对话并在每个压缩点显示分隔线——折叠会把这些条目从导航树和轨迹跳转里隐藏",
-	"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16": "端侧神经语音（Kokoro-82M / MeloTTS 中文）；输出为 WAV/PCM16",
+	"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps":
+		"把压缩点之前的历史折叠进摘要分隔线之后；关闭（默认）则完整保留对话并在每个压缩点显示分隔线——折叠会把这些条目从导航树和轨迹跳转里隐藏",
+	"On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16":
+		"端侧神经语音（Kokoro-82M / MeloTTS 中文）；输出为 WAV/PCM16",
 	"Solid accent line, no context feedback": "纯强调色线条，无上下文反馈",
 	"Used portion in accent color, remainder dimmed": "已用部分强调色，其余变暗",
 	"Visual layout of the input editor and status line": "输入编辑器与状态线的视觉形态",
@@ -3352,70 +3189,109 @@ export const settings = {
 	":floor": ":floor（下限）",
 	":nitro": ":nitro（极速）",
 	":online": ":online（在线）",
-	"AI": "AI",
-	"Anthropic": "Anthropic",
-	"Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})": "命令后端的 argv 模板；{file} 是图片路径，{mime}/{ext} 可选。取 stdout 打印的最后一个 URL（如 pasta -b -f {file}）",
-	"Automatically fix syntax errors introduced by edits using AST-based localization and a small model": "编辑引入语法错误时，用 AST 定位加小模型自动修复",
-	"Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.": "助手没有可见消息就停更时自动恢复。Smart 档还会用小模型对纯文本停更分类。",
-	"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.": "传给语音模型的 BCP-47 提示（如 zh、yue、en、ja）。留空自动检测——内置模型多语言，通常无需提示。",
-	"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.": "Smart 意外停更检测的分类器：默认在线（/models 里的 TINY 角色，否则 smol），也可用端侧本地模型。",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace": "启用 OMP 原生安全扫描的规划与执行，以及只读的 security:// 资源命名空间",
-	"Exa": "Exa",
-	"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.": "显式选择终端后端。auto 在 bun-pty 失败时回退 node-pty；bun-pty 或 node-pty 在不支持的平台上直接报错。",
-	"Externally reachable base URL fronting the blob server (required for ssh, optional for direct)": "blob 服务器对外的公网基础地址（ssh 方式必填，直连可选）",
-	"GLM": "GLM",
+	AI: "AI",
+	Anthropic: "Anthropic",
+	"Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})":
+		"命令后端的 argv 模板；{file} 是图片路径，{mime}/{ext} 可选。取 stdout 打印的最后一个 URL（如 pasta -b -f {file}）",
+	"Automatically fix syntax errors introduced by edits using AST-based localization and a small model":
+		"编辑引入语法错误时，用 AST 定位加小模型自动修复",
+	"Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.":
+		"助手没有可见消息就停更时自动恢复。Smart 档还会用小模型对纯文本停更分类。",
+	"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.":
+		"传给语音模型的 BCP-47 提示（如 zh、yue、en、ja）。留空自动检测——内置模型多语言，通常无需提示。",
+	"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
+		"Smart 意外停更检测的分类器：默认在线（/models 里的 TINY 角色，否则 smol），也可用端侧本地模型。",
+	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
+		"启用 OMP 原生安全扫描的规划与执行，以及只读的 security:// 资源命名空间",
+	Exa: "Exa",
+	"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.":
+		"显式选择终端后端。auto 在 bun-pty 失败时回退 node-pty；bun-pty 或 node-pty 在不支持的平台上直接报错。",
+	"Externally reachable base URL fronting the blob server (required for ssh, optional for direct)":
+		"blob 服务器对外的公网基础地址（ssh 方式必填，直连可选）",
+	GLM: "GLM",
 	"GitHub CLI": "GitHub CLI",
 	"GitHub Gist": "GitHub Gist",
-	"How the line between the left and right segments reflects context usage (box composer only)": "左右分段之间的线条如何反映上下文用量（仅框式输入框）",
+	"How the line between the left and right segments reflects context usage (box composer only)":
+		"左右分段之间的线条如何反映上下文用量（仅框式输入框）",
 	"Just under the 200K tier break some providers bill double past": "部分供应商在 200K 档位之上按双倍计费",
 	"Mark misspelled prompt words with the active macOS dictionaries": "用当前启用的 macOS 词典标记拼写错误的输入词",
-	"Maximum concurrent LLM requests per provider id (for example \"openai\" or \"anthropic\"), shared across local OMP processes with this config root. Omitted providers are unlimited.": "每个供应商 id 的最大并发 LLM 请求数（如 \"openai\"、\"anthropic\"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。",
-	"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).": "内联图片的最大高度（终端行数，默认 20）。0 表示只用视口限制（终端高度的 60%）。",
-	"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).": "内联图片的最大宽度（终端列数，默认 100）。0 为不限（只受终端宽度约束）。",
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
+		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。',
+	"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).":
+		"内联图片的最大高度（终端行数，默认 20）。0 表示只用视口限制（终端高度的 60%）。",
+	"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).":
+		"内联图片的最大宽度（终端列数，默认 100）。0 为不限（只受终端宽度约束）。",
 	"Mechanical + small-model classification of text-only stops": "机械规则 + 小模型对纯文本停更的分类",
-	"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend": "本地语音后端使用的端侧神经语音模型（Kokoro-82M 偏英语，MeloTTS 中文 面向普通话/中英混合）",
+	"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend":
+		"本地语音后端使用的端侧神经语音模型（Kokoro-82M 偏英语，MeloTTS 中文 面向普通话/中英混合）",
 	"Ordered destinations tried when publishing images for provider access": "发布图片供供应商访问时按序尝试的目标列表",
 	"Percentage plus ticks at the speculative and auto-compaction boundaries": "百分比加上投机压缩与自动压缩边界的刻度",
-	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count": "扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 OMP 自有对话框的时间不计入",
-	"Powerline": "Powerline",
-	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice": "自动上下文维护的首选回退顺序；不可用或失败的方式自动前进到下一项",
-	"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning": "私有草稿；不展示给用户。关闭受支持的 GPT、Claude 与 Gemini 推理摘要",
-	"Protect expensive prefixes during long tool executions; stops when the agent settles": "长工具执行期间保护昂贵前缀；代理落定后停止",
-	"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires": "在提示缓存条目临期前，以单 token 输出预算重发上一次请求",
-	"Remote listen port of the ssh reverse forward that your web server proxies to": "ssh 反向转发的远程监听端口，由你的 Web 服务器代理",
-	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.": "将 Mermaid 代码块渲染为 ASCII 图（TUI）。桌面端对话用自己的聊天偏好把 mermaid 渲染为 SVG。",
+	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count":
+		"扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 OMP 自有对话框的时间不计入",
+	Powerline: "Powerline",
+	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice":
+		"自动上下文维护的首选回退顺序；不可用或失败的方式自动前进到下一项",
+	"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning":
+		"私有草稿；不展示给用户。关闭受支持的 GPT、Claude 与 Gemini 推理摘要",
+	"Protect expensive prefixes during long tool executions; stops when the agent settles":
+		"长工具执行期间保护昂贵前缀；代理落定后停止",
+	"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires":
+		"在提示缓存条目临期前，以单 token 输出预算重发上一次请求",
+	"Remote listen port of the ssh reverse forward that your web server proxies to":
+		"ssh 反向转发的远程监听端口，由你的 Web 服务器代理",
+	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.":
+		"将 Mermaid 代码块渲染为 ASCII 图（TUI）。桌面端对话用自己的聊天偏好把 mermaid 渲染为 SVG。",
 	"Repaint only the viewport and keep history wrapped at its old width": "只重绘视口，历史保持旧宽度换行",
 	"Replay the transcript at the new width below retained history": "按新宽度重放对话，保留的历史保持原换行",
-	"Retry stops with no visible assistant message; tool calls are excluded (default)": "对没有可见助手消息的停更进行重试；工具调用除外（默认）",
-	"Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)": "通过 daemon 中转在多个 musepi 实例间共享每个项目的语言服务器（不可用时回退私有服务器）",
-	"Show macOS dictionary word completions as inline hints accepted with Tab": "以行内提示显示 macOS 词典的补全，Tab 采纳",
+	"Retry stops with no visible assistant message; tool calls are excluded (default)":
+		"对没有可见助手消息的停更进行重试；工具调用除外（默认）",
+	"Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)":
+		"通过 daemon 中转在多个 musepi 实例间共享每个项目的语言服务器（不可用时回退私有服务器）",
+	"Show macOS dictionary word completions as inline hints accepted with Tab":
+		"以行内提示显示 macOS 词典的补全，Tab 采纳",
 	"Silver 16, CJK": "Silver 16, CJK",
 	"Single top rule with status docked onto it and below": "单条顶线，状态停靠在线上及线下",
-	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed": "上下文接近压缩阈值时后台先做投机摘要，越过阈值后把就绪结果拼接进来",
+	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed":
+		"上下文接近压缩阈值时后台先做投机摘要，越过阈值后把就绪结果拼接进来",
 	"Status line embedded in top border, compact 2-line prompt": "状态线内嵌顶边框，紧凑两行提示符",
-	"TTSR": "TTSR",
+	TTSR: "TTSR",
 	"Update channel used by omp update and the startup update check": "omp update 与启动时更新检查使用的更新通道",
-	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window": "对超过阈值加价的长上下文窗口使用premium档（如 GPT-5.6 1M 在 272K 以上输入按 2 倍计费）；关闭则限制在标准定价窗口",
-	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections": "用户级系统提示词区块（{name, order, text}）；作用于每个会话，同名预设区块被覆盖",
-	"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)": "本地语音后端使用的音色——设置 → 语音中各档位下方的音色选择器写入（Kokoro 多音色，MeloTTS-zh 单中文音色）",
-	"Yolo": "Yolo",
+	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window":
+		"对超过阈值加价的长上下文窗口使用premium档（如 GPT-5.6 1M 在 272K 以上输入按 2 倍计费）；关闭则限制在标准定价窗口",
+	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections":
+		"用户级系统提示词区块（{name, order, text}）；作用于每个会话，同名预设区块被覆盖",
+	"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)":
+		"本地语音后端使用的音色——设置 → 语音中各档位下方的音色选择器写入（Kokoro 多音色，MeloTTS-zh 单中文音色）",
+	Yolo: "Yolo",
 	"api.kimi.com": "api.kimi.com",
 	"api.moonshot.ai": "api.moonshot.ai",
 	"user@host destination for the ssh reverse forward": "ssh 反向转发的 user@host 目标",
-	"使用中文界面": "使用中文界面",
-	"简体中文": "简体中文",
-	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.": "从会话开始即启用扩展引导/生命周期工具集（extension_load、extension_reload、ext_define 等）。默认关闭，普通会话不带这些 schema；creator 预设会自动启用。",
-	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.": "为内置通用 task 子代理启用 prewalk：以解析到的模型起步、规划并开始实现，在第一次编辑/写入时移交 'smol' 角色。按代理的覆盖（/agents 中心的 task.agentPrewalk）与用户代理的 prewalk frontmatter 不受此开关影响。",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.": "代理管理的 worktree 基目录——任务隔离副本、github PR 检出、musepi worktree 清理都在这里。未设置用 ~/.musepi/wt。必须是绝对路径或 ~ 相对路径；相对路径被忽略。环境变量 MUSEPI_WORKTREE_DIR 优先于本项。",
-	"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).": "所有工具的超时上限（秒），同时约束代理显式设置的超时和工具未设置时的默认值（0 = 不限制）。调低可压缩 eval 内核默认的 30s；调高适合长时间运行的 Python/Julia 单元（按会话生效，无需重启）。",
-	"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.": "驱动应用内托管浏览器（桌面 GUI 右栏浏览器，Electron WebContentsView 走本地 CDP 桥）而非另起 Chromium：代理的页面在面板中可见并共享其持久登录态。CLI/TUI 默认关；桌面应用运行时桥接在线、此项默认开——显式设 false 可强制无头浏览器。优先于 Headless Browser；显式 app.cdp_url/path 与 Browser Relay 仍然最优先。",
-	"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.": "上下文维护的固定 token 上限；设置后覆盖百分比。用它把上下文压到远低于模型物理窗口——适用于长上下文 token 超阈值加价（如把 500K 模型压到 190000），或超长上下文明显劣化注意力质量时。",
-	"Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.": "桌面 GUI 托管浏览器的本地 CDP 端点（默认 http://127.0.0.1:9230）。运行中的应用桥接会绑定 9230-9239 里第一个空闲端口并以实际端口为准；此值只在桥接未启动时生效。",
-	"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.": "端侧本地语音模型。Whisper base/small/large-v3-turbo（transformers.js）多语言、中文可用（默认 Whisper small）；SenseVoiceSmall（sherpa-onnx, INT8）面向普通话/粤语及中英混说优化（auto/zh/en/yue/ja/ko）；Parakeet TDT v3（sherpa-onnx）英语与欧洲语言精度/速度最佳但不支持中文。首次使用时下载。",
-	"Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).": "以终端实时图形保留的内联图片上限（默认 8）。超限后旧图片在整屏重绘时退化为文字占位。0 表示全部保留（不限制）。",
-	"Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails": "通过配置的后端链发布外发图片，向支持抓取 URL 的供应商发送短链接而非内联 base64。所有后端或供应商抓取失败时自动回退内联",
-	"Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.": "把浏览器导航限制在公网 http/https：阻止 localhost、内网与带凭据的 URL，导航前复查 DNS（防 DNS 重绑定）。默认关闭——访问 localhost 开发服务器是核心功能；需要严格公网浏览面的工作流再开启。",
-	"Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs": "本地托管图片 URL 的服务窗口，从会话最后一次发送图片起计；恢复会话会以同一链接重开窗口。0 表示 broker 运行期间链接一直有效",
+	使用中文界面: "使用中文界面",
+	简体中文: "简体中文",
+	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
+		"从会话开始即启用扩展引导/生命周期工具集（extension_load、extension_reload、ext_define 等）。默认关闭，普通会话不带这些 schema；creator 预设会自动启用。",
+	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.":
+		"为内置通用 task 子代理启用 prewalk：以解析到的模型起步、规划并开始实现，在第一次编辑/写入时移交 'smol' 角色。按代理的覆盖（/agents 中心的 task.agentPrewalk）与用户代理的 prewalk frontmatter 不受此开关影响。",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.":
+		"代理管理的 worktree 基目录——任务隔离副本、github PR 检出、musepi worktree 清理都在这里。未设置用 ~/.musepi/wt。必须是绝对路径或 ~ 相对路径；相对路径被忽略。环境变量 MUSEPI_WORKTREE_DIR 优先于本项。",
+	"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).":
+		"所有工具的超时上限（秒），同时约束代理显式设置的超时和工具未设置时的默认值（0 = 不限制）。调低可压缩 eval 内核默认的 30s；调高适合长时间运行的 Python/Julia 单元（按会话生效，无需重启）。",
+	"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.":
+		"驱动应用内托管浏览器（桌面 GUI 右栏浏览器，Electron WebContentsView 走本地 CDP 桥）而非另起 Chromium：代理的页面在面板中可见并共享其持久登录态。CLI/TUI 默认关；桌面应用运行时桥接在线、此项默认开——显式设 false 可强制无头浏览器。优先于 Headless Browser；显式 app.cdp_url/path 与 Browser Relay 仍然最优先。",
+	"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.":
+		"上下文维护的固定 token 上限；设置后覆盖百分比。用它把上下文压到远低于模型物理窗口——适用于长上下文 token 超阈值加价（如把 500K 模型压到 190000），或超长上下文明显劣化注意力质量时。",
+	"Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.":
+		"桌面 GUI 托管浏览器的本地 CDP 端点（默认 http://127.0.0.1:9230）。运行中的应用桥接会绑定 9230-9239 里第一个空闲端口并以实际端口为准；此值只在桥接未启动时生效。",
+	"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.":
+		"端侧本地语音模型。Whisper base/small/large-v3-turbo（transformers.js）多语言、中文可用（默认 Whisper small）；SenseVoiceSmall（sherpa-onnx, INT8）面向普通话/粤语及中英混说优化（auto/zh/en/yue/ja/ko）；Parakeet TDT v3（sherpa-onnx）英语与欧洲语言精度/速度最佳但不支持中文。首次使用时下载。",
+	"Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).":
+		"以终端实时图形保留的内联图片上限（默认 8）。超限后旧图片在整屏重绘时退化为文字占位。0 表示全部保留（不限制）。",
+	"Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails":
+		"通过配置的后端链发布外发图片，向支持抓取 URL 的供应商发送短链接而非内联 base64。所有后端或供应商抓取失败时自动回退内联",
+	"Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.":
+		"把浏览器导航限制在公网 http/https：阻止 localhost、内网与带凭据的 URL，导航前复查 DNS（防 DNS 重绑定）。默认关闭——访问 localhost 开发服务器是核心功能；需要严格公网浏览面的工作流再开启。",
+	"Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs":
+		"本地托管图片 URL 的服务窗口，从会话最后一次发送图片起计；恢复会话会以同一链接重开窗口。0 表示 broker 运行期间链接一直有效",
 	"0 lines": "0 行",
 	"0 turns": "0 轮",
 	"1 hour": "1 小时",
@@ -3474,7 +3350,8 @@ export const settings = {
 	"8 tasks": "8 个任务",
 	"90 requests": "90 个请求",
 	"AI-generated commit message from diff": "AI 根据差异生成的提交信息",
-	"API format for Kimi Code provider (auto follows live model metadata)": "Kimi Code 供应商的 API 格式（auto 跟随在线模型元数据）",
+	"API format for Kimi Code provider (auto follows live model metadata)":
+		"Kimi Code 供应商的 API 格式（auto 跟随在线模型元数据）",
 	"Abort On Fabricated Tool Result": "对伪造的工具结果中止",
 	"Abort on Failed Preview": "预览失败中止",
 	"Abort streaming edit tool calls when patch preview fails": "补丁预览失败时中止流式 edit 调用",
@@ -3483,56 +3360,69 @@ export const settings = {
 	"Action when pressing Escape twice with empty editor": "空编辑器双击 Escape 的行为",
 	"Additional Workspace Dirs": "额外工作区目录",
 	"Adds delegation guidance to the system prompt": "在系统提示中添加委派指南",
-	"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.": "高级：显式的嵌入模型 ID，覆盖变体选择。留空使用 mnemopi.embeddingVariant。",
+	"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.":
+		"高级：显式的嵌入模型 ID，覆盖变体选择。留空使用 mnemopi.embeddingVariant。",
 	"Advisor Immune Turns": "顾问免疫轮次",
 	"Advisor Sync Backlog": "顾问同步积压",
-	"After an advisor concern or blocker interrupts, route further concerns/blockers non-interruptingly for this many primary turns.": "顾问关注/阻塞中断后，接下来这么多主回合内的后续关注/阻塞改为非中断呈现。",
-	"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills": "代理停下后，提示它把经验沉淀到记忆并创建/完善独立管理的技能",
+	"After an advisor concern or blocker interrupts, route further concerns/blockers non-interruptingly for this many primary turns.":
+		"顾问关注/阻塞中断后，接下来这么多主回合内的后续关注/阻塞改为非中断呈现。",
+	"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills":
+		"代理停下后，提示它把经验沉淀到记忆并创建/完善独立管理的技能",
 	"Agent Idle TTL": "Agent 空闲 TTL",
 	"Aggressive context usage": "激进上下文使用",
 	"Agnes Video Generation": "Agnes 视频生成",
-	"All": "全部",
+	All: "全部",
 	"All (messages + thinking)": "全部（消息+思考）",
 	"All Devices": "所有设备",
 	"All segments including time": "包含时间的所有段",
 	"Allow every concern/blocker to interrupt.": "允许每个关注/阻塞中断。",
 	"Allow repetition": "允许重复",
 	"Allow retry recovery to switch to configured fallback models": "允许重试恢复切换到配置的备用模型",
-	"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.": "允许 task 工具派生的子代理使用 lsp 工具。默认关闭以保持子代理轻量；LSP 感知的委派值得额外 token 时再开。",
-	"Allow the eval tool to dispatch JavaScript cells to the in-process runtime": "允许 eval 工具把 JavaScript 单元派发到进程内运行时",
-	"Allow the eval tool to dispatch Julia cells to the persistent Julia kernel": "允许 eval 工具把 Julia 单元派发到持久 Julia 内核",
-	"Allow the eval tool to dispatch Python cells to the IPython kernel": "允许 eval 工具把 Python 单元派发到 IPython 内核",
-	"Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel": "允许 eval 工具把 Ruby 单元派发到持久 Ruby 内核",
+	"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.":
+		"允许 task 工具派生的子代理使用 lsp 工具。默认关闭以保持子代理轻量；LSP 感知的委派值得额外 token 时再开。",
+	"Allow the eval tool to dispatch JavaScript cells to the in-process runtime":
+		"允许 eval 工具把 JavaScript 单元派发到进程内运行时",
+	"Allow the eval tool to dispatch Julia cells to the persistent Julia kernel":
+		"允许 eval 工具把 Julia 单元派发到持久 Julia 内核",
+	"Allow the eval tool to dispatch Python cells to the IPython kernel":
+		"允许 eval 工具把 Python 单元派发到 IPython 内核",
+	"Allow the eval tool to dispatch Ruby cells to the persistent Ruby kernel":
+		"允许 eval 工具把 Ruby 单元派发到持久 Ruby 内核",
 	"Allow the read tool to fetch and process URLs": "允许 read 工具获取和处理 URL",
-	"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)": "接电源时同时阻止系统睡眠并声明用户活跃（caffeinate -i -d -s -u）",
+	"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)":
+		"接电源时同时阻止系统睡眠并声明用户活跃（caffeinate -i -d -s -u）",
 	"Also keep the display from idle-sleeping (caffeinate -i -d)": "同时阻止显示器空闲休眠（caffeinate -i -d）",
-	"Always": "总是",
+	Always: "总是",
 	"Always ask": "始终询问",
 	"Always enable append-only context": "始终启用仅追加上下文",
 	"Always inline descriptors in the system prompt": "始终在系统提示中内联描述符",
 	"Always select the next eligible configured fallback": "始终选择下一个符合条件的配置备用方案",
 	"Always use the URL configured below": "始终使用下方配置的地址",
-	"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.": "输出溢出到产物时与尾部一并保留的头部内容量（中段省略）。0 关闭——只保留尾部。",
+	"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.":
+		"输出溢出到产物时与尾部一并保留的头部内容量（中段省略）。0 关闭——只保留尾部。",
 	"Amount of tail content kept inline when output spills to artifact": "输出溢出到 artifact 时保留内联的尾部内容量",
 	"Animation style for working/loading messages": "工作/加载消息的动画样式",
 	"Anthropic Server-Side Fallback (Fable 5)": "Anthropic 服务端备用方案（Fable 5）",
 	"Antigravity Endpoint Mode": "反重力端点模式",
 	"Append-Only Context": "仅追加上下文",
 	"Apply Isolated Changes": "应用隔离变更",
-	"Apply loop guard to assistant prose messages in addition to thinking logs": "循环防护除思考日志外也作用于助手正文消息",
+	"Apply loop guard to assistant prose messages in addition to thinking logs":
+		"循环防护除思考日志外也作用于助手正文消息",
 	"Artifact Head Size (KB)": "Artifact 头部大小（KB）",
 	"Artifact Spill Threshold (KB)": "Artifact 溢出阈值（KB）",
 	"Artifact Tail Lines": "Artifact 尾部行数",
 	"Artifact Tail Size (KB)": "Artifact 尾部大小（KB）",
-	"Ask": "询问",
+	Ask: "询问",
 	"Ask Notification": "询问通知",
 	"Ask Timeout": "询问超时",
 	"Ask the agent to describe the intent of each tool call before executing it": "让代理在执行每个工具调用前先描述意图",
-	"Ask the official registry first, then try the public mirror if the failure is one it could answer": "先问官方仓库，失败属于其可答类型时再试公共镜像",
+	"Ask the official registry first, then try the public mirror if the failure is one it could answer":
+		"先问官方仓库，失败属于其可答类型时再试公共镜像",
 	"Assistant messages": "助手消息",
 	"Async Execution": "异步执行",
-	"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.": "会话启动时创建库中尚不存在的内置心智模型（project-conventions、project-decisions、user-preferences）。",
-	"Auto": "自动",
+	"At session start, create any built-in mental models (project-conventions, project-decisions, user-preferences) that do not yet exist on the bank.":
+		"会话启动时创建库中尚不存在的内置心智模型（project-conventions、project-decisions、user-preferences）。",
+	Auto: "自动",
 	"Auto (only for models without vision)": "自动（仅限无视觉模型）",
 	"Auto QA": "自动质量检测",
 	"Auto QA Push Endpoint": "自动质量检测推送端点",
@@ -3543,27 +3433,37 @@ export const settings = {
 	"Auto-Learn (experimental)": "自动学习（实验性）",
 	"Auto-Promote Context": "自动提升上下文",
 	"Auto-Resize Images": "自动调整图片大小",
-	"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.": "自动批准读取、写入与执行工具。用户策略仍可要求确认或拦截调用。",
-	"Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.": "自动批准只读与写入工具；bash、eval、browser、task 等执行类工具需要确认。",
-	"Auto-approve read-only tools; require confirmation for write and exec tools.": "只读工具自动批准；写入与执行工具需要确认。",
+	"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.":
+		"自动批准读取、写入与执行工具。用户策略仍可要求确认或拦截调用。",
+	"Auto-approve read-only and write tools; require confirmation for exec tools such as bash, eval, browser, and task.":
+		"自动批准只读与写入工具；bash、eval、browser、task 等执行类工具需要确认。",
+	"Auto-approve read-only tools; require confirmation for write and exec tools.":
+		"只读工具自动批准；写入与执行工具需要确认。",
 	"Auto-fallback": "自动备用",
 	"Auto-installs via uv/pip": "通过 uv/pip 自动安装",
-	"Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed": "把仓库的 direnv/devenv .envrc 自动加载进 bash 会话，devenv 工具与环境变量无需手动 direnv exec 即就位。遵循 direnv 允许清单：未 direnv allow 过的 .envrc 绝不执行",
+	"Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed":
+		"把仓库的 direnv/devenv .envrc 自动加载进 bash 会话，devenv 工具与环境变量无需手动 direnv exec 即就位。遵循 direnv 允许清单：未 direnv allow 过的 .envrc 绝不执行",
 	"Auto-read new replies": "自动朗读新回复",
 	"Auto-run capture at stop": "停止时自动捕获",
-	"Auto-select the recommended ask option after this many seconds (0 disables)": "这么多秒后自动选择推荐的 ask 选项（0 关闭）",
+	"Auto-select the recommended ask option after this many seconds (0 disables)":
+		"这么多秒后自动选择推荐的 ask 选项（0 关闭）",
 	"Autocomplete Items": "自动完成条数",
-	"Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly": "自动工具问题上报（xd://report_issue）。默认开启；首次上报会征求同意，拒绝则停用直到显式重新开启",
-	"Automatically apply successful isolated task changes to the parent checkout; disable to retain patch or branch artifacts": "隔离任务变更成功后自动应用到父检出；关闭则保留补丁或分支产物",
-	"Automatically background long-running bash commands and deliver the result later": "长时间运行的 bash 命令自动转后台，结果稍后交付",
+	"Automated tool issue reporting (xd://report_issue). On by default; the first report asks for consent, and denying it disables reporting until re-enabled explicitly":
+		"自动工具问题上报（xd://report_issue）。默认开启；首次上报会征求同意，拒绝则停用直到显式重新开启",
+	"Automatically apply successful isolated task changes to the parent checkout; disable to retain patch or branch artifacts":
+		"隔离任务变更成功后自动应用到父检出；关闭则保留补丁或分支产物",
+	"Automatically background long-running bash commands and deliver the result later":
+		"长时间运行的 bash 命令自动转后台，结果稍后交付",
 	"Automatically compact context when it gets too large": "上下文过大时自动压缩",
 	"Automatically enter plan mode at the start of every new session": "在每个新 Session 开始时自动进入 plan 模式",
 	"Automatically format code files using LSP after writing": "写入后用 LSP 自动格式化代码文件",
 	"Automatically read aloud new assistant replies via the local TTS engine": "通过本地 TTS 引擎自动朗读新的助手回复",
 	"Automatically resume the most recent session in the current directory": "自动恢复当前目录中的最近会话",
 	"BAAI/bge-base-en-v1.5 (768d), English-only": "BAAI/bge-base-en-v1.5（768 维），仅英文",
-	"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.": "BFS 展开可省略片段，直到摘要至少达到此可见行数。0 表示只保留最外层省略。",
-	"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice": "tts 工具后端：端侧神经语音（Kokoro-82M）或 xAI Grok Voice",
+	"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.":
+		"BFS 展开可省略片段，直到摘要至少达到此可见行数。0 表示只保留最外层省略。",
+	"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice":
+		"tts 工具后端：端侧神经语音（Kokoro-82M）或 xAI Grok Voice",
 	"Balance brevity and detail (default)": "平衡简洁与详细（默认）",
 	"Balanced safety margin": "平衡安全边距",
 	"Base URL of a self-hosted SearXNG instance used for web search": "用于网络搜索的自托管 SearXNG 实例的基准 URL",
@@ -3572,38 +3472,46 @@ export const settings = {
 	"Bash Interceptor": "Bash 拦截器",
 	"Batch Task Calls": "批量任务调用",
 	"Bearer token for authenticated Hindsight servers": "认证 Hindsight 服务器的 Bearer token",
-	"Block": "方块",
+	Block: "方块",
 	"Block Auto-Generated Files": "阻止自动生成文件",
 	"Block Images": "拦截图片",
 	"Block clone": "拦截克隆",
 	"Block shell commands that have dedicated tools": "拦截有专用工具的 Shell 命令",
 	"Branch Summaries": "分支摘要",
-	"Broad": "宽泛",
-	"Browser": "浏览器",
+	Broad: "宽泛",
+	Browser: "浏览器",
 	"Browser CDP URL": "浏览器 CDP URL",
 	"Browser Relay": "浏览器中继",
 	"Browser Relay URL": "浏览器中继 URL",
-	"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only": "/collab 链接使用的浏览器界面；留空从 collab.relayUrl 推导；显式 http:// 仅限本机",
+	"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only":
+		"/collab 链接使用的浏览器界面；留空从 collab.relayUrl 推导；显式 http:// 仅限本机",
 	"Built-in Rules": "内置规则",
 	"Built-ins Only": "仅内置",
 	"Cache Miss Marker": "缓存未命中标记",
-	"Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free": "把渲染好的 issue/PR 视图缓存在 ~/.musepi/cache/github-cache.db，重复读取零开销",
-	"Cache system prompt + tool specs and keep an append-only message log so provider prefix caches (DeepSeek, Xiaomi/SGLang, Anthropic) hit at maximum rate. Auto enables for known prefix-cache providers.": "缓存系统提示 + 工具规格并保持仅追加的消息日志，让供应商前缀缓存（DeepSeek、Xiaomi/SGLang、Anthropic）以最高命中率命中。Auto 对已知支持前缀缓存的供应商启用。",
+	"Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free":
+		"把渲染好的 issue/PR 视图缓存在 ~/.musepi/cache/github-cache.db，重复读取零开销",
+	"Cache system prompt + tool specs and keep an append-only message log so provider prefix caches (DeepSeek, Xiaomi/SGLang, Anthropic) hit at maximum rate. Auto enables for known prefix-cache providers.":
+		"缓存系统提示 + 工具规格并保持仅追加的消息日志，让供应商前缀缓存（DeepSeek、Xiaomi/SGLang、Anthropic）以最高命中率命中。Auto 对已知支持前缀缓存的供应商启用。",
 	"Catalog Only": "仅目录",
-	"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape": "Codex 周用量计划外重置与新入账保存重置时，在屏幕上三分之一处放一段烟花庆祝，按 Escape 消散",
+	"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape":
+		"Codex 周用量计划外重置与新入账保存重置时，在屏幕上三分之一处放一段烟花庆祝，按 Escape 消散",
 	"Check eligibility, then ask before spending the first saved reset.": "先检查资格，再在消耗第一份保存重置前询问。",
 	"Check for Updates": "检查更新",
 	"Check for plugin updates on startup": "启动时检查插件更新",
 	"Check on startup and auto-install updates": "启动时检查并自动安装更新",
 	"Check on startup and notify when updates are available": "启动时检查并在有更新时通知",
-	"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request": "在回合内安全的工具循环边界、下一次供应商请求前检查阈值",
+	"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request":
+		"在回合内安全的工具循环边界、下一次供应商请求前检查阈值",
 	"Checkpoint/Rewind": "检查点/回退",
 	"Cherry-picked high-quality providers (only defined for select models)": "精选的高质量提供商（仅针对特定模型定义）",
-	"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.": "语音听写何时自动提交：从不、松键（2+ 词）、松键且句子完整、或我说提交时。",
-	"Choose whether update notes start as a summary, full details, or stay hidden": "更新说明默认展开为摘要、完整详情还是收起",
-	"Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.": "选择哪些已挂载设备的文档与 schema 内联进系统提示。Built-ins 保持核心工具内联，MCP 与扩展工具按需。",
+	"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.":
+		"语音听写何时自动提交：从不、松键（2+ 词）、松键且句子完整、或我说提交时。",
+	"Choose whether update notes start as a summary, full details, or stay hidden":
+		"更新说明默认展开为摘要、完整详情还是收起",
+	"Choose which mounted-device docs and schemas are inlined in the system prompt. Built-ins keeps core tools inline while MCP and extension tools stay on-demand.":
+		"选择哪些已挂载设备的文档与 schema 内联进系统提示。Built-ins 保持核心工具内联，MCP 与扩展工具按需。",
 	"Chunked retention sliced by turn boundaries": "按回合边界分块保留",
-	"Classic": "经典",
+	Classic: "经典",
 	"Classifier may resolve max where the model supports it": "分类器可在模型支持时解析 max",
 	"Classifier stops at xhigh (default)": "分类器在 xhigh 停止（默认）",
 	"Claude Project Commands": "Claude 项目命令",
@@ -3615,10 +3523,11 @@ export const settings = {
 	"Collapse Compacted History": "折叠已压缩历史",
 	"Color-Blind Mode": "色盲模式",
 	"Combine diffs and git apply": "合并差异并使用 git apply",
-	"Commit message style for nested repo changes (generic or AI-generated)": "嵌套仓库变更的提交信息风格（通用或 AI 生成）",
+	"Commit message style for nested repo changes (generic or AI-generated)":
+		"嵌套仓库变更的提交信息风格（通用或 AI 生成）",
 	"Commit per task, merge with --no-ff": "每个任务提交一次，使用 --no-ff 合并",
 	"Communication style rendered into the system prompt's personality block": "渲染到系统提示个性块中的沟通风格",
-	"Compact": "紧凑",
+	Compact: "紧凑",
 	"Compact Thinking Level": "紧凑思维层级",
 	"Compact context while idle when token count exceeds threshold": "当 token 数超过阈值时，在空闲时压缩上下文",
 	"Compact the session context, then re-submit the prompt": "压缩会话上下文，然后重新提交提示词",
@@ -3626,47 +3535,60 @@ export const settings = {
 	"Compaction Token Limit": "压缩 Token 限制",
 	"Completion Notification": "完成通知",
 	"Composite all displays or select a native display id": "合成所有显示器，或选择原生显示器 ID",
-	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent": "把冗长的 shell 输出（git、npm、cargo 等）压缩后返回给代理",
+	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent":
+		"把冗长的 shell 输出（git、npm、cargo 等）压缩后返回给代理",
 	"Computer Display": "计算机显示器",
 	"Computer Screenshot Height": "计算机截图高度",
 	"Computer Screenshot Width": "计算机截图宽度",
 	"Confirm interactively": "交互式确认",
-	"Consecutive identical tool calls required before the corrective steer is injected": "触发纠偏引导前所需的连续相同工具调用次数",
-	"Conservative": "保守",
-	"Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.": "控制工具以何种方式暴露给模型。Auto 用供应商原生工具调用，所选模型标记为不支持时回退 GLM 自有方言。Native 强制原生；其余值强制对应方言。会话启动时生效。",
-	"Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.": "控制 inspect_image 工具（把图像理解委托给有视觉的模型）。auto 仅在当前模型无原生图像输入时暴露；on 始终暴露；off 从不。",
+	"Consecutive identical tool calls required before the corrective steer is injected":
+		"触发纠偏引导前所需的连续相同工具调用次数",
+	Conservative: "保守",
+	"Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.":
+		"控制工具以何种方式暴露给模型。Auto 用供应商原生工具调用，所选模型标记为不支持时回退 GLM 自有方言。Native 强制原生；其余值强制对应方言。会话启动时生效。",
+	"Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.":
+		"控制 inspect_image 工具（把图像理解委托给有视觉的模型）。auto 仅在当前模型无原生图像输入时暴露；on 始终暴露；off 从不。",
 	"Cooldown expiry": "冷却到期",
 	"Create Todos Automatically": "自动创建待办",
-	"Custom": "自定义",
+	Custom: "自定义",
 	"Custom Plugin Registry URL": "自定义插件源地址",
 	"Dark Theme": "深色主题",
-	"Debounce window in milliseconds for MCP resource updates before injecting them into the conversation": "MCP 资源更新注入对话前的防抖窗口（毫秒）",
-	"Debug": "调试",
+	"Debounce window in milliseconds for MCP resource updates before injecting them into the conversation":
+		"MCP 资源更新注入对话前的防抖窗口（毫秒）",
+	Debug: "调试",
 	"Deduplicate Diagnostics": "诊断去重",
-	"Default": "默认",
-	"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.": "默认的 HTTP CDP 发现端点（如 http://127.0.0.1:9222），命中则附加而不是启动浏览器。工具调用上的显式 app.cdp_url 或 app.path 优先。",
+	Default: "默认",
+	"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.":
+		"默认的 HTTP CDP 发现端点（如 http://127.0.0.1:9222），命中则附加而不是启动浏览器。工具调用上的显式 app.cdp_url 或 app.path 优先。",
 	"Default Read Limit": "默认读取上限",
-	"Default approval behavior for tool calls. 'Always ask' auto-approves read-only tools only. 'Write' auto-approves read and workspace-write tools. 'Yolo' auto-approves all tiers; user policy may still prompt or block.": "工具调用的默认审批行为。「总是询问」仅自动批准只读工具。「写入」自动批准读取与工作区写入。「Yolo」全档自动批准；用户策略仍可提示或拦截。",
+	"Default approval behavior for tool calls. 'Always ask' auto-approves read-only tools only. 'Write' auto-approves read and workspace-write tools. 'Yolo' auto-approves all tiers; user policy may still prompt or block.":
+		"工具调用的默认审批行为。「总是询问」仅自动批准只读工具。「写入」自动批准读取与工作区写入。「Yolo」全档自动批准；用户策略仍可提示或拦截。",
 	"Default filter mode when opening the session tree": "打开会话树时的默认筛选模式",
 	"Default number of lines returned when agent calls read without a limit": "智能体无限制调用 read 时默认返回的行数",
-	"Default routing-variant suffix appended to OpenRouter model IDs (overridden when the selector already names a variant)": "OpenRouter 模型 ID 默认追加的路由变体后缀（选择器已带变体时覆盖）",
+	"Default routing-variant suffix appended to OpenRouter model IDs (overridden when the selector already names a variant)":
+		"OpenRouter 模型 ID 默认追加的路由变体后缀（选择器已带变体时覆盖）",
 	"Default serving path (no service_tier)": "默认服务路径（无 service_tier）",
-	"Default timeout for hub message waits (and send await:true) in milliseconds; 0 disables the timeout": "hub 消息等待（以及 send await:true）的默认超时（毫秒）；0 关闭超时",
+	"Default timeout for hub message waits (and send await:true) in milliseconds; 0 disables the timeout":
+		"hub 消息等待（以及 send await:true）的默认超时（毫秒）；0 关闭超时",
 	"Default — adaptive 5s→5m, resets when you stop polling": "默认 —— 自适应 5 秒→5 分钟，停止轮询时重置",
 	"Default; ~12.5K tokens": "默认；约 12.5K token",
 	"Default; ~2.5K tokens": "默认；约 2.5K token",
 	"Default; ~5K tokens": "默认；约 5K token",
-	"Delay before completed or abandoned todos are removed from the todo widget": "已完成或已放弃的待办从组件移除前的延迟",
+	"Delay before completed or abandoned todos are removed from the todo widget":
+		"已完成或已放弃的待办从组件移除前的延迟",
 	"Densest cell with sentence-hue ink.": "最密单元格，句子色调墨水。",
 	"Describe Images for Text Models": "为文本模型描述图片",
-	"Detect consecutive identical tool calls across turns and inject a corrective steer": "跨回合检测连续相同工具调用并注入纠偏引导",
-	"Deterministic": "确定性",
+	"Detect consecutive identical tool calls across turns and inject a corrective steer":
+		"跨回合检测连续相同工具调用并注入纠偏引导",
+	Deterministic: "确定性",
 	"Diagnostics on Edit": "编辑时诊断",
 	"Diagnostics on Write": "写入时诊断",
 	"Dictation barge-in": "听写打断播放",
-	"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model": "auto 思考档位的难度分类器：默认在线（/models 的 TINY 角色，否则 smol），也可用端侧本地模型",
+	"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model":
+		"auto 思考档位的难度分类器：默认在线（/models 的 TINY 角色，否则 smol），也可用端侧本地模型",
 	"Direct, efficient engineer focused on clarity and rigor": "直接高效的工程师，注重清晰和严谨",
-	"Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)": "截图保存目录。未设置则存临时文件。支持 ~。示例：~/Downloads、~/Desktop、/sdcard/Download（Android）",
+	"Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)":
+		"截图保存目录。未设置则存临时文件。支持 ~。示例：~/Downloads、~/Desktop、/sdcard/Download（Android）",
 	"Disable Mnemopi LLM-backed extraction": "禁用 Mnemopi 基于 LLM 的抽取",
 	"Disable append-only context": "禁用仅追加上下文",
 	"Disable first-event timeout": "禁用首个事件超时",
@@ -3676,25 +3598,30 @@ export const settings = {
 	"Disabled; tail-only truncation": "已禁用；仅保留尾部",
 	"Display Name": "显示名称",
 	"Display hook status messages below the status line": "在状态栏下方显示钩子状态消息",
-	"Display the actual model ID used by each subagent in the task widget status line": "在任务组件状态行显示每个子代理实际使用的模型 ID",
+	"Display the actual model ID used by each subagent in the task widget status line":
+		"在任务组件状态行显示每个子代理实际使用的模型 ID",
 	"Do not prevent any sleep": "不阻止任何休眠",
 	"Do not run the saved-reset auto-redeem check.": "不运行 saved-reset 自动兑换检查。",
 	"Do not show release notes on startup": "启动时不显示版本说明",
 	"Do not spend reserve quota or select a fallback": "不消耗预留配额或选择回退",
 	"Doc 8on16, black": "Doc 8on16，黑色",
 	"Don't check for plugin updates": "不检查插件更新",
-	"Double": "双击",
+	Double: "双击",
 	"Double-Escape Action": "双击 Esc 行为",
-	"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.": "通过 musepi 浏览器中继驱动你自己的 Chrome 标签页。扩展只需安装一次（musepi browser-relay install）；浏览器工具需要时中继服务自动启动。优先于 Browser CDP URL；设 PI_BROWSER_RELAY=0 或 1 可强制覆盖。",
+	"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.":
+		"通过 musepi 浏览器中继驱动你自己的 Chrome 标签页。扩展只需安装一次（musepi browser-relay install）；浏览器工具需要时中继服务自动启动。优先于 Browser CDP URL；设 PI_BROWSER_RELAY=0 或 1 可强制覆盖。",
 	"Early maintenance": "早期维护",
 	"Early protection": "早期保护",
 	"Edit Mode": "编辑模式",
 	"Elide Uneventful Results": "省略无事件结果",
-	"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.": "内嵌 Silver TrueType 字体（16px 网格），覆盖 CJK 等非拉丁文本。",
+	"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.":
+		"内嵌 Silver TrueType 字体（16px 网格），覆盖 CJK 等非拉丁文本。",
 	"Embedding variant": "嵌入模型变体",
-	"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running": "代理或上下文维护运行时发出 OSC 9;4 不确定进度",
+	"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running":
+		"代理或上下文维护运行时发出 OSC 9;4 不确定进度",
 	"Emoji Autocomplete": "Emoji 自动补全",
-	"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion": "启用四路召回（向量、图、事实、时序），以倒数排名融合",
+	"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion":
+		"启用四路召回（向量、图、事实、时序），以倒数排名融合",
 	"Enable Advisor": "启用顾问",
 	"Enable Git Integration": "启用 Git 集成",
 	"Enable OpenRouter's web-search plugin": "启用 OpenRouter 的网络搜索插件",
@@ -3702,7 +3629,8 @@ export const settings = {
 	"Enable async bash commands and background task execution": "启用异步 bash 命令和后台任务执行",
 	"Enable automatic stream loop detection for model reasoning and prose": "为模型推理和文本启用自动流式循环检测",
 	"Enable for known prefix-cache providers (recommended)": "为已知前缀缓存提供商启用（推荐）",
-	"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords": "为独立 ultrathink、orchestrate、workflowz 关键词启用隐藏提示",
+	"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords":
+		"为独立 ultrathink、orchestrate、workflowz 关键词启用隐藏提示",
 	"Enable per-session goal mode and the hidden goal tool": "启用每会话目标模式和隐藏的目标工具",
 	"Enable plan mode for read-only exploration and planning before execution": "启用计划模式：执行前只读探索与规划",
 	"Enable speech-to-text input via microphone": "通过麦克风启用语音转文字输入",
@@ -3712,45 +3640,61 @@ export const settings = {
 	"Enable the ast_edit tool for structural AST rewrites": "启用 ast_edit 工具进行结构化 AST 重写",
 	"Enable the ast_grep tool for structural AST search": "启用 ast_grep 工具进行结构化 AST 搜索",
 	"Enable the bash tool for shell command execution": "启用 bash 工具执行 shell 命令",
-	"Enable the browser tool for scripted Chromium automation (puppeteer)": "启用浏览器工具进行脚本化 Chromium 自动化（puppeteer）",
+	"Enable the browser tool for scripted Chromium automation (puppeteer)":
+		"启用浏览器工具进行脚本化 Chromium 自动化（puppeteer）",
 	"Enable the checkpoint and rewind tools for context checkpointing": "启用 checkpoint 和 rewind 工具以进行上下文快照",
 	"Enable the debug tool for DAP-based debugging": "启用 debug 工具进行基于 DAP 的调试",
-	"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.": "启用 generate_image 工具（文生图与改图）。tools.xdev 开启时作为 xd:// 设备暴露。",
-	"Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)": "启用 github 工具（按操作分发仓库、issue、拉取请求、diff、搜索、检出、推送与 Actions 监视流）",
+	"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.":
+		"启用 generate_image 工具（文生图与改图）。tools.xdev 开启时作为 xd:// 设备暴露。",
+	"Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)":
+		"启用 github 工具（按操作分发仓库、issue、拉取请求、diff、搜索、检出、推送与 Actions 监视流）",
 	"Enable the glob tool for glob-based file lookup": "启用 glob 工具进行基于 glob 的文件查找",
 	"Enable the grep tool for regex content search": "启用 grep 工具进行正则表达式内容搜索",
-	"Enable the launch tool for supervising shared long-running project processes": "启用 launch 工具管理共享的长运行项目进程",
-	"Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)": "启用 lsp 工具提供代码智能（定义、引用、诊断、重命名）",
-	"Enable the scriptable host-desktop control tool (screenshots, input, accessibility)": "启用可脚本化的桌面控制工具（截图、输入、辅助功能）",
-	"Enable the tiered query result cache for repeated and similar recall queries": "为重复与相似召回查询启用分层结果缓存",
+	"Enable the launch tool for supervising shared long-running project processes":
+		"启用 launch 工具管理共享的长运行项目进程",
+	"Enable the lsp tool for code intelligence (definitions, references, diagnostics, rename)":
+		"启用 lsp 工具提供代码智能（定义、引用、诊断、重命名）",
+	"Enable the scriptable host-desktop control tool (screenshots, input, accessibility)":
+		"启用可脚本化的桌面控制工具（截图、输入、辅助功能）",
+	"Enable the tiered query result cache for repeated and similar recall queries":
+		"为重复与相似召回查询启用分层结果缓存",
 	"Enable the todo tool for task tracking": "启用 todo 工具进行任务跟踪",
-	"Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis": "启用 tts 工具进行端侧（Kokoro）或 xAI Grok Voice 语音文件合成",
-	"Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.": "启用 vault:// 内部 URL，经 Obsidian CLI 读写 Obsidian 库内容。关闭时 vault:// 解析被拒，系统提示中也省略 vault:// 条目。",
+	"Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis":
+		"启用 tts 工具进行端侧（Kokoro）或 xAI Grok Voice 语音文件合成",
+	"Enable the vault:// internal URL for reading and editing Obsidian vault content via the Obsidian CLI. When disabled, vault:// resolution is refused and the vault:// entry is omitted from the system prompt.":
+		"启用 vault:// 内部 URL，经 Obsidian CLI 读写 Obsidian 库内容。关闭时 vault:// 解析被拒，系统提示中也省略 vault:// 条目。",
 	"Enable the web_search tool for live web results": "启用 web_search 工具获取实时网络结果",
 	"Encourage novelty": "鼓励创新",
 	"Encrypted Blob": "加密数据块",
-	"Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)": "google-antigravity 供应商的端点路由策略（chat、search、image、discovery）",
+	"Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)":
+		"google-antigravity 供应商的端点路由策略（chat、search、image、discovery）",
 	"Enforce Seen-Line Guard": "强制已见行保护",
 	"English (bge-base-en-v1.5)": "英文（bge-base-en-v1.5）",
 	"Enhanced Speech Rewriting": "增强语音重写",
-	"Erase and replay terminal scrollback when a block's final form replaces its live preview. When off (default), stale preview copies remain in history and the final content is appended below.": "区块最终形态替换实时预览时擦除并重放终端回滚区。关闭（默认）时历史里残留过期预览副本，最终内容追加在下方。",
+	"Erase and replay terminal scrollback when a block's final form replaces its live preview. When off (default), stale preview copies remain in history and the final content is appended below.":
+		"区块最终形态替换实时预览时擦除并重放终端回滚区。关闭（默认）时历史里残留过期预览副本，最终内容追加在下方。",
 	"Error Notification": "错误通知",
 	"Every row stays visible while the agent works.": "智能体工作时每一行都可见",
 	"Exa Search Delay": "Exa 搜索延迟",
 	"Excluded Web Search Providers": "排除的网络搜索提供商",
-	"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.": "Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.",
-	"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.": "Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.",
-	"Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level": "在 task 派生上暴露可选的 effort 参数，允许调用方覆盖各子代理的思考档位",
-	"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.": "作为附加根加入每个会话的额外工作区目录（多根工作区）。通过 /add-dir 与 /remove-dir 实时管理。路径相对 cwd 解析；建议绝对路径。代理会被告知这些根的存在，可对它们 read/grep/glob。",
+	"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.":
+		"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.",
+	"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.":
+		"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.",
+	"Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level":
+		"在 task 派生上暴露可选的 effort 参数，允许调用方覆盖各子代理的思考档位",
+	"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.":
+		"作为附加根加入每个会话的额外工作区目录（多根工作区）。通过 /add-dir 与 /remove-dir 实时管理。路径相对 cwd 解析；建议绝对路径。代理会被告知这些根的存在，可对它们 read/grep/glob。",
 	"Extremely early maintenance": "极端早期维护",
 	"Fail closed": "失败关闭",
 	"Fallback Revert Policy": "备用回退策略",
 	"Fetch Provider": "获取提供商",
-	"Files": "文件",
-	"Files with fewer total lines are read verbatim instead of structurally summarized": "总行数较少的文件直接原文读取，不做结构化摘要",
+	Files: "文件",
+	"Files with fewer total lines are read verbatim instead of structurally summarized":
+		"总行数较少的文件直接原文读取，不做结构化摘要",
 	"Final message only": "仅最终消息",
 	"Fireworks Tier": "Fireworks 层级",
-	"Focused": "聚焦",
+	Focused: "聚焦",
 	"Follow-Up Mode": "跟进模式",
 	"Force deterministic FTS-only recall instead of vector embeddings": "强制仅用确定性全文检索回忆，不用向量嵌入",
 	"Force production endpoint only": "仅强制生产端点",
@@ -3759,22 +3703,25 @@ export const settings = {
 	"Forces a comprehensive todo list on the first message": "在第一条消息上强制生成全面的待办列表",
 	"Format on Write": "写入时格式化",
 	"Forward slashes": "正斜杠",
-	"Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.": "snapcompact 打印文本的边框形态（压缩归档与内联成像）。Auto 按当前模型选择适配形态。",
-	"Full": "完整",
-	"Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)": "接收 Auto QA JSON 报告的完整地址（默认 https://qa.omp.sh/v1/grievances）",
+	"Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.":
+		"snapcompact 打印文本的边框形态（压缩归档与内联成像）。Auto 按当前模型选择适配形态。",
+	Full: "完整",
+	"Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)":
+		"接收 Auto QA JSON 报告的完整地址（默认 https://qa.omp.sh/v1/grievances）",
 	"Full session": "完整会话",
 	"Full standard context window": "完整标准上下文窗口",
 	"Fuzzy Match": "模糊匹配",
 	"Fuzzy Match Threshold": "模糊匹配阈值",
 	"Gemini web_search model": "Gemini 网络搜索模型",
-	"General": "常规",
+	General: "常规",
 	"Generate Image": "生成图片",
-	"Generate a brief LLM recap of where things stand after the terminal has been idle": "终端空闲后生成一段简短的 LLM 现状回顾",
+	"Generate a brief LLM recap of where things stand after the terminal has been idle":
+		"终端空闲后生成一段简短的 LLM 现状回顾",
 	"Generic Task Prewalk": "通用任务预走",
 	"GitHub Cache Hard TTL": "GitHub 缓存硬 TTL",
 	"GitHub Cache Soft TTL": "GitHub 缓存软 TTL",
 	"GitHub View Cache": "GitHub 视图缓存",
-	"Global": "全局",
+	Global: "全局",
 	"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)": "图标和符号的字形集（Unicode、Nerd 字体或 ASCII）",
 	"Goal Continuation Modes": "目标继续模式",
 	"Goal Mode": "目标模式",
@@ -3785,18 +3732,21 @@ export const settings = {
 	"Grep Context Before": "Grep 上文行数",
 	"Half of a 200K window": "200K 窗口的一半",
 	"Halfway point": "中点",
-	"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.": "BFS 展开时的摘要大小硬上限。展开后行数会超过上限的片段跳过（保持折叠），继续处理其余片段。",
-	"Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.": "每个子代理的硬墙钟上限（毫秒）。0 关闭。对逃过推理层看门狗的供应商侧流挂起做纵深防御；触发常规子代理中止，原因为「超时」。",
+	"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.":
+		"BFS 展开时的摘要大小硬上限。展开后行数会超过上限的片段跳过（保持折叠），继续处理其余片段。",
+	"Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.":
+		"每个子代理的硬墙钟上限（毫秒）。0 关闭。对逃过推理层看门狗的供应商侧流挂起做纵深防御；触发常规子代理中止，原因为「超时」。",
 	"Headless Browser": "无头浏览器",
-	"Hidden": "隐藏",
+	Hidden: "隐藏",
 	"Hide Secrets": "隐藏密钥",
 	"Hide Thinking Blocks": "隐藏思考块",
 	"Hide Tool Activity": "隐藏工具活动",
 	"Hide model-initiated tool calls and results from the transcript": "在转录中隐藏模型发起的工具调用及其结果",
 	"Hide thinking blocks in assistant responses": "在助手响应中隐藏思考块",
-	"High": "高",
-	"Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.": "auto 分类器可解析的最高档位。xhigh 让分类器保持在顶档下一级，只有显式 ultrathink 才到 max；max 允许分类器判定 exceptional 的回合在使用该档位的模型上按最高档计费。",
-	"Hindsight": "Hindsight",
+	High: "高",
+	"Highest effort the `auto` classifier may resolve. `xhigh` keeps the classifier one tier below the top, so only an explicit `ultrathink` reaches `max`; `max` lets a turn the classifier judges exceptional bill the top tier on models that expose it.":
+		"auto 分类器可解析的最高档位。xhigh 让分类器保持在顶档下一级，只有显式 ultrathink 才到 max；max 允许分类器判定 exceptional 的回合在使用该档位的模型上按最高档计费。",
+	Hindsight: "Hindsight",
 	"Hindsight API Token": "Hindsight API Token",
 	"Hindsight API URL": "Hindsight API URL",
 	"Hindsight Auto Recall": "Hindsight 自动回忆",
@@ -3808,17 +3758,22 @@ export const settings = {
 	"Hindsight Scoping": "Hindsight 作用域",
 	"Hindsight server URL (Cloud or self-hosted)": "Hindsight 服务器 URL（云或自托管）",
 	"Holds a long task's tail in view.": "让长任务的画面停在尾部",
-	"How a settled terminal resize refreshes transcript rows retained in terminal scrollback": "终端窗口尺寸变化稳定后，如何刷新保留在回滚区里的对话行",
+	"How a settled terminal resize refreshes transcript rows retained in terminal scrollback":
+		"终端窗口尺寸变化稳定后，如何刷新保留在回滚区里的对话行",
 	"How isolated task changes are integrated (patch apply or branch merge)": "隔离任务变更如何合入（打补丁或分支合并）",
-	"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.": "hub wait 观察后台任务多久后返回当前状态。固定值每次等满该时长。smart 自适应：从 5s 起随连续等待拉长（至多 5m），约一分钟未等待后重置回 5s。",
-	"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.": "空闲子代理在内存中存活多久后驻留磁盘（毫秒）。被驻留的代理在收到消息或恢复时自动复活。0 表示空闲代理一直存活到退出。",
+	"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.":
+		"hub wait 观察后台任务多久后返回当前状态。固定值每次等满该时长。smart 自适应：从 5s 起随连续等待拉长（至多 5m），约一分钟未等待后重置回 5s。",
+	"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.":
+		"空闲子代理在内存中存活多久后驻留磁盘（毫秒）。被驻留的代理在收到消息或恢复时自动复活。0 表示空闲代理一直存活到退出。",
 	"How long of a pause counts as the end of dictation.": "语音输入中停顿多久视为一句话结束。",
 	"How many levels deep subagents can spawn their own subagents": "子代理可生成其子代理的最大深度层级",
-	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to": "运行中的回合保留多少在视野内。Show all（默认）流式显示每一行；数字则只保留最近 N 行，其余折叠为「+N 更多」行，长任务因此保持稳定。已完成的回合无论取值如何都折叠进活动摘要",
+	"How much of a RUNNING turn to keep in view. 'Show all' (default) streams every row; a number keeps only the latest N and folds the rest into a '+N more' line, so a long task holds still. Finished turns always fold into the activity summary, whatever this is set to":
+		"运行中的回合保留多少在视野内。Show all（默认）流式显示每一行；数字则只保留最近 N 行，其余折叠为「+N 更多」行，长任务因此保持稳定。已完成的回合无论取值如何都折叠进活动摘要",
 	"How rules can repeat: once per session or after a message gap": "规则如何重复：每会话一次，或在消息间隔后",
 	"How strongly to push automatic todo-list creation after the first message": "首条消息后自动创建待办清单的推进强度",
 	"How strongly to push delegating work to subagents": "将工作委托给子代理的倾向程度",
-	"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.": "合成前如何处理助手回复：原文、净化（去代码/markdown）或摘要。",
+	"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.":
+		"合成前如何处理助手回复：原文、净化（去代码/markdown）或摘要。",
 	"How to drain follow-up messages after a turn completes": "一轮完成后如何排空后续消息",
 	"How to process queued messages while agent is working": "代理工作时如何处理排队消息",
 	"IME-Safe Prompt Layout": "IME 安全提示布局",
@@ -3832,26 +3787,32 @@ export const settings = {
 	"In-process HTML→Markdown converter (always available)": "进程内 HTML→Markdown 转换器（始终可用）",
 	"Include Model in Prompt": "在提示中包含模型名",
 	"Include Workspace Tree": "包含工作区树",
-	"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories": "新记忆写入时即进入情景图，与相关实体和记忆建立链接",
+	"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories":
+		"新记忆写入时即进入情景图，与相关实体和记忆建立链接",
 	"Inject MCP resource updates into the agent conversation": "将 MCP 资源更新注入到 Agent 对话中",
-	"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.": "子代理越过软请求预算时注入一次引导提示，要求在 1.5 倍强制交出停止前收尾。",
+	"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.":
+		"子代理越过软请求预算时注入一次引导提示，要求在 1.5 倍强制交出停止前收尾。",
 	"Inline Read Previews": "内联读取预览",
 	"Inline Tool Descriptors": "内联工具描述符",
 	"Inline built-in docs; fetch MCP and extension docs on demand.": "内联内置文档；按需获取 MCP 和扩展文档。",
-	"Inline descriptors for Gemini models; keep them in tool schemas otherwise": "Gemini 模型用行内描述符；其余模型保留在工具 schema 中",
+	"Inline descriptors for Gemini models; keep them in tool schemas otherwise":
+		"Gemini 模型用行内描述符；其余模型保留在工具 schema 中",
 	"Inline docs and schemas for every mounted device.": "为每个挂载设备内联文档和 schema。",
 	"Inspect Image": "检查图像",
 	"Inspect Image Timeout": "检查图像超时",
-	"Instant": "即时",
-	"Instruct upstream providers to completely omit thinking summaries from responses (where supported)": "指示上游供应商在响应中完全省略思考摘要（在支持的情况下）",
+	Instant: "即时",
+	"Instruct upstream providers to completely omit thinking summaries from responses (where supported)":
+		"指示上游供应商在响应中完全省略思考摘要（在支持的情况下）",
 	"Intent Tracing": "意图追踪",
 	"Interface Language": "界面语言",
 	"Interrupt Mode": "中断模式",
 	"Interrupt on prose and tool streams": "在文本和工具流上中断",
 	"Interrupt only on reply/thinking matches": "仅在回复/思考匹配时中断",
 	"Interrupt only on tool-call argument matches": "仅在工具调用参数匹配时中断",
-	"Interrupt the agent mid-stream when output matches rule patterns (Time-Traveling Stream Rules)": "输出命中规则模式时中断代理流（Time-Traveling Stream Rules）",
-	"Isolated bank per cwd basename — projects cannot see each other's memories": "按 cwd 名隔离记忆库——项目之间互不可见",
+	"Interrupt the agent mid-stream when output matches rule patterns (Time-Traveling Stream Rules)":
+		"输出命中规则模式时中断代理流（Time-Traveling Stream Rules）",
+	"Isolated bank per cwd basename — projects cannot see each other's memories":
+		"按 cwd 名隔离记忆库——项目之间互不可见",
 	"Isolation Commit Style": "隔离提交风格",
 	"Isolation Merge Strategy": "隔离合并策略",
 	"Isolation Mode": "隔离模式",
@@ -3860,14 +3821,16 @@ export const settings = {
 	"Julia Interpreter": "Julia 解释器",
 	"KITT Scanner": "KITT 扫描效果",
 	"Keep descriptors in provider tool schemas only": "仅保留描述符在提供商工具模式中",
-	"Keep interactive sessions on the primary until confirmed; background agents auto-fallback": "交互会话保持主账号直到确认；后台代理自动回退",
-	"Keep the IPython kernel alive across eval calls or start fresh each time": "IPython 内核跨 eval 调用保持存活，或每次新建",
+	"Keep interactive sessions on the primary until confirmed; background agents auto-fallback":
+		"交互会话保持主账号直到确认；后台代理自动回退",
+	"Keep the IPython kernel alive across eval calls or start fresh each time":
+		"IPython 内核跨 eval 调用保持存活，或每次新建",
 	"Keep the system awake while a session is open (caffeinate -i)": "会话打开时保持系统唤醒（caffeinate -i）",
 	"Keep the system prompt as text.": "将系统提示保留为文本。",
 	"Kimi API Format": "Kimi API 格式",
 	"Knight Rider 1982 red light bouncing left-right": "《霹雳游侠》1982 红色灯光左右弹跳",
 	"Kokoro voice used when speaking the assistant's output aloud": "朗读助手输出时使用的 Kokoro 语音",
-	"LSP": "LSP",
+	LSP: "LSP",
 	"LSP in Subagents": "子代理中的 LSP",
 	"Language for the TUI and the setup wizard": "TUI 和设置向导使用的语言。",
 	"Large Headings (Kitty)": "大标题（Kitty）",
@@ -3878,13 +3841,15 @@ export const settings = {
 	"Latest 3 rows": "最近 3 行",
 	"Latest 5 rows": "最近 5 行",
 	"Latest 7 rows": "最近 7 行",
-	"Launch": "启动",
+	Launch: "启动",
 	"Launch browser in headless mode (disable to show browser UI)": "以无头模式启动浏览器（禁用可显示浏览器 UI）",
 	"Lazy LSP Startup": "LSP 懒启动",
 	"Legacy reserve-based threshold": "基于预留的旧版阈值",
-	"Lenient": "宽松",
-	"Let standalone orchestrate append its hidden multi-agent orchestration notice": "允许独立 orchestrate 追加其隐藏的多代理编排提示",
-	"Let standalone ultrathink request maximum automatic thinking and append its hidden notice": "允许独立 ultrathink 请求最大自动思考并追加其隐藏提示",
+	Lenient: "宽松",
+	"Let standalone orchestrate append its hidden multi-agent orchestration notice":
+		"允许独立 orchestrate 追加其隐藏的多代理编排提示",
+	"Let standalone ultrathink request maximum automatic thinking and append its hidden notice":
+		"允许独立 ultrathink 请求最大自动思考并追加其隐藏提示",
 	"Let standalone workflowz append its hidden eval workflow notice": "允许独立 workflowz 追加其隐藏的 eval 工作流提示",
 	"Let the PAL pick the best available backend": "让 PAL 选择最佳可用后端",
 	"Light Theme": "浅色主题",
@@ -3899,19 +3864,21 @@ export const settings = {
 	"Load commands from .opencode/commands/": "从 .opencode/commands/ 加载命令",
 	"Load commands from ~/.claude/commands/": "从 ~/.claude/commands/ 加载命令",
 	"Load commands from ~/.config/opencode/commands/": "从 ~/.config/opencode/commands/ 加载命令",
-	"Load the default rules shipped with the agent (override individually with ttsr.disabledRules)": "加载代理内置默认规则（可用 ttsr.disabledRules 逐条覆盖）",
-	"Local": "本地",
+	"Load the default rules shipped with the agent (override individually with ttsr.disabledRules)":
+		"加载代理内置默认规则（可用 ttsr.disabledRules 逐条覆盖）",
+	Local: "本地",
 	"Local SQLite recall/retain backend with optional embeddings": "本地 SQLite 回忆/保留后端（可选嵌入）",
 	"Local TTS Model": "本地 TTS 模型",
 	"Local TTS Voice": "本地 TTS 声音",
-	"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.": "本地嵌入模型族。en = 更强的英语模型；multilingual = 跨语言模型。更改后下次启动重建现有记忆嵌入。",
+	"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.":
+		"本地嵌入模型族。en = 更强的英语模型；multilingual = 跨语言模型。更改后下次启动重建现有记忆嵌入。",
 	"Local rollout summarisation pipeline (memory_summary.md)": "本地滚动摘要管线（memory_summary.md）",
 	"Loop Guard": "循环防护",
 	"Loop Guard Scan Prose": "循环防护扫描文本",
 	"Loop Guard Tool-Call Reminder": "循环防护工具调用提醒",
 	"Loop Mode": "循环模式",
-	"Loose": "宽松",
-	"Low": "低",
+	Loose: "宽松",
+	Low: "低",
 	"MCP Markdown Results": "MCP Markdown 结果",
 	"MCP Notification Debounce": "MCP 通知防抖",
 	"MCP Project Config": "MCP 项目配置",
@@ -3927,21 +3894,25 @@ export const settings = {
 	"Max Task Recursion": "最大任务递归深度",
 	"Max Tool Timeout": "工具最大超时时间",
 	"Max visible items in autocomplete dropdown (3-20)": "自动完成下拉菜单中最大可见条目数（3-20）",
-	"Max wait for the first `direnv export` (a cold devenv shell can be slow); on timeout the session runs without the direnv env": "首个 direnv export 的最长等待（冷启动 devenv shell 可能很慢）；超时会话将在无 direnv 环境下运行",
+	"Max wait for the first `direnv export` (a cold devenv shell can be slow); on timeout the session runs without the direnv env":
+		"首个 direnv export 的最长等待（冷启动 devenv shell 可能很慢）；超时会话将在无 direnv 环境下运行",
 	"Maximum Per-Spawn Effort": "每次生成最大努力值",
 	"Maximum compatibility": "最大兼容性",
 	"Maximum composite screenshot height in pixels": "合成截图的最大高度（像素）",
 	"Maximum composite screenshot width in pixels": "合成截图的最大宽度（像素）",
-	"Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit": "每进程 Ollama Cloud 子代理最大并发数；0 关闭该供应商专项限制",
+	"Maximum concurrent Ollama Cloud subagent runs per process; 0 disables the provider-specific limit":
+		"每进程 Ollama Cloud 子代理最大并发数；0 关闭该供应商专项限制",
 	"Maximum info with Nerd Font icons": "Nerd 字体图标的最大信息量",
 	"Maximum lines of tail content kept inline when output spills to artifact": "输出溢出到产物时行内保留的最大尾部行数",
 	"Maximum number of subagents running concurrently": "同时运行的子代理最大数量",
 	"Maximum number of todo reminders before giving up": "放弃前的最大 todo 提醒次数",
-	"Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.": "task 工具每次派生的 effort 提示允许的最大推理档位。调低可防止调用方把子代理抬到超过此顶；默认保留模型完整范围。",
+	"Maximum reasoning effort allowed for the task tool's per-spawn effort hint. Lower values prevent callers from escalating subagents above this ceiling; the default preserves the model's full range.":
+		"task 工具每次派生的 effort 提示允许的最大推理档位。调低可防止调用方把子代理抬到超过此顶；默认保留模型完整范围。",
 	"Maximum retry attempts on API errors": "API 错误时的最大重试次数",
 	"Maximum variety": "最大多样性",
-	"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).": "重试之间的最大等待（毫秒）。供应商要求等待超过此值且没有凭据或模型回退成功时，请求快速失败而不是干等（如 Anthropic 3 小时限流窗口）。",
-	"Medium": "中",
+	"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows).":
+		"重试之间的最大等待（毫秒）。供应商要求等待超过此值且没有凭据或模型回退成功时，请求快速失败而不是干等（如 Anthropic 3 小时限流窗口）。",
+	Medium: "中",
 	"Memory Backend": "记忆后端",
 	"Memory Model": "记忆模型",
 	"Memory bank identifier (default: project name)": "记忆库标识（默认：项目名）",
@@ -3950,12 +3921,13 @@ export const settings = {
 	"Mild novelty": "轻度创新",
 	"Mild penalty": "轻度惩罚",
 	"Min P": "最小 P",
-	"Minimal": "极简",
-	"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing": "Exa 网络搜索请求之间的最小间隔（毫秒）；0 关闭节流",
+	Minimal: "极简",
+	"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing":
+		"Exa 网络搜索请求之间的最小间隔（毫秒）；0 关闭节流",
 	"Minimum multiline block comment length before read summaries collapse it": "多行块注释超过该长度时摘要折叠",
 	"Minimum multiline body or literal length before read summaries collapse it": "多行正文或字面量超过该长度时摘要折叠",
 	"Minimum probability threshold (0-1, -1 = provider default)": "最小概率阈值（0-1，-1 = 提供商默认值）",
-	"Mnemopi": "Mnemopi",
+	Mnemopi: "Mnemopi",
 	"Mnemopi Auto Recall": "Mnemopi 自动回忆",
 	"Mnemopi Auto Retain": "Mnemopi 自动保留",
 	"Mnemopi Bank": "Mnemopi 记忆库",
@@ -3969,32 +3941,37 @@ export const settings = {
 	"Mnemopi LLM Base URL": "Mnemopi LLM 基础 URL",
 	"Mnemopi LLM Mode": "Mnemopi LLM 模式",
 	"Mnemopi LLM Model": "Mnemopi LLM 模型",
-	"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model": "Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model",
+	"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model":
+		"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model",
 	"Mnemopi Polyphonic Recall": "Mnemopi 复调回忆",
 	"Mnemopi Proactive Linking": "Mnemopi 主动链接",
 	"Mnemopi Scoping": "Mnemopi 作用域",
-	"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.": "Gemini Google 搜索 grounding 的模型 ID。默认 gemini-2.5-flash。",
+	"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.":
+		"Gemini Google 搜索 grounding 的模型 ID。默认 gemini-2.5-flash。",
 	"Model Role Storage": "模型角色存储",
 	"Model decides when to delegate": "由模型决定何时委派",
 	"Model decides; no automatic todo list": "由模型决定；不自动创建待办列表",
 	"Model, git, cost, context": "模型、git、成本、上下文",
 	"Model, path, git, context, tokens, cost": "模型、路径、git、上下文、tokens、成本",
-	"Moderate": "适中",
+	Moderate: "适中",
 	"Moderate context usage": "适中的上下文使用",
 	"Moderately early maintenance": "中等早期维护",
-	"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.": "把低频（可发现）工具挂到 xd:// 设备 URL 下、经 read/write 驱动，而不是每次请求都带上全部 schema。未授予 write 工具的会话跳过挂载、所有工具照常顶层暴露。关闭即全部顶层暴露。",
+	"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.":
+		"把低频（可发现）工具挂到 xd:// 设备 URL 下、经 read/write 驱动，而不是每次请求都带上全部 schema。未授予 write 工具的会话跳过挂载、所有工具照常顶层暴露。关闭即全部顶层暴露。",
 	"Move the full system prompt to images, when that saves tokens.": "在能节省 token 时，将完整系统提示移动到图像。",
-	"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it": "提示词下边框独占一行，避免 macOS 输入法预编辑挤动",
+	"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it":
+		"提示词下边框独占一行，避免 macOS 输入法预编辑挤动",
 	"Multilingual (multilingual-e5-large)": "多语言（multilingual-e5-large）",
 	"Name shown to other collab participants (default: OS username)": "展示给其他协作参与者的名称（默认：系统用户名）",
-	"Native": "原生",
+	Native: "原生",
 	"Native Terminal Progress": "原生终端进度",
 	"Near context limit": "接近上下文限制",
 	"Nerd Font": "Nerd 字体",
-	"Never": "从不",
-	"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.": "保存的重置额度低于此数时不自动消耗（0 = 最后一份额度也可自动使用）。临期额度不受此限——保留到过期的额度什么也保不住。",
+	Never: "从不",
+	"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.":
+		"保存的重置额度低于此数时不自动消耗（0 = 最后一份额度也可自动使用）。临期额度不受此限——保留到过期的额度什么也保不住。",
 	"Never interrupt; inject warning after completion": "从不中断；在完成后注入警告",
-	"No": "否",
+	No: "否",
 	"No animation; static muted text": "无动画；静态弱化文字",
 	"No isolation": "无隔离",
 	"No limit": "无限制",
@@ -4004,29 +3981,36 @@ export const settings = {
 	"No per-line cap": "无每行上限",
 	"No special characters": "无特殊字符",
 	"No suffix; use OpenRouter's default routing": "无后缀；使用 OpenRouter 的默认路由",
-	"None": "无",
-	"Notify": "通知",
+	None: "无",
+	Notify: "通知",
 	"Notify when the agent finishes a turn": "Agent 完成一轮时通知",
 	"Notify when the agent stops with an error": "代理因错误停止时通知",
 	"Notify when the ask tool is waiting for input": "当询问工具等待输入时通知",
 	"Nucleus sampling cutoff (0-1, -1 = provider default)": "核采样截断值（0-1，-1 = 提供商默认值）",
-	"ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.": "本地小模型（标题 + 记忆）的 ONNX 执行后端。默认纯 CPU 推理。环境变量 PI_TINY_DEVICE 可覆盖。",
-	"ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.": "本地小模型的 ONNX 量化/精度。默认用模型自带 dtype（q4）；精度越低越快、越高越忠实。环境变量 PI_TINY_DTYPE 可覆盖。",
-	"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers": "发送给 AI 供应商前混淆已配置密钥并遮蔽凭据形 token",
+	"ONNX execution provider for local tiny models (titles + memory). Default uses CPU-only inference. The PI_TINY_DEVICE env var overrides this.":
+		"本地小模型（标题 + 记忆）的 ONNX 执行后端。默认纯 CPU 推理。环境变量 PI_TINY_DEVICE 可覆盖。",
+	"ONNX quantization/precision for local tiny models. Default uses each model's shipped dtype (q4); lower precision is faster, higher is more faithful. The PI_TINY_DTYPE env var overrides this.":
+		"本地小模型的 ONNX 量化/精度。默认用模型自带 dtype（q4）；精度越低越快、越高越忠实。环境变量 PI_TINY_DTYPE 可覆盖。",
+	"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers":
+		"发送给 AI 供应商前混淆已配置密钥并遮蔽凭据形 token",
 	"Obsidian Vault": "Obsidian 库",
-	"Off": "关闭",
-	"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory": "关闭、本地摘要管线、Mnemopi SQLite 或 Hindsight 远程记忆",
+	Off: "关闭",
+	"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory":
+		"关闭、本地摘要管线、Mnemopi SQLite 或 Hindsight 远程记忆",
 	"Ollama Cloud Max Concurrency": "Ollama Cloud 最大并发",
 	"Omit Thinking summaries": "省略思维摘要",
 	"Omit code blocks from thinking summaries and replace them with an ellipsis": "从思维摘要中省略代码块并用省略号替换",
 	"Omit the personality block entirely": "完全省略个性块",
-	"On": "开启",
+	On: "开启",
 	"One shared Mnemopi bank for every project": "所有项目共用一个 Mnemopi 库",
 	"One shared bank — every project sees the same memories": "单一共享库——所有项目看到相同记忆",
 	"Online (tiny)": "在线（微小）",
-	"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.": "只有当自然解封时间（已耗尽的 5h/周窗口中最近的一次重置）至少在这么多分钟之后才自动兑换（不为省一小段等待消耗稀缺额度）。调高（如 360）可忽略仅 5h 的封禁。",
-	"Only move loaded context-file instructions to images, when that saves tokens.": "仅当确实节省 token 时才把上下文文件指令转为图片。",
-	"OpenAI Responses and Codex response verbosity (low, medium, or high)": "OpenAI Responses and Codex response verbosity (low, medium, or high)",
+	"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.":
+		"只有当自然解封时间（已耗尽的 5h/周窗口中最近的一次重置）至少在这么多分钟之后才自动兑换（不为省一小段等待消耗稀缺额度）。调高（如 360）可忽略仅 5h 的封禁。",
+	"Only move loaded context-file instructions to images, when that saves tokens.":
+		"仅当确实节省 token 时才把上下文文件指令转为图片。",
+	"OpenAI Responses and Codex response verbosity (low, medium, or high)":
+		"OpenAI Responses and Codex response verbosity (low, medium, or high)",
 	"OpenCode Project Commands": "OpenCode 项目命令",
 	"OpenCode User Commands": "OpenCode 用户命令",
 	"OpenRouter Routing": "OpenRouter 路由",
@@ -4036,71 +4020,96 @@ export const settings = {
 	"Optional OpenAI-compatible embedding endpoint passed to Mnemopi": "可选 OpenAI 兼容嵌入端点，传给 Mnemopi",
 	"Optional SQLite DB path. Defaults to the agent memories directory.": "可选 SQLite 数据库路径，默认在智能体记忆目录",
 	"Optional embedding API key passed to Mnemopi": "可选嵌入 API 密钥，传给 Mnemopi",
-	"Optional path to an exact Julia executable. When set, automatic Julia runtime discovery is skipped.": "Julia 可执行文件的精确路径。设置后跳过自动 Julia 运行时发现。",
-	"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.": "Python 可执行文件的精确路径。设置后跳过自动 Python 运行时发现。",
-	"Optional path to an exact Ruby executable. When set, automatic Ruby runtime discovery is skipped.": "Ruby 可执行文件的精确路径。设置后跳过自动 Ruby 运行时发现。",
-	"Optional shared bank base name. Per-project modes derive project-local banks from it.": "可选的共享库名。按项目模式据此派生项目本地库。",
+	"Optional path to an exact Julia executable. When set, automatic Julia runtime discovery is skipped.":
+		"Julia 可执行文件的精确路径。设置后跳过自动 Julia 运行时发现。",
+	"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.":
+		"Python 可执行文件的精确路径。设置后跳过自动 Python 运行时发现。",
+	"Optional path to an exact Ruby executable. When set, automatic Ruby runtime discovery is skipped.":
+		"Ruby 可执行文件的精确路径。设置后跳过自动 Ruby 运行时发现。",
+	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
+		"可选的共享库名。按项目模式据此派生项目本地库。",
 	"Orchestrate Keyword": "Orchestrate 关键词",
-	"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.": "有序的 bash 命令审批规则。每项含 match 与 approval 字段；仅支持 '*' 通配。",
+	"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.":
+		"有序的 bash 命令审批规则。每项含 match 与 approval 字段；仅支持 '*' 通配。",
 	"Output Column Cap": "输出列上限",
 	"Package manager": "包管理器",
-	"Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.": "搭配第二个模型（分配为 advisor 角色），被动审阅每个回合并插入备注。",
-	"Past the soft TTL the cached row is returned and refreshed in the background; past the hard TTL it is dropped (seconds; default 7 days)": "超过软 TTL 先返回缓存行并后台刷新；超过硬 TTL 直接丢弃（秒；默认 7 天）",
+	"Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.":
+		"搭配第二个模型（分配为 advisor 角色），被动审阅每个回合并插入备注。",
+	"Past the soft TTL the cached row is returned and refreshed in the background; past the hard TTL it is dropped (seconds; default 7 days)":
+		"超过软 TTL 先返回缓存行并后台刷新；超过硬 TTL 直接丢弃（秒；默认 7 天）",
 	"Path and git only": "仅路径和 git",
-	"Pause the main agent for up to 30 seconds if the advisor falls behind by this many turns. Off disables catch-up delays.": "顾问落后此回合数时，主代理最多暂停 30 秒等它。Off 关闭追赶延迟。",
-	"Penalty for introducing already-present tokens (-1 = provider default)": "引入已存在 token 的惩罚（-1 = 供应商默认）",
+	"Pause the main agent for up to 30 seconds if the advisor falls behind by this many turns. Off disables catch-up delays.":
+		"顾问落后此回合数时，主代理最多暂停 30 秒等它。Off 关闭追赶延迟。",
+	"Penalty for introducing already-present tokens (-1 = provider default)":
+		"引入已存在 token 的惩罚（-1 = 供应商默认）",
 	"Penalty for repeated tokens (-1 = provider default)": "重复 token 的惩罚（-1 = 提供商默认值）",
 	"Per project": "按项目",
 	"Per project (tagged)": "按项目（带标签）",
 	"Per-Task Effort": "每任务努力值",
-	"Per-line byte cap for streaming tool outputs (bash, python, js eval) and `read`. Lines wider than this are ellipsis-truncated; remaining bytes up to the next newline are dropped. 0 disables.": "流式工具输出（bash、python、js eval）与 read 的每行字节上限。超宽行省略截断，到下一换行前的剩余字节丢弃。0 关闭。",
+	"Per-line byte cap for streaming tool outputs (bash, python, js eval) and `read`. Lines wider than this are ellipsis-truncated; remaining bytes up to the next newline are dropped. 0 disables.":
+		"流式工具输出（bash、python、js eval）与 read 的每行字节上限。超宽行省略截断，到下一换行前的剩余字节丢弃。0 关闭。",
 	"Per-project": "按项目",
-	"Per-request timeout for the inspect_image vision-model call, in milliseconds. A stalled provider fails fast with a timeout error instead of blocking until manual abort. Set to 0 to disable the timeout.": "inspect_image 视觉模型调用的单次超时（毫秒）。卡住的供应商快速失败并报超时，而不是阻塞到手动中止。0 关闭超时。",
-	"Per-tool approval policies. Set to 'allow' to auto-approve, 'prompt' to require confirmation, or 'deny' to block. Overrides are honored in every approval mode.": "按工具的审批策略。allow 自动批准、prompt 需确认、deny 拦截。在每种审批模式下都生效。",
-	"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior": "Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior",
-	"Personality": "性格",
-	"Picks a shape tuned for the current model, falling back to its provider family.": "Picks a shape tuned for the current model, falling back to its provider family.",
-	"Pipe": "竖线",
+	"Per-request timeout for the inspect_image vision-model call, in milliseconds. A stalled provider fails fast with a timeout error instead of blocking until manual abort. Set to 0 to disable the timeout.":
+		"inspect_image 视觉模型调用的单次超时（毫秒）。卡住的供应商快速失败并报超时，而不是阻塞到手动中止。0 关闭超时。",
+	"Per-tool approval policies. Set to 'allow' to auto-approve, 'prompt' to require confirmation, or 'deny' to block. Overrides are honored in every approval mode.":
+		"按工具的审批策略。allow 自动批准、prompt 需确认、deny 拦截。在每种审批模式下都生效。",
+	"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior":
+		"Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior",
+	Personality: "性格",
+	"Picks a shape tuned for the current model, falling back to its provider family.":
+		"Picks a shape tuned for the current model, falling back to its provider family.",
+	Pipe: "竖线",
 	"Plain unscii square cell with sentence-hue ink.": "纯 unscii 方形单元格，句子色调墨水。",
 	"Plan Mode": "计划模式",
 	"Playback rate for local TTS — 0.8× is common for reading aloud.": "本地 TTS 的播放速率——朗读常用 0.8×。",
 	"Plugin Install Source": "插件安装源",
-	"Pragmatic": "务实",
+	Pragmatic: "务实",
 	"Pre-built status line configurations": "预构建的状态栏配置",
 	"Prefer Task Delegation": "偏好任务委派",
 	"Prefer concise responses": "偏好简洁回复",
 	"Prefer detailed responses": "偏好详细回复",
-	"Prefer local on-device TTS; route .mp3 output to xAI when credentials exist": "优先端侧 TTS；有凭据时 .mp3 输出走 xAI",
-	"Preferred": "首选",
+	"Prefer local on-device TTS; route .mp3 output to xAI when credentials exist":
+		"优先端侧 TTS；有凭据时 .mp3 输出走 xAI",
+	Preferred: "首选",
 	"Prepend line numbers to read tool output by default": "read 输出默认带行号",
 	"Presence Penalty": "存在惩罚",
 	"Prevent Display Sleep": "阻止显示器休眠",
 	"Prevent Idle Sleep": "阻止空闲休眠",
 	"Prevent System Sleep": "阻止系统休眠",
-	"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)": "阻止编辑疑似自动生成的文件（protoc、sqlc、swagger 等）",
+	"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)":
+		"阻止编辑疑似自动生成的文件（protoc、sqlc、swagger 等）",
 	"Prevent images from being sent to LLM providers": "阻止图片发送到 LLM 提供商",
-	"Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.": "活跃会话期间阻止 macOS 睡眠。各级别累加——包含所有更低级别的标志。",
+	"Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.":
+		"活跃会话期间阻止 macOS 睡眠。各级别累加——包含所有更低级别的标志。",
 	"Prioritize cheapest available provider": "优先选择最便宜的可用提供商",
 	"Prioritize throughput / lowest latency": "优先吞吐量 / 最低延迟",
-	"Prioritized providers for image generation; unlisted providers follow the active session provider and the built-in order": "图片生成的供应商优先级；未列出者跟随当前会话供应商与内置顺序",
-	"Prioritized providers for the web_search tool; unlisted providers retain their default order afterward": "web_search 工具的供应商优先级；未列出的供应商保持默认顺序",
-	"Priority": "优先级",
+	"Prioritized providers for image generation; unlisted providers follow the active session provider and the built-in order":
+		"图片生成的供应商优先级；未列出者跟随当前会话供应商与内置顺序",
+	"Prioritized providers for the web_search tool; unlisted providers retain their default order afterward":
+		"web_search 工具的供应商优先级；未列出的供应商保持默认顺序",
+	Priority: "优先级",
 	"Priority serving path: higher reliability, premium per-token pricing": "优先服务路径：可靠性更高，token 单价更高",
 	"Priority: native > trafilatura > lynx > parallel > jina": "优先级：native > trafilatura > lynx > parallel > jina",
-	"Processing tier for Gemini (Google AI Studio + Vertex) requests, and Google-family models routed via OpenRouter (none = omit). Sent as the top-level `serviceTier` field.": "Gemini（Google AI Studio + Vertex）请求及经 OpenRouter 路由的 Google 系模型的处理档位（none = 不发送）。以顶层 serviceTier 字段传递。",
-	"Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.": "OpenAI / OpenAI-Codex 请求及经 OpenRouter 路由的 OpenAI 系模型的处理档位（none = 不发送）。以 service_tier 传递。",
+	"Processing tier for Gemini (Google AI Studio + Vertex) requests, and Google-family models routed via OpenRouter (none = omit). Sent as the top-level `serviceTier` field.":
+		"Gemini（Google AI Studio + Vertex）请求及经 OpenRouter 路由的 Google 系模型的处理档位（none = 不发送）。以顶层 serviceTier 字段传递。",
+	"Processing tier for OpenAI / OpenAI-Codex requests, and OpenAI-family models routed via OpenRouter (none = omit). Sent as `service_tier`.":
+		"OpenAI / OpenAI-Codex 请求及经 OpenRouter 路由的 OpenAI 系模型的处理档位（none = 不发送）。以 service_tier 传递。",
 	"Production Only": "仅生产环境",
 	"Project-local Mnemopi bank per cwd basename": "按 cwd 目录名建项目本地库",
-	"Promote to a larger-context model on context overflow instead of compacting": "上下文溢出时升级到更大窗口的模型而不是压缩",
-	"Prompt": "提示",
+	"Promote to a larger-context model on context overflow instead of compacting":
+		"上下文溢出时升级到更大窗口的模型而不是压缩",
+	Prompt: "提示",
 	"Prompt guidance plus a first-turn delegation reminder": "提示引导及首轮委托提醒",
 	"Prompt to summarize when leaving a branch": "离开分支时提示摘要",
 	"Prose Only Thinking": "纯文本思维",
 	"Prose Summaries": "散文摘要",
 	"Providers that web_search should never use, even as fallbacks": "web_search 不应使用的提供商，即使作为后备也不行",
-	"Prune older read results when the same file is read again (cache-aware, runs every turn)": "同一文件再次读取时清理旧的读取结果（缓存感知，每回合运行）",
-	"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)": "工具结果被消费后，清理被标记为上下文无用的项（无匹配、等待超时）（缓存感知）",
-	"Push to a secret gist (needs authenticated gh), falling back to the share server": "推送到私密 gist（需 gh 已登录），失败回退共享服务器",
+	"Prune older read results when the same file is read again (cache-aware, runs every turn)":
+		"同一文件再次读取时清理旧的读取结果（缓存感知，每回合运行）",
+	"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)":
+		"工具结果被消费后，清理被标记为上下文无用的项（无匹配、等待超时）（缓存感知）",
+	"Push to a secret gist (needs authenticated gh), falling back to the share server":
+		"推送到私密 gist（需 gh 已登录），失败回退共享服务器",
 	"Python Eval Backend": "Python 执行后端",
 	"Python Interpreter": "Python 解释器",
 	"Python Kernel Mode": "Python 内核模式",
@@ -4115,31 +4124,41 @@ export const settings = {
 	"Read Summary Unfold Target": "摘要展开目标",
 	"Read URLs": "读取 URL",
 	"Read content": "朗读内容",
-	"Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.": "启动时把精选的 reflect 摘要（心智模型）读入开发者指令。只读取库中已有模型——不写入。配合 hindsight.mentalModelAutoSeed 可自动创建内置种子集。",
+	"Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write. Pair with hindsight.mentalModelAutoSeed to also auto-create the built-in seed set.":
+		"启动时把精选的 reflect 摘要（心智模型）读入开发者指令。只读取库中已有模型——不写入。配合 hindsight.mentalModelAutoSeed 可自动创建内置种子集。",
 	"Reader backend priority for the fetch/read URL tool": "fetch/read URL 工具的读取后端优先级",
 	"Reasoning depth for thinking-capable models": "支持思维功能的模型的推理深度",
 	"Recall local memories into the first turn of each session": "每个会话首轮注入本地记忆",
 	"Recall memories on the first turn of each session": "每个会话首轮回忆记忆",
 	"Recursive copy": "递归复制",
 	"Refresh Title on Replan": "重新规划时刷新标题",
-	"Refresh generated session titles after todo init replans unless the title was set by the user": "todo init 重新规划后刷新生成的会话标题（用户手动改过的不动）",
+	"Refresh generated session titles after todo init replans unless the title was set by the user":
+		"todo init 重新规划后刷新生成的会话标题（用户手动改过的不动）",
 	"Register skills as /skill:name commands": "将技能注册为 /skill:name 命令",
-	"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.": "Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
-	"Reject edits anchored on lines a prior read/search never displayed in full": "拒绝锚定在之前 read/search 从未完整显示过的行上的编辑",
+	"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.":
+		"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
+	"Reject edits anchored on lines a prior read/search never displayed in full":
+		"拒绝锚定在之前 read/search 从未完整显示过的行上的编辑",
 	"Relay URL": "中继 URL",
 	"Relay used by /collab (wss://host[:port])": "/collab 使用的中继（wss://host[:port]）",
 	"Remind the agent to complete todos before stopping": "在停止前提醒 Agent 完成 todos",
-	"Remote": "远程",
+	Remote: "远程",
 	"Remote Compaction V2": "远程压缩 V2",
-	"Remove the 1-character horizontal padding from the left and right of the terminal output": "去掉终端输出左右的 1 字符水平内边距",
-	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.": "用 Kitty 的 OSC 66 文字缩放协议以 2 倍渲染 Markdown H1。仅 Kitty 终端生效，其余忽略。默认关闭。",
-	"Render Markdown read results as formatted terminal Markdown previews instead of raw source": "Markdown 读取结果渲染为终端排版预览，而非原始源码",
+	"Remove the 1-character horizontal padding from the left and right of the terminal output":
+		"去掉终端输出左右的 1 字符水平内边距",
+	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.":
+		"用 Kitty 的 OSC 66 文字缩放协议以 2 倍渲染 Markdown H1。仅 Kitty 终端生效，其余忽略。默认关闭。",
+	"Render Markdown read results as formatted terminal Markdown previews instead of raw source":
+		"Markdown 读取结果渲染为终端排版预览，而非原始源码",
 	"Render Mermaid Diagrams": "渲染 Mermaid 图表",
-	"Render full tool descriptors in the system prompt and strip top-level/nested descriptions from provider tool schemas so descriptor text is sent once. Auto enables this for Gemini models and disables it otherwise": "在系统提示中渲染完整工具描述符，并从供应商工具 schema 里剥掉顶层/嵌套描述，让描述文本只发一次。Auto 对 Gemini 模型启用，其余关闭",
+	"Render full tool descriptors in the system prompt and strip top-level/nested descriptions from provider tool schemas so descriptor text is sent once. Auto enables this for Gemini models and disables it otherwise":
+		"在系统提示中渲染完整工具描述符，并从供应商工具 schema 里剥掉顶层/嵌套描述，让描述文本只发一次。Auto 对 Gemini 模型启用，其余关闭",
 	"Render images inline in the terminal": "在终端中内联渲染图片",
 	"Render non-JSON MCP text results as Markdown in the transcript": "在对话中把非 JSON 的 MCP 文本结果渲染为 Markdown",
-	"Render read tool results inline in the transcript instead of summary rows": "read 工具结果在对话中内联渲染，而不是摘要行",
-	"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.": "在系统提示中渲染工作区目录树。警告：文件变动时可能击穿跨会话的提示缓存。",
+	"Render read tool results inline in the transcript instead of summary rows":
+		"read 工具结果在对话中内联渲染，而不是摘要行",
+	"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.":
+		"在系统提示中渲染工作区目录树。警告：文件变动时可能击穿跨会话的提示缓存。",
 	"Repeated grid with ink cycling six hues at sentence boundaries.": "重复网格，墨水在句子边界循环六种色调。",
 	"Repetition Penalty": "重复惩罚",
 	"Requires Nerd Font": "需要 Nerd 字体",
@@ -4148,9 +4167,10 @@ export const settings = {
 	"Requires xAI Grok OAuth or XAI_API_KEY; MP3 or WAV": "需要 xAI Grok OAuth 或 XAI_API_KEY；支持 MP3 或 WAV",
 	"Reserve Margin": "预留余量",
 	"Reserve Policy": "预留策略",
-	"Reset": "重置",
+	Reset: "重置",
 	"Resize Scrollback": "重整历史滚动区",
-	"Resize large images to 2000x2000 max for better model compatibility": "Resize large images to 2000x2000 max for better model compatibility",
+	"Resize large images to 2000x2000 max for better model compatibility":
+		"Resize large images to 2000x2000 max for better model compatibility",
 	"Retain completed conversation turns into local Mnemopi memory": "完成的对话回合写入本地 Mnemopi 记忆",
 	"Retain transcript every N turns and at session boundaries": "每 N 轮及会话边界保留转录",
 	"Retry Attempts": "重试次数",
@@ -4158,36 +4178,49 @@ export const settings = {
 	"Retry Model Fallback": "重试模型回退",
 	"Return LSP diagnostics after editing code files": "编辑代码文件后返回 LSP 诊断",
 	"Return LSP diagnostics after writing code files": "写入代码文件后返回 LSP 诊断",
-	"Return structural code summaries when read is called without an explicit selector": "read 未带显式 selector 时返回结构化代码摘要",
+	"Return structural code summaries when read is called without an explicit selector":
+		"read 未带显式 selector 时返回结构化代码摘要",
 	"Return structural summaries for Markdown and plain text reads": "对 Markdown 与纯文本读取返回结构化摘要",
 	"Return to the primary model after its suppression window ends": "在抑制窗口结束后返回主模型",
-	"Reveal assistant text and streamed tool input smoothly while chunks arrive": "内容分块到达时平滑显示助手文字与流式工具输入",
+	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
+		"内容分块到达时平滑显示助手文字与流式工具输入",
 	"Rewrite Scrollback": "重写滚动历史",
-	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure": "合成前用 tiny/smol 模型把助手输出改写成自然口语（描述代码、去掉链接与 markdown）。失败时退回机械清理",
+	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure":
+		"合成前用 tiny/smol 模型把助手输出改写成自然口语（描述代码、去掉链接与 markdown）。失败时退回机械清理",
 	"Ruby Eval Backend": "Ruby 执行后端",
 	"Ruby Interpreter": "Ruby 解释器",
-	"Rule names to ignore entirely (applies to bundled defaults and your own rules)": "完全忽略的规则名（作用于内置默认与自定义规则）",
+	"Rule names to ignore entirely (applies to bundled defaults and your own rules)":
+		"完全忽略的规则名（作用于内置默认与自定义规则）",
 	"Run modes where active goals may auto-continue between turns": "运行模式，其中活跃目标可能在轮次间自动继续",
-	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)": "/share 快照上传前跑一遍密钥混淆（使用 secrets.* 配置）",
+	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)":
+		"/share 快照上传前跑一遍密钥混淆（使用 secrets.* 配置）",
 	"Running Turn Detail": "运行中回合显示多少",
 	"Sample from top-K tokens (-1 = provider default)": "从 top-K tokens 中采样（-1 = 提供商默认值）",
-	"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)": "采样温度（0 = 确定性，1 = 创意，-1 = 供应商默认）",
+	"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)":
+		"采样温度（0 = 确定性，1 = 创意，-1 = 供应商默认）",
 	"Sandbox Only": "仅沙箱环境",
 	"Save Handoff Docs": "保存交接文档",
-	"Save generated handoff documents to markdown files for the auto-handoff flow": "自动交接流程把生成的交接文档存为 markdown 文件",
-	"Save project role models in .musepi/config.yml; missing project roles use global defaults": "项目角色模型存入 .musepi/config.yml；缺失的项目角色用全局默认",
+	"Save generated handoff documents to markdown files for the auto-handoff flow":
+		"自动交接流程把生成的交接文档存为 markdown 文件",
+	"Save project role models in .musepi/config.yml; missing project roles use global defaults":
+		"项目角色模型存入 .musepi/config.yml；缺失的项目角色用全局默认",
 	"Save role models in the active profile config (current behavior)": "将角色模型保存在当前个人配置中（当前行为）",
 	"Screen Glow Indicator": "屏幕发光指示器",
 	"Screenshot Directory": "截图目录",
 	"SearXNG Endpoint": "SearXNG 端点",
-	"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog": "模型流事件之间的最大静默秒数；-1 用供应商/环境默认，0 关闭看门狗",
-	"Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog": "等待首个模型流事件的秒数；-1 用供应商/环境默认，0 关闭看门狗",
+	"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog":
+		"模型流事件之间的最大静默秒数；-1 用供应商/环境默认，0 关闭看门狗",
+	"Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog":
+		"等待首个模型流事件的秒数；-1 用供应商/环境默认，0 关闭看门狗",
 	"Seconds to wait while idle before compacting": "空闲等待多少秒后压缩",
 	"Seconds to wait while idle before showing the recap": "空闲多少秒后生成回顾",
-	"Security": "安全",
-	"Select the edit tool variant (replace, patch, hashline, or apply_patch)": "选择编辑工具变体（replace、patch、hashline 或 apply_patch）",
-	"Service Tier for spawned task/eval subagents. Inherit = match the main agent's live per-family tiers (tracks /fast); pick a value to apply it to whichever family the subagent's model belongs to.": "派生的 task/eval 子代理的服务档位。Inherit = 跟随主代理的实时按族档位（跟随 /fast）；选具体值则应用到子代理模型所属族。",
-	"Service Tier for the advisor model. None = standard processing; Inherit = match the main agent's live per-family tiers; pick a value to apply it to the advisor model's family.": "顾问模型的服务档位。None = 标准处理；Inherit = 跟随主代理的实时按族档位；选具体值则应用到顾问模型所属族。",
+	Security: "安全",
+	"Select the edit tool variant (replace, patch, hashline, or apply_patch)":
+		"选择编辑工具变体（replace、patch、hashline 或 apply_patch）",
+	"Service Tier for spawned task/eval subagents. Inherit = match the main agent's live per-family tiers (tracks /fast); pick a value to apply it to whichever family the subagent's model belongs to.":
+		"派生的 task/eval 子代理的服务档位。Inherit = 跟随主代理的实时按族档位（跟随 /fast）；选具体值则应用到子代理模型所属族。",
+	"Service Tier for the advisor model. None = standard processing; Inherit = match the main agent's live per-family tiers; pick a value to apply it to the advisor model's family.":
+		"顾问模型的服务档位。None = 标准处理；Inherit = 跟随主代理的实时按族档位；选具体值则应用到顾问模型所属族。",
 	"Service Tier — Advisor": "服务层级 — 顾问",
 	"Service Tier — Anthropic": "服务层级 — Anthropic",
 	"Service Tier — Google": "服务层级 — Google",
@@ -4195,54 +4228,64 @@ export const settings = {
 	"Service Tier — Subagent": "服务层级 — 子代理",
 	"Session Accent": "会话强调色",
 	"Session Tree Filter": "会话树过滤器",
-	"Session-title model: online (the TINY role from /models, else @smol) by default, or a local on-device model": "会话标题模型：默认在线（/models 的 TINY 角色，否则 @smol），也可用端侧本地模型",
+	"Session-title model: online (the TINY role from /models, else @smol) by default, or a local on-device model":
+		"会话标题模型：默认在线（/models 的 TINY 角色，否则 @smol），也可用端侧本地模型",
 	"Setup Wizard": "设置向导",
 	"Share Secret Redaction": "分享密钥编辑",
 	"Share Server": "分享服务器",
 	"Share Store": "分享存储",
-	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)": "/share 使用的查看/上传基础地址（加密 blob 上传 + 查看器；链接形如 <base>/<id>#<key>）",
+	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)":
+		"/share 使用的查看/上传基础地址（加密 blob 上传 + 查看器；链接形如 <base>/<id>#<key>）",
 	"Shared Language Servers": "共享语言服务器",
-	"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together": "共享库，保留项带 project:<cwd> 标签。召回同时呈现项目与未标记的全局记忆",
+	"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together":
+		"共享库，保留项带 project:<cwd> 标签。召回同时呈现项目与未标记的全局记忆",
 	"Shell Minimizer": "Shell 精简器",
 	"Shell Minimizer Source Outline": "Shell 精简器源码大纲",
-	"Shimmer": "微光",
+	Shimmer: "微光",
 	"Show Hardware Cursor": "显示硬件光标",
 	"Show Hook Status": "显示钩子状态",
 	"Show Inline Images": "显示内联图片",
 	"Show Resolved Model Badge": "显示已解析模型徽标",
 	"Show Startup Splash": "显示启动画面",
 	"Show Token Usage": "显示 Token 用量",
-	"Show a divider above an assistant turn whose request lost (missed) the prompt cache": "请求未命中（丢失）提示缓存的助手回合上方显示分隔线",
+	"Show a divider above an assistant turn whose request lost (missed) the prompt cache":
+		"请求未命中（丢失）提示缓存的助手回合上方显示分隔线",
 	"Show all": "全部显示",
-	"Show git branch, status, and PR information in the TUI and watch repository metadata.": "在 TUI 中显示 git 分支、状态与 PR 信息，并监视仓库元数据。",
+	"Show git branch, status, and PR information in the TUI and watch repository metadata.":
+		"在 TUI 中显示 git 分支、状态与 PR 信息，并监视仓库元数据。",
 	"Show newly added onboarding steps once per setup version": "每个设置版本显示一次新添加的引导步骤",
 	"Show per-turn token usage on assistant messages": "在助手消息上显示每轮 token 用量",
 	"Show release and change counts with a /changelog hint": "通过 /changelog 提示显示版本和更改计数",
 	"Show terminal cursor for IME support": "显示终端光标以支持 IME",
-	"Show the agent run state in the terminal title's separator — an animated spinner while working (a static ':' on Windows), '>' when it's your turn, '!' when the agent is waiting on you": "在终端标题分隔符中显示代理运行状态——工作中为动画旋转（Windows 为静态 ':'），轮到你是 '>'，代理在等你时是 '!'",
-	"Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.": "常规交互启动时播放完整动画启动页而不重跑引导。安静启动仍会跳过它。",
+	"Show the agent run state in the terminal title's separator — an animated spinner while working (a static ':' on Windows), '>' when it's your turn, '!' when the agent is waiting on you":
+		"在终端标题分隔符中显示代理运行状态——工作中为动画旋转（Windows 为静态 ':'），轮到你是 '>'，代理在等你时是 '!'",
+	"Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.":
+		"常规交互启动时播放完整动画启动页而不重跑引导。安静启动仍会跳过它。",
 	"Show the recent release notes in full": "完整显示最近的版本说明",
-	"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.": "思考档位以单个图标显示在模型名上，而不是独立的「 · <档位>」后缀。",
+	"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.":
+		"思考档位以单个图标显示在模型名上，而不是独立的「 · <档位>」后缀。",
 	"Show token budget alongside the goal indicator in the status line": "在状态行中目标指示器旁显示 token 预算",
 	"Silence threshold (ms)": "静音判定阈值（毫秒）",
 	"Similarity threshold (0-1) for accepting fuzzy matches": "接受模糊匹配的相似度阈值（0-1）",
-	"Single": "单击",
+	Single: "单击",
 	"Skill Commands": "技能命令",
 	"Skip welcome screen and startup status messages": "跳过欢迎屏幕和启动状态消息",
-	"Slash": "斜杠",
+	Slash: "斜杠",
 	"Sleep Prevention": "睡眠预防",
 	"Slightly aggressive": "略微激进",
-	"Smart": "智能",
+	Smart: "智能",
 	"Snapcompact Shape": "快照压缩形状",
 	"Snapcompact System Prompt": "快照压缩系统提示",
 	"Snapcompact Tool Results": "快照压缩工具结果",
 	"Soft Request Budget Notice": "软请求预算通知",
 	"Soft Subagent Request Budget": "软子代理请求预算",
 	"Soft cosine wave sweeping across the text": "柔和余弦波扫过文字",
-	"Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up steering notice (see task.softRequestBudgetNotice); at 1.5x the budget the run is force-stopped and the agent must yield its partial findings. 0 disables the guard. Bundled scout/sonic agents cap out at a lower built-in budget, so a value below that cap still applies to them.": "每个子代理的软请求预算（每次运行的助手请求数）。越过即注入收尾引导提示（见 task.softRequestBudgetNotice）；到 1.5 倍预算强制停止运行，代理必须交出部分结论。0 关闭防护。内置 scout/sonic 代理有更低的内建上限，低于该上限的取值对它们同样生效。",
+	"Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up steering notice (see task.softRequestBudgetNotice); at 1.5x the budget the run is force-stopped and the agent must yield its partial findings. 0 disables the guard. Bundled scout/sonic agents cap out at a lower built-in budget, so a value below that cap still applies to them.":
+		"每个子代理的软请求预算（每次运行的助手请求数）。越过即注入收尾引导提示（见 task.softRequestBudgetNotice）；到 1.5 倍预算强制停止运行，代理必须交出部分结论。0 关闭防护。内置 scout/sonic 代理有更低的内建上限，低于该上限的取值对它们同样生效。",
 	"Solid arrows (Nerd Font)": "实心箭头（Nerd 字体）",
 	"Solid blocks": "实心方块",
-	"Source outline mode for cat/read of source files: default or aggressive": "源码文件的 cat/read 大纲模式：default 或 aggressive",
+	"Source outline mode for cat/read of source files: default or aggressive":
+		"源码文件的 cat/read 大纲模式：default 或 aggressive",
 	"Space only": "仅空格",
 	"Speak the assistant's output aloud through the speakers as it streams": "助手输出流式生成时通过扬声器朗读",
 	"Speech Generation": "语音生成",
@@ -4253,15 +4296,19 @@ export const settings = {
 	"Speech rate (0.5–2)": "语速（0.5–2）",
 	"Speech-to-Text": "语音转文字",
 	"Speech-to-Text Submit Trigger": "语音转文字提交触发",
-	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).": "当保存的 Codex 重置额度将在此小时数内过期、且 5h 或周窗口还有可观用量可恢复时，自动消耗一份（0 关闭临期回收）。",
+	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).":
+		"当保存的 Codex 重置额度将在此小时数内过期、且 5h 或周窗口还有可观用量可恢复时，自动消耗一份（0 关闭临期回收）。",
 	"Spend eligible saved resets without prompting.": "无提示地花费符合条件的已保存重置。",
-	"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.": "自动消耗保存的 Codex 限流重置：轮次卡住且没有其他账号可接手时，恢复被耗尽的 5h/周窗口封禁的账号，并回收临期额度。unset 在首次消耗前询问，yes 不再询问，no 同时关闭两项。",
-	"Standard": "标准",
+	"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.":
+		"自动消耗保存的 Codex 限流重置：轮次卡住且没有其他账号可接手时，恢复被耗尽的 5h/周窗口封禁的账号，并回收临期额度。unset 在首次消耗前询问，yes 不再询问，no 同时关闭两项。",
+	Standard: "标准",
 	"Standard symbols (default)": "标准符号（默认）",
 	"Start a new session, then re-submit the prompt": "开启新会话，然后重新提交提示词",
 	"Start in Plan Mode": "以计划模式启动",
-	"Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup": "语言服务器在首次使用时启动（lsp 工具或编辑匹配的文件类型），而不是会话启动时",
-	"Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.": "以当前模型起步，在计划提示的待办清单就绪后的第一次编辑/写入时切换到快/廉价模型（默认 smol 角色）——强模型负责规划、提交待办并启动实现，然后交接。可用 --prewalk / --no-prewalk 按会话覆盖。",
+	"Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup":
+		"语言服务器在首次使用时启动（lsp 工具或编辑匹配的文件类型），而不是会话启动时",
+	"Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.":
+		"以当前模型起步，在计划提示的待办清单就绪后的第一次编辑/写入时切换到快/廉价模型（默认 smol 角色）——强模型负责规划、提交待办并启动实现，然后交接。可用 --prewalk / --no-prewalk 按会话覆盖。",
 	"Startup Changelog": "启动更新日志",
 	"Static commit message": "静态提交信息",
 	"Status Line Preset": "状态栏预设",
@@ -4271,36 +4318,41 @@ export const settings = {
 	"Stream First Event Timeout": "流首个事件超时",
 	"Stream Idle Timeout": "流空闲超时",
 	"Streaming rendering": "流式渲染",
-	"Strict": "严格",
+	Strict: "严格",
 	"Strong novelty": "重度创新",
 	"Strong penalty": "重度惩罚",
 	"Style of separators between segments": "段落间分隔符样式",
-	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`": "从 `:name:` 短码推荐 emoji，并展开 `:D`、`:-)` 等文字颜文字",
+	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`":
+		"从 `:name:` 短码推荐 emoji，并展开 `:D`、`:-)` 等文字颜文字",
 	"Suggests a todo list on the first message (reminder, not forced)": "在首条消息时建议 todo 列表（提醒，非强制）",
-	"Summary": "摘要",
+	Summary: "摘要",
 	"Supersede Stale Reads": "替代过期读取",
-	"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones": "抑制文件已显示过的编辑后 LSP 诊断；只出现新增或变化的",
-	"Surface the active model identifier in the system prompt so the agent knows which model it is": "在系统提示中暴露当前模型标识，让代理知道自己是什么模型",
-	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.": "把 task 工具切换到批量形态：一次调用携带 { context, tasks[] }——每项一个子代理，可按项指定代理（默认会话派生策略代理）、按项隔离，且必须提供拼接在每个任务前的共享上下文。async.enabled=true 时每次派生都是独立后台代理、走正常的空闲/驻留生命周期；否则调用阻塞等待合并结果。关闭恢复扁平的单次派生 schema。",
+	"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones":
+		"抑制文件已显示过的编辑后 LSP 诊断；只出现新增或变化的",
+	"Surface the active model identifier in the system prompt so the agent knows which model it is":
+		"在系统提示中暴露当前模型标识，让代理知道自己是什么模型",
+	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.":
+		"把 task 工具切换到批量形态：一次调用携带 { context, tasks[] }——每项一个子代理，可按项指定代理（默认会话派生策略代理）、按项隔离，且必须提供拼接在每个任务前的共享上下文。async.enabled=true 时每次派生都是独立后台代理、走正常的空闲/驻留生命周期；否则调用阻塞等待合并结果。关闭恢复扁平的单次派生 schema。",
 	"Symbol Preset": "符号预设",
 	"TTSR Context Mode": "TTSR 上下文模式",
 	"TTSR Interrupt Mode": "TTSR 中断模式",
 	"TTSR Repeat Gap": "TTSR 重复间隔",
 	"TTSR Repeat Mode": "TTSR 重复模式",
-	"Temperature": "温度",
+	Temperature: "温度",
 	"Terminal Hyperlinks": "终端超链接",
 	"Terminal Title Run State": "终端标题运行状态",
 	"Terse, evidence-first engineer; dense, action-oriented replies": "简洁、证据优先的工程师；紧凑、面向行动的回复",
 	"Text Verbosity": "文字详细程度",
 	"Text-to-Speech Provider": "文字转语音提供商",
-	"The original snapcompact shape (pre-shape-table sessions rendered this).": "原始 snapcompact 形态（形态表之前的会话渲染此项）。",
+	"The original snapcompact shape (pre-shape-table sessions rendered this).":
+		"原始 snapcompact 形态（形态表之前的会话渲染此项）。",
 	"Theme used when the terminal has a dark background": "终端为深色背景时使用的主题",
 	"Theme used when the terminal has a light background": "终端为浅色背景时使用的主题",
 	"Thin arrows (Nerd Font)": "细箭头（Nerd 字体）",
 	"Thin chevron": "细箭头",
 	"Thinking Level": "思维层级",
 	"Three-quarters of a 200K window": "200K 窗口的四分之三",
-	"Tight": "紧凑",
+	Tight: "紧凑",
 	"Tight Layout": "紧凑布局",
 	"Tiny Model": "微型模型",
 	"Tiny Model Device": "微型模型设备",
@@ -4308,28 +4360,32 @@ export const settings = {
 	"Todo Auto-Clear Delay": "待办自动清除延迟",
 	"Todo Reminder Limit": "待办提醒限制",
 	"Todo Reminders": "待办提醒",
-	"Todos": "待办",
+	Todos: "待办",
 	"Token count above which idle compaction triggers": "触发空闲压缩的 token 计数上限",
 	"Tool Approval": "工具审批",
 	"Tool Approval Policies": "工具审批策略",
 	"Tool Calling Mode": "工具调用模式",
-	"Tool names that may repeat consecutively without triggering the cross-turn loop guard": "允许连续重复而不触发跨回合循环防护的工具名",
-	"Tool output above this size is saved as an artifact; tail is kept inline": "超过此大小的工具输出存为产物；尾部保留在行内",
+	"Tool names that may repeat consecutively without triggering the cross-turn loop guard":
+		"允许连续重复而不触发跨回合循环防护的工具名",
+	"Tool output above this size is saved as an artifact; tail is kept inline":
+		"超过此大小的工具输出存为产物；尾部保留在行内",
 	"Tool-Call Loop Exempt Tools": "工具调用循环豁免工具",
 	"Tool-Call Loop Guard": "工具调用循环防护",
 	"Tool-Call Loop Threshold": "工具调用循环阈值",
 	"Transparent Status Line": "透明状态栏",
-	"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.": "编码套餐模型剩余百分比低于此值视为接近上限。用量未知或未映射时保持主模型。",
-	"Triple": "三击",
+	"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.":
+		"编码套餐模型剩余百分比低于此值视为接近上限。用量未知或未映射时保持主模型。",
+	Triple: "三击",
 	"Try production endpoint, fail over to sandbox on 5xx/429": "尝试生产端点，在 5xx/429 时故障转移到沙箱",
 	"Two-column doc layout with sentence-hue ink.": "双栏文档版式，句子色调墨水。",
 	"Two-column doc layout, sentence-hue ink, function words dimmed gray.": "双栏文档版式，句子色调墨水，功能词淡灰色。",
 	"Typical threshold": "典型阈值",
 	"Ultrathink Keyword": "Ultrathink 关键词",
 	"Unexpected Stop Model": "意外停止模型",
-	"Unlimited": "不限",
-	"Unset": "未设置",
-	"Upload to the share server (no GitHub account needed; avoids gist API rate limits)": "上传到共享服务器（无需 GitHub 账号；避开 gist API 限流）",
+	Unlimited: "不限",
+	Unset: "未设置",
+	"Upload to the share server (no GitHub account needed; avoids gist API rate limits)":
+		"上传到共享服务器（无需 GitHub 账号；避开 gist API 限流）",
 	"Upsert one document per session (recommended)": "每会话 upsert 单文档（推荐）",
 	"Usage-Aware Fallback": "用量感知回退",
 	"Use Anthropic-style in-band tool calls.": "使用 Anthropic 风格带内工具调用。",
@@ -4339,28 +4395,35 @@ export const settings = {
 	"Use Harmony-style in-band tool calls.": "使用 Harmony 风格带内工具调用。",
 	"Use Hermes-style in-band tool calls.": "使用 Hermes 风格带内工具调用。",
 	"Use Kimi-style in-band tool calls.": "使用 Kimi 风格带内工具调用。",
-	"Use Responses streaming compaction for compatible remote compaction models": "兼容的远程压缩模型使用 Responses 流式压缩",
+	"Use Responses streaming compaction for compatible remote compaction models":
+		"兼容的远程压缩模型使用 Responses 流式压缩",
 	"Use blue instead of green for diff additions": "差异新增使用蓝色而非绿色",
-	"Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.": "有 cmux 套接字时用 cmux WKWebView 面做浏览器自动化。设 PI_BROWSER_CMUX=0 或 1 可覆盖。",
+	"Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.":
+		"有 cmux 套接字时用 cmux WKWebView 面做浏览器自动化。设 PI_BROWSER_CMUX=0 或 1 可覆盖。",
 	"Use generic XML in-band tool calls.": "使用通用 XML 带内工具调用。",
 	"Use model/provider default websocket behavior": "使用模型/提供商默认的 websocket 行为",
 	"Use native tool calls unless the model is known not to support them.": "使用原生工具调用，除非已知模型不支持。",
-	"Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint": "不用 LLM、用在线小模型（/models 的 TINY 角色，否则 @smol），或远程 OpenAI 兼容端点",
+	"Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint":
+		"不用 LLM、用在线小模型（/models 的 TINY 角色，否则 @smol），或远程 OpenAI 兼容端点",
 	"Use percentage-based threshold": "使用基于百分比的阈值",
 	"Use provider default": "使用提供商默认值",
 	"Use provider defaults and PI_* timeout env vars": "使用提供商默认值和 PI_* 超时环境变量",
 	"Use provider-native tool calls.": "使用提供商原生工具调用。",
-	"Use reliable coding-plan quota reports to prefer same-provider accounts, then configured fallback models, before a hard usage limit. Ordinary configured API keys are excluded.": "用可靠的编码套餐配额报告，在硬性用量上限前优先同供应商账号，再走已配置的回退模型。普通配置的 API key 不参与。",
+	"Use reliable coding-plan quota reports to prefer same-provider accounts, then configured fallback models, before a hard usage limit. Ordinary configured API keys are excluded.":
+		"用可靠的编码套餐配额报告，在硬性用量上限前优先同供应商账号，再走已配置的回退模型。普通配置的 API key 不参与。",
 	"Use the Gemini owned dialect.": "使用 Gemini 专属方言。",
 	"Use the Gemma owned dialect.": "使用 Gemma 专属方言。",
 	"Use the MiniMax owned dialect.": "使用 MiniMax 专属方言。",
 	"Use the Mnemopi remote LLM settings below": "使用下方 Mnemopi 远程 LLM 设置",
 	"Use the Qwen3 owned dialect.": "使用 Qwen3 专属方言。",
 	"Use the model's server-declared protocol": "使用模型服务器声明的协议",
-	"Use the online tiny model (the TINY role from /models, else @smol)": "使用在线小模型（/models 的 TINY 角色，否则 @smol）",
+	"Use the online tiny model (the TINY role from /models, else @smol)":
+		"使用在线小模型（/models 的 TINY 角色，否则 @smol）",
 	"Use the session name color for the editor border and status line gap": "输入框边框与状态线间隔使用会话名颜色",
-	"Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.": "状态线用终端默认背景而非主题的 statusLineBg。Powerline 端帽会去掉——它们需要对比填充来衔接周围终端。",
-	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)": "使用包管理器已有配置（.npmrc、bunfig.toml）",
+	"Use the terminal's default background for the status line instead of the theme's `statusLineBg`. Powerline end caps are dropped because they need a contrasting fill to bridge into the surrounding terminal.":
+		"状态线用终端默认背景而非主题的 statusLineBg。Powerline 端帽会去掉——它们需要对比填充来衔接周围终端。",
+	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)":
+		"使用包管理器已有配置（.npmrc、bunfig.toml）",
 	"User-defined segments": "用户自定义段落",
 	"Uses r.jina.ai reader (JINA_API_KEY optional)": "使用 r.jina.ai 读取器（JINA_API_KEY 可选）",
 	"Vectorize Hindsight remote memory service": "向量化 Hindsight 远程记忆服务",
@@ -4376,63 +4439,84 @@ export const settings = {
 	"Web Search": "网络搜索",
 	"Web Search Provider Order": "网络搜索提供商顺序",
 	"Web Search Timeout": "网页搜索超时",
-	"Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)": "OpenAI Codex 模型的 WebSocket 策略（auto 随模型默认，on 强制，off 禁用）",
+	"Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)":
+		"OpenAI Codex 模型的 WebSocket 策略（auto 随模型默认，on 强制，off 禁用）",
 	"What happens between /loop iterations before re-submitting the prompt": "/loop 迭代之间、重新提交提示词前的行为",
-	"What happens to playback when dictation starts: duck (drop volume) or pause.": "开始听写时朗读如何处理：降低音量或暂停。",
-	"What to do when every same-provider coding-plan account is inside the reserve margin.": "同供应商所有编码套餐账号都进入保留余量时的处理。",
+	"What happens to playback when dictation starts: duck (drop volume) or pause.":
+		"开始听写时朗读如何处理：降低音量或暂停。",
+	"What to do when every same-provider coding-plan account is inside the reserve margin.":
+		"同供应商所有编码套餐账号都进入保留余量时的处理。",
 	"What to do with partial output when TTSR triggers": "TTSR 触发时如何处理部分输出",
-	"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end": "朗读范围：all = 助手消息 + 思考；assistant = 仅消息；yield = 仅回合结束的最终消息",
-	"When a Claude Fable 5 / Mythos 5 request is blocked by Anthropic's safety classifier, retry it on Claude Opus 4.8 server-side (Anthropic `server-side-fallback-2026-06-01` beta). Opt-in — leaving this off preserves the pre-fallback behavior for every request.": "Claude Fable 5 / Mythos 5 请求被 Anthropic 安全分类器拦截时，服务端在 Claude Opus 4.8 上重试（Anthropic server-side-fallback-2026-06-01 beta）。需主动开启——关闭时所有请求保持回退前的行为。",
-	"When a Gemini reasoning stream emits many consecutive planning headers without calling a tool, interrupt it and inject a reminder to issue a tool call (requires Loop Guard)": "Gemini 推理流连续输出大量计划标题而不调用工具时，中断并注入调用工具的提醒（需开启循环防护）",
-	"When a paste reaches this many lines, offer a menu to wrap it in a code block, wrap it in XML tags, or save it to a file. 0 disables the menu (large pastes still collapse to a [Paste] marker).": "粘贴达到此行数时弹出菜单：包进代码块、包进 XML 标签、或存为文件。0 关闭菜单（大粘贴仍折叠为 [Paste] 标记）。",
-	"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it": "图片附给不支持视觉的模型时，存到 local:// 并注入由视觉模型生成的描述，而不是直接丢弃",
-	"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.": "开启后停止时自动运行一轮私有捕捉（消耗额外 token）。关闭则只保留常驻的自动学习指引。",
+	"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end":
+		"朗读范围：all = 助手消息 + 思考；assistant = 仅消息；yield = 仅回合结束的最终消息",
+	"When a Claude Fable 5 / Mythos 5 request is blocked by Anthropic's safety classifier, retry it on Claude Opus 4.8 server-side (Anthropic `server-side-fallback-2026-06-01` beta). Opt-in — leaving this off preserves the pre-fallback behavior for every request.":
+		"Claude Fable 5 / Mythos 5 请求被 Anthropic 安全分类器拦截时，服务端在 Claude Opus 4.8 上重试（Anthropic server-side-fallback-2026-06-01 beta）。需主动开启——关闭时所有请求保持回退前的行为。",
+	"When a Gemini reasoning stream emits many consecutive planning headers without calling a tool, interrupt it and inject a reminder to issue a tool call (requires Loop Guard)":
+		"Gemini 推理流连续输出大量计划标题而不调用工具时，中断并注入调用工具的提醒（需开启循环防护）",
+	"When a paste reaches this many lines, offer a menu to wrap it in a code block, wrap it in XML tags, or save it to a file. 0 disables the menu (large pastes still collapse to a [Paste] marker).":
+		"粘贴达到此行数时弹出菜单：包进代码块、包进 XML 标签、或存为文件。0 关闭菜单（大粘贴仍折叠为 [Paste] 标记）。",
+	"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it":
+		"图片附给不支持视觉的模型时，存到 local:// 并注入由视觉模型生成的描述，而不是直接丢弃",
+	"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.":
+		"开启后停止时自动运行一轮私有捕捉（消耗额外 token）。关闭则只保留常驻的自动学习指引。",
 	"When steering messages interrupt tool execution": "引导消息何时中断工具执行",
 	"When to interrupt mid-stream vs inject warning after completion": "何时中途中断，以及在完成后注入警告",
 	"When to return to the primary model after a fallback": "回退后何时返回主模型",
-	"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.": "xd:// Prompt Docs 为 Built-ins Only 时，内联名称匹配这些 glob 的动态设备（如 mcp__context_mode_*）。Catalog Only 忽略此项。",
+	"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.":
+		"xd:// Prompt Docs 为 Built-ins Only 时，内联名称匹配这些 glob 的动态设备（如 mcp__context_mode_*）。Catalog Only 忽略此项。",
 	"Where /share uploads the encrypted session blob": "/share 上传加密会话 blob 的位置",
 	"Where model selector role assignments are saved": "模型选择器角色分配保存位置",
-	"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.": "插件从哪个包仓库安装。Auto 先问官方仓库，失败属于可重试类型时再试公共镜像；Custom 使用下方地址；Package manager 交给包管理器自己的配置。",
-	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing": "计算机工具操控桌面时，在显示器上显示全屏辉光边缘、状态徽标与逐步操作的目标高亮，代理在做什么始终可见",
-	"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.": "带内工具调用时，模型在回合中开始幻觉工具结果就立即停止。关闭则让模型生成完，然后丢弃伪造的续写。",
-	"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)": "此窗口内直接返回缓存的 issue/PR 视图行（秒；默认 5 分钟）",
+	"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
+		"插件从哪个包仓库安装。Auto 先问官方仓库，失败属于可重试类型时再试公共镜像；Custom 使用下方地址；Package manager 交给包管理器自己的配置。",
+	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing":
+		"计算机工具操控桌面时，在显示器上显示全屏辉光边缘、状态徽标与逐步操作的目标高亮，代理在做什么始终可见",
+	"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.":
+		"带内工具调用时，模型在回合中开始幻觉工具结果就立即停止。关闭则让模型生成完，然后丢弃伪造的续写。",
+	"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)":
+		"此窗口内直接返回缓存的 issue/PR 视图行（秒；默认 5 分钟）",
 	"Workflow Keyword": "Workflow 关键词",
 	"Worktree Base Directory": "工作树基础目录",
-	"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)": "把路径与 URL 包成 OSC 8 超链接供终端原生点击打开（auto 检测支持；off 从不；always 无条件）",
-	"Write": "写入",
-	"Write to a project-local bank but merge project + shared recall results": "写入项目本地库，但召回合并项目与共享结果",
-	"Yes": "是",
-	"always": "总是",
+	"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)":
+		"把路径与 URL 包成 OSC 8 超链接供终端原生点击打开（auto 检测支持；off 从不；always 无条件）",
+	Write: "写入",
+	"Write to a project-local bank but merge project + shared recall results":
+		"写入项目本地库，但召回合并项目与共享结果",
+	Yes: "是",
+	always: "总是",
 	"cmux Browser": "cmux 浏览器",
 	"direnv Auto-Load": "direnv 自动加载",
 	"direnv Load Timeout (ms)": "direnv 加载超时（毫秒）",
-	"full-session = upsert one document per session, last-turn = chunked": "full-session = 每会话更新一篇文档；last-turn = 分块",
+	"full-session = upsert one document per session, last-turn = chunked":
+		"full-session = 每会话更新一篇文档；last-turn = 分块",
 	"git worktree if available, otherwise recursive copy": "git worktree 可用时使用，否则使用 recursive copy",
-	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility": "global = 单一共享库；per-project = 按 cwd 隔离；per-project-tagged = 项目本地写入 + 全局召回可见",
-	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall": "global = 单一共享库；per-project = 按 cwd 隔离；per-project-tagged = 共享库带项目标签，召回时全局与项目记忆合并",
-	"intfloat/multilingual-e5-large (1024d), cross-language recall": "intfloat/multilingual-e5-large（1024 维），跨语言召回",
-	"max": "最大",
-	"musepi browser relay endpoint (default http://127.0.0.1:9224).": "musepi 浏览器中继端点（默认 http://127.0.0.1:9224）。",
-	"never": "从不",
+	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
+		"global = 单一共享库；per-project = 按 cwd 隔离；per-project-tagged = 项目本地写入 + 全局召回可见",
+	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall":
+		"global = 单一共享库；per-project = 按 cwd 隔离；per-project-tagged = 共享库带项目标签，召回时全局与项目记忆合并",
+	"intfloat/multilingual-e5-large (1024d), cross-language recall":
+		"intfloat/multilingual-e5-large（1024 维），跨语言召回",
+	max: "最大",
+	"musepi browser relay endpoint (default http://127.0.0.1:9224).":
+		"musepi 浏览器中继端点（默认 http://127.0.0.1:9224）。",
+	never: "从不",
 	"prose-only": "仅散文",
 	"tool-only": "仅工具",
 	"xAI Grok Voice": "xAI Grok 语音",
 	"xd:// Inline Devices": "xd:// 内联设备",
 	"xd:// Prompt Docs": "xd:// 提示文档",
 	"xd:// Tools": "xd:// 工具",
-	"xhigh": "最高",
-	"context": "上下文",
-	"files": "文件",
-	"artifacts": "产物",
-	"trajectory": "轨迹",
-	"jobs": "任务",
-	"git": "Git",
-	"notes": "笔记",
-	"browser": "浏览器",
-	"agents": "子代理",
-	"widget": "组件",
-	"board": "看板",
+	xhigh: "最高",
+	context: "上下文",
+	files: "文件",
+	artifacts: "产物",
+	trajectory: "轨迹",
+	jobs: "任务",
+	git: "Git",
+	notes: "笔记",
+	browser: "浏览器",
+	agents: "子代理",
+	widget: "组件",
+	board: "看板",
 	"scheduled cron ex every5": "每 5 分钟",
 	"scheduled cron ex hourly": "每小时",
 	"scheduled cron ex monday9": "周一 9 点",
@@ -4469,15 +4553,20 @@ export const settings = {
 	"Auto-Learn": "自动学习",
 	"add instance": "添加实例",
 	"instance label": "实例名称",
-	"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)": "Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
+	"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)":
+		"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
 	"Online (TINY role, else @smol)": "在线（TINY 角色，否则 @smol）",
-	"Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.": "Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.",
+	"Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.":
+		"Use the online model: the TINY role from /models when set, otherwise @smol. No local model download or on-device inference.",
 	"Qwen3 1.7B": "Qwen3 1.7B",
-	"Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.": "Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.",
+	"Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.":
+		"Disabled for local inference: onnxruntime-node cannot run this ONNX export's RotaryEmbedding cache updates.",
 	"Llama 3.2 3B": "Llama 3.2 3B",
-	"Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.": "Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.",
+	"Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.":
+		"Larger Llama 3.2 option for local memory/classifier tasks; higher quality potential at higher disk/RAM/latency cost.",
 	"Gemma 3 1B": "Gemma 3 1B",
-	"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.": "Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.",
+	"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.":
+		"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.",
 	"Qwen2.5 1.5B": "Qwen2.5 1.5B",
 	"Best extraction granularity (atomic facts); weaker consolidation.": "抽取粒度最佳（原子事实）；合并较弱",
 	"LFM2 1.2B": "LFM2 1.2B",
@@ -4694,7 +4783,8 @@ export const settings = {
 	"share this session live on the local network": "在局域网内实时共享当前会话，手机扫码即可加入。",
 	"open or create a session first to share it": "请先打开或新建一个会话，再开始共享。",
 	"public tunnel": "公网隧道",
-	"public tunnel — anyone with the link can join; stop sharing to close it": "public tunnel — anyone with the link can join; stop sharing to close it",
+	"public tunnel — anyone with the link can join; stop sharing to close it":
+		"public tunnel — anyone with the link can join; stop sharing to close it",
 	"use bot channel": "使用 Bot Channel",
 	"connect a chat bot for longer mobile access": "连接聊天 Bot，适合更长时间的移动端访问。",
 	"open this workspace from {name}": "从 {name} 打开这个工作区。",
@@ -4746,7 +4836,8 @@ export const settings = {
 	"menu popups, orb animation, splash pulse": "菜单弹出、动效头像、启动动画",
 	"sound effects": "音效",
 	"motion effects": "动效",
-	"tool needs a daemon backend — coming with the desktop release": "tool needs a daemon backend — coming with the desktop release",
+	"tool needs a daemon backend — coming with the desktop release":
+		"tool needs a daemon backend — coming with the desktop release",
 	"project notes": "项目笔记",
 	"git graph": "Git Graph",
 	"subject column": "描述",
@@ -5244,7 +5335,8 @@ export const settings = {
 	"widget source": "组件源码",
 	"maximize panel": "最大化面板",
 	"watch the agent's browser live": "实时查看 agent 的浏览器操作",
-	"with the managed browser on, pages the agent opens show up in the side panel and share its login state": "with the managed browser on, pages the agent opens show up in the side panel and share its login state",
+	"with the managed browser on, pages the agent opens show up in the side panel and share its login state":
+		"with the managed browser on, pages the agent opens show up in the side panel and share its login state",
 	"enable & watch": "启用并查看",
 	"don't ask again": "不再提示",
 	"restore panel": "还原面板",
@@ -5450,7 +5542,8 @@ export const settings = {
 	"invalid or expired pair code": "配对码无效或已过期",
 	"invalid pair response": "配对响应无效",
 	"cannot reach the computer — same Wi-Fi?": "无法连接电脑 — 是否在同一 Wi-Fi？",
-	"no address shown? share with a public tunnel and scan the link instead": "no address shown? share with a public tunnel and scan the link instead",
+	"no address shown? share with a public tunnel and scan the link instead":
+		"no address shown? share with a public tunnel and scan the link instead",
 	"offline — showing cached content, connecting needs a network": "离线 — 已显示缓存内容，连接需要网络",
 	"no channels configured": "尚未配置渠道",
 	"configure channel": "配置渠道凭据",
@@ -5711,7 +5804,8 @@ export const settings = {
 	"pet accessory note": "音符",
 	"pet accessory headphones": "耳机",
 	"import svg": "导入 SVG",
-	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.": "Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.",
+	"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.":
+		"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chart preference.",
 	"Auto-detect per prompt": "按提示自动检测",
 	"no-tools": "无工具",
 	"user-only": "仅用户",
@@ -5748,52 +5842,81 @@ export const settings = {
 	"WebNN GPU device": "WebNN GPU 设备",
 	"WebNN CPU device": "WebNN CPU 设备",
 	"WebNN NPU device": "WebNN NPU 设备",
-	"Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.": "Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.",
-	"Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.": "Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.",
-	"Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.": "Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.",
-	"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.": "Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.",
-	"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.": "NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
+	"Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.":
+		"Classify prompt difficulty online with the TINY role model (set one in /models) or @smol; no local download or on-device inference.",
+	"Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.":
+		"Whisper base, multilingual. Smallest + fastest; lowest accuracy. Best for low-resource machines.",
+	"Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.":
+		"Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.",
+	"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.":
+		"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.",
+	"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.":
+		"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
 	"Never automatically submit; insert dictation and remain in editor.": "绝不自动提交；插入听写文本并停留在编辑器中。",
-	"Submit on release if the utterance has 2+ words to avoid accidental sends.": "Submit on release if the utterance has 2+ words to avoid accidental sends.",
-	"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).": "Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).",
-	"Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).": "Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).",
-	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace": "Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
-	"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)": "Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
-	"Uses auth when configured; explicit selection falls back to anonymous search": "Uses auth when configured; explicit selection falls back to anonymous search",
-	"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)": "Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)",
-	"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)": "Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)",
-	"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)": "OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
-	"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)": "Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)",
+	"Submit on release if the utterance has 2+ words to avoid accidental sends.":
+		"Submit on release if the utterance has 2+ words to avoid accidental sends.",
+	"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).":
+		"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).",
+	"Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).":
+		"Submit if the utterance ends with a word containing 'submit' (strips that word before submitting).",
+	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace":
+		"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
+	"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)":
+		"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
+	"Uses auth when configured; explicit selection falls back to anonymous search":
+		"Uses auth when configured; explicit selection falls back to anonymous search",
+	"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)":
+		"Google Search grounding via Gemini (uses google-gemini-cli or google-antigravity OAuth)",
+	"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)":
+		"Claude's native web_search tool (uses Anthropic OAuth or ANTHROPIC_API_KEY)",
+	"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)":
+		"OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
+	"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)":
+		"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)",
 	"Calls Z.AI webSearchPrime MCP": "调用 Z.AI webSearchPrime MCP",
-	"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP": "API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP",
+	"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP":
+		"API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP",
 	"Requires TINYFISH_API_KEY": "需要 TINYFISH_API_KEY",
 	"Requires JINA_API_KEY": "需要 JINA_API_KEY",
 	"Requires KAGI_API_KEY and Kagi Search API beta access": "需要 KAGI_API_KEY 与 Kagi Search API 测试版权限",
 	"Requires TAVILY_API_KEY": "需要 TAVILY_API_KEY",
-	"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode": "Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode",
+	"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode":
+		"Uses Firecrawl API when FIRECRAWL_API_KEY is set; falls back to keyless mode",
 	"Requires BRAVE_API_KEY": "需要 BRAVE_API_KEY",
-	"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)": "Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)",
+	"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)":
+		"Kimi Code search (requires a Kimi Code Console key via KIMI_SEARCH_API_KEY/MOONSHOT_SEARCH_API_KEY or /login kimi-code; not MOONSHOT_API_KEY)",
 	"Requires SYNTHETIC_API_KEY": "需要 SYNTHETIC_API_KEY",
 	"Requires SEARXNG_ENDPOINT or searxng.endpoint": "需要 SEARXNG_ENDPOINT 或 searxng.endpoint",
-	"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged": "Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
-	"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs": "Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs",
-	"Credential-free browser-backed scrape of Ecosia (Google-backed) results": "Credential-free browser-backed scrape of Ecosia (Google-backed) results",
-	"Credential-free browser-backed fallback; slower and may be bot-challenged": "Credential-free browser-backed fallback; slower and may be bot-challenged",
+	"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged":
+		"Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
+	"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs":
+		"Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs",
+	"Credential-free browser-backed scrape of Ecosia (Google-backed) results":
+		"Credential-free browser-backed scrape of Ecosia (Google-backed) results",
+	"Credential-free browser-backed fallback; slower and may be bot-challenged":
+		"Credential-free browser-backed fallback; slower and may be bot-challenged",
 	"Credential-free browser-backed scrape of Mojeek's independent index": "无凭证浏览器抓取 Mojeek 独立索引",
-	"Queries every credential-free engine in parallel and consolidates deduplicated results": "Queries every credential-free engine in parallel and consolidates deduplicated results",
+	"Queries every credential-free engine in parallel and consolidates deduplicated results":
+		"Queries every credential-free engine in parallel and consolidates deduplicated results",
 	"Requires AGNES_API_KEY": "需要 AGNES_API_KEY",
 	"Requires AGNES_GLOBAL_API_KEY": "需要 AGNES_GLOBAL_API_KEY",
-	"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription": "OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription",
-	"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed": "Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed",
+	"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription":
+		"OPENAI_API_KEY (gpt-image-2) or active GPT model; falls back to a connected Codex subscription",
+	"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed":
+		"Uses a connected Codex / ChatGPT subscription — no OPENAI_API_KEY needed",
 	"Requires google-antigravity OAuth": "需要 google-antigravity OAuth",
 	"Requires xAI Grok OAuth or XAI_API_KEY": "需要 xAI Grok OAuth 或 XAI_API_KEY",
 	"Requires GEMINI_API_KEY": "需要 GEMINI_API_KEY",
 	"Requires OPENROUTER_API_KEY": "需要 OPENROUTER_API_KEY",
-	"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local": "Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local",
-	"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.": "Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.",
-	"Recommended local model; best speed/quality balance, about 212 MB cached.": "Recommended local model; best speed/quality balance, about 212 MB cached.",
+	"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local":
+		"Kokoro-82M neural TTS — SoTA on-device quality, multi-voice, fully local",
+	"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.":
+		"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.",
+	"Recommended local model; best speed/quality balance, about 212 MB cached.":
+		"Recommended local model; best speed/quality balance, about 212 MB cached.",
 	"Most robust local option; slower first load, about 500 MB cached.": "最稳的本地选项；首次加载较慢，缓存约 500 MB。",
-	"Smallest viable local option; lower quality, lowest cache footprint.": "Smallest viable local option; lower quality, lowest cache footprint.",
+	"Smallest viable local option; lower quality, lowest cache footprint.":
+		"Smallest viable local option; lower quality, lowest cache footprint.",
 	"Balanced local fallback; moderate quality and cache footprint.": "均衡的本地回退；质量与缓存占用适中。",
 	"Highest-quality local option; larger and slower than LFM2 350M.": "最高质量本地选项；比 LFM2 350M 更大更慢。",
 	"plugin install title": "安装插件",
@@ -5838,9 +5961,11 @@ export const settings = {
 	"6x6 dense, sentence hues": "6x6 密集，句子色调",
 	"700K tokens": "700K token",
 	"800K tokens": "800K token",
-	"8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.": "8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.",
+	"8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.":
+		"8x13 glyphs on an 11x16 cell — extra letter spacing so characters don't merge. Default for Anthropic.",
 	"8x13 glyphs on an 8x16 cell (extra leading), black ink.": "8x13 字形，8x16 单元格（额外行距），黑色墨水。",
-	"8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.": "8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.",
+	"8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.":
+		"8x13 glyphs on an 8x22 cell — extra line spacing so rows don't crowd. Default for OpenAI/Google.",
 	"8x13 on 11px advance (tracking), black": "8x13 11px 字距，黑色",
 	"8x13 on 16px pitch, black": "8x13 16px 间距，黑色",
 	"8x13 on 22px pitch (leading), black": "8x13 22px 行距，黑色",
@@ -5852,18 +5977,26 @@ export const settings = {
 	"900K tokens": "900K token",
 	"Advisor for Subagents": "子代理顾问",
 	"Also enable the advisor on spawned task/eval subagents.": "也在生成的任务/eval 子代理上启用顾问。",
-	"Archive history onto dense bitmap images the model reads back; no LLM call": "Archive history onto dense bitmap images the model reads back; no LLM call",
-	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.": "Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.",
+	"Archive history onto dense bitmap images the model reads back; no LLM call":
+		"Archive history onto dense bitmap images the model reads back; no LLM call",
+	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.":
+		"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, toggled with P in /agents) and user agent `prewalk` frontmatter apply regardless of this toggle.",
 	"Available Tools": "可用工具",
 	"Balanced (Whisper small)": "均衡（Whisper small）",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.": "Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.":
+		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
 	"Check for omp updates on startup": "启动时检查 omp 更新",
-	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)": "Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
-	"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.": "Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
-	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point": "Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
+	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)":
+		"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
+	"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
+		"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
+	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
+		"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
 	"Task Card Style": "任务卡样式",
-	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card": "Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
-	"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)": "Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
+	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card":
+		"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
+	"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
+		"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
 	"Plain tool-call card only — no swarm member grid": "仅普通工具调用卡，无 swarm 成员网格",
 	"MusePi Swarm": "MusePi Swarm",
 	"MusePi original (Classic)": "MusePi 原版 (Classic)",
@@ -5918,23 +6051,30 @@ export const settings = {
 	"debug work profile desc": "最近 30 秒的火焰图",
 	"Deep reasoning (~16k tokens)": "深度推理（~16k token）",
 	"Detect unexpected stops": "检测意外停止",
-	"Disable automatic context maintenance (same behavior as Auto-compact off)": "Disable automatic context maintenance (same behavior as Auto-compact off)",
+	"Disable automatic context maintenance (same behavior as Auto-compact off)":
+		"Disable automatic context maintenance (same behavior as Auto-compact off)",
 	"Discovery & MCP": "发现与 MCP",
 	"Doc 8on16, sentence hues": "Doc 8on16，句子色调",
 	"Doc 8on16, sentence hues + dimmed stopwords": "Doc 8on16，句子色调 + 停用词淡化",
-	"Drop heavy content (tool results + large blocks) in place; recover via artifact": "Drop heavy content (tool results + large blocks) in place; recover via artifact",
+	"Drop heavy content (tool results + large blocks) in place; recover via artifact":
+		"Drop heavy content (tool results + large blocks) in place; recover via artifact",
 	"Eval & Runtimes": "执行与运行时",
 	"Fast (Whisper base)": "快速（Whisper base）",
-	"Fixed token limit for context maintenance; overrides percentage if set": "Fixed token limit for context maintenance; overrides percentage if set",
+	"Fixed token limit for context maintenance; overrides percentage if set":
+		"Fixed token limit for context maintenance; overrides percentage if set",
 	"Generate handoff and continue in a new session": "生成交接并在新会话中继续",
 	"Grep & Browser": "搜索与浏览器",
-	"Kokoro voice used by the local TTS backend (American/British, female/male)": "Kokoro voice used by the local TTS backend (American/British, female/male)",
+	"Kokoro voice used by the local TTS backend (American/British, female/male)":
+		"Kokoro voice used by the local TTS backend (American/British, female/male)",
 	"Light reasoning (~2k tokens)": "轻度推理（~2k token）",
-	"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.": "Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
-	"Maximum timeout in seconds the agent can set for any tool (0 = no limit)": "Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
+	"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.":
+		"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
+	"Maximum timeout in seconds the agent can set for any tool (0 = no limit)":
+		"Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
 	"Moderate reasoning (~8k tokens)": "中等推理（~8k token）",
 	"On-device neural TTS (Kokoro-82M); output is WAV/PCM16": "设备端神经 TTS（Kokoro-82M）；输出为 WAV/PCM16",
-	"On-device neural TTS model (Kokoro-82M) used by the local TTS backend": "On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
+	"On-device neural TTS model (Kokoro-82M) used by the local TTS backend":
+		"On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
 	"Original X.org 5x8 glyphs on the 2576px frame, black ink.": "原始 X.org 5x8 字形，2576px 框架，黑色墨水。",
 	"Output Limits": "输出限制",
 	"Parakeet TDT v3 (SoTA)": "Parakeet TDT v3（SoTA）",
@@ -5950,13 +6090,18 @@ export const settings = {
 	"Status Line": "状态栏",
 	"Summarize in-place and keep the current session": "原地摘要并保持当前会话",
 	"Turbo (Whisper large-v3)": "高速（Whisper large-v3）",
-	"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.": "Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
-	"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.": "unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.",
-	"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.": "unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.",
-	"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.": "Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.",
-	"Use remote compaction endpoints when available instead of local summarization": "Use remote compaction endpoints when available instead of local summarization",
+	"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.":
+		"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
+	"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.":
+		"unscii square cell, black ink, every line printed twice with the copy on a pale highlight band.",
+	"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.":
+		"unscii squeezed to 6x6 — densest readable cell, fewest frames — in black ink.",
+	"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.":
+		"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.",
+	"Use remote compaction endpoints when available instead of local summarization":
+		"Use remote compaction endpoints when available instead of local summarization",
 	"Very brief reasoning (~1k tokens)": "极简推理（~1k token）",
-	"When I Say Submit": "说\"提交\"时触发",
+	"When I Say Submit": '说"提交"时触发',
 	"X.org 6x12 glyphs, black ink, function words dimmed gray.": "X.org 6x12 字形，黑色墨水，功能词淡灰色。",
 	"X.org 8x13 glyphs, black ink.": "X.org 8x13 字形，黑色墨水。",
 	"modes title": "预设",
@@ -6092,7 +6237,6 @@ export const settings = {
 	"settings.previewImageActualSize": "实际大小",
 	"settings.previewImageFit": "适应窗口",
 	"settings.previewImageExpand": "全屏查看",
-
 } as const;
 
 /** Key union for the settings domain (source of truth). */

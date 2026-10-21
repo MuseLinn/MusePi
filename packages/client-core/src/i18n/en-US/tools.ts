@@ -920,7 +920,8 @@ export const tools = {
 	"tools.artifactsScanTruncated": "Scan stopped at depth 4 — deeper artifact directories were not visited",
 	"tools.artifactsViewportDesktop": "Desktop",
 	"tools.artifactsViewportTablet": "Tablet",
-	"tools.artifactsViewportMobile": "Mobile",	"final url": "final url",
+	"tools.artifactsViewportMobile": "Mobile",
+	"final url": "final url",
 	"content-type": "content-type",
 	"output truncated": "output truncated",
 	"limit reached": "limit reached",
@@ -968,7 +969,8 @@ export const tools = {
 	"new name": "new name",
 	"stop reason": "stop reason",
 	"exit code": "exit code",
-	"pending configurationDone — set breakpoints, then continue": "pending configurationDone — set breakpoints, then continue",
+	"pending configurationDone — set breakpoints, then continue":
+		"pending configurationDone — set breakpoints, then continue",
 	"hit condition": "hit condition",
 	"frame id": "frame id",
 	"scope id": "scope id",
@@ -1544,7 +1546,8 @@ export const tools = {
 	"{count} message(s)": "{count} message(s)",
 	"{count} peer(s)": "{count} peer(s)",
 	"await reply": "await reply",
-	"No reply yet — they may answer later; check inbox or wait again.": "No reply yet — they may answer later; check inbox or wait again.",
+	"No reply yet — they may answer later; check inbox or wait again.":
+		"No reply yet — they may answer later; check inbox or wait again.",
 	"to {name}": "to {name}",
 	"from {name}": "from {name}",
 	"{count} unread": "{count} unread",
@@ -1631,5 +1634,4 @@ export const tools = {
 	"artifacts viewport desktop": "artifacts viewport desktop",
 	"artifacts viewport tablet": "artifacts viewport tablet",
 	"artifacts viewport mobile": "artifacts viewport mobile",
-
 } as const satisfies Record<ToolsKey, string>;

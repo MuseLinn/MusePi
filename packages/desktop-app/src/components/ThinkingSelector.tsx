@@ -77,7 +77,9 @@ export function ThinkingSelector({
 				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
 				ref={capsule ? anchorRef : undefined}
 				onClick={() => setOpen(v => !v)}
-				title={capsule ? `${t("transcript.thinkingLevel")} · ${thinkingLabel(value)}` : t("transcript.thinkingLevel")}
+				title={
+					capsule ? `${t("transcript.thinkingLevel")} · ${thinkingLabel(value)}` : t("transcript.thinkingLevel")
+				}
 				aria-label={t("transcript.thinkingLevel")}
 			>
 				<Icon name="brain" className="h-3.5 w-3.5" />

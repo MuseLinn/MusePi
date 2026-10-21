@@ -89,7 +89,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 						key={i}
 						code={pat}
 						lang={lang ?? undefined}
-						title={patterns.length > 1 ? t("tools.patternWithCount", { count: String(i + 1) }) : t("tools.pattern")}
+						title={
+							patterns.length > 1 ? t("tools.patternWithCount", { count: String(i + 1) }) : t("tools.pattern")
+						}
 						maxLines={12}
 					/>
 				))

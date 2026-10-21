@@ -9,7 +9,7 @@ import type { RpcClient } from "../../lib/rpc";
  * 授权跳转(系统设置深链)。Kimi Work 权限引导弹窗的设置面板版。
  * 非 macOS(后端不可用)渲染空节点。
  */
-export type ComputerPermissionKind = "capture" | "ax" | "tools.input";
+export type ComputerPermissionKind = "capture" | "ax" | "input";
 
 export interface ComputerPermissionRow {
 	kind: ComputerPermissionKind;
@@ -28,7 +28,11 @@ const PERMISSION_META: Record<
 	ComputerPermissionKind,
 	{ labelKey: TranslationKey; descriptionKey: TranslationKey; icon: string }
 > = {
-	capture: { labelKey: "tools.screenRecording", descriptionKey: "tools.permissionScreenRecordingDescription", icon: "camera" },
+	capture: {
+		labelKey: "tools.screenRecording",
+		descriptionKey: "tools.permissionScreenRecordingDescription",
+		icon: "camera",
+	},
 	ax: { labelKey: "tools.accessibility", descriptionKey: "tools.permissionAccessibilityDescription", icon: "key" },
 	input: { labelKey: "tools.inputMonitoring", descriptionKey: "tools.permissionInputDescription", icon: "key" },
 };
@@ -49,7 +53,7 @@ export function computerPermissionRows(caps: Record<string, unknown> | undefined
 	};
 	pick("capture", "capturePermission", "capture");
 	pick("ax", "axPermission", "ax");
-	pick("tools.input", "inputPermission", "tools.input");
+	pick("input", "inputPermission", "input");
 	return rows;
 }
 

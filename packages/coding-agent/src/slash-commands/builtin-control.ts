@@ -22,8 +22,8 @@ export const BUILTIN_CONTROL_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		getTuiAutocompleteDescription: runtime => {
 			const count = runtime.ctx.session.getActiveToolNames().length;
 			return count === 0
-				? statusLine("Force", t("no active tools"))
-				: statusLine("Force", `${count} ${t("active tools")}`);
+				? statusLine("Force", t("commands.noActiveTools"))
+				: statusLine("Force", `${count} ${t("commands.activeTools")}`);
 		},
 
 		handle: async (command, runtime) => {

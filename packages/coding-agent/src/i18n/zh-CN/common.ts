@@ -34,7 +34,8 @@ export const common = {
 	"common.loaded": "已加载",
 	"common.useAgentsBrowse": "使用 /agents 浏览",
 	"common.useAgentsManage": "使用 /agents 管理",
-	"common.tipUseHelp.info": "提示：使用 /help 查看所有命令",	"(session default)": "（会话默认）",
+	"common.tipUseHelp.info": "提示：使用 /help 查看所有命令",
+	"(session default)": "（会话默认）",
 	"(unset)": "（未设置）",
 	"(current)": "（当前）",
 	"all enabled": "全部启用",
@@ -43,7 +44,6 @@ export const common = {
 	"Use /agents to browse": "使用 /agents 浏览",
 	"Use /agents to manage": "使用 /agents 管理",
 	"Tip: Use /help to see all commands": "提示：使用 /help 查看所有命令",
-
 } as const;
 
 /** Key union for the common domain (mirrors the guest-client locale split). */

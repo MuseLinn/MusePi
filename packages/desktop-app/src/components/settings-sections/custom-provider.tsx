@@ -703,7 +703,11 @@ export function CustomProviderPane({
 						disabled={formBusy}
 						onClick={() => void submitModel()}
 					>
-						{formBusy ? `${t("settings.saving")}…` : editingProvider ? t("settings.saveChanges") : t("settings.addProvider")}
+						{formBusy
+							? `${t("settings.saving")}…`
+							: editingProvider
+								? t("settings.saveChanges")
+								: t("settings.addProvider")}
 					</button>
 				</div>
 				{/* Candidate picker for "fetch available models" — shared with

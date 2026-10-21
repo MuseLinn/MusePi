@@ -19,6 +19,13 @@ import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
+import {
+	publishComposerInsets,
+	registerComposerInsetReader,
+	withdrawComposerInsets,
+} from "../lib/composer-inset-readers";
+import { forgetComposerSlot, recordComposerSlotHeight } from "../lib/composer-tail-inset";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { HISTORY_PAGE_MESSAGES, loadAlignedHistoryBatch } from "../lib/history-batch";
@@ -44,9 +51,6 @@ import { surfaceById } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
 import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
-import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
-import { publishComposerInsets, registerComposerInsetReader, withdrawComposerInsets } from "../lib/composer-inset-readers";
-import { forgetComposerSlot, recordComposerSlotHeight } from "../lib/composer-tail-inset";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
@@ -1229,7 +1233,10 @@ export function ChatView({
 	);
 	const confirmTreeOpWhileWorking = useCallback(async (): Promise<boolean> => {
 		if (snap?.working !== true) return true;
-		return confirm(`${t("general.agentRunning")}\n\n${t("general.treeOpInterruptsWork")}`, t("general.interruptContinue"));
+		return confirm(
+			`${t("general.agentRunning")}\n\n${t("general.treeOpInterruptsWork")}`,
+			t("general.interruptContinue"),
+		);
 	}, [confirm, snap?.working, t]);
 	// 统一树操作守卫(retry / rewind / switchBranch / fork 共用):运行中先
 	// 确认,确认后停下在途回合并等它真正收敛(branchAt 在在途回合下重锚

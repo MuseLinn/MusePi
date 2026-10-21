@@ -36,7 +36,12 @@ const assistantReply = (id: string): SessionEntry =>
 		id,
 		parentId: null,
 		timestamp: "2026-10-05T00:00:01Z",
-		message: { role: "general.assistant", content: [{ type: "tools.text", text: "tools.done" }], stopReason: "settings.stop", timestamp: 2 },
+		message: {
+			role: "general.assistant",
+			content: [{ type: "tools.text", text: "tools.done" }],
+			stopReason: "settings.stop",
+			timestamp: 2,
+		},
 	}) as unknown as SessionEntry;
 
 const assistantError = (id: string, text: string): SessionEntry =>

@@ -39,11 +39,7 @@ function resolveReference(previewPath: string, reference: string): string {
 	return baseDirectory + clean;
 }
 
-function makeDelegate(
-	container: HTMLElement,
-	previewPath: string,
-	onOpenFile: (workspacePath: string) => void,
-): void {
+function makeDelegate(container: HTMLElement, previewPath: string, onOpenFile: (workspacePath: string) => void): void {
 	const scrollToHeading = (fragment: string): boolean => {
 		const wanted = decodeReference(fragment.replace(/^#/, "")).toLowerCase();
 		if (!wanted) return false;
@@ -58,7 +54,15 @@ function makeDelegate(
 	container.addEventListener(
 		"click",
 		(event: MouseEvent): void => {
-			if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+			if (
+				event.defaultPrevented ||
+				event.button !== 0 ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.shiftKey ||
+				event.altKey
+			)
+				return;
 			const target = event.target;
 			if (!(target instanceof Element)) return;
 			const anchor = target.closest("a[href]");

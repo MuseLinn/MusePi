@@ -92,7 +92,9 @@ function DiagnosticRows({ text, rows }: { text: string; rows: DiagRow[] }): Reac
 				))}
 				{rows.length > shown.length && (
 					<Row>
-						<span className="tv-faint">{t("tools.moreWithCount", { count: String(rows.length - shown.length) })}</span>
+						<span className="tv-faint">
+							{t("tools.moreWithCount", { count: String(rows.length - shown.length) })}
+						</span>
 					</Row>
 				)}
 			</div>
@@ -118,7 +120,9 @@ function LocationRows({ text, rows }: { text: string; rows: LocRow[] }): ReactNo
 				))}
 				{rows.length > shown.length && (
 					<Row>
-						<span className="tv-faint">{t("tools.moreWithCount", { count: String(rows.length - shown.length) })}</span>
+						<span className="tv-faint">
+							{t("tools.moreWithCount", { count: String(rows.length - shown.length) })}
+						</span>
 					</Row>
 				)}
 			</div>
@@ -138,7 +142,9 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 			<Badge tone="accent">{action ? action.replace(/_/g, " ") : t("tools.request")}</Badge>
 			{file === "*" && <Badge>{t("tools.workspace")}</Badge>}
 			{file && file !== "*" && <PathText path={file} from={line} />}
-			{!file && line != null && <span className="tv-faint">{t("tools.lineWithCount", { count: String(line) })}</span>}
+			{!file && line != null && (
+				<span className="tv-faint">{t("tools.lineWithCount", { count: String(line) })}</span>
+			)}
 			{symbol && <span className="tv-pattern">{truncate(normalizeWs(symbol), 48)}</span>}
 			{query && <span className="tv-muted">{truncate(normalizeWs(query), 48)}</span>}
 			{newName && <span className="tv-muted">→ {truncate(normalizeWs(newName), 48)}</span>}
@@ -179,7 +185,11 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				<ArgKv k={t("tools.symbol")} raw={args.symbol} val={symbol && truncate(normalizeWs(symbol), 120)} />
 				<ArgKv k={t("tools.query")} raw={args.query} val={query && truncate(normalizeWs(query), 120)} />
 				<ArgKv k={t("tools.newName")} raw={args.new_name} val={newName && truncate(normalizeWs(newName), 120)} />
-				<ArgKv k={t("tools.apply")} raw={args.apply} val={apply == null ? null : apply ? t("tools.yes") : t("tools.no")} />
+				<ArgKv
+					k={t("tools.apply")}
+					raw={args.apply}
+					val={apply == null ? null : apply ? t("tools.yes") : t("tools.no")}
+				/>
 				<ArgKv k={t("tools.timeout")} raw={args.timeout} val={timeout != null && `${timeout}s`} />
 				{args.payload !== undefined && payload == null && (
 					<Kv k={t("tools.payload")}>

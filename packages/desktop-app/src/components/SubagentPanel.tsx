@@ -301,7 +301,12 @@ export function SubagentPanel(props: {
 					placeholder={t("agents.messageWithName", { name: shownAgent.displayName })}
 					onChange={e => setDraft(e.target.value)}
 				/>
-				<button type="submit" className="ag-iconbtn" aria-label={t("settings.send2")} disabled={draft.trim().length === 0}>
+				<button
+					type="submit"
+					className="ag-iconbtn"
+					aria-label={t("settings.send2")}
+					disabled={draft.trim().length === 0}
+				>
 					<SendHorizontal size={15} aria-hidden />
 				</button>
 			</form>

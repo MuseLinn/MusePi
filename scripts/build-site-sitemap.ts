@@ -37,9 +37,7 @@ interface Entry {
 	priority: string;
 }
 
-const entries: Entry[] = [
-	{ loc: `${SITE}${BASE}/`, lastmod: "", changefreq: "weekly", priority: "1.0" },
-];
+const entries: Entry[] = [{ loc: `${SITE}${BASE}/`, lastmod: "", changefreq: "weekly", priority: "1.0" }];
 
 // The landing page and the docs index.
 entries.push({

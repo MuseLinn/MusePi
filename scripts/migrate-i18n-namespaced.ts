@@ -1,7 +1,7 @@
 /**
  * Migrate English-source i18n keys to namespaced keys.
  *
- * Convention (measured against openchamber's dictionaries: avg 40.8 chars,
+ * Convention (measured against the source dictionaries: avg 40.8 chars,
  * 4.5 segments, max 56):
  *
  *   <domain>.<camelCaseSlug>[.info|.desc]
@@ -89,7 +89,7 @@ function isProse(text: string): boolean {
 function placeholderSuffix(text: string): string {
 	const names = [...text.matchAll(/\{([^}]*)\}/g)].map(m => m[1]!.replace(/[^\p{L}\p{N}]+/gu, "")).filter(Boolean);
 	if (names.length === 0) return "";
-	return names.map(n => "With" + n.charAt(0).toUpperCase() + n.slice(1)).join("");
+	return names.map(n => `With${n.charAt(0).toUpperCase()}${n.slice(1)}`).join("");
 }
 
 /**
@@ -107,8 +107,7 @@ function readSettingGroups(): Map<string, { tab: string; group: string }> {
 	if (!fs.existsSync(schemaPath)) return map;
 	const src = fs.readFileSync(schemaPath, "utf8");
 	const re = /"[\w.]+":\s*\{([\s\S]{0,900}?)\n\t\},/g;
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(src)) !== null) {
+	for (const m of src.matchAll(re)) {
 		const body = m[1]!;
 		const tab = /tab:\s*"([^"]+)"/.exec(body)?.[1];
 		const group = /group:\s*"([^"]+)"/.exec(body)?.[1];
@@ -318,7 +317,7 @@ const mappingPath = path.resolve(root, "scripts/i18n-key-migration.json");
 if (apply) {
 	const exportShape: Record<string, Record<string, string>> = {};
 	for (const [pkg, table] of allMappings) exportShape[pkg] = Object.fromEntries(table);
-	fs.writeFileSync(mappingPath, JSON.stringify(exportShape, null, "\t") + "\n");
+	fs.writeFileSync(mappingPath, `${JSON.stringify(exportShape, null, "\t")}\n`);
 	console.log(`\nmapping written to ${mappingPath}`);
 }
 

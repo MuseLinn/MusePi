@@ -119,16 +119,8 @@ export class PluginListComponent extends Container {
 		if (entries.length === 0) {
 			this.addChild(new Text(theme.fg("muted", t("settings.noPluginsInstalled")), 0, 0));
 			this.addChild(new Spacer(1));
-			this.addChild(
-				new Text(theme.fg("dim", t("settings.installNpmPlugins.info")), 0, 0),
-			);
-			this.addChild(
-				new Text(
-					theme.fg("dim", t("settings.installMarketplacePlugins.info")),
-					0,
-					0,
-				),
-			);
+			this.addChild(new Text(theme.fg("dim", t("settings.installNpmPlugins.info")), 0, 0));
+			this.addChild(new Text(theme.fg("dim", t("settings.installMarketplacePlugins.info")), 0, 0));
 			this.addChild(new Spacer(1));
 			this.addChild(new DynamicBorder());
 
@@ -419,7 +411,8 @@ export class MarketplacePluginDetailComponent extends Container {
 		this.addChild(new Text(theme.bold(theme.fg("accent", `  ${plugin.id}`)), 0, 0));
 
 		const subtitleParts = [`[${plugin.scope}]`];
-		if (plugin.shadowedBy) subtitleParts.push(`${theme.status.shadowed} ${t("commands.shadowedByWith0", plugin.shadowedBy)}`);
+		if (plugin.shadowedBy)
+			subtitleParts.push(`${theme.status.shadowed} ${t("commands.shadowedByWith0", plugin.shadowedBy)}`);
 		this.addChild(new Text(theme.fg("muted", `  ${subtitleParts.join(" ")}`), 0, 0));
 		this.addChild(new Spacer(1));
 
@@ -455,7 +448,9 @@ export class MarketplacePluginDetailComponent extends Container {
 
 		// Read-only metadata. SettingsList rejects items without `values`/`submenu`,
 		// so we render the metadata as plain text rows beneath the toggle.
-		this.addChild(new Text(theme.fg("dim", `  ${t("commands.version")}       ${entry?.version ?? t("commands.text19")}`), 0, 0));
+		this.addChild(
+			new Text(theme.fg("dim", `  ${t("commands.version")}       ${entry?.version ?? t("commands.text19")}`), 0, 0),
+		);
 		this.addChild(new Text(theme.fg("dim", `  ${t("shell.scope")}         ${plugin.scope}`), 0, 0));
 		this.addChild(
 			new Text(
@@ -467,8 +462,20 @@ export class MarketplacePluginDetailComponent extends Container {
 				0,
 			),
 		);
-		this.addChild(new Text(theme.fg("dim", `  ${t("commands.installedAt")}  ${entry?.installedAt ?? t("commands.text19")}`), 0, 0));
-		this.addChild(new Text(theme.fg("dim", `  ${t("commands.lastUpdated")}  ${entry?.lastUpdated ?? t("commands.text19")}`), 0, 0));
+		this.addChild(
+			new Text(
+				theme.fg("dim", `  ${t("commands.installedAt")}  ${entry?.installedAt ?? t("commands.text19")}`),
+				0,
+				0,
+			),
+		);
+		this.addChild(
+			new Text(
+				theme.fg("dim", `  ${t("commands.lastUpdated")}  ${entry?.lastUpdated ?? t("commands.text19")}`),
+				0,
+				0,
+			),
+		);
 		if (entry?.gitCommitSha) {
 			this.addChild(new Text(theme.fg("dim", `  ${t("commands.gitSha")}       ${entry.gitCommitSha}`), 0, 0));
 		}

@@ -15,14 +15,12 @@ export const commands = {
 	"commands.showAllKeyboardShortcuts": "显示全部键盘快捷键",
 	"commands.createNewForkPrevious": "从上一条用户消息创建新分支",
 	"commands.queueMessageAfterAgent": "排队消息等待 Agent 完成当前任务",
-	"commands.manageGoalSet.info":
-		"管理目标：设置、状态、暂停、恢复、取消、替换、下一步、预算、队列",
+	"commands.manageGoalSet.info": "管理目标：设置、状态、暂停、恢复、取消、替换、下一步、预算、队列",
 	"commands.switchPermissionMode": "切换权限模式",
 	"commands.togglePlanModeOff": "切换计划模式开/关",
 	"commands.toggleSwarmModeOff": "切换集群模式开/关或显示状态",
 	"commands.showBackgroundTaskBrowser": "显示后台任务浏览器",
-	"commands.manageTodoList.info":
-		"管理待办列表：查看、初始化、开始、完成、丢弃、移除、追加",
+	"commands.manageTodoList.info": "管理待办列表：查看、初始化、开始、完成、丢弃、移除、追加",
 	"commands.askSideQuestionWithout": "提出一个不干扰主会话的侧边问题（工具关闭）",
 	"commands.duplicateCurrentSessionCurrent": "在当前位置复制当前会话",
 	"commands.navigateSessionTree": "导航会话树（切换分支）",
@@ -37,8 +35,7 @@ export const commands = {
 	"commands.longTermMemory.info": "长期记忆：查看内容、统计、清除、启用/禁用",
 	"commands.importMcpServersSkills": "从 Claude Code 导入 MCP 服务器和技能",
 	"commands.resumeDifferentSession": "恢复另一个会话",
-	"commands.reloadKeybindingsExtensions.info":
-		"重新加载快捷键、扩展、技能、提示、主题和上下文文件",
+	"commands.reloadKeybindingsExtensions.info": "重新加载快捷键、扩展、技能、提示、主题和上下文文件",
 	"commands.openAgentsDashboard": "打开 Agent 仪表盘（浏览、检查、配置 Agent）",
 	"commands.listStoredCredentialsEdit": "列出存储的凭证并编辑备注",
 	"commands.manageSharedCredentialBroker": "管理共享凭证代理（远程凭证共享）",
@@ -50,8 +47,7 @@ export const commands = {
 	"commands.reject": "拒绝",
 
 	// ── Slash command descriptions ──────────────────────────────────────────────
-	"commands.planRunInspect.info":
-		"规划、运行、检查、导入和对比 MusePi 原生安全扫描",
+	"commands.planRunInspect.info": "规划、运行、检查、导入和对比 MusePi 原生安全扫描",
 	"commands.createImmutableSecurityScan": "创建不可变的安全扫描计划",
 	"commands.startPlannedNewlyPlanned": "开始执行已计划或新建的原生扫描",
 	"commands.showNativeScanOperation": "显示原生扫描操作状态",
@@ -81,8 +77,7 @@ export const commands = {
 		"切换循环模式：开启后，你发送的下一条消息会在每次输出后自动重发（持续追问），Esc 取消当前迭代，再次 /loop 关闭",
 	"commands.switchModelSession": "切换本会话模型",
 	"commands.switchModelSession2": "切换本会话模型（同 alt+p）",
-	"commands.togglePriorityServiceTier":
-		"切换优先 API 服务等级（OpenAI priority / Anthropic fast），降低响应延迟",
+	"commands.togglePriorityServiceTier": "切换优先 API 服务等级（OpenAI priority / Anthropic fast），降低响应延迟",
 	"commands.enableFastMode": "开启快速模式",
 	"commands.disableFastMode": "关闭快速模式",
 	"commands.showFastModeStatus": "显示快速模式状态",
@@ -94,21 +89,17 @@ export const commands = {
 	"commands.controlInspectImageVision": "控制本会话的 inspect_image 视觉委托工具",
 	"commands.alwaysExposeInspectImage": "本会话始终暴露 inspect_image",
 	"commands.neverExposeInspectImage": "本会话永不暴露 inspect_image",
-	"commands.followInspectImageMode":
-		"遵循 inspect_image.mode（对支持视觉的模型自动隐藏）",
+	"commands.followInspectImageMode": "遵循 inspect_image.mode（对支持视觉的模型自动隐藏）",
 	"commands.showInspectImageStatus": "显示 inspect_image 状态",
-	"commands.switchFastCheapModel":
-		"下一步动作切换到快速/便宜模型（即使未带 --prewalk 也生效）",
-	"commands.toggleAdvisor":
-		"切换顾问模式（第二个模型审查每一轮并注入建议）",
+	"commands.switchFastCheapModel": "下一步动作切换到快速/便宜模型（即使未带 --prewalk 也生效）",
+	"commands.toggleAdvisor": "切换顾问模式（第二个模型审查每一轮并注入建议）",
 	"commands.enableAdvisor": "开启顾问",
 	"commands.disableAdvisor": "关闭顾问",
 	"commands.showAdvisorStatus": "显示顾问状态",
 	"commands.copyAdvisorSTranscript": "把顾问的记录复制到剪贴板",
 	"commands.openAdvisorConfigurationEditor": "打开顾问配置编辑器（TUI）",
 	"commands.exportSessionHtmlFile": "将会话导出为 HTML 文件",
-	"commands.copySessionTranscriptClipboard":
-		"复制会话记录到剪贴板（并把 LLM 请求 JSON 写入临时目录）",
+	"commands.copySessionTranscriptClipboard": "复制会话记录到剪贴板（并把 LLM 请求 JSON 写入临时目录）",
 	"commands.shareSessionViaEncrypted": "通过加密链接分享会话（分享服务器或私有 gist）",
 	"commands.shareSessionLiveVia": "通过中继实时分享本会话",
 	"commands.shareReadOnlyLink": "分享只读链接（访客可观看，不能发提示）",
@@ -120,10 +111,8 @@ export const commands = {
 	"commands.joinAnotherTerminal": "从另一个终端加入：",
 	"commands.watchAnotherTerminal": "在另一个终端观看：",
 	"commands.anyWebBrowser": "或任意浏览器：",
-	"commands.anyoneLinkCan.info":
-		"持此链接可观看会话，但不能向代理发提示。",
-	"commands.anyoneLinkCan.info2":
-		"持此链接可阅读会话并向代理发提示。只读链接：/collab view",
+	"commands.anyoneLinkCan.info": "持此链接可观看会话，但不能向代理发提示。",
+	"commands.anyoneLinkCan.info2": "持此链接可阅读会话并向代理发提示。只读链接：/collab view",
 	"commands.notHostingCollabSession": "当前未托管协作会话",
 	"commands.collabStopped": "协作已停止",
 	"commands.collabWith0With1": "协作：{0} — {1}",
@@ -133,13 +122,11 @@ export const commands = {
 	"commands.failedStartTunnelCollabWith0": "启动隧道协作失败：{0}",
 	"commands.failedStartLanCollabWith0": "启动局域网协作失败：{0}",
 	"commands.text": "（端口被占用——请先 /collab stop 关闭之前的会话）",
-	"commands.text2":
-		"（cloudflared 未安装——请按上方提示安装后重试）",
+	"commands.text2": "（cloudflared 未安装——请按上方提示安装后重试）",
 	"commands.tailscale": "Tailscale（无证书警告）",
 	"commands.tailscaleIp": "Tailscale IP",
 	"commands.plaintextHttp": "无加密 http（明文，免证书警告）",
-	"commands.firstVisitShowsSelf":
-		"首次访问浏览器会提示自签证书警告——点「高级」→「继续前往」即可",
+	"commands.firstVisitShowsSelf": "首次访问浏览器会提示自签证书警告——点「高级」→「继续前往」即可",
 	"commands.collabSessionStarted": "协作会话已启动（隧道）！",
 	"commands.collabSessionStarted2": "协作会话已启动（局域网）！",
 	"commands.collabSessionStarted3": "协作会话已启动！",
@@ -224,8 +211,7 @@ export const commands = {
 	"commands.resetProviderStreamState":
 		"重置提供商流状态（清除中断的流式续传状态），不改变本地记录。会话在响应中断后卡住时用它恢复",
 	"commands.deleteCurrentSessionStart": "删除当前会话并开始新会话",
-	"commands.dropHeavyContentContext":
-		"从上下文丢弃沉重内容（工具结果、大块文本），回收令牌",
+	"commands.dropHeavyContentContext": "从上下文丢弃沉重内容（工具结果、大块文本），回收令牌",
 	"commands.stripToolResultsLarge": "剥离工具结果和大块文本（默认）",
 	"commands.stripImageBlocks": "剥离图片块",
 	"commands.handOffSessionContext": "把会话上下文移交给新会话",
@@ -270,8 +256,7 @@ export const commands = {
 	"commands.listAllInstalledPlugins": "列出所有已安装插件（npm + 市场）",
 	"commands.enableMarketplacePlugin": "启用市场插件",
 	"commands.disableMarketplacePlugin": "禁用市场插件",
-	"commands.reloadAllPlugins":
-		"重载所有插件（技能、命令、钩子、工具、代理、MCP）",
+	"commands.reloadAllPlugins": "重载所有插件（技能、命令、钩子、工具、代理、MCP）",
 	"commands.forceNextTurnUse": "强制下一轮使用指定工具",
 	"commands.startCodexBackedRealtime": "启动 Codex 驱动的实时语音模式",
 	"commands.freezeAllAgentsUntil": "冻结所有代理（主代理、子代理、顾问），直到恢复",
@@ -388,8 +373,7 @@ export const commands = {
 	"commands.adjustRedGreenContrast": "调整红/绿对比度",
 	"commands.advisorConfigWith0": "顾问配置：{0}",
 	"commands.annotate": "批注",
-	"commands.applyingYourSelection.info":
-		"正在应用您的选择——准备上下文可能需要片刻。",
+	"commands.applyingYourSelection.info": "正在应用您的选择——准备上下文可能需要片刻。",
 	"commands.askWith0": "询问（{0} 秒）",
 	"commands.askAnythingEdit.info": "随意提问、编辑文件、运行工具",
 	"commands.authApiKeyViaWith0": "认证：经环境变量提供 API 密钥（{0}）",
@@ -417,8 +401,7 @@ export const commands = {
 	"commands.configuredMarketplacesHaveNo": "已配置的市场中没有插件",
 	"commands.copyClipboard": "复制到剪贴板",
 	"commands.couldNotCreateRule": "无法创建规则。",
-	"commands.createNewAdvisor.info":
-		"创建新的顾问条目，然后编辑其模型、工具和指令。",
+	"commands.createNewAdvisor.info": "创建新的顾问条目，然后编辑其模型、工具和指令。",
 	"commands.createdAgentWith0With1": "已在 {1} 创建 Agent {0}",
 	"commands.credentialsSavedWith0": "凭据已保存到 {0}",
 	"commands.customAnswer": "自定义答案：",
@@ -440,8 +423,7 @@ export const commands = {
 	"commands.enableSpeechText.desc":
 		"通过 stt.enabled 启用语音转文字，然后按住 Space 说话（或绑定 app.stt.toggle）；通过 speechgen.enabled 启用语音生成工具；通过 speech.enabled 让回复朗读出声。",
 	"commands.enabled": "启用：",
-	"commands.enterClickToggle.info":
-		"Enter / 点击切换 · 选 Done 或 Esc 应用（留空 = 无工具；read/grep/glob = 默认）",
+	"commands.enterClickToggle.info": "Enter / 点击切换 · 选 Done 或 Esc 应用（留空 = 无工具；read/grep/glob = 默认）",
 	"commands.enterModelPattern": "输入模型模式（留空清除覆盖）",
 	"commands.enterSelectNNote": "Enter 选择 · n 记笔记",
 	"commands.enterConfigureEscGo": "Enter 配置 · Esc 返回",
@@ -589,12 +571,10 @@ export const commands = {
 	"commands.stepHttpHeaderName": "步骤：HTTP 头名称",
 	"commands.stepHowProvide.info": "步骤：如何提供密钥？",
 	"commands.suggestions": "建议：",
-	"commands.switchBetweenProjectWith0.info":
-		"在项目级与用户级 WATCHDOG.yml 之间切换。当前正在编辑 {0} 级文件。",
+	"commands.switchBetweenProjectWith0.info": "在项目级与用户级 WATCHDOG.yml 之间切换。当前正在编辑 {0} 级文件。",
 	"commands.textSpeechModel": "文字转语音模型",
 	"commands.accountHasNoSaved": "该账户没有可用的已保存重置。",
-	"commands.themeChangesPreview.info":
-		"主题更改实时预览；按 Enter 前不会保存任何改动。",
+	"commands.themeChangesPreview.info": "主题更改实时预览；按 Enter 前不会保存任何改动。",
 	"commands.themePreviewFailed": "主题预览失败",
 	"commands.thinkingEffortEnterClickWith0": "{0} 的思考投入 · Enter / 点击选择 · Esc 返回",
 	"commands.tinyModel": "精简模型",
@@ -607,8 +587,7 @@ export const commands = {
 	"commands.transcriptLivesHostNot": "转录存在于主机上——此处不可用。",
 	"commands.typeDirectoryPath": "输入目录路径…",
 	"commands.typeNameEnterSave": "输入名称 · Enter 保存 · Esc 取消",
-	"commands.typeFilterNavigateTab":
-		"输入过滤 · ↑↓ 导航 · Tab 接受 · Enter 确认 · Esc 取消",
+	"commands.typeFilterNavigateTab": "输入过滤 · ↑↓ 导航 · Tab 接受 · Enter 确认 · Esc 取消",
 	"commands.typeSearchEnterClick": "输入搜索 · Enter / 双击选择 · Esc 返回",
 	"commands.urlRequired": "URL 为必填项",
 	"commands.urlMustUseHttp": "URL 必须使用 http:// 或 https:// 协议",
@@ -628,8 +607,7 @@ export const commands = {
 	"commands.webSearchSetWith0": "网络搜索已设置为 {0}",
 	"commands.weeklyUsageClearedEarly": "每周用量已提前清零 · ESC 返回",
 	"commands.working": "处理中…",
-	"commands.writeScopeS.info":
-		"写入此范围的 WATCHDOG.yml 并热重载运行中的顾问，无需重启。",
+	"commands.writeScopeS.info": "写入此范围的 WATCHDOG.yml 并热重载运行中的顾问，无需重启。",
 	"commands.enterContinueEsc.info": "[回车继续，Esc 取消]",
 	"commands.enterContinueEsc.info2": "[回车继续，Esc 返回]",
 	"commands.imageWith0": "[图片：{0}]",
@@ -654,8 +632,7 @@ export const commands = {
 	"commands.collabGuestWith0": "协作访客:{0}",
 	"commands.collabWith0": "协作:{0}",
 	"commands.compacted": "已压缩",
-	"commands.ctrlQCtrlEnter":
-		"ctrl+q/ctrl+enter 提交  esc 取消  ctrl+g 外部编辑器",
+	"commands.ctrlQCtrlEnter": "ctrl+q/ctrl+enter 提交  esc 取消  ctrl+g 外部编辑器",
 	"commands.current": "当前",
 	"commands.detached": "游离 HEAD",
 	"commands.developer": "开发者：",
@@ -717,8 +694,7 @@ export const commands = {
 	"commands.moreWith02": "…另有 {0} 条（ctrl+o 展开）",
 	"commands.selectEnterConfirmEsc": "↑/↓ 选择 · enter 确认 · esc 跳过 · ctrl+c 退出设置",
 	"commands.selectLogOutAccount": "↑/↓ 选择 · ↵ 登出账户 · Esc 取消",
-	"commands.moveEnterClickSelect":
-		"↑↓ 移动 · Enter / 点击选择 · 右侧滚动预览 · Esc 关闭",
+	"commands.moveEnterClickSelect": "↑↓ 移动 · Enter / 点击选择 · 右侧滚动预览 · Esc 关闭",
 	"commands.oauthCancelled": "○ OAuth 已取消",
 	"commands.authenticationRequired": "⚠ 需要认证",
 	"commands.healthCheckFailed": "⚠ 健康检查失败（仍会保存配置）",
@@ -747,7 +723,8 @@ export const commands = {
 	"commands.linesWith0": "{0} 行",
 	"commands.snapcompactFrameAttachedWith0": "附加了 {0} 个 snapcompact 帧",
 	"commands.snapcompactFramesAttachedWith0": "附加了 {0} 个 snapcompact 帧",
-	"commands.presetSlashNone": "当前会话未应用预设。启动时用 --preset <id> 应用(如 --preset minimal);会话内热切换为 v2 能力。",
+	"commands.presetSlashNone":
+		"当前会话未应用预设。启动时用 --preset <id> 应用(如 --preset minimal);会话内热切换为 v2 能力。",
 	"commands.presetSlashCurrent": "当前预设:{0}(经 --preset 启动应用;会话内热切换为 v2 能力)",
 	"commands.presetUseUsage": "用法:/preset use <id> —— 热切换会话预设;或 /preset list 列出全部预设",
 	"commands.presetUseOk": "已热切换预设:{0}",
@@ -763,7 +740,8 @@ export const commands = {
 	"commands.presetDesignName": "设计模式",
 	"commands.presetDesignDescription": "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
 	"commands.presetCreatorName": "创作模式",
-	"commands.presetCreatorDescription": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",	"Run the MusePi setup wizard (first-run configuration)": "运行 MusePi 设置向导（首次运行配置）",
+	"commands.presetCreatorDescription": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
+	"Run the MusePi setup wizard (first-run configuration)": "运行 MusePi 设置向导（首次运行配置）",
 	"List, preview, or switch themes": "列出、预览或切换主题",
 	"Open settings menu": "打开设置菜单",
 	"Select model (opens selector UI)": "选择模型（打开选择器）",
@@ -778,12 +756,14 @@ export const commands = {
 	"Show all keyboard shortcuts": "显示全部键盘快捷键",
 	"Create a new fork from a previous user message": "从上一条用户消息创建新分支",
 	"Queue a message for after the agent yields": "排队消息等待 Agent 完成当前任务",
-	"Manage goal: set, status, pause, resume, cancel, replace, next, budget, queue": "Manage goal: set, status, pause, resume, cancel, replace, next, budget, queue",
+	"Manage goal: set, status, pause, resume, cancel, replace, next, budget, queue":
+		"Manage goal: set, status, pause, resume, cancel, replace, next, budget, queue",
 	"Switch permission mode": "切换权限模式",
 	"Toggle plan mode on/off": "切换计划模式开/关",
 	"Toggle swarm mode on/off or show status": "切换集群模式开/关或显示状态",
 	"Show background task browser": "显示后台任务浏览器",
-	"Manage todo list: view, init, start, done, drop, rm, append": "Manage todo list: view, init, start, done, drop, rm, append",
+	"Manage todo list: view, init, start, done, drop, rm, append":
+		"Manage todo list: view, init, start, done, drop, rm, append",
 	"Ask a side question without touching the main session (tools off)": "提出一个不干扰主会话的侧边问题（工具关闭）",
 	"Duplicate the current session at the current position": "在当前位置复制当前会话",
 	"Navigate session tree (switch branches)": "导航会话树（切换分支）",
@@ -798,12 +778,14 @@ export const commands = {
 	"Long-term memory: view payload, stats, clear, enable/disable": "长期记忆：查看内容、统计、清除、启用/禁用",
 	"Import MCP servers and skills from Claude Code": "从 Claude Code 导入 MCP 服务器和技能",
 	"Resume a different session": "恢复另一个会话",
-	"Reload keybindings, extensions, skills, prompts, themes, and context files": "Reload keybindings, extensions, skills, prompts, themes, and context files",
+	"Reload keybindings, extensions, skills, prompts, themes, and context files":
+		"Reload keybindings, extensions, skills, prompts, themes, and context files",
 	"Open the Agents dashboard (browse, inspect, configure agents)": "打开 Agent 仪表盘（浏览、检查、配置 Agent）",
 	"List stored credentials and edit remarks": "列出存储的凭证并编辑备注",
 	"Manage the shared credential broker (remote credential sharing)": "管理共享凭证代理（远程凭证共享）",
 	"Show internal debug info (render dimensions, all lines)": "显示内部调试信息（渲染尺寸、所有行）",
-	"Plan, run, inspect, import, and compare MusePi-native security scans": "Plan, run, inspect, import, and compare MusePi-native security scans",
+	"Plan, run, inspect, import, and compare MusePi-native security scans":
+		"Plan, run, inspect, import, and compare MusePi-native security scans",
 	"Create an immutable security scan plan": "创建不可变的安全扫描计划",
 	"Start a planned or newly planned native scan": "开始执行已计划或新建的原生扫描",
 	"Show native scan operation status": "显示原生扫描操作状态",
@@ -819,7 +801,8 @@ export const commands = {
 	"Configure sign-in and web search providers": "配置登录和网络搜索提供商",
 	"Toggle plan mode (agent plans before executing)": "切换计划模式（代理先规划再执行）",
 	"Re-open the plan review for the latest plan (plan mode only)": "重新打开最新计划的审查（仅计划模式）",
-	"Toggle vibe mode (direct persistent fast/good worker sessions; read-only toolset)": "Toggle vibe mode (direct persistent fast/good worker sessions; read-only toolset)",
+	"Toggle vibe mode (direct persistent fast/good worker sessions; read-only toolset)":
+		"Toggle vibe mode (direct persistent fast/good worker sessions; read-only toolset)",
 	"Toggle goal mode (persistent autonomous objective for this session)": "切换目标模式：为本会话设置持续自主目标",
 	"Set or replace the goal": "设置或替换目标",
 	"Show current goal details": "显示当前目标详情",
@@ -828,10 +811,12 @@ export const commands = {
 	"Drop the current goal": "放弃当前目标",
 	"Adjust the token budget": "调整令牌预算",
 	"Have the agent interview you in chat, then set up goal mode": "让代理在聊天中访谈你，然后配置目标模式",
-	"Toggle loop mode. While enabled, the next prompt you send re-submits after every yield. Esc cancels the current iteration; /loop again to disable.": "Toggle loop mode. While enabled, the next prompt you send re-submits after every yield. Esc cancels the current iteration; /loop again to disable.",
+	"Toggle loop mode. While enabled, the next prompt you send re-submits after every yield. Esc cancels the current iteration; /loop again to disable.":
+		"Toggle loop mode. While enabled, the next prompt you send re-submits after every yield. Esc cancels the current iteration; /loop again to disable.",
 	"Switch model for this session": "切换本会话模型",
 	"Switch model for this session (same as alt+p)": "切换本会话模型（同 alt+p）",
-	"Toggle priority service tier (OpenAI service_tier=priority, Anthropic speed=fast)": "Toggle priority service tier (OpenAI service_tier=priority, Anthropic speed=fast)",
+	"Toggle priority service tier (OpenAI service_tier=priority, Anthropic speed=fast)":
+		"Toggle priority service tier (OpenAI service_tier=priority, Anthropic speed=fast)",
 	"Enable fast mode": "开启快速模式",
 	"Disable fast mode": "关闭快速模式",
 	"Show fast mode status": "显示快速模式状态",
@@ -842,17 +827,21 @@ export const commands = {
 	"Control the inspect_image vision-delegation tool for this session": "控制本会话的 inspect_image 视觉委托工具",
 	"Always expose inspect_image this session": "本会话始终暴露 inspect_image",
 	"Never expose inspect_image this session": "本会话永不暴露 inspect_image",
-	"Follow inspect_image.mode (auto hides it for vision-capable models)": "Follow inspect_image.mode (auto hides it for vision-capable models)",
+	"Follow inspect_image.mode (auto hides it for vision-capable models)":
+		"Follow inspect_image.mode (auto hides it for vision-capable models)",
 	"Show inspect_image status": "显示 inspect_image 状态",
-	"Switch to a fast/cheap model at the next action (works even without --prewalk)": "Switch to a fast/cheap model at the next action (works even without --prewalk)",
-	"Toggle the advisor (a second model that reviews each turn and injects notes)": "Toggle the advisor (a second model that reviews each turn and injects notes)",
+	"Switch to a fast/cheap model at the next action (works even without --prewalk)":
+		"Switch to a fast/cheap model at the next action (works even without --prewalk)",
+	"Toggle the advisor (a second model that reviews each turn and injects notes)":
+		"Toggle the advisor (a second model that reviews each turn and injects notes)",
 	"Enable the advisor": "开启顾问",
 	"Disable the advisor": "关闭顾问",
 	"Show advisor status": "显示顾问状态",
 	"Copy the advisor's transcript to clipboard": "把顾问的记录复制到剪贴板",
 	"Open the advisor configuration editor (TUI)": "打开顾问配置编辑器（TUI）",
 	"Export session to HTML file": "将会话导出为 HTML 文件",
-	"Copy session transcript to clipboard (and write LLM request JSON to tmp)": "Copy session transcript to clipboard (and write LLM request JSON to tmp)",
+	"Copy session transcript to clipboard (and write LLM request JSON to tmp)":
+		"Copy session transcript to clipboard (and write LLM request JSON to tmp)",
 	"Share session via an encrypted link (share server or secret gist)": "通过加密链接分享会话（分享服务器或私有 gist）",
 	"Share this session live via a relay": "通过中继实时分享本会话",
 	"Share a read-only link (guests can watch, not prompt)": "分享只读链接（访客可观看，不能发提示）",
@@ -863,8 +852,10 @@ export const commands = {
 	"Join from another terminal:": "从另一个终端加入：",
 	"Watch from another terminal:": "在另一个终端观看：",
 	"or any web browser:": "或任意浏览器：",
-	"Anyone with this link can watch the session but cannot prompt the agent.": "Anyone with this link can watch the session but cannot prompt the agent.",
-	"Anyone with the link can read the session and prompt the agent. Read-only link: /collab view": "Anyone with the link can read the session and prompt the agent. Read-only link: /collab view",
+	"Anyone with this link can watch the session but cannot prompt the agent.":
+		"Anyone with this link can watch the session but cannot prompt the agent.",
+	"Anyone with the link can read the session and prompt the agent. Read-only link: /collab view":
+		"Anyone with the link can read the session and prompt the agent. Read-only link: /collab view",
 	"Not hosting a collab session": "当前未托管协作会话",
 	"Collab stopped": "协作已停止",
 	"Collab: {0} — {1}": "协作：{0} — {1}",
@@ -874,17 +865,20 @@ export const commands = {
 	"Failed to start tunnel collab: {0}": "启动隧道协作失败：{0}",
 	"Failed to start LAN collab: {0}": "启动局域网协作失败：{0}",
 	" (port already in use — stop a previous collab session first)": "（端口被占用——请先 /collab stop 关闭之前的会话）",
-	" (cloudflared is not installed — see the error above for install instructions)": " (cloudflared is not installed — see the error above for install instructions)",
+	" (cloudflared is not installed — see the error above for install instructions)":
+		" (cloudflared is not installed — see the error above for install instructions)",
 	"Tailscale (no cert warning)": "Tailscale（无证书警告）",
 	"Tailscale IP": "Tailscale IP",
 	"Plaintext http (no encryption)": "无加密 http（明文，免证书警告）",
-	"First visit shows a self-signed certificate warning — click Advanced → Continue": "First visit shows a self-signed certificate warning — click Advanced → Continue",
+	"First visit shows a self-signed certificate warning — click Advanced → Continue":
+		"First visit shows a self-signed certificate warning — click Advanced → Continue",
 	"Collab session started (tunnel)!": "协作会话已启动（隧道）！",
 	"Collab session started (LAN)!": "协作会话已启动（局域网）！",
 	"Collab session started!": "协作会话已启动！",
 	"Read-only collab session active": "只读协作会话进行中",
 	"Collab session active": "协作会话进行中",
-	"No relay configured. Set collab.relayUrl in /settings or pass one: /collab relay.example.com": "No relay configured. Set collab.relayUrl in /settings or pass one: /collab relay.example.com",
+	"No relay configured. Set collab.relayUrl in /settings or pass one: /collab relay.example.com":
+		"No relay configured. Set collab.relayUrl in /settings or pass one: /collab relay.example.com",
 	"Failed to start collab session: {0}": "启动协作会话失败：{0}",
 	"Usage: /join <link>": "用法：/join <链接>",
 	"This collab link is read-only": "此协作链接为只读",
@@ -958,9 +952,11 @@ export const commands = {
 	"Add an SSH host": "添加 SSH 主机",
 	"List all configured SSH hosts": "列出所有已配置的 SSH 主机",
 	"Remove an SSH host": "移除 SSH 主机",
-	"Reset provider stream state without changing the local transcript": "Reset provider stream state without changing the local transcript",
+	"Reset provider stream state without changing the local transcript":
+		"Reset provider stream state without changing the local transcript",
 	"Delete the current session and start a new one": "删除当前会话并开始新会话",
-	"Drop heavy content from context (tool results, large blocks)": "Drop heavy content from context (tool results, large blocks)",
+	"Drop heavy content from context (tool results, large blocks)":
+		"Drop heavy content from context (tool results, large blocks)",
 	"Strip tool results + large blocks (default)": "剥离工具结果和大块文本（默认）",
 	"Strip image blocks": "剥离图片块",
 	"Hand off session context to a new session": "把会话上下文移交给新会话",
@@ -1005,7 +1001,8 @@ export const commands = {
 	"List all installed plugins (npm + marketplace)": "列出所有已安装插件（npm + 市场）",
 	"Enable a marketplace plugin": "启用市场插件",
 	"Disable a marketplace plugin": "禁用市场插件",
-	"Reload all plugins (skills, commands, hooks, tools, agents, MCP)": "Reload all plugins (skills, commands, hooks, tools, agents, MCP)",
+	"Reload all plugins (skills, commands, hooks, tools, agents, MCP)":
+		"Reload all plugins (skills, commands, hooks, tools, agents, MCP)",
 	"Force next turn to use a specific tool": "强制下一轮使用指定工具",
 	"Start Codex-backed realtime voice mode": "启动 Codex 驱动的实时语音模式",
 	"Freeze all agents (main, subagents, advisor) until resumed": "冻结所有代理（主代理、子代理、顾问），直到恢复",
@@ -1079,7 +1076,8 @@ export const commands = {
 	"Adding server anyway...": "仍将添加服务器…",
 	"Adjust red/green contrast": "调整红/绿对比度",
 	"Advisor config: {0}": "顾问配置：{0}",
-	"Applying your selection — this can take a moment while context is prepared.": "Applying your selection — this can take a moment while context is prepared.",
+	"Applying your selection — this can take a moment while context is prepared.":
+		"Applying your selection — this can take a moment while context is prepared.",
 	"Ask ({0}s)": "询问（{0} 秒）",
 	"Ask anything, edit files, run tools": "随意提问、编辑文件、运行工具",
 	"Auth: API key via env ({0})": "认证：经环境变量提供 API 密钥（{0}）",
@@ -1105,7 +1103,8 @@ export const commands = {
 	"Configured marketplaces have no plugins": "已配置的市场中没有插件",
 	"Copy to clipboard": "复制到剪贴板",
 	"Could not create rule.": "无法创建规则。",
-	"Create a new advisor entry, then edit its model, tools, and instructions.": "Create a new advisor entry, then edit its model, tools, and instructions.",
+	"Create a new advisor entry, then edit its model, tools, and instructions.":
+		"Create a new advisor entry, then edit its model, tools, and instructions.",
 	"Created agent {0} at {1}": "已在 {1} 创建 Agent {0}",
 	"Credentials saved to {0}": "凭据已保存到 {0}",
 	"Custom answer: ": "自定义答案：",
@@ -1119,9 +1118,11 @@ export const commands = {
 	"Edit OAuth settings": "编辑 OAuth 设置",
 	"Enable or disable this marketplace plugin": "启用或禁用此市场插件",
 	"Enable or disable this plugin": "启用或禁用此插件",
-	"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.": "Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.",
+	"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.":
+		"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.",
 	"Enabled:": "启用：",
-	"Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)": "Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)",
+	"Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)":
+		"Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)",
 	"Enter model pattern (empty clears override)": "输入模型模式（留空清除覆盖）",
 	"Enter select · n note": "Enter 选择 · n 记笔记",
 	"Enter to configure · Esc to go back": "Enter 配置 · Esc 返回",
@@ -1263,10 +1264,12 @@ export const commands = {
 	"Step: HTTP Header Name": "步骤：HTTP 头名称",
 	"Step: How to provide the key?": "步骤：如何提供密钥？",
 	"Suggestions:": "建议：",
-	"Switch between the project and user WATCHDOG.yml. Currently editing the {0}-level file.": "Switch between the project and user WATCHDOG.yml. Currently editing the {0}-level file.",
+	"Switch between the project and user WATCHDOG.yml. Currently editing the {0}-level file.":
+		"Switch between the project and user WATCHDOG.yml. Currently editing the {0}-level file.",
 	"Text-to-Speech model": "文字转语音模型",
 	"That account has no saved resets to spend.": "该账户没有可用的已保存重置。",
-	"Theme changes preview live. Nothing is saved until you press Enter.": "Theme changes preview live. Nothing is saved until you press Enter.",
+	"Theme changes preview live. Nothing is saved until you press Enter.":
+		"Theme changes preview live. Nothing is saved until you press Enter.",
 	"Theme preview failed": "主题预览失败",
 	"Thinking effort for {0} · Enter / click pick · Esc back": "{0} 的思考投入 · Enter / 点击选择 · Esc 返回",
 	"Tiny model": "精简模型",
@@ -1278,7 +1281,8 @@ export const commands = {
 	"Transcript lives on the host — not available.": "转录存在于主机上——此处不可用。",
 	"Type a directory path…": "输入目录路径…",
 	"Type a name · Enter save · Esc cancel": "输入名称 · Enter 保存 · Esc 取消",
-	"Type to filter · ↑↓ navigate · Tab accept · Enter confirm · Esc cancel": "Type to filter · ↑↓ navigate · Tab accept · Enter confirm · Esc cancel",
+	"Type to filter · ↑↓ navigate · Tab accept · Enter confirm · Esc cancel":
+		"Type to filter · ↑↓ navigate · Tab accept · Enter confirm · Esc cancel",
 	"Type to search · Enter / click twice picks · Esc back": "输入搜索 · Enter / 双击选择 · Esc 返回",
 	"URL is required": "URL 为必填项",
 	"URL must use http:// or https:// scheme": "URL 必须使用 http:// 或 https:// 协议",
@@ -1296,7 +1300,8 @@ export const commands = {
 	"Web search set to {0}": "网络搜索已设置为 {0}",
 	"Weekly usage cleared early · ESC to return": "每周用量已提前清零 · ESC 返回",
 	"Working…": "处理中…",
-	"Write this scope's WATCHDOG.yml and reload the live advisors without a restart.": "Write this scope's WATCHDOG.yml and reload the live advisors without a restart.",
+	"Write this scope's WATCHDOG.yml and reload the live advisors without a restart.":
+		"Write this scope's WATCHDOG.yml and reload the live advisors without a restart.",
 	"[Enter to continue, Esc to cancel]": "[回车继续，Esc 取消]",
 	"[Enter to continue, Esc to go back]": "[回车继续，Esc 返回]",
 	"[Image: {0}]": "[图片：{0}]",
@@ -1313,7 +1318,8 @@ export const commands = {
 	"c copy · b branch to chat · Esc dismiss": "c 复制 · b 分支到对话 · Esc 关闭",
 	"collab guest:{0}": "协作访客:{0}",
 	"collab:{0}": "协作:{0}",
-	"ctrl+q/ctrl+enter submit  esc cancel  ctrl+g external editor": "ctrl+q/ctrl+enter submit  esc cancel  ctrl+g external editor",
+	"ctrl+q/ctrl+enter submit  esc cancel  ctrl+g external editor":
+		"ctrl+q/ctrl+enter submit  esc cancel  ctrl+g external editor",
 	"developer: ": "开发者：",
 	"e.g., https://auth.example.com/oauth/authorize": "例如：https://auth.example.com/oauth/authorize",
 	"e.g., https://auth.example.com/oauth/token": "例如：https://auth.example.com/oauth/token",
@@ -1358,7 +1364,8 @@ export const commands = {
 	"… +{0} more (ctrl+o to expand)": "…另有 {0} 条（ctrl+o 展开）",
 	"↑/↓ select · enter confirm · esc skip · ctrl+c exit setup": "↑/↓ 选择 · enter 确认 · esc 跳过 · ctrl+c 退出设置",
 	"↑/↓ select · ↵ log out account · Esc cancel": "↑/↓ 选择 · ↵ 登出账户 · Esc 取消",
-	"↑↓ move · Enter / click select · scroll preview on the right · Esc close": "↑↓ move · Enter / click select · scroll preview on the right · Esc close",
+	"↑↓ move · Enter / click select · scroll preview on the right · Esc close":
+		"↑↓ move · Enter / click select · scroll preview on the right · Esc close",
 	"○ OAuth cancelled": "○ OAuth 已取消",
 	"⚠ Authentication required": "⚠ 需要认证",
 	"⚠ Health check failed (will still save config)": "⚠ 健康检查失败（仍会保存配置）",
@@ -1392,8 +1399,8 @@ export const commands = {
 	"preset use fail": "切换预设 {0} 失败:{1}",
 	"preset list empty": "没有已保存的预设(modes 目录为空)。用 /modes validate <id> 校验或用 GUI 预设中心创建。",
 	"modes validate usage": "用法:/modes validate <id> —— 校验预设文件(结构/环/悬空引用),不落盘",
-	"modes validate ok": "预设 \"{0}\" 校验通过",
-	"modes validate fail": "预设 \"{0}\" 校验失败:{1}",
+	"modes validate ok": '预设 "{0}" 校验通过',
+	"modes validate fail": '预设 "{0}" 校验失败:{1}',
 	"preset work name": "工作模式",
 	"preset work description": "默认工作预设:完整工具集、无提示词覆盖(未启用预设时的行为)",
 	"preset chat name": "对话模式",
@@ -1402,7 +1409,6 @@ export const commands = {
 	"preset design description": "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
 	"preset creator name": "创作模式",
 	"preset creator description": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
-
 } as const;
 
 /** Key union for the commands domain (mirrors the guest-client locale split). */

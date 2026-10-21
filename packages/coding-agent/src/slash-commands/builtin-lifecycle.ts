@@ -99,8 +99,8 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 		description: "Reset provider stream state without changing the local transcript",
 		getTuiAutocompleteDescription: runtime =>
 			runtime.ctx.session.isStreaming
-				? statusLine("Fresh", t("unavailable while streaming"))
-				: statusLine("Fresh", t("ready")),
+				? statusLine("Fresh", t("commands.unavailableWhileStreaming"))
+				: statusLine("Fresh", t("commands.ready")),
 
 		handle: async (_command, runtime) => {
 			const result = runtime.session.freshSession();
@@ -154,8 +154,8 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 		getTuiAutocompleteDescription: runtime => {
 			const usage = runtime.ctx.session.getContextUsage();
 			return usage
-				? statusLine("Compact", `${t("context")} ${Math.round(usage.percent)}% ${t("used")}`)
-				: statusLine("Compact", t("context unavailable"));
+				? statusLine("Compact", `${t("commands.context")} ${Math.round(usage.percent)}% ${t("commands.used")}`)
+				: statusLine("Compact", t("commands.contextUnavailable"));
 		},
 
 		handle: async (command, runtime) => {

@@ -339,7 +339,9 @@ function Summary({ name, args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{label && <span>{truncate(label, 72)}</span>}
-			<Badges items={[cells.length > 1 ? t("tools.cellsWithCount", { count: String(cells.length) }) : null, ...langs]} />
+			<Badges
+				items={[cells.length > 1 ? t("tools.cellsWithCount", { count: String(cells.length) }) : null, ...langs]}
+			/>
 		</>
 	);
 }
@@ -388,7 +390,9 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 						}
 						if (dc.status === "error")
 							titleParts.push(
-								dc.exitCode !== null ? t("tools.errorWithCode", { code: String(dc.exitCode) }) : t("tools.error"),
+								dc.exitCode !== null
+									? t("tools.errorWithCode", { code: String(dc.exitCode) })
+									: t("tools.error"),
 							);
 					}
 					return (

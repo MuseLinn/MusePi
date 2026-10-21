@@ -242,13 +242,13 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => {
 			if (!runtime.ctx.settings.get("plan.enabled" as SettingPath))
-				return statusLine("Plan", t("disabled in settings"));
+				return statusLine("Plan", t("commands.disabledSettings"));
 			if (runtime.ctx.planModeEnabled) {
 				const planFile = runtime.ctx.planModePlanFilePath;
-				return statusLine("Plan", `${t("on")}${planFile ? ` (${path.basename(planFile)})` : ""}`);
+				return statusLine("Plan", `${t("settings.on")}${planFile ? ` (${path.basename(planFile)})` : ""}`);
 			}
-			if (runtime.ctx.goalModeEnabled) return statusLine("Plan", t("blocked by goal mode"));
-			return statusLine("Plan", t("off"));
+			if (runtime.ctx.goalModeEnabled) return statusLine("Plan", t("commands.blockedGoalMode"));
+			return statusLine("Plan", t("settings.off"));
 		},
 
 		handleTui: async (command, runtime) => {
@@ -263,8 +263,8 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		description: "Re-open the plan review for the latest plan (plan mode only)",
 		getTuiAutocompleteDescription: runtime =>
 			runtime.ctx.planModeEnabled
-				? statusLine("Plan review", t("available"))
-				: statusLine("Plan review", t("plan mode inactive")),
+				? statusLine("Plan review", t("commands.available"))
+				: statusLine("Plan review", t("commands.planModeInactive")),
 
 		handleTui: async (_command, runtime) => {
 			await runtime.ctx.openPlanReview();
@@ -278,10 +278,10 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		inlineHint: "[prompt]",
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => {
-			if (runtime.ctx.vibeModeEnabled) return statusLine("Vibe", t("on"));
-			if (runtime.ctx.planModeEnabled) return statusLine("Vibe", t("blocked by plan mode"));
-			if (runtime.ctx.goalModeEnabled) return statusLine("Vibe", t("blocked by goal mode"));
-			return statusLine("Vibe", t("off"));
+			if (runtime.ctx.vibeModeEnabled) return statusLine("Vibe", t("settings.on"));
+			if (runtime.ctx.planModeEnabled) return statusLine("Vibe", t("commands.blockedPlanMode"));
+			if (runtime.ctx.goalModeEnabled) return statusLine("Vibe", t("commands.blockedGoalMode"));
+			return statusLine("Vibe", t("settings.off"));
 		},
 
 		handleTui: async (command, runtime) => {
@@ -306,12 +306,12 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => {
 			if (!runtime.ctx.settings.get("goal.enabled" as SettingPath))
-				return statusLine("Goal", t("disabled in settings"));
-			if (runtime.ctx.planModeEnabled) return statusLine("Goal", t("blocked by plan mode"));
+				return statusLine("Goal", t("commands.disabledSettings"));
+			if (runtime.ctx.planModeEnabled) return statusLine("Goal", t("commands.blockedPlanMode"));
 			const state = runtime.ctx.session.getGoalModeState();
 			return state
 				? statusLine("Goal", `${t(state.goal.status)} (${shortDetail(state.goal.objective)})`)
-				: statusLine("Goal", t("off"));
+				: statusLine("Goal", t("settings.off"));
 		},
 
 		handleTui: async (command, runtime) => {
@@ -340,12 +340,13 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		inlineHint: "[count|duration] [prompt]",
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => {
-			if (!runtime.ctx.loopModeEnabled) return statusLine("Loop", t("off"));
-			if (runtime.ctx.loopModePaused) return statusLine("Loop", t("paused"));
+			if (!runtime.ctx.loopModeEnabled) return statusLine("Loop", t("settings.off"));
+			if (runtime.ctx.loopModePaused) return statusLine("Loop", t("commands.paused"));
 			if (runtime.ctx.loopLimit)
-				return statusLine("Loop", `${t("on")} (${describeLoopLimitRuntime(runtime.ctx.loopLimit)})`);
-			if (runtime.ctx.loopPrompt) return statusLine("Loop", `${t("on")} (${t("repeating prompt")})`);
-			return statusLine("Loop", `${t("on")} (${t("waiting for next prompt")})`);
+				return statusLine("Loop", `${t("settings.on")} (${describeLoopLimitRuntime(runtime.ctx.loopLimit)})`);
+			if (runtime.ctx.loopPrompt)
+				return statusLine("Loop", `${t("settings.on")} (${t("commands.repeatingPrompt")})`);
+			return statusLine("Loop", `${t("settings.on")} (${t("commands.waitingNextPrompt")})`);
 		},
 
 		handleTui: async (command, runtime) => {
@@ -374,7 +375,9 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		acpDescription: "Show current model selection",
 		getTuiAutocompleteDescription: runtime => {
 			const model = runtime.ctx.session.model;
-			return model ? statusLine("Model", `${model.provider}/${model.id}`) : statusLine("Model", t("none selected"));
+			return model
+				? statusLine("Model", `${model.provider}/${model.id}`)
+				: statusLine("Model", t("commands.noneSelected"));
 		},
 
 		handle: async (command, runtime) => {
@@ -418,7 +421,9 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		description: "Switch model for this session (same as alt+p)",
 		getTuiAutocompleteDescription: runtime => {
 			const model = runtime.ctx.session.model;
-			return model ? statusLine("Model", `${model.provider}/${model.id}`) : statusLine("Model", t("none selected"));
+			return model
+				? statusLine("Model", `${model.provider}/${model.id}`)
+				: statusLine("Model", t("commands.noneSelected"));
 		},
 
 		handleTui: (_command, runtime) => {
@@ -536,7 +541,10 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		],
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime =>
-			statusLine("Computer", t(runtime.ctx.session.settings.get("computer.enabled") ? "on" : "off")),
+			statusLine(
+				"Computer",
+				t(runtime.ctx.session.settings.get("computer.enabled") ? "settings.on" : "settings.off"),
+			),
 
 		handle: async (command, runtime) => {
 			const arg = command.args.trim().toLowerCase();
@@ -654,13 +662,13 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			if (args[0] === "use") {
 				const modeId = args[1];
 				if (!modeId || !MODE_ID_PATTERN.test(modeId)) {
-					return usage(t("preset use usage"), runtime);
+					return usage(t("commands.presetUseUsage"), runtime);
 				}
 				const result = await runtime.session.setMode(modeId, { hot: true });
 				if (result.ok) {
-					await runtime.output(t("preset use ok", modeId));
+					await runtime.output(t("commands.presetUseOk", modeId));
 				} else {
-					await runtime.output(t("preset use fail", modeId, result.error ?? "unknown error"));
+					await runtime.output(t("commands.presetUseFail", modeId, result.error ?? "unknown error"));
 				}
 				return commandConsumed();
 			}
@@ -672,7 +680,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				const ids = listModeIds(dir);
 				const current = runtime.sessionManager.getHeader()?.modeId;
 				if (ids.length === 0) {
-					await runtime.output(t("preset list empty"));
+					await runtime.output(t("commands.presetListEmpty"));
 				} else {
 					await runtime.output(ids.map(id => (id === current ? `* ${id}` : `  ${id}`)).join("\n"));
 				}
@@ -681,9 +689,9 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			// Bare `/preset` — show the current session preset (mode).
 			const modeId = runtime.sessionManager.getHeader()?.modeId;
 			if (!modeId) {
-				await runtime.output(t("preset slash none"));
+				await runtime.output(t("commands.presetSlashNone"));
 			} else {
-				await runtime.output(t("preset slash current", modeId));
+				await runtime.output(t("commands.presetSlashCurrent", modeId));
 			}
 			return commandConsumed();
 		},
@@ -699,9 +707,9 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			// Reuses the preset-use keys; no new i18n surface.
 			const result = await runtime.session.setMode("design", { hot: true });
 			if (result.ok) {
-				await runtime.output(t("preset use ok", "design"));
+				await runtime.output(t("commands.presetUseOk", "design"));
 			} else {
-				await runtime.output(t("preset use fail", "design", result.error ?? "unknown error"));
+				await runtime.output(t("commands.presetUseFail", "design", result.error ?? "unknown error"));
 			}
 			return commandConsumed();
 		},
@@ -716,7 +724,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		handle: async (command, runtime) => {
 			const args = command.args.trim().split(/\s+/).filter(Boolean);
 			if (args[0] !== "validate" || !args[1]) {
-				return usage(t("modes validate usage"), runtime);
+				return usage(t("commands.modesValidateUsage"), runtime);
 			}
 			const modeId = args[1]!;
 			// Modes v2(§7):agent/用户自检形态 —— 纯校验不落盘。CLI 上下文没有
@@ -724,7 +732,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			// 检查);结构/环/悬空引用始终校验,扩展存在性以 daemon modes.validate
 			// RPC 为准。
 			if (!MODE_ID_PATTERN.test(modeId)) {
-				await runtime.output(t("modes validate fail", modeId, `invalid mode id: ${modeId}`));
+				await runtime.output(t("commands.modesValidateFail", modeId, `invalid mode id: ${modeId}`));
 				return commandConsumed();
 			}
 			const dir = process.env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
@@ -740,7 +748,9 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				errors.push(String((error as Error).message));
 			}
 			await runtime.output(
-				errors.length > 0 ? t("modes validate fail", modeId, errors.join("; ")) : t("modes validate ok", modeId),
+				errors.length > 0
+					? t("commands.modesValidateFail", modeId, errors.join("; "))
+					: t("commands.modesValidateOk", modeId),
 			);
 			return commandConsumed();
 		},

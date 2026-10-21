@@ -154,7 +154,9 @@ export function SessionSearchBar({
 				)}
 			</div>
 			{!pending && hasQuery && matchCount === 0 && (
-				<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">{t("settings.noMatchingSessions")}</p>
+				<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">
+					{t("settings.noMatchingSessions")}
+				</p>
 			)}
 		</div>
 	);

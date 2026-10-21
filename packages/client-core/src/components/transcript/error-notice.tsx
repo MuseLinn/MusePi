@@ -61,7 +61,9 @@ export function TurnErrorBody({ kind, raw, attempt }: TurnErrorBodyProps): React
 				<span className="tr-error-body-mark" aria-hidden="true" />
 				<span className="tr-error-body-label">{label}</span>
 				{attempt !== undefined ? (
-					<span className="tr-error-body-meta">{t("general.retryAttemptWithCount", { count: String(attempt) })}</span>
+					<span className="tr-error-body-meta">
+						{t("general.retryAttemptWithCount", { count: String(attempt) })}
+					</span>
 				) : null}
 			</div>
 			<LongErrorText text={text}>{visible => <div className="tr-error-body-text">{visible}</div>}</LongErrorText>

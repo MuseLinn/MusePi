@@ -291,7 +291,7 @@ export class CollabHost {
 				return;
 			}
 			if (willReconnect) {
-				this.#ctx.showStatus(t("Collab relay connection lost ({0}), reconnecting…", reason), { dim: true });
+				this.#ctx.showStatus(t("commands.collabRelayConnectionLostWith0", reason), { dim: true });
 			} else {
 				void this.#teardown();
 				this.#ctx.session.emitNotice("warning", `Collab ended: ${reason}`, "collab");

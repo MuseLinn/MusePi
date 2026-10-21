@@ -473,7 +473,9 @@ export function ScheduledTasksPage({
 										onClick={() => setSelectedId(task.id)}
 									>
 										<span className="gui-scheduled-row-dot" />
-										<span className="min-w-0 flex-1 truncate">{task.name || t("settings.scheduledUntitled")}</span>
+										<span className="min-w-0 flex-1 truncate">
+											{task.name || t("settings.scheduledUntitled")}
+										</span>
 										{!task.enabled && <Icon name="pause" className="h-3 w-3 shrink-0 opacity-50" />}
 									</button>
 								))}
@@ -484,7 +486,9 @@ export function ScheduledTasksPage({
 					<div className="gui-scheduled-detail">
 						{selected ? (
 							<>
-								<h3 className="gui-scheduled-detail-title">{selected.name || t("settings.scheduledUntitled")}</h3>
+								<h3 className="gui-scheduled-detail-title">
+									{selected.name || t("settings.scheduledUntitled")}
+								</h3>
 								<div className="gui-scheduled-detail-sched">{scheduleLabel(selected.schedule)}</div>
 								<div className="gui-scheduled-detail-status">
 									<span className="gui-scheduled-detail-status-item">
@@ -515,7 +519,9 @@ export function ScheduledTasksPage({
 								</div>
 								{selected.state.lastStatus === "error" && selected.state.lastError && (
 									<div className="gui-scheduled-detail-error">
-										<span className="gui-scheduled-detail-status-key">{t("settings.scheduledLastError")}</span>
+										<span className="gui-scheduled-detail-status-key">
+											{t("settings.scheduledLastError")}
+										</span>
 										<p className="gui-scheduled-detail-error-text">{selected.state.lastError}</p>
 									</div>
 								)}
@@ -758,7 +764,9 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 				aria-expanded={open}
 			>
 				<Icon name="calendar-schedule" className="h-4 w-4" />
-				<span className="gui-calendar-field-text">{selected ? fmt(selected) : t("settings.scheduledPickDate")}</span>
+				<span className="gui-calendar-field-text">
+					{selected ? fmt(selected) : t("settings.scheduledPickDate")}
+				</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
 			<MenuPopup
@@ -779,7 +787,9 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 						>
 							<Icon name="arrow-left-s" className="h-4 w-4" />
 						</button>
-						<span className="gui-calendar-month">{t("settings.taskCalendarMonth", { year, month: mon + 1 })}</span>
+						<span className="gui-calendar-month">
+							{t("settings.taskCalendarMonth", { year, month: mon + 1 })}
+						</span>
 						<button
 							type="button"
 							className="gui-calendar-nav"
@@ -1286,7 +1296,9 @@ function DeleteConfirmDialog({
 					{t("settings.scheduledDeleteDesc", { name: task.name || t("settings.scheduledUntitled") })}
 				</p>
 				{sessionCount > 0 && (
-					<p className="gui-cron-delete-sessions">{t("settings.scheduledDeleteSessions", { count: sessionCount })}</p>
+					<p className="gui-cron-delete-sessions">
+						{t("settings.scheduledDeleteSessions", { count: sessionCount })}
+					</p>
 				)}
 				<div className="gui-cron-delete-opts">
 					<label className="gui-cron-delete-opt">

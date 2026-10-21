@@ -162,7 +162,10 @@ export function AgentDrawer(props: {
 						<span className="ag-stat-value">{fmtTokens(p.tokens)}</span>
 					</span>
 					{ctxPct !== null ? (
-						<span className="ag-stat" title={t("agents.contextWithCount", { count: fmtTokens(p.contextTokens ?? 0) })}>
+						<span
+							className="ag-stat"
+							title={t("agents.contextWithCount", { count: fmtTokens(p.contextTokens ?? 0) })}
+						>
 							<span className="ag-stat-label">{t("settings.ctx")}</span>
 							<span className="ag-gauge">
 								<span
@@ -226,7 +229,12 @@ export function AgentDrawer(props: {
 						placeholder={t("agents.messageWithName", { name: agent.displayName })}
 						onChange={e => setDraft(e.target.value)}
 					/>
-					<button type="submit" className="ag-iconbtn" aria-label={t("settings.send2")} disabled={draft.trim().length === 0}>
+					<button
+						type="submit"
+						className="ag-iconbtn"
+						aria-label={t("settings.send2")}
+						disabled={draft.trim().length === 0}
+					>
 						<SendHorizontal size={15} aria-hidden />
 					</button>
 				</form>

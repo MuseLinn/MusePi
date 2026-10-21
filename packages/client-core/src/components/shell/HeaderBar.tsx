@@ -149,7 +149,12 @@ export function HeaderBar({
 					</button>
 				)}
 				{onBack && (
-					<button type="button" className="sh-btn sh-btn-icon" onClick={onBack} title={t("settings.backWorkspace")}>
+					<button
+						type="button"
+						className="sh-btn sh-btn-icon"
+						onClick={onBack}
+						title={t("settings.backWorkspace")}
+					>
 						<ArrowLeft size={14} />
 					</button>
 				)}

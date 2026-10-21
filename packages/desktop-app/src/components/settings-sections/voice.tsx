@@ -551,7 +551,7 @@ const TTS_SAMPLE_MARKDOWN = [
  *  chat playback will use). State machine carried over from the former
  *  TtsTestCard, unchanged. Exported for the voice-settings contract tests. */
 export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown: string }): ReactNode {
-	const [state, setState] = useState<"idle" | "loading" | "speaking" | "error">("settings.idle");
+	const [state, setState] = useState<"idle" | "loading" | "speaking" | "error">("idle");
 	const [err, setErr] = useState("");
 	const stopRef = useRef<(() => void) | null>(null);
 	useEffect(() => () => stopRef.current?.(), []);
@@ -737,7 +737,9 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// transcribing → result / error. Phase drives the status copy, the
 	// dictating-capsule mic button and the meter.
 	const [dictating, setDictating] = useState(false);
-	const [dictationPhase, setDictationPhase] = useState<"settings.idle" | "recording" | "transcribing">("settings.idle");
+	const [dictationPhase, setDictationPhase] = useState<"settings.idle" | "recording" | "transcribing">(
+		"settings.idle",
+	);
 	const [recordSeconds, setRecordSeconds] = useState(0);
 	const [recordLevel, setRecordLevel] = useState(0);
 	// Multi-turn: every finished dictation appends a user message to the

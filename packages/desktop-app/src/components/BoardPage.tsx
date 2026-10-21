@@ -292,7 +292,9 @@ function BoardHome({
 			>
 				{confirmBoard && (
 					<div className="gui-board-remove">
-						<p className="gui-board-remove-desc">{t("settings.boardRemoveConfirm", { name: confirmBoard.title })}</p>
+						<p className="gui-board-remove-desc">
+							{t("settings.boardRemoveConfirm", { name: confirmBoard.title })}
+						</p>
 						<p className="gui-board-remove-hint">
 							{t("settings.boardRemoveHint", { count: confirmBoard.widgets.length })}
 						</p>
@@ -1402,7 +1404,12 @@ export function BoardPage({
 									}}
 									onViewTask={widgetHasTask(focusWidget.data) ? () => openTaskModal(focusWidget) : undefined}
 								/>
-								<button type="button" className="gui-tool-btn" onClick={closeFocus} aria-label={t("settings.close")}>
+								<button
+									type="button"
+									className="gui-tool-btn"
+									onClick={closeFocus}
+									aria-label={t("settings.close")}
+								>
 									<Icon name="close" className="h-4 w-4" />
 								</button>
 							</div>

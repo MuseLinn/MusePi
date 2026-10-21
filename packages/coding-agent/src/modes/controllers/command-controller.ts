@@ -581,7 +581,9 @@ export class CommandController {
 		const allEntries = await parseChangelog(changelogPath);
 		const entriesToShow = showFull ? allEntries : allEntries.slice(0, RECENT_CHANGELOG_ENTRY_LIMIT);
 		const changelogMarkdown =
-			entriesToShow.length > 0 ? renderChangelogEntries(entriesToShow).markdown : t("settings.noChangelogEntriesFound");
+			entriesToShow.length > 0
+				? renderChangelogEntries(entriesToShow).markdown
+				: t("settings.noChangelogEntriesFound");
 		const title = showFull ? t("settings.fullChangelog") : t("settings.recentChanges");
 		const hint = showFull
 			? ""
@@ -654,7 +656,10 @@ export class CommandController {
 				this.ctx.showStatus(t("settings.memoryDataClearedSystem"));
 			} catch (error) {
 				this.ctx.showError(
-					t("settings.memoryClearFailedWith0").replace("{0}", error instanceof Error ? error.message : String(error)),
+					t("settings.memoryClearFailedWith0").replace(
+						"{0}",
+						error instanceof Error ? error.message : String(error),
+					),
 				);
 			}
 			return;
@@ -666,7 +671,10 @@ export class CommandController {
 				this.ctx.showStatus(t("settings.memoryConsolidationEnqueued"));
 			} catch (error) {
 				this.ctx.showError(
-					t("settings.memoryEnqueueFailedWith0").replace("{0}", error instanceof Error ? error.message : String(error)),
+					t("settings.memoryEnqueueFailedWith0").replace(
+						"{0}",
+						error instanceof Error ? error.message : String(error),
+					),
 				);
 			}
 			return;
@@ -688,7 +696,10 @@ export class CommandController {
 				}
 				showMarkdownPanel(
 					this.ctx,
-					t("settings.memoryWith0").replace("{0}", action === "stats" ? t("settings.stats") : t("settings.diagnostics")),
+					t("settings.memoryWith0").replace(
+						"{0}",
+						action === "stats" ? t("settings.stats") : t("settings.diagnostics"),
+					),
 					payload,
 				);
 			} catch (error) {
@@ -825,11 +836,7 @@ export class CommandController {
 				const targets = items.filter(m => m.trigger?.refresh_after_consolidation === true);
 				const skipped = items.length - targets.length;
 				if (targets.length === 0) {
-					this.ctx.showStatus(
-						t(
-							"settings.noMentalModelsWith0.desc",
-						).replace("{0}", String(skipped)),
-					);
+					this.ctx.showStatus(t("settings.noMentalModelsWith0.desc").replace("{0}", String(skipped)));
 					return;
 				}
 				let queued = 0;
@@ -982,7 +989,10 @@ export class CommandController {
 		}
 	}
 
-	async #runNewSessionFlow(options?: NewSessionOptions, label: string = t("settings.newSessionStarted")): Promise<void> {
+	async #runNewSessionFlow(
+		options?: NewSessionOptions,
+		label: string = t("settings.newSessionStarted"),
+	): Promise<void> {
 		this.ctx.clearTransientSessionUi();
 
 		if (this.ctx.session.isCompacting) {
@@ -1013,12 +1023,11 @@ export class CommandController {
 	async handleFreshCommand(): Promise<void> {
 		const result = this.ctx.session.freshSession();
 		if (!result) {
-			this.ctx.showWarning(
-				t("settings.waitCurrentResponse.info"),
-			);
+			this.ctx.showWarning(t("settings.waitCurrentResponse.info"));
 			return;
 		}
-		const stateLabel = result.closedProviderSessions === 1 ? t("settings.providerState") : t("settings.providerStates");
+		const stateLabel =
+			result.closedProviderSessions === 1 ? t("settings.providerState") : t("settings.providerStates");
 		this.ctx.statusLine.invalidate();
 		this.ctx.ui.requestRender();
 		this.ctx.showStatus(
@@ -1166,7 +1175,10 @@ export class CommandController {
 				await fs.mkdir(resolvedPath, { recursive: true });
 			} catch (err) {
 				this.ctx.showError(
-					t("settings.failedCreateDirectoryWith0").replace("{0}", err instanceof Error ? err.message : String(err)),
+					t("settings.failedCreateDirectoryWith0").replace(
+						"{0}",
+						err instanceof Error ? err.message : String(err),
+					),
 				);
 				return;
 			}
@@ -1175,7 +1187,10 @@ export class CommandController {
 			await this.ctx.settings.flush();
 		} catch (err) {
 			this.ctx.showError(
-				t("settings.failedSavePendingSettingsWith0").replace("{0}", err instanceof Error ? err.message : String(err)),
+				t("settings.failedSavePendingSettingsWith0").replace(
+					"{0}",
+					err instanceof Error ? err.message : String(err),
+				),
 			);
 			return;
 		}
@@ -1183,7 +1198,9 @@ export class CommandController {
 		try {
 			await this.ctx.session.moveSession(resolvedPath);
 		} catch (err) {
-			this.ctx.showError(t("settings.moveFailedWith0").replace("{0}", err instanceof Error ? err.message : String(err)));
+			this.ctx.showError(
+				t("settings.moveFailedWith0").replace("{0}", err instanceof Error ? err.message : String(err)),
+			);
 			return;
 		}
 		await this.ctx.applyCwdChange(resolvedPath);
@@ -1212,7 +1229,9 @@ export class CommandController {
 			const name = this.ctx.sessionManager.getSessionName()!;
 			this.ctx.showStatus(t('Session renamed to "{0}".').replace("{0}", name));
 		} catch (err) {
-			this.ctx.showError(t("settings.renameFailedWith0").replace("{0}", err instanceof Error ? err.message : String(err)));
+			this.ctx.showError(
+				t("settings.renameFailedWith0").replace("{0}", err instanceof Error ? err.message : String(err)),
+			);
 		}
 	}
 
@@ -1266,7 +1285,10 @@ export class CommandController {
 				this.ctx.bashComponent.setComplete(undefined, false);
 			}
 			this.ctx.showError(
-				t("settings.bashCommandFailedWith0").replace("{0}", error instanceof Error ? error.message : t("swarm.unknownError")),
+				t("settings.bashCommandFailedWith0").replace(
+					"{0}",
+					error instanceof Error ? error.message : t("swarm.unknownError"),
+				),
 			);
 		}
 
@@ -1425,9 +1447,7 @@ export class CommandController {
 		}
 		this.ctx.statusContainer.disposeChildren();
 
-		const label = isAuto
-			? t("settings.autoCompactingContext.info")
-			: t("settings.compactingContext.info");
+		const label = isAuto ? t("settings.autoCompactingContext.info") : t("settings.compactingContext.info");
 		const compactingLoader = new Loader(
 			this.ctx.ui,
 			spinner => theme.fg("accent", spinner),

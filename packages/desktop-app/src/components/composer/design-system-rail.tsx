@@ -81,7 +81,9 @@ export function DesignSystemRail({
 									<DesignSystemSwatchBar entry={s} className="gui-ds-swatchbar gui-ds-swatchbar--rail" />
 									<span className="gui-ds-card-name">{designSystemLabel(s)}</span>
 									<span className={`gui-ds-badge gui-ds-badge--${s.source}`}>
-										{s.source === "builtin" ? t("composer.designSystemBuiltin") : t("composer.designSystemExtension")}
+										{s.source === "builtin"
+											? t("composer.designSystemBuiltin")
+											: t("composer.designSystemExtension")}
 									</span>
 									{on && (
 										<span className="gui-ds-card-check" aria-hidden="true">

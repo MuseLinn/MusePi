@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { type TranslationKey, t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
 import { memo, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
@@ -16,6 +16,18 @@ import { flattenTree, sessionSortKey, sortSessionTree } from "./session-list-sha
  * 它本身不是消息树。消息树的 GUI 侧载体见 `lib/message-tree.ts`(buildMessageTree),
  * 对应 TUI `/tree` / 未来 `/trace`。
  */
+
+/** Session status labels are keyed per status id (closed set, from
+ *  session.list). */
+const SESSION_STATUS_KEY: Record<string, TranslationKey> = {
+	aborted: "sessions.sessionStatusAborted",
+	complete: "sessions.sessionStatusComplete",
+	error: "sessions.sessionStatusError",
+	interrupted: "sessions.sessionStatusInterrupted",
+	pending: "sessions.sessionStatusPending",
+	unknown: "sessions.sessionStatusUnknown",
+};
+
 export interface SessionListEntry {
 	type: string;
 	id: string;
@@ -330,7 +342,7 @@ const SessionRow = memo(function SessionRow({
 					className="gui-session-status"
 					aria-hidden="true"
 					style={fill ? { background: fill } : undefined}
-					title={status ? t(`session status ${status}` as const) : undefined}
+					title={status ? t(SESSION_STATUS_KEY[status] ?? status) : undefined}
 				/>
 				<span className="gui-tree-prefix">{treePrefix(indent)}</span>
 				<span className="gui-session-title">
@@ -342,7 +354,12 @@ const SessionRow = memo(function SessionRow({
 					</span>
 				)}
 				{working && (
-					<span className="gui-tree-working" role="img" aria-label={t("settings.inProgress")} title={t("settings.inProgress")}>
+					<span
+						className="gui-tree-working"
+						role="img"
+						aria-label={t("settings.inProgress")}
+						title={t("settings.inProgress")}
+					>
 						{/* ZCode parity: an 8-ray starburst spinning while the
 						 * agent turn runs (was a breathing dot) — opacity ramps
 						 * around the ring so the rotation reads at 12px. */}

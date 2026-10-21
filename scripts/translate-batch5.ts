@@ -5,7 +5,7 @@
 import { applyBatch } from "./schema-batch-apply.ts";
 
 const TRANSLATIONS: Record<string, string> = {
-	"Isolation backend for subagents. \"auto\" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).":
+	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		"子代理的隔离后端。auto 由原生 PAL 自动选择最佳可用后端（先 CoW 感知的文件系统，再 overlayfs/ProjFS，最后回退 git worktree / 递归复制）。",
 	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).":
 		"当保存的 Codex 重置额度将在此小时数内过期、且 5h 或周窗口还有可观用量可恢复时，自动消耗一份（0 关闭临期回收）。",
@@ -15,8 +15,8 @@ const TRANSLATIONS: Record<string, string> = {
 		"以终端实时图形保留的内联图片上限（默认 8）。超限后旧图片在整屏重绘时退化为文字占位。0 表示全部保留（不限制）。",
 	"Publish outgoing images through the configured backend chain and send URL-fetching providers short URLs instead of inline base64. Falls back to inline automatically when every backend or a provider fetch fails":
 		"通过配置的后端链发布外发图片，向支持抓取 URL 的供应商发送短链接而非内联 base64。所有后端或供应商抓取失败时自动回退内联",
-	"Serving path for Fireworks requests. Priority sends `service_tier: \"priority\"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.":
-		"Fireworks 请求的服务路径。Priority 发送 service_tier: \"priority\"，高峰期可靠性更高、价格更贵；Standard 不发送。Fast（-fast）模型忽略此项——Fast 本身就是独立服务路径。",
+	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
+		'Fireworks 请求的服务路径。Priority 发送 service_tier: "priority"，高峰期可靠性更高、价格更贵；Standard 不发送。Fast（-fast）模型忽略此项——Fast 本身就是独立服务路径。',
 	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
 		"从会话开始即启用扩展引导/生命周期工具集（extension_load、extension_reload、ext_define 等）。默认关闭，普通会话不带这些 schema；creator 预设会自动启用。",
 	"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.":
@@ -45,8 +45,8 @@ const TRANSLATIONS: Record<string, string> = {
 		"端侧本地语音模型。Whisper base/small/large-v3-turbo（transformers.js）多语言、中文可用（默认 Whisper small）；SenseVoiceSmall（sherpa-onnx, INT8）面向普通话/粤语及中英混说优化（auto/zh/en/yue/ja/ko）；Parakeet TDT v3（sherpa-onnx）英语与欧洲语言精度/速度最佳但不支持中文。首次使用时下载。",
 	"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.":
 		"驱动应用内托管浏览器（桌面 GUI 右栏浏览器，Electron WebContentsView 走本地 CDP 桥）而非另起 Chromium：代理的页面在面板中可见并共享其持久登录态。CLI/TUI 默认关；桌面应用运行时桥接在线、此项默认开——显式设 false 可强制无头浏览器。优先于 Headless Browser；显式 app.cdp_url/path 与 Browser Relay 仍然最优先。",
-	"JSON object mapping model roles, model selectors (\"provider/model-id\"), or provider wildcards (\"provider/*\") to ordered fallback selectors, e.g. {\"default\":[\"openai/gpt-4o-mini\"],\"google-antigravity/*\":[\"google/*\",\"google-vertex/*\"]}. Model-oriented keys apply whenever that model/provider is active, regardless of role; a \"provider/*\" entry keeps the failing model's id and swaps the provider. An id-prefixed wildcard (\"openrouter/google/*\") re-prefixes the failing model's bare id (google-antigravity/gemini-x -> openrouter/google/gemini-x) and, used as a key, matches only that provider's ids under the prefix.":
-		"JSON 对象：把模型角色、模型选择器（\"provider/model-id\"）或供应商通配（\"provider/*\"）映射到有序回退选择器，如 {\"default\":[\"openai/gpt-4o-mini\"],\"google-antigravity/*\":[\"google/*\",\"google-vertex/*\"]}。面向模型的键在该模型/供应商活跃时生效、与角色无关；\"provider/*\" 条目保留失败模型的 id、只换供应商。带 id 前缀的通配（\"openrouter/google/*\"）会给失败模型的裸 id 重新加前缀（google-antigravity/gemini-x → openrouter/google/gemini-x），作为键时只匹配该前缀下此供应商的 id。",
+	'JSON object mapping model roles, model selectors ("provider/model-id"), or provider wildcards ("provider/*") to ordered fallback selectors, e.g. {"default":["openai/gpt-4o-mini"],"google-antigravity/*":["google/*","google-vertex/*"]}. Model-oriented keys apply whenever that model/provider is active, regardless of role; a "provider/*" entry keeps the failing model\'s id and swaps the provider. An id-prefixed wildcard ("openrouter/google/*") re-prefixes the failing model\'s bare id (google-antigravity/gemini-x -> openrouter/google/gemini-x) and, used as a key, matches only that provider\'s ids under the prefix.':
+		'JSON 对象：把模型角色、模型选择器（"provider/model-id"）或供应商通配（"provider/*"）映射到有序回退选择器，如 {"default":["openai/gpt-4o-mini"],"google-antigravity/*":["google/*","google-vertex/*"]}。面向模型的键在该模型/供应商活跃时生效、与角色无关；"provider/*" 条目保留失败模型的 id、只换供应商。带 id 前缀的通配（"openrouter/google/*"）会给失败模型的裸 id 重新加前缀（google-antigravity/gemini-x → openrouter/google/gemini-x），作为键时只匹配该前缀下此供应商的 id。',
 };
 
 applyBatch(TRANSLATIONS, process.argv.includes("--apply"));

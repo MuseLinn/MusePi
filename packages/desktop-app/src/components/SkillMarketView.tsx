@@ -384,7 +384,10 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			if (active.kind === "conflict") {
 				// 重复安装同一技能：语义态而非错误 —— 卡片就地翻「已安装」
 				// （daemon 已落盘，回读让角标/底部计数立即对齐），不报错误条。
-				setNotice({ ok: true, text: t("general.skillMarketAlreadyInstalledWithName", { name: active.entry.name }) });
+				setNotice({
+					ok: true,
+					text: t("general.skillMarketAlreadyInstalledWithName", { name: active.entry.name }),
+				});
 				setActive(null);
 				refreshInstalled();
 				onInstalled?.();
@@ -471,7 +474,9 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				</button>
 			</div>
 
-			{failures ? <div className="gui-skill-market-warn">{t("general.skillMarketOffline", { msg: failures })}</div> : null}
+			{failures ? (
+				<div className="gui-skill-market-warn">{t("general.skillMarketOffline", { msg: failures })}</div>
+			) : null}
 			{loadError ? <div className="gui-skill-market-warn">{loadError}</div> : null}
 			{notice && (
 				<div
@@ -485,7 +490,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					))}
 				</div>
 			)}
-			{active && active.state !== "failed" && active.state !== "done" && active.state !== "composer.cancelled" ? (
+			{active && active.state !== "failed" && active.state !== "done" && active.state !== "cancelled" ? (
 				<div className="gui-skill-market-note">
 					{active.state === "awaiting-approval" ? (
 						<>
@@ -1065,7 +1070,12 @@ export function SkillPreviewDialog({
 							{meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
 						</span>
 					</div>
-					<button type="button" className="gui-skill-market-page" onClick={requestClose} aria-label={t("settings.close")}>
+					<button
+						type="button"
+						className="gui-skill-market-page"
+						onClick={requestClose}
+						aria-label={t("settings.close")}
+					>
 						✕
 					</button>
 				</div>

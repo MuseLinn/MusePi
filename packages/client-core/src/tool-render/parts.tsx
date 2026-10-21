@@ -129,7 +129,9 @@ export function Output({ text, maxLines = 10, lang, error, variant = "plain", ti
 			)}
 			{collapsible && (
 				<button type="button" className="tv-expand" onClick={() => setExpanded(v => !v)}>
-					{expanded ? t("tools.collapse") : t("tools.moreLinesWithCount", { count: String(lines.length - maxLines) })}
+					{expanded
+						? t("tools.collapse")
+						: t("tools.moreLinesWithCount", { count: String(lines.length - maxLines) })}
 				</button>
 			)}
 		</div>
@@ -747,7 +749,9 @@ export function DiffBlock({
 			)}
 			{collapsible && (
 				<button type="button" className="tv-expand" onClick={() => setExpanded(v => !v)}>
-					{expanded ? t("tools.collapse") : t("tools.moreLinesWithCount", { count: String(lines.length - maxLines) })}
+					{expanded
+						? t("tools.collapse")
+						: t("tools.moreLinesWithCount", { count: String(lines.length - maxLines) })}
 				</button>
 			)}
 		</div>

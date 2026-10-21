@@ -222,9 +222,9 @@ describe("built-in viewers", () => {
 		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
 		// The mime is the ambiguous one a host reports for tsv; the extension
 		// decides, exactly as it will in the pane.
-		expect(
-			selectFileViewer(input({ name: "rows.tsv", ext: "tsv", mime: "application/octet-stream" }))?.id,
-		).toBe("sheets");
+		expect(selectFileViewer(input({ name: "rows.tsv", ext: "tsv", mime: "application/octet-stream" }))?.id).toBe(
+			"sheets",
+		);
 		// A host that reports text/plain must not hand a table to the text
 		// viewer either — the sheets viewer outranks it for this extension.
 		expect(selectFileViewer(input({ name: "rows.tsv", ext: "tsv", mime: "text/plain" }))?.id).toBe("sheets");

@@ -209,7 +209,11 @@ export function GuiHeader({
 	// Managed-browser bridge state (batch C): port / tab count / last error
 	// for the instance-menu diagnostics row.
 	const browserHost = useSyncExternalStore(subscribeHost, getHostState);
-	const statusText = snap?.working ? (snap.streaming ? t("settings.replying") : t("settings.working")) : t("settings.idle");
+	const statusText = snap?.working
+		? snap.streaming
+			? t("settings.replying")
+			: t("settings.working")
+		: t("settings.idle");
 	// Traffic lights are macOS-only. Windows/Linux get a native
 	// titleBarOverlay (top-right ~138px) so the right cluster needs
 	// clearance; macOS keeps the 172px left clearance for the
@@ -218,7 +222,11 @@ export function GuiHeader({
 	const isLinux = shellPlatform() === "linux";
 	const hasOverlay = isWin || isLinux;
 	const [ceiling, setCeiling] = useState<string | null>(null);
-	const projectLabel = snap?.state?.cwd ? projectName(snap.state.cwd) : store ? t("settings.session2") : t("general.local");
+	const projectLabel = snap?.state?.cwd
+		? projectName(snap.state.cwd)
+		: store
+			? t("settings.session2")
+			: t("general.local");
 	// Trigger refs for the portaled popups (global z-order above the chat
 	// surface — the header itself is z-1 and would trap in-flow menus).
 	const projBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -999,7 +1007,9 @@ export function GuiHeader({
 											pair={["chat-thread", "chat-1"]}
 											className="h-3.5 w-3.5 flex-shrink-0"
 										/>
-										<span className="min-w-0 flex-1 truncate">{s.label.trim() || t("transcript.untitledSession")}</span>
+										<span className="min-w-0 flex-1 truncate">
+											{s.label.trim() || t("transcript.untitledSession")}
+										</span>
 										{active && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
 										<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
 											{fmtSessionTime(s.timestamp)}
@@ -1292,7 +1302,9 @@ export function GuiHeader({
 								);
 							})}
 							{openInApps.length === 0 && (
-								<div className="px-3 py-2 text-[12px] text-[var(--color-text-faint)]">{t("general.noApps")}</div>
+								<div className="px-3 py-2 text-[12px] text-[var(--color-text-faint)]">
+									{t("general.noApps")}
+								</div>
 							)}
 							<button
 								type="button"

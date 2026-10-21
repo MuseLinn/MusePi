@@ -162,7 +162,8 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 		for (const peer of peers) unread += peer.unread;
 		return (
 			<>
-				{opBadge} {d && <span className="tv-muted">{t("tools.peerWithCount", { count: String(peers.length) })}</span>}
+				{opBadge}{" "}
+				{d && <span className="tv-muted">{t("tools.peerWithCount", { count: String(peers.length) })}</span>}
 				{unread > 0 && (
 					<>
 						{" "}

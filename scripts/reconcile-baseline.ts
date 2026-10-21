@@ -28,7 +28,8 @@ const baseline = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
 
 // Class 2: font descriptors — anything with a glyph-grid pattern or a plain
 // color/ink descriptor used by the TUI font picker.
-const FONT_RE = /^\d+x\d+|\bgyphs?\b|glyph|black ink|sentence hues|dimmed stopwords|legacy,|dense,|on an \d+x\d+|on \d+px|leading\)|tracking\)|extra letter spacing|extra line spacing|extra leading\)/i;
+const FONT_RE =
+	/^\d+x\d+|\bgyphs?\b|glyph|black ink|sentence hues|dimmed stopwords|legacy,|dense,|on an \d+x\d+|on \d+px|leading\)|tracking\)|extra letter spacing|extra line spacing|extra leading\)/i;
 const fontStrings = new Set<string>();
 const rest: string[] = [];
 for (const p of baseline.pairs) {
@@ -52,7 +53,10 @@ if (apply && fontStrings.size > 0) {
 		process.exit(1);
 	}
 	const insertAt = s.indexOf("\n", at) + 1;
-	const block = [...fontStrings].sort().map((k) => "\t" + JSON.stringify(k) + ",").join("\n") + "\n";
+	const block = `${[...fontStrings]
+		.sort()
+		.map(k => `\t${JSON.stringify(k)},`)
+		.join("\n")}\n`;
 	s = s.slice(0, insertAt) + block + s.slice(insertAt);
 	fs.writeFileSync(FONT_FILE, s);
 	console.log("font descriptors → LOCALE_NEUTRAL");
@@ -74,11 +78,11 @@ function dictKeys(dir: string): Set<string> {
 const guiKeys = dictKeys(path.resolve(root, "packages/client-core/src/i18n/zh-CN"));
 const tuiKeys = dictKeys(path.resolve(root, "packages/coding-agent/src/i18n/zh-CN"));
 const guiEnKeys = dictKeys(path.resolve(root, "packages/client-core/src/i18n/en-US"));
-const byVerbatim = uniqueRest.filter((s) => guiKeys.has(s) && tuiKeys.has(s) && guiEnKeys.has(s));
-const stillOpen = uniqueRest.filter((s) => !byVerbatim.includes(s));
+const byVerbatim = uniqueRest.filter(s => guiKeys.has(s) && tuiKeys.has(s) && guiEnKeys.has(s));
+const stillOpen = uniqueRest.filter(s => !byVerbatim.includes(s));
 console.log("resolvable by verbatim dictionary key:", byVerbatim.length);
 console.log("genuinely open after all classes:", stillOpen.length);
-for (const s of stillOpen.slice(0, 25)) console.log("  " + JSON.stringify(s.slice(0, 85)));
+for (const s of stillOpen.slice(0, 25)) console.log(`  ${JSON.stringify(s.slice(0, 85))}`);
 
 if (apply) {
 	const handled = new Set([...fontStrings, ...byVerbatim]);
@@ -86,6 +90,6 @@ if (apply) {
 		const oldKey = p.split("\u0000").slice(1).join("\u0000");
 		return !handled.has(oldKey);
 	});
-	fs.writeFileSync(BASELINE, JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t") + "\n");
+	fs.writeFileSync(BASELINE, `${JSON.stringify({ ...baseline, count: kept.length, pairs: kept }, null, "\t")}\n`);
 	console.log(`baseline: ${baseline.count} → ${kept.length}`);
 }

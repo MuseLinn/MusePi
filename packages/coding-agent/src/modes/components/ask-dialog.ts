@@ -263,7 +263,8 @@ function renderAnswerSummary(question: ExtensionAskDialogQuestion, state: Questi
 	const selected = question.options.map(option => option.label).filter(label => state.selectedOptions.has(label));
 	if (question.multi) {
 		const answers = [...selected];
-		if (state.customInput !== undefined) answers.push(t("commands.otherWith0", normalizedInlineInput(state.customInput)));
+		if (state.customInput !== undefined)
+			answers.push(t("commands.otherWith0", normalizedInlineInput(state.customInput)));
 		return answers.length > 0 ? answers.join(", ") : theme.fg("warning", t("commands.unanswered"));
 	}
 	if (state.customInput !== undefined) return `“${normalizedInlineInput(state.customInput)}”`;
@@ -316,7 +317,8 @@ function renderRowLabel(
 	const marker = `${theme.fg(checked ? "success" : "dim", optionMarker(question, checked))} `;
 	const cursor = selected ? theme.fg("accent", `${theme.nav.cursor} `) : "  ";
 	const label = renderInlineMarkdown(rowItem.label, mdTheme, t => theme.fg(color, t));
-	const noteMarker = state.note && state.noteRowKey === rowItem.key ? theme.fg("success", `  ${t("commands.note3")}`) : "";
+	const noteMarker =
+		state.note && state.noteRowKey === rowItem.key ? theme.fg("success", `  ${t("commands.note3")}`) : "";
 	const firstLine = `${cursor}${marker}${label}${noteMarker}`;
 	const lines = [truncateToWidth(firstLine, width, Ellipsis.Unicode)];
 	if (rowItem.kind === "option") {
@@ -544,7 +546,9 @@ export class AskDialogComponent implements Component {
 	}
 
 	#titleText(): string {
-		return this.#remainingSeconds === undefined ? t("mcp.tools.availableTools.ask") : t("commands.askWith0", String(this.#remainingSeconds));
+		return this.#remainingSeconds === undefined
+			? t("mcp.tools.availableTools.ask")
+			: t("commands.askWith0", String(this.#remainingSeconds));
 	}
 
 	#hasSubmitTab(): boolean {
@@ -893,7 +897,10 @@ export class AskDialogComponent implements Component {
 			if (submittedNote?.trim()) {
 				const note = normalizedInlineInput(submittedNote);
 				allLines.push(
-					theme.fg("muted", `   ${t("commands.note")}${truncateToWidth(note, Math.max(1, width - 9), Ellipsis.Unicode)}`),
+					theme.fg(
+						"muted",
+						`   ${t("commands.note")}${truncateToWidth(note, Math.max(1, width - 9), Ellipsis.Unicode)}`,
+					),
 				);
 			}
 		}

@@ -108,7 +108,11 @@ class ThemeSceneController implements SetupSceneController {
 			},
 			{ value: "theme:titanium", label: t("commands.titanium"), description: t("commands.defaultDarkTheme") },
 			{ value: "theme:light", label: t("settings.light"), description: t("commands.defaultLightTheme") },
-			{ value: "colorblind", label: t("commands.colorblindColors"), description: t("commands.adjustRedGreenContrast") },
+			{
+				value: "colorblind",
+				label: t("commands.colorblindColors"),
+				description: t("commands.adjustRedGreenContrast"),
+			},
 			{ value: "ansi", label: t("commands.ansiSafe"), description: t("commands.asciiGlyphsDarkTerminal") },
 			{ value: "browse", label: t("commands.browseAll"), description: t("commands.showEveryBuiltCustom") },
 		];

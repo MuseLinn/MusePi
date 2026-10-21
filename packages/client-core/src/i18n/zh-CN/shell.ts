@@ -41,7 +41,8 @@ export const shell = {
 	"shell.approvalNeeded": "需要审批",
 	"shell.approveTool": "允许",
 	"shell.denyTool": "拒绝",
-	"shell.waitingYourDecision": "等待你的决定",	"musepi collab": "musepi 协作",
+	"shell.waitingYourDecision": "等待你的决定",
+	"musepi collab": "musepi 协作",
 	"live agent session, in your browser": "浏览器中的实时代理会话",
 	"join link": "加入链接",
 	"display name": "显示名称",
@@ -73,7 +74,6 @@ export const shell = {
 	"approve tool": "允许",
 	"deny tool": "拒绝",
 	"waiting for your decision": "等待你的决定",
-
 } as const;
 
 /** Key union for the shell domain (source of truth). */

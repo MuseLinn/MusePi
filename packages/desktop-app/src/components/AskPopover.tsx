@@ -107,7 +107,13 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 			<div className="gui-ask-pop-head">
 				<Icon name="sparkling" className="h-3.5 w-3.5" />
 				<span className="gui-ask-pop-title">{t("settings.askAboutSelection")}</span>
-				<button type="button" className="gui-ask-pop-x" aria-label={t("settings.close")} title={t("settings.close")} onClick={close}>
+				<button
+					type="button"
+					className="gui-ask-pop-x"
+					aria-label={t("settings.close")}
+					title={t("settings.close")}
+					onClick={close}
+				>
 					<Icon name="close" className="h-3 w-3" />
 				</button>
 			</div>

@@ -502,7 +502,9 @@ export function workingLabel(kind: "working" | "took", seconds: number): string 
 		return kind === "working"
 			? t("settings.workingMSWithMinutesWithSeconds", { minutes: m, seconds: s })
 			: t("settings.tookMSWithMinutesWithSeconds", { minutes: m, seconds: s });
-	return kind === "working" ? t("settings.workingSWithSeconds", { seconds }) : t("settings.tookSWithSeconds", { seconds });
+	return kind === "working"
+		? t("settings.workingSWithSeconds", { seconds })
+		: t("settings.tookSWithSeconds", { seconds });
 }
 
 /** `model · level` badge for the work-timer row — the model id plus the
@@ -600,7 +602,9 @@ export function RoundFoldHeader({
 	}
 	if (fold.exploreCount > 0) segments.push(<span key="explore">{t("transcript.exploredCodebase")}</span>);
 	if (fold.commandCount > 0) {
-		segments.push(<span key="cmds">{t("transcript.roundCommandsWithCount", { count: String(fold.commandCount) })}</span>);
+		segments.push(
+			<span key="cmds">{t("transcript.roundCommandsWithCount", { count: String(fold.commandCount) })}</span>,
+		);
 	}
 	if (segments.length === 0 && fold.toolCount > 0) {
 		segments.push(<span key="tools">{t("transcript.roundToolsWithCount", { count: String(fold.toolCount) })}</span>);

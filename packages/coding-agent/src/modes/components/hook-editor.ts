@@ -85,9 +85,7 @@ export class HookEditorComponent extends Container implements Focusable {
 		this.addChild(new Spacer(1));
 
 		// Hint
-		const hint = this.#promptStyle
-			? t("commands.enterCtrlQSubmit")
-			: t("commands.ctrlQCtrlEnter");
+		const hint = this.#promptStyle ? t("commands.enterCtrlQSubmit") : t("commands.ctrlQCtrlEnter");
 		this.addChild(new Text(theme.fg("dim", hint), chromePadX, 0));
 
 		this.addChild(new Spacer(1));

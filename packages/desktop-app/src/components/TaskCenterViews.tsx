@@ -260,7 +260,9 @@ export function TaskBoardView({
 										className="gui-taskboard-card-main"
 										onClick={() => onSelectTask?.(task.id)}
 									>
-										<span className="gui-taskboard-card-name">{task.name || t("settings.scheduledUntitled")}</span>
+										<span className="gui-taskboard-card-name">
+											{task.name || t("settings.scheduledUntitled")}
+										</span>
 										<span className="gui-taskboard-card-sched">{taskScheduleLabel(task.schedule)}</span>
 										{task.state.nextRunAt && task.enabled && (
 											<span className="gui-taskboard-card-next">
@@ -279,7 +281,11 @@ export function TaskBoardView({
 										>
 											{task.enabled ? "⏸" : "▶"}
 										</button>
-										<button type="button" onClick={() => onDelete?.(task.id)} title={t("settings.boardDelete")}>
+										<button
+											type="button"
+											onClick={() => onDelete?.(task.id)}
+											title={t("settings.boardDelete")}
+										>
 											🗑
 										</button>
 									</div>

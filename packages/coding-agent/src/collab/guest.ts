@@ -243,7 +243,7 @@ export class CollabGuestLink {
 	/** Shows the read-only status hint when applicable; true when the action must be dropped. */
 	#rejectReadOnly(): boolean {
 		if (!this.#readOnly) return false;
-		this.#ctx.showStatus(t("This collab link is read-only"));
+		this.#ctx.showStatus(t("commands.collabLinkReadOnly"));
 		return true;
 	}
 
@@ -315,7 +315,7 @@ export class CollabGuestLink {
 						// Fail the join with the host's message instead of hanging
 						// until the welcome timeout.
 						this.#clearWelcomeTimer();
-						if (joined) this.#ctx.showError(t("Collab host: {0}", frame.message));
+						if (joined) this.#ctx.showError(t("commands.collabHostWith0", frame.message));
 						else firstWelcome.reject(new Error(frame.message));
 						return;
 					}
@@ -339,10 +339,10 @@ export class CollabGuestLink {
 				return;
 			}
 			if (willReconnect) {
-				this.#ctx.showStatus(t("Collab connection lost ({0}), reconnecting…", reason), { dim: true });
+				this.#ctx.showStatus(t("commands.collabConnectionLostReconnectingWith0", reason), { dim: true });
 				return;
 			}
-			this.#ctx.showStatus(t("Collab session ended ({0})", reason));
+			this.#ctx.showStatus(t("commands.collabSessionEndedWith0", reason));
 			void this.#restoreLocalSession();
 		};
 		socket.connect();
@@ -460,7 +460,9 @@ export class CollabGuestLink {
 		this.#welcomed = true;
 		const suffix = this.#readOnly ? " (read-only)" : "";
 		this.#ctx.showStatus(
-			pending.isResync ? t("Reconnected to collab session{0}", suffix) : t("Joined collab session{0}", suffix),
+			pending.isResync
+				? t("commands.reconnectedCollabSessionWith0", suffix)
+				: t("commands.joinedCollabSessionWith0", suffix),
 		);
 	}
 
@@ -545,13 +547,13 @@ export class CollabGuestLink {
 				break;
 			}
 			case "bye": {
-				this.#ctx.showStatus(t("Collab session ended ({0})", frame.reason));
+				this.#ctx.showStatus(t("commands.collabSessionEndedWith0", frame.reason));
 				this.#socket?.close();
 				void this.#restoreLocalSession();
 				break;
 			}
 			case "error":
-				this.#ctx.showError(t("Collab host: {0}", frame.message));
+				this.#ctx.showError(t("commands.collabHostWith0", frame.message));
 				break;
 			default:
 				logger.debug("collab guest ignoring unexpected frame", { type: frame.t });

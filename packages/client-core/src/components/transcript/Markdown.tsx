@@ -5,10 +5,11 @@ import { createPortal } from "react-dom";
 import { type TranslationKey, t } from "../../i18n/index.js";
 
 const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
-	"blocker": "general.advisoryBlocker",
-	"concern": "general.advisoryConcern",
-	"nit": "general.advisoryNit",
+	blocker: "general.advisoryBlocker",
+	concern: "general.advisoryConcern",
+	nit: "general.advisoryNit",
 };
+
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
 import { useDeepScrollShadow, useScrollShadow } from "../../lib/scroll-shadow";
@@ -577,7 +578,13 @@ function MermaidLightbox({
 	};
 	return createPortal(
 		<div className="tr-img-lb tr-mm-lb" onClick={onClose}>
-			<button type="button" className="tr-img-lb-x" aria-label={t("settings.close")} title={t("settings.close")} onClick={onClose}>
+			<button
+				type="button"
+				className="tr-img-lb-x"
+				aria-label={t("settings.close")}
+				title={t("settings.close")}
+				onClick={onClose}
+			>
 				✕
 			</button>
 			<div className="tr-mm-lb-body" onClick={e => e.stopPropagation()}>
@@ -824,7 +831,8 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableCopy.dataset.tableCopy ?? "csv";
-			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "settings.markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const text =
+				fmt === "tsv" ? tableToTSV(data) : fmt === "settings.markdown" ? tableToMarkdown(data) : tableToCSV(data);
 			const hash =
 				tableCopy
 					.closest<HTMLElement>(".tr-table")

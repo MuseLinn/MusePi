@@ -903,7 +903,11 @@ export class ModelHubComponent implements Component {
 			styled: theme.fg("muted", `fallbacks:${item.model.provider}/*`),
 			action: "fallbackProvider",
 		});
-		chips.push({ label: t("mcp.fallback"), styled: theme.fg("muted", t("commands.retryFallback")), action: "fallback" });
+		chips.push({
+			label: t("mcp.fallback"),
+			styled: theme.fg("muted", t("commands.retryFallback")),
+			action: "fallback",
+		});
 		this.#strip = { kind: "role", item, chips, index: 0, returnToRoles: false };
 	}
 
@@ -1703,15 +1707,13 @@ export class ModelHubComponent implements Component {
 	#statusRow(width: number): string {
 		if (this.#assigning !== null) {
 			if (this.#assigning.kind === "fallbackKey") {
-				return truncateToWidth(
-					theme.fg("accent", t("settings.newFallbackChain.info")),
-					width,
-				);
+				return truncateToWidth(theme.fg("accent", t("settings.newFallbackChain.info")), width);
 			}
 			const info = getRoleInfo(this.#assigning.role, this.#settings);
 			const label = info.tag ?? info.name ?? this.#assigning.role;
 			if (this.#assigning.kind === "fallback") {
-				const verb = this.#assigning.index === null ? t("settings.addingFallback") : t("settings.replacingFallback");
+				const verb =
+					this.#assigning.index === null ? t("settings.addingFallback") : t("settings.replacingFallback");
 				return truncateToWidth(
 					theme.fg("accent", ` ${verb} ${theme.bold(label)} — Enter picks the fallback model, Esc cancels`),
 					width,

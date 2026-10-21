@@ -57,7 +57,9 @@ export function BashCard({ message }: { message: BashExecutionMessage }): ReactN
 				{message.truncated && <span className="tr-bash-truncated">{t("tools.outputTruncated")}</span>}
 				{hasMore && (
 					<button type="button" className="tr-bash-toggle" onClick={() => setExpanded(v => !v)}>
-						{expanded ? t("tools.collapse") : `${t("composer.showAll")} (${message.output.split("\n").length} ${t("composer.lines")})`}
+						{expanded
+							? t("tools.collapse")
+							: `${t("composer.showAll")} (${message.output.split("\n").length} ${t("composer.lines")})`}
 					</button>
 				)}
 			</div>

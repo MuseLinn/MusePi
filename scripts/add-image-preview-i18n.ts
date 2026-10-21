@@ -22,15 +22,17 @@ const FILES = [
 
 for (const { file, zh } of FILES) {
 	let s = fs.readFileSync(file, "utf8");
-	const add = ENTRIES.filter(([k]) => !s.includes(JSON.stringify(k) + ":")).map(([k, v]) => [k, zh ? v : k] as [string, string]);
+	const add = ENTRIES.filter(([k]) => !s.includes(`${JSON.stringify(k)}:`)).map(
+		([k, v]) => [k, zh ? v : k] as [string, string],
+	);
 	if (add.length === 0) {
-		console.log(file.split("/").slice(-2).join("/") + ": already present");
+		console.log(`${file.split("/").slice(-2).join("/")}: already present`);
 		continue;
 	}
 	const topClose = s.lastIndexOf("} as const") >= 0 ? s.lastIndexOf("} as const") : s.lastIndexOf("}");
 	const lineEnd = s.lastIndexOf("\n", topClose);
-	const block = add.map(([k, v]) => "\t" + JSON.stringify(k) + ": " + JSON.stringify(v) + ",").join("\n") + "\n";
+	const block = `${add.map(([k, v]) => `\t${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n")}\n`;
 	s = s.slice(0, lineEnd) + block + s.slice(lineEnd);
 	if (apply) fs.writeFileSync(file, s);
-	console.log(file.split("/").slice(-2).join("/") + ": +" + add.length);
+	console.log(`${file.split("/").slice(-2).join("/")}: +${add.length}`);
 }

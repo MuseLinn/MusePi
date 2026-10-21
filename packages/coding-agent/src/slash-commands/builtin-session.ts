@@ -170,13 +170,13 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => {
 			const tasks = runtime.ctx.todoPhases.flatMap(phase => phase.tasks);
-			if (tasks.length === 0) return statusLine("Todos", t("none"));
+			if (tasks.length === 0) return statusLine("Todos", t("settings.none2"));
 			const pending = tasks.filter(task => task.status === "pending").length;
 			const inProgress = tasks.filter(task => task.status === "in_progress").length;
 			const completed = tasks.filter(task => task.status === "completed").length;
 			return statusLine(
 				"Todos",
-				`${pending + inProgress} ${t("open")} (${inProgress} ${t("in progress")}, ${completed} ${t("done")})`,
+				`${pending + inProgress} ${t("commands.open")} (${inProgress} ${t("commands.inProgress")}, ${completed} ${t("swarm.done")})`,
 			);
 		},
 
@@ -272,10 +272,10 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		getTuiAutocompleteDescription: runtime => {
 			const snapshot = runtime.ctx.session.getAsyncJobSnapshot({ recentLimit: 5 });
 			if (!snapshot || (snapshot.running.length === 0 && snapshot.recent.length === 0))
-				return statusLine("Jobs", t("none"));
+				return statusLine("Jobs", t("settings.none2"));
 			return statusLine(
 				"Jobs",
-				`${snapshot.running.length} ${t("running")}, ${snapshot.recent.length} ${t("recent")}`,
+				`${snapshot.running.length} ${t("commands.running")}, ${snapshot.recent.length} ${t("commands.recent")}`,
 			);
 		},
 
@@ -418,8 +418,8 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			const active = runtime.ctx.session.getActiveToolNames().length;
 			const all = runtime.ctx.session.getAllToolNames().length;
 			return all === 0
-				? statusLine("Tools", t("none available"))
-				: statusLine("Tools", `${active} ${t("active")} / ${all} ${t("available")}`);
+				? statusLine("Tools", t("commands.noneAvailable"))
+				: statusLine("Tools", `${active} ${t("settings.active")} / ${all} ${t("commands.available")}`);
 		},
 
 		handle: async (_command, runtime) => {
@@ -448,7 +448,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		acpDescription: "Show context usage",
 		getTuiAutocompleteDescription: runtime => {
 			const usage = runtime.ctx.session.getContextUsage();
-			if (!usage) return statusLine("Context", t("unavailable"));
+			if (!usage) return statusLine("Context", t("commands.unavailable"));
 			return statusLine(
 				"Context",
 				`${Math.round(usage.percent)}% (${formatTokenCount(usage.tokens)}/${formatTokenCount(usage.contextWindow)})`,
@@ -558,9 +558,9 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			runtime.ctx.oauthManualInput.hasPending()
 				? statusLine(
 						"Login",
-						t("waiting for {0} callback", runtime.ctx.oauthManualInput.pendingProviderId ?? "OAuth"),
+						t("commands.waitingCallbackWith0", runtime.ctx.oauthManualInput.pendingProviderId ?? "OAuth"),
 					)
-				: statusLine("Login", t("choose provider")),
+				: statusLine("Login", t("commands.chooseProvider")),
 
 		handleTui: (command, runtime) => {
 			const manualInput = runtime.ctx.oauthManualInput;

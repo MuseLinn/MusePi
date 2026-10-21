@@ -213,12 +213,18 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 	if (results.length > 0) {
 		footer = (
 			<Row>
-				{counts.done > 0 && <Badge tone="ok">{t("tools.succeededWithCount", { count: String(counts.done) })}</Badge>}{" "}
+				{counts.done > 0 && (
+					<Badge tone="ok">{t("tools.succeededWithCount", { count: String(counts.done) })}</Badge>
+				)}{" "}
 				{counts.mergeFailed > 0 && (
 					<Badge tone="warn">{t("tools.mergeFailedWithCount", { count: String(counts.mergeFailed) })}</Badge>
 				)}{" "}
-				{counts.failed > 0 && <Badge tone="err">{t("tools.failedWithCount", { count: String(counts.failed) })}</Badge>}{" "}
-				{counts.aborted > 0 && <Badge tone="err">{t("tools.abortedWithCount", { count: String(counts.aborted) })}</Badge>}{" "}
+				{counts.failed > 0 && (
+					<Badge tone="err">{t("tools.failedWithCount", { count: String(counts.failed) })}</Badge>
+				)}{" "}
+				{counts.aborted > 0 && (
+					<Badge tone="err">{t("tools.abortedWithCount", { count: String(counts.aborted) })}</Badge>
+				)}{" "}
 				{totalDurationMs != null && <span className="tv-faint">{fmtDuration(totalDurationMs)}</span>}
 			</Row>
 		);
@@ -485,7 +491,9 @@ function SwarmAgentResult({
 						<Note tone={tone === "warn" ? "warn" : "err"}>{error}</Note>
 					)}
 					{patchPath && <div className="tv-faint">{t("tools.patchWithPath", { path: patchPath })}</div>}
-					{!patchPath && branchName && <div className="tv-faint">{t("tools.branchWithName", { name: branchName })}</div>}
+					{!patchPath && branchName && (
+						<div className="tv-faint">{t("tools.branchWithName", { name: branchName })}</div>
+					)}
 				</div>
 			)}
 		</div>
@@ -644,7 +652,9 @@ function AgentResult({
 						<Note tone={tone === "warn" ? "warn" : "err"}>{error}</Note>
 					)}
 					{patchPath && <div className="tv-faint">{t("tools.patchWithPath", { path: patchPath })}</div>}
-					{!patchPath && branchName && <div className="tv-faint">{t("tools.branchWithName", { name: branchName })}</div>}
+					{!patchPath && branchName && (
+						<div className="tv-faint">{t("tools.branchWithName", { name: branchName })}</div>
+					)}
 				</>
 			)}
 		</>
@@ -738,12 +748,18 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 	if (results.length > 0) {
 		footer = (
 			<Row>
-				{counts.done > 0 && <Badge tone="ok">{t("tools.succeededWithCount", { count: String(counts.done) })}</Badge>}{" "}
+				{counts.done > 0 && (
+					<Badge tone="ok">{t("tools.succeededWithCount", { count: String(counts.done) })}</Badge>
+				)}{" "}
 				{counts.mergeFailed > 0 && (
 					<Badge tone="warn">{t("tools.mergeFailedWithCount", { count: String(counts.mergeFailed) })}</Badge>
 				)}{" "}
-				{counts.failed > 0 && <Badge tone="err">{t("tools.failedWithCount", { count: String(counts.failed) })}</Badge>}{" "}
-				{counts.aborted > 0 && <Badge tone="err">{t("tools.abortedWithCount", { count: String(counts.aborted) })}</Badge>}{" "}
+				{counts.failed > 0 && (
+					<Badge tone="err">{t("tools.failedWithCount", { count: String(counts.failed) })}</Badge>
+				)}{" "}
+				{counts.aborted > 0 && (
+					<Badge tone="err">{t("tools.abortedWithCount", { count: String(counts.aborted) })}</Badge>
+				)}{" "}
 				{totalDurationMs != null && <span className="tv-faint">{fmtDuration(totalDurationMs)}</span>}
 			</Row>
 		);

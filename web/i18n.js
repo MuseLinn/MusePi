@@ -34,7 +34,7 @@
     "hero.term.tabs": "Choose the install command",
     "hero.term.copy": "Copy command",
     "hero.term.note":
-      "Needs Node ≥ 22 or Bun. Once installed, the desktop app, the terminal TUI and the mobile companion share the same sessions.",
+      "This command installs the terminal TUI (the background service starts with it). For the graphical interface, pick an installer from the platform menu above. Once installed, the desktop app, the terminal TUI and the mobile companion share the same sessions.",
     "dl.aria": "Choose another platform",
     "dl.group.desktop": "Desktop",
     "dl.group.mobile": "Mobile and terminal",
@@ -148,7 +148,7 @@
       "MusePi is an AI workspace: the desktop GUI, the terminal, the mobile companion and the resident desktop pet share one background service, with models, tools and surfaces all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; everything is MIT-licensed.",
     "faq.q6": "How do I get started?",
     "faq.a6":
-      "One command installs the background service, the terminal TUI and the desktop app: <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Requires Node ≥ 22 or Bun. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
+      "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Requires Node ≥ 22 or Bun. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
 
     /* CTA band */
     "cta.h2": "Connect it to the machines you have",

@@ -206,7 +206,8 @@ function UsageResetsBlock({
 			(activeAccount.accountId !== undefined && meta.accountId === activeAccount.accountId));
 	const rows: ReactNode[] = [
 		<span key="row">
-			• {label}: {resets.availableCount} {resets.availableCount === 1 ? t("general.savedReset") : t("general.savedResets")}
+			• {label}: {resets.availableCount}{" "}
+			{resets.availableCount === 1 ? t("general.savedReset") : t("general.savedResets")}
 			{isActive ? ` (${t("settings.active")})` : ""}
 		</span>,
 	];
@@ -334,9 +335,7 @@ export function UsageProviderSection({
 			<Reveal open={expanded}>
 				<div className="gui-usage-provider-body">
 					{activeHere && (
-						<div className="gui-usage-note">
-							{t("general.useSessionWithAccount", { account: activeHere })}
-						</div>
+						<div className="gui-usage-note">{t("general.useSessionWithAccount", { account: activeHere })}</div>
 					)}
 					{notes.length > 0 && <div className="gui-usage-note">{notes.join(" • ")}</div>}
 					{resetsReports.map(report => (
@@ -418,7 +417,9 @@ export function UsageProviderSection({
 													</div>
 													<span className="gui-quota-pct">
 														{fraction !== undefined
-															? t("general.usedWithPercent", { percent: String(Math.round(fraction * 100)) })
+															? t("general.usedWithPercent", {
+																	percent: String(Math.round(fraction * 100)),
+																})
 															: "—"}
 													</span>
 												</div>
@@ -509,7 +510,8 @@ export function UsageGapLines({ provider, data }: { provider: string; data: Usag
 					key={`${credential.provider}-${usageGapLabel(credential)}`}
 				>
 					<span className="gui-usage-gap-glyph">✗</span> {usageGapLabel(credential)} — {t("general.disabled")}:{" "}
-					{usageShortCause(credential.cause)} <span className="gui-usage-note">({t("general.reLoginRestore")})</span>
+					{usageShortCause(credential.cause)}{" "}
+					<span className="gui-usage-note">({t("general.reLoginRestore")})</span>
 				</div>
 			))}
 			{relogin.map(deadline => (

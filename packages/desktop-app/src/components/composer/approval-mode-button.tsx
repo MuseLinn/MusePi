@@ -120,7 +120,7 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 							aria-checked={mode === m.value}
 							onClick={() => pick(m.value)}
 						>
-							<Icon name={mode === m.value ? "settings.check" : "shield"} className="h-4 w-4" />
+							<Icon name={mode === m.value ? "check" : "shield"} className="h-4 w-4" />
 							<span className="min-w-0 flex-1">
 								<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
 									{t(m.label)}

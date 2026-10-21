@@ -68,7 +68,8 @@ export const transcript = {
 	"transcript.turnMapKindAdvisor": "Advisor",
 	"transcript.turnMapKindSystem": "System",
 	"transcript.turnMapLoadingHistory": "Completing history…",
-	"transcript.trajectoryHistoryPartialRetry": "History backfill failed — showing a partial window only. Click to retry.",
+	"transcript.trajectoryHistoryPartialRetry":
+		"History backfill failed — showing a partial window only. Click to retry.",
 	"transcript.mapSwitchBranch": "Switch to this branch",
 	"transcript.mapSwitchBranchDesc": "Move the session leaf to this branch (opens the chat view)",
 	"transcript.trajectoryExpandAll": "Expand all",
@@ -124,7 +125,8 @@ export const transcript = {
 	"transcript.btwFailedCheckDaemon": "Btw failed — check the daemon connection",
 	"transcript.followUp": "Follow up…",
 	"transcript.enterAskEscCloses": "Enter to ask, Esc to close",
-	"transcript.backBottom": "Back to bottom",	"round tools {count}": "round tools {count}",
+	"transcript.backBottom": "Back to bottom",
+	"round tools {count}": "round tools {count}",
 	"explored the codebase": "explored the codebase",
 	"round commands {count}": "round commands {count}",
 	"round changed {count}": "round changed {count}",
@@ -238,5 +240,4 @@ export const transcript = {
 	"follow up…": "follow up…",
 	"Enter to ask — Esc closes": "Enter to ask — Esc closes",
 	"back to bottom": "back to bottom",
-
 } as const satisfies Record<TranscriptKey, string>;

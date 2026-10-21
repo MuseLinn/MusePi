@@ -1,5 +1,5 @@
+import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { t } from "../../i18n/index.js";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 
@@ -25,6 +25,13 @@ interface ConnectorServer {
 	readonly transport: "stdio" | "http" | "sse";
 	readonly status: "connected" | "connecting" | "disconnected";
 }
+
+/** Connector status labels are keyed per status id (closed set). */
+const CONNECTOR_STATUS_KEY: Record<string, TranslationKey> = {
+	connected: "tools.connectorStatusConnected",
+	connecting: "tools.connectorStatusConnecting",
+	disconnected: "tools.connectorStatusDisconnected",
+};
 
 interface ConnectorSnapshot {
 	readonly servers: readonly ConnectorServer[];
@@ -190,8 +197,8 @@ export function ConnectorPanel({
 								{server.transport}
 								<span
 									className={`gui-connector-dot gui-connector-dot--${server.status}`}
-									title={t(`connector status ${server.status}`)}
-									aria-label={t(`connector status ${server.status}`)}
+									title={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
+									aria-label={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
 								/>
 							</span>
 						</label>

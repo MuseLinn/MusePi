@@ -486,13 +486,17 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				{open && (
 					<div className="gui-changes-file-diff overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2 font-mono text-[11px] leading-relaxed">
 						{diffLoading ? (
-							<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
+							<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
+								{t("settings.loading2")}
+							</div>
 						) : (
 							<CodeHighlightProvider highlight={highlight}>
 								{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
 								{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
 								{!fileDiff?.staged && !fileDiff?.unstaged && (
-									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
+									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
+										{t("tools.noChanges")}
+									</div>
 								)}
 							</CodeHighlightProvider>
 						)}
@@ -798,7 +802,9 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					))}
 				</FadeScroll>
 			) : (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("general.noOpenPullRequests")}</div>
+				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">
+					{t("general.noOpenPullRequests")}
+				</div>
 			)}
 		</div>
 	);

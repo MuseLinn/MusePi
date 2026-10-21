@@ -6,23 +6,16 @@
  * browser API (the media element, the font registry, the diagram renderer) and
  * needs nothing from the pane but the file's URL and name.
  */
+
+import { type MermaidMode, renderMermaidHtml, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { type MermaidMode, renderMermaidHtml, t } from "@musepi/client-core";
 
 /** Audio and video, played by the browser's own media element.
  *
  * A codec the runtime cannot decode surfaces as the element's error event;
  * the preview says so instead of showing a dead player. */
-export function MediaPreview({
-	kind,
-	url,
-	name,
-}: {
-	kind: "audio" | "video";
-	url: string;
-	name: string;
-}): ReactNode {
+export function MediaPreview({ kind, url, name }: { kind: "audio" | "video"; url: string; name: string }): ReactNode {
 	const [failed, setFailed] = useState(false);
 	const [duration, setDuration] = useState<number | null>(null);
 	const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);

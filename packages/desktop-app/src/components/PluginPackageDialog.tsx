@@ -113,7 +113,11 @@ export function PluginPackageDialog({
 						{pkg.tools > 0 || pkg.commands > 0 || pkg.handlers > 0 ? (
 							<div className="gui-ext-plugins-meta">
 								<span className="gui-ext-group-count">
-									{t("tools.pluginCounts", { tools: pkg.tools, commands: pkg.commands, handlers: pkg.handlers })}
+									{t("tools.pluginCounts", {
+										tools: pkg.tools,
+										commands: pkg.commands,
+										handlers: pkg.handlers,
+									})}
 								</span>
 							</div>
 						) : null}
@@ -129,7 +133,9 @@ export function PluginPackageDialog({
 											className={`gui-ext-dot${m.loadError ? " gui-ext-dot--error" : m.state === "active" ? "" : " gui-ext-dot--off"}`}
 										/>
 										{m.loadError ? (
-											<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("tools.extLoadFailed")}</span>
+											<span className="gui-ext-item-tag gui-ext-item-tag--err">
+												{t("tools.extLoadFailed")}
+											</span>
 										) : null}
 										<span style={{ marginLeft: "auto" }}>
 											<button

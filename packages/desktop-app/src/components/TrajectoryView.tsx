@@ -278,7 +278,12 @@ export function TreeNodeRow({
 			style={{ paddingLeft: Math.min(depth, TRAJ_MAX_INDENT) * 14 }}
 			data-trajectory-entry={node.id}
 		>
-			<button type="button" className="traj-trow-main" onClick={() => onJump(node.id)} title={t("settings.trajectoryJump")}>
+			<button
+				type="button"
+				className="traj-trow-main"
+				onClick={() => onJump(node.id)}
+				title={t("settings.trajectoryJump")}
+			>
 				<Icon
 					name={(TREE_ICON[kind] ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
 					className={`h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${kind}`}
@@ -289,7 +294,9 @@ export function TreeNodeRow({
 				{childCount > 1 && (
 					<span
 						className={`traj-trow-badge${isCollapsed ? " traj-trow-badge--closed" : ""}`}
-						title={isCollapsed ? t("transcript.trajectoryExpandBranch") : t("transcript.trajectoryCollapseBranch")}
+						title={
+							isCollapsed ? t("transcript.trajectoryExpandBranch") : t("transcript.trajectoryCollapseBranch")
+						}
 						onClick={e => {
 							e.stopPropagation();
 							onToggleCollapse(node.id);

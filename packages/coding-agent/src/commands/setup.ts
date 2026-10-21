@@ -23,7 +23,7 @@ export async function runOnboardingSetup(deps: OnboardingSetupDependencies = {})
 	const stdinIsTTY = deps.stdinIsTTY ?? process.stdin.isTTY;
 	const stdoutIsTTY = deps.stdoutIsTTY ?? process.stdout.isTTY;
 	if (!stdinIsTTY || !stdoutIsTTY) {
-		(deps.writeStderr ?? (text => process.stderr.write(text)))(`${t("musepi setup requires an interactive TTY.")}\n`);
+		(deps.writeStderr ?? (text => process.stderr.write(text)))(`${t("commands.musepiSetupRequiresInteractive")}\n`);
 		(deps.exit ?? process.exit)(1);
 		return;
 	}
@@ -34,13 +34,13 @@ export default class Setup extends Command {
 	// Descriptions and flag help are evaluated lazily (getters) so locale is
 	// resolved at help/parse time, never at module load.
 	static get description(): string {
-		return t("Run onboarding setup or install dependencies for optional features");
+		return t("commands.runOnboardingSetupInstall");
 	}
 
 	static get args() {
 		return {
 			component: Args.string({
-				description: t("Optional component to install"),
+				description: t("commands.optionalComponentInstall"),
 				required: false,
 				options: COMPONENTS,
 			}),
@@ -49,8 +49,8 @@ export default class Setup extends Command {
 
 	static get flags() {
 		return {
-			check: Flags.boolean({ char: "c", description: t("Check if dependencies are installed") }),
-			json: Flags.boolean({ description: t("Output status as JSON") }),
+			check: Flags.boolean({ char: "c", description: t("commands.checkDependenciesInstalled") }),
+			json: Flags.boolean({ description: t("commands.outputStatusJson") }),
 		};
 	}
 

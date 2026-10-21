@@ -2,10 +2,11 @@
  * WelcomeComposer TIP_KEYS: a `as const` tuple of keys read through t(tipKey).
  * Each entry is renamed individually.
  */
-import { parse as parseBabel } from "@babel/parser";
-import _traverse from "@babel/traverse";
+
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseBabel } from "@babel/parser";
+import _traverse from "@babel/traverse";
 
 const traverse = _traverse as unknown as typeof import("@babel/traverse").default;
 const apply = process.argv.includes("--apply");
@@ -22,7 +23,7 @@ traverse(ast, {
 	ArrayExpression(path) {
 		// TIP_KEYS starts with "try / for commands and @ for context".
 		const first = path.node.elements[0];
-		if (!first || first.type !== "StringLiteral" || first.value !== "try / for commands and @ for context") return;
+		if (first?.type !== "StringLiteral" || first.value !== "try / for commands and @ for context") return;
 		for (const el of path.node.elements) {
 			if (el?.type !== "StringLiteral") continue;
 			const next = cc[el.value];

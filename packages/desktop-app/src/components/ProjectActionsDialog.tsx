@@ -66,7 +66,12 @@ export function ProjectActionsDialog({
 	};
 
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("general.editProjectActions")} className="w-[460px] max-w-[92vw]">
+		<DialogFrame
+			open={open}
+			onClose={onClose}
+			label={t("general.editProjectActions")}
+			className="w-[460px] max-w-[92vw]"
+		>
 			<div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
 				<h3 className="text-[14px] font-semibold text-[var(--color-text)]">{t("general.editProjectActions")}</h3>
 				{actions.length === 0 ? (
