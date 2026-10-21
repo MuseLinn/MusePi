@@ -189,27 +189,6 @@
 	transition: opacity 180ms var(--spring);
 }
 
-/* Credit readout beside the model capsule (auth-hub channels only): a quiet
- * fact, not a control — no hover, no affordance. Hidden below the same
- * threshold that collapses the thinking label, since the composer frame is
- * the scarce resource there. */
-.gui-credit-badge {
-	font-size: 11px;
-	line-height: 1;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	max-width: 200px;
-	padding-inline-start: 2px;
-	color: var(--color-text-faint);
-	font-variant-numeric: tabular-nums;
-}
-
-@container (max-width: 480px) {
-	.gui-credit-badge {
-		display: none;
-	}
-}
 
 /* Narrow composer: the thinking-effort label gives way first (the brain
  * icon + title keep the level discoverable), then the model label, then

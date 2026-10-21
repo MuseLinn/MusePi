@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { RpcClient } from "../lib/rpc";
-import { CreditBadge } from "./CreditBadge";
 import { ModelSelector } from "./ModelSelector";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
 
@@ -74,11 +73,6 @@ export function ModelThinkingCapsule({
 					/>
 				</>
 			)}
-			{/* Credit readout for the current channel (auth-hub only). Sits
-			 * after the model/thinking segments so it reads as a fact ABOUT
-			 * the selected model, not another control. Renders nothing when the
-			 * provider is not an auth-hub channel. */}
-			<CreditBadge rpc={rpc} currentModelId={currentModelId} />
 		</div>
 	);
 }
