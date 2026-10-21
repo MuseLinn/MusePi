@@ -7,12 +7,23 @@
  * package's settings components (slot settings.extensions / settings.item.*
  * whose extensionId lives under the package dir) mount in a 插件设置
  * section, which is where a plugin's own management UI appears.
+ *
+ * settings.tab.* pages are deliberately excluded: a full settings nav page
+ * (its own scrollable multi-section layout) does not fit a dialog — it
+ * would render a second copy of the page next to the settings nav entry it
+ * already lives in. Detail surfaces get the compact settings.extensions /
+ * settings.item.* components instead.
  */
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
-import { ConfigFormSlotMount, type ExtensionItem, type SlotComponent } from "../lib/slot-host";
+import {
+	ConfigFormSlotMount,
+	type ExtensionItem,
+	SETTINGS_TAB_SLOT_PREFIX,
+	type SlotComponent,
+} from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { PluginIcon } from "./PluginIcon";
@@ -48,7 +59,9 @@ export function PluginPackageDialog({
 	rpc: RpcClient | null;
 }): ReactNode {
 	const { confirm } = useConfirm();
-	const settingsComponents = components.filter(c => c.slot.startsWith("settings."));
+	const settingsComponents = components.filter(
+		c => c.slot.startsWith("settings.") && !c.slot.startsWith(SETTINGS_TAB_SLOT_PREFIX),
+	);
 	// A plugin's own panel persists through settingsScope — the same proxy the
 	// settings-page cards receive. Without it a panel that writes settings
 	// would see `undefined` where it expects a read/write object.
