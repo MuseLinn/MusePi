@@ -1,0 +1,504 @@
+@import "./tokens.css";
+
+/* ════════════════════════════════════════════════════════════════════════
+   MusePi 安装器 UI
+
+   设计约束（与客户端一致）：
+   * 颜色、圆角、动效曲线全部来自 tokens.css，本文件**不写任何原始色值**
+     （唯一例外是少量 oklch(1 0 0 / x%) 的玻璃叠层，它们本身就是
+     --glass-* 的展开形式，客户端 tokens.css:154-168 同款）。
+   * tokens.css 由构建脚本从 packages/client-core/src/styles/ 拷到同目录，
+     保证单一真源；安装包里也是这一份。
+
+   为什么窗口内要自带"光场"：安装器窗口是不透明的，身后没有桌面内容可供
+   模糊。没有可辨认的明暗结构，backdrop-filter 就退化成纯色块。所以
+   body 铺一层品牌金光 + 焦点环青光，玻璃面板模糊的是这层光场。
+   ════════════════════════════════════════════════════════════════════════ */
+
+* { box-sizing: border-box; }
+
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+body {
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--fg);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    user-select: none;
+}
+
+/* ── 窗口内光场 ─────────────────────────────────────────────────────── */
+.lightfield {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(54% 46% at 18% 14%, oklch(0.7507 0.1295 79.85 / 34%) 0%, transparent 62%),
+        radial-gradient(46% 40% at 86% 80%, oklch(0.817 0.112 205 / 24%) 0%, transparent 60%),
+        radial-gradient(92% 84% at 52% 46%, oklch(0.235 0.014 60) 0%, transparent 76%);
+}
+/* 细颗粒：给玻璃表面物质感，避免大色块渐变的塑料味 */
+.lightfield::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.028;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── 窗口骨架 ───────────────────────────────────────────────────────────
+   结构对齐客户端的 .gui-main（gui-chrome.css:245-259）：
+   整个工作区是**一层连续的玻璃**，顶栏与左侧品牌栏都透明地坐在这一层上，
+   只有右侧内容区是一张浮起的圆角卡片。这样顶栏和侧栏浑然一体，而不是
+   "顶栏一条 + 侧栏一条"各自带边框的分块感。
+
+     ┌──────────────────────────────────────────┐
+     │ titlebar (transparent, full width)       │  ← 沉浸
+     ├────────────┬─────────────────────────────┤
+     │ brandpane  │ content card (rounded, glass)│
+     │ (transparent)                             │
+     └────────────┴─────────────────────────────┘
+   ──────────────────────────────────────────────────────────────────────── */
+.shell {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    grid-template-rows: 40px 1fr;
+    /* 四边留 10px，让玻璃卡片的外投影有落点；顶栏与侧栏贴这层玻璃的边 */
+    padding: 0 10px 10px 0;
+    /* 整窗一层玻璃：顶栏与侧栏共享它（客户端 .gui-main 同款） */
+    background: color-mix(in oklab, var(--bg-raised) 62%, transparent);
+    -webkit-backdrop-filter: blur(var(--blur-xl)) saturate(140%);
+    backdrop-filter: blur(var(--blur-xl)) saturate(140%);
+}
+
+/* ── 标题栏（可拖动，透明沉浸）─────────────────────────────────────── */
+.titlebar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 0 16px;
+    /* 不画分隔线：顶栏与侧栏是同一层玻璃，画线就切断了沉浸感 */
+    border-bottom: 0;
+    -webkit-app-region: drag;
+    cursor: default;
+}
+.brandline { display: flex; align-items: center; gap: 8px; }
+.brandline .mark {
+    width: 16px; height: 16px;
+    border-radius: var(--radius-sm);
+    background: var(--brand-mark-gradient);
+    box-shadow: 0 0 12px oklch(0.7507 0.1295 79.85 / 28%);
+}
+.brandline .name {
+    font-size: 12.5px;
+    color: var(--fg-muted);
+    letter-spacing: 0.01em;
+}
+
+.wincontrols { display: flex; gap: 2px; -webkit-app-region: no-drag; }
+.wincontrols button {
+    width: 32px; height: 28px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--fg-faint);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background 140ms var(--spring-liquid), color 140ms var(--spring-liquid);
+}
+.wincontrols button:hover { background: oklch(1 0 0 / 8%); color: var(--fg); }
+.wincontrols button.close:hover { background: var(--err); color: #fff; }
+
+/* ── 左侧品牌栏（透明，坐落在共享玻璃层上）─────────────────────────── */
+.brandpane {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 24px 20px 32px;
+    overflow: hidden;
+    /* 透明：共享 .shell 那层玻璃。客户端 .gui-sidebar 同款做法
+       （gui-chrome.css:313-322 "Transparent: the workspace glass layer
+       provides the scrim"）。不再自带 border-right——边界由右侧卡片的
+       圆角与投影自然形成。 */
+    background: transparent;
+    border-right: 0;
+}
+/* 品牌栏里再叠一层金色氛围光，制造纵深 */
+.brandpane::after {
+    content: "";
+    position: absolute;
+    width: 230px; height: 230px;
+    border-radius: 50%;
+    background: radial-gradient(circle, oklch(0.7507 0.1295 79.85 / 18%) 0%, transparent 68%);
+    filter: blur(28px);
+    pointer-events: none;
+}
+
+.orb {
+    position: relative;
+    width: 118px; height: 118px;
+    border-radius: 30px;
+    /* 真实品牌图标（戴耳机的那张），由构建脚本从 build/icon.png 生成到
+       ui/assets/。不用纯色方块——那是占位符，不是品牌。 */
+    background-image: url("assets/brand-mark.png");
+    background-size: cover;
+    background-position: center;
+    box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / 34%),
+        inset 0 -2px 7px oklch(0 0 0 / 30%),
+        0 16px 38px oklch(0 0 0 / 46%),
+        0 0 54px oklch(0.7507 0.1295 79.85 / 26%);
+    animation: breathe 4.6s ease-in-out infinite;
+}
+/* 镜面高光 */
+.orb::before {
+    content: "";
+    position: absolute;
+    top: 7px; left: 13px; right: 13px; height: 42%;
+    border-radius: 24px 24px 50% 50%;
+    background: linear-gradient(180deg, oklch(1 0 0 / 22%) 0%, transparent 100%);
+    filter: blur(4px);
+    pointer-events: none;
+}
+@keyframes breathe {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-4px) scale(1.014); }
+}
+
+.brandtext { text-align: center; position: relative; z-index: 1; }
+.brandtext .wordmark {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 680;
+    letter-spacing: -0.026em;
+    background: linear-gradient(180deg, var(--fg) 0%, var(--fg-muted) 135%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.brandtext .version {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+}
+
+/* ── 右侧内容：浮起的玻璃卡片 ───────────────────────────────────────── */
+.content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 28px 34px 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
+
+    /* 圆角卡片：这是整个窗口唯一"实体"的面，其余都是玻璃。
+       用 --glass-bg + 外投影 + 折射内边，和客户端浮层同款配方
+       （tokens.css:154-168）。 */
+    /* 卡片右侧与底部留白由 .shell 的 padding 提供；顶部再让 2px，
+       避免上沿紧贴顶栏、把"沉浸"切断。 */
+    margin: 2px 0 0 0;
+    border-radius: var(--radius-2xl);
+    border: 1px solid var(--glass-border);
+    background: color-mix(in oklab, var(--bg-inset) 72%, transparent);
+    box-shadow:
+        0 18px 44px oklch(0 0 0 / 42%),
+        inset 0 1px 0 var(--glass-edge-hi),
+        inset 0 -1px 0 var(--glass-edge-lo);
+    -webkit-backdrop-filter: blur(var(--blur-sm));
+    backdrop-filter: blur(var(--blur-sm));
+}
+.content::-webkit-scrollbar { width: 8px; }
+.content::-webkit-scrollbar-thumb {
+    background: oklch(1 0 0 / 12%);
+    border-radius: 999px;
+}
+
+.page-head h2 {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 650;
+    letter-spacing: -0.016em;
+}
+.page-head .lede {
+    margin: 7px 0 0;
+    color: var(--fg-muted);
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 360px;
+}
+
+/* ── 玻璃卡片单选（语言）──────────────────────────────────────────── */
+.langs { margin-top: 24px; display: flex; flex-direction: column; gap: 8px; }
+
+.option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    border-radius: var(--radius-xl);
+    border: 1px solid transparent;
+    background: oklch(1 0 0 / 3%);
+    cursor: pointer;
+    text-align: start;
+    color: inherit;
+    font: inherit;
+    width: 100%;
+    transition:
+        background 220ms var(--spring-liquid),
+        border-color 220ms var(--spring-liquid),
+        transform 220ms var(--spring-liquid),
+        box-shadow 220ms var(--spring-liquid);
+}
+.option:hover {
+    background: oklch(1 0 0 / 6%);
+    border-color: var(--glass-border);
+    transform: translateX(2px);
+}
+/* 选中：增强玻璃 + 品牌金描边 + 内发光 —— "选中有水感" */
+.option[aria-checked="true"] {
+    background: var(--glass-bg-strong);
+    border-color: var(--accent-bd);
+    box-shadow:
+        inset 0 1px 0 var(--glass-edge-hi),
+        inset 0 -1px 0 var(--glass-edge-lo),
+        0 6px 20px oklch(0.7507 0.1295 79.85 / 10%);
+}
+
+.radio {
+    position: relative;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-strong);
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    transition: border-color 200ms var(--spring-liquid);
+}
+.option[aria-checked="true"] .radio { border-color: var(--accent); }
+.radio::after {
+    content: "";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: scale(0);
+    transition: transform 320ms var(--spring-liquid);
+    box-shadow: 0 0 9px oklch(0.7507 0.1295 79.85 / 60%);
+}
+.option[aria-checked="true"] .radio::after { transform: scale(1); }
+
+.option .label { font-size: 13.5px; }
+.option .aside {
+    margin-left: auto;
+    color: var(--fg-faint);
+    font-size: 11.5px;
+}
+
+/* ── 安装位置页 ───────────────────────────────────────────────────── */
+.field { margin-top: 24px; }
+.field > .caption {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--fg-muted);
+    font-size: 12px;
+}
+.pathrow { display: flex; gap: 8px; }
+.pathrow input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 13px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-strong);
+    background: oklch(0 0 0 / 22%);
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    user-select: text;
+}
+.pathrow input:focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+    border-color: transparent;
+}
+
+.checkline {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 14px;
+    font-size: 12.5px;
+    color: var(--fg-muted);
+    cursor: pointer;
+}
+.checkline input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+/* ── 进度页 ───────────────────────────────────────────────────────── */
+.progress-wrap {
+    margin: 34px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+}
+.progress-orb {
+    width: 86px; height: 86px;
+    border-radius: 24px;
+    /* 与左侧品牌栏共用同一张真实图标，避免进度页出现"金色方块"这种
+       与产品无关的占位符号 */
+    background-image: url("assets/brand-mark.png");
+    background-size: cover;
+    background-position: center;
+    box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / 32%),
+        0 14px 34px oklch(0 0 0 / 44%),
+        0 0 46px oklch(0.7507 0.1295 79.85 / 26%);
+    animation: breathe 2.6s ease-in-out infinite;
+}
+.track {
+    width: 100%;
+    max-width: 320px;
+    height: 5px;
+    border-radius: 999px;
+    background: oklch(1 0 0 / 9%);
+    overflow: hidden;
+}
+.track > .fill {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+    box-shadow: 0 0 12px oklch(0.7507 0.1295 79.85 / 55%);
+    transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.progress-meta {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 320px;
+    font-size: 11.5px;
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── 完成页 ───────────────────────────────────────────────────────── */
+.done-wrap {
+    margin: 26px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+}
+.done-badge {
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: color-mix(in oklab, var(--accent) 18%, transparent);
+    border: 1px solid var(--accent-bd);
+    color: var(--accent);
+    box-shadow: 0 0 28px oklch(0.7507 0.1295 79.85 / 26%);
+}
+
+/* ── 底栏与按钮 ───────────────────────────────────────────────────── */
+.footer {
+    margin-top: auto;
+    padding: 18px 0 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.footer .hint { font-size: 11px; color: var(--fg-faint); }
+
+.btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: 0;
+    border-radius: var(--radius-xl);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        transform 260ms var(--spring-liquid),
+        box-shadow 260ms var(--spring-liquid),
+        filter 180ms,
+        background 180ms;
+}
+.btn svg { width: 14px; height: 14px; }
+
+.btn-primary {
+    color: var(--accent-fg);
+    background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
+    box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / 44%),
+        inset 0 -1px 0 oklch(0 0 0 / 12%),
+        0 7px 20px oklch(0.7507 0.1295 79.85 / 24%);
+}
+.btn-primary:hover {
+    transform: translateY(-1.5px);
+    filter: brightness(1.045);
+    box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / 52%),
+        inset 0 -1px 0 oklch(0 0 0 / 12%),
+        0 12px 27px oklch(0.7507 0.1295 79.85 / 32%);
+}
+.btn-primary:active { transform: translateY(0) scale(0.986); transition-duration: 90ms; }
+.btn-primary[disabled] {
+    opacity: 0.42;
+    cursor: default;
+    transform: none;
+    filter: none;
+}
+
+.btn-ghost {
+    color: var(--fg-muted);
+    background: oklch(1 0 0 / 4%);
+    border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: oklch(1 0 0 / 8%); color: var(--fg); }
+
+.btn:focus-visible, .option:focus-visible, .wincontrols button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* ── 页面切换动效 ─────────────────────────────────────────────────── */
+.page { display: none; flex-direction: column; min-height: 100%; }
+.page.active { display: flex; animation: page-in 340ms var(--spring-liquid) both; }
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ── 无障碍 ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .orb, .progress-orb { animation: none; }
+    .page.active { animation: none; }
+    * { transition-duration: 0.01ms !important; }
+}

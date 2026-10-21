@@ -1,0 +1,183 @@
+<!doctype html>
+<!--
+  MusePi Windows installer UI.
+
+  Hosted by InstallerHost.exe (a .NET WebView2 shell compiled with the in-box
+  csc.exe — no MSVC). The host serves this directory over the virtual origin
+  https://musepi.installer/ and talks to the page through
+  chrome.webview.postMessage.
+
+  Message contract (page -> host), one string per message:
+    drag                 begin window drag (frameless titlebar)
+    minimize             minimize
+    close                close without installing
+    back                 request previous page (host decides if legal)
+    install:<json>       run install; json = { path, desktopShortcut, startMenu }
+    launch               launch the installed app
+    finish               close after successful install
+
+  Host -> page:
+    host:progress        { percent, step }
+    host:error           { message }
+    host:ready           { version, defaultPath, appVersion }
+-->
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MusePi Installer</title>
+<link rel="stylesheet" href="installer.css" />
+</head>
+<body>
+<div class="lightfield"></div>
+
+<div class="shell">
+    <div class="titlebar">
+        <div class="brandline">
+            <div class="mark"></div>
+            <span class="name">MusePi 安装程序</span>
+        </div>
+        <div class="wincontrols">
+            <button id="btn-min" aria-label="最小化" title="最小化">
+                <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </button>
+            <button id="btn-close" class="close" aria-label="关闭" title="关闭">
+                <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <aside class="brandpane">
+        <div class="orb"></div>
+        <div class="brandtext">
+            <h1 class="wordmark">MusePi</h1>
+            <span class="version" id="app-version">版本 —</span>
+        </div>
+    </aside>
+
+    <main class="content" id="content">
+
+        <!-- ── 1. 语言 ────────────────────────────────────────────── -->
+        <section class="page active" id="page-language" aria-labelledby="h-language">
+            <div class="page-head">
+                <h2 id="h-language">选择语言</h2>
+                <p class="lede">用于安装过程与应用首次启动。之后可随时在设置中更改。</p>
+            </div>
+            <div class="langs" role="radiogroup" aria-labelledby="h-language">
+                <button class="option" role="radio" aria-checked="false" data-lang="en-US">
+                    <span class="radio"></span>
+                    <span class="label">English</span>
+                    <span class="aside">English</span>
+                </button>
+                <button class="option" role="radio" aria-checked="true" data-lang="zh-CN">
+                    <span class="radio"></span>
+                    <span class="label">简体中文</span>
+                    <span class="aside">Chinese (Simplified)</span>
+                </button>
+                <button class="option" role="radio" aria-checked="false" data-lang="zh-TW">
+                    <span class="radio"></span>
+                    <span class="label">繁體中文</span>
+                    <span class="aside">Chinese (Traditional)</span>
+                </button>
+            </div>
+            <div class="footer">
+                <span class="hint">逐用户安装 · 无需管理员权限</span>
+                <button class="btn btn-primary" data-next="location">
+                    继续
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7h9M8 3.5L11.5 7 8 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- ── 2. 安装位置 ────────────────────────────────────────── -->
+        <section class="page" id="page-location" aria-labelledby="h-location">
+            <div class="page-head">
+                <h2 id="h-location">选择安装位置</h2>
+                <p class="lede">安装到本机后可用桌面快捷方式启动。配置与会话数据单独存放，卸载时保留。</p>
+            </div>
+            <div class="field">
+                <label class="caption" for="path">目标文件夹</label>
+                <div class="pathrow">
+                    <input id="path" type="text" spellcheck="false" />
+                    <button class="btn btn-ghost" id="btn-browse">浏览…</button>
+                </div>
+            </div>
+            <label class="checkline">
+                <input type="checkbox" id="chk-desktop" checked />
+                创建桌面快捷方式
+            </label>
+            <label class="checkline">
+                <input type="checkbox" id="chk-startmenu" checked />
+                添加到开始菜单
+            </label>
+            <div class="footer">
+                <button class="btn btn-ghost" data-back="language">上一步</button>
+                <button class="btn btn-primary" id="btn-install">
+                    安装
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7h9M8 3.5L11.5 7 8 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- ── 3. 进度 ────────────────────────────────────────────── -->
+        <section class="page" id="page-progress" aria-labelledby="h-progress">
+            <div class="progress-wrap">
+                <div class="progress-orb"></div>
+                <div class="page-head" style="text-align:center">
+                    <h2 id="h-progress">正在安装</h2>
+                    <p class="lede" id="progress-step">准备中…</p>
+                </div>
+                <div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar">
+                    <div class="fill"></div>
+                </div>
+                <div class="progress-meta">
+                    <span id="progress-label">准备中…</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── 4. 完成 ────────────────────────────────────────────── -->
+        <section class="page" id="page-done" aria-labelledby="h-done">
+            <div class="done-wrap">
+                <div class="done-badge">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="page-head" style="text-align:center">
+                    <h2 id="h-done">MusePi 已就绪</h2>
+                    <p class="lede" style="margin-inline:auto">安装已完成。首次启动会引导你选择语言并配置模型服务商。</p>
+                </div>
+            </div>
+            <label class="checkline" style="justify-content:center;margin-top:22px">
+                <input type="checkbox" id="chk-launch" checked />
+                立即启动 MusePi
+            </label>
+            <div class="footer">
+                <span class="hint">配置与会话数据保留在本机</span>
+                <button class="btn btn-primary" id="btn-finish">
+                    完成
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7h9M8 3.5L11.5 7 8 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- ── 错误层 ─────────────────────────────────────────────── -->
+        <section class="page" id="page-error" aria-labelledby="h-error">
+            <div class="page-head">
+                <h2 id="h-error">安装失败</h2>
+                <p class="lede" id="error-message">未知错误</p>
+            </div>
+            <div class="footer">
+                <button class="btn btn-ghost" data-back="location">返回</button>
+                <button class="btn btn-primary" id="btn-retry">重试</button>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<script src="installer.js"></script>
+</body>
+</html>

@@ -116,6 +116,33 @@ jobs:
            working-directory: packages/desktop-app
            run: bun run build
 
+         # Windows installer UI host (WebView2 shell).
+         #
+         # The installer wizard is an HTML/CSS page hosted by a small .NET
+         # executable, because NSIS widgets cannot express the client's
+         # liquid-glass language. The host is compiled with the .NET Framework
+         # compiler that ships with Windows — no MSVC, no Visual Studio, so the
+         # only new CI requirement is that this step runs on a Windows runner.
+         #
+         # Must run BEFORE electron-builder: release/installer-branding.nsh
+         # `!error`s out when installer/dist is missing, so a silent skip would
+         # turn into a hard packaging failure. That guard is deliberate.
+         #
+         # --arch follows the matrix: win32-x64 builds on windows-2022, while
+         # win32-arm64 builds on windows-11-arm and needs an ARM64 host binary.
+         - name: Build Windows installer host (WebView2)
+           if: matrix.builder == 'win'
+           working-directory: packages/desktop-app
+           shell: bash
+           run: |
+             set -euo pipefail
+             if [[ "${{ matrix.target_id }}" == "win32-arm64" ]]; then
+               ARCH="arm64"
+             else
+               ARCH="x64"
+             fi
+             bun scripts/build-installer-host.mjs --arch "$ARCH" --smoke
+
          - name: Package (electron-builder)
            working-directory: packages/desktop-app
            # Beta tags (v*-beta*) build the "beta" publish channel: electron-builder
