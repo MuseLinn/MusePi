@@ -194,6 +194,25 @@ interface SessionMetaRow {
 	agentCount?: number;
 }
 
+/** Poll-row equality at field granularity: every field the poll lane writes
+ *  must match (missing payload fields fall back to the old row's value, the
+ *  same merge the updater applies). Untouched fields (status/model) are not
+ *  compared — the full refresh owns them. */
+function pollRowEquals(old: SessionMetaRow, r: SessionMetaRow & { id: string }): boolean {
+	return (
+		old.working === (r.working === true) &&
+		old.live === (r.live === true) &&
+		old.messageCount === (r.messageCount ?? 0) &&
+		old.paused === (r.paused === true) &&
+		old.title === (r.title ?? old.title) &&
+		old.timestamp === (r.timestamp ?? old.timestamp) &&
+		old.updatedAt === (r.updatedAt ?? old.updatedAt) &&
+		old.cwd === (r.cwd ?? old.cwd) &&
+		old.modeId === (r.modeId ?? old.modeId) &&
+		old.agentCount === (r.agentCount ?? 0)
+	);
+}
+
 /** Collect every session id in a session tree (drift check for the poll:
  *  the sidebar tree must show exactly the sessions session.list knows). */
 function collectTreeIds(nodes: SessionListNode[], out: Set<string>): void {
@@ -1212,49 +1231,39 @@ function AppInner(): ReactNode {
 	// working in the background (streaming turns, cron runs), and the
 	// cursor-based unread derivation catches message growth the pet bubbles
 	// never see (sessions completed while the app was closed). One light RPC
-	// per 5s; sessionMeta only merges when a tracked field actually changed.
+	// per 5s. The merge is field-level: unchanged rows keep their object
+	// identity and an unchanged payload keeps the map's identity, so React
+	// skips the sidebar subtree entirely when nothing the GUI tracks moved.
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
-		let lastKey = "";
 		const poll = (): void => {
 			void rpc
 				.request<Array<SessionMetaRow & { id: string }>>("session.list")
 				.then(rows => {
 					if (!alive) return;
 					const list = rows ?? [];
-					const key = JSON.stringify(
-						list.map(r => [
-							r.id,
-							r.working === true,
-							r.live === true,
-							r.messageCount ?? 0,
-							r.paused === true,
-							r.modeId,
-							r.agentCount ?? 0,
-						]),
-					);
-					if (key === lastKey) return;
-					lastKey = key;
 					setSessionMeta(prev => {
-						const next = new Map(prev);
+						let next: Map<string, SessionMetaRow> | null = null;
 						for (const r of list) {
-							const row = next.get(r.id) ?? {};
+							const old = prev.get(r.id);
+							if (old && pollRowEquals(old, r)) continue;
+							next ??= new Map(prev);
 							next.set(r.id, {
-								...row,
+								...old,
 								working: r.working === true,
 								live: r.live === true,
 								messageCount: r.messageCount ?? 0,
 								paused: r.paused === true,
-								title: r.title ?? row.title,
-								timestamp: r.timestamp ?? row.timestamp,
-								updatedAt: r.updatedAt ?? row.updatedAt,
-								cwd: r.cwd ?? row.cwd,
-								modeId: r.modeId ?? row.modeId,
+								title: r.title ?? old?.title,
+								timestamp: r.timestamp ?? old?.timestamp,
+								updatedAt: r.updatedAt ?? old?.updatedAt,
+								cwd: r.cwd ?? old?.cwd,
+								modeId: r.modeId ?? old?.modeId,
 								agentCount: r.agentCount ?? 0,
 							});
 						}
-						return next;
+						return next ?? prev;
 					});
 					applyReadStatus(list);
 					// Tree sync: session.list is the freshest source of which

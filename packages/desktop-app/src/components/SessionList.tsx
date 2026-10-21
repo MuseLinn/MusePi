@@ -1,6 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
-import { memo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
@@ -426,7 +426,7 @@ const SessionRow = memo(function SessionRow({
 	);
 });
 
-export function SessionList({
+function SessionListComponent({
 	nodes,
 	selectedId,
 	onSelect,
@@ -478,17 +478,26 @@ export function SessionList({
 	// under the cursor jumped up/down on every switch (user: 点击切换会话时
 	// 排序跳动). Order is purely last-activity; working/unread stay as
 	// visual-only row indicators (pulse dot, bold title).
-	const ordered =
-		sort !== "none"
-			? sortSessionTree(nodes, (a, b) => {
-					return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
-				})
-			: nodes;
+	//
+	// The sort/flatten pipeline is memoized on the inputs it derives from:
+	// a sidebar re-render for unrelated state (menu open, hover chip) must
+	// not re-sort every group. Row elements below are memoized separately.
+	const ordered = useMemo(
+		() =>
+			sort !== "none"
+				? sortSessionTree(nodes, (a, b) => {
+						return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
+					})
+				: nodes,
+		[nodes, sort],
+	);
 	// 折叠态(openchamber 文件夹层级 parity):父行 chevron 收起 → 整棵子树
 	// 从渲染树剪除;状态持久化到 localStorage,默认展开(与既有行为一致)。
 	// 子代理会话多的父行可收起,列表不再被长子树刷屏。
 	const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(readCollapsedIds);
-	const toggleCollapse = (id: string): void => {
+	// Stable so the memoized rows don't all invalidate whenever the list body
+	// re-renders (the row memo compares callback props by reference).
+	const toggleCollapse = useCallback((id: string): void => {
 		setCollapsedIds(prev => {
 			const next = new Set(prev);
 			if (next.has(id)) next.delete(id);
@@ -496,11 +505,14 @@ export function SessionList({
 			writeCollapsedIds(next);
 			return next;
 		});
-	};
-	const childCounts = childCountMap(ordered);
+	}, []);
 	// 搜索期间强制展开:命中行可能藏在收起的子树里,剪枝会让命中不可见。
 	const effectiveCollapsed = searchQuery.trim() ? EMPTY_IDS : collapsedIds;
-	const flat = flattenTree(pruneCollapsedNodes(ordered, effectiveCollapsed));
+	const childCounts = useMemo(() => childCountMap(ordered), [ordered]);
+	const flat = useMemo(
+		() => flattenTree(pruneCollapsedNodes(ordered, effectiveCollapsed)),
+		[ordered, effectiveCollapsed],
+	);
 	if (flat.length === 0) return null;
 	// Parent lookup for fork markers **at the SESSION level** (a session forked
 	// from another session shows a branch glyph + the parent's label on hover).
@@ -543,3 +555,12 @@ export function SessionList({
 		</ul>
 	);
 }
+
+/**
+ * Memoized shell around the list body: callers pass useMemo'd Sets/Maps and
+ * stable callbacks, so a sidebar re-render that doesn't move any prop (menu
+ * toggles, hover state) skips the whole list — the sort/flatten memos inside
+ * already guard the pipeline, and the row elements are memoized on their
+ * own primitive props below this.
+ */
+export const SessionList = memo(SessionListComponent);

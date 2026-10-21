@@ -627,6 +627,16 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **i18n**（general 域）：`pr board`、`open pull requests`、`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`。
 - **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`、`gui-prboard-title/body`；徽章档复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
 
+## 5ab. 会话列表渲染稳定性：字段级 meta 合并 + 管线 memo 化（2026-10-21）
+
+侧栏会话列表此前在 `SessionSidebar` **每次**渲染时都对全部会话重新排序、重新分组——搜索键入、右键菜单、悬停状态、5 秒状态轮询，各自都会触发每个日期分组的一次完整 `sortSessionTree`（递归重建节点 + 每组排序）、折叠剪枝、扁平化、子计数 map 和 fork 父级查找。此外轮询每 5 秒把整个 `session.list` 载荷 JSON 序列化一遍，且只要任何后台会话的 messageCount 变化，就重建**每一条** meta 行对象，使侧栏里所有下游 `useMemo` 全部失效。修复分三层：
+
+- **轮询合并（app.tsx）**：`pollRowEquals` 按字段比对轮询写入的字段（working/live/messageCount/paused/title/timestamp/updatedAt/cwd/modeId/agentCount）与已有行；未变化的行保持对象引用不变，全部无变化时 `sessionMeta` **map 本身保持引用**，React 直接跳过整棵子树。JSON 快照 key 已删除（字段比较取而代之）。`status`/`model` 仍归 `refreshSessions` 全量替换所有，id 集合漂移检查仍会强制刷新树。
+- **列表管线（SessionList.tsx）**：排序/扁平化/剪枝/子计数链 memo 化到 `[nodes, sort]` / `[ordered, effectiveCollapsed]`，组件外包 `memo`——无关的侧栏重渲染不再重排任何分组。行组件本就 memo 在原语 props 上，该契约不变（调用方仍需保持回调引用稳定）。
+- **分组（GroupedSessionList.tsx）**：日期分桶 memo 化到 `[nodes, locale]`（`useLocale()` 为非响应式 `t()` 订阅语言切换），组件同样 memo 化。
+
+明确不做的事：不做列表虚拟化（memo 行 + memo 管线已让单次渲染开销随可见行数线性增长；仅当数百会话的 profile 仍显示吃紧时再回头做）；不做 `session.list` 的守护进程侧分页（载荷本就很小，成本在客户端重复派生，不在 RPC）。
+
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。

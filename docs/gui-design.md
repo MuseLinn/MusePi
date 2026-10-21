@@ -742,6 +742,16 @@ The PR/issue center is a **main-view page**, not a right-panel tab (the right gi
 - **i18n** (general domain): `pr board`, `open pull requests`, `issues`, `state open/closed/all`, `no open issues`, `no pr for branch`, `pr no checks`, `pr checks passing/failing/pending`, `pr mergeable`, `pr has conflicts`, `pr review approved/changes/required`, `pr title placeholder`, `pr base branch`, `pr description`, `create as draft`, `push and create`, `pr ahead count`.
 - **CSS** (`gui-workspace.css`): `gui-pr-card`, `gui-pr-meta`, `gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`, `gui-pr-merge--ok/--conflict`, `gui-pr-review`, `gui-pr-actions`, `gui-pr-create*` form family, `gui-issue-label`, `gui-prboard-title/body`; badge tiers reuse `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`. Radius tokens only (`--radius-xl/lg`, pills 999px).
 
+## 5ab. Session list rendering stability: field-level meta merge + memoized pipelines (2026-10-21)
+
+The sidebar's session list re-sorted and re-grouped every session on **every** render of `SessionSidebar` — search keystrokes, context menus, hover state, and the 5s status poll each triggered a full `sortSessionTree` (recursive node rebuild + per-sibling-group sort), collapse-prune, flatten, child-count map and fork-parent lookup **per date group**. On top of that, the poll serialized the whole `session.list` payload to JSON every 5s and, when anything changed (any background session's message count), rebuilt **every** meta row object, invalidating every downstream `useMemo` in the sidebar. Fixes, in three layers:
+
+- **Poll merge (app.tsx)**: `pollRowEquals` compares the poll-lane fields (working/live/messageCount/paused/title/timestamp/updatedAt/cwd/modeId/agentCount) against the existing row; unchanged rows keep their object identity, and when nothing changed the `sessionMeta` **map keeps its identity** so React bails out of the whole subtree. The JSON snapshot key is gone (the field comparison replaces it). The full `refreshSessions` replace still owns `status`/`model`, and the id-set drift check still forces a tree refresh.
+- **List pipeline (SessionList.tsx)**: the sort/flatten/prune/child-count chain is memoized on `[nodes, sort]` / `[ordered, effectiveCollapsed]`, and the component is wrapped in `memo` — unrelated sidebar re-renders no longer re-sort any group. Rows were already memoized on primitive props; that contract is unchanged (callers must keep callbacks stable).
+- **Grouping (GroupedSessionList.tsx)**: date bucketing memoized on `[nodes, locale]` (`useLocale()` subscribes for the non-reactive `t()`), component memoized like SessionList.
+
+Non-goals (deliberate): no list virtualization (memoized rows + memoized pipelines keep per-render cost linear in visible rows; revisit only if hundreds-of-sessions profiles still hurt), no daemon-side pagination of `session.list` (the payload is small metadata; the cost was client-side re-derivation, not the RPC).
+
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

@@ -1,5 +1,6 @@
-import { t } from "@musepi/client-core";
+import { t, useLocale } from "@musepi/client-core";
 import type { ReactNode } from "react";
+import { memo, useMemo } from "react";
 import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
 /** Bucket a timestamp into a date-group label (ZCode groups tab). */
@@ -26,7 +27,7 @@ const GROUP_ORDER = ["today", "yesterday", "last 7 days", "earlier"];
  * 会话内消息树的构建与载体是 `lib/message-tree.ts`(buildMessageTree)——
  * 轨迹面板未来的「时间线/分支树」切换与 TUI `/trace` 共用它。
  */
-export function GroupedSessionList({
+function GroupedSessionListInner({
 	nodes,
 	selectedId,
 	onSelect,
@@ -52,17 +53,27 @@ export function GroupedSessionList({
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
 }): ReactNode {
-	const groups = new Map<string, SessionListNode[]>();
-	for (const n of nodes) {
-		// Bucket by LAST-ACTIVITY (openchamber `time.updated` parity, the same
-		// key the in-group SessionList sorts by): a session created last week
-		// but resumed today belongs under "today", not "earlier" (creation
-		// time). Fall back to the creation timestamp for old daemons.
-		const g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp) || "earlier";
-		const list = groups.get(g) ?? [];
-		list.push(n);
-		groups.set(g, list);
-	}
+	// t() reads the locale store non-reactively — subscribe so a language
+	// switch re-buckets the date-group labels through the memo below.
+	const locale = useLocale();
+	// Bucketing memoized on the node list (locale in the deps for the same
+	// non-reactive t() reason): a sidebar re-render for unrelated state must
+	// not re-group every session before the memoized SessionList even gets
+	// to compare props.
+	const groups = useMemo(() => {
+		const buckets = new Map<string, SessionListNode[]>();
+		for (const n of nodes) {
+			// Bucket by LAST-ACTIVITY (openchamber `time.updated` parity, the same
+			// key the in-group SessionList sorts by): a session created last week
+			// but resumed today belongs under "today", not "earlier" (creation
+			// time). Fall back to the creation timestamp for old daemons.
+			const g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp) || "earlier";
+			const list = buckets.get(g) ?? [];
+			list.push(n);
+			buckets.set(g, list);
+		}
+		return buckets;
+	}, [nodes, locale]);
 	const ordered = GROUP_ORDER.filter(g => groups.has(g)).concat(
 		[...groups.keys()].filter(g => !GROUP_ORDER.includes(g)),
 	);
@@ -97,3 +108,10 @@ export function GroupedSessionList({
 		</>
 	);
 }
+
+/**
+ * Memoized like SessionList: the sidebar re-renders constantly (poll merges,
+ * menu state, keystrokes), and neither the bucketing nor the group shells
+ * need to move until the node list or one of the row-marker sets changes.
+ */
+export const GroupedSessionList = memo(GroupedSessionListInner);

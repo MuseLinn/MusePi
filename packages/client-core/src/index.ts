@@ -110,6 +110,7 @@ export {
 	t,
 	tLoose,
 } from "./i18n/index.js";
+export { useLocale } from "./i18n/use-locale.js";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
