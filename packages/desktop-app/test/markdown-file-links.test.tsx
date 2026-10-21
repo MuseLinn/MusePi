@@ -95,7 +95,7 @@ function setup(href: string): { anchor: HTMLAnchorElement; events: string[]; con
 	// The shim has no layout, so heading.scrollIntoView must exist before the
 	// delegate can call it.
 	for (const h of container.querySelectorAll("h2")) {
-		(h as unknown as { scrollIntoView: () => void }).scrollIntoView = () => events.push("scrolled:" + h.textContent);
+		(h as unknown as { scrollIntoView: () => void }).scrollIntoView = () => events.push(`scrolled:${h.textContent}`);
 	}
 	return { anchor, events, container };
 }

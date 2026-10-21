@@ -686,7 +686,7 @@ export class ExtensionService implements DaemonService {
 			// （校验声明 + 真实挂载/拆卸,效果账本随 fiber 回收）,成功才持久化
 			// 黑名单;运行时未装载该插件时先 reconcile 一次再重试,仍失败结构化
 			// 上抛且不落盘。
-			if (p.id.startsWith(LEGACY_EXTENSION_MODULE_KIND + ":")) {
+			if (p.id.startsWith(`${LEGACY_EXTENSION_MODULE_KIND}:`)) {
 				const pluginName = p.id.slice("extension-module:".length);
 				const component = p.component;
 				const enabled = p.enabled;

@@ -41,7 +41,7 @@ export function isLargePlainTextPaste(
 	text: string,
 	options?: { charThreshold?: number; lineThreshold?: number },
 ): boolean {
-	if (!text || !text.trim()) return false;
+	if (!text?.trim()) return false;
 	const charThreshold = options?.charThreshold ?? LARGE_TEXT_PASTE_CHAR_THRESHOLD;
 	const lineThreshold = options?.lineThreshold ?? LARGE_TEXT_PASTE_LINE_THRESHOLD;
 	if (text.length >= charThreshold) return true;

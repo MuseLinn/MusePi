@@ -17,8 +17,6 @@
  * performs (insert a mention, restore a draft, replace a token, place a popup
  * at the caret). Every policy decision — what a key means, which picker opens,
  * when to send — stays with the caller.
- *
- * Adapted from openchamber's `composer/editor/ComposerEditor.tsx`.
  */
 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
