@@ -165,7 +165,7 @@ export const tools = {
 	// ── 连接器（composer chip，M4 P1）──
 	"tools.connectorsChip": "连接器",
 	"tools.connectorsChipTitle": "选择本会话可用的连接器",
-	"tools.connectorsChipNarrowed": "连接器 {chosen}/{total}",
+	"tools.connectorsChipNarrowed": "{chosen}/{total}",
 	"tools.connectorsPanelTitle": "连接器",
 	"tools.connectorsLoading": "正在加载连接器…",
 	"tools.connectorsLoadFailed": "无法加载连接器",
@@ -975,7 +975,7 @@ export const tools = {
 	"swarm members": "Swarm 成员",
 	"connectors chip": "连接器",
 	"connectors chip title": "选择本会话可用的连接器",
-	"connectors chip narrowed": "连接器 {chosen}/{total}",
+	"connectors chip narrowed": "{chosen}/{total}",
 	"connectors panel title": "连接器",
 	"connectors loading": "正在加载连接器…",
 	"connectors load failed": "无法加载连接器",

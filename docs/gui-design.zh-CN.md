@@ -542,6 +542,15 @@ turn
 - 全空（无步数、无 token）→ 整行隐藏；纯用户消息的窗口只把计数丸显示为纯读数。
 - 数字不随分页/压缩跳动：token 数字有投影背书；窗口数字只在窗口 settled 内容变化时变化。
 
+## 5ac. Composer 周边修正：dock 座位回到下方、连接器面板设计、tail-inset 暖机（2026-10-21）
+
+composer 周边的四个回归，同一个根因模式：布局没有为异步挂载的行预留位置。
+
+- **`composer.dock` 是输入框下方的座位**（修订此前一切「上方」措辞）：宿主把它挂在 `ComposerFrame` 的 `belowRow`，自成一行（`.gui-composer-below-dock`），位于输入卡正下方并自居中。读数类插件（性能与用量）属于 composer 的页脚行；上方 dock（`gui-composer-dock`）只放状态 chip（连接器、todo/排队、swarm）。座位表在 `collab-proto/extension-slots.ts` 里标注位置，daemon 侧契约保持一致。
+- **插件平台面**：编译后的插件模块把 `React` 绑定到 `window.MusePiReact`，现在它是宿主命名空间展开 + `react-dom` 的 `createPortal`（react 命名空间里没有——用 portal 弹自己浮层的插件一打开就崩，报 "React.createPortal is not a function"）。guest-client Web 入口的同名暴露同样修正。
+- **Tail-inset 暖机**（`lib/composer-tail-inset.ts`）：resting 高度的最小值只在首个真实测量后的 2 秒窗口结束后才开始锁存。结构性行（连接器 chip 在其 RPC 之后、插件行在 registry import 之后）都在该窗口内落地；把异步前的最小值锁存会冻结预留高度过小，转录区最后一行会整个会话藏在那些行下面。暖机期内只预留当前高度；暖机结束后恢复原「史上最小」语义（打字增长仍吸进 80px 间隙）。
+- **连接器面板设计**：弹窗行换自绘复选框（accent 底 + clip-path 勾选，`appearance: none`——原生蓝色方块破坏玻璃材质），头部带标题（面板名 + 服务器数，操作链接右对齐），280px 上限。收窄态 chip 只读 `{已选}/{总数}`——「连接器」字样只留在默认态。
+
 ## 5x. 查找栏、撤销 toast、命令面板增量（2026-10-02，openchamber v2.1.0 parity）
 
 三件低风险吸收同批落地。实现契约与它们暴露出的工具链陷阱见

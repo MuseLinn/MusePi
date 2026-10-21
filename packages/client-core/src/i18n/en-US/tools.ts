@@ -167,7 +167,7 @@ export const tools = {
 	// ── 连接器（composer chip，M4 P1）──
 	"tools.connectorsChip": "Connectors",
 	"tools.connectorsChipTitle": "Choose which connectors this session may use",
-	"tools.connectorsChipNarrowed": "Connectors {chosen}/{total}",
+	"tools.connectorsChipNarrowed": "{chosen}/{total}",
 	"tools.connectorsPanelTitle": "Connectors",
 	"tools.connectorsLoading": "Loading connectors…",
 	"tools.connectorsLoadFailed": "Connectors could not be loaded",
@@ -1011,7 +1011,7 @@ export const tools = {
 	"swarm members": "swarm members",
 	"connectors chip": "connectors chip",
 	"connectors chip title": "connectors chip title",
-	"connectors chip narrowed": "connectors chip narrowed",
+	"connectors chip narrowed": "{chosen}/{total}",
 	"connectors panel title": "connectors panel title",
 	"connectors loading": "connectors loading",
 	"connectors load failed": "connectors load failed",

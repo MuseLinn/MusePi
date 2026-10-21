@@ -643,6 +643,15 @@ All additions ride the §5s ladder: tab open = shared-element grow from the invo
 - Both empty (no steps, no tokens) → the whole row is hidden; a window of pure user messages shows the counts pill as a plain reading.
 - Figures never move because of paging or compaction: token figures are projection-backed; window figures only change when the window's settled content changes.
 
+## 5ac. Composer chrome corrections: dock seat below, connector panel design, tail-inset warmup (2026-10-21)
+
+Four regressions around the composer's chrome, one root pattern: async-mounted rows the layout did not account for.
+
+- **`composer.dock` is a BELOW-input seat** (amending any "上方" wording): the host mounts it in `ComposerFrame`'s `belowRow` as its own centered row (`.gui-composer-below-dock`) directly under the input card. Readout plugins (性能与用量) belong to the composer's footer line; the above-dock (`gui-composer-dock`) is for status chips (connector, todo/queue, swarm). Seat table in `collab-proto/extension-slots.ts` carries the position so the daemon-side contract agrees.
+- **Plugin platform surface**: compiled plugin modules bind `React` → `window.MusePiReact`, which now spreads the host namespace PLUS `react-dom`'s `createPortal` (the react namespace has none — a plugin that portals its popover crashed on open with "React.createPortal is not a function"). Same exposure in the guest-client web entry.
+- **Tail-inset warmup** (`lib/composer-tail-inset.ts`): the resting-height minimum only latches after a 2s window from the first real measurement. Structural rows (connector chip after its RPC, plugin rows after the registry import) land inside that window; latching the pre-async minimum froze the reservation too small and the transcript's last row hid under those rows for the whole session. During warmup the current height is reserved; after it, the min-ever semantics are unchanged (typing growth still absorbs into the 80px gap).
+- **Connector panel design**: popup rows get a custom drawn checkbox (accent fill + clip-path check, `appearance: none` — the native blue square broke the glass), a titled header (面板名 + 服务器数, links right-aligned), and a 280px max height. The narrowed chip reads `{chosen}/{total}` — the word 连接器 stays only in the default state.
+
 ## 5x. Find bar, undo-action toast, palette deltas (2026-10-02, openchamber v2.1.0 parity)
 
 Three low-risk absorptions landed together. Implementation contracts and the

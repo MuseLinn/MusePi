@@ -253,8 +253,8 @@ export function Composer({
 }: ComposerProps): ReactNode {
 	const pet = usePet();
 	// composer 座位槽(dock / left / right):
-	// dock = 输入卡上方行;left/right = 底部工具栏两端。list 语义 ——
-	// 扩展声明 composer.dock/left/right 槽位即注入组件。
+	// dock = 输入卡下方的整行(读数类内容,居中);left/right = 底部工具栏两端。
+	// list 语义 —— 扩展声明 composer.dock/left/right 槽位即注入组件。
 	const composerDockItems = useSlotComponents(rpc, COMPOSER_DOCK_SLOT);
 	const [text, setText] = useState("");
 	// Element picker (browser tool) inserts picked-page text into the draft.
@@ -1898,10 +1898,15 @@ export function Composer({
 				flipAnchor="session"
 				belowRow={
 					<>
-						{/* composer.overlay / composer.requestDraft / composer.for 座位槽。
-						 * 注意：composer.dock 不在此挂载——它的唯一挂载点是上方
-						 * gui-composer-dock 里的座位槽，这里再挂一次会让 stats-pills
-						 * 渲染两行。 */}
+						{/* composer.dock 座位槽：输入卡下方、整行居中的一条——读数类
+						 * 插件（性能与用量）属于 composer 的页脚行，跟在输入卡之后，
+						 * 不占用上方 dock 的状态行，也不会压在对话内容上。 */}
+						{composerDockItems.length > 0 && (
+							<div className="gui-composer-below-dock">
+								<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
+							</div>
+						)}
+						{/* composer.overlay / composer.requestDraft / composer.for 座位槽。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_OVERLAY_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_REQUEST_DRAFT_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_FOR_SLOT} sessionId={sessionId} cwd={cwd} />
@@ -2015,8 +2020,7 @@ export function Composer({
 				// not inside the framed box).
 				aboveRow={
 					<div className="gui-composer-above">
-						{composerDockItems.length > 0 ||
-						(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
+						{(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
 						connectorServers.length > 0 ||
 						activeTask ? (
 							<div className="gui-composer-dock">
@@ -2055,9 +2059,6 @@ export function Composer({
 								{/* composer.plan 座位槽:
 								 * 计划模式旁的扩展控件。 */}
 								<SlotComponentHost rpc={rpc} slot={COMPOSER_PLAN_SLOT} sessionId={sessionId} cwd={cwd} />
-								{composerDockItems.length > 0 && (
-									<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
-								)}
 								{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
 									activeTask) && (
 									<div className="gui-mode-row gui-mode-row--status">

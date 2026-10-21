@@ -15,7 +15,7 @@
  *
  * | 席位 | 容量 | 位置 |
  * |---|---|---|
- * | `composer.dock` | list | 输入卡上方的整宽条目 |
+ * | `composer.dock` | list | 输入卡下方的整行条目（读数类内容，自居中） |
  * | `composer.left` | list | 工具栏左端 |
  * | `composer.right` | list | 提交键之前的紧凑控件 |
  * | `composer.overlay` | list | 输入卡内的浮层 |

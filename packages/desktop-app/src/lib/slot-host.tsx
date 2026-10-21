@@ -12,7 +12,20 @@ import type {
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RpcClient } from "./rpc";
+
+/**
+ * The React surface compiled plugin modules bind to: the artifact compiler
+ * maps the `React` identifier to `window.MusePiReact`, so whatever lands here
+ * IS the plugin's whole platform. The react namespace itself has no
+ * `createPortal` (that export lives in react-dom), and a plugin that portals
+ * its popover crashed on open with "React.createPortal is not a function" —
+ * spread the namespace and add the portal entry.
+ */
+function exposeHostReact(): void {
+	(window as unknown as { MusePiReact: unknown }).MusePiReact = { ...React, createPortal };
+}
 
 /**
  * Renderer-side component slots: extensions
@@ -623,7 +636,7 @@ export function SlotComponentMount({
 				// Compiled components bind to the HOST react instance via the
 				// `React` identifier (window.MusePiReact) — see
 				// daemon/extension-artifact-compiler.ts. Inject before import.
-				(window as unknown as { MusePiReact: unknown }).MusePiReact = React;
+				exposeHostReact();
 				// Dynamic import: specifier is a runtime blob URL served from
 				// the extension registry — static import is impossible here.
 				url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
@@ -710,7 +723,7 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 			for (const item of toolViews) {
 				if (item.error) continue; // 编译失败:回退内置/generic 渲染器
 				try {
-					(window as unknown as { MusePiReact: unknown }).MusePiReact = React;
+					exposeHostReact();
 					const url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
 					urls.push(url);
 					const mod = (await import(url)) as { default?: unknown };

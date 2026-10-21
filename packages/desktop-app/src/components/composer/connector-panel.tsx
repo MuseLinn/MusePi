@@ -170,18 +170,24 @@ export function ConnectorPanel({
 	return (
 		<div className="gui-connector-panel" role="group" aria-label={t("tools.connectorsPanelTitle")}>
 			<div className="gui-connector-panel-head">
-				<button
-					type="button"
-					className="gui-connector-link"
-					onClick={() => (allChecked ? onSelectAll() : onToggleServers(checkedNames()))}
-				>
-					{allChecked ? t("tools.connectorsClearAll") : t("tools.connectorsSelectAll")}
-				</button>
-				{snapshot.selected !== null && (
-					<button type="button" className="gui-connector-link" onClick={onUseAll}>
-						{t("tools.connectorsUseAll")}
+				<span className="gui-connector-panel-title">
+					{t("tools.connectorsPanelTitle")}
+					<span className="gui-connector-panel-count">{snapshot.servers.length}</span>
+				</span>
+				<span className="gui-connector-panel-links">
+					<button
+						type="button"
+						className="gui-connector-link"
+						onClick={() => (allChecked ? onSelectAll() : onToggleServers(checkedNames()))}
+					>
+						{allChecked ? t("tools.connectorsClearAll") : t("tools.connectorsSelectAll")}
 					</button>
-				)}
+					{snapshot.selected !== null && (
+						<button type="button" className="gui-connector-link" onClick={onUseAll}>
+							{t("tools.connectorsUseAll")}
+						</button>
+					)}
+				</span>
 			</div>
 			<ul className="gui-connector-list">
 				{snapshot.servers.map(server => (

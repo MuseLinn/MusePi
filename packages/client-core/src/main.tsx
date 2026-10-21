@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import "./styles/tokens.css";
@@ -15,7 +16,9 @@ import "./i18n";
 // host (it renders the session), so it exposes its instance the same way the
 // GUI's slot-host does. The compat slot host (injected by `musepi serve`)
 // then blob-imports extension components against this instance.
-(window as unknown as { MusePiReact?: unknown }).MusePiReact = React;
+// The react namespace carries no createPortal (react-dom does); add it so a
+// plugin that portals its popover stops crashing on open.
+(window as unknown as { MusePiReact?: unknown }).MusePiReact = { ...React, createPortal };
 
 // The compat slot-host registry (dsh-desktop plugin parity): the injected
 // serve script calls register() for each compiled extension component; the

@@ -41,10 +41,11 @@ export function apply(pi: ExtensionAPI): void {
 export default function statsPills(pi: ExtensionAPI): void {
 	pi.setLabel("MusePi 性能与用量");
 
-	// `composer.dock` 是输入区上方的整宽条目座位，正是这类「一行读数」
-	// 该待的位置。
+	// `composer.dock` 是输入卡下方的整行座位，正是这类「一行读数」
+	// 该待的位置——读数属于 composer 的页脚行，跟在输入卡之后，不占用
+	// 上方 dock 的状态行，也不会压在对话内容上。
 	//
-	// `order` 取一个较小值：统计行是输入区最上方的一行，排在其它停靠条目
+	// `order` 取一个较小值：统计行是页脚的第一行，排在其它停靠条目
 	// 之前才符合阅读顺序（先看用量，再看其它提示）。
 	pi.registerComponent({
 		slot: "composer.dock",
