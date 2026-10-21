@@ -41,8 +41,8 @@ export function apply(pi: ExtensionAPI): void {
 export default function statsPills(pi: ExtensionAPI): void {
 	pi.setLabel("MusePi 性能与用量");
 
-	// `composer.dock` 是输入区上方的整宽条目座位（对齐 DSH 的
-	// `conversation.input.dock`），正是这类「一行读数」该待的位置。
+	// `composer.dock` 是输入区上方的整宽条目座位，正是这类「一行读数」
+	// 该待的位置。
 	//
 	// `order` 取一个较小值：统计行是输入区最上方的一行，排在其它停靠条目
 	// 之前才符合阅读顺序（先看用量，再看其它提示）。

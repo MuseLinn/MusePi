@@ -11,7 +11,6 @@
  * the scale then follows the viewer's size, and the image is never upscaled, so
  * a 16px icon stays 16px instead of blurring across the panel.
  *
- * Absorbed from openchamber's `views/files/previews/imageZoom.ts`.
  */
 
 /** Space the image keeps from the viewer's edges, in CSS pixels. */

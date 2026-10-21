@@ -1,9 +1,5 @@
 import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/client-core";
-import {
-	EXTENSION_SLOT_DECLARATION,
-	EXTENSION_SLOT_NAMES,
-	slotKindOf,
-} from "@musepi/collab-proto/extension-slots";
+import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
@@ -17,6 +13,7 @@ import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "./rpc";
+
 /**
  * Renderer-side component slots: extensions
  * register components via `pi.registerComponent({ slot, moduleUrl })`, the
@@ -60,7 +57,7 @@ export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2]; // "rail
 export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
 /** 单行偏好槽。 */
 export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
-/** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的 DSH 对应表）。 */
+/** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
 export const COMPOSER_DOCK_SLOT = slot("composer.dock");
 export const COMPOSER_LEFT_SLOT = slot("composer.left");
 export const COMPOSER_RIGHT_SLOT = slot("composer.right");
@@ -72,7 +69,7 @@ export const COMPOSER_ACTIVITY_SLOT = slot("composer.activity");
 export const COMPOSER_OVERLAY_SLOT = slot("composer.overlay");
 export const COMPOSER_REQUEST_DRAFT_SLOT = slot("composer.requestDraft");
 export const COMPOSER_FOR_SLOT = slot("composer.for");
-/** transcript.node seat slot —— DSH `conversation.chat.node` 粒度:单一
+/** transcript.node seat slot —— 单一
  *  聊天节点 seat,按节点 kind(entryKey)分发;turn-tail/tool/user/assistant
  *  都是该 seat 的节点 kind,而非独立槽。 */
 export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
@@ -130,7 +127,7 @@ export interface SlotComponent {
 	order?: number;
 	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
 	 *  renderer owns. No entryKinds → does not participate in per-kind
-	 *  dispatch (targets other exact slots). DSH entryKey analog. */
+	 *  dispatch (targets other exact slots). */
 	entryKinds?: string[];
 }
 
@@ -184,7 +181,7 @@ export interface ExtensionItem {
 	builtin?: boolean;
 	/** 只读展示项(主题包/渲染器包):无禁用语义,不渲染停用开关。 */
 	readonly?: boolean;
-	/** 插件清单声明的配置字段表(dsh 式管理页;daemon 经 pi-wire 校验后下发)。 */
+	/** 插件清单声明的配置字段表(管理页;daemon 经 pi-wire 校验后下发)。 */
 	config?: ConfigFieldDesc[];
 	/** 被丢弃的坏配置字段及原因(fail-soft 证据)。 */
 	configErrors?: ConfigFieldError[];
@@ -192,14 +189,14 @@ export interface ExtensionItem {
 	resources?: PluginResources;
 	/** 已落盘的插件配置值(daemon 按字段钳制后下发;表单初始值)。 */
 	configValues?: PluginConfigValues;
-	/** dsh 式「包含的组件」状态(声明了组件的内置单元才有;详情弹层渲染开关行)。 */
+	/** 「包含的组件」状态(声明了组件的内置单元才有;详情弹层渲染开关行)。 */
 	components?: PluginComponentDesc[];
 	/** dsh「会话插件」面:显式预设白名单启用了该扩展的预设名列表。 */
 	enabledInPresets?: string[];
 	/** cordis 运行状态（仅接入 fiber 的条目才有;builtin 单元随 daemon
 	 *  挂载,user 插件会话装载无宿主 fiber,缺省如实不显示）。 */
 	runtime?: { fiberState: string; effects: number; operational: "running" | "stopped" };
-	/** dsh 式「启用条件」:镜像设置键为 on 时启用。 */
+	/** 「启用条件」:镜像设置键为 on 时启用。 */
 	activation?: { kind: "setting"; key: string };
 	/** 插件清单版本（extension-module 条目;宿主 runtime 透出,回退保护②）。 */
 	version?: string;
@@ -387,7 +384,7 @@ export interface SlotComponentProps {
 	 *  (ext.call RPC). Bound to the component's extensionId; absent when
 	 *  no rpc bridge is available. */
 	extensionCall?: (method: string, params?: unknown) => Promise<unknown>;
-	/** transcript.node seat —— DSH ChatNodeOwnerProps 类比。宿主(渲染器)按节点
+	/** transcript.node seat。宿主(渲染器)按节点
 	 *  kind(entryKey)派发到注册组件;组件可用 `children`(内建 MusePi 渲染)做
 	 *  增强/追加,或独立渲染。核心消息渲染仍由宿主持有 —— 扩展只贡献到 seat。 */
 	node?: {
@@ -397,10 +394,10 @@ export interface SlotComponentProps {
 		kind: string;
 		/** 归属回合序号(可选)。 */
 		turnIndex?: number;
-		/** 内建 MusePi 对该条目的渲染 —— 用于“增强而不替换”(DSH 不 replace 核心)。 */
+		/** 内建 MusePi 对该条目的渲染 —— 用于“增强而不替换核心渲染”。 */
 		children?: ReactNode;
 	} | null;
-	/** turn 级上下文 —— DSH TurnTailOwnerProps 类比。用于回合底 footer / 总结面板。 */
+	/** turn 级上下文。用于回合底 footer / 总结面板。 */
 	turn?: {
 		turnIndex: number;
 		userText?: string;
@@ -521,9 +518,9 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
 	}, [data, prefix]);
 }
 
-/** transcript.node seat 派发 (DSH `entryKey` 类比): 从注册到 `transcript.node`
+/** transcript.node seat 派发: 从注册到 `transcript.node`
  *  的组件中挑出声明处理该 kind 的。无 entryKinds 的组件不参与按 kind 派发
- *  (它面向其它精确槽位)。命中列表为空 -> seat 回退到内建渲染 (DSH fallback);
+ *  (它面向其它精确槽位)。命中列表为空 -> seat 回退到内建渲染;
  *  命中 -> 命中组件"拥有"该节点渲染(可包含 children 基座做增强或完全自绘)。 */
 export function selectTranscriptNodeComponents(components: readonly SlotComponent[], kind: string): SlotComponent[] {
 	return components
@@ -578,10 +575,10 @@ export function SlotComponentMount({
 	cwd?: string;
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
 	settingsScope?: SlotComponentProps["settingsScope"];
-	/** transcript.node seat 节点上下文(DSH ChatNodeOwnerProps 类比):命中
+	/** transcript.node seat 节点上下文: 命中
 	 *  kind 的组件收到它,可用 node.children 增强或完全自绘。 */
 	node?: SlotComponentProps["node"];
-	/** turn 级上下文(DSH TurnTailOwnerProps 类比)。 */
+	/** turn 级上下文。 */
 	turn?: SlotComponentProps["turn"];
 	/** 该组件的 config form(宿主从 pluginConfig.* 构造);缺省时本组件
 	 *  按 extensionId 自行构造一个。 */

@@ -14,12 +14,11 @@
  * A single large paste therefore never blocks, and the escape hatch is
  * discovered by the person who needs it rather than imposed on everyone.
  *
- * Absorbed from openchamber's `largeTextPaste.ts`, adapted to a textarea
- * (they drive a CodeMirror view, and read the document from it).
+ * 宿主是 textarea（非 CodeMirror），文档从 value 读取。
  */
 
-export const LARGE_TEXT_PASTE_CHAR_THRESHOLD = 2000;
-export const LARGE_TEXT_PASTE_LINE_THRESHOLD = 25;
+const LARGE_TEXT_PASTE_CHAR_THRESHOLD = 2000;
+const LARGE_TEXT_PASTE_LINE_THRESHOLD = 25;
 
 /** How long a first paste stays "the same paste" for the second one to count. */
 const DOUBLE_PASTE_WINDOW_MS = 1000;
@@ -176,6 +175,10 @@ export class LargeTextPasteGesture {
 	}
 
 	#matches(candidate: LargeTextPasteCandidate, snapshot: PasteSnapshot): boolean {
-		return snapshot.value === candidate.value && snapshot.selectionStart === candidate.to && snapshot.selectionEnd === candidate.to;
+		return (
+			snapshot.value === candidate.value &&
+			snapshot.selectionStart === candidate.to &&
+			snapshot.selectionEnd === candidate.to
+		);
 	}
 }

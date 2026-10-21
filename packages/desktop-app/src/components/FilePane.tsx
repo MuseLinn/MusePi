@@ -130,7 +130,7 @@ interface PreviewState {
 	raw?: string;
 	/** highlighted text preview (tree-sitter spans) */
 	html?: string;
-	/** live-rendered HTML page (openchamber parity: .html previews render) */
+	/** live-rendered HTML page (.html previews render) */
 	htmlLive?: string;
 	/** blob URL for image preview */
 	imageUrl?: string;
@@ -181,7 +181,7 @@ interface TreeNode {
 	entry: WorkspaceEntry;
 	children: TreeNode[];
 	/** Display label — "a/b" when a single-child dir chain is compressed
-	 *  (bitfun lazyCompressFileTree / VS Code path-compression parity). */
+	 *  (VS Code path-compression). */
 	label: string;
 }
 
@@ -274,7 +274,7 @@ function flattenVisible(
 }
 
 /** Collapse single-child directory chains into one display row
- *  (bitfun lazyCompressFileTree / VS Code path-compression parity):
+ *  (VS Code path-compression):
  *  a dir with exactly one dir child (that itself has children) merges
  *  their labels into "a/b". The deepest entry.path stays the collapse
  *  key and the target of fs operations; only the label changes. */
@@ -317,7 +317,7 @@ function extOf(name: string): string {
 	return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-/** Extension-aware file glyph (proma FileTypeIcon parity): code, image,
+/** Extension-aware file glyph: code, image,
  *  JSON and text files get a recognizable icon; the rest keep the plain
  *  document glyph. */
 function TypeIcon({ name }: { name: string }): ReactElement {
@@ -381,15 +381,15 @@ export function FilePane({
 	onDirty?: (path: string, dirty: boolean) => void;
 	/** Panel-level file instances split the tree and the preview into two
 	 *  tabs: the preview's back button shows the tree tab instead of
-	 *  unmounting its own preview (dsh tree/preview tab parity). */
+	 *  unmounting its own preview (tree/preview tabs). */
 	onShowTree?: () => void;
 }): ReactNode {
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
 	// The markdown FILE preview's container: its relative links open the target
-	// file in this pane and #fragment links scroll within it (openchamber
-	// useMarkdownLocalAssets parity, minus what resolveLocalImages already
+	// file in this pane and #fragment links scroll within it (local-asset
+	// resolution, minus what resolveLocalImages already
 	// covers). The transcript's Markdown has no such concept — a chat message
 	// has no file to resolve against.
 	const mdPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -956,7 +956,7 @@ export function FilePane({
 		const closed = isDir && collapsed.has(entry.path);
 		const selected = selectedPath === entry.path;
 		const indent = (depth - 1) * 14;
-		// dsh rc.2 ui-open-in-app parity: a hover action opens the entry in
+		// A hover action opens the entry in
 		// the OS default app (folder → Explorer/Finder, file → default app).
 		const openInApp = (
 			<button
@@ -1122,12 +1122,17 @@ export function FilePane({
 					>
 						{showHidden ? <ScanEye size={12} /> : <EyeOff size={12} />}
 					</button>
-					<button className="gui-btn gui-btn-icon" type="button" onClick={() => void load()} title={t("settings.refresh")}>
+					<button
+						className="gui-btn gui-btn-icon"
+						type="button"
+						onClick={() => void load()}
+						title={t("settings.refresh")}
+					>
 						<RefreshCw size={12} />
 					</button>
 				</div>
 			</div>
-			{/* Working-dir breadcrumb (proma/openchamber toolbar parity). */}
+			{/* Working-dir breadcrumb. */}
 			<div className="gui-filepane-path" title={cwd}>
 				<span className="gui-filepane-path-root">~/</span>
 				<span className="truncate">{cwd.replace(/^\/Users\/[^/]+\//, "")}</span>
@@ -1361,8 +1366,8 @@ export function FilePane({
 	);
 }
 
-/** HTML file preview: live page in a sandboxed iframe (openchamber
- *  parity) with a preview/source toggle. */
+/** HTML file preview: live page in a sandboxed iframe with a
+ *  preview/source toggle. */
 function HtmlPreview({
 	live,
 	source,
@@ -1452,7 +1457,13 @@ function FileEditor({
 				}}
 			/>
 			<div className="gui-filepane-editor-foot">
-				<button type="button" className="gui-btn gui-btn-sm" disabled={saving} onClick={onSave} title={t("general.save")}>
+				<button
+					type="button"
+					className="gui-btn gui-btn-sm"
+					disabled={saving}
+					onClick={onSave}
+					title={t("general.save")}
+				>
 					<Save size={12} />
 					{t("general.save")}
 				</button>
@@ -1541,7 +1552,9 @@ function SheetPreview({
 				</div>
 			)}
 			{sheet?.truncated && (
-				<p className="gui-filepane-preview-note">{t("settings.onlyFirstRowsShownWithN", { n: OFFICE_SHEET_ROWS })}</p>
+				<p className="gui-filepane-preview-note">
+					{t("settings.onlyFirstRowsShownWithN", { n: OFFICE_SHEET_ROWS })}
+				</p>
 			)}
 			{sheet && (
 				<div

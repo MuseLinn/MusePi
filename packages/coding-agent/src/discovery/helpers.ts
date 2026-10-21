@@ -11,10 +11,7 @@ import {
 	parseFrontmatter,
 	tryParseJson,
 } from "@musepi/pi-utils";
-import {
-	type ExtensionModule,
-	LEGACY_EXTENSION_MODULE_KIND,
-} from "../capability/extension-module";
+import type { ExtensionModule } from "../capability/extension-module";
 import { invalidate as invalidateFsCache, readDirEntries, readFile } from "../capability/fs";
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";

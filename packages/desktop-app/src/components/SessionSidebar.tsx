@@ -357,7 +357,7 @@ export function SessionSidebar({
 		setSessionCtx({ id, x, y });
 	}, []);
 	// AI rename in flight (row menu item disables while its own run is
-	// pending -- openchamber shows a spinner; disabled-with-same-label
+	// pending -- show a spinner; disabled-with-same-label
 	// is the ContextMenu vocabulary for busy here).
 	const [retitlingId, setRetitlingId] = useState<string | null>(null);
 	// Row display title for the export filename/header: node label wins,
@@ -951,7 +951,9 @@ export function SessionSidebar({
 												<div className="flex items-center gap-1 text-[13px] text-[var(--color-text-faint)]">
 													<Icon name="folder-3" className="h-3 w-3 flex-shrink-0" />
 													<span className="min-w-0 flex-1 truncate">
-														{a.cwd ? (a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd) : t("transcript.noFolder")}
+														{a.cwd
+															? (a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd)
+															: t("transcript.noFolder")}
 													</span>
 													<span className="flex-shrink-0">{new Date(a.archivedAt).toLocaleString()}</span>
 												</div>
@@ -1478,7 +1480,9 @@ export function SessionSidebar({
 														if (!r.ok)
 															pushActionToast({
 																message: t(
-																	r.reason === "empty" ? "general.aiRenameEmpty" : "general.aiRenameFailed",
+																	r.reason === "empty"
+																		? "general.aiRenameEmpty"
+																		: "general.aiRenameFailed",
 																),
 															});
 													});

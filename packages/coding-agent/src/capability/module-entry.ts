@@ -14,8 +14,7 @@
  * 日志里找。现在 kind 按轨道分名，这是**显示属性**，与身份无关（见下行）。
  *
  * ⚠️ **身份与状态都不在这里**：条目身份是插件名（`plugin-identity.ts` 的
- * `pluginEntryId`），启停是这个名字上的一个布尔值——与 dsh 的
- * `PluginEntryId` + `entry.disabled` 同模型。kind 只是分类标签，改它不会让
+ * `pluginEntryId`），启停是这个名字上的一个布尔值。kind 只是分类标签，改它不会让
  * 任何用户状态失配。
  */
 
@@ -28,7 +27,7 @@ export const PLUGIN_MODULE_KIND = "plugin-module";
 export const LEGACY_EXTENSION_MODULE_KIND = "extension-module";
 
 /**
- * 一个模块条目的身份键 = 插件名本身（与 dsh 的 `PluginEntryId` 同模型）。
+ * 一个模块条目的身份键 = 插件名本身。
  *
  * 历史包袱：存量 `disabledExtensions` 用 `extension-module:<name>` 拼接串记录，
  * 于是「分类」被焊进了「身份」——改分类就会让用户的启停状态失配。身份不该含

@@ -249,7 +249,7 @@ export class ExtensionList implements Component {
 		// Built-in badge: registry deployment artifacts + annotated rows
 		// (bundled skills) carry the same "内置" marker as the GUI.
 		if (ext.builtin) {
-			line += theme.fg("muted", ` ${t("Builtin")}`);
+			line += theme.fg("muted", ` ${t("settings.builtin")}`);
 		}
 
 		// Trigger hint
@@ -455,45 +455,45 @@ export class ExtensionList implements Component {
 	#getKindLabel(kind: ExtensionKind): string {
 		switch (kind) {
 			case "extension-module":
-				return t("Extension Modules");
+				return t("settings.extensionModules");
 			case "skill":
-				return t("Skills");
+				return t("settings.skills");
 			case "tool":
-				return t("Tools");
+				return t("settings.settingsTools");
 			case "slash-command":
-				return t("Commands");
+				return t("settings.commands");
 			case "rule":
-				return t("Rules");
+				return t("settings.rules2");
 			case "mcp":
-				return t("MCP Servers");
+				return t("settings.mcpServers3");
 			case "hook":
-				return t("Hooks");
+				return t("settings.hooks");
 			case "prompt":
-				return t("Prompts");
+				return t("settings.prompts");
 			case "context-file":
-				return t("Context");
+				return t("settings.context");
 			case "instruction":
-				return t("Instructions");
+				return t("settings.instructions");
 			case "gui-motion":
 				return t("GUI Motion");
 			case "magic-keyword":
-				return t("Magic Keywords");
+				return t("settings.interaction.magicKeywords.magicKeywords");
 			case "theme":
-				return t("Themes");
+				return t("settings.themes");
 			case "tool-render":
-				return t("Tool Renderers");
+				return t("settings.toolRenderers");
 			case "voice":
-				return t("Voice");
+				return t("settings.voice");
 			case "terminal":
-				return t("Terminal");
+				return t("settings.terminal");
 			case "browser":
-				return t("Browser");
+				return t("settings.tools.availableTools.browser");
 			case "computer":
-				return t("Computer Use");
+				return t("settings.computerUse");
 			case "lsp":
-				return t("LSP");
+				return t("settings.files.lsp.lsp");
 			case "file":
-				return t("Files");
+				return t("settings.files");
 			default:
 				return kind;
 		}

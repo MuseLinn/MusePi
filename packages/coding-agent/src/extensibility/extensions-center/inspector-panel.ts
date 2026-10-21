@@ -23,7 +23,7 @@ export class InspectorPanel implements Component {
 
 	render(width: number): readonly string[] {
 		if (!this.#extension) {
-			return [theme.fg("muted", t("Select an extension")), theme.fg("dim", t("to view details"))];
+			return [theme.fg("muted", t("settings.selectExtension")), theme.fg("dim", t("settings.viewDetails"))];
 		}
 
 		const ext = this.#extension;
@@ -34,7 +34,7 @@ export class InspectorPanel implements Component {
 		lines.push("");
 
 		// Kind badge
-		lines.push(theme.fg("muted", t("Type: ")) + this.#getKindBadge(ext.kind));
+		lines.push(theme.fg("muted", t("settings.type")) + this.#getKindBadge(ext.kind));
 		lines.push("");
 
 		// Description (wrapped)
@@ -53,9 +53,13 @@ export class InspectorPanel implements Component {
 		}
 
 		// Origin
-		lines.push(theme.fg("muted", t("Origin:")));
+		lines.push(theme.fg("muted", t("settings.origin")));
 		const levelLabel =
-			ext.source.level === "user" ? t("User") : ext.source.level === "project" ? t("Project") : t("Native");
+			ext.source.level === "user"
+				? t("dashboard.user")
+				: ext.source.level === "project"
+					? t("dashboard.project")
+					: t("errors.native");
 		lines.push(`  ${theme.italic(`via ${ext.source.providerName} (${levelLabel})`)}`);
 		const shortened = shortenPath(ext.path, os.homedir());
 		// If path is very long, show just the last parts
@@ -67,18 +71,18 @@ export class InspectorPanel implements Component {
 		lines.push("");
 
 		// Status badge
-		lines.push(theme.fg("muted", t("Status:")));
+		lines.push(theme.fg("muted", t("settings.status")));
 		lines.push(`  ${this.#getStatusBadge(ext.state, ext.disabledReason, ext.shadowedBy)}`);
 		lines.push("");
 
 		// 「包含的组件」段(dsh 插件详情 parity):组件开关在左侧列表
 		// 的子行进行(Space),此处展示每个组件的当前状态与说明。
 		if (ext.components && ext.components.length > 0) {
-			lines.push(theme.fg("muted", t("Components:")));
+			lines.push(theme.fg("muted", t("commands.components")));
 			for (const component of ext.components) {
 				const state = component.enabled
-					? theme.fg("success", `${theme.status.enabled} ${t("Enabled")}`)
-					: theme.fg("dim", `${theme.status.disabled} ${t("Disabled")}`);
+					? theme.fg("success", `${theme.status.enabled} ${t("settings.enabled")}`)
+					: theme.fg("dim", `${theme.status.disabled} ${t("dashboard.disabled")}`);
 				lines.push(`  ${component.name}  ${state}`);
 				const description = component.description ? t(component.description) : "";
 				if (description && description !== component.description && width > 6) {
@@ -94,12 +98,12 @@ export class InspectorPanel implements Component {
 		// 直读(state-manager 的 configValues);编辑入口是 /settings 的同一
 		// 批键,此处如实呈现现状。未翻译的 label(GUI 侧 i18n 键)不渲染。
 		if (ext.config && ext.config.length > 0) {
-			lines.push(theme.fg("muted", t("Config:")));
+			lines.push(theme.fg("muted", t("settings.config")));
 			for (const field of ext.config) {
 				const raw = ext.configValues?.[field.key];
 				const rendered =
 					raw === undefined || raw === null || raw === ""
-						? theme.fg("dim", t("(default)"))
+						? theme.fg("dim", t("dashboard.text5"))
 						: theme.fg("accent", String(raw));
 				if (!field.label) {
 					lines.push(`  ${field.key}: ${rendered}`);
@@ -150,7 +154,7 @@ export class InspectorPanel implements Component {
 
 	#renderFilePreview(raw: unknown, width: number): string[] {
 		const lines: string[] = [];
-		lines.push(theme.fg("muted", t("Preview:")));
+		lines.push(theme.fg("muted", t("selector.preview")));
 		lines.push(theme.fg("dim", theme.boxRound.horizontal.repeat(Math.min(width - 2, 40))));
 
 		const content = this.#getContextFileContent(raw);
@@ -208,7 +212,7 @@ export class InspectorPanel implements Component {
 
 	#renderToolArgs(raw: unknown, width: number): string[] {
 		const lines: string[] = [];
-		lines.push(theme.fg("muted", t("Arguments:")));
+		lines.push(theme.fg("muted", t("settings.arguments")));
 		lines.push(theme.fg("dim", theme.boxRound.horizontal.repeat(Math.min(width - 2, 40))));
 
 		try {
@@ -237,10 +241,10 @@ export class InspectorPanel implements Component {
 					const nameCol = theme.fg("accent", name.padEnd(12));
 					const typeCol = theme.fg("muted", type.padEnd(10));
 					const reqCol = isRequired
-						? theme.fg("warning", t("Required"))
+						? theme.fg("warning", t("settings.required"))
 						: defaultVal
 							? theme.fg("dim", defaultVal)
-							: theme.fg("dim", t("Optional"));
+							: theme.fg("dim", t("settings.optional"));
 
 					lines.push(`  ${nameCol} ${typeCol} ${reqCol}`);
 				}
@@ -255,7 +259,7 @@ export class InspectorPanel implements Component {
 
 	#renderSkillContent(raw: unknown, width: number): string[] {
 		const lines: string[] = [];
-		lines.push(theme.fg("muted", t("Instruction:")));
+		lines.push(theme.fg("muted", t("settings.instruction")));
 		lines.push(theme.fg("dim", theme.boxRound.horizontal.repeat(Math.min(width - 2, 40))));
 
 		try {
@@ -284,7 +288,7 @@ export class InspectorPanel implements Component {
 
 	#renderMcpDetails(raw: unknown, width: number): string[] {
 		const lines: string[] = [];
-		lines.push(theme.fg("muted", t("Connection:")));
+		lines.push(theme.fg("muted", t("settings.connection")));
 		lines.push(theme.fg("dim", theme.boxRound.horizontal.repeat(Math.min(width - 2, 40))));
 
 		try {
@@ -293,21 +297,21 @@ export class InspectorPanel implements Component {
 			const command = mcp?.command || mcp?.cmd || "";
 			const args = mcp?.args || mcp?.arguments || [];
 
-			lines.push(`  ${theme.fg("muted", t("Transport:"))}  ${theme.fg("accent", transport)}`);
+			lines.push(`  ${theme.fg("muted", t("settings.transport2"))}  ${theme.fg("accent", transport)}`);
 
 			if (command) {
-				lines.push(`  ${theme.fg("muted", t("Command:"))}    ${theme.fg("success", command)}`);
+				lines.push(`  ${theme.fg("muted", t("settings.command"))}    ${theme.fg("success", command)}`);
 			}
 
 			if (Array.isArray(args) && args.length > 0) {
-				lines.push(`  ${theme.fg("muted", t("Args:"))}       ${theme.fg("dim", args.join(" "))}`);
+				lines.push(`  ${theme.fg("muted", t("settings.args"))}       ${theme.fg("dim", args.join(" "))}`);
 			}
 
 			// Environment variables if present
 			if (mcp?.env && typeof mcp.env === "object") {
 				const envCount = Object.keys(mcp.env).length;
 				if (envCount > 0) {
-					lines.push(`  ${theme.fg("muted", t("Env vars:"))}   ${theme.fg("dim", `${envCount} defined`)}`);
+					lines.push(`  ${theme.fg("muted", t("settings.envVars"))}   ${theme.fg("dim", `${envCount} defined`)}`);
 				}
 			}
 		} catch {
@@ -323,7 +327,7 @@ export class InspectorPanel implements Component {
 
 		// Show trigger pattern if present
 		if (ext.trigger) {
-			lines.push(theme.fg("muted", t("Trigger:")));
+			lines.push(theme.fg("muted", t("settings.trigger")));
 			lines.push(theme.fg("dim", theme.boxRound.horizontal.repeat(Math.min(width - 2, 40))));
 			lines.push(`  ${theme.fg("accent", ext.trigger)}`);
 			lines.push("");

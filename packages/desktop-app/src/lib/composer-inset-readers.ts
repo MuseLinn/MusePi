@@ -13,7 +13,6 @@
  * the CSS defaults); the column's observer then updates only the registered
  * readers inside it.
  *
- * Absorbed from openchamber's `composerInsetReaders.ts`.
  */
 
 interface ComposerInsets {

@@ -29,7 +29,13 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
 					className="gui-composer-morph"
 				/>
 			)}
-			<span>{state === "enhancing" ? t("transcript.enhancing") : state === "enhanced" ? t("settings.enhanced") : t("settings.enhance")}</span>
+			<span>
+				{state === "enhancing"
+					? t("transcript.enhancing")
+					: state === "enhanced"
+						? t("settings.enhanced")
+						: t("settings.enhance")}
+			</span>
 		</button>
 	);
 }
@@ -257,7 +263,7 @@ function MatrixLoader({ className }: { className?: string }): ReactNode {
  *  between steering and queueing on Enter) but was invisible — a user who did
  *  not know the setting could not discover it, and a message that steers the
  *  agent mid-turn is not always what someone typing during a long run wants.
- *  openchamber shows the same two actions side by side. */
+ *  The two actions sit side by side. */
 export function SendOrStopButton({
 	canSend,
 	busy,
@@ -327,7 +333,10 @@ export function SendOrStopButton({
 						<span aria-hidden className="gui-send-label gui-send-label--sizer">
 							{t("composer.workingActive")}
 						</span>
-						<TextMorph text={interacting ? t("composer.stopTurn") : t("composer.workingActive")} className="gui-send-morph" />
+						<TextMorph
+							text={interacting ? t("composer.stopTurn") : t("composer.workingActive")}
+							className="gui-send-morph"
+						/>
 					</span>
 				</span>
 			</button>
@@ -335,7 +344,7 @@ export function SendOrStopButton({
 	);
 }
 
-/** Focus mode toggle (openchamber ⌘⇧E): the composer fills the surface. */
+/** Focus mode toggle (⌘⇧E): the composer fills the surface. */
 export function FocusButton({ focused, onPress }: { focused: boolean; onPress(): void }): ReactNode {
 	return (
 		<button

@@ -10,9 +10,9 @@
 import { defineCapability } from ".";
 import {
 	isModuleEntryKind,
-	LEGACY_EXTENSION_MODULE_KIND,
+	type LEGACY_EXTENSION_MODULE_KIND,
 	moduleEntryId,
-	PLUGIN_MODULE_KIND,
+	type PLUGIN_MODULE_KIND,
 } from "./module-entry";
 import type { SourceMeta } from "./types";
 
@@ -68,4 +68,3 @@ export {
 	moduleEntryName,
 	PLUGIN_MODULE_KIND,
 } from "./module-entry";
-

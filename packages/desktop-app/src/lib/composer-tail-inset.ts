@@ -12,7 +12,6 @@
  *    transcript past its growth allowance. Reserving the current height would
  *    make the transcript jump every time the user types a line.
  *
- * Absorbed from openchamber's `composerTailInset.ts`.
  */
 
 /**
@@ -56,10 +55,7 @@ export function resolveComposerTailInset(restingHeight: number, height: number):
  * its shortest, so the first measurement of a session that starts with a queue
  * row already present is not mistaken for resting.
  */
-export function recordComposerSlotHeight(
-	column: HTMLElement,
-	height: number,
-): { tailInset: number; grown: boolean } {
+export function recordComposerSlotHeight(column: HTMLElement, height: number): { tailInset: number; grown: boolean } {
 	const previous = restingHeights.get(column);
 	const resting = height > 0 ? Math.min(previous ?? height, height) : previous;
 	if (resting === undefined) {

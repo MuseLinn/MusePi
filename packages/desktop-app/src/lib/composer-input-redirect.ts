@@ -17,8 +17,7 @@
  *    annotation rather than a message;
  *  - the key is a modifier chord or an IME composition.
  *
- * Absorbed from openchamber's `editor/inputRedirect.ts`, adapted to a plain
- * textarea (they target a CodeMirror view).
+ * 宿主是原生 textarea（非 CodeMirror 视图）。
  */
 
 const EDITABLE_SELECTOR = [

@@ -162,31 +162,31 @@ export function AppearanceSection({
 	// Locale: subscribe so the dropdown reflects the current language.
 	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot);
 	// Custom appearance (persisted, applied on the root element).
-	
-/** Theme-preset labels are keyed per preset id; the ids come from
- *  client-core's preset tables, so the lookup is closed over that set. */
-const THEME_PRESET_KEY: Record<string, TranslationKey> = {
-	default: "settings.themePresetDefault",
-	warm: "settings.themePresetWarm",
-	cool: "settings.themePresetCool",
-	midnight: "settings.themePresetMidnight",
-	graphite: "settings.themePresetGraphite",
-	anthro: "settings.themePresetAnthro",
-	openchamber: "settings.themePresetOpenchamber",
-	catppuccin: "settings.themePresetCatppuccin",
-	nord: "settings.themePresetNord",
-	tokyonight: "settings.themePresetTokyonight",
-	aura: "settings.themePresetAura",
-	ayu: "settings.themePresetAyu",
-	dracula: "settings.themePresetDracula",
-	gruvbox: "settings.themePresetGruvbox",
-	kanagawa: "settings.themePresetKanagawa",
-	monokai: "settings.themePresetMonokai",
-	solarized: "settings.themePresetSolarized",
-	vesper: "settings.themePresetVesper",
-};
 
-const [motion, setMotion] = useState<"full" | "reduced" | "off">(
+	/** Theme-preset labels are keyed per preset id; the ids come from
+	 *  client-core's preset tables, so the lookup is closed over that set. */
+	const THEME_PRESET_KEY: Record<string, TranslationKey> = {
+		default: "settings.themePresetDefault",
+		warm: "settings.themePresetWarm",
+		cool: "settings.themePresetCool",
+		midnight: "settings.themePresetMidnight",
+		graphite: "settings.themePresetGraphite",
+		anthro: "settings.themePresetAnthro",
+		openchamber: "settings.themePresetOpenchamber",
+		catppuccin: "settings.themePresetCatppuccin",
+		nord: "settings.themePresetNord",
+		tokyonight: "settings.themePresetTokyonight",
+		aura: "settings.themePresetAura",
+		ayu: "settings.themePresetAyu",
+		dracula: "settings.themePresetDracula",
+		gruvbox: "settings.themePresetGruvbox",
+		kanagawa: "settings.themePresetKanagawa",
+		monokai: "settings.themePresetMonokai",
+		solarized: "settings.themePresetSolarized",
+		vesper: "settings.themePresetVesper",
+	};
+
+	const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
@@ -212,7 +212,9 @@ const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 		() => (localStorage.getItem(TIME_FMT_KEY) as "general.auto" | "12h" | "24h") ?? "general.auto",
 	);
 	const [weekStart, setWeekStart] = useState<"general.auto" | "general.monday" | "general.sunday">(
-		() => (localStorage.getItem(WEEK_START_KEY) as "general.auto" | "general.monday" | "general.sunday") ?? "general.auto",
+		() =>
+			(localStorage.getItem(WEEK_START_KEY) as "general.auto" | "general.monday" | "general.sunday") ??
+			"general.auto",
 	);
 	const [uiFont, setUiFont] = useState<string>(() => localStorage.getItem(UI_FONT_KEY) ?? DEFAULT_UI_FONT.id);
 	const [monoFont, setMonoFont] = useState<string>(() => localStorage.getItem(MONO_FONT_KEY) ?? DEFAULT_CODE_FONT.id);
@@ -291,7 +293,10 @@ const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 								className="gui-settings-select"
 								value={unifiedThemeId}
 								onChange={v => setUnifiedTheme(v as UiThemeId)}
-								options={UNIFIED_THEME_PRESETS.map(p => ({ value: p.id, label: t(THEME_PRESET_KEY[p.id] ?? p.id) }))}
+								options={UNIFIED_THEME_PRESETS.map(p => ({
+									value: p.id,
+									label: t(THEME_PRESET_KEY[p.id] ?? p.id),
+								}))}
 							/>
 						</div>
 					</div>
@@ -305,7 +310,10 @@ const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 								className="gui-settings-select"
 								value={lightThemeId}
 								onChange={v => setLightTheme(v as UiThemeId)}
-								options={LIGHT_THEME_PRESETS.map(p => ({ value: p.id, label: t(THEME_PRESET_KEY[p.id] ?? p.id) }))}
+								options={LIGHT_THEME_PRESETS.map(p => ({
+									value: p.id,
+									label: t(THEME_PRESET_KEY[p.id] ?? p.id),
+								}))}
 							/>
 						</div>
 					</div>
@@ -317,7 +325,10 @@ const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 								className="gui-settings-select"
 								value={darkThemeId}
 								onChange={v => setDarkTheme(v as UiThemeId)}
-								options={DARK_THEME_PRESETS.map(p => ({ value: p.id, label: t(THEME_PRESET_KEY[p.id] ?? p.id) }))}
+								options={DARK_THEME_PRESETS.map(p => ({
+									value: p.id,
+									label: t(THEME_PRESET_KEY[p.id] ?? p.id),
+								}))}
 							/>
 						</div>
 					</div>
@@ -604,9 +615,7 @@ const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 				<div className="gui-settings-row">
 					<div className="flex-1">
 						<div className="gui-settings-row-label">{t("settings.showAvatars")}</div>
-						<div className="gui-settings-row-desc">
-							{t("settings.agentOrbAvatar.info")}
-						</div>
+						<div className="gui-settings-row-desc">{t("settings.agentOrbAvatar.info")}</div>
 					</div>
 					<button
 						type="button"

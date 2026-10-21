@@ -172,7 +172,7 @@ export class ExtensionDashboard implements Component {
 		const bodyLines = this.#body.render(innerWidth);
 
 		const out: string[] = [];
-		out.push(topBorder(width, t("Extensions & plugins")));
+		out.push(topBorder(width, t("settings.extensionsPlugins")));
 		this.#tabRowStart = out.length;
 		this.#tabRowCount = tabLines.length;
 		for (const line of tabLines) out.push(row(line, width));

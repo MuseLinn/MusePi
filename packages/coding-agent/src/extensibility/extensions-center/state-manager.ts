@@ -8,10 +8,7 @@ import { getMCPConfigPath, getProjectDir, logger } from "@musepi/pi-utils";
 import type { PluginConfigValues } from "@musepi/pi-wire";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import type { ContextFile } from "../../capability/context-file";
-import {
-	type ExtensionModule,
-	moduleEntryId,
-} from "../../capability/extension-module";
+import { type ExtensionModule, moduleEntryId } from "../../capability/extension-module";
 import type { GuiMotion } from "../../capability/gui-motion";
 import type { Hook } from "../../capability/hook";
 import type { MCPServer } from "../../capability/mcp";
@@ -125,7 +122,7 @@ export async function loadAllExtensions(
 			// migrated and carry no track ambiguity.
 			const id = opts?.entryIdOf?.(item) ?? makeExtensionId(itemKind, item.name);
 			// A module's toggle may still live under a legacy `kind:name` key (data
-			// written before the identity model matched dsh's). Read through the
+			// written before the identity model matched). Read through the
 			// plugin-name helper so those toggles keep working; every other kind
 			// keeps the plain composite lookup.
 			const isDisabled = opts?.isDisabledOf?.(item) ?? disabledExtensions.has(id);
@@ -237,7 +234,7 @@ export async function loadAllExtensions(
 				return false;
 			})
 			.map(entry => entry.module);
-		// 插件清单 config/resources(dsh 式管理页):逐模块向上解析最近的
+		// 插件清单 config/resources(管理页):逐模块向上解析最近的
 		// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上;已落盘的
 		// 配置值同帧读出,经字段声明钳制后以 configValues 下发(表单初始值)。
 		const pluginMetaByPath = new Map<string, ExtensionPluginMeta | null>();
@@ -507,7 +504,7 @@ export async function loadAllExtensions(
 		logger.warn("Failed to load gui-motion capability", { error: String(error) });
 	}
 
-	// 内置扩展注册表(DSH builtins 对齐):inline 部署物,只读不可改删,可禁用。
+	// 内置扩展注册表(builtins):inline 部署物,只读不可改删,可禁用。
 	// 新增内置扩展 = builtin-registry.ts 的 BUILTIN_EXTENSIONS 加一行;
 	// annotate 定义先给扫描行打 builtin 标注(bundled skills 等),再生成
 	// 注册表自身的条目(不产生重复行)。
@@ -830,7 +827,7 @@ export function applyBuiltinMirrorState(state: DashboardState, getRaw: (key: str
 			});
 			out = { ...out, components };
 		}
-		// 配置面(dsh 式插件 config 表单):字段键即设置键,TUI 独立进程从
+		// 配置面(插件 config 表单):字段键即设置键,TUI 独立进程从
 		// 设置直读当前值——编辑入口是 /settings 的同一批键(不重复造表单,
 		// 两处实现同一功能是 bug),此处让检视面如实呈现配置现状。
 		if (def.config && def.config.length > 0) {

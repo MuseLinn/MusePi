@@ -1,29 +1,23 @@
 /**
  * Preset service — the cordis layer over the preset composition.
  *
- * dsh 的 preset 是两件东西：一个 `agentPresets` Service（注册表），和一个把
- * 注册进来的定义**真正挂载成插件组合**的 mount 层。数据层（`presets/resolve.ts`
- * 的继承展开）之前已对齐；本文件补的是第二件——**一个 preset 声明的插件行
- * 会被真实装载**，而不只是留在 JSON 里。
+ * Preset 是两件东西：一个注册表（{@link PresetRegistry}），和一个把注册进来的
+ * 定义**真正挂载成插件组合**的 mount 层。数据层（`presets/resolve.ts` 的继承展开）
+ * 之前已存在；本文件补的是第二件——**一个 preset 声明的插件行会被真实装载**，
+ * 而不只是留在 JSON 里：
  *
- * 与 dsh 的 `mountPreset` 的结构对应：
+ * - 每个 preset 一个 cordis 子 Context（销毁即回收）。
+ * - mount 经由 {@link mountPreset} → `loadSessionPlugins`。
+ * - 注销收集 generation（{@link PresetRegistry.unregister}）。
  *
- * | dsh | 这里 |
- * |---|---|
- * | `registry.register(definition)` | {@link PresetRegistry.register} |
- * | `createScope` 子作用域 | 一个cordis 子 Context（每 preset 一个，销毁即回收） |
- * | `mountPreset` → `EntryTree.root.update` | {@link mountPreset} → `loadSessionPlugins` |
- * | 挂载失败 → `record.broken`（roster 可见） | 同 |
- * | 注销 → 收集 generation | {@link PresetRegistry.unregister} |
- *
- * 挂载失败**不抛给注册方**：dsh 把失败记进 `broken` 并在 roster 上可见——
+ * 挂载失败**不抛给注册方**：失败记进 `broken` 并在 roster 上可见——
  * 一个坏的 preset 不能拖垮其它 preset 或宿主启动，但也不能**无声消失**。
  */
 
 import { logger } from "@musepi/pi-utils";
 import type { PresetPluginRow, ResolvedMode } from "../../presets/resolve";
+import type { EventBus } from "../../utils/event-bus";
 import type { Extension, LoadExtensionsResult } from "../extensions/types";
-import { type EventBus } from "../../utils/event-bus";
 
 /** One live preset composition: its resolved definition and loaded extensions. */
 export interface PresetMountRecord {
@@ -116,11 +110,7 @@ export class PresetRegistry {
 				logger.warn(`preset ${definition.id} 未挂载: ${record.broken}`);
 				return;
 			}
-			const result = await this.#options.loadSessionPlugins(
-				paths,
-				this.#options.cwd,
-				this.#options.eventBus,
-			);
+			const result = await this.#options.loadSessionPlugins(paths, this.#options.cwd, this.#options.eventBus);
 			for (const error of result.errors) {
 				logger.warn(`preset ${definition.id} 的插件装载失败`, { path: error.path, error: error.error });
 			}

@@ -15,7 +15,6 @@
  * as a useless sliver beside the send button. Real overflow at the cap is at
  * least half a line.
  *
- * Absorbed from openchamber's `editor/heightLimit.ts`.
  */
 
 export interface ComposerHeightLimitOptions {
