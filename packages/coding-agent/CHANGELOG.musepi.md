@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **右侧 Git 面板的拉取请求页升级成了 PR/问题中心**：打开「拉取请求」页签，现在能看到当前分支对应的 PR 卡片——状态徽章、检查运行结果（通过/失败/进行中，带呼吸小圆点）、能否合并、评审结论，一键在浏览器打开或复制链接。当前分支还没有 PR 时，同一个位置变成创建表单：标题自动从分支名生成（可改）、选目标分支、可勾选「创建为草稿」，点「推送并创建」会先推送当前分支（没有上游时自动建立跟踪）再开 PR。新增「问题」子页签，按打开/已关闭/全部过滤，标签带原色小徽章、带评论数。全部走本机 gh 命令行，gh 没装或没登录时给出明确提示而不是空白面板。
+  - EN: The pull-requests tab of the right git panel is now a PR/issue center. Open it and you see a card for the PR on the current branch — state badge, check run results (passing/failing/pending with a breathing dot), mergeability, review decision, plus one-click open-in-browser and copy-link. When the branch has no PR yet, the same spot turns into a create form: the title is prefilled from the branch name (editable), you pick the base branch, can tick "create as draft", and "push and create" pushes the branch first (setting upstream when missing) and then opens the PR. A new Issues subtab filters by open/closed/all, shows labels in their own colours and comment counts. Everything runs through the local gh CLI; a missing or unauthenticated gh gets a clear message instead of a blank pane.
 - **子会话行左侧长出了樱花树枝**：侧栏会话树的子会话行现在用一条竖线挂在自己的父行下面，最深的那根线端带一朵小樱花，谁是谁的孩子一眼就能看出来；悬停或选中时线和花微微发亮。每级缩进宽度不变，标题对齐和以往完全一致。
   - EN: Child session rows now grow a sakura branch: each row hangs off its parent on a vertical guide line ending in a small blossom, so parentage reads at a glance; the line and flower glow faintly on hover or selection. Per-level indent width is unchanged, so title alignment is exactly as before.
 - **窗口顶栏可以开多会话标签页了**：设置→外观→聊天里打开「多会话标签页」，最近打开的会话会以标签排在顶栏——点标签即切换，拖动能排序，悬停出现关闭钮、中键也能关。关标签不会删会话；关掉当前标签会自动切到旁边那个，旁边没有了就开一个全新的草稿会话。工作中的会话标签转着小圆圈，有未读消息的带小圆点。标签列表只存在本机，最多记住 10 个；快捷键 ⌘Tab / ⌘⇧Tab 左右切换（可在设置→快捷键里改）。

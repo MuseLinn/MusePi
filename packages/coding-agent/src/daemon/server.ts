@@ -254,6 +254,43 @@ function readGhToken(): StoredGhToken | null {
 		return null;
 	}
 }
+/**
+ * Spawn `gh` with the daemon-owned token (GH_TOKEN wins over the keyring)
+ * and a hard timeout — every gh call hits the network and must never pin
+ * the daemon event loop (a hung RPC freezes every session's turn).
+ * `exitCode` is null only when the CLI itself is missing.
+ */
+async function runGh(
+	cwd: string,
+	args: string[],
+	timeoutMs = 15_000,
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+	const gh = ghPath();
+	if (gh === null) return { exitCode: null, stdout: "", stderr: "gh CLI not installed" };
+	const storedToken = readGhToken();
+	const proc = Bun.spawn({
+		cmd: [gh, ...args],
+		cwd,
+		stdout: "pipe",
+		stderr: "pipe",
+		env: storedToken ? { ...process.env, GH_TOKEN: storedToken.token } : undefined,
+		windowsHide: true,
+	});
+	setTimeout(() => {
+		try {
+			proc.kill();
+		} catch {
+			// already exited
+		}
+	}, timeoutMs);
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited.catch(() => null),
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	return { exitCode, stdout, stderr };
+}
+
 function writeGhToken(token: string, identity?: { login?: string; email?: string }): void {
 	try {
 		const prev = readGhToken();
@@ -3221,6 +3258,46 @@ export class DaemonServer {
 					branches,
 				};
 			}
+			case "git.push": {
+				// Push the repo's current branch. First try a plain `git
+				// push`; a branch with no upstream asks for `-u`, so retry
+				// with `-u origin HEAD` when git says so. Async spawn + 30s
+				// cap: the first push of a branch can be slow.
+				const p = (params ?? {}) as { cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const run = (args: string[]): Promise<{ exitCode: number | null; stdout: string; stderr: string }> => {
+					const proc = Bun.spawn({
+						cmd: ["git", ...args],
+						cwd,
+						stdout: "pipe",
+						stderr: "pipe",
+						windowsHide: true,
+					});
+					setTimeout(() => {
+						try {
+							proc.kill();
+						} catch {
+							// already exited
+						}
+					}, 30_000);
+					return Promise.all([
+						proc.exited.catch(() => null),
+						new Response(proc.stdout).text(),
+						new Response(proc.stderr).text(),
+					]).then(([exitCode, stdout, stderr]) => ({ exitCode, stdout, stderr }));
+				};
+				let res = await run(["push"]);
+				if (
+					res.exitCode !== 0 &&
+					/(set the remote as upstream|upstream branch|no upstream)/i.test(`${res.stderr}\n${res.stdout}`)
+				) {
+					res = await run(["push", "-u", "origin", "HEAD"]);
+				}
+				if (res.exitCode !== 0) {
+					return { ok: false, error: (res.stderr.trim() || res.stdout.trim() || "git push failed").slice(0, 500) };
+				}
+				return { ok: true };
+			}
 			case "git.checkout": {
 				// Switch the repo's branch (welcome branch selector, status-card
 				// branch menu). Caller's cwd; uncommitted changes are git's
@@ -3323,54 +3400,118 @@ export class DaemonServer {
 				return this.#services.get<RemoteService>("remote").disconnect((params ?? {}) as { name?: unknown });
 			}
 			case "github.prs": {
-				// Pull-request list for the right-pane PR view. Uses the
+				// Pull-request list for the right-pane PR center. Uses the
 				// `gh` CLI when available (same credentials the user's shell
-				// has); reports a clear error otherwise. Async spawn + 15s
-				// cap: `gh pr list` hits the network, and a sync call here
-				// froze every session's turn while it hung.
-				const gh = ghPath();
-				if (gh === null) return { error: "gh CLI not installed" };
+				// has); reports a clear error otherwise. Extended fields
+				// (checks rollup, mergeability, review decision) drive the
+				// list's per-row status dots and the current-branch card.
+				const p = (params ?? {}) as { cwd?: string };
 				// Session cwd when the caller passes it (GUI PR pane) — the
 				// host cwd is the daemon launch dir, which may be a different
 				// repo (git RPC cwd-isolation parity).
-				const p = (params ?? {}) as { cwd?: string };
 				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
-				const storedToken = readGhToken();
-				const proc = Bun.spawn({
-					cmd: [
-						gh,
-						"pr",
-						"list",
-						"--json",
-						"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,url",
-					],
-					cwd,
-					stdout: "pipe",
-					stderr: "pipe",
-					env: storedToken ? { ...process.env, GH_TOKEN: storedToken.token } : undefined,
-					windowsHide: true,
-				});
-				setTimeout(() => {
-					try {
-						proc.kill();
-					} catch {
-						// already exited
-					}
-				}, 15_000);
-				const [exitCode, stdout, stderr] = await Promise.all([
-					proc.exited.catch(() => null),
-					new Response(proc.stdout).text(),
-					new Response(proc.stderr).text(),
+				const res = await runGh(cwd, [
+					"pr",
+					"list",
+					"--limit",
+					"50",
+					"--json",
+					"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision",
 				]);
-				if (exitCode !== 0) {
-					const err = stderr.trim();
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					const err = res.stderr.trim();
 					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
 				}
 				try {
-					return { prs: JSON.parse(stdout) };
+					return { prs: JSON.parse(res.stdout) };
 				} catch {
 					return { error: "invalid gh output" };
 				}
+			}
+			case "github.prStatus": {
+				// The PR belonging to the repo's CURRENT branch (gh resolves
+				// the branch itself). No PR → { pr: null }, NOT an error —
+				// the panel shows the create form there. 15s cap: network.
+				const p = (params ?? {}) as { cwd?: string };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const res = await runGh(cwd, [
+					"pr",
+					"view",
+					"--json",
+					"number,title,state,isDraft,url,baseRefName,headRefName,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup",
+				]);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					const err = res.stderr.trim();
+					if (/no pull requests found|could not resolve|no pull request/i.test(err)) return { pr: null };
+					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
+				}
+				try {
+					return { pr: JSON.parse(res.stdout) };
+				} catch {
+					return { error: "invalid gh output" };
+				}
+			}
+			case "github.issues": {
+				// Issue list for the right-pane Issues subtab. `state` passes
+				// through to gh (open|closed|all, default open); label and
+				// author filters arrive from the pane's filter row.
+				const p = (params ?? {}) as { cwd?: string; state?: unknown; label?: unknown; author?: unknown };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const stateRaw = typeof p.state === "string" ? p.state : "open";
+				const state = ["open", "closed", "all"].includes(stateRaw) ? stateRaw : "open";
+				const args = [
+					"issue",
+					"list",
+					"--state",
+					state,
+					"--limit",
+					"50",
+					"--json",
+					"number,title,state,author,labels,updatedAt,url,comments",
+				];
+				if (typeof p.label === "string" && p.label.trim() !== "") args.push("--label", p.label.trim());
+				if (typeof p.author === "string" && p.author.trim() !== "") args.push("--author", p.author.trim());
+				const res = await runGh(cwd, args);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					const err = res.stderr.trim();
+					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
+				}
+				try {
+					return { issues: JSON.parse(res.stdout) };
+				} catch {
+					return { error: "invalid gh output" };
+				}
+			}
+			case "github.prCreate": {
+				// Create a PR for the repo's current branch. Push first via
+				// git.push (the panel's button chains them); gh prints the
+				// new PR's URL on stdout — parsed, not --json (field support
+				// varies across gh versions).
+				const p = (params ?? {}) as {
+					cwd?: string;
+					title?: unknown;
+					body?: unknown;
+					base?: unknown;
+					draft?: unknown;
+				};
+				const title = typeof p.title === "string" ? p.title.trim() : "";
+				if (!title) return { error: "title required" };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const args = ["pr", "create", "--title", title];
+				const body = typeof p.body === "string" ? p.body : "";
+				args.push("--body", body || title);
+				if (typeof p.base === "string" && p.base.trim() !== "") args.push("--base", p.base.trim());
+				if (p.draft === true) args.push("--draft");
+				const res = await runGh(cwd, args, 30_000);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					return { error: res.stderr.trim() || "gh pr create failed" };
+				}
+				const url = /https?:\/\/\S+/.exec(res.stdout)?.[0];
+				return url ? { url } : { error: "gh pr create returned no URL" };
 			}
 			case "github.authStatus": {
 				// gh CLI auth state (settings Git tab): login/active account +
