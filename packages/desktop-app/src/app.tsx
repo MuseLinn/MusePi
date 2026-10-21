@@ -39,6 +39,7 @@ import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMe
 import { openMiniChat, pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
+import { ensureLiquidGlass } from "./lib/liquid-glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
 import { dispatchNotification } from "./lib/notify";
 import type { PetSessionCard } from "./lib/pet";
@@ -316,6 +317,9 @@ function AppInner(): ReactNode {
 			// Glass transparency (slider value = transparency %) — migrates the
 			// v1 scrim-coefficient pref once, then applies scrim + adaptive text.
 			applyGlass();
+			// Liquid-glass rim refraction: injects the SVG displacement filter
+			// and arms .gui-liquid-glass surfaces (composer card, status card).
+			ensureLiquidGlass();
 			// Window-transparency toggle OFF → opaque panes (overrides the slider).
 			const glassEnabled = localStorage.getItem("musepi-gui-glass-enabled") !== "0";
 			if (!glassEnabled) {

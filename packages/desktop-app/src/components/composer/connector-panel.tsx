@@ -27,13 +27,13 @@ interface ConnectorServer {
 }
 
 /** Connector status labels are keyed per status id (closed set). */
-const CONNECTOR_STATUS_KEY: Record<string, TranslationKey> = {
+export const CONNECTOR_STATUS_KEY: Record<string, TranslationKey> = {
 	connected: "tools.connectorStatusConnected",
 	connecting: "tools.connectorStatusConnecting",
 	disconnected: "tools.connectorStatusDisconnected",
 };
 
-interface ConnectorSnapshot {
+export interface ConnectorSnapshot {
 	readonly servers: readonly ConnectorServer[];
 	/** null = never configured (all servers in play); array = an explicit choice. */
 	readonly selected: readonly string[] | null;
@@ -53,26 +53,52 @@ function isChecked(snapshot: ConnectorSnapshot, name: string): boolean {
  * Failure is reported as an empty list rather than a thrown error: the picker is
  * a chip above the input, and a session that cannot be asked must not take the
  * composer down with it.
+ *
+ * 两种问法（GUI 的两种宿主共用）：
+ * - live 会话：`sessionId`（composer chip 的原生场景）。
+ * - 空态输入框/欢迎页：draft 没有 sessionId（startNewTask 把 store 清空，
+ *   会话在首条消息发送时才创建），只给 `cwd`——daemon 按 cwd 回退出
+ *   服务器清单 + 健康态，选择态为 null。
+ *
+ * 空态下的勾选没有会话头可写：选择以 cwd 为键暂存（pending），乐观
+ * 反映到当前快照；会话 id 一旦出现（首条消息发送、会话创建完成），
+ * pending 值原样写回 `connectors.setSelected` 并清掉暂存。
  */
-export function useConnectors(rpc: RpcClient | null, sessionId: string | null) {
+export function useConnectors(rpc: RpcClient | null, sessionId: string | null, cwd?: string | null) {
 	const [snapshot, setSnapshot] = useState<ConnectorSnapshot | null>(null);
 	const [loadFailed, setLoadFailed] = useState(false);
 
 	const reload = useCallback(() => {
-		if (!rpc || !sessionId) return;
-		rpc.request<ConnectorSnapshot>("connectors.list", { sessionId })
+		if (!rpc) return;
+		const params = sessionId ? { sessionId, cwd } : cwd ? { cwd } : null;
+		if (!params) return;
+		rpc.request<ConnectorSnapshot>("connectors.list", params)
 			.then(next => {
 				setSnapshot(next);
 				setLoadFailed(false);
 			})
 			.catch(() => setLoadFailed(true));
-	}, [rpc, sessionId]);
+	}, [rpc, sessionId, cwd]);
 
 	useEffect(() => {
 		setSnapshot(null);
 		setLoadFailed(false);
 		reload();
 	}, [reload]);
+
+	// Draft → live 过渡：把空态攒下的选择写进新会话头。发生在会话创建
+	// 之后（store.sessionId 置上），setSelected 即刻生效于 live 会话。
+	useEffect(() => {
+		if (!rpc || !sessionId) return;
+		const pending = cwd ? readPendingSelection(cwd) : undefined;
+		if (pending === undefined) return;
+		rpc.request<{ ok: true; appliedToLive: boolean }>("connectors.setSelected", { sessionId, servers: pending })
+			.then(() => {
+				if (cwd) clearPendingSelection(cwd);
+				reload();
+			})
+			.catch(() => {});
+	}, [rpc, sessionId, cwd, reload]);
 
 	/**
 	 * Apply a choice.
@@ -83,15 +109,68 @@ export function useConnectors(rpc: RpcClient | null, sessionId: string | null) {
 	 */
 	const setSelection = useCallback(
 		(servers: string[] | null) => {
-			if (!rpc || !sessionId) return;
+			if (!rpc) return;
+			if (!sessionId) {
+				// 空态：没有会话头可持久化。暂存意图（cwd 键），乐观更新
+				// 当前快照；会话创建后由上面的 effect 采纳写回。
+				if (cwd) writePendingSelection(cwd, servers);
+				setSnapshot(prev => (prev ? { ...prev, selected: servers } : prev));
+				return;
+			}
 			rpc.request<{ ok: true; appliedToLive: boolean }>("connectors.setSelected", { sessionId, servers })
 				.then(() => reload())
 				.catch(() => setLoadFailed(true));
 		},
-		[reload, rpc, sessionId],
+		[reload, rpc, sessionId, cwd],
 	);
 
 	return { snapshot, loadFailed, reload, setSelection };
+}
+
+/** 空态选择暂存的 localStorage 键：cwd → servers（null = 显式全量语义）。 */
+const PENDING_KEY = "musepi-gui-connectors-pending";
+
+type PendingMap = Record<string, string[] | null>;
+
+function readPendingMap(): PendingMap {
+	if (typeof localStorage === "undefined") return {};
+	try {
+		const raw = localStorage.getItem(PENDING_KEY);
+		if (!raw) return {};
+		const parsed: unknown = JSON.parse(raw);
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+		return parsed as PendingMap;
+	} catch {
+		return {};
+	}
+}
+
+/** 读某 cwd 的暂存选择：undefined = 没有暂存；null = 暂存了「全量」。 */
+function readPendingSelection(cwd: string): string[] | null | undefined {
+	return readPendingMap()[cwd];
+}
+
+function writePendingSelection(cwd: string, servers: string[] | null): void {
+	if (typeof localStorage === "undefined") return;
+	const map = readPendingMap();
+	map[cwd] = servers;
+	try {
+		localStorage.setItem(PENDING_KEY, JSON.stringify(map));
+	} catch {
+		// 配额满时放弃暂存：空态选择丢失，会话内选择不受影响。
+	}
+}
+
+function clearPendingSelection(cwd: string): void {
+	if (typeof localStorage === "undefined") return;
+	const map = readPendingMap();
+	if (!(cwd in map)) return;
+	delete map[cwd];
+	try {
+		localStorage.setItem(PENDING_KEY, JSON.stringify(map));
+	} catch {
+		// 同上。
+	}
 }
 
 export function ConnectorChip({

@@ -22,6 +22,8 @@ import type { DaemonService } from "./types";
 export interface ConnectorServiceDeps {
 	/** 服务器清单 + 健康态（宿主 session-host.connectorsSnapshot）。 */
 	connectorsSnapshot(sessionId: string): { servers: ConnectorServerInfo[] } | null;
+	/** 空态半：某 cwd 的清单 + 健康态，无需 live 会话（宿主 session-host.connectorsSnapshotForCwd）。 */
+	connectorsSnapshotForCwd(cwd: string): Promise<{ servers: ConnectorServerInfo[] }>;
 	/** 选择态读半（宿主 session-host.readSessionConnectors）。 */
 	readSelection(sessionId: string): string[] | null;
 	/** 写半：应用 + 持久化（宿主 session-host.setSessionConnectors）。 */
@@ -43,19 +45,26 @@ export class ConnectorService implements DaemonService {
 
 	/**
 	 * RPC connectors.list：composer 连接器选择浮层的数据面。返回该会话
-	 * cwd 的 MCP 服务器（真实健康态）+ 该会话当前选择态。会话不 live 抛错
-	 * （composer 场景只会问 live 会话；历史会话无输入框）。
+	 * cwd 的 MCP 服务器（真实健康态）+ 该会话当前选择态。
+	 *
+	 * 两种问法：live 会话按 sessionId（composer chip 的原生场景）；空态
+	 * 输入框/欢迎页没有 live 会话，按 cwd 回退——服务器清单照常返回，
+	 * 选择态为 null（客户端把空态选择暂存为 pending，会话创建后写回）。
+	 * 两者都给不到时抛错。
 	 */
-	list(params: { sessionId?: unknown }): {
+	async list(params: { sessionId?: unknown; cwd?: unknown }): Promise<{
 		servers: ConnectorServerInfo[];
 		/** null = 未配置（存量全量语义）；数组（可空）= 已配置。 */
 		selected: string[] | null;
-	} {
+	}> {
 		const sessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
-		if (!sessionId) throw new Error("sessionId required");
-		const snapshot = this.#deps.connectorsSnapshot(sessionId);
+		const cwd = typeof params?.cwd === "string" ? params.cwd : "";
+		if (!sessionId && !cwd) throw new Error("sessionId or cwd required");
+		let snapshot = sessionId ? this.#deps.connectorsSnapshot(sessionId) : null;
+		// 会话尚未 live（创建中的过渡帧）也能按 cwd 给出清单，客户端不用闪空。
+		if (!snapshot && cwd) snapshot = await this.#deps.connectorsSnapshotForCwd(cwd);
 		if (!snapshot) throw new Error(`Session not live: ${sessionId}`);
-		return { servers: snapshot.servers, selected: this.#deps.readSelection(sessionId) };
+		return { servers: snapshot.servers, selected: sessionId ? this.#deps.readSelection(sessionId) : null };
 	}
 
 	/**

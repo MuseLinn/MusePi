@@ -665,6 +665,24 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **悬浮面板 clearance**（`lib/composer-inset-readers.ts`）：提问卡位于输入框上方，`position: absolute; bottom: calc(100% + 4px)`——高度永远进不了 wrap 的 ResizeObserver 测量，不另开通道就会在它弹出时盖住末尾消息。面板挂载期间发布 `ceil(height + 4px)` 为 `--chat-floating-panel-clearance`（ResizeObserver 监听面板，卸载时 withdraw）；尾部 spacer 与末尾渐隐带都加上这个变量。两条通道都只写到 reader 叶子上，绝不写列（列上的自定义属性会让每个虚拟行重排样式）。
 - **明确不做**：不移植 `--chat-status-row-clearance`——工作条是 wrap 的子节点，已被测量；回到底部按钮不做 clearance 偏移（提问卡弹出时可能与之重叠，边缘场景，接受）。
 
+## 5af. 连接器进工作状态面板 + 空态选择（2026-10-21）
+
+连接器在输入框上方胶囊之外有了第二个宿主，欢迎页（无会话）输入框也能选连接器了。
+
+- **两宿主并存**：会话输入框上方胶囊与欢迎页 dock 胶囊不变；工作状态卡（StatusCards）在 git 与 agents 之间新增连接器 section，复用 connector-row 的 label + checkbox + transport + 状态点行结构。`useConnectors(rpc, sessionId, cwd)` 优先按 sessionId 解析快照，回退到纯 cwd 查询——daemon 侧 `connectorsSnapshotForCwd` 与创建会话同一条代码路径构建/复用每 cwd 的 MCP manager。
+- **空态（pending）采纳**：没有 sessionId 时选择无处持久化，因此该状态下的 `setSelection` 把按 cwd 的条目写入 localStorage（`musepi-gui-connectors-pending`）并乐观更新快照。sessionId 出现（草稿 → 正式会话）时，hook 把 pending 条目原样经 `connectors.setSelected` 写回（暂存 `null` 表示「全量」）后清除。边缘场景，接受：首条消息之前做的选择可能赶不上当回合的工具列表。
+- **选择态唯一来源**：`selected` 仅在存在 sessionId 时读取；cwd 回退快照不带选择态，也从不虚构。
+- **展开面板头部预留**（`ChatView.tsx`）：工作状态卡绝对定位锚在会话视图右上角，展开面板原先会盖住右侧最新几行消息。面板展开时按 `46px（卡的 top 偏移）+ 实测面板高 + 8px` 在 transcript 滚动器顶部插入 spacer（static 包装 div 上挂 ResizeObserver），收回胶囊时撤掉——折叠态不预留，常态全宽。滚动内容从面板下经过可接受（与一切悬浮面板同性质）。
+
+## 5ag. 液态玻璃边缘折射配方（2026-10-21）
+
+磨砂玻璃只模糊背景；液态玻璃还会在边缘弯折背景。通过 `.gui-liquid-glass` 工具类（gui-base.css）+ `lib/liquid-glass.ts` 应用到输入框卡与工作状态卡。
+
+- **弯折层**：工具类把承载面的 `backdrop-filter` 迁到专门的 `::before`（`isolation: isolate` 下 z-index −1）；元素自身只保留半透明Tint，文字与控件保持锐利，只有背景采样被弯折。
+- **位移滤镜**：`ensureLiquidGlass()` 注入 0×0 SVG，`feImage` → `feDisplacementMap`（R/B 通道，scale 24，20% 外扩）。位移图在运行时以 256×256 canvas 生成——内部全为中性灰（#808080 = 不移位），仅边缘 ramp 内沿径向外弯（t² 缓动，角上 14 px）。不打包图片资源；`slice` 保证非方形承载面的边缘仍呈圆形。
+- **边缘高光**：`::after` 用 `mask-composite: exclude` 画 1.5 px 渐变环。
+- **安全门**：warp 的 `filter: url(#…)` 只在 `html.gui-liquid-glass-ready` 下生效，由模块在 SVG 进入 DOM 后置位——Chromium 会隐藏滤镜引用了不存在 id 的元素，所以注入失败时降级为普通磨砂而不是把承载面清空。非 Chromium 引擎跳过效果，渲染同样的磨砂回退。
+
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。

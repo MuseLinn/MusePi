@@ -1204,8 +1204,9 @@ export function Composer({
 	});
 
 	// Connector picker (M4 P1 client): which MCP servers this session may use.
-	// Only rendered for a live session — the daemon answers per live session, and
-	// a historical one has no composer to put a chip above anyway.
+	// Session composers always carry a live sessionId; the cwd is passed along
+	// so the draft→live transition and the not-quite-live frame still resolve
+	// (daemon falls back to the cwd-scoped manager).
 	const [connectorsOpen, setConnectorsOpen] = useState(false);
 	const { anchorRef: connectorsAnchorRef, renderMenu: renderConnectorsMenu } = useFloatingMenu(
 		connectorsOpen,
@@ -1216,7 +1217,7 @@ export function Composer({
 		snapshot: connectorSnapshot,
 		loadFailed: connectorsLoadFailed,
 		setSelection: setConnectorSelection,
-	} = useConnectors(rpc, sessionId);
+	} = useConnectors(rpc, sessionId, cwd);
 	const connectorServers = connectorSnapshot?.servers ?? [];
 	const connectorChosen = connectorSnapshot
 		? connectorServers.filter(s => connectorSnapshot.selected === null || connectorSnapshot.selected.includes(s.name))

@@ -2296,13 +2296,30 @@ export class DaemonSessionHost {
 		if (!live) return null;
 		const manager = this.#mcpManagers.get(live.cwd);
 		if (!manager) return { servers: [] };
-		const servers: ConnectorServerInfo[] = manager.getServerNames().map(name => {
+		return { servers: this.#connectorServersFromManager(manager) };
+	}
+
+	/**
+	 * M4 P1 `connectors.list` 的空态半:某 cwd 的 MCP 服务器清单 + 真实健康态,
+	 * 不依赖 live 会话(空态输入框/欢迎页也要能看能选)。按需拉起该 cwd 的共享
+	 * manager(与 createSession 同一 #ensureMcpManager 路径,manager 每 cwd 只建
+	 * 一次,不会为重复查询起多套服务器子进程)。选择态不在此读——空态没有会话
+	 * 头,选择由客户端暂存、会话创建后写回(见 GUI useConnectors)。
+	 */
+	async connectorsSnapshotForCwd(cwd: string): Promise<{ servers: ConnectorServerInfo[] }> {
+		const discovery = await this.#discoveryFor(cwd, getAgentDir());
+		const manager = await this.#ensureMcpManager(cwd, discovery);
+		return { servers: this.#connectorServersFromManager(manager) };
+	}
+
+	/** manager → wire 清单的映射(connectorsSnapshot 两路共用)。 */
+	#connectorServersFromManager(manager: MCPManager): ConnectorServerInfo[] {
+		return manager.getServerNames().map(name => {
 			const config = manager.getServerConfig(name);
 			const transport =
 				config?.type ?? (config && "command" in config && config.command ? ("stdio" as const) : ("http" as const));
 			return { name, transport, status: manager.getConnectionStatus(name) };
 		});
-		return { servers };
 	}
 
 	/**

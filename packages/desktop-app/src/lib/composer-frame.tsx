@@ -454,7 +454,7 @@ export function ComposerFrame({
 	};
 	const frame = (
 		<div
-			className={`${className} gui-composer-frame`}
+			className={`${className} gui-composer-frame gui-liquid-glass`}
 			data-enhancing={enhancing || undefined}
 			data-chat-input={chatInput ? "true" : undefined}
 			// data-flip-anchor rides on the hero wrapper (BorderBeam) when

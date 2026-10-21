@@ -2021,9 +2021,10 @@ body.gui-resizing .gui-pane-right {
 	max-width: 100%;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-xl);
+	/* The backdrop-filter lives on the .gui-liquid-glass warp layer
+	 * (gui-base.css); the card keeps the tint + shadow. */
+	--gui-liquid-glass-blur: 14px;
 	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
-	backdrop-filter: blur(14px) saturate(140%);
-	-webkit-backdrop-filter: blur(14px) saturate(140%);
 	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
 	display: flex;
 	flex-direction: column;

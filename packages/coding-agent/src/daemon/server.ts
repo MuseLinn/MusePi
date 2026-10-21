@@ -857,6 +857,7 @@ export class DaemonServer {
 		this.#services.register(
 			new ConnectorService({
 				connectorsSnapshot: sessionId => this.#host.connectorsSnapshot(sessionId),
+				connectorsSnapshotForCwd: cwd => this.#host.connectorsSnapshotForCwd(cwd),
 				readSelection: sessionId => this.#host.readSessionConnectors(sessionId),
 				setSelection: (sessionId, servers) => this.#host.setSessionConnectors(sessionId, servers),
 			}),

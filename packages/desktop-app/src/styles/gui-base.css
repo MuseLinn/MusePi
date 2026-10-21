@@ -197,6 +197,60 @@ code,
 	--gui-glass-saturate: 180%;
 }
 
+/* ── Liquid-glass edge refraction ─────────────────────────────────────
+ * Frosted glass blurs; liquid glass also BENDS the backdrop at the rim.
+ * .gui-liquid-glass relocates the pane's backdrop-filter onto a dedicated
+ * warp layer (::before) and — once lib/liquid-glass.ts has injected the
+ * SVG displacement filter (html.gui-liquid-glass-ready) — bends that
+ * sample at the edge via feDisplacementMap. Without the ready class (JS
+ * off, injection failed, non-Chromium engine) the panes render as plain
+ * frosted glass, so applying the class is always safe: Chromium hides an
+ * element whose filter references a missing id, which is why the warp
+ * filter is gated on the ready class instead of declared unconditionally.
+ * The element keeps its own translucent background as the tint wash; the
+ * warp layer (::before) and the rim highlight (::after) paint beneath it
+ * (z-index −1 under isolation). Set --gui-liquid-glass-blur on the pane
+ * for a blur that differs from the global glass token. */
+.gui-liquid-glass {
+	position: relative;
+	isolation: isolate;
+}
+.gui-liquid-glass::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: inherit;
+	backdrop-filter: blur(var(--gui-liquid-glass-blur, var(--gui-glass-blur)))
+		saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-liquid-glass-blur, var(--gui-glass-blur)))
+		saturate(var(--gui-glass-saturate));
+}
+html.gui-liquid-glass-ready .gui-liquid-glass::before {
+	filter: url(#musepi-liquid-glass-displace);
+}
+.gui-liquid-glass::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	padding: 1.5px;
+	background: linear-gradient(
+		135deg,
+		rgb(255 255 255 / 0.55),
+		rgb(255 255 255 / 0.18) 33%,
+		transparent 66%
+	);
+	-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+	-webkit-mask-composite: xor;
+	mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+	mask-composite: exclude;
+	opacity: 0.7;
+	pointer-events: none;
+}
+
 /* Light scheme: macOS dims the backdrop behind the window with the
  * under-window material (and this system has no bright vibrancy variant)
  * — a thin white scrim over that reads as dirty grey, not glass

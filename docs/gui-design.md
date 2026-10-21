@@ -780,6 +780,24 @@ Two fixes for "the newest message ends up under the floating composer", one whil
 - **Floating-panel clearance** (`lib/composer-inset-readers.ts`): the ask card above the composer is `position: absolute; bottom: calc(100% + 4px)` — its height never enters the wrap's ResizeObserver measurement, so without an extra channel it covered the last rows whenever it was up. The panel publishes `ceil(height + 4px)` as `--chat-floating-panel-clearance` while mounted (ResizeObserver on the panel, withdraw on unmount); the tail spacer and the end-fade band add the variable. Both channels are written onto the reader leaves, never the column (a custom property on the column restyles every virtualized row).
 - **Deliberate non-goals**: no `--chat-status-row-clearance` — the working strip is a child of the wrap and already measured; no clearance offset on the jump-to-bottom button (an open ask card may overlap it; edge case, accepted).
 
+## 5af. Connectors in the work-status panel + empty-state selection (2026-10-21)
+
+Connectors get a second host beside the composer-above capsule, and the welcome (no-session) composer can now select them too.
+
+- **Two hosts coexist**: the composer-above capsule (chat) and the welcome dock capsule are unchanged; the work-status card (StatusCards) gains a connectors section between git and agents, reusing the connector-row label + checkbox + transport + status-dot markup. `useConnectors(rpc, sessionId, cwd)` resolves the snapshot by sessionId first, falling back to a pure-cwd query — the daemon's `connectorsSnapshotForCwd` builds/uses the per-cwd MCP manager on the same code path as session creation.
+- **Empty-state (pending) adoption**: with no sessionId there is nothing to persist a selection to, so `setSelection` in that state writes a per-cwd entry to localStorage (`musepi-gui-connectors-pending`) and updates the snapshot optimistically. When a sessionId materializes (draft → live), the hook replays the pending entry through `connectors.setSelected` verbatim (a stored `null` means "all servers") and clears it. Edge case, accepted: choices made before the first message may not apply to the tool list of that very first turn.
+- **Selection source of truth**: `selected` is read only when a sessionId exists; the cwd fallback snapshot carries selection state from the session-scoped store and never invents one.
+- **Expanded-panel head reservation** (`ChatView.tsx`): the status card is absolutely pinned to the transcript's top-right, so its expanded panel used to cover the newest message rows on the right edge. When the panel expands, a spacer of `46px (card top offset) + measured panel height + 8px` is inserted at the top of the transcript scroller (ResizeObserver on the static wrapper), and withdrawn when it collapses back to the capsule — collapsed reserves nothing, so the steady state keeps full width. Scroll-under content is accepted (same nature as any overlay panel).
+
+## 5ag. Liquid-glass edge refraction recipe (2026-10-21)
+
+Frosted glass blurs the backdrop; liquid glass also bends it at the rim. Applied to the composer card and the work-status card via the `.gui-liquid-glass` utility (gui-base.css) + `lib/liquid-glass.ts`.
+
+- **Warp layer**: the utility relocates the pane's `backdrop-filter` onto a dedicated `::before` (z-index −1 under `isolation: isolate`); the element keeps only its translucent tint, so text and controls stay sharp while the backdrop sample bends.
+- **Displacement filter**: `ensureLiquidGlass()` injects a 0×0 SVG with `feImage` → `feDisplacementMap` (R/B channels, scale 24, 20% overscan). The map is generated at runtime on a 256×256 canvas — neutral grey (#808080 = no displacement) across the interior, bending outward along the radial only inside the rim ramp (t² eased, 14 px at the corner). No bundled image asset; `slice` keeps the rim circular on non-square panes.
+- **Rim highlight**: `::after` draws a 1.5 px gradient ring via `mask-composite: exclude`.
+- **Safety gate**: the warp `filter: url(#…)` only applies under `html.gui-liquid-glass-ready`, armed by the module after the SVG is in the DOM — Chromium hides an element whose filter references a missing id, so a failed injection degrades to plain frosted glass instead of blanking the pane. Non-Chromium engines skip the effect and render the same frosted fallback.
+
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

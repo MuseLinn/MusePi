@@ -48,6 +48,7 @@ import {
 } from "./CreationModeRow";
 import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
+import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
 import { ComposerHighlight } from "./composer/input-highlight";
@@ -281,6 +282,28 @@ export function WelcomeComposer({
 			align: "right",
 		},
 	);
+
+	// Connector picker (M4 P1): the welcome surface has NO session yet
+	// (startNewTask 把 store 清空,会话在首条消息发送时才创建),所以走
+	// daemon 的 cwd 回退拿服务器清单 + 健康态;勾选没有会话头可写,以
+	// cwd 为键暂存 pending,会话创建后由 useConnectors 写回(与状态面板
+	// 的连接器 section 同一条数据面,两种实现并存)。
+	const [connectorsOpen, setConnectorsOpen] = useState(false);
+	const { anchorRef: connectorsAnchorRef, renderMenu: renderConnectorsMenu } = useFloatingMenu(
+		connectorsOpen,
+		setConnectorsOpen,
+		{ className: "gui-connector-popup" },
+	);
+	const {
+		snapshot: connectorSnapshot,
+		loadFailed: connectorsLoadFailed,
+		setSelection: setConnectorSelection,
+	} = useConnectors(rpc, null, project ?? null);
+	const connectorServers = connectorSnapshot?.servers ?? [];
+	const connectorChosen = connectorSnapshot
+		? connectorServers.filter(s => connectorSnapshot.selected === null || connectorSnapshot.selected.includes(s.name))
+				.length
+		: 0;
 	// Centered dialog + veil (same as the session Composer — a floating
 	// layer over the composer card read as nested rounded cards).
 	useEffect(() => {
@@ -1791,6 +1814,38 @@ export function WelcomeComposer({
 									: null
 							}
 							attachments={attachments}
+							aboveRow={
+								connectorServers.length > 0 ? (
+									<div className="gui-composer-above">
+										<div className="gui-composer-dock">
+											<ConnectorChip
+												open={connectorsOpen}
+												onToggle={() => setConnectorsOpen(v => !v)}
+												anchorRef={connectorsAnchorRef}
+												serverCount={connectorServers.length}
+												chosenCount={connectorChosen}
+												menu={renderConnectorsMenu(
+													<ConnectorPanel
+														snapshot={connectorSnapshot}
+														loadFailed={connectorsLoadFailed}
+														onToggleServer={name =>
+															connectorSnapshot &&
+															setConnectorSelection(nextSelection(connectorSnapshot, name))
+														}
+														onToggleServers={names =>
+															setConnectorSelection(
+																names.length === connectorSnapshot?.servers.length ? null : names,
+															)
+														}
+														onSelectAll={() => setConnectorSelection([])}
+														onUseAll={() => setConnectorSelection(null)}
+													/>,
+												)}
+											/>
+										</div>
+									</div>
+								) : null
+							}
 							onRemoveAttachment={id => {
 								const next = attachments.filter(p => p.id !== id);
 								setAttachments(next);

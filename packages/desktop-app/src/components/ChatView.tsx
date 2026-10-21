@@ -2322,6 +2322,25 @@ export function ChatView({
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
 	const wrapMorphVer = useRef(0);
 
+	// StatusCards(工作状态悬浮卡)的展开预留:展开时按它的实测高度在列表
+	// 头部让出空间,首行不再被玻璃盖住;折叠成胶囊时不预留(矮,遮挡一行
+	// 可接受,常驻预留反而每屏吃掉一行)。wrapper 是普通 static div,绝对
+	// 定位的卡仍锚到 .gui-transcript-wrap(最近的 positioned 祖先不变)。
+	const statusCardsHostRef = useRef<HTMLDivElement | null>(null);
+	const [statusCardsExpanded, setStatusCardsExpanded] = useState(false);
+	const [statusCardsHeight, setStatusCardsHeight] = useState(0);
+	useEffect(() => {
+		const el = statusCardsHostRef.current;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		const update = (): void => {
+			setStatusCardsHeight(Math.ceil(el.getBoundingClientRect().height));
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+
 	/**
 	 * Publish the floating composer's geometry.
 	 *
@@ -2611,19 +2630,31 @@ export function ChatView({
 												</button>
 											)}
 											{/* Floating status cards: live git
-											 * state + subagents + todo progress, pinned top-right;
-											 * hidden entirely when there is nothing to show. */}
-											<StatusCards
-												rpc={rpc}
-												cwd={store?.cwd ?? ""}
-												progress={snap?.progress ?? null}
-												entries={snap?.entries ?? []}
-												working={snap?.working ?? false}
-												onOpenSurface={view => {
-													setActiveView(view);
-													if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-												}}
-											/>
+											 * state + subagents + todo progress + MCP
+											 * connectors, pinned top-right; hidden
+											 * entirely when there is nothing to show.
+											 * While the panel is EXPANDED its height is
+											 * reserved at the transcript's head (spacer
+											 * below), so at rest no row hides under the
+											 * glass; rows scrolled up still pass under,
+											 * the same trade the reference overlay makes
+											 * (its column-reserving mode is a separate
+											 * layout project). */}
+											<div ref={statusCardsHostRef}>
+												<StatusCards
+													rpc={rpc}
+													cwd={store?.cwd ?? ""}
+													sessionId={store?.sessionId ?? null}
+													progress={snap?.progress ?? null}
+													entries={snap?.entries ?? []}
+													working={snap?.working ?? false}
+													onOpenSurface={view => {
+														setActiveView(view);
+														if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+													}}
+													onExpandedChange={setStatusCardsExpanded}
+												/>
+											</div>
 											{/* History-session cold-open skeleton (React-Bits style):
 											 * the daemon reactivates the session on demand — cover
 											 * the (stale) previous transcript while the RPC runs. */}
@@ -2672,6 +2703,18 @@ export function ChatView({
 														data-top-scroll="false"
 														data-bottom-scroll="false"
 													>
+														{/* Head reservation for the expanded status
+														 * panel: the card pins at top:46px of the wrap,
+														 * so the first rows must start below 46 + card
+														 * height + one gap. Only while expanded (the
+														 * collapsed pill is short enough to overlay). */}
+														{statusCardsExpanded && statusCardsHeight > 0 && (
+															<div
+																aria-hidden="true"
+																className="flex-shrink-0"
+																style={{ height: 46 + statusCardsHeight + 8 }}
+															/>
+														)}
 														<CodeHighlightProvider highlight={chatHighlight}>
 															<Transcript
 																entries={visibleEntries}

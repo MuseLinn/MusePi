@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
+import { CONNECTOR_STATUS_KEY, nextSelection, useConnectors } from "./composer/connector-panel";
 import { HeightMorph } from "./HeightMorph";
 import { Reveal } from "./Reveal";
 import { StateIcon } from "./StateIcon";
@@ -111,17 +112,25 @@ function StatusSection({
 export function StatusCards({
 	rpc,
 	cwd,
+	sessionId,
 	progress,
 	entries,
 	working,
 	onOpenSurface,
+	onExpandedChange,
 }: {
 	rpc: RpcClient | null;
 	cwd: string;
+	/** Live session id, null on a new-session draft (cwd fallback drives the list). */
+	sessionId: string | null;
 	progress: ReadonlyMap<string, SubagentProgressPayload> | null;
 	entries: readonly SessionEntry[];
 	working: boolean;
 	onOpenSurface: (view: "git" | "trajectory") => void;
+	/** Fires whenever the expanded panel's reservation-relevant shape changes
+	 * (mounted+expanded or not). ChatView turns it into the transcript's
+	 * top reservation so the panel never covers the first rows. */
+	onExpandedChange?: (expanded: boolean) => void;
 }): ReactNode {
 	const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
 	const toggleCollapsed = useCallback((): void => {
@@ -335,18 +344,38 @@ export function StatusCards({
 		return () => ro.disconnect();
 	}, []);
 
+	// ── Connectors (MCP): same data面 as the composer chip ─────────────────
+	// 与输入框上的连接器胶囊并存:胶囊管输入途中的顺手切换,这里管「在场边
+	// 看全场」——会话状态面板里的一个折叠 section。draft(无 sessionId)走
+	// daemon 的 cwd 回退,选择暂存 pending、会话创建后写回(见 useConnectors)。
+	const { snapshot: connectorSnapshot, setSelection: setConnectorSelection } = useConnectors(rpc, sessionId, cwd);
+	const connectorServers = connectorSnapshot?.servers ?? [];
+	const connectorChosen = connectorSnapshot
+		? connectorServers.filter(s => connectorSnapshot.selected === null || connectorSnapshot.selected.includes(s.name))
+				.length
+		: 0;
+
+	// 展开面板的顶部预留: mounted 且未折叠(含窄列强制展开)才算数——
+	// 折叠成胶囊时不预留(胶囊矮,遮挡一行可接受,常驻预留反而吃掉首行)。
+	const expanded = !collapsed;
+	useEffect(() => {
+		onExpandedChange?.(expanded);
+		return () => onExpandedChange?.(false);
+	}, [expanded, onExpandedChange]);
+
 	const hasGitSection = git !== null;
 	const hasAgentsSection = live.length > 0 || endedCount > 0;
 	const hasTodoSection = Boolean(todo && (todo.current || working) && todo.done < todo.total);
-	if (!hasGitSection && !hasAgentsSection && !hasTodoSection) return null;
+	const hasConnectorsSection = connectorServers.length > 0;
+	if (!hasGitSection && !hasAgentsSection && !hasTodoSection && !hasConnectorsSection) return null;
 
 	// ── Expanded panel ─────────────────────────────────────────────────────
 	// ZCode status-panel parity: sectioned rows inside ONE frosted card; the
 	// ⋯-strategy menu ZCode also sports has no musepi counterpart (a single
 	// persisted boolean), so the panel carries just the collapse control.
 	const panel =
-		!collapsed && (hasGitSection || hasAgentsSection || hasTodoSection) ? (
-			<HeightMorph morphKey="panel" className="gui-status-card">
+		!collapsed && (hasGitSection || hasAgentsSection || hasTodoSection || hasConnectorsSection) ? (
+			<HeightMorph morphKey="panel" className="gui-status-card gui-liquid-glass">
 				<div className="gui-status-tools">
 					<button
 						type="button"
@@ -454,6 +483,44 @@ export function StatusCards({
 									<Icon name="arrow-right-s" className="gui-status-caret" />
 								)}
 							</button>
+						</StatusSection>
+					)}
+					{hasConnectorsSection && (
+						<StatusSection
+							title={t("tools.connectorsPanelTitle")}
+							trailing={
+								<span className="gui-status-count">
+									{connectorChosen}/{connectorServers.length}
+								</span>
+							}
+						>
+							{connectorServers.map(server => {
+								const checked =
+									connectorSnapshot !== null &&
+									(connectorSnapshot.selected === null || connectorSnapshot.selected.includes(server.name));
+								return (
+									<label key={server.name} className="gui-connector-row">
+										<input
+											type="checkbox"
+											checked={checked}
+											onChange={() => {
+												if (connectorSnapshot) {
+													setConnectorSelection(nextSelection(connectorSnapshot, server.name));
+												}
+											}}
+										/>
+										<span className="gui-connector-row-name">{server.name}</span>
+										<span className="gui-connector-row-meta">
+											{server.transport}
+											<span
+												className={`gui-connector-dot gui-connector-dot--${server.status}`}
+												title={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
+												aria-label={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
+											/>
+										</span>
+									</label>
+								);
+							})}
 						</StatusSection>
 					)}
 					{hasAgentsSection && (

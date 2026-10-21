@@ -155,6 +155,7 @@ function buildRegistry(): HostServices {
 	services.register(
 		new ConnectorService({
 			connectorsSnapshot: () => null,
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			readSelection: () => null,
 			setSelection: async () => ({ ok: true, appliedToLive: false }),
 		}),
