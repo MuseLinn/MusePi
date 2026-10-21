@@ -715,6 +715,20 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
   `document` capture phase (`DialogFrame`, prompt-dialog); an unclaimed Escape
   interrupts the running turn (`lib/escape-stop`); portalled menus dismiss
   themselves. New layers follow this order, they do not invent their own.
+## 5z. Header session tabs: the multi-session working set (2026-10-21)
+
+Amends §5t's "no inline tabs" principle with an OPT-IN escape hatch: the default single-session title is unchanged; enabling the setting puts the window's horizontal working set of sessions into the header as a tab strip.
+
+- **Setting**: 外观 → 聊天 → 「多会话标签页」 (`PrefToggle`, storage `musepi-gui-session-tabs`, `"1"` = on, default off). Live via the `musepi-gui-session-tabs-changed` window event (`useSessionTabsEnabled` in `lib/session-tabs.ts`, `useSyncExternalStore` on storage + the companion event).
+- **Tabs are a per-client projection**: the persisted state (`musepi-gui-session-tab-ids`, a JSON array) owns ONLY session ids + order. Titles, working/unread status and liveness resolve at render time from `sessionMeta` + the session tree. Closing a tab never deletes the session; deleting a session drops its tab.
+- **Lifecycle**: opening a session joins its tab idempotently (append-last); the soft cap `MAX_SESSION_TABS = 10` evicts the OLDEST tab, never the one being opened. Ids whose session the client cannot resolve (`sessionMeta` miss AND tree miss) stay stored but do not render — a partially loaded session list must not destroy the working set ("ghost" ids).
+- **Close semantics** (`closeTabAndActivateNeighbour` in `lib/session-tabs.ts`): closing the active tab activates its right neighbour (else left, else `null` → the caller opens a fresh draft via `startNewTask`); closing an inactive tab just removes it. Middle click closes without activating; the close button is hover-revealed so the title keeps its width.
+- **Shortcuts**: `tab-next` / `tab-prev` in the shortcut registry (default ⌘Tab / ⌘⇧Tab, editable, group 会话). Per-tab ⌘1–9 direct jumps are deliberately absent in v1 — they collide with `panel-surfaces`' bare ⌘1–8.
+- **Strip behavior**: dnd-kit horizontal sort (whole tab is the drag handle; 8px activation distance keeps a click a click); vertical wheel maps to horizontal scroll (Shift/Cmd-wheel and native horizontal deltas pass through); both scroller ends carry a 24px fade (`SESSION_TAB_EDGE_FADE_PX`) and the active tab auto-scrolls into view stopping short of the fades (`lib/session-tab-reveal.ts`).
+- **Status**: `working` spins a small loader icon on the tab; `unread` (non-active) shows an accent dot — both derived from the same `sessionMeta`/`unreadSessions` the sidebar uses.
+- **Active tab content**: the strip's active tab hosts the existing header title/switcher block (GuiHeader's `titleBlock`); with the setting off the header renders exactly as before. i18n: `settings.sessionTabs*`, `session tabs`, `session tab working/unread`, `ctx percent`, `tab next/prev shortcut*`.
+- **Tests**: `packages/desktop-app/test/session-tabs.test.ts` (16 cases: cap eviction, neighbour activation, ghost ids, wrap-around adjacency, reorder, persistence round-trip + corrupt JSON).
+
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

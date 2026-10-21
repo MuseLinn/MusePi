@@ -1516,6 +1516,9 @@ export const settings = {
 	"settings.collapseLongUserMessages": "折叠较长的用户消息",
 	"settings.messageAutoFold": "消息自动折叠",
 	"settings.messageAutoFoldDescription": "回合结束时自动折叠工作过程，仅展示总结；流式进行中永不折叠。",
+	"settings.sessionTabs": "多会话标签页",
+	"settings.sessionTabsDescription":
+		"在窗口顶栏以标签页形式展示最近打开的多路会话，可拖动排序，关闭标签不影响会话本身",
 	"settings.toolCallSummary": "工具调用汇总",
 	"settings.toolCallSummaryDescription": "回答过程中，连续的工具调用自动汇总为一行摘要；点击摘要行可展开完整过程。",
 	"settings.collapseLongUserMessagesDescription": "超长消息默认收起为两行，点击展开",

@@ -25,6 +25,7 @@ import type { ReminderRow } from "./components/RemindersPanel";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import type { SessionListNode } from "./components/SessionList";
 import { SessionSidebar } from "./components/SessionSidebar";
+import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { SplashOrb } from "./components/SplashOrb";
@@ -55,6 +56,16 @@ import {
 	GuiSessionStore,
 	type PetBubbleKind,
 } from "./lib/session-store";
+import {
+	adjacentTabId,
+	closeTabAndActivateNeighbour,
+	ensureTabId,
+	loadTabIds,
+	removeTabId,
+	reorderTabIds,
+	saveTabIds,
+	useSessionTabsEnabled,
+} from "./lib/session-tabs";
 import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
@@ -999,6 +1010,26 @@ function AppInner(): ReactNode {
 	// refs so onStatus (wired before openSession exists) can reach them.
 	const selectedIdRef = useRef<string | null>(null);
 	const openSessionRef = useRef<(sessionId: string) => Promise<void>>(async () => {});
+	// Header tab strip (multi-session tabs, settings 外观 → 聊天): the state
+	// owns ONLY session ids + order (persisted); titles and working/unread
+	// status resolve at render time from sessionMeta/tree. Opening a session
+	// joins its tab (cap drops the oldest); closing a tab never deletes the
+	// session.
+	const tabsEnabled = useSessionTabsEnabled();
+	const tabsEnabledRef = useRef(tabsEnabled);
+	tabsEnabledRef.current = tabsEnabled;
+	const [tabIds, setTabIds] = useState<string[]>(() => loadTabIds());
+	const tabIdsRef = useRef<string[]>(tabIds);
+	tabIdsRef.current = tabIds;
+	useEffect(() => {
+		if (!tabsEnabled || !selectedId) return;
+		setTabIds(prev => {
+			const next = ensureTabId(prev, selectedId);
+			if (next.length === prev.length) return prev;
+			saveTabIds(next);
+			return next;
+		});
+	}, [tabsEnabled, selectedId]);
 
 	// Keep refs for event handlers that must not re-subscribe per render.
 	rpcRef.current = rpc;
@@ -2645,6 +2676,12 @@ function AppInner(): ReactNode {
 				// Drop the deleted session's frozen round totals + unviewed marks.
 				clearRoundDurations(sessionId);
 				clearUnviewedCompletions(sessionId);
+				// Header tab strip: drop the deleted session's tab.
+				setTabIds(prev => {
+					const next = removeTabId(prev, sessionId);
+					if (next.length !== prev.length) saveTabIds(next);
+					return next;
+				});
 				// Refresh the tree/metadata views (delete may affect nesting).
 				await refreshSessions(client);
 				if (storeRef.current?.sessionId === sessionId) {
@@ -3282,6 +3319,19 @@ function AppInner(): ReactNode {
 			} else if (mod && eventMatches(e, "new-task")) {
 				e.preventDefault();
 				startNewTask();
+			} else if (mod && tabsEnabledRef.current && eventMatches(e, "tab-next")) {
+				// 会话标签页 → 右邻（环绕）；开关关闭时不拦截。
+				e.preventDefault();
+				const next = adjacentTabId(tabIdsRef.current, selectedIdRef.current, 1, id =>
+					sessionMetaRef.current.has(id),
+				);
+				if (next) void openSessionRef.current(next);
+			} else if (mod && tabsEnabledRef.current && eventMatches(e, "tab-prev")) {
+				e.preventDefault();
+				const prevId = adjacentTabId(tabIdsRef.current, selectedIdRef.current, -1, id =>
+					sessionMetaRef.current.has(id),
+				);
+				if (prevId) void openSessionRef.current(prevId);
 			} else if (mod && eventMatches(e, "settings")) {
 				e.preventDefault();
 				openSettings();
@@ -3493,6 +3543,56 @@ function AppInner(): ReactNode {
 		if (!cwd) return false;
 		return /(^|[\\/])\.musepi[\\/]remote[\\/]/.test(cwd);
 	})();
+	// ── Header tab strip (multi-session tabs): rows for the GuiHeader strip.
+	// IIFEs, not hooks — this sits after the early returns (same rule as
+	// recentSessions above).
+	const treeLabelById = ((): Map<string, string> => {
+		const map = new Map<string, string>();
+		const walk = (nodes: SessionListNode[]): void => {
+			for (const n of nodes) {
+				map.set(n.entry.id, n.entry.label ?? n.label ?? "");
+				walk(n.children);
+			}
+		};
+		walk(tree);
+		return map;
+	})();
+	/** A tab renders when the client knows its session (metadata or tree row);
+	 *  ghost ids stay stored but hidden (partial session list must not destroy
+	 *  the working set). */
+	const tabRenderable = (id: string): boolean => sessionMeta.has(id) || treeLabelById.has(id);
+	const sessionTabRows = ((): SessionTabRow[] => {
+		if (!tabsEnabled) return [];
+		const rows: SessionTabRow[] = [];
+		for (const id of tabIds) {
+			if (!tabRenderable(id)) continue;
+			const meta = sessionMeta.get(id);
+			rows.push({
+				id,
+				label: meta?.title?.trim() || treeLabelById.get(id)?.trim() || t("transcript.untitledSession"),
+				working: meta?.working === true && meta?.paused !== true,
+				unread: unreadSessions.has(id),
+			});
+		}
+		return rows;
+	})();
+	const handleSelectTab = (id: string): void => {
+		void openSession(id);
+	};
+	const handleCloseTab = (id: string): void => {
+		// Computed outside the state updater — the open/next side effects
+		// must run exactly once.
+		const { ids, nextId } = closeTabAndActivateNeighbour(tabIdsRef.current, id, selectedId, tabRenderable);
+		saveTabIds(ids);
+		setTabIds(ids);
+		if (nextId) void openSession(nextId);
+		else if (id === selectedId) startNewTask();
+	};
+	const handleReorderTabs = (activeTabId: string, overTabId: string): void => {
+		const next = reorderTabIds(tabIdsRef.current, activeTabId, overTabId);
+		saveTabIds(next);
+		setTabIds(next);
+	};
 	// ── Mini chat window (?mini=1): the SAME boot/connect/session wiring,
 	// rendered as a chat-only surface — a slim drag strip on top, then
 	// ChatView full-bleed (transcript + composer, no sidebar/header).
@@ -3753,6 +3853,10 @@ function AppInner(): ReactNode {
 								onReconnect={() => void boot()}
 								onOpenCollab={() => setCollabOpen(true)}
 								onDeleteSession={deleteSession}
+								tabs={sessionTabRows}
+								onSelectTab={handleSelectTab}
+								onCloseTab={handleCloseTab}
+								onReorderTabs={handleReorderTabs}
 								hosts={hosts}
 								onSwitchHost={switchHost}
 								onAddHost={addHost}

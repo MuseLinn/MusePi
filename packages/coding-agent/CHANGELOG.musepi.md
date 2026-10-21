@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **窗口顶栏可以开多会话标签页了**：设置→外观→聊天里打开「多会话标签页」，最近打开的会话会以标签排在顶栏——点标签即切换，拖动能排序，悬停出现关闭钮、中键也能关。关标签不会删会话；关掉当前标签会自动切到旁边那个，旁边没有了就开一个全新的草稿会话。工作中的会话标签转着小圆圈，有未读消息的带小圆点。标签列表只存在本机，最多记住 10 个；快捷键 ⌘Tab / ⌘⇧Tab 左右切换（可在设置→快捷键里改）。
+  - EN: The window header can now show session tabs. Enable "Session tabs" in Settings → Appearance → Chat: recently opened sessions line up as tabs in the header — click to switch, drag to reorder, close via the hover button or a middle click. Closing a tab never deletes the session; closing the active one activates its neighbour, and with no neighbour left it opens a fresh draft session. A working session spins a small circle on its tab, an unread one shows a dot. The tab list lives only on this machine and remembers up to 10; ⌘Tab / ⌘⇧Tab cycle left and right (rebindable in Settings → Shortcuts).
 - **Windows 安装器换上了品牌化的安装向导**：安装过程不再是一屏灰白的默认界面，而是带着 MusePi 配色的分步向导——欢迎、选择安装位置、进度、完成，每一步都是应用自己的视觉。界面由 WebView2 承载、资源名带内容哈希，卸载界面同样换了品牌外观。
   - EN: The Windows installer now runs a branded wizard. Setup is no longer a plain default screen but a MusePi-styled step-by-step flow — welcome, install location, progress, finish — every step in the app's own visual language. The UI rides on WebView2 with content-hashed assets, and the uninstaller gets matching branding.
 - **长任务的画面不再一路往上滚，你可以选择只保留最近几行**：一个回合跑上几分钟时，每个工具调用都占一行，正在做的事很快被顶出视野。设置→外观→显示里新增「运行中回合显示多少」：默认「全部显示」和现在一样；选「最近 7 行」就只留最近 7 行，更早的折成「⋯ 还有 N 行」。选项是写清楚的档位而不是一个数字，不需要猜 0 是什么意思。只作用于正在运行的那个回合：跑完的回合照旧折进活动摘要行，两者互不干扰。

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import { useChatHighlight } from "../../lib/highlight";
+import { SESSION_TABS_CHANGED_EVENT, SESSION_TABS_ENABLED_KEY } from "../../lib/session-tabs";
 import { STATS_MODE_EVENT, STATS_MODE_KEY } from "../composer/stats-pills";
 
 /** Segmented option tables — module scope is fine, the labels are static
@@ -364,6 +365,13 @@ export function ChatSection(): ReactNode {
 							}
 							window.dispatchEvent(new Event(STATS_MODE_EVENT));
 						}}
+					/>
+					<PrefToggle
+						label={t("settings.sessionTabs")}
+						description={t("settings.sessionTabsDescription")}
+						storageKey={SESSION_TABS_ENABLED_KEY}
+						on={false}
+						onChange={() => window.dispatchEvent(new Event(SESSION_TABS_CHANGED_EVENT))}
 					/>
 				</div>
 			</div>

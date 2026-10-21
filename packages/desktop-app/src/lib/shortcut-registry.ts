@@ -41,6 +41,24 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		groupKey: "shortcut group session",
 	},
 	{
+		// Tab cycling stays ⌘-prefixed so it cannot collide with panel-surfaces'
+		// bare ⌘1–8; per-tab ⌘1–9 direct jumps are left out of v1 for that clash.
+		id: "tab-next",
+		labelKey: "tab next shortcut",
+		descKey: "tab next shortcut desc",
+		def: "⌘tab",
+		editable: true,
+		groupKey: "shortcut group session",
+	},
+	{
+		id: "tab-prev",
+		labelKey: "tab prev shortcut",
+		descKey: "tab prev shortcut desc",
+		def: "⌘⇧tab",
+		editable: true,
+		groupKey: "shortcut group session",
+	},
+	{
 		id: "search",
 		labelKey: "search shortcut",
 		descKey: "search shortcut desc",

@@ -1584,6 +1584,9 @@ export const settings = {
 	"settings.messageAutoFold": "Auto-fold messages",
 	"settings.messageAutoFoldDescription":
 		"Fold a turn's working process when it completes, showing only the summary; never folds while streaming.",
+	"settings.sessionTabs": "Session tabs",
+	"settings.sessionTabsDescription":
+		"Show recently opened sessions as tabs in the window header; drag to reorder, and closing a tab never deletes the session",
 	"settings.toolCallSummary": "Tool call summary",
 	"settings.toolCallSummaryDescription":
 		"While answering, consecutive tool calls summarize into a one-line abstract; click it to reveal the full process.",

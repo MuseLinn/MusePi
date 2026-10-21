@@ -600,6 +600,20 @@ turn
 - **Escape 不变量（现状追认）**：弹窗在 `document` 捕获阶段认领 Escape（`DialogFrame`、
   prompt-dialog 前例）；无人认领的 Escape 中断当前轮次（`lib/escape-stop`）；portalled 菜单自理
   关闭。新层按此顺序来，不自创新语义。
+## 5z. 顶栏会话标签页：多会话工作集（2026-10-21）
+
+对 §5t「顶栏不放内联标签带」原则的修订——开一个**可选**逃生门：默认仍是单会话标题，现状不变；打开设置后，最近使用的会话以标签带形式进入顶栏。
+
+- **设置**：外观 → 聊天 → 「多会话标签页」（`PrefToggle`，localStorage `musepi-gui-session-tabs`，`"1"`=开，默认关）。设置页与顶栏分属两棵子树，切换经 window 事件 `musepi-gui-session-tabs-changed` 生效（`lib/session-tabs.ts` 的 `useSessionTabsEnabled`，`useSyncExternalStore` 订阅 storage + 伴随事件）。
+- **标签是纯客户端投影**：持久化状态（`musepi-gui-session-tab-ids`，JSON 数组）只存会话 id 与顺序；标题、工作/未读状态、存活与否全部在渲染期由 `sessionMeta` + 会话树解析。关标签永不删会话；删会话会摘掉对应标签。
+- **生命周期**：打开会话即幂等加入其标签（追加在末尾）；软上限 `MAX_SESSION_TABS = 10` 溢出时挤掉**最旧**的标签，永不挤正在打开的那个。客户端解析不了的 id（`sessionMeta` 与树双双缺失）保留存储但不渲染——会话列表只加载了一半时不得摧毁工作集（「幽灵」id）。
+- **关闭语义**（`lib/session-tabs.ts` 的 `closeTabAndActivateNeighbour`）：关闭当前标签激活其右邻（无右邻取左邻，皆无返回 `null` → 调用方经 `startNewTask` 开全新草稿）；关闭非当前标签仅移除。中键关闭不激活；关闭钮悬停出现，标题宽度不变。
+- **快捷键**：快捷键注册表新增 `tab-next` / `tab-prev`（默认 ⌘Tab / ⌘⇧Tab，可改键，分组「会话」）。每标签 ⌘1–9 直达 v1 刻意不做——与 `panel-surfaces` 的裸 ⌘1–8 冲突。
+- **标签带行为**：dnd-kit 横向排序（整个标签即拖拽把手，8px 触发距离保证单击仍是单击）；纵向滚轮映射为横向滚动（Shift/Cmd-滚轮与原生横向增量放行）；滚动容器两端 24px 渐隐（`SESSION_TAB_EDGE_FADE_PX`），激活标签自动滚入视野且在渐隐前停住（`lib/session-tab-reveal.ts`）。
+- **状态**：`working` 在标签上转小加载图标；`unread`（非当前）显示强调色小圆点——两者与侧栏同源（`sessionMeta` / `unreadSessions`）。
+- **当前标签内容**：标签带的当前标签承载原有顶栏标题/切换器整块（GuiHeader 的 `titleBlock`）；设置关闭时顶栏渲染与以前完全一致。i18n：`settings.sessionTabs*`、`session tabs`、`session tab working/unread`、`ctx percent`、`tab next/prev shortcut*`。
+- **测试**：`packages/desktop-app/test/session-tabs.test.ts`（16 例：上限挤出、邻居激活、幽灵 id、环绕邻接、重排、持久化 round-trip + 损坏 JSON）。
+
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。
