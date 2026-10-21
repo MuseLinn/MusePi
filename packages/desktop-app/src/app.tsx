@@ -21,6 +21,7 @@ import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { ManagedBrowserHost } from "./components/ManagedBrowserHost";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
+import { PrBoardPage } from "./components/PrBoardPage";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import type { SessionListNode } from "./components/SessionList";
@@ -672,6 +673,7 @@ function AppInner(): ReactNode {
 	const [boardOpen, setBoardOpen] = useState(false);
 	const [scheduledOpen, setScheduledOpen] = useState(false);
 	const [capabilityOpen, setCapabilityOpen] = useState(false);
+	const [prBoardOpen, setPrBoardOpen] = useState(false);
 	// Cron-run notifications: poll cron.list while the app is up; a run that
 	// finishes fires the standard completion/error notification + pet bubble,
 	// and the sidebar 定时任务 button glows for a while (visible without any
@@ -785,14 +787,16 @@ function AppInner(): ReactNode {
 	}, [rpc]);
 	// Board / scheduled / chat surface swap with the same blur transition
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).
-	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "capability" | "chat" | null>(null);
+	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "capability" | "prboard" | "chat" | null>(
+		null,
+	);
 	// 能力中心当前 tab（受控：CapabilityCenterPage 始终挂载，切 tab 只改
 	// 这里，页面内部不再各自 useState(initialTab)——否则人在能力中心时经
 	// 侧边栏悬停菜单点另一个 tab 只更新了 state、组件不重挂载，永远不跳）。
 	// musepi-open-capability 事件的可选 detail.tab 载荷与侧边栏悬停菜单都写这里。
 	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "composition" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "chat"): void => {});
+	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "prboard" | "chat"): void => {});
 	useEffect(() => {
 		const onOpenBoard = (e: Event) => {
 			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
@@ -849,7 +853,17 @@ function AppInner(): ReactNode {
 				section === "skills" || section === "suggestions" || section === "providers" ? section : undefined;
 			if (settingsOpen) return;
 			// Blur the current surface out first (leavingView keeps it mounted).
-			setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : capabilityOpen ? "capability" : "chat");
+			setLeavingView(
+				boardOpen
+					? "board"
+					: scheduledOpen
+						? "scheduled"
+						: capabilityOpen
+							? "capability"
+							: prBoardOpen
+								? "prboard"
+								: "chat",
+			);
 			clearTimeout(settingsTimerRef.current ?? undefined);
 			settingsTimerRef.current = setTimeout(() => {
 				settingsTimerRef.current = null;
@@ -858,7 +872,7 @@ function AppInner(): ReactNode {
 				setSettingsOpen(true);
 			}, 150);
 		},
-		[boardOpen, scheduledOpen, settingsOpen],
+		[boardOpen, scheduledOpen, prBoardOpen, settingsOpen],
 	);
 	const closeSettings = useCallback((): void => {
 		if (!settingsOpen || leavingSettings) return;
@@ -870,8 +884,16 @@ function AppInner(): ReactNode {
 			setSettingsOpen(false);
 		}, 150);
 	}, [settingsOpen, leavingSettings]);
-	viewSwapRef.current = (to: "board" | "scheduled" | "capability" | "chat"): void => {
-		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : capabilityOpen ? "capability" : "chat";
+	viewSwapRef.current = (to: "board" | "scheduled" | "capability" | "prboard" | "chat"): void => {
+		const from = boardOpen
+			? "board"
+			: scheduledOpen
+				? "scheduled"
+				: capabilityOpen
+					? "capability"
+					: prBoardOpen
+						? "prboard"
+						: "chat";
 		// A same-target call must still clear any stale leave state — a
 		// leftover leavingView keeps the leave frame mounted at opacity 0
 		// (forwards fill) and the surface appears blank. Settings can be open
@@ -896,6 +918,7 @@ function AppInner(): ReactNode {
 			setBoardOpen(to === "board");
 			setScheduledOpen(to === "scheduled");
 			setCapabilityOpen(to === "capability");
+			setPrBoardOpen(to === "prboard");
 		}, 150);
 	};
 	// Settings shell visible across the whole close transition (blur-out
@@ -3749,6 +3772,8 @@ function AppInner(): ReactNode {
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenBoard={() => viewSwapRef.current("board")}
 							boardActive={boardOpen}
+							onOpenPrBoard={() => viewSwapRef.current("prboard")}
+							prBoardActive={prBoardOpen}
 							onOpenScheduled={() => viewSwapRef.current("scheduled")}
 							scheduledActive={scheduledOpen}
 							cronGlow={cronGlow}
@@ -3954,7 +3979,8 @@ function AppInner(): ReactNode {
 									// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
 									// Settings 关闭的 150ms 模糊退出期间让 chat keeper 重新占位
 									// (交叉淡入); settingsOpen 真正翻 false 后才隐藏。
-									const chatKeeperHidden = settingsOpen || boardOpen || scheduledOpen || capabilityOpen;
+									const chatKeeperHidden =
+										settingsOpen || boardOpen || scheduledOpen || capabilityOpen || prBoardOpen;
 									return (
 										<>
 											<div
@@ -4067,6 +4093,25 @@ function AppInner(): ReactNode {
 														onBack={() => viewSwapRef.current("chat")}
 														tab={capabilityTab}
 														onTabChange={setCapabilityTab}
+													/>
+												</ChatSurfaceShell>
+											) : leavingView === "prboard" ? (
+												/* Leaving PR board → chat: the board blurs out first. */
+												<ChatSurfaceShell leave>
+													<PrBoardPage
+														rpc={rpc}
+														cwd={project ?? undefined}
+														onBack={() => viewSwapRef.current("chat")}
+													/>
+												</ChatSurfaceShell>
+											) : prBoardOpen ? (
+												/* PR/issue board (sidebar first-class entry): the shared
+												 * PrCenter hosted full-page over the chat column. */
+												<ChatSurfaceShell>
+													<PrBoardPage
+														rpc={rpc}
+														cwd={project ?? undefined}
+														onBack={() => viewSwapRef.current("chat")}
 													/>
 												</ChatSurfaceShell>
 											) : null}

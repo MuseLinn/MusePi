@@ -1311,6 +1311,8 @@ export const general = {
 	"create as draft": "create as draft",
 	"push and create": "push and create",
 	"pr ahead count": "{count} commit(s) ahead",
+	"pr board": "issues & pull requests",
+	"open pull requests": "open pull requests",
 	"duplicate tab": "duplicate tab",
 	"hide surface": "hide surface",
 	"show hidden surfaces": "show hidden surfaces",

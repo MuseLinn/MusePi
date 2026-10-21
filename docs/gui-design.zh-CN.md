@@ -614,17 +614,18 @@ turn
 - **当前标签内容**：标签带的当前标签承载原有顶栏标题/切换器整块（GuiHeader 的 `titleBlock`）；设置关闭时顶栏渲染与以前完全一致。i18n：`settings.sessionTabs*`、`session tabs`、`session tab working/unread`、`ctx percent`、`tab next/prev shortcut*`。
 - **测试**：`packages/desktop-app/test/session-tabs.test.ts`（16 例：上限挤出、邻居激活、幽灵 id、环绕邻接、重排、持久化 round-trip + 损坏 JSON）。
 
-## 5aa. 右侧面板 Git 的 PR/问题中心（2026-10-21）
+## 5aa. PR/问题面板：侧栏入口 → 主视图整页（2026-10-21）
 
-Git 面板的「拉取请求」页签升级为双页签中心（`PrCenter`）：PR 页签（当前分支的 PR 卡片；没有 PR 时变为创建表单）+ 问题页签（按状态过滤的列表）。两侧都走本机 `gh` 命令行、经 daemon 转发——不新增任何鉴权面；daemon 像既有 PR 列表 RPC 一样注入已保存的 gh token。
+PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git 面板只保留「工作区改动 + 提交历史」两页签）。侧栏菜单新增「问题与拉取请求」入口（git-pull-request 图标，打开时按下高亮），经应用既有的视图切换机制把聊天列换成面板页——与看板 / 定时任务 / 能力中心同一套模式（聊天保持挂载在底下、`ChatSurfaceShell` 模糊过渡、`leavingView` 让页面撑过 150ms 退出）。
 
-- **daemon RPC**（`packages/coding-agent/src/daemon/server.ts`）：共享助手 `runGh(cwd, args, timeoutMs)`（token 注入 + 默认 15s 超时；`exitCode === null` 表示 gh 未安装）。`github.prStatus`（当前分支 PR，分支无 PR 时返回 `{pr: null}` 而不是报错）、`github.issues`（打开/已关闭/全部，支持 `--label`/`--author` 过滤）、`github.prCreate`（校验标题；`--body` 缺省用标题；可选 `--draft`；30s 超时；PR URL 用 URL 正则从 stdout 解析，因为 `--json` 字段支持随 gh 版本不同）、`git.push`（推送报无上游时以 `-u origin HEAD` 重试）。
-- **纯函数助手**（`packages/desktop-app/src/lib/pr-status.ts`）：`rollupCheckState` 把 `statusCheckRollup` 归约为通过/失败/进行中（FAILURE/TIMED_OUT/ACTION_REQUIRED/CANCELLED/STARTUP_FAILURE → 失败；SUCCESS/SKIPPED/NEUTRAL → 通过；其余含畸形条目 → 进行中；缺省 → null）；`prVisualState` 把 `{isDraft, state}` 映射为徽章档位（draft/open/merged/closed）；`branchToTitle` 把分支名变成 Title Case 的 PR 标题（含 `/` 在内的分隔符都转空格）。`test/pr-status.test.ts` 覆盖。
-- **PR 页签**：一次加载 `Promise.all`（prStatus + prs + git.status + git.branches）。有 PR：卡片含状态徽章（字母 D/O/M/X）、检查圆点（8px，通过绿/失败 warning/进行中呼吸）、可合并性行、评审结论文行、浏览器打开 + 复制链接两个操作。无 PR：`PrCreateForm`——标题从分支名预填（可改）、目标分支下拉（偏好 main → master → 第一个分支）、草稿勾选、「推送并创建」先走 `git.push`、推送失败即中止不建 PR；分支有未推送提交时显示 `{count} 个提交待推送` 提示。
-- **问题页签**：`Segmented` 打开/已关闭/全部三态过滤，切换即重新拉取；每行显示状态徽章、标题、按标签原色着色的 chip（底色 `#{color}22`）、评论数。gh 缺失或未登录时显示可读的报错行而不是空白面板。
-- **页签持久化**：`musepi-gui-prcenter-tab` 存储键；PR 草稿勾选记在 `musepi-gui-pr-draft`。
-- **i18n**（general 域）：`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`。
-- **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`；徽章档位复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`（`--closed` 档为本节新增）。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
+- **页面拆分**：`PrBoardPage.tsx` 是页面骨架（页头 + 返回工作区）；`pr-center.tsx` 承载共享主体（`PrCenter`，PR / 问题两个子页签，选择记在 `musepi-gui-prcenter-tab`）。主体限宽（`.gui-prboard-body`，880px），在宽阔的主视图列里保持阅读舒适。
+- **PR 子页签**：一次 `Promise.all`（prStatus + prs + git.status + git.branches）。当前分支的 PR 卡片（状态徽章、检查圆点、可合并性、评审结论、打开/复制操作）；分支没有 PR 时是创建表单（标题从分支名预填、目标分支偏好 main→master→第一个、记住的草稿开关、先推送后创建且推送失败即中止、待推送计数提示）；下方是仓库打开的 PR 列表，每行带检查圆点和 head→base 分支。
+- **问题子页签**：`Segmented` 打开/已关闭/全部过滤；标签按各自原色着色；带评论数；点击在系统浏览器打开。
+- **daemon RPC**（`packages/coding-agent/src/daemon/server.ts`）：共享助手 `runGh(cwd, args, timeoutMs)`（token 注入 + 默认 15s 超时；`exitCode === null` 表示 gh 未安装）。`github.prStatus`（当前分支 PR；无 PR 返回 `{pr: null}` 而非报错）、`github.issues`（打开/已关闭/全部，支持 `--label`/`--author`）、`github.prCreate`（标题必填；正文缺省用标题；可选 `--draft`；30s 超时；PR URL 用正则从 stdout 解析）、`git.push`（报无上游时以 `-u origin HEAD` 重试）。
+- **纯函数助手**（`packages/desktop-app/src/lib/pr-status.ts`）：`rollupCheckState`（FAILURE/TIMED_OUT/ACTION_REQUIRED/CANCELLED/STARTUP_FAILURE → 失败；SUCCESS/SKIPPED/NEUTRAL → 通过；畸形/缺省 → 进行中/null）；`prVisualState`（{isDraft, state} → draft/open/merged/closed 徽章档）；`branchToTitle`（分支名 → Title Case，含 `/` 的分隔符都转空格）。`test/pr-status.test.ts` 覆盖。
+- **子页签持久化**：`musepi-gui-prcenter-tab` 存储键；PR 草稿勾选记在 `musepi-gui-pr-draft`。
+- **i18n**（general 域）：`pr board`、`open pull requests`、`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`。
+- **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`、`gui-prboard-title/body`；徽章档复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
 
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 

@@ -6182,3 +6182,15 @@ button.traj-error-note:hover {
 	line-height: 16px;
 	white-space: nowrap;
 }
+
+/* PR/issue board page (main view): title row + a reading-width body column. */
+.gui-prboard-title {
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.gui-prboard-body {
+	max-width: 880px;
+	margin: 0 auto;
+	width: 100%;
+}

@@ -1296,6 +1296,8 @@ export const general = {
 	"create as draft": "创建为草稿",
 	"push and create": "推送并创建",
 	"pr ahead count": "{count} 个提交待推送",
+	"pr board": "问题与拉取请求",
+	"open pull requests": "打开的拉取请求",
 	"duplicate tab": "复制标签页",
 	"hide surface": "隐藏表面",
 	"show hidden surfaces": "显示已隐藏的表面",

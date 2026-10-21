@@ -52,6 +52,8 @@ export function SessionSidebar({
 	onOpenConnect,
 	onOpenBoard,
 	boardActive,
+	onOpenPrBoard,
+	prBoardActive,
 	onOpenScheduled,
 	scheduledActive,
 	cronGlow,
@@ -107,6 +109,9 @@ export function SessionSidebar({
 	cronGlow?: boolean;
 	/** Board view is the active scene — its nav item renders selected. */
 	boardActive?: boolean;
+	/** Open the PR/issue board (main view); its nav item renders selected. */
+	onOpenPrBoard?(): void;
+	prBoardActive?: boolean;
 	/** 能力中心枢纽 (WorkBuddy 式单入口): 主点击区进能力中心默认页,
 	 *  尾部 chevron 弹下拉直达 技能/插件/扩展/市场 四个 tab。 */
 	onOpenCapability?(): void;
@@ -657,6 +662,17 @@ export function SessionSidebar({
 						>
 							<Icon name="layout-column" className="h-4 w-4" />
 							<span>{t("settings.board")}</span>
+						</button>
+					)}
+					{onOpenPrBoard && (
+						<button
+							type="button"
+							className={`gui-menu-item${prBoardActive ? " gui-menu-item--active" : ""}`}
+							onClick={onOpenPrBoard}
+							title={t("pr board")}
+						>
+							<Icon name="git-pull-request" className="h-4 w-4" />
+							<span>{t("pr board")}</span>
 						</button>
 					)}
 					{onOpenCapability && (
