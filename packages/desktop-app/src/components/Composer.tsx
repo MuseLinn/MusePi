@@ -49,6 +49,7 @@ import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { ComposerHighlight } from "./composer/input-highlight";
+import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
 import {
@@ -92,7 +93,6 @@ import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
-import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModes } from "./composer/use-modes";
 import { useSessionDesignSystem } from "./composer/use-session-design-system";
@@ -155,7 +155,7 @@ export interface ComposerProps {
 	/** Current model's exact effort ladder (getSupportedEfforts); undefined
 	 *  shows the full fixed ladder. */
 	thinkingEfforts?: readonly string[] | null;
-	/** Quoted message texts to prepend (ZCode 引用回复 / Cmd+L 追加引用).
+	/** Quoted message texts to prepend (引用回复 / Cmd+L 追加引用).
 	 *  Each renders as a card above the input; the list is append-only from
 	 *  the caller's side (quote buttons / global Cmd+L), cards close
 	 *  individually, everything clears on send. */
@@ -175,7 +175,7 @@ export interface ComposerProps {
 	presetModelId?: string | null;
 	/** welcome 空态(会话态不传)。 */
 	welcome?: boolean;
-	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
+	/** Focus mode (⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
 	/** /btw 旁路提问 (TUI parity): intercept the slash command and hand the
@@ -185,7 +185,7 @@ export interface ComposerProps {
 	/** Live `task` tool running in this session (ChatView passes the last
 	 *  active task tool's partialResult) — drives the temporary swarm status
 	 *  chip above the input. Clicking the chip opens the frosted floating
-	 *  member grid (avatar + progress), kimiwork parity. null → no chip. */
+	 *  member grid (avatar + progress). null → no chip. */
 	activeTask?: { partialResult?: unknown } | null;
 	/** Host for the floating member grid (agent trajectory drill-down). */
 	swarmHost?: import("@musepi/client-core").ToolRenderHost;
@@ -253,7 +253,7 @@ export function Composer({
 	welcome,
 }: ComposerProps): ReactNode {
 	const pet = usePet();
-	// composer 座位槽(DSH conversation.input.dock/left/right 对齐):
+	// composer 座位槽(dock / left / right):
 	// dock = 输入卡上方行;left/right = 底部工具栏两端。list 语义 ——
 	// 扩展声明 composer.dock/left/right 槽位即注入组件。
 	const composerDockItems = useSlotComponents(rpc, COMPOSER_DOCK_SLOT);
@@ -303,7 +303,7 @@ export function Composer({
 		setSketch(prev => ({ open: false, editId: null, initial: null, scene: null }));
 	}, []);
 
-	// kimicode 截屏 parity ("+" 菜单 / ⇧⌘S): grab the primary display through
+	// 截屏 ("+" 菜单 / ⇧⌘S): grab the primary display through
 	// the main process, then open the annotate board ON the shot — the flow
 	// is capture → markup → chip, so a bare "paste my screen" never lands.
 	// Both the menu item and the shortcut registry dispatch the same event.
@@ -858,7 +858,7 @@ export function Composer({
 	// the composer can show the "queue N" chip. Idle → nothing to show.
 	const [queued, setQueued] = useState<{ count: number; steering: string[]; followUp: string[] } | null>(null);
 	const [queueOpen, setQueueOpen] = useState(false);
-	// Busy-state plain-Enter behavior (settings.busyEnter, dsh parity):
+	// Busy-state plain-Enter behavior (settings.busyEnter):
 	// "steer" (TUI default — insert into the running turn now) or "queue"
 	// (follow-up, delivered after the turn yields). Cmd/Ctrl+Enter flips it.
 	const [busyEnter, setBusyEnter] = useState<"steer" | "queue">("steer");
@@ -1432,7 +1432,7 @@ export function Composer({
 			//    (busyEnter: steer = insert into the running turn now, TUI
 			//    default; queue = follow-up delivered after the turn yields).
 			//    Cmd/Ctrl+Enter (accelerated) uses the OPPOSITE behavior
-			//    (dsh parity: "Cmd/Ctrl+Enter 使用另一行为").
+			//    ("Cmd/Ctrl+Enter 使用另一行为").
 			//  - Plain Enter when idle is a normal prompt (streamingBehavior:
 			//    steer covers the race).
 			//  - "/queue <msg>" / "=> <msg>" → followUp explicitly.
@@ -1441,7 +1441,13 @@ export function Composer({
 			// after the current turn, whatever the busyEnter setting says. The
 			// setting decides what a plain Enter does; the button states the
 			// intent outright.
-			const effectiveBusy = forceQueue ? "queue" : accelerated ? (busyEnter === "queue" ? "steer" : "queue") : busyEnter;
+			const effectiveBusy = forceQueue
+				? "queue"
+				: accelerated
+					? busyEnter === "queue"
+						? "steer"
+						: "queue"
+					: busyEnter;
 			let delivery: "steer" | "followUp" | undefined = working
 				? effectiveBusy === "queue"
 					? "followUp"
@@ -1782,7 +1788,7 @@ export function Composer({
 		if (enhance === "enhanced") setEnhance("idle");
 	}, [enhance, text.length]);
 
-	// ZCode 引用回复 / Cmd+L 追加引用: quoted texts render as cards above
+	// 引用回复 / Cmd+L 追加引用: quoted texts render as cards above
 	// the input (not raw `> ` text pasted into the box). The count guard
 	// runs the focus effect exactly once per newly appended quote; cards
 	// stay until the message is sent or closed individually.
@@ -1900,12 +1906,10 @@ export function Composer({
 				flipAnchor="session"
 				belowRow={
 					<>
-						{/* 性能与用量读数由插件提供（bundled-plugins/stats-pills，挂在
-						 * composer.dock）。宿主不再硬编码这一行：它属于会话的观测面，
-						 * 不是输入区的结构，用户应当可以停用或替换它。
-						 * composer.overlay / composer.requestDraft / composer.for 座位槽：
-						 * DSH conversation.input.overlay / .requestDraftInitialization / .for 的对应位。 */}
-						<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
+						{/* composer.overlay / composer.requestDraft / composer.for 座位槽。
+						 * 注意：composer.dock 不在此挂载——它的唯一挂载点是上方
+						 * gui-composer-dock 里的座位槽，这里再挂一次会让 stats-pills
+						 * 渲染两行。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_OVERLAY_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_REQUEST_DRAFT_SLOT} sessionId={sessionId} cwd={cwd} />
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_FOR_SLOT} sessionId={sessionId} cwd={cwd} />
@@ -1915,7 +1919,7 @@ export function Composer({
 					setText(prev => (prev ? `${prev}\n${text}` : text));
 					requestAnimationFrame(() => autosize(taRef.current));
 				}}
-				// openchamber parity: the selection-capture module excludes
+				// The selection-capture module excludes
 				// selections inside the composer (Cmd/Ctrl+L must not re-quote
 				// what is being typed).
 				chatInput
@@ -2053,22 +2057,12 @@ export function Composer({
 										)}
 									/>
 								)}
-								{/* composer.activity 座位槽(DSH conversation.input.activity 对齐):
+								{/* composer.activity 座位槽:
 								 * 进行中的活动(子代理、后台任务)的扩展视图。 */}
-								<SlotComponentHost
-									rpc={rpc}
-									slot={COMPOSER_ACTIVITY_SLOT}
-									sessionId={sessionId}
-									cwd={cwd}
-								/>
-								{/* composer.plan 座位槽(DSH conversation.input.plan 对齐):
+								<SlotComponentHost rpc={rpc} slot={COMPOSER_ACTIVITY_SLOT} sessionId={sessionId} cwd={cwd} />
+								{/* composer.plan 座位槽:
 								 * 计划模式旁的扩展控件。 */}
-								<SlotComponentHost
-									rpc={rpc}
-									slot={COMPOSER_PLAN_SLOT}
-									sessionId={sessionId}
-									cwd={cwd}
-								/>
+								<SlotComponentHost rpc={rpc} slot={COMPOSER_PLAN_SLOT} sessionId={sessionId} cwd={cwd} />
 								{composerDockItems.length > 0 && (
 									<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
 								)}
@@ -2147,17 +2141,12 @@ export function Composer({
 				}
 				footerLeft={
 					<>
-						{/* composer.left 座位槽(DSH conversation.input.left 对齐):
+						{/* composer.left 座位槽:
 						 * 扩展声明 composer.left 槽位即注入工具栏左端。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
-						{/* composer.attachments 座位槽(DSH conversation.input.attachments 对齐):
+						{/* composer.attachments 座位槽:
 						 * 附件区——待发附件的清单、扫描、批量操作。 */}
-						<SlotComponentHost
-							rpc={rpc}
-							slot={COMPOSER_ATTACHMENTS_SLOT}
-							sessionId={sessionId}
-							cwd={cwd}
-						/>
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_ATTACHMENTS_SLOT} sessionId={sessionId} cwd={cwd} />
 						<AttachMenu
 							goalMode={modes?.goalMode?.enabled === true || goalArmed}
 							planMode={modes?.planMode === true}
@@ -2199,14 +2188,14 @@ export function Composer({
 								onHashInput(next);
 							}}
 						/>
-						{/* 会话扩展状态卡(DSH Cordis Plugin 卡片参考吸收):运行中扩展数 +
+						{/* 会话扩展状态卡: 运行中扩展数 +
 						 * 浮窗状态列表。 */}
 						{!welcome && <ExtensionStatusCard rpc={rpc} />}
 						{/* (The interactive 队列 toggle chip lives in the status dock
 						 * above — the old informational toolbar chip was a duplicate
 						 * badge and is gone.) */}
 						{/* Focus mode sits between the attach menu and the model
-						 * selector (openchamber ComposerFooter order). */}
+						 * selector. */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
 						<ModelThinkingCapsule
 							rpc={rpc}
@@ -2229,15 +2218,10 @@ export function Composer({
 							}}
 							onSetThinking={onSetThinking}
 						/>
-						{/* composer.model 座位槽(DSH conversation.input.model 对齐):
+						{/* composer.model 座位槽:
 						 * 模型选择器旁的事实位——积分余额、模型配额、该模型的
 						 * 专属控件都挂这里,而不是挤进模型菜单里。 */}
-						<SlotComponentHost
-							rpc={rpc}
-							slot={COMPOSER_MODEL_SLOT}
-							sessionId={sessionId}
-							cwd={cwd}
-						/>
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_MODEL_SLOT} sessionId={sessionId} cwd={cwd} />
 						{/* Design-style select (M3.7b §3, WorkBuddy footer-pill
 						 * parity): the pick writes via session.setDesignSystem;
 						 * the daemon injects the resolved system's brief
@@ -2285,20 +2269,15 @@ export function Composer({
 				}
 				footerRight={
 					<>
-						{/* composer.right 座位槽(DSH conversation.input.right 对齐):
+						{/* composer.right 座位槽:
 						 * 扩展声明 composer.right 槽位即注入工具栏右端。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_RIGHT_SLOT} sessionId={sessionId} cwd={cwd} />
-						{/* Approval mode (openchamber input permission-picker parity):
+						{/* Approval mode (input permission-picker):
 						 * the daemon re-reads tools.approvalMode on every tool call. */}
 						<ApprovalModeButton rpc={rpc} />
-						{/* composer.permission 座位槽(DSH conversation.input.permission 对齐):
+						{/* composer.permission 座位槽:
 						 * 权限模式旁——与「本次调用允许什么」相关的扩展控件。 */}
-						<SlotComponentHost
-							rpc={rpc}
-							slot={COMPOSER_PERMISSION_SLOT}
-							sessionId={sessionId}
-							cwd={cwd}
-						/>
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_PERMISSION_SLOT} sessionId={sessionId} cwd={cwd} />
 						{contextUsage != null && (
 							<ContextRing
 								percent={contextUsage.percent}
@@ -2416,8 +2395,8 @@ export function Composer({
 						}}
 					/>
 				)}
-				{/* Attachment-row "+" card target: all-types picker (openchamber
-				 *  parity — no accept restriction; files ride via fs.write). */}
+				{/* Attachment-row "+" card target: all-types picker (no accept
+				 *  restriction; files ride via fs.write). */}
 				<input
 					ref={anyPickRef}
 					type="file"

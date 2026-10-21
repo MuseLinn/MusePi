@@ -15,11 +15,7 @@
  */
 
 declare const React: {
-	createElement: (
-		type: unknown,
-		props?: Record<string, unknown>,
-		...children: unknown[]
-	) => unknown;
+	createElement: (type: unknown, props?: Record<string, unknown>, ...children: unknown[]) => unknown;
 	useEffect: (fn: () => void | (() => void), deps?: unknown[]) => void;
 	useState: <T>(initial: T) => [T, (v: T | ((prev: T) => T)) => void];
 	useSyncExternalStore: <T>(subscribe: (cb: () => void) => () => void, get: () => T, getServer: () => T) => T;
@@ -156,7 +152,7 @@ export default function StatsRow(props: SlotProps): ReactNode {
 			"div",
 			{ style: rowStyle, "data-composer-stats": "" },
 			hitRate !== null
-				? React.createElement("span", { style: pillStyle, key: "c" }, `缓存命中 ${hitRate}%`)
+				? React.createElement("span", { style: pillStyle, key: "c" }, `缓存命中 ${hitRate.toFixed(1)}%`)
 				: null,
 		);
 	}
@@ -165,14 +161,12 @@ export default function StatsRow(props: SlotProps): ReactNode {
 	if (total > 0) {
 		// Input is shown as the billed total (input + cache write): a reader
 		// comparing with the provider's console expects the same denominator.
-		pills.push(
-			React.createElement("span", { style: pillStyle, key: "t" }, `${formatTokens(total)} tokens`),
-		);
+		pills.push(React.createElement("span", { style: pillStyle, key: "t" }, `${formatTokens(total)} tokens`));
 		if (typeof usage.cost === "number" && usage.cost > 0) {
 			pills.push(React.createElement("span", { style: pillStyle, key: "s" }, formatSpend(usage.cost)));
 		}
 		if (hitRate !== null) {
-			pills.push(React.createElement("span", { style: pillStyle, key: "h" }, `缓存命中 ${hitRate}%`));
+			pills.push(React.createElement("span", { style: pillStyle, key: "h" }, `缓存命中 ${hitRate.toFixed(1)}%`));
 		}
 	}
 	if (pills.length === 0) return null;
