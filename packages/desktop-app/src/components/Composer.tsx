@@ -1,10 +1,9 @@
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
-import { deriveWindowStats } from "../lib/derive-window-stats";
 import { tapFeedback } from "../lib/haptic";
 import type { PetMood, PetState } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
@@ -536,13 +535,6 @@ export function Composer({
 			document.removeEventListener("visibilitychange", onVis);
 		};
 	}, [rpc, sessionId, refreshUsage, working]);
-
-	// ── §5w stats row ── Visible-window fold (time figures) rides the chat
-	// window the caller passes; token figures reuse the durable
-	// `session.contextUsage` projection state above. The memoized row
-	// re-renders only when the derived figures move, so stream deltas on
-	// `entries` stay invisible to it.
-	const windowStats = useMemo(() => deriveWindowStats(entries ?? []), [entries]);
 
 	// ── Manual context compaction (TUI /compact parity) ────────────────────
 	// The ring shows usage; this is the escape hatch when it fills up. The

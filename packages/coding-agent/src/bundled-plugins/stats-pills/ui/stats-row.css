@@ -1,0 +1,147 @@
+/* 性能与用量（composer.dock 插件）— 液态玻璃材质复用宿主设计令牌
+ * （--glass-* / --color-* / --radius-* 由宿主主题在 :root 提供），
+ * 让这枚插件的视觉跟着应用主题走，而不是自带一份写死的配色。 */
+
+.mpstats-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 4px 20px 2px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+.mpstats-pill {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 9px;
+	border: 0;
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 16px;
+	font-family: inherit;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-muted);
+	background: var(--glass-bg);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
+	transition:
+		color 120ms ease-out,
+		background-color 120ms ease-out,
+		box-shadow 120ms ease-out,
+		transform 120ms var(--spring-liquid, ease-out);
+}
+
+button.mpstats-pill {
+	cursor: pointer;
+}
+
+/* Sheen wash: the diagonal "water" pass, clipped to the capsule. */
+.mpstats-pill::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--glass-sheen);
+	pointer-events: none;
+	z-index: 0;
+}
+
+.mpstats-pill > * {
+	position: relative;
+	z-index: 1;
+}
+
+button.mpstats-pill:hover,
+button.mpstats-pill--open {
+	color: var(--color-text);
+	background-color: var(--glass-bg-strong);
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		0 6px 18px oklch(0 0 0 / 22%);
+}
+
+button.mpstats-pill:active {
+	transform: scale(0.97);
+}
+
+.mpstats-pill-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.mpstats-pill-sep {
+	opacity: 0.45;
+}
+
+/* ── 弹窗（Detailed 模式点击胶囊后展开）────────────────────────────
+ * 固定定位，JS 量出锚点后写 inline left/top；玻璃浮层与药丸同材质族。 */
+.mpstats-pop {
+	position: fixed;
+	min-width: 210px;
+	padding: 10px 12px;
+	border-radius: var(--radius-lg, 12px);
+	background: var(--glass-bg-strong, var(--glass-bg));
+	-webkit-backdrop-filter: blur(calc(var(--gui-glass-blur) * 1.6)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(calc(var(--gui-glass-blur) * 1.6)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		0 12px 32px oklch(0 0 0 / 30%);
+	color: var(--color-text);
+	font-size: 12px;
+	line-height: 1.5;
+	z-index: 90;
+	animation: mpstats-pop-in 140ms var(--spring-liquid, ease-out);
+}
+
+@keyframes mpstats-pop-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px) scale(0.98);
+	}
+}
+
+.mpstats-pop-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	margin-bottom: 8px;
+}
+
+.mpstats-pop-title .mpstats-pop-val {
+	margin-left: auto;
+	font-weight: 400;
+	color: var(--color-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.mpstats-pop-rule {
+	height: 1px;
+	margin: 0 0 8px;
+	background: var(--glass-edge-lo);
+}
+
+.mpstats-pop-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 18px;
+	padding: 2px 0;
+}
+
+.mpstats-pop-row > span:first-child {
+	color: var(--color-text-muted);
+}
+
+.mpstats-pop-val {
+	font-variant-numeric: tabular-nums;
+}

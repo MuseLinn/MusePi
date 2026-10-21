@@ -45,6 +45,7 @@ import type {
 	AgentEvent as WireAgentEvent,
 	WireMessage,
 } from "@musepi/pi-wire";
+import { deriveWindowStats } from "@musepi/pi-wire";
 import { messageKey } from "@musepi/sdk";
 import { YAML } from "bun";
 import { type FSWatcher, watch } from "chokidar";
@@ -5515,6 +5516,11 @@ export class DaemonServer {
 				const stats = live.agentSession.getSessionStats();
 				const usage = stats.contextUsage ?? null;
 				if (!usage) return usage;
+				// Visible-window timing fold for the composer stats row
+				// (性能与用量 activity pill). The fold answers "what is in
+				// the log now"; token figures stay on the durable projection
+				// above, so paging/compaction never moves them.
+				const windowStats = deriveWindowStats(live.agentSession.sessionManager.getEntries());
 				const snapcompact = estimateSnapcompactSavings(live.agentSession);
 				// Full category breakdown (TUI /context panel parity) for the
 				// GUI's native /context dialog — the ring only needs the
@@ -5591,8 +5597,9 @@ export class DaemonServer {
 							...(thresholdTokens !== null ? { thresholdTokens } : {}),
 							autoCompactBufferTokens,
 							freeTokens,
+							windowStats,
 						}
-					: usage;
+					: { ...usage, windowStats };
 			}
 			case "session.modes": {
 				// Goal / plan mode + todo progress (TUI /goal /plan parity):

@@ -1,15 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { SessionEntry, StopReason } from "@musepi/pi-wire";
-import {
-	billedTotalTokens,
-	cacheHitPercent,
-	decodeTokensPerSecond,
-	deriveWindowStats,
-	hasAnyTiming,
-	hasTokenActivity,
-	type StatsRowProps,
-	statsRowPropsEqual,
-} from "../src/lib/derive-window-stats";
+import type { SessionEntry, StopReason } from "../src/index";
+import { decodeTokensPerSecond, deriveWindowStats, hasAnyTiming } from "../src/index";
 
 /** Minimal message-entry factories — the fold reads only these fields. */
 function userEntry(id: string, timestamp: number, synthetic = false): SessionEntry {
@@ -63,10 +54,6 @@ function toolResultEntry(id: string, toolCallId: string, timestamp: number): Ses
 		type: "message",
 		message: { role: "toolResult", toolCallId, toolName: "read", content: [], isError: false, timestamp },
 	};
-}
-
-function usage(over: Partial<NonNullable<StatsRowProps["usage"]>> = {}): NonNullable<StatsRowProps["usage"]> {
-	return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: 0, cacheHitRate: null, ...over };
 }
 
 describe("deriveWindowStats — visible-window fold", () => {
@@ -135,71 +122,5 @@ describe("deriveWindowStats — visible-window fold", () => {
 			toolResultEntry("r1", "c1", 4000),
 		]);
 		expect(stats.toolMs).toBe(0);
-	});
-});
-
-describe("statsRowPropsEqual — streaming memo guard", () => {
-	const base: StatsRowProps = {
-		stats: deriveWindowStats([userEntry("u1", 1000), assistantEntry("a1", 2000, { duration: 3000, ttft: 500 })]),
-		usage: usage({ input: 10, cacheRead: 5, output: 20, cacheHitRate: 33.3 }),
-		mode: "detailed",
-	};
-
-	test("a stream delta on the unsettled tail leaves the derived props equal (no re-render)", () => {
-		const windowWithDelta: SessionEntry[] = [
-			userEntry("u1", 1000),
-			assistantEntry("a1", 2000, { duration: 3000, ttft: 500 }),
-			// The streaming entry: message_update swaps in new text but no
-			// stopReason/duration — the fold skips it entirely.
-			assistantEntry("a2", 3000, { stopReason: "" }),
-		];
-		const next: StatsRowProps = { ...base, stats: deriveWindowStats(windowWithDelta) };
-		expect(statsRowPropsEqual(base, next)).toBe(true);
-	});
-
-	test("a settled step landing changes the props (re-render)", () => {
-		const next: StatsRowProps = {
-			...base,
-			stats: deriveWindowStats([
-				userEntry("u1", 1000),
-				assistantEntry("a1", 2000, { duration: 3000, ttft: 500 }),
-				assistantEntry("a2", 6000, { duration: 1000, ttft: 200 }),
-			]),
-		};
-		expect(statsRowPropsEqual(base, next)).toBe(false);
-	});
-
-	test("usage movement (cost/cache) changes the props even when the window is static", () => {
-		const next: StatsRowProps = {
-			...base,
-			usage: usage({ input: 10, cacheRead: 5, output: 20, cacheHitRate: 33.3, cost: 0.01 }),
-		};
-		expect(statsRowPropsEqual(base, next)).toBe(false);
-	});
-
-	test("mode flip always changes the props", () => {
-		expect(statsRowPropsEqual(base, { ...base, mode: "compact" })).toBe(false);
-	});
-
-	test("null vs fetched usage changes the props", () => {
-		expect(statsRowPropsEqual(base, { ...base, usage: null })).toBe(false);
-	});
-});
-
-describe("usage pill figures", () => {
-	test("billedTotalTokens sums the three input buckets plus output", () => {
-		expect(billedTotalTokens(usage({ input: 100, cacheRead: 50, cacheWrite: 10, output: 40 }))).toBe(200);
-	});
-
-	test("hasTokenActivity gates on any billed token", () => {
-		expect(hasTokenActivity(usage())).toBe(false);
-		expect(hasTokenActivity(usage({ cacheRead: 1 }))).toBe(true);
-		expect(hasTokenActivity(usage({ output: 1 }))).toBe(true);
-		expect(hasTokenActivity(null)).toBe(false);
-	});
-
-	test("cacheHitPercent follows the projection; null until the first cache read", () => {
-		expect(cacheHitPercent(usage({ cacheHitRate: 45.25 }))).toBe("45.3");
-		expect(cacheHitPercent(usage())).toBeNull();
 	});
 });
