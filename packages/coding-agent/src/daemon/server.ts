@@ -291,6 +291,38 @@ async function runGh(
 	return { exitCode, stdout, stderr };
 }
 
+/**
+ * Spawn `git` for the daemon git.* RPCs with a hard timeout — fetch/pull hit
+ * the network and must never pin the daemon event loop. Same contract as
+ * `runGh`: `exitCode` is null only when the spawn itself failed.
+ */
+async function runGit(
+	cwd: string,
+	args: string[],
+	timeoutMs = 30_000,
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+	const proc = Bun.spawn({
+		cmd: ["git", ...args],
+		cwd,
+		stdout: "pipe",
+		stderr: "pipe",
+		windowsHide: true,
+	});
+	setTimeout(() => {
+		try {
+			proc.kill();
+		} catch {
+			// already exited
+		}
+	}, timeoutMs);
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited.catch(() => null),
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	return { exitCode, stdout, stderr };
+}
+
 function writeGhToken(token: string, identity?: { login?: string; email?: string }): void {
 	try {
 		const prev = readGhToken();
@@ -3332,6 +3364,91 @@ export class DaemonServer {
 				}
 				return { ok: true };
 			}
+			case "git.fetch": {
+				// Fetch every remote in one shot — no per-remote bookkeeping
+				// needed for a panel-sized sync control. 30s cap: network.
+				const p = (params ?? {}) as { cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const res = await runGit(cwd, ["fetch", "--all"]);
+				if (res.exitCode !== 0) {
+					return {
+						ok: false,
+						error: (res.stderr.trim() || res.stdout.trim() || "git fetch failed").slice(0, 500),
+					};
+				}
+				return { ok: true };
+			}
+			case "git.pull": {
+				// Pull = fetch + rebase, never a merge commit: local commits
+				// replay on top of the fetched ones. `--no-autostash` keeps a
+				// dirty tree a loud, recoverable error instead of a silent
+				// autostash.
+				const p = (params ?? {}) as { cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const res = await runGit(cwd, ["pull", "--rebase", "--no-autostash"]);
+				if (res.exitCode !== 0) {
+					return { ok: false, error: (res.stderr.trim() || res.stdout.trim() || "git pull failed").slice(0, 500) };
+				}
+				return { ok: true };
+			}
+			case "git.stashList": {
+				// Stash entries for the right-panel stash tab: ref, subject
+				// (the -m message), relative age, commit hash — \x1f fields,
+				// one entry per line.
+				const p = (params ?? {}) as { cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const res = await runGit(cwd, ["stash", "list", "--format=%gd%x1f%gs%x1f%cr%x1f%H"]);
+				if (res.exitCode !== 0) return { stashes: [] };
+				const stashes = res.stdout
+					.split("\n")
+					.map(line => line.trim())
+					.filter(line => line !== "")
+					.map(line => {
+						const [ref, message, age, hash] = line.split("\x1f");
+						return { ref: ref ?? "", message: message ?? "", age: age ?? "", hash: hash ?? "" };
+					});
+				return { stashes };
+			}
+			case "git.stashPush": {
+				// Stash working-tree + staged changes, untracked included. A
+				// clean tree is NOT an error — `{ok: true, empty: true}` lets
+				// the panel skip the refresh.
+				const p = (params ?? {}) as { cwd?: unknown; message?: unknown; includeUntracked?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const message = typeof p.message === "string" && p.message.trim() !== "" ? p.message.trim() : undefined;
+				const args = ["stash", "push", "--include-untracked"];
+				if (message) args.push("-m", message);
+				const res = await runGit(cwd, args);
+				const out = `${res.stderr}\n${res.stdout}`;
+				if (res.exitCode !== 0) {
+					if (/no local changes|no changes/i.test(out)) return { ok: true, empty: true };
+					return { ok: false, error: out.trim().slice(0, 500) };
+				}
+				return { ok: true, empty: /no local changes/i.test(out) };
+			}
+			case "git.stashPop": {
+				// Apply a stash and drop it (ref defaults to the newest). A
+				// conflicted pop keeps the stash: git reports it and exits 1,
+				// which is the correct outcome to surface.
+				const p = (params ?? {}) as { cwd?: unknown; ref?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const ref = typeof p.ref === "string" && p.ref.trim() !== "" ? p.ref.trim() : "stash@{0}";
+				const res = await runGit(cwd, ["stash", "pop", ref]);
+				if (res.exitCode !== 0) {
+					return { ok: false, error: (res.stderr.trim() || "git stash pop failed").slice(0, 500) };
+				}
+				return { ok: true };
+			}
+			case "git.stashDrop": {
+				const p = (params ?? {}) as { cwd?: unknown; ref?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const ref = typeof p.ref === "string" && p.ref.trim() !== "" ? p.ref.trim() : "stash@{0}";
+				const res = await runGit(cwd, ["stash", "drop", ref]);
+				if (res.exitCode !== 0) {
+					return { ok: false, error: (res.stderr.trim() || "git stash drop failed").slice(0, 500) };
+				}
+				return { ok: true };
+			}
 			case "git.checkout": {
 				// Switch the repo's branch (welcome branch selector, status-card
 				// branch menu). Caller's cwd; uncommitted changes are git's
@@ -3439,14 +3556,20 @@ export class DaemonServer {
 				// has); reports a clear error otherwise. Extended fields
 				// (checks rollup, mergeability, review decision) drive the
 				// list's per-row status dots and the current-branch card.
-				const p = (params ?? {}) as { cwd?: string };
+				// `state` passes through to gh (open|closed|merged|all,
+				// default open) for the board's state filter.
+				const p = (params ?? {}) as { cwd?: string; state?: unknown };
 				// Session cwd when the caller passes it (GUI PR pane) — the
 				// host cwd is the daemon launch dir, which may be a different
 				// repo (git RPC cwd-isolation parity).
 				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const stateRaw = typeof p.state === "string" ? p.state : "open";
+				const state = ["open", "closed", "merged", "all"].includes(stateRaw) ? stateRaw : "open";
 				const res = await runGh(cwd, [
 					"pr",
 					"list",
+					"--state",
+					state,
 					"--limit",
 					"50",
 					"--json",
@@ -3547,6 +3670,139 @@ export class DaemonServer {
 				const url = /https?:\/\/\S+/.exec(res.stdout)?.[0];
 				return url ? { url } : { error: "gh pr create returned no URL" };
 			}
+			case "github.prView": {
+				// Single-PR detail for the board's preview pane: body, comments,
+				// reviews, labels, reviewers/assignees — everything the list
+				// row doesn't carry. `no pull requests found` → { pr: null }.
+				const p = (params ?? {}) as { cwd?: string; number?: unknown };
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const res = await runGh(cwd, [
+					"pr",
+					"view",
+					String(num),
+					"--json",
+					"number,title,body,author,state,isDraft,url,labels,reviewers,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
+				]);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					const err = res.stderr.trim();
+					if (/no pull requests found|could not resolve|no pull request/i.test(err)) return { pr: null };
+					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
+				}
+				try {
+					return { pr: JSON.parse(res.stdout) };
+				} catch {
+					return { error: "invalid gh output" };
+				}
+			}
+			case "github.prMerge": {
+				// Merge a PR from the board preview (method picker → confirm).
+				// 30s cap: gh may push the merge commit and delete nothing (the
+				// branch is kept — deletion surprises users mid-work).
+				const p = (params ?? {}) as { cwd?: string; number?: unknown; method?: unknown };
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const methodRaw = typeof p.method === "string" ? p.method : "merge";
+				const method = ["merge", "squash", "rebase"].includes(methodRaw) ? methodRaw : "merge";
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const res = await runGh(cwd, ["pr", "merge", String(num), `--${method}`], 30_000);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					return { error: res.stderr.trim() || "gh pr merge failed" };
+				}
+				return { ok: true };
+			}
+			case "github.prState": {
+				// Close or reopen a PR from the board preview.
+				const p = (params ?? {}) as { cwd?: string; number?: unknown; state?: unknown };
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const state = p.state === "open" ? "reopen" : "close";
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const res = await runGh(cwd, ["pr", state, String(num)]);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					return { error: res.stderr.trim() || `gh pr ${state} failed` };
+				}
+				return { ok: true };
+			}
+			case "github.prEdit": {
+				// Label / reviewer edits from the board preview. Every list is
+				// optional; nothing to do is a no-op success.
+				const p = (params ?? {}) as {
+					cwd?: string;
+					number?: unknown;
+					addLabels?: unknown;
+					removeLabels?: unknown;
+					addReviewers?: unknown;
+					removeReviewers?: unknown;
+				};
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const list = (v: unknown): string[] =>
+					Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+				const addLabels = list(p.addLabels);
+				const removeLabels = list(p.removeLabels);
+				const addReviewers = list(p.addReviewers);
+				const removeReviewers = list(p.removeReviewers);
+				if (addLabels.length + removeLabels.length + addReviewers.length + removeReviewers.length === 0) {
+					return { ok: true };
+				}
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const args = ["pr", "edit", String(num)];
+				for (const l of addLabels) args.push("--add-label", l);
+				for (const l of removeLabels) args.push("--remove-label", l);
+				for (const r of addReviewers) args.push("--add-reviewer", r);
+				for (const r of removeReviewers) args.push("--remove-reviewer", r);
+				const res = await runGh(cwd, args);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					return { error: res.stderr.trim() || "gh pr edit failed" };
+				}
+				return { ok: true };
+			}
+			case "github.issueView": {
+				// Single-issue detail for the issues tab preview: body, labels,
+				// assignees, comments. `no issues found` → { issue: null }.
+				const p = (params ?? {}) as { cwd?: string; number?: unknown };
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const res = await runGh(cwd, [
+					"issue",
+					"view",
+					String(num),
+					"--json",
+					"number,title,body,state,author,labels,assignees,comments,url,createdAt,updatedAt,closedAt",
+				]);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					const err = res.stderr.trim();
+					if (/no issues found/i.test(err)) return { issue: null };
+					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
+				}
+				try {
+					return { issue: JSON.parse(res.stdout) };
+				} catch {
+					return { error: "invalid gh output" };
+				}
+			}
+			case "github.issueState": {
+				// Close or reopen an issue from the issues tab preview.
+				const p = (params ?? {}) as { cwd?: string; number?: unknown; state?: unknown };
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const state = p.state === "open" ? "reopen" : "close";
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const res = await runGh(cwd, ["issue", state, String(num)]);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) {
+					return { error: res.stderr.trim() || `gh issue ${state} failed` };
+				}
+				return { ok: true };
+			}
 			case "github.authStatus": {
 				// gh CLI auth state (settings Git tab): login/active account +
 				// email. Async spawn + 10s cap — a hung gh (keyring lock) must
@@ -3603,6 +3859,8 @@ export class DaemonServer {
 						// github.com itself works (device flow proves it).
 						avatarUrl: stored.login ? `https://github.com/${stored.login}.png` : undefined,
 						active: true,
+						source: "oauth",
+						updatedAt: stored.updatedAt,
 					};
 				}
 				if (ghPath() === null) return { installed: false };
@@ -3627,6 +3885,7 @@ export class DaemonServer {
 					email: email || undefined,
 					avatarUrl: login ? `https://github.com/${login}.png` : undefined,
 					active: true,
+					source: "gh-cli",
 				};
 			}
 			case "github.authStart": {
@@ -7488,6 +7747,16 @@ export class DaemonServer {
 				return registry
 					.getAvailable()
 					.map(model => modelDetailRow(model, registry.getProviderLabel(model.provider)));
+			}
+			case "models.refreshRuntime": {
+				// Force dynamic-provider catalog discovery to re-run ("online"
+				// strategy), busting the per-provider TTL cache — the button
+				// behind an empty extension-provided model list whose first
+				// discovery failed or ran before credentials landed.
+				const registry = await this.#host.ensureRegistry();
+				if (!registry) return { refreshed: false };
+				await registry.refreshRuntimeProviders("online");
+				return { refreshed: true };
 			}
 			case "models.catalog": {
 				// Full bundled catalog grouped by provider (TUI model-hub
