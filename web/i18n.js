@@ -50,9 +50,9 @@
     "preview.desc":
       "The welcome workspace, for real: sessions and tasks on the left, an input box always at the ready in the middle — with models, tools and surfaces all swappable. This is no illustration — every release regenerates it automatically from the real interface.",
     "preview.shot.aria":
-      "MusePi desktop app welcome screen in the brand dark theme",
+      "MusePi desktop app welcome screen in the brand dark theme: composer, suggestions and the session sidebar",
     "preview.shot.note":
-      "Real interface capture — the welcome workspace in the brand dark theme; sessions and settings sync across devices.",
+      "Real interface capture — the welcome workspace in the brand dark theme: composer, quick suggestions and session navigation, regenerated automatically from the real interface every release.",
 
     /* 三个核心功能 */
     "feat.kicker": "Why MusePi",
@@ -82,15 +82,15 @@
     "mom.stat2": "Supported platforms",
     "mom.stat3": "Extension hubs",
     "mom.stat4": "Shared background service",
-    "mom.log1.tag": "Plugins",
+    "mom.log1.tag": "Collaboration",
     "mom.log1.body":
-      "Install your own plugins by simply dragging in an archive or a local folder; right after install it tells you whether dependencies are complete — what's missing and at which path, all listed at once.",
-    "mom.log2.tag": "Reliability",
+      'Annotate a page and tell the agent "right here": the built-in browser and in-conversation interfaces share one annotation tool — pick an element, box a region, draw freely — and the circled screenshot with your notes lands in the composer automatically, so the agent sees exactly what you circled.',
+    "mom.log2.tag": "Interface",
     "mom.log2.body":
-      'When a message is sent, the session is idle, yet there\'s neither a reply nor an error, a silence banner lights up above the composer — re-reading at 0 / 10 / 30 seconds, three times before it decides, never faking a "still thinking".',
-    "mom.log3.tag": "Usage",
+      "The window header can now show session tabs (Settings → Appearance → Chat): fixed width, a hover menu and close button, and drafts that haven't sent their first message show in italics — manage parallel sessions like browser tabs.",
+    "mom.log3.tag": "Git",
     "mom.log3.body":
-      "<code>/usage</code> grows into a full-screen usage panel: one row per account, one line per quota, Enter toggles between the summary and the full report, and prepaid balance is visible in every view.",
+      "The sidebar gains an Issues & PRs entry that opens a full-page center: the current branch's PR and every open issue in the repo, with merge, close, reopen and label actions right in the detail — no trip back to the browser.",
     "mom.changelog": "Read the full changelog",
 
     /* 价格 */

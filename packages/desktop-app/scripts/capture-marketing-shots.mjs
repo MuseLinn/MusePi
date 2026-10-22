@@ -116,8 +116,21 @@ await page.evaluateOnNewDocument(`
 
 console.log(`[shots] loading ${fileUrl}`);
 await page.goto(fileUrl, { waitUntil: "load", timeout: 60_000 });
-// Let the shell mount, fonts settle and the entrance animations finish.
-await new Promise(resolve => setTimeout(resolve, 3500));
+// The shell boots through a splash whose hold varies with daemon warmth
+// (connect + prewarm wait + ~1.1s animation hold). Wait for the splash to
+// LEAVE the DOM (it unmounts when booting flips false), then let fonts and
+// the entrance animation settle — a fixed sleep used to capture the splash
+// itself on a cold daemon.
+try {
+	await page.waitForFunction(
+		() => !document.querySelector(".gui-splash") && !document.querySelector(".gui-connect-wrap"),
+		{ timeout: 45_000, polling: 250 },
+	);
+} catch {
+	console.error("[shots] shell never left the splash/connect screen — capturing anyway");
+	if (consoleErrors.length > 0) console.error(`[shots] console errors:\n${consoleErrors.join("\n")}`);
+}
+await new Promise(resolve => setTimeout(resolve, 1500));
 
 const shot = async (name) => {
 	const file = join(OUT_DIR, `${name}.png`);
