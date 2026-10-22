@@ -2,9 +2,12 @@
  * PrCenter — the PR/issue center shared by the main-view board page. Two
  * subtabs: the PR tab (current-branch PR card, or the create form when the
  * branch has none, over the repo's open PR list) and the issues tab
- * (state-filtered issue list). All gh calls go through the daemon with the
- * machine's own credentials (gh CLI); a missing or unauthenticated gh
- * surfaces a readable error instead of a blank pane.
+ * (state-filtered issue list with label/author filters). Row clicks expand
+ * an inline detail preview — body, comments, individual checks, and the
+ * actions the list doesn't have: merge (method picker + confirm),
+ * close/reopen, label/reviewer adds. All gh calls go through the daemon
+ * with the machine's own credentials (gh CLI); a missing or unauthenticated
+ * gh surfaces a readable error instead of a blank pane.
  */
 import { Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
@@ -76,6 +79,401 @@ function PrMergeLine({ pr }: { pr: GhPr }): ReactNode {
 			{pr.mergeable === true && <span className="gui-pr-merge gui-pr-merge--ok">{t("pr mergeable")}</span>}
 			{reviewKey && <span className="gui-pr-review">{t(reviewKey as TranslationKey)}</span>}
 		</>
+	);
+}
+
+/** gh comment/review author + body + time (both fold to this for display). */
+interface GhComment {
+	author: { login: string };
+	body: string;
+	createdAt?: string;
+}
+
+/** Full PR detail from `github.prView` — everything the list row doesn't carry. */
+interface GhPrDetail extends GhPr {
+	body: string;
+	labels: { name: string; color: string }[];
+	reviewers: { login: string }[];
+	assignees: { login: string }[];
+	comments: GhComment[];
+	createdAt?: string;
+	closedAt?: string | null;
+}
+
+/** gh's statusCheckRollup is heterogeneous: CheckRun ({name, conclusion,
+ *  status}) and StatusContext ({context, state}). Fold an entry to one of
+ *  the three dot states, picking whichever field the entry actually has. */
+function checkItemState(item: Record<string, unknown>): "success" | "failure" | "pending" {
+	const conclusion = typeof item.conclusion === "string" ? item.conclusion : null;
+	if (conclusion !== null) {
+		if (["SUCCESS", "NEUTRAL", "SKIPPED"].includes(conclusion)) return "success";
+		if (["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"].includes(conclusion))
+			return "failure";
+		return "pending";
+	}
+	const state = typeof item.state === "string" ? item.state : "";
+	if (["SUCCESS", "EXPECTED"].includes(state)) return "success";
+	if (["FAILURE", "ERROR", "CANCELLED"].includes(state)) return "failure";
+	return "pending";
+}
+
+function checkItemName(item: Record<string, unknown>): string {
+	return typeof item.name === "string" ? item.name : typeof item.context === "string" ? item.context : "";
+}
+
+/** Per-check list inside the detail pane (the list row only has the rollup dot). */
+function CheckItemList({ rollup }: { rollup: unknown }): ReactNode {
+	if (!Array.isArray(rollup) || rollup.length === 0) return null;
+	return (
+		<div className="gui-pr-detail-section">
+			{rollup.slice(0, 20).map((item, i) => {
+				const rec = item as Record<string, unknown>;
+				const state = checkItemState(rec);
+				return (
+					<span key={`${checkItemName(rec)}-${i}`} className="gui-pr-check-item">
+						<span className={`gui-pr-check-dot gui-pr-check-dot--${state}`} aria-hidden="true" />
+						{checkItemName(rec)}
+					</span>
+				);
+			})}
+		</div>
+	);
+}
+
+/** Comment list shared by the PR and issue detail panes. */
+function CommentList({ comments }: { comments: GhComment[] }): ReactNode {
+	if (comments.length === 0) return null;
+	return (
+		<div className="gui-pr-detail-section">
+			<span className="gui-pr-detail-label">{t("pr comments {count}", { count: comments.length })}</span>
+			{comments.slice(0, 20).map((c, i) => (
+				<div key={`${c.author?.login ?? "comment"}-${i}`} className="gui-pr-comment">
+					<span className="gui-pr-comment-meta">
+						{c.author?.login}
+						{c.createdAt && <span>{new Date(c.createdAt).toLocaleString()}</span>}
+					</span>
+					<span className="gui-pr-comment-body">{c.body}</span>
+				</div>
+			))}
+		</div>
+	);
+}
+
+/** Comma-separated input → trimmed non-empty tokens (label/reviewer adds). */
+function splitCsv(raw: string): string[] {
+	return raw
+		.split(",")
+		.map(s => s.trim())
+		.filter(s => s !== "");
+}
+
+/** PR detail preview: fetched per selected list row; hosts the actions the
+ *  list doesn't have — merge (method picker + two-step confirm), close/reopen,
+ *  label/reviewer adds. `onChanged` refreshes the parent list after a mutation. */
+function PrDetail({
+	rpc,
+	cwd,
+	number,
+	onChanged,
+}: {
+	rpc: RpcClient;
+	cwd: string;
+	number: number;
+	onChanged(): void;
+}): ReactNode {
+	const [detail, setDetail] = useState<GhPrDetail | null | undefined>(undefined);
+	const [error, setError] = useState<string | null>(null);
+	const [method, setMethod] = useState<"merge" | "squash" | "rebase">("squash");
+	const [confirming, setConfirming] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [actionError, setActionError] = useState<string | null>(null);
+	const [labelInput, setLabelInput] = useState("");
+	const [reviewerInput, setReviewerInput] = useState("");
+	const load = useCallback((): void => {
+		setDetail(undefined);
+		setError(null);
+		void rpc
+			.request<{ pr?: GhPrDetail | null; error?: string }>("github.prView", { cwd, number })
+			.then(res => {
+				if (res?.error) setError(res.error);
+				else setDetail(res?.pr ?? null);
+			})
+			.catch(() => setError(t("general.requestFailed")));
+	}, [rpc, cwd, number]);
+	useEffect(load, [load]);
+	const act = useCallback(
+		async (call: () => Promise<{ ok?: boolean; error?: string } | null>): Promise<void> => {
+			if (busy) return;
+			setBusy(true);
+			setActionError(null);
+			try {
+				const res = await call();
+				if (res?.ok) {
+					onChanged();
+					load();
+				} else {
+					setActionError(res?.error ?? t("general.requestFailed"));
+				}
+			} finally {
+				setBusy(false);
+				setConfirming(false);
+			}
+		},
+		[busy, onChanged, load],
+	);
+	const addLabels = (): void => {
+		const labels = splitCsv(labelInput);
+		if (labels.length === 0) return;
+		setLabelInput("");
+		void act(() =>
+			rpc.request<{ ok?: boolean; error?: string }>("github.prEdit", { cwd, number, addLabels }).catch(() => null),
+		);
+	};
+	const addReviewers = (): void => {
+		const reviewers = splitCsv(reviewerInput);
+		if (reviewers.length === 0) return;
+		setReviewerInput("");
+		void act(() =>
+			rpc
+				.request<{ ok?: boolean; error?: string }>("github.prEdit", { cwd, number, addReviewers })
+				.catch(() => null),
+		);
+	};
+	const removeLabel = (name: string): void => {
+		void act(() =>
+			rpc
+				.request<{ ok?: boolean; error?: string }>("github.prEdit", { cwd, number, removeLabels: [name] })
+				.catch(() => null),
+		);
+	};
+	const removeReviewer = (login: string): void => {
+		void act(() =>
+			rpc
+				.request<{ ok?: boolean; error?: string }>("github.prEdit", { cwd, number, removeReviewers: [login] })
+				.catch(() => null),
+		);
+	};
+	if (error) return <div className="gui-pr-detail gui-pr-error">{error}</div>;
+	if (detail === undefined)
+		return (
+			<div className="gui-pr-detail" aria-busy="true">
+				{[0, 1, 2].map(i => (
+					<div key={i} className="gui-skeleton-row" />
+				))}
+			</div>
+		);
+	if (detail === null) return null;
+	const open = detail.state === "OPEN";
+	const methodOptions: { value: "merge" | "squash" | "rebase"; label: string }[] = [
+		{ value: "merge", label: t("pr merge method merge") },
+		{ value: "squash", label: t("pr merge method squash") },
+		{ value: "rebase", label: t("pr merge method rebase") },
+	];
+	return (
+		<div className="gui-pr-detail">
+			<div className="flex min-w-0 items-center gap-2">
+				<span className={`gui-changes-badge gui-pr-badge--${prVisualState(detail)}`}>
+					{detail.isDraft ? "D" : detail.state === "MERGED" ? "M" : detail.state === "CLOSED" ? "X" : "O"}
+				</span>
+				<span className="min-w-0 flex-1 text-[13px] font-medium">
+					<span className="text-[var(--color-text-faint)]">#{detail.number}</span> {detail.title}
+				</span>
+			</div>
+			<div className="gui-pr-meta">
+				{detail.author?.login} · {detail.headRefName} → {detail.baseRefName}
+				{detail.createdAt && <> · {new Date(detail.createdAt).toLocaleDateString()}</>}
+			</div>
+			<div className="gui-pr-meta">
+				<PrChecks rollup={detail.statusCheckRollup} />
+				<PrMergeLine pr={detail} />
+			</div>
+			<CheckItemList rollup={detail.statusCheckRollup} />
+			{detail.labels.length > 0 && (
+				<div className="flex flex-wrap gap-1">
+					{detail.labels.map(label => (
+						<span
+							key={label.name}
+							className="gui-issue-label"
+							style={{
+								background: `#${label.color}22`,
+								color: `#${label.color}`,
+								borderColor: `#${label.color}44`,
+							}}
+						>
+							{label.name}
+							{open && (
+								<button
+									type="button"
+									className="gui-chip-x"
+									title={`${t("general.remove")} ${label.name}`}
+									aria-label={`${t("general.remove")} ${label.name}`}
+									onClick={() => removeLabel(label.name)}
+								>
+									×
+								</button>
+							)}
+						</span>
+					))}
+				</div>
+			)}
+			{(detail.reviewers.length > 0 || detail.assignees.length > 0) && (
+				<div className="gui-pr-meta">
+					{detail.reviewers.length > 0 && (
+						<span className="flex flex-wrap items-center gap-1">
+							{t("pr reviewers")}:
+							{detail.reviewers.map(r => (
+								<span key={r.login} className="gui-issue-label">
+									{r.login}
+									{open && (
+										<button
+											type="button"
+											className="gui-chip-x"
+											title={`${t("general.remove")} ${r.login}`}
+											aria-label={`${t("general.remove")} ${r.login}`}
+											onClick={() => removeReviewer(r.login)}
+										>
+											×
+										</button>
+									)}
+								</span>
+							))}
+						</span>
+					)}
+					{detail.assignees.length > 0 && (
+						<span>
+							{t("pr assignees")}: {detail.assignees.map(a => a.login).join(", ")}
+						</span>
+					)}
+				</div>
+			)}
+			<div className="gui-pr-detail-body">{detail.body?.trim() || t("pr no description")}</div>
+			<CommentList comments={detail.comments} />
+			{open && !detail.isDraft && (
+				<div className="gui-pr-merge-row">
+					<select
+						value={method}
+						onChange={e => setMethod(e.target.value as "merge" | "squash" | "rebase")}
+						aria-label={t("pr merge")}
+						title={t("pr merge")}
+					>
+						{methodOptions.map(o => (
+							<option key={o.value} value={o.value}>
+								{o.label}
+							</option>
+						))}
+					</select>
+					<button
+						type="button"
+						className="gui-pane-action !w-auto px-2"
+						disabled={busy}
+						onClick={() => {
+							if (!confirming) {
+								setConfirming(true);
+								return;
+							}
+							void act(() =>
+								rpc
+									.request<{ ok?: boolean; error?: string }>("github.prMerge", {
+										cwd,
+										number,
+										method,
+									})
+									.catch(() => null),
+							);
+						}}
+					>
+						{busy ? (
+							<Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
+						) : (
+							<Icon name="git-pull-request" className="h-3.5 w-3.5" />
+						)}
+						<span>{confirming ? t("pr merge confirm", { number: detail.number }) : t("pr merge")}</span>
+					</button>
+				</div>
+			)}
+			<div className="gui-pr-actions">
+				{open ? (
+					<button
+						type="button"
+						className="gui-pane-action !w-auto px-2"
+						disabled={busy}
+						onClick={() =>
+							void act(() =>
+								rpc
+									.request<{ ok?: boolean; error?: string }>("github.prState", {
+										cwd,
+										number,
+										state: "closed",
+									})
+									.catch(() => null),
+							)
+						}
+					>
+						<span>{t("pr close")}</span>
+					</button>
+				) : (
+					<button
+						type="button"
+						className="gui-pane-action !w-auto px-2"
+						disabled={busy}
+						onClick={() =>
+							void act(() =>
+								rpc
+									.request<{ ok?: boolean; error?: string }>("github.prState", {
+										cwd,
+										number,
+										state: "open",
+									})
+									.catch(() => null),
+							)
+						}
+					>
+						<span>{t("pr reopen")}</span>
+					</button>
+				)}
+				<button
+					type="button"
+					className="gui-pane-action !w-auto px-2"
+					onClick={() => void openExternalUrl(detail.url)}
+				>
+					<Icon name="external-link" className="h-3.5 w-3.5" />
+					<span>{t("open in browser")}</span>
+				</button>
+				<button
+					type="button"
+					className="gui-pane-action !w-auto px-2"
+					onClick={() => void copyToClipboard(detail.url)}
+				>
+					<Icon name="clipboard" className="h-3.5 w-3.5" />
+					<span>{t("copy link")}</span>
+				</button>
+			</div>
+			{open && (
+				<div className="gui-pr-merge-row">
+					<input
+						className="gui-pr-add-input"
+						value={labelInput}
+						onChange={e => setLabelInput(e.target.value)}
+						onKeyDown={e => {
+							if (e.key === "Enter") addLabels();
+						}}
+						placeholder={t("pr add labels placeholder")}
+						aria-label={t("pr add labels placeholder")}
+					/>
+					<input
+						className="gui-pr-add-input"
+						value={reviewerInput}
+						onChange={e => setReviewerInput(e.target.value)}
+						onKeyDown={e => {
+							if (e.key === "Enter") addReviewers();
+						}}
+						placeholder={t("pr add reviewers placeholder")}
+						aria-label={t("pr add reviewers placeholder")}
+					/>
+				</div>
+			)}
+			{actionError && <div className="gui-pr-error">{actionError}</div>}
+		</div>
 	);
 }
 
@@ -229,6 +627,13 @@ function PrCreateForm({
 /** PR tab: the current branch's PR card (or the create form when there is
  *  none) over the repo's open PR list. All gh calls go through the daemon
  *  with the machine's own credentials. */
+const PR_STATE_SEGMENTS: SegmentedOption<"open" | "closed" | "merged" | "all">[] = [
+	{ value: "open", label: t("state open") },
+	{ value: "closed", label: t("state closed") },
+	{ value: "merged", label: t("state merged") },
+	{ value: "all", label: t("state all") },
+];
+
 function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: string }): ReactNode {
 	const [data, setData] = useState<{
 		pr: GhPr | null;
@@ -238,17 +643,26 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 		branches: string[];
 	} | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [selectedPr, setSelectedPr] = useState<number | null>(null);
+	const [prState, setPrState] = useState<"open" | "closed" | "merged" | "all">("open");
 	const load = useCallback((): void => {
 		if (!rpc) return;
 		void Promise.all([
 			rpc.request<{ pr?: GhPr | null; error?: string }>("github.prStatus", { cwd }).catch(() => null),
-			rpc.request<{ prs?: GhPr[]; error?: string }>("github.prs", { cwd }).catch(() => null),
+			rpc.request<{ prs?: GhPr[]; error?: string }>("github.prs", { cwd, state: prState }).catch(() => null),
 			rpc
 				.request<{ branch?: string | null; ahead?: number; error?: string }>("git.status", { cwd })
 				.catch(() => null),
 			rpc.request<{ branches?: string[]; error?: string }>("git.branches", { cwd }).catch(() => null),
 		]).then(([statusRes, listRes, gitRes, branchesRes]) => {
-			setError(statusRes?.error ?? listRes?.error ?? null);
+			// A null slot means the RPC itself failed at the transport/daemon
+			// layer — without this the pane silently renders "no PR → create
+			// form" while gh is actually broken or unreachable.
+			setError(
+				statusRes === null || listRes === null
+					? t("general.requestFailed")
+					: (statusRes.error ?? listRes.error ?? null),
+			);
 			setData({
 				pr: statusRes?.pr === undefined ? null : statusRes.pr,
 				prs: listRes?.prs ?? [],
@@ -257,7 +671,7 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 				branches: branchesRes?.branches ?? [],
 			});
 		});
-	}, [rpc, cwd]);
+	}, [rpc, cwd, prState]);
 	useEffect(load, [load]);
 	const refresh = useCallback((): void => load(), [load]);
 	const pr = data?.pr ?? null;
@@ -266,12 +680,20 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 	const linkQuery = isLinkQuery(query);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex items-center justify-between px-1 pb-1 pt-1">
+			<div className="flex items-center justify-between gap-2 px-1 pb-1 pt-1">
 				<span className="gui-group-label px-2">{t("settings.pullRequests")}</span>
-				<button type="button" className="gui-pane-action !w-auto px-2" onClick={refresh}>
-					<Icon name="refresh" className="h-3.5 w-3.5" />
-					<span>{t("settings.refresh")}</span>
-				</button>
+				<div className="gui-issue-filters">
+					<Segmented<"open" | "closed" | "merged" | "all">
+						ariaLabel={t("settings.pullRequests")}
+						value={prState}
+						options={PR_STATE_SEGMENTS}
+						onChange={setPrState}
+					/>
+					<button type="button" className="gui-pane-action !w-auto px-2" onClick={refresh}>
+						<Icon name="refresh" className="h-3.5 w-3.5" />
+						<span>{t("settings.refresh")}</span>
+					</button>
+				</div>
 			</div>
 			{error ? (
 				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
@@ -346,13 +768,8 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 									<button
 										key={pr.number}
 										type="button"
-										className="gui-changes-row"
-										onClick={() => {
-											// Open the PR in the SYSTEM browser (Electron
-											// shell.openExternal; window.open fallback for
-											// plain-browser dev).
-											void openExternalUrl(pr.url);
-										}}
+										className={`gui-changes-row${selectedPr === pr.number ? " gui-changes-row--active" : ""}`}
+										onClick={() => setSelectedPr(prev => (prev === pr.number ? null : pr.number))}
 									>
 										<span className={`gui-changes-badge gui-pr-badge--${prVisualState(pr)}`}>
 											{pr.isDraft ? "D" : pr.state === "MERGED" ? "M" : pr.state === "CLOSED" ? "X" : "O"}
@@ -388,6 +805,7 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 							</div>
 						</>
 					)}
+					{selectedPr !== null && <PrDetail rpc={rpc} cwd={cwd} number={selectedPr} onChanged={refresh} />}
 				</FadeScroll>
 			) : (
 				<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
@@ -418,16 +836,162 @@ const ISSUE_STATE_SEGMENTS: SegmentedOption<"open" | "closed" | "all">[] = [
 	{ value: "all", label: t("state all") },
 ];
 
+/** Full issue detail from `github.issueView`. */
+interface GhIssueDetail extends GhIssue {
+	body: string;
+	assignees: { login: string }[];
+	comments: GhComment[];
+	createdAt?: string;
+	closedAt?: string | null;
+}
+
+/** Issue detail preview: body, labels, assignees, comments, close/reopen. */
+function IssueDetail({
+	rpc,
+	cwd,
+	number,
+	onChanged,
+}: {
+	rpc: RpcClient;
+	cwd: string;
+	number: number;
+	onChanged(): void;
+}): ReactNode {
+	const [detail, setDetail] = useState<GhIssueDetail | null | undefined>(undefined);
+	const [error, setError] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
+	const [actionError, setActionError] = useState<string | null>(null);
+	const load = useCallback((): void => {
+		setDetail(undefined);
+		setError(null);
+		void rpc
+			.request<{ issue?: GhIssueDetail | null; error?: string }>("github.issueView", { cwd, number })
+			.then(res => {
+				if (res?.error) setError(res.error);
+				else setDetail(res?.issue ?? null);
+			})
+			.catch(() => setError(t("general.requestFailed")));
+	}, [rpc, cwd, number]);
+	useEffect(load, [load]);
+	const toggleState = async (): Promise<void> => {
+		if (busy || !detail) return;
+		setBusy(true);
+		setActionError(null);
+		try {
+			const res = await rpc
+				.request<{ ok?: boolean; error?: string }>("github.issueState", {
+					cwd,
+					number,
+					state: detail.state === "open" ? "closed" : "open",
+				})
+				.catch(() => null);
+			if (res?.ok) {
+				onChanged();
+				load();
+			} else {
+				setActionError(res?.error ?? t("general.requestFailed"));
+			}
+		} finally {
+			setBusy(false);
+		}
+	};
+	if (error) return <div className="gui-pr-detail gui-pr-error">{error}</div>;
+	if (detail === undefined)
+		return (
+			<div className="gui-pr-detail" aria-busy="true">
+				{[0, 1, 2].map(i => (
+					<div key={i} className="gui-skeleton-row" />
+				))}
+			</div>
+		);
+	if (detail === null) return null;
+	const open = detail.state === "open";
+	return (
+		<div className="gui-pr-detail">
+			<div className="flex min-w-0 items-center gap-2">
+				<span className={`gui-changes-badge ${open ? "gui-pr-badge--open" : "gui-pr-badge--merged"}`}>
+					{open ? "O" : "C"}
+				</span>
+				<span className="min-w-0 flex-1 text-[13px] font-medium">
+					<span className="text-[var(--color-text-faint)]">#{detail.number}</span> {detail.title}
+				</span>
+			</div>
+			<div className="gui-pr-meta">
+				{detail.author?.login}
+				{detail.assignees.length > 0 && (
+					<span>
+						{t("pr assignees")}: {detail.assignees.map(a => a.login).join(", ")}
+					</span>
+				)}
+			</div>
+			{detail.labels.length > 0 && (
+				<div className="flex flex-wrap gap-1">
+					{detail.labels.map(label => (
+						<span
+							key={label.name}
+							className="gui-issue-label"
+							style={{
+								background: `#${label.color}22`,
+								color: `#${label.color}`,
+								borderColor: `#${label.color}44`,
+							}}
+						>
+							{label.name}
+						</span>
+					))}
+				</div>
+			)}
+			<div className="gui-pr-detail-body">{detail.body?.trim() || t("pr no description")}</div>
+			<CommentList comments={detail.comments} />
+			<div className="gui-pr-actions">
+				<button
+					type="button"
+					className="gui-pane-action !w-auto px-2"
+					disabled={busy}
+					onClick={() => void toggleState()}
+				>
+					<span>{open ? t("pr close") : t("pr reopen")}</span>
+				</button>
+				<button
+					type="button"
+					className="gui-pane-action !w-auto px-2"
+					onClick={() => void openExternalUrl(detail.url)}
+				>
+					<Icon name="external-link" className="h-3.5 w-3.5" />
+					<span>{t("open in browser")}</span>
+				</button>
+				<button
+					type="button"
+					className="gui-pane-action !w-auto px-2"
+					onClick={() => void copyToClipboard(detail.url)}
+				>
+					<Icon name="clipboard" className="h-3.5 w-3.5" />
+					<span>{t("copy link")}</span>
+				</button>
+			</div>
+			{actionError && <div className="gui-pr-error">{actionError}</div>}
+		</div>
+	);
+}
+
 /** Issues subtab: state filter + the repo's issue list (gh CLI via the
  *  daemon, same credentials as the PR tab). */
 function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: string }): ReactNode {
 	const [state, setState] = useState<"open" | "closed" | "all">("open");
+	const [labelFilter, setLabelFilter] = useState("");
+	const [authorFilter, setAuthorFilter] = useState("");
 	const [issues, setIssues] = useState<GhIssue[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
 	const load = useCallback((): void => {
 		if (!rpc) return;
 		void rpc
-			.request<{ issues?: GhIssue[]; error?: string }>("github.issues", { cwd, state })
+			.request<{ issues?: GhIssue[]; error?: string }>("github.issues", {
+				cwd,
+				state,
+				label: labelFilter.trim() || undefined,
+				author: authorFilter.trim() || undefined,
+			})
 			.then(res => {
 				setIssues(res?.issues ?? []);
 				setError(res?.error ?? null);
@@ -435,7 +999,7 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 			.catch(err => {
 				setError(err instanceof Error ? err.message : String(err));
 			});
-	}, [rpc, cwd, state]);
+	}, [rpc, cwd, state, labelFilter, authorFilter]);
 	useEffect(load, [load]);
 	const filteredIssues = (issues ?? []).filter(i => matchesQuery(query, i.number, i.title));
 	const linkQuery = isLinkQuery(query);
@@ -443,12 +1007,26 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between gap-2 px-1 pb-1 pt-1">
 				<span className="gui-group-label px-2">{t("issues")}</span>
-				<Segmented<"open" | "closed" | "all">
-					ariaLabel={t("issues")}
-					value={state}
-					options={ISSUE_STATE_SEGMENTS}
-					onChange={setState}
-				/>
+				<div className="gui-issue-filters">
+					<input
+						value={labelFilter}
+						onChange={e => setLabelFilter(e.target.value)}
+						placeholder={t("filter by label")}
+						aria-label={t("filter by label")}
+					/>
+					<input
+						value={authorFilter}
+						onChange={e => setAuthorFilter(e.target.value)}
+						placeholder={t("filter by author")}
+						aria-label={t("filter by author")}
+					/>
+					<Segmented<"open" | "closed" | "all">
+						ariaLabel={t("issues")}
+						value={state}
+						options={ISSUE_STATE_SEGMENTS}
+						onChange={setState}
+					/>
+				</div>
 			</div>
 			{error ? (
 				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
@@ -465,8 +1043,8 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 						<button
 							key={issue.number}
 							type="button"
-							className="gui-changes-row"
-							onClick={() => void openExternalUrl(issue.url)}
+							className={`gui-changes-row${selectedIssue === issue.number ? " gui-changes-row--active" : ""}`}
+							onClick={() => setSelectedIssue(prev => (prev === issue.number ? null : issue.number))}
 						>
 							<span
 								className={`gui-changes-badge ${issue.state === "open" ? "gui-pr-badge--open" : "gui-pr-badge--merged"}`}
@@ -500,6 +1078,7 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 							</span>
 						</button>
 					))}
+					{selectedIssue !== null && <IssueDetail rpc={rpc} cwd={cwd} number={selectedIssue} onChanged={load} />}
 				</FadeScroll>
 			) : issues ? (
 				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no open issues")}</div>

@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SESSION_TAB_EDGE_FADE_PX, sessionTabRevealDelta } from "../lib/session-tab-reveal";
 import { Icon } from "../vendor/oc-icons";
+import { MenuPopup } from "./MenuPopup";
 
 const restrictToXAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
@@ -41,6 +42,8 @@ export interface SessionTabRow {
 	working: boolean;
 	/** Completed-but-unread (sidebar unread set parity). */
 	unread: boolean;
+	/** Fresh draft (no messages yet) — the title renders italic. */
+	draft?: boolean;
 }
 
 /**
@@ -54,16 +57,22 @@ function SessionTabItem({
 	isActive,
 	onSelect,
 	onClose,
+	onCloseOthers,
+	onArchive,
 	children,
 }: {
 	tab: SessionTabRow;
 	isActive: boolean;
 	onSelect: (id: string) => void;
 	onClose: (id: string) => void;
+	onCloseOthers?: (id: string) => void;
+	onArchive?: (id: string) => void;
 	children?: ReactNode;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
 	const showDot = tab.working || (tab.unread && !isActive);
+	const [menuOpen, setMenuOpen] = useState(false);
+	const menuBtnRef = useRef<HTMLButtonElement | null>(null);
 	return (
 		<div
 			ref={setNodeRef}
@@ -101,32 +110,107 @@ function SessionTabItem({
 					<div className="gui-session-tab-current min-w-0 flex-1">{children}</div>
 				) : (
 					<>
-						<span className="gui-session-tab-label" dir="auto" title={tab.label}>
-							{tab.label}
+						{/* Title + status; the row shrinks on hover so the text
+						 * fades under the controls instead of sliding. */}
+						<span className="gui-session-tab-main">
+							<span
+								className={`gui-session-tab-label${tab.draft ? " gui-session-tab-label--draft" : ""}`}
+								dir="auto"
+								title={tab.label}
+							>
+								{tab.label}
+							</span>
+							{showDot ? (
+								tab.working ? (
+									<Icon
+										name="loader-4"
+										className="gui-session-tab-working"
+										aria-label={t("session tab working")}
+									/>
+								) : (
+									<span className="gui-session-tab-unread" aria-label={t("session tab unread")} />
+								)
+							) : null}
 						</span>
-						{showDot ? (
-							tab.working ? (
-								<Icon
-									name="loader-4"
-									className="gui-session-tab-working"
-									aria-label={t("session tab working")}
-								/>
-							) : (
-								<span className="gui-session-tab-unread" aria-label={t("session tab unread")} />
-							)
-						) : null}
-						<button
-							type="button"
-							aria-label={t("close tab")}
-							className="gui-session-tab-close"
-							onClick={event => {
-								event.stopPropagation();
-								onClose(tab.id);
-							}}
-							onPointerDown={event => event.stopPropagation()}
-						>
-							<Icon name="close" className="h-3 w-3" />
-						</button>
+						{/* Hover-revealed overlay at the pill's end: session menu
+						 * first, close after it. Pins open while the menu is up. */}
+						<span className="gui-session-tab-controls" data-open={menuOpen ? "true" : undefined}>
+							<button
+								type="button"
+								ref={menuBtnRef}
+								aria-label={t("tab menu")}
+								aria-haspopup="menu"
+								aria-expanded={menuOpen}
+								className="gui-session-tab-ctl"
+								onClick={event => {
+									event.stopPropagation();
+									setMenuOpen(v => !v);
+								}}
+								onPointerDown={event => event.stopPropagation()}
+							>
+								<Icon name="more" className="h-3 w-3" />
+							</button>
+							<button
+								type="button"
+								aria-label={t("close tab")}
+								className="gui-session-tab-ctl"
+								onClick={event => {
+									event.stopPropagation();
+									onClose(tab.id);
+								}}
+								onPointerDown={event => event.stopPropagation()}
+							>
+								<Icon name="close" className="h-3 w-3" />
+							</button>
+							<MenuPopup
+								open={menuOpen}
+								className="gui-session-tab-menu"
+								anchor={menuBtnRef.current}
+								align="right"
+								onOpenChange={setMenuOpen}
+							>
+								<button
+									type="button"
+									className="gui-menu-item"
+									onClick={() => {
+										setMenuOpen(false);
+										onClose(tab.id);
+									}}
+								>
+									<Icon name="close" className="h-3.5 w-3.5" />
+									{t("close tab")}
+								</button>
+								{onCloseOthers ? (
+									<button
+										type="button"
+										className="gui-menu-item"
+										onClick={() => {
+											setMenuOpen(false);
+											onCloseOthers(tab.id);
+										}}
+									>
+										<Icon name="subtract" className="h-3.5 w-3.5" />
+										{t("close other tabs")}
+									</button>
+								) : null}
+								{onArchive ? (
+									<>
+										<div className="my-1 border-t border-[var(--border)]" role="separator" />
+										<button
+											type="button"
+											className="gui-menu-item"
+											onClick={() => {
+												setMenuOpen(false);
+												onArchive(tab.id);
+											}}
+										>
+											<Icon name="archive" className="h-3.5 w-3.5" />
+											{t("settings.archiveTask")}
+										</button>
+									</>
+								) : null}
+							</MenuPopup>
+						</span>
 					</>
 				)}
 			</div>
@@ -147,6 +231,8 @@ export function SessionTabsStrip({
 	activeId,
 	onSelect,
 	onClose,
+	onCloseOthers,
+	onArchive,
 	onReorder,
 	children,
 }: {
@@ -154,6 +240,8 @@ export function SessionTabsStrip({
 	activeId: string | null;
 	onSelect: (id: string) => void;
 	onClose: (id: string) => void;
+	onCloseOthers?: (id: string) => void;
+	onArchive?: (id: string) => void;
 	onReorder: (activeId: string, overId: string) => void;
 	children: ReactNode;
 }): ReactNode {
@@ -234,6 +322,8 @@ export function SessionTabsStrip({
 								isActive={tab.id === activeId}
 								onSelect={onSelect}
 								onClose={onClose}
+								onCloseOthers={onCloseOthers}
+								onArchive={onArchive}
 							>
 								{tab.id === activeId ? children : null}
 							</SessionTabItem>

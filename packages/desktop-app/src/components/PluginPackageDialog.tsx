@@ -21,7 +21,8 @@ import type { RpcClient } from "../lib/rpc";
 import {
 	ConfigFormSlotMount,
 	type ExtensionItem,
-	SETTINGS_TAB_SLOT_PREFIX,
+	SETTINGS_EXTENSION_SLOT,
+	SETTINGS_ITEM_SLOT_PREFIX,
 	type SlotComponent,
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
@@ -60,7 +61,7 @@ export function PluginPackageDialog({
 }): ReactNode {
 	const { confirm } = useConfirm();
 	const settingsComponents = components.filter(
-		c => c.slot.startsWith("settings.") && !c.slot.startsWith(SETTINGS_TAB_SLOT_PREFIX),
+		c => c.slot === SETTINGS_EXTENSION_SLOT || c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX),
 	);
 	// A plugin's own panel persists through settingsScope — the same proxy the
 	// settings-page cards receive. Without it a panel that writes settings

@@ -21,6 +21,8 @@ interface GitAuthState {
 	email?: string;
 	avatarUrl?: string;
 	active?: boolean;
+	source?: "oauth" | "gh-cli";
+	updatedAt?: string;
 	detail?: string;
 }
 
@@ -299,7 +301,15 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								)}
 							</div>
 							<div className="text-[12px] text-[var(--color-text-muted)]">
-								{t("general.authenticatedViaGhCli")}
+								{auth.source === "oauth"
+									? t("general.authenticatedViaDeviceFlow")
+									: t("general.authenticatedViaGhCli")}
+								{auth.updatedAt && (
+									<span>
+										{" · "}
+										{new Date(auth.updatedAt).toLocaleDateString()}
+									</span>
+								)}
 							</div>
 						</div>
 						<button type="button" className="gui-btn" disabled={authLoading} onClick={() => void disableAuth()}>

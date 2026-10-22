@@ -6271,3 +6271,227 @@ button.traj-error-note:hover {
 	margin: 0 auto;
 	width: 100%;
 }
+
+/* 无工作区时的引导空态（曾经挂着一个永远的「加载中…」——这里没有任何
+ *  在途请求，只是缺一个可以查仓库的目录）。 */
+.gui-prboard-empty {
+	padding: 28px 8px;
+}
+
+/* 头部项目切换器：看板自己的项目记忆，切换不影响 app 其余部分
+ *  （details/summary 承载，选一项即关）。 */
+.gui-prboard-picker {
+	position: relative;
+}
+
+.gui-prboard-picker > summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 220px;
+	padding: 2px 8px;
+	border-radius: var(--radius);
+	font-size: 12.5px;
+	color: var(--color-text-faint);
+	list-style: none;
+	cursor: pointer;
+	user-select: none;
+}
+
+.gui-prboard-picker > summary::-webkit-details-marker {
+	display: none;
+}
+
+.gui-prboard-picker > summary:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
+.gui-prboard-picker[open] > summary {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
+.gui-prboard-picker-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 40;
+	min-width: 200px;
+	max-width: 320px;
+	max-height: 300px;
+	overflow-y: auto;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.gui-prboard-picker-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	border-radius: var(--radius);
+	font-size: 12.5px;
+	color: var(--color-text);
+}
+
+.gui-prboard-picker-item:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-prboard-picker-item--active {
+	color: var(--color-accent);
+}
+
+/* 详情预览（行内展开）：正文、评论、检查项与操作区。 */
+.gui-pr-detail {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 8px;
+	padding: 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface, transparent);
+}
+
+.gui-pr-detail-body {
+	font-size: 12.5px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.gui-pr-detail-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-pr-detail-label {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--color-text-faint);
+}
+
+.gui-pr-comment {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px 8px;
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-sunken, transparent);
+}
+
+.gui-pr-comment-meta {
+	display: flex;
+	gap: 6px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-pr-comment-body {
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* 合并方式选择 + 两步确认按钮。 */
+.gui-pr-merge-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-pr-merge-row select {
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg, transparent);
+	color: var(--color-text);
+	padding: 5px 6px;
+	font-size: 12px;
+}
+
+.gui-pr-detail .gui-pr-actions {
+	flex-wrap: wrap;
+}
+
+.gui-pr-check-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+/* 详情里可移除芯片（标签/审查者）上的 × 钮。 */
+.gui-chip-x {
+	margin-left: 3px;
+	padding: 0 1px;
+	border: none;
+	background: none;
+	color: inherit;
+	opacity: 0.55;
+	font-size: 11px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.gui-chip-x:hover {
+	opacity: 1;
+}
+
+/* 行内追加标签/审查者的输入。 */
+.gui-pr-add-input {
+	max-width: 260px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg, transparent);
+	color: var(--color-text);
+	padding: 5px 8px;
+	font-size: 12px;
+}
+
+/* 列表行与详情里独立使用的 check 点修饰（卡片内是父级选择器，此处补齐）。 */
+.gui-changes-row--active {
+	background: var(--color-surface-hover, color-mix(in srgb, var(--color-text) 8%, transparent));
+}
+
+.gui-pr-check-dot--success {
+	background: var(--color-success, #34d399);
+}
+
+.gui-pr-check-dot--failure {
+	background: var(--color-warning, #f87171);
+}
+
+.gui-pr-check-dot--pending {
+	background: var(--color-text-faint, var(--color-text-muted));
+	animation: gui-pr-pending-pulse 1.6s ease-in-out infinite;
+}
+
+/* 问题过滤行：标签/作者输入与状态分段并排，窄屏换行。 */
+.gui-issue-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-issue-filters input {
+	width: 130px;
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background: var(--color-bg, transparent);
+	color: var(--color-text);
+	padding: 4px 10px;
+	font-size: 11.5px;
+}

@@ -726,16 +726,242 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	);
 }
 
+/** Stash entry from the daemon git.stashList RPC (\x1f fields of
+ *  `git stash list --format=%gd%x1f%gs%x1f%cr%x1f%H`). */
+interface GitStashEntry {
+	ref: string;
+	message: string;
+	age: string;
+	hash: string;
+}
+
+/** Stash tab: save the working tree (staged + unstaged + untracked) with
+ *  an optional message, list entries newest-first, pop or drop each.
+ *  Pop/drop refresh the list; a failed pop surfaces stderr (git keeps the
+ *  stash on conflict, which is the outcome we want to show). */
+function StashPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+	const [entries, setEntries] = useState<GitStashEntry[] | null>(null);
+	const [message, setMessage] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [confirmDrop, setConfirmDrop] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const load = useCallback((): void => {
+		if (!rpc) return;
+		void rpc
+			.request<{ stashes?: GitStashEntry[] }>("git.stashList", { cwd })
+			.then(res => setEntries(res?.stashes ?? []))
+			.catch(() => setEntries([]));
+	}, [rpc, cwd]);
+	useEffect(load, [load]);
+	const push = async (): Promise<void> => {
+		if (!rpc || busy) return;
+		setBusy(true);
+		setError(null);
+		try {
+			const res = await rpc
+				.request<{ ok?: boolean; empty?: boolean; error?: string }>("git.stashPush", {
+					cwd,
+					message: message.trim() || undefined,
+				})
+				.catch(() => null);
+			if (res?.ok) {
+				setMessage("");
+				load();
+			} else {
+				setError(res?.error ?? t("general.requestFailed"));
+			}
+		} finally {
+			setBusy(false);
+		}
+	};
+	const act = async (method: "git.stashPop" | "git.stashDrop", ref: string): Promise<void> => {
+		if (!rpc || busy) return;
+		setBusy(true);
+		setError(null);
+		try {
+			const res = await rpc.request<{ ok?: boolean; error?: string }>(method, { cwd, ref }).catch(() => null);
+			if (res?.ok) load();
+			else setError(res?.error ?? t("general.requestFailed"));
+		} finally {
+			setBusy(false);
+			setConfirmDrop(null);
+		}
+	};
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<div className="flex items-center justify-between px-1 pb-1 pt-1">
+				<span className="gui-group-label px-2">{t("stashes")}</span>
+				<button type="button" className="gui-pane-action !w-auto px-2" onClick={load}>
+					<Icon name="refresh" className="h-3.5 w-3.5" />
+					<span>{t("settings.refresh")}</span>
+				</button>
+			</div>
+			<div className="mb-1 flex items-center gap-1.5 px-1">
+				<input
+					className="gui-input min-w-0 flex-1 !py-1 text-[12px]"
+					value={message}
+					onChange={e => setMessage(e.target.value)}
+					onKeyDown={e => {
+						if (e.key === "Enter") void push();
+					}}
+					placeholder={t("stash message placeholder")}
+					aria-label={t("stash message placeholder")}
+				/>
+				<button
+					type="button"
+					className="gui-btn !h-6 !px-2 !py-0 !text-[11.5px]"
+					disabled={busy}
+					onClick={() => void push()}
+				>
+					{busy ? t("general.committing") : t("stash push")}
+				</button>
+			</div>
+			{error && <div className="gui-pr-error px-2 pb-1">{error}</div>}
+			<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
+				{entries === null ? (
+					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
+				) : entries.length === 0 ? (
+					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("no stashes")}</div>
+				) : (
+					entries.map(entry => (
+						<div key={entry.ref} className="gui-changes-row-wrap">
+							<div className="gui-changes-row !cursor-default">
+								<span className="gui-changes-badge">{entry.ref.replace(/^stash@{(\d+)}$/, "#$1")}</span>
+								<span className="min-w-0 flex-1 truncate text-left">{entry.message}</span>
+								<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{entry.age}</span>
+								<span
+									className="gui-changes-act"
+									role="button"
+									tabIndex={0}
+									title={t("stash pop")}
+									aria-label={t("stash pop")}
+									onClick={e => {
+										e.stopPropagation();
+										void act("git.stashPop", entry.ref);
+									}}
+									onKeyDown={e => {
+										if (e.key === "Enter") void act("git.stashPop", entry.ref);
+									}}
+								>
+									<Icon name="arrow-down" className="h-3.5 w-3.5" />
+								</span>
+								<button
+									type="button"
+									className="gui-changes-act"
+									title={confirmDrop === entry.ref ? t("stash drop confirm") : t("stash drop")}
+									aria-label={t("stash drop")}
+									onClick={e => {
+										e.stopPropagation();
+										if (confirmDrop !== entry.ref) {
+											setConfirmDrop(entry.ref);
+											return;
+										}
+										void act("git.stashDrop", entry.ref);
+									}}
+								>
+									<Icon name={confirmDrop === entry.ref ? "check" : "close"} className="h-3.5 w-3.5" />
+								</button>
+							</div>
+						</div>
+					))
+				)}
+			</FadeScroll>
+		</div>
+	);
+}
+
+/** Sync controls: fetch / pull(rebase) / push for the repo's current
+ *  branch, with the upstream ahead/behind pill beside the actions and
+ *  errors inline. Lives on the GitPanel sub-tab row so every git tab
+ *  reaches it. */
+function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+	const [ahead, setAhead] = useState(0);
+	const [behind, setBehind] = useState(0);
+	const [busyAction, setBusyAction] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const refreshStatus = useCallback((): void => {
+		void rpc
+			?.request<{ ahead?: number; behind?: number }>("git.status", { cwd })
+			.then(res => {
+				setAhead(res?.ahead ?? 0);
+				setBehind(res?.behind ?? 0);
+			})
+			.catch(() => {});
+	}, [rpc, cwd]);
+	useEffect(refreshStatus, [refreshStatus]);
+	const run = async (method: "git.fetch" | "git.pull" | "git.push"): Promise<void> => {
+		if (!rpc || busyAction) return;
+		setBusyAction(method);
+		setError(null);
+		try {
+			const res = await rpc.request<{ ok?: boolean; error?: string }>(method, { cwd }).catch(() => null);
+			if (res?.ok) refreshStatus();
+			else setError(res?.error ?? t("general.requestFailed"));
+		} finally {
+			setBusyAction(null);
+		}
+	};
+	return (
+		<div className="ml-auto flex items-center gap-0.5">
+			{(ahead > 0 || behind > 0) && (
+				<span
+					className="mr-1 flex-shrink-0 font-mono text-[10.5px] text-[var(--color-text-faint)]"
+					title={`↑${ahead} ↓${behind}`}
+				>
+					{ahead > 0 ? `↑${ahead} ` : ""}
+					{behind > 0 ? `↓${behind}` : ""}
+				</span>
+			)}
+			<button
+				type="button"
+				className="gui-pane-tool"
+				disabled={busyAction !== null}
+				title={t("fetch")}
+				aria-label={t("fetch")}
+				onClick={() => void run("git.fetch")}
+			>
+				<StateIcon on={busyAction === "git.fetch"} pair={["loader-4", "download-cloud"]} className="h-3.5 w-3.5" />
+			</button>
+			<button
+				type="button"
+				className="gui-pane-tool"
+				disabled={busyAction !== null}
+				title={t("pull")}
+				aria-label={t("pull")}
+				onClick={() => void run("git.pull")}
+			>
+				<StateIcon on={busyAction === "git.pull"} pair={["loader-4", "arrow-down"]} className="h-3.5 w-3.5" />
+			</button>
+			<button
+				type="button"
+				className="gui-pane-tool"
+				disabled={busyAction !== null}
+				title={t("push")}
+				aria-label={t("push")}
+				onClick={() => void run("git.push")}
+			>
+				<StateIcon on={busyAction === "git.push"} pair={["loader-4", "arrow-up"]} className="h-3.5 w-3.5" />
+			</button>
+			{error && (
+				<span className="ml-1 max-w-[140px] truncate text-[10.5px] text-[var(--color-danger)]" title={error}>
+					{error}
+				</span>
+			)}
+		</div>
+	);
+}
+
 /**
  * Single rail "git" surface (Phase 3 merge of the former git/diff/pr
  * surfaces): a view-local sub-tab bar — workspace changes / commit
  * history / pull requests — over the merged panes. The rail stays the
  * single navigation axis; these tabs switch content *within* the surface.
  */
-type GitPaneTab = "changes" | "commits";
+type GitPaneTab = "changes" | "commits" | "stash";
 const GIT_PANE_TABS: Array<{ id: GitPaneTab; label: string }> = [
 	{ id: "changes", label: "workspace changes" },
 	{ id: "commits", label: "commit history" },
+	{ id: "stash", label: "stashes" },
 ];
 export function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [tab, setTab] = useState<GitPaneTab>("changes");
@@ -758,9 +984,16 @@ export function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 						{t(label as TranslationKey)}
 					</button>
 				))}
+				<GitSyncControls rpc={rpc} cwd={cwd} />
 			</div>
 			<div className="min-h-0 flex-1">
-				{tab === "commits" ? <GitLogPane rpc={rpc} cwd={cwd} /> : <DiffPane rpc={rpc} cwd={cwd} />}
+				{tab === "commits" ? (
+					<GitLogPane rpc={rpc} cwd={cwd} />
+				) : tab === "stash" ? (
+					<StashPane rpc={rpc} cwd={cwd} />
+				) : (
+					<DiffPane rpc={rpc} cwd={cwd} />
+				)}
 			</div>
 		</div>
 	);

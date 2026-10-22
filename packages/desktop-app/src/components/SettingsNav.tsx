@@ -1,6 +1,6 @@
 import { t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SectionId, SectionRequest } from "../lib/settings-nav";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
@@ -309,6 +309,48 @@ export function navGroups(
 	return groups;
 }
 
+/** Live filter over the nav groups: a group survives when the query hits an
+ *  item's label or one of its keyword entries (see SECTION_SEARCH_TERMS).
+ *  Shared by the inline search box and the collapsed-mode floating panel so
+ *  both surfaces rank sections identically. */
+function filterNavGroups(
+	groups: { title: string; items: SectionDef[] }[],
+	query: string,
+): { title: string; items: SectionDef[] }[] {
+	const q = query.trim().toLowerCase();
+	if (!q) return groups;
+	return groups
+		.map(group => ({
+			...group,
+			items: group.items.filter(item => {
+				if (item.label.toLowerCase().includes(q)) return true;
+				const terms = SECTION_SEARCH_TERMS[item.id] ?? [];
+				return terms.some(k => k.includes(q) || q.includes(k));
+			}),
+		}))
+		.filter(group => group.items.length > 0);
+}
+
+/** Mirrors the ≤900px icon-rail media query in gui-settings.css so the
+ *  component can swap the inline search box for a floating panel without
+ *  relying on CSS-only state (:focus-within was fragile — a click on the
+ *  icon button did not reliably focus the hidden input). */
+function useCollapsedNav(): boolean {
+	const [mq] = useState(() =>
+		typeof window !== "undefined" && typeof window.matchMedia === "function"
+			? window.matchMedia("(max-width: 900px)")
+			: null,
+	);
+	const [collapsed, setCollapsed] = useState(() => mq?.matches ?? false);
+	useEffect(() => {
+		if (!mq) return;
+		const onChange = () => setCollapsed(mq.matches);
+		mq.addEventListener("change", onChange);
+		return () => mq.removeEventListener("change", onChange);
+	}, [mq]);
+	return collapsed;
+}
+
 /**
  * The nav column body: back-to-workspace header, the section search box,
  * the grouped rows (filtered live by `query`) and the bottom user-area
@@ -333,11 +375,31 @@ export function SettingsNav({
 	onQueryChange(query: string): void;
 }): ReactNode {
 	const groups = navGroups(extTabs);
+	const collapsedNav = useCollapsedNav();
+	const [searchOpen, setSearchOpen] = useState(false);
+	const searchFabRef = useRef<HTMLButtonElement | null>(null);
+	const searchPopRef = useRef<HTMLDivElement | null>(null);
 	// Content-boundary feather (transcript parity): the nav column scrolls
 	// inside the slot — the shared hook flips its data-top-scroll /
 	// data-bottom-scroll mask attrs.
 	const navRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(navRef);
+	// Collapsed mode: close the floating search panel on any pointer-down
+	// outside it (the FAB itself toggles, so it is excluded).
+	useEffect(() => {
+		if (!searchOpen) return;
+		const onDown = (e: MouseEvent) => {
+			const target = e.target as Node;
+			if (searchPopRef.current?.contains(target) || searchFabRef.current?.contains(target)) return;
+			setSearchOpen(false);
+		};
+		document.addEventListener("mousedown", onDown);
+		return () => document.removeEventListener("mousedown", onDown);
+	}, [searchOpen]);
+	const closeSearch = useCallback(() => {
+		setSearchOpen(false);
+		onQueryChange("");
+	}, [onQueryChange]);
 	return (
 		<nav className="gui-settings-nav-col flex h-full w-full flex-shrink-0 flex-col overflow-hidden">
 			<div className="gui-settings-nav-head">
@@ -346,60 +408,120 @@ export function SettingsNav({
 					<span className="gui-settings-back-label">{t("settings.backWorkspace")}</span>
 				</button>
 			</div>
-			<div className="gui-settings-search">
-				<Icon name="search" className="h-3.5 w-3.5 flex-none" />
-				<input
-					className="gui-input min-w-0 flex-1"
-					value={query}
-					onChange={e => onQueryChange(e.target.value)}
-					placeholder={t("settings.searchSettings")}
-					aria-label={t("settings.searchSettings")}
-				/>
-				{query && (
+			{collapsedNav ? (
+				<div className="gui-settings-search-slot">
 					<button
+						ref={searchFabRef}
 						type="button"
-						className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
-						onClick={() => onQueryChange("")}
-						title={t("settings.clear")}
-						aria-label={t("settings.clear")}
+						className="gui-settings-search-fab"
+						title={t("settings.searchSettings")}
+						aria-label={t("settings.searchSettings")}
+						aria-expanded={searchOpen}
+						onClick={() => setSearchOpen(open => !open)}
 					>
-						<Icon name="close" className="h-3 w-3" />
+						<Icon name="search" className="h-4 w-4" />
 					</button>
-				)}
-			</div>
-			<div ref={navRef} className="gui-settings-nav-scroll" data-top-scroll="false" data-bottom-scroll="false">
-				{groups
-					.map(group => ({
-						...group,
-						items: query.trim()
-							? group.items.filter(item => {
-									const q = query.trim().toLowerCase();
-									if (item.label.toLowerCase().includes(q)) return true;
-									const terms = SECTION_SEARCH_TERMS[item.id] ?? [];
-									return terms.some(k => k.includes(q) || q.includes(k));
-								})
-							: group.items,
-					}))
-					.filter(group => group.items.length > 0)
-					.map(group => (
-						<div key={group.title} className="mb-1">
-							<div className="gui-settings-nav-group">{group.title}</div>
-							{group.items.map(item => (
-								<button
-									key={item.id}
-									type="button"
-									title={item.enabled ? item.label : `${item.label} · ${t("settings.comingSoon")}`}
-									className={`gui-settings-nav${activeSection === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
-									onClick={() => {
-										if (item.enabled) onSelect(item.id as SectionRequest);
+					{searchOpen && (
+						<div ref={searchPopRef} className="gui-settings-search-pop" role="dialog">
+							<div className="gui-settings-search-pop-input">
+								<Icon name="search" className="h-3.5 w-3.5 flex-none" />
+								<input
+									// eslint-disable-next-line jsx-a11y/no-autofocus -- the panel only opens from an explicit click, so focusing the field is the expected continuation.
+									autoFocus
+									className="gui-input min-w-0 flex-1"
+									value={query}
+									onChange={e => onQueryChange(e.target.value)}
+									placeholder={t("settings.searchSettings")}
+									aria-label={t("settings.searchSettings")}
+									onKeyDown={e => {
+										if (e.key === "Escape") {
+											e.stopPropagation();
+											setSearchOpen(false);
+										}
 									}}
-								>
-									<Icon name={item.icon} className="h-4 w-4" />
-									<span className="gui-settings-nav-label">{item.label}</span>
-								</button>
-							))}
+								/>
+								{query && (
+									<button
+										type="button"
+										className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+										onClick={() => onQueryChange("")}
+										title={t("settings.clear")}
+										aria-label={t("settings.clear")}
+									>
+										<Icon name="close" className="h-3 w-3" />
+									</button>
+								)}
+							</div>
+							<div className="gui-settings-search-pop-results">
+								{filterNavGroups(groups, query).map(group => (
+									<div key={group.title} className="mb-0.5">
+										<div className="gui-settings-search-pop-group">{group.title}</div>
+										{group.items.map(item => (
+											<button
+												key={item.id}
+												type="button"
+												className="gui-settings-search-pop-item"
+												onClick={() => {
+													onSelect(item.id as SectionRequest);
+													closeSearch();
+												}}
+											>
+												<Icon name={item.icon} className="h-4 w-4 flex-none" />
+												<span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
+											</button>
+										))}
+									</div>
+								))}
+								{query.trim() && filterNavGroups(groups, query).length === 0 && (
+									<div className="gui-settings-search-pop-empty">{t("general.noResults")}</div>
+								)}
+							</div>
 						</div>
-					))}
+					)}
+				</div>
+			) : (
+				<label className="gui-settings-search">
+					<Icon name="search" className="h-3.5 w-3.5 flex-none" />
+					<input
+						className="gui-input min-w-0 flex-1"
+						value={query}
+						onChange={e => onQueryChange(e.target.value)}
+						placeholder={t("settings.searchSettings")}
+						aria-label={t("settings.searchSettings")}
+					/>
+					{query && (
+						<button
+							type="button"
+							className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+							onClick={() => onQueryChange("")}
+							title={t("settings.clear")}
+							aria-label={t("settings.clear")}
+						>
+							<Icon name="close" className="h-3 w-3" />
+						</button>
+					)}
+				</label>
+			)}
+			<div ref={navRef} className="gui-settings-nav-scroll" data-top-scroll="false" data-bottom-scroll="false">
+				{filterNavGroups(groups, query).map(group => (
+					<div key={group.title} className="mb-1">
+						<div className="gui-settings-nav-group">{group.title}</div>
+						{group.items.map(item => (
+							<button
+								key={item.id}
+								type="button"
+								title={item.enabled ? item.label : `${item.label} · ${t("settings.comingSoon")}`}
+								className={`gui-settings-nav${activeSection === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
+								onClick={() => {
+									if (item.enabled) onSelect(item.id as SectionRequest);
+								}}
+							>
+								<Icon name={item.icon} className="h-4 w-4" />
+								<span className="gui-settings-nav-label">{item.label}</span>
+							</button>
+						))}
+					</div>
+				))}
 			</div>
 			{/* Bottom: onboarding + announcements + daemon status (user-area slot). */}
 			<div className="flex flex-col gap-0.5 border-t border-[var(--border)] px-2 py-2">

@@ -2954,6 +2954,26 @@
 	flex: 0 1 auto;
 }
 
+/* Array chip editor container (SchemaSettings ArrayChipsEditor). Dedicated
+   class instead of utility soup so chips keep their natural width in every
+   build — the segmented control's flex:1 on .gui-seg-btn otherwise stretches
+   every chip to an equal share of the row (dozens of backends → one
+   character per chip). */
+.gui-settings-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-settings-chips .gui-seg-item {
+	flex: 0 0 auto;
+}
+
+.gui-settings-chips-add {
+	max-width: 160px;
+}
+
 .gui-seg-move {
 	padding: 2px 4px;
 	border: none;
@@ -6093,4 +6113,97 @@ body.gui-resizing {
 	font-weight: 700;
 	line-height: 1;
 	pointer-events: none;
+}
+
+/* ── Collapsed settings nav (≤900px, icon-rail width): the search field
+ *  collapses to a centered magnifier button; clicking it opens a floating
+ *  panel with the input and a live-filtered section list (SettingsNav swaps
+ *  the inline <label> for this slot via useCollapsedNav). The panel carries
+ *  its own label/group styles because the rail media query hides
+ *  .gui-settings-nav-label / .gui-settings-nav-group. (Base
+ *  .gui-settings-search rules at ~L4196 still serve the expanded layout.) ── */
+@media (max-width: 900px) {
+	.gui-settings-search-slot {
+		position: relative;
+		display: flex;
+		justify-content: center;
+		margin: 4px 8px 6px;
+	}
+
+	.gui-settings-search-fab {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: var(--radius-lg);
+		color: var(--color-text-faint);
+		transition:
+			background-color 120ms ease-out,
+			color 120ms ease-out;
+	}
+
+	.gui-settings-search-fab:hover,
+	.gui-settings-search-fab[aria-expanded="true"] {
+		background: color-mix(in oklab, var(--color-text) 8%, transparent);
+		color: var(--color-text);
+	}
+
+	.gui-settings-search-pop {
+		position: absolute;
+		top: calc(100% + 6px);
+		left: 0;
+		z-index: 50;
+		width: 232px;
+		max-width: calc(100vw - 96px);
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+	}
+
+	.gui-settings-search-pop-input {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 8px;
+		border-bottom: 1px solid var(--border);
+		color: var(--color-text-faint);
+	}
+
+	.gui-settings-search-pop-results {
+		max-height: 320px;
+		overflow-y: auto;
+		padding: 4px;
+	}
+
+	.gui-settings-search-pop-group {
+		padding: 6px 8px 2px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-faint);
+	}
+
+	.gui-settings-search-pop-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 6px 8px;
+		border-radius: var(--radius);
+		font-size: 13px;
+		color: var(--color-text);
+	}
+
+	.gui-settings-search-pop-item:hover {
+		background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	}
+
+	.gui-settings-search-pop-empty {
+		padding: 10px 8px;
+		font-size: 12px;
+		color: var(--color-text-faint);
+		text-align: center;
+	}
 }

@@ -687,26 +687,49 @@ body.gui-resizing .gui-pane-resize-x::after {
 	pointer-events: auto;
 }
 
-/* ── End fade: rows thin out under the composer's glass ────────────────
- * Static CSS mask, no animation timeline. The band is the composer's measured
- * height plus a small extra, so the fade always ends exactly where the glass
- * begins — a fixed 32px would be too short over a tall composer (rows would be
- * cut mid-line) and too long over a short one (rows would vanish early).
- * `--chat-composer-inset` is written onto this element by the inset-reader
- * registration, not inherited from the column: a custom property on the column
- * restyles every virtualized row.
- *
- * While a live reply streams AND the view follows it (`data-live-tail`), the
- * band grows by a line or so: the newest line must be fully transparent at the
- * composer's edge instead of being sliced by it.
- * `--chat-floating-panel-clearance` covers the absolute panels above the
- * composer (the ask card): they are not part of the wrap measurement, so the
- * fade must grow by their height too. */
-.gui-transcript {
-	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + 24px);
+/* ── Transcript edge fades: bands, not a scroller mask ────────────────
+ * A mask-image on the scrolling container recomposited the whole
+ * transcript on the GPU every frame it scrolled or grew. Each edge is
+ * a band instead: a later sibling of the scroller, painted in the
+ * card's surface color (the only thing behind the scroller), so rows
+ * dissolve into the background instead of stopping dead at an edge.
+ * The end band is always on: it spans the floating composer's measured
+ * height (`--chat-composer-inset`, written onto the band itself by the
+ * composer observer through the reader channel) plus a ramp, so rows
+ * sliding under the glass thin out instead of being sliced by it.
+ * While a live reply streams (`data-live-tail`) the band turns solid
+ * over the composer zone — no ghost row bleeds through the glass.
+ * The top band follows the scroller's scroll-shadow attribute, same
+ * as the mask it replaces. */
+.gui-chat-fade {
+	position: absolute;
+	inset-inline: 0;
+	z-index: 1;
+	pointer-events: none;
 }
-.gui-chat-body[data-live-tail="true"] .gui-transcript {
-	--chat-tail-fade: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + 64px);
+.gui-chat-fade--top {
+	display: none;
+	top: 0;
+	height: 24px;
+	background-image: linear-gradient(to bottom, var(--color-surface) 0, transparent 100%);
+}
+.gui-transcript[data-top-scroll="true"] ~ .gui-chat-fade--top {
+	display: block;
+}
+.gui-chat-fade--end {
+	--chat-end-ramp: 24px;
+	bottom: 0;
+	height: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + var(--chat-end-ramp));
+	background-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		var(--color-surface) calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + var(--chat-end-ramp))
+	);
+}
+.gui-chat-body[data-live-tail="true"] .gui-chat-fade--end {
+	--chat-end-ramp: 8px;
+	height: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + 8px);
+	background-image: linear-gradient(to bottom, transparent 0, var(--color-surface) 8px);
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
@@ -1631,9 +1654,10 @@ body.gui-resizing .gui-pane-resize-x::after {
 }
 
 .gui-session-tab {
+	position: relative;
 	display: flex;
 	height: 28px;
-	max-width: 180px;
+	width: 176px;
 	min-width: 0;
 	align-items: center;
 	gap: 4px;
@@ -1667,6 +1691,29 @@ body.gui-resizing .gui-pane-resize-x::after {
 	white-space: nowrap;
 	font-size: 12.5px;
 	color: var(--color-text-faint);
+}
+
+/* Title + status row. On hover it reserves the controls' width so the
+ * text ellipsizes in place instead of sliding under the buttons. */
+.gui-session-tab-main {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	align-items: center;
+	gap: 4px;
+	padding-right: 0;
+	transition: padding-right 120ms ease-out;
+}
+
+.gui-session-tab:hover .gui-session-tab-main,
+.gui-session-tab:has(.gui-session-tab-controls[data-open="true"]) .gui-session-tab-main {
+	padding-right: 42px;
+}
+
+/* Fresh draft tabs read as temporary — italic title, the same convention
+ * editor tabs use for unsaved buffers. */
+.gui-session-tab-label--draft {
+	font-style: italic;
 }
 
 .gui-session-tab:hover .gui-session-tab-label {
@@ -1703,29 +1750,49 @@ body.gui-resizing .gui-pane-resize-x::after {
 	background: var(--color-accent);
 }
 
-/* Hover-revealed close: the title keeps its width (flex-shrink on the
- * label) while the control only appears when the tab is hovered. */
-.gui-session-tab-close {
+/* Hover-revealed controls at the pill's end: session menu first, close
+ * after it. Hidden until hover (or while the menu is open); the status dot
+ * fades out in their place. */
+.gui-session-tab-controls {
+	position: absolute;
+	inset-inline-end: 5px;
+	top: 50%;
+	display: none;
+	align-items: center;
+	gap: 1px;
+	transform: translateY(-50%);
+}
+
+.gui-session-tab:hover .gui-session-tab-controls,
+.gui-session-tab-controls[data-open="true"],
+.gui-session-tab-controls:has(:focus-visible) {
 	display: inline-flex;
-	height: 16px;
-	width: 16px;
+}
+
+.gui-session-tab:hover .gui-session-tab-working,
+.gui-session-tab:hover .gui-session-tab-unread,
+.gui-session-tab:has(.gui-session-tab-controls[data-open="true"]) .gui-session-tab-working,
+.gui-session-tab:has(.gui-session-tab-controls[data-open="true"]) .gui-session-tab-unread {
+	opacity: 0;
+}
+
+.gui-session-tab-working,
+.gui-session-tab-unread {
+	transition: opacity 120ms ease-out;
+}
+
+.gui-session-tab-ctl {
+	display: inline-flex;
+	height: 18px;
+	width: 18px;
 	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
 	border-radius: 999px;
 	color: var(--color-text-faint);
-	opacity: 0;
-	transition:
-		opacity 120ms ease-out,
-		background 120ms ease-out;
 }
 
-.gui-session-tab:hover .gui-session-tab-close,
-.gui-session-tab-close:focus-visible {
-	opacity: 1;
-}
-
-.gui-session-tab-close:hover {
+.gui-session-tab-ctl:hover {
 	background: var(--color-hover);
 	color: var(--color-text);
 }
@@ -5151,23 +5218,6 @@ body.gui-resizing .gui-pane-right {
 	overflow: visible;
 }
 
-.gui-transcript[data-top-scroll="true"][data-bottom-scroll="true"] {
-	mask-image: linear-gradient(
-		to bottom,
-		transparent 0,
-		#000 24px,
-		#000 calc(100% - 32px),
-		transparent 100%
-	);
-}
-
-.gui-transcript[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
-	mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
-}
-
-.gui-transcript[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
-	mask-image: linear-gradient(to top, transparent 0, #000 32px);
-}
 
 /* ── Content-boundary feather for the sidebar session list + settings ──
  * Same recipe as the transcript: data attrs are maintained by the shared
@@ -5282,6 +5332,7 @@ body.gui-resizing .gui-pane-right {
  * the shared Transcript's .tr-back-bottom is the single jump-to-bottom.) */
 .gui-recap-row {
 	position: absolute;
+	z-index: 3;
 	/* Sits above the transcript's back-to-bottom button zone so the two
 	 * floating controls never overlap — even when the recap expands. */
 	bottom: 56px;

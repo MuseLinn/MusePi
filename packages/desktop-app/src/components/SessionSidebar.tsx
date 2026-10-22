@@ -17,7 +17,13 @@ import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionHoverCard } from "./SessionHoverCard";
-import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
+import {
+	hasCollapsedSubtrees,
+	SessionList,
+	type SessionListNode,
+	type SessionStatus,
+	setAllSubtreesCollapsed,
+} from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
 
@@ -819,7 +825,10 @@ export function SessionSidebar({
 								} else {
 									// Toggle: any collapsed → expand all; all expanded → collapse all.
 									// (Was `length > 0`, which re-collapsed instead of expanding.)
-									collapseAllProjects(collapsedProjects.length === 0);
+									// 子会话子树走同一方向：项目块与子树同收同展。
+									const collapse = collapsedProjects.length === 0 && !hasCollapsedSubtrees();
+									collapseAllProjects(collapse);
+									setAllSubtreesCollapsed(collapse);
 								}
 							}}
 						>

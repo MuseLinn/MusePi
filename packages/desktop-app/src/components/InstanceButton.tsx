@@ -3,8 +3,8 @@
  * 浏览器桥诊断）。独立组件：状态全自管（meta 轮询、hosts 表单、
  * browserHost 外部 store），宿主只需喂连接事实与 host 增删改回调。
  *
- * 位置：左侧面板底部栏（顶栏减法后从 header 迁来，openchamber 把
- * connection 状态收进侧栏 footer 的同一类位置）。
+ * 位置：左侧面板底部栏（顶栏减法后从 header 迁来）——连接状态收起
+ * 在侧栏 footer，与设置入口并列成两段布局。
  */
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";

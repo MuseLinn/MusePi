@@ -105,6 +105,107 @@ function RecordInput({
 }
 
 /**
+ * Declared-membership array editor (TUI MultiSelectSubmenu parity): one
+ * pressed chip per choice, click flips membership. Stored values outside
+ * the declared set keep a fallback chip so nothing is silently dropped.
+ * `ui.ordered` (TUI ordered-multiselect parity): selected chips lead in
+ * stored order — position is priority — and carry ←/→ move buttons.
+ *
+ * Large option sets (the image URL backend list ships ~50 entries)
+ * collapse to "selected chips + add dropdown": rendering every choice as
+ * a chip buries the row and, under the segmented control's flex:1, squeezes
+ * each chip down to its first character. Small sets keep every choice one
+ * click away.
+ */
+function ArrayChipsEditor({
+	item,
+	value,
+	commit,
+}: {
+	item: SchemaItem;
+	value: unknown;
+	commit(key: string, value: unknown): void;
+}): ReactNode {
+	const ordered = item.ui?.ordered === true;
+	const current = Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+	const declared = (
+		Array.isArray(item.ui?.options)
+			? item.ui.options
+			: ([] as readonly { value: string; label: string; description?: string }[])
+	) as readonly { value: string; label: string; description?: string }[];
+	const opts = declared.map(opt => ({
+		value: opt.value,
+		label: t(opt.label as TranslationKey),
+		description: opt.description ? t(opt.description as TranslationKey) : undefined,
+	}));
+	for (const v of current) {
+		if (!opts.some(o => o.value === v)) opts.push({ value: v, label: v, description: undefined });
+	}
+	const displayOpts = ordered ? sortOrderedOptions(opts, current) : opts;
+	const compact = displayOpts.length > 8;
+	const shown = compact ? displayOpts.filter(o => current.includes(o.value)) : displayOpts;
+	const addable = displayOpts.filter(o => !current.includes(o.value));
+	return (
+		<span className="gui-settings-chips">
+			{shown.map(opt => {
+				const on = current.includes(opt.value);
+				const pos = current.indexOf(opt.value);
+				return (
+					<span key={opt.value} className="gui-seg-item">
+						<button
+							type="button"
+							className={`gui-seg-btn${on ? " gui-seg-btn--active" : ""}`}
+							aria-pressed={on}
+							title={opt.description}
+							onClick={() =>
+								commit(item.key, on ? current.filter(v => v !== opt.value) : [...current, opt.value])
+							}
+						>
+							{opt.label}
+						</button>
+						{ordered && on && (
+							<>
+								<button
+									type="button"
+									className="gui-seg-move"
+									aria-label={t("settings.moveEarlier")}
+									title={t("settings.moveEarlier")}
+									disabled={pos === 0}
+									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, -1))}
+								>
+									←
+								</button>
+								<button
+									type="button"
+									className="gui-seg-move"
+									aria-label={t("settings.moveLater")}
+									title={t("settings.moveLater")}
+									disabled={pos === current.length - 1}
+									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, 1))}
+								>
+									→
+								</button>
+							</>
+						)}
+					</span>
+				);
+			})}
+			{compact && addable.length > 0 && (
+				<GuiSelect
+					className="gui-settings-chips-add"
+					value=""
+					ariaLabel={t("settings.add")}
+					onChange={v => {
+						if (v !== "") commit(item.key, [...current, v]);
+					}}
+					options={[{ value: "", label: t("settings.add") }, ...addable]}
+				/>
+			)}
+		</span>
+	);
+}
+
+/**
  * Generic settings renderer driven by daemon schema metadata.
  * Boolean → toggle, enum → select, string → input (credentials render
  * masked and keep the stored value unless replaced), number → input.
@@ -269,91 +370,7 @@ export function SchemaSettings({
 												) : item.type === "array" &&
 													Array.isArray(item.ui?.options) &&
 													item.ui.options.length > 0 ? (
-													// Declared-membership array (TUI MultiSelectSubmenu
-													// parity): one pressed chip per choice, click flips
-													// membership. Stored values outside the declared set
-													// keep a fallback chip so nothing is silently dropped.
-													// `ui.ordered` (TUI ordered-multiselect parity):
-													// selected chips lead in stored order — position is
-													// priority — and carry ←/→ move buttons.
-													<span className="flex flex-wrap items-center gap-1">
-														{(() => {
-															const ordered = item.ui?.ordered === true;
-															const current = Array.isArray(value)
-																? value.filter((v): v is string => typeof v === "string")
-																: [];
-															const opts = item.ui.options.map(opt => ({
-																value: opt.value,
-																label: t(opt.label as TranslationKey),
-																description: opt.description
-																	? t(opt.description as TranslationKey)
-																	: undefined,
-															}));
-															for (const v of current) {
-																if (!opts.some(o => o.value === v))
-																	opts.push({ value: v, label: v, description: undefined });
-															}
-															const displayOpts = ordered ? sortOrderedOptions(opts, current) : opts;
-															return displayOpts.map(opt => {
-																const on = current.includes(opt.value);
-																const pos = current.indexOf(opt.value);
-																return (
-																	<span key={opt.value} className="gui-seg-item">
-																		<button
-																			type="button"
-																			className={`gui-seg-btn${on ? " gui-seg-btn--active" : ""}`}
-																			aria-pressed={on}
-																			title={opt.description}
-																			onClick={() =>
-																				commit(
-																					item.key,
-																					on
-																						? current.filter(v => v !== opt.value)
-																						: [...current, opt.value],
-																				)
-																			}
-																		>
-																			{opt.label}
-																		</button>
-																		{ordered && on && (
-																			<>
-																				<button
-																					type="button"
-																					className="gui-seg-move"
-																					aria-label={t("settings.moveEarlier")}
-																					title={t("settings.moveEarlier")}
-																					disabled={pos === 0}
-																					onClick={() =>
-																						commit(
-																							item.key,
-																							moveOrderedOption(current, opt.value, -1),
-																						)
-																					}
-																				>
-																					←
-																				</button>
-																				<button
-																					type="button"
-																					className="gui-seg-move"
-																					aria-label={t("settings.moveLater")}
-																					title={t("settings.moveLater")}
-																					disabled={pos === current.length - 1}
-																					onClick={() =>
-																						commit(
-																							item.key,
-																							moveOrderedOption(current, opt.value, 1),
-																						)
-																					}
-																				>
-																					→
-																				</button>
-																			</>
-																		)}
-																	</span>
-																);
-															});
-														})()}
-													</span>
+													<ArrayChipsEditor item={item} value={value} commit={commit} />
 												) : item.type === "array" ? (
 													<input
 														type="text"

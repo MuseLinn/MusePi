@@ -112,6 +112,8 @@ export function GuiHeader({
 	tabs,
 	onSelectTab,
 	onCloseTab,
+	onCloseOtherTabs,
+	onArchiveTab,
 	onReorderTabs,
 }: {
 	store: GuiSessionStore | null;
@@ -157,6 +159,10 @@ export function GuiHeader({
 	tabs?: SessionTabRow[];
 	onSelectTab?(id: string): void;
 	onCloseTab?(id: string): void;
+	/** Close every tab except this one and activate it. */
+	onCloseOtherTabs?(id: string): void;
+	/** Archive the tab's session (local archive list + undo toast). */
+	onArchiveTab?(id: string): void;
 	onReorderTabs?(activeId: string, overId: string): void;
 }): ReactNode {
 	const noopSubscribe = (): (() => void) => () => {};
@@ -934,6 +940,8 @@ export function GuiHeader({
 						activeId={store?.sessionId ?? null}
 						onSelect={onSelectTab ?? (() => {})}
 						onClose={onCloseTab ?? (() => {})}
+						onCloseOthers={onCloseOtherTabs ?? (() => {})}
+						onArchive={onArchiveTab ?? (() => {})}
 						onReorder={onReorderTabs ?? (() => {})}
 					>
 						{titleBlock}

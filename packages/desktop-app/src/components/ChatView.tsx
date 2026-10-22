@@ -2555,11 +2555,11 @@ export function ChatView({
 												? "gui-chat-body--focused-hidden"
 												: "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
 										}
-										/* A live reply the view follows: the end fade deepens
-										 * (see --chat-tail-fade, gui-chat.css) so the newest line
-										 * is fully transparent where the floating composer meets
-										 * it instead of being cut in half. At rest and while
-										 * reading history the rows slide under the glass, which
+										/* A live reply the view follows: the end fade band turns
+										 * solid over the composer zone (`.gui-chat-fade--end`,
+										 * gui-chat.css) so no ghost row bleeds through the
+										 * glass while the newest line streams in. At rest the
+										 * band is a ramp and rows slide under the glass, which
 										 * is what makes it read as floating. */
 										data-live-tail={snap?.working ? "true" : undefined}
 									>
@@ -2871,6 +2871,39 @@ export function ChatView({
 																}}
 															/>
 														</CodeHighlightProvider>
+														{/* Tail spacer. The composer floats over this
+														 * scroller, so without a reserved band the last
+														 * row would sit under it. INSIDE the scroller on
+														 * purpose: only scroll content counts toward
+														 * scrollHeight — parked below the scroller (its
+														 * old spot) it never entered the pin math and the
+														 * last row hid under the composer. The height is a
+														 * CSS variable the composer's ResizeObserver writes
+														 * (see the --chat-composer-inset effect), so a
+														 * growing textarea or a queue row resizes the
+														 * footer without re-rendering the list. The band is
+														 * exactly the floating stack's height, because every
+														 * dock (approvals, asks, jump-back, session-tree nav)
+														 * is a child of the wrap. While the session works
+														 * the growth allowance is off: the working strip and
+														 * the live-end fade sit in the gap, so a composer
+														 * grown into it (a queued message, the working strip)
+														 * left the last line under the glass. The ask card
+														 * above the composer is absolutely anchored (not part
+														 * of the wrap), so its published clearance is added
+														 * on top. */}
+														<div
+															className="gui-chat-tail-spacer flex-shrink-0"
+															ref={registerComposerInsetReader}
+															style={{
+																height: `calc(${
+																	(snap?.working ?? false)
+																		? `max(var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px), calc(var(--chat-composer-inset, 0px) + ${FLOATING_COMPOSER_GAP_PX}px))`
+																		: `var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px)`
+																} + var(--chat-floating-panel-clearance, 0px))`,
+															}}
+															aria-hidden="true"
+														/>
 													</div>
 													{/* Jump-to-bottom: the shared client-core Transcript owns the
 													 * canonical .tr-back-bottom (M1.10 follow re-arm).
@@ -2953,34 +2986,18 @@ export function ChatView({
 															</button>
 														</div>
 													)}
-													{/* Tail spacer. The composer floats over this
-													 * scroller, so without a reserved band the last
-													 * row would sit under it. The height is a CSS
-													 * variable the composer's ResizeObserver writes
-													 * (see the --chat-composer-inset effect), so a
-													 * growing textarea or a queue row resizes the
-													 * footer without re-rendering the list.
-													 * The band is exactly the floating stack's height,
-													 * because every dock (approvals, asks, jump-back,
-													 * session-tree nav) is a child of the wrap.
-													 * While the session works the growth allowance is
-													 * off: the working strip and the live-end fade sit
-													 * in the gap, so a composer grown into it (a queued
-													 * message, the working strip) left the last line
-													 * under the glass. The ask card above the composer is
-													 * absolutely anchored (not part of the wrap), so its
-													 * published clearance is added on top. */}
+													{/* Edge fade bands: painted siblings of the scroller
+													 * (see .gui-chat-fade, gui-chat.css). A mask on the
+													 * scroller recomposited the whole transcript every
+													 * frame it scrolled; the end band is a composer-inset
+													 * reader — the observer writes the measured inset onto
+													 * it and rows dissolve into the surface as they slide
+													 * under the floating composer. */}
+													<div aria-hidden="true" className="gui-chat-fade gui-chat-fade--top" />
 													<div
-														className="gui-chat-tail-spacer flex-shrink-0"
 														ref={registerComposerInsetReader}
-														style={{
-															height: `calc(${
-																(snap?.working ?? false)
-																	? `max(var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px), calc(var(--chat-composer-inset, 0px) + ${FLOATING_COMPOSER_GAP_PX}px))`
-																	: `var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px)`
-															} + var(--chat-floating-panel-clearance, 0px))`,
-														}}
 														aria-hidden="true"
+														className="gui-chat-fade gui-chat-fade--end"
 													/>
 												</>
 											)}

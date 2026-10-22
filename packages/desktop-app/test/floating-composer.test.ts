@@ -71,26 +71,38 @@ describe("floating composer layout", () => {
 		expect(getComputedStyle(body.querySelector(".gui-transcript")!).pointerEvents).not.toBe("none");
 	});
 
-	it("deepens the end fade only while a reply streams", () => {
-		const { body, transcript } = mountColumn();
-		const atRest = getComputedStyle(transcript).getPropertyValue("--chat-tail-fade").trim();
+	it("fades the transcript's end with a band fed by the composer inset", () => {
+		const { body } = mountColumn();
+		// The end fade is a sibling overlay, not a mask on the scroller: a mask
+		// recomposited the whole transcript every scroll frame, and the
+		// scroller never received the measured inset, so the band could not
+		// track the composer.
+		const band = document.createElement("div");
+		band.className = "gui-chat-fade gui-chat-fade--end";
+		body.appendChild(band);
+		// At rest the band ramps over the composer height plus a margin, so
+		// rows dissolve into the surface as they slide under the glass. While
+		// a live reply streams the ramp collapses to a short edge and the band
+		// turns solid over the composer zone — no ghost row bleeds through
+		// the glass while the newest line streams in.
+		const heightOf = (): string => getComputedStyle(band).height;
+		const atRest = heightOf();
 		body.setAttribute("data-live-tail", "true");
-		const streaming = getComputedStyle(transcript).getPropertyValue("--chat-tail-fade").trim();
-		// At rest rows thin out under the glass; while streaming the band is
-		// pulled up so the newest line is transparent at the composer's edge
-		// instead of being cut in half.
-		// The band is derived from the measured composer height (happy-dom folds
-		// the calc with its fallback), so what matters is that streaming asks for
-		// a deeper band than rest — a line or two of extra fade.
-		// "calc(32px + 24px)" -> 24: the extra band on top of the fallback.
+		const streaming = heightOf();
+		// happy-dom folds calc() with the variable fallbacks: rest resolves
+		// the ramp to 24px, the live band to 8px.
 		const depth = (value: string): number => {
 			const numbers = value.match(/(\d+(?:\.\d+)?)px/g) ?? [];
-			return numbers.length > 1 ? Number.parseFloat(numbers[numbers.length - 1]) : 0;
+			return numbers.length > 0 ? Number.parseFloat(numbers[numbers.length - 1]) : 0;
 		};
-		expect(depth(streaming)).toBeGreaterThan(depth(atRest));
-		// (The fallback-substituted value proves the variable is consumed; the
-		// live value is pinned by the inset the observer publishes.)
+		expect(depth(streaming)).toBeLessThan(depth(atRest));
 		expect(depth(atRest)).toBeGreaterThan(0);
+		// The top band stays out of the way until the scroller reports content
+		// above the fold (its display rule is the one mounted from the sheet).
+		const top = document.createElement("div");
+		top.className = "gui-chat-fade gui-chat-fade--top";
+		body.appendChild(top);
+		expect(getComputedStyle(top).display).toBe("none");
 	});
 
 	it("reserves the measured composer height as the transcript's tail band", () => {

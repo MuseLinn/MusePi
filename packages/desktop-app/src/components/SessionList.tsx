@@ -1,6 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
@@ -207,6 +207,114 @@ function writeCollapsedIds(ids: ReadonlySet<string>): void {
 	}
 }
 
+/** 收起/展开单行高度补间：与全局伸缩规范（use-collapse.ts / WelcomeComposer
+ *  建议区）同一阶梯 —— 240ms、cubic-bezier(0.22,1,0.36,1)。子树多行同时补间，
+ *  视觉上整棵子树同步收缩。 */
+const SUBTREE_ANIM_MS = 240;
+const SUBTREE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+type SubtreePhase = "leaving" | "entering";
+interface SubtreeSnapshot {
+	collapsed: ReadonlySet<string>;
+	phases: ReadonlyMap<string, SubtreePhase>;
+}
+
+/** 子树折叠共享存储：折叠态原本是每个 SessionList 实例各自的 useState，
+ *  侧栏头部「全部展开/收起」按钮需要同时驱动所有实例（定时任务区、各项目
+ *  块、未分组区各自渲染一份 SessionList），且持久化键本来也只有一份 ——
+ *  提升为模块级存储（useSyncExternalStore 订阅），localStorage 持久化逻辑
+ *  不变。 */
+let subtreeCollapsed: ReadonlySet<string> = readCollapsedIds();
+/** 动画中的节点：leaving = 子树行高收缩到 0、尚未从树剪除；entering = 已
+ *  提交展开、行高从 0 长开。两阶段保证动画期间渲染树稳定。 */
+const subtreePhases = new Map<string, SubtreePhase>();
+/** 注册过的「有子会话的父行」id —— 全量收起时的目标集合。实例卸载不清理：
+ *  折叠持久化在 localStorage，id 集合与会话总量同阶，留存无害。 */
+const subtreeParentIds = new Set<string>();
+const subtreeListeners = new Set<() => void>();
+const subtreeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let subtreeSnapshot: SubtreeSnapshot = { collapsed: subtreeCollapsed, phases: new Map() };
+
+function emitSubtrees(): void {
+	subtreeSnapshot = { collapsed: subtreeCollapsed, phases: new Map(subtreePhases) };
+	for (const listener of subtreeListeners) listener();
+}
+
+function subscribeSubtrees(listener: () => void): () => void {
+	subtreeListeners.add(listener);
+	return () => subtreeListeners.delete(listener);
+}
+
+function getSubtreesSnapshot(): SubtreeSnapshot {
+	return subtreeSnapshot;
+}
+
+function armSubtreeTimer(id: string, fn: () => void): void {
+	const prev = subtreeTimers.get(id);
+	if (prev !== undefined) clearTimeout(prev);
+	subtreeTimers.set(
+		id,
+		setTimeout(() => {
+			subtreeTimers.delete(id);
+			fn();
+		}, SUBTREE_ANIM_MS + 40),
+	);
+}
+
+function setSubtreePhase(id: string, phase: SubtreePhase | null): void {
+	if (phase === null) subtreePhases.delete(id);
+	else subtreePhases.set(id, phase);
+	emitSubtrees();
+}
+
+function commitSubtreeCollapsed(next: ReadonlySet<string>): void {
+	subtreeCollapsed = next;
+	writeCollapsedIds(next);
+	emitSubtrees();
+}
+
+/** 收起/展开某一棵子树（父行 chevron）。收起先播收缩动画再剪枝；展开先
+ *  提交再播长高动画。动画期间忽略重复点击，避免相位互相打断。 */
+function toggleSubtreeCollapse(id: string): void {
+	if (subtreePhases.has(id)) return;
+	if (subtreeCollapsed.has(id)) {
+		const next = new Set(subtreeCollapsed);
+		next.delete(id);
+		commitSubtreeCollapsed(next);
+		setSubtreePhase(id, "entering");
+		armSubtreeTimer(id, () => setSubtreePhase(id, null));
+	} else {
+		setSubtreePhase(id, "leaving");
+		armSubtreeTimer(id, () => {
+			const next = new Set(subtreeCollapsed);
+			next.add(id);
+			commitSubtreeCollapsed(next);
+			setSubtreePhase(id, null);
+		});
+	}
+}
+
+/** 当前是否存在已收起的子树（头部「全部展开/收起」判断切换方向用）。 */
+export function hasCollapsedSubtrees(): boolean {
+	return subtreeCollapsed.size > 0;
+}
+
+/** 全量收起/展开所有已注册的父行。逐棵走 toggleSubtreeCollapse 的动画
+ *  路径，视觉与单棵 chevron 折叠一致（多棵同时补间）。 */
+export function setAllSubtreesCollapsed(collapse: boolean): void {
+	if (collapse) {
+		for (const id of subtreeParentIds) {
+			if (!subtreeCollapsed.has(id)) toggleSubtreeCollapse(id);
+		}
+	} else {
+		for (const id of [...subtreeCollapsed]) toggleSubtreeCollapse(id);
+	}
+}
+
+function registerSubtreeParents(ids: ReadonlySet<string>): void {
+	for (const id of ids) subtreeParentIds.add(id);
+}
+
 /** 折叠剪枝:被收起节点的整棵子树从渲染树剔除(返回新树,输入不变)。 */
 function pruneCollapsedNodes(nodes: SessionListNode[], collapsed: ReadonlySet<string>): SessionListNode[] {
 	return nodes.map(n => {
@@ -258,6 +366,7 @@ const SessionRow = memo(function SessionRow({
 	advisor,
 	childCount,
 	collapsed,
+	anim,
 	onToggleCollapse,
 	onSelect,
 	onContextMenu,
@@ -285,13 +394,46 @@ const SessionRow = memo(function SessionRow({
 	childCount: number;
 	/** 子树当前是否收起。 */
 	collapsed: boolean;
+	/** 折叠补间相位：自身或某位祖先的子树正在收起/展开，本行行高跟随补间。 */
+	anim: SubtreePhase | null;
 	onToggleCollapse?(id: string): void;
 	onSelect(id: string): void;
 	onContextMenu?(sessionId: string, x: number, y: number): void;
 }): ReactNode {
 	const fill = status ? STATUS_COLOR[status] : undefined;
+	const itemRef = useRef<HTMLLIElement | null>(null);
+	// 子树折叠的高度补间（use-collapse.ts 同一规范的行级版）：收起把行高锁
+	// 到当前值再补到 0px，展开反方向；结束时清掉内联样式回归自然布局。用
+	// useLayoutEffect 避免新挂载的展开行在首帧以全高闪现再塌缩。
+	useLayoutEffect(() => {
+		const li = itemRef.current;
+		if (!li || anim === null) return;
+		li.style.overflow = "hidden";
+		li.style.transition = "none";
+		li.style.height = anim === "leaving" ? `${li.scrollHeight}px` : "0px";
+		// 强制回流，让起点高度在启用补间前生效。
+		void li.offsetHeight;
+		li.style.transition = `height ${SUBTREE_ANIM_MS}ms ${SUBTREE_EASING}`;
+		li.style.height = anim === "leaving" ? "0px" : `${li.scrollHeight}px`;
+		const settle = (): void => {
+			if (anim === "entering") {
+				li.style.height = "";
+				li.style.overflow = "";
+			}
+		};
+		const timer = setTimeout(settle, SUBTREE_ANIM_MS + 60);
+		const onEnd = (): void => {
+			clearTimeout(timer);
+			settle();
+		};
+		li.addEventListener("transitionend", onEnd, { once: true });
+		return () => {
+			clearTimeout(timer);
+			li.removeEventListener("transitionend", onEnd);
+		};
+	}, [anim]);
 	return (
-		<li>
+		<li ref={itemRef}>
 			<button
 				type="button"
 				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${unread ? " gui-session-row--unread" : ""}`}
@@ -491,28 +633,54 @@ function SessionListComponent({
 				: nodes,
 		[nodes, sort],
 	);
-	// 折叠态(openchamber 文件夹层级 parity):父行 chevron 收起 → 整棵子树
-	// 从渲染树剪除;状态持久化到 localStorage,默认展开(与既有行为一致)。
-	// 子代理会话多的父行可收起,列表不再被长子树刷屏。
-	const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(readCollapsedIds);
-	// Stable so the memoized rows don't all invalidate whenever the list body
-	// re-renders (the row memo compares callback props by reference).
-	const toggleCollapse = useCallback((id: string): void => {
-		setCollapsedIds(prev => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			writeCollapsedIds(next);
-			return next;
-		});
-	}, []);
+	// 折叠态：模块级共享存储（定义在文件上方 store 区），跨 SessionList
+	// 实例同步 —— 侧栏头部的「全部展开/收起」按钮要同时驱动定时任务区/
+	// 各项目块/未分组区的所有子树。leaving 相位的子树尚未剪除（行高补间
+	// 到 0 后才提交），因此剪枝仍只认 collapsedIds，渲染树在动画全程稳定。
+	const { collapsed: collapsedIds, phases } = useSyncExternalStore(
+		subscribeSubtrees,
+		getSubtreesSnapshot,
+		// renderToString 测试路径（无 hydration）用同一快照。
+		getSubtreesSnapshot,
+	);
 	// 搜索期间强制展开:命中行可能藏在收起的子树里,剪枝会让命中不可见。
 	const effectiveCollapsed = searchQuery.trim() ? EMPTY_IDS : collapsedIds;
 	const childCounts = useMemo(() => childCountMap(ordered), [ordered]);
+	// 把「有子会话的父行」注册进共享存储 —— 侧栏头部「全部展开/收起」按这个
+	// 集合全量收起。
+	useEffect(() => {
+		const parents = new Set<string>();
+		for (const [id, count] of childCounts) {
+			if (count > 0) parents.add(id);
+		}
+		registerSubtreeParents(parents);
+	}, [childCounts]);
 	const flat = useMemo(
 		() => flattenTree(pruneCollapsedNodes(ordered, effectiveCollapsed)),
 		[ordered, effectiveCollapsed],
 	);
+	// 行级补间相位：自身或最近一位带相位祖先决定本行是 leaving 还是
+	// entering。父链取自剪枝前的树，leaving 子树的行才能在剪除前拿到相位。
+	const parentOf = useMemo(() => {
+		const map = new Map<string, string>();
+		const walk = (list: SessionListNode[]): void => {
+			for (const n of list) {
+				for (const c of n.children) map.set(c.entry.id, n.entry.id);
+				walk(n.children);
+			}
+		};
+		walk(ordered);
+		return map;
+	}, [ordered]);
+	const animFor = (id: string): SubtreePhase | null => {
+		let current: string | undefined = id;
+		while (current !== undefined) {
+			const phase = phases.get(current);
+			if (phase !== undefined) return phase;
+			current = parentOf.get(current);
+		}
+		return null;
+	};
 	if (flat.length === 0) return null;
 	// Parent lookup for fork markers **at the SESSION level** (a session forked
 	// from another session shows a branch glyph + the parent's label on hover).
@@ -545,8 +713,9 @@ function SessionListComponent({
 						subagent={node.entry.subagent === true}
 						advisor={node.entry.advisor === true}
 						childCount={childCounts.get(node.entry.id) ?? 0}
-						collapsed={collapsedIds.has(node.entry.id)}
-						onToggleCollapse={toggleCollapse}
+						collapsed={collapsedIds.has(node.entry.id) || phases.get(node.entry.id) === "leaving"}
+						anim={animFor(node.entry.id)}
+						onToggleCollapse={toggleSubtreeCollapse}
 						onSelect={onSelect}
 						onContextMenu={onContextMenu}
 					/>

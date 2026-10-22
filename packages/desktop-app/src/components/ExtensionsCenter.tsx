@@ -7,7 +7,6 @@ import {
 	ConfigFormSlotMount,
 	type ExtensionItem,
 	type ProviderInfo,
-	SETTINGS_EXTENSION_SLOT,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	type SlotComponent,
 	useExtensionRegistry,
@@ -297,20 +296,24 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	// 与扩展中心条目的 path 匹配)。
 	const extSettingCards = useMemo(() => {
 		const enabled = new Set((data?.extensions ?? []).filter(e => e.state === "active").map(e => e.path));
+		const nameOf = new Map((data?.extensions ?? []).map(e => [e.path, e.displayName || e.name]));
 		const byExt = new Map<string, SlotComponent[]>();
 		for (const c of data?.components ?? []) {
-			// Both settings surfaces land here: `settings.item.<extId>` per-row
-			// cards AND the exact `settings.extensions` page slot, which is
-			// where a plugin's own management panel (an account pool, for
-			// example) registers.
-			const isSettingsSurface = c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX) || c.slot === SETTINGS_EXTENSION_SLOT;
+			// Per-row config cards (`settings.item.<extId>`) live here. The
+			// full-page `settings.extensions` panel does NOT: a plugin's own
+			// management surface already mounts in its package detail dialog
+			// (PluginPackageDialog 插件设置 section) — rendering the page slot
+			// again buries a whole account-pool panel under the inventory.
+			const isSettingsSurface = c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX);
 			if (!isSettingsSurface) continue;
 			if (!enabled.has(c.extensionId)) continue;
 			const list = byExt.get(c.extensionId) ?? [];
 			list.push(c);
 			byExt.set(c.extensionId, list);
 		}
-		return [...byExt.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+		return [...byExt.entries()]
+			.map(([extId, items]) => [extId, items, nameOf.get(extId) ?? extId.split(/[\\/]/).pop() ?? extId] as const)
+			.sort((a, b) => a[2].localeCompare(b[2]));
 	}, [data]);
 	const extSettingsScope = rpc
 		? {
@@ -946,9 +949,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 						<Icon name="plug-2" className="h-3.5 w-3.5 shrink-0 opacity-60" />
 						<span className="text-[12px] font-medium">{t("tools.extensionSettings")}</span>
 					</div>
-					{extSettingCards.map(([extId, items]) => (
+					{extSettingCards.map(([extId, items, extName]) => (
 						<div key={extId} className="gui-agent-card gui-ext-settings-card">
-							<div className="gui-ext-settings-card-label">{extId.split(/[\\/]/).pop()}</div>
+							<div className="gui-ext-settings-card-label">{extName}</div>
 							{items.map(item => (
 								<ConfigFormSlotMount
 									key={`${item.slot}:${item.extensionId}`}

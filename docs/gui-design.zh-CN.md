@@ -627,6 +627,7 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
 - **状态**：`working` 在标签上转小加载图标；`unread`（非当前）显示强调色小圆点——两者与侧栏同源（`sessionMeta` / `unreadSessions`）。
 - **当前标签内容**：标签带的当前标签承载原有顶栏标题/切换器整块（GuiHeader 的 `titleBlock`）；设置关闭时顶栏渲染与以前完全一致。i18n：`settings.sessionTabs*`、`session tabs`、`session tab working/unread`、`ctx percent`、`tab next/prev shortcut*`。
 - **标签减法（2026-10-21 同批）**：tab 模式下 GuiHeader 不渲染 AgentAvatar、remote chip、ceiling 文字与整个 `gui-header-subrow`——一条标签就是一行字，工作/未读状态由 spinner 与小圆点表达，省下的横向空间留给长标题。
+- **悬停控件 + 固定尺寸（2026-10-22）**：非当前标签固定 176px（`gui-session-tab { width: 176px }`），长标题省略号收住，整排不再随标题长短忽宽忽窄。悬停时尾部浮出一层控件（`gui-session-tab-controls`，绝对定位于行尾，18px 圆形按钮）：「⋯」钮开菜单（关闭标签页 / 关闭其他标签页 / 归档——归档走 `archiveSession`，复用侧栏的撤销 toast），外加单独关闭钮；控件出现时状态点淡出，菜单打开期间 `:has()` 保持标题的右侧预留，布局不跳动。草稿标签（`messageCount === 0`）标题斜体（`gui-session-tab-label--draft`）。
 - **测试**：`packages/desktop-app/test/session-tabs.test.ts`（16 例：上限挤出、邻居激活、幽灵 id、环绕邻接、重排、持久化 round-trip + 损坏 JSON）。
 
 ## 5aa. PR/问题面板：侧栏入口 → 主视图整页（2026-10-21）
@@ -651,6 +652,30 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **子页签持久化**：`musepi-gui-prcenter-tab` 存储键；PR 草稿勾选记在 `musepi-gui-pr-draft`。
 - **i18n**（general 域）：`pr board`、`open pull requests`、`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`、`pr search placeholder`、`pr open link`。
 - **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`、`gui-prboard-title/body`、`gui-pr-search-row` + 复用 `gui-ext-plugins-search` 胶囊、`gui-skeleton-row`（首载骨架，与 `gui-cap-diag-skeleton` 同配方）；徽章档复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
+
+## 5ak. PR/问题看板：行内详情预览 + 行操作（2026-10-22）
+
+看板列表行不再是「跳外部浏览器」的发射钮——点击行在列表下方切换展开**行内详情预览**（`pr-center.tsx` 的 `PrDetail` / `IssueDetail`），与参考看板「列表 → 预览」的约定对齐：
+
+- **点击行 = 切换展开，绝不跳转**：选中态（`selectedPr` / `selectedIssue`）各自存于子页；激活行加 `gui-changes-row--active`；再点一次收起。外部打开/复制链接放在详情的操作行上，而不是列表行。
+- **详情载荷**：选中时拉取 `github.prView` / `github.issueView`（加载中显示骨架行；传输层失败显示 `general.requestFailed`，绝不伪装成空）。PR 详情显示正文（`gui-pr-detail-body`，pre-wrap、限高）、按本色着色的标签、审查者/处理人、逐项检查列表（`CheckItemList`——gh 的 `statusCheckRollup` 是异构的 CheckRun/StatusContext；`checkItemState` 把两种形态都折成 success/failure/pending，最多 20 项），以及共享的 `CommentList`（作者 + 时间 + 正文，最多 20 条）。
+- **行操作**（合并仅限打开且非草稿的 PR）：合并走方式选择（`merge`/`squash`/`rebase`）+**两步确认**（第一次点击进入 `pr merge confirm` 确认态，第二次才真正执行）→ `github.prMerge`；关闭/重开 → `github.prState`；逗号分隔的输入框回车即加标签/审查者 → `github.prEdit`。问题关闭/重开 → `github.issueState`。任何变更成功后都通过子页的 `load` 同时刷新详情和父列表。
+- **问题过滤**：过滤行里的标签/作者输入框（`.gui-issue-filters`，窄屏自动换行）原样传 `--label`/`--author` 给已有的 `github.issues` RPC；顶部搜索框仍是在此之上的客户端标题/#编号过滤。
+- **daemon RPC**（全部走共享 `runGh` 调 gh CLI）：`github.prView`、`github.prMerge`（30s 超时）、`github.prState`、`github.prEdit`（标签/审查者增删列表，全空时 no-op）、`github.issueView`、`github.issueState`。全部返回 `{ok: true}` 或 `{error: gh stderr}`；每个处理器都拒绝非正整数 `number`。六个方法都进了 `legacy-routes.ts` 白名单，紧挨既有 `github.*` 路由。
+- **圆点配色修复**：列表行用的 `gui-pr-check-dot--{success,failure,pending}` 类在标记里早就有，但样式表缺对应规则（行上的圆点一直是无色的）；修饰规则现与 `gui-pr-detail` 并排放在 `gui-workspace.css`，颜色与卡片里的父级选择器一致。
+- **i18n**（general 域，中英同 key）：`pr merge`、`pr merge method merge/squash/rebase`、`pr merge confirm`、`pr close`、`pr reopen`、`pr reviewers`、`pr assignees`、`pr add labels placeholder`、`pr add reviewers placeholder`、`pr comments {count}`、`pr no description`、`filter by label`、`filter by author`。
+
+## 5al. 右栏 git 面板：储藏页签、同步行、看板状态过滤、账号卡来源（2026-10-22）
+
+右栏 git 面板补齐与完整 git 客户端的差距，全部落在现有子页签壳内：
+
+- **储藏页签**（`StashPane`，第三个 `GitPaneTab`）：说明输入框 + `git.stashPush`（含未跟踪；干净工作区返回 `{ok, empty}` 而非报错）、`git.stashList` 列表（`%gd%x1f%gs%x1f%cr%x1f%H` 格式——ref、主题、相对时间、hash）、每行「恢复并移除」（`git.stashPop`，冲突时 git 保留储藏、stderr 透出）和「删除」（**两步确认**：× → 对勾）。储藏行复用 `gui-changes-row`，与改动页视觉一致。
+- **同步行**（`GitSyncControls`，挂在子页签栏上，三个 git 页签都够得到）：获取/拉取/推送图标钮 + 上游 `↑n ↓m` 计数（每次操作后重读 `git.status`；错误截断显示在按钮旁）。拉取**永远走变基**（`git pull --rebase --no-autostash`）——不产生合并提交，脏树大声报错而不是静默 autostash。
+- **daemon RPC**（模块级 `runGit(cwd, args, timeoutMs)` 助手，与 `runGh` 同构）：`git.fetch`（`fetch --all`）、`git.pull`、`git.stashList`、`git.stashPush`、`git.stashPop`、`git.stashDrop`；`github.prs` 新增透传 `state` 参数（`open|closed|merged|all`）。`legacy-routes.ts` 白名单顺带补了之前漏掉的 `git.push` / `git.identity`（漂移修复——列表落后于处理器）。
+- **看板状态过滤**：`PrPane` 按选中状态拉取（`PR_STATE_SEGMENTS` 在打开/已关闭/全部之外加了 已合并/`merged`）——gh 原生支持 `merged`，无需客户端过滤。详情里的标签/审查者变成可移除芯片（`gui-chip-x` 上的 × → `github.prEdit removeLabels/removeReviewers`，仅限打开的 PR）。
+- **设置 Git 页账号卡**：`github.authStatus` 现在返回 `source: "oauth" | "gh-cli"` 和 `updatedAt`；卡片区分 设备授权 / gh CLI 两种来源（以前两种都写 gh CLI——是实打实的显示错误），设备授权连接的还显示连接日期。
+
+本轮明确的非目标：hunk 级暂存/丢弃（需要字节级补丁校验）、历史里的合并/变基/cherry-pick、分支删除/重命名、GitHub 多账号（daemon 单 token）、GitLab/Linear 供应商。
 
 ## 5ab. 会话列表渲染稳定性：字段级 meta 合并 + 管线 memo 化（2026-10-21）
 
@@ -698,6 +723,23 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **位移滤镜**：`ensureLiquidGlass()` 注入 0×0 SVG，`feImage` → `feDisplacementMap`（R/B 通道，scale 24，20% 外扩）。位移图在运行时以 256×256 canvas 生成——内部全为中性灰（#808080 = 不移位），仅边缘 ramp 内沿径向外弯（t² 缓动，角上 14 px）。不打包图片资源；`slice` 保证非方形承载面的边缘仍呈圆形。
 - **边缘高光**：`::after` 用 `mask-composite: exclude` 画 1.5 px 渐变环。
 - **安全门**：warp 的 `filter: url(#…)` 只在 `html.gui-liquid-glass-ready` 下生效，由模块在 SVG 进入 DOM 后置位——Chromium 会隐藏滤镜引用了不存在 id 的元素，所以注入失败时降级为普通磨砂而不是把承载面清空。非 Chromium 引擎跳过效果，渲染同样的磨砂回退。
+
+## 5ah. 尾部预留移进滚动容器 + 边缘渐变革新（2026-10-22）
+
+悬浮输入框的预留间距只有成为滚动内容的一部分，才能真正护住最后一行。
+
+- **根因**：`gui-chat-tail-spacer` 一直是 `.gui-transcript`（滚动容器）**下面**的兄弟节点，而不是它的子节点。滚动容器的 scrollHeight 从不包含这段预留，钉底时最后一行贴死在滚动容器底缘——正落在悬浮输入框底下——而流外的垫片只是白白溢出 wrap。任何重新钉底（拖窗口、新开会话、切布局）都会重新暴露；切走再切回恰好落在一个可用位置，让这 bug 看起来飘忽不定。
+- **修复**：垫片移进 `.gui-transcript`，紧跟 `</CodeHighlightProvider>` 之后。reader-channel 契约不变（`registerComposerInsetReader`；`--chat-composer-tail-inset` + `--chat-floating-panel-clearance`；高度仍由 §5ae 的 working/rest 公式驱动）。
+- **边缘渐变革新，取代 scroller mask**：会话列表两端的渐隐以前是直接画在 `.gui-transcript` 上的 `mask-image`，它有两个毛病：(a) 滚动容器每滚一帧、每长一帧，GPU 都要把整个会话列表重新合成一遍；(b) 永远跟不上输入框——实测的 `--chat-composer-inset` 只写到注册的 reader 叶子上，mask 读到的 `--chat-tail-fade` 永远是 32px 兜底值，流式输出时把最新一行的下缘切掉（96px 的 mask 带对上 80px 的预留间距）。现在渐隐由滚动容器的两个绝对定位后置兄弟（`.gui-chat-fade--top` / `.gui-chat-fade--end`）用 `--color-surface`（滚动容器背后唯一的颜色）绘制。end 带是第二个注册 reader：输入框观测器把实测 inset 直接写到它身上。静止时该带在 `inset + clearance + 24px` 上渐变——消息滑入玻璃下方时溶进底色；`data-live-tail` 时渐变收短到 8px、带子在输入框区域变为纯色，流式输出的最新一行不会有鬼影从玻璃里透出来。top 带照旧由 `[data-top-scroll="true"]` 驱动，与被替换的 mask 同一套属性契约。
+- **层级**：两条带子 `z-index: 1`，位于所有悬浮控件之下——回合导轨（20）、Chat/Canvas 切换（30）、会话树触发钮/面板（20/40）、sticky 的回到底部钮（5），recap 行补了显式 `z-index: 3`（不补的话，常亮的 end 带会盖过绝对定位的 recap）。
+- **测试**：`floating-composer.test.ts` 的 "fades the transcript's end with a band fed by the composer inset" 经计算样式断言：`data-live-tail` 下带子变浅（纯色短边）、静止时变深（完整渐变），并断言 top 带默认 `display: none`。
+
+## 5aj. 设置壳层边角：折叠导航、芯片编辑器归属、插件面板位置（2026-10-22）
+
+- **设置导航折叠（≤900px）**：导航列与侧栏槽一起折成 64px 图标栏（两条宽度必须在同一条媒体查询里——分开写就是当年漂移的根因）。搜索框不能被挤成「放大镜加一条缝」：`SettingsNav` 用 `matchMedia` hook 镜像断点，把行内 `<label>` 搜索换成居中的放大镜按钮；点击弹出 React 渲染的悬浮面板（输入框 + 实时过滤的分区列表，自带标签/分组样式——图标栏会隐藏 `.gui-settings-nav-label` / `.gui-settings-nav-group`），点外部或按 Esc 收起。纯 CSS 的 `:focus-within` 下拉试过又放弃：点图标根本不能可靠聚焦到隐藏的输入框。
+- **侧栏拖拽柄随所属面板一起隐藏**：设置页保留会话侧栏挂载（display:none）。`.gui-resize-x--side` 以前在它隐藏时照常渲染，在设置页上留一条贯穿的细线（位置 `left: sideWidth - 3`）。现在只有侧栏真的可见时才挂载拖拽柄。
+- **数组芯片编辑器的两条纪律**：声明成员制的数组设置渲染成芯片。(a) 芯片容器用专用类 `.gui-settings-chips`，不用工具类——否则芯片宽度跟着构建产物的风吹草动走（分段控件给 `.gui-seg-btn` 的 `flex: 1` 会把每颗芯片拉成行宽等分；图片 URL 后端约 50 个候选时退化成每芯片一个字）。(b) 候选超过 8 个就收进「已选芯片 + 一个添加下拉」——优先级链，不是芯片云。可排序列表只在已选芯片上保留 ←/→ 移动钮。
+- **插件设置面板的三个家**：`settings.tab.<id>` 整页进设置导航；`settings.extensions`（插件自带管理面板）与 `settings.item.*` 紧凑卡进插件详情弹窗的「插件设置」区；「扩展与插件」清单底部只放每行 `settings.item.*` 卡——整页面板永不出现，卡片标题一律经扩展注册表解析显示名，不用入口文件 basename。
 
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
