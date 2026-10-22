@@ -1,4 +1,13 @@
-import { BlurText, getLocaleSnapshot, ShinyText, setLocale, subscribeLocale, t } from "@musepi/client-core";
+import {
+	BlurText,
+	getLocaleSnapshot,
+	ShinyText,
+	setLocale,
+	subscribeLocale,
+	t,
+	unarchiveSession,
+	archiveSession as writeArchivedSession,
+} from "@musepi/client-core";
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -1603,6 +1612,8 @@ function AppInner(): ReactNode {
 							electronAPI?: {
 								getAppVersion?(): Promise<string>;
 								restartDaemon?(port: number): Promise<number>;
+								daemonOrphaned?(): Promise<boolean>;
+								adoptDaemon?(): Promise<boolean>;
 							};
 						}
 					).electronAPI;
@@ -1624,6 +1635,26 @@ function AppInner(): ReactNode {
 								if (ok) answered.push(method);
 							}
 							stale = shouldRestartForMissingMethods(answered);
+						}
+						// 所有权接管门:probe→connect 启动路径从不跑 reaper
+						// (reaper 只在 daemon-start),于是「上一个 GUI 崩溃/被
+						// 不可捕获信号杀死」遗留的孤儿 daemon 会被无限期沿用
+						// —— client.pid 永远指向死进程,之后每次退出
+						// ownsDaemon() 都是 false,daemon 永远不随客户端退出。
+						// 处理:无在跑回合 → 按陈旧同样重启(新代码 + 取得所有
+						// 权);有在跑回合 → adopt(守护进程不动,所有权移交给
+						// 本 GUI,退出时照常拆卸,回合不受影响)。
+						if (!stale && !capabilityRestarted.has(u)) {
+							const orphaned = (await api.daemonOrphaned?.().catch(() => false)) ?? false;
+							if (orphaned) {
+								const rows = await rpc.request<Array<{ working?: boolean }>>("session.list").catch(() => null);
+								const working = rows?.some(r => r.working === true) ?? false;
+								if (working) {
+									await api.adoptDaemon?.().catch(() => {});
+								} else {
+									stale = true;
+								}
+							}
 						}
 						markStartup("version.gate");
 						if (stale) {
@@ -3615,6 +3646,8 @@ function AppInner(): ReactNode {
 				label: meta?.title?.trim() || treeLabelById.get(id)?.trim() || t("transcript.untitledSession"),
 				working: meta?.working === true && meta?.paused !== true,
 				unread: unreadSessions.has(id),
+				// No messages yet — the tab reads as a temporary draft (italic).
+				draft: meta ? (meta.messageCount ?? 0) === 0 : false,
 			});
 		}
 		return rows;
@@ -3630,6 +3663,23 @@ function AppInner(): ReactNode {
 		setTabIds(ids);
 		if (nextId) void openSession(nextId);
 		else if (id === selectedId) startNewTask();
+	};
+	const handleCloseOtherTabs = (id: string): void => {
+		const next = tabIdsRef.current.filter(tabId => tabId === id);
+		saveTabIds(next);
+		setTabIds(next);
+		if (selectedId !== id) void openSession(id);
+	};
+	const handleArchiveTab = (id: string): void => {
+		// The archive is a local list edit — the undo is a synchronous
+		// reverse, same contract as the header/sidebar archive paths.
+		writeArchivedSession(id, sessionMeta.get(id)?.cwd);
+		pushActionToast({
+			kind: "success",
+			message: t("general.sessionArchived"),
+			actionLabel: t("general.undo"),
+			onAction: () => unarchiveSession(id),
+		});
 	};
 	const handleReorderTabs = (activeTabId: string, overTabId: string): void => {
 		const next = reorderTabIds(tabIdsRef.current, activeTabId, overTabId);
@@ -3767,7 +3817,10 @@ function AppInner(): ReactNode {
 				 * the top edge, the three panes below it sharing its surface
 				 * (no divider, same frosted tint). */}
 				<div className="gui-main relative flex min-h-0 flex-1">
-					{!sideCollapsed && (
+					{/* The side resizer must not float while the settings shell
+					 * hides the sidebar — otherwise a stray handle line rides the
+					 * settings nav slot (its left comes from the sidebar width). */}
+					{!sideCollapsed && !shell.sideKeeperHidden && (
 						<div
 							className="gui-resize-x gui-resize-x--side"
 							style={{ left: sideWidth - 3 }}
@@ -3897,6 +3950,8 @@ function AppInner(): ReactNode {
 								tabs={sessionTabRows}
 								onSelectTab={handleSelectTab}
 								onCloseTab={handleCloseTab}
+								onCloseOtherTabs={handleCloseOtherTabs}
+								onArchiveTab={handleArchiveTab}
 								onReorderTabs={handleReorderTabs}
 							/>
 							{/* 表面区(会话 / 看板 / 任务中心 / 智能体 / 能力中心):chat
@@ -4022,7 +4077,7 @@ function AppInner(): ReactNode {
 															<BoardPage
 																onBack={() => viewSwapRef.current("chat")}
 																rpc={rpc}
-																cwd={project ?? undefined}
+																cwd={project ?? sessionMeta.get(selectedId ?? "")?.cwd ?? undefined}
 																jumpId={boardJumpId}
 																onJumpConsumed={() => setBoardJumpId(null)}
 																onChatCreate={text => {
@@ -4049,7 +4104,7 @@ function AppInner(): ReactNode {
 													<BoardPage
 														onBack={() => viewSwapRef.current("chat")}
 														rpc={rpc}
-														cwd={project ?? undefined}
+														cwd={project ?? sessionMeta.get(selectedId ?? "")?.cwd ?? undefined}
 														jumpId={boardJumpId}
 														onJumpConsumed={() => setBoardJumpId(null)}
 														onChatCreate={text => {
@@ -4111,21 +4166,13 @@ function AppInner(): ReactNode {
 											) : leavingView === "prboard" ? (
 												/* Leaving PR board → chat: the board blurs out first. */
 												<ChatSurfaceShell leave>
-													<PrBoardPage
-														rpc={rpc}
-														cwd={project ?? undefined}
-														onBack={() => viewSwapRef.current("chat")}
-													/>
+													<PrBoardPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
 												</ChatSurfaceShell>
 											) : prBoardOpen ? (
 												/* PR/issue board (sidebar first-class entry): the shared
 												 * PrCenter hosted full-page over the chat column. */
 												<ChatSurfaceShell>
-													<PrBoardPage
-														rpc={rpc}
-														cwd={project ?? undefined}
-														onBack={() => viewSwapRef.current("chat")}
-													/>
+													<PrBoardPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
 												</ChatSurfaceShell>
 											) : null}
 										</>

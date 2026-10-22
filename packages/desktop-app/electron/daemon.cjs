@@ -22,10 +22,12 @@ const { spawn, spawnSync } = require("node:child_process");
 // Socket/port discovery dir. MUSEPI_DAEMON_DIR (dev-desktop data isolation)
 // keeps a dev GUI's ws.port discovery away from the user's running daemon —
 // the daemon (coding-agent server.ts) honors the same variable when writing.
-const SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi-daemon");
-const PORT_FILE = path.join(SOCKET_DIR, "ws.port");
-const WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
-const CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");
+// `let`, not `const`: `resetSocketDirForTests` repoints them at a private dir
+// (see there).
+let SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi-daemon");
+let PORT_FILE = path.join(SOCKET_DIR, "ws.port");
+let WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
+let CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");
 const STARTUP_TIMEOUT_MS = 10_000;
 /**
  * How long the daemon gets to finish a cooperative `system.shutdown` (release
@@ -39,7 +41,22 @@ const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
 // whatever listens on the port. The two files above answer "where is the daemon
 // running NOW"; this directory answers "which daemons did we ever start, and is
 // each one still owned by a live shell".
-const REGISTRY_DIR = path.join(SOCKET_DIR, "managed");
+let REGISTRY_DIR = path.join(SOCKET_DIR, "managed");
+
+/**
+ * TEST-ONLY seam: repoint the discovery/registry paths at a private directory
+ * (null restores the default resolution). Setting MUSEPI_DAEMON_DIR before
+ * import cannot isolate a test — the suite runs every test file in ONE
+ * process, so the first file to import this module fixes the paths for all
+ * later ones. Never called from app code.
+ */
+function resetSocketDirForTests(dir) {
+	SOCKET_DIR = dir ?? process.env.MUSEPI_DAEMON_DIR ?? path.join(os.tmpdir(), "musepi-daemon");
+	PORT_FILE = path.join(SOCKET_DIR, "ws.port");
+	WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
+	CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");
+	REGISTRY_DIR = path.join(SOCKET_DIR, "managed");
+}
 
 /** GUI package version (brand version for the spawned daemon). */
 function guiVersion() {
@@ -793,6 +810,56 @@ async function reapOrphanedDaemons() {
 	return { inspected: entries.length, reaped };
 }
 
+/**
+ * Is the probed daemon an orphan WE spawned — registry-verified, identity
+ * intact, recorded owner dead? This is the reap condition of
+ * `reapOrphanedDaemons` factored into a query: the boot path needs the same
+ * evidence to decide "restart or adopt" WITHOUT killing anything, and the
+ * renderer asks via the `daemon-orphaned` IPC after connecting.
+ *
+ * Returns the matching registry entry, or null. A daemon with no registry
+ * record (terminal `musepi serve`, launch-at-login) is foreign by definition
+ * and is never reported — exactly the daemons the reaper cannot see.
+ */
+async function findOrphanedDaemon() {
+	const port = probe();
+	if (!port) return null;
+	for (const entry of readManagedDaemons()) {
+		if (entry.port !== port) continue;
+		if (Number.isInteger(entry.ownerPid) && pidAlive(entry.ownerPid)) continue;
+		if (await stillOurDaemon(entry)) return entry;
+	}
+	return null;
+}
+
+/**
+ * Claim an orphaned daemon for THIS GUI process: rewrite the ownership
+ * marker and the registry's ownerPid, so a later graceful quit runs
+ * `ownsDaemon()` → true and tears the daemon down. Used when the daemon has
+ * live working sessions and must not be restarted mid-turn — the turn keeps
+ * running, and the daemon stops outliving every GUI that ever connects to
+ * it. No-op (false) when the probed daemon is not a registry-verified orphan.
+ */
+async function adoptDaemon() {
+	const entry = await findOrphanedDaemon();
+	if (!entry) return false;
+	try {
+		fs.writeFileSync(CLIENT_PID_FILE, String(process.pid), "utf8");
+	} catch {
+		return false;
+	}
+	try {
+		const file = registryFile(entry.pid);
+		const updated = { ...entry, ownerPid: process.pid };
+		const tmp = `${file}.tmp-${process.pid}`;
+		fs.writeFileSync(tmp, JSON.stringify(updated), "utf8");
+		fs.renameSync(tmp, file);
+	} catch {
+		// Best-effort: the marker alone already makes ownsDaemon() true.
+	}
+	return true;
+}
+
 /** Clear the ownership marker (after killing the daemon we spawned). */
 function clearDaemonOwnership() {
 	try {
@@ -851,10 +918,13 @@ module.exports = {
 	readManagedDaemons,
 	reapOrphanedDaemons,
 	pidAlive,
+	findOrphanedDaemon,
+	adoptDaemon,
 	SOCKET_DIR,
 	PORT_FILE,
 	WEB_PORT_FILE,
 	CLIENT_PID_FILE,
 	REGISTRY_DIR,
+	resetSocketDirForTests,
 };
 

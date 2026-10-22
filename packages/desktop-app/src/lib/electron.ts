@@ -10,6 +10,12 @@ export interface ElectronAPI {
 	probeDaemonPort(): Promise<number | null>;
 	startDaemon(port: number): Promise<void>;
 	restartDaemon(port: number): Promise<number>;
+	/** Boot takeover gate: is the connected daemon an orphan we spawned
+	 *  whose owning GUI is gone? (见 app.tsx tryUrl 所有权门) */
+	daemonOrphaned?(): Promise<boolean>;
+	/** Claim an orphaned daemon for this GUI so a graceful quit tears it
+	 *  down; resolves true when adopted. */
+	adoptDaemon?(): Promise<boolean>;
 	openDirectory(): Promise<string | null>;
 	copyText(text: string): Promise<boolean>;
 	/** Picture-in-picture mini chat window (openchamber mini chat);

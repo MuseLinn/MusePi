@@ -109,6 +109,8 @@ web/robots.txt
 packages/desktop-app/release/*
 !packages/desktop-app/release/ensure-shortcuts.nsh
 !packages/desktop-app/release/installer-branding.nsh
+# Dated local installer drops (manual packaging output kept beside release/).
+packages/desktop-app/release-*/
 packages/desktop-app/dist/
 
 # WebView2 installer host: build output + the vendored NuGet SDK cache.

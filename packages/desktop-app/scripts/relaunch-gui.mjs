@@ -8,6 +8,7 @@
  * so unrelated apps (Kimi, etc.) are never touched.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { requestGracefulQuit, waitForPidsExit } from "./graceful-quit.mjs";
 
 // Match only Electron binaries inside this repo so unrelated apps (Kimi,
 // etc.) are never touched. Per-platform layout: macOS runs from the .app
@@ -57,15 +58,26 @@ async function waitExit(pids, timeoutMs = 4000) {
 
 const targets = runningPids();
 if (targets.length > 0) {
-	console.log(`relaunch: stopping stale GUI instance(s) ${targets.join(", ")}…`);
-	for (const pid of targets) {
+	console.log(`relaunch: asking running GUI instance(s) ${targets.join(", ")} to quit…`);
+	// Graceful first: the helper routes through the single-instance lock so
+	// the running instance executes its normal quit path (daemon teardown
+	// included). Generous window: the owned-daemon shutdown ladder can take
+	// a few seconds; stragglers (or instances predating the handler) fall
+	// through to the force-kill sweep below.
+	requestGracefulQuit();
+	await waitForPidsExit(targets, runningPids, 9000);
+}
+const remaining = runningPids();
+if (remaining.length > 0) {
+	console.log(`relaunch: stopping stale GUI instance(s) ${remaining.join(", ")}…`);
+	for (const pid of remaining) {
 		try {
 			process.kill(pid, "SIGTERM");
 		} catch {
 			// already gone
 		}
 	}
-	await waitExit(targets);
+	await waitExit(remaining);
 	const still = runningPids();
 	for (const pid of still) {
 		try {

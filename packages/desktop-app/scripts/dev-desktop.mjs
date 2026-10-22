@@ -29,6 +29,7 @@ import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { requestGracefulQuit, waitForPidsExit } from "./graceful-quit.mjs";
 
 const VITE_PORT = 5173;
 const argv = process.argv.slice(2);
@@ -83,9 +84,13 @@ function repoElectronPids() {
 	return pids;
 }
 
-/** Kill stale repo Electron instances (single-instance lock would otherwise
- *  make the new process quit and refocus the frozen old window). */
-function sweepStaleElectron() {
+/** Stop stale repo Electron instances (single-instance lock would otherwise
+ *  make the new process quit and refocus the frozen old window). Graceful
+ *  first: the quit-request helper lets the running instance tear its daemon
+ *  down through the normal quit path (Windows SIGTERM is an uncatchable
+ *  TerminateProcess, so a signal alone orphaned the daemon on every dev
+ *  relaunch); force-kill remains the fallback for stragglers. */
+async function sweepStaleElectron() {
 	let targets = [];
 	try {
 		targets = repoElectronPids();
@@ -94,7 +99,13 @@ function sweepStaleElectron() {
 		return;
 	}
 	if (targets.length === 0) return;
-	console.log(`dev-desktop: stopping stale Electron instance(s) ${targets.join(", ")}…`);
+	console.log(`dev-desktop: asking running GUI instance(s) ${targets.join(", ")} to quit…`);
+	requestGracefulQuit();
+	await waitForPidsExit(targets, repoElectronPids, 9000);
+	// Fall through to the force ladder for whatever ignored the request.
+	targets = repoElectronPids();
+	if (targets.length === 0) return;
+	console.log(`dev-desktop: force-stopping stale Electron instance(s) ${targets.join(", ")}…`);
 	for (const pid of targets) {
 		try {
 			process.kill(pid, "SIGTERM");
@@ -102,18 +113,16 @@ function sweepStaleElectron() {
 			// already gone
 		}
 	}
-	const deadline = Date.now() + 4000;
-	while (Date.now() < deadline) {
-		const alive = repoElectronPids().filter((pid) => targets.includes(pid));
-		if (alive.length === 0) return;
-		for (const pid of alive) {
-			try {
-				process.kill(pid, "SIGKILL");
-			} catch {
-				// already gone
-			}
+	await waitForPidsExit(targets, repoElectronPids, 4000);
+	const still = repoElectronPids();
+	for (const pid of still) {
+		try {
+			process.kill(pid, "SIGKILL");
+		} catch {
+			// already gone
 		}
 	}
+	await waitForPidsExit(still, repoElectronPids, 2000);
 }
 
 // `electron .` (directory app path) fails on this Windows setup
@@ -125,7 +134,7 @@ const electronBin =
 		? "node_modules/electron/dist/electron.exe"
 		: "node_modules/.bin/electron";
 
-sweepStaleElectron();
+await sweepStaleElectron();
 
 // A pre-existing :5173 listener must fail the run LOUDLY. The old probe
 // accepted any listener and pointed Electron at a stale dev server.

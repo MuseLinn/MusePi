@@ -39,6 +39,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Restart the daemon: kill the current listener, spawn fresh code,
 	 *  resolve once the new listener is up (instance menu 重启 daemon). */
 	restartDaemon: (port) => ipcRenderer.invoke("daemon-restart", port),
+	/** Is the connected daemon an orphan we spawned (owner GUI gone)?
+	 *  Boot takeover gate — see app.tsx tryUrl. */
+	daemonOrphaned: () => ipcRenderer.invoke("daemon-orphaned"),
+	/** Claim an orphaned daemon for this GUI so a graceful quit tears it
+	 *  down (working sessions keep running; ownership moves, the daemon
+	 *  does not restart). Resolves true when adopted. */
+	adoptDaemon: () => ipcRenderer.invoke("daemon-adopt"),
 	/** Relocate the app data root (设置 → 常规 → 数据存储路径): picks a
 	 *  parent folder, copies the current root into `<picked>/.musepi`,
 	 *  persists the override, respawns the daemon with PI_CONFIG_DIR.

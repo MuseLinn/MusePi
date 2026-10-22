@@ -37,7 +37,7 @@ const win32Native = createWindowsNative({ log: msg => console.log(`[pet] ${msg}`
 if (process.env.MUSEPI_CDP_PORT) {
 	app.commandLine.appendSwitch("remote-debugging-port", process.env.MUSEPI_CDP_PORT);
 }
-const { probe, probeWeb, restart, start, kill, portOpen, reapOrphanedDaemons } = require("./daemon.cjs");
+const { probe, probeWeb, restart, start, kill, portOpen, reapOrphanedDaemons, findOrphanedDaemon, adoptDaemon } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
 const {
 	checkForUpdates,
@@ -219,6 +219,15 @@ if (!app.requestSingleInstanceLock()) {
 	app.quit();
 	return; // CJS top-level: skip the rest of the module, no window flash
 }
+// `--quit-request` helper (relaunch-gui.mjs / dev-desktop.mjs): reaching
+// here means NO instance was running, so there is nothing to ask — exit
+// immediately without creating a window. When an instance IS running, the
+// helper never gets this far: the lock fails and the running instance
+// receives the flag through its `second-instance` event (handler below).
+if (process.argv.includes("--quit-request")) {
+	app.quit();
+	return;
+}
 // Normal exit tears the daemon down WITH the GUI. Only the daemon this GUI
 // instance SPAWNED is killed — a daemon we merely connected to (another GUI
 // instance, autostart, terminal `musepi serve`) must survive. A crash never
@@ -273,7 +282,21 @@ let daemonQuitHandled = false;
 		})
 		.finally(() => app.quit());
 });
-app.on("second-instance", () => {
+app.on("second-instance", (_event, argv) => {
+	// `--quit-request` (relaunch-gui.mjs / dev-desktop.mjs): a dev relaunch
+	// asks the running instance to exit gracefully. Windows cannot deliver a
+	// catchable SIGTERM to a GUI process (Node maps it to TerminateProcess,
+	// so before-quit — and with it the owned-daemon teardown — never ran on
+	// dev relaunches, orphaning the daemon every time); routing through the
+	// single-instance lock lands INSIDE the app, where the normal quit path
+	// runs: active-session guard is skipped (a programmatic relaunch is an
+	// explicit restart intent, and the old fallback force-killed with no
+	// dialog at all), killOwnedDaemon still tears the owned daemon down.
+	if (Array.isArray(argv) && argv.includes("--quit-request")) {
+		quittingConfirmed = true;
+		app.quit();
+		return;
+	}
 	if (mainWindow && !mainWindow.isDestroyed()) {
 		if (mainWindow.isMinimized()) mainWindow.restore();
 		mainWindow.show();
@@ -3413,6 +3436,18 @@ ipcMain.handle("daemon-start", async (_event, port) => {
 	await reapOrphanedDaemons();
 	return start(Number(port), daemonEnv());
 });
+// Boot takeover gate (renderer app.tsx tryUrl): after a successful connect,
+// is the daemon we landed on an orphan WE spawned whose owning GUI is gone?
+// The probe-connect boot path never runs the reaper (that only happens on
+// daemon-start), so without this query an orphaned daemon is connected to
+// indefinitely and every later quit finds client.pid naming a dead process
+// and leaves it running. Foreign daemons (terminal serve, launch-at-login)
+// are never reported — same evidence discipline as the reaper.
+ipcMain.handle("daemon-orphaned", async () => (await findOrphanedDaemon()) !== null);
+// Claim an orphaned daemon for this GUI: rewrite the ownership marker and
+// the registry ownerPid so a graceful quit tears it down. Used when the
+// orphan still has working sessions and must not be restarted mid-turn.
+ipcMain.handle("daemon-adopt", async () => adoptDaemon());
 ipcMain.handle("daemon-restart", async (_event, port) => {
 	// Explicit user action (instance menu / boot version gate): replacing the
 	// listener IS the request, so reap our own orphans and then kill the
