@@ -784,7 +784,10 @@ const BUNDLED_SELF_PACKAGE_ROOT = resolveBundledSelfPackageRoot();
 function sourceShimPath(file: string): string {
 	return BUNDLED_SELF_PACKAGE_ROOT
 		? path.join(BUNDLED_SELF_PACKAGE_ROOT, "src", "extensibility", file)
-		: path.resolve(import.meta.dir, "..", file);
+		: // The compat modules moved into extensibility/plugins/compat (the
+			// plugins-by-responsibility regroup); the shims still live directly
+			// under extensibility/, two levels up.
+			path.resolve(import.meta.dir, "..", "..", file);
 }
 
 /**
@@ -1247,7 +1250,9 @@ async function resolvePackageImportTarget(
 	target: string,
 	wildcard: string | null,
 ): Promise<string | null> {
-	if (!target.startsWith("..")) {
+	// Package-import targets must stay inside the package: a valid one starts
+	// with "./"; "../" escapes and a bare specifier is not a filesystem target.
+	if (!target.startsWith("./")) {
 		return null;
 	}
 	const substituted = wildcard === null ? target : target.replaceAll("*", wildcard);
@@ -1463,7 +1468,9 @@ async function resolvePackageExportTarget(
 	target: string,
 	wildcard: string | null,
 ): Promise<string | null> {
-	if (!target.startsWith("..")) {
+	// Package-export targets must stay inside the package: a valid one starts
+	// with "./"; "../" escapes and a bare specifier is not a filesystem target.
+	if (!target.startsWith("./")) {
 		return null;
 	}
 	const substituted = wildcard === null ? target : target.replaceAll("*", wildcard);
