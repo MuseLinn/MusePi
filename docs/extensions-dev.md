@@ -568,3 +568,65 @@ legacy 扩展按模块级状态写，没有 fiber 可挂。给它一个「看起
 
 `ExtensionAPI` 上这两个成员是**可选**的（`effect?` / `state?`），类型层面就把
 「legacy 装载拿不到」表达了；代码里必须按可选处理，不要断言非空。
+
+## 18. `apply(ctx)` lifecycle for plugin UI modules (2026-10-24)
+
+A plugin's **compiled UI artifact** (`ui/*.tsx`, compiled by the daemon via
+`bun.build` and then blob-imported) may export `apply(ctx)` alongside its
+`export default` component:
+
+```ts
+export default function Panel(props) { ... }   // required: the mounted component
+
+export function apply(ctx: PluginClientContext): void {   // optional: module-level setup
+  const style = document.createElement("style");
+  style.textContent = MY_CSS;
+  document.head.appendChild(style);
+  ctx.effect(() => style.remove());          // runs on unmount / reload
+
+  const events = new EventSource("/api/my-plugin/events");
+  ctx.effect(() => events.close());
+}
+```
+
+### `PluginClientContext`
+
+| Member | Meaning |
+|---|---|
+| `effect(dispose, label?)` | Register a teardown. Runs in **reverse** order (a later contribution may depend on an earlier one). |
+| `signal: AbortSignal` | Aborted when this module load is superseded or unmounted. Pass it to `fetch`/`EventSource` instead of tracking lifetime by hand. |
+| `slot: string` | The seat this component mounted into (`composer.model`, `settings.tab.x`, …). |
+| `extensionId: string` | The extension entry path that produced the component. |
+
+### Why this seam has to exist
+
+**A component that only exports `default` has no leak problem**: its styles and
+subscriptions live in `useEffect` and React runs the cleanups on unmount. What
+leaks is **module-level** contribution:
+
+- one global stylesheet (one per plugin, not one per render);
+- one EventSource shared across the plugin's panels;
+- window-level listeners.
+
+A reload swaps the whole compiled artifact, and the old module is **never
+evaluated again** — whatever it installed stays in the document until the window
+closes. The symptoms are "every UI edit leaves another stylesheet behind" and
+"sockets still open against a module that no longer exists".
+
+### Host guarantees
+
+- `apply` is called once, **before** the component mounts;
+- teardown runs **before the next load** (reload and unmount alike), so the old
+  `<style>`/connections are gone first;
+- every load gets a **fresh** `ctx` (and a fresh signal) — reusing an aborted
+  signal would make every request in the new module fail instantly;
+- a module with no `apply` export behaves **exactly as before** (a pure component
+  is the common case).
+
+### Acceptance
+
+`desktop-app/test/plugin-client-lifecycle.test.tsx` drives the **real**
+`SlotComponentMount` (blob-imports real code → mounts → unmounts) and asserts the
+`<style>` count in the document, the abort the module observed, and the disposer
+order. Do **not** write a test that replays the host's steps — it would pass
+while the host is broken.

@@ -556,3 +556,59 @@ legacy 扩展按模块级状态写，没有 fiber 可挂。给它一个「看起
 
 `ExtensionAPI` 上这两个成员是**可选**的（`effect?` / `state?`），类型层面就把
 「legacy 装载拿不到」表达了；代码里必须按可选处理，不要断言非空。
+
+## 18. 插件 UI 模块的 `apply(ctx)` 生命周期(2026-10-24)
+
+插件的**编译产物**(`ui/*.tsx`,daemon 用 `bun.build` 编译后经 blob 导入)除
+`export default` 组件外,**可以**再导出一个 `apply(ctx)`:
+
+```ts
+export default function Panel(props) { ... }   // 必选:挂到座位里的组件
+
+export function apply(ctx: PluginClientContext): void {   // 可选:模块级装配
+  const style = document.createElement("style");
+  style.textContent = MY_CSS;
+  document.head.appendChild(style);
+  ctx.effect(() => style.remove());          // 卸载/重载时跑
+
+  const events = new EventSource("/api/my-plugin/events");
+  ctx.effect(() => events.close());
+}
+```
+
+### `PluginClientContext`
+
+| 成员 | 含义 |
+|---|---|
+| `effect(dispose, label?)` | 登记一次拆卸。**逆序执行**(后装的贡献可能依赖先装的) |
+| `signal: AbortSignal` | 本模块被取代/卸载时中止;交给 `fetch`/`EventSource`,不要手工跟踪生命周期 |
+| `slot: string` | 挂载到的座位(`composer.model`、`settings.tab.x` …) |
+| `extensionId: string` | 产出该组件的扩展入口路径 |
+
+### 为什么必须存在这条缝
+
+**只写 `export default` 的组件没有泄漏问题**:它的样式/订阅都在 `useEffect` 里,
+React 卸载时会跑清理。漏的是**模块级**贡献:
+
+- 一份全局样式表(每插件一份,不是每渲染一份);
+- 跨面板共享的一条 EventSource;
+- window 级监听。
+
+重载会换掉整份编译产物、旧模块**永远不会再被求值**——它装下的东西就留在
+document 里直到窗口关闭。症状是「改一次 UI 就多一份样式」「旧连接一直开着打
+一个已不存在的模块」。
+
+### 宿主保证
+
+- `apply` 在组件挂载**之前**被调用一次;
+- 拆卸在**下一次加载之前**跑(重载/卸载都算),因此旧 `<style>`/连接先清掉;
+- 每次加载都是**全新** `ctx`(全新 signal)——复用一个已中止的 signal 会让新模块
+  的每个请求立刻失败;
+- 没导出 `apply` 的模块**行为完全不变**(纯组件是常态)。
+
+### 验收
+
+`desktop-app/test/plugin-client-lifecycle.test.tsx` 驱动**真实**的
+`SlotComponentMount`(blob 导入真实代码 → 挂载 → 卸载),断言 document 里的
+`<style>` 数量、模块收到的 abort、以及 disposer 顺序。**不要**写「复现宿主步骤」
+的测试——那会在宿主坏掉时照样通过。

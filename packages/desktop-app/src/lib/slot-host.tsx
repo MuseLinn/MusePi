@@ -363,6 +363,37 @@ export function ConfigFormSlotMount({
 	return <SlotComponentMount item={item} rpc={rpc} settingsScope={settingsScope} configForm={configForm} />;
 }
 
+/**
+ * The context a plugin component module's `apply(ctx)` receives.
+ *
+ * A module MAY export `apply` alongside its default component. It is called once
+ * per module load, before the component mounts, and exists for contributions
+ * that are NOT per-render: one shared stylesheet, one event source across the
+ * plugin's panels, window-level listeners.
+ *
+ * Without it those contributions have no owner: a reload swaps the compiled
+ * module, the old module is never run again, and whatever it installed stays in
+ * the document for the life of the window (duplicate `<style>` tags, sockets
+ * still open against a module nobody can unload).
+ *
+ * Host contract:
+ * - `effect(dispose)` collects a teardown; disposers run in REVERSE order
+ *   (later contributions may depend on earlier ones).
+ * - `signal` aborts when the module is superseded or unmounted — pass it to
+ *   `fetch`/`EventSource` rather than tracking lifetime by hand.
+ * - Both are per-load: a recompiled module gets a fresh ctx, and the previous
+ *   one's disposers have already run.
+ */
+export interface PluginClientContext {
+	/** Register a teardown for a contribution this module installed. */
+	effect(dispose: () => void, label?: string): void;
+	/** Aborted when this module load is superseded or unmounted. */
+	readonly signal: AbortSignal;
+	/** The seat this component was mounted into (`composer.model`, …). */
+	readonly slot: string;
+	/** The extension entry path this component came from. */
+	readonly extensionId: string;
+}
 export interface SlotComponentProps {
 	/** Daemon RPC bridge (models.list / session.setModel / …). */
 	rpc?: RpcClient | null;
@@ -598,6 +629,10 @@ export function SlotComponentMount({
 	configForm?: SlotConfigForm | null;
 }): ReactNode {
 	const [error, setError] = useState<string | null>(null);
+	// This mount's module-level teardown (see the pply(ctx) call below). Held in
+	// This mount's module-level teardown (see the apply(ctx) call below). Held
+	// resolved — a local would be out of scope by then.
+	const moduleTeardown = useRef<(() => void) | null>(null);
 	const [Comp, setComp] = useState<ComponentType<SlotComponentProps> | null>(null);
 	// The form is always constructed (never conditionally) — a component with
 	// no namespace simply gets `null`, which is what "no form" means.
@@ -640,11 +675,42 @@ export function SlotComponentMount({
 				// Dynamic import: specifier is a runtime blob URL served from
 				// the extension registry — static import is impossible here.
 				url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
-				const mod = (await import(url)) as { default?: ComponentType };
+				const mod = (await import(url)) as {
+					default?: ComponentType;
+					apply?: (ctx: PluginClientContext) => void;
+				};
 				if (!alive) return;
 				const Component = mod.default;
 				if (typeof Component !== "function") {
 					throw new Error("component module must export a default React component");
+				}
+				// Module-level setup: a plugin whose contribution is NOT per-render
+				// (one stylesheet, one shared event source, window listeners) has
+				// nowhere else to put it, and no way to clean it up. `apply(ctx)`
+				// gets a disposer list and an abort signal that this mount owns —
+				// both die with the component, including on a reload that swaps
+				// `item.code` for the recompiled module.
+				//
+				// A module with no `apply` export is the common case (a pure
+				// component) and stays exactly as it was.
+				if (typeof mod.apply === "function") {
+					const controller = new AbortController();
+					const disposers: Array<() => void> = [];
+					moduleTeardown.current = () => {
+						controller.abort();
+						// Reverse order: later contributions may depend on earlier
+						// ones (a listener registered on top of an open connection).
+						for (let i = disposers.length - 1; i >= 0; i--) disposers[i]?.();
+					};
+					mod.apply({
+						effect(dispose, label) {
+							void label;
+							disposers.push(dispose);
+						},
+						signal: controller.signal,
+						slot: item.slot,
+						extensionId: item.extensionId,
+					});
 				}
 				// React 19:setState(函数) 会被当作 updater 执行 —— 直接传
 				// Component 会把它调用一次,state 变成执行结果(JSX 元素),
@@ -661,6 +727,11 @@ export function SlotComponentMount({
 		})();
 		return () => {
 			alive = false;
+			// Run the module's teardown BEFORE the next load replaces it: a
+			// reload would otherwise leave the old stylesheet in <head> and the
+			// old EventSource open against a module nobody will ever unload.
+			moduleTeardown.current?.();
+			moduleTeardown.current = null;
 		};
 	}, [item]);
 	if (error) {
