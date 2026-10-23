@@ -77,6 +77,7 @@ import type {
 	ToolDefinition,
 	ToolInfo,
 } from "./types";
+import { namespaceOf, type PluginWebRouteRequest, scopeRoute } from "./web-route-scope";
 
 installLegacyPiSpecifierShim();
 
@@ -465,6 +466,25 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.extension.rpcs.set(method, handler);
 	}
 
+	registerWebRoute(route: PluginWebRouteRequest): () => void {
+		if (typeof route?.handler !== "function") {
+			throw new TypeError("registerWebRoute: handler must be a function");
+		}
+		if (route.kind !== "exact" && route.kind !== "prefix") {
+			throw new TypeError(`registerWebRoute: kind must be "exact" or "prefix", got ${String(route.kind)}`);
+		}
+		// The namespace is derived from THIS extension's identity, so a plugin
+		// physically cannot name a path outside its own subtree. `scopeRoute`
+		// rejects the traversal shapes; the namespace makes `/` mean "my root".
+		const namespace = namespaceOf(this.extension.path);
+		const scoped = scopeRoute(route, namespace);
+		this.extension.webRoutes.push(scoped);
+		return () => {
+			const index = this.extension.webRoutes.indexOf(scoped);
+			if (index >= 0) this.extension.webRoutes.splice(index, 1);
+		};
+	}
+
 	registerSkill(skill: ExtensionSkillDeclaration): void {
 		if (!skill || typeof skill.name !== "string" || skill.name.length === 0) {
 			throw new TypeError("registerSkill: skill.name is required");
@@ -732,6 +752,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		promptSections: [],
 		modes: [],
 		rpcs: new Map(),
+		webRoutes: [],
 		skills: [],
 		toolViews: [],
 		notificationChannels: [],

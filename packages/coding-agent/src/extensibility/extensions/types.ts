@@ -144,6 +144,7 @@ import type {
 import type { SlashCommandInfo } from "../slash-commands";
 import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
 import type { UrlSchemeDefinition } from "./url-schemes";
+import type { PluginWebRouteRequest, ScopedWebRoute } from "./web-route-scope";
 
 export type { OverlayHandle, OverlayOptions } from "@musepi/pi-tui";
 export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
@@ -1501,6 +1502,24 @@ export interface ExtensionAPI {
 	 *  available, session-bound actions are not wired there. */
 	registerRpc(method: string, handler: ExtensionRpcHandler): void;
 
+	/**
+	 * Contribute an HTTP route on the daemon's loopback web server.
+	 *
+	 * `path` is RELATIVE to this extension's own namespace (`/summary`,
+	 * `/events`, or `/` for the namespace root); the daemon mounts it at
+	 * `/api/<extension-namespace>/<path>`. A plugin therefore cannot name an
+	 * absolute path, so it cannot take over the renderer entry (`/`) or its
+	 * assets — that is a structural fact, not a convention to remember.
+	 *
+	 * Use `kind: "prefix"` to own a subtree (your JSON API) and `kind: "exact"`
+	 * for a path that must not be swallowed by it (an event stream): exact
+	 * outranks prefix in the router.
+	 *
+	 * The returned disposer removes the route; the daemon also drops every route
+	 * on unload/reload, so a plugin rarely needs to call it.
+	 */
+	registerWebRoute(route: PluginWebRouteRequest): () => void;
+
 	/** Declare a virtual skill, merged
 	 *  into the daemon skills.list and the extension center alongside
 	 *  file-discovered skills; skills.read serves `content`. There is no
@@ -2401,6 +2420,16 @@ export interface Extension {
 	 *  via the `ext.call` daemon RPC, giving slot components a callback
 	 *  channel into their own daemon-side logic. */
 	rpcs: Map<string, ExtensionRpcHandler>;
+	/**
+	 * HTTP routes contributed by the extension (registerWebRoute).
+	 *
+	 * The daemon mounts them on its loopback web server under the extension's own
+	 * `/api/<namespace>/` prefix, so a plugin can serve its own API and event
+	 * streams instead of polling `ext.call`. Paths here are the ABSOLUTE ones the
+	 * router uses (the namespace is applied at registration); a plugin never
+	 * names the site root.
+	 */
+	webRoutes: ScopedWebRoute[];
 	/** Skills declared by the extension (registerSkill): virtual skills
 	 *  merged into the daemon skills.list / extensions center alongside
 	 *  file-discovered skills. */

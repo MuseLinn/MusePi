@@ -513,6 +513,7 @@ describe("createAgentSession credential_disabled subscription", () => {
 				promptSections: [],
 				modes: [],
 				rpcs: new Map(),
+				webRoutes: [],
 				skills: [],
 				toolViews: [],
 				notificationChannels: [],

@@ -3863,6 +3863,7 @@ describe("ExtensionRunner", () => {
 				promptSections: [],
 				modes: [],
 				rpcs: new Map(),
+				webRoutes: [],
 				skills: [],
 				toolViews: [],
 				notificationChannels: [],

@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { rejectionForOrigin, RouteTable } from "./web-routes";
+import { RouteTable, rejectionForOrigin } from "./web-routes";
 
 /** A handler that echoes its own name, so the winner is visible. */
 function named(name: string) {
@@ -17,11 +17,7 @@ function named(name: string) {
 }
 
 /** One request against the table's origin. */
-function request(
-	table: RouteTable,
-	path: string,
-	headers: Record<string, string> = {},
-): Request {
+function request(table: RouteTable, path: string, headers: Record<string, string> = {}): Request {
 	return new Request(`${table.origin}${path}`, { headers });
 }
 
@@ -84,9 +80,7 @@ describe("RouteTable dispatch", () => {
 
 	test("rejects a path that is not absolute", () => {
 		const table = new RouteTable("http://127.0.0.1:1234");
-		expect(() => table.register({ kind: "exact", path: "api/x", handler: named("x") })).toThrow(
-			/start with/,
-		);
+		expect(() => table.register({ kind: "exact", path: "api/x", handler: named("x") })).toThrow(/start with/);
 	});
 });
 

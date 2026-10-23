@@ -235,30 +235,51 @@ function ghPath(): string | null {
  * api.github.com — unreachable on flaky networks, which then fails the whole
  * auth even though the device flow succeeded. gh RPCs receive it via the
  * GH_TOKEN env (higher precedence than the keyring).
+ *
+ * Persistence lives in daemon/git-accounts.ts: one host-keyed account store
+ * with a legacy github-token.json migration; this file only reads the
+ * active github.com credential and writes re-login results back.
  */
-interface StoredGhToken {
-	token: string;
-	login?: string;
-	email?: string;
-	updatedAt: string;
+function readGhToken(): { token: string; login?: string; email?: string; updatedAt: string } | null {
+	return activeTokenForHost("github.com");
 }
-function ghTokenPath(): string {
-	return path.join(getAgentDir(), "github-token.json");
-}
-function readGhToken(): StoredGhToken | null {
-	try {
-		const raw = fs.readFileSync(ghTokenPath(), "utf8");
-		const parsed = JSON.parse(raw) as StoredGhToken;
-		return typeof parsed.token === "string" && parsed.token.length > 0 ? parsed : null;
-	} catch {
-		return null;
-	}
-}
+
 /**
- * Spawn `gh` with the daemon-owned token (GH_TOKEN wins over the keyring)
+ * cwd → remote host (bare, lowercase), cached per process. The default is
+ * github.com — a repo with no origin (or a non-URL remote) behaves exactly
+ * as before the host-aware token existed.
+ */
+const REMOTE_HOST_CACHE = new Map<string, string>();
+async function remoteHostFor(cwd: string): Promise<string> {
+	const key = path.resolve(cwd);
+	const cached = REMOTE_HOST_CACHE.get(key);
+	if (cached) return cached;
+	let host = "github.com";
+	try {
+		const res = await runGit(key, ["remote", "get-url", "origin"], 5000);
+		if (res.exitCode === 0) {
+			const url = res.stdout.trim();
+			// https://host/owner/repo(.git) or git@host:owner/repo(.git)
+			const m = /^https?:\/\/([^/]+)\//.exec(url) ?? /^git@([^:]+):/.exec(url);
+			if (m) host = normalizeGitHost(m[1]) || "github.com";
+		}
+	} catch {
+		// keep the github.com default — a detection failure must not break RPCs
+	}
+	REMOTE_HOST_CACHE.set(key, host);
+	return host;
+}
+
+/** Spawn `gh` with the daemon-owned token (GH_TOKEN wins over the keyring)
  * and a hard timeout — every gh call hits the network and must never pin
  * the daemon event loop (a hung RPC freezes every session's turn).
  * `exitCode` is null only when the CLI itself is missing.
+ *
+ * The token is chosen per repo remote host: github.com uses GH_TOKEN; a
+ * self-hosted host (GitHub Enterprise and compatible) uses
+ * GH_ENTERPRISE_TOKEN + GH_HOST, which is how the gh CLI scopes a
+ * credential to a non-github.com host. Repos without a stored account fall
+ * back to the gh keyring, same as before.
  */
 async function runGh(
 	cwd: string,
@@ -267,13 +288,21 @@ async function runGh(
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
 	const gh = ghPath();
 	if (gh === null) return { exitCode: null, stdout: "", stderr: "gh CLI not installed" };
-	const storedToken = readGhToken();
+	const host = await remoteHostFor(cwd);
+	const account = activeTokenForHost(host);
 	const proc = Bun.spawn({
 		cmd: [gh, ...args],
 		cwd,
 		stdout: "pipe",
 		stderr: "pipe",
-		env: storedToken ? { ...process.env, GH_TOKEN: storedToken.token } : undefined,
+		env: account
+			? {
+					...process.env,
+					...(host === "github.com"
+						? { GH_TOKEN: account.token }
+						: { GH_ENTERPRISE_TOKEN: account.token, GH_HOST: host }),
+				}
+			: undefined,
 		windowsHide: true,
 	});
 	setTimeout(() => {
@@ -324,32 +353,27 @@ async function runGit(
 }
 
 function writeGhToken(token: string, identity?: { login?: string; email?: string }): void {
-	try {
-		const prev = readGhToken();
-		fs.writeFileSync(
-			ghTokenPath(),
-			JSON.stringify(
-				{
-					token,
-					login: identity?.login ?? prev?.login,
-					email: identity?.email ?? prev?.email,
-					updatedAt: new Date().toISOString(),
-				},
-				null,
-				2,
-			),
-			{ mode: 0o600 },
-		);
-	} catch {
-		// agent dir unavailable — token lost after daemon restart
+	if (identity?.login?.trim() || identity?.email?.trim()) {
+		updateGitAccountIdentity("github.com", identity);
+		// Identity-only refresh assumes an account already exists (the device
+		// flow wrote it first); a standalone identity write with no account
+		// falls through to the upsert below, same as the legacy prev-merge.
+		if (readGhToken()) return;
 	}
+	// Merge the previous identity when the caller only passes a token — a
+	// re-login without an api.github.com round trip keeps the known login.
+	const prev = readGhToken();
+	upsertGitAccount({
+		host: "github.com",
+		kind: "github",
+		token,
+		login: identity?.login ?? prev?.login,
+		email: identity?.email ?? prev?.email,
+	});
 }
 function clearGhToken(): void {
-	try {
-		fs.unlinkSync(ghTokenPath());
-	} catch {
-		// nothing stored
-	}
+	const active = activeTokenForHost("github.com");
+	if (active) removeGitAccount(active.id);
 }
 
 /**
@@ -554,6 +578,15 @@ import { dropManagedBrowserBridge, managedBrowserBridgeUrl } from "../tools/brow
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
+import {
+	activeTokenForHost,
+	listGitAccounts,
+	normalizeGitHost,
+	removeGitAccount,
+	updateGitAccountIdentity,
+	upsertGitAccount,
+	validateGitHubToken,
+} from "./git-accounts";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import { BoardService } from "./services/board-service";
@@ -594,6 +627,7 @@ import {
 } from "./session-host";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { createTerminalCorePlugin, createTerminalProviderPlugin } from "./terminal-core-plugin";
+import type { WebRouteRegistry } from "./web-routes";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
 
 export type { DaemonConnection, DaemonOptions, IdleCandidate, LiveSession } from "./session-host";
@@ -618,6 +652,8 @@ export class DaemonServer {
 	 *  desktop-shell extension reports it so the GUI shell knows where the
 	 *  runtime-served content lives. */
 	#webUrl: string | null = null;
+	/** Plugin-contributed HTTP route table (set once the web server is up). */
+	#webRoutes: WebRouteRegistry | null = null;
 
 	setWebUrl(url: string | null): void {
 		this.#webUrl = url;
@@ -625,6 +661,15 @@ export class DaemonServer {
 
 	getWebUrl(): string | null {
 		return this.#webUrl;
+	}
+
+	/**
+	 * Hand the loopback web route table to the extension service so plugin
+	 * routes can be mounted. Absent web server ⇒ plugin routes simply do not
+	 * mount (the renderer falls back to its local bundle in that case too).
+	 */
+	setWebRoutes(routes: WebRouteRegistry | null): void {
+		this.#webRoutes = routes;
 	}
 
 	/** Daemon socket path (set by startDaemon; used for the web.port
@@ -837,6 +882,7 @@ export class DaemonServer {
 				ensureRegistry: () => this.#host.ensureRegistry(),
 				cwd: () => this.#host.cwd(),
 				webUrl: () => this.#webUrl,
+				webRoutes: () => this.#webRoutes ?? undefined,
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
 				builtinRuntime: () => this.#hostContext.builtinInspect(),
@@ -3683,7 +3729,7 @@ export class DaemonServer {
 					"view",
 					String(num),
 					"--json",
-					"number,title,body,author,state,isDraft,url,labels,reviewers,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
+					"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
 				]);
 				if (res.exitCode === null) return { error: "gh CLI not installed" };
 				if (res.exitCode !== 0) {
@@ -3692,7 +3738,8 @@ export class DaemonServer {
 					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
 				}
 				try {
-					return { pr: JSON.parse(res.stdout) };
+					const pr = JSON.parse(res.stdout) as { reviewRequests?: { login: string }[] };
+					return { pr: { ...pr, reviewers: pr.reviewRequests ?? [] } };
 				} catch {
 					return { error: "invalid gh output" };
 				}
@@ -3801,6 +3848,20 @@ export class DaemonServer {
 				if (res.exitCode !== 0) {
 					return { error: res.stderr.trim() || `gh issue ${state} failed` };
 				}
+				return { ok: true };
+			}
+			case "github.issueComment":
+			case "github.prComment": {
+				const p = (params ?? {}) as { cwd?: string; number?: unknown; body?: unknown };
+				const num = Number(p.number);
+				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+				const body = typeof p.body === "string" ? p.body.trim() : "";
+				if (!body) return { error: "comment required" };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				const kind = method === "github.issueComment" ? "issue" : "pr";
+				const res = await runGh(cwd, [kind, "comment", String(num), "--body", body]);
+				if (res.exitCode === null) return { error: "gh CLI not installed" };
+				if (res.exitCode !== 0) return { error: res.stderr.trim() || `gh ${kind} comment failed` };
 				return { ok: true };
 			}
 			case "github.authStatus": {
@@ -3975,23 +4036,42 @@ export class DaemonServer {
 					});
 					if (who.exitCode === 0) {
 						const [login, email] = who.stdout.toString().trim().split("\0");
-						try {
-							fs.writeFileSync(
-								ghTokenPath(),
-								JSON.stringify(
-									{ token: body.access_token, login, email, updatedAt: new Date().toISOString() },
-									null,
-									2,
-								),
-								{ mode: 0o600 },
-							);
-						} catch {
-							// keep the basic write
-						}
+						// Attach the identity to the account the basic write just
+						// created; a failed write here keeps the token-only account.
+						writeGhToken(body.access_token, { login, email: email || undefined });
 						return { connected: true, login: login || undefined };
 					}
 				}
 				return { connected: true };
+			}
+			case "github.accountList": {
+				// Connected git-host accounts for the settings UI — tokens
+				// are masked (…last4); the raw credential never leaves
+				// git-accounts.ts except via GH_TOKEN-spawning RPCs.
+				return { accounts: listGitAccounts() };
+			}
+			case "github.patConnect": {
+				// PAT 直接接入（GitHub Enterprise / 自托管兼容主机）：校验
+				// 通过才落库，新账号成为该主机的活跃凭据。
+				const p = (params ?? {}) as { host?: string; token?: string };
+				const token = typeof p.token === "string" ? p.token.trim() : "";
+				if (!token) return { error: "token required" };
+				const host = normalizeGitHost(p.host ?? "github.com") || "github.com";
+				const validated = await validateGitHubToken(host, token);
+				if ("error" in validated) return { error: validated.error };
+				const account = upsertGitAccount({
+					host,
+					kind: "github",
+					token,
+					login: validated.login,
+					email: validated.email,
+				});
+				return { connected: true, id: account.id, login: account.login };
+			}
+			case "github.accountRemove": {
+				const p = (params ?? {}) as { id?: string };
+				if (typeof p.id !== "string" || !p.id) return { error: "id required" };
+				return { ok: removeGitAccount(p.id) };
 			}
 			case "github.authLogout": {
 				// Drop the daemon-owned token; also
@@ -8342,6 +8422,7 @@ export async function startDaemon(
 	// The desktop-shell extension reports the served origin so the GUI shell
 	// (and any extension center) sees where the runtime-served content lives.
 	server.setWebUrl(webHandle?.url ?? null);
+	server.setWebRoutes(webHandle?.routes ?? null);
 	server.setSocketPath(socketPath);
 
 	const netServer = net.createServer(socket => {

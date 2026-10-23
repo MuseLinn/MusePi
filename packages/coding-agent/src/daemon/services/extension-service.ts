@@ -9,7 +9,7 @@ import { invalidateCapabilityCache } from "../../capability";
 import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
 import { legacyModuleEntryIds, pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
 import type { Settings } from "../../config/settings";
-import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
+import type { LoadExtensionsResult, Extension as RuntimeExtension } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
 import {
 	readCompatibilityExemptions,
@@ -18,6 +18,7 @@ import {
 } from "../../extensibility/plugins/compat/compatibility-store";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
+import type { WebRouteRegistry } from "../web-routes";
 import type { DaemonService } from "./types";
 
 /**
@@ -71,6 +72,11 @@ export interface ExtensionServiceDeps {
 	ensureRegistry(): Promise<unknown>;
 	cwd(): string;
 	webUrl(): string | null;
+	/**
+	 * The daemon's loopback web route table, when the web server is up.
+	 * Extension-contributed HTTP routes are (re)mounted here.
+	 */
+	webRoutes?(): WebRouteRegistry | undefined;
 	/** web.port 发现文件的绝对路径（宿主计算：socket 目录下）。 */
 	webPortFile(): string;
 	/** 预设目录（宿主注入 #modesDir；缺省回退 $env/用户目录——测试可隔离）。 */
@@ -99,6 +105,8 @@ export interface ExtensionServiceDeps {
 }
 
 export class ExtensionService implements DaemonService {
+	/** Disposers for the web routes we mounted; a reconcile drops them first. */
+	#mountedWebRoutes: Array<() => void> = [];
 	readonly key = "extensions";
 	readonly routes = {
 		"extensions.list": "list",
@@ -174,8 +182,51 @@ export class ExtensionService implements DaemonService {
 				at: Date.now(),
 				extensions: await loadAllExtensions(this.#deps.cwd(), disabledIds, forceIds),
 			};
+			// Routes follow the list: a reload/install/uninstall moves them with it.
 		}
 		return this.#extensionsCache.extensions;
+	}
+
+	/**
+	 * Mount every loaded extension's HTTP routes on the daemon's web server.
+	 *
+	 * Runs after the extension list is (re)built, so an install/uninstall/reload
+	 * moves the routes with it. The routes are the extension's OWN namespace
+	 * (`/api/<ns>/…` — the loader scoped them at registration), which is why
+	 * this cannot collide with the renderer's static paths.
+	 *
+	 * ⚠️ **A path already claimed by another extension is reported, not
+	 * overridden.** The route table would happily let the last registration win,
+	 * and then the earlier plugin's panel would be served by a stranger's
+	 * handler with nothing in any log. Skipping + warning keeps both the truth
+	 * and the earlier plugin's data plane intact.
+	 */
+	#reconcileWebRoutes(extensions: readonly RuntimeExtension[]): void {
+		const table = this.#deps.webRoutes?.();
+		if (!table) return;
+		const mounted = this.#mountedWebRoutes;
+		this.#mountedWebRoutes = [];
+		for (const dispose of mounted) dispose();
+		// Ownership by absolute path: the namespace is already baked in, so two
+		// extensions claiming one path is the collision to catch.
+		const ownerOf = new Map<string, string>();
+		for (const extension of extensions) {
+			for (const route of extension.webRoutes) {
+				const existing = ownerOf.get(route.path);
+				if (existing !== undefined) {
+					logger.warn(
+						`extension web route "${route.path}" already served by ${existing}; skipping ${extension.path}`,
+					);
+					continue;
+				}
+				ownerOf.set(route.path, extension.path);
+				try {
+					this.#mountedWebRoutes.push(table.register(route));
+				} catch (error) {
+					logger.warn(`failed to mount web route "${route.path}": ${String(error)}`);
+				}
+			}
+		}
 	}
 
 	/**
@@ -212,6 +263,11 @@ export class ExtensionService implements DaemonService {
 					? await dynamic.loadAll(paths, cwd, disabledComponents)
 					: await (await import("../../extensibility/extensions/loader")).loadExtensions(paths, cwd),
 			};
+			// Routes belong to the RUNTIME load, not to the list rows: `webRoutes`
+			// lives on the Extension the loader executed (the same object that
+			// holds `rpcs`), while `getExtensions()` returns the center's
+			// inventory rows — a different shape with no routes on it.
+			this.#reconcileWebRoutes(this.#runtimeLoadCache.result.extensions);
 		}
 		return this.#runtimeLoadCache.result;
 	}

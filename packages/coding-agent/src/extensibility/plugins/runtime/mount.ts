@@ -197,6 +197,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 		promptSections: [],
 		modes: [],
 		rpcs: new Map(),
+		webRoutes: [],
 		skills: [],
 		toolViews: [],
 		notificationChannels: [],
