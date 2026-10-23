@@ -1,4 +1,12 @@
-import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/client-core";
+import {
+	bindTranslationNamespace,
+	getLocaleSnapshot,
+	registerExternalToolRenderers,
+	registerTranslationNamespace,
+	subscribeLocale,
+	type ToolRenderer,
+	unregisterTranslationNamespace,
+} from "@musepi/client-core";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
 import type {
 	ConfigFieldDesc,
@@ -25,6 +33,23 @@ import type { RpcClient } from "./rpc";
  */
 function exposeHostReact(): void {
 	(window as unknown as { MusePiReact: unknown }).MusePiReact = { ...React, createPortal };
+	// The plugin's other platform surface: its own translation namespace.
+	//
+	// A compiled plugin module cannot import from client-core, so the namespace
+	// API is injected the same way React is. Without it a plugin has to call the
+	// flat `registerTranslations`, which shares one key space with the host and
+	// with every other plugin — two plugins using `title` silently overwrite each
+	// other and the winner depends on load order.
+	(window as unknown as { MusePiI18n: unknown }).MusePiI18n = {
+		register: registerTranslationNamespace,
+		unregister: unregisterTranslationNamespace,
+		bind: bindTranslationNamespace,
+		/** The locale tag in effect, read live. */
+		get locale(): string {
+			return getLocaleSnapshot();
+		},
+		subscribe: subscribeLocale,
+	};
 }
 
 /**

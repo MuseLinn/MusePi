@@ -100,8 +100,11 @@ export {
 	widgetStandaloneEnabled,
 } from "./components/transcript/widget-standalone";
 export {
+	bindTranslationNamespace,
 	getLocaleSnapshot,
+	type NamespacedTranslator,
 	type ParamsOf,
+	registerTranslationNamespace,
 	registerTranslations,
 	setLocale,
 	subscribeLocale,
@@ -109,6 +112,7 @@ export {
 	type TranslationMap,
 	t,
 	tLoose,
+	unregisterTranslationNamespace,
 } from "./i18n/index.js";
 export { useLocale } from "./i18n/use-locale.js";
 export * from "./lib/download";

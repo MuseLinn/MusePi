@@ -158,6 +158,91 @@ export function registerTranslations(locale: string, map: Record<string, string>
 	if (locale === currentLocale) emit();
 }
 
+// ── Namespaced contributions (plugins) ───────────────────────────────────────
+
+/**
+ * Register a plugin's dictionaries under its own namespace.
+ *
+ * The flat seam above shares one key space with the core map, so two plugins
+ * using `title` or `close` would silently overwrite each other and the winner
+ * would depend on load order. A namespace makes each plugin's keys its own:
+ * `registerTranslationNamespace("auth-hub", { "zh-CN": { title: "账号" } })`
+ * stores `auth-hub:title`, which nothing else can claim.
+ *
+ * Shapes taken from the reference host's locale service (`ctx.locale.register(
+ * NS, { zh, en })`): a namespace plus a dictionary per locale tag.
+ */
+export function registerTranslationNamespace(
+	namespace: string,
+	dictionaries: Record<string, Record<string, string>>,
+): void {
+	if (namespace.trim() === "") {
+		throw new Error("translation namespace must not be empty");
+	}
+	const prefix = `${namespace}:`;
+	for (const [locale, map] of Object.entries(dictionaries)) {
+		const scoped: Record<string, string> = {};
+		for (const [key, value] of Object.entries(map)) {
+			// A key that already carries this namespace is kept as-is, so a plugin
+			// cannot accidentally double-prefix on a reload.
+			scoped[key.startsWith(prefix) ? key : `${prefix}${key}`] = value;
+		}
+		const base = overlays[locale] ?? {};
+		overlays[locale] = { ...base, ...scoped };
+		if (locale === currentLocale) emit();
+	}
+}
+
+/** Drop a namespace's keys (plugin unload). */
+export function unregisterTranslationNamespace(namespace: string): void {
+	const prefix = `${namespace}:`;
+	let changed = false;
+	for (const [locale, map] of Object.entries(overlays)) {
+		const kept: Record<string, string> = {};
+		for (const [key, value] of Object.entries(map)) {
+			if (key.startsWith(prefix)) {
+				changed = true;
+				continue;
+			}
+			kept[key] = value;
+		}
+		overlays[locale] = kept;
+	}
+	if (changed) emit();
+}
+
+/**
+ * A translator bound to one namespace — the reference's `ctx.locale.bind(NS)`.
+ *
+ * The returned function takes BARE keys (`t("title")`), prefixes them, and
+ * carries `locale` so callers doing their own date/number formatting do not have
+ * to reach for the global state.
+ */
+export interface NamespacedTranslator {
+	(key: string, params?: Record<string, string | number>): string;
+	/** The locale tag in effect right now (re-read on every access). */
+	readonly locale: string;
+	/** The namespace this translator is bound to. */
+	readonly namespace: string;
+}
+
+export function bindTranslationNamespace(namespace: string): NamespacedTranslator {
+	const translateBound = ((key: string, params?: Record<string, string | number>): string =>
+		translate(`${namespace}:${key}`, params)) as {
+		(key: string, params?: Record<string, string | number>): string;
+		locale: string;
+		namespace: string;
+	};
+	translateBound.namespace = namespace;
+	// A getter so `t.locale` follows a live locale switch without the caller
+	// re-binding (the reference reads it the same way, for date formatting).
+	Object.defineProperty(translateBound, "locale", {
+		get: () => currentLocale,
+		enumerable: true,
+	});
+	return translateBound;
+}
+
 // ── Initialization ───────────────────────────────────────────────────────────
 
 try {
