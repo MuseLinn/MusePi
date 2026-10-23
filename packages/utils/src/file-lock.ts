@@ -5,7 +5,8 @@
  * mutexes, and other Unix platforms use `flock(2)` on `${filePath}.lock`.
  */
 import * as path from "node:path";
-import { FileLock as NativeFileLock } from "@musepi/pi-natives";
+import type { FileLock as NativeFileLock } from "@musepi/pi-natives";
+import { tryAcquireFileLock } from "@musepi/pi-natives/file-lock";
 
 /** Controls bounded waiting when an advisory file lock is contended. */
 export interface FileLockOptions {
@@ -25,7 +26,7 @@ function getLockPath(filePath: string): string {
 }
 
 function tryAcquireLock(lockPath: string): NativeFileLock | null {
-	const lock = NativeFileLock.tryAcquire(lockPath);
+	const lock = tryAcquireFileLock(lockPath);
 	if (lock.acquired) return lock;
 	lock.release();
 	return null;

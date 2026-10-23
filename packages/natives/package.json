@@ -71,6 +71,14 @@
 		"./clipboard": {
 			"types": "./native/clipboard.d.ts",
 			"import": "./native/clipboard.js"
+		},
+		"./process": {
+			"types": "./native/process.d.ts",
+			"import": "./native/process.js"
+		},
+		"./file-lock": {
+			"types": "./native/file-lock.d.ts",
+			"import": "./native/file-lock.js"
 		}
 	}
 }
