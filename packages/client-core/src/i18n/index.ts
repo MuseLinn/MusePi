@@ -1,8 +1,9 @@
 /**
  * Lightweight i18n for client-core.
  *
- * Translation keys ARE the English strings (pass-through for en-US).
- * `t()` must only be called at render time, never at module load time.
+ * Keys are namespaced ("<domain>.<name>"); en-US/zh-CN domain dictionaries
+ * live under ./en-US and ./zh-CN. `t()` must only be called at render
+ * time, never at module load time.
  */
 
 import { enUS } from "./en-US/index.js";
@@ -94,13 +95,27 @@ export function getLocaleSnapshot(): string {
 // ── Core API ─────────────────────────────────────────────────────────────────
 
 /**
- * Core translation lookup: `key` → current locale map, falling back to the
- * key itself (English source string). Named `{name}` replacements applied
- * when params are given.
+ * Runtime overlays from {@link registerTranslations}, kept as a separate
+ * tier so an un-namespaced plugin key ("usage") can shadow a base entry's
+ * namespaced lookup ("tools.usage") without rewriting the base map.
+ */
+const overlays: Record<string, TranslationMap> = {};
+
+/**
+ * Core translation lookup for `key`:
+ *   1. overlay[current locale][key]
+ *   2. overlay[current locale][key minus its namespace] — plugin keys
+ *      registered bare shadow the namespaced base entry
+ *   3. base map[current locale][key]
+ *   4. the namespace-stripped key (e.g. "tools.usage" → "usage") — so a
+ *      locale that never registered the key still shows readable text
+ * Named `{name}` replacements applied when params are given.
  */
 function translate(key: string, params?: Record<string, string | number>): string {
+	const strip = key.includes(".") ? key.slice(key.indexOf(".") + 1) : key;
+	const overlay = overlays[currentLocale];
 	const locale = locales[currentLocale];
-	let translated = locale?.[key] ?? key;
+	let translated = overlay?.[key] ?? overlay?.[strip] ?? locale?.[key] ?? strip;
 	if (params) {
 		for (const [name, value] of Object.entries(params)) {
 			translated = translated.split(`{${name}}`).join(String(value));
@@ -138,8 +153,8 @@ export function tLoose(key: string, params?: Record<string, string | number>): s
  * restores the core maps.
  */
 export function registerTranslations(locale: string, map: Record<string, string>): void {
-	const base = locales[locale] ?? {};
-	locales[locale] = { ...base, ...map };
+	const base = overlays[locale] ?? {};
+	overlays[locale] = { ...base, ...map };
 	if (locale === currentLocale) emit();
 }
 

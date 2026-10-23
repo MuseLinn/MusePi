@@ -3,12 +3,14 @@
  *
  * Usage:
  *   import { t } from "../i18n/index.js";
- *   t("Hello, {0}!", name);  // translates "Hello, {0}!" → 你好，{0}!
+ *   t("welcome.tip");  // → "提示: " under zh-CN, "Tip: " under en-US
  *
- * Translation keys ARE the English strings (pass-through for en-US).
- * `t()` must only be called at render time, never at module load time.
+ * Keys are namespaced ("<domain>.<name>"); zh-CN and en-US domain
+ * dictionaries live under ./zh-CN and ./en-US. `t()` must only be called
+ * at render time, never at module load time.
  */
 
+import { enUS } from "./en-US/index.ts";
 import { zhCN } from "./zh-CN/index.ts";
 
 export type TranslationMap = Record<string, string>;
@@ -18,6 +20,7 @@ export type TranslationMap = Record<string, string>;
 const locales: Record<string, TranslationMap> = {
 	"zh-CN": zhCN,
 	"zh-CN-b5": zhCN, // fallback
+	"en-US": enUS,
 };
 
 /**
