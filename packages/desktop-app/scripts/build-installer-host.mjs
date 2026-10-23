@@ -198,10 +198,14 @@ function compileHost(sdkDir) {
 	// the reference assembly explicitly on some SKUs.
 	const jsonRef = "C:\\Program Files (x86)\\Reference Assemblies\\Microsoft\\Framework\\.NETFramework\\v4.8\\System.Text.Json.dll";
 
+	// Framework csc has no arm64 platform option ("arm" is 32-bit ARM); AnyCPU
+	// IL runs as a 64-bit ARM64 process on the windows-11-arm runner.
+	const cscPlatform = TARGET_ARCH === "arm64" ? "anycpu" : TARGET_ARCH;
+
 	const compileArgs = [
 		"/nologo",
 		"/target:exe",
-		`/platform:${TARGET_ARCH}`,
+		`/platform:${cscPlatform}`,
 		"/optimize+",
 		`/out:${out}`,
 		// DPI awareness lives in the manifest. Without it the host is DPI-unaware
