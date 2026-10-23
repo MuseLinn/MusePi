@@ -536,6 +536,16 @@ export function reset(): void {
 }
 
 /**
+ * Drop only the loadCapability TTL cache. Extension install/remove paths
+ * (marketplace, skills) call this so the next discovery re-walks providers
+ * instead of serving deleted extension entries for the TTL window — without
+ * touching the fs content cache or provider readiness.
+ */
+export function invalidateCapabilityCache(): void {
+	capabilityCache.clear();
+}
+
+/**
  * Invalidate cache for a specific path.
  * @param filePath - Absolute or relative path to invalidate
  */

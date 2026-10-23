@@ -5,6 +5,7 @@ import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab
 import { logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
+import { invalidateCapabilityCache } from "../../capability";
 import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
 import { legacyModuleEntryIds, pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
 import type { Settings } from "../../config/settings";
@@ -1137,6 +1138,10 @@ export class ExtensionService implements DaemonService {
 	invalidateExtensionsCache(): void {
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;
+		// Discovery sits on the capability TTL cache — clear it too or a
+		// removed extension keeps being discovered for the TTL window and
+		// design.systems.list replays a stale system (M3 §3.7d unload path).
+		invalidateCapabilityCache();
 		void import("../extension-artifact-compiler").then(m => m.invalidateExtensionLoadCache());
 	}
 
