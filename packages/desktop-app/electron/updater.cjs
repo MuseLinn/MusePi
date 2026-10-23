@@ -394,11 +394,17 @@ async function checkForUpdates() {
 	} catch (err) {
 		state.status = "error";
 		setError("check", err);
-		// The checkForUpdates() renderer contract keeps `error` a string
-		// (settings page prints it verbatim); the structured shape only
-		// travels on updater-state.
+		// The renderer contract ships both the raw message (folded into the
+		// 技术详情 section) and the classified `kind` (mapped to localized
+		// copy there); the structured shape also travels on updater-state.
 		emitState();
-		return { enabled: true, error: state.error.message, url: "", otaCapable: otaCapable() };
+		return {
+			enabled: true,
+			error: state.error.message,
+			errorKind: state.error.kind,
+			url: "",
+			otaCapable: otaCapable(),
+		};
 	}
 }
 

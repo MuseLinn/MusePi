@@ -100,7 +100,10 @@ export interface UpdateCheckResult {
 	 */
 	otaCapable?: boolean;
 	notes?: string | null;
+	/** Raw failure message (folded into the 技术详情 section, never naked). */
 	error?: string;
+	/** Classified failure kind → localized copy via UPDATE_ERROR_BODY_KEYS. */
+	errorKind?: UpdateErrorInfo["kind"];
 	reason?: string;
 }
 

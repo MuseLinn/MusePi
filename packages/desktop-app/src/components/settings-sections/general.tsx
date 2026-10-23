@@ -21,6 +21,7 @@ import {
 	setPetDecorFlag,
 } from "../../lib/pet-decor";
 import type { RpcClient } from "../../lib/rpc";
+import { UPDATE_ERROR_BODY_KEYS } from "../../lib/update-ux";
 import { Icon } from "../../vendor/oc-icons";
 import {
 	AVATAR_PRESETS,
@@ -221,6 +222,8 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [rootBusy, setRootBusy] = useState(false);
 	const [rootMsg, setRootMsg] = useState<{ ok: boolean; text: string } | null>(null);
 	const [updateStatus, setUpdateStatus] = useState<string>(t("settings.checkUpdates"));
+	/** Raw updater error, folded under the localized status as muted detail. */
+	const [updateErrorDetail, setUpdateErrorDetail] = useState<string | null>(null);
 	// Full check result kept for the richer row: notes snippet + explicit
 	// 前往下载 button instead of the old surprise window.open popup.
 	const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
@@ -231,12 +234,26 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			const r = await checkAppUpdates();
 			if (!r) {
 				setUpdateStatus(t("settings.updatesOnlyDesktopApp"));
+				setUpdateErrorDetail(null);
 				return;
 			}
-			if (!r.enabled) setUpdateStatus(t("settings.noUpdateSourceConfigured"));
-			else if (r.error) setUpdateStatus(`⚠ ${r.error}`);
-			else if (r.newer) setUpdateStatus(`${t("settings.newVersion")}: v${r.latest}`);
-			else setUpdateStatus(`${t("settings.upDate")} (v${r.current ?? "?"})`);
+			if (!r.enabled) {
+				setUpdateStatus(t("settings.noUpdateSourceConfigured"));
+				setUpdateErrorDetail(null);
+			} else if (r.error) {
+				setUpdateStatus(
+					r.errorKind && UPDATE_ERROR_BODY_KEYS[r.errorKind]
+						? t(UPDATE_ERROR_BODY_KEYS[r.errorKind])
+						: t("update.updateErrorCheck"),
+				);
+				setUpdateErrorDetail(r.error);
+			} else if (r.newer) {
+				setUpdateStatus(`${t("settings.newVersion")}: v${r.latest}`);
+				setUpdateErrorDetail(null);
+			} else {
+				setUpdateStatus(`${t("settings.upDate")} (v${r.current ?? "?"})`);
+				setUpdateErrorDetail(null);
+			}
 			setUpdateResult(r);
 		} finally {
 			setUpdateChecking(false);
@@ -633,6 +650,11 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<div className="w-full">
 							<div className="gui-settings-row-label">{t("settings.checkUpdates")}</div>
 							<div className="gui-settings-row-desc">{updateStatus}</div>
+							{updateErrorDetail && (
+								<div className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-all text-[11.5px] leading-relaxed text-[var(--color-text-muted)]">
+									{updateErrorDetail}
+								</div>
+							)}
 							{updateResult?.newer && (
 								<div className="gui-update-result">
 									{updateResult.notes ? (
