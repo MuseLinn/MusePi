@@ -128,8 +128,12 @@ async function fetchNuget() {
 	mkdirSync(extracted, { recursive: true });
 	log("extracting…");
 	// .nupkg is a zip; `tar` ships with Windows 10+ and avoids a zip dependency.
+	// Use System32's bsdtar by absolute path: GNU tar (Git for Windows) shadows
+	// `tar` in PATH on CI runners and parses the `D:\…` drive colon as a remote
+	// host ("Cannot connect to D: resolve failed"); bsdtar handles it fine.
+	const SYSTEM_TAR = join(process.env.WINDIR ?? "C:\\Windows", "System32", "tar.exe");
 	try {
-		execFileSync("tar", ["-xf", nupkg, "-C", extracted], { stdio: "inherit" });
+		execFileSync(SYSTEM_TAR, ["-xf", nupkg, "-C", extracted], { stdio: "inherit" });
 	} catch (error) {
 		fail(`failed to extract the WebView2 SDK with tar: ${error?.message ?? error}`);
 	}
