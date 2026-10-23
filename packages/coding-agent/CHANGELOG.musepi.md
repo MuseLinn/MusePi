@@ -6,6 +6,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+- **Windows 安装器又能正常完成了**：打包脚本调用系统 tar 解压组件时会把盘符误判成远程主机，导致安装器构建在 Windows 上失败。
+  - EN: The Windows installer builds again. The packaging script passed the nupkg to tar in a way Windows read as a remote-host path, so installer builds failed on Windows.
+- **检查更新失败时不再甩出一段英文报错原文**：设置里的「检查更新」遇到网络或发布资产问题以前直接把原始错误贴在页面上，现在显示一句本地化的「检查更新失败」，原始错误收进下方可展开的小字里。
+  - EN: A failed update check no longer dumps a raw English error string. The settings page now shows a localized "update check failed" line and tucks the original error into a small expandable detail below.
+- **卸掉的插件不再赖在设计体系列表里**：卸载或禁用插件后，欢迎页的预览栏在几秒内仍显示该插件注册的设计体系；现在失效缓存会一并清掉，卸载后立即消失。
+  - EN: Uninstalled plugins no longer linger in the design-systems list. After uninstall or disable, the welcome-page preview rail kept showing the plugin's registered design systems for a few seconds; the invalidation now clears that cache too, so they vanish immediately.
+- **用 `#` 路径别名（package imports）的老插件又能加载了**：这类插件的子模块此前绕过源码改写直接交给运行时解析，引旧包名时会报「找不到包」；现在子模块照常走改写管线，别名与旧包名映射都生效。
+  - EN: Legacy plugins that use `#` package-import aliases load again. Their submodules used to bypass the source rewrite and fail with "package not found" when importing legacy package names; submodules now go through the rewrite pipeline, so aliases and legacy-name remaps both apply.
+
 ## [0.6.0] - 2026-10-22
 
 - **安装插件的弹窗不再样式错乱**：弹窗里的搜索输入框以前被撑成一颗巨大的椭圆、「安装」按钮是一块没经过样式的裸绿色块。现在输入框恢复正常的胶囊尺寸，安装按钮用回标准的主按钮样式。
