@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Fixed
+- **Windows 版又能正常收到更新了**：最近一次版本发布的 Windows 安装包和更新清单漏传了，旧客户端点「检查更新」会一直失败；修复后新版本照常附带安装包与更新清单。
+  - EN: Windows builds receive updates again. The most recent release shipped without its Windows installer and update manifest, so older clients failed every "check for updates"; new releases now include the installer and manifest again.
 - **Windows 安装器又能正常完成了**：打包脚本调用系统 tar 解压组件时会把盘符误判成远程主机，导致安装器构建在 Windows 上失败。
   - EN: The Windows installer builds again. The packaging script passed the nupkg to tar in a way Windows read as a remote-host path, so installer builds failed on Windows.
 - **检查更新失败时不再甩出一段英文报错原文**：设置里的「检查更新」遇到网络或发布资产问题以前直接把原始错误贴在页面上，现在显示一句本地化的「检查更新失败」，原始错误收进下方可展开的小字里。
