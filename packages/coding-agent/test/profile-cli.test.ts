@@ -7,11 +7,11 @@ import { removeWithRetries } from "@musepi/pi-utils";
 import {
 	__resetProfileSnapshotForTests,
 	APP_NAME,
-	getActiveProfile,
+	getActiveHome,
 	getAgentDbPath,
 	getAgentDir,
 	setAgentDir,
-	setProfile,
+	setHome,
 	VERSION,
 } from "@musepi/pi-utils/dirs";
 import { Snowflake } from "@musepi/pi-utils/snowflake";
@@ -47,7 +47,7 @@ describe("global --profile flag", () => {
 	let originalConfigDir: string | undefined;
 
 	beforeEach(() => {
-		originalProfile = getActiveProfile();
+		originalProfile = getActiveHome();
 		originalAgentDir = getAgentDir();
 		originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
 		originalOmpProfileEnv = process.env.MUSEPI_PROFILE;
@@ -60,18 +60,18 @@ describe("global --profile flag", () => {
 
 	afterEach(async () => {
 		vi.restoreAllMocks();
-		setProfile(undefined);
+		setHome(undefined);
 		if (originalConfigDir === undefined) {
 			delete process.env.PI_CONFIG_DIR;
 		} else {
 			process.env.PI_CONFIG_DIR = originalConfigDir;
 		}
 		if (originalProfile) {
-			setProfile(originalProfile);
+			setHome(originalProfile);
 		} else if (originalAgentDirEnv !== undefined) {
 			setAgentDir(originalAgentDir);
 		} else {
-			setProfile(undefined);
+			setHome(undefined);
 		}
 		if (originalOmpProfileEnv === undefined) {
 			delete process.env.MUSEPI_PROFILE;
@@ -93,20 +93,31 @@ describe("global --profile flag", () => {
 		await removeWithRetries(path.join(os.homedir(), configDir));
 	});
 
-	it("activates a profile before dispatching root flags", async () => {
+	it("activates a state home before dispatching root flags", async () => {
 		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-		await runCli(["--profile=work", "--version"]);
+		await runCli(["--home=work", "--version"]);
 
 		expect(process.exitCode).toBe(0);
 		expect(writeSpy).toHaveBeenCalled();
-		expect(getActiveProfile()).toBe("work");
+		expect(getActiveHome()).toBe("work");
 		expect(getAgentDir()).toBe(path.join(os.homedir(), configDir, "profiles", "work", "agent"));
+	});
+
+	it("a bare --profile selects a composition without moving the state home", async () => {
+		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+		await runCli(["--profile=desk", "--version"]);
+
+		expect(process.exitCode).toBe(0);
+		expect(writeSpy).toHaveBeenCalled();
+		expect(getActiveHome()).toBeUndefined();
+		expect(getAgentDir()).toBe(path.join(os.homedir(), configDir, "agent"));
 	});
 
 	it("activates a profile inherited from MUSEPI_PROFILE at run time", async () => {
 		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-		setProfile(undefined);
+		setHome(undefined);
 		process.env.MUSEPI_PROFILE = "work";
 		delete process.env.PI_PROFILE;
 
@@ -114,18 +125,18 @@ describe("global --profile flag", () => {
 
 		expect(process.exitCode).toBe(0);
 		expect(writeSpy).toHaveBeenCalled();
-		expect(getActiveProfile()).toBe("work");
+		expect(getActiveHome()).toBe("work");
 		expect(getAgentDir()).toBe(path.join(os.homedir(), configDir, "profiles", "work", "agent"));
 		expect(getAgentDbPath()).toBe(path.join(os.homedir(), configDir, "profiles", "work", "agent", "agent.db"));
 	});
 
-	it("accepts the profile flag after other root flags", async () => {
+	it("accepts the home flag after other root flags", async () => {
 		vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-		await runCli(["--version", "--profile", "office"]);
+		await runCli(["--version", "--home", "office"]);
 
 		expect(process.exitCode).toBe(0);
-		expect(getActiveProfile()).toBe("office");
+		expect(getActiveHome()).toBe("office");
 		expect(getAgentDir()).toBe(path.join(os.homedir(), configDir, "profiles", "office", "agent"));
 	});
 
@@ -199,7 +210,8 @@ describe("global --profile flag", () => {
 				aliasName: "omp-work",
 			}),
 		);
-		expect(getActiveProfile()).toBe("work");
+		// --profile names the composition; it does not activate a state home.
+		expect(getActiveHome()).toBeUndefined();
 		const output = outSpy.mock.calls.map(call => String(call[0] ?? "")).join("\n");
 		expect(output).toContain("Created omp-work");
 		expect(output).not.toContain(`${APP_NAME}/${VERSION}`);

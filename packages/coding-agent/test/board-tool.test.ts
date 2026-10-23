@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import { validateBoards } from "../src/daemon/boards";
 import { WIDGET_TYPES } from "../src/tools/widget";
 
@@ -40,9 +41,18 @@ describe("board tool validation (validateBoards)", () => {
 		if (!r.ok) expect(r.error).toContain("id + title");
 	});
 
-	test("rejects oversized html widgets (>64KB)", () => {
+	test(`rejects oversized html widgets (>${MAX_WIDGET_HTML} chars)`, () => {
 		const r = validateBoards(
-			[board([{ id: "w1", type: "html", data: { html: "x".repeat(64_001) }, pos: { x: 0, y: 0, w: 300, h: 200 } }])],
+			[
+				board([
+					{
+						id: "w1",
+						type: "html",
+						data: { html: "x".repeat(MAX_WIDGET_HTML + 1) },
+						pos: { x: 0, y: 0, w: 300, h: 200 },
+					},
+				]),
+			],
 			known,
 		);
 		expect(r.ok).toBe(false);

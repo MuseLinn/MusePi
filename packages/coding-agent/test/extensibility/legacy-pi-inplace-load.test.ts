@@ -201,7 +201,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		const bumpedHelperMtime = new Date(Math.ceil(firstHelperStat.mtimeMs) + 2_000);
 		await fs.utimes(helper, bumpedHelperMtime, bumpedHelperMtime);
 
-		const second = await loadLegacyPiModule(entry);
+		const second = await loadLegacyPiModule(entry, { fresh: true });
 		expect(Reflect.get(Object(second), "helperValue")).toBe("v2");
 	});
 
@@ -235,7 +235,11 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		const bumpedMtime = new Date(Math.ceil(firstStat.mtimeMs) + 2_000);
 		await fs.utimes(entry, bumpedMtime, bumpedMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as { version: string; entryPath: string; asset: string };
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as {
+			version: string;
+			entryPath: string;
+			asset: string;
+		};
 		expect(second.version).toBe("v2");
 		expect(second.entryPath).toBe(expectedEntryPath);
 		expect(second.entryPath.includes("?")).toBe(false);
@@ -275,7 +279,11 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(entry, bumpedEntryMtime, bumpedEntryMtime);
 		await fs.utimes(helper, bumpedHelperMtime, bumpedHelperMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as { entryVersion: string; H: string; entryPath: string };
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as {
+			entryVersion: string;
+			H: string;
+			entryPath: string;
+		};
 		expect(second.entryVersion).toBe("v2");
 		expect(second.H).toBe("v2");
 		expect(second.entryPath).toBe(expectedEntryPath);
@@ -318,7 +326,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(entry, bumpedEntryMtime, bumpedEntryMtime);
 		await fs.utimes(helper, bumpedHelperMtime, bumpedHelperMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as { entryVersion: string; depValue: string };
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as { entryVersion: string; depValue: string };
 		expect(second.entryVersion).toBe("v2");
 		expect(second.depValue).toBe("dep-v2");
 	});
@@ -364,7 +372,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(entry, bumpedEntryMtime, bumpedEntryMtime);
 		await fs.utimes(helper, bumpedHelperMtime, bumpedHelperMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as { entryVersion: string; depValue: string };
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as { entryVersion: string; depValue: string };
 		expect(second.entryVersion).toBe("v2");
 		expect(second.depValue).toBe("dep-v2");
 	});
@@ -495,7 +503,10 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(entry, bumpedEntryMtime, bumpedEntryMtime);
 		await fs.utimes(transitiveDependency, bumpedDependencyMtime, bumpedDependencyMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as { entryVersion: string; dependencyValue: string };
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as {
+			entryVersion: string;
+			dependencyValue: string;
+		};
 		expect(second.entryVersion).toBe("v2");
 		expect(second.dependencyValue).toBe("dep-v2");
 	});
@@ -663,7 +674,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(entry, bumpedEntryMtime, bumpedEntryMtime);
 		await fs.utimes(leaf, bumpedLeafMtime, bumpedLeafMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as {
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as {
 			entryVersion: string;
 			loadValue(): Promise<string>;
 		};
@@ -704,7 +715,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(helper, firstGraphMtime, firstGraphMtime);
 		await fs.utimes(leaf, firstGraphMtime, firstGraphMtime);
 
-		const second = (await loadLegacyPiModule(entry)) as {
+		const second = (await loadLegacyPiModule(entry, { fresh: true })) as {
 			entryVersion: string;
 			entryPath: string;
 			leafValue: string;
@@ -723,7 +734,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		await fs.utimes(entry, bumpedEntryMtime, bumpedEntryMtime);
 		await fs.utimes(leaf, bumpedLeafMtime, bumpedLeafMtime);
 
-		const third = (await loadLegacyPiModule(entry)) as {
+		const third = (await loadLegacyPiModule(entry, { fresh: true })) as {
 			entryVersion: string;
 			entryPath: string;
 			leafValue: string;
@@ -1175,7 +1186,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 			"utf8",
 		);
 
-		const second = await loadLegacyPiModule(entry);
+		const second = await loadLegacyPiModule(entry, { fresh: true });
 		const secondLoad = Reflect.get(Object(second), "loadValue");
 		if (typeof secondLoad !== "function") {
 			throw new Error("reload-upgrade fixture v2 did not export loadValue");
@@ -1224,7 +1235,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 			"utf8",
 		);
 
-		const second = await loadLegacyPiModule(entry);
+		const second = await loadLegacyPiModule(entry, { fresh: true });
 		const secondLoad = Reflect.get(Object(second), "loadValue");
 		if (typeof secondLoad !== "function") {
 			throw new Error("reload-downgrade fixture v2 did not export loadValue");

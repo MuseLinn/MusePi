@@ -466,11 +466,8 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		});
 
 		try {
-			expect(session.getEnabledToolNames()).toContain("bash");
-			const runner = session.extensionRunner;
-			if (!runner) throw new Error("expected extension runner");
-			await runner.emit({ type: "session_start" });
-
+			// session_start fires during construction, so the default-inactive
+			// late replacement has already landed and deactivated "bash".
 			expect(session.getToolByName("bash")?.label).toBe("Late Inactive Bash");
 			expect(session.hasBuiltInTool("bash")).toBe(false);
 			expect(session.getEnabledToolNames()).not.toContain("bash");
@@ -694,10 +691,10 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		});
 
 		try {
-			expect(session.getToolByName("mcp__foo_bar_refresh")?.label).toBe("foo.bar/refresh connected");
-			const runner = session.extensionRunner;
-			if (!runner) throw new Error("expected extension runner");
-			await runner.emit({ type: "session_start" });
+			// createAgentSession emits session_start during construction, so the
+			// winner extension's re-registration has already refreshed the tool:
+			// the earlier extension's refreshed registration wins over the later
+			// colliding registrant.
 			expect(session.getToolByName("mcp__foo_bar_refresh")?.label).toBe("foo.bar/refresh reconnected");
 		} finally {
 			await session.dispose();
@@ -793,6 +790,12 @@ describe("createAgentSession defaultInactive tool activation", () => {
 
 	it("preserves RPC host-tool precedence when an extension registers the same name later", async () => {
 		const tempDir = makeTempDir();
+		// Ordering gate: session_start fires during createAgentSession (before the
+		// test can call refreshRpcHostTools), so the late registration is deferred
+		// until the RPC host tool is in place — "later" is about registry order,
+		// not wall time.
+		const rpcHostReady = Promise.withResolvers<void>();
+		const registrationDone = Promise.withResolvers<void>();
 		const rpcHostTool = {
 			name: "rpc_host_collision",
 			label: "RPC Host Tool",
@@ -805,14 +808,17 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		const lateCollisionExtension: ExtensionFactory = pi => {
 			pi.on("session_start", async () => {
 				await Promise.resolve();
-				pi.registerTool({
-					name: rpcHostTool.name,
-					label: "Late Extension Collision",
-					description: "Extension tool that must not replace the RPC host tool.",
-					parameters: type({}),
-					async execute() {
-						return { content: [{ type: "text", text: "late extension" }] };
-					},
+				void rpcHostReady.promise.then(() => {
+					pi.registerTool({
+						name: rpcHostTool.name,
+						label: "Late Extension Collision",
+						description: "Extension tool that must not replace the RPC host tool.",
+						parameters: type({}),
+						async execute() {
+							return { content: [{ type: "text", text: "late extension" }] };
+						},
+					});
+					registrationDone.resolve();
 				});
 			});
 		};
@@ -824,11 +830,11 @@ describe("createAgentSession defaultInactive tool activation", () => {
 
 		try {
 			await session.refreshRpcHostTools([rpcHostTool]);
-			const runner = session.extensionRunner;
-			if (!runner) throw new Error("expected extension runner");
-			await runner.emit({ type: "session_start" });
+			rpcHostReady.resolve();
+			await registrationDone.promise;
 			expect(session.getToolByName(rpcHostTool.name)?.label).toBe(rpcHostTool.label);
 		} finally {
+			rpcHostReady.resolve();
 			await session.dispose();
 		}
 	});
@@ -1025,12 +1031,8 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		});
 
 		try {
-			expect(session.getActiveToolNames()).toContain("late_becomes_discoverable");
-			expect(session.getMountedXdevToolNames()).toContain("late_becomes_essential");
-			const runner = session.extensionRunner;
-			if (!runner) throw new Error("expected extension runner");
-			await runner.emit({ type: "session_start" });
-
+			// session_start fires during construction, so the load-mode transition
+			// has already been reclassified by the time the session is returned.
 			expect(session.getActiveToolNames()).not.toContain("late_becomes_discoverable");
 			expect(session.getMountedXdevToolNames()).toContain("late_becomes_discoverable");
 			expect(session.getActiveToolNames()).toContain("late_becomes_essential");
@@ -1067,11 +1069,8 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		});
 
 		try {
-			expect(session.systemPrompt.join("\n")).toContain("Original prompt-visible lifecycle description.");
-			const runner = session.extensionRunner;
-			if (!runner) throw new Error("expected extension runner");
-			await runner.emit({ type: "session_start" });
-
+			// session_start fires during construction, so the replacement metadata
+			// is already live in the rebuilt prompt.
 			const prompt = session.systemPrompt.join("\n");
 			expect(session.getToolByName("prompt_refresh_tool")?.label).toBe("Replacement Prompt Tool");
 			expect(prompt).toContain("Replacement prompt-visible lifecycle description.");
@@ -1083,22 +1082,29 @@ describe("createAgentSession defaultInactive tool activation", () => {
 
 	it("restores a built-in tool and its provenance when a replacement prompt rebuild fails", async () => {
 		let rejectReplacementPrompt = false;
-		const releaseHandler = Promise.withResolvers<void>();
+		// session_start fires during createAgentSession, so the gated registration
+		// is deferred: the handler parks on `registrationReady` (resolved after
+		// construction returns) instead of blocking the bootstrap emit.
+		const registrationReady = Promise.withResolvers<void>();
+		const registrationApplied = Promise.withResolvers<void>();
 		const replacementRefreshAttempted = Promise.withResolvers<void>();
+		const promptFailureReported = Promise.withResolvers<void>();
 		const tempDir = makeTempDir();
 		const replacementExtension: ExtensionFactory = pi => {
 			pi.on("session_start", async () => {
 				await Promise.resolve();
-				pi.registerTool({
-					name: "bash",
-					label: "Rejected Rollback Bash",
-					description: "Rejected rollback lifecycle description.",
-					parameters: type({ changed: type.string }),
-					async execute() {
-						return { content: [{ type: "text", text: "rejected" }] };
-					},
+				void registrationReady.promise.then(() => {
+					pi.registerTool({
+						name: "bash",
+						label: "Rejected Rollback Bash",
+						description: "Rejected rollback lifecycle description.",
+						parameters: type({ changed: type.string }),
+						async execute() {
+							return { content: [{ type: "text", text: "rejected" }] };
+						},
+					});
+					registrationApplied.resolve();
 				});
-				await releaseHandler.promise;
 			});
 		};
 
@@ -1113,7 +1119,6 @@ describe("createAgentSession defaultInactive tool activation", () => {
 				return defaultPrompt;
 			},
 		});
-		let emission: Promise<unknown> | undefined;
 
 		try {
 			const enabledBefore = session.getEnabledToolNames();
@@ -1126,13 +1131,13 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			const errors: string[] = [];
 			const unsubscribe = runner.onError(error => {
 				errors.push(error.error);
+				if (error.error.includes("expected replacement prompt failure")) promptFailureReported.resolve();
 			});
 			rejectReplacementPrompt = true;
-			emission = runner.emit({ type: "session_start" });
+			registrationReady.resolve();
+			await registrationApplied.promise;
 			await replacementRefreshAttempted.promise;
-			expect(errors).not.toContain("expected replacement prompt failure");
-			releaseHandler.resolve();
-			await emission;
+			await promptFailureReported.promise;
 			unsubscribe();
 
 			expect(errors).toContain("expected replacement prompt failure");
@@ -1142,8 +1147,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			expect(session.getMountedXdevToolNames()).toEqual(mountedBefore);
 			expect(session.systemPrompt).toEqual(promptBefore);
 		} finally {
-			releaseHandler.resolve();
-			await emission;
+			registrationReady.resolve();
 			await session.dispose();
 		}
 	});
@@ -1152,20 +1156,28 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		const tempDir = makeTempDir();
 		const releaseLaterActivation = Promise.withResolvers<void>();
 		const laterActivationEntered = Promise.withResolvers<void>();
+		// session_start fires during createAgentSession, so the registration is
+		// deferred until the failure-injection spy below is installed: the
+		// handler parks on `registrationReady` instead of blocking the emit.
+		const registrationReady = Promise.withResolvers<void>();
+		const registrationApplied = Promise.withResolvers<void>();
 		const registrationExtension: ExtensionFactory = pi => {
 			pi.on("session_start", async () => {
 				await Promise.resolve();
-				for (const name of ["failed_registration_tool", "drained_registration_tool"]) {
-					pi.registerTool({
-						name,
-						label: name,
-						description: `${name} lifecycle description.`,
-						parameters: type({}),
-						async execute() {
-							return { content: [{ type: "text", text: name }] };
-						},
-					});
-				}
+				void registrationReady.promise.then(() => {
+					for (const name of ["failed_registration_tool", "drained_registration_tool"]) {
+						pi.registerTool({
+							name,
+							label: name,
+							description: `${name} lifecycle description.`,
+							parameters: type({}),
+							async execute() {
+								return { content: [{ type: "text", text: name }] };
+							},
+						});
+					}
+					registrationApplied.resolve();
+				});
 			});
 		};
 
@@ -1187,40 +1199,52 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		const runner = session.extensionRunner;
 		if (!runner) throw new Error("expected extension runner");
 		const errors: string[] = [];
+		const activationFailed = Promise.withResolvers<void>();
 		runner.onError(error => {
 			errors.push(error.error);
-		});
-		let emissionCompleted = false;
-		const emission = runner.emit({ type: "session_start" }).finally(() => {
-			emissionCompleted = true;
+			if (error.error.includes("expected activation failure")) activationFailed.resolve();
 		});
 
 		try {
+			registrationReady.resolve();
+			await registrationApplied.promise;
+			// The failed activation is rejected first; the drained activation
+			// must still start afterwards (serialized), not be skipped.
+			await activationFailed.promise;
+			expect(session.getToolByName("failed_registration_tool")).toBeUndefined();
+			expect(errors).toEqual(["expected activation failure"]);
+
 			await laterActivationEntered.promise;
-			await Promise.resolve();
-			await Promise.resolve();
-			expect(emissionCompleted).toBe(false);
-			expect(errors).toEqual([]);
+			// The drained activation is in flight, held behind the gate; the
+			// tool is not yet visible to the prompt.
+			expect(session.systemPrompt.join("\n")).not.toContain("drained_registration_tool");
 
 			releaseLaterActivation.resolve();
-			await emission;
-			expect(errors).toContain("expected activation failure");
-			expect(session.getToolByName("failed_registration_tool")).toBeUndefined();
-			expect(session.getToolByName("drained_registration_tool")).toBeDefined();
+			// Wait for the drained activation to commit: prompt is rebuilt only
+			// after setActiveToolPresentation resolves.
+			const deadline = Date.now() + 10_000;
+			while (!session.systemPrompt.join("\n").includes("drained_registration_tool") && Date.now() < deadline) {
+				await Bun.sleep(25);
+			}
 			expect(session.systemPrompt.join("\n")).toContain("drained_registration_tool");
+			expect(session.getToolByName("drained_registration_tool")).toBeDefined();
 		} finally {
 			releaseLaterActivation.resolve();
-			await emission;
 			await session.dispose();
 		}
 	});
 
 	it("releases a timed-out activation so later lifecycle registrations can proceed", async () => {
 		const tempDir = makeTempDir();
+		// session_start also fires during createAgentSession, before the spies and
+		// the 10ms handler budget below exist; the guard keeps registration inside
+		// the armed manual emit so the timeout semantics under test are unchanged.
+		let armed = false;
 		const registrationExtension: ExtensionFactory = pi => {
 			for (const name of ["stalled_registration_tool", "recovered_registration_tool"]) {
 				pi.on("session_start", async () => {
 					await Promise.resolve();
+					if (!armed) return;
 					pi.registerTool({
 						name,
 						label: name,
@@ -1259,6 +1283,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			});
 			testSetExtensionHandlerTimeoutMs(10);
 
+			armed = true;
 			await runner.emit({ type: "session_start" });
 			unsubscribe();
 
@@ -1313,9 +1338,15 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		const releaseDetachedRegistration = Promise.withResolvers<void>();
 		const registrationFailure = Promise.withResolvers<{ event: string; error: string }>();
 		let rejectDetachedPrompt = false;
+		// session_start now fires both during createAgentSession and again inside
+		// initializeExtensions below; the guard keeps the detached registration
+		// single-shot so exactly one activation failure is exercised.
+		let didRegister = false;
 		const detachedRegistrationExtension: ExtensionFactory = pi => {
 			pi.on("session_start", () => {
 				void releaseDetachedRegistration.promise.then(() => {
+					if (didRegister) return;
+					didRegister = true;
 					pi.registerTool({
 						name: "detached_registration_tool",
 						label: "Detached Registration Tool",

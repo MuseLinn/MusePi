@@ -69,8 +69,9 @@ describe("extension source-graph change detection", () => {
 		expect(extensionEntriesNeedingReload([entry])).toEqual([entry]);
 
 		// And the reload actually serves the new bytes, which is what makes the
-		// touch unnecessary rather than merely unreported.
-		const after = (await loadLegacyPiModule(entry)) as { seen: string };
+		// touch unnecessary rather than merely unreported. Reloads opt into a
+		// fresh module instance; the default shared load would serve the cache.
+		const after = (await loadLegacyPiModule(entry, { fresh: true })) as { seen: string };
 		expect(after.seen).toBe("v2");
 	});
 
@@ -83,7 +84,7 @@ describe("extension source-graph change detection", () => {
 		expect(extensionEntriesNeedingReload([entry])).toEqual([entry]);
 
 		// The baseline moves with the load, so a reload loop cannot form.
-		await loadLegacyPiModule(entry);
+		await loadLegacyPiModule(entry, { fresh: true });
 		expect(extensionEntriesNeedingReload([entry])).toEqual([]);
 	});
 

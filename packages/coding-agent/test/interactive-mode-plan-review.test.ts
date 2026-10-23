@@ -422,69 +422,75 @@ describe("InteractiveMode plan review rendering", () => {
 		expect(session.getPlanModeState()?.planFilePath).toBe(newPlanPath);
 	});
 
-	it("opens the annotation external editor from the real plan review overlay", async () => {
-		const editorPath = path.join(tempDir.path(), "annotation-editor.sh");
-		await Bun.write(
-			editorPath,
-			"#!/bin/sh\nprintf '%s\\n%s\\n' '- add rollback command' '- include smoke test' > \"$1\"\n",
-		);
-		await fs.chmod(editorPath, 0o755);
-		const previousEditor = Bun.env.EDITOR;
-		const previousVisual = Bun.env.VISUAL;
-		const keybindings = KeybindingsManager.inMemory({
-			"app.editor.external": "ctrl+e",
-			"tui.select.cancel": "ctrl+g",
-		});
-		mode.keybindings = keybindings;
-		setKeybindings(keybindings);
-		let capturedOverlay: PlanReviewOverlay | undefined;
-		vi.spyOn(mode.ui, "showOverlay").mockImplementation(component => {
-			capturedOverlay = component as PlanReviewOverlay;
-			return { hide: vi.fn() } as never;
-		});
-		let feedback = "";
-		// Resolve the instant the real $EDITOR subprocess commits its output back
-		// through onFeedbackChange — a deterministic signal, not a polled timer.
-		const { promise: editorApplied, resolve: markEditorApplied } = Promise.withResolvers<void>();
-
-		try {
-			Bun.env.EDITOR = editorPath;
-			delete Bun.env.VISUAL;
-			const choice = mode.showPlanReview(
-				"# Plan\n\nIntro\n\n## Rollout\n\nSteps\n\n## Verify\n\nChecks\n",
-				"Plan mode - next step",
-				["Approve and execute", "Refine plan"],
-				{
-					onFeedbackChange: value => {
-						feedback = value;
-						if (value.includes("- include smoke test")) markEditorApplied();
-					},
-				},
+	// The fixture editor is a POSIX sh script; the Windows spawn path hosts
+	// editors via cmd.exe, which cannot execute it (same skip precedent as
+	// external-editor.test.ts). CI coverage runs on ubuntu.
+	it.skipIf(process.platform === "win32")(
+		"opens the annotation external editor from the real plan review overlay",
+		async () => {
+			const editorPath = path.join(tempDir.path(), "annotation-editor.sh");
+			await Bun.write(
+				editorPath,
+				"#!/bin/sh\nprintf '%s\\n%s\\n' '- add rollback command' '- include smoke test' > \"$1\"\n",
 			);
+			await fs.chmod(editorPath, 0o755);
+			const previousEditor = Bun.env.EDITOR;
+			const previousVisual = Bun.env.VISUAL;
+			const keybindings = KeybindingsManager.inMemory({
+				"app.editor.external": "ctrl+e",
+				"tui.select.cancel": "ctrl+g",
+			});
+			mode.keybindings = keybindings;
+			setKeybindings(keybindings);
+			let capturedOverlay: PlanReviewOverlay | undefined;
+			vi.spyOn(mode.ui, "showOverlay").mockImplementation(component => {
+				capturedOverlay = component as PlanReviewOverlay;
+				return { hide: vi.fn() } as never;
+			});
+			let feedback = "";
+			// Resolve the instant the real $EDITOR subprocess commits its output back
+			// through onFeedbackChange — a deterministic signal, not a polled timer.
+			const { promise: editorApplied, resolve: markEditorApplied } = Promise.withResolvers<void>();
 
-			expect(capturedOverlay).toBeDefined();
-			const overlay = capturedOverlay!;
-			overlay.render(80);
-			overlay.handleInput("\t"); // -> toc (Rollout)
-			overlay.handleInput("a");
-			for (const ch of "draft") overlay.handleInput(ch);
-			overlay.handleInput("\x05"); // ctrl+e
-			// The subprocess is real; block on its commit signal instead of polling.
-			await editorApplied;
-			expect(feedback).toContain("## Rollout\n```md\n- add rollback command\n- include smoke test\n```");
+			try {
+				Bun.env.EDITOR = editorPath;
+				delete Bun.env.VISUAL;
+				const choice = mode.showPlanReview(
+					"# Plan\n\nIntro\n\n## Rollout\n\nSteps\n\n## Verify\n\nChecks\n",
+					"Plan mode - next step",
+					["Approve and execute", "Refine plan"],
+					{
+						onFeedbackChange: value => {
+							feedback = value;
+							if (value.includes("- include smoke test")) markEditorApplied();
+						},
+					},
+				);
 
-			overlay.handleInput("\x1b[B"); // Rollout -> Verify
-			overlay.handleInput("\x1b[B"); // toc -> actions
-			overlay.handleInput("\x1b[B"); // select Refine plan
-			overlay.handleInput("\r");
-			expect(await choice).toBe("Refine plan");
-		} finally {
-			if (previousEditor === undefined) delete Bun.env.EDITOR;
-			else Bun.env.EDITOR = previousEditor;
-			if (previousVisual === undefined) delete Bun.env.VISUAL;
-			else Bun.env.VISUAL = previousVisual;
-		}
-	});
+				expect(capturedOverlay).toBeDefined();
+				const overlay = capturedOverlay!;
+				overlay.render(80);
+				overlay.handleInput("\t"); // -> toc (Rollout)
+				overlay.handleInput("a");
+				for (const ch of "draft") overlay.handleInput(ch);
+				overlay.handleInput("\x05"); // ctrl+e
+				// The subprocess is real; block on its commit signal instead of polling.
+				await editorApplied;
+				expect(feedback).toContain("## Rollout\n```md\n- add rollback command\n- include smoke test\n```");
+
+				overlay.handleInput("\x1b[B"); // Rollout -> Verify
+				overlay.handleInput("\x1b[B"); // toc -> actions
+				overlay.handleInput("\x1b[B"); // select Refine plan
+				overlay.handleInput("\r");
+				expect(await choice).toBe("Refine plan");
+			} finally {
+				if (previousEditor === undefined) delete Bun.env.EDITOR;
+				else Bun.env.EDITOR = previousEditor;
+				if (previousVisual === undefined) delete Bun.env.VISUAL;
+				else Bun.env.VISUAL = previousVisual;
+			}
+		},
+	);
 
 	it("leaves terminal mouse tracking disabled while Plan Review is open", async () => {
 		let capturedOverlay: PlanReviewOverlay | undefined;

@@ -196,7 +196,9 @@ describe("OmfgController", () => {
 		expect(harness.ttsrAddRule.mock.calls[0]?.[0].path).toBe(savedPath);
 		const rendered = Bun.stripANSI(harness.container.render(120).join("\n"));
 		expect(rendered).toContain("Registered live");
-		expect(rendered).toContain(path.join(".musepi", "rules", "ts-no-any.md"));
+		// The renderer normalizes displayed paths to forward slashes on every
+		// platform, so assert the platform-independent form.
+		expect(rendered).toContain([".musepi", "rules", "ts-no-any.md"].join("/"));
 		// Long `.musepi/...` paths can wrap the footer at width 120, splitting
 		// "Esc dismiss" across lines; assert both words independently.
 		expect(rendered).toContain("Esc");

@@ -270,6 +270,7 @@ describe("PluginManager.install with git sources", () => {
 			["bun", "install", "github:foo/bar"],
 			["bun", "pm", "cache"],
 			["bun", "update", "stale-plugin"],
+			["bun", "pm", "untrusted"],
 		]);
 	});
 
@@ -327,6 +328,15 @@ describe("PluginManager.install with git sources", () => {
 				} as Subprocess;
 			}
 
+			if (cmd[1] === "pm" && cmd[2] === "untrusted") {
+				return {
+					pid: 4,
+					stdout: emptyStream(),
+					stderr: emptyStream(),
+					exited: Promise.resolve(0),
+				} as Subprocess;
+			}
+
 			if (cmd[1] === "pm") {
 				expect(cmd).toEqual(["bun", "pm", "cache"]);
 				return {
@@ -365,6 +375,16 @@ describe("PluginManager.install with git sources", () => {
 		const spawnedCommands: string[][] = [];
 		vi.spyOn(Bun, "spawn").mockImplementation(((cmd: string[]) => {
 			spawnedCommands.push([...cmd]);
+			if (cmd[1] === "pm") {
+				// Post-install build-approval probe (`bun pm untrusted`).
+				expect(cmd).toEqual(["bun", "pm", "untrusted"]);
+				return {
+					pid: 2,
+					stdout: emptyStream(),
+					stderr: emptyStream(),
+					exited: Promise.resolve(0),
+				} as Subprocess;
+			}
 			expect(cmd[1]).toBe("install");
 			const prepare = (async () => {
 				await Bun.write(
@@ -397,7 +417,10 @@ describe("PluginManager.install with git sources", () => {
 		const mgr = new PluginManager(tmpRoot);
 		await mgr.install("github:foo/bar");
 
-		expect(spawnedCommands).toEqual([["bun", "install", "github:foo/bar"]]);
+		expect(spawnedCommands).toEqual([
+			["bun", "install", "github:foo/bar"],
+			["bun", "pm", "untrusted"],
+		]);
 	});
 
 	test("drains stdout/stderr concurrently with proc.exited (pipe-buffer deadlock, #4230)", async () => {
@@ -521,7 +544,7 @@ describe("PluginManager.install with git sources", () => {
 		} finally {
 			await server.stop(true);
 		}
-	});
+	}, 30000);
 
 	test("rejects git specs containing shell metacharacters", async () => {
 		const mgr = new PluginManager(tmpRoot);
