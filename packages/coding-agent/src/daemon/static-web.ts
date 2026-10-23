@@ -11,6 +11,7 @@
  */
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import { RouteTable, type WebRouteRegistry } from "./web-routes";
 
 export interface DaemonWebOptions {
 	/** Port to bind. 0 picks a free ephemeral port. */
@@ -32,6 +33,15 @@ export interface DaemonWebHandle {
 	port: number;
 	/** Loopback origin (http://127.0.0.1:<port>). */
 	url: string;
+	/**
+	 * Plugin-owned routes on this port.
+	 *
+	 * The daemon hands this to plugins so they can serve their own HTTP API and
+	 * event streams instead of polling `ext.call`. Undefined only when the
+	 * server was constructed without a route table (tests that want the plain
+	 * static behaviour).
+	 */
+	routes?: WebRouteRegistry;
 	close: () => Promise<void>;
 }
 
@@ -182,8 +192,14 @@ export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonW
 	if (!options.distDir || !(await Bun.file(path.join(options.distDir, "index.html")).exists())) {
 		throw new Error(`renderer dist not found at ${options.distDir} (build client-core first)`);
 	}
+	const bindHost = options.host ?? "127.0.0.1";
+	// Declared before serve() so the fetch handler closes over it. Its `origin`
+	// needs the ACTUAL port (0 = ephemeral), so it is created just after the
+	// server reports one — the handler reads the variable, not a value captured
+	// at construction.
+	let routeTable: RouteTable | undefined;
 	const server = Bun.serve({
-		hostname: options.host ?? "127.0.0.1",
+		hostname: bindHost,
 		port: options.port,
 		async fetch(req) {
 			const url = new URL(req.url);
@@ -193,6 +209,11 @@ export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonW
 					headers: { "content-type": "application/json; charset=utf-8" },
 				});
 			}
+			// Plugin routes before the static/SPA path: an unmatched `/api/x`
+			// would otherwise fall through to the SPA fallback and answer with
+			// index.html, which reads to the plugin as "my route returned HTML".
+			const handled = await routeTable?.dispatch(req);
+			if (handled !== undefined) return handled;
 			const isRoot = url.pathname === "/";
 			const filePath = isRoot
 				? path.join(options.distDir, "index.html")
@@ -223,9 +244,14 @@ export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonW
 	});
 	logger.info(`renderer served at http://127.0.0.1:${server.port}/ (compat shell target)`);
 	const port = server.port ?? options.port;
+	// Now that the real port is known (0 = ephemeral), the table can name the
+	// origin it will compare `Origin` headers against.
+	const table = new RouteTable(`http://${bindHost}:${port}`);
+	routeTable = table;
 	return {
 		port,
 		url: `http://127.0.0.1:${port}/`,
+		routes: table,
 		close: async () => {
 			await server.stop(true);
 		},
