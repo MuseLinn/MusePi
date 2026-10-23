@@ -14,7 +14,9 @@
  *   2. Copy packages/client-core/src/styles/tokens.css next to the UI so the
  *      installer consumes the SAME tokens as the client (single source of truth;
  *      the copy is generated, never edited).
- *   3. Compile InstallerHost.cs -> dist/MusePiInstallerHost.exe (x64).
+ *   3. Compile InstallerHost.cs -> dist/MusePiInstallerHost.exe (x64; an
+ *      arm64 matrix target still compiles x64 — the host then runs under
+ *      emulation on ARM64 Windows with a matched x64 loader/runtime pair).
  *   4. Stage dist/ with the UI, the two managed DLLs and WebView2Loader.dll.
  *
  * Usage:
@@ -70,8 +72,9 @@ const RUN_SMOKE = args.has("--smoke");
  * Target architecture for the host executable.
  *
  * The release matrix builds Windows on TWO runners: x64 on windows-2022 and
- * arm64 on windows-11-arm. A /platform:x64 host cannot run on ARM64, so the
- * architecture has to follow the matrix. Defaults to the host's own
+ * arm64 on windows-11-arm. The arm64 target still COMPILES an x64 host (see
+ * cscPlatform) — x64 processes run under emulation on ARM64 Windows — so
+ * this flag currently only documents intent; defaults to the host's own
  * architecture, which is what a developer wants locally.
  *
  *   --arch x64    | --arch arm64
@@ -89,8 +92,11 @@ function resolveArch() {
 }
 
 const TARGET_ARCH = resolveArch();
-/** NuGet runtime folder names: runtimes/win-x64 or runtimes/win-arm64. */
-const WEBVIEW2_RUNTIME_ARCH = TARGET_ARCH === "arm64" ? "arm64" : "x64";
+// The managed host is compiled x64 even for an arm64 target (see
+// cscPlatform below), so the native loader must be the x64 build too —
+// loader arch and process arch have to match or WebView2 P/Invoke fails
+// with BadImageFormatException.
+const WEBVIEW2_RUNTIME_ARCH = "x64";
 
 
 async function fetchNuget() {
@@ -198,9 +204,14 @@ function compileHost(sdkDir) {
 	// the reference assembly explicitly on some SKUs.
 	const jsonRef = "C:\\Program Files (x86)\\Reference Assemblies\\Microsoft\\Framework\\.NETFramework\\v4.8\\System.Text.Json.dll";
 
-	// Framework csc has no arm64 platform option ("arm" is 32-bit ARM); AnyCPU
-	// IL runs as a 64-bit ARM64 process on the windows-11-arm runner.
-	const cscPlatform = TARGET_ARCH === "arm64" ? "anycpu" : TARGET_ARCH;
+	// Framework csc has no arm64 platform option ("arm" is 32-bit ARM). An
+	// AnyCPU exe's process arch is whichever .NET Framework the OS resolves —
+	// ARM64 native where that framework exists, x64-emulated elsewhere — and
+	// a process/load arch mismatch is exactly the BadImageFormatException the
+	// arm64 smoke test hit. Pinning x64 is deterministic: on ARM64 Windows the
+	// host runs under emulation with a matched x64 loader/runtime pair, and a
+	// transient install wizard doesn't care about the emulation overhead.
+	const cscPlatform = TARGET_ARCH === "arm64" ? "x64" : TARGET_ARCH;
 
 	const compileArgs = [
 		"/nologo",
