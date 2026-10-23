@@ -104,6 +104,9 @@ export interface UpdateCheckResult {
 	error?: string;
 	/** Classified failure kind → localized copy via UPDATE_ERROR_BODY_KEYS. */
 	errorKind?: UpdateErrorInfo["kind"];
+	/** True when the release ships no update metadata for this platform/channel
+	 *  (404 on latest.yml) — "nothing to update to", not a network failure. */
+	missingFeed?: boolean;
 	reason?: string;
 }
 

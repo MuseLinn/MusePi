@@ -55,7 +55,7 @@ const { autoUpdater } = require("electron-updater");
 const { BrowserWindow, session, shell } = electronModule;
 const fs = require("node:fs");
 const nodePath = require("node:path");
-const { classifyUpdateError } = require("./update-logic.cjs");
+const { classifyUpdateError, isMissingUpdateFeedError } = require("./update-logic.cjs");
 
 // ── File log ─────────────────────────────────────────────────────────────
 // Everything the updater does also lands in ~/Library/Logs/MusePi/updater.log
@@ -308,6 +308,18 @@ autoUpdater.on("update-not-available", () => {
 });
 
 autoUpdater.on("error", (err) => {
+	// A release with no update metadata for this platform/channel (404 on
+	// latest.yml) means "nothing to update to", not a broken updater
+	// (openchamber updater-check parity): log it, stay idle, and let the
+	// checkForUpdates result carry the missingFeed verdict to the settings
+	// page — the toast never shows because no update-available fires.
+	if (state.status !== "verifying" && state.status !== "downloaded" && state.status !== "downloading" && state.status !== "preparing" && isMissingUpdateFeedError(err)) {
+		log("update feed not published for this platform/channel:", err?.message ?? err);
+		state.status = "idle";
+		clearError();
+		emitState();
+		return;
+	}
 	// electron-updater's `error` event fires for whatever operation is
 	// current — infer the operation from the phase the failure arrived in.
 	const op = state.status === "verifying" || state.status === "downloaded" ? "install" : state.status === "downloading" || state.status === "preparing" ? "download" : "check";
@@ -392,6 +404,21 @@ async function checkForUpdates() {
 			otaCapable: otaCapable(),
 		};
 	} catch (err) {
+		// Missing feed (404 on latest.yml / channel file never published) is
+		// "nothing to update to", not a failure — a dedicated verdict lets the
+		// settings page say so instead of implying the user's network is down.
+		if (isMissingUpdateFeedError(err)) {
+			log("check: update feed not published:", err?.message ?? err);
+			return {
+				enabled: true,
+				newer: false,
+				latest: null,
+				current: app.getVersion(),
+				missingFeed: true,
+				url: "",
+				otaCapable: otaCapable(),
+			};
+		}
 		state.status = "error";
 		setError("check", err);
 		// The renderer contract ships both the raw message (folded into the

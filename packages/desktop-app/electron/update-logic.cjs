@@ -31,6 +31,24 @@ function isNetworkError(message) {
 	return NETWORK_ERROR_PATTERN.test(text) || NETWORK_ERROR_WORDS.test(text);
 }
 
+/** openchamber updater-check.mjs parity: electron-updater rejects the check
+ *  with these wordings when the release simply has no update metadata for
+ *  this platform/channel yet (404 on latest.yml, or a channel file that was
+ *  never published). That is authoritative "nothing to update to", not a
+ *  broken updater — surface it as its own verdict instead of a failure so
+ *  users don't blame their network. Deliberately narrower than openchamber's
+ *  regex: a bare HttpError/status-code 404 also matches a missing installer
+ *  ASSET mid-download, which must stay a download error, so only the
+ *  provider's own "cannot find the channel file" wordings count; ENOTFOUND
+ *  likewise stays a network error (we classify it separately). */
+const MISSING_UPDATE_FEED_RE = /Cannot find (?:channel\b|.+ in the latest release artifacts)/i;
+
+/** True when a check-phase rejection means "no update metadata published". */
+function isMissingUpdateFeedError(err) {
+	const message = err instanceof Error ? err.message : String(err ?? "");
+	return MISSING_UPDATE_FEED_RE.test(message);
+}
+
 /**
  * Classify one updater failure.
  * @param {"check"|"download"|"install"} op which phase failed
@@ -84,7 +102,9 @@ module.exports = {
 	UPDATE_POLL_BASE_MS,
 	UPDATE_POLL_MAX_MS,
 	UPDATE_POLL_JITTER,
+	MISSING_UPDATE_FEED_RE,
 	isNetworkError,
+	isMissingUpdateFeedError,
 	classifyUpdateError,
 	nextPollDelayMs,
 };

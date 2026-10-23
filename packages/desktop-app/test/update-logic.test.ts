@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 // types — same convention as the daemon.cjs test imports.
 import {
 	classifyUpdateError,
+	isMissingUpdateFeedError,
 	isNetworkError,
 	nextPollDelayMs,
 	UPDATE_POLL_BASE_MS,
@@ -74,6 +75,33 @@ describe("isNetworkError", () => {
 	test("does not tag local validation failures as network", () => {
 		expect(isNetworkError("signature verification failed")).toBe(false);
 		expect(isNetworkError("")).toBe(false);
+	});
+});
+
+describe("isMissingUpdateFeedError", () => {
+	test("treats a 404 on the channel file as 'no feed published'", () => {
+		// The exact GitHub-provider wording a missing latest.yml produces
+		// (observed on 0.5.3 against the asset-less 0.6.0 release).
+		expect(
+			isMissingUpdateFeedError(
+				new Error(
+					"Cannot find latest.yml in the latest release artifacts (https://github.com/MuseLinn/MusePi/releases/download/v0.6.0/latest.yml): HttpError: 404 ",
+				),
+			),
+		).toBe(true);
+		// Generic-provider wording for a channel file that was never published.
+		expect(isMissingUpdateFeedError(new Error('Cannot find channel "beta.yml" update info'))).toBe(true);
+	});
+
+	test("keeps genuine network failures and download-phase failures out of the missing-feed verdict", () => {
+		// DNS failure is the user's network, not a missing release.
+		expect(isMissingUpdateFeedError(new Error("getaddrinfo ENOTFOUND github.com"))).toBe(false);
+		expect(isMissingUpdateFeedError(new Error("Request failed: ETIMEDOUT"))).toBe(false);
+		// A 404 on the installer ASSET mid-download must stay a download error:
+		// the bare status wording is intentionally not a missing-feed signal.
+		expect(isMissingUpdateFeedError(new Error("Cannot download MusePi-0.6.0-setup.exe: HttpError: 404"))).toBe(false);
+		expect(isMissingUpdateFeedError("Request failed with status code 404")).toBe(false);
+		expect(isMissingUpdateFeedError(undefined)).toBe(false);
 	});
 });
 

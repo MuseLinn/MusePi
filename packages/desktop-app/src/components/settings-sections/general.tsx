@@ -240,6 +240,11 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			if (!r.enabled) {
 				setUpdateStatus(t("settings.noUpdateSourceConfigured"));
 				setUpdateErrorDetail(null);
+			} else if (r.missingFeed) {
+				// 404 on latest.yml: the release simply has no update metadata
+				// for this platform yet — say so instead of crying network.
+				setUpdateStatus(t("settings.updateFeedMissing"));
+				setUpdateErrorDetail(null);
 			} else if (r.error) {
 				setUpdateStatus(
 					r.errorKind && UPDATE_ERROR_BODY_KEYS[r.errorKind]

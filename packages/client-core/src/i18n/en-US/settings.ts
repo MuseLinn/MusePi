@@ -571,6 +571,8 @@ export const settings = {
 	"settings.upDate": "Up to date",
 	"settings.newVersion": "New version available",
 	"settings.noUpdateSourceConfigured": "No public update source yet (available after release)",
+	"settings.updateFeedMissing":
+		"No update feed was found for this platform; the new release may not be published for it yet",
 	"settings.updatesOnlyDesktopApp": "Available only in the desktop app",
 	"settings.checking": "Checking…",
 	"settings.check": "Check",

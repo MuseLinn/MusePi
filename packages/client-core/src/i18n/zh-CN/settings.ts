@@ -525,6 +525,7 @@ export const settings = {
 	"settings.upDate": "已是最新版本",
 	"settings.newVersion": "发现新版本",
 	"settings.noUpdateSourceConfigured": "尚未发布公开更新源（发布后可用）",
+	"settings.updateFeedMissing": "未找到当前平台的更新发布信息，新版本可能尚未发布到该平台",
 	"settings.updatesOnlyDesktopApp": "仅在桌面应用中可用",
 	"settings.checking": "检查中…",
 	"settings.check": "检查",
