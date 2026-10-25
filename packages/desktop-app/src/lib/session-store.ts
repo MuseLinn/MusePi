@@ -13,6 +13,7 @@ import {
 	type AgentEvent,
 	type AgentProgress,
 	type AgentSnapshot,
+	type MessageDisplayContext,
 	roundDurationRecord,
 	type SessionEntry,
 	type SessionState,
@@ -243,7 +244,11 @@ export class GuiSessionStore {
 	/** 乐观回显:发送瞬间本地插入的用户消息(TUI startPendingSubmission
 	 *  parity)。daemon 的 message_start 到达时按内容签名移除,由权威
 	 *  entry 接管;turn 结束仍未匹配则清空(防幽灵)。 */
-	#optimisticUser: { text: string; images?: { type: "image"; data: string; mimeType: string }[] } | null = null;
+	#optimisticUser: {
+		text: string;
+		images?: { type: "image"; data: string; mimeType: string }[];
+		displayContext?: MessageDisplayContext;
+	} | null = null;
 	#optimisticSeq = 0;
 	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
 	 *  between mutations, so the snapshot is rebuilt only inside {@link apply}. */
@@ -547,8 +552,12 @@ export class GuiSessionStore {
 	 * message_start 到达时按内容签名匹配并移除,由权威 entry 接管。
 	 * turn 结束(agent_end)仍未匹配则清空——发送失败/被吞时不留幽灵。
 	 */
-	optimisticEcho(text: string, images?: { type: "image"; data: string; mimeType: string }[]): void {
-		this.#optimisticUser = { text, images };
+	optimisticEcho(
+		text: string,
+		images?: { type: "image"; data: string; mimeType: string }[],
+		displayContext?: MessageDisplayContext,
+	): void {
+		this.#optimisticUser = { text, images, displayContext };
 		this.#optimisticSeq += 1;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
@@ -604,6 +613,7 @@ export class GuiSessionStore {
 					role: "user",
 					timestamp: Date.now(),
 					content: [...(o.text ? [{ type: "text" as const, text: o.text }] : []), ...(o.images ?? [])],
+					...(o.displayContext ? { displayContext: o.displayContext } : {}),
 				},
 			};
 			entries = [...entries, optimisticEntry];

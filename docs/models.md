@@ -1,3 +1,13 @@
+---
+layout: default
+title: Model and provider configuration
+status: living
+summary: Model loading, role and fallback selection, thinking levels, overrides, credentials, and runtime resolution.
+scope:
+  - packages/coding-agent/src/config
+  - packages/catalog/src
+---
+
 # Model and Provider Configuration (`models.yml` / `models.yaml`)
 English | [中文](models.zh-CN.md)
 
@@ -578,6 +588,8 @@ providers:
 ```
 
 The built-in model policy currently links OpenAI `codex-spark` variants to `gpt-5.5`, and `gpt-5.5` to `gpt-5.4`, when that target exists on the same provider/API.
+
+In the desktop role settings, each role and each fallback selector independently accepts `inherit`, `auto`, `off`, or a concrete effort supported by that exact model. The `provider/id:auto` suffix selects automatic thinking for that row only; it is not a global default and is not removed by model clamping. Fallback rows resolve their ladder through `models.detail`, so different entries may use different levels.
 
 ## Compatibility and routing fields
 

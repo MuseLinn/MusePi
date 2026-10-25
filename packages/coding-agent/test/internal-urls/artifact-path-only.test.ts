@@ -103,6 +103,6 @@ describe("resolveToolSearchScope handles large artifacts via pathOnly", () => {
 		});
 		// Scope resolution must reach the artifact's real path without going through
 		// InternalUrlRouter's inline-content cap.
-		expect(scope.searchPath).toBe(path.join(artifactDir, "0.mcp.log"));
+		expect(scope.searchPath && path.resolve(scope.searchPath)).toBe(path.join(artifactDir, "0.mcp.log"));
 	});
 });

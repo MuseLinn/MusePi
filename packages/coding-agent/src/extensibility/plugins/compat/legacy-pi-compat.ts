@@ -461,6 +461,20 @@ function staticObjectPropertyName(node: StructuralAstNode): string | null {
 	return key?.type === "StringLiteral" && typeof key.value === "string" ? key.value : null;
 }
 
+function isRuntimeModuleDeclaration(node: StructuralAstNode): boolean {
+	if (node.type === "ImportDeclaration") {
+		if (node.importKind === "type") return false;
+		const specifiers = Array.isArray(node.specifiers) ? node.specifiers : [];
+		return specifiers.length === 0 || specifiers.some(specifier => asAstNode(specifier)?.importKind !== "type");
+	}
+	if (node.type === "ExportNamedDeclaration" || node.type === "ExportAllDeclaration") {
+		if (node.exportKind === "type") return false;
+		const specifiers = Array.isArray(node.specifiers) ? node.specifiers : [];
+		return specifiers.length === 0 || specifiers.some(specifier => asAstNode(specifier)?.exportKind !== "type");
+	}
+	return true;
+}
+
 function collectExtensionSpecifierReferences(
 	source: string,
 	importerPath: string,
@@ -481,6 +495,7 @@ function collectExtensionSpecifierReferences(
 	const createRequireBindings = new Set<string>();
 	const moduleNamespaceBindings = new Set<string>();
 	for (const { node } of collectScopedAstNodes(ast, candidate => candidate.type === "ImportDeclaration")) {
+		if (!isRuntimeModuleDeclaration(node)) continue;
 		const source = asAstNode(node.source);
 		if (source?.type !== "StringLiteral" || (source.value !== "node:module" && source.value !== "module")) continue;
 		for (const value of Array.isArray(node.specifiers) ? node.specifiers : []) {
@@ -502,9 +517,10 @@ function collectExtensionSpecifierReferences(
 	}
 	for (const { node, scope } of collectScopedAstNodes(ast, isSpecifierReferenceNode)) {
 		if (
-			node.type === "ImportDeclaration" ||
-			node.type === "ExportNamedDeclaration" ||
-			node.type === "ExportAllDeclaration"
+			(node.type === "ImportDeclaration" ||
+				node.type === "ExportNamedDeclaration" ||
+				node.type === "ExportAllDeclaration") &&
+			isRuntimeModuleDeclaration(node)
 		) {
 			record("import", node.source);
 		} else if (node.type === "ImportExpression") {

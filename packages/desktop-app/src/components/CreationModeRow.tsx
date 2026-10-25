@@ -1,4 +1,5 @@
 import { t } from "@musepi/client-core";
+import type { MessageDisplayContext } from "@musepi/client-core/src/messages/display-context";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -53,6 +54,7 @@ import { AssetPolicyRow } from "./composer/asset-policy-row";
 export interface CreationMessage {
 	text: string;
 	images?: { type: "image"; data: string; mimeType: string }[];
+	displayContext?: MessageDisplayContext;
 	files?: File[];
 	thinkingLevel?: string | null;
 	modelId?: string | null;

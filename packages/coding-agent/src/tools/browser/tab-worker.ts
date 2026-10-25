@@ -48,10 +48,11 @@ import {
 	DEFAULT_VIEWPORT,
 	loadPuppeteerInWorker,
 } from "./launch";
+import { BrowserOperationTracker, operationResultDetails, redactBrowserUrl } from "./operation-activity";
 import { extractReadableFromHtml, type ReadableFormat } from "./readable";
-
 import { cloneSafe, RunOutput } from "./run-output";
 import type {
+	BrowserOperationAction,
 	Observation,
 	ObservationEntry,
 	ReadyInfo,
@@ -324,10 +325,38 @@ export type ActionableHandle = ElementHandle & { fill(value: string): Promise<vo
  * Puppeteer handles expose `type()` but no `fill()`; the semantics mirror the
  * selector-based `tab.fill()`: focus, clear any existing value, then type.
  */
-export function toActionableHandle(handle: ElementHandle): ActionableHandle {
+export function toActionableHandle(
+	handle: ElementHandle,
+	activity?: { tracker: BrowserOperationTracker; target: string; signal?: AbortSignal },
+): ActionableHandle {
 	const enriched = handle as ActionableHandle;
-	enriched.fill = value => fillViaHandle(enriched, value);
+	if (activity) {
+		const click = enriched.click.bind(enriched);
+		enriched.click = async (...args) =>
+			await trackHandleOperation(activity, "click", async () => await click(...args));
+	}
+	enriched.fill = value =>
+		activity
+			? trackHandleOperation(activity, "fill", async () => await fillViaHandle(enriched, value))
+			: fillViaHandle(enriched, value);
 	return enriched;
+}
+
+async function trackHandleOperation<T>(
+	activity: { tracker: BrowserOperationTracker; target: string; signal?: AbortSignal },
+	action: "click" | "fill",
+	fn: () => Promise<T>,
+): Promise<T> {
+	const id = activity.tracker.start(action, { target: activity.target });
+	try {
+		const result = await fn();
+		activity.tracker.complete(id);
+		return result;
+	} catch (error) {
+		if (activity.signal?.aborted || error instanceof ToolAbortError) activity.tracker.cancel(id);
+		else activity.tracker.fail(id, error);
+		throw error;
+	}
 }
 
 /** Focus, clear any existing value, then retype — shared by `tab.fill(aria-ref)` and enriched handles. */
@@ -340,25 +369,6 @@ async function fillViaHandle(handle: ElementHandle, value: string, signal?: Abor
 		}),
 	);
 	await untilAborted(signal, () => handle.type(value, { delay: 0 }));
-}
-
-/**
- * Strip `user:pass@` from a URL before surfacing it in tool outputs / details
- * so Basic Auth credentials don't leak into transcripts. Returns the original
- * string verbatim when it doesn't parse as a URL or when there are no
- * credentials to redact.
- */
-function redactUrlCredentials(url: string): string {
-	if (!url || (!url.includes("@") && !url.includes("//"))) return url;
-	try {
-		const parsed = new URL(url);
-		if (!parsed.username && !parsed.password) return url;
-		parsed.username = "";
-		parsed.password = "";
-		return parsed.toString();
-	} catch {
-		return url;
-	}
 }
 
 class RequestInterceptionCleanupError extends ToolError {}
@@ -713,6 +723,7 @@ interface ActiveRun {
 	/** Helper invocations currently awaiting the page/network, keyed by op id. */
 	inflight: Map<number, InflightOp>;
 	opCounter: number;
+	operations: BrowserOperationTracker;
 }
 
 /** Human-readable label for a screenshot op, used in op tracking + timeout errors. */
@@ -745,6 +756,53 @@ export function describeInflight(inflight: Map<number, InflightOp>): string {
 		.sort((a, b) => a.startedAt - b.startedAt)
 		.map(op => `${op.label} (${((now - op.startedAt) / 1000).toFixed(1)}s)`)
 		.join(", ");
+}
+
+function browserOperationForLabel(
+	label: string,
+	selector?: string,
+): { action: BrowserOperationAction; target?: string } | null {
+	const match = /^tab\.([A-Za-z]+)\(/.exec(label);
+	if (!match) return null;
+	const method = match[1];
+	const action: BrowserOperationAction | null =
+		method === "goto"
+			? "goto"
+			: method === "observe" || method === "ariaSnapshot"
+				? "observe"
+				: method === "click"
+					? "click"
+					: method === "fill"
+						? "fill"
+						: method === "type"
+							? "type"
+							: method === "press"
+								? "press"
+								: method === "select"
+									? "select"
+									: method === "scroll"
+										? "scroll"
+										: method === "drag"
+											? "drag"
+											: method === "hover"
+												? "hover"
+												: method === "screenshot"
+													? "screenshot"
+													: method === "evaluate"
+														? "evaluate"
+														: method.startsWith("wait")
+															? "wait"
+															: null;
+	if (!action) return null;
+	const argument = /^[^(]+\(("(?:\\.|[^"\\])*")/.exec(label)?.[1];
+	let parsed: string | undefined;
+	if (argument) {
+		try {
+			parsed = JSON.parse(argument) as string;
+		} catch {}
+	}
+	const target = selector ?? parsed;
+	return { action, target: action === "goto" && target ? redactBrowserUrl(target) : target };
 }
 
 export class WorkerCore {
@@ -985,7 +1043,7 @@ export class WorkerCore {
 		const targetId = this.#targetId ?? (await targetIdForPage(page));
 		this.#targetId = targetId;
 		return {
-			url: redactUrlCredentials(page.url()),
+			url: redactBrowserUrl(page.url()),
 			title: await page.title().catch(() => undefined),
 			viewport: page.viewport() ?? DEFAULT_VIEWPORT,
 			targetId,
@@ -1053,6 +1111,9 @@ export class WorkerCore {
 			floatingFailure,
 			inflight: new Map(),
 			opCounter: 0,
+			operations: new BrowserOperationTracker(msg.id, operations => {
+				this.#transport.send({ type: "activity", id: msg.id, operations });
+			}),
 		};
 		this.#active = active;
 		let completed = false;
@@ -1153,10 +1214,16 @@ export class WorkerCore {
 				failure = { error };
 			}
 			failure = this.#foldFloatingRejections(active, failure);
+			active.operations.cancelPending();
 			if (this.#active?.id === msg.id) this.#active = null;
 		}
 		if (failure) {
-			this.#transport.send({ type: "result", id: msg.id, ok: false, error: errorPayload(failure.error) });
+			this.#transport.send({
+				type: "result",
+				id: msg.id,
+				ok: false,
+				error: { ...errorPayload(failure.error), operations: active.operations.snapshot() },
+			});
 			return;
 		}
 		if (completed) {
@@ -1165,7 +1232,12 @@ export class WorkerCore {
 				type: "result",
 				id: msg.id,
 				ok: true,
-				payload: { displays: output.finish(), returnValue: cloneSafe(returnValue), screenshots },
+				payload: {
+					displays: output.finish(),
+					returnValue: cloneSafe(returnValue),
+					screenshots,
+					operations: active.operations.snapshot(),
+				},
 			});
 		}
 	}
@@ -1237,6 +1309,8 @@ export class WorkerCore {
 		opts?: { selector?: string; zeroMatchAfterMs?: number },
 	): Promise<T> {
 		const opId = active.opCounter++;
+		const activity = browserOperationForLabel(label, opts?.selector);
+		const activityId = activity ? active.operations.start(activity.action, { target: activity.target }) : null;
 		active.inflight.set(opId, { label, startedAt: Date.now() });
 		const capped = Number.isFinite(perOpTimeoutMs) && perOpTimeoutMs > 0;
 		const opTimeout = capped ? AbortSignal.timeout(perOpTimeoutMs) : undefined;
@@ -1250,13 +1324,24 @@ export class WorkerCore {
 		// the finally (stops the watchdog's polling once the op settles either way).
 		const earlyAc = new AbortController();
 		try {
-			if (!watchdog) return await fn(opSignal);
-			const racedSignal = AbortSignal.any([opSignal, earlyAc.signal]);
-			return await Promise.race([
-				fn(racedSignal),
-				this.#zeroMatchWatchdog(watchdog.selector, label, watchdog.afterMs, racedSignal),
-			]);
+			const result = watchdog
+				? await Promise.race([
+						fn(AbortSignal.any([opSignal, earlyAc.signal])),
+						this.#zeroMatchWatchdog(
+							watchdog.selector,
+							label,
+							watchdog.afterMs,
+							AbortSignal.any([opSignal, earlyAc.signal]),
+						),
+					])
+				: await fn(opSignal);
+			if (activityId) active.operations.complete(activityId, operationResultDetails(result));
+			return result;
 		} catch (err) {
+			if (activityId) {
+				if (cellSignal.aborted) active.operations.cancel(activityId);
+				else active.operations.fail(activityId, err);
+			}
 			// Fail fast with a named, attributable error instead of the opaque whole-cell timeout:
 			// our per-op deadline fired, or puppeteer's own (equal) timeout fired first — having
 			// already torn down the CDP action via the op signal, so no work is left dangling.
@@ -1506,7 +1591,12 @@ export class WorkerCore {
 				return op(
 					`tab.waitFor(${JSON.stringify(selector)})`,
 					w,
-					async sig => toActionableHandle(await this.#resolveActionHandle(selector, w, sig)),
+					async sig =>
+						toActionableHandle(await this.#resolveActionHandle(selector, w, sig), {
+							tracker: active.operations,
+							signal,
+							target: selector,
+						}),
 					{ selector, zeroMatchAfterMs: opts?.timeout === undefined ? ZERO_MATCH_FAIL_FAST_MS : undefined },
 				);
 			},
@@ -1517,7 +1607,11 @@ export class WorkerCore {
 					w,
 					async sig => {
 						if (parseAriaRefSelector(selector) !== null)
-							return toActionableHandle(await this.#resolveAriaRef(selector));
+							return toActionableHandle(await this.#resolveAriaRef(selector), {
+								tracker: active.operations,
+								signal,
+								target: selector,
+							});
 						const handle = (await untilAborted(sig, () =>
 							page.waitForSelector(normalizeSelector(selector), {
 								timeout: w,
@@ -1526,7 +1620,9 @@ export class WorkerCore {
 								signal: sig,
 							}),
 						)) as ElementHandle | null;
-						return handle ? toActionableHandle(handle) : null;
+						return handle
+							? toActionableHandle(handle, { tracker: active.operations, signal, target: selector })
+							: null;
 					},
 					{
 						selector,
@@ -1597,8 +1693,18 @@ export class WorkerCore {
 				const w = waitMs(opts?.timeout);
 				return op("tab.waitForResponse()", w, sig => this.#waitForResponse(pattern, w, sig));
 			},
-			id: async id => toActionableHandle(await this.#resolveCachedHandle(id)),
-			ref: async id => toActionableHandle(await this.#resolveAriaRef(id)),
+			id: async id =>
+				toActionableHandle(await this.#resolveCachedHandle(id), {
+					tracker: active.operations,
+					signal,
+					target: String(id),
+				}),
+			ref: async id =>
+				toActionableHandle(await this.#resolveAriaRef(id), {
+					tracker: active.operations,
+					signal,
+					target: id,
+				}),
 		};
 	}
 

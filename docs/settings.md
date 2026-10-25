@@ -1,3 +1,13 @@
+---
+layout: default
+title: Settings and configuration precedence
+status: living
+summary: Settings sources, schema, project overlays, runtime precedence, and configuration workflows.
+scope:
+  - packages/coding-agent/src/config
+  - packages/coding-agent/src/commands
+---
+
 # Settings
 
 English | [中文](settings.zh-CN.md)

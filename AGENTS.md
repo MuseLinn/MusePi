@@ -1,324 +1,63 @@
-# Development Rules
-
-## GUI Development Rules (`packages/desktop-app`, `packages/guest-client`)
-
-The desktop GUI follows its own living spec — **`docs/gui-design.md`** (design/interaction standards) and **`docs/gui-implementation.md`** (RPC contracts, gotchas, verification workflow). Update them when you change GUI behavior. Key rules that bite:
-
-- **Only the top modal owns the keyboard.** Shared modals use `useModalFocus` / `isTopModal`: Escape is captured on `document`, Tab stays inside the top dialog, and closing restores a still-connected opener. Ordinary confirms accept Enter; destructive confirms initially focus Cancel and never confirm on Enter (an explicit click is required). The onboarding overlay advances on Enter / steps back on Escape. Never let a modal rely on the page behind keeping focus — the composer swallows Enter and sends a message.
-- **`DialogFrame` is always mounted and driven by `open`** — conditional mounting (`{x && <DialogFrame/>}`) kills the exit animation. Same rule for prompt/confirm dialogs (`lib/prompt-dialog.tsx`): closing defers the promise resolution until the 180ms exit plays.
-- **Small-content dialogs must use the compact style** (`gui-dialog--confirm`): auto-sized, `max-width: 380px`. The base `.gui-dialog` is a 600×420 settings box — a desc + two buttons floating in it reads broken.
-- **Every hook must be declared before any early return** (`if (!open) return null`). A hook after a conditional return flips the hook count and crashes with "Rendered more hooks than during the previous render" (AnnouncementOverlay regression, fixed 2026-08-14).
-- **Model identity is `provider/id`, never a bare id.** Two providers can serve the same bare id (opencode-go vs opencode-zen both offering `deepseek-v4-flash`): favorites, the DEFAULT pin, the selection state and role assignments all key on `provider/id`, and `session.setModel` carries `provider` so the daemon resolves the exact model. The daemon's model resolver already understands `provider/id` references.
-- **Model selection is session-scoped** (TUI `/switch` parity): the in-chat composer's pick calls `session.setModel` for THAT session only. The welcome composer's resting preselect is the DEFAULT role (`modelRoles.default`) kept in its own `defaultModelId` app state — opening/switching sessions must NEVER write it, and `ModelSelector` resets its `userPicked` seed lock on session change (the composer stays mounted across switches, so a pick in session A must not freeze session B's selector on A's model). Seed precedence in session mode: live model (`contextUsage.model`) → session preselect → DEFAULT → list head.
-- **Role thinking ladders are per-model.** The role rows' thinking select renders the resolved model's `getSupportedEfforts` (daemon `resolvedRoleModels.efforts`) — never a fixed seven-rung list; re-fetch the resolution after every role-model change (`applyRoleModels`).
-- **CSS-only interactions stay CSS-only** (chroma group glow via CSS vars + hover; recap slide via sibling selectors) — no React state for pointer tracks.
-- **i18n 词表按域拆分**（`guest-client/src/i18n/{zh-CN,en-US}/<domain>.ts`，TUI 在 `coding-agent/src/i18n/zh-CN/`）：改文案找对应域文件，禁止塞回单文件；en 域文件必须 `as const satisfies Record<ZhKey, string>`（缺/多 key 即编译错误，加 zh key 必须同步 en）；域间 key 重复 → barrel 模块加载抛错。插件/扩展文案走 `registerTranslations`（GUI 另有 `tLoose`），不直接改词表。架构见 `docs/i18n.md`。
-- **Extension HMR / `registerComponent`**（P4 v1 + P5 v2，契约见 `docs/extensions-dev.md §6`）：扩展入口文件变更 → daemon watcher 500ms 内广播 `extensions.changed`（GUI `useSlotComponents`/`ExtensionsCenter`/`PluginsSection` 监听即刷，替代纯轮询）+ 对每个活跃会话比对源码图 mtime 后执行 `reloadExtension`（忙会话挂起、`agent_end` 补做），完成发会话内事件 `extensions.reloaded`。GUI 组件渲染 = 文件变更后 ~1s；会话内工具 = 下次调用生效（旧名若未被新模块重注册则从注册表删除）。**子模块改动同样热生效，无需 touch 入口**：变更判定按入口整张源码图的 mtime 快照（`extensionEntriesNeedingReload`），图内任一文件改动即重载其入口；图内 specifier 发裸路径 + `?mtime=`（`file://` 会被 Bun 按缓存忽略，Windows 上原先正因此整图不刷新）。扩展内存态不迁移、在途副作用不回收、handler 重载存在 ~ms 双跑窗口（旧 handler 先清后推新）。新增扩展 API 必须同步更新 `docs/extensions-dev.md`。
-- **Modes（预设）与扩展中心分类**（已归档：`docs/archive/modes-plan.md`；实现见 `coding-agent/src/presets/`）：预设 = 扩展白名单 + 提示词区块 + settings 覆盖，文件在 `~/.musepi/modes/<id>.json`（`presets/resolve.ts` 继承展开/校验、`prompts/composer.ts` 注入；入口 `--preset` CLI / GUI 欢迎页项目行 chip / 设置→智能体→预设）。**扩展中心 provider 并存**：`omp-plugins` = "OMP Extension Packages"（上游生态，勿改品牌名）、`musepi-extensions` = "MusePi Plugins"（自有插件系统，GUI 品牌一律「插件」；pi/omp 遗产 runtime 扩展归设置侧「扩展与插件」控制中心，`discovery/builtin.ts` 的 ExtensionModule/Extension 源标记）——新增自有插件能力沿用 `musepi-extensions` provider id（品牌名 MusePi Plugins），勿并入 native。
-
-## Docs: 计划文档状态与双语约定
-
-> **权威状态在 `docs/` 各文档头部状态行**。已完结的计划文档全部移入 `docs/archive/`（归档规则与完整清单见 `docs/archive/README.md`），不要为归档文档更新状态。留在 `docs/` 顶层的活文档（如 `docs/mobile-design.md`——壳已构建、细节待专项核对）改动时先更新其自身状态行。GUI 共享渲染组件在 `packages/client-core/`（2026-09-21 由 guest-client 更名，历史文档中的旧名随章节下次改动自然更新）。
-
-**文档双语约定**（参照 dsh 配对，仓库既有后缀是 `.zh-CN.md` 非 `.zh.md`）：
-
-- 配对 = 三个同级文件：`X.md` + `X.zh-CN.md` + `X.i18n.yaml`（blob-hash 记录配对）。
-- 门控脚本：`bun run verify-translation-pairing`（全量报告 exit 0，列出 missing-pair；命名配对严格 exit 1——渐进落地不阻塞 CI）。
-- 配对契约：`docs/i18n/README.md`；语言切换器、结构调整勾选后 `--write` 记录 hash。
-- 修改 `docs/*.md` 时若终态仍有对应 `.zh-CN.md`，必须同步更新双语（除非是临时/已闭合文档——应删除而非翻译）。
-- 排除配对：`docs/AGENTS.md`、`docs/CLAUDE.md`、`docs/skills/examples/**/README.md`。
-
-## Default Context
-
-This repo contains multiple packages, but **`packages/coding-agent/`** is the primary focus. Unless otherwise specified, assume work refers to this package.
-
-**Terminology**: When the user says "agent" or asks "why is agent doing X", they mean the **coding-agent package implementation**, not you (the assistant). The coding-agent is a CLI tool — questions about its behavior refer to code in `packages/coding-agent/`, not your current session.
-
-### Package Structure
-
-| Package                 | Description                                                                             |
-| ----------------------- | --------------------------------------------------------------------------------------- |
-| `packages/ai`           | Multi-provider LLM client with streaming support                                        |
-| `packages/catalog`      | Model catalog: bundled models.json, provider descriptors, model identity/classification |
-| `packages/agent`        | Agent runtime with tool calling and state management                                    |
-| `packages/coding-agent` | Main CLI application (primary focus)                                                    |
-| `packages/tui`          | Terminal UI library with differential rendering                                         |
-| `packages/natives`      | Bindings for native text/image/grep operations                                          |
-| `packages/stats`        | Local observability dashboard (`omp stats`)                                             |
-| `packages/utils`        | Shared utilities (logger, streams, temp files)                                          |
-| `crates/pi-natives`     | Rust crate for performance-critical text/grep ops                                       |
-
-**Catalog import convention**: code in this repo imports catalog _values_ (bundled models, model-thinking helpers, identity, descriptors, model manager/cache) from `@musepi/pi-catalog/<module>` — never via `@musepi/pi-ai`. The pi-ai barrel re-exports only the model/effort _types_ its own signatures use (`Model`, `Api`, `ThinkingConfig`, `Effort`, …); type-only imports of those from `@musepi/pi-ai` are fine.
-
-## Package READMEs
-
-Every package directory under `packages/` must contain a bilingual README pair: `README.md` (English) + `README.zh-CN.md` (Chinese). Existing single-language READMEs are grandfathered in the debt register inside `scripts/verify-package-readmes.ts` (runs in `bun run check` via `check:tools`) — translating one means removing its name from the script's `GRANDFATHERED` set.
-
-## GitHub
-
-Unless user tells you exactly what to write:
-
-- **Never comment on GitHub** (issues, PRs, discussions).
-- **Never create issues on GitHub**.
-
-## Code Quality
-
-- No `any` unless absolutely necessary.
-- **NEVER use `ReturnType<>`** — use the actual type name.
-- **No inline type imports** — `import("pkg").Type` in a type position, and dynamic type imports, are banned; use a top-level `import type`. They escape the static graph (refactors miss them, and the checker loses the real type) and no peer project does it.
-- **Dynamic `import()` only at a real split point** — `React.lazy` / route-level code splitting, plugin or extension loaders, an optional heavy dependency, or a genuine module-graph cycle. Not as a way to dodge a static import between two modules that already share a graph: that buys nothing and hides a dependency the bundler would otherwise see. (dsh keeps exactly 3, all `React.lazy`; openchamber uses ~860 including ordinary helpers — the split point is the test, not the syntax.)
-- Check `node_modules` for external API types instead of guessing.
-- **Barrel exports**: prefer `export * from "./module"` over named re-exports, including `export type { ... } from`. In pure `index.ts` barrels, use star re-exports even for single-specifier cases. If stars create ambiguity, remove the redundant export path; do not keep duplicates.
-- **Class privacy**: use ES `#private` fields; leave externally accessible members bare. **No `private`/`protected`/`public` keyword on fields or methods**, except on **constructor parameter properties** where TypeScript requires it (e.g. `constructor(private readonly session: ToolSession)`).
-- **Promises**: use `Promise.withResolvers()` instead of `new Promise((resolve, reject) => ...)`.
-- **Prompts**: never build prompts in code (no inline strings, template literals, or concatenation). Prompts live in static `.md` files; use Handlebars for dynamic content. Import them via `import content from "./prompt.md" with { type: "text" }` — not `readFile`.
-- **能力缝声明（M2.4）**: 新增内置能力（新 L2 服务 / `BUILTIN_TOOLS` 条目 / 斜杠命令域 / `register*` 方法 / widget / 插槽族）必须在对应权威注册表文件头部带六字段缝声明（名称+ns / 输入 / 输出 / 生命周期 / 启停 / 冲突 + 检视入口），并在 `docs/capability-seams.md` 索引页登记锚点。格式与七域锚点见 `docs/review/0.5.0-m2.4-capability-seams.md` §3。启停默认走覆盖层，选 always-on 必须在声明里写理由。
-- **Worker scripts**: workers re-enter the CLI entrypoint; never spawn separate worker entry modules. `cli.ts` declares itself as the worker host at startup (`declareWorkerHostEntry()` from `@musepi/pi-utils/env`) and dispatches hidden argv selectors (`__omp_worker_stats_sync`, `__omp_worker_tab`, `__omp_worker_js_eval`, `__omp_worker_tiny_inference`) before loading the command registry. Spawn sites use:
-  ```ts
-  import { workerHostEntry } from "@musepi/pi-utils";
-  const hostEntry = workerHostEntry();
-  const worker = hostEntry
-  	? new Worker(hostEntry, { type: "module", argv: ["__omp_worker_<name>"] })
-  	: new Worker(new URL("./<worker>.ts", import.meta.url).href, { type: "module" });
-  ```
-  When the process was started from the omp CLI — source `cli.ts`, npm-bundle `dist/cli.js`, or compiled binary — `workerHostEntry()` is `Bun.main` and the worker re-enters the single entry module, so no per-worker `--compile` entrypoints or bundle entries exist. Outside a CLI host (`bun test`, SDK embedding, standalone `omp-stats`) it returns `null` and the direct-module fallback loads the worker source. New worker kinds MUST add their selector to the dispatch table in `cli.ts` and keep the fallback branch.
-  History: `with { type: "file" }` copied the entry as a raw asset (silent worker crashes in compiled binaries — #1011, #1027); the later literal-path + extra-entrypoint pattern forced spawn literals and two build scripts to stay in sync (#1150). The smoke probe below is the live validation of this contract.
-  Validate any new worker with the dedicated smoke probe: `omp --smoke-test` spawns the stats sync worker and the tiny-model subprocess, pings them, and exits — it's wired into `ci:test:smoke` and `scripts/install-tests/run-ci.sh` so binary, source-link, and tarball installs all exercise it. Add a sibling smoke if the new worker is on a different module graph.
-
-## Central Utilities
-
-Before writing a helper, check whether one already exists — `packages/coding-agent/src/utils/`, `@musepi/pi-utils`, `@musepi/pi-tui`, and the domain modules next to your callsite. This applies to **everything**: VCS wrappers, formatting/truncation/path-display helpers, image handling, clipboard, streams, temp files, caching. The central versions carry hardening a fresh copy always loses (timeouts, output caps, non-interactive env, lock avoidance, caching, TUI sanitization).
-
-- Search first: `grep` for the operation before implementing it. Two implementations of the same thing is a bug even when both work.
-- Examples: `src/utils/git.ts` and `src/utils/jj.ts` are the only sanctioned way to run git/jj (`import * as git from "../utils/git"` — never hand-spawn via `$`/`Bun.spawn`); rendering goes through the TUI Sanitization helpers below (`replaceTabs`, `truncateToWidth`, `shortenPath`, `PREVIEW_LIMITS`), not ad-hoc string math.
-- Missing capability? Extend the central helper (new option, new sub-function on the namespace) and call it — don't fork its logic locally.
-
-## Bun Over Node
-
-Use Bun APIs where they provide a cleaner alternative; fall back to `node:*` only for what Bun doesn't cover. **Never spawn shell commands for operations with proper APIs** (e.g., don't `Bun.spawnSync(["mkdir", "-p", dir])` — use `mkdirSync`).
-
-### Quick reference
-
-| Operation       | Use                                       | Not                                |
-| --------------- | ----------------------------------------- | ---------------------------------- |
-| File read/write | `Bun.file()`, `Bun.write()`               | `readFileSync`, `writeFileSync`    |
-| Spawn process   | `` $`cmd` ``, `Bun.spawn()`               | `child_process`                    |
-| Sleep           | `Bun.sleep(ms)`                           | `setTimeout` promise               |
-| Binary lookup   | `$which("git")` from `@musepi/pi-utils` | `spawnSync(["which", "git"])`      |
-| HTTP server     | `Bun.serve()`                             | `http.createServer()`              |
-| SQLite          | `bun:sqlite`                              | `better-sqlite3`                   |
-| Hashing         | `Bun.hash()`, `Bun.password.*`, WebCrypto | `node:crypto`                      |
-| Path resolution | `import.meta.dir`, `import.meta.path`     | `fileURLToPath` dance              |
-| JSON5           | `Bun.JSON5.parse()` / `.stringify()`      | `json5` package                    |
-| JSONL           | `Bun.JSONL.parse()` / `.parseChunk()`     | `text.split("\n").map(JSON.parse)` |
-| String width    | `Bun.stringWidth()`                       | `get-east-asian-width`, custom     |
-| Text wrapping   | `Bun.wrapAnsi()`                          | custom ANSI-aware wrappers         |
-
-### Process execution
-
-Prefer Bun Shell (`` $`cmd` ``) for simple commands — methods: `.quiet()`, `.nothrow()`, `.text()`, `.cwd(path)`:
-
-```typescript
-import { $ } from "bun";
-
-const result = await $`git status`.cwd(dir).quiet().nothrow();
-if (result.exitCode === 0) {
-	const text = result.text();
-}
-
-$`do-stuff ${tmpFile}`.quiet().nothrow(); // fire and forget
-```
-
-Use `Bun.spawn`/`Bun.spawnSync` only for: long-running processes (LSP, kernels), streaming stdin/stdout/stderr (SSE, JSON-RPC), or process control (signals, kill, complex lifecycle). When using `pipe` mode, cast the stream: `(child.stdout as ReadableStream<Uint8Array>).getReader()`.
-
-### Node module imports
-
-Always use **namespace imports** for `node:fs`, `node:path`, `node:os` (`import * as fs from "node:fs/promises"`). Async-only file → `node:fs/promises`; needs both sync and async → `node:fs`, then `fs.promises.xxx` for async.
-
-### File I/O
-
-Prefer `Bun.file(path).text()` / `.json()` and `Bun.write(path, data)` (auto-creates parent dirs). Use `node:fs/promises` for directory ops (`fs.mkdir`, `fs.rm`, `fs.readdir`) — Bun has no native directory APIs. Avoid sync APIs in async flows; use sync only when forced by a synchronous interface.
-
-**Anti-patterns:**
-
-- `existsSync`/`readFileSync`/`writeFileSync` in async code → `Bun.file()` APIs.
-- `mkdir(dirname(path), …)` before `Bun.write(path, …)` → redundant; `Bun.write` handles it.
-- `if (await file.exists()) { await file.json() }` → two syscalls plus race. Use try-catch with `isEnoent` from `@musepi/pi-utils`: `try { return await Bun.file(path).json() } catch (err) { if (isEnoent(err)) return null; throw err }`.
-- Multiple `Bun.file(path)` handles for the same path (including across `checkX`/`loadX` helpers).
-- `Buffer.from(await Bun.file(x).arrayBuffer())` → `await fs.readFile(path)`.
-- Existence check + try-catch around the same read → drop the existence check.
-
-### Streams
-
-Prefer the centralized helpers (`readStream`, `readLines` from `./utils/stream`); manual reader loops only when the protocol requires it (SSE, streaming JSON-RPC).
-
-## Generated Files
-
-**NEVER edit `packages/catalog/src/models.json` directly.** It is generated from upstream sources (stencil.so, provider catalog discovery, OpenCode docs) by `packages/catalog/scripts/generate-models.ts` and the descriptors/resolvers in `packages/catalog/src/provider-models/`. Hand-edits get overwritten on the next regen.
-
-To change an entry, fix the source:
-
-- **Resolution rules / per-id overrides** → relevant resolver in `packages/catalog/src/provider-models/openai-compat.ts` (e.g. `createOpenCodeApiResolution`'s id-override map).
-- **Provider catalog entries** (default model, discovery factory/flags) → the `CATALOG_PROVIDERS` table in `packages/catalog/src/provider-models/descriptors.ts`.
-- **Generator-level fixups** (premium multipliers, codex pricing fallback, fallback models, post-processing) → `packages/catalog/scripts/generate-models.ts`.
-- **Thinking metadata / generated policies** → `packages/catalog/src/model-thinking.ts` (`applyGeneratedModelPolicies`); model-id classification (family/version parsing) lives in `packages/catalog/src/identity/classify.ts`.
-
-Regenerate with `bun run gen:models` and commit `models.json` alongside the source change. Add a regression test against the **resolver/descriptor**, not the bundled JSON, so it survives upstream metadata shifts.
-
-## Logging and CLI Output
-
-Code that may run while the TUI, RPC, SDK, workers, or background runtimes are active MUST NOT use `console.log`/`error`/`warn`; it corrupts rendering or protocols. Use the centralized logger:
-
-```typescript
-import { logger } from "@musepi/pi-utils";
-
-logger.error("MCP request failed", { url, method });
-logger.warn("Theme file invalid, using fallback", { path });
-```
-
-Logs go to `~/.omp/logs/omp.YYYY-MM-DD.log` with automatic rotation. Standalone CLI commands that exit without entering the TUI MAY use `console.*` or process streams for intentional user-facing output. Keep structured stdout clean. This exception is semantic, not filename-based; shared code must use `logger` or an explicit output sink.
-
-## TUI Sanitization
-
-All text displayed in tool renderers must be sanitized. Raw content (file contents, error messages, tool output) breaks terminal rendering: tabs → visual holes, long lines → overflow, paths → leak home directory.
-
-**Rules:**
-
-- **Tabs → spaces** via `replaceTabs()` (from `@musepi/pi-tui` or `../tools/render-utils`).
-- **Truncate** lines with `truncateToWidth()` / `ui.truncate()`. Use `TRUNCATE_LENGTHS` constants.
-- **Shorten paths** with `shortenPath()` (replaces home with `~`).
-- **Preview limits** from `PREVIEW_LIMITS`. No ad-hoc numbers.
-
-**Apply to every render path**, not just the happy one:
-
-- Success output (file previews, command output, search results).
-- **Error messages** — these often embed file content (e.g., patch failure messages include unmatched lines). If a message contains file content, it needs `replaceTabs()`.
-- Diff content (added and removed).
-- Streaming previews.
-
-### Streaming tool previews
-
-Tool-call previews have **multiple render paths** — adding preview-only fields or depending on partially streamed args means updating every path (live event, transcript rebuild, merged call/result), not just the final renderer. The full contract (decode helpers, bash `__partialJson` gotchas, verification rule) lives in the module header of `modes/controllers/tool-args-reveal.ts`.
-
-## Commands
-
-- NEVER commit unless asked.
-- Never use `tsc`/`npx tsc` — always `bun check`.
-- Commit subjects are Conventional Commits (`type(scope): summary`, ≤ 72 chars): the summary states the user-visible change in plain language. No process jargon in the subject — no batch/phase/cut numbering (第N刀, 快赢包, 收官), no roadmap milestone codes (M1.10, P1, C面), no stacked em-dash subtitles; that context goes in the body or the roadmap doc. Bad: `feat(daemon): P1 第十三刀（收官）——会话宿主面文件级拆分`; good: `refactor(daemon): split session-host surface out of server.ts`.
-- Merge commits (maintainer merges of PRs) follow: `Merge PR #<number>: <conventional PR subject> (@<author>)` — e.g. `Merge PR #6386: feat(catalog): add native Meta Model API provider (@eggpeat)`.
-
-## Testing Guidance
-
-### Test/session isolation (hard rule)
-
-Tests and smoke runs MUST NEVER write into the developer's production session store (`~/.musepi/agent/sessions/`) or share the production daemon socket dir (`%TEMP%/musepi-daemon`). Violations litter the user's session sidebar with "未命名会话" junk and can cross-talk with a running desktop daemon.
-
-- **Tests** that exercise real session storage (daemon suites, `SessionManager` suites, SDK suites) must isolate the agent dir with `test/helpers/isolate-agent-dir.ts` (`isolateAgentDirForTest` in `beforeAll`, `restoreAgentDirForTest` in `afterAll`; give the hook a 30s timeout — daemon/SQLite handles on Windows stay busy past the default 5s). Suites that pass an explicit session dir for every write are exempt.
-- **Why the temp cwd alone is not enough**: the default session root is `<agentDir>/sessions/<cwd-slug>` — a temp cwd only changes the slug, not the root. Only redirecting the agent dir isolates fully.
-- **Manual smoke runs** (desktop app, daemon, CLI chat against real models) must go through `bun scripts/dev-smoke.ts -- <command>`: it sets `PI_CODING_AGENT_DIR` + `MUSEPI_DAEMON_DIR` to a temp tree (copying `auth.json` so real calls work) and cleans up on exit. Never point a smoke run at the production daemon socket or session root.
-- **Tests** that boot daemons get an isolated daemon dir automatically: `packages/coding-agent/test/preload-locale.ts` (the bunfig preload entry) imports `test/preload-daemon-isolation.ts` first, which points `MUSEPI_DAEMON_DIR` at a fresh temp tree (socket/journal/ViewStore) unless already set, and removes it on exit. Never hardcode the production dir in a suite — import `JOURNAL_DIR`/`viewStorePath` from the daemon sources instead (fork-at/branch-at used to hardcode it). Per-suite journal/view-store cleanup stays as belt-and-braces for suites that write those files directly.
-
-Test the contract the system exposes — not the easiest internal detail to assert.
-
-- Every new test must defend one **concrete, externally observable contract**: behavior, output shape, state transition, error mapping, or a regression-prone parsing boundary. If you cannot name the contract, do not add the test.
-
-### Good vs. bad test filter
-
-- **Name the failure mode.** Every test MUST state what a consumer observes if it regresses. Cannot name one? NEVER add it.
-- **Good: transformation.** One fixture MAY prove parse/render/normalize/encode/resolve behavior when output is computed, not echoed.
-- **Good: branch or boundary.** Distinct inputs, empty values, malformed input, version/provider routing, and state transitions MUST prove distinct outcomes.
-- **Good: external contract.** Exact bytes/shape MAY be asserted when a provider, parser, protocol, or persisted consumer reads them.
-- **Good: precedence or negative contract.** Keep explicit `false`/override-wins assertions and required absence only when they prevent a documented leak, downgrade, 400, or incompatible wire field.
-- **Good: regression.** A repro MUST trigger the prior real failure path and assert the corrected observable result.
-- **Bad: static echo.** NEVER test a constructor/builder merely copied a fixture or baked constant into an in-memory config/metadata field.
-- **Bad: success passthrough.** NEVER assert `fn(x) === x` when `x` was already supplied/declared valid; assert a transform, rejection, or downstream effect instead.
-- **Bad: wording/defaults.** NEVER assert prompt/UI boilerplate, a default literal, object existence, non-empty output, or length growth without a consumer contract.
-- **Bad: duplicate rows.** Parameterized/loop rows MUST each cover a distinct branch, provider/model path, or consumer contract; delete same-path duplicates.
-- **Metadata exception.** Exact metadata, identity, ordering, or `undefined` MAY remain only when a downstream consumer depends on it and the test establishes branch, precedence, negative-contract, wire, or regression evidence.
-- **Termination exception.** For cyclic/large inputs, assert a bounded output, surfaced error, or state change; bare `not.toThrow()` is insufficient.
-- No placeholder tests, tautologies, or "the code ran" assertions (`expect(true).toBe(true)`, bare `not.toThrow()`, non-empty string checks, length-grew checks, "prompt exists" checks without semantic assertion).
-- Prefer contract-level tests over implementation details. Avoid asserting internal helper wiring, field assignment, singleton identity, incidental ordering, prompt boilerplate, or passthrough option forwarding unless another component depends on that exact detail.
-- Don't duplicate coverage across abstraction levels. If an integration test already proves the behavior, drop the narrower unit test that restates it through mocks.
-- Tests **must be full-suite safe**, not just file-local safe. No long-lived file-wide mutations of `Bun.*`, `process.platform`, `process.env`, or `Bun.env` when a narrower seam exists. Prefer per-test `vi.spyOn(...)` with `vi.restoreAllMocks()` in `afterEach`. A test that passes alone but poisons later files is broken.
-- **Never use `mock.module()`**. Bun's `mock.module()` mutates the global module registry and leaks across files ([oven-sh/bun#12823](https://github.com/oven-sh/bun/issues/12823)). Use `spyOn` on the imported module object instead. For pass deps, import the pass and spy on `.run`. For package deps, namespace-import and spy on the exported function.
-- For lifecycle/stateful code, prefer one test per invariant or transition over several tiny tests asserting one field each from the same transition.
-- For error handling, trigger the real failure path and assert the surfaced contract — don't instantiate error classes directly or inspect internal metadata.
-- Smoke tests are acceptable only when they catch a failure mode narrower tests would miss. "Package boots" or "command starts" alone is not enough.
-- Assert exact strings, ordering, and formatting only when downstream code parses or depends on the exact bytes. Otherwise assert semantic content.
-- Compile-time guarantees → type checks/type tests, not runtime placeholders.
-- **Never source-grep.** A test that reads an implementation file (`.ts`/`.rs`/build script) and asserts on its _text_ — `expect(src).toContain("someCall()")`, `.toMatch(/import .../)`, `.not.toContain("oldName")`, or "comment must say X" — is banned. It tests how code _looks_, not what it _does_: it breaks on harmless refactors (comment reflow, rename, import reorder) and passes while the behavior is broken. Assert the observable contract instead (run the code, check output/state/error), use the runtime smoke probe for wiring you cannot exercise in-process, and enforce structural invariants (no value-import of X, no self-import) with a type test or a lint/biome rule — never a string scan of the source. (Reading a file your code _wrote_ — apply-patch result, generated bundle, temp fixture — and asserting on that output is fine; that is behavior, not a source grep.)
-- Don't add tests for tiny low-risk changes unless they protect a real contract or fix a regression-prone edge case.
-- Prefer focused package-local verification for the changed area.
-
-## Changelog
-
-Location: primary — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's release notes, read by the GUI "what's-new" panel and `/changelog`). `packages/coding-agent/CHANGELOG.md` remains as a compiled-in upstream fallback (imported by `src/utils/changelog.ts`). `packages/guest-client/CHANGELOG.md` is also release-managed (0.4.x line). Do not add per-package `packages/*/CHANGELOG.md` files — that upstream convention was removed.
-
-**Format** — sections under `## [Unreleased]`:
-
-- `### Breaking Changes` (first if present)
-- `### Added`
-- `### Changed`
-- `### Fixed`
-- `### Removed`
-
-**Voice** — `CHANGELOG.musepi.md` is not an engineering log; it is the single source for
-every user-facing release surface (what's-new panel cards, `/changelog`, the OTA
-`update-manifest.json` notes, the GitHub release page body). A bullet's bold span is
-rendered **verbatim as a card headline**, and the panel takes the first three such
-bullets in document order — so the title is the entire user-facing surface.
-
-- **Title = what changed for the user**, in user vocabulary. `**回合导轨新增「加载更多」按钮**`,
-  not `**回合导轨新增「加载更多」按钮**（吸收 openchamber PromptNavigatorRail）`.
-- **No provenance anywhere in this file.** Reading references and absorbing what works is a
-  development-time activity — it belongs in the task brief, the PR body and
-  `docs/review/0.5.0-roadmap.md`, never in a shipped entry. That rules out `吸收 X` / `X parity` /
-  `对标 X` / reference-repo names, `刻意不抄 X`, internal cut numbers (`M2-2.6`,
-  `ADR 0001 首刀`, `⑥ 第二刀`, `P0-4`), and process narration (根因 / 这一刀 / 复核 / 拍板).
-  Not in the title, and not in the body either: the panel truncates the body, but
-  `/changelog` and the release page render it whole.
-- **The body may still be rich.** Mechanism, rationale, rollout and compatibility detail are
-  welcome after the first sentence. What must not happen is the headline being a record of
-  how we decided something.
-- **「我们刻意没抄 X」不是发布说明。** A divergence with no user-visible consequence belongs
-  in the PR; with one, write the consequence instead.
-- **User-visible changes come first within a version.** Internal maintenance (dependency
-  pins, lockfile churn, refactors with no behaviour change) must not occupy the first three
-  bullets of a section — those are the ones that become cards.
-- Gate: `bun scripts/check-changelog-voice.ts` (wired into `check:tools`) fails the build when
-  an `[Unreleased]` title carries a narrative tell. Title layer only, `[Unreleased]` only —
-  released sections stay immutable and predate the rule.
-
-**Rules:**
-
-- New entries always go under `## [Unreleased]`.
-- Never modify already-released sections (e.g., `## [0.4.5]`) — they are immutable.
-- Don't flag changelog section order or formatting in reviews or PRs — `bun run release` runs `fix-changelogs` which normalizes everything automatically.
-
-**Bilingual entries (MusePi-only, mandatory):**
-
-`CHANGELOG.musepi.md` is the single source for the GUI "what's-new" panel, `/changelog`, the OTA `update-manifest.json` notes, and the GitHub release page body — they all slice the released section verbatim, so a missing translation ships a half-Chinese release page. Every entry in this file MUST carry its English translation, and `CHANGELOG.musepi.md` only — upstream's `CHANGELOG.md` and `guest-client/CHANGELOG.md` stay English-only.
-
-- The translation is a **nested `- EN:` child line** directly under the Chinese bullet, indented two spaces:
-  ```markdown
-  - 文件面板内嵌文本编辑器：预览头 ✎ 进入编辑，⌘S 保存。
-    - EN: Built-in text editor inside the file panel: ✎ in the preview header enters edit mode, ⌘S saves.
-  ```
-- One `- EN:` per Chinese bullet — the parity script indexes them by bullet position, so a missing or extra child line is a hard failure.
-- Never use a trailing `### English` / `### 中文` block instead of inline children (0.4.29 did; the release page lost its translation). Those blocks are not parsed.
-- A multi-line Chinese bullet keeps a single `- EN:` child holding the whole translation in one (possibly long) line — do not spread the English across several children.
-- The rule accepts only this exact shape; `bun run check:changelog-i18n` enforces it and names the offending bullet.
-
-**Attribution:**
-
-- Internal (from issues): `Fixed foo bar ([#123](https://github.com/can1357/oh-my-pi/issues/123))`.
-- External contributions: `Added feature X ([#456](https://github.com/can1357/oh-my-pi/pull/456) by [@username](https://github.com/username))`.
-
-## Releasing
-
-1. Ensure all changes since last release are in the `[Unreleased]` section of `CHANGELOG.musepi.md`.
-2. Run `bun run release`.
-
-The script handles version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.
-
-The release page body is sliced verbatim from the version's `CHANGELOG.musepi.md` section, so confirm `bun run check:changelog-i18n` is green before releasing — a missing `- EN:` line ships a half-Chinese release page, and released sections are immutable afterwards.
+# MusePi Development Guide
+
+This file is the always-loaded hot path: execution boundaries, repository routing, and rules that apply to most tasks. Load the linked domain rule before work that enters its scope; do not duplicate those rules here.
+
+## Execution and approvals
+
+- Follow the user's current request and preserve unrelated worktree changes. Explicit implementation or “continue” instructions authorize continuous work through the stated scope; do not ask for confirmation again between tasks.
+- Ask only when an unresolved answer would materially change requirements, architecture, or risk. Complete independent, well-understood items while an unrelated item is unresolved.
+- Auto-approved plans only close the planning interface; the original request determines whether to execute. Subagents require explicit user authorization under the host's rules; otherwise work inline.
+- Local reversible edits, focused tests, and read-only investigation do not need approval. Confirm irreversible or security-sensitive actions and effects beyond the local workspace unless the user already authorized that exact action.
+- Never commit, merge, push, publish, create a PR, or discard work unless asked. Plan templates and skill workflows never override this rule.
+- Never comment on GitHub or create issues unless the user specifies the exact content.
+- A blocked or unverified result is reported as such. Existing unrelated failures do not erase completed work, but no failure may be hidden or relabeled as a pass.
+
+## Repository map
+
+| Area | Responsibility |
+| --- | --- |
+| `packages/coding-agent` | CLI, daemon, session runtime, tools, bundled plugins; default focus when no area is specified |
+| `packages/agent` | Agent loop, tool calling, state, compaction |
+| `packages/ai` | Provider-neutral LLM streaming client |
+| `packages/catalog` | Model catalog, provider descriptors, model identity and thinking policies |
+| `packages/client-core` | Shared GUI rendering and client state |
+| `packages/desktop-app` | Electron shell and desktop GUI |
+| `packages/tui` | Terminal UI and differential rendering |
+| `packages/wire`, `packages/collab-proto` | Persisted/wire and GUI/daemon contracts |
+| `packages/utils`, `packages/natives`, `crates/pi-natives` | Shared utilities and native operations |
+
+“Agent” in a question about product behavior means `packages/coding-agent`, not the assistant currently answering.
+
+## Rule routing
+
+| Work | Required references |
+| --- | --- |
+| TypeScript, Bun, shared helpers, logging, TUI output | `.agents/rules/code-quality.md` |
+| Packages, generated catalog, workers, capability seams | `.agents/rules/architecture.md` |
+| Tests, smoke runs, session/daemon isolation, verification | `.agents/rules/testing.md` |
+| Documentation, bilingual pairs, package READMEs, agent-facing docs | `.agents/rules/documentation.md` |
+| Changelog and release | `.agents/rules/release.md` |
+| GUI design or interaction | `docs/gui-design.md`, `docs/gui-design.zh-CN.md`; dialogs also `docs/gui-dialog-spec.md`, widgets also `docs/gui-widget-spec.md` |
+| GUI RPC, lifecycle, implementation gotchas | `docs/gui-implementation.md`, `docs/gui-implementation.zh-CN.md` |
+| Extension API or HMR | `docs/extensions-dev.md`, `docs/extensions-dev.zh-CN.md`, `docs/capability-seams.md` |
+| i18n architecture | `docs/i18n.md`, `docs/i18n.zh-CN.md` |
+
+The nearest package README and local code/test precedent supply local conventions. Code and runtime behavior outrank prose; update the owning documentation when they change.
+
+## Always-on constraints
+
+- Model identity is `provider/id`, never a bare id. Session model selection stays session-scoped; role effort choices use the selected model's supported ladder, including `auto` when supported.
+- Reuse central utilities before adding a helper. Git/jj process execution goes through `packages/coding-agent/src/utils/git.ts` or `jj.ts`.
+- Never edit `packages/catalog/src/models.json` directly; change its generator/resolver and regenerate.
+- Keep secrets and production user data out of source, tests, logs, and generated artifacts. Tests and smoke runs must never write the production session store or share the production daemon directory.
+- User-facing changes update the owning docs, both locales of paired docs, and `packages/coding-agent/CHANGELOG.musepi.md` under `[Unreleased]` with the inline English translation. Released sections are immutable.
+- Use `bun check`, never `tsc` or `npx tsc`. Package `package.json` scripts are the command source of truth.
+- Commit subjects, when a commit is explicitly requested, are Conventional Commits with a user-visible summary of at most 72 characters and no process jargon.
+
+## Delivery contract
+
+1. Read the actual code and exercise the exposed contract, not only imports or compilation.
+2. Run the focused package checks and relevant tests; then run the repository checks required for the deliverable. Record environment-limited and pre-existing failures separately from regressions.
+3. Keep evidence scoped to the current tree. A prior run does not prove a later edit; unchanged code may reuse recorded evidence.
+4. Do not mark work complete with failing required checks, partial implementation, or unresolved requested behavior. Report precisely what remains instead.
+5. Finish with the changed files, behavioral result, verification commands/results, and any unverified native or platform behavior.

@@ -2984,21 +2984,52 @@ async function createWindow() {
 		}
 	});
 
+	// Renderer crash → reload, but a crash LOOP must not spin a fresh renderer
+	// every second forever (an OOM from one bad page would churn processes and
+	// pin the CPU). After 3 crashes within 60s, give up reloading and take the
+	// whole app down the graceful quit path (active-session guard + owned-daemon
+	// teardown) — a GUI that cannot render anything is not worth keeping alive,
+	// and the daemon teardown matters more than a white window.
+	const rendererCrashTimes = [];
+	const RENDERER_CRASH_WINDOW_MS = 60_000;
+	const RENDERER_CRASH_MAX_RELOADS = 3;
 	mainWindow.webContents.on("render-process-gone", (_event, details) => {
 		if (details.reason === "clean-exit") return;
 		console.error("[main] renderer process gone:", details.reason, "exitCode:", details.exitCode);
-		if (!mainWindow.isDestroyed()) mainWindow.webContents.reload();
+		if (mainWindow.isDestroyed()) return;
+		const now = Date.now();
+		rendererCrashTimes.push(now);
+		while (rendererCrashTimes.length > 0 && now - rendererCrashTimes[0] > RENDERER_CRASH_WINDOW_MS) {
+			rendererCrashTimes.shift();
+		}
+		if (rendererCrashTimes.length > RENDERER_CRASH_MAX_RELOADS) {
+			console.error("[main] renderer crash loop — giving up and quitting gracefully");
+			app.quit();
+			return;
+		}
+		mainWindow.webContents.reload();
 	});
 
-	// Close-to-tray on non-darwin (Discord/Slack convention): hide the window
-	// instead of quitting so the tray icon keeps the app alive and "show-main-window"
-	// / tray-click can bring it back. A real quit goes through before-quit (the
-	// tray "quit" action sets the quitting flag so the close is allowed).
-	// If the tray was never created (ensureTray failure), allow the close so
-	// the existing window-all-closed path quits instead of leaving a zombie.
+	// Close-to-tray on non-darwin is OPT-IN (settings → 常规 → 关闭窗口时最小化
+	// to托盘, openchamber desktopMinimizeToTrayEnabled parity): when enabled, the
+	// close button hides the window so the tray icon keeps the app alive and
+	// "show-main-window" / tray-click can bring it back. The default (off)
+	// makes close QUIT the app — the window-all-closed path runs before-quit,
+	// which warns on active sessions and tears the owned daemon down, so a
+	// "closed" window never leaves the backend running behind the user's back.
+	// The preference lives in <userData>/window-behavior.json (not the daemon
+	// settings): the close gate must decide synchronously, before any daemon
+	// round-trip is possible. If the tray was never created (ensureTray
+	// failure), allow the close so the existing window-all-closed path quits
+	// instead of leaving a zombie.
 	mainWindow.on("close", (event) => {
 		if (quitting) return;
-		if (process.platform !== "darwin" && trayController && !trayClosed) {
+		if (
+			process.platform !== "darwin" &&
+			trayController &&
+			!trayClosed &&
+			readWindowBehavior().closeToTray === true
+		) {
 			event.preventDefault();
 			mainWindow.hide();
 		}
@@ -3191,6 +3222,40 @@ ipcMain.handle("updater-install", async () => {
 // musepiVersion 比对 —— 不一致说明运行中的 daemon 是旧进程,走
 // daemon-restart 刷新(见 app.tsx boot)。
 ipcMain.handle("app-version", () => app.getVersion());
+
+// ── Window behavior (close → quit vs close → tray) ────────────────────────
+// The close gate inside createWindow must decide synchronously, so the
+// preference is a tiny JSON file in userData that this process owns — the
+// daemon settings store is unavailable at quit time (the daemon may already
+// be tearing down) and renderer localStorage is not readable from here.
+// Default (file absent / unparsable): closeToTray=false — closing the window
+// quits the app and the before-quit path stops the owned daemon. The
+// settings toggle (设置 → 常规) flips it for users who want the tray to hold
+// the app in the background.
+const windowBehaviorFile = () => path.join(app.getPath("userData"), "window-behavior.json");
+let windowBehaviorCache = null;
+function readWindowBehavior() {
+	if (windowBehaviorCache) return windowBehaviorCache;
+	try {
+		const raw = JSON.parse(fs.readFileSync(windowBehaviorFile(), "utf8"));
+		windowBehaviorCache = { closeToTray: raw?.closeToTray === true };
+	} catch {
+		// Missing or corrupt file — default to close-quits.
+		windowBehaviorCache = { closeToTray: false };
+	}
+	return windowBehaviorCache;
+}
+ipcMain.handle("window-behavior:get", () => readWindowBehavior().closeToTray);
+ipcMain.handle("window-behavior:set-close-to-tray", (_event, value) => {
+	const next = { ...readWindowBehavior(), closeToTray: value === true };
+	windowBehaviorCache = next;
+	try {
+		fs.writeFileSync(windowBehaviorFile(), JSON.stringify(next));
+	} catch (err) {
+		console.error("[window-behavior] persist failed:", err?.message ?? err);
+	}
+	return next.closeToTray;
+});
 
 // ── IPC: window glass (window-transparency toggle in settings) ────────────
 // OFF restores an opaque base (theme-matched) so the desktop never shows

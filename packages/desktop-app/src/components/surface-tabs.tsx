@@ -25,6 +25,7 @@ import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable 
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
+import { useTabMotion } from "../lib/use-tab-motion";
 
 /** One open instance inside a surface. Content lives elsewhere; the strip
  *  only tracks labels, so serialization stays trivial. */
@@ -262,6 +263,7 @@ export function SurfaceTabStripSortable({
 	// 横向边缘羽化:实例 tab 条横向滚动时左右羽化(只在溢出时出现)。
 	const stripRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(stripRef);
+	const motion = useTabMotion(tabs);
 
 	return (
 		<div
@@ -272,17 +274,33 @@ export function SurfaceTabStripSortable({
 			aria-orientation="horizontal"
 		>
 			<SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
-				{tabs.map(tab => (
-					<SurfaceTabButton
-						key={tab.id}
-						tab={tab}
-						active={tab.id === activeId}
-						closeLabel={closeLabel}
-						onActivate={onActivate}
-						onClose={onClose}
-						onTabContextMenu={onTabContextMenu}
-					/>
-				))}
+				{motion.tabs.map(tab => {
+					if (motion.closingIds.has(tab.id)) {
+						return (
+							<div
+								key={tab.id}
+								className="gui-surface-tab gui-surface-tab--closing"
+								data-motion="closing"
+								aria-hidden="true"
+								inert
+							>
+								<span className="gui-surface-tab-title">{tab.title}</span>
+							</div>
+						);
+					}
+					return (
+						<SurfaceTabButton
+							key={tab.id}
+							tab={tab}
+							active={tab.id === activeId}
+							entering={motion.enteringIds.has(tab.id)}
+							closeLabel={closeLabel}
+							onActivate={onActivate}
+							onClose={onClose}
+							onTabContextMenu={onTabContextMenu}
+						/>
+					);
+				})}
 			</SortableContext>
 		</div>
 	);
@@ -291,6 +309,7 @@ export function SurfaceTabStripSortable({
 function SurfaceTabButton({
 	tab,
 	active,
+	entering,
 	closeLabel,
 	onActivate,
 	onClose,
@@ -298,6 +317,7 @@ function SurfaceTabButton({
 }: {
 	tab: SurfaceTab;
 	active: boolean;
+	entering: boolean;
 	closeLabel: string;
 	onActivate(id: string): void;
 	onClose(id: string): void;
@@ -328,7 +348,8 @@ function SurfaceTabButton({
 			role="tab"
 			aria-selected={active}
 			tabIndex={active ? 0 : -1}
-			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}`}
+			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}${entering ? " gui-surface-tab--entering" : ""}`}
+			data-motion={entering ? "entering" : undefined}
 			style={{ transform: CSS.Transform.toString(transform), transition }}
 			onClick={() => onActivate(tab.id)}
 			onContextMenu={e => {

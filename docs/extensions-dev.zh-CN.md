@@ -1,3 +1,15 @@
+---
+layout: default
+title: 扩展开发契约
+status: living
+summary: OMP 与 MusePi 插件边界、开发流程、生命周期和产品级验收标准。
+scope:
+  - packages/coding-agent/src
+  - packages/client-core/src
+  - docs/capability-seams.md
+lang: zh-CN
+---
+
 # MusePi 扩展开发规范（Agent 版）
 
 [English](extensions-dev.md) | 中文
@@ -102,6 +114,7 @@ export default function myExtension(pi: ExtensionAPI) {
 
 - `docs/extensions.md` —— 扩展运行时 API 全量（事件、注册方法、生命周期图）
 - `docs/extension-loading.md` —— 发现与加载规则（module 路径、discovery provider）
+- `docs/plugin-lifecycle.md` —— Cordis 注册与消费、fiber 状态、依赖、销毁及迁移验收
 - `docs/plugin-manager-installer-plumbing.md` —— 插件管理/市场安装管线
 - `docs/user-facing-packages.md` —— 用户面包（CLI/特性）
 - `docs/gui-implementation.md` §2 —— GUI 扩展控制中心契约（daemon RPC、TTL、启停语义）
@@ -151,10 +164,10 @@ musepi-auth-hub）设置界面的落点。
 
 **设置卡片（settings.item + settingsScope）**：注册 `slot: "settings.item.<extId>"`（extId = 扩展目录名）的组件，会在**扩展中心**（设置 → 扩展）底部按扩展获得一张卡片（扩展未启用则不显示）。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名，建议用 `扩展名.xxx` 前缀**（与 registerSetting 的 `display.taskCardStyle` 同约定）避免与其他扩展冲突；写入只放行 registerSetting 注册过的键，未注册键写会抛 read-only。**写时校验（registerSetting 的 `validate` 字段）**：扩展可为注册的设置键提供 `validate(value)` 回调——返回错误字符串即拒写（daemon `settings.set` RPC 抛错，GUI 显示原因），返回 `void` 放行。schema 无法表达的约束（端点可达性、跨键一致性、枚举外值）由此在**写入时**拒绝，而非用到时才炸。无任何扩展注册该槽位时分区显示空态文案。
 
-**热插拔（v2，HMR 全量）**：扩展源码/配置变更 → daemon watcher（500ms debounce）① 清缓存并广播 `extensions.changed`（需先 `events.subscribe`）→ GUI 插槽即时重载（~1s），`ExtensionsCenter`/`PluginsSection` 监听同事件即时刷新；② 对每个活跃会话比对**整张源码图的 mtime 快照**后执行 `reloadExtension`（不依赖 fs.watch 的 filename —— Windows 递归 watch 的 filename 不可靠），完成后发会话内事件 `extensions.reloaded`。会话内工具/命令/handlers 下次调用生效。
+**热插拔（v2，HMR 全量）**：扩展源码/配置变更 → daemon watcher（500ms debounce）① 清缓存并广播 `extensions.changed`（需先 `events.subscribe`）→ GUI 插槽即时重载（~1s），`ExtensionsCenter`/`PluginsSection` 监听同事件即时刷新；② 对每个活跃会话比对**运行时源码图的 mtime 快照**后执行 `reloadExtension`（不依赖 fs.watch 的 filename —— Windows 递归 watch 的 filename 不可靠），完成后发会话内事件 `extensions.reloaded`。会话内工具/命令/handlers 下次调用生效。
 
 **v2 契约（子模块边界、忙门控、MCP）**：
-- **子模块改动同样热生效，无需 touch 入口**：装载时对入口的**整个源码图**做一次走查（`collectExtensionModules`，含静态 `import`、CJS `require` 与动态 `import()`），快照逐文件 mtime；daemon 的变更判定按这个快照逐文件比对（`extensionEntriesNeedingReload`），任一图内文件变了就重载它的入口。重载本身一直是好的 —— cache-bust tag 单调递增（`nextLegacyPiLoadTag`），`onLoad` 钩子把它盖到每个相对 import 上，整图重新读盘 —— 坏的是**没人通知有东西该重载**。
+- **子模块改动同样热生效，无需 touch 入口**：装载时对入口的**运行时源码图**做一次走查（`collectExtensionModules`，含静态 `import`、CJS `require` 与动态 `import()`；type-only import/export 被编译擦除，不进入该图），快照逐文件 mtime；daemon 的变更判定按这个快照逐文件比对（`extensionEntriesNeedingReload`），任一图内文件变了就重载它的入口。重载本身一直是好的 —— cache-bust tag 单调递增（`nextLegacyPiLoadTag`），`onLoad` 钩子把它盖到每个相对 import 上，整图重新读盘 —— 坏的是**没人通知有东西该重载**。
   图内 specifier 一律发**裸路径 + `?mtime=`**，不是 `file://`：Bun 对 `file://` 忽略 query（会命中缓存），对裸路径才按键。这条原先只在 POSIX 生效，Windows 上整图退回 `file://` 而静默不刷新 —— 入口能重载、它的子模块不能，正是这个不对称。
 extLegacyPiLoadTag），onLoad 钩子把它盖到每个相对 import 上，整图重新读盘 —— 坏的是**没人通知有东西该重载**。
   图内 specifier 一律发**裸路径 + ?mtime=**，不是 ile://：Bun 对 ile:// 忽略 query（会命中缓存），对裸路径才按键。这条原先只在 POSIX 生效，Windows 上整图退回 ile:// 而静默不刷新 —— 入口能重载、它的子模块不能，正是这个不对称。

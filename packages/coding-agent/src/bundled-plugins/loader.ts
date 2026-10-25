@@ -1,8 +1,8 @@
 /**
  * Loader for the bundled plugin packages.
  *
- * The first-party units that ship in plugin form (currently the magic-keywords
- * trio) live in `src/bundled-plugins/<name>/`, and the bundled CLI copies the
+ * The first-party units that ship in plugin form live in
+ * `src/bundled-plugins/<name>/`, and the bundled CLI copies the
  * tree to `./bundled-plugins`. Discovery finds them like any plugin; this
  * module additionally offers a one-shot idempotent load, so a host that wants
  * the first-party contributions guaranteed — regardless of whether extension

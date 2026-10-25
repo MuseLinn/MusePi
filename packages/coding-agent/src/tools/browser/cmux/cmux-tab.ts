@@ -21,9 +21,18 @@ import {
 import { ToolAbortError, ToolError, throwIfAborted } from "../../tool-errors";
 import { type AriaSnapshotOptions, assertSelectorString, buildAriaSnapshotScript } from "../aria/aria-snapshot";
 import { DEFAULT_VIEWPORT } from "../launch";
+import { BrowserOperationTracker, operationResultDetails, redactBrowserUrl } from "../operation-activity";
 import { extractReadableFromHtml, type ReadableFormat } from "../readable";
 import { cloneSafe, RunOutput } from "../run-output";
-import type { Observation, ReadyInfo, RunResultOk, ScreenshotResult, SessionSnapshot } from "../tab-protocol";
+import type {
+	BrowserOperation,
+	BrowserOperationAction,
+	Observation,
+	ReadyInfo,
+	RunResultOk,
+	ScreenshotResult,
+	SessionSnapshot,
+} from "../tab-protocol";
 import {
 	type CmuxEvalResult,
 	type CmuxGeometry,
@@ -56,6 +65,7 @@ interface RunContext {
 	screenshots: ScreenshotResult[];
 	signal: AbortSignal;
 	timeoutMs: number;
+	operations: BrowserOperationTracker;
 }
 
 type WaitUntil = "load" | "domcontentloaded" | "networkidle0" | "networkidle2";
@@ -261,6 +271,7 @@ export interface RunCmuxCodeOptions {
 	signal?: AbortSignal;
 	session: ToolSession;
 	snapshot: SessionSnapshot;
+	onOperations?: (operations: BrowserOperation[]) => void;
 }
 
 interface ActiveCmuxRun {
@@ -403,37 +414,41 @@ export class CmuxTab {
 	}
 
 	async goto(url: string, opts?: { waitUntil?: WaitUntil; timeoutMs?: number }): Promise<void> {
-		const timeoutMs = opts?.timeoutMs ?? this.#runContext?.timeoutMs ?? 30_000;
-		const result = await this.#request("browser.navigate", { url }, timeoutMs);
-		const navigatedUrl = result.url;
-		this.#lastUrl = typeof navigatedUrl === "string" && navigatedUrl.length > 0 ? navigatedUrl : url;
-		if (opts?.waitUntil) {
-			await this.#request(
-				"browser.wait",
-				{ load_state: mapWaitUntil(opts.waitUntil), timeout_ms: timeoutMs },
-				timeoutMs,
-			);
-		}
+		await this.#track("goto", redactBrowserUrl(url), async () => {
+			const timeoutMs = opts?.timeoutMs ?? this.#runContext?.timeoutMs ?? 30_000;
+			const result = await this.#request("browser.navigate", { url }, timeoutMs);
+			const navigatedUrl = result.url;
+			this.#lastUrl = typeof navigatedUrl === "string" && navigatedUrl.length > 0 ? navigatedUrl : url;
+			if (opts?.waitUntil) {
+				await this.#request(
+					"browser.wait",
+					{ load_state: mapWaitUntil(opts.waitUntil), timeout_ms: timeoutMs },
+					timeoutMs,
+				);
+			}
+		});
 	}
 
 	async observe(opts?: ObserveOptions): Promise<Observation> {
-		void opts?.viewportOnly;
-		const timeoutMs = Math.min(this.#runContext?.timeoutMs ?? 30_000, 30_000);
-		const [snapshot, geometry] = await Promise.all([
-			this.#request("browser.snapshot", { interactive: !opts?.includeAll, max_depth: 12 }, timeoutMs),
-			this.#readGeometry(timeoutMs),
-		]);
-		const viewport = {
-			width: geometry.innerWidth,
-			height: geometry.innerHeight,
-			deviceScaleFactor: geometry.dpr,
-		};
-		this.#lastViewport = viewport;
-		const observation = cmuxSnapshotToObservation(snapshot as CmuxSnapshotResult, viewport, geometry);
-		this.#lastUrl = observation.url;
-		this.#lastTitle = observation.title;
-		this.#rememberObservedElements(observation);
-		return observation;
+		return await this.#track("observe", undefined, async () => {
+			void opts?.viewportOnly;
+			const timeoutMs = Math.min(this.#runContext?.timeoutMs ?? 30_000, 30_000);
+			const [snapshot, geometry] = await Promise.all([
+				this.#request("browser.snapshot", { interactive: !opts?.includeAll, max_depth: 12 }, timeoutMs),
+				this.#readGeometry(timeoutMs),
+			]);
+			const viewport = {
+				width: geometry.innerWidth,
+				height: geometry.innerHeight,
+				deviceScaleFactor: geometry.dpr,
+			};
+			this.#lastViewport = viewport;
+			const observation = cmuxSnapshotToObservation(snapshot as CmuxSnapshotResult, viewport, geometry);
+			this.#lastUrl = observation.url;
+			this.#lastTitle = observation.title;
+			this.#rememberObservedElements(observation);
+			return observation;
+		});
 	}
 
 	async ariaSnapshot(selector?: string, opts?: AriaSnapshotOptions): Promise<string> {
@@ -455,15 +470,15 @@ export class CmuxTab {
 	}
 
 	async click(selector: string): Promise<void> {
-		await this.#selectorAction(selector, "click");
+		await this.#track("click", selector, async () => await this.#selectorAction(selector, "click"));
 	}
 
 	async dblclick(selector: string): Promise<void> {
-		await this.#selectorAction(selector, "dblclick");
+		await this.#track("click", selector, async () => await this.#selectorAction(selector, "dblclick"));
 	}
 
 	async hover(selector: string): Promise<void> {
-		await this.#selectorAction(selector, "hover");
+		await this.#track("hover", selector, async () => await this.#selectorAction(selector, "hover"));
 	}
 
 	async focus(selector: string): Promise<void> {
@@ -471,56 +486,57 @@ export class CmuxTab {
 	}
 
 	async check(selector: string): Promise<void> {
-		await this.#selectorAction(selector, "check");
+		await this.#track("click", selector, async () => await this.#selectorAction(selector, "check"));
 	}
 
 	async uncheck(selector: string): Promise<void> {
-		await this.#selectorAction(selector, "uncheck");
+		await this.#track("click", selector, async () => await this.#selectorAction(selector, "uncheck"));
 	}
 
 	async type(selector: string, text: string): Promise<void> {
-		await this.#selectorAction(selector, "type", { text });
+		await this.#track("type", selector, async () => await this.#selectorAction(selector, "type", { text }));
 	}
 
 	async fill(selector: string, value: string): Promise<void> {
-		await this.#selectorAction(selector, "fill", { value });
+		await this.#track("fill", selector, async () => await this.#selectorAction(selector, "fill", { value }));
 	}
 
 	async press(key: string, opts?: { selector?: string }): Promise<void> {
-		if (opts?.selector) {
-			await this.focus(opts.selector);
-		}
-		await this.#request("browser.press", { key });
+		await this.#track("press", opts?.selector ?? key, async () => {
+			if (opts?.selector) await this.focus(opts.selector);
+			await this.#request("browser.press", { key });
+		});
 	}
 
 	async scroll(dx: number, dy: number): Promise<void> {
-		await this.#request("browser.scroll", { dx, dy });
+		await this.#track("scroll", undefined, async () => await this.#request("browser.scroll", { dx, dy }));
 	}
 
 	async waitFor(selector: string, opts?: { timeout?: number }): Promise<CmuxElementHandle> {
-		const timeoutMs = opts?.timeout ?? this.#runContext?.timeoutMs ?? 30_000;
-		await this.#waitForSelector(selector, timeoutMs);
-		return new CmuxElementHandle(this, selector);
+		return await this.#track("wait", selector, async () => {
+			const timeoutMs = opts?.timeout ?? this.#runContext?.timeoutMs ?? 30_000;
+			await this.#waitForSelector(selector, timeoutMs);
+			return new CmuxElementHandle(this, selector);
+		});
 	}
 
 	async waitForSelector(selector: string, opts?: { timeout?: number }): Promise<CmuxElementHandle> {
-		const timeoutMs = opts?.timeout ?? this.#runContext?.timeoutMs ?? 30_000;
-		await this.#waitForSelector(selector, timeoutMs);
-		return new CmuxElementHandle(this, selector);
+		return await this.#track("wait", selector, async () => {
+			const timeoutMs = opts?.timeout ?? this.#runContext?.timeoutMs ?? 30_000;
+			await this.#waitForSelector(selector, timeoutMs);
+			return new CmuxElementHandle(this, selector);
+		});
 	}
 
 	async evaluate<TResult, TArgs extends unknown[]>(
 		fn: string | ((...args: TArgs) => TResult | Promise<TResult>),
 		...args: TArgs
 	): Promise<TResult> {
-		// A script that throws inside the daemon comes back as a bare
-		// `js_error: A JavaScript exception occurred` with no message or stack.
-		// Catch page-side instead so the exception is diagnosable, and turn the
-		// daemon's other blind spot — Promise return values it cannot
-		// serialize — into an actionable error instead of "unsupported type".
-		const script = serializeEvalWithEnvelope(fn as string | ((...args: unknown[]) => unknown), args);
-		const result = (await this.#request("browser.eval", { script })) as CmuxEvalResult;
-		return unwrapEvalEnvelope<TResult>(result.value, "tab.evaluate()");
+		return await this.#track("evaluate", undefined, async () => {
+			const script = serializeEvalWithEnvelope(fn as string | ((...args: unknown[]) => unknown), args);
+			const result = (await this.#request("browser.eval", { script })) as CmuxEvalResult;
+			return unwrapEvalEnvelope<TResult>(result.value, "tab.evaluate()");
+		});
 	}
 
 	async scrollIntoView(selector: string): Promise<void> {
@@ -528,7 +544,11 @@ export class CmuxTab {
 	}
 
 	async select(selector: string, ...values: string[]): Promise<string[]> {
-		return await this.#selectorAction<string[]>(selector, "select", { values });
+		return await this.#track(
+			"select",
+			selector,
+			async () => await this.#selectorAction<string[]>(selector, "select", { values }),
+		);
 	}
 
 	async extract(format: ReadableFormat = "markdown"): Promise<string> {
@@ -550,6 +570,10 @@ export class CmuxTab {
 	}
 
 	async screenshot(opts: ScreenshotOptions = {}): Promise<string> {
+		return await this.#track("screenshot", opts.selector, async () => await this.#captureScreenshot(opts));
+	}
+
+	async #captureScreenshot(opts: ScreenshotOptions): Promise<string> {
 		const context = this.#requireRunContext("tab.screenshot()");
 		// The cmux daemon's `browser.screenshot` captures the surface viewport
 		// only — it has no element-clip or full-page mode, and Bun.Image cannot
@@ -689,27 +713,29 @@ export class CmuxTab {
 	}
 
 	async drag(from: DragTarget, to: DragTarget): Promise<void> {
-		const start = await this.#dragPoint(from);
-		const end = await this.#dragPoint(to);
-		await this.#evalScript(
-			`(() => {
-				const points = ${JSON.stringify({ start, end })};
-				const target = document.elementFromPoint(points.start.x, points.start.y) || document.body;
-				const dispatch = (type, point) => target.dispatchEvent(new MouseEvent(type, {
-					bubbles: true,
-					cancelable: true,
-					view: window,
-					clientX: point.x,
-					clientY: point.y,
-					buttons: type === "mouseup" ? 0 : 1,
-				}));
-				dispatch("mousemove", points.start);
-				dispatch("mousedown", points.start);
-				dispatch("mousemove", points.end);
-				dispatch("mouseup", points.end);
-				return true;
-			})()`,
-		);
+		await this.#track("drag", undefined, async () => {
+			const start = await this.#dragPoint(from);
+			const end = await this.#dragPoint(to);
+			await this.#evalScript(
+				`(() => {
+					const points = ${JSON.stringify({ start, end })};
+					const target = document.elementFromPoint(points.start.x, points.start.y) || document.body;
+					const dispatch = (type, point) => target.dispatchEvent(new MouseEvent(type, {
+						bubbles: true,
+						cancelable: true,
+						view: window,
+						clientX: point.x,
+						clientY: point.y,
+						buttons: type === "mouseup" ? 0 : 1,
+					}));
+					dispatch("mousemove", points.start);
+					dispatch("mousedown", points.start);
+					dispatch("mousemove", points.end);
+					dispatch("mouseup", points.end);
+					return true;
+				})()`,
+			);
+		});
 	}
 
 	async uploadFile(selector: string, ...filePaths: string[]): Promise<void> {
@@ -835,7 +861,13 @@ export class CmuxTab {
 		const pollingMs = typeof opts?.polling === "number" ? opts.polling : 200;
 		const deadline = Date.now() + timeoutMs;
 		while (Date.now() <= deadline) {
-			const value = typeof fn === "string" ? await this.#evalScript<unknown>(fn) : await this.evaluate(fn, ...args);
+			const value =
+				typeof fn === "string"
+					? await this.#evalScript<unknown>(fn)
+					: unwrapEvalEnvelope(
+							await this.#evalScript(serializeEvalWithEnvelope(fn, args)),
+							"page.waitForFunction()",
+						);
 			if (value) return value;
 			await untilAborted(signal, () => Bun.sleep(pollingMs));
 		}
@@ -1131,6 +1163,21 @@ export class CmuxTab {
 		}
 		return this.#runContext;
 	}
+
+	async #track<T>(action: BrowserOperationAction, target: string | undefined, fn: () => Promise<T>): Promise<T> {
+		const context = this.#runContext;
+		if (!context) return await fn();
+		const id = context.operations.start(action, { target });
+		try {
+			const result = await fn();
+			context.operations.complete(id, operationResultDetails(result));
+			return result;
+		} catch (error) {
+			if (context.signal.aborted) context.operations.cancel(id);
+			else context.operations.fail(id, error);
+			throw error;
+		}
+	}
 }
 
 class CmuxResponse {
@@ -1384,7 +1431,8 @@ export async function runCmuxCode(tab: CmuxTab, opts: RunCmuxCodeOptions): Promi
 	const filename = `cmux-run-${runId}.js`;
 	const activeRun: ActiveCmuxRun = { filename, floatingRejections: [] };
 	activeCmuxRuns.set(filename, activeRun);
-	tab.setRunContext({ session: opts.snapshot, output, screenshots, signal, timeoutMs: opts.timeoutMs });
+	const operations = new BrowserOperationTracker(runId, opts.onOperations);
+	tab.setRunContext({ session: opts.snapshot, output, screenshots, signal, timeoutMs: opts.timeoutMs, operations });
 
 	const { promise: cancelRejection, reject } = Promise.withResolvers<never>();
 	// If the synchronous setup below throws (same-realm ownership conflict)
@@ -1514,7 +1562,12 @@ export async function runCmuxCode(tab: CmuxTab, opts: RunCmuxCodeOptions): Promi
 				rejections: activeRun.floatingRejections,
 			});
 		}
-		return { displays: output.finish(), returnValue: cloneSafe(returnValue), screenshots };
+		return {
+			displays: output.finish(),
+			returnValue: cloneSafe(returnValue),
+			screenshots,
+			operations: operations.snapshot(),
+		};
 	} finally {
 		runActive = false;
 		uninstallRejectionInterceptor();
@@ -1522,6 +1575,7 @@ export async function runCmuxCode(tab: CmuxTab, opts: RunCmuxCodeOptions): Promi
 		runAc.abort(runEndedError);
 		activeCmuxRuns.delete(filename);
 		rememberCmuxRunFile(filename);
+		operations.cancelPending();
 		tab.clearRunContext();
 	}
 }

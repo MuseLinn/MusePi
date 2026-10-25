@@ -18,6 +18,7 @@ import {
 	releaseBrowser,
 } from "./registry";
 import type {
+	BrowserOperation,
 	ReadyInfo,
 	RunErrorPayload,
 	RunResultOk,
@@ -48,6 +49,7 @@ export interface PendingRun {
 	session: ToolSession;
 	signal?: AbortSignal;
 	toolCalls: Map<string, AbortController>;
+	onOperations?: (operations: BrowserOperation[]) => void;
 	/**
 	 * Fires when `releaseTab` closes the tab out from under an in-flight run
 	 * (sibling `browser close --all`, session-scoped reap, etc.). Composed
@@ -120,6 +122,7 @@ export interface RunInTabOptions {
 	timeoutMs: number;
 	signal?: AbortSignal;
 	session: ToolSession;
+	onOperations?: (operations: BrowserOperation[]) => void;
 }
 
 export interface ReleaseTabOptions {
@@ -421,7 +424,13 @@ async function acquireCmuxTab(
 export async function runInTab(name: string, opts: RunInTabOptions): Promise<RunResultOk> {
 	return await runInTabWithSnapshot(
 		name,
-		{ code: opts.code, timeoutMs: opts.timeoutMs, signal: opts.signal, session: opts.session },
+		{
+			code: opts.code,
+			timeoutMs: opts.timeoutMs,
+			signal: opts.signal,
+			session: opts.session,
+			onOperations: opts.onOperations,
+		},
 		{
 			cwd: opts.session.cwd,
 			browserScreenshotDir: expandBrowserScreenshotDir(opts.session),
@@ -432,7 +441,13 @@ export async function runInTab(name: string, opts: RunInTabOptions): Promise<Run
 
 async function runInTabWithSnapshot(
 	name: string,
-	opts: { code: string; timeoutMs: number; signal?: AbortSignal; session?: ToolSession },
+	opts: {
+		code: string;
+		timeoutMs: number;
+		signal?: AbortSignal;
+		session?: ToolSession;
+		onOperations?: (operations: BrowserOperation[]) => void;
+	},
 	snapshot: SessionSnapshot,
 ): Promise<RunResultOk> {
 	const tab = tabs.get(name);
@@ -469,6 +484,7 @@ async function runInTabWithSnapshot(
 		session: opts.session ?? ({} as ToolSession),
 		signal: opts.signal,
 		toolCalls: new Map(),
+		onOperations: opts.onOperations,
 		closeAc,
 	};
 	tab.pending.set(id, pending);
@@ -486,6 +502,7 @@ async function runInTabWithSnapshot(
 				signal: runSignal,
 				session: pending.session,
 				snapshot,
+				onOperations: opts.onOperations,
 			}).then(resolve, reject);
 			return await promise;
 		} finally {
@@ -766,7 +783,12 @@ function handleTabMessage(tab: WorkerTabSession, msg: WorkerOutbound): void {
 			pending.resolve(msg.payload);
 			return;
 		}
+		if (msg.error.operations) pending.onOperations?.(msg.error.operations);
 		pending.reject(errorFromPayload(msg.error));
+		return;
+	}
+	if (msg.type === "activity") {
+		tab.pending.get(msg.id)?.onOperations?.(msg.operations);
 		return;
 	}
 	if (msg.type === "ready") {

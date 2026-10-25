@@ -20,6 +20,7 @@ import type {
 	ToolChoice,
 } from "@musepi/pi-ai";
 import type { postmortem } from "@musepi/pi-utils";
+import type { MessageDisplayContext } from "@musepi/pi-wire";
 import type { AdvisorConfig } from "../advisor";
 import type { AsyncJob, AsyncJobDeliveryState, AsyncJobManager } from "../async";
 import type { ModelRegistry } from "../config/model-registry";
@@ -321,6 +322,8 @@ export interface PromptOptions {
 	expandPromptTemplates?: boolean;
 	/** Image attachments. */
 	images?: ImageContent[];
+	/** Presentation-only context persisted with the user message. */
+	displayContext?: MessageDisplayContext;
 	/** Queue behavior while streaming. */
 	streamingBehavior?: "steer" | "followUp";
 	/** Optional tool choice override for the next LLM call. */
@@ -339,6 +342,8 @@ export interface PromptOptions {
 export interface FollowUpOptions {
 	/** Enqueue as a hidden developer message instead of a user follow-up. */
 	synthetic?: boolean;
+	/** Presentation-only context persisted with the user message. */
+	displayContext?: MessageDisplayContext;
 	/** Whether to expand file-based prompt templates (default: true). */
 	expandPromptTemplates?: boolean;
 	/** Explicit billing/initiator attribution. */
@@ -441,4 +446,8 @@ export interface ResetSessionContextResult {
 }
 
 /** Queued user content restored to the editor. */
-export type RestoredQueuedMessage = { text: string; images?: ImageContent[] };
+export type RestoredQueuedMessage = {
+	text: string;
+	images?: ImageContent[];
+	displayContext?: MessageDisplayContext;
+};

@@ -36,6 +36,7 @@ const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createHash } = require("node:crypto");
+const { projectActivity, settleActivity, startActivity, takeoverActivity } = require("./managed-browser-activity.cjs");
 
 const DEFAULT_PORT = Number(process.env.MUSEPI_MANAGED_BROWSER_PORT || 9230);
 const MAX_PORT_TRIES = 10;
@@ -404,7 +405,6 @@ class ManagedTab {
 			this.loading = false;
 			this.refreshState();
 			this.controller.notifyLifecycle(this);
-			this.controller.markActivityComplete(this);
 		});
 		wc.on("did-navigate", (_e, targetUrl) => {
 			this.refreshState(targetUrl);
@@ -839,12 +839,12 @@ class ManagedBrowserController {
 
 	// ── renderer-facing state ────────────────────────────────────────────
 
-	/** Projected state: the CDP port and the ledger's latest entry. Tab
-	 *  metadata stays in the renderer — it owns the elements. */
+	/** Projected state: the CDP port and per-tab activity. Tab metadata stays
+	 *  in the renderer — it owns the elements. */
 	state() {
 		return {
 			port: this.server ? this.port : null,
-			activity: this.ledger[this.ledger.length - 1] ?? null,
+			...projectActivity(this.ledger, this.activeTabId),
 		};
 	}
 
@@ -859,38 +859,22 @@ class ManagedBrowserController {
 
 	// ── activity ledger (sanitized — never page text, cookies or scripts) ─
 
-	recordActivity(tab, action, url, status) {
+	recordActivity(tab, action, url, status, key) {
 		let domain = null;
 		try {
 			domain = new URL(url).host || null;
 		} catch {
 			// about:blank etc.
 		}
-		this.ledger.push({
-			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+		return startActivity(this.ledger, {
+			key: key ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 			action,
 			summary: this.activitySummary(action, tab, url),
 			domain,
 			status,
 			tabId: String(tab.id),
 			at: Date.now(),
-		});
-		if (this.ledger.length > MAX_ACTIVITY_ITEMS) this.ledger.shift();
-	}
-
-	/** An agent-initiated action on `tab` finished loading — drop its
-	 *  in-flight ledger entry so the renderer hides the "Agent 活动" row
-	 *  (it is transient: visible only while the agent is working). */
-	markActivityComplete(tab) {
-		const id = String(tab.id);
-		for (let i = this.ledger.length - 1; i >= 0; i--) {
-			const entry = this.ledger[i];
-			if (entry.tabId === id && entry.status === "dispatched") {
-				entry.status = "completed";
-				this.emitState({});
-				return;
-			}
-		}
+		}, MAX_ACTIVITY_ITEMS);
 	}
 
 	activitySummary(action, tab, url) {
@@ -964,15 +948,16 @@ class ManagedBrowserController {
 
 	// ── operation status + stop (executionSource 停止按钮) ───────────────
 
-	/** Flip the latest dispatched ledger entry for a tab to a terminal status. */
-	markOpStatus(tabId, status) {
-		for (let i = this.ledger.length - 1; i >= 0; i--) {
-			const entry = this.ledger[i];
-			if (entry.tabId === tabId && entry.status === "dispatched") {
-				entry.status = status;
-				break;
-			}
-		}
+	markOpStatus(key, status) {
+		return settleActivity(this.ledger, key, status);
+	}
+
+	/** Hand the live page to the user without the hard-stop tab disposal. */
+	takeoverOp(tabId) {
+		const id = String(tabId ?? this.activeTabId ?? "");
+		if (id) takeoverActivity(this.ledger, id);
+		this.emitState({});
+		return this.state();
 	}
 
 	/** Interrupt the agent's in-flight operation on a tab: stop the loading
@@ -993,7 +978,7 @@ class ManagedBrowserController {
 		}
 		// Mark before closing: the close path drops the tab record and its
 		// ledger rows, so a terminal status must land on the entry first.
-		this.markOpStatus(String(tab.id), "canceled");
+		takeoverActivity(this.ledger, String(tab.id));
 		if (tab.openedByAgent) this.closeTab(String(tab.id));
 		this.emitState({});
 		return this.state();
@@ -1552,9 +1537,10 @@ class ManagedBrowserController {
 				return;
 			}
 		}
-		if (activityAction) {
-			this.recordActivity(tab, activityAction, tab.url, "dispatched");
-			if (!this.panelVisible) this.emitState({ agentActivity: true });
+		const activityKey = activityAction ? `${conn.id}:${msg.id}` : null;
+		if (activityAction && activityKey) {
+			this.recordActivity(tab, activityAction, tab.url, "dispatched", activityKey);
+			this.emitState(this.panelVisible ? {} : { agentActivity: true });
 		}
 		const highlightPoint = agentHighlightPoint(msg.method, msg.params);
 		if (highlightPoint) this.flashAgentTarget(tab, highlightPoint);
@@ -1562,10 +1548,16 @@ class ManagedBrowserController {
 			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
 			// of rejecting — do not overwrite the canceled mark the stop applied.
-			if (this.tabs.has(String(tab.id))) this.markOpStatus(String(tab.id), "completed");
+			if (activityKey && this.tabs.has(String(tab.id))) {
+				this.markOpStatus(activityKey, "completed");
+				this.emitState({});
+			}
 			this.reply(conn, msg, result);
 		} catch (error) {
-			this.markOpStatus(String(tab.id), "failed");
+			if (activityKey) {
+				this.markOpStatus(activityKey, "failed");
+				this.emitState({});
+			}
 			this.replyError(
 				conn,
 				msg,
@@ -1851,6 +1843,7 @@ class ManagedBrowserController {
 		// Page freeze/thaw for tab residency (CDP `Page.setWebLifecycleState`).
 		ipcMain.handle("managed-browser:set-lifecycle", (_e, input) => this.setTabLifecycle(input));
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
+		ipcMain.handle("managed-browser:takeover", (_e, tabId) => this.takeoverOp(tabId));
 		ipcMain.handle("managed-browser:confirm-result", (_e, input) => {
 			const pending = this.pendingConfirm;
 			if (!pending || !input || pending.requestId !== input.requestId) return { ok: false };
@@ -1865,10 +1858,10 @@ class ManagedBrowserController {
 		ipcMain.handle("managed-browser:guest-gone", (_e, tabId) => this.handleGuestGone(tabId));
 		ipcMain.handle("managed-browser:active-tab", (_e, tabId) => {
 			// The renderer is the selection authority and may report a tab
-			// before its guest attaches — adopt the id unconditionally. No
-			// state push: nothing in the projection (port/activity) changed.
+			// before its guest attaches — adopt the id unconditionally.
 			if (typeof tabId !== "string" || !tabId) return { ok: false };
 			this.activeTabId = tabId;
+			this.emitState({});
 			return { ok: true };
 		});
 		ipcMain.handle("managed-browser:visibility", (_e, input) => {

@@ -1,6 +1,10 @@
 ---
 layout: default
 title: Documentation
+status: living
+summary: Reader map for MusePi product, implementation, and developer-record documentation.
+scope:
+  - docs
 ---
 
 # MusePi Documentation
@@ -27,6 +31,7 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 
 - [gui-design.md](gui-design.html) — **活文档** GUI design spec: layout / tokens / motion / component patterns / pet visual style
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI implementation notes: daemon RPC contracts, IPC shapes, pitfalls, verification workflows
+- [gui-context-and-session.md](gui-context-and-session.html) — **活文档** structured quote contexts, session subtree collapse, and role/fallback thinking levels
 - [i18n.md](i18n.html) — **活文档** i18n architecture: per-domain locale maps, compile-time en parity, plugin translation registration
 - [gui-settings.md](gui-settings.html) — settings panel notes
 - [mobile-design.md](mobile-design.html) — **活文档** mobile companion design spec · [ota-mobile-design.md](ota-mobile-design.html) OTA / in-app update design
@@ -53,6 +58,7 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 
 - [hooks.md](hooks.html) · [extensions.md](extensions.html) · [extensions-dev.md](extensions-dev.html) (extension API reference) · [extension-loading.md](extension-loading.html)
 - [agent-hub.md](agent-hub.html) · [task-agent-discovery.md](task-agent-discovery.html) · [plugin-manager-installer-plumbing.md](plugin-manager-installer-plumbing.html)
+- [plugin-lifecycle.md](plugin-lifecycle.html) — **活文档** Cordis ownership, state, dependencies, disposal, and migration contracts
 
 ## Board & Automation
 
@@ -65,6 +71,7 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 
 ## Conventions & Manifests
 
+- [documentation.md](documentation.html) — **活文档** documentation ownership, metadata, progressive disclosure, and bilingual maintenance
 - [naming.md](naming.html) — **活文档** naming convention, applies to GUI / mobile / TUI / i18n strings
 - [assembly.md](assembly.html) — **活文档** `musepi.assembly.toml`, the declarative product assembly manifest
 

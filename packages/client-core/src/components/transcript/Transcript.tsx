@@ -240,7 +240,8 @@ export interface TranscriptProps {
 	 *  green (root gets `data-colorblind`). */
 	colorBlind?: boolean;
 	/** Quote-a-message into the composer (引用回复). */
-	onQuote?(text: string): void;
+	onQuote?(text: string, messageId?: string): void;
+	onJumpToMessage?(messageId: string): void;
 	/** Edit: truncate to this message and restore its text (edit-and-reconverse). */
 	onEdit?(messageId: string, text: string): void;
 	/** Retry: truncate the session to before the USER message that produced
@@ -280,6 +281,9 @@ export interface TranscriptProps {
 	 *  spacer instead — the target stayed unmounted (user: 轨迹跳转不能
 	 *  合理处理). */
 	jumpRequest?: { entryId: string; nonce: number } | null;
+	/** Composer inset channel supplied by the floating desktop host. Web callers
+	 * omit it and keep the CSS-only back-to-bottom offset. */
+	registerComposerInsetReader?(reader: HTMLElement | null): (() => void) | undefined;
 	/** Read an assistant reply aloud (TTS). */
 	onSpeak?(text: string, messageId?: string): void;
 	/** 当前朗读中的消息 id(播放状态行级指示;null = 无朗读)。 */
@@ -382,6 +386,7 @@ function Row({
 	turnStart,
 	children,
 	onQuote,
+	onJumpToMessage,
 	onEdit,
 	onRetry,
 	onRevert,
@@ -402,7 +407,8 @@ function Row({
 	 *  当前轮高亮(顾问行是 tr-row--custom,不进 .tr-row--user 查询)。 */
 	turnStart?: boolean;
 	children: ReactNode;
-	onQuote?(text: string): void;
+	onQuote?(text: string, messageId?: string): void;
+	onJumpToMessage?(messageId: string): void;
 	/** Edit: truncate to this message and restore its text (edit-and-reconverse). */
 	onEdit?(messageId: string, text: string): void;
 	onRetry?(messageId: string, text: string): void;
@@ -627,7 +633,7 @@ function Row({
 							onClick={() => {
 								play("press");
 								hapticTap();
-								if (quoteText) onQuote(quoteText);
+								if (quoteText) onQuote(quoteText, id);
 							}}
 						>
 							<MessageSquare size={13} />
@@ -667,6 +673,9 @@ interface EntryRowProps {
 	/** Collapsed 活动 fold: render this row's TEXT blocks only (see AssistantBody). */
 	textOnly?: boolean;
 	showTokenUsage?: boolean;
+	/** The usage row renders on the round's FINAL reply only (the wire stamps
+	 *  usage on every assistant message, tool-call carriers included). */
+	usageHere?: boolean;
 	smoothStreaming?: boolean;
 	/** display.taskCardStyle parity: "classic" swaps the swarm member grid
 	 *  card for the plain tool-call card. */
@@ -678,7 +687,8 @@ interface EntryRowProps {
 	errorAttempt?: number;
 	/** Session thinking level — work-timer `model · level` badge. */
 	thinkingLevel?: string;
-	onQuote?(text: string): void;
+	onQuote?(text: string, messageId?: string): void;
+	onJumpToMessage?(messageId: string): void;
 	onEdit?(messageId: string, text: string): void;
 	onRetry?(messageId: string, text: string): void;
 	onRevert?(messageId: string, text: string): void;
@@ -779,7 +789,13 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	) {
 		return false;
 	}
-	if (prev.onQuote !== next.onQuote || prev.onEdit !== next.onEdit || prev.onRetry !== next.onRetry) return false;
+	if (
+		prev.onQuote !== next.onQuote ||
+		prev.onJumpToMessage !== next.onJumpToMessage ||
+		prev.onEdit !== next.onEdit ||
+		prev.onRetry !== next.onRetry
+	)
+		return false;
 	if (prev.artifacts !== next.artifacts) return false;
 	if (prev.thinkingLevel !== next.thinkingLevel) return false;
 	if (prev.onRevert !== next.onRevert || prev.onFork !== next.onFork) return false;
@@ -1024,11 +1040,13 @@ const EntryRow = memo(function EntryRow({
 	foldHeader,
 	textOnly = false,
 	showTokenUsage = false,
+	usageHere = false,
 	smoothStreaming = true,
 	taskCardStyle = "swarm",
 	artifacts,
 	thinkingLevel,
 	onQuote,
+	onJumpToMessage,
 	onEdit,
 	onRetry,
 	onRevert,
@@ -1087,6 +1105,7 @@ const EntryRow = memo(function EntryRow({
 								title={entry.timestamp}
 								turnStart
 								onQuote={onQuote}
+								onJumpToMessage={onJumpToMessage}
 								onEdit={onEdit}
 								onRetry={onRetry}
 								onRevert={onRevert}
@@ -1095,8 +1114,10 @@ const EntryRow = memo(function EntryRow({
 							>
 								<UserMsgContent
 									content={msg.content}
+									displayContext={msg.displayContext}
 									plain={userPlain}
 									collapse={collapseLongUserMessages}
+									onJumpToMessage={onJumpToMessage}
 									onPreviewImage={onPreviewImage}
 								/>
 							</Row>
@@ -1109,6 +1130,7 @@ const EntryRow = memo(function EntryRow({
 								gutter={agentGutter ?? t("settings.agent")}
 								title={entry.timestamp}
 								onQuote={onQuote}
+								onJumpToMessage={onJumpToMessage}
 								onRetry={onRetry}
 								onFork={onFork}
 								onSpeak={onSpeak}
@@ -1130,6 +1152,7 @@ const EntryRow = memo(function EntryRow({
 									hideToolActivity={hideToolActivity}
 									textOnly={textOnly}
 									showTokenUsage={showTokenUsage}
+									usageHere={usageHere}
 									smoothStreaming={smoothStreaming}
 									taskCardStyle={taskCardStyle}
 									artifacts={artifacts}
@@ -1238,6 +1261,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		collapseCompacted = false,
 		colorBlind = false,
 		onQuote,
+		onJumpToMessage,
 		onEdit,
 		onRetry,
 		onRevert,
@@ -1247,6 +1271,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		historyBlocked = false,
 		anchorCtlRef,
 		jumpRequest = null,
+		registerComposerInsetReader,
 		onSpeak,
 		onSaveImage,
 		onEditImage,
@@ -1517,14 +1542,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// a turn that runs for minutes streams a row per tool call and scrolls the
 	// work away. Only that span qualifies — a settled turn belongs to its round
 	// fold, and trimming it too would swap content under the fold's animation.
+	// `liveTrimRevealed`: clicking the "⋯ 还有 N 行" indicator reveals the whole
+	// span (the entries are all in memory; the trim is display-only), resetting
+	// per round so the next turn trims again.
+	const [liveTrimRevealed, setLiveTrimRevealed] = useState(false);
+	useEffect(() => {
+		setLiveTrimRevealed(false);
+	}, [working, liveFromIdx]);
 	const liveTrim = useMemo(() => {
-		if (!working || liveActivityRows <= 0 || liveFromIdx >= entries.length) return null;
+		if (!working || liveTrimRevealed || liveActivityRows <= 0 || liveFromIdx >= entries.length) return null;
 		const rows: number[] = [];
 		for (let i = liveFromIdx; i < entries.length; i++) {
 			if (classifyTranscriptRow(entries[i]) === "work") rows.push(i);
 		}
 		return planLiveActivityTrim(rows, liveActivityRows);
-	}, [entries, working, liveFromIdx, liveActivityRows]);
+	}, [entries, working, liveFromIdx, liveActivityRows, liveTrimRevealed]);
 
 	// Session switch → land on the latest message (see `sessionKey`).
 	useEffect(() => {
@@ -2063,6 +2095,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		};
 		const ro = new ResizeObserver(pinIfFollowing);
 		ro.observe(content);
+		const tailSibling = content.nextElementSibling;
+		if (tailSibling) ro.observe(tailSibling);
 		// The scroller's own box too: a window resize shrinks the viewport
 		// without touching the content box — scrollTop stays put and the last
 		// rows slide under the composer until something else re-pins. While
@@ -2180,6 +2214,18 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			fold !== undefined && foldOpen && absIdx > fold.headerIdx && absIdx <= fold.endIdx;
 		const isHeaderRow = fold !== undefined && absIdx === fold.headerIdx;
 		const isReplyRow = fold !== undefined && absIdx === fold.finalIdx;
+		// The usage row is the ROUND's: only the final reply carries it (every
+		// assistant message in the wire stamps usage — tool-call carriers
+		// included — so a per-message gate drew a raw stat line under each
+		// tool row).
+		const usageHere = isAssistantMessage && (isReplyRow || absIdx === lastAssistantIdx);
+		// ONE predicate for "this row must not carry the orb". The EntryRow,
+		// the run-summary row and the live-trim row each render an
+		// assistant-gutter Row; the latter two used to pass the orb
+		// unconditionally, so an expanded turn showed an orb on the fold
+		// header AND on every run-summary row (user: 单回合轮次显示多个头像).
+		const avatarSuppressed =
+			isAssistantMessage && (prevIsAssistant || spanAvatarOwnedByHeader) && !(foldClosed && isReplyRow);
 		// Widget rows (successful widget toolCalls, see round-collapse
 		// exempt) stay mounted while the fold is closed: the standalone
 		// card is the turn's artifact, not process noise.
@@ -2265,12 +2311,24 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const runSummaryHere = isRunHead && run !== undefined;
 		// The "+N more" line the trim counts behind: it rides the first VISIBLE
 		// row, so it scrolls away with the work it describes instead of
-		// stranding a count at the top of a long turn.
+		// stranding a count at the top of a long turn. It is a control, not a
+		// count: the trimmed entries are all still in memory, and clicking
+		// reveals the whole span (the trim exists for render/scroll cost, not
+		// for hiding history — user: 光折叠了我也没法展开).
 		const liveMoreLine = liveMoreHere ? (
-			<Row key={`live-more-${entry.id}`} kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
-				<div className="tr-live-more">
+			<Row
+				key={`live-more-${entry.id}`}
+				kind="assistant"
+				gutter={avatarSuppressed ? "" : (agentGutter ?? t("settings.agent"))}
+			>
+				<button
+					type="button"
+					className="tr-live-more"
+					onClick={() => setLiveTrimRevealed(true)}
+					title={t("tools.expand")}
+				>
 					{t("tools.moreLinesWithCount", { count: String(liveTrim?.hiddenCount ?? 0) })}
-				</div>
+				</button>
 			</Row>
 		) : null;
 		const body = trimmedByLiveTail ? null : collapsible || !hideRowContent ? (
@@ -2283,7 +2341,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					</Row>
 				) : null}
 				{runSummaryHere ? (
-					<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
+					<Row kind="assistant" gutter={avatarSuppressed ? "" : (agentGutter ?? t("settings.agent"))}>
 						{headerStandalone ? null : foldHeader}
 						<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
 					</Row>
@@ -2300,16 +2358,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							// The reply of a COLLAPSED turn owns the orb: its predecessor is the
 							// hidden header row, so the usual "consecutive assistant rows drop the
 							// avatar" rule must not apply here. An OPEN fold's header owns the orb
-							// for the whole span instead (spanAvatarOwnedByHeader above).
-							isAssistantMessage && (prevIsAssistant || spanAvatarOwnedByHeader) && !(foldClosed && isReplyRow)
-								? ""
-								: agentGutter
+							// for the whole span instead (spanAvatarOwnedByHeader above). Same
+							// predicate gates the run-summary and live-trim rows (avatarSuppressed).
+							avatarSuppressed ? "" : agentGutter
 						}
 						userPlain={userPlain}
 						collapseLongUserMessages={collapseLongUserMessages}
 						hideToolActivity={rowHideTools || rowTextOnly}
 						textOnly={rowTextOnly}
 						showTokenUsage={showTokenUsage}
+						usageHere={usageHere}
 						smoothStreaming={smoothStreaming}
 						taskCardStyle={taskCardStyle}
 						artifacts={turnArtifactsByFinal.get(entry.id)}
@@ -2319,6 +2377,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						runStartTs={streamingLast ? lastUserTs : undefined}
 						roundDuration={roundDuration}
 						onQuote={onQuote}
+						onJumpToMessage={onJumpToMessage}
 						onEdit={onEdit}
 						onRetry={onRetry}
 						onRevert={onRevert}
@@ -2485,6 +2544,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						host={host}
 						hideToolActivity={hideToolActivity}
 						showTokenUsage={showTokenUsage}
+						usageHere
 						smoothStreaming={smoothStreaming}
 						taskCardStyle={taskCardStyle}
 						thinkingLevel={thinkingLevel}
@@ -2519,8 +2579,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			    below the viewport. */}
 			{shouldShowBackToBottom(followingUi, entries.length, scrolledAway) && (
 				<button
+					ref={registerComposerInsetReader}
 					type="button"
 					className="tr-back-bottom"
+					style={
+						registerComposerInsetReader
+							? {
+									bottom:
+										"calc(14px + var(--chat-composer-inset, 0px) + var(--chat-floating-panel-clearance, 0px))",
+								}
+							: undefined
+					}
 					onClick={backToBottom}
 					aria-label={t("transcript.backBottom")}
 					title={t("transcript.backBottom")}

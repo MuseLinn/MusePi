@@ -121,6 +121,23 @@ describe("knowledge tool", () => {
 		expect(shown.details?.showPlan).toMatchObject({ id: planId, title: "My plan", directory: CWD });
 	});
 
+	it("returns a note's full body on `show kind=note` (list only previews)", async () => {
+		const tool = new KnowledgeTool(makeSession());
+		const body = `conclusion line\n\n${"detail ".repeat(60)}`;
+		const created = await tool.execute("c1", { action: "save", kind: "note", body });
+		const noteId = created.details?.id;
+		expect(noteId).toBeTruthy();
+
+		// `list` caps the preview at 80 chars; a caller asking to see the note
+		// must get the whole text back (user: agent 查不了笔记内容).
+		const shown = await tool.execute("c2", { action: "show", kind: "note", id: noteId! });
+		expect(textOf(shown)).toBe(body);
+
+		// A guessed id must fail loudly, and todo show must point at `list`.
+		await expect(tool.execute("c3", { action: "show", kind: "note", id: "nope-nope" })).rejects.toThrow();
+		await expect(tool.execute("c4", { action: "show", kind: "todo", id: "t1" })).rejects.toThrow();
+	});
+
 	it("deletes, and reports a missing id instead of silently succeeding", async () => {
 		const tool = new KnowledgeTool(makeSession());
 		const created = await tool.execute("c1", { action: "save", kind: "note", body: "temp" });

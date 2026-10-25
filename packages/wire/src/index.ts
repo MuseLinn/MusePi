@@ -63,11 +63,39 @@ export interface WireUsage {
 // Messages
 // ═══════════════════════════════════════════════════════════════════════════
 
+export type DisplayContext =
+	| {
+			kind: "browser-annotation";
+			pageUrl: string;
+			prompt: string;
+			comment?: string;
+			image?: string;
+	  }
+	| {
+			kind: "chat-quote";
+			messageId?: string;
+			quote: string;
+			comment?: string;
+	  }
+	| {
+			kind: "file-quote";
+			path: string;
+			quote: string;
+			language?: string;
+			startLine?: number;
+			endLine?: number;
+			comment?: string;
+	  };
+
+export type MessageDisplayContext = DisplayContext | DisplayContext[];
+
 export interface UserMessage {
 	role: "user";
 	content: string | (TextContent | ImageContent)[];
 	/** True if the message was injected by the system (e.g. auto-continue). */
 	synthetic?: boolean;
+	/** Presentation-only provenance for annotation and quote cards. */
+	displayContext?: MessageDisplayContext;
 	/** Unix timestamp in milliseconds. */
 	timestamp: number;
 	/** 会话内条目树父节点 id(/tree 语义;live 事件暂缺,live 消息树需发射端打标)。 */

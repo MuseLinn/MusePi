@@ -47,9 +47,9 @@ const KOKORO_VOICES: ReadonlyArray<{ id: string; label: string }> = [
 ];
 
 const ENGINES: ReadonlyArray<{ id: TtsEngine; label: string }> = [
-	{ id: "auto", label: "voice engine auto" },
-	{ id: "daemon", label: "voice engine daemon" },
-	{ id: "native", label: "voice engine native" },
+	{ id: "auto", label: "settings.voiceEngineAuto" },
+	{ id: "daemon", label: "settings.voiceEngineDaemon" },
+	{ id: "native", label: "settings.voiceEngineNative" },
 ];
 
 const STT_LANGS: ReadonlyArray<{ id: SttLang; label: string }> = [

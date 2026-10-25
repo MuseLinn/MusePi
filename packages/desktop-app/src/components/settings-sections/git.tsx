@@ -187,6 +187,74 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 	};
 
+	// ── Host accounts（git-accounts store）────────────────────────────────
+	// 掩码账号列表 + PAT 直接接入（含 GitHub Enterprise 自托管域名）。
+	// 旧守护进程没有这些 RPC —— 请求失败时整块不渲染，设备流卡片照旧。
+	interface GitAccountRow {
+		id: string;
+		host: string;
+		kind: string;
+		apiBase: string | null;
+		login?: string;
+		email?: string;
+		updatedAt: string;
+		active: boolean;
+		tokenTail: string;
+	}
+	const [accounts, setAccounts] = useState<GitAccountRow[] | null>(null);
+	const [patHost, setPatHost] = useState("");
+	const [patToken, setPatToken] = useState("");
+	const [patBusy, setPatBusy] = useState(false);
+	const [patError, setPatError] = useState<string | null>(null);
+
+	const refreshAccounts = useCallback(async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const res = await rpc.request<{ accounts?: GitAccountRow[] }>("github.accountList", {});
+			setAccounts(Array.isArray(res?.accounts) ? res.accounts : []);
+		} catch {
+			// daemon predates github.accountList — keep the section hidden
+			setAccounts(null);
+		}
+	}, [rpc]);
+
+	useEffect(() => {
+		void refreshAccounts();
+	}, [refreshAccounts]);
+
+	const removeAccount = async (id: string): Promise<void> => {
+		if (!rpc) return;
+		const ok = await confirm(t("general.confirmRemoveGitAccount"), undefined, { destructive: true });
+		if (!ok) return;
+		await rpc.request("github.accountRemove", { id }).catch(() => null);
+		await Promise.all([refreshAccounts(), refreshAuth()]);
+	};
+
+	const connectPat = async (): Promise<void> => {
+		if (!rpc || patBusy) return;
+		const token = patToken.trim();
+		if (!token) return;
+		setPatBusy(true);
+		setPatError(null);
+		try {
+			const res = await rpc.request<{ connected?: boolean; login?: string; error?: string }>("github.patConnect", {
+				host: patHost.trim() || "github.com",
+				token,
+			});
+			if (res?.connected) {
+				setPatToken("");
+				setPatHost("");
+				await Promise.all([refreshAccounts(), refreshAuth()]);
+			} else {
+				setPatError(res?.error ?? t("general.patConnectFailed"));
+			}
+		} catch (err) {
+			setPatError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setPatBusy(false);
+		}
+	};
+
 	// ── Identities ───────────────────────────────────────────────────────
 	// 系统身份：git config 解析出的本机身份（git.identity RPC，daemon 侧
 	// local→global 链解析）。只读，列在自定义身份之前；没有自定义默认身份时
@@ -360,6 +428,70 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					</div>
 				)}
 			</div>
+
+			{accounts !== null && (
+				<div className="gui-settings-section">
+					<div className="gui-settings-section-title">{t("general.gitAccounts")}</div>
+					<div className="gui-settings-section-desc">{t("general.gitAccountsDescription")}</div>
+					{accounts.length === 0 ? (
+						<div className="gui-settings-row">
+							<div className="gui-settings-row-desc">{t("general.noGitAccounts")}</div>
+						</div>
+					) : (
+						accounts.map(account => (
+							<div key={account.id} className="gui-github-card">
+								<div className="gui-github-avatar">{account.login?.slice(0, 1).toUpperCase() ?? "?"}</div>
+								<div className="min-w-0 flex-1">
+									<div className="flex items-center gap-1.5">
+										<Icon name="github" className="h-3.5 w-3.5" />
+										<span className="font-medium">{account.login ?? t("transcript.unknown")}</span>
+										<span className="text-[12px] text-[var(--color-text-muted)]">
+											{account.host} · {account.tokenTail}
+										</span>
+										{account.active && <span className="gui-badge">{t("general.gitAccountActive")}</span>}
+									</div>
+									<div className="text-[12px] text-[var(--color-text-muted)]">
+										{new Date(account.updatedAt).toLocaleDateString()}
+									</div>
+								</div>
+								<button type="button" className="gui-btn" onClick={() => void removeAccount(account.id)}>
+									{t("general.removeGitAccount")}
+								</button>
+							</div>
+						))
+					)}
+
+					<div className="gui-settings-section-title mt-4">{t("general.patConnect")}</div>
+					<div className="gui-settings-section-desc">{t("general.patConnectDescription")}</div>
+					<div className="flex flex-wrap items-center gap-2">
+						<input
+							type="text"
+							className="gui-input gui-git-pat-host"
+							placeholder={t("general.patHostPlaceholder")}
+							value={patHost}
+							onChange={e => setPatHost(e.target.value)}
+							spellCheck={false}
+						/>
+						<input
+							type="password"
+							className="gui-input gui-git-pat-token"
+							placeholder={t("general.patTokenPlaceholder")}
+							value={patToken}
+							onChange={e => setPatToken(e.target.value)}
+							spellCheck={false}
+						/>
+						<button
+							type="button"
+							className="gui-btn gui-btn-primary"
+							disabled={patBusy || patToken.trim().length === 0}
+							onClick={() => void connectPat()}
+						>
+							{patBusy ? t("settings.loading") : t("general.patConnectAction")}
+						</button>
+					</div>
+					{patError && <div className="mt-2 text-[12.5px] text-[var(--color-danger)]">{patError}</div>}
+				</div>
+			)}
 
 			<div className="gui-settings-row">
 				<div>

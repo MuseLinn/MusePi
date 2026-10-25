@@ -84,9 +84,9 @@ async function mount(extra: Record<string, unknown> = {}): Promise<{ root: unkno
 }
 
 function rowEl(): HTMLElement {
-	const el = Array.from(document.querySelectorAll("#app button")).find(b => b.textContent?.includes("Some task")) as
-		| HTMLElement
-		| undefined;
+	const el = Array.from(document.querySelectorAll("#app .gui-session-row")).find(b =>
+		b.textContent?.includes("Some task"),
+	) as HTMLElement | undefined;
 	if (!el) throw new Error("session row not found");
 	return el;
 }

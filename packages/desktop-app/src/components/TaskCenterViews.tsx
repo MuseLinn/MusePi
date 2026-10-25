@@ -131,6 +131,7 @@ export function TaskCalendarView({
 	onSelectTask?(id: string): void;
 }): ReactNode {
 	const [cursor, setCursor] = useState(new Date());
+	const [selectedDay, setSelectedDay] = useState<number | null>(null);
 	const year = cursor.getFullYear();
 	const month = cursor.getMonth();
 	const startDow = (new Date(year, month, 1).getDay() - weekStartIndex() + 7) % 7;
@@ -169,8 +170,10 @@ export function TaskCalendarView({
 			<button
 				type="button"
 				key={d}
-				className={`gui-taskcal-cell${isToday(d) ? " gui-taskcal-cell--today" : ""}`}
-				onClick={() => dayTasks.length === 1 && onSelectTask?.(dayTasks[0]!.id)}
+				className={`gui-taskcal-cell${isToday(d) ? " gui-taskcal-cell--today" : ""}${selectedDay === d ? " gui-taskcal-cell--selected" : ""}`}
+				disabled={dayTasks.length === 0}
+				aria-pressed={selectedDay === d}
+				onClick={() => setSelectedDay(d)}
 			>
 				<span className="gui-taskcal-day">{d}</span>
 				{dayTasks.length > 0 && (
@@ -217,6 +220,21 @@ export function TaskCalendarView({
 				))}
 				{cells}
 			</div>
+			{selectedDay !== null && (
+				<div className="gui-taskcal-day-detail">
+					{(byDay.get(selectedDay) ?? []).map(task => (
+						<button
+							type="button"
+							key={task.id}
+							className="gui-taskcal-day-task"
+							onClick={() => onSelectTask?.(task.id)}
+						>
+							<strong>{task.name || t("settings.scheduledUntitled")}</strong>
+							<span>{taskScheduleLabel(task.schedule)}</span>
+						</button>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -278,6 +296,7 @@ export function TaskBoardView({
 											type="button"
 											onClick={() => onToggle?.(task.id)}
 											title={task.enabled ? t("settings.boardPause") : t("settings.boardResume")}
+											aria-label={task.enabled ? t("settings.boardPause") : t("settings.boardResume")}
 										>
 											{task.enabled ? "⏸" : "▶"}
 										</button>
@@ -285,6 +304,7 @@ export function TaskBoardView({
 											type="button"
 											onClick={() => onDelete?.(task.id)}
 											title={t("settings.boardDelete")}
+											aria-label={t("settings.boardDelete")}
 										>
 											🗑
 										</button>

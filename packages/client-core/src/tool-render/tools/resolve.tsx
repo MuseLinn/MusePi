@@ -116,7 +116,7 @@ function Body(props: ToolRenderProps): ReactNode {
 					card.sourceToolName && <Badge key="source">{card.sourceToolName}</Badge>,
 					card.label && <span key="label">{truncate(normalizeWs(card.label), 120)}</span>,
 					card.kind === "propose" && card.title && (
-						<span key="settings.title">{truncate(normalizeWs(card.title), 120)}</span>
+						<span key="title">{truncate(normalizeWs(card.title), 120)}</span>
 					),
 				]}
 			/>

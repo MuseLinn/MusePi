@@ -7,6 +7,8 @@
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
+	box-sizing: border-box;
+	min-height: 32px;
 	padding: 4px 20px 2px;
 	line-height: 1.4;
 	color: var(--color-text-muted);
@@ -99,11 +101,25 @@ button.mpstats-pill:active {
 	font-size: 12px;
 	line-height: 1.5;
 	z-index: 90;
+}
+
+.mpstats-pop-motion {
 	animation: mpstats-pop-in 140ms var(--spring-liquid, ease-out);
+}
+
+.mpstats-pop--closing .mpstats-pop-motion {
+	animation: mpstats-pop-out 140ms ease-in forwards;
 }
 
 @keyframes mpstats-pop-in {
 	from {
+		opacity: 0;
+		transform: translateY(4px) scale(0.98);
+	}
+}
+
+@keyframes mpstats-pop-out {
+	to {
 		opacity: 0;
 		transform: translateY(4px) scale(0.98);
 	}

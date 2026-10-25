@@ -127,7 +127,7 @@ const md = new Marked({
 		// chat setting) and never reach the highlighter.
 		code({ text, lang, escaped }) {
 			const l = (lang ?? "").trim().toLowerCase();
-			if (l === "settings.mermaid" || l === "mmd") {
+			if (l === "mermaid" || l === "mmd") {
 				return renderMermaidHtml(text, mermaidMode());
 			}
 			const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
@@ -144,7 +144,7 @@ const md = new Marked({
 			// source even after tree-sitter spans replace the body.
 			const head =
 				`<div class="tr-code-head">` +
-				`<span class="tr-code-lang">${lang ? escapeHtml(lang) : "tools.text"}</span>` +
+				`<span class="tr-code-lang">${lang ? escapeHtml(lang) : "text"}</span>` +
 				`<button type="button" class="tr-code-copy" data-copy-hash="${hash}">${t("settings.copy")}</button>` +
 				`</div>`;
 			return `<div class="tr-code">${head}<pre><code${langAttr} data-hl-hash="${hash}">${lines}\n</code></pre></div>`;
@@ -210,14 +210,14 @@ function tableToolbarHtml(hash: string): string {
 				`<span class="tr-table-menu" role="menu">` +
 				`<button type="button" role="menuitem" data-table-copy="csv">CSV</button>` +
 				`<button type="button" role="menuitem" data-table-copy="tsv">TSV</button>` +
-				`<button type="button" role="menuitem" data-table-copy="settings.markdown">Markdown</button>` +
+				`<button type="button" role="menuitem" data-table-copy="markdown">Markdown</button>` +
 				`</span>`,
 		) +
 		menuWrap(
 			`<button type="button" class="tr-table-btn tr-code-copy">${t("settings.download")}</button>` +
 				`<span class="tr-table-menu" role="menu">` +
 				`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
-				`<button type="button" role="menuitem" data-table-download="settings.markdown">Markdown</button>` +
+				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>` +
 				`</span>`,
 		) +
 		`</div>`
@@ -699,7 +699,7 @@ export const Markdown = memo(function Markdown({
 			: (() => {
 					try {
 						const v = localStorage.getItem("musepi-gui-chat-effect");
-						return v === "burst" || v === "general.shimmer" || v === "glitch" || v === "flip" || v === "ink"
+						return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink"
 							? v
 							: "typewriter";
 					} catch {
@@ -784,12 +784,12 @@ export const Markdown = memo(function Markdown({
 			if (!svgWrap) return;
 			const dir = mermaidZoom.dataset.mermaidZoom;
 			const cur = Number.parseFloat(svgWrap.dataset.zoom ?? "1") || 1;
-			const next = Math.min(4, Math.max(0.5, dir === "tools.in" ? cur * 1.2 : cur / 1.2));
+			const next = Math.min(4, Math.max(0.5, dir === "in" ? cur * 1.2 : cur / 1.2));
 			svgWrap.dataset.zoom = String(next);
-			const svg = svgWrap.querySelector<HTMLElement>("settings.svg");
+			const svg = svgWrap.querySelector<HTMLElement>("svg");
 			if (svg) {
 				svg.style.zoom = String(next);
-				svg.style.maxWidth = next === 1 ? "" : "settings.none2";
+				svg.style.maxWidth = next === 1 ? "" : "none";
 			}
 			return;
 		}
@@ -831,8 +831,7 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableCopy.dataset.tableCopy ?? "csv";
-			const text =
-				fmt === "tsv" ? tableToTSV(data) : fmt === "settings.markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
 			const hash =
 				tableCopy
 					.closest<HTMLElement>(".tr-table")
@@ -851,11 +850,11 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableDl.dataset.tableDownload ?? "csv";
-			const content = fmt === "settings.markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const content = fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
 			downloadBlob(
-				fmt === "settings.markdown" ? "table.md" : "table.csv",
+				fmt === "markdown" ? "table.md" : "table.csv",
 				content,
-				fmt === "settings.markdown" ? "text/markdown" : "text/csv",
+				fmt === "markdown" ? "text/markdown" : "text/csv",
 			);
 			return;
 		}
@@ -974,7 +973,7 @@ export const Markdown = memo(function Markdown({
 		const delta = target.slice(tailAppendedRef.current.length);
 		// shimmer is a root-level CSS sweep (no per-char spans); every other
 		// preset animates each new char exactly once via its CSS class.
-		if (effect === "general.shimmer") {
+		if (effect === "shimmer") {
 			frag.appendChild(document.createTextNode(delta));
 		} else {
 			const effCls = effect === "typewriter" ? "tr-char tr-char--typewriter" : `tr-char tr-char--${effect}`;

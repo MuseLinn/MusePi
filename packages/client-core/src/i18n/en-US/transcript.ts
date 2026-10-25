@@ -240,4 +240,9 @@ export const transcript = {
 	"follow up…": "follow up…",
 	"Enter to ask — Esc closes": "Enter to ask — Esc closes",
 	"back to bottom": "back to bottom",
+	"transcript.runBrowserPagesWithCount": "Read {count} pages",
+	"transcript.runBrowserCallsWithCount": "Ran {count} browser operations",
+	"transcript.runBrowserActionWithCount": "{action} × {count}",
+	"transcript.runBrowserFailuresWithCount": "{count} other failures",
+	"transcript.runBrowserRetriesWithCount": "retried {count} times",
 } as const satisfies Record<TranscriptKey, string>;

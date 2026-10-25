@@ -1,3 +1,14 @@
+---
+layout: default
+title: 移动端设计规范
+status: living
+summary: Capacitor 移动壳与共享客户端移动入口的信息架构、交互、视觉和原生集成契约。
+scope:
+  - packages/mobile
+  - packages/client-core
+lang: zh-CN
+---
+
 # MusePi 移动端设计规范（Mobile Companion）
 
 > **状态（2026-08-31 核对）**：壳已构建（`packages/mobile` Capacitor Android + guest-client 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。

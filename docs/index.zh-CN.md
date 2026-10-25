@@ -1,6 +1,10 @@
 ---
 layout: default
 title: 文档
+status: living
+summary: MusePi 产品、实现与开发者记录文档的读者索引。
+scope:
+  - docs
 lang: zh-CN
 ---
 
@@ -26,6 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 
 - [gui-design.md](gui-design.html) — **活文档** GUI 设计规范：布局 / token / 动效 / 组件模式 / 桌宠视觉风格
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI 实现笔记：daemon RPC 契约、IPC 形状、踩坑、验证工作流
+- [gui-context-and-session.md](gui-context-and-session.html) — **活文档** 结构化引用、子会话折叠和角色/回退模型思考等级
 - [i18n.md](i18n.html) — **活文档** i18n 架构：按域 locale 表、编译期英文对等、插件翻译注册
 - [gui-settings.md](gui-settings.html) — 设置面板笔记
 - [mobile-design.md](mobile-design.html) — **活文档** 移动端设计规范 · [ota-mobile-design.md](ota-mobile-design.html) OTA / 应用内更新设计
@@ -52,6 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 
 - [hooks.md](hooks.html) · [extensions.md](extensions.html) · [extensions-dev.md](extensions-dev.html)（扩展 API 参考）· [extension-loading.md](extension-loading.html)
 - [agent-hub.md](agent-hub.html) · [task-agent-discovery.md](task-agent-discovery.html) · [plugin-manager-installer-plumbing.md](plugin-manager-installer-plumbing.html)
+- [plugin-lifecycle.md](plugin-lifecycle.html) — **活文档** Cordis 归属、状态、依赖、销毁与迁移契约
 
 ## 看板与自动化
 
@@ -64,6 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 
 ## 约定与清单
 
+- [documentation.md](documentation.html) — **活文档** 文档归属、元数据、渐进披露与双语维护规范
 - [naming.md](naming.html) — **活文档** 命名规范，适用于 GUI / 移动端 / TUI / i18n 文案
 - [assembly.md](assembly.html) — **活文档** `musepi.assembly.toml`，声明式产品装配清单
 

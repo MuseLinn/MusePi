@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import * as path from "node:path";
 import type { Usage } from "@musepi/pi-ai";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { SqlSessionStorage } from "@musepi/pi-coding-agent/session/sql-session-storage";
@@ -27,7 +28,7 @@ describe("SessionManager + SqlSessionStorage (SQLite)", () => {
 	it("persists appended assistant messages into SQL and reloads via open()", async () => {
 		const client = new SQL("sqlite::memory:");
 		const storage = await SqlSessionStorage.create({ client });
-		const sessionDir = "/sessions/proj";
+		const sessionDir = path.resolve("/sessions/proj");
 
 		const manager = SessionManager.create("/cwd", sessionDir, storage);
 		manager.appendMessage({
@@ -80,7 +81,7 @@ describe("SessionManager + SqlSessionStorage (SQLite)", () => {
 	it("SessionManager.list returns SQL-backed sessions for the cwd", async () => {
 		const client = new SQL("sqlite::memory:");
 		const storage = await SqlSessionStorage.create({ client });
-		const sessionDir = "/sessions/list-proj";
+		const sessionDir = path.resolve("/sessions/list-proj");
 
 		const a = SessionManager.create("/cwd", sessionDir, storage);
 		a.appendMessage({

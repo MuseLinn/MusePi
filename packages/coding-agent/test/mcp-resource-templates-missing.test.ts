@@ -92,7 +92,9 @@ describe("MCPManager loads resources for a templates-less server", () => {
 		};
 
 		try {
-			await manager.connectServers({ docs: config }, {});
+			const result = await manager.connectServers({ docs: config }, {});
+			await manager.waitForConnection("docs");
+			expect([...result.errors]).toEqual([]);
 			await manager.ensureServerResources("docs");
 			const resources = manager.getServerResources("docs");
 
@@ -118,7 +120,9 @@ describe("MCPManager loads resources for a templates-less server", () => {
 		};
 
 		try {
-			await manager.connectServers({ docs: config }, {});
+			const result = await manager.connectServers({ docs: config }, {});
+			await manager.waitForConnection("docs");
+			expect([...result.errors]).toEqual([]);
 			await manager.ensureServerResources("docs");
 			const resources = manager.getServerResources("docs");
 

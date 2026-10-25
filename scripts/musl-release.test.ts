@@ -68,7 +68,18 @@ describe("musl release artifacts", () => {
 case "$*" in
   *api.github.com*) echo '{"tag_name":"v1.0.0"}' ;;
   *) while [ "$#" -gt 0 ]; do
-       [ "$1" = "-o" ] && { printf binary > "$2"; exit 0; }
+       [ "$1" = "-o" ] && {
+         case "$2" in
+           */SHA256SUMS.txt)
+             sum=$(printf '#!/bin/sh\necho 1.0.0' | sha256sum | awk '{ print $1 }')
+             printf '%s  musepi-linux-musl-x64\n' "$sum" > "$2"
+             ;;
+           *)
+             printf '#!/bin/sh\necho 1.0.0' > "$2"
+             ;;
+         esac
+         exit 0
+       }
        shift
      done ;;
 esac
@@ -80,10 +91,11 @@ esac
 			PATH: `${binDir}:${process.env.PATH ?? ""}`,
 			HOME: dir,
 			PI_INSTALL_DIR: installDir,
+			PI_BIN_DIR: installDir,
 		});
 
 		expect(result.exitCode, result.stderr).toBe(0);
-		expect(result.stdout).toContain("Downloading omp-linux-musl-x64...");
-		expect(await Bun.file(path.join(installDir, "omp")).text()).toBe("binary");
+		expect(result.stdout).toContain("Downloading musepi-linux-musl-x64");
+		expect(await Bun.file(path.join(installDir, "musepi")).text()).toBe("#!/bin/sh\necho 1.0.0");
 	});
 });

@@ -1,3 +1,14 @@
+---
+layout: default
+title: 模型与 Provider 配置
+status: living
+summary: 模型加载、角色与回退选择、思考等级、覆盖、凭据和运行时解析契约。
+scope:
+  - packages/coding-agent/src/config
+  - packages/catalog/src
+lang: zh-CN
+---
+
 # 模型与 Provider 配置（`models.yml` / `models.yaml`）
 
 [English](models.md) | 中文
@@ -560,6 +571,8 @@ providers:
 ```
 
 内置 model 策略目前在同 provider/API 上存在目标时，将 OpenAI `codex-spark` 变体链接到 `gpt-5.5`，将 `gpt-5.5` 链接到 `gpt-5.4`。
+
+桌面端角色设置中，每个角色和每个回退选择器都可以独立选择 `inherit`、`auto`、`off` 或该模型支持的 concrete effort。`provider/id:auto` 后缀只对当前行启用自动思考，不是全局默认值，也不会被模型 clamp 清除。回退行通过 `models.detail` 获取各自的思考阶梯，因此不同回退项可以使用不同等级。
 
 ## 兼容性与路由字段
 

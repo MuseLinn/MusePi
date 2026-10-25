@@ -36,6 +36,7 @@ import type {
 import type { Effort } from "@musepi/pi-catalog/effort";
 import { isOpenAIModelId } from "@musepi/pi-catalog/identity/family";
 import type { Api, FetchImpl, KnownApi, Model, Provider, ThinkingBudgets, Usage } from "@musepi/pi-catalog/types";
+import type { MessageDisplayContext } from "@musepi/pi-wire";
 import type { ApiKey } from "./auth-retry";
 import type { BedrockOptions } from "./providers/amazon-bedrock";
 import type { AnthropicOptions } from "./providers/anthropic";
@@ -859,6 +860,8 @@ export interface UserMessage {
 	attribution?: MessageAttribution;
 	/** Provider-specific opaque payload used to reconstruct transport-native history. */
 	providerPayload?: ProviderPayload;
+	/** Presentation-only provenance; never used to alter model content or behavior. */
+	displayContext?: MessageDisplayContext;
 	timestamp: number; // Unix timestamp in milliseconds
 }
 

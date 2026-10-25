@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	probeDaemonPort: () => ipcRenderer.invoke("daemon-probe"),
 	/** GUI package version (OTA/发布一致性比对,见 app.tsx boot)。 */
 	getAppVersion: () => ipcRenderer.invoke("app-version"),
+	/** Close behavior (设置 → 常规): true = close hides to tray, app keeps
+	 *  running; false/absent = close quits and the before-quit path stops the
+	 *  owned daemon. Default false. */
+	getCloseToTray: () => ipcRenderer.invoke("window-behavior:get"),
+	setCloseToTray: (value) => ipcRenderer.invoke("window-behavior:set-close-to-tray", value === true),
 	/** Spawn `musepi serve --port` and resolve once the listener is up. */
 	startDaemon: (port) => ipcRenderer.invoke("daemon-start", port),
 	/** Restart the daemon: kill the current listener, spawn fresh code,
@@ -316,6 +321,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserClearData: (mode) => ipcRenderer.invoke("managed-browser:clear-data", { mode }),
 	/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 	managedBrowserStop: (tabId) => ipcRenderer.invoke("managed-browser:stop", tabId),
+	/** Stop the current turn's automation but keep the page for the user. */
+	managedBrowserTakeover: (tabId) => ipcRenderer.invoke("managed-browser:takeover", tabId),
 	/** Device preset + emulated viewport for the active tab
 	 *  ("fit" clears the identity and the metrics override). */
 	managedBrowserSetDevice: (input) => ipcRenderer.invoke("managed-browser:set-device", input),

@@ -22,7 +22,7 @@ describe("release publish", () => {
 			JSON.stringify({ name: "@musepi/pi-test", version: "1.2.3" }),
 		);
 		const tarball = path.join(root, "test.tgz");
-		await $`tar -czf ${tarball} -C ${root} package`.quiet();
+		await $`tar --force-local -czf ${tarball} -C ${root} package`.quiet();
 
 		await expect(inspectPackedTarball(tarball)).resolves.toEqual({
 			name: "@musepi/pi-test",

@@ -15,6 +15,20 @@ import { ToolAbortError } from "../../src/tools/tool-errors";
 
 const runScopeModuleUrl = new URL("../../src/tools/run-scope.ts", import.meta.url).href;
 
+async function runIsolated(script: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+	const proc = Bun.spawn([process.execPath, "-e", script], {
+		cwd: process.cwd(),
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [exitCode, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	]);
+	return { exitCode, stdout, stderr };
+}
+
 async function collectUnhandledRejections(action: () => void | Promise<void>): Promise<unknown[]> {
 	const reasons: unknown[] = [];
 	const onUnhandled = (reason: unknown) => reasons.push(reason);
@@ -396,58 +410,51 @@ describe("browser run cancellation", () => {
 
 	it("reports unhandled errors from then, catch, and finally continuations", async () => {
 		vi.useRealTimers();
-		const owner = {};
-		const floatingRejections: unknown[] = [];
-		const facade = bindRunFacade(
-			{
-				fail: async (): Promise<never> => {
-					throw new Error("browser failure");
-				},
-				ok: async (): Promise<string> => "ok",
-			},
-			new AbortController().signal,
-			owner,
-			reason => floatingRejections.push(reason),
-		);
-
-		void facade.ok().then(() => {
-			throw new Error("then failed");
-		});
-		void facade.fail().catch(() => {
-			throw new Error("catch failed");
-		});
-		void facade.ok().finally(() => {
-			throw new Error("finally failed");
-		});
-		await Bun.sleep(20);
-
-		const messages = floatingRejections
-			.map(reason => (reason instanceof Error ? reason.message : String(reason)))
-			.sort();
-		expect(messages).toEqual(["catch failed", "finally failed", "then failed"]);
+		const script = `
+			import { bindRunFacade, installBrowserWorkerRejectionGuard } from ${JSON.stringify(runScopeModuleUrl)};
+			const failures = [];
+			const uninstall = installBrowserWorkerRejectionGuard(reason => {
+				failures.push(reason instanceof Error ? reason.message : String(reason));
+				return true;
+			});
+			const facade = bindRunFacade({
+				fail: async () => { throw new Error("browser failure"); },
+				ok: async () => "ok",
+			}, new AbortController().signal, {}, reason => failures.push(reason instanceof Error ? reason.message : String(reason)));
+			void facade.ok().then(() => { throw new Error("then failed"); });
+			void facade.fail().catch(() => { throw new Error("catch failed"); });
+			void facade.ok().finally(() => { throw new Error("finally failed"); });
+			setTimeout(() => {
+				uninstall();
+				console.log(JSON.stringify(failures.sort()));
+			}, 50);
+		`;
+		const { exitCode, stdout, stderr } = await runIsolated(script);
+		expect(exitCode, stderr).toBe(0);
+		expect(JSON.parse(stdout)).toEqual(["catch failed", "finally failed", "then failed"]);
 	});
 
 	it("reports a browser error rethrown by a user rejection continuation", async () => {
 		vi.useRealTimers();
-		const owner = {};
-		const browserFailure = new Error("browser failure");
-		const floatingRejections: unknown[] = [];
-		const facade = bindRunFacade(
-			{
-				fail: (): Promise<never> => Promise.reject(browserFailure),
-			},
-			new AbortController().signal,
-			owner,
-			reason => floatingRejections.push(reason),
-		);
-
-		void facade.fail().catch(reason => {
-			throw reason;
-		});
-		await Bun.sleep(20);
-
-		expect(isBrowserRunRejection(browserFailure, owner)).toBe(true);
-		expect(floatingRejections).toEqual([browserFailure]);
+		const script = `
+			import { bindRunFacade, installBrowserWorkerRejectionGuard, isBrowserRunRejection } from ${JSON.stringify(runScopeModuleUrl)};
+			const browserFailure = new Error("browser failure");
+			const failures = [];
+			const owner = {};
+			const uninstall = installBrowserWorkerRejectionGuard(reason => {
+				failures.push(reason);
+				return true;
+			});
+			const facade = bindRunFacade({ fail: () => Promise.reject(browserFailure) }, new AbortController().signal, owner, reason => failures.push(reason));
+			void facade.fail().catch(reason => { throw reason; });
+			setTimeout(() => {
+				uninstall();
+				console.log(JSON.stringify({ marked: isBrowserRunRejection(browserFailure, owner), count: failures.length }));
+			}, 50);
+		`;
+		const { exitCode, stdout, stderr } = await runIsolated(script);
+		expect(exitCode, stderr).toBe(0);
+		expect(JSON.parse(stdout)).toEqual({ marked: true, count: 1 });
 	});
 
 	it("rejects awaited facade method calls that settle after abort", async () => {

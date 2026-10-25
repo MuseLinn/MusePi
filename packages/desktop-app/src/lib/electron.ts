@@ -47,6 +47,10 @@ export interface ElectronAPI {
 	onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () => void;
 	/** Live updater state pushes; returns the unsubscribe function. */
 	onUpdateState(cb: (state: UpdaterState) => void): () => void;
+	/** Close behavior: true = close hides to tray; false/absent = close quits
+	 *  and stops the owned daemon (default). 设置 → 常规「关闭窗口时最小化到托盘」。 */
+	getCloseToTray?(): Promise<boolean>;
+	setCloseToTray?(value: boolean): Promise<boolean>;
 }
 
 /** Classified updater failure (main process update-logic.cjs → renderer).
@@ -136,6 +140,30 @@ export function shellPlatform(): string {
 	if (!isElectron()) return "";
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return (electronAPI?.platform ?? "").toLowerCase();
+}
+
+/** Close behavior (设置 → 常规「关闭窗口时最小化到托盘」): true = close
+ *  hides to tray; false = close quits and stops the owned daemon. Resolves
+ *  false outside Electron or when the bridge predates the API. */
+export async function getCloseToTray(): Promise<boolean> {
+	if (!isElectron()) return false;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		return (await electronAPI.getCloseToTray?.()) === true;
+	} catch {
+		return false;
+	}
+}
+
+/** Persist the close behavior (see getCloseToTray). No-op outside Electron. */
+export async function setCloseToTray(value: boolean): Promise<void> {
+	if (!isElectron()) return;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		await electronAPI.setCloseToTray?.(value);
+	} catch {
+		// Best-effort — the toggle already shows the new state.
+	}
 }
 
 /** Native folder picker; null when canceled or running in a browser. */

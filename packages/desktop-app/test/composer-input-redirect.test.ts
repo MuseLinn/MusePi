@@ -11,7 +11,7 @@
  *  - an IME composition that is mid-word.
  */
 import "./happy-dom-shim"; // MUST be first: installs the DOM globals.
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
 	findComposerTextarea,
 	isComposerRedirectTarget,
@@ -22,6 +22,10 @@ import {
 function textarea(): HTMLTextAreaElement {
 	return document.querySelector<HTMLTextAreaElement>("textarea[data-composer-input]")!;
 }
+
+afterEach(() => {
+	document.body.innerHTML = "";
+});
 
 beforeEach(() => {
 	document.body.innerHTML = `

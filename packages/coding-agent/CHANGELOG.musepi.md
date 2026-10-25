@@ -6,13 +6,56 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+- **内置浏览器的 Agent 操作现在看得见，也能随时接管**：页面会显示操作边框、当前动作和已控制时长；点击「我来接管」停止本轮自动化后，当前页面和登录状态仍然保留，可以马上手动继续。设备工具条同时支持尺寸、显示比例和外框背景调整。
+  - EN: Built-in browser automation is now visible and easy to take over. The page shows an operation ring, current action, and elapsed control time; "Take over" stops the current turn while preserving the page and login state for immediate manual use. The device toolbar also supports dimensions, display scale, and frame background.
+- **浏览器工具调用现在展示具体步骤和重试结果**：查看页面、点击、填写、滚动和截图等操作会实时列在卡片中，刷新历史后仍然保留；连续调用自动汇总页面与操作次数，已成功的重试不再被误报为最终失败，展开仍可查看完整过程。
+  - EN: Browser tool calls now show their actual steps and retry outcomes. Page inspection, clicks, fills, scrolling, and screenshots appear live in the card and persist through history reloads. Consecutive calls summarize pages and actions, recovered retries no longer count as final failures, and the complete sequence remains expandable.
+
+- **Issue 和 PR 可以直接阅读详情并发表评论了**：列表旁新增独立详情栏，自动预览当前选中项；正文与评论支持 Markdown 渲染，可查看元信息、标签、检查状态和评论，并直接在客户端发表评论。PR 的合并、关闭、加标签和审查者操作保留在详情栏中。
+  - EN: Issues and pull requests now have a real reading and commenting workspace. A dedicated detail pane previews the selected item beside the list, renders bodies and comments as Markdown, shows metadata, labels, checks, and discussions, and accepts new comments without leaving the app. Existing PR merge, close, label, and reviewer actions remain available in the detail pane.
+- **Git 设置可以管理多个账号、用令牌直接接入了**：设置 → Git 新增「已连接的账号」列表——每个主机一个活跃凭据（带「活跃」徽标），支持移除；「使用访问令牌接入」可以直接填个人访问令牌（PAT），主机填 github.com 或企业版/自托管域名（如 ghe.example.com），校验通过才保存。以前只有 GitHub 设备授权一条路，且只能存一个账号。
+  - EN: Git settings now manage multiple accounts and accept direct token sign-in. Settings → Git gains a "Connected accounts" list — one active credential per host (with an "Active" badge), each removable — and a "Connect with an access token" form that takes a personal access token (PAT) with a host of github.com or an enterprise/self-hosted domain (e.g. ghe.example.com), saved only after validation. Previously the only path was the GitHub device flow, storing a single account.
+- **关闭窗口的行为可以自己选了**：设置 → 常规新增「关闭窗口时最小化到托盘」开关（Windows / Linux）。默认关闭——点关闭按钮就是退出客户端，后台的本地守护进程随退出一起停止，不再出现「窗口关了、进程还在后台跑」的误会；开启后关闭只把窗口藏进托盘，客户端继续在后台运行，随时从托盘唤回。
+  - EN: Closing the window is now a choice. Settings → General gains a "Minimize to tray when closing the window" toggle (Windows / Linux). It defaults to off — the close button quits the app and the local daemon stops with it, so a closed window no longer leaves processes running behind your back. Turn it on to hide the window to the tray instead and keep the app alive in the background, one tray click away.
+- **智能体现在能读笔记全文了**：`knowledge` 工具的 `show` 以前只支持计划，智能体问「那条笔记写了什么」只会报一条错误，只能去磁盘上翻文件；现在 `show` + `kind: "note"` 直接返回笔记完整正文（`list` 的摘要仍然只有 80 字预览，用 `show` 看全文）。
+  - EN: The agent can now read a note in full. The knowledge tool's `show` used to accept plans only — asking "what does that note say" produced an error and the agent had to go digging through files on disk; `show` with `kind: "note"` now returns the note's complete body (`list` still gives an 80-character preview; use `show` for the full text).
+
 ### Changed
+- **Issue/PR 工具区和右侧标签更整齐流畅了**：搜索与 PR/问题子页签归入同一工具栏，筛选器不再多层挤压换行；右侧零标签页改为垂直居中的自适应卡片网格。右侧与内置浏览器标签新增统一的打开/关闭动效，减少动态效果时立即完成，浏览器页面销毁顺序不受影响。
+  - EN: Issue/PR tools and panel tabs are cleaner and smoother. Search and the PR/issues subtabs now share one toolbar, while filters keep their own structured row. The empty right panel is now a vertically centered adaptive card grid. Surface and built-in browser tabs share open/close motion that snaps under reduced motion without changing WebView disposal order.
 - **提示、通知、抽屉和弹窗统一了玻璃质感与可读性**：六类浮层共享一致的边缘、光泽和阴影；关闭动效或减少动态效果时，入场与出场都会立即完成。降低透明度、系统不支持背景模糊以及 Windows 无模糊路径会使用清晰的不透明底色。嵌套弹窗只响应最上层的键盘操作，危险删除确认也不会再被 Enter 误触发。
   - EN: Tooltips, toasts, drawers, and dialogs now share consistent glass edges, sheen, and shadows across six overlay types. Entrance and exit motion both stop when animation is disabled or reduced motion is requested. Reduced transparency, missing backdrop-filter support, and Windows without blur use readable opaque surfaces. Only the top nested dialog handles keyboard input, and destructive confirmations can no longer be triggered accidentally with Enter.
+- **Issue 和 PR 面板在窄窗口也能读详情了**：宽屏保留双列列表与详情，低于 960px 时详情独占宽度，列表改为当前项按钮弹出的玻璃面板；同时移除重复区块标签，列表和详情统一使用液态玻璃背景、边缘和阴影。
+  - EN: The issue and PR workspace now stays readable in narrow windows. Wide layouts keep list and detail side by side; below 960px the detail takes the full width and the list opens in a glass popup from the current-item button. Duplicate section labels are gone, and both surfaces share the liquid-glass background, borders, and shadows.
+- **任务中心、看板、Issue 与 PR、能力中心统一了页面排版**：四个一级页面现在共享一致的标题、返回入口、说明、操作区与标签页结构；任务日历支持按日期展开全部任务，日历和状态看板都能直接进入任务详情。
+  - EN: Task center, boards, issues & pull requests, and capability center now share one page-header layout for titles, back navigation, descriptions, actions, and tabs. The task calendar exposes every task for a selected day, and both calendar and status-board items open the corresponding task details.
 
 ### Fixed
+- **文件、代码、网页和会话引用统一成结构化卡片了**：引用不再把大段裸文本塞进输入框；来源、选区、评论、预览和移除都在卡片里处理，发送后仍保留专用展示。文件预览现在可以直接引用选中的代码及行号，队列和持久化不会丢来源。
+  - EN: File, code, browser, and chat references now share structured cards. Sources, selections, comments, previews, and removal stay out of the raw textarea and remain visible after sending. File previews can quote selected code with line numbers, while queues and persistence preserve the source.
+- **折叠子会话不再把父会话一起藏掉**：父行始终保持可见，只有子行执行高度动画；「全部展开/收起」现在能跨所有列表实例工作，展开时恢复原来的子会话。
+  - EN: Collapsing sub-sessions no longer hides the parent. Parent rows remain visible while only child rows animate, and "expand/collapse all" now works across every list instance and restores the original children on expansion.
+- **角色和回退模型可以分别选择 Auto 与思考等级了**：主角色和每个回退项都有独立的 inherit/auto/off/模型支持等级；`provider/id:auto` 不再被误当模型名或被 clamp 清除，修改一个回退项不会覆盖其他项。
+  - EN: Roles and fallback models now have independent Auto and thinking-level selectors. `provider/id:auto` is no longer parsed as a model id or cleared by clamping, and editing one fallback entry does not overwrite the others.
+- **禁用魔术关键词后提示和高亮会一起消失**：关键词的提示文本、检测和渐变高亮现在只由插件注册表驱动，不再被静态路径重复执行；卸载或清空注册后，第一方关键词也不会残留。
+  - EN: Disabling magic keywords now removes both notices and highlights. Prompt generation, detection, and gradients are driven only by the plugin registry, with no static duplicate path or first-party residue after unload.
 - **会话切换浮层完整显示了**：多会话主机的标题按钮打开的工作区 sheet 不再被顶栏裁到屏幕外，移动和桌面视口都能查看会话列表、关闭浮层并恢复焦点。
   - EN: The session switcher now opens fully in view. The workspace sheet opened from a multi-session host title is no longer clipped above the screen by the header, so mobile and desktop users can see the session list, close the sheet, and restore focus.
+- **PR 详情不再因审查者字段报错**：GitHub CLI 的 `reviewRequests` 现在会正确转换为界面需要的审查者列表，不再出现 `Unknown JSON field: "reviewers"`，PR 描述、评论、标签和操作区可以正常加载。
+  - EN: PR details no longer fail on the reviewer field. GitHub CLI's `reviewRequests` is normalized into the reviewers list used by the GUI, eliminating `Unknown JSON field: "reviewers"` so descriptions, comments, labels, and actions load normally.
+- **窄窗口的设置搜索不再被侧栏裁切**：折叠成图标栏后，搜索改为独立浮层，输入和结果完整可见；搜索不会过滤掉背后的导航图标，选择结果或按 Escape 会正常关闭并恢复焦点。
+  - EN: Settings search is no longer clipped by the collapsed sidebar. Its input and results now appear in an independent popup, searching leaves the icon rail intact, and choosing a result or pressing Escape closes it and restores focus correctly.
+- **开放的 Issue 不再显示成已关闭**：GitHub 返回的大写 `OPEN` 现在会被正确识别，列表图标和关闭/重新打开操作与真实状态一致；任务中心的定时任务列表也不再因持续自动刷新而重复重渲染。
+  - EN: Open issues no longer appear closed. GitHub's uppercase `OPEN` state is recognized correctly, keeping list icons and close/reopen actions consistent with reality. The scheduled-task page also no longer re-renders continuously from an unstable refresh callback.
+- **新功能弹窗的折叠栏目有动效了**：「本次还有 N 项修复与改进」和历史版本折叠区以前展开、收起都是瞬间跳变，现在按全局规范的 240ms 高度伸缩动效过渡；完整日志仍在第一次展开时才渲染，开机不会被它拖慢。
+  - EN: Collapsible sections in the what's-new panel now animate. The "N more fixes" and older-release folds used to pop open and shut instantly; they now expand and collapse with the standard 240ms height motion, and the full log still renders only on first expand so startup doesn't pay for it.
+- **聊天里「添加到笔记」后右栏立刻有显示**：从选中文本添加笔记后，项目知识面板以前要切走再切回来才刷出这条笔记；现在添加成功后面板立即刷新。
+  - EN: "Add to notes" from selected text now shows up immediately. The project-knowledge panel used to need a tab switch away and back before the new note appeared; it refreshes the moment the add succeeds.
+- **「⋯ 还有 N 行」能点开了**：设置成「运行中回合只保留最近 N 行」时，被折起来的活动以前只是一行干巴巴的字，想看前面的过程没办法；现在点这一行就把整个回合的活动全部展开，下个回合开始时再恢复折叠。
+  - EN: The "⋯ N more lines" row is now clickable. With "running turn keeps only the latest N rows" on, the folded work used to be a bare line with no way back; clicking it now reveals the turn's full activity, and folding resumes when the next turn starts.
+- **界面彻底卡死时客户端不再反复重启页面**：渲染进程一旦崩溃，客户端以前会立刻重新加载，页面要是反复崩溃就会每秒拉起一个新进程空转；现在一分钟内连崩三次后停止重载，直接走正常退出流程（退出前仍会提示正在运行的会话、并停掉本地守护进程）。
+  - EN: A renderer that keeps crashing no longer gets reloaded forever. The client used to reload instantly after every crash, so one pathological page spun up a fresh process every second; after three crashes within a minute it now stops reloading and takes the normal quit path instead — running sessions still get the warning prompt, and the local daemon is torn down with the app.
 - **Windows 版又能正常收到更新了**：最近一次版本发布的 Windows 安装包和更新清单漏传了，旧客户端点「检查更新」会一直失败；修复后新版本照常附带安装包与更新清单。
   - EN: Windows builds receive updates again. The most recent release shipped without its Windows installer and update manifest, so older clients failed every "check for updates"; new releases now include the installer and manifest again.
 - **检查更新遇到「 release 还没带上更新清单」会说清楚了**：发布暂时缺了当前平台的更新元数据时，设置页以前显示一句笼统的「检查更新失败」，让人误会是自己网络出问题；现在明确提示「未找到当前平台的更新发布信息」，真正的网络故障仍然单独归类。
@@ -25,6 +68,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Uninstalled plugins no longer linger in the design-systems list. After uninstall or disable, the welcome-page preview rail kept showing the plugin's registered design systems for a few seconds; the invalidation now clears that cache too, so they vanish immediately.
 - **用 `#` 路径别名（package imports）的老插件又能加载了**：这类插件的子模块此前绕过源码改写直接交给运行时解析，引旧包名时会报「找不到包」；现在子模块照常走改写管线，别名与旧包名映射都生效。
   - EN: Legacy plugins that use `#` package-import aliases load again. Their submodules used to bypass the source rewrite and fail with "package not found" when importing legacy package names; submodules now go through the rewrite pipeline, so aliases and legacy-name remaps both apply.
+- **一个回合只会出现一个智能体头像了**：回合展开时，工具汇总行和「还有 N 行」截断行以前会各自再带一个头像，一屏叠出好几个；现在头像只钉在回合的第一个内容行上，过程行不再重复。
+  - EN: A turn now shows a single agent avatar. When expanded, the tool-summary rows and the "N more lines" trim row each used to carry another avatar, stacking several on one screen; the avatar now anchors to the turn's first content row only.
+- **token 用量只在回合最终回复下面显示一次**：以前每个工具行的末尾都挂着一条「↑ ↓ 耗时」统计，刷一长串；现在整回合的用量聚合到最终回复一条上。
+  - EN: Token usage now renders once, under the turn's final reply. It used to dangle off every tool row as a long chain of "↑ ↓ duration" stats; the turn's usage now aggregates into a single line on the final reply.
+- **思考行不再假装还在运行**：思考结束后，「思考」标签以前仍播放高亮扫过的动画，看起来像一直在想；现在结束即恢复静态，收起状态下还会在旁边预览思考内容的第一行，不用点开也知道这步在想什么。
+  - EN: Finished thinking rows no longer pretend to be running. The "Thinking" label used to keep playing its shimmer animation after the block settled, reading as permanently active; it now rests once done, and while collapsed the row previews the reasoning's first line next to the label — you can tell what was pondered without expanding it.
+- **命令行工具正确计入「命令」统计**：自动执行的 bash 工具以前被算进「其他操作」，工具汇总显示「执行了 N 次其他操作」；现在归到「命令」段。
+  - EN: Shell commands now count as commands. Auto-approved bash tool calls used to be tallied as "other operations", so the run summary read "ran N other operations"; they now land in the commands segment.
+- **插件加载和热更新不再被类型文件拖慢**：运行时依赖图会跳过 `import type` 和 `export type`，不再递归读取 SDK 的整条类型导入链；实际运行模块及其子模块热更新保持原有行为。
+  - EN: Plugin loading and hot reload no longer get bogged down by type files. The runtime dependency graph skips `import type` and `export type` instead of recursively reading the SDK's type-import chain, while runtime modules retain their existing submodule HMR behavior.
 
 ## [0.6.0] - 2026-10-22
 

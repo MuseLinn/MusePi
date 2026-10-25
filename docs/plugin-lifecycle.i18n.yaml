@@ -1,0 +1,5 @@
+# Consistency record for plugin-lifecycle.md / plugin-lifecycle.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/plugin-lifecycle
+plugin-lifecycle.md: e6fc34b8678c5819cd134e40b1f27f7dd8e0e915
+plugin-lifecycle.zh-CN.md: 7dfed3067849224528f3534db313cc7246db4299

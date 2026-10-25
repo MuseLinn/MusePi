@@ -12,6 +12,12 @@
  */
 
 import { isTurnStartEntry, type SessionEntry } from "@musepi/pi-wire";
+import {
+	type BrowserActivityCall,
+	type BrowserActivitySummary,
+	browserOperationsOf,
+	summarizeBrowserOperations,
+} from "../../tool-render/tools/browser-activity";
 import { diffStats } from "../../tool-render/tools/edit";
 import { isRecord } from "../../tool-render/util";
 import { classifyTranscriptRow } from "./row-kinds";
@@ -388,6 +394,8 @@ export interface ToolRunSummary {
 	commands: number;
 	/** Any other tool results. */
 	other: number;
+	/** Structured browser operations; browser calls are not counted in other. */
+	browser: BrowserActivitySummary | null;
 }
 
 /**
@@ -405,6 +413,40 @@ export interface ToolRunSummary {
  * settles or the turn ends. Settled earlier runs in the same live round DO
  * summarize (Kimi's "回答过程中，连续的工具调用自动汇总为一行摘要").
  */
+function browserCallsOf(entries: readonly SessionEntry[], idxs: readonly number[]): BrowserActivityCall[] {
+	const inputs = new Map<string, { args: unknown; agentId: string }>();
+	const calls: BrowserActivityCall[] = [];
+	for (const index of idxs) {
+		const entry = entries[index];
+		if (entry?.type !== "message") continue;
+		const message = entry.message;
+		if (message.role === "assistant" && Array.isArray(message.content)) {
+			const agentId = "agentId" in message && typeof message.agentId === "string" ? message.agentId : "main";
+			for (const block of message.content) {
+				if (block.type === "toolCall" && block.name === "browser") {
+					inputs.set(block.id, { args: block.arguments, agentId });
+				}
+			}
+			continue;
+		}
+		if (message.role !== "toolResult" || message.toolName !== "browser") continue;
+		const input = inputs.get(message.toolCallId) ?? { args: {}, agentId: "main" };
+		const details = isRecord(message.details) ? message.details : undefined;
+		const argRecord = isRecord(input.args) ? input.args : undefined;
+		calls.push({
+			agentId: input.agentId,
+			tab:
+				(argRecord && typeof argRecord.name === "string" ? argRecord.name : undefined) ??
+				(details && typeof details.name === "string" ? details.name : "main"),
+			url: details && typeof details.url === "string" ? details.url : undefined,
+			args: input.args,
+			isError: message.isError,
+			operations: browserOperationsOf(details),
+		});
+	}
+	return calls;
+}
+
 export function buildToolRuns(entries: readonly SessionEntry[], working: boolean): ToolRunSummary[] {
 	const runs: ToolRunSummary[] = [];
 	let idxs: number[] = [];
@@ -414,6 +456,7 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 			let edits = 0;
 			let commands = 0;
 			let other = 0;
+			const browserCalls = browserCallsOf(entries, idxs);
 			for (const i of idxs) {
 				const e = entries[i];
 				if (e?.type !== "message") continue;
@@ -422,10 +465,13 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 				else if (m.role === "toolResult") {
 					if (EXPLORE_TOOLS.has(m.toolName)) reads++;
 					else if (WRITE_TOOLS.has(m.toolName)) edits++;
-					else other++;
+					// A plain bash toolResult (auto-approval run) is a command,
+					//  not "other" — the summary's 命令 segment owns it.
+					else if (m.toolName === "bash") commands++;
+					else if (m.toolName !== "browser") other++;
 				}
 			}
-			if (reads + edits + commands + other >= 2) {
+			if (reads + edits + commands + other + browserCalls.length >= 2) {
 				const head = entries[idxs[0]];
 				runs.push({
 					key: head?.id ?? `idx:${idxs[0]}`,
@@ -435,6 +481,7 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 					edits,
 					commands,
 					other,
+					browser: browserCalls.length > 0 ? summarizeBrowserOperations(browserCalls) : null,
 				});
 			}
 		}

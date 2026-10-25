@@ -27,6 +27,17 @@ export function useCollapse(open: boolean): (el: HTMLDivElement | null) => void 
 		const inner = innerRef.current;
 		if (!inner) return;
 
+		// Motion-off (settings toggle or OS reduced-motion): land on the target
+		// state with no intermediate frames — §5u forbids animation there.
+		const motionOff =
+			document.documentElement.classList.contains("gui-motion-off") ||
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		if (motionOff) {
+			inner.style.transition = "none";
+			inner.style.height = open ? "auto" : "0px";
+			return;
+		}
+
 		// Already at the target state — nothing to animate.
 		const current = inner.style.height;
 		if (open && (current === "" || current === "auto")) return;

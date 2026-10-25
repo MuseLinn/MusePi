@@ -9,14 +9,15 @@
  * with the machine's own credentials (gh CLI); a missing or unauthenticated
  * gh surfaces a readable error instead of a blank pane.
  */
-import { Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
+import { Markdown, Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { copyToClipboard, openExternalUrl } from "../lib/electron";
 import { branchToTitle, prVisualState, rollupCheckState } from "../lib/pr-status";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
+import { MenuPopup } from "./MenuPopup";
 
 /** gh PR shape shared by the list and the current-branch card (the daemon
  *  passes gh's --json fields through; the check rollup stays opaque until
@@ -142,20 +143,59 @@ function CheckItemList({ rollup }: { rollup: unknown }): ReactNode {
 
 /** Comment list shared by the PR and issue detail panes. */
 function CommentList({ comments }: { comments: GhComment[] }): ReactNode {
-	if (comments.length === 0) return null;
 	return (
 		<div className="gui-pr-detail-section">
 			<span className="gui-pr-detail-label">{t("pr comments {count}", { count: comments.length })}</span>
+			{comments.length === 0 && <p className="gui-pr-comments-empty">{t("pr no comments")}</p>}
 			{comments.slice(0, 20).map((c, i) => (
-				<div key={`${c.author?.login ?? "comment"}-${i}`} className="gui-pr-comment">
+				<article key={`${c.author?.login ?? "comment"}-${i}`} className="gui-pr-comment">
 					<span className="gui-pr-comment-meta">
-						{c.author?.login}
+						<strong>{c.author?.login}</strong>
 						{c.createdAt && <span>{new Date(c.createdAt).toLocaleString()}</span>}
 					</span>
-					<span className="gui-pr-comment-body">{c.body}</span>
-				</div>
+					<div className="gui-pr-comment-body">
+						<Markdown text={c.body} />
+					</div>
+				</article>
 			))}
 		</div>
+	);
+}
+
+function CommentComposer({ busy, onSubmit }: { busy: boolean; onSubmit(body: string): Promise<boolean> }): ReactNode {
+	const [draft, setDraft] = useState("");
+	const submit = async (): Promise<void> => {
+		const body = draft.trim();
+		if (!body || busy) return;
+		if (await onSubmit(body)) setDraft("");
+	};
+	return (
+		<form
+			className="gui-pr-comment-composer"
+			onSubmit={event => {
+				event.preventDefault();
+				void submit();
+			}}
+		>
+			<label>
+				<span className="gui-pr-detail-label">{t("pr add comment")}</span>
+				<textarea
+					value={draft}
+					onChange={event => setDraft(event.target.value)}
+					placeholder={t("pr comment placeholder")}
+					rows={4}
+					disabled={busy}
+				/>
+			</label>
+			<button type="submit" className="gui-btn gui-pr-comment-submit" disabled={busy || !draft.trim()}>
+				{busy ? (
+					<Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
+				) : (
+					<Icon name="chat-1" className="h-3.5 w-3.5" />
+				)}
+				<span>{t("pr comment submit")}</span>
+			</button>
+		</form>
 	);
 }
 
@@ -189,16 +229,29 @@ function PrDetail({
 	const [actionError, setActionError] = useState<string | null>(null);
 	const [labelInput, setLabelInput] = useState("");
 	const [reviewerInput, setReviewerInput] = useState("");
+	const requestSeq = useRef(0);
+	const mounted = useRef(true);
+	useEffect(() => {
+		return () => {
+			mounted.current = false;
+			requestSeq.current++;
+		};
+	}, []);
 	const load = useCallback((): void => {
+		if (!mounted.current) return;
+		const seq = ++requestSeq.current;
 		setDetail(undefined);
 		setError(null);
 		void rpc
 			.request<{ pr?: GhPrDetail | null; error?: string }>("github.prView", { cwd, number })
 			.then(res => {
+				if (seq !== requestSeq.current) return;
 				if (res?.error) setError(res.error);
 				else setDetail(res?.pr ?? null);
 			})
-			.catch(() => setError(t("general.requestFailed")));
+			.catch(() => {
+				if (seq === requestSeq.current) setError(t("general.requestFailed"));
+			});
 	}, [rpc, cwd, number]);
 	useEffect(load, [load]);
 	const act = useCallback(
@@ -253,6 +306,25 @@ function PrDetail({
 				.catch(() => null),
 		);
 	};
+	const postComment = async (body: string): Promise<boolean> => {
+		if (busy) return false;
+		setBusy(true);
+		setActionError(null);
+		try {
+			const res = await rpc
+				.request<{ ok?: boolean; error?: string }>("github.prComment", { cwd, number, body })
+				.catch(() => null);
+			if (!res?.ok) {
+				setActionError(res?.error ?? t("general.requestFailed"));
+				return false;
+			}
+			onChanged();
+			if (mounted.current) load();
+			return true;
+		} finally {
+			setBusy(false);
+		}
+	};
 	if (error) return <div className="gui-pr-detail gui-pr-error">{error}</div>;
 	if (detail === undefined)
 		return (
@@ -275,7 +347,7 @@ function PrDetail({
 				<span className={`gui-changes-badge gui-pr-badge--${prVisualState(detail)}`}>
 					{detail.isDraft ? "D" : detail.state === "MERGED" ? "M" : detail.state === "CLOSED" ? "X" : "O"}
 				</span>
-				<span className="min-w-0 flex-1 text-[13px] font-medium">
+				<span className="gui-pr-detail-title min-w-0 flex-1 text-[13px] font-medium">
 					<span className="text-[var(--color-text-faint)]">#{detail.number}</span> {detail.title}
 				</span>
 			</div>
@@ -346,8 +418,11 @@ function PrDetail({
 					)}
 				</div>
 			)}
-			<div className="gui-pr-detail-body">{detail.body?.trim() || t("pr no description")}</div>
+			<div className="gui-pr-detail-body">
+				<Markdown text={detail.body?.trim() || t("pr no description")} />
+			</div>
 			<CommentList comments={detail.comments} />
+			<CommentComposer busy={busy} onSubmit={postComment} />
 			{open && !detail.isDraft && (
 				<div className="gui-pr-merge-row">
 					<select
@@ -634,6 +709,88 @@ const PR_STATE_SEGMENTS: SegmentedOption<"open" | "closed" | "merged" | "all">[]
 	{ value: "all", label: t("state all") },
 ];
 
+function useNarrowPrPane(): { narrow: boolean; paneRef: (element: HTMLDivElement | null) => void } {
+	const [element, setElement] = useState<HTMLDivElement | null>(null);
+	const [narrow, setNarrow] = useState(false);
+	useEffect(() => {
+		if (!element) return;
+		const update = (width: number): void => {
+			if (width > 0) setNarrow(width < 960);
+		};
+		const observer = new ResizeObserver(entries => {
+			const entry = entries[0];
+			if (entry) update(entry.contentRect.width);
+		});
+		observer.observe(element);
+		update(element.clientWidth);
+		return () => observer.disconnect();
+	}, [element]);
+	return { narrow, paneRef: setElement };
+}
+
+function PrWorkspace({
+	narrow,
+	itemLabel,
+	filters,
+	notice,
+	list,
+	detail,
+}: {
+	narrow: boolean;
+	itemLabel: string;
+	filters: ReactNode;
+	notice?: ReactNode;
+	list: ReactNode;
+	detail: ReactNode;
+}): ReactNode {
+	const [listOpen, setListOpen] = useState(false);
+	const listButtonRef = useRef<HTMLButtonElement | null>(null);
+	useEffect(() => setListOpen(false), [narrow]);
+	return (
+		<>
+			<div className="gui-pr-filter-row">
+				{narrow && (
+					<button
+						ref={listButtonRef}
+						type="button"
+						className="gui-pr-list-toggle"
+						aria-expanded={listOpen}
+						aria-label={itemLabel}
+						onClick={() => setListOpen(open => !open)}
+					>
+						<Icon name="list-check-2" className="h-3.5 w-3.5" />
+						<span>{itemLabel}</span>
+						<Icon name="arrow-down-s" className="h-3.5 w-3.5" />
+					</button>
+				)}
+				<div className="gui-issue-filters">{filters}</div>
+			</div>
+			{notice}
+			<div className={`gui-pr-workspace${narrow ? " gui-pr-workspace--narrow" : ""}`}>
+				{!narrow && <FadeScroll className="gui-pr-list">{list}</FadeScroll>}
+				<FadeScroll className="gui-pr-detail-pane">{detail}</FadeScroll>
+				{narrow && (
+					<MenuPopup
+						open={listOpen}
+						className="gui-pr-list-popup"
+						anchor={listButtonRef.current}
+						onOpenChange={setListOpen}
+					>
+						<FadeScroll
+							className="gui-pr-list"
+							onClick={event => {
+								if ((event.target as HTMLElement).closest(".gui-pr-list-row")) setListOpen(false);
+							}}
+						>
+							{list}
+						</FadeScroll>
+					</MenuPopup>
+				)}
+			</div>
+		</>
+	);
+}
+
 function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: string }): ReactNode {
 	const [data, setData] = useState<{
 		pr: GhPr | null;
@@ -645,8 +802,10 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 	const [error, setError] = useState<string | null>(null);
 	const [selectedPr, setSelectedPr] = useState<number | null>(null);
 	const [prState, setPrState] = useState<"open" | "closed" | "merged" | "all">("open");
+	const listRequestSeq = useRef(0);
+	const { narrow, paneRef } = useNarrowPrPane();
 	const load = useCallback((): void => {
-		if (!rpc) return;
+		const seq = ++listRequestSeq.current;
 		void Promise.all([
 			rpc.request<{ pr?: GhPr | null; error?: string }>("github.prStatus", { cwd }).catch(() => null),
 			rpc.request<{ prs?: GhPr[]; error?: string }>("github.prs", { cwd, state: prState }).catch(() => null),
@@ -655,6 +814,7 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 				.catch(() => null),
 			rpc.request<{ branches?: string[]; error?: string }>("git.branches", { cwd }).catch(() => null),
 		]).then(([statusRes, listRes, gitRes, branchesRes]) => {
+			if (seq !== listRequestSeq.current) return;
 			// A null slot means the RPC itself failed at the transport/daemon
 			// layer — without this the pane silently renders "no PR → create
 			// form" while gh is actually broken or unreachable.
@@ -677,143 +837,164 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 	const pr = data?.pr ?? null;
 	// 搜索词过滤（编号/标题）；链接形态不改列表，交给「打开链接」行。
 	const filteredPrs = (data?.prs ?? []).filter(p2 => matchesQuery(query, p2.number, p2.title));
+	useEffect(() => {
+		const visible = (data?.prs ?? []).filter(item => matchesQuery(query, item.number, item.title));
+		setSelectedPr(current =>
+			visible.some(item => item.number === current) ? current : (visible[0]?.number ?? null),
+		);
+	}, [data, query]);
 	const linkQuery = isLinkQuery(query);
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex items-center justify-between gap-2 px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("settings.pullRequests")}</span>
-				<div className="gui-issue-filters">
-					<Segmented<"open" | "closed" | "merged" | "all">
-						ariaLabel={t("settings.pullRequests")}
-						value={prState}
-						options={PR_STATE_SEGMENTS}
-						onChange={setPrState}
-					/>
-					<button type="button" className="gui-pane-action !w-auto px-2" onClick={refresh}>
-						<Icon name="refresh" className="h-3.5 w-3.5" />
-						<span>{t("settings.refresh")}</span>
-					</button>
-				</div>
-			</div>
-			{error ? (
-				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
-			) : data ? (
-				<FadeScroll className="min-h-0 flex-1 overflow-y-auto">
-					{pr ? (
-						<div className="gui-pr-card">
-							<div className="flex min-w-0 items-center gap-2">
-								<span className={`gui-changes-badge gui-pr-badge--${prVisualState(pr)}`}>
-									{pr.isDraft ? "D" : pr.state === "MERGED" ? "M" : pr.state === "CLOSED" ? "X" : "O"}
-								</span>
-								<span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-									<span className="text-[var(--color-text-faint)]">#{pr.number}</span> {pr.title}
-								</span>
-							</div>
-							<div className="gui-pr-meta">
-								<PrChecks rollup={pr.statusCheckRollup} />
-								<PrMergeLine pr={pr} />
-							</div>
-							<div className="gui-pr-actions">
-								<button
-									type="button"
-									className="gui-pane-action !w-auto px-2"
-									onClick={() => void openExternalUrl(pr.url)}
-								>
-									<Icon name="external-link" className="h-3.5 w-3.5" />
-									<span>{t("open in browser")}</span>
-								</button>
-								<button
-									type="button"
-									className="gui-pane-action !w-auto px-2"
-									onClick={() => void copyToClipboard(pr.url)}
-								>
-									<Icon name="clipboard" className="h-3.5 w-3.5" />
-									<span>{t("copy link")}</span>
-								</button>
-							</div>
-						</div>
-					) : (
-						<PrCreateForm
-							rpc={rpc}
-							cwd={cwd}
-							branch={data.branch}
-							ahead={data.ahead}
-							branches={data.branches.filter(b => b !== data.branch)}
-							onCreated={url => {
-								refresh();
-								void openExternalUrl(url);
-							}}
+		<div ref={paneRef} className="gui-pr-pane">
+			<PrWorkspace
+				narrow={narrow}
+				notice={error ? <div className="gui-pr-load-state gui-pr-error">{error}</div> : undefined}
+				itemLabel={selectedPr === null ? t("pr select detail") : `#${selectedPr}`}
+				filters={
+					<>
+						<Segmented<"open" | "closed" | "merged" | "all">
+							ariaLabel={t("settings.pullRequests")}
+							value={prState}
+							options={PR_STATE_SEGMENTS}
+							onChange={setPrState}
 						/>
-					)}
-					{linkQuery && (
-						<div className="m-1.5">
-							<button
-								type="button"
-								className="gui-changes-row"
-								onClick={() => void openExternalUrl(query.trim())}
-							>
-								<Icon name="external-link" className="h-3.5 w-3.5 flex-shrink-0" />
-								<span className="min-w-0 flex-1 truncate text-left">{t("general.prOpenLink")}</span>
-								<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
-									{query.trim()}
-								</span>
-							</button>
-						</div>
-					)}
-					{filteredPrs.length > 0 && (
+						<button type="button" className="gui-pane-action !w-auto px-2" onClick={refresh}>
+							<Icon name="refresh" className="h-3.5 w-3.5" />
+							<span>{t("settings.refresh")}</span>
+						</button>
+					</>
+				}
+				list={
+					data ? (
 						<>
-							<div className="gui-group-label px-3 pb-1 pt-2">{t("open pull requests")}</div>
-							<div className="m-1.5 rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
-								{filteredPrs.map(pr => (
-									<button
-										key={pr.number}
-										type="button"
-										className={`gui-changes-row${selectedPr === pr.number ? " gui-changes-row--active" : ""}`}
-										onClick={() => setSelectedPr(prev => (prev === pr.number ? null : pr.number))}
-									>
+							{pr ? (
+								<div className="gui-pr-card">
+									<div className="flex min-w-0 items-center gap-2">
 										<span className={`gui-changes-badge gui-pr-badge--${prVisualState(pr)}`}>
 											{pr.isDraft ? "D" : pr.state === "MERGED" ? "M" : pr.state === "CLOSED" ? "X" : "O"}
 										</span>
-										<span className="min-w-0 flex-1 truncate text-left">
+										<span className="min-w-0 flex-1 truncate text-[13px] font-medium">
 											<span className="text-[var(--color-text-faint)]">#{pr.number}</span> {pr.title}
 										</span>
-										{rollupCheckState(pr.statusCheckRollup) !== null && (
-											<span
-												className={`gui-pr-check-dot gui-pr-check-dot--${rollupCheckState(pr.statusCheckRollup)}`}
-												role="img"
-												aria-label={t(
-													(rollupCheckState(pr.statusCheckRollup) === "success"
-														? "pr checks passing"
-														: rollupCheckState(pr.statusCheckRollup) === "failure"
-															? "pr checks failing"
-															: "pr checks pending") as TranslationKey,
-												)}
-												title={t(
-													(rollupCheckState(pr.statusCheckRollup) === "success"
-														? "pr checks passing"
-														: rollupCheckState(pr.statusCheckRollup) === "failure"
-															? "pr checks failing"
-															: "pr checks pending") as TranslationKey,
-												)}
-											/>
-										)}
+									</div>
+									<div className="gui-pr-meta">
+										<PrChecks rollup={pr.statusCheckRollup} />
+										<PrMergeLine pr={pr} />
+									</div>
+									<div className="gui-pr-actions">
+										<button
+											type="button"
+											className="gui-pane-action !w-auto px-2"
+											onClick={() => void openExternalUrl(pr.url)}
+										>
+											<Icon name="external-link" className="h-3.5 w-3.5" />
+											<span>{t("open in browser")}</span>
+										</button>
+										<button
+											type="button"
+											className="gui-pane-action !w-auto px-2"
+											onClick={() => void copyToClipboard(pr.url)}
+										>
+											<Icon name="clipboard" className="h-3.5 w-3.5" />
+											<span>{t("copy link")}</span>
+										</button>
+									</div>
+								</div>
+							) : (
+								<PrCreateForm
+									rpc={rpc}
+									cwd={cwd}
+									branch={data.branch}
+									ahead={data.ahead}
+									branches={data.branches.filter(b => b !== data.branch)}
+									onCreated={url => {
+										refresh();
+										void openExternalUrl(url);
+									}}
+								/>
+							)}
+							{linkQuery && (
+								<div className="m-1.5">
+									<button
+										type="button"
+										className="gui-changes-row"
+										onClick={() => void openExternalUrl(query.trim())}
+									>
+										<Icon name="external-link" className="h-3.5 w-3.5 flex-shrink-0" />
+										<span className="min-w-0 flex-1 truncate text-left">{t("general.prOpenLink")}</span>
 										<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
-											{pr.headRefName} → {pr.baseRefName}
+											{query.trim()}
 										</span>
 									</button>
-								))}
-							</div>
+								</div>
+							)}
+							{filteredPrs.length > 0 && (
+								<div className="m-1.5 rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
+									{filteredPrs.map(pr => (
+										<button
+											key={pr.number}
+											type="button"
+											className={`gui-changes-row gui-pr-list-row${selectedPr === pr.number ? " gui-changes-row--active" : ""}`}
+											onClick={() => setSelectedPr(pr.number)}
+										>
+											<span className={`gui-changes-badge gui-pr-badge--${prVisualState(pr)}`}>
+												{pr.isDraft ? "D" : pr.state === "MERGED" ? "M" : pr.state === "CLOSED" ? "X" : "O"}
+											</span>
+											<span className="min-w-0 flex-1 truncate text-left">
+												<span className="text-[var(--color-text-faint)]">#{pr.number}</span> {pr.title}
+											</span>
+											{rollupCheckState(pr.statusCheckRollup) !== null && (
+												<span
+													className={`gui-pr-check-dot gui-pr-check-dot--${rollupCheckState(pr.statusCheckRollup)}`}
+													role="img"
+													aria-label={t(
+														(rollupCheckState(pr.statusCheckRollup) === "success"
+															? "pr checks passing"
+															: rollupCheckState(pr.statusCheckRollup) === "failure"
+																? "pr checks failing"
+																: "pr checks pending") as TranslationKey,
+													)}
+													title={t(
+														(rollupCheckState(pr.statusCheckRollup) === "success"
+															? "pr checks passing"
+															: rollupCheckState(pr.statusCheckRollup) === "failure"
+																? "pr checks failing"
+																: "pr checks pending") as TranslationKey,
+													)}
+												/>
+											)}
+											<span className="gui-pr-list-branches text-[10.5px] text-[var(--color-text-faint)]">
+												{pr.headRefName} → {pr.baseRefName}
+											</span>
+										</button>
+									))}
+								</div>
+							)}
 						</>
-					)}
-					{selectedPr !== null && <PrDetail rpc={rpc} cwd={cwd} number={selectedPr} onChanged={refresh} />}
-				</FadeScroll>
-			) : (
-				<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
-					{[0, 1, 2, 3].map(i => (
-						<div key={i} className="gui-skeleton-row" />
-					))}
-				</div>
-			)}
+					) : (
+						<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
+							{[0, 1, 2, 3].map(i => (
+								<div key={i} className="gui-skeleton-row" />
+							))}
+						</div>
+					)
+				}
+				detail={
+					data ? (
+						selectedPr !== null ? (
+							<PrDetail key={selectedPr} rpc={rpc} cwd={cwd} number={selectedPr} onChanged={refresh} />
+						) : (
+							<div className="gui-pr-detail-empty">{t("pr select detail")}</div>
+						)
+					) : (
+						<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
+							{[0, 1, 2, 3].map(i => (
+								<div key={i} className="gui-skeleton-row" />
+							))}
+						</div>
+					)
+				}
+			/>
 		</div>
 	);
 }
@@ -861,16 +1042,29 @@ function IssueDetail({
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [actionError, setActionError] = useState<string | null>(null);
+	const requestSeq = useRef(0);
+	const mounted = useRef(true);
+	useEffect(() => {
+		return () => {
+			mounted.current = false;
+			requestSeq.current++;
+		};
+	}, []);
 	const load = useCallback((): void => {
+		if (!mounted.current) return;
+		const seq = ++requestSeq.current;
 		setDetail(undefined);
 		setError(null);
 		void rpc
 			.request<{ issue?: GhIssueDetail | null; error?: string }>("github.issueView", { cwd, number })
 			.then(res => {
+				if (seq !== requestSeq.current) return;
 				if (res?.error) setError(res.error);
 				else setDetail(res?.issue ?? null);
 			})
-			.catch(() => setError(t("general.requestFailed")));
+			.catch(() => {
+				if (seq === requestSeq.current) setError(t("general.requestFailed"));
+			});
 	}, [rpc, cwd, number]);
 	useEffect(load, [load]);
 	const toggleState = async (): Promise<void> => {
@@ -882,7 +1076,7 @@ function IssueDetail({
 				.request<{ ok?: boolean; error?: string }>("github.issueState", {
 					cwd,
 					number,
-					state: detail.state === "open" ? "closed" : "open",
+					state: isOpenState(detail.state) ? "closed" : "open",
 				})
 				.catch(() => null);
 			if (res?.ok) {
@@ -891,6 +1085,25 @@ function IssueDetail({
 			} else {
 				setActionError(res?.error ?? t("general.requestFailed"));
 			}
+		} finally {
+			setBusy(false);
+		}
+	};
+	const postComment = async (body: string): Promise<boolean> => {
+		if (busy) return false;
+		setBusy(true);
+		setActionError(null);
+		try {
+			const res = await rpc
+				.request<{ ok?: boolean; error?: string }>("github.issueComment", { cwd, number, body })
+				.catch(() => null);
+			if (!res?.ok) {
+				setActionError(res?.error ?? t("general.requestFailed"));
+				return false;
+			}
+			onChanged();
+			if (mounted.current) load();
+			return true;
 		} finally {
 			setBusy(false);
 		}
@@ -905,14 +1118,14 @@ function IssueDetail({
 			</div>
 		);
 	if (detail === null) return null;
-	const open = detail.state === "open";
+	const open = isOpenState(detail.state);
 	return (
 		<div className="gui-pr-detail">
 			<div className="flex min-w-0 items-center gap-2">
 				<span className={`gui-changes-badge ${open ? "gui-pr-badge--open" : "gui-pr-badge--merged"}`}>
 					{open ? "O" : "C"}
 				</span>
-				<span className="min-w-0 flex-1 text-[13px] font-medium">
+				<span className="gui-pr-detail-title min-w-0 flex-1 text-[13px] font-medium">
 					<span className="text-[var(--color-text-faint)]">#{detail.number}</span> {detail.title}
 				</span>
 			</div>
@@ -941,8 +1154,11 @@ function IssueDetail({
 					))}
 				</div>
 			)}
-			<div className="gui-pr-detail-body">{detail.body?.trim() || t("pr no description")}</div>
+			<div className="gui-pr-detail-body">
+				<Markdown text={detail.body?.trim() || t("pr no description")} />
+			</div>
 			<CommentList comments={detail.comments} />
+			<CommentComposer busy={busy} onSubmit={postComment} />
 			<div className="gui-pr-actions">
 				<button
 					type="button"
@@ -983,8 +1199,10 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 	const [issues, setIssues] = useState<GhIssue[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
+	const listRequestSeq = useRef(0);
+	const { narrow, paneRef } = useNarrowPrPane();
 	const load = useCallback((): void => {
-		if (!rpc) return;
+		const seq = ++listRequestSeq.current;
 		void rpc
 			.request<{ issues?: GhIssue[]; error?: string }>("github.issues", {
 				cwd,
@@ -993,108 +1211,131 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 				author: authorFilter.trim() || undefined,
 			})
 			.then(res => {
+				if (seq !== listRequestSeq.current) return;
 				setIssues(res?.issues ?? []);
 				setError(res?.error ?? null);
 			})
 			.catch(err => {
-				setError(err instanceof Error ? err.message : String(err));
+				if (seq === listRequestSeq.current) setError(err instanceof Error ? err.message : String(err));
 			});
 	}, [rpc, cwd, state, labelFilter, authorFilter]);
 	useEffect(load, [load]);
 	const filteredIssues = (issues ?? []).filter(i => matchesQuery(query, i.number, i.title));
+	useEffect(() => {
+		const visible = (issues ?? []).filter(i => matchesQuery(query, i.number, i.title));
+		setSelectedIssue(current => (visible.some(i => i.number === current) ? current : (visible[0]?.number ?? null)));
+	}, [issues, query]);
 	const linkQuery = isLinkQuery(query);
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex items-center justify-between gap-2 px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("issues")}</span>
-				<div className="gui-issue-filters">
-					<input
-						value={labelFilter}
-						onChange={e => setLabelFilter(e.target.value)}
-						placeholder={t("filter by label")}
-						aria-label={t("filter by label")}
-					/>
-					<input
-						value={authorFilter}
-						onChange={e => setAuthorFilter(e.target.value)}
-						placeholder={t("filter by author")}
-						aria-label={t("filter by author")}
-					/>
-					<Segmented<"open" | "closed" | "all">
-						ariaLabel={t("issues")}
-						value={state}
-						options={ISSUE_STATE_SEGMENTS}
-						onChange={setState}
-					/>
-				</div>
-			</div>
-			{error ? (
-				<div className="px-2 py-5 text-[12.5px] leading-relaxed text-[var(--color-text-faint)]">{error}</div>
-			) : issues && (linkQuery || filteredIssues.length > 0) ? (
-				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
-					{linkQuery && (
-						<button type="button" className="gui-changes-row" onClick={() => void openExternalUrl(query.trim())}>
-							<Icon name="external-link" className="h-3.5 w-3.5 flex-shrink-0" />
-							<span className="min-w-0 flex-1 truncate text-left">{t("general.prOpenLink")}</span>
-							<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{query.trim()}</span>
-						</button>
-					)}
-					{filteredIssues.map(issue => (
-						<button
-							key={issue.number}
-							type="button"
-							className={`gui-changes-row${selectedIssue === issue.number ? " gui-changes-row--active" : ""}`}
-							onClick={() => setSelectedIssue(prev => (prev === issue.number ? null : issue.number))}
-						>
-							<span
-								className={`gui-changes-badge ${issue.state === "open" ? "gui-pr-badge--open" : "gui-pr-badge--merged"}`}
-							>
-								{issue.state === "open" ? "O" : "C"}
-							</span>
-							<span className="min-w-0 flex-1 truncate text-left">
-								<span className="text-[var(--color-text-faint)]">#{issue.number}</span> {issue.title}
-							</span>
-							{issue.labels.slice(0, 3).map(label => (
-								<span
-									key={label.name}
-									className="gui-issue-label"
-									style={{
-										background: `#${label.color}22`,
-										color: `#${label.color}`,
-										borderColor: `#${label.color}44`,
-									}}
+		<div ref={paneRef} className="gui-pr-pane">
+			<PrWorkspace
+				narrow={narrow}
+				notice={error ? <div className="gui-pr-load-state gui-pr-error">{error}</div> : undefined}
+				itemLabel={selectedIssue === null ? t("pr select detail") : `#${selectedIssue}`}
+				filters={
+					<>
+						<input
+							value={labelFilter}
+							onChange={e => setLabelFilter(e.target.value)}
+							placeholder={t("filter by label")}
+							aria-label={t("filter by label")}
+						/>
+						<input
+							value={authorFilter}
+							onChange={e => setAuthorFilter(e.target.value)}
+							placeholder={t("filter by author")}
+							aria-label={t("filter by author")}
+						/>
+						<Segmented<"open" | "closed" | "all">
+							ariaLabel={t("issues")}
+							value={state}
+							options={ISSUE_STATE_SEGMENTS}
+							onChange={setState}
+						/>
+					</>
+				}
+				list={
+					issues ? (
+						<>
+							{linkQuery && (
+								<button
+									type="button"
+									className="gui-changes-row"
+									onClick={() => void openExternalUrl(query.trim())}
 								>
-									{label.name}
-								</span>
-							))}
-							{issue.comments.length > 0 && (
-								<span className="flex flex-shrink-0 items-center gap-0.5 text-[10.5px] text-[var(--color-text-faint)]">
-									<Icon name="chat-1" className="h-3 w-3" />
-									{issue.comments.length}
-								</span>
+									<Icon name="external-link" className="h-3.5 w-3.5 flex-shrink-0" />
+									<span className="min-w-0 flex-1 truncate text-left">{t("general.prOpenLink")}</span>
+								</button>
 							)}
-							<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
-								{new Date(issue.updatedAt).toLocaleDateString()}
-							</span>
-						</button>
-					))}
-					{selectedIssue !== null && <IssueDetail rpc={rpc} cwd={cwd} number={selectedIssue} onChanged={load} />}
-				</FadeScroll>
-			) : issues ? (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no open issues")}</div>
-			) : (
-				<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
-					{[0, 1, 2, 3].map(i => (
-						<div key={i} className="gui-skeleton-row" />
-					))}
-				</div>
-			)}
+							{filteredIssues.map(issue => (
+								<button
+									key={issue.number}
+									type="button"
+									className={`gui-changes-row gui-pr-list-row${selectedIssue === issue.number ? " gui-changes-row--active" : ""}`}
+									onClick={() => setSelectedIssue(issue.number)}
+								>
+									<span
+										className={`gui-changes-badge ${isOpenState(issue.state) ? "gui-pr-badge--open" : "gui-pr-badge--merged"}`}
+									>
+										{isOpenState(issue.state) ? "O" : "C"}
+									</span>
+									<span className="gui-pr-list-copy">
+										<span className="gui-pr-list-title">
+											<span className="text-[var(--color-text-faint)]">#{issue.number}</span> {issue.title}
+										</span>
+										<span className="gui-pr-list-meta">
+											{issue.labels.slice(0, 2).map(label => (
+												<span key={label.name} className="gui-issue-label">
+													{label.name}
+												</span>
+											))}
+											{issue.comments.length > 0 && (
+												<span>
+													<Icon name="chat-1" className="h-3 w-3" />
+													{issue.comments.length}
+												</span>
+											)}
+											<span>{new Date(issue.updatedAt).toLocaleDateString()}</span>
+										</span>
+									</span>
+								</button>
+							))}
+							{filteredIssues.length === 0 && <div className="gui-pr-load-state">{t("no open issues")}</div>}
+						</>
+					) : (
+						<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
+							{[0, 1, 2, 3].map(i => (
+								<div key={i} className="gui-skeleton-row" />
+							))}
+						</div>
+					)
+				}
+				detail={
+					issues ? (
+						selectedIssue !== null ? (
+							<IssueDetail key={selectedIssue} rpc={rpc} cwd={cwd} number={selectedIssue} onChanged={load} />
+						) : (
+							<div className="gui-pr-detail-empty">{t("pr select detail")}</div>
+						)
+					) : (
+						<div className="min-h-0 flex-1 px-1 py-1" aria-busy="true">
+							{[0, 1, 2, 3].map(i => (
+								<div key={i} className="gui-skeleton-row" />
+							))}
+						</div>
+					)
+				}
+			/>
 		</div>
 	);
 }
 
 /** 搜索过滤：普通文本按标题子串过滤；`#123` 精确匹配编号；http(s) 链接不
  * 过滤列表，由面板渲染一行「打开链接」。 */
+export function isOpenState(state: string): boolean {
+	return state.toUpperCase() === "OPEN";
+}
+
 export function matchesQuery(query: string, number: number, title: string): boolean {
 	const q = query.trim().toLowerCase();
 	if (!q) return true;
@@ -1132,38 +1373,40 @@ export function PrCenter({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 	};
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="gui-pr-search-row">
-				<label className="gui-ext-plugins-search gui-pr-search">
-					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
-					<input
-						value={query}
-						onChange={e => setQuery(e.target.value)}
-						placeholder={t("general.prSearchPlaceholder")}
-						aria-label={t("general.prSearchPlaceholder")}
-					/>
-				</label>
+			<div className="gui-pr-toolbar">
+				<div className="gui-pr-search-row">
+					<label className="gui-ext-plugins-search gui-pr-search">
+						<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
+						<input
+							value={query}
+							onChange={e => setQuery(e.target.value)}
+							placeholder={t("general.prSearchPlaceholder")}
+							aria-label={t("general.prSearchPlaceholder")}
+						/>
+					</label>
+				</div>
+				<div className="gui-pane-subtabs" role="tablist" aria-label={t("settings.pullRequests")}>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === "prs"}
+						className={`gui-pane-subtab${tab === "prs" ? " gui-pane-subtab--active" : ""}`}
+						onClick={() => pick("prs")}
+					>
+						{t("pull requests")}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === "issues"}
+						className={`gui-pane-subtab${tab === "issues" ? " gui-pane-subtab--active" : ""}`}
+						onClick={() => pick("issues")}
+					>
+						{t("issues")}
+					</button>
+				</div>
 			</div>
-			<div className="gui-pane-subtabs" role="tablist" aria-label={t("settings.pullRequests")}>
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "prs"}
-					className={`gui-pane-subtab${tab === "prs" ? " gui-pane-subtab--active" : ""}`}
-					onClick={() => pick("prs")}
-				>
-					{t("pull requests")}
-				</button>
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "issues"}
-					className={`gui-pane-subtab${tab === "issues" ? " gui-pane-subtab--active" : ""}`}
-					onClick={() => pick("issues")}
-				>
-					{t("issues")}
-				</button>
-			</div>
-			<div className="min-h-0 flex-1">
+			<div className="flex min-h-0 flex-1 flex-col">
 				{tab === "prs" ? (
 					<PrPane rpc={rpc} cwd={cwd} query={query} />
 				) : (

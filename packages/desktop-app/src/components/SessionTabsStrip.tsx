@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SESSION_TAB_EDGE_FADE_PX, sessionTabRevealDelta } from "../lib/session-tab-reveal";
 import { Icon } from "../vendor/oc-icons";
-import { MenuPopup } from "./MenuPopup";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 const restrictToXAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
@@ -44,35 +44,75 @@ export interface SessionTabRow {
 	unread: boolean;
 	/** Fresh draft (no messages yet) — the title renders italic. */
 	draft?: boolean;
+	cwd?: string;
 }
 
-/**
- * One tab. The whole tab is the drag handle (the mouse sensor's 8px
- * activation distance keeps a plain click a click); the close control sits
- * in a hover-revealed overlay so the title keeps its width. Middle click
- * closes without activating.
- */
+interface SessionTabActions {
+	onSelect(id: string): void;
+	onKeepOpen(id: string): void;
+	onRename(id: string): void;
+	onCopyId(id: string): void;
+	onExport(id: string): void;
+	onOpenMiniChat(id: string): void;
+	onMoveToWorktree(id: string): void;
+	onArchive(id: string): void;
+	onDelete(id: string): void;
+	onCloseOthers(id: string): void;
+	onClose(id: string): void;
+}
+
+function tabMenuItems(tab: SessionTabRow, isPreview: boolean, actions: SessionTabActions): ContextMenuItem[] {
+	return [
+		...(isPreview
+			? [{ label: t("keep tab open"), icon: "pushpin", onSelect: () => actions.onKeepOpen(tab.id) }]
+			: []),
+		{ label: t("settings.renameSession"), icon: "pencil", onSelect: () => actions.onRename(tab.id) },
+		{ label: t("transcript.copySessionId"), icon: "clipboard", onSelect: () => actions.onCopyId(tab.id) },
+		{ label: t("general.exportMarkdown"), icon: "download", onSelect: () => actions.onExport(tab.id) },
+		{ label: t("general.openMiniChat"), icon: "chat-1", onSelect: () => actions.onOpenMiniChat(tab.id) },
+		{
+			label: t("general.moveNewWorktree"),
+			icon: "folder-shared",
+			onSelect: () => actions.onMoveToWorktree(tab.id),
+		},
+		{ label: t("settings.archiveTask"), icon: "archive", onSelect: () => actions.onArchive(tab.id) },
+		{
+			label: t("general.deleteSession"),
+			icon: "delete-bin",
+			danger: true,
+			onSelect: () => actions.onDelete(tab.id),
+		},
+		{
+			label: t("close other tabs"),
+			icon: "subtract",
+			divider: true,
+			onSelect: () => actions.onCloseOthers(tab.id),
+		},
+		{ label: t("close tab"), icon: "close", onSelect: () => actions.onClose(tab.id) },
+	];
+}
+
 function SessionTabItem({
 	tab,
 	isActive,
-	onSelect,
-	onClose,
-	onCloseOthers,
-	onArchive,
-	children,
+	isPreview,
+	menuOpen,
+	onOpenMenu,
+	actions,
 }: {
 	tab: SessionTabRow;
 	isActive: boolean;
-	onSelect: (id: string) => void;
-	onClose: (id: string) => void;
-	onCloseOthers?: (id: string) => void;
-	onArchive?: (id: string) => void;
-	children?: ReactNode;
+	isPreview: boolean;
+	menuOpen: boolean;
+	onOpenMenu(id: string, x: number, y: number): void;
+	actions: SessionTabActions;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
 	const showDot = tab.working || (tab.unread && !isActive);
-	const [menuOpen, setMenuOpen] = useState(false);
-	const menuBtnRef = useRef<HTMLButtonElement | null>(null);
+	const select = (): void => {
+		if (isPreview) actions.onKeepOpen(tab.id);
+		if (!isActive) actions.onSelect(tab.id);
+	};
 	return (
 		<div
 			ref={setNodeRef}
@@ -86,133 +126,73 @@ function SessionTabItem({
 				aria-selected={isActive}
 				data-active-session-tab={isActive ? true : undefined}
 				className={`gui-session-tab group/session-tab${isActive ? " gui-session-tab--active" : ""}`}
-				onClick={isActive ? undefined : () => onSelect(tab.id)}
-				onKeyDown={
-					isActive
-						? undefined
-						: event => {
-								if (event.key === "Enter" || event.key === " ") {
-									event.preventDefault();
-									onSelect(tab.id);
-								}
-							}
-				}
+				onClick={select}
+				onDoubleClick={() => {
+					if (isPreview) actions.onKeepOpen(tab.id);
+				}}
+				onKeyDown={event => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						select();
+					}
+				}}
+				onContextMenu={event => {
+					event.preventDefault();
+					event.stopPropagation();
+					onOpenMenu(tab.id, event.clientX, event.clientY);
+				}}
 				onAuxClick={event => {
 					if (event.button === 1) {
 						event.preventDefault();
-						onClose(tab.id);
+						actions.onClose(tab.id);
 					}
 				}}
 			>
-				{/* The active tab hosts the header's title/switcher block; an
-					inactive tab is a plain title pill. */}
-				{isActive ? (
-					<div className="gui-session-tab-current min-w-0 flex-1">{children}</div>
-				) : (
-					<>
-						{/* Title + status; the row shrinks on hover so the text
-						 * fades under the controls instead of sliding. */}
-						<span className="gui-session-tab-main">
-							<span
-								className={`gui-session-tab-label${tab.draft ? " gui-session-tab-label--draft" : ""}`}
-								dir="auto"
-								title={tab.label}
-							>
-								{tab.label}
-							</span>
-							{showDot ? (
-								tab.working ? (
-									<Icon
-										name="loader-4"
-										className="gui-session-tab-working"
-										aria-label={t("session tab working")}
-									/>
-								) : (
-									<span className="gui-session-tab-unread" aria-label={t("session tab unread")} />
-								)
-							) : null}
-						</span>
-						{/* Hover-revealed overlay at the pill's end: session menu
-						 * first, close after it. Pins open while the menu is up. */}
-						<span className="gui-session-tab-controls" data-open={menuOpen ? "true" : undefined}>
-							<button
-								type="button"
-								ref={menuBtnRef}
-								aria-label={t("tab menu")}
-								aria-haspopup="menu"
-								aria-expanded={menuOpen}
-								className="gui-session-tab-ctl"
-								onClick={event => {
-									event.stopPropagation();
-									setMenuOpen(v => !v);
-								}}
-								onPointerDown={event => event.stopPropagation()}
-							>
-								<Icon name="more" className="h-3 w-3" />
-							</button>
-							<button
-								type="button"
-								aria-label={t("close tab")}
-								className="gui-session-tab-ctl"
-								onClick={event => {
-									event.stopPropagation();
-									onClose(tab.id);
-								}}
-								onPointerDown={event => event.stopPropagation()}
-							>
-								<Icon name="close" className="h-3 w-3" />
-							</button>
-							<MenuPopup
-								open={menuOpen}
-								className="gui-session-tab-menu"
-								anchor={menuBtnRef.current}
-								align="right"
-								onOpenChange={setMenuOpen}
-							>
-								<button
-									type="button"
-									className="gui-menu-item"
-									onClick={() => {
-										setMenuOpen(false);
-										onClose(tab.id);
-									}}
-								>
-									<Icon name="close" className="h-3.5 w-3.5" />
-									{t("close tab")}
-								</button>
-								{onCloseOthers ? (
-									<button
-										type="button"
-										className="gui-menu-item"
-										onClick={() => {
-											setMenuOpen(false);
-											onCloseOthers(tab.id);
-										}}
-									>
-										<Icon name="subtract" className="h-3.5 w-3.5" />
-										{t("close other tabs")}
-									</button>
-								) : null}
-								{onArchive ? (
-									<>
-										<div className="my-1 border-t border-[var(--border)]" role="separator" />
-										<button
-											type="button"
-											className="gui-menu-item"
-											onClick={() => {
-												setMenuOpen(false);
-												onArchive(tab.id);
-											}}
-										>
-											<Icon name="archive" className="h-3.5 w-3.5" />
-											{t("settings.archiveTask")}
-										</button>
-									</>
-								) : null}
-							</MenuPopup>
-						</span>
-					</>
-				)}
+				<span className="gui-session-tab-main">
+					<span
+						className={`gui-session-tab-label${tab.draft ? " gui-session-tab-label--draft" : ""}${isPreview ? " gui-session-tab-label--preview" : ""}`}
+						dir="auto"
+						title={tab.label}
+					>
+						{tab.label}
+					</span>
+					{showDot ? (
+						tab.working ? (
+							<Icon name="loader-4" className="gui-session-tab-working" aria-label={t("session tab working")} />
+						) : (
+							<span className="gui-session-tab-unread" aria-label={t("session tab unread")} />
+						)
+					) : null}
+				</span>
+				<span className="gui-session-tab-controls" data-open={menuOpen ? "true" : undefined}>
+					<button
+						type="button"
+						aria-label={t("tab menu")}
+						aria-haspopup="menu"
+						aria-expanded={menuOpen}
+						className="gui-session-tab-ctl"
+						onClick={event => {
+							event.stopPropagation();
+							const rect = event.currentTarget.getBoundingClientRect();
+							onOpenMenu(tab.id, rect.right, rect.bottom);
+						}}
+						onPointerDown={event => event.stopPropagation()}
+					>
+						<Icon name="more" className="h-3 w-3" />
+					</button>
+					<button
+						type="button"
+						aria-label={t("close tab")}
+						className="gui-session-tab-ctl"
+						onClick={event => {
+							event.stopPropagation();
+							actions.onClose(tab.id);
+						}}
+						onPointerDown={event => event.stopPropagation()}
+					>
+						<Icon name="close" className="h-3 w-3" />
+					</button>
+				</span>
 			</div>
 		</div>
 	);
@@ -220,35 +200,28 @@ function SessionTabItem({
 
 /**
  * The header's horizontal working set of sessions. Every session the user
- * opens joins the strip once; the active tab renders `children` — the
- * header's title/switcher block — inside its pill. Closing a tab only
+ * opens joins the strip once; every tab uses the same title structure.
+ * Closing a tab only
  * removes it from the strip; closing the active one activates its neighbour
  * (handled by the caller via onClose). Tabs whose session is not in `tabs`
  * stay stored upstream and simply do not render here.
  */
-export function SessionTabsStrip({
-	tabs,
-	activeId,
-	onSelect,
-	onClose,
-	onCloseOthers,
-	onArchive,
-	onReorder,
-	children,
-}: {
+export interface SessionTabsStripProps extends SessionTabActions {
 	tabs: SessionTabRow[];
 	activeId: string | null;
-	onSelect: (id: string) => void;
-	onClose: (id: string) => void;
-	onCloseOthers?: (id: string) => void;
-	onArchive?: (id: string) => void;
-	onReorder: (activeId: string, overId: string) => void;
-	children: ReactNode;
-}): ReactNode {
+	previewTabId: string | null;
+	onReorder(activeId: string, overId: string): void;
+}
+
+export function SessionTabsStrip(props: SessionTabsStripProps): ReactNode {
+	const { tabs, activeId, previewTabId, onReorder } = props;
 	const sensors = useSensors(
 		useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
 		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
 	);
+	const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+	const openMenu = useCallback((id: string, x: number, y: number): void => setMenu({ id, x, y }), []);
+	const menuTab = menu ? tabs.find(tab => tab.id === menu.id) : undefined;
 
 	const handleDragEnd = useCallback(
 		(event: DragEndEvent): void => {
@@ -320,17 +293,22 @@ export function SessionTabsStrip({
 								key={tab.id}
 								tab={tab}
 								isActive={tab.id === activeId}
-								onSelect={onSelect}
-								onClose={onClose}
-								onCloseOthers={onCloseOthers}
-								onArchive={onArchive}
-							>
-								{tab.id === activeId ? children : null}
-							</SessionTabItem>
+								isPreview={tab.id === previewTabId}
+								menuOpen={menu?.id === tab.id}
+								onOpenMenu={openMenu}
+								actions={props}
+							/>
 						))}
 					</SortableContext>
 				</DndContext>
 			</div>
+			<ContextMenu
+				open={menuTab !== undefined}
+				x={menu?.x ?? 0}
+				y={menu?.y ?? 0}
+				items={menuTab ? tabMenuItems(menuTab, menuTab.id === previewTabId, props) : []}
+				onClose={() => setMenu(null)}
+			/>
 		</div>
 	);
 }

@@ -1,7 +1,7 @@
 import "./happy-dom-shim"; // MUST be first: component module graphs define HTMLElement subclasses at evaluation time.
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test, vi } from "bun:test";
 import { setLocale } from "@musepi/client-core";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SettingsNav } from "../src/components/SettingsNav";
 import { computeSettingsShellState } from "../src/lib/settings-shell";
@@ -28,6 +28,9 @@ import { computeSettingsShellState } from "../src/lib/settings-shell";
 setLocale("zh-CN");
 afterAll(() => {
 	setLocale("en-US");
+});
+afterEach(() => {
+	vi.restoreAllMocks();
 });
 
 describe("computeSettingsShellState", () => {
@@ -115,5 +118,79 @@ describe("SettingsNav interaction", () => {
 		const rows = mount("model");
 		const active = rows.find(b => b.className.includes("gui-settings-nav--active"));
 		expect(active?.querySelector(".gui-settings-nav-label")?.textContent).toBe("模型与供应商");
+	});
+
+	test("collapsed search portals out, preserves the rail, and restores focus on Escape", async () => {
+		vi.spyOn(window, "matchMedia").mockReturnValue({
+			matches: true,
+			media: "(max-width: 900px)",
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		} as unknown as MediaQueryList);
+		function ControlledNav() {
+			const [query, setQuery] = useState("");
+			return createElement(SettingsNav, {
+				extTabs: [],
+				activeSection: "appearance",
+				onSelect: (id: string) => picked.push(id),
+				onBack: () => {},
+				query,
+				onQueryChange: setQuery,
+			});
+		}
+		act(() => root.render(createElement(ControlledNav)));
+		const railCount = host.querySelectorAll(".gui-settings-nav").length;
+		const fab = host.querySelector<HTMLButtonElement>(".gui-settings-search-fab")!;
+		act(() => fab.click());
+		expect(host.querySelector(".gui-settings-search-pop")).toBeNull();
+		const popup = document.body.querySelector(".gui-settings-search-pop");
+		expect(popup).not.toBeNull();
+		const input = popup!.querySelector<HTMLInputElement>("input")!;
+		const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
+		const props = (input as unknown as Record<string, { onChange(event: unknown): void }>)[propsKey]!;
+		input.value = "模型";
+		act(() => props.onChange({ target: input, currentTarget: input }));
+		expect(host.querySelectorAll(".gui-settings-nav").length).toBe(railCount);
+		const result = document.body.querySelector<HTMLButtonElement>(".gui-settings-search-pop-item")!;
+		act(() => result.click());
+		expect(picked).toContain("model");
+		await act(async () => Bun.sleep(150));
+		expect(document.body.querySelector(".gui-settings-search-pop")).toBeNull();
+		act(() => fab.click());
+		const reopenedInput = document.body.querySelector<HTMLInputElement>(".gui-settings-search-pop input")!;
+		act(() => reopenedInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+		await act(async () => Bun.sleep(150));
+		expect(document.body.querySelector(".gui-settings-search-pop")).toBeNull();
+		expect(document.activeElement).toBe(fab);
+	});
+
+	test("collapsed search closes its state as well as its popup on resize", async () => {
+		vi.spyOn(window, "matchMedia").mockReturnValue({
+			matches: true,
+			media: "(max-width: 900px)",
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		} as unknown as MediaQueryList);
+		act(() =>
+			root.render(
+				createElement(SettingsNav, {
+					extTabs: [],
+					activeSection: "appearance",
+					onSelect: () => {},
+					onBack: () => {},
+					query: "",
+					onQueryChange: () => {},
+				}),
+			),
+		);
+		const fab = host.querySelector<HTMLButtonElement>(".gui-settings-search-fab")!;
+		act(() => fab.click());
+		expect(document.body.querySelector(".gui-settings-search-pop")).not.toBeNull();
+		await act(async () => {
+			window.dispatchEvent(new Event("resize"));
+			await Bun.sleep(150);
+		});
+		expect(fab.getAttribute("aria-expanded")).toBe("false");
+		expect(document.body.querySelector(".gui-settings-search-pop")).toBeNull();
 	});
 });

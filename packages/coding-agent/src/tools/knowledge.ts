@@ -18,6 +18,7 @@ import {
 	deleteNote,
 	deletePlan,
 	deleteTodo,
+	getNote,
 	getPlan,
 	isValidKnowledgeId,
 	listNotes,
@@ -153,8 +154,21 @@ export class KnowledgeTool implements AgentTool<typeof knowledgeSchema, Knowledg
 		}
 
 		if (action === "show") {
-			if (kind !== "plan") throw new Error("show requires kind=plan");
+			if (!kind) throw new Error("show requires kind (note or plan)");
 			if (!id) throw new Error("show requires id");
+			if (!isValidKnowledgeId(id)) throw new Error("invalid id");
+			if (kind === "todo")
+				throw new Error("todo text is short — `list` returns it whole; show supports note and plan");
+			if (kind === "note") {
+				// `list` caps note previews at 80 chars; show returns the full
+				// body so the caller can answer "what does that note say".
+				const note = await getNote(projectId, id);
+				if (!note) throw new Error(`no note with id ${id}`);
+				return {
+					content: [{ type: "text", text: note.body }],
+					details: { action, kind, id, projectId },
+				};
+			}
 			const plan = await getPlan(projectId, id);
 			if (!plan) throw new Error(`no plan with id ${id}`);
 			// `show` puts the plan in FRONT OF THE USER, where they can read it —

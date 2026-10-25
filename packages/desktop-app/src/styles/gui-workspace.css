@@ -6227,10 +6227,272 @@ button.traj-error-note:hover {
 	white-space: nowrap;
 }
 
+/* First-class workspace pages share one quiet, consistent title skeleton. */
+.gui-workspace-header {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 10px;
+	padding: 14px 18px 10px;
+}
+
+.gui-workspace-header-main {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	min-width: 0;
+}
+
+.gui-workspace-header-back {
+	flex: 0 0 auto;
+	margin-top: 1px;
+}
+
+.gui-workspace-header-copy {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.gui-workspace-header-title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	min-height: 26px;
+}
+
+.gui-workspace-header-icon {
+	flex: 0 0 auto;
+	color: var(--color-accent);
+}
+
+.gui-workspace-header-title {
+	min-width: 0;
+	margin: 0;
+	font-size: 16px;
+	font-weight: 600;
+	line-height: 1.45;
+	letter-spacing: -0.01em;
+}
+
+.gui-workspace-header-meta {
+	display: flex;
+	min-width: 0;
+}
+
+.gui-workspace-header-description {
+	color: var(--color-text-faint);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.gui-workspace-header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.gui-workspace-header-tabs {
+	display: flex;
+	min-width: 0;
+	padding-left: 34px;
+}
+
+/* PR/issue workspace: list and reading pane share the available width. */
+.gui-pr-pane {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	gap: 8px;
+}
+
+.gui-pr-filter-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-pr-filter-row .gui-issue-filters {
+	display: flex;
+	grid-column: 2;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-pr-list-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	max-width: 220px;
+	min-height: 30px;
+	padding: 4px 9px;
+	border: 1px solid var(--glass-border, var(--border));
+	border-radius: var(--radius-lg);
+	background: var(--glass-bg);
+	color: var(--color-text);
+	box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+}
+
+.gui-pr-list-toggle span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-pr-workspace {
+	display: grid;
+	grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.35fr);
+	gap: 12px;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+.gui-pr-workspace--narrow {
+	display: block;
+}
+
+.gui-pr-workspace--narrow .gui-pr-detail-pane {
+	height: 100%;
+}
+
+.gui-pr-list,
+.gui-pr-detail-pane {
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	border: 1px solid var(--glass-border, var(--border));
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg);
+	box-shadow: var(--glass-shadow);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+}
+
+.gui-pr-detail-title {
+	overflow-wrap: anywhere;
+}
+
+.gui-pr-list-branches {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-pr-list {
+	padding: 6px;
+}
+
+.gui-pr-list-popup {
+	width: min(460px, calc(100vw - 16px));
+	padding: 0;
+	border: 1px solid var(--glass-border, var(--border));
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	box-shadow: var(--glass-shadow);
+}
+
+.gui-pr-list-popup .gui-pr-list {
+	max-height: min(560px, 70vh);
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.gui-pr-detail-pane {
+	border-top: 1px solid var(--glass-border, var(--border));
+}
+
+.gui-pr-list-row {
+	align-items: flex-start;
+	width: 100%;
+	padding: 9px 8px;
+	border-radius: var(--radius-lg);
+}
+
+.gui-pr-list-copy {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
+	text-align: left;
+}
+
+.gui-pr-list-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	font-weight: 500;
+}
+
+.gui-pr-list-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+	color: var(--color-text-faint);
+	font-size: 10.5px;
+}
+
+.gui-pr-list-meta > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.gui-pr-load-state,
+.gui-pr-detail-empty,
+.gui-pr-comments-empty {
+	padding: 18px 12px;
+	color: var(--color-text-faint);
+	font-size: 12.5px;
+	line-height: 1.6;
+}
+
 /* PR/issue board page (main view): title row + a reading-width body column. */
 .gui-prboard-title {
 	font-size: 15px;
 	font-weight: 600;
+}
+
+.gui-pr-toolbar {
+	display: grid;
+	grid-template-columns: minmax(220px, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	border-bottom: 1px solid var(--border);
+	margin-bottom: 6px;
+}
+
+.gui-pr-toolbar .gui-pane-subtabs {
+	border-bottom: 0;
+	margin-bottom: 0;
+}
+
+@container (max-width: 560px) {
+	.gui-pr-toolbar {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0;
+	}
 }
 
 /* 看板搜索行：胶囊占满内容宽（面板是横向 flex，继承 200px 基准宽）。 */
@@ -6251,9 +6513,8 @@ button.traj-error-note:hover {
 }
 
 .gui-prboard-body {
-	max-width: 880px;
-	margin: 0 auto;
 	width: 100%;
+	container-type: inline-size;
 }
 
 /* 无工作区时的引导空态（曾经挂着一个永远的「加载中…」——这里没有任何
@@ -6331,25 +6592,56 @@ button.traj-error-note:hover {
 	color: var(--color-accent);
 }
 
-/* 详情预览（行内展开）：正文、评论、检查项与操作区。 */
+/* 独立阅读列：正文、评论、检查项与操作区。 */
 .gui-pr-detail {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	margin: 8px;
-	padding: 12px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-xl);
-	background: var(--color-surface, transparent);
+	gap: 14px;
+	margin: 0;
+	padding: 16px 14px 24px;
+	min-width: 0;
 }
 
 .gui-pr-detail-body {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: 13px;
+	line-height: 1.65;
+}
+
+.gui-pr-comment-composer {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
+	padding-top: 12px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-pr-comment-composer label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+}
+
+.gui-pr-comment-composer textarea {
+	width: 100%;
+	min-height: 88px;
+	resize: vertical;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font: inherit;
 	font-size: 12.5px;
-	line-height: 1.6;
-	white-space: pre-wrap;
-	word-break: break-word;
-	max-height: 320px;
-	overflow-y: auto;
+	line-height: 1.55;
+}
+
+.gui-pr-comment-composer textarea:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
 }
 
 .gui-pr-detail-section {
@@ -6375,16 +6667,17 @@ button.traj-error-note:hover {
 
 .gui-pr-comment-meta {
 	display: flex;
-	gap: 6px;
+	justify-content: space-between;
+	gap: 8px;
 	font-size: 10.5px;
 	color: var(--color-text-faint);
 }
 
 .gui-pr-comment-body {
+	min-width: 0;
+	overflow-wrap: anywhere;
 	font-size: 12px;
-	line-height: 1.5;
-	white-space: pre-wrap;
-	word-break: break-word;
+	line-height: 1.55;
 }
 
 /* 合并方式选择 + 两步确认按钮。 */

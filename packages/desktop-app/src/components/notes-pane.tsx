@@ -752,6 +752,15 @@ export function NotesPane({
 		loadNotes();
 		loadPlans();
 	}, [loadNotes, loadPlans]);
+	// "Add to notes" from the chat selection toolbar writes through
+	// `notes.create` without this panel knowing; the GUI-local event keeps the
+	// list live instead of needing a tab switch to re-mount (user: 添加笔记后
+	// 要切走再回来才刷新).
+	useEffect(() => {
+		const onNotesChanged = (): void => loadNotes();
+		window.addEventListener("musepi-notes-changed", onNotesChanged);
+		return () => window.removeEventListener("musepi-notes-changed", onNotesChanged);
+	}, [loadNotes]);
 	// A plan belongs to its section and to this project; leaving either must
 	// not leave its editor open over a list it no longer matches. The query
 	// resets on project change (a query for the old project would hide

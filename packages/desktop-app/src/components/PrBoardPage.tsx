@@ -20,6 +20,7 @@ import { useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { PrCenter } from "./pr-center";
+import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 /** The board's own memory: which workspace it was last left on. */
 const BOARD_PROJECT_KEY = "musepi-prboard-project";
@@ -76,11 +77,13 @@ export function PrBoardPage({ rpc, onBack }: { rpc: RpcClient | null; onBack(): 
 	};
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
-				<div className="flex min-w-0 items-center gap-2">
-					<Icon name="git-pull-request" className="h-4 w-4 flex-shrink-0 text-[var(--color-text-muted)]" />
-					<span className="gui-prboard-title">{t("pr board")}</span>
-					{projects.length > 0 && cwd && (
+			<WorkspacePageHeader
+				icon="git-pull-request"
+				title={t("pr board")}
+				onBack={onBack}
+				backLabel={t("settings.backWorkspace")}
+				meta={
+					projects.length > 0 && cwd ? (
 						<details className="gui-prboard-picker">
 							<summary title={cwd} aria-label={t("general.tagWorkspace")}>
 								<span className="min-w-0 truncate">{dirBasename(cwd)}</span>
@@ -106,12 +109,9 @@ export function PrBoardPage({ rpc, onBack }: { rpc: RpcClient | null; onBack(): 
 								))}
 							</div>
 						</details>
-					)}
-				</div>
-				<button type="button" className="gui-btn" onClick={onBack}>
-					{t("settings.backWorkspace")}
-				</button>
-			</div>
+					) : undefined
+				}
+			/>
 			<div className="gui-prboard-body min-h-0 flex-1 px-4 pb-4">
 				{rpc && cwd ? (
 					<PrCenter rpc={rpc} cwd={cwd} />

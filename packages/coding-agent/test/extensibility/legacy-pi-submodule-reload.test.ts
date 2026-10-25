@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+	__collectLegacyPiExtensionSourcesForTests,
 	extensionEntriesNeedingReload,
 	loadLegacyPiModule,
 } from "@musepi/pi-coding-agent/extensibility/plugins/compat/legacy-pi-compat";
@@ -98,5 +99,30 @@ describe("extension source-graph change detection", () => {
 		// The next load re-walks and re-resolves; that only happens if the
 		// watcher was told.
 		expect(extensionEntriesNeedingReload([entry])).toEqual([entry]);
+	});
+
+	it("keeps type-only modules out of the runtime source graph", async () => {
+		const dir = await writePackage({
+			"index.ts": [
+				'import type { TypeOnly } from "./types.ts";',
+				'import type LegacyType = require("./legacy-types.cjs");',
+				'import { value } from "./value.ts";',
+				'export type { Other } from "./other.ts";',
+				'export { type ValueType, value as renamed } from "./value.ts";',
+				"export default function (pi) { void pi; void value; }",
+			].join("\n"),
+			"types.ts": "export interface TypeOnly { value: string }",
+			"legacy-types.cjs": "module.exports = {};",
+			"other.ts": "export interface Other { value: string }",
+			"value.ts": "export interface ValueType { value: number }\nexport const value = 1;",
+		});
+		const entry = path.join(dir, "index.ts");
+		const sources = await __collectLegacyPiExtensionSourcesForTests(entry);
+
+		expect(sources.has(await fs.realpath(entry))).toBe(true);
+		expect(sources.has(await fs.realpath(path.join(dir, "value.ts")))).toBe(true);
+		expect(sources.has(await fs.realpath(path.join(dir, "types.ts")))).toBe(false);
+		expect(sources.has(await fs.realpath(path.join(dir, "legacy-types.cjs")))).toBe(false);
+		expect(sources.has(await fs.realpath(path.join(dir, "other.ts")))).toBe(false);
 	});
 });

@@ -1,3 +1,15 @@
+---
+layout: default
+title: GUI 实现契约
+status: living
+summary: 桌面端与共享客户端 UI 的 daemon RPC、Electron IPC、生命周期和验证契约。
+scope:
+  - packages/desktop-app
+  - packages/client-core
+  - packages/coding-agent/src/daemon
+lang: zh-CN
+---
+
 # MusePi GUI 实现笔记(契约与坑)
 [English](gui-implementation.md) | 中文
 
@@ -80,6 +92,7 @@ daemon RPC:
 - **Provider 登录卡片**(SettingsView 供应商 tab,2026-08-06):`loginState` 面板从简陋版(URL 链接 + 文本)升级为 **device-flow 同款原生卡片**(`.gui-github-flow` 样式族)——标题 + 「打开登录页」主按钮(external-link)+ 取消链接 + 「等待登录…」spinner(非 waitingInput 时)+ 粘贴 code/URL 输入框(waitingInput 时)。渲染路径与 git device flow 卡片同构(事件驱动 provider-login → loginState)。
 - **添加账号** = GitHub OAuth Device Flow(client_id `178c6fc778ccc68e1d6a` 即 gh CLI 公开客户端;`github.authStart` POST /login/device/code → GUI 显示 user_code + 打开 verification_uri + 按 interval 轮询 `github.authPoll`(pending/slow_down 续轮询;拿到 access_token 后 `gh auth login --with-token` stdin 导入 gh keyring——**所有 gh RPC 立即生效**))。注意 gh 配置在 `$HOME/.config/gh`(token 在 macOS Keychain)——**隔离 HOME 的 daemon 看不到用户 gh 认证**(测试用 mock gh + GH_CONFIG_DIR 组合)。
 - **身份** = 提交身份列表(localStorage `musepi-gui-git-identities` + `musepi-gui-git-default-identity`,两步 prompt 新建,默认徽章,confirm 删除)——**git.commit 消费**(`-c` 注入)。**系统身份行**(2026-10-22):设置 Git tab 的身份区顶部新增一行只读的系统身份——daemon RPC `git.identity`(spawnSync `git config user.name` / `user.email`,local→global 链解析;`--local --get` 探测来源)返回 `{name, email, source}`;非仓库目录退化为全局配置且不报错。未写自定义身份时该行挂「默认」徽章,`source === "local"` 时挂「当前项目」徽章。
+- **Issue/PR 阅读与评论**：`github.issueView` / `github.prView` 为独立详情列供数；gh 状态串按大小写不敏感处理（`OPEN` 与 `open` 都表示开放）。PR 详情请求 gh 支持的 `reviewRequests` 字段，并归一化为 GUI 的 `reviewers` 数组。`github.issueComment` 和 `github.prComment` 接收 `{cwd, number, body}`，要求 number 为正整数、body 非空白，经 host-aware `runGh` 调用 `gh issue|pr comment <number> --body <body>`，返回 `{ok:true}` 或 `{error}`，不落盘评论内容。发表成功后清空输入框并刷新列表与详情。列表和详情请求用序号防止选择/筛选竞态，mutation 完成后不得重新加载已卸载条目。
 - **工作区变更面板**(openchamber GitView/ChangesPanel parity):三组(已暂存/未暂存/未跟踪 + 可选已忽略),每行 hover stage/unstage(`git.stage` = `git add -- <paths>`;`git.unstage` = `git restore --staged --` fallback `git reset HEAD --`),header 有平铺/树形视图切换 + Gitignored 开关(`git.status {ignored}` → `--ignored` 标志解析 `!!` 行)+ 提交按钮。
 - **项目笔记面板**(ContextPanel NotesPane,2026-08-06 openchamber 对齐):快速笔记(daemon notes.get/set,3000 字符上限 + `{n}/3000` 计数,**400ms debounce 自动保存 + blur 立即落盘**)+ **待办列表**(localStorage `musepi-gui-todos:<cwd>`;**openchamber 语义**:header「待办 {count} 项」、每项 120 字符、添加插入到第一个已完成项之前、勾选完成移到末尾(completed-last)、清除已完成按钮(0 完成时 disabled)、删除 ✕)+ **计划文件**(daemon `plans.list/get/save/delete`,存 `agentDir/plans/<cwdHash>/<时间戳>-<slug>.md`,格式 `# 标题\n\n内容`——标题从首行 `# heading` 解析;GUI:「计划 {count} 个文件」header + `+` 新建(两步 prompt:标题+内容)+ 列表(标题+日期+删除)+ 打开查看(等宽 pre))。**存储设计**:与 openchamber 的 `~/.config/openchamber/projects/<id>.json` 不同——musepi 用 agentDir 文件(与 notes 同款,不碰用户项目)。**未做**(说明):dnd 拖拽排序、待办发送到会话、文件导入、聊天消息「保存为计划」按钮、CodeMirror PlanView。
 - **prompt 对话框修复**(prompt-dialog.tsx,2026-08-06):确定按钮对 prompt 分支原来 `finish(true)` → 返回 **null(等于取消)**——prompt 只能靠 Enter 确认,点确定无效——改为 `state.kind === "prompt" ? finish(value.trim()) : finish(true)`。**bun build CSS 坑**:bun 的 CSS 解析器**不支持 `@layer` 裸语句**(`@layer a, b, c;` 报 Unexpected token,错误位置漂移到注释里的 `*` 误导调试)——**块形式** `@layer a {} @layer b {}` 可以(语义等价,声明层顺序)。base.css 的层顺序声明已用四空块替代。
@@ -161,6 +174,7 @@ daemon RPC:
 - **共享栈**：`useModalFocus` 记录 opener 并压入每个活跃 dialog；`isTopModal` 门控 Tab 与 Escape。仅栈顶锁焦或响应 Escape，底层保持打开。关闭栈顶后归还可连接的 opener；关闭底层或组件卸载不得从剩余栈顶抢焦点。消费者包括 `DialogFrame`、Promise prompt/confirm、client-core `ConfirmDialog`、`AgentDrawer`、`SessionsSheet`、`TaskModal`、能力抽屉、Board 放大卡、SketchPad、Onboarding/Announcement 与 ImageLightbox。RewardOverlay 自己注册共享栈并提供 dialog ARIA；AnnouncementOverlay 仅在非 reward 分支激活卡片 hook，因此 reward 切换到 Markdown 后仍会入栈。SessionsSheet 将 backdrop portal 到 `document.body`，带滤镜的 header 不得成为其 fixed 定位包含块。`CommandPalette` 保留自己的输入框焦点、方向键导航和 Escape 处理，不因名称含 palette 就隐式加入共享栈。
 - **确认键**：普通确认允许 Enter。Promise confirm 与 client-core `ConfirmDialog` 在 `destructive: true` 时都抑制 Enter；Promise 版本初始聚焦 Cancel，显式激活确认按钮仍可执行。只有确认框位于共享栈顶时 Escape 才取消。Promise prompt/confirm 在 180ms 出场后 settle；请求被替换或宿主卸载时也会 settle，不留下悬挂 Promise。
 - **临时表面**：共享 tooltip 初始化保留既有 `aria-describedby` token，支持悬停、焦点和触屏长按，提示本身不可聚焦。toast 在悬停或焦点内暂停，恢复时续算剩余时长；错误持续显示并 assertive 播报，其他级别使用 polite status 播报。
+- **面板空态与标签动效**：右侧零标签时，`.gui-panel-empty` 通过现有 flex 高度链让限宽自适应卡片 grid 垂直居中。`useTabMotion` 为 surface 与托管浏览器标签统一展示层 entering/closing：恢复不重播，打开 130ms、关闭 140ms；关闭中重开会取消退场，卸载会清理全部定时器。closing 项 inert、对辅助技术隐藏，并退出 roving tabindex 与 dnd items。业务标签仍立即关闭；浏览器 ref detach、guest-gone 和 main dispose 顺序绝不等动画。motion-off 与 reduced-motion 同时取消两类动画。
 
 ## 7. macOS 应用图标处理(2026-08-06 查证 + 修复)
 
@@ -200,6 +214,7 @@ daemon RPC:
 - **启动接管门（2026-10-22 修复）：probe→connect 启动路径从不跑回收器。** 回收器只在 `daemon-start`/`daemon-restart` 里运行。GUI 启动时探测 `ws.port` 后直接连上一个「上一个 GUI 已死」（崩溃，或被不可捕获信号杀死——见隐患 (3) 与 §8c）的 daemon，两条 IPC 都不会走到：孤儿被无限期沿用，`client.pid` 永远指向死进程，之后每次正常退出 `ownsDaemon()` 都是 false，daemon 随一次次重开客户端不断累积——正是「退出客户端时 daemon 没有跟着退出」的症状。修复：本地连接成功后，渲染端（`app.tsx` tryUrl）询问新增的 `daemon-orphaned` IPC——证据标准与回收器相同（注册表验证身份 + owner 已死，外来 daemon 永不报告）——随后分两种处置：daemon 空闲时重启（新代码 + 本 GUI 取得所有权）；`session.list` 显示有 working 会话时改用新增的 `daemon-adopt` IPC **收养**（回合跑到一半重启会丢回合）：收养把 `client.pid` 与注册表 `ownerPid` 改写为本 GUI，daemon 继续服务，之后的退出会把它拆掉。重启走 `daemon-restart`，同一启动 URL 有既有的 `capabilityRestarted` 集合兜底防重启循环。
 - **dev 重开现在走优雅退出（2026-10-22）——`--quit-request` 经单实例锁转发。** `relaunch-gui.mjs` / `dev-desktop.mjs` 过去用 `process.kill(pid, "SIGTERM")` 停掉旧 GUI；Windows 上那是 `TerminateProcess`（不可捕获），`before-quit` 从不触发，于是每次 dev 重开都恰好制造出上面那种孤儿。现在两个脚本先 spawn 壳自己的 main 入口并传 `--quit-request`：单实例锁把请求转给运行中的实例，其 `second-instance` 处理器看到标志后走正常退出路径（活跃会话防护跳过——程序化重开本身就是显式的重启意图，且旧的兜底行为是无对话框直接强杀；`killOwnedDaemon` 照常执行）。若没有实例在跑，helper 自己拿到锁、看到标志、在建窗之前退出。早于该处理器的实例或卡死的退出，会在约 9 秒宽限后落入旧的 SIGTERM/SIGKILL 清扫。
 - **退出路径**：`before-quit` → `killOwnedDaemon()` → 自己 spawn 的 daemon SIGTERM → SIGKILL 升级。所有权现在同样覆盖收养的孤儿：本 GUI spawn 过**或收养过**的 daemon 随退出销毁；外来 daemon（终端 `musepi serve`、开机自启、其他存活 GUI 的）照旧存活。
+- **关闭到托盘改为可选（2026-10-23），默认关闭即退出。** 窗口 `close` 门过去在非 darwin 上一律把窗口藏进托盘，于是应用（连同 daemon）在没有可见窗口的情况下继续跑、用户无从察觉——「我关了它但后端还在跑」。现在该门还要求 `readWindowBehavior().closeToTray === true`；默认（文件缺失）放行关闭，落到 `window-all-closed` → `before-quit`，上面那套 daemon 销毁必然执行。偏好存于 `<userData>/window-behavior.json`（由主进程持有——关闭门不能等 daemon 或渲染端），IPC 为 `window-behavior:get` / `window-behavior:set-close-to-tray`，`lib/electron.ts` 暴露为 `getCloseToTray`/`setCloseToTray`，开关在 设置 → 常规「关闭窗口时最小化到托盘」（仅 Windows/Linux；macOS 维持 Dock 持有窗口的惯例）。与 openchamber 对齐：其 `desktopMinimizeToTrayEnabled` 同为可选，默认关。
 - **崩溃存活是刻意选择，位置介于两家参考实现之间。** dsh 根本没有 daemon（一个 owned child，`process.once('disconnect')` 自尽，硬杀壳就带走 host）；openchamber 的后端同样随 app 退出，它的回收器只服务于外部 spawn 的 OpenCode 子进程。我们让 daemon 在崩溃后存活（丢一个正在跑的回合太贵），代价就是这套回收器——这正是 openchamber 对它无法掌控的那个 child 所做的同一笔交易。
 - **测试**：`test/daemon-registry.test.ts`（绝不误杀：未登记监听者、owner 存活、pid 被回收、死 pid 记账）+ `test/daemon-reaper-reclaim.test.ts`（确实回收：真实子进程监听、owner 已死、回收后端口关闭）+ `test/daemon-orphan-adopt.test.ts`（接管门：身份完整且 owner 已死时报告孤儿；owner 存活 / 外来监听 / 缺 ws.port 一律拒绝；收养把 `client.pid` 与注册表 `ownerPid` 移交给本进程、daemon 保持存活、非孤儿时无动作——测试使用私有 `MUSEPI_DAEMON_DIR`，绝不触碰真实注册表）。
 
@@ -259,7 +274,15 @@ daemon RPC:
 - **停止按钮**：账本状态 dispatched→completed/failed/canceled；`managed-browser:stop` → `webContents.stop()` + **关闭 agent tab**（Electron debugger 接受 `Runtime.terminateExecution` 但不中止脚本，关 tab 是唯一可靠硬中止——pending CDP 调用随 target 关闭而拒绝，daemon 工具快速失败）。detach 会让 pending sendCommand resolve 而非 reject，成功标记需在 tab 存活时才写（否则覆盖 canceled）。`Runtime.callFunctionOn` 已映射到 evaluate 活动。
 - 9229 remote-debugging 会把受管 view 也列成 target（agent 默认不会碰到；桥面只暴露受管 tabs）。
 
-### 10.1 最佳实践（使用 + 工程）
+### 10.1 Agent 活动、接管与操作快照（2026-10-25）
+
+- `electron/managed-browser-activity.cjs` 以 `${connectionId}:${cdpMessageId}` 为活动键。`dispatched → completed|failed|canceled` 只结束对应项，start/settle 都推送状态，`did-stop-loading` 不再结束无关输入。`state()` 优先投影当前 tab 的运行项，再选其他运行项，并给出 residency 使用的完整 `busyTabIds`；后台 tab 不会遮住或解冻其他 tab 的工作。
+- `managed-browser:takeover` 只把目标 tab 的运行项标为 canceled，不停止或销毁 guest；`ManagedBrowserPane` 随后调用现有会话 `onStop`。旧的 `managed-browser:stop` 硬中止（含关闭 agent tab）保持独立。回调沿 `ChatView → ContextPanel → BrowserPane` 传递。
+- worker 的 `BrowserOperationTracker` 经 `WorkerOutbound.activity` → `tab-supervisor` → `BrowserTool._onUpdate` 发出累计快照。`tab.*` helper 与增强句柄只上报动作/状态/目标，不含填写或输入文本。`RunResultOk.operations` 与最终 `BrowserToolDetails.operations` 保留同一列表，非取消失败也不丢。cmux 复用同一 tracker。原始 `page.*` 调用不猜测为高层动作。
+- `ToolCard` 把结构化 browser partial result 适配给共享 renderer；`browser-activity.ts` 为单卡步骤和 `buildToolRuns` 聚合提供解析。重试恢复要求 agent/tab、规范化参数（排除 timeout）、action 和 target 全部匹配且后续成功。已恢复失败仍留在展开历史中，但不计入汇总错误数。
+- `BrowserDeviceToolbar` 负责预设、宽高、显示比例和背景。`resolveViewportScale(fitScale, displayScale)` 只覆盖呈现；`syncDevice` 仍负责仿真布局，`managedBrowserSetZoom` 仍负责页面缩放。宽限制 320–7680、高限制 480–4320；`viewportOverflow` 让放大页面滚动。`BrowserControlOverlay` 经 portal 挂到根级、位于 z-900 页面宿主之上。`HostRect.clip` 在 transform 前的宿主本地坐标中应用 `viewportClip`，放大页面始终裁在真实 scrollport 内，不覆盖相邻 UI；webview 生命周期约束不变。
+
+### 10.2 最佳实践（使用 + 工程）
 
 **使用（desktop）**
 - 模式选择：看得到 agent 的页面 / 在面板里登录 → `browser.gui`；用自己的 Chrome 登录态/扩展/2FA → `browser.relay`；终端或无 GUI → headless（默认）；本地开发服务器 → 保持 `restrictToPublic` 关。
@@ -992,7 +1015,7 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 
 ## 54. 滚动锚定补 scroller 盒观察、顶栏减法与实例迁移、侧边通道角色语义（2026-10-21）
 
-**最新消息被 composer 遮挡的根因与修复**（`client-core` Transcript 跟随钉底 effect）：原 ResizeObserver 只 observe 内容盒（`.tr-root`）。视口尺寸变化——拖窗口、切布局、新开会话——只改滚动视口盒、不动内容盒，scrollTop 保持原位，底部几条消息滑进输入框底下；切走再切回之所以"又好了"，是重挂时的一次性重钉盖住了症状。修复：RO 同时 observe `scrollerRef`（视口盒），跟随期任何视口变化都重锚 live edge。EN 版滚动锚定条目已同步。
+**最新消息被 composer 遮挡的根因与修复**（`client-core` Transcript 跟随钉底 effect）：原 ResizeObserver 只 observe 内容盒（`.tr-root`）。视口尺寸变化——拖窗口、切布局、新开会话——只改滚动视口盒、不动内容盒，scrollTop 保持原位，底部几条消息滑进输入框底下；切走再切回之所以"又好了"，是重挂时的一次性重钉盖住了症状。修复：RO 同时 observe `scrollerRef`（视口盒）与内容后的 tail sibling，跟随期任何视口或尾部变化都重锚 live edge；上翻释放 `following` 后，tail 增长不得抢滚动。「回到底部」按钮经 `registerComposerInsetReader` 读取当前 composer inset 与浮动面板 clearance 并抬升 bottom；web 不注入 reader，保留 CSS 14px。EN 版滚动锚定条目已同步。
 
 **空态提示语轮播纪律**（`WelcomeComposer.tsx`）：placeholder 轮播 interval 依赖加 `focused`——失焦即停、聚焦回第 0 条；否则切专注模式时轮播与形态动画叠加造成卡顿。专注模式 tips 换行：形态动画期间隐藏 `.gui-tip`（`gui-morphing` 兄弟选择器）+ `max-width:100% text-wrap:balance`。
 
@@ -1001,3 +1024,15 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 **顶栏减法**：GuiHeader 移除 terminal / board / 右侧面板三个按钮；terminal 开关迁至 RightRail 底部组（新增 `terminalOpen`/`onToggleTerminal` prop，激活态 `gui-right-rail-btn--active`）；实例菜单整块迁出为 `InstanceButton.tsx`（自包含：system.meta 轮询、GitHub latest release 角标、hosts `/healthz` 可达性探测、browserHost 诊断，props 仅连接事实 + 增删改回调；`useSyncExternalStore` 第三参 getServerSnapshot 必填——静态渲染测试走 renderToStaticMarkup 会炸），挂侧栏 footer 左侧。GuiHeader 保留 `terminalOpen/onToggleTerminal`（开发服务器/项目动作要先开 dock）。app.tsx 实例 props 从 GuiHeader 调用点迁到 SessionSidebar 调用点。
 
 **侧边通道模型角色语义**（daemon `agent-session.ts #sideChannelModel` + 设置页选择器）：`sideChannelModel` 现在接受角色别名（`@tiny`、legacy `pi/tiny`、`*`）——经 `resolveModelRoleValue` 按角色分配实时解析，改角色模型即生效；纯 catalog id 仍走直查（旧配置兼容）；未知值回落会话模型。角色形状判定用新导出的 `isModelRoleAliasValue`（`model-resolver.ts`）。设置页选择器改为「跟随会话模型 / 跟随 TINY 角色 / 其余八个角色 / 具体模型」的顺序，存量具体模型仍可显示与选择。测试：`test/model-resolver.test.ts` 新增 `isModelRoleAliasValue` 5 例（@tiny 解析、legacy 前缀、* 别名、纯 id 否定、未配置自定义角色否定）。
+
+## 55. 顶栏会话 preview 标签与按 ID 菜单（2026-10-25）
+
+`lib/session-tabs.ts` 持有 preview 迁移 helper。`openPreviewTab` 在原索引替换旧 preview，不改变已固定的 id；没有 preview 时经既有上限逻辑追加。`pinPreviewTab` 与 `clearPreviewTab` 返回下一个 preview id；app 用独立键 `musepi-gui-session-preview-tab-id` 持久化，不与 ids/顺序键混存。关闭、关闭其他、删除同步更新两类持久化值；排序只改 ids/顺序。
+
+`SessionTabsStrip` 为「⋯」和右键构造同一组 `ContextMenuItem[]`。菜单回调接收所在行 id，而非当前 store id。`GuiHeader` 将回调接到既有重命名、剪贴板、只读 `session.snapshot` 导出、mini chat、`worktree.create` + `/move`、归档与删除路径。导出和工作树因此能对非当前会话执行，无需订阅或激活；归档同样不改变当前选择。标签行携带 `cwd` 供工作树 RPC 使用。
+
+最近会话 `MenuPopup` 由非 tab 标题和标签带外的紧凑按钮共享，因此 tab 模式保留新建与最近会话导航，且不改变标签标题盒。标签测试在 `afterAll` 恢复入口 locale，只移除自身 hosts。隔离 seed 在切换前记录 `preSeedLocale`，收尾恢复该精确值，最终文件分别验证英文与非英文入口。
+
+**验证**：`SESSION_TAB_TEST_ENTRY_LOCALE=zh-CN bun test packages/desktop-app/test/session-tabs-strip-00-isolation-seed.test.ts packages/desktop-app/test/session-tabs.test.ts packages/desktop-app/test/session-tabs-strip.test.tsx packages/desktop-app/test/session-tabs-strip.test.tsx-after.test.ts packages/desktop-app/test/session-tabs-strip.test.tsx-after.test.ts-locale.test.ts packages/desktop-app/test/session-markdown.test.ts` 覆盖迁移、持久化、尺寸、固定手势、每个按 ID 动作、tab 模式导航与跨文件隔离；将入口改为 `en-US` 验证另一方向。`bun --cwd=packages/desktop-app run check` 覆盖 Biome 与类型。
+
+当前的 display-context 传输、FilePane 引用生产者、子会话折叠和角色/回退模型思考等级契约见 **`docs/gui-context-and-session.md`**。

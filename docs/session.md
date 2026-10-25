@@ -1,3 +1,13 @@
+---
+layout: default
+title: Session storage and entry model
+status: living
+summary: Session JSONL persistence, entry tree semantics, migration, and runtime reconstruction.
+scope:
+  - packages/coding-agent/src/session
+  - packages/wire/src
+---
+
 # Session Storage and Entry Model
 English | [中文](session.zh-CN.md)
 

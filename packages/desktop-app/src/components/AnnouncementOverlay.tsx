@@ -14,6 +14,7 @@ import { activePet } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { PetSprite, usePetDecor } from "./PetSprite";
+import { Reveal } from "./Reveal";
 import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
 
 /** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
@@ -132,15 +133,31 @@ function OlderVersionRow({
 }): ReactNode {
 	const total = entry.counts.added + entry.counts.fixed + entry.counts.changed + entry.counts.removed;
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	// The markdown mounts on first expand (lazy render) but stays mounted
+	// afterwards so the collapse can animate back to zero height instead of
+	// popping out (the shared Reveal contract).
+	const [mounted, setMounted] = useState(false);
 	return (
 		<div style={VERSION_ROW_STYLE}>
-			<button type="button" style={FOLD_ROW_STYLE} onClick={onToggle} aria-expanded={expanded}>
+			<button
+				type="button"
+				style={FOLD_ROW_STYLE}
+				onClick={() => {
+					setMounted(true);
+					onToggle();
+				}}
+				aria-expanded={expanded}
+			>
 				<Chevron size={13} aria-hidden />
 				<span style={{ fontWeight: 600, color: "var(--fg)" }}>v{entry.version}</span>
 				{entry.date && <span style={DATE_STYLE}>{entry.date}</span>}
 				<span style={COUNT_BADGE_STYLE}>{t("announcement.announcementChangeswithcount", { count: total })}</span>
 			</button>
-			{expanded && <Markdown text={entry.markdown} />}
+			{mounted && (
+				<Reveal open={expanded}>
+					<Markdown text={entry.markdown} />
+				</Reveal>
+			)}
 		</div>
 	);
 }
@@ -187,6 +204,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	// Structured-view UI state, reset on every open (the peek re-open may
 	// serve different markdown than the boot push).
 	const [showFullLog, setShowFullLog] = useState(false);
+	const [fullLogMounted, setFullLogMounted] = useState(false);
 	const [expandedVersions, setExpandedVersions] = useState<ReadonlySet<string>>(() => new Set());
 	const [reducedMotion, setReducedMotion] = useState(false);
 	const cardRef = useModalFocus<HTMLDivElement>(open && !reward);
@@ -459,15 +477,23 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 						<button
 							type="button"
 							style={FOLD_ROW_STYLE}
-							onClick={() => setShowFullLog(v => !v)}
+							onClick={() => {
+								// Mount the (large) full log on first expand only —
+								// boot shouldn't pay its render cost until asked.
+								setFullLogMounted(true);
+								setShowFullLog(v => !v);
+							}}
 							aria-expanded={showFullLog}
 						>
 							{showFullLog ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
 							{t("announcement.announcementMorefixeswithcount", { count: remaining })}
 						</button>
 					)}
-					{/* The full log mounts lazily — only after the fold opens. */}
-					{showFullLog && <Markdown text={markdown} />}
+					{fullLogMounted && (
+						<Reveal open={showFullLog}>
+							<Markdown text={markdown} />
+						</Reveal>
+					)}
 					{older.length > 0 && (
 						<div>
 							<div style={{ ...DATE_STYLE, margin: "6px 0 2px", fontWeight: 600 }}>

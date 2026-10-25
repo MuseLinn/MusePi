@@ -1,3 +1,14 @@
+---
+layout: default
+title: Product naming conventions
+status: living
+summary: Naming boundaries for architecture, packages, and user-facing product language.
+scope:
+  - packages/client-core/src/i18n
+  - packages/coding-agent/src/i18n
+  - packages/desktop-app/src
+---
+
 # Naming Convention
 
 > Status: Active (2026-09-15). Applies to all user-facing surfaces (GUI, mobile, TUI, i18n strings).

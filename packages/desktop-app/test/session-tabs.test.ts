@@ -11,14 +11,20 @@
 import { describe, expect, it } from "bun:test";
 import {
 	adjacentTabId,
+	clearPreviewTab,
 	closeOtherTabIds,
 	closeTabAndActivateNeighbour,
 	ensureTabId,
+	loadPreviewTabId,
 	loadTabIds,
 	MAX_SESSION_TABS,
+	openPreviewTab,
+	pinPreviewTab,
 	removeTabId,
 	reorderTabIds,
+	SESSION_PREVIEW_TAB_ID_KEY,
 	SESSION_TAB_IDS_KEY,
+	savePreviewTabId,
 	saveTabIds,
 	tabIdAtIndex,
 } from "../src/lib/session-tabs";
@@ -134,5 +140,49 @@ describe("persistence", () => {
 		expect(loadTabIds(storage)).toEqual([]);
 		mem.set(SESSION_TAB_IDS_KEY, JSON.stringify(["a", 7, "", null, "b"]));
 		expect(loadTabIds(storage)).toEqual(["a", "b"]);
+	});
+
+	it("persists preview separately from tab order and clears it on close", () => {
+		const mem = new Map<string, string>();
+		const storage = {
+			getItem: (k: string) => mem.get(k) ?? null,
+			setItem: (k: string, v: string) => void mem.set(k, v),
+		};
+		saveTabIds(["a", "b"], storage);
+		savePreviewTabId("b", storage);
+		expect(loadTabIds(storage)).toEqual(["a", "b"]);
+		expect(loadPreviewTabId(storage)).toBe("b");
+		savePreviewTabId(clearPreviewTab("b", "b"), storage);
+		expect(loadPreviewTabId(storage)).toBeNull();
+		expect(loadTabIds(storage)).toEqual(["a", "b"]);
+		expect(mem.has(SESSION_PREVIEW_TAB_ID_KEY)).toBe(true);
+	});
+});
+
+describe("preview tabs", () => {
+	it("replaces only the previous preview in place", () => {
+		expect(openPreviewTab(["a", "b", "c"], "b", "d")).toEqual({ ids: ["a", "d", "c"], previewTabId: "d" });
+	});
+
+	it("does not downgrade a pinned tab or discard the current preview", () => {
+		expect(openPreviewTab(["a", "b", "c"], "b", "a")).toEqual({ ids: ["a", "b", "c"], previewTabId: "b" });
+	});
+
+	it("keeps a reopened preview as preview until the user pins it", () => {
+		expect(openPreviewTab(["a", "b"], "b", "b")).toEqual({ ids: ["a", "b"], previewTabId: "b" });
+		expect(pinPreviewTab("b", "b")).toBeNull();
+		expect(pinPreviewTab("b", "a")).toBe("b");
+	});
+
+	it("appends a first preview and preserves its identity across reorder", () => {
+		const opened = openPreviewTab(["a", "b"], null, "c");
+		expect(opened).toEqual({ ids: ["a", "b", "c"], previewTabId: "c" });
+		expect(reorderTabIds(opened.ids, "c", "a")).toEqual(["c", "a", "b"]);
+		expect(opened.previewTabId).toBe("c");
+	});
+
+	it("clears preview only when its own tab closes", () => {
+		expect(clearPreviewTab("b", "a")).toBe("b");
+		expect(clearPreviewTab("b", "b")).toBeNull();
 	});
 });

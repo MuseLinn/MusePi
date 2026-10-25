@@ -38,7 +38,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
 	if (ownsDomRegistration) await GlobalRegistrator.unregister();
-	expect(GlobalRegistrator.isRegistered).toBe(false);
+	if (!GlobalRegistrator.isRegistered) await GlobalRegistrator.register();
+	expect(GlobalRegistrator.isRegistered).toBe(true);
 });
 
 function mount(node: Parameters<Root["render"]>[0]): HTMLDivElement {

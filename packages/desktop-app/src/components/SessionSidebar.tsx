@@ -820,18 +820,15 @@ export function SessionSidebar({
 							title={t("general.expandCollapseAll")}
 							aria-label={t("general.expandCollapseAll")}
 							onClick={() => {
-								if (tab === "groups") {
-									// Custom groups only (import-created groups included):
-									// null/true → collapse all, false → expand all.
-									setGroupsAll(prev => prev === false);
-								} else {
-									// Toggle: any collapsed → expand all; all expanded → collapse all.
-									// (Was `length > 0`, which re-collapsed instead of expanding.)
-									// 子会话子树走同一方向：项目块与子树同收同展。
-									const collapse = collapsedProjects.length === 0 && !hasCollapsedSubtrees();
-									collapseAllProjects(collapse);
-									setAllSubtreesCollapsed(collapse);
-								}
+								const collapse =
+									tab === "groups"
+										? groupsAll === null
+											? !hasCollapsedSubtrees()
+											: groupsAll === true
+										: collapsedProjects.length === 0 && !hasCollapsedSubtrees();
+								if (tab === "groups") setGroupsAll(!collapse);
+								else collapseAllProjects(collapse);
+								setAllSubtreesCollapsed(collapse);
 							}}
 						>
 							<Icon name="expand-up-down" className="h-3.5 w-3.5" />

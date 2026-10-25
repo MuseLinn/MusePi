@@ -1,4 +1,11 @@
-import { ANNOTATION_ATTACH_EVENT } from "@musepi/client-core/src/annotation";
+import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
+import {
+	composeDisplayContextPrompt,
+	type DisplayContext,
+	type MessageDisplayContext,
+	messageDisplayContext,
+	normalizeDisplayContexts,
+} from "@musepi/client-core/src/messages/display-context";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -135,6 +142,7 @@ export interface ComposerProps {
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
 		deliverAs?: "prompt" | "steer" | "followUp" | "continue",
+		displayContext?: MessageDisplayContext,
 	): void;
 	onStop(): void;
 	rpc: RpcClient;
@@ -155,12 +163,9 @@ export interface ComposerProps {
 	/** Current model's exact effort ladder (getSupportedEfforts); undefined
 	 *  shows the full fixed ladder. */
 	thinkingEfforts?: readonly string[] | null;
-	/** Quoted message texts to prepend (引用回复 / Cmd+L 追加引用).
-	 *  Each renders as a card above the input; the list is append-only from
-	 *  the caller's side (quote buttons / global Cmd+L), cards close
-	 *  individually, everything clears on send. */
-	quotes: string[];
-	onQuotesChange(next: string[]): void;
+	/** Staged quote and annotation contexts. Their model text is derived at send. */
+	quotes: DisplayContext[];
+	onQuotesChange(next: DisplayContext[]): void;
 	/** User-message edit: load text into the composer. */
 	pendingEdit?: string | null;
 	onEditConsumed?(): void;
@@ -272,22 +277,22 @@ export function Composer({
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
 	const { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop } = useAttachments(rpc);
-	// 统一标注(浏览器页 / 会话内卡片):文本追加进草稿,标记截图走普通图片
-	// 附件管线 —— 一条事件同时带两样,发送时随消息一起给模型。addFiles 每个
-	// 渲染都是新函数,经 ref 引用,避免每次按键都重挂监听。
+	// Annotation screenshots use the ordinary attachment pipeline; their text
+	// stays in display context until send.
 	const addFilesRef = useRef(addFiles);
 	addFilesRef.current = addFiles;
+	const quotesRef = useRef(quotes);
+	quotesRef.current = quotes;
 	useEffect(() => {
 		const onAttach = (e: Event): void => {
-			const detail = (e as CustomEvent<{ text?: string; image?: File }>).detail;
-			const insertion = detail?.text;
-			if (!insertion) return;
-			setText(prev => (prev.length === 0 ? insertion : `${prev}\n\n${insertion}`));
-			if (detail?.image) void addFilesRef.current([detail.image]);
+			const detail = (e as CustomEvent<AnnotationAttachDetail>).detail;
+			if (!detail?.displayContext) return;
+			onQuotesChange([...quotesRef.current, detail.displayContext]);
+			if (detail.image) void addFilesRef.current([detail.image]);
 		};
 		window.addEventListener(ANNOTATION_ATTACH_EVENT, onAttach);
 		return () => window.removeEventListener(ANNOTATION_ATTACH_EVENT, onAttach);
-	}, []);
+	}, [onQuotesChange]);
 	// SketchPad (Codex 绘画 parity): open from the attach menu, from clicking
 	// a sketch chip (re-edit), or from an image lightbox's edit button
 	// (musepi-gui-sketch-open, wired by ChatView). editId targets an existing
@@ -972,10 +977,11 @@ export function Composer({
 		(group?: "steering" | "followUp", text?: string): Promise<void> => {
 			if (!rpc || !sessionId) return Promise.resolve();
 			return rpc
-				.request<{ text: string; images?: { type: string; data: string; mimeType: string }[] } | null>(
-					"session.queuedPop",
-					{ sessionId, group, text },
-				)
+				.request<{
+					text: string;
+					images?: { type: string; data: string; mimeType: string }[];
+					displayContext?: MessageDisplayContext;
+				} | null>("session.queuedPop", { sessionId, group, text })
 				.then(res => {
 					if (res?.text) {
 						setText(prev => {
@@ -991,6 +997,10 @@ export function Composer({
 					// re-attach before every re-send.
 					const restored = attachmentsFromWireImages(res?.images);
 					if (restored.length > 0) setAttachments(prev => [...prev, ...restored]);
+					if (res?.displayContext) {
+						const restoredContexts = normalizeDisplayContexts(res.displayContext);
+						onQuotesChange([...quotesRef.current, ...restoredContexts]);
+					}
 					// Optimistic removal — the next poll confirms.
 					if (group && text) {
 						setQueued(prev =>
@@ -1008,7 +1018,7 @@ export function Composer({
 				})
 				.catch(() => {});
 		},
-		[rpc, sessionId],
+		[rpc, sessionId, onQuotesChange],
 	);
 	const clearQueued = useCallback((): Promise<void> => {
 		if (!rpc || !sessionId) return Promise.resolve();
@@ -1322,9 +1332,7 @@ export function Composer({
 			// state array; these projections follow it).
 			const imageParts = attachmentImageParts(attachments);
 			const fileChips = attachmentFileChips(attachments);
-			const quotePrefix =
-				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-			const baseObjective = `${quotePrefix}${expandMentionTokens(objective, attachments)}`.trim();
+			const baseObjective = composeDisplayContextPrompt(quotes, expandMentionTokens(objective, attachments));
 			void (async () => {
 				let refs: string[] = [];
 				if (fileChips.length > 0) {
@@ -1513,15 +1521,13 @@ export function Composer({
 					.catch(() => {});
 				setGoalArmed(false);
 			}
-			const quotePrefix =
-				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
 			// Attachment mentions (Kimi parity): `@名` tokens become explicit
 			// references — image chips → `[图片:名]` (pixels ride the wire
 			// images channel as always), file chips → the existing
 			// `[Attachment] <workspace path>` line; tokens whose attachment is
 			// gone no longer resolve and stay verbatim.
 			const expanded = expandMentionTokens(payload, attachments);
-			const finalMsg = quotePrefix ? `${quotePrefix}${expanded}`.trim() : expanded;
+			const finalMsg = composeDisplayContextPrompt(quotes, expanded);
 			// TUI "." / "c" continue-shortcut parity: a bare dot or c (no
 			// quote/attachment) is the "continue working" signal — delivered
 			// as a hidden synthetic directive, not a visible user message.
@@ -1583,7 +1589,7 @@ export function Composer({
 					}
 					const wireText = refs.length > 0 ? `${refs.join("\n")}\n\n${finalMsg}`.trim() : finalMsg;
 					pushHistory(wireText);
-					onSend(wireText, imageParts, delivery);
+					onSend(wireText, imageParts, delivery, messageDisplayContext(quotes));
 					finishSend();
 				})();
 				return;
@@ -1596,6 +1602,7 @@ export function Composer({
 				// "/queue"/"=>" → followUp (after the current turn yields);
 				// "." / "c" → continue (hidden synthetic resume, TUI parity).
 				isContinueShortcut ? "continue" : delivery,
+				messageDisplayContext(quotes),
 			);
 			finishSend();
 		},
@@ -2399,11 +2406,12 @@ export function Composer({
 				)}
 				{quotes.length > 0 && (
 					<QuoteCards
-						quotes={quotes}
+						contexts={quotes}
 						onRemove={i => {
 							handledQuoteCountRef.current = 0;
 							onQuotesChange(quotes.filter((_, j) => j !== i));
 						}}
+						onChange={(index, context) => onQuotesChange(quotes.map((item, i) => (i === index ? context : item)))}
 					/>
 				)}
 				{/* Attachment-row "+" card target: all-types picker (no accept

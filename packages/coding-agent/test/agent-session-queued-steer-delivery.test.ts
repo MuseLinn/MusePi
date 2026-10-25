@@ -18,8 +18,10 @@ import * as path from "node:path";
 import { Agent } from "@musepi/pi-agent-core";
 import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";
 import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "@musepi/pi-coding-agent/session/messages";
@@ -39,7 +41,10 @@ describe("AgentSession queued steer delivery", () => {
 	let session: AgentSession;
 	const authStorages: AuthStorage[] = [];
 
-	beforeEach(() => {
+	beforeEach(async () => {
+		resetBundledPluginsLoaded();
+		resetMagicKeywordRegistry();
+		await ensureBundledPluginsLoaded(process.cwd());
 		tempDir = path.join(os.tmpdir(), `pi-steer-strand-${Snowflake.next()}`);
 		fs.mkdirSync(tempDir, { recursive: true });
 	});

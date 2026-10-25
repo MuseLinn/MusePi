@@ -9,7 +9,7 @@ export interface PromptSpec {
 	placeholder?: string;
 }
 
-export interface ConfirmOptions {
+interface ConfirmOptions {
 	destructive?: boolean;
 }
 

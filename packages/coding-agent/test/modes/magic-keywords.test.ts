@@ -1,10 +1,23 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
+import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { hasMagicKeyword, highlightMagicKeywords } from "@musepi/pi-coding-agent/modes/magic-keywords";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 
 beforeAll(async () => {
 	// Gradient palettes read the active theme's color mode.
 	await initTheme(false);
+});
+
+beforeEach(async () => {
+	resetBundledPluginsLoaded();
+	resetMagicKeywordRegistry();
+	await ensureBundledPluginsLoaded(process.cwd());
+});
+
+afterAll(() => {
+	resetMagicKeywordRegistry();
+	resetBundledPluginsLoaded();
 });
 
 describe("highlightMagicKeywords", () => {
@@ -71,6 +84,13 @@ describe("highlightMagicKeywords", () => {
 		expect(highlightMagicKeywords(text, undefined, 1)).toBe(highlightMagicKeywords(text, undefined, 0));
 		// Negative phase wraps too — -0.25 ≡ 0.75.
 		expect(highlightMagicKeywords(text, undefined, -0.25)).toBe(highlightMagicKeywords(text, undefined, 0.75));
+	});
+
+	it("does not paint or detect keywords when their plugin contributions are gone", () => {
+		resetMagicKeywordRegistry();
+		const text = "please ultrathink and orchestrate the workflowz";
+		expect(highlightMagicKeywords(text)).toBe(text);
+		expect(hasMagicKeyword(text)).toBe(false);
 	});
 });
 

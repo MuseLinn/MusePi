@@ -87,6 +87,8 @@ export interface HostRect {
 	height: number;
 	/** Viewport-preset fit: layout is `width` wide and visually scaled by this. */
 	scale?: number;
+	/** Scrollport clipping in the transformed host's local coordinates. */
+	clip?: { top: number; right: number; bottom: number; left: number };
 }
 
 export interface ManagedBrowserHostState {
@@ -97,6 +99,7 @@ export interface ManagedBrowserHostState {
 	paneVisible: boolean;
 	port: number | null;
 	activity: ManagedBrowserActivity | null;
+	busyTabIds: readonly string[];
 	agentActivity: boolean;
 	confirm: ManagedBrowserConfirmRequest | null;
 	error: string | null;
@@ -109,6 +112,7 @@ let state: ManagedBrowserHostState = {
 	paneVisible: false,
 	port: null,
 	activity: null,
+	busyTabIds: [],
 	agentActivity: false,
 	confirm: null,
 	error: null,
@@ -454,7 +458,11 @@ export function setPaneRect(rect: HostRect | null): void {
 		current.y === rect.y &&
 		current.width === rect.width &&
 		current.height === rect.height &&
-		(current.scale ?? 1) === (rect.scale ?? 1)
+		(current.scale ?? 1) === (rect.scale ?? 1) &&
+		(current.clip?.top ?? 0) === (rect.clip?.top ?? 0) &&
+		(current.clip?.right ?? 0) === (rect.clip?.right ?? 0) &&
+		(current.clip?.bottom ?? 0) === (rect.clip?.bottom ?? 0) &&
+		(current.clip?.left ?? 0) === (rect.clip?.left ?? 0)
 	) {
 		return;
 	}
@@ -566,11 +574,11 @@ async function thawTab(tabId: string): Promise<void> {
 export function enforceResidency(): void {
 	const tabs = state.tabs;
 	if (tabs.length <= RESIDENCY_LIMIT) return;
-	const busyTabId = state.activity?.status === "dispatched" ? state.activity.tabId : null;
+	const busyTabIds = new Set(state.busyTabIds);
 	const idleBefore = Date.now() - RESIDENCY_IDLE_MS;
 	const eligible = (tab: ManagedTab): boolean =>
 		tab.id !== state.activeId &&
-		tab.id !== busyTabId &&
+		!busyTabIds.has(tab.id) &&
 		!tab.loading &&
 		!tab.blank &&
 		!tab.frozen &&
@@ -586,6 +594,10 @@ export function enforceResidency(): void {
 
 export async function stopAgentOp(tabId?: string): Promise<void> {
 	await window.electronAPI?.managedBrowserStop(tabId);
+}
+
+export async function takeoverAgentOp(tabId?: string): Promise<void> {
+	await window.electronAPI?.managedBrowserTakeover(tabId);
 }
 
 export async function clearData(mode: "cookies" | "all"): Promise<void> {
@@ -627,6 +639,7 @@ export function wireHost(): void {
 		set({
 			port: push.port ?? null,
 			activity: push.activity ?? null,
+			busyTabIds: push.busyTabIds,
 			agentActivity: push.agentActivity === true,
 		});
 	});
@@ -639,7 +652,7 @@ export function wireHost(): void {
 	api.onManagedBrowserSelectTab(input => selectTab(input.tabId));
 	api.onManagedBrowserCloseTab(input => closeTab(input.tabId));
 	void api.managedBrowserGetState().then(snapshot => {
-		set({ port: snapshot.port ?? null, activity: snapshot.activity ?? null });
+		set({ port: snapshot.port ?? null, activity: snapshot.activity ?? null, busyTabIds: snapshot.busyTabIds });
 	});
 	// Long-lived sets can exceed the cap without any new tab (restored tabs
 	// all arrive at once); re-check periodically rather than only on create.

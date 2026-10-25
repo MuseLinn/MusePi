@@ -1,3 +1,13 @@
+---
+layout: default
+title: Declarative assembly and boot verification
+status: living
+summary: Product surfaces, managed extensions, selectable seams, and fail-loud assembly validation.
+scope:
+  - musepi.assembly.toml
+  - packages/coding-agent/src
+---
+
 # MusePi Assembly — Declarative Assembly and Boot Verification
 
 [English](assembly.md) | [中文](assembly.zh-CN.md)

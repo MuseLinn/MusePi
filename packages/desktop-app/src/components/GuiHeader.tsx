@@ -110,10 +110,14 @@ export function GuiHeader({
 	onOpenCollab,
 	onDeleteSession,
 	tabs,
+	previewTabId,
 	onSelectTab,
+	onKeepOpenTab,
 	onCloseTab,
 	onCloseOtherTabs,
 	onArchiveTab,
+	onExportSession,
+	onOpenMiniChat,
 	onReorderTabs,
 }: {
 	store: GuiSessionStore | null;
@@ -154,15 +158,18 @@ export function GuiHeader({
 	 *  resets the UI when it was the active session. Returns success. */
 	onDeleteSession(sessionId: string): Promise<boolean>;
 	/** Header tab strip rows (multi-session tabs); empty/undefined renders the
-	 *  single-session title only. The active tab hosts the title switcher
-	 *  block; closing a tab never deletes the session. */
+	 *  single-session title only. Closing a tab never deletes the session. */
 	tabs?: SessionTabRow[];
+	previewTabId?: string | null;
 	onSelectTab?(id: string): void;
+	onKeepOpenTab?(id: string): void;
 	onCloseTab?(id: string): void;
 	/** Close every tab except this one and activate it. */
 	onCloseOtherTabs?(id: string): void;
 	/** Archive the tab's session (local archive list + undo toast). */
 	onArchiveTab?(id: string): void;
+	onExportSession?(sessionId: string, title: string): Promise<boolean>;
+	onOpenMiniChat?(sessionId: string): void;
 	onReorderTabs?(activeId: string, overId: string): void;
 }): ReactNode {
 	const noopSubscribe = (): (() => void) => () => {};
@@ -514,13 +521,14 @@ export function GuiHeader({
 	const title = sessionLabel?.trim() ? sessionLabel : sessionTitle;
 
 	const { prompt } = usePrompt();
-	const renameActiveSession = (): void => {
-		if (!store) return;
-		const current = title;
+	const renameSessionById = (sessionId: string, current: string): void => {
 		void prompt({ title: t("settings.renameSession"), defaultValue: current }).then(next => {
 			if (!next || next === current) return;
-			onRenameSession(store.sessionId, next);
+			onRenameSession(sessionId, next);
 		});
+	};
+	const renameActiveSession = (): void => {
+		if (store) renameSessionById(store.sessionId, title);
 	};
 
 	/** Export the active session transcript as a downloadable Markdown file
@@ -586,8 +594,8 @@ export function GuiHeader({
 	 *
 	 *  A killed/streaming session cannot move: `/move` refuses while streaming
 	 *  and the handler reports it, which the toast surfaces. */
-	const moveToNewWorktree = async (): Promise<void> => {
-		if (!rpc || !store) return;
+	const moveToNewWorktree = async (sessionId = store?.sessionId, cwd = store?.cwd): Promise<void> => {
+		if (!rpc || !sessionId || !cwd) return;
 		const suggested = `musepi/session-${Date.now().toString(36)}`;
 		const branch = await prompt({
 			title: t("general.moveNewWorktree"),
@@ -597,7 +605,7 @@ export function GuiHeader({
 		if (!branch) return;
 		const created = await rpc
 			.request<{ path?: string; error?: string }>("worktree.create", {
-				cwd: store.cwd,
+				cwd,
 				branch,
 			})
 			.catch((err: unknown): { path?: string; error?: string } => ({
@@ -609,7 +617,7 @@ export function GuiHeader({
 		}
 		const moved = await rpc
 			.request<{ consumed?: boolean; reason?: string }>("session.slashCommand", {
-				sessionId: store.sessionId,
+				sessionId,
 				text: `/move ${created.path}`,
 			})
 			.catch(() => null);
@@ -660,121 +668,6 @@ export function GuiHeader({
 			? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 			: d.toLocaleDateString([], { month: "short", day: "numeric" });
 	};
-
-	// The session-title switcher block: rendered bare in single-session mode,
-	// or as the active tab's content when the multi-session tab strip is on.
-	// Tab mode subtracts: the active tab is a plain
-	// title — no avatar, no remote/ceiling chips, no second row. Those
-	// details live in the sidebar row and the right rail, not on every tab.
-	const tabbed = tabs !== undefined && tabs.length > 0;
-	const titleBlock = (
-		<>
-			<div className="gui-header-title">
-				<button
-					type="button"
-					ref={switcherBtnRef}
-					data-header-trigger="switcher"
-					className="gui-header-title-btn"
-					title={t("general.recentSessions")}
-					aria-label={t("general.recentSessions")}
-					onClick={() => setSwitcherOpen(v => !v)}
-				>
-					<span className="gui-header-title-row">
-						{store && !tabbed && <AgentAvatar state={orb} size={20} />}
-						<span className="min-w-0 truncate text-[14px] font-medium text-[var(--color-text)]" title={title}>
-							{title}
-						</span>
-						{remote && !tabbed && (
-							<span className="gui-remote-chip" title={t("settings.remoteWorkspace")}>
-								<Icon name="server" className="h-3 w-3" />
-								{t("settings.remote2")}
-							</span>
-						)}
-						{ceiling && !tabbed && (
-							<span className="hidden text-[12px] text-[var(--color-text-faint)] md:inline">
-								{t("settings.thinking2")} · {ceiling}
-							</span>
-						)}
-					</span>
-					{!tabbed && (
-						<span className="gui-header-subrow">
-							{gitBranch && (
-								<span className="gui-header-chip" title={`${t("general.gitBranch")} · ${gitBranch}`}>
-									<Icon name="git-branch" className="h-2.5 w-2.5" />
-									{gitBranch}
-								</span>
-							)}
-							<span
-								className="min-w-0 truncate text-[10.5px] text-[var(--color-text-faint)]"
-								title={store ? projectLabel : project ? projectName(project) : t("general.local")}
-							>
-								{store ? projectLabel : project ? projectName(project) : t("general.local")}
-							</span>
-							{ctxChip && (
-								<span className="gui-header-chip" title={t("general.contextUsage")}>
-									{t("ctx percent", { percent: Math.round(ctxChip.percent) })}
-								</span>
-							)}
-						</span>
-					)}
-				</button>
-				<MenuPopup
-					open={switcherOpen}
-					className="gui-header-title-menu"
-					portal
-					anchor={switcherBtnRef.current}
-					onOpenChange={setSwitcherOpen}
-				>
-					<button
-						type="button"
-						className="gui-header-session-row"
-						onClick={() => {
-							setSwitcherOpen(false);
-							onNewSession();
-						}}
-					>
-						<Icon name="chat-new" className="h-4 w-4 text-[var(--color-text-faint)]" />
-						<span className="truncate text-[13px] text-[var(--color-text)]">{t("settings.newSession")}</span>
-					</button>
-					<div className="my-1 border-t border-[var(--border)]" />
-					{sessions.length === 0 ? (
-						<div className="px-3 py-4 text-center text-[12px] text-[var(--color-text-faint)]">
-							{t("settings.selectSession")}
-						</div>
-					) : (
-						sessions.map(s => {
-							const active = store?.sessionId === s.id;
-							return (
-								<button
-									key={s.id}
-									type="button"
-									className={`gui-header-session-row${active ? " gui-header-session-row--active" : ""}`}
-									title={s.id}
-									onClick={() => {
-										setSwitcherOpen(false);
-										onSelectSession(s.id);
-									}}
-								>
-									<StateIcon
-										on={active}
-										pair={["chat-thread", "chat-1"]}
-										className="h-3.5 w-3.5 flex-shrink-0"
-									/>
-									<span className="min-w-0 flex-1 truncate">
-										{s.label.trim() || t("transcript.untitledSession")}
-									</span>
-									{active && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-									<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
-										{fmtSessionTime(s.timestamp)}
-									</span>
-								</button>
-							);
-						})
-					)}
-				</MenuPopup>
-			</div>
-		</>
-	);
 
 	return (
 		<header
@@ -935,17 +828,41 @@ export function GuiHeader({
 				{/* Session title = switcher trigger: clicking opens 新建会话 +
 				 * recent sessions. Essential when the sidebar is collapsed. */}
 				{tabs && tabs.length > 0 ? (
-					<SessionTabsStrip
-						tabs={tabs}
-						activeId={store?.sessionId ?? null}
-						onSelect={onSelectTab ?? (() => {})}
-						onClose={onCloseTab ?? (() => {})}
-						onCloseOthers={onCloseOtherTabs ?? (() => {})}
-						onArchive={onArchiveTab ?? (() => {})}
-						onReorder={onReorderTabs ?? (() => {})}
-					>
-						{titleBlock}
-					</SessionTabsStrip>
+					<>
+						<button
+							type="button"
+							ref={switcherBtnRef}
+							data-header-trigger="switcher"
+							className="gui-tool-btn h-6 w-6 flex-shrink-0"
+							title={t("general.recentSessions")}
+							aria-label={t("general.recentSessions")}
+							onClick={() => setSwitcherOpen(v => !v)}
+						>
+							<Icon name="chat-thread" className="h-3.5 w-3.5" />
+						</button>
+						<SessionTabsStrip
+							tabs={tabs}
+							activeId={store?.sessionId ?? null}
+							previewTabId={previewTabId ?? null}
+							onSelect={onSelectTab ?? (() => {})}
+							onKeepOpen={onKeepOpenTab ?? (() => {})}
+							onRename={id => renameSessionById(id, tabs.find(tab => tab.id === id)?.label ?? "")}
+							onCopyId={id => void copyToClipboard(id)}
+							onExport={id => {
+								const label = tabs.find(tab => tab.id === id)?.label ?? t("transcript.untitledSession");
+								void onExportSession?.(id, label).then(ok => {
+									if (!ok) toast(t("general.exportFailed"), "error");
+								});
+							}}
+							onOpenMiniChat={id => onOpenMiniChat?.(id)}
+							onMoveToWorktree={id => void moveToNewWorktree(id, tabs.find(tab => tab.id === id)?.cwd)}
+							onArchive={onArchiveTab ?? (() => {})}
+							onDelete={id => void onDeleteSession(id)}
+							onClose={onCloseTab ?? (() => {})}
+							onCloseOthers={onCloseOtherTabs ?? (() => {})}
+							onReorder={onReorderTabs ?? (() => {})}
+						/>
+					</>
 				) : (
 					<div className="gui-header-title">
 						<button
@@ -997,64 +914,62 @@ export function GuiHeader({
 								)}
 							</span>
 						</button>
-						<MenuPopup
-							open={switcherOpen}
-							className="gui-header-title-menu"
-							portal
-							anchor={switcherBtnRef.current}
-							onOpenChange={setSwitcherOpen}
-						>
-							<button
-								type="button"
-								className="gui-header-session-row"
-								onClick={() => {
-									setSwitcherOpen(false);
-									onNewSession();
-								}}
-							>
-								<Icon name="chat-new" className="h-4 w-4 text-[var(--color-text-faint)]" />
-								<span className="truncate text-[13px] text-[var(--color-text)]">
-									{t("settings.newSession")}
-								</span>
-							</button>
-							<div className="my-1 border-t border-[var(--border)]" />
-							{sessions.length === 0 ? (
-								<div className="px-3 py-4 text-center text-[12px] text-[var(--color-text-faint)]">
-									{t("settings.selectSession")}
-								</div>
-							) : (
-								sessions.map(s => {
-									const active = store?.sessionId === s.id;
-									return (
-										<button
-											key={s.id}
-											type="button"
-											className={`gui-header-session-row${active ? " gui-header-session-row--active" : ""}`}
-											title={s.id}
-											onClick={() => {
-												setSwitcherOpen(false);
-												onSelectSession(s.id);
-											}}
-										>
-											<StateIcon
-												on={active}
-												pair={["chat-thread", "chat-1"]}
-												className="h-3.5 w-3.5 flex-shrink-0"
-											/>
-											<span className="min-w-0 flex-1 truncate">
-												{s.label.trim() || t("transcript.untitledSession")}
-											</span>
-											{active && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-											<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
-												{fmtSessionTime(s.timestamp)}
-											</span>
-										</button>
-									);
-								})
-							)}
-						</MenuPopup>
 					</div>
 				)}
+				<MenuPopup
+					open={switcherOpen}
+					className="gui-header-title-menu"
+					portal
+					anchor={switcherBtnRef.current}
+					onOpenChange={setSwitcherOpen}
+				>
+					<button
+						type="button"
+						className="gui-header-session-row"
+						onClick={() => {
+							setSwitcherOpen(false);
+							onNewSession();
+						}}
+					>
+						<Icon name="chat-new" className="h-4 w-4 text-[var(--color-text-faint)]" />
+						<span className="truncate text-[13px] text-[var(--color-text)]">{t("settings.newSession")}</span>
+					</button>
+					<div className="my-1 border-t border-[var(--border)]" />
+					{sessions.length === 0 ? (
+						<div className="px-3 py-4 text-center text-[12px] text-[var(--color-text-faint)]">
+							{t("settings.selectSession")}
+						</div>
+					) : (
+						sessions.map(s => {
+							const active = store?.sessionId === s.id;
+							return (
+								<button
+									key={s.id}
+									type="button"
+									className={`gui-header-session-row${active ? " gui-header-session-row--active" : ""}`}
+									title={s.id}
+									onClick={() => {
+										setSwitcherOpen(false);
+										onSelectSession(s.id);
+									}}
+								>
+									<StateIcon
+										on={active}
+										pair={["chat-thread", "chat-1"]}
+										className="h-3.5 w-3.5 flex-shrink-0"
+									/>
+									<span className="min-w-0 flex-1 truncate">
+										{s.label.trim() || t("transcript.untitledSession")}
+									</span>
+									{active && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
+									<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
+										{fmtSessionTime(s.timestamp)}
+									</span>
+								</button>
+							);
+						})
+					)}
+				</MenuPopup>
 				{/* Session-title menu: horizontal
 				 * ellipsis; rename / copy id / share / export / worktree /
 				 * archive / delete. */}

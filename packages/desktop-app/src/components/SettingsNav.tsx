@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SectionId, SectionRequest } from "../lib/settings-nav";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { MenuPopup } from "./MenuPopup";
 
 /**
  * The settings navigation column as a controlled component (2026-09-24 slot
@@ -378,28 +379,25 @@ export function SettingsNav({
 	const collapsedNav = useCollapsedNav();
 	const [searchOpen, setSearchOpen] = useState(false);
 	const searchFabRef = useRef<HTMLButtonElement | null>(null);
-	const searchPopRef = useRef<HTMLDivElement | null>(null);
-	// Content-boundary feather (transcript parity): the nav column scrolls
-	// inside the slot — the shared hook flips its data-top-scroll /
-	// data-bottom-scroll mask attrs.
+	const wasCollapsed = useRef(collapsedNav);
 	const navRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(navRef);
-	// Collapsed mode: close the floating search panel on any pointer-down
-	// outside it (the FAB itself toggles, so it is excluded).
-	useEffect(() => {
-		if (!searchOpen) return;
-		const onDown = (e: MouseEvent) => {
-			const target = e.target as Node;
-			if (searchPopRef.current?.contains(target) || searchFabRef.current?.contains(target)) return;
-			setSearchOpen(false);
-		};
-		document.addEventListener("mousedown", onDown);
-		return () => document.removeEventListener("mousedown", onDown);
-	}, [searchOpen]);
 	const closeSearch = useCallback(() => {
 		setSearchOpen(false);
 		onQueryChange("");
+		searchFabRef.current?.focus();
 	}, [onQueryChange]);
+	useEffect(() => {
+		if (wasCollapsed.current === collapsedNav) return;
+		wasCollapsed.current = collapsedNav;
+		closeSearch();
+	}, [collapsedNav, closeSearch]);
+	useEffect(() => {
+		if (!searchOpen) return;
+		const close = (): void => closeSearch();
+		window.addEventListener("resize", close);
+		return () => window.removeEventListener("resize", close);
+	}, [searchOpen, closeSearch]);
 	return (
 		<nav className="gui-settings-nav-col flex h-full w-full flex-shrink-0 flex-col overflow-hidden">
 			<div className="gui-settings-nav-head">
@@ -417,16 +415,27 @@ export function SettingsNav({
 						title={t("settings.searchSettings")}
 						aria-label={t("settings.searchSettings")}
 						aria-expanded={searchOpen}
-						onClick={() => setSearchOpen(open => !open)}
+						aria-controls="gui-settings-search-pop"
+						onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
 					>
 						<Icon name="search" className="h-4 w-4" />
 					</button>
-					{searchOpen && (
-						<div ref={searchPopRef} className="gui-settings-search-pop" role="dialog">
+					<MenuPopup
+						open={searchOpen}
+						className="gui-settings-search-popup"
+						anchor={searchFabRef.current}
+						onOpenChange={open => (open ? setSearchOpen(true) : closeSearch())}
+					>
+						<div
+							id="gui-settings-search-pop"
+							className="gui-settings-search-pop"
+							role="dialog"
+							aria-label={t("settings.searchSettings")}
+						>
 							<div className="gui-settings-search-pop-input">
 								<Icon name="search" className="h-3.5 w-3.5 flex-none" />
 								<input
-									// eslint-disable-next-line jsx-a11y/no-autofocus -- the panel only opens from an explicit click, so focusing the field is the expected continuation.
+									// eslint-disable-next-line jsx-a11y/no-autofocus -- explicit search-button activation continues into the field.
 									autoFocus
 									className="gui-input min-w-0 flex-1"
 									value={query}
@@ -435,8 +444,9 @@ export function SettingsNav({
 									aria-label={t("settings.searchSettings")}
 									onKeyDown={e => {
 										if (e.key === "Escape") {
+											e.preventDefault();
 											e.stopPropagation();
-											setSearchOpen(false);
+											closeSearch();
 										}
 									}}
 								/>
@@ -477,7 +487,7 @@ export function SettingsNav({
 								)}
 							</div>
 						</div>
-					)}
+					</MenuPopup>
 				</div>
 			) : (
 				<label className="gui-settings-search">
@@ -503,7 +513,7 @@ export function SettingsNav({
 				</label>
 			)}
 			<div ref={navRef} className="gui-settings-nav-scroll" data-top-scroll="false" data-bottom-scroll="false">
-				{filterNavGroups(groups, query).map(group => (
+				{filterNavGroups(groups, collapsedNav ? "" : query).map(group => (
 					<div key={group.title} className="mb-1">
 						<div className="gui-settings-nav-group">{group.title}</div>
 						{group.items.map(item => (

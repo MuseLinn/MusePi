@@ -18,7 +18,7 @@ import {
 	releaseBrowser,
 } from "./browser/registry";
 import { resolveRelayKind } from "./browser/relay/kind";
-import type { Observation, ScreenshotResult } from "./browser/tab-protocol";
+import type { BrowserOperation, Observation, ScreenshotResult } from "./browser/tab-protocol";
 import {
 	type AcquireTabResult,
 	acquireTab,
@@ -87,6 +87,7 @@ export interface BrowserToolDetails {
 	viewport?: { width: number; height: number; deviceScaleFactor?: number };
 	observation?: Observation;
 	screenshots?: ScreenshotResult[];
+	operations?: BrowserOperation[];
 	result?: string;
 	meta?: OutputMeta;
 }
@@ -318,7 +319,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 				case "close":
 					return await this.#close(name, params, details, timeoutMs, signal);
 				case "run":
-					return await this.#run(name, params, details, timeoutMs, signal);
+					return await this.#run(name, params, details, timeoutMs, signal, _onUpdate);
 				default:
 					throw new ToolError(`Unsupported action: ${(params as BrowserParams).action}`);
 			}
@@ -460,6 +461,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 		details: BrowserToolDetails,
 		timeoutMs: number,
 		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<BrowserToolDetails>,
 	): Promise<AgentToolResult<BrowserToolDetails>> {
 		if (!params.code?.trim()) {
 			throw new ToolError("Missing required parameter 'code' for action 'run'.");
@@ -470,13 +472,29 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			details.url = tab.info.url;
 		}
 
-		const { displays, returnValue, screenshots } = await runInTab(name, {
+		const run = await runInTab(name, {
 			code: params.code,
 			timeoutMs,
 			signal,
 			session: this.session,
+			onOperations: current => {
+				details.operations = current;
+				onUpdate?.({ content: [], details: { ...details } });
+			},
+		}).catch(error => {
+			if (signal?.aborted || error instanceof ToolAbortError) throw error;
+			details.result = error instanceof Error ? error.message : String(error);
+			return null;
 		});
+		if (!run)
+			return toolResult(details)
+				.text(details.result ?? "Browser run failed")
+				.error()
+				.done();
+		const { displays, returnValue, screenshots, operations = [] } = run;
 
+		details.url = getTab(name)?.info.url ?? details.url;
+		details.operations = operations;
 		if (screenshots.length) details.screenshots = screenshots;
 
 		const content = [...displays];

@@ -8,7 +8,7 @@
  */
 import "./happy-dom-shim"; // MUST be first: component module graphs define HTMLElement subclasses at evaluation time.
 import { describe, expect, it } from "bun:test";
-import { isLinkQuery, matchesQuery } from "../src/components/pr-center";
+import { isLinkQuery, isOpenState, matchesQuery } from "../src/components/pr-center";
 
 describe("matchesQuery", () => {
 	it("passes everything on an empty or whitespace query", () => {
@@ -33,6 +33,15 @@ describe("matchesQuery", () => {
 		// The panes branch on isLinkQuery before filtering; matchesQuery just
 		// must not crash and not pretend the URL is a title substring.
 		expect(matchesQuery("https://github.com/a/b/issues/1", 1, "anything")).toBe(false);
+	});
+});
+
+describe("isOpenState", () => {
+	it("treats gh's uppercase and lowercase open states as open only", () => {
+		expect(isOpenState("OPEN")).toBe(true);
+		expect(isOpenState("open")).toBe(true);
+		expect(isOpenState("CLOSED")).toBe(false);
+		expect(isOpenState("MERGED")).toBe(false);
 	});
 });
 

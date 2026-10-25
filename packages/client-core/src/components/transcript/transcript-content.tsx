@@ -5,15 +5,28 @@
  * helper. Extracted from Transcript.tsx — the windowed list, Row chrome and
  * EntryRow dispatch stay there; they import from this module.
  */
-import type { AssistantMessage, ImageContent, SessionEntry, TextContent, ToolResultMessage } from "@musepi/pi-wire";
+import type {
+	AssistantMessage,
+	ImageContent,
+	MessageDisplayContext,
+	SessionEntry,
+	TextContent,
+	ToolResultMessage,
+} from "@musepi/pi-wire";
 import { ChevronRight, Undo2 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { createElement, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
-
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
+import {
+	type DisplayContext,
+	displayContextQuote,
+	normalizeDisplayContexts,
+	textWithoutDisplayContext,
+} from "../../messages/display-context";
 import type { ToolRenderHost } from "../../tool-render";
+import { type BrowserOperationAction, browserActionLabel } from "../../tool-render/tools/browser-activity";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
@@ -77,12 +90,32 @@ export function ThinkingBlock({
 	const [showAll, setShowAll] = useState(false);
 	const shownSentences = showAll ? sentences : sentences.slice(0, MAX_THINK_SENTENCES);
 	const thinkTruncated = !showAll && sentences.length > MAX_THINK_SENTENCES;
+	// Settled first-line preview: a collapsed, finished think block shows its
+	//  opening line next to the label so the row says WHAT was reasoned about,
+	//  not just that thinking happened. Streaming blocks keep the shimmer
+	//  label-only look.
+	const previewLine = useMemo(() => {
+		if (redacted || streaming || open) return null;
+		const line = text
+			.split("\n")
+			.map(l => l.trim())
+			.find(l => l.length > 0);
+		if (!line) return null;
+		return line.length > 80 ? `${line.slice(0, 80)}…` : line;
+	}, [text, redacted, streaming, open]);
 	return (
 		<div className="tr-think">
 			<button type="button" className="tr-think-head" onClick={toggle}>
 				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
-				<span className={redacted ? undefined : "tr-think-label"}>{t("settings.thinking2")}</span>
+				<span
+					className={
+						redacted ? undefined : streaming ? "tr-think-label" : "tr-think-label tr-think-label--settled"
+					}
+				>
+					{t("settings.thinking2")}
+				</span>
 				{redacted ? t("transcript.redacted") : ""}
+				{previewLine && <span className="tr-think-preview">{previewLine}</span>}
 			</button>
 			<div
 				ref={bodyRef}
@@ -440,19 +473,74 @@ export function UserText({ text, plain, collapse }: { text: string; plain: boole
 	);
 }
 
+function DisplayContextCard({
+	context,
+	onJumpToMessage,
+}: {
+	context: DisplayContext;
+	onJumpToMessage?(messageId: string): void;
+}): ReactNode {
+	const [expanded, setExpanded] = useState(false);
+	const source =
+		context.kind === "browser-annotation"
+			? context.pageUrl
+			: context.kind === "file-quote"
+				? context.path
+				: t("settings.quoteReply");
+	return (
+		<div className="tr-display-context">
+			{context.kind === "chat-quote" && context.messageId ? (
+				<button
+					type="button"
+					className="tr-display-context-source"
+					onClick={() => onJumpToMessage?.(context.messageId!)}
+				>
+					{source}
+				</button>
+			) : (
+				<span className="tr-display-context-source">{source}</span>
+			)}
+			<div className={`tr-display-context-quote${expanded ? "" : " tr-display-context-quote--clamped"}`}>
+				{displayContextQuote(context)}
+			</div>
+			<button
+				type="button"
+				className="tr-display-context-toggle"
+				aria-expanded={expanded}
+				onClick={() => setExpanded(current => !current)}
+			>
+				{t(expanded ? "tools.collapse" : "tools.expand")}
+			</button>
+			{context.comment?.trim() ? <div className="tr-display-context-comment">{context.comment}</div> : null}
+		</div>
+	);
+}
+
 export function UserMsgContent({
 	content,
 	plain,
 	collapse,
+	displayContext,
+	onJumpToMessage,
 	onPreviewImage,
 }: {
 	content: string | readonly (TextContent | ImageContent)[];
 	plain: boolean;
 	collapse: boolean;
+	displayContext?: MessageDisplayContext;
+	onJumpToMessage?(messageId: string): void;
 	/** Open the full-size image preview lightbox at this message image
 	 *  (all of the message's images form the gallery). */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
 }): ReactNode {
+	const contexts = normalizeDisplayContexts(displayContext);
+	const cards = contexts.map((context, index) => (
+		<DisplayContextCard key={`${context.kind}-${index}`} context={context} onJumpToMessage={onJumpToMessage} />
+	));
+	const userText = (text: string): ReactNode => {
+		const remainder = textWithoutDisplayContext(text, displayContext);
+		return remainder ? <UserText text={remainder} plain={plain} collapse={collapse} /> : null;
+	};
 	// All image blocks of this message, in order — the preview gallery.
 	const images = useMemo(() => {
 		if (typeof content === "string") return [];
@@ -460,14 +548,22 @@ export function UserMsgContent({
 			.filter((b): b is ImageContent => b.type === "image")
 			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("settings.attachment") }));
 	}, [content]);
-	if (typeof content === "string") return <UserText text={content} plain={plain} collapse={collapse} />;
+	if (typeof content === "string") {
+		if (contexts.length === 0) return <UserText text={content} plain={plain} collapse={collapse} />;
+		return (
+			<>
+				{cards}
+				{userText(content)}
+			</>
+		);
+	}
 	return (
 		<>
 			{content.map((block, i) => {
 				switch (block.type) {
 					case "text":
 						// Anonymous content blocks have no stable id — index is identity.
-						return <UserText key={`t${i}`} text={block.text} plain={plain} collapse={collapse} />;
+						return <Fragment key={`t${i}`}>{userText(block.text)}</Fragment>;
 					case "image":
 						// A lone image keeps its in-flow position (the old
 						// thumbnail's spot); multiple images collapse into
@@ -482,6 +578,7 @@ export function UserMsgContent({
 				}
 			})}
 			{images.length > 1 && <ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />}
+			{cards}
 		</>
 	);
 }
@@ -686,6 +783,71 @@ export function ToolRunLine({
 	if (run.commands > 0) {
 		segments.push(<span key="cmds">{t("transcript.runCommandWithCount", { count: String(run.commands) })}</span>);
 	}
+	if (run.browser) {
+		const order: BrowserOperationAction[] = [
+			"click",
+			"fill",
+			"select",
+			"press",
+			"scroll",
+			"screenshot",
+			"type",
+			"goto",
+			"evaluate",
+			"drag",
+			"hover",
+			"wait",
+		];
+		const actions = order
+			.filter(action => run.browser?.actions[action])
+			.map(action => ({ action, summary: run.browser!.actions[action]! }))
+			.sort(
+				(left, right) =>
+					right.summary.count - left.summary.count || order.indexOf(left.action) - order.indexOf(right.action),
+			);
+		const visible = actions.slice(0, 2);
+		if (run.browser.pages > 0) {
+			segments.push(
+				<span key="browser-pages">
+					{t("transcript.runBrowserPagesWithCount", { count: String(run.browser.pages) })}
+				</span>,
+			);
+		}
+		for (const { action, summary } of visible) {
+			segments.push(
+				<span key={`browser-${action}`}>
+					{t("transcript.runBrowserActionWithCount", {
+						action: browserActionLabel(action),
+						count: String(summary.count),
+					})}
+					{summary.failed > 0 ? ` (${t("tools.failed")} ${summary.failed})` : ""}
+				</span>,
+			);
+		}
+		if (run.browser.pages === 0 && visible.length === 0) {
+			segments.push(
+				<span key="browser-calls">
+					{t("transcript.runBrowserCallsWithCount", { count: String(run.browser.calls) })}
+				</span>,
+			);
+		}
+		const remainingFailures =
+			run.browser.residualFailures - visible.reduce((total, item) => total + item.summary.failed, 0);
+		if (remainingFailures > 0) {
+			segments.push(
+				<span key="browser-failures">
+					{t("transcript.runBrowserFailuresWithCount", { count: String(remainingFailures) })}
+				</span>,
+			);
+		}
+		if (run.browser.recoveredFailures > 0) {
+			segments.push(
+				<span key="browser-retries">
+					{t("transcript.runBrowserRetriesWithCount", { count: String(run.browser.recoveredFailures) })}
+				</span>,
+			);
+		}
+	}
 	if (run.other > 0) {
 		segments.push(<span key="other">{t("transcript.runOtherWithCount", { count: String(run.other) })}</span>);
 	}
@@ -854,6 +1016,7 @@ export function AssistantBody({
 	hideToolActivity = false,
 	textOnly = false,
 	showTokenUsage = false,
+	usageHere = false,
 	smoothStreaming = true,
 	taskCardStyle = "swarm",
 	/** Turn-final aggregated file artifacts (本轮文件卡片展示在最底部):
@@ -890,6 +1053,10 @@ export function AssistantBody({
 	textOnly?: boolean;
 	/** display.showTokenUsage parity: gate the per-turn usage row. */
 	showTokenUsage?: boolean;
+	/** The usage row renders on the ROUND's final reply only — every assistant
+	 *  message in the wire carries usage, so gating by showTokenUsage alone
+	 *  stamped a raw stat line under every tool-call row. */
+	usageHere?: boolean;
 	/** display.smoothStreaming parity: false disables the reveal. */
 	smoothStreaming?: boolean;
 	/** display.taskCardStyle parity: "classic" swaps the swarm member grid
@@ -1000,7 +1167,7 @@ export function AssistantBody({
 			) : roundDuration !== undefined ? (
 				<WorkingLine start={0} freezeMs={roundDuration} meta={modelLevelMeta(message.model, thinkingLevel)} />
 			) : null}
-			{showTokenUsage && !pending && !failed && message.duration !== undefined && (
+			{showTokenUsage && usageHere && !pending && !failed && message.duration !== undefined && (
 				<div className="tr-usage">{usageRow(message)}</div>
 			)}
 		</>

@@ -102,13 +102,14 @@ function advisorEntry(noteCount: number): SessionEntry {
 	};
 }
 
-function transcriptEl(entries: readonly SessionEntry[]): ReactNode {
+function transcriptEl(entries: readonly SessionEntry[], extras: Record<string, unknown> = {}): ReactNode {
 	return createElement(Transcript, {
 		entries,
 		stream: null,
 		streamDone: true,
 		activeTools: new Map(),
 		working: false,
+		...extras,
 	});
 }
 
@@ -259,5 +260,102 @@ describe("round-fold manual expansion is not overwritten by re-derivation", () =
 		// The expanded fold renders its hidden-span rows again.
 		expect(container.querySelector(".tr-fold-slot--open")).not.toBeNull();
 		await act(async () => root.unmount());
+	});
+});
+
+class TailResizeObserver {
+	static instances: TailResizeObserver[] = [];
+	readonly observed: HTMLElement[] = [];
+	readonly callback: ResizeObserverCallback;
+
+	constructor(callback: ResizeObserverCallback) {
+		this.callback = callback;
+		TailResizeObserver.instances.push(this);
+	}
+
+	observe(element: Element): void {
+		this.observed.push(element as HTMLElement);
+	}
+
+	unobserve(_element: Element): void {}
+	disconnect(): void {}
+
+	trigger(): void {
+		this.callback([], this as unknown as ResizeObserver);
+	}
+}
+
+async function mountWithTail(): Promise<Mounted & { tail: HTMLElement; scroller: HTMLElement }> {
+	const container = document.createElement("div");
+	document.body.appendChild(container);
+	const root = createRoot(container);
+	await act(async () => {
+		root.render(
+			createElement(
+				"div",
+				null,
+				transcriptEl([userEntry(1), assistantText(2)]),
+				createElement("div", { className: "gui-chat-tail-spacer" }),
+			),
+		);
+	});
+	const tail = container.querySelector<HTMLElement>(".gui-chat-tail-spacer")!;
+	const scroller = container.querySelector<HTMLElement>(".tr-root")!;
+	return { container, root, tail, scroller };
+}
+
+describe("composer tail geometry", () => {
+	it("observes the tail sibling and re-pins its growth only while following", async () => {
+		const original = globalThis.ResizeObserver;
+		TailResizeObserver.instances = [];
+		globalThis.ResizeObserver = TailResizeObserver as unknown as typeof ResizeObserver;
+		const mounted = await mountWithTail();
+		try {
+			defineScrollerGeometry(mounted.scroller, { scrollTop: 1200, clientHeight: 800, scrollHeight: 2000 });
+			const observer = TailResizeObserver.instances.find(candidate => candidate.observed.includes(mounted.tail));
+			expect(observer).toBeDefined();
+			defineScrollerGeometry(mounted.scroller, { scrollTop: 1200, clientHeight: 800, scrollHeight: 2200 });
+			await act(async () => observer!.trigger());
+			expect(mounted.scroller.scrollTop).toBe(2200);
+
+			defineScrollerGeometry(mounted.scroller, { scrollTop: 400, clientHeight: 800, scrollHeight: 2200 });
+			await act(async () => {
+				wheelUp(mounted.scroller);
+				fireScroll(mounted.scroller);
+			});
+			defineScrollerGeometry(mounted.scroller, { scrollTop: 400, clientHeight: 800, scrollHeight: 2400 });
+			await act(async () => observer!.trigger());
+			expect(mounted.scroller.scrollTop).toBe(400);
+		} finally {
+			await act(async () => mounted.root.unmount());
+			globalThis.ResizeObserver = original;
+		}
+	});
+
+	it("registers the back-to-bottom button as a composer inset reader", async () => {
+		let reader: HTMLElement | null = null;
+		const registerComposerInsetReader = (element: HTMLElement | null): (() => void) | undefined => {
+			reader = element;
+			element?.style.setProperty("--chat-composer-inset", "48px");
+			return element ? () => {} : undefined;
+		};
+		const { container, root } = await mount(
+			transcriptEl([userEntry(1), assistantText(2)], { registerComposerInsetReader }),
+		);
+		try {
+			const scroller = container.querySelector<HTMLElement>(".tr-root")!;
+			defineScrollerGeometry(scroller, { scrollTop: 400, clientHeight: 800, scrollHeight: 2000 });
+			await act(async () => {
+				wheelUp(scroller);
+				fireScroll(scroller);
+			});
+			expect(reader !== null && reader === container.querySelector(".tr-back-bottom")).toBe(true);
+			expect((reader! as HTMLElement).style.bottom).toBe(
+				"calc(14px + var(--chat-composer-inset, 0px) + var(--chat-floating-panel-clearance, 0px))",
+			);
+			expect((reader! as HTMLElement).style.getPropertyValue("--chat-composer-inset")).toBe("48px");
+		} finally {
+			await act(async () => root.unmount());
+		}
 	});
 });

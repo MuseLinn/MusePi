@@ -61,7 +61,9 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 		});
 
 		await client.start();
-		await expect(client.getMessagesPage()).rejects.toThrow("Cannot page messages while the session is changing");
+		const pageError = await client.getMessagesPage().catch((error: unknown) => error);
+		expect(pageError).toBeInstanceOf(Error);
+		expect((pageError as Error).message).toBe("Cannot page messages while the session is changing");
 		expect((await client.getMessages()) as unknown).toEqual([
 			{ role: "assistant", content: [{ type: "text", text: "streaming snapshot" }], timestamp: 3 },
 		]);
@@ -77,9 +79,11 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 		// Direct page walks stay strict: the stale cursor is surfaced to the caller.
 		const firstPage = await client.getMessagesPage();
 		expect(firstPage.nextCursor).toBe("second-page");
-		await expect(client.getMessagesPage({ cursor: firstPage.nextCursor })).rejects.toThrow(
-			"RPC message cursor is stale",
-		);
+		const staleError = await client
+			.getMessagesPage({ cursor: firstPage.nextCursor })
+			.catch((error: unknown) => error);
+		expect(staleError).toBeInstanceOf(Error);
+		expect((staleError as Error).message).toBe("RPC message cursor is stale");
 		// The high-level drain discards the partial first page and takes the legacy snapshot.
 		expect((await client.getMessages()) as unknown).toEqual([
 			{ role: "assistant", content: [{ type: "text", text: "streaming snapshot" }], timestamp: 3 },
@@ -245,8 +249,8 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 		});
 		await client.start();
 
-		await expect(client.getState()).rejects.toThrow(
-			"Agent process exited with code 23. Stderr: fixture worker failed",
-		);
+		const stateError = await client.getState().catch((error: unknown) => error);
+		expect(stateError).toBeInstanceOf(Error);
+		expect((stateError as Error).message).toBe("Agent process exited with code 23. Stderr: fixture worker failed");
 	});
 });

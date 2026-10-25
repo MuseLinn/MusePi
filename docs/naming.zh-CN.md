@@ -1,3 +1,15 @@
+---
+layout: default
+title: 产品命名规范
+status: living
+summary: 架构、包目录与用户可见产品文案的命名边界。
+scope:
+  - packages/client-core/src/i18n
+  - packages/coding-agent/src/i18n
+  - packages/desktop-app/src
+lang: zh-CN
+---
+
 # 命名规范
 
 > 状态：生效（2026-09-15）。适用于所有用户可见界面（GUI、移动端、TUI、i18n 文案）。

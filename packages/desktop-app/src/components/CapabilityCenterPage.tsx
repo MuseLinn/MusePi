@@ -8,6 +8,7 @@ import { CapabilityCenter } from "./CapabilityCenter";
 import { MarketplaceView } from "./MarketplaceView";
 import { SkillMarketView } from "./SkillMarketView";
 import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./UnifiedPluginsView";
+import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 /**
  * 能力中心 (capability center) — the FIRST-CLASS sidebar page (设计稿 05:
@@ -128,37 +129,29 @@ export function CapabilityCenterPage({
 
 	return (
 		<div className="gui-agents-center gui-capability-page">
-			<header className="gui-agents-center-head">
-				<button
-					type="button"
-					className="gui-tool-btn"
-					onClick={onBack}
-					aria-label={t("settings.back")}
-					title={t("settings.back")}
-				>
-					<Icon name="arrow-left" className="h-4 w-4" />
-				</button>
-				<div className="gui-agents-center-title">
-					<Icon name="star" className="h-4 w-4 text-[var(--color-accent)]" />
-					<h2 className="gui-agents-center-name">{t("tools.capabilityCenter")}</h2>
-					<span className="gui-agents-center-count">{t("tools.capabilityCenterDesc")}</span>
-				</div>
-			</header>
-			<div className="gui-capability-tabs" role="tablist">
-				{tabs.map(tb => (
-					<button
-						key={tb.id}
-						type="button"
-						role="tab"
-						aria-selected={tab === tb.id}
-						className={`gui-capability-tab${tab === tb.id ? " gui-capability-tab--on" : ""}`}
-						onClick={() => onTabChange(tb.id)}
-					>
-						<Icon name={tb.icon} className="h-3.5 w-3.5 shrink-0 opacity-70" />
-						{tb.label}
-					</button>
-				))}
-			</div>
+			<WorkspacePageHeader
+				icon="star"
+				title={t("tools.capabilityCenter")}
+				description={t("tools.capabilityCenterDesc")}
+				onBack={onBack}
+				tabs={
+					<div className="gui-capability-tabs" role="tablist">
+						{tabs.map(tb => (
+							<button
+								key={tb.id}
+								type="button"
+								role="tab"
+								aria-selected={tab === tb.id}
+								className={`gui-capability-tab${tab === tb.id ? " gui-capability-tab--on" : ""}`}
+								onClick={() => onTabChange(tb.id)}
+							>
+								<Icon name={tb.icon} className="h-3.5 w-3.5 shrink-0 opacity-70" />
+								{tb.label}
+							</button>
+						))}
+					</div>
+				}
+			/>
 			{/* 技能子分段条放在滚动体外：与主 tab 同处页头，各面板工具行才能
 			 * 以统一偏移吸顶（subtabs 若在滚动体内，吸顶偏移随面板层级而变）。 */}
 			{tab === "skills" && (

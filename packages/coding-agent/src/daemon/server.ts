@@ -37,6 +37,7 @@ import { DesktopSession, getWorkProfile } from "@musepi/pi-natives";
 import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
+	MessageDisplayContext,
 	SessionEntry,
 	SttModelRow,
 	SttModelStatusResponse,
@@ -587,6 +588,7 @@ import {
 	upsertGitAccount,
 	validateGitHubToken,
 } from "./git-accounts";
+import { commentOnGithub, normalizeGithubReviewers } from "./github-mutations";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import { BoardService } from "./services/board-service";
@@ -3738,8 +3740,10 @@ export class DaemonServer {
 					return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
 				}
 				try {
-					const pr = JSON.parse(res.stdout) as { reviewRequests?: { login: string }[] };
-					return { pr: { ...pr, reviewers: pr.reviewRequests ?? [] } };
+					const pr = JSON.parse(res.stdout) as {
+						reviewRequests?: { login?: string; slug?: string; name?: string }[];
+					};
+					return { pr: { ...pr, reviewers: normalizeGithubReviewers(pr.reviewRequests) } };
 				} catch {
 					return { error: "invalid gh output" };
 				}
@@ -3853,16 +3857,14 @@ export class DaemonServer {
 			case "github.issueComment":
 			case "github.prComment": {
 				const p = (params ?? {}) as { cwd?: string; number?: unknown; body?: unknown };
-				const num = Number(p.number);
-				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
-				const body = typeof p.body === "string" ? p.body.trim() : "";
-				if (!body) return { error: "comment required" };
 				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
-				const kind = method === "github.issueComment" ? "issue" : "pr";
-				const res = await runGh(cwd, [kind, "comment", String(num), "--body", body]);
-				if (res.exitCode === null) return { error: "gh CLI not installed" };
-				if (res.exitCode !== 0) return { error: res.stderr.trim() || `gh ${kind} comment failed` };
-				return { ok: true };
+				return commentOnGithub(
+					cwd,
+					method === "github.issueComment" ? "issue" : "pr",
+					Number(p.number),
+					typeof p.body === "string" ? p.body : "",
+					runGh,
+				);
 			}
 			case "github.authStatus": {
 				// gh CLI auth state (settings Git tab): login/active account +
@@ -4207,6 +4209,7 @@ export class DaemonServer {
 					sessionId: string;
 					text: string;
 					deliverAs?: "prompt" | "steer" | "followUp" | "continue";
+					displayContext?: MessageDisplayContext;
 					images?: { type: "image"; data: string; mimeType: string }[];
 				};
 				// Reactivate history sessions on send so continuing an old
@@ -4221,7 +4224,13 @@ export class DaemonServer {
 				await this.#host.subscribe(p.sessionId, conn);
 				// "prompt" (default) = plain sendUserMessage; steer/followUp
 				// map to the AgentSession delivery semantics.
-				const options = p.deliverAs && p.deliverAs !== "prompt" ? { deliverAs: p.deliverAs } : undefined;
+				const options =
+					(p.deliverAs && p.deliverAs !== "prompt") || p.displayContext
+						? {
+								...(p.deliverAs && p.deliverAs !== "prompt" ? { deliverAs: p.deliverAs } : {}),
+								...(p.displayContext ? { displayContext: p.displayContext } : {}),
+							}
+						: undefined;
 				const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
 				// Image attachments ride along as content parts, whether
 				// pasted or dragged; sendUserMessage accepts text+images.}
@@ -7506,18 +7515,34 @@ export class DaemonServer {
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const agent = live.agentSession as unknown as {
 					popLastQueuedMessage():
-						| { text: string; images?: { type: string; data: string; mimeType: string }[] }
+						| {
+								text: string;
+								images?: { type: string; data: string; mimeType: string }[];
+								displayContext?: MessageDisplayContext;
+						  }
 						| undefined;
 					popQueuedMessage(
 						group: "steering" | "followUp",
 						text: string,
-					): { text: string; images?: { type: string; data: string; mimeType: string }[] } | undefined;
+					):
+						| {
+								text: string;
+								images?: { type: string; data: string; mimeType: string }[];
+								displayContext?: MessageDisplayContext;
+						  }
+						| undefined;
 				};
 				const popped =
 					p.group && typeof p.text === "string"
 						? agent.popQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.text)
 						: agent.popLastQueuedMessage();
-				return popped ? { text: popped.text, images: popped.images ?? null } : null;
+				return popped
+					? {
+							text: popped.text,
+							images: popped.images ?? null,
+							...(popped.displayContext ? { displayContext: popped.displayContext } : {}),
+						}
+					: null;
 			}
 			case "session.queuedClear": {
 				// Drop every queued user message (TUI clearQueue parity).

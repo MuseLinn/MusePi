@@ -99,6 +99,7 @@ describe("createAgentSession deferred model pattern resolution", () => {
 			agentDir: tempDir,
 			authStorage,
 			modelRegistry,
+			settings: Settings.isolated(),
 			sessionManager: SessionManager.inMemory(),
 			disableExtensionDiscovery: true,
 			extensions: [providerExtension],
@@ -116,11 +117,14 @@ describe("createAgentSession deferred model pattern resolution", () => {
 		const { session, modelFallbackMessage } = await createAgentSession(
 			await buildSessionOptions("runtime-provider/runtime-model"),
 		);
-
-		expect(session.model).toBeDefined();
-		expect(session.model?.provider).toBe("runtime-provider");
-		expect(session.model?.id).toBe("runtime-model");
-		expect(modelFallbackMessage).toBeUndefined();
+		try {
+			expect(session.model).toBeDefined();
+			expect(session.model?.provider).toBe("runtime-provider");
+			expect(session.model?.id).toBe("runtime-model");
+			expect(modelFallbackMessage).toBeUndefined();
+		} finally {
+			await session.dispose();
+		}
 	});
 
 	test("resolves a bare modelPattern without silently falling back to the configured default role", async () => {
@@ -156,6 +160,7 @@ describe("createAgentSession deferred model pattern resolution", () => {
 			agentDir: tempDir,
 			authStorage,
 			modelRegistry,
+			settings: Settings.isolated(),
 			sessionManager: SessionManager.inMemory(),
 			disableExtensionDiscovery: true,
 			extensions: [dynamicOnlyProviderExtension],
@@ -206,6 +211,7 @@ describe("createAgentSession deferred model pattern resolution", () => {
 			agentDir: tempDir,
 			authStorage,
 			modelRegistry,
+			settings: Settings.isolated(),
 			sessionManager: SessionManager.inMemory(),
 			disableExtensionDiscovery: true,
 			extensions: [providerExtension],

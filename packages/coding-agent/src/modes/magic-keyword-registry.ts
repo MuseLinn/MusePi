@@ -3,8 +3,8 @@
  *
  * A magic keyword is a standalone word typed in the composer that, on submit,
  * appends a hidden notice nudging the model. The three first-party keywords
- * (ultrathink / orchestrate / workflow) are compiled in; extensions contribute
- * theirs through `pi.registerMagicKeyword`, on the same terms.
+ * arrive through the bundled magic-keywords package; other extensions use
+ * `pi.registerMagicKeyword` on the same terms.
  *
  * Lifecycle mirrors the design-system registry (M3 §3): registrations are queued
  * during extension loading and replayed into this registry during session

@@ -101,9 +101,34 @@ describe("issue #2600 - session_shutdown handler timeout", () => {
 		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 		try {
 			testSetSessionShutdownHandlerTimeoutMs(100);
+			let now = 0;
+			const timers: Array<{ at: number; run: () => void }> = [];
+			vi.spyOn(performance, "now").mockImplementation(() => now);
+			const setTimeoutStub = Object.assign(
+				(handler: unknown, timeout?: number) => {
+					const at = now + (timeout ?? 0);
+					timers.push({
+						at,
+						run: () => {
+							if (typeof handler === "function") handler();
+						},
+					});
+					return {} as NodeJS.Timeout;
+				},
+				{ __promisify__: setTimeout.__promisify__ },
+			);
+			vi.spyOn(globalThis, "setTimeout").mockImplementation(setTimeoutStub);
 
 			const startedAt = performance.now();
-			await runner.emit({ type: "session_shutdown" });
+			const emission = runner.emit({ type: "session_shutdown" });
+			while (timers.length > 0) {
+				const timer = timers.shift();
+				if (!timer) continue;
+				now = Math.max(now, timer.at);
+				timer.run();
+				await Promise.resolve();
+			}
+			await emission;
 			const elapsedMs = performance.now() - startedAt;
 
 			// Multiple hung shutdown handlers must share the cap. Sequential
@@ -117,7 +142,7 @@ describe("issue #2600 - session_shutdown handler timeout", () => {
 				});
 			}
 		} finally {
-			warnSpy.mockRestore();
+			vi.restoreAllMocks();
 			cleanup();
 		}
 	});

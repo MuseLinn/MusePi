@@ -53,6 +53,7 @@
 		"lucide-react": "^1.24.0",
 		"morphicons": "^1.4.2",
 		"pdfjs-dist": "^6.2.108",
+		"puppeteer-core": "catalog:",
 		"react": "19.2.7",
 		"react-dom": "19.2.7",
 		"tailwindcss": "^4.3.3",

@@ -8,7 +8,8 @@ import {
 	unarchiveSession,
 	archiveSession as writeArchivedSession,
 } from "@musepi/client-core";
-import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
+import { createChatQuoteContext, createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
+import type { MessageDisplayContext, SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
@@ -58,7 +59,7 @@ import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
 import { RpcClient, type StreamEvent } from "./lib/rpc";
-import { captureSelectionText } from "./lib/selection-capture";
+import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { buildSessionMarkdown, markdownFileName } from "./lib/session-markdown";
 import {
@@ -70,11 +71,16 @@ import {
 } from "./lib/session-store";
 import {
 	adjacentTabId,
+	clearPreviewTab,
+	closeOtherTabIds,
 	closeTabAndActivateNeighbour,
-	ensureTabId,
+	loadPreviewTabId,
 	loadTabIds,
+	openPreviewTab,
+	pinPreviewTab,
 	removeTabId,
 	reorderTabIds,
+	savePreviewTabId,
 	saveTabIds,
 	useSessionTabsEnabled,
 } from "./lib/session-tabs";
@@ -1072,26 +1078,35 @@ function AppInner(): ReactNode {
 	// refs so onStatus (wired before openSession exists) can reach them.
 	const selectedIdRef = useRef<string | null>(null);
 	const openSessionRef = useRef<(sessionId: string) => Promise<void>>(async () => {});
-	// Header tab strip (multi-session tabs, settings 外观 → 聊天): the state
-	// owns ONLY session ids + order (persisted); titles and working/unread
-	// status resolve at render time from sessionMeta/tree. Opening a session
-	// joins its tab (cap drops the oldest); closing a tab never deletes the
-	// session.
+	// Header tab strip (multi-session tabs, settings 外观 → 聊天): ids, order,
+	// and the single preview id persist independently; titles and live status
+	// resolve from session metadata.
 	const tabsEnabled = useSessionTabsEnabled();
 	const tabsEnabledRef = useRef(tabsEnabled);
 	tabsEnabledRef.current = tabsEnabled;
 	const [tabIds, setTabIds] = useState<string[]>(() => loadTabIds());
 	const tabIdsRef = useRef<string[]>(tabIds);
 	tabIdsRef.current = tabIds;
+	const [previewTabId, setPreviewTabId] = useState<string | null>(() => loadPreviewTabId());
+	const previewTabIdRef = useRef<string | null>(previewTabId);
+	previewTabIdRef.current = previewTabId;
+	const updatePreviewTabId = useCallback((next: string | null): void => {
+		previewTabIdRef.current = next;
+		savePreviewTabId(next);
+		setPreviewTabId(next);
+	}, []);
 	useEffect(() => {
 		if (!tabsEnabled || !selectedId) return;
-		setTabIds(prev => {
-			const next = ensureTabId(prev, selectedId);
-			if (next.length === prev.length) return prev;
-			saveTabIds(next);
-			return next;
-		});
-	}, [tabsEnabled, selectedId]);
+		const current = tabIdsRef.current;
+		const next = openPreviewTab(current, previewTabIdRef.current, selectedId);
+		const idsChanged = next.ids.length !== current.length || next.ids.some((id, index) => id !== current[index]);
+		if (idsChanged) {
+			saveTabIds(next.ids);
+			tabIdsRef.current = next.ids;
+			setTabIds(next.ids);
+		}
+		if (next.previewTabId !== previewTabIdRef.current) updatePreviewTabId(next.previewTabId);
+	}, [tabsEnabled, selectedId, updatePreviewTabId]);
 
 	// Keep refs for event handlers that must not re-subscribe per render.
 	rpcRef.current = rpc;
@@ -2363,6 +2378,7 @@ function AppInner(): ReactNode {
 			images?: { type: "image"; data: string; mimeType: string }[],
 			sessionId?: string,
 			deliverAs?: "prompt" | "steer" | "followUp" | "continue",
+			displayContext?: MessageDisplayContext,
 		): Promise<void> => {
 			const client = rpcRef.current;
 			const id = sessionId ?? selectedId;
@@ -2374,7 +2390,7 @@ function AppInner(): ReactNode {
 			// 感觉"没发送"。
 			const store = storeRef.current;
 			if (store && store.sessionId === id && !deliverAs) {
-				store.optimisticEcho(text, images);
+				store.optimisticEcho(text, images, displayContext);
 			}
 			try {
 				// Refresh the tree/metadata right after the daemon ACCEPTS the
@@ -2386,6 +2402,7 @@ function AppInner(): ReactNode {
 					sessionId: id,
 					text,
 					...(deliverAs ? { deliverAs } : {}),
+					...(displayContext ? { displayContext } : {}),
 					...(images && images.length > 0 ? { images } : {}),
 				});
 				p.then(() => refreshSessions(client)).catch(() => {});
@@ -2437,7 +2454,7 @@ function AppInner(): ReactNode {
 			if (message?.text.trim()) {
 				const prompt = await uploadFirstMessageFiles(message.text, message.files, project ?? null);
 				if (prompt === null) return true;
-				await sendPrompt(prompt, message.images, id);
+				await sendPrompt(prompt, message.images, id, undefined, message.displayContext);
 			}
 			return true;
 		},
@@ -2455,6 +2472,7 @@ function AppInner(): ReactNode {
 				thinkingLevel?: ThinkingLevel | null;
 				modelId?: string | null;
 				images?: { type: "image"; data: string; mimeType: string }[];
+				displayContext?: MessageDisplayContext;
 				/** Non-image chips from the empty-state composer. They have no
 				 *  workspace at pick time, so we write them into the session we
 				 *  just created — the same fs.write channel the session composer
@@ -2608,7 +2626,7 @@ function AppInner(): ReactNode {
 			// same helper, so channel / sanitizing / collision rules can't drift.
 			const prompt = await uploadFirstMessageFiles(text, opts?.files, project ?? null);
 			if (prompt === null) return;
-			await sendPrompt(prompt, opts?.images, id);
+			await sendPrompt(prompt, opts?.images, id, undefined, opts?.displayContext);
 		},
 		[createSession, project, sendPrompt],
 	);
@@ -2756,6 +2774,7 @@ function AppInner(): ReactNode {
 					if (next.length !== prev.length) saveTabIds(next);
 					return next;
 				});
+				updatePreviewTabId(clearPreviewTab(previewTabIdRef.current, sessionId));
 				// Refresh the tree/metadata views (delete may affect nesting).
 				await refreshSessions(client);
 				if (storeRef.current?.sessionId === sessionId) {
@@ -2772,7 +2791,7 @@ function AppInner(): ReactNode {
 				return false;
 			}
 		},
-		[confirm, refreshSessions],
+		[confirm, refreshSessions, updatePreviewTabId],
 	);
 
 	/** Export ANY session's transcript as Markdown (row-menu parity with
@@ -3363,9 +3382,14 @@ function AppInner(): ReactNode {
 				// as the toolbar 引用 button (append-only, stacked cards).
 				// With no selection, focus the composer instead.
 				e.preventDefault();
-				const text = captureSelectionText();
-				if (text) {
-					window.dispatchEvent(new CustomEvent("musepi-gui-quote-append", { detail: { text } }));
+				const selection = captureSelectionContext();
+				if (selection) {
+					const displayContext = selection.file
+						? createFileQuoteContext({ ...selection.file, quote: selection.text })
+						: createChatQuoteContext({ quote: selection.text });
+					window.dispatchEvent(
+						new CustomEvent("musepi-gui-quote-append", { detail: { text: selection.text, displayContext } }),
+					);
 				} else {
 					(document.querySelector('[data-chat-input="true"] textarea') as HTMLTextAreaElement | null)?.focus();
 				}
@@ -3648,10 +3672,14 @@ function AppInner(): ReactNode {
 				unread: unreadSessions.has(id),
 				// No messages yet — the tab reads as a temporary draft (italic).
 				draft: meta ? (meta.messageCount ?? 0) === 0 : false,
+				cwd: meta?.cwd,
 			});
 		}
 		return rows;
 	})();
+	const handleKeepOpenTab = (id: string): void => {
+		updatePreviewTabId(pinPreviewTab(previewTabIdRef.current, id));
+	};
 	const handleSelectTab = (id: string): void => {
 		void openSession(id);
 	};
@@ -3660,14 +3688,18 @@ function AppInner(): ReactNode {
 		// must run exactly once.
 		const { ids, nextId } = closeTabAndActivateNeighbour(tabIdsRef.current, id, selectedId, tabRenderable);
 		saveTabIds(ids);
+		tabIdsRef.current = ids;
 		setTabIds(ids);
+		updatePreviewTabId(clearPreviewTab(previewTabIdRef.current, id));
 		if (nextId) void openSession(nextId);
 		else if (id === selectedId) startNewTask();
 	};
 	const handleCloseOtherTabs = (id: string): void => {
-		const next = tabIdsRef.current.filter(tabId => tabId === id);
+		const next = closeOtherTabIds(tabIdsRef.current, id);
 		saveTabIds(next);
+		tabIdsRef.current = next;
 		setTabIds(next);
+		updatePreviewTabId(previewTabIdRef.current === id ? id : null);
 		if (selectedId !== id) void openSession(id);
 	};
 	const handleArchiveTab = (id: string): void => {
@@ -3730,7 +3762,9 @@ function AppInner(): ReactNode {
 						readOnly={selectedIsAdvisor}
 						onAddProvider={() => openSettings("providers")}
 						onOpenSettings={openSettings}
-						onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
+						onSend={(text, images, deliverAs, displayContext) =>
+							void sendPrompt(text, images, undefined, deliverAs, displayContext)
+						}
 						onStop={stop}
 						onDecideApproval={decideApproval}
 						onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
@@ -3948,10 +3982,14 @@ function AppInner(): ReactNode {
 								onOpenCollab={() => setCollabOpen(true)}
 								onDeleteSession={deleteSession}
 								tabs={sessionTabRows}
+								previewTabId={previewTabId}
 								onSelectTab={handleSelectTab}
+								onKeepOpenTab={handleKeepOpenTab}
 								onCloseTab={handleCloseTab}
 								onCloseOtherTabs={handleCloseOtherTabs}
 								onArchiveTab={handleArchiveTab}
+								onExportSession={exportSessionById}
+								onOpenMiniChat={openMiniChatFor}
 								onReorderTabs={handleReorderTabs}
 							/>
 							{/* 表面区(会话 / 看板 / 任务中心 / 智能体 / 能力中心):chat
@@ -3967,8 +4005,8 @@ function AppInner(): ReactNode {
 											parentSession={activeParentSession}
 											onOpenParentSession={id => void openSession(id)}
 											onOpenSession={id => void openSession(id)}
-											onSend={(text, images, deliverAs) =>
-												void sendPrompt(text, images, undefined, deliverAs)
+											onSend={(text, images, deliverAs, displayContext) =>
+												void sendPrompt(text, images, undefined, deliverAs, displayContext)
 											}
 											onStop={stop}
 											onDecideApproval={decideApproval}

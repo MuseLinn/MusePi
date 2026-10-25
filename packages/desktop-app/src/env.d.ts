@@ -39,6 +39,8 @@ interface Window {
 		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean }>;
 		/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 		managedBrowserStop(tabId?: string): Promise<unknown>;
+		/** Stop automation without closing the agent tab or changing its page. */
+		managedBrowserTakeover(tabId?: string): Promise<unknown>;
 		/** Device preset for a tab: "phone"/"tablet" set a device UA (plus
 		 *  client hints and touch) so the SITE serves its mobile document;
 		 *  "fit"/"desktop" clear the identity. `viewport` emulates the layout
@@ -94,6 +96,7 @@ interface ManagedBrowserActivity {
 	domain: string | null;
 	status: string;
 	tabId: string;
+	at: number;
 }
 
 /** Everything main still owns about the panel: the CDP port, the running agent
@@ -101,5 +104,6 @@ interface ManagedBrowserActivity {
 interface ManagedBrowserState {
 	port: number | null;
 	activity: ManagedBrowserActivity | null;
+	busyTabIds: string[];
 	agentActivity?: boolean;
 }

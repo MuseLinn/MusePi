@@ -1,4 +1,5 @@
 import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type SegmentedOption, t } from "@musepi/client-core";
+import { createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import { renderAsync as renderDocx } from "docx-preview";
 import {
 	ArrowLeft,
@@ -43,6 +44,7 @@ import { useChatHighlight } from "../lib/highlight";
 import { previewMappingFor } from "../lib/preview-from-viewer";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
+import { captureSelectionContext } from "../lib/selection-capture";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { ImagePreview } from "./FilePaneImagePreview";
 import { useMarkdownFileNavigation } from "./FilePaneMarkdownNav";
@@ -1240,17 +1242,27 @@ export function FilePane({
 								</button>
 								<button
 									type="button"
-									className="gui-btn gui-btn-icon"
+									className="gui-btn gui-btn-icon gui-filepane-quote"
 									title={t("general.citeFileComposer")}
+									aria-label={t("general.citeFileComposer")}
+									onMouseDown={event => event.preventDefault()}
 									onClick={() => {
-										// Cite the workspace-relative path into the
-										// chat draft (shared insert channel — the
-										// composer listens window-wide).
 										const rel = preview.path.startsWith(`${cwd}/`)
 											? preview.path.slice(cwd.length + 1)
 											: preview.path;
+										const selection = captureSelectionContext();
+										const displayContext = createFileQuoteContext({
+											path: rel,
+											quote: selection?.file?.path === preview.path ? selection.text : "",
+											language: selection?.file?.language ?? extOf(preview.name),
+											...(selection?.file?.startLine !== undefined && selection.file.endLine !== undefined
+												? { startLine: selection.file.startLine, endLine: selection.file.endLine }
+												: {}),
+										});
 										window.dispatchEvent(
-											new CustomEvent("musepi-gui-insert-text", { detail: { text: `@${rel}` } }),
+											new CustomEvent("musepi-gui-quote-append", {
+												detail: { text: selection?.text ?? "", displayContext },
+											}),
 										);
 									}}
 								>
@@ -1276,7 +1288,11 @@ export function FilePane({
 								✕
 							</button>
 						</div>
-						<div className="gui-filepane-preview-body">
+						<div
+							className="gui-filepane-preview-body"
+							data-file-path={preview.path}
+							data-file-language={extOf(preview.name)}
+						>
 							{preview.error && <p className="gui-error">{preview.error}</p>}
 							{preview.htmlLive !== undefined && (
 								<HtmlPreview

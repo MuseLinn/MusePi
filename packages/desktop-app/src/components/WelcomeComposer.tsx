@@ -1,7 +1,13 @@
 import { BlurText, DotMatrixMark, t } from "@musepi/client-core";
-import { ANNOTATION_ATTACH_EVENT } from "@musepi/client-core/src/annotation";
+import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
+import {
+	composeDisplayContextPrompt,
+	createChatQuoteContext,
+	type DisplayContext,
+	type MessageDisplayContext,
+	messageDisplayContext,
+} from "@musepi/client-core/src/messages/display-context";
 import { Plus as PlusIcon, X as XIcon } from "lucide";
-import { X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -60,6 +66,7 @@ import {
 	retargetMentionTokens,
 	spliceMentionToken,
 } from "./composer/mention-token";
+import { QuoteCards } from "./composer/quote-cards";
 import { StartFromPicker } from "./composer/start-from-picker";
 import { TemplateRail } from "./composer/template-rail";
 import {
@@ -188,6 +195,7 @@ export function WelcomeComposer({
 			thinkingLevel?: ThinkingLevel | null;
 			modelId?: string | null;
 			images?: { type: "image"; data: string; mimeType: string }[];
+			displayContext?: MessageDisplayContext;
 			/** Non-image chips picked in the empty state. The welcome surface
 			 *  has no session (and therefore no workspace) yet, so the host
 			 *  resolves the project — or reports that one is needed — when the
@@ -332,16 +340,25 @@ export function WelcomeComposer({
 		window.addEventListener("musepi-gui-insert-text", onInsert);
 		return () => window.removeEventListener("musepi-gui-insert-text", onInsert);
 	}, []);
-	// Cmd/Ctrl+L quote cards (same style as the session Composer): quoted
-	// selections render as cards above the input and are sent as `> …`
-	// markdown in front of the prompt.
-	const [quotes, setQuotes] = useState<string[]>([]);
+	// Quoted selections and annotations share the session composer's context chips.
+	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
 	useEffect(() => {
 		const onQuoteAppend = (e: Event): void => {
-			const detail = (e as CustomEvent<{ text?: string }>).detail;
-			const text = detail?.text;
-			if (!text) return;
-			setQuotes(q => (q.includes(text) ? q : [...q, text]));
+			const detail = (e as CustomEvent<{ text?: string; messageId?: string; displayContext?: DisplayContext }>)
+				.detail;
+			if (detail?.displayContext) {
+				setQuotes(current => [...current, detail.displayContext!]);
+				requestAnimationFrame(() => autosize(taRef.current));
+				requestAnimationFrame(() => taRef.current?.focus());
+				return;
+			}
+			if (!detail?.text) return;
+			const context = createChatQuoteContext({ messageId: detail.messageId, quote: detail.text });
+			setQuotes(current =>
+				current.some(item => item.kind === "chat-quote" && item.quote === detail.text)
+					? current
+					: [...current, context],
+			);
 			requestAnimationFrame(() => autosize(taRef.current));
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
@@ -1244,18 +1261,16 @@ export function WelcomeComposer({
 			return [...prev, ...named];
 		});
 	};
-	// 统一标注(浏览器页 / 会话内卡片):文本追加进草稿,标记截图走图片附件
-	// 管线。放在 addFiles 定义之后 —— ref 赋值在渲染期执行,提前引用会 TDZ。
-	// addFiles 每个渲染都是新函数,经 ref 引用,避免每次按键都重挂监听。
+	// Annotation screenshots use the ordinary attachment pipeline; their text
+	// stays in display context until send.
 	const addFilesForAnnotationRef = useRef(addFiles);
 	addFilesForAnnotationRef.current = addFiles;
 	useEffect(() => {
 		const onAttach = (e: Event): void => {
-			const detail = (e as CustomEvent<{ text?: string; image?: File }>).detail;
-			const insertion = detail?.text;
-			if (!insertion) return;
-			setText(prev => (prev.length === 0 ? insertion : `${prev}\n\n${insertion}`));
-			if (detail?.image) void addFilesForAnnotationRef.current([detail.image]);
+			const detail = (e as CustomEvent<AnnotationAttachDetail>).detail;
+			if (!detail?.displayContext) return;
+			setQuotes(current => [...current, detail.displayContext]);
+			if (detail.image) void addFilesForAnnotationRef.current([detail.image]);
 			requestAnimationFrame(() => autosize(taRef.current));
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
@@ -1303,12 +1318,10 @@ export function WelcomeComposer({
 	// auto-submit): carries the welcome preselects (model/thinking) and armed
 	// modes into the session this first prompt creates.
 	const sendText = (trimmed: string): void => {
-		const quotePrefix =
-			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
 		// Attachment mentions (session-composer parity): expand before the
 		// quote prefix so the references ride the first prompt too.
 		const expanded = expandMentionTokens(trimmed, attachments);
-		const payload = quotePrefix ? `${quotePrefix}${expanded}`.trim() : expanded;
+		const payload = composeDisplayContextPrompt(quotes, expanded);
 		// M3.7a 内联形态:design 模式发送改走 session.create + projectMetadata
 		// 管线(§2.4)——快照草稿先行,clear 交给结果:失败回填输入,成功由
 		// rail 收起模式页(mode chip 复位 work)。
@@ -1331,6 +1344,7 @@ export function WelcomeComposer({
 					// the state array; these projections follow it).
 					images: attachmentImageParts(prevAttachments),
 					files: attachmentFiles(prevAttachments),
+					displayContext: messageDisplayContext(prevQuotes),
 				})
 				.then(ok => {
 					if (!ok) {
@@ -1369,6 +1383,7 @@ export function WelcomeComposer({
 			// Chip order IS the send order (drag-reorder moves chips in the
 			// state array; these projections follow it).
 			images: attachmentImageParts(attachments),
+			displayContext: messageDisplayContext(quotes),
 			// Non-image chips (the attach menu's file entry). The host owns the
 			// workspace decision: it writes these into the session it creates,
 			// or asks for a project when there is none.
@@ -2076,20 +2091,13 @@ export function WelcomeComposer({
 							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
 								{quotes.length > 0 && (
 									<div className="gui-welcome-quotes">
-										{quotes.map((q, i) => (
-											<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
-												<div className="gui-quote-text">{q}</div>
-												<button
-													type="button"
-													className="gui-quote-close"
-													onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
-													title={t("general.removeQuote")}
-													aria-label={t("general.removeQuote")}
-												>
-													<X size={12} />
-												</button>
-											</div>
-										))}
+										<QuoteCards
+											contexts={quotes}
+											onRemove={index => setQuotes(current => current.filter((_, i) => i !== index))}
+											onChange={(index, context) =>
+												setQuotes(current => current.map((item, i) => (i === index ? context : item)))
+											}
+										/>
 									</div>
 								)}
 								{renderCompMenu(

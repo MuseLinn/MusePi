@@ -1,5 +1,5 @@
 # Consistency record for assembly.md / assembly.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/assembly
-assembly.md: 05403c5767f311e8e20c6503e15c2bb188e1f10f
-assembly.zh-CN.md: 04137e265b80ed355eecf7d5410044dabeff3552
+assembly.md: 29aabd00b9699c88ffb9ebb57017840d072291d4
+assembly.zh-CN.md: 8d7b594a62f52f6db3e44ad133efffee50b8ad5b

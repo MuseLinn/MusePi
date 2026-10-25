@@ -77,6 +77,17 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	const { name, intent, args, result, running, partialResult, host, taskCardStyle, onPreviewImage } = props;
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";
+	const structuredPartial =
+		name === "browser" &&
+		running &&
+		!result &&
+		typeof partialResult === "object" &&
+		partialResult !== null &&
+		"content" in partialResult &&
+		Array.isArray(partialResult.content)
+			? (partialResult as ToolResultMessage)
+			: undefined;
+	const effectiveResult = result ?? structuredPartial;
 	// With the standalone widget display on, the widget's visual lives on
 	// its own card in the message flow — the tool-call card folds to its
 	// summary line (the musepi-gui-widget-expanded pref only applies when the
@@ -86,12 +97,12 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// media inside. For every other tool, strip image blocks out of the
 	// card content so the fold never re-hides them, and render them inline.
 	const isArtifact = isArtifactCard(name);
-	const { images, cardResult } = hoistToolMedia(result, isArtifact);
+	const { images, cardResult } = hoistToolMedia(effectiveResult, isArtifact);
 	// Computer screenshots live in `details.screenshots` (not content
 	// blocks), so the generic image-block hoist misses them — pull them out
 	// here too, and blank them from the card result (with a screenshotCount
 	// fallback for the summary badge) so the folded body never duplicates.
-	const shotSrcs = !isArtifact && name === "computer" ? computerShotsOf(result) : [];
+	const shotSrcs = !isArtifact && name === "computer" ? computerShotsOf(effectiveResult) : [];
 	let mediaResult = cardResult;
 	if (shotSrcs.length > 0 && mediaResult) {
 		const details = detailsRecord(mediaResult);

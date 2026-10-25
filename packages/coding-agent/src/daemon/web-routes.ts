@@ -12,17 +12,14 @@
  * - **OpenAI 兼容网关**：`/v1/chat/completions` 等对外端点；
  * - **OAuth 回环回调**：登录流程需要本机 callback URL。
  *
- * 对标实现把整块 UI 建在这条缝上（其宿主侧 `webServer.register({kind, path,
- * handler})`，见 `docs/review/plugin-parity-dsh-our-free-model.md` §1）。
- *
- * ## 派发顺序（有意为之）
+ * ## 派发顺序
  *
  * 1. **精确**路由：`Map` 查表，O(1)；
  * 2. **前缀**路由：**最长前缀优先**（不是注册顺序）——`/api/a/b` 比 `/api/a` 更具体，
  *    让它被短前缀截胡是排序缺陷；
  * 3. 未被任何插件接管 ⇒ 交回静态服务（含 SPA 回退）。
  *
- * ⚠️ 精确**优先于**前缀，而不是按注册时间混排：对标实现的事件流用 `kind:'exact'`
+ * ⚠️ 精确**优先于**前缀，而不是按注册时间混排：事件流用 `kind:'exact'`
  * 拿到 `/api/<ns>/events`，而 JSON API 用 `kind:'prefix'` 覆盖 `/api/<ns>/*`。
  * 若按时间排，先注册的前缀会把后面的事件流整条吃掉（socket 永远进不了流式处理器）。
  *

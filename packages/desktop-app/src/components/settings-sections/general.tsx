@@ -7,7 +7,11 @@ import {
 	checkAppUpdates,
 	downloadInstaller,
 	downloadUpdate,
+	getCloseToTray,
+	isElectron,
 	openExternalUrl,
+	setCloseToTray,
+	shellPlatform,
 	type UpdateCheckResult,
 } from "../../lib/electron";
 import { activePet } from "../../lib/pet";
@@ -322,6 +326,20 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [dotMatrixText, setDotMatrixText] = useState(
 		() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi",
 	);
+	// Close behavior (Windows/Linux): true = close hides to tray; false =
+	// close quits and stops the owned daemon. Owned by the main process
+	// (<userData>/window-behavior.json) — the close gate cannot wait on the
+	// daemon — and mirrored here so the toggle reflects the real value.
+	const [closeToTray, setCloseToTrayState] = useState(false);
+	useEffect(() => {
+		let alive = true;
+		void getCloseToTray().then(v => {
+			if (alive) setCloseToTrayState(v);
+		});
+		return () => {
+			alive = false;
+		};
+	}, []);
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
@@ -482,6 +500,28 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						disabled={autostartBusy}
 						onClick={toggleAutostart}
 						aria-label={t("settings.launchLogin")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+			)}
+			{isElectron() && shellPlatform() !== "darwin" && (
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.closeToTray")}</div>
+						<div className="gui-settings-row-desc">{t("settings.closeToTrayDescription")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={closeToTray}
+						className={`gui-toggle${closeToTray ? " gui-toggle--on" : ""}`}
+						onClick={() => {
+							const next = !closeToTray;
+							setCloseToTrayState(next);
+							void setCloseToTray(next);
+						}}
+						aria-label={t("settings.closeToTray")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>

@@ -503,6 +503,59 @@
 	opacity: 0.6;
 }
 
+.gui-taskcal-cell:not(:disabled) {
+	cursor: pointer;
+}
+
+.gui-taskcal-cell:not(:disabled):hover,
+.gui-taskcal-cell--selected {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 8%, var(--color-surface));
+}
+
+.gui-taskcal-cell:disabled {
+	opacity: 0.62;
+}
+
+.gui-taskcal-day-detail {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 6px;
+	max-height: 180px;
+	overflow-y: auto;
+	padding-top: 8px;
+}
+
+.gui-taskcal-day-task {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	color: var(--color-text);
+	text-align: left;
+}
+
+.gui-taskcal-day-task:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--color-border));
+	background: color-mix(in oklab, var(--color-accent) 7%, var(--color-surface));
+}
+
+.gui-taskcal-day-task strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+}
+
+.gui-taskcal-day-task span {
+	color: var(--color-text-faint);
+	font-size: 11px;
+}
+
 .gui-taskboard {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);

@@ -88,7 +88,7 @@ const ROLE_THINK_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "
  * for round-tripping but never persisted — joinRoleValue strips it). */
 function splitRoleValue(value: string): { model: string; level: string | null } {
 	const colon = value.lastIndexOf(":");
-	if (colon > 0 && [...ROLE_THINK_LEVELS, "inherit"].includes(value.slice(colon + 1))) {
+	if (colon > 0 && [...ROLE_THINK_LEVELS, "auto", "inherit"].includes(value.slice(colon + 1))) {
 		return { model: value.slice(0, colon), level: value.slice(colon + 1) };
 	}
 	return { model: value, level: null };
@@ -388,7 +388,7 @@ export function ModelSection({
 			const raw = roleModels[roleKey];
 			if (!raw) continue;
 			const { model: bareModel, level } = splitRoleValue(raw);
-			if (!level || level === "off" || level === "inherit") continue;
+			if (!level || level === "off" || level === "inherit" || level === "auto") continue;
 			if (!resolved.efforts.includes(level)) {
 				changed = { ...(changed ?? {}), [roleKey]: joinRoleValue(bareModel, "inherit") };
 			}
@@ -405,6 +405,27 @@ export function ModelSection({
 	// Which existing chain row is being REPLACED via the inline picker
 	// (`role:index`) — editing an entry, not appending one. Null = none.
 	const [fallbackEditIndex, setFallbackEditIndex] = useState<string | null>(null);
+	const [fallbackEfforts, setFallbackEfforts] = useState<Record<string, string[]>>({});
+	useEffect(() => {
+		if (!rpc) return;
+		const selectors = [...new Set(Object.values(fallbackChains).flat())];
+		let cancelled = false;
+		void Promise.all(
+			selectors.map(async selector => {
+				try {
+					const detail = await rpc.request<{ efforts?: string[] } | null>("models.detail", { id: selector });
+					return [selector, detail?.efforts ?? []] as const;
+				} catch {
+					return [selector, []] as const;
+				}
+			}),
+		).then(entries => {
+			if (!cancelled) setFallbackEfforts(Object.fromEntries(entries));
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, fallbackChains]);
 
 	// Role presets only exist on a live session (settings live there).
 	useEffect(() => {
@@ -784,6 +805,30 @@ export function ModelSection({
 											{selector}
 										</span>
 									)}
+									<GuiSelect
+										className="gui-role-fallback-thinking"
+										value={splitRoleValue(selector).level ?? "inherit"}
+										ariaLabel={t("general.roleThinkingLevel")}
+										options={[
+											{ value: "inherit", label: t("general.inherit") },
+											{ value: "auto", label: t("general.auto") },
+											{ value: "off", label: t("transcript.thinkingOff") },
+											...(fallbackEfforts[selector] ?? []).map(lv => ({
+												value: lv,
+												label: t(`thinking ${lv}` as TranslationKey),
+											})),
+										]}
+										onChange={nextLevel => {
+											const nextChain = chain.map((entry, idx) =>
+												idx === i ? joinRoleValue(splitRoleValue(entry).model, nextLevel) : entry,
+											);
+											const next = { ...fallbackChains, [role]: nextChain };
+											setFallbackChains(next);
+											void rpc
+												.request("settings.set", { key: "retry.fallbackChains", value: next })
+												.catch(() => {});
+										}}
+									/>
 									<button
 										type="button"
 										className="gui-btn gui-btn--icon"
@@ -839,14 +884,12 @@ export function ModelSection({
 						}}
 						ariaLabel={t("general.roleThinkingLevel")}
 						options={(() => {
-							// TUI #thinkingOptionsFor parity: inherit + off always
-							// present, then the resolved role model's real effort
-							// rungs. `auto` is session-scoped in the TUI and has no
-							// per-role selector encoding, so it lives only in the
-							// behavior tab's defaultThinkingLevel setting here.
+							// Each role owns its auto policy or a concrete level
+							// from the resolved model's ladder; auto is not a rung.
 							const efforts = resolvedRoleModels[role]?.efforts ?? [];
 							return [
 								{ value: "inherit", label: t("general.inherit") },
+								{ value: "auto", label: t("general.auto") },
 								{ value: "off", label: t("transcript.thinkingOff") },
 								...efforts.map(lv => ({
 									value: lv,

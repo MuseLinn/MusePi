@@ -81,11 +81,11 @@ function resultPhase(res: Record<string, unknown>): "ok" | "warn" | "err" {
 }
 
 /** Phase of a live progress row. */
-function progressPhase(p: Record<string, unknown>): "ok" | "tools.run" | "err" {
-	const status = str(p.status) ?? "tools.running";
-	if (status === "tools.completed") return "ok";
-	if (status === "tools.failed" || status === "tools.aborted") return "err";
-	return "tools.run";
+function progressPhase(p: Record<string, unknown>): "ok" | "run" | "err" {
+	const status = str(p.status) ?? "running";
+	if (status === "completed") return "ok";
+	if (status === "failed" || status === "aborted") return "err";
+	return "run";
 }
 
 /**
@@ -95,8 +95,8 @@ function progressPhase(p: Record<string, unknown>): "ok" | "tools.run" | "err" {
  * (coding-agent `computeProgress`), and both surfaces must read the same.
  */
 export function agentProgressFraction(p: { status?: unknown; toolCount?: unknown }): number {
-	const status = typeof p.status === "string" ? p.status : "tools.running";
-	if (status === "tools.completed" || status === "tools.failed" || status === "tools.aborted") return 1;
+	const status = typeof p.status === "string" ? p.status : "running";
+	if (status === "completed" || status === "failed" || status === "aborted") return 1;
 	const toolCount = typeof p.toolCount === "number" ? p.toolCount : 0;
 	if (status === "pending" || toolCount <= 0) return 0;
 	return Math.min(1, toolCount / (toolCount + 2));
@@ -129,10 +129,10 @@ function swarmCounts(results: Record<string, unknown>[], progress: Record<string
 		}
 	} else {
 		for (const p of progress) {
-			const status = str(p.status) ?? "tools.running";
-			if (status === "tools.completed") c.done++;
-			else if (status === "tools.failed") c.failed++;
-			else if (status === "tools.aborted") c.aborted++;
+			const status = str(p.status) ?? "running";
+			if (status === "completed") c.done++;
+			else if (status === "failed") c.failed++;
+			else if (status === "aborted") c.aborted++;
 			else c.running++;
 		}
 	}
@@ -343,7 +343,7 @@ function SwarmOverview({
 const SWARM_MATRIX_DOTS = 16;
 const SWARM_MATRIX_COLS = 8;
 
-function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "warn" | "err" | "tools.run" }): ReactNode {
+function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "warn" | "err" | "run" }): ReactNode {
 	const filled = Math.round(Math.min(1, Math.max(0, fraction)) * SWARM_MATRIX_DOTS);
 	return (
 		<span
@@ -356,7 +356,7 @@ function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "war
 					key={i}
 					className={
 						i < filled
-							? `tv-swarm-matrix-dot tv-swarm-matrix-dot--on${i === filled - 1 && phase === "tools.run" ? " tv-swarm-matrix-dot--tip" : ""}`
+							? `tv-swarm-matrix-dot tv-swarm-matrix-dot--on${i === filled - 1 && phase === "run" ? " tv-swarm-matrix-dot--tip" : ""}`
 							: "tv-swarm-matrix-dot"
 					}
 				/>
@@ -374,7 +374,7 @@ function SwarmFoot({
 	status,
 	children,
 }: {
-	phase: "ok" | "warn" | "err" | "tools.run";
+	phase: "ok" | "warn" | "err" | "run";
 	fraction: number;
 	status: string;
 	children?: ReactNode;
@@ -513,13 +513,13 @@ function SwarmAgentProgressRow({
 	host?: ToolRenderHost;
 	index: number;
 }): ReactNode {
-	const status = str(p.status) ?? "tools.running";
+	const status = str(p.status) ?? "running";
 	const tone =
-		status === "tools.completed"
+		status === "completed"
 			? ("ok" as const)
-			: status === "tools.failed" || status === "tools.aborted"
+			: status === "failed" || status === "aborted"
 				? ("err" as const)
-				: status === "tools.running"
+				: status === "running"
 					? ("accent" as const)
 					: undefined;
 	const phase = progressPhase(p);
@@ -535,9 +535,9 @@ function SwarmAgentProgressRow({
 	if (durationMs) bits.push(fmtDuration(durationMs));
 	// Foot status, kimiwork semantics: what the agent is doing right now.
 	const footStatus =
-		status === "tools.running"
+		status === "running"
 			? t("tools.swarmWorking")
-			: status === "tools.completed"
+			: status === "completed"
 				? toolCount > 0
 					? t("tools.toolsWithCount", { count: String(toolCount) })
 					: t("tools.completed")
@@ -562,7 +562,7 @@ function SwarmAgentProgressRow({
 					)}
 					{bits.length > 0 && <div className="tv-swarm-member-stats">{bits.join(" · ")}</div>}
 					<SwarmFoot
-						phase={phase === "ok" ? "ok" : phase === "err" ? "err" : "tools.run"}
+						phase={phase === "ok" ? "ok" : phase === "err" ? "err" : "run"}
 						fraction={agentProgressFraction(p)}
 						status={footStatus}
 					/>
@@ -674,13 +674,13 @@ function AgentProgressRow({
 	open: boolean;
 	onToggle(): void;
 }): ReactNode {
-	const status = str(p.status) ?? "tools.running";
+	const status = str(p.status) ?? "running";
 	const tone =
-		status === "tools.completed"
+		status === "completed"
 			? ("ok" as const)
-			: status === "tools.failed" || status === "tools.aborted"
+			: status === "failed" || status === "aborted"
 				? ("err" as const)
-				: status === "tools.running"
+				: status === "running"
 					? ("accent" as const)
 					: undefined;
 	const id = str(p.id) ?? t("settings.agent");

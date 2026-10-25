@@ -1,5 +1,5 @@
 import { archiveSession, t } from "@musepi/client-core";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
@@ -7,6 +7,7 @@ import { GuiSelect } from "./GuiSelect";
 import { MenuPopup } from "./MenuPopup";
 import { StateIconN } from "./StateIcon";
 import { TaskBoardView, TaskCalendarView } from "./TaskCenterViews";
+import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 /**
  * Scheduled tasks (定时任务) — openchamber scheduled-task parity.
@@ -192,7 +193,7 @@ export function ScheduledTasksPage({
 	const editorTask = draft ?? draftRef.current;
 	const deleteTask = deleteTarget ?? deleteTargetRef.current;
 
-	const refresh = (): void => {
+	const refresh = useCallback((): void => {
 		if (!rpc) return;
 		void rpc
 			.request("cron.list")
@@ -202,7 +203,7 @@ export function ScheduledTasksPage({
 				if (r?.runs) setRuns(r.runs);
 			})
 			.catch(() => {});
-	};
+	}, [rpc]);
 
 	useEffect(() => {
 		aliveRef.current = true;
@@ -222,7 +223,6 @@ export function ScheduledTasksPage({
 			clearInterval(timer);
 			off?.();
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once refresh
 	}, [refresh]);
 
 	// Default selection: first task (openchamber selects the top row).
@@ -339,84 +339,93 @@ export function ScheduledTasksPage({
 		});
 	};
 
+	const openTask = (id: string): void => {
+		setSelectedId(id);
+		setView("tasks");
+	};
+
 	return (
 		<div className="gui-scheduled">
-			<div className="gui-scheduled-head">
-				<h2 className="gui-scheduled-title">{t("settings.scheduledTasks")}</h2>
-				<div className="gui-taskcenter-tabs" role="tablist">
-					{(["calendar", "board", "tasks"] as const).map(v => (
+			<WorkspacePageHeader
+				icon="calendar-schedule"
+				title={t("settings.scheduledTasks")}
+				description={t("settings.scheduledTasksDesc")}
+				onBack={onBack}
+				backLabel={t("settings.backWorkspace")}
+				tabs={
+					<div className="gui-taskcenter-tabs" role="tablist">
+						{(["calendar", "board", "tasks"] as const).map(v => (
+							<button
+								type="button"
+								key={v}
+								role="tab"
+								aria-selected={view === v}
+								className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
+								onClick={() => setView(v)}
+							>
+								<StateIconN
+									value={v}
+									options={{ calendar: "calendar", board: "list-check-2", list: "calendar-schedule" }}
+									className="h-4 w-4"
+								/>
+								<span>
+									{v === "calendar"
+										? t("settings.taskCenterCalendar")
+										: v === "board"
+											? t("settings.taskCenterBoard")
+											: t("settings.taskList")}
+								</span>
+							</button>
+						))}
+					</div>
+				}
+				actions={
+					<>
 						<button
 							type="button"
-							key={v}
-							role="tab"
-							aria-selected={view === v}
-							className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
-							onClick={() => setView(v)}
+							className="gui-btn gui-scheduled-new"
+							onClick={() =>
+								setDraft({
+									id: "",
+									name: "",
+									enabled: true,
+									schedule: { kind: "daily", times: ["09:00"] },
+									prompt: "",
+									cwd: "",
+									thinkingLevel: "default",
+									state: { createdAt: Date.now() },
+								})
+							}
 						>
-							<StateIconN
-								value={v}
-								options={{ calendar: "calendar", board: "list-check-2", list: "calendar-schedule" }}
-								className="h-4 w-4"
-							/>
-							<span>
-								{v === "calendar"
-									? t("settings.taskCenterCalendar")
-									: v === "board"
-										? t("settings.taskCenterBoard")
-										: t("settings.taskList")}
-							</span>
+							<Icon name="add" className="h-4 w-4" />
+							<span>{t("settings.scheduledNew")}</span>
 						</button>
-					))}
-				</div>
-				<p className="gui-scheduled-desc">{t("settings.scheduledTasksDesc")}</p>
-				<div className="gui-scheduled-actions">
-					<button
-						type="button"
-						className="gui-btn gui-scheduled-new"
-						onClick={() =>
-							setDraft({
-								id: "",
-								name: "",
-								enabled: true,
-								schedule: { kind: "daily", times: ["09:00"] },
-								prompt: "",
-								cwd: "",
-								thinkingLevel: "default",
-								state: { createdAt: Date.now() },
-							})
-						}
-					>
-						<Icon name="add" className="h-4 w-4" />
-						<span>{t("settings.scheduledNew")}</span>
-					</button>
-					<button
-						type="button"
-						className="gui-btn"
-						onClick={refresh}
-						title={t("settings.boardRefresh")}
-						aria-label={t("settings.boardRefresh")}
-					>
-						<Icon name="refresh" className="h-4 w-4 oc-icon-spin" />
-					</button>
-					<button type="button" className="gui-btn" onClick={onBack}>
-						{t("settings.backWorkspace")}
-					</button>
-				</div>
-			</div>
+						<button
+							type="button"
+							className="gui-btn"
+							onClick={refresh}
+							title={t("settings.boardRefresh")}
+							aria-label={t("settings.boardRefresh")}
+						>
+							<Icon name="refresh" className="h-4 w-4 oc-icon-spin" />
+						</button>
+					</>
+				}
+			/>
 
 			{view === "calendar" ? (
 				<div className="gui-taskcenter-body">
 					<TaskCalendarView
 						tasks={tasks}
 						runs={runs.map(r => ({ taskId: r.taskId, status: r.status, startedAt: r.startedAt }))}
-						onSelectTask={id => setSelectedId(id)}
+						onSelectTask={openTask}
 					/>
 				</div>
 			) : view === "board" ? (
 				<div className="gui-taskcenter-body">
 					<TaskBoardView
 						tasks={tasks}
-						onSelectTask={id => setSelectedId(id)}
+						onSelectTask={openTask}
 						onToggle={id => {
 							const task = tasks.find(x => x.id === id);
 							if (task) toggle(task);

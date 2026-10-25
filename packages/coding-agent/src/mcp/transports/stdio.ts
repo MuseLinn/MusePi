@@ -360,6 +360,10 @@ export async function resolveStdioSpawnCommand(
 
 	const windowsHide = options.hostHasInheritableConsole === undefined ? true : !options.hostHasInheritableConsole;
 	const resolved = await resolveWindowsCommandPath(config.command, options.cwd, options.env);
+	if (resolved === null && hasPathSegment(config.command)) {
+		const commandPath = path.resolve(options.cwd, config.command);
+		throw Object.assign(new Error(`MCP stdio command not found: ${commandPath}`), { code: "ENOENT" });
+	}
 	const resolvedCommand = resolved ?? config.command;
 	const npmShimCommand = await resolveWindowsNpmShimCommand(resolvedCommand, args, options.cwd, windowsHide);
 	if (npmShimCommand) return npmShimCommand;

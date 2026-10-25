@@ -21,7 +21,7 @@ knowledge { action, kind?, id?, body?, text?, done?, directory?, projectId?, exp
 | `list` | — | 一次列全：所有笔记、待办、计划（含每个计划的文件路径） |
 | `save` | `kind` + 内容 | 新建（不带 id）或替换（带 id） |
 | `delete` | `kind` + `id` | 删除一条 |
-| `show` | `kind: "plan"` + `id` | **在界面上打开**给用户看，同时返回正文 |
+| `show` | `kind` + `id` | 返回条目正文。`kind: "plan"` 会**同时在界面上打开**给用户看；`kind: "note"` 只返回正文（笔记没有独立查看页） |
 
 `save` 的字段按 kind 取：
 

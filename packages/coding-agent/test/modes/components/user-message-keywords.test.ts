@@ -2,9 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import * as url from "node:url";
 import type { AgentMessage } from "@musepi/pi-agent-core";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
 import { UserMessageComponent } from "@musepi/pi-coding-agent/modes/components/user-message";
+import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
@@ -15,10 +17,15 @@ beforeAll(async () => {
 	await Settings.init({ inMemory: true });
 	Settings.instance.set("tui.hyperlinks", "always");
 	await initTheme(false);
+	resetBundledPluginsLoaded();
+	resetMagicKeywordRegistry();
+	await ensureBundledPluginsLoaded(process.cwd());
 });
 
 afterAll(() => {
 	resetSettingsForTest();
+	resetMagicKeywordRegistry();
+	resetBundledPluginsLoaded();
 });
 
 function render(text: string): string {

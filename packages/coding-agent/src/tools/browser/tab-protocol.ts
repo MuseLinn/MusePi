@@ -35,6 +35,33 @@ export interface ScreenshotResult {
 	height: number;
 }
 
+export type BrowserOperationAction =
+	| "goto"
+	| "observe"
+	| "click"
+	| "fill"
+	| "type"
+	| "press"
+	| "select"
+	| "scroll"
+	| "drag"
+	| "hover"
+	| "screenshot"
+	| "evaluate"
+	| "wait";
+
+export interface BrowserOperation {
+	id: string;
+	action: BrowserOperationAction;
+	status: "running" | "completed" | "failed" | "canceled";
+	startedAt: number;
+	endedAt?: number;
+	target?: string;
+	elementCount?: number;
+	truncated?: boolean;
+	error?: string;
+}
+
 export interface SessionSnapshot {
 	cwd: string;
 	browserScreenshotDir?: string;
@@ -95,6 +122,7 @@ export interface RunResultOk {
 	displays: Array<TextContent | ImageContent>;
 	returnValue: unknown;
 	screenshots: ScreenshotResult[];
+	operations?: BrowserOperation[];
 }
 
 export interface RunErrorPayload {
@@ -105,6 +133,7 @@ export interface RunErrorPayload {
 	isAbort: boolean;
 	/** The worker could not restore tab-scoped browser state and must be recycled. */
 	recoverTab?: boolean;
+	operations?: BrowserOperation[];
 }
 
 export type WorkerOutbound =
@@ -112,6 +141,7 @@ export type WorkerOutbound =
 	| { type: "init-failed"; error: RunErrorPayload }
 	| { type: "result"; id: string; ok: true; payload: RunResultOk }
 	| { type: "result"; id: string; ok: false; error: RunErrorPayload }
+	| { type: "activity"; id: string; operations: BrowserOperation[] }
 	| { type: "tool-call"; id: string; runId: string; name: string; args: unknown }
 	| { type: "log"; level: "debug" | "warn" | "error"; msg: string; meta?: Record<string, unknown> }
 	| { type: "closed" };

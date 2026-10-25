@@ -1546,8 +1546,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	const modelRegistry =
 		options.modelRegistry ??
 		new ModelRegistry(options.authStorage ?? (await logger.time("discoverModels", discoverAuthStorage, agentDir)));
-	// Track whether we internally created the authStorage so we can close it
-	// if construction fails before the session takes ownership.
+	// Track whether we internally created the authStorage so disposal can close it.
+	// Caller-provided storage stays owned by the caller.
 	const ownsAuthStorage = !options.authStorage && !options.modelRegistry;
 	const authStorage = modelRegistry.authStorage;
 	if (options.authStorage && options.authStorage !== authStorage) {
@@ -4371,6 +4371,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					// the bridge closure past explicit dispose.
 					unsubscribeMcpNotifications = undefined;
 					unregisterMcpPostmortem = undefined;
+					if (ownsAuthStorage) authStorage.close();
 				}
 			};
 		}

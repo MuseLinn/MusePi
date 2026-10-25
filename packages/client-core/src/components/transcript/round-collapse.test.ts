@@ -38,6 +38,20 @@ const toolResult = (toolCallId: string, toolName = "read"): SessionEntry =>
 const custom = (customType: string): SessionEntry =>
 	withId({ type: "custom_message", customType, content: "x", display: true });
 
+const browserResult = (toolCallId: string, operations: unknown[], isError = false): SessionEntry =>
+	withId({
+		type: "message",
+		message: {
+			role: "toolResult",
+			toolCallId,
+			toolName: "browser",
+			content: [{ type: "text", text: isError ? "failed" : "ok" }],
+			details: { action: "run", name: "main", url: "https://example.com", operations },
+			isError,
+			timestamp: 1,
+		},
+	});
+
 describe("buildRoundFolds tail/hook exemption (design doc §C)", () => {
 	test("tail rows stay visible while the fold is closed", () => {
 		const entries = [
@@ -201,5 +215,31 @@ describe("buildToolRuns (工具调用汇总, Kimi parity)", () => {
 		const runs = buildToolRuns(entries, false);
 		expect(runs[0]!.edits).toBe(1);
 		expect(runs[0]!.reads).toBe(1);
+	});
+
+	test("browser calls summarize pages and operations, with equivalent recovered retries excluded from failures", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("b1", "browser"),
+			browserResult(
+				"b1",
+				[
+					{ id: "1", action: "observe", status: "completed", startedAt: 1, elementCount: 4 },
+					{ id: "2", action: "click", status: "failed", startedAt: 2, target: "#go" },
+				],
+				true,
+			),
+			assistantToolCall("b2", "browser"),
+			browserResult("b2", [{ id: "3", action: "click", status: "completed", startedAt: 3, target: "#go" }]),
+			assistantText("done"),
+		];
+
+		const run = buildToolRuns(entries, false)[0]!;
+		expect(run.other).toBe(0);
+		expect(run.browser?.calls).toBe(2);
+		expect(run.browser?.pages).toBe(1);
+		expect(run.browser?.actions.click).toEqual({ count: 1, failed: 0 });
+		expect(run.browser?.recoveredFailures).toBe(1);
+		expect(run.browser?.residualFailures).toBe(0);
 	});
 });

@@ -434,12 +434,19 @@ const SessionRow = memo(function SessionRow({
 	}, [anim]);
 	return (
 		<li ref={itemRef}>
-			<button
-				type="button"
+			<div
+				role="button"
+				tabIndex={0}
 				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${unread ? " gui-session-row--unread" : ""}`}
 				onClick={() => {
 					tapFeedback();
-					// 点开即收卡:行位置随排序/状态变化,卡片锚点已失效。
+					clearSessionHover();
+					onSelect(id);
+				}}
+				onKeyDown={event => {
+					if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+					event.preventDefault();
+					tapFeedback();
 					clearSessionHover();
 					onSelect(id);
 				}}
@@ -563,7 +570,7 @@ const SessionRow = memo(function SessionRow({
 				>
 					{rowTime(updatedAt ?? timestamp)}
 				</span>
-			</button>
+			</div>
 		</li>
 	);
 });
@@ -673,7 +680,7 @@ function SessionListComponent({
 		return map;
 	}, [ordered]);
 	const animFor = (id: string): SubtreePhase | null => {
-		let current: string | undefined = id;
+		let current = parentOf.get(id);
 		while (current !== undefined) {
 			const phase = phases.get(current);
 			if (phase !== undefined) return phase;

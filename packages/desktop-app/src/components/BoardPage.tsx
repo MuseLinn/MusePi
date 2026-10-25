@@ -43,6 +43,7 @@ import { DialogFrame } from "./DialogFrame";
 import { StateIcon } from "./StateIcon";
 import { TaskModal, widgetHasTask } from "./TaskModal";
 import { WidgetEditor } from "./WidgetEditor";
+import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 /**
  * BoardPage — kimi-work-style widget boards (docs/archive/board-dashboard.md).
@@ -142,12 +143,14 @@ function BoardHome({
 	onCreate,
 	onDelete,
 	onChatCreate,
+	onBack,
 }: {
 	boards: BoardData[];
 	onOpen(id: string): void;
 	onCreate(title: string): void;
 	onDelete(id: string): void;
 	onChatCreate(text: string): void;
+	onBack(): void;
 }): ReactNode {
 	const [draft, setDraft] = useState("");
 	// Collection-card context menu (open / delete — the examples must be
@@ -177,14 +180,19 @@ function BoardHome({
 	};
 	return (
 		<div className="gui-board-home">
-			<div className="gui-board-home-head">
-				<h2 className="gui-board-home-title">{t("settings.board")}</h2>
-				<p className="gui-board-home-desc">{t("settings.boardHomeDesc")}</p>
-				<button type="button" className="gui-btn gui-board-home-chat" onClick={() => onChatCreate("")}>
-					<Icon name="add" className="h-4 w-4" />
-					<span>{t("settings.boardChatCreate")}</span>
-				</button>
-			</div>
+			<WorkspacePageHeader
+				icon="stack"
+				title={t("settings.board")}
+				description={t("settings.boardHomeDesc")}
+				onBack={onBack}
+				backLabel={t("settings.backWorkspace")}
+				actions={
+					<button type="button" className="gui-btn gui-board-home-chat" onClick={() => onChatCreate("")}>
+						<Icon name="add" className="h-4 w-4" />
+						<span>{t("settings.boardChatCreate")}</span>
+					</button>
+				}
+			/>
 			<div className="gui-board-home-grid">
 				{boards.map((b, bi) => (
 					<button
@@ -1023,6 +1031,7 @@ export function BoardPage({
 					onCreate={createBoard}
 					onDelete={removeBoard}
 					onChatCreate={text => onChatCreate?.(text)}
+					onBack={onBack}
 				/>
 			</div>
 		);
@@ -1136,73 +1145,67 @@ export function BoardPage({
 	};
 	const boardView = (
 		<div className="gui-board">
-			<div className="gui-board-head">
-				<button
-					type="button"
-					className="gui-tool-btn"
-					onClick={openBoardHome}
-					aria-label={t("settings.back")}
-					title={t("settings.back")}
-				>
-					<Icon name="arrow-left" className="h-4 w-4" />
-				</button>
-				<div className="gui-board-title-wrap">
-					<input
-						className="gui-board-title"
-						value={active.title}
-						onChange={e => updateBoard(active.id, { title: e.target.value })}
-						aria-label={t("settings.boardTitle")}
-					/>
-					{savedTick && <span className="gui-board-saved">{t("general.saved")}</span>}
-				</div>
-				<div className="gui-board-actions">
-					<button
-						type="button"
-						className={`gui-tool-btn${editMode ? " gui-tool-btn--active" : ""}`}
-						disabled={active.builtin === true}
-						title={active.builtin ? t("settings.boardBuiltin") : t("settings.boardEdit")}
-						aria-label={t("settings.boardEdit")}
-						onClick={() => {
-							setEditMode(v => !v);
-							setSelectedWidgetId(null);
-						}}
-					>
-						<Icon name="pencil" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						className="gui-tool-btn"
-						onClick={() => organizeBoard(active.id)}
-						title={t("settings.boardOrganize")}
-						aria-label={t("settings.boardOrganize")}
-					>
-						<Icon name="layout-column" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						className="gui-tool-btn"
-						onClick={refreshBoards}
-						title={t("settings.boardRefresh")}
-						aria-label={t("settings.boardRefresh")}
-					>
-						<Icon name="refresh" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						className={`gui-btn${genBusy ? " gui-btn--busy" : ""}`}
-						disabled={active.builtin === true || genBusy}
-						title={active.builtin ? t("settings.boardBuiltin") : t("settings.boardGenerate")}
-						aria-label={t("settings.boardGenerate")}
-						onClick={() => setGenOpen(true)}
-					>
-						<StateIcon on={genBusy} pair={["loader", "robot"]} className="h-4 w-4" />
-						<span>{t("settings.boardGenerate")}</span>
-					</button>
-					<button type="button" className="gui-btn" onClick={onBack}>
-						{t("settings.backWorkspace")}
-					</button>
-				</div>
-			</div>
+			<WorkspacePageHeader
+				icon="stack"
+				title={
+					<span className="gui-board-title-wrap">
+						<input
+							className="gui-board-title"
+							value={active.title}
+							onChange={e => updateBoard(active.id, { title: e.target.value })}
+							aria-label={t("settings.boardTitle")}
+						/>
+						{savedTick && <span className="gui-board-saved">{t("general.saved")}</span>}
+					</span>
+				}
+				onBack={openBoardHome}
+				actions={
+					<div className="gui-board-actions">
+						<button
+							type="button"
+							className={`gui-tool-btn${editMode ? " gui-tool-btn--active" : ""}`}
+							disabled={active.builtin === true}
+							title={active.builtin ? t("settings.boardBuiltin") : t("settings.boardEdit")}
+							aria-label={t("settings.boardEdit")}
+							onClick={() => {
+								setEditMode(v => !v);
+								setSelectedWidgetId(null);
+							}}
+						>
+							<Icon name="pencil" className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							className="gui-tool-btn"
+							onClick={() => organizeBoard(active.id)}
+							title={t("settings.boardOrganize")}
+							aria-label={t("settings.boardOrganize")}
+						>
+							<Icon name="layout-column" className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							className="gui-tool-btn"
+							onClick={refreshBoards}
+							title={t("settings.boardRefresh")}
+							aria-label={t("settings.boardRefresh")}
+						>
+							<Icon name="refresh" className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							className={`gui-btn${genBusy ? " gui-btn--busy" : ""}`}
+							disabled={active.builtin === true || genBusy}
+							title={active.builtin ? t("settings.boardBuiltin") : t("settings.boardGenerate")}
+							aria-label={t("settings.boardGenerate")}
+							onClick={() => setGenOpen(true)}
+						>
+							<StateIcon on={genBusy} pair={["loader", "robot"]} className="h-4 w-4" />
+							<span>{t("settings.boardGenerate")}</span>
+						</button>
+					</div>
+				}
+			/>
 			<div className="gui-board-canvas" ref={canvasRef} onPointerMove={onCanvasPointerMove}>
 				<div className="gui-board-surface" style={{ width: BASE_W, transform: `scale(${canvasScale})` }}>
 					{active.widgets.length === 0 && (
@@ -1479,6 +1482,7 @@ export function BoardPage({
 						onCreate={createBoard}
 						onDelete={removeBoard}
 						onChatCreate={text => onChatCreate?.(text)}
+						onBack={onBack}
 					/>
 				</div>
 			</div>
@@ -1494,6 +1498,7 @@ export function BoardPage({
 						onCreate={createBoard}
 						onDelete={removeBoard}
 						onChatCreate={text => onChatCreate?.(text)}
+						onBack={onBack}
 					/>
 				</div>
 			</div>

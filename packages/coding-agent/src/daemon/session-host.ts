@@ -165,20 +165,6 @@ function ghPath(): string | null {
 	return null;
 }
 
-/**
- * Daemon-owned GitHub token: the device-flow token is
- * stored here instead of `gh auth login`, whose token validation hits
- * api.github.com — unreachable on flaky networks, which then fails the whole
- * auth even though the device flow succeeded. gh RPCs receive it via the
- * GH_TOKEN env (higher precedence than the keyring).
- */
-interface StoredGhToken {
-	token: string;
-	login?: string;
-	email?: string;
-	updatedAt: string;
-}
-
 /** M4 P1 连接器清单的一项（`connectors.list` wire 形状，session-host 权威）。 */
 export interface ConnectorServerInfo {
 	/** MCP 服务器原始配置名（白名单同款标识）。 */
@@ -186,46 +172,6 @@ export interface ConnectorServerInfo {
 	transport: "stdio" | "http" | "sse";
 	/** manager 权威健康态——不凭配置显示「已连接」。 */
 	status: "connected" | "connecting" | "disconnected";
-}
-function ghTokenPath(): string {
-	return path.join(getAgentDir(), "github-token.json");
-}
-function readGhToken(): StoredGhToken | null {
-	try {
-		const raw = fs.readFileSync(ghTokenPath(), "utf8");
-		const parsed = JSON.parse(raw) as StoredGhToken;
-		return typeof parsed.token === "string" && parsed.token.length > 0 ? parsed : null;
-	} catch {
-		return null;
-	}
-}
-function writeGhToken(token: string, identity?: { login?: string; email?: string }): void {
-	try {
-		const prev = readGhToken();
-		fs.writeFileSync(
-			ghTokenPath(),
-			JSON.stringify(
-				{
-					token,
-					login: identity?.login ?? prev?.login,
-					email: identity?.email ?? prev?.email,
-					updatedAt: new Date().toISOString(),
-				},
-				null,
-				2,
-			),
-			{ mode: 0o600 },
-		);
-	} catch {
-		// agent dir unavailable — token lost after daemon restart
-	}
-}
-function clearGhToken(): void {
-	try {
-		fs.unlinkSync(ghTokenPath());
-	} catch {
-		// nothing stored
-	}
 }
 
 /**

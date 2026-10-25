@@ -3015,6 +3015,9 @@ export const settings = {
 	"settings.modelReadyOffline": "已就绪 · 本地可用",
 	"settings.launchLogin": "开机启动",
 	"settings.launchLoginDescription": "登录时自动启动 MusePi 后台守护进程（无需打开应用即可保持后台功能可用）",
+	"settings.closeToTray": "关闭窗口时最小化到托盘",
+	"settings.closeToTrayDescription":
+		"开启后点关闭按钮只把窗口藏进托盘，客户端继续在后台运行；关闭时退出客户端，后台的本地守护进程随退出一起停止",
 	"settings.imageVideoGeneration": "图像与视频生成",
 	"settings.imageVideoGenSubtitle":
 		"管理图像生成（generate_image）与视频生成（agnes_video_gen）可用的供应商凭证；密钥保存在本地凭证库，立即对所有会话生效",

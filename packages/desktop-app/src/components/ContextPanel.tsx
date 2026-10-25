@@ -142,6 +142,7 @@ export function ContextPanel({
 	open = true,
 	openRequest = null,
 	browserOpenRequest = null,
+	onBrowserTakeover,
 	extTabs = [],
 	onViewChange,
 	panelTabs,
@@ -181,6 +182,8 @@ export function ContextPanel({
 	/** External browser reveal (chat link click / agent browser.open):
 	 *  switches to the browser tool and navigates the active tab. */
 	browserOpenRequest?: { url: string; nonce: number } | null;
+	/** Stop the current session turn while leaving the managed page intact. */
+	onBrowserTakeover?(): void;
 	/** Extension panel-tab slots (panel.tab.*); nav items live in the
 	 *  RightRail — the panel only renders their content. */
 	extTabs?: import("../lib/slot-host").SlotComponent[];
@@ -814,7 +817,7 @@ export function ContextPanel({
 				 * browser-rendering.md §1.2 (A1: the old "native WebContentsView
 				 * projection" motive is gone; the host stays for the maximized
 				 * layering and blank start-page glass stacking). */
-				<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} />
+				<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} onTakeover={onBrowserTakeover} />
 			)
 		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
 			<GitPanel rpc={rpc} cwd={cwd} />
@@ -1719,14 +1722,16 @@ function BrowserPane({
 	open,
 	rpc,
 	browserOpenRequest = null,
+	onTakeover,
 }: {
 	open: boolean;
 	rpc: RpcClient;
 	browserOpenRequest?: { url: string; nonce: number } | null;
+	onTakeover?(): void;
 }): ReactNode {
 	// Electron shell → the managed browser (shared with the agent's browser tool);
 	// plain-browser builds keep the iframe fallback.
-	if (isElectron()) return <ManagedBrowserPane open={open} openRequest={browserOpenRequest} />;
+	if (isElectron()) return <ManagedBrowserPane open={open} openRequest={browserOpenRequest} onTakeover={onTakeover} />;
 	return <LegacyBrowserPane rpc={rpc} />;
 }
 

@@ -100,6 +100,7 @@ import {
 	stringProperty,
 	withTimeout,
 } from "@musepi/pi-utils";
+import type { MessageDisplayContext } from "@musepi/pi-wire";
 import { type AdvisorConfig, type AdvisorRuntimeStatus, loadAdvisorTranscriptCosts } from "../advisor";
 import { ASYNC_JOB_MANAGER_SHUTDOWN_REASON, type AsyncJob, AsyncJobManager } from "../async";
 import { reset as resetCapabilities } from "../capability";
@@ -5840,9 +5841,13 @@ export class AgentSession {
 				await this.#queueCustomMessage(notice, streamingBehavior);
 			}
 			if (streamingBehavior === "followUp") {
-				await this.#queueUserMessage(expandedText, options?.images, "followUp");
+				await this.#queueUserMessage(expandedText, options?.images, "followUp", {
+					displayContext: options?.displayContext,
+				});
 			} else {
-				await this.#queueUserMessage(expandedText, options?.images, "steer");
+				await this.#queueUserMessage(expandedText, options?.images, "steer", {
+					displayContext: options?.displayContext,
+				});
 			}
 			return true;
 		}
@@ -5883,7 +5888,13 @@ export class AgentSession {
 		}
 		const message = options?.synthetic
 			? { role: "developer" as const, content: userContent, attribution: promptAttribution, timestamp: Date.now() }
-			: { role: "user" as const, content: userContent, attribution: promptAttribution, timestamp: Date.now() };
+			: {
+					role: "user" as const,
+					content: userContent,
+					attribution: promptAttribution,
+					timestamp: Date.now(),
+					...(options?.displayContext ? { displayContext: options.displayContext } : {}),
+				};
 
 		const preludeMessages: AgentMessage[] = [];
 		if (eagerTodoPrelude) {
@@ -6453,13 +6464,13 @@ export class AgentSession {
 	/**
 	 * Queue a steering message to interrupt the agent mid-run.
 	 */
-	async steer(text: string, images?: ImageContent[]): Promise<void> {
+	async steer(text: string, images?: ImageContent[], displayContext?: MessageDisplayContext): Promise<void> {
 		if (text.startsWith("/")) {
 			this.#throwIfExtensionCommand(text);
 		}
 
 		const expandedText = expandPromptTemplate(text, [...this.#promptTemplates]);
-		await this.#queueUserMessage(expandedText, images, "steer");
+		await this.#queueUserMessage(expandedText, images, "steer", { displayContext });
 	}
 
 	/**
@@ -6477,7 +6488,7 @@ export class AgentSession {
 		const expandedText =
 			options?.expandPromptTemplates === false ? text : expandPromptTemplate(text, [...this.#promptTemplates]);
 		if (!options?.synthetic) {
-			await this.#queueUserMessage(expandedText, images, "followUp");
+			await this.#queueUserMessage(expandedText, images, "followUp", { displayContext: options?.displayContext });
 			return;
 		}
 		// Synthetic branch: agent-initiated hidden developer message. Bypass
@@ -6507,7 +6518,7 @@ export class AgentSession {
 		text: string,
 		images: ImageContent[] | undefined,
 		mode: "steer" | "followUp",
-		options?: { prepend?: boolean },
+		options?: { prepend?: boolean; displayContext?: MessageDisplayContext },
 	): Promise<void> {
 		// A queued user message (RPC/SDK/collab steer or follow-up, or a typed message
 		// while streaming) is a deliberate resume; re-enable advisor auto-resume that
@@ -6524,6 +6535,7 @@ export class AgentSession {
 			? await this.#buildImageDescriptionNotice(normalizedImages)
 			: undefined;
 		this.#allowQueuedMessageDrainRetry();
+		const displayContext = options?.displayContext;
 		if (mode === "followUp") {
 			if (imageDescriptionNotice) this.agent.followUp(imageDescriptionNotice);
 			this.agent.followUp({
@@ -6531,6 +6543,7 @@ export class AgentSession {
 				content,
 				attribution: "user",
 				timestamp: Date.now(),
+				...(displayContext ? { displayContext } : {}),
 			});
 		} else if (options?.prepend) {
 			// 立即发出插到队首:steering 默认 one-at-a-time、循环每个注入边界只取队首
@@ -6542,6 +6555,7 @@ export class AgentSession {
 				steering: true,
 				attribution: "user",
 				timestamp: Date.now(),
+				...(displayContext ? { displayContext } : {}),
 			};
 			const head = imageDescriptionNotice ? [imageDescriptionNotice, userMessage] : [userMessage];
 			this.agent.replaceQueues([...head, ...this.agent.peekSteeringQueue()], [...this.agent.peekFollowUpQueue()]);
@@ -6553,6 +6567,7 @@ export class AgentSession {
 				steering: true,
 				attribution: "user",
 				timestamp: Date.now(),
+				...(displayContext ? { displayContext } : {}),
 			});
 		}
 		this.#scheduleIdleQueueDrain();
@@ -6894,7 +6909,7 @@ export class AgentSession {
 	 */
 	async sendUserMessage(
 		content: string | (TextContent | ImageContent)[],
-		options?: { deliverAs?: "steer" | "followUp" | "continue" },
+		options?: { deliverAs?: "steer" | "followUp" | "continue"; displayContext?: MessageDisplayContext },
 	): Promise<void> {
 		// Normalize content to text string + optional images
 		let text: string;
@@ -6917,11 +6932,11 @@ export class AgentSession {
 		}
 
 		if (options?.deliverAs === "followUp") {
-			await this.#queueUserMessage(text, images, "followUp");
+			await this.#queueUserMessage(text, images, "followUp", { displayContext: options.displayContext });
 			return;
 		}
 		if (options?.deliverAs === "steer") {
-			await this.#queueUserMessage(text, images, "steer");
+			await this.#queueUserMessage(text, images, "steer", { displayContext: options.displayContext });
 			return;
 		}
 		if (options?.deliverAs === "continue") {
@@ -6944,6 +6959,7 @@ export class AgentSession {
 		await this.prompt(text, {
 			expandPromptTemplates: false,
 			images,
+			displayContext: options?.displayContext,
 			streamingBehavior: "steer",
 		});
 	}
@@ -6963,7 +6979,10 @@ export class AgentSession {
 		else this.agent.replaceQueues([...this.agent.peekSteeringQueue()], rest);
 		this.#reconcileQueuedMessageDrain();
 		const restored = toRestoredQueuedMessage(queue[index]);
-		await this.#queueUserMessage(restored.text, restored.images, "steer", { prepend: true });
+		await this.#queueUserMessage(restored.text, restored.images, "steer", {
+			prepend: true,
+			displayContext: restored.displayContext,
+		});
 		return true;
 	}
 

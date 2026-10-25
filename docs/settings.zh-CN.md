@@ -1,3 +1,14 @@
+---
+layout: default
+title: 设置与配置优先级
+status: living
+summary: 设置来源、schema、项目覆盖、运行时优先级和配置工作流。
+scope:
+  - packages/coding-agent/src/config
+  - packages/coding-agent/src/commands
+lang: zh-CN
+---
+
 # 设置
 
 [English](settings.md) | 中文

@@ -20,7 +20,7 @@
  *
  * - **简洁模式**：只显示速度与缓存命中率两枚纯读数胶囊，无弹窗；
  * - **详细模式**：两枚胶囊都可点击（活动胶囊在没有计时读数时退化为纯读数）；
- * - **没有任何活动时整行不渲染**——空读数行只是噪音。
+ * - **没有读数时保留固定高度并显示 `—`**——初始加载和空会话不推动输入区。
  *
  * 弹窗行为约定：同一行最多开一个；Escape 或点外部关闭；弹窗门户到
  * body 并用锚点量位，不被输入区的裁切上下文吞掉。
@@ -42,6 +42,7 @@ declare const React: {
 	Fragment: unknown;
 	useState: <T>(initial: T | (() => T)) => [T, (v: T | ((prev: T) => T)) => void];
 	useEffect: (fn: () => void | (() => void), deps?: readonly unknown[]) => void;
+	useLayoutEffect: (fn: () => void | (() => void), deps?: readonly unknown[]) => void;
 	useRef: <T>(initial: T | null) => { current: T | null };
 	useSyncExternalStore: <T>(subscribe: (cb: () => void) => () => void, get: () => T, getServer: () => T) => T;
 };
@@ -244,8 +245,9 @@ function Popover(props: {
 }): ReactNode {
 	const { open, onClose, anchorRef, title, titleValue, icon, children } = props;
 	const [pos, setPos] = React.useState<{ left: number; top: number } | null>(null);
+	const [mounted, setMounted] = React.useState(open);
 
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
 		if (!open) return;
 		const rect = anchorRef.current?.getBoundingClientRect();
 		if (rect) {
@@ -275,23 +277,44 @@ function Popover(props: {
 		};
 	}, [open, onClose, anchorRef]);
 
-	if (!open) return null;
+	React.useEffect(() => {
+		if (open) {
+			setMounted(true);
+			return;
+		}
+		if (!mounted) return;
+		const timer = setTimeout(() => setMounted(false), 140);
+		return () => clearTimeout(timer);
+	}, [open, mounted]);
+
+	if (!mounted) return null;
 	const style: Record<string, unknown> = pos
 		? { left: pos.left, top: pos.top, transform: "translate(-50%, -100%)" }
-		: { left: -9999, top: -9999 };
+		: { left: -9999, top: -9999, transform: "translate(-50%, -100%)" };
 	return React.createPortal(
 		React.createElement(
 			"div",
-			{ className: "mpstats-pop", role: "dialog", "aria-label": title, style },
+			{
+				className: open ? "mpstats-pop" : "mpstats-pop mpstats-pop--closing",
+				role: "dialog",
+				"aria-label": title,
+				style,
+			},
 			React.createElement(
 				"div",
-				{ className: "mpstats-pop-title" },
-				icon,
-				React.createElement("span", null, title),
-				titleValue !== undefined ? React.createElement("span", { className: "mpstats-pop-val" }, titleValue) : null,
+				{ className: "mpstats-pop-motion" },
+				React.createElement(
+					"div",
+					{ className: "mpstats-pop-title" },
+					icon,
+					React.createElement("span", null, title),
+					titleValue !== undefined
+						? React.createElement("span", { className: "mpstats-pop-val" }, titleValue)
+						: null,
+				),
+				React.createElement("div", { className: "mpstats-pop-rule", "aria-hidden": true }),
+				children,
 			),
-			React.createElement("div", { className: "mpstats-pop-rule", "aria-hidden": true }),
-			children,
 		),
 		document.body,
 	);
@@ -487,29 +510,42 @@ function UsagePill(props: {
 export default function StatsRow(props: SlotProps): ReactNode {
 	const { rpc, sessionId } = props;
 	const mode = React.useSyncExternalStore(subscribeStatsMode, readStatsMode, () => "detailed" as StatsMode);
-	const [usage, setUsage] = React.useState<UsageView | null>(null);
-	const [windowStats, setWindowStats] = React.useState<WindowStatsView | null>(null);
+	const [readings, setReadings] = React.useState<{
+		sessionId: string | null;
+		usage: UsageView | null;
+		windowStats: WindowStatsView | null;
+	}>({ sessionId: null, usage: null, windowStats: null });
 	// 同一行最多开一个弹窗（Escape/外部点按关闭，互不叠放）。
 	const [openStat, setOpenStat] = React.useState<StatId | null>(null);
 	const activityAnchor = React.useRef<ElemLike | null>(null);
 	const usageAnchor = React.useRef<ElemLike | null>(null);
+	const currentSessionId = sessionId ?? null;
+	const usage = readings.sessionId === currentSessionId ? readings.usage : null;
+	const windowStats = readings.sessionId === currentSessionId ? readings.windowStats : null;
+	const empty = React.createElement("span", { className: "mpstats-empty", "aria-hidden": true }, "—");
 
 	React.useEffect(() => {
+		setReadings(current =>
+			current.sessionId === currentSessionId
+				? current
+				: { sessionId: currentSessionId, usage: null, windowStats: null },
+		);
+		setOpenStat(null);
 		if (!rpc || !sessionId) return;
 		let alive = true;
 		const poll = (): void => {
 			void rpc
 				.request<ContextUsageResponse | null>("session.contextUsage", { sessionId })
 				.then(row => {
-					if (!alive) return;
-					setUsage(row?.usage ?? null);
-					setWindowStats(row?.windowStats ?? null);
+					if (!alive || row === null) return;
+					setReadings({
+						sessionId,
+						usage: row.usage ?? null,
+						windowStats: row.windowStats ?? null,
+					});
 				})
 				.catch(() => {
-					// 读数缺失只是不显示，不是错误。
-					if (!alive) return;
-					setUsage(null);
-					setWindowStats(null);
+					// A transient read failure must not erase the last good readings.
 				});
 		};
 		poll();
@@ -518,14 +554,12 @@ export default function StatsRow(props: SlotProps): ReactNode {
 			alive = false;
 			clearInterval(timer);
 		};
-	}, [rpc, sessionId]);
+	}, [rpc, currentSessionId, sessionId]);
 
-	if (!usage && !windowStats) return null;
 	if (mode === "compact") {
 		// Compact = plain readings only (speed + cache hit); no popovers.
 		const speed = windowStats ? formatSpeed(windowStats) : null;
 		const hit = usage !== null && hasTokenActivity(usage) && usage.cacheHitRate !== null ? usage.cacheHitRate : null;
-		if (speed === null && hit === null) return null;
 		return React.createElement(
 			"div",
 			{ className: "mpstats-row", "data-composer-stats": "" },
@@ -547,12 +581,12 @@ export default function StatsRow(props: SlotProps): ReactNode {
 						anchorRef: usageAnchor,
 					})
 				: null,
+			speed === null && hit === null ? empty : null,
 		);
 	}
 	const stats = windowStats;
 	const showActivity = stats !== null && stats.steps > 0;
 	const showUsage = hasTokenActivity(usage);
-	if (!showActivity && !showUsage) return null;
 	const toggle = (id: StatId) => (): void => {
 		setOpenStat(prev => (prev === id ? null : id));
 	};
@@ -577,5 +611,6 @@ export default function StatsRow(props: SlotProps): ReactNode {
 					anchorRef: usageAnchor,
 				})
 			: null,
+		!showActivity && !showUsage ? empty : null,
 	);
 }

@@ -239,7 +239,7 @@ export interface PackedTarball {
 
 /** Read the package identity npm will publish from the packed archive. */
 export async function inspectPackedTarball(tarballPath: string): Promise<PackedTarball> {
-	const extracted = await $`tar -xOzf ${tarballPath} package/package.json`.quiet().nothrow();
+	const extracted = await $`tar --force-local -xOzf ${tarballPath} package/package.json`.quiet().nothrow();
 	if (extracted.exitCode !== 0) {
 		throw new Error(`Could not read packed manifest from ${tarballPath}: ${extracted.stderr.toString().trim()}`);
 	}

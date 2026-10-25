@@ -3171,6 +3171,9 @@ export const settings = {
 	"settings.launchLogin": "Launch at login",
 	"settings.launchLoginDescription":
 		"Start the MusePi daemon automatically when you log in (keeps background features available without opening the app)",
+	"settings.closeToTray": "Minimize to tray when closing the window",
+	"settings.closeToTrayDescription":
+		"When on, the close button hides the window to the tray and the app keeps running in the background; when off, closing quits the app and stops the local daemon with it",
 	"settings.imageVideoGeneration": "Image & video generation",
 	"settings.imageVideoGenSubtitle":
 		"Manage provider credentials for image generation (generate_image) and video generation (agnes_video_gen); keys are stored in the local credential store and take effect for every session immediately",

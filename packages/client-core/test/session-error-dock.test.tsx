@@ -23,34 +23,34 @@ import "./transcript-dom-shim";
  */
 const userPrompt = (id: string, iso = "2026-10-05T00:00:00Z"): SessionEntry =>
 	({
-		type: "settings.message",
+		type: "message",
 		id,
 		parentId: null,
 		timestamp: iso,
-		message: { role: "general.user", content: [{ type: "tools.text", text: "go" }], timestamp: 1 },
+		message: { role: "user", content: [{ type: "text", text: "go" }], timestamp: 1 },
 	}) as unknown as SessionEntry;
 
 const assistantReply = (id: string): SessionEntry =>
 	({
-		type: "settings.message",
+		type: "message",
 		id,
 		parentId: null,
 		timestamp: "2026-10-05T00:00:01Z",
 		message: {
-			role: "general.assistant",
-			content: [{ type: "tools.text", text: "tools.done" }],
-			stopReason: "settings.stop",
+			role: "assistant",
+			content: [{ type: "text", text: "done" }],
+			stopReason: "stop",
 			timestamp: 2,
 		},
 	}) as unknown as SessionEntry;
 
 const assistantError = (id: string, text: string): SessionEntry =>
 	({
-		type: "settings.message",
+		type: "message",
 		id,
 		parentId: null,
 		timestamp: "2026-10-05T00:00:01Z",
-		message: { role: "general.assistant", content: [], stopReason: "tools.error", errorMessage: text, timestamp: 2 },
+		message: { role: "assistant", content: [], stopReason: "error", errorMessage: text, timestamp: 2 },
 	}) as unknown as SessionEntry;
 
 const retryRow = (id: string, text: string, attempt?: number): SessionEntry =>
@@ -121,11 +121,11 @@ describe("readUnansweredCandidate", () => {
 		// Date.parse of a malformed stamp is NaN, and a candidate keyed on NaN would
 		// never reach its 5s deadline — the notice would simply never appear.
 		const bad = {
-			type: "settings.message",
+			type: "message",
 			id: "u1",
 			parentId: null,
 			timestamp: "not-a-date",
-			message: { role: "general.user", content: [{ type: "tools.text", text: "go" }], timestamp: 1 },
+			message: { role: "user", content: [{ type: "text", text: "go" }], timestamp: 1 },
 		} as unknown as SessionEntry;
 
 		expect(readUnansweredCandidate([bad], false)).toBeNull();
@@ -239,7 +239,7 @@ describe("SessionErrorDock", () => {
 		// about a round that finished before the dock appeared.
 		const html = renderToStaticMarkup(<SessionErrorDock entries={[retryRow("c1", "429")]} working={false} />);
 
-		expect(html).toContain('role="tools.status"');
+		expect(html).toContain('role="status"');
 		expect(html).not.toContain('role="alert"');
 	});
 

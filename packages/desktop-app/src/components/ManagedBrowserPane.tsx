@@ -17,16 +17,18 @@
  * auto-open the panel (ContextPanel listens for agentActivity).
  */
 import { t } from "@musepi/client-core";
-import {
-	dispatchAnnotationAttach,
-	formatAnnotationPrompt,
-	resolveAnnotationOverlayTheme,
-} from "@musepi/client-core/src/annotation";
+import { dispatchAnnotationResult, resolveAnnotationOverlayTheme } from "@musepi/client-core/src/annotation";
 import { widgetHostTheme } from "@musepi/client-core/src/widgets/html";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
-import { fitViewport } from "../lib/browser-viewport";
+import {
+	clampViewportSize,
+	fitViewport,
+	resolveViewportScale,
+	viewportClip,
+	viewportOverflow,
+} from "../lib/browser-viewport";
 import { openExternalUrl } from "../lib/electron";
 import {
 	answerConfirm,
@@ -43,28 +45,22 @@ import {
 	setPaneRect,
 	stopAgentOp,
 	subscribeHost,
+	takeoverAgentOp,
 } from "../lib/managed-browser-host";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
+import { useTabMotion } from "../lib/use-tab-motion";
 import { Icon } from "../vendor/oc-icons";
+import { BrowserControlOverlay } from "./browser-control-overlay";
+import {
+	BROWSER_VIEWPORTS,
+	BrowserDeviceToolbar,
+	type BrowserPageBackground,
+	type BrowserViewportPreset,
+} from "./browser-device-toolbar";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { StateIcon } from "./StateIcon";
-
-const statusLabel = (status: string): string => {
-	switch (status) {
-		case "tools.dispatched":
-			return t("tools.dispatched");
-		case "tools.failed":
-			return t("tools.failed");
-		case "tools.canceled":
-			return t("tools.canceled");
-		case "verified":
-			return t("tools.completed");
-		default:
-			return t("tools.completed");
-	}
-};
 
 // ── URL helpers (open-design DesignBrowserPanel parity) ───────────────
 
@@ -202,15 +198,6 @@ function isHistoryUrl(url: string): boolean {
 	return url !== EMPTY_URL && (/^https?:\/\//i.test(url) || /^omp-file:\/\//i.test(url));
 }
 
-// ── viewport presets (legacy pane parity, moved into the managed pane) ─
-
-const VIEWPORTS = [
-	{ key: "tools.browserViewportFit", width: null as number | null, device: "fit" },
-	{ key: "tools.browserViewportPhone", width: 393, device: "phone" },
-	{ key: "tools.browserViewportTablet", width: 768, device: "tablet" },
-	{ key: "tools.browserViewportDesktop", width: 1440, device: "desktop" },
-] as const;
-
 // ── quick links (start page 快速链接) ─────────────────────────────────
 
 const QUICK_LINKS: Array<{
@@ -229,6 +216,7 @@ const QUICK_LINKS: Array<{
 export function ManagedBrowserPane({
 	open = true,
 	openRequest = null,
+	onTakeover,
 }: {
 	/** External reveal (chat link click / agent browser open): navigate the
 	 *  active tab to this URL when the nonce advances (proma
@@ -237,6 +225,8 @@ export function ManagedBrowserPane({
 	/** Panel fold state. A closed panel keeps this pane mounted at width 0, so
 	 *  the pane cannot infer visibility from its own geometry. */
 	open?: boolean;
+	/** Stop the current session turn without closing the managed page. */
+	onTakeover?(): void;
 } = {}): ReactNode {
 	// 页面状态在宿主 store 里(`<webview>` 元素由常驻的 ManagedBrowserHost 持有);
 	// 本组件只渲染 chrome,并把内容槽位的 rect 报给宿主定位。
@@ -254,10 +244,15 @@ export function ManagedBrowserPane({
 	// Preset KEY, not its width: the key also carries the device identity the
 	// page is served under (see the device-preset effect below), while the
 	// width drives the fit-scaling.
-	const [viewportKey, setViewportKey] = useState<(typeof VIEWPORTS)[number]["key"]>("tools.browserViewportFit");
-	const viewport = VIEWPORTS.find(v => v.key === viewportKey)?.width ?? null;
+	const [viewportKey, setViewportKey] = useState<BrowserViewportPreset>("tools.browserViewportFit");
+	const activePreset = BROWSER_VIEWPORTS.find(preset => preset.key === viewportKey) ?? BROWSER_VIEWPORTS[0];
+	const viewport = activePreset.width;
+	const [displayScale, setDisplayScale] = useState<"fit" | number>("fit");
+	const [pageBackground, setPageBackground] = useState<BrowserPageBackground>("auto");
 	const [copied, setCopied] = useState(false);
 	const slotRef = useRef<HTMLDivElement | null>(null);
+	const contentRef = useRef<HTMLDivElement | null>(null);
+	const [controlRect, setControlRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 	// 横向边缘羽化:标签页 strip 横向滚动时左右羽化(通用 .gui-panel-tabs
 	// 类,与 ContextPanel 的 agent tabs strip 同配方)。
 	const tabsRef = useRef<HTMLDivElement | null>(null);
@@ -331,7 +326,7 @@ export function ManagedBrowserPane({
 	// catalog value (width floor 320). Reset when the preset changes.
 	const [customVp, setCustomVp] = useState<{ width: number; height: number | null } | null>(null);
 	const presetWidth = viewport === null ? null : (customVp?.width ?? viewport);
-	const presetHeight = customVp?.height ?? null;
+	const presetHeight = customVp?.height ?? activePreset.height;
 	useEffect(() => setCustomVp(null), [viewportKey]);
 	// Viewport-frame geometry for the drag handles, measured in report().
 	const [pageBox, setPageBox] = useState<{
@@ -342,6 +337,7 @@ export function ManagedBrowserPane({
 		layoutWidth: number;
 		layoutHeight: number;
 	} | null>(null);
+	const [pageOverflow, setPageOverflow] = useState({ x: false, y: false });
 	const vpDragRef = useRef<{ axis: "x" | "y"; startClient: number; startSize: number; scale: number } | null>(null);
 
 	// Device identity: a preset has to change what the SITE serves, not just
@@ -349,7 +345,7 @@ export function ManagedBrowserPane({
 	// google.com) keep sending their desktop document. Main applies the
 	// UA/client-hints/touch override on the active tab; switching the preset
 	// reloads so the page re-serves, while a tab switch re-applies silently.
-	const device = VIEWPORTS.find(v => v.key === viewportKey)?.device ?? "fit";
+	const device = activePreset.device;
 	// Identity AND emulated layout size ride one channel, because main owns the
 	// guest's debugger. Both matter: the preset decides what the SITE serves
 	// (UA + client hints + touch), and the page's viewport has to be emulated
@@ -395,8 +391,9 @@ export function ManagedBrowserPane({
 		const avail = el.getBoundingClientRect();
 		if (avail.width <= 0 || avail.height <= 0) return null;
 		const fit = fitViewport(presetWidth, avail.width);
-		return { width: fit.width, height: Math.round(presetHeight ?? avail.height / fit.scale) };
-	}, [presetWidth, presetHeight]);
+		const scale = resolveViewportScale(fit.scale, displayScale);
+		return { width: fit.width, height: Math.round(presetHeight ?? avail.height / scale) };
+	}, [presetWidth, presetHeight, displayScale]);
 	useEffect(() => {
 		if (!host.activeId) return;
 		const previous = deviceSyncRef.current;
@@ -474,13 +471,10 @@ export function ManagedBrowserPane({
 			.then(result => {
 				setAnnotating(false);
 				if (!result) return;
-				dispatchAnnotationAttach({
-					text: formatAnnotationPrompt({
-						payload: result.payload,
-						screenshotAttached: result.screenshot !== null,
-						intro: t("annotation.browserIntro"),
-					}),
-					...(result.screenshot ? { image: result.screenshot } : {}),
+				void dispatchAnnotationResult({
+					payload: result.payload,
+					screenshot: result.screenshot,
+					intro: t("annotation.browserIntro"),
 				});
 				window.dispatchEvent(
 					new CustomEvent("musepi-gui-toast", { detail: { message: t("annotation.attached"), kind: "success" } }),
@@ -520,30 +514,45 @@ export function ManagedBrowserPane({
 		const el = slotRef.current;
 		if (!el) return;
 		const report = (): void => {
+			const avail = el.getBoundingClientRect();
+			const scrollport = contentRef.current?.getBoundingClientRect() ?? avail;
+			const nextControlRect = {
+				x: scrollport.x + 5,
+				y: scrollport.y + 5,
+				width: Math.max(0, scrollport.width - 10),
+				height: Math.max(0, scrollport.height - 10),
+			};
+			setControlRect(previous =>
+				previous &&
+				Math.abs(previous.x - nextControlRect.x) < 1 &&
+				Math.abs(previous.y - nextControlRect.y) < 1 &&
+				Math.abs(previous.width - nextControlRect.width) < 1 &&
+				Math.abs(previous.height - nextControlRect.height) < 1
+					? previous
+					: nextControlRect,
+			);
 			if (presetWidth !== null) {
-				// Preset active: the page must LAY OUT at the preset width (that is
-				// what makes a responsive check meaningful) and be scaled down to
-				// fit — `max-width` alone let flex shrink it instead, so the preset
-				// did nothing (user: 网页显示尺寸不正常).
-				const avail = el.getBoundingClientRect();
 				const fit = fitViewport(presetWidth, avail.width);
-				const layoutHeight = presetHeight ?? avail.height / fit.scale;
-				const visualWidth = fit.width * fit.scale;
+				const scale = resolveViewportScale(fit.scale, displayScale);
+				const layoutHeight = presetHeight ?? avail.height / scale;
+				const visualWidth = fit.width * scale;
+				const hostX = avail.x + Math.max(0, (avail.width - visualWidth) / 2);
+				const overflow = viewportOverflow(fit.width, layoutHeight, scale, avail.width, avail.height);
+				setPageOverflow(previous => (previous.x === overflow.x && previous.y === overflow.y ? previous : overflow));
 				setPaneRect({
-					x: avail.x + Math.max(0, (avail.width - visualWidth) / 2),
+					x: hostX,
 					y: avail.y,
 					width: fit.width,
 					height: layoutHeight,
-					scale: fit.scale,
+					scale: scale,
+					clip: viewportClip({ x: hostX, y: avail.y, width: fit.width, height: layoutHeight, scale }, scrollport),
 				});
-				// Viewport-frame geometry for the drag handles (value-compare:
-				// report runs on a 200ms interval and must not re-render).
 				setPageBox(prev => {
 					const next = {
 						left: Math.max(0, (avail.width - visualWidth) / 2),
 						width: visualWidth,
-						height: layoutHeight * fit.scale,
-						scale: fit.scale,
+						height: layoutHeight * scale,
+						scale: scale,
 						layoutWidth: fit.width,
 						layoutHeight,
 					};
@@ -556,17 +565,30 @@ export function ManagedBrowserPane({
 						? prev
 						: next;
 				});
-				// Keep the emulated viewport in step with the pane (a window or
-				// panel drag changes the height the guest may lay out into);
-				// syncDevice dedupes.
 				const { tabId: syncedTabId, device: syncedDevice } = syncContextRef.current;
 				if (syncedTabId) {
 					syncDevice(syncedTabId, syncedDevice, { width: fit.width, height: Math.round(layoutHeight) }, false);
 				}
 			} else {
 				setPageBox(prev => (prev === null ? prev : null));
-				const rect = el.getBoundingClientRect();
-				setPaneRect({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+				const scale = resolveViewportScale(1, displayScale);
+				const visualWidth = avail.width * scale;
+				const hostX = avail.x + Math.max(0, (avail.width - visualWidth) / 2);
+				setPageOverflow(previous => {
+					const overflow = viewportOverflow(avail.width, avail.height, scale, avail.width, avail.height);
+					return previous.x === overflow.x && previous.y === overflow.y ? previous : overflow;
+				});
+				setPaneRect({
+					x: hostX,
+					y: avail.y,
+					width: avail.width,
+					height: avail.height,
+					scale,
+					clip: viewportClip(
+						{ x: hostX, y: avail.y, width: avail.width, height: avail.height, scale },
+						scrollport,
+					),
+				});
 			}
 		};
 		report();
@@ -589,7 +611,7 @@ export function ManagedBrowserPane({
 			window.removeEventListener("transitionend", report, true);
 			setPaneRect(null);
 		};
-	}, [presetWidth, presetHeight, syncDevice]);
+	}, [presetWidth, presetHeight, displayScale, syncDevice]);
 
 	// Viewport-handle drag (§3.2.2): the pointer delta is visual px; convert
 	// through the fit scale so dragging feels 1:1 on screen. Width floor 320
@@ -610,11 +632,11 @@ export function ManagedBrowserPane({
 		if (!drag) return;
 		const delta = ((drag.axis === "x" ? e.clientX : e.clientY) - drag.startClient) / drag.scale;
 		if (drag.axis === "x") {
-			const width = Math.max(320, Math.round(drag.startSize + delta));
-			setCustomVp(current => ({ width, height: current?.height ?? null }));
+			const size = clampViewportSize(drag.startSize + delta, pageBox?.layoutHeight ?? 480);
+			setCustomVp(current => ({ width: size.width, height: current?.height ?? null }));
 		} else {
-			const height = Math.max(480, Math.round(drag.startSize + delta));
-			setCustomVp(current => ({ width: current?.width ?? presetWidth ?? 393, height }));
+			const size = clampViewportSize(pageBox?.layoutWidth ?? 320, drag.startSize + delta);
+			setCustomVp(current => ({ width: current?.width ?? presetWidth ?? 393, height: size.height }));
 		}
 	};
 	const endVpDrag = (): void => {
@@ -701,14 +723,6 @@ export function ManagedBrowserPane({
 		className: "gui-browser-menu",
 		align: "right",
 	});
-	// Viewport-preset dropdown (§3.2.4): device presets are second-tier
-	// chrome, out of the address row and out of the ⋯ menu.
-	const [vpMenuOpen, setVpMenuOpen] = useState(false);
-	const { anchorRef: vpAnchorRef, renderMenu: renderVpMenu } = useFloatingMenu(vpMenuOpen, setVpMenuOpen, {
-		className: "gui-browser-menu",
-		align: "right",
-	});
-
 	const addressDisplayParts = addressEditing ? { url: "" } : formatAddressDisplayParts(activeUrl, activeTab?.title);
 	const shownAddressValue = addressEditing ? addressValue : "";
 	const pageTitle = activeTab?.title?.trim() || labelFromUrl(activeUrl);
@@ -771,6 +785,10 @@ export function ManagedBrowserPane({
 	// Agent occupancy (§3.2.5): only when the dispatched op targets the tab
 	// on screen — background-tab work paints the ledger, not this chrome.
 	const agentBusy = host.activity?.status === "dispatched" && host.activity.tabId === host.activeId && !isBlank;
+	const handleTakeover = useCallback((): void => {
+		void takeoverAgentOp(host.activity?.tabId).finally(() => onTakeover?.());
+	}, [host.activity?.tabId, onTakeover]);
+	const tabMotion = useTabMotion(host.tabs);
 
 	return (
 		<div className="gui-browser-pane relative flex min-h-0 flex-1 flex-col">
@@ -932,42 +950,6 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 				<div className="gui-browser-actions">
-					{/* Viewport-preset dropdown (§3.2.4): second-tier chrome.
-					 * Icon morphs computer ⇄ smartphone with the active preset. */}
-					<div ref={vpAnchorRef} className="gui-browser-action-item">
-						<button
-							type="button"
-							className={`gui-browser-icon-btn${vpMenuOpen ? " gui-browser-icon-btn--active" : ""}`}
-							aria-label={t("tools.browserViewportPresets")}
-							title={t("tools.browserViewportPresets")}
-							onClick={() => {
-								setVpMenuOpen(o => !o);
-								setSuggestionsOpen(false);
-							}}
-						>
-							<StateIcon on={device !== "fit"} pair={["computer", "smartphone"]} className="h-4 w-4" />
-						</button>
-						{renderVpMenu(
-							<div role="menu">
-								<span className="gui-browser-menu-label">{t("tools.browserViewportPresets")}</span>
-								<div className="gui-browser-menu-viewports">
-									{VIEWPORTS.map(v => (
-										<button
-											key={v.key}
-											type="button"
-											className={viewportKey === v.key ? "gui-browser-menu-chip--active" : ""}
-											onClick={() => {
-												setViewportKey(v.key);
-												setVpMenuOpen(false);
-											}}
-										>
-											{t(v.key)}
-										</button>
-									))}
-								</div>
-							</div>,
-						)}
-					</div>
 					<div ref={actionsAnchorRef} className="gui-browser-action-item">
 						<button
 							type="button"
@@ -1078,31 +1060,34 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 			</div>
-			{/* Agent occupancy strip (§3.2.5): 2px accent top bar on the chrome
-			 * above plus this mono line — a constant hint while the agent works
-			 * THIS tab. (Human-input pause is not wired: Electron's
-			 * before-input-event cannot distinguish real pointer input from
-			 * CDP-dispatched agent input, so it would suppress itself.) */}
-			{agentBusy && (
-				<div className="gui-browser-agent-strip" role="status" aria-live="polite">
-					<span className="gui-browser-agent-dot" />
-					<span className="flex-shrink-0">{t("tools.agentOperating")}</span>
-					{host.activity?.summary ? <span className="min-w-0 truncate">{host.activity.summary}</span> : null}
-				</div>
-			)}
+			<BrowserDeviceToolbar
+				preset={viewportKey}
+				width={presetWidth}
+				height={presetHeight}
+				displayScale={displayScale}
+				background={pageBackground}
+				onPresetChange={setViewportKey}
+				onSizeChange={size => setCustomVp(size)}
+				onDisplayScaleChange={setDisplayScale}
+				onBackgroundChange={setPageBackground}
+			/>
 			{/* Tab strip (Agent-created tabs are badged; selecting only changes
 			 * what the user sees — the agent keeps its own working tab). */}
 			{host.tabs.length > 0 && (
 				<div ref={tabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					{host.tabs.map(tab => {
+					{tabMotion.tabs.map(tab => {
 						// 网页 theme-color 只做低透明度晕染 + 细环,不再整块实底
 						// 反白文字——玻璃标签的质感与可读性都保住(部分站点的
 						// theme-color 与界面明暗冲突,实底标签读起来就是"样式坏了")。
 						const themeRgb = tab.themeColor ? parseHexColor(tab.themeColor) : null;
+						const closing = tabMotion.closingIds.has(tab.id);
 						return (
 							<div
 								key={tab.id}
-								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}`}
+								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}${closing ? " gui-browser-tab--closing" : ""}${tabMotion.enteringIds.has(tab.id) ? " gui-browser-tab--entering" : ""}`}
+								data-motion={closing ? "closing" : tabMotion.enteringIds.has(tab.id) ? "entering" : undefined}
+								aria-hidden={closing ? true : undefined}
+								inert={closing}
 								title={tab.frozen ? `${tab.url} · ${t("tools.browserTabFrozen")}` : tab.url}
 								style={
 									themeRgb
@@ -1159,33 +1144,6 @@ export function ManagedBrowserPane({
 					})}
 				</div>
 			)}
-			{/* Agent activity ledger (sanitized in main — never page text,
-			 * cookies or script source). */}
-			{host.activity?.status === "dispatched" && (
-				<div
-					className="flex min-h-6 items-center gap-2 border-b border-[var(--border)] bg-[var(--color-accent)]/[0.04] px-2 py-0.5 text-[11px]"
-					role="status"
-					aria-live="polite"
-				>
-					<span className="flex-shrink-0 font-medium text-[var(--color-accent)]">{t("tools.agentActivity")}</span>
-					<span className="flex-shrink-0 text-[var(--color-text-faint)]">{statusLabel(host.activity.status)}</span>
-					<span className="truncate text-[var(--color-text-muted)]">
-						{host.activity.summary}
-						{host.activity.domain ? ` · ${host.activity.domain}` : ""}
-					</span>
-					{host.activity.status === "dispatched" && (
-						<button
-							type="button"
-							className="gui-pane-action ml-auto !w-auto px-1.5"
-							aria-label={t("tools.stopAgentOperation")}
-							title={t("tools.stopAgentOperation")}
-							onClick={() => void stopAgentOp(host.activity?.tabId)}
-						>
-							<Icon name="stop" className="h-3 w-3" />
-						</button>
-					)}
-				</div>
-			)}
 			{host.error && (
 				<div className="border-b border-[var(--border)] px-2 py-1 text-[11px] text-[var(--color-danger)]">
 					{host.error}
@@ -1194,8 +1152,20 @@ export function ManagedBrowserPane({
 			{/* Content: the slot is the host's positioning target (the page itself
 			 * lives in the always-mounted host); a viewport preset is applied by
 			 * scaling the host, not by constraining this box. */}
-			<div className="gui-browser-content">
+			<div
+				ref={contentRef}
+				className="gui-browser-content"
+				data-background={pageBackground}
+				style={{ overflow: pageOverflow.x || pageOverflow.y ? "auto" : "hidden" }}
+			>
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
+				{agentBusy && (
+					<BrowserControlOverlay
+						activity={host.activity}
+						onTakeover={handleTakeover}
+						frameRect={controlRect ?? undefined}
+					/>
+				)}
 				{/* Preset mode: dashed viewport frame + right/bottom drag handles
 				 * (§3.2.2). Pure overlay siblings of the slot — the §23 webview
 				 * constraints are untouched (no display/reparent near the page

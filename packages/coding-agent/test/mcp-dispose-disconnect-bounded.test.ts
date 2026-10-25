@@ -45,6 +45,7 @@ describe("owned-manager dispose disconnect is bounded (PR #2839)", () => {
 		const manager = new MCPManager(workDir);
 		const config: MCPStdioServerConfig = { type: "stdio", command: BUN_EXEC, args: [FIXTURE_PATH] };
 		const result = await manager.connectServers({ instr: config }, {});
+		await manager.waitForConnection("instr");
 		expect(result.errors.has("instr")).toBe(false);
 		expect(manager.getConnectedServers()).toContain("instr");
 

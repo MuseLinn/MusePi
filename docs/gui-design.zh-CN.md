@@ -1,3 +1,14 @@
+---
+layout: default
+title: GUI 设计与交互契约
+status: living
+summary: 桌面端与共享客户端 UI 的视觉、交互、动效和液态玻璃规范。
+scope:
+  - packages/desktop-app
+  - packages/client-core
+lang: zh-CN
+---
+
 # MusePi GUI 设计规范
 
 [English](gui-design.md) | 中文
@@ -37,6 +48,10 @@
 
 - **三栏 shell**(openchamber 共识布局):左 SessionSidebar(会话/分组/项目)+ 中 ChatView(消息流 + 圆角 composer)+ 右 ContextPanel(始终可见)。`gui-shell` 是 flex ROW——每个全宽 pane(SettingsView 等)必须 `flex:1; min-width:0`,否则塌缩到内容宽。
 - **设置面板**(2026-09-24 起槽位替换,退役聊天列覆盖层):设置壳层**复用主布局**——设置导航填入应用侧栏的槽位(`.gui-settings-nav-slot`,同位置 + 同宽度语言;SettingsView 将导航列 portal 进去),内容填聊天列,顶部保留 48px 窗口拖拽条(`gui-settings-content` 固定高度滚动容器,`width:100% + max-width + margin-inline:auto` 居中列;上限为 `--gui-settings-content-max` = `clamp(840px, 78%, 1080px)`——840px 是 openchamber 的定值,保留为下限使普通窗口几何与参照一致,宽面板下升至 1080px,避免高分辨率最大化窗口把内容列晾在空白里)。真实侧栏与聊天列 header + surface 在下层保持挂载(`.gui-side-keeper` / `.gui-chat-col-keeper`,仅 display:none),关闭设置即恢复工作区——分组展开态、转录、虚拟列表无一重挂(槽位决策表:`lib/settings-shell.ts`)。
+- **一级工作区页头**：任务中心、看板、问题与拉取请求、能力中心统一使用 `WorkspacePageHeader`，承载前导返回按钮、`h1`、可选说明/元信息/操作区与可选 tab 行。看板首页返回工作区，已打开看板返回集合；各页面不再自造标题几何，也不在尾侧重复放返回按钮。
+- **Issue/PR 工作区**：列表与选中详情在双列主从网格中各自独立滚动。首个可见项自动打开；过滤后失效选择自动修正，较早详情响应不得覆盖较新选择。正文与评论使用共享 Markdown 渲染器，评论输入框位于详情列。低于 960px 时详情独占宽度，列表由当前项按钮打开玻璃 `MenuPopup`，选择后自动关闭。表面使用共享玻璃背景、边框、sheen 与阴影 token，不叠加重复的区块标签。
+- **折叠设置搜索**：≤900px 时图标导航保持完整，搜索只过滤浮层结果。搜索使用共享 `MenuPopup` portal，64px 导航槽不会裁切它；选择结果、外部关闭和 Escape 都清理临时搜索状态，Escape 后焦点回到搜索按钮。
+- **任务日历选择**：有计划任务的日期打开当日任务列表，同一天有多个任务时也逐条可选。从当日列表或状态看板卡片选择任务会进入可见的任务详情视图，而不是只修改内部选中 id。
 - **扩展控制中心**(设置「扩展」tab):section 占满设置视口(`gui-skills-section` = `height:100%` flex column,`gui-ext-center` `flex:1; min-height:0`)——左列表(`gui-ext-list-scroll`)与右详情(`gui-ext-detail`)在各自圆角容器内**独立滚动**,设置页整体不滚(TUI /extensions 面板 parity);两栏统一细滚动条(8px、thumb `text-faint 30%`、hover 50%,与 xterm 同配方);指令内容不限高(pre 无 max-height),随详情区整体滚动,避免嵌套滚动。
 - **内容边界羽化(ScrollShadow,2026-08-21 审计,2026-09-27 纵横通用化)**:`useScrollShadow` hook + CSS `mask-image` linear-gradient 实现边缘渐变淡出——透明→实色柔带,仅内容溢出且滚离边缘才挂载。共享实现在 client-core(`src/lib/scroll-shadow.ts`):单容器用 `attachScrollShadow`/`useScrollShadow`,raw-HTML 滚动容器子树(markdown 表格/代码块/KaTeX/mermaid 走 `dangerouslySetInnerHTML`,React 拿不到内部 ref)用 `useDeepScrollShadow` 深扫描增量补挂。四方向属性(`data-top|bottom|left|right-scroll`)驱动 mask:纵向容器上下羽化,横向容器(消息内 markdown 表格、代码块、工具渲染 diff、tab 条、chip 排)左右羽化,走共享 `:is(...)` mask 规则(桌面端 `gui-chat.css` 横向段,带宽 `--gui-fade-x`;client-core `transcript.css` 横向段)。已覆盖:`.gui-transcript`(聊天)/`.gui-sessions-list`(会话列表)/`.gui-settings-nav-scroll|content`(设置)/`.gui-model-list`/`.gui-notes-editor`/`.pet-bubbles`/`.mp-grid-shell`(插件市场)/`.ag-panel`(agents)/`.gui-model-tabs`/`.gui-surface-tabs`/`.gui-ext-tabs`/`.gui-code-preview-body`/`.gui-ext-detail-code pre`/`.gui-changes-file-diff`/`.gui-panel-tabs`(右栏 tab 条)+ 消息内 `.tr-table-scroll`/`.tr-md pre`/`.katex-display`/`.tr-mermaid*`/`.tr-usage`/`.tv-pre|.tv-diff|.tv-diff-sbs-cell`/`.sh-wspanel-tabs|.sh-changes-diff|.sh-attach-chips`。**通用载体 `FadeScroll`**(`components/FadeScroll.tsx` + `.gui-fade-scroll` 规则,现经同一组属性支持双方向)接无专用 class 的泛化滚动容器——欢迎页内联 chip 排即用此类。mask 羽化的是内容本身,透明/玻璃容器同样正确;静态 mask 不受 `gui-motion-off` 影响。一条约束:`mask-image` 不能双轴叠加,纵横同时溢出的容器只得到后写方向的羽化——这些类只用于单方向滚动容器。
 - **空态**:WelcomeComposer 大输入框(品牌/问候/提示 + composer),输入即建会话;专注模式(⌘⇧E)输入框铺满。
@@ -518,14 +533,14 @@ turn
 
 ### 布局与落点（决策①——方案 A）
 
-- `ContextRing` 留在原胶囊排（`footerRight`）不动。统计行是 composer footer 排**下方的一条独立新行**，经 `ComposerFrame` 新增的 `belowRow` 插槽渲染在输入卡磨砂面之外（与 `aboveRow` 对称），与 `footerRight` 同一网格右对齐；两颗丸都隐藏时该行零高度收拢。
+- `ContextRing` 留在原胶囊排（`footerRight`）不动。统计行是 composer footer 排**下方的一条独立新行**，经 `ComposerFrame` 新增的 `belowRow` 插槽渲染在输入卡磨砂面之外（与 `aboveRow` 对称），与 `footerRight` 同一网格右对齐；初始、空数据和两丸皆隐时保留 32px 最小行高并显示 `—`。
 - 挂载跟着 composer 走（不挂聊天 transcript），transcript 滚动时数字保持可见——dsh `conversation.composer.dock` 同款。
 
 ### 玻璃与动效（§5s 层级，零新 token）
 
 - 丸休眠态：**L1 card**——基材+缘取自 footer-pill 家族配方（`.gui-stats-pill` 加入 gui-composer.css 的家族选择器组；状态由颜色承载，遵守批次 C1 纪律）。
 - 浮层：**L2 float** 走唯一 `.gui-menu-popup` 配方（`useFloatingMenu`，两阶段仅 transform 入场）——与批次 C2 同一收口契约；丸不得自声明 background/backdrop-filter/box-shadow。
-- 动效：丸入场 180ms `var(--spring)`（§5s 时长阶梯的 chip 档）；浮层出入走共享菜单两阶段；backdrop-filter 表面禁 opacity 动画。
+- 动效：丸入场 180ms `var(--spring)`（§5s 时长阶梯的 chip 档）。浮层定位与动画分层：外层锚点始终保留 `translate(-50%, -100%)`，内层执行匹配的进入/退出 morph。
 
 ### 两颗丸（决策②）
 
@@ -534,7 +549,7 @@ turn
 
 ### 数据契约（决策③——零新 RPC）
 
-- **token 数字读 daemon 持久投影**：`session.contextUsage` 已返回 `usage { input, output, cacheRead, cacheWrite, totalTokens, cost, cacheHitRate }`（TUI `cache_hit` 同款，daemon 侧计算）。Composer 已为 ContextRing 轮询该 RPC——统计行消费同一份 state。总量 = input + cacheRead + cacheWrite + output（计费输入三桶 + 输出）。分页/压缩永不改写这些数字。
+- **token 数字读 daemon 持久投影**：`session.contextUsage` 已返回 `usage { input, output, cacheRead, cacheWrite, totalTokens, cost, cacheHitRate }`（TUI `cache_hit` 同款，daemon 侧计算）。Composer 已为 ContextRing 轮询该 RPC——统计行消费同一份 state。总量 = input + cacheRead + cacheWrite + output（计费输入三桶 + 输出）。分页/压缩永不改写这些数字。同会话 RPC 失败或返回 null 时保留最后有效读数；切换会话立即清空，等待新会话响应。
 - **时间/轮/步数字走可见窗口 fold**（`deriveWindowStats`，`packages/desktop-app/src/lib/derive-window-stats.ts`）：daemon 没有逐轮计时投影，fold 回答「屏幕上有什么」，字段名刻意与 dsh `WindowStats` 同形，便于日后整体替换。
 - **Fold 口径（契约测试守在 `packages/desktop-app/test/derive-window-stats.test.ts`）**：
   - `turns` = 窗口内非 synthetic 用户消息数；`steps` = **已 settled** 的 assistant 消息数（有 `stopReason`——流式中的条目还不算一步）。
@@ -547,12 +562,12 @@ turn
 
 - 设置项「性能与用量」（设置 → 外观 → 聊天分区 `ChatSection`）：Segmented **简洁 / 详细**，渲染端 localStorage 键 `musepi-gui-stats-mode`（默认 `detailed`）+ `musepi-stats-mode-changed` 窗口事件——与 `musepi-gui-chat-*` 同款偏好模式（GUI 专属偏好，零 daemon 改动）。
 - **详细**（默认）：两颗丸带 popover，如上。
-- **简洁**：只剩两个纯读数——解码速度与缓存命中——且各有数据才显示；无 popover、无计数。两者皆空 → 整行不渲染。
+- **简洁**：只剩两个纯读数——解码速度与缓存命中——且各有数据才显示；无 popover、无计数。两者皆空 → 稳定行显示 `—`。
 
 ### 交互契约
 
 - 两个 popover 共享一个 open 位——开一个关另一个（`useFloatingMenu` 模块级互斥已全应用强制）。
-- 全空（无步数、无 token）→ 整行隐藏；纯用户消息的窗口只把计数丸显示为纯读数。
+- 全空（无步数、无 token）→ 稳定行显示 `—`；纯用户消息的窗口只把计数丸显示为纯读数。
 - 数字不随分页/压缩跳动：token 数字有投影背书；窗口数字只在窗口 settled 内容变化时变化。
 
 ## 5ac. Composer 周边修正：dock 座位回到下方、连接器面板设计、tail-inset 暖机（2026-10-21）
@@ -632,22 +647,21 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
 对 §5t「顶栏不放内联标签带」原则的修订——开一个**可选**逃生门：默认仍是单会话标题，现状不变；打开设置后，最近使用的会话以标签带形式进入顶栏。
 
 - **设置**：外观 → 聊天 → 「多会话标签页」（`PrefToggle`，localStorage `musepi-gui-session-tabs`，`"1"`=开，默认关）。设置页与顶栏分属两棵子树，切换经 window 事件 `musepi-gui-session-tabs-changed` 生效（`lib/session-tabs.ts` 的 `useSessionTabsEnabled`，`useSyncExternalStore` 订阅 storage + 伴随事件）。
-- **标签是纯客户端投影**：持久化状态（`musepi-gui-session-tab-ids`，JSON 数组）只存会话 id 与顺序；标题、工作/未读状态、存活与否全部在渲染期由 `sessionMeta` + 会话树解析。关标签永不删会话；删会话会摘掉对应标签。
-- **生命周期**：打开会话即幂等加入其标签（追加在末尾）；软上限 `MAX_SESSION_TABS = 10` 溢出时挤掉**最旧**的标签，永不挤正在打开的那个。客户端解析不了的 id（`sessionMeta` 与树双双缺失）保留存储但不渲染——会话列表只加载了一半时不得摧毁工作集（「幽灵」id）。
+- **标签是纯客户端投影**：`musepi-gui-session-tab-ids` 以 JSON 数组存会话 id 与顺序，`musepi-gui-session-preview-tab-id` 独立存唯一 preview id；标题、工作/未读状态、存活与否全部在渲染期由 `sessionMeta` + 会话树解析。关标签永不删会话；删会话会摘掉对应标签并清除其 preview 标记。
+- **生命周期**：新打开的会话成为 preview，并在原位置替换旧 preview；重开固定标签不会降级。点击已打开的 preview、双击或选择「保持打开」都会固定。没有现存 preview 时新标签追加在末尾；软上限 `MAX_SESSION_TABS = 10` 溢出时挤掉**最旧**的标签，永不挤正在打开的那个。客户端解析不了的 id（`sessionMeta` 与树双双缺失）保留存储但不渲染——会话列表只加载了一半时不得摧毁工作集（「幽灵」id）。
 - **关闭语义**（`lib/session-tabs.ts` 的 `closeTabAndActivateNeighbour`）：关闭当前标签激活其右邻（无右邻取左邻，皆无返回 `null` → 调用方经 `startNewTask` 开全新草稿）；关闭非当前标签仅移除。中键关闭不激活；关闭钮悬停出现，标题宽度不变。
 - **快捷键**：快捷键注册表新增 `tab-next` / `tab-prev`（默认 ⌘Tab / ⌘⇧Tab，可改键，分组「会话」）。每标签 ⌘1–9 直达 v1 刻意不做——与 `panel-surfaces` 的裸 ⌘1–8 冲突。
 - **标签带行为**：dnd-kit 横向排序（整个标签即拖拽把手，8px 触发距离保证单击仍是单击）；纵向滚轮映射为横向滚动（Shift/Cmd-滚轮与原生横向增量放行）；滚动容器两端 24px 渐隐（`SESSION_TAB_EDGE_FADE_PX`），激活标签自动滚入视野且在渐隐前停住（`lib/session-tab-reveal.ts`）。
 - **状态**：`working` 在标签上转小加载图标；`unread`（非当前）显示强调色小圆点——两者与侧栏同源（`sessionMeta` / `unreadSessions`）。
-- **当前标签内容**：标签带的当前标签承载原有顶栏标题/切换器整块（GuiHeader 的 `titleBlock`）；设置关闭时顶栏渲染与以前完全一致。i18n：`settings.sessionTabs*`、`session tabs`、`session tab working/unread`、`ctx percent`、`tab next/prev shortcut*`。
-- **标签减法（2026-10-21 同批）**：tab 模式下 GuiHeader 不渲染 AgentAvatar、remote chip、ceiling 文字与整个 `gui-header-subrow`——一条标签就是一行字，工作/未读状态由 spinner 与小圆点表达，省下的横向空间留给长标题。
-- **悬停控件 + 固定尺寸（2026-10-22）**：非当前标签固定 176px（`gui-session-tab { width: 176px }`），长标题省略号收住，整排不再随标题长短忽宽忽窄。悬停时尾部浮出一层控件（`gui-session-tab-controls`，绝对定位于行尾，18px 圆形按钮）：「⋯」钮开菜单（关闭标签页 / 关闭其他标签页 / 归档——归档走 `archiveSession`，复用侧栏的撤销 toast），外加单独关闭钮；控件出现时状态点淡出，菜单打开期间 `:has()` 保持标题的右侧预留，布局不跳动。草稿标签（`messageCount === 0`）标题斜体（`gui-session-tab-label--draft`）。
-- **测试**：`packages/desktop-app/test/session-tabs.test.ts`（16 例：上限挤出、邻居激活、幽灵 id、环绕邻接、重排、持久化 round-trip + 损坏 JSON）。
+- **统一标签尺寸**：当前与非当前标签共用 176px 宽度、padding、字号和标题元素；选中只增加 accent 背景与前景，hover 不清除选中色。草稿与 preview 标题斜体。标签带外的紧凑最近会话按钮在折叠侧栏时保留新建与最近会话导航，并与非 tab 标题共用同一个 switcher 菜单。
+- **共享菜单**：尾部「⋯」与右键渲染同一组 `ContextMenu` 项，右键不激活标签。保持打开、重命名、复制 ID、导出、mini chat、工作树、归档、删除、关闭其他与关闭均按菜单所属标签 id 执行；归档非当前标签不切换会话。
+- **测试**：六个会话标签/Markdown 测试文件（每种入口 locale 各 43 例：preview 迁移、持久化、尺寸、固定手势、共享菜单、tab 模式导航、跨文件 locale/DOM 隔离与精确 pre-seed locale 恢复）。
 
 ## 5aa. PR/问题面板：侧栏入口 → 主视图整页（2026-10-21）
 
 PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git 面板只保留「工作区改动 + 提交历史」两页签）。侧栏菜单新增「问题与拉取请求」入口（git-pull-request 图标，打开时按下高亮），经应用既有的视图切换机制把聊天列换成面板页——与看板 / 定时任务 / 能力中心同一套模式（聊天保持挂载在底下、`ChatSurfaceShell` 模糊过渡、`leavingView` 让页面撑过 150ms 退出）。
 
-- **页面拆分**：`PrBoardPage.tsx` 是页面骨架（页头 + 返回工作区）；`pr-center.tsx` 承载共享主体（`PrCenter`，PR / 问题两个子页签，选择记在 `musepi-gui-prcenter-tab`）。主体限宽（`.gui-prboard-body`，880px），在宽阔的主视图列里保持阅读舒适。
+- **页面拆分**：`PrBoardPage.tsx` 是页面骨架（页头 + 返回工作区）；`pr-center.tsx` 承载共享主体（`PrCenter`，PR / 问题两个子页签，选择记在 `musepi-gui-prcenter-tab`）。主体使用可用宽度承载双列主从工作区。搜索与 PR/问题子页签共享一个 `.gui-pr-toolbar`；筛选器独立成行并明确左右区域，不再依靠多层 auto margin 自然换行。
 - **PR 子页签**：一次 `Promise.all`（prStatus + prs + git.status + git.branches）。当前分支的 PR 卡片（状态徽章、检查圆点、可合并性、评审结论、打开/复制操作）；分支没有 PR 时是创建表单（标题从分支名预填、目标分支偏好 main→master→第一个、记住的草稿开关、先推送后创建且推送失败即中止、待推送计数提示）；下方是仓库打开的 PR 列表，每行带检查圆点和 head→base 分支。
 - **问题子页签**：`Segmented` 打开/已关闭/全部过滤；标签按各自原色着色；带评论数；点击在系统浏览器打开。
 - **搜索**：共享主体顶部一个搜索框同时过滤两个子页签——标题子串（不分大小写）或 `#编号`
@@ -710,6 +724,14 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **浏览器栏**：受管浏览器主行新增三个玻璃图标按钮——标注（铅笔）、开发者工具（code-slash，对 webview 调 `openDevTools()`）、外部打开（external-link，`shell.openExternal`）——归入 `gui-browser-tools` 组；缩放三件套收进 ⋯ 菜单（`gui-browser-menu-zoom`）。旧的选元素菜单项、选中选择器 chip 与 `pickElement` 宿主导出已删除。
 - **卡片入口**：`HtmlCard` 右上角挂液态玻璃悬浮按钮（`.gui-widget-annotate-btn`）；srcdoc 卡片经 postMessage 握手。ContextPanel 回退面板的旧拾取器不动。
 - **i18n**：`annotation.*`（13 个 key）+ `tools.browserDevTools`，tools 域，中英同步。
+
+## 5ad.1. 浏览器 Agent 控制与操作转录（2026-10-25）
+
+- **控制界面**：agent 驱动当前可见受管标签时，accent 细环框住页面，底部液态玻璃胶囊显示当前动作、已控制时长和「我来接管」按钮。只有按钮接收指针；细环绝不移动、隐藏或重挂 webview。动作变化经 polite live region 播报，每秒计时只做视觉更新、不重复播报。窄容器收起次要文字，减少动态效果时去掉入場位移。
+- **接管**：按钮取消当前会话回合，把现有页面交还用户，绝不关闭 agent 标签、重载文档或丢弃登录/DOM 状态。后续新消息开启新的自动化回合，不伪造暂停/恢复协议。
+- **视口工具条**：设备预设、数字宽高、显示比例和外框背景集中在一行。显示比例（fit 或 25–200%）只改呈现；页面缩放仍是独立的 per-tab WebContents 设置，设备仿真负责布局尺寸和 UA 身份。放大后的页面允许滚动而不是裁切。背景只影响外框和留白，不改网页自身颜色。
+- **操作转录**：浏览器卡片在流式和重载后显示同一份累计高层操作，包括观察元素数、目标、失败和截图。连续调用汇总页面和最高频的两类操作，其余失败与已恢复重试分别计数。展开保留每次原始调用；只有后续出现同 agent、同 tab、同规范化 run 输入和同操作目标的成功，才把先前失败归为已恢复。
+- **材质**：胶囊使用 `.gui-liquid-glass`、玻璃边缘/光泽/阴影和 190ms 入場。玻璃关闭时由全局 overlay token 提供不透明回退，不另造主题或模糊开关。
 
 ## 5ae. 工作态尾部预留与悬浮面板 clearance（2026-10-21）
 
@@ -779,3 +801,7 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **CSS `color-mix(in oklab, …)` 负责**：全部逐帧运行时混色——原生零成本，已有 60+ 处。那里永远不要上 JS 库。
 - **tokens.css 手调 oklch 值负责**：静态真相（预设、表面、图表色）。不要用脚本生成它们——这些值本身就是设计决策。
 - **回归锁**：`packages/client-core/test/derive-custom-accent.test.ts` —— 8 组强调色 × 双主题 accent-fg ≥ 4.5:1；旧 sRGB 派生在品牌金上只有 2.2:1。
+
+## 5ad.2. 引用、会话层级与角色模型
+
+结构化引用、子会话折叠和角色/回退模型思考等级见 **`docs/gui-context-and-session.md`**。批注现在暂存 display context，不再把原始 prompt 直接插入输入框。

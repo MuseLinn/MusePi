@@ -3,5 +3,12 @@
  * same runtime switching; the GUI and guest-client stay in sync on one locale).
  */
 
-export type { TranslationMap } from "@musepi/client-core";
-export { getLocaleSnapshot, registerTranslations, setLocale, subscribeLocale, t, tLoose } from "@musepi/client-core";
+export type { TranslationMap } from "@musepi/client-core/src/i18n/index.js";
+export {
+	getLocaleSnapshot,
+	registerTranslations,
+	setLocale,
+	subscribeLocale,
+	t,
+	tLoose,
+} from "@musepi/client-core/src/i18n/index.js";

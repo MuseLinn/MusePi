@@ -16,12 +16,9 @@
  * Nothing about their runtime behavior changes; their settings defaults live in
  * the settings schema and are untouched.
  *
- * The compiled-in paths stay wired for now: `agent-session` reads the static
- * notices directly and the editor paints the static highlighters. This package
- * is the declaration layer the migration lands on — its entries register through
- * `pi.registerMagicKeyword` so the registry (and the extension center) sees the
- * trio as plugin contributions. The static paths remain authoritative until the
- * session-side consumption flips over, which is the next migration step.
+ * The package also owns consumption: AgentSession builds notices through the
+ * registry, and the editor paints only registered highlighters. Disabling or
+ * unloading the package removes both effects; there is no static fallback.
  */
 import type { ExtensionAPI } from "../../extensibility/extensions/types";
 import { renderOrchestrateNotice } from "../../modes/orchestrate";

@@ -14,6 +14,7 @@ const os = require("node:os");
 const path = require("node:path");
 const fs = require("node:fs");
 const { spawn } = require("node:child_process");
+const { test } = require("bun:test");
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-daemon-test-"));
 const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
@@ -162,7 +163,6 @@ async function main() {
 	try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
 }
 
-main().catch(err => {
-	console.error(err);
-	process.exit(1);
-});
+test("daemon lifecycle smoke", async () => {
+	await main();
+}, 30_000);

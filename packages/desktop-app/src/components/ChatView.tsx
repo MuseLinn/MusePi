@@ -16,6 +16,11 @@ import {
 } from "@musepi/client-core";
 import { openPlanFromChat } from "@musepi/client-core/src/components/transcript/canvas-jump";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import {
+	createChatQuoteContext,
+	type DisplayContext,
+	type MessageDisplayContext,
+} from "@musepi/client-core/src/messages/display-context";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -362,6 +367,7 @@ export function ChatView({
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
 		deliverAs?: "prompt" | "steer" | "followUp",
+		displayContext?: MessageDisplayContext,
 	): void;
 	onStop(): void;
 	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
@@ -849,19 +855,21 @@ export function ChatView({
 		}, 700);
 		return () => clearTimeout(timer);
 	}, [store?.sessionId, store]);
-	// 引用回复 / Cmd+L 追加引用: quoted texts prepend the next
-	// composer message; multiple quotes append as stacked cards.
-	const [quotes, setQuotes] = useState<string[]>([]);
-	const appendQuote = useCallback((text: string): void => {
-		setQuotes(q => (q.includes(text) ? q : [...q, text]));
+	// Quote chips retain their source entry so a later card can jump back to it.
+	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
+	const appendQuote = useCallback((text: string, messageId?: string): void => {
+		setQuotes(current => {
+			if (current.some(context => context.kind === "chat-quote" && context.quote === text)) return current;
+			return [...current, createChatQuoteContext({ messageId, quote: text })];
+		});
 	}, []);
-	// Global Cmd+L (app.tsx) lands here through the shared window event —
-	// identical style to the toolbar 引用 button (quote cards), unlike the
-	// old fenced-code insert.
+	// Global Cmd+L (app.tsx) lands here through the shared window event.
 	useEffect(() => {
 		const onQuoteAppend = (e: Event): void => {
-			const detail = (e as CustomEvent<{ text?: string }>).detail;
-			if (detail?.text) appendQuote(detail.text);
+			const detail = (e as CustomEvent<{ text?: string; messageId?: string; displayContext?: DisplayContext }>)
+				.detail;
+			if (detail?.displayContext) setQuotes(current => [...current, detail.displayContext!]);
+			else if (detail?.text) appendQuote(detail.text, detail.messageId);
 		};
 		window.addEventListener("musepi-gui-quote-append", onQuoteAppend);
 		return () => window.removeEventListener("musepi-gui-quote-append", onQuoteAppend);
@@ -1070,6 +1078,7 @@ export function ChatView({
 			text: string,
 			images?: { type: "image"; data: string; mimeType: string }[],
 			deliverAs?: "prompt" | "steer" | "followUp",
+			displayContext?: MessageDisplayContext,
 		): void => {
 			setJumpBack(null);
 			// Sending from a branch point commits it: drop the explicit leaf so
@@ -1078,7 +1087,7 @@ export function ChatView({
 			// the send just produced.
 			setCurrentLeafKey(null);
 			setPinnedPathIds(null);
-			onSend(text, images, deliverAs);
+			onSend(text, images, deliverAs, displayContext);
 		},
 		[onSend],
 	);
@@ -2723,6 +2732,7 @@ export function ChatView({
 															<Transcript
 																entries={visibleEntries}
 																sessionKey={store?.sessionId ?? ""}
+																registerComposerInsetReader={registerComposerInsetReader}
 																/* The branch bar lists siblings that are OFF the
 																 * active path, so it needs the full tree while the
 																 * transcript renders the path. */
@@ -2792,7 +2802,8 @@ export function ChatView({
 																		: "swarm"
 																}
 																colorBlind={displaySettings.colorBlindMode === true}
-																onQuote={text => appendQuote(text)}
+																onQuote={(text, messageId) => appendQuote(text, messageId)}
+																onJumpToMessage={entryId => requestJump({ entryId })}
 																/* 撤回: move the leaf only — nothing is
 																 * backfilled into the composer (与「编辑并
 																 * 重发」互补)。 */
@@ -2950,6 +2961,12 @@ export function ChatView({
 															const cwd = store.cwd;
 															void rpc
 																.request("notes.create", { cwd, body: `> ${text}` })
+																.then(() => {
+																	// The project-knowledge panel lists the same
+																	// daemon notes; tell it to reload instead of
+																	// waiting for a tab switch to re-mount it.
+																	window.dispatchEvent(new CustomEvent("musepi-notes-changed"));
+																})
 																.catch(() => {});
 														}}
 													/>
@@ -3221,6 +3238,7 @@ export function ChatView({
 									open={rightPanelOpen && !focusMode}
 									openRequest={openFileReq}
 									browserOpenRequest={openBrowserReq}
+									onBrowserTakeover={onStop}
 									onViewChange={setActiveView}
 									panelTabs={panelTabs}
 									onExpandPanel={onExpandRightPanel}

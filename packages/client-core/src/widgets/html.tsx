@@ -9,8 +9,7 @@ import {
 	ANNOTATION_TEARDOWN_SCRIPT,
 	type AnnotationOverlayTheme,
 	buildAnnotationOverlayScript,
-	dispatchAnnotationAttach,
-	formatAnnotationPrompt,
+	dispatchAnnotationResult,
 	isAnnotationPayload,
 	renderAnnotationScreenshotFromBlob,
 	resolveAnnotationOverlayTheme,
@@ -472,14 +471,7 @@ export function HtmlCard({
 					accentFill: overlayTheme.primarySoft,
 				})
 			: null;
-		dispatchAnnotationAttach({
-			text: formatAnnotationPrompt({
-				payload,
-				screenshotAttached: screenshot !== null,
-				intro: t("annotation.cardIntro"),
-			}),
-			...(screenshot ? { image: screenshot } : {}),
-		});
+		await dispatchAnnotationResult({ payload, screenshot, intro: t("annotation.cardIntro") });
 	};
 	// 消息监听只注册一次([raw] 依赖),经 ref 拿最新实现,避免闭包陈旧。
 	const finishCardAnnotationRef = useRef(finishCardAnnotation);

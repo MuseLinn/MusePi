@@ -236,6 +236,11 @@ export const transcript = {
 	"follow up…": "追问…",
 	"Enter to ask — Esc closes": "Enter 提问 — Esc 关闭",
 	"back to bottom": "回到底部",
+	"transcript.runBrowserPagesWithCount": "读取了 {count} 个页面",
+	"transcript.runBrowserCallsWithCount": "执行了 {count} 次浏览器操作",
+	"transcript.runBrowserActionWithCount": "{action} {count} 次",
+	"transcript.runBrowserFailuresWithCount": "另有 {count} 次失败",
+	"transcript.runBrowserRetriesWithCount": "重试 {count} 次",
 } as const;
 
 /** Key union for the transcript domain (source of truth). */

@@ -1644,9 +1644,8 @@ body.gui-resizing .gui-pane-resize-x::after {
 	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
-/* ── Header session tabs (multi-session working set): the strip owns the
- *    header's middle; the active tab hosts the title/switcher block, the
- *    inactive ones are plain title pills with a hover-revealed close. ── */
+/* ── Header session tabs (multi-session working set): every tab shares the
+ *    same title box; selection changes color only. ── */
 .gui-session-tabs {
 	display: flex;
 	min-width: 0;
@@ -1702,14 +1701,14 @@ body.gui-resizing .gui-pane-resize-x::after {
 	background: var(--color-hover);
 }
 
-.gui-session-tab--active {
-	max-width: none;
-	padding: 0;
-	cursor: default;
+.gui-session-tab--active,
+.gui-session-tab--active:hover {
+	background: var(--color-accent);
 }
 
-.gui-session-tab--active:hover {
-	background: transparent;
+.gui-session-tab--active .gui-session-tab-label,
+.gui-session-tab--active:hover .gui-session-tab-label {
+	color: var(--color-accent-fg);
 }
 
 .gui-session-tab-label {
@@ -1738,21 +1737,13 @@ body.gui-resizing .gui-pane-resize-x::after {
 	padding-right: 42px;
 }
 
-/* Fresh draft tabs read as temporary — italic title, the same convention
- * editor tabs use for unsaved buffers. */
-.gui-session-tab-label--draft {
+.gui-session-tab-label--draft,
+.gui-session-tab-label--preview {
 	font-style: italic;
 }
 
 .gui-session-tab:hover .gui-session-tab-label {
 	color: var(--color-text);
-}
-
-.gui-session-tab-current {
-	display: flex;
-	min-width: 0;
-	flex: 1;
-	align-items: center;
 }
 
 /* Working spinner (li 进行中 parity) + unread dot (sidebar unread parity). */
@@ -3785,6 +3776,13 @@ body.gui-resizing .gui-pane-right {
 	font-size: var(--ui-font-size-xs);
 }
 
+.gui-select-trigger.gui-role-fallback-thinking {
+	flex: none;
+	min-width: 84px;
+	padding: 2px 5px;
+	font-size: var(--ui-font-size-xs);
+}
+
 .gui-role-fallbacks {
 	width: 100%;
 	display: flex;
@@ -4269,6 +4267,28 @@ body.gui-resizing .gui-pane-right {
 	flex: none;
 }
 
+/* 活跃账号徽标（git-accounts 列表）：小号胶囊，语义=该主机的 RPC 凭据。 */
+.gui-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 15%, transparent);
+	color: var(--color-accent);
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.5;
+}
+
+.gui-git-pat-host {
+	width: 200px;
+}
+
+.gui-git-pat-token {
+	flex: 1;
+	min-width: 220px;
+}
+
 .gui-github-flow {
 	margin-top: 10px;
 	padding: 14px 16px;
@@ -4596,6 +4616,12 @@ body.gui-resizing .gui-pane-right {
 	min-height: 0;
 }
 
+.gui-quote-contexts {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
 .gui-quote-card {
 	display: flex;
 	align-items: flex-start;
@@ -4606,8 +4632,103 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
 	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
-	max-height: 96px;
+}
+
+.gui-quote-context-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-quote-context-meta {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-quote-context-page {
+	min-width: 0;
 	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-quote-context-count {
+	flex: none;
+	padding: 0 5px;
+	border-radius: var(--radius-md);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+	font-size: 0.75rem;
+}
+
+.gui-quote-comment-label {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+	margin-top: 5px;
+	color: var(--color-text-faint);
+	font-size: 0.6875rem;
+}
+
+.gui-quote-comment {
+	flex: 1;
+	min-width: 0;
+	width: 100%;
+	margin-top: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 0.75rem;
+	outline: none;
+}
+
+.gui-quote-comment::placeholder {
+	color: var(--color-text-faint);
+}
+
+.gui-quote-preview {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	margin-top: 1px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+
+.gui-quote-preview:hover,
+.gui-quote-preview[aria-expanded="true"] {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+
+.gui-quote-context-preview {
+	margin-top: 7px;
+	max-height: 240px;
+	overflow: auto;
+}
+
+.gui-quote-context-preview pre {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.75rem;
+	line-height: 1.5;
+}
+
+.gui-quote-context-image {
+	display: block;
+	max-width: 100%;
+	margin-bottom: 7px;
+	border-radius: var(--radius-md);
 }
 
 .gui-quote-text {

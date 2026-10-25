@@ -14,6 +14,7 @@ import { createMockModel } from "@musepi/pi-ai/providers/mock";
 import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { AsyncJobManager } from "@musepi/pi-coding-agent/async";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
 import type { Rule } from "@musepi/pi-coding-agent/capability/rule";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
@@ -21,6 +22,7 @@ import { TtsrManager } from "@musepi/pi-coding-agent/export/ttsr";
 import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
 import { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
 import { GoalRuntime } from "@musepi/pi-coding-agent/goals/runtime";
+import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
@@ -65,7 +67,10 @@ describe("AgentSession concurrent prompt guard", () => {
 	let session: AgentSession;
 	let tempDir: string;
 
-	beforeEach(() => {
+	beforeEach(async () => {
+		resetBundledPluginsLoaded();
+		resetMagicKeywordRegistry();
+		await ensureBundledPluginsLoaded(process.cwd());
 		// Collapse scheduler settle delays so the post-abort auto-continue and
 		// dispose teardown are deterministic instead of racing the wall clock.
 		collapseSchedulerSettleDelays();

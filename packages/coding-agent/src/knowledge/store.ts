@@ -226,6 +226,16 @@ export async function createNote(slug: string, body: string): Promise<KnowledgeN
 	};
 }
 
+export async function getNote(slug: string, id: string): Promise<KnowledgeNote | null> {
+	if (!isValidKnowledgeId(id)) return null;
+	try {
+		const body = await fs.readFile(path.join(notesDir(slug), `${id}.md`), "utf8");
+		return { id, body, createdAt: id.slice(0, 15), updatedAt: id.slice(0, 15) };
+	} catch {
+		return null;
+	}
+}
+
 export async function updateNote(slug: string, id: string, body: string, expected?: string): Promise<void> {
 	if (!isValidKnowledgeId(id)) throw new Error("invalid note id");
 	if (!body.trim()) throw new Error("blank note body");

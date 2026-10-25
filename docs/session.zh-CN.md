@@ -1,3 +1,14 @@
+---
+layout: default
+title: Session 存储与 Entry 模型
+status: living
+summary: Session JSONL 持久化、Entry 树语义、迁移和运行时重建契约。
+scope:
+  - packages/coding-agent/src/session
+  - packages/wire/src
+lang: zh-CN
+---
+
 # Session 存储与 Entry 模型
 
 [English](session.md) | 中文

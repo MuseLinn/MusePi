@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ToolCard } from "../src/components/transcript/ToolCard";
 import { ToolView } from "../src/tool-render/ToolView";
 
 describe("ToolView xd:// dispatches", () => {
@@ -148,5 +149,33 @@ describe("ToolView xd:// dispatches", () => {
 
 		expect(html).toContain("poll a1b2");
 		expect(html).not.toContain("tv-out-title");
+	});
+
+	it("shows structured browser operations from live updates and persisted results", () => {
+		const details = {
+			action: "run",
+			name: "main",
+			operations: [
+				{ id: "1", action: "observe", status: "completed", startedAt: 1, elementCount: 4 },
+				{ id: "2", action: "click", status: "running", startedAt: 2, target: "#go" },
+			],
+		};
+		const live = renderToStaticMarkup(
+			<ToolCard
+				toolCallId="b1"
+				name="browser"
+				args={{ action: "run", code: "await tab.click('#go')" }}
+				running
+				partialResult={{ content: [], details }}
+			/>,
+		);
+		const historical = renderToStaticMarkup(
+			<ToolView name="browser" defaultOpen args={{ action: "run" }} result={{ content: [], details }} />,
+		);
+
+		expect(live).toContain("#go");
+		expect(live).toContain("4");
+		expect(historical).toContain("#go");
+		expect(historical).toContain("4");
 	});
 });

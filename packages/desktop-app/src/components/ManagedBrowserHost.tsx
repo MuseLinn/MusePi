@@ -80,6 +80,9 @@ export function ManagedBrowserHost(): ReactNode {
 				// anything.
 				transform: state.rect?.scale && state.rect.scale !== 1 ? `scale(${state.rect.scale})` : undefined,
 				transformOrigin: "top left",
+				clipPath: state.rect?.clip
+					? `inset(${state.rect.clip.top}px ${state.rect.clip.right}px ${state.rect.clip.bottom}px ${state.rect.clip.left}px)`
+					: undefined,
 			}}
 		>
 			{state.tabs.map(tab => {

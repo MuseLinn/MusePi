@@ -69,10 +69,45 @@ const captureDomSelection = (): string | null => {
 	return text;
 };
 
+export interface SelectionCapture {
+	text: string;
+	file?: { path: string; language?: string; startLine?: number; endLine?: number };
+}
+
+function fileContextForSelection(node: Node | null, text: string): SelectionCapture["file"] {
+	const element = node instanceof Element ? node : node?.parentElement;
+	const host = element?.closest("[data-file-path]");
+	const path = host?.getAttribute("data-file-path");
+	if (!host || !path) return undefined;
+	const language = host.getAttribute("data-file-language") ?? undefined;
+	const source =
+		element instanceof HTMLTextAreaElement
+			? element.value
+			: (host.querySelector(".gui-filepane-preview-text")?.textContent ?? "");
+	const index = source.indexOf(text);
+	if (index < 0 || source.indexOf(text, index + 1) >= 0) return { path, ...(language ? { language } : {}) };
+	const before = source.slice(0, index);
+	const startLine = before.split("\n").length;
+	const endLine = startLine + text.split("\n").length - 1;
+	return { path, ...(language ? { language } : {}), startLine, endLine };
+}
+
 /** Current non-composer selection as plain text, or null when nothing
  *  usable is selected. */
 export function captureSelectionText(): string | null {
 	return captureActiveElementSelection() ?? captureDomSelection();
+}
+
+export function captureSelectionContext(): SelectionCapture | null {
+	const selection = typeof window === "undefined" ? null : window.getSelection();
+	const node =
+		selection && selection.rangeCount > 0 && !selection.isCollapsed
+			? selection.getRangeAt(0).commonAncestorContainer
+			: document.activeElement;
+	const text = captureSelectionText();
+	if (!text) return null;
+	const file = fileContextForSelection(node, text);
+	return { text, ...(file ? { file } : {}) };
 }
 
 /** Wrap a captured selection for the composer (openchamber parity: a md

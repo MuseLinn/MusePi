@@ -22,21 +22,21 @@ const REASON = "429 insufficient balance, top up required";
 function entries(assistantReason: string, retryReason: string, attempt: number): SessionEntry[] {
 	return [
 		{
-			type: "settings.message",
+			type: "message",
 			id: "user-1",
 			parentId: null,
 			timestamp: "2026-10-05T00:00:00Z",
-			message: { role: "general.user", content: "hello?", timestamp: 1 },
+			message: { role: "user", content: "hello?", timestamp: 1 },
 		} as unknown as SessionEntry,
 		{
-			type: "settings.message",
+			type: "message",
 			id: "assistant-err",
 			parentId: null,
 			timestamp: "2026-10-05T00:00:01Z",
 			message: {
-				role: "general.assistant",
+				role: "assistant",
 				content: [],
-				stopReason: "tools.error",
+				stopReason: "error",
 				errorMessage: assistantReason,
 				timestamp: 2,
 			},
@@ -131,21 +131,21 @@ describe("transcript error surfaces", () => {
 			<Transcript
 				entries={[
 					{
-						type: "settings.message",
+						type: "message",
 						id: "user-1",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:00Z",
-						message: { role: "general.user", content: "hello?", timestamp: 1 },
+						message: { role: "user", content: "hello?", timestamp: 1 },
 					} as unknown as SessionEntry,
 					{
-						type: "settings.message",
+						type: "message",
 						id: "assistant-ok",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:01Z",
 						message: {
-							role: "general.assistant",
-							content: [{ type: "tools.text", text: "a real reply" }],
-							stopReason: "settings.stop",
+							role: "assistant",
+							content: [{ type: "text", text: "a real reply" }],
+							stopReason: "stop",
 							timestamp: 2,
 						},
 					} as unknown as SessionEntry,
@@ -167,22 +167,22 @@ describe("transcript error surfaces", () => {
 			<Transcript
 				entries={[
 					{
-						type: "settings.message",
+						type: "message",
 						id: "user-1",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:00Z",
-						message: { role: "general.user", content: "hello?", timestamp: 1 },
+						message: { role: "user", content: "hello?", timestamp: 1 },
 					} as unknown as SessionEntry,
 					{
-						type: "settings.message",
+						type: "message",
 						id: "assistant-stop",
 						parentId: null,
 						timestamp: "2026-10-05T00:00:01Z",
 						message: {
-							role: "general.assistant",
-							content: [{ type: "tools.text", text: "partial answer" }],
-							stopReason: "tools.aborted",
-							errorMessage: "tools.aborted",
+							role: "assistant",
+							content: [{ type: "text", text: "partial answer" }],
+							stopReason: "aborted",
+							errorMessage: "aborted",
 							timestamp: 2,
 						},
 					} as unknown as SessionEntry,

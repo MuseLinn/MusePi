@@ -1,9 +1,9 @@
 /**
  * Header session tabs — the window's horizontal working set of sessions.
  *
- * The store owns ONLY session ids and their order (persisted in
- * localStorage); titles, working/unread status and liveness resolve at render
- * time from the app's session metadata. A tab is a per-client projection:
+ * The store owns session ids, their order, and the single preview id (each
+ * persisted separately in localStorage); titles and live status resolve at
+ * render time from the app's session metadata. A tab is a per-client projection:
  * closing one never touches the session itself, and ids whose session the
  * client has not loaded stay stored but do not render (a partially loaded
  * session list must not destroy the working set).
@@ -12,6 +12,7 @@ import { useSyncExternalStore } from "react";
 
 export const SESSION_TABS_ENABLED_KEY = "musepi-gui-session-tabs";
 export const SESSION_TAB_IDS_KEY = "musepi-gui-session-tab-ids";
+export const SESSION_PREVIEW_TAB_ID_KEY = "musepi-gui-session-preview-tab-id";
 /** Fired on window when the enabled toggle changes (settings page and header
  * live in different subtrees; storage events only reach OTHER windows). */
 export const SESSION_TABS_CHANGED_EVENT = "musepi-gui-session-tabs-changed";
@@ -81,6 +82,54 @@ export function saveTabIds(ids: readonly string[], storage: StorageLike | null =
 	} catch {
 		// storage unavailable — the working set just won't persist
 	}
+}
+
+export function loadPreviewTabId(storage: StorageLike | null = defaultStorage()): string | null {
+	if (!storage) return null;
+	try {
+		return storage.getItem(SESSION_PREVIEW_TAB_ID_KEY) || null;
+	} catch {
+		return null;
+	}
+}
+
+export function savePreviewTabId(previewTabId: string | null, storage: StorageLike | null = defaultStorage()): void {
+	if (!storage) return;
+	try {
+		storage.setItem(SESSION_PREVIEW_TAB_ID_KEY, previewTabId ?? "");
+	} catch {
+		// storage unavailable — preview state just won't persist
+	}
+}
+
+export interface SessionTabPreviewState {
+	ids: string[];
+	previewTabId: string | null;
+}
+
+export function openPreviewTab(
+	ids: readonly string[],
+	previewTabId: string | null,
+	sessionId: string,
+): SessionTabPreviewState {
+	if (!sessionId || ids.includes(sessionId)) return { ids: [...ids], previewTabId };
+	if (previewTabId) {
+		const previewIndex = ids.indexOf(previewTabId);
+		if (previewIndex >= 0) {
+			const next = [...ids];
+			next[previewIndex] = sessionId;
+			return { ids: next, previewTabId: sessionId };
+		}
+	}
+	return { ids: ensureTabId(ids, sessionId), previewTabId: sessionId };
+}
+
+export function pinPreviewTab(previewTabId: string | null, sessionId: string): string | null {
+	return previewTabId === sessionId ? null : previewTabId;
+}
+
+export function clearPreviewTab(previewTabId: string | null, sessionId: string): string | null {
+	return pinPreviewTab(previewTabId, sessionId);
 }
 
 /** Append a session's tab (idempotent). Returns the same array when nothing changed. */

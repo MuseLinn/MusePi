@@ -1,21 +1,45 @@
-/**
- * 标注结果 → composer 的挂载通道。
- *
- * 一次 CustomEvent 同时带文本与截图 File:composer 把文本追加进草稿、把
- * 附图走普通图片附件管线(addFiles)。事件没人听时(非桌面宿主)静默无事,
- * 标注入口在那些宿主上本来也不存在(沙箱卡片的 annotateCapture 由桌面
- * 渲染器提供)。
- */
+import type { DisplayContext } from "../messages/display-context";
+import { createBrowserAnnotationContext } from "../messages/display-context";
+import type { AnnotationPayload } from "./contract";
+import { formatAnnotationPrompt } from "./prompt";
 
+/** Annotation results stay out of the textarea: the composer stages their
+ * display context and derives the model prompt only when sending. */
 export const ANNOTATION_ATTACH_EVENT = "musepi-gui-attach-annotation";
 
 export interface AnnotationAttachDetail {
-	/** 已格式化的标注 prompt(英文正文 + 本地化 intro)。 */
 	readonly text: string;
-	/** 画了标记的页面截图;捕获失败时为 undefined(prompt 里如实写 not attached)。 */
+	readonly displayContext: Extract<DisplayContext, { kind: "browser-annotation" }>;
 	readonly image?: File;
 }
 
 export function dispatchAnnotationAttach(detail: AnnotationAttachDetail): void {
 	window.dispatchEvent(new CustomEvent<AnnotationAttachDetail>(ANNOTATION_ATTACH_EVENT, { detail }));
+}
+
+function readDataUrl(file: File): Promise<string> {
+	const { promise, resolve, reject } = Promise.withResolvers<string>();
+	const reader = new FileReader();
+	reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+	reader.onerror = () => reject(reader.error);
+	reader.readAsDataURL(file);
+	return promise;
+}
+
+export async function dispatchAnnotationResult({
+	payload,
+	screenshot,
+	intro,
+}: {
+	payload: AnnotationPayload;
+	screenshot: File | null;
+	intro: string;
+}): Promise<void> {
+	const prompt = formatAnnotationPrompt({ payload, screenshotAttached: screenshot !== null, intro });
+	const image = screenshot ? await readDataUrl(screenshot).catch(() => undefined) : undefined;
+	dispatchAnnotationAttach({
+		text: prompt,
+		displayContext: createBrowserAnnotationContext({ payload, prompt, image }),
+		...(screenshot ? { image: screenshot } : {}),
+	});
 }

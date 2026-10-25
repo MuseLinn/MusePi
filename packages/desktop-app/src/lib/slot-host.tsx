@@ -409,7 +409,7 @@ export function ConfigFormSlotMount({
  * - Both are per-load: a recompiled module gets a fresh ctx, and the previous
  *   one's disposers have already run.
  */
-export interface PluginClientContext {
+interface PluginClientContext {
 	/** Register a teardown for a contribution this module installed. */
 	effect(dispose: () => void, label?: string): void;
 	/** Aborted when this module load is superseded or unmounted. */

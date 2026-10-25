@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { BrowserOperationTracker } from "@musepi/pi-coding-agent/tools/browser/operation-activity";
 import { RunOutput } from "@musepi/pi-coding-agent/tools/browser/run-output";
 import { formatSelectorMatchHint, toActionableHandle } from "@musepi/pi-coding-agent/tools/browser/tab-worker";
+import { ToolAbortError } from "@musepi/pi-coding-agent/tools/tool-errors";
 import type { ElementHandle } from "puppeteer-core";
 
 // Regression coverage for the invisible-output failure mode: `display("string")`,
@@ -81,6 +83,21 @@ describe("browser handle enrichment — fill()", () => {
 		expect(calls).toEqual(["evaluate", "type"]);
 		expect(node.focused).toBe(true);
 		expect(node.value).toBe("fresh");
+	});
+
+	it("records an aborted enriched-handle action as canceled", async () => {
+		const controller = new AbortController();
+		const tracker = new BrowserOperationTracker("run-abort");
+		const stub = {
+			click: async () => {
+				controller.abort();
+				throw new ToolAbortError();
+			},
+		} as unknown as ElementHandle;
+		const handle = toActionableHandle(stub, { tracker, target: "#go", signal: controller.signal });
+
+		await expect(handle.click()).rejects.toBeInstanceOf(ToolAbortError);
+		expect(tracker.snapshot()[0]?.status).toBe("canceled");
 	});
 });
 

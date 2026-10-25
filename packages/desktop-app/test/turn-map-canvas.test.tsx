@@ -1,4 +1,4 @@
-import "./dom-shim";
+import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
 import { t, tLoose } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -62,7 +62,7 @@ describe("轮卡折叠/展开渲染分支", () => {
 		expect(html).toContain("Turn 3");
 		expect(html).toContain("修复登录页闪烁");
 		// 计数走 i18n 词表(事件数 = 2)。
-		expect(html).toContain(tLoose("turn map compact count", { count: 2 }));
+		expect(html).toContain(tLoose("transcript.turnMapCompactCount", { count: 2 }));
 		// 泳道与构成条只在展开态出现。
 		expect(html).not.toContain("tm-lane");
 		expect(html).not.toContain("tm-comp-seg");

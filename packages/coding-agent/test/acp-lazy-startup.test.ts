@@ -530,7 +530,9 @@ describe("ACP lazy startup", () => {
 					},
 				},
 			);
-			await expect(stopped).rejects.toThrow("stop test ACP mode");
+			const stoppedError = await stopped.catch((error: unknown) => error);
+			expect(stoppedError).toBeInstanceOf(Error);
+			expect((stoppedError as Error).message).toBe("stop test ACP mode");
 
 			if (!session?.model) {
 				throw new Error("Expected extension model to resolve");

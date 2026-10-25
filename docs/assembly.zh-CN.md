@@ -1,3 +1,14 @@
+---
+layout: default
+title: 声明式装配与启动验证
+status: living
+summary: 产品面、managed 扩展、可选择缝和 fail-loud 装配验证契约。
+scope:
+  - musepi.assembly.toml
+  - packages/coding-agent/src
+lang: zh-CN
+---
+
 # MusePi Assembly — 声明式装配与启动验证
 
 [English](assembly.md) | 中文
