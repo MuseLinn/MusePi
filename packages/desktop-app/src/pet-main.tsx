@@ -68,12 +68,12 @@ const POKE_COMBO_MS = 900;
  *  the reaction deserves to be seen rather than glimpsed. */
 const POKE_HOLD_MS = 1400;
 
-// The pet window needs the full pet style set (.gui-pet-svg-*, mood
-// keyframes, .gui-petdex-sprite) — those live in gui.css alongside the app
-// tokens. Import order matters: gui.css AFTER pet-window.css so the tokens
-// :root (dark default) wins; the pet window never sets data-theme.
+// Local pet chrome comes first; shared tokens supply the overlay glass without
+// painting the transparent page. Component rules precede the overlay fallback.
 import "./styles/pet-window.css";
+import "@musepi/client-core/src/styles/tokens.css";
 import "./styles/gui.css";
+import "@musepi/client-core/src/styles/overlay-fallback.css";
 
 interface PetBridge {
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
@@ -769,7 +769,8 @@ function PetApp(): ReactNode {
 	);
 }
 
-// Unified tooltip layer for this window too (pet controls have titles).
+// Platform-aware overlays must not activate the opaque workspace backdrop.
+document.documentElement.dataset.transparentWindow = "true";
 initTooltips();
 
 createRoot(document.getElementById("root")!).render(

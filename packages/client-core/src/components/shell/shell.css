@@ -81,10 +81,12 @@
 	max-height: 40vh;
 	overflow: auto;
 	padding: 14px 16px;
-	border: 1px solid rgba(255, 255, 255, 0.12);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-xl);
-	background: rgba(24, 26, 32, 0.96);
-	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	box-shadow: var(--glass-shadow);
 	z-index: 900;
 }
 .sh-approval-title {
@@ -95,14 +97,14 @@
 .sh-approval-tool {
 	font-family: var(--mono, ui-monospace, monospace);
 	font-size: 12px;
-	color: #8ab4ff;
+	color: var(--accent);
 	margin-bottom: 6px;
 }
 .sh-approval-prompt {
 	font-size: 12px;
 	white-space: pre-wrap;
 	word-break: break-word;
-	color: rgba(232, 232, 232, 0.8);
+	color: var(--fg-muted);
 	max-height: 160px;
 	overflow: auto;
 	margin: 0 0 10px;
@@ -151,14 +153,14 @@
 	}
 }
 .sh-btn-approve {
-	background: rgba(42, 130, 78, 0.25);
-	border-color: rgba(42, 130, 78, 0.6);
-	color: #7fdca3;
+	background: color-mix(in oklab, var(--ok) 25%, transparent);
+	border-color: color-mix(in oklab, var(--ok) 60%, transparent);
+	color: var(--ok);
 }
 .sh-btn-deny {
-	background: rgba(180, 62, 62, 0.2);
-	border-color: rgba(180, 62, 62, 0.55);
-	color: #ff9b9b;
+	background: color-mix(in oklab, var(--err) 20%, transparent);
+	border-color: color-mix(in oklab, var(--err) 55%, transparent);
+	color: var(--err);
 }
 .sh-app {
 	display: grid;
@@ -1255,6 +1257,48 @@
 	margin-top: 6px;
 }
 
+/* ---- shared tooltip ---- */
+.gui-tooltip {
+	position: fixed;
+	z-index: 10000;
+	max-width: 340px;
+	padding: 4px 9px;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-md);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	box-shadow: var(--glass-shadow);
+	color: var(--fg);
+	font-size: 11.5px;
+	line-height: 1.45;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(4px) scale(0.98);
+	transition:
+		opacity 120ms var(--spring-liquid),
+		transform 120ms var(--spring-liquid);
+}
+
+.gui-tooltip--show {
+	opacity: 1;
+	transform: none;
+}
+
+.gui-motion-off .gui-tooltip,
+.gui-motion-off .gui-tooltip--show {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-tooltip,
+	.gui-tooltip--show {
+		transition: none;
+	}
+}
+
 /* ---- toasts ---- */
 .sh-toasts {
 	position: fixed;
@@ -1276,11 +1320,13 @@
 	padding: 8px 10px;
 	font-size: var(--ui-font-size-xs);
 	color: var(--fg);
-	background: var(--bg-overlay);
-	border: 1px solid var(--border-strong);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	border: 1px solid var(--glass-border);
 	border-left-width: 2px;
 	border-radius: var(--radius-lg);
-	box-shadow: var(--shadow-overlay);
+	box-shadow: var(--glass-shadow);
 }
 
 .sh-toast-info {
@@ -3000,9 +3046,10 @@
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
-	background: oklch(0 0 0 / 42%);
-	backdrop-filter: blur(2px);
-	animation: ss-backdrop-in 180ms ease-out;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	animation: ss-backdrop-in 160ms ease-out;
 }
 
 .ss-card {
@@ -3011,11 +3058,6 @@
 	max-width: 640px;
 	margin: 0 10px calc(10px + var(--safe-bottom, 0px));
 	border-radius: var(--radius-2xl);
-	/* L2 float (M1.10 §2 层级表): glass-strong base with the sheen wash
-	 * layered on top, glass border + refractive rim (the --glass-shadow
-	 * insets), and the token's single-declaration lifted shadow — same
-	 * one-token usage as the tr-back-bottom L2 precedent. No content row
-	 * takes glass: the sheet container only (§5). */
 	background: var(--glass-sheen), var(--glass-bg-strong);
 	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
 	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
@@ -3023,6 +3065,11 @@
 	box-shadow: var(--glass-shadow);
 	overflow: hidden;
 	animation: ss-card-in 280ms var(--spring-bouncy);
+}
+
+.ss-card--confirm {
+	max-width: 380px;
+	animation: ss-card-in 240ms var(--spring-liquid);
 }
 
 /* Drag handle zone (grabber + head). touch-action:none so downward drag isn't
@@ -3239,6 +3286,13 @@
 	}
 }
 
+.gui-motion-off .ss-backdrop,
+.gui-motion-off .ss-card,
+.gui-motion-off .ss-backdrop.ss-closing,
+.gui-motion-off .ss-card.ss-closing {
+	animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	/* Rotation/breakpoint geometry transitions: hard switch under reduced
 	 * motion (the block near the responsive styles sets them). */
@@ -3260,8 +3314,8 @@
 	.sh-content {
 		transition: none;
 	}
-	/* Sessions sheet exit: under reduced motion skip the slide-out and rely
-	 * on the 280ms fallback timer to flip the stage to hidden. */
+	.ss-backdrop,
+	.ss-card,
 	.ss-backdrop.ss-closing,
 	.ss-card.ss-closing {
 		animation: none;

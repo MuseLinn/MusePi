@@ -1,5 +1,5 @@
 import { type TranslationKey, t } from "@musepi/client-core";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 const DELAY_MS = 150;
@@ -11,7 +11,7 @@ const GAP = 8;
  * right edge, so the bubble is always placed to the LEFT of the anchor and
  * vertically centered on it: no flip/shift collision detection is possible
  * or needed (openchamber pays radix for that generality; here the geometry is
- * constant). Shows after a 150ms hover delay and follows scroll/resize.
+ * constant). Hover and keyboard focus share a 150ms delay; scroll/resize repositions it.
  *
  * Content lines: the label, an optional description, and one optional extra
  * line (e.g. the changed-files count). Hidden while dragging — see
@@ -36,6 +36,7 @@ export function RailTooltip({
 	extra?: string | null;
 	suppressed: boolean;
 }): React.ReactNode {
+	const tooltipId = useId();
 	const [pos, setPos] = useState<{ right: number; top: number } | null>(null);
 
 	useLayoutEffect(() => {
@@ -57,8 +58,6 @@ export function RailTooltip({
 		};
 	}, [anchor]);
 
-	// Delayed show: an instant popup on a 34px icon target would flicker on
-	// every rail sweep. Hide is immediate.
 	const [shown, setShown] = useState(false);
 	useEffect(() => {
 		if (!anchor || suppressed) {
@@ -69,9 +68,26 @@ export function RailTooltip({
 		return () => window.clearTimeout(id);
 	}, [anchor, suppressed]);
 
+	useEffect(() => {
+		if (!anchor || !shown || !label) return;
+		const descriptions = new Set(
+			(anchor.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(token => token.length > 0),
+		);
+		descriptions.add(tooltipId);
+		anchor.setAttribute("aria-describedby", [...descriptions].join(" "));
+		return () => {
+			const remaining = (anchor.getAttribute("aria-describedby") ?? "")
+				.split(/\s+/)
+				.filter(token => token.length > 0 && token !== tooltipId);
+			if (remaining.length > 0) anchor.setAttribute("aria-describedby", remaining.join(" "));
+			else anchor.removeAttribute("aria-describedby");
+		};
+	}, [anchor, label, shown, tooltipId]);
+
 	if (!pos || !shown || !label) return null;
 	return createPortal(
 		<div
+			id={tooltipId}
 			className="gui-rail-tooltip"
 			style={{ right: pos.right, top: pos.top, transform: "translateY(-50%)" }}
 			role="tooltip"

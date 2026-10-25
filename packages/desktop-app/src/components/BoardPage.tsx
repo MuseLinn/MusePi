@@ -1,4 +1,4 @@
-import { SpotlightCard, t } from "@musepi/client-core";
+import { isTopModal, SpotlightCard, t, useModalFocus } from "@musepi/client-core";
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
 import { type BoardWidget, widgetDef } from "@musepi/client-core/src/widgets/registry";
@@ -736,7 +736,9 @@ export function BoardPage({
 	// Two-phase enter: the frosted scrim paints at opacity 0 first so the
 	// backdrop composites before gui-fade-in (mount-frame animation on a
 	// backdrop-filter element kills the frost — gui-implementation.md §6.5).
-	const focusEnteredCls = useTwoPhaseEnter(focusWidget !== null);
+	const focusOpen = focusWidget !== null;
+	const focusEnteredCls = useTwoPhaseEnter(focusOpen);
+	const focusRef = useModalFocus<HTMLDivElement>(focusOpen);
 	const closeFocus = (): void => {
 		if (focusClosing) return;
 		setFocusClosing(true);
@@ -745,6 +747,18 @@ export function BoardPage({
 			setFocusClosing(false);
 		}, 150);
 	};
+	useEffect(() => {
+		if (!focusOpen) return;
+		const onKey = (event: KeyboardEvent): void => {
+			const dialog = focusRef.current;
+			if (event.key !== "Escape" || !dialog || !isTopModal(dialog)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			closeFocus();
+		};
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [focusOpen, focusClosing, focusRef]);
 
 	/** 整理 — flow-arrange widgets left→right, wrapping at the canvas edge
 	 *  (kimi's organize keeps the board tidy in one pass). */
@@ -1353,9 +1367,11 @@ export function BoardPage({
 			)}
 			{focusWidget && (
 				<div
+					ref={focusRef}
 					className={`gui-board-focus${focusEnteredCls ? " gui-board-focus--entered" : ""}${focusClosing ? " gui-board-focus--closing" : ""}`}
 					role="dialog"
 					aria-modal="true"
+					aria-label={focusWidget.title.trim() || t("settings.widgetTitle")}
 					onClick={closeFocus}
 				>
 					<div

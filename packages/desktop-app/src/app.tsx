@@ -2743,7 +2743,7 @@ function AppInner(): ReactNode {
 			if (!client) return false;
 			try {
 				if (localStorage.getItem("musepi-gui-confirm-delete") !== "0") {
-					const ok = await confirm(t("general.confirmDeleteSession"));
+					const ok = await confirm(t("general.confirmDeleteSession"), undefined, { destructive: true });
 					if (!ok) return false;
 				}
 				await client.request("session.delete", { sessionId });

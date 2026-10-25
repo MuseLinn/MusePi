@@ -7,6 +7,7 @@
 	justify-content: center;
 	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
 	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
 	/* Two-phase enter (useTwoPhaseEnter) — see .gui-board-focus. */
 	opacity: 0;
 }
@@ -20,24 +21,27 @@
 	animation: gui-focus-out 150ms ease-in forwards;
 }
 
-/* Motion-off / reduced-motion: exit snaps instead of animating (the
- * unmount timer in TaskModal still fires — onboarding parity, §5u). */
-.gui-motion-off .gui-task-modal--closing {
+.gui-motion-off .gui-task-modal--entered,
+.gui-motion-off .gui-task-modal--closing,
+.gui-motion-off .gui-task-modal-card {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-	.gui-task-modal--closing {
+	.gui-task-modal--entered,
+	.gui-task-modal--closing,
+	.gui-task-modal-card {
 		animation: none;
 	}
 }
 
 .gui-task-modal-card {
 	width: min(380px, 86vw);
-	border: 1px solid var(--border);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-2xl);
-	/* TODO(M1.10 批次 C): 迁移 L3 overlay 玻璃（--glass-bg-strong+rim+sheen+shadow），欠账见 gui-design.md §5u */
-	background: var(--color-surface-raised);
-	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
 	padding: 16px;
 	display: flex;
 	flex-direction: column;
@@ -269,8 +273,18 @@
 	}
 }
 
+.gui-motion-off .gui-board-focus--entered,
+.gui-motion-off .gui-board-focus--closing,
 .gui-motion-off .gui-board-focus-card {
 	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-board-focus--entered,
+	.gui-board-focus--closing,
+	.gui-board-focus-card {
+		animation: none;
+	}
 }
 
 /* Custom HTML widget face — opaque-origin sandbox iframe */
@@ -2500,14 +2514,16 @@
 		transform: translateY(10px) scale(0.98);
 	}
 }
-/* Motion-off / reduced-motion: exit snaps instead of animating (the
- * mount timer in OnboardingOverlay still un-mounts after the duration). */
+.gui-motion-off .gui-onboarding-backdrop--entered,
 .gui-motion-off .gui-onboarding-backdrop--closing,
+.gui-motion-off .gui-onboarding-card,
 .gui-motion-off .gui-onboarding-card.gui-onboarding-card--closing {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
+	.gui-onboarding-backdrop--entered,
 	.gui-onboarding-backdrop--closing,
+	.gui-onboarding-card,
 	.gui-onboarding-card.gui-onboarding-card--closing {
 		animation: none;
 	}
@@ -2527,12 +2543,14 @@
 	 * ~100px min margin each side; capped so large displays don't blow up. */
 	width: min(1000px, calc(100vw - 160px));
 	height: min(620px, calc(100vh - 160px));
-	border: 1px solid var(--border);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-2xl);
-	background: var(--bg-raised);
-	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
 	overflow: hidden;
-	animation: gui-obo-card-in 240ms var(--spring) both;
+	animation: gui-obo-card-in 240ms var(--spring-liquid) both;
 }
 .gui-onboarding-topbar {
 	display: flex;
@@ -3141,7 +3159,9 @@
 .gui-reward-secondary:hover {
 	background: color-mix(in oklab, var(--fg) 11%, transparent);
 }
-/* Motion-off / reduced-motion: the sky settles, the ticket sits still. */
+/* Motion-off / reduced-motion: the card, sky and ticket all sit still. */
+.gui-motion-off .gui-reward-card,
+.gui-motion-off .gui-reward-card--closing,
 .gui-motion-off .gui-reward-stars,
 .gui-motion-off .gui-reward-shoot,
 .gui-motion-off .gui-reward-float,
@@ -3150,6 +3170,8 @@
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
+	.gui-reward-card,
+	.gui-reward-card--closing,
 	.gui-reward-stars,
 	.gui-reward-shoot,
 	.gui-reward-float,
@@ -4505,15 +4527,25 @@
 	gap: 10px;
 	padding: 9px 12px;
 	border-radius: var(--radius-lg);
-	border: 1px solid var(--border);
-	background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg-strong);
 	backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
-	box-shadow: var(--shadow-overlay);
+	box-shadow: var(--glass-shadow);
 	color: var(--color-text);
 	font-size: var(--ui-font-size-sm);
 	pointer-events: auto;
-	animation: gui-action-toast-in 200ms var(--spring, ease);
+	animation: gui-action-toast-in 200ms var(--spring-liquid, ease);
+}
+
+.gui-motion-off .gui-action-toast {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-action-toast {
+		animation: none;
+	}
 }
 /* 状态色：图标与描边随 kind 微染，底色保持玻璃中性——浮窗不尖叫。 */
 .gui-action-toast--success .gui-action-toast-icon {
@@ -4572,11 +4604,14 @@
 	width: 320px;
 	padding: 14px 16px;
 	border-radius: var(--radius-xl);
-	border: 1px solid var(--border);
+	border: 1px solid var(--glass-border);
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--accent) 6%, transparent), transparent 120px),
-		var(--bg-raised);
-	box-shadow: 0 12px 40px rgb(0 0 0 / 22%);
+		var(--glass-sheen),
+		var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
 	animation: gui-update-toast-in 260ms var(--spring) both;
 }
 @keyframes gui-update-toast-in {
@@ -4598,12 +4633,12 @@
 		transform: translateY(8px);
 	}
 }
-/* Motion-off / reduced-motion: exit snaps instead of animating (the
- * unmount timer in UpdateToast still fires — onboarding parity, §5u). */
+.gui-motion-off .gui-update-toast,
 .gui-motion-off .gui-update-toast--closing {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
+	.gui-update-toast,
 	.gui-update-toast--closing {
 		animation: none;
 	}

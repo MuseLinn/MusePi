@@ -1,4 +1,4 @@
-import { getLocaleSnapshot, Markdown, t } from "@musepi/client-core";
+import { getLocaleSnapshot, isTopModal, Markdown, t, useModalFocus } from "@musepi/client-core";
 import {
 	type ChangelogHighlight,
 	type ChangelogHighlightKind,
@@ -7,7 +7,7 @@ import {
 } from "@musepi/client-core/src/lib/changelog-highlights";
 import { ChevronDown, ChevronRight, ExternalLink, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { onboardingPending } from "../lib/onboarding";
 import { activePet } from "../lib/pet";
@@ -189,7 +189,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [showFullLog, setShowFullLog] = useState(false);
 	const [expandedVersions, setExpandedVersions] = useState<ReadonlySet<string>>(() => new Set());
 	const [reducedMotion, setReducedMotion] = useState(false);
-	const cardRef = useRef<HTMLDivElement | null>(null);
+	const cardRef = useModalFocus<HTMLDivElement>(open && !reward);
 	const enteredCls = useTwoPhaseEnter(open);
 	// Stay mounted through the exit so the fade-out plays instead of cutting.
 	const [closing, setClosing] = useState(false);
@@ -283,23 +283,18 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setReducedMotion(motionOff());
 	}, [open]);
 
-	// Focus contract (§5u): opening moves focus to the primary action
-	// (confirm-dialog precedent — the card itself is the tabIndex=-1
-	// fallback), closing restores the previously focused element.
+	// Focus contract (§5u): opening moves focus to the primary action; the
+	// shared modal hook traps Tab and restores the opener on close.
 	useEffect(() => {
 		if (!open) return;
-		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		const raf = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
 			const primary = card.querySelector<HTMLElement>(".gui-btn-primary");
 			(primary ?? card).focus();
 		});
-		return () => {
-			cancelAnimationFrame(raf);
-			prevActive?.focus();
-		};
-	}, [open]);
+		return () => cancelAnimationFrame(raf);
+	}, [open, cardRef]);
 
 	// Keyboard priority: Escape closes and Enter confirms (= close, the
 	// confirm-dialog contract) — the page behind must not keep focus/keys
@@ -310,6 +305,8 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	useEffect(() => {
 		if (!open || (!markdown && !reward)) return;
 		const onKey = (e: KeyboardEvent): void => {
+			const card = cardRef.current;
+			if (!card || !isTopModal(card)) return;
 			if (e.key === "Escape") {
 				e.preventDefault();
 				e.stopPropagation();
@@ -329,7 +326,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		};
 		document.addEventListener("keydown", onKey, true);
 		return () => document.removeEventListener("keydown", onKey, true);
-	}, [open, markdown, reward, requestClose]);
+	}, [open, markdown, reward, requestClose, cardRef]);
 
 	const toggleVersion = useCallback((version: string): void => {
 		setExpandedVersions(prev => {
@@ -357,6 +354,11 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 				className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${closing ? " gui-onboarding-backdrop--closing" : ""}`}
 			>
 				<div
+					ref={cardRef}
+					tabIndex={-1}
+					role="dialog"
+					aria-modal="true"
+					aria-label={t("settings.whatSNew")}
 					className={`gui-onboarding-card gui-announcement-card${closing ? " gui-onboarding-card--closing" : ""}`}
 				>
 					<div className="gui-onboarding-topbar">

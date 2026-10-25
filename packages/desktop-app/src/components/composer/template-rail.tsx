@@ -111,6 +111,7 @@ export function TemplateRail({
 		const ok = await confirm(
 			t("creation.creationTemplateConfirmDelete", { name }),
 			t("creation.creationTemplateDelete"),
+			{ destructive: true },
 		);
 		if (!ok) return;
 		try {

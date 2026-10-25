@@ -7,6 +7,7 @@ import type { SessionClient } from "../../lib/client";
 import { formatWhen, shortenPath } from "../../lib/format";
 import { sessionTitleMorphId, useMorphTarget } from "../../lib/scene-morph";
 import { useArchivedSessions } from "../../lib/session-archive";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 /**
  * Multi-session workspace: a directory of session cards so remote guests can
@@ -201,6 +202,9 @@ function WorkspaceCard({
 }): ReactNode {
 	const [renaming, setRenaming] = useState(false);
 	const [draft, setDraft] = useState(session.title ?? "");
+	const [confirmingDelete, setConfirmingDelete] = useState(false);
+	const [deleteBusy, setDeleteBusy] = useState(false);
+	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const title = session.title ?? t("transcript.untitledSession");
 	const when = formatWhen(session.updatedAt);
 	// Mobile 列表→会话 morph source/target (M1.10 §3.3 批次 B): the card
@@ -314,13 +318,41 @@ function WorkspaceCard({
 						title={t("settings.delete")}
 						onClick={e => {
 							e.stopPropagation();
-							if (window.confirm(t("general.confirmDeleteSession"))) void onDeleteSession(session.id);
+							setDeleteError(null);
+							setConfirmingDelete(true);
 						}}
 					>
 						<Trash2 size={12} />
 					</button>
 				)}
 			</div>
+			<ConfirmDialog
+				open={confirmingDelete}
+				title={t("general.confirmDeleteSession")}
+				confirmLabel={t("settings.delete")}
+				busy={deleteBusy}
+				destructive
+				error={deleteError}
+				onConfirm={() => {
+					if (!onDeleteSession) return;
+					setDeleteBusy(true);
+					setDeleteError(null);
+					void (async () => {
+						try {
+							await onDeleteSession(session.id);
+							setConfirmingDelete(false);
+						} catch (error) {
+							setDeleteError(error instanceof Error ? error.message : String(error));
+						} finally {
+							setDeleteBusy(false);
+						}
+					})();
+				}}
+				onClose={() => {
+					setConfirmingDelete(false);
+					setDeleteError(null);
+				}}
+			/>
 		</div>
 	);
 }

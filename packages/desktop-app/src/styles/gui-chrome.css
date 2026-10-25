@@ -282,8 +282,8 @@
  * desktop would show). The primer's 24px+saturate blur is the heaviest glass
  * in the app and lands on first run, when the welcome page behind it is also
  * running the dot-matrix canvas — the combination stalled the renderer
- * (2026-09-14). Frosting still comes from the window material; the scrim is
- * densified so each card keeps its separation without the page blur. */
+ * (2026-09-14). Linux keeps a densified scrim; Windows uses the opaque
+ * overlay-fallback.css rules loaded after every component stylesheet. */
 [data-platform="win32"] .gui-onboarding-backdrop,
 [data-platform="linux"] .gui-onboarding-backdrop,
 [data-platform="win32"] .gui-dialog-backdrop,
@@ -296,16 +296,12 @@
 	-webkit-backdrop-filter: none;
 }
 
-[data-platform="win32"] .gui-onboarding-backdrop,
 [data-platform="linux"] .gui-onboarding-backdrop,
-[data-platform="win32"] .gui-global-pause--active,
 [data-platform="linux"] .gui-global-pause--active {
 	background: color-mix(in oklab, var(--bg) 80%, transparent);
 }
 
-[data-platform="win32"] .gui-dialog-backdrop,
 [data-platform="linux"] .gui-dialog-backdrop,
-[data-platform="win32"] .gui-cap-drawer-backdrop,
 [data-platform="linux"] .gui-cap-drawer-backdrop {
 	background: color-mix(in oklab, var(--color-bg) 78%, transparent);
 }

@@ -600,7 +600,7 @@ export function FilePane({
 	const confirmDiscard = useCallback(async (): Promise<boolean> => {
 		const buf = editBufRef.current;
 		if (!buf || buf.text === buf.saved) return true;
-		const ok = await confirm(t("settings.discardUnsavedChanges"), t("general.discard"));
+		const ok = await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true });
 		if (ok) {
 			editBufRef.current = null;
 			setEdit(null);
@@ -861,12 +861,14 @@ export function FilePane({
 			const cached = unsavedBufferCache.get(preview.path);
 			if (cached) {
 				if (edit && edit.text !== edit.saved) {
-					if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard")))) return;
+					if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true })))
+						return;
 				}
 				setEdit(cached);
 			} else if (!edit) setEdit({ text: preview.raw, saved: preview.raw });
 			else if (edit.text !== edit.saved) {
-				if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard")))) return;
+				if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true })))
+					return;
 				setEdit({ text: preview.raw, saved: preview.raw });
 			}
 			editRef.current?.focus();
@@ -882,7 +884,8 @@ export function FilePane({
 			setEdit(null);
 			return;
 		}
-		if (await confirm(t("settings.discardUnsavedChanges"), t("general.discard"))) setEdit(null);
+		if (await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true }))
+			setEdit(null);
 	}, [edit, confirm]);
 
 	/** Persist the edited buffer. fs.write takes cwd-relative paths; the

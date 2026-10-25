@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { isTopModal, t, useModalFocus } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,14 +9,24 @@ export interface PromptSpec {
 	placeholder?: string;
 }
 
+export interface ConfirmOptions {
+	destructive?: boolean;
+}
+
 type PromptFn = (spec: PromptSpec) => Promise<string | null>;
 /** Confirm message — resolves true on confirm, false on cancel/Escape. */
-type ConfirmFn = (message: string, okLabel?: string) => Promise<boolean>;
+type ConfirmFn = (message: string, okLabel?: string, options?: ConfirmOptions) => Promise<boolean>;
 
 interface DialogState {
 	kind: "prompt" | "confirm";
 	spec: PromptSpec;
 	okLabel?: string;
+	destructive?: boolean;
+}
+
+interface PendingDialog {
+	settle(value: string | null | boolean): void;
+	cancel(): void;
 }
 
 const PromptContext = createContext<PromptFn>(async () => null);
@@ -40,38 +50,56 @@ export function useConfirm(): { confirm: ConfirmFn } {
 
 export function PromptProvider({ children }: { children: ReactNode }): ReactNode {
 	const [state, setState] = useState<DialogState | null>(null);
-	// Enter/closing phases (DialogFrame parity): first frame paints at
-	// opacity 0 so the frosted backdrop composites before the fade starts,
-	// then --entered runs the scale/fade-in; finish() flips to closing and
-	// keeps the dialog mounted through the exit animation before the state
-	// clears — so confirm dialogs (session delete, project remove, …) get
-	// the same show/hide motion as every other modal.
 	const [phase, setPhase] = useState<"enter" | "open" | "closing">("open");
 	const rafRef = useRef<number | null>(null);
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const timerRef = useRef<Timer | null>(null);
+	const exitTimerRef = useRef<Timer | null>(null);
 	const [value, setValue] = useState("");
-	const resolverRef = useRef<((v: string | null) => void) | null>(null);
-	const confirmRef = useRef<((v: boolean) => void) | null>(null);
+	const pendingRef = useRef<PendingDialog | null>(null);
+	const finishingRef = useRef(false);
+	const dialogRef = useModalFocus<HTMLDivElement>(state !== null);
 
-	const prompt = useCallback((s: PromptSpec): Promise<string | null> => {
-		setValue(s.defaultValue ?? "");
-		setState({ kind: "prompt", spec: s });
-		return new Promise<string | null>(resolve => {
-			resolverRef.current = resolve;
-		});
+	const cancelPending = useCallback((): void => {
+		if (exitTimerRef.current !== null) clearTimeout(exitTimerRef.current);
+		exitTimerRef.current = null;
+		finishingRef.current = false;
+		const pending = pendingRef.current;
+		pendingRef.current = null;
+		pending?.cancel();
 	}, []);
 
-	const confirm = useCallback((message: string, okLabel?: string): Promise<boolean> => {
-		setValue("");
-		setState({ kind: "confirm", spec: { title: message }, okLabel });
-		return new Promise<boolean>(resolve => {
-			confirmRef.current = resolve;
-		});
-	}, []);
+	const prompt = useCallback(
+		(s: PromptSpec): Promise<string | null> => {
+			cancelPending();
+			const { promise, resolve } = Promise.withResolvers<string | null>();
+			pendingRef.current = {
+				settle: result => resolve(typeof result === "string" ? result : null),
+				cancel: () => resolve(null),
+			};
+			setValue(s.defaultValue ?? "");
+			setPhase("open");
+			setState({ kind: "prompt", spec: s });
+			return promise;
+		},
+		[cancelPending],
+	);
 
-	// Enter: two rAF hops then --entered (same pattern as DialogFrame /
-	// useFloatingMenu), with a timer fallback for throttled rAF.
+	const confirm = useCallback(
+		(message: string, okLabel?: string, options?: ConfirmOptions): Promise<boolean> => {
+			cancelPending();
+			const { promise, resolve } = Promise.withResolvers<boolean>();
+			pendingRef.current = {
+				settle: result => resolve(result === true),
+				cancel: () => resolve(false),
+			};
+			setValue("");
+			setPhase("open");
+			setState({ kind: "confirm", spec: { title: message }, okLabel, destructive: options?.destructive });
+			return promise;
+		},
+		[cancelPending],
+	);
+
 	useEffect(() => {
 		if (!state) return;
 		setPhase("enter");
@@ -91,65 +119,49 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 		};
 	}, [state]);
 
-	const finish = useCallback(
-		(v: string | null | boolean): void => {
-			if (phase === "closing") return;
-			setPhase("closing");
-			if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
-			exitTimerRef.current = setTimeout(() => {
-				if (state?.kind === "confirm") {
-					confirmRef.current?.(v === true);
-					confirmRef.current = null;
-				} else {
-					resolverRef.current?.(typeof v === "string" ? v : null);
-					resolverRef.current = null;
-				}
-				setState(null);
-				setPhase("open");
-			}, 180);
-		},
-		[phase, state],
-	);
-
-	// Escape cancels either dialog; Enter confirms a confirm box (a prompt
-	// has its own input handler). The confirm box has no input to hang a
-	// keydown on, so the listener is document-level while it is open — in
-	// capture phase so the modal wins over the page behind.
-	//
-	// Focus: a PROMPT focuses its text input (typing must land immediately —
-	// focusing the button instead stole focus on every keystroke because the
-	// effect re-ran after each render); a confirm box focuses its confirm
-	// button so Enter/Escape visibly land on it. The [state, phase] deps keep
-	// the effect from re-arming mid-typing: `state` arms it on open, `phase`
-	// refreshes the closing guard. `value` is intentionally NOT a dep.
 	useEffect(() => {
 		if (!state) return;
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") {
+		const target = dialogRef.current?.querySelector<HTMLElement>(
+			state.kind === "prompt" ? "input" : ".gui-btn:not(.gui-btn-primary)",
+		);
+		target?.focus();
+	}, [state, dialogRef]);
+
+	const finish = useCallback((result: string | null | boolean): void => {
+		const pending = pendingRef.current;
+		if (!pending || finishingRef.current) return;
+		finishingRef.current = true;
+		setPhase("closing");
+		exitTimerRef.current = setTimeout(() => {
+			pendingRef.current = null;
+			exitTimerRef.current = null;
+			finishingRef.current = false;
+			pending.settle(result);
+			setState(null);
+			setPhase("open");
+		}, 180);
+	}, []);
+
+	useEffect(() => () => cancelPending(), [cancelPending]);
+
+	useEffect(() => {
+		if (!state) return;
+		const onKey = (event: KeyboardEvent): void => {
+			const dialog = dialogRef.current;
+			if (!dialog || !isTopModal(dialog) || phase === "closing") return;
+			if (event.key === "Escape") {
+				event.preventDefault();
+				event.stopPropagation();
 				finish(null);
-			} else if (e.key === "Enter" && state.kind === "confirm" && phase !== "closing") {
-				finish(true);
+			} else if (event.key === "Enter" && state.kind === "confirm") {
+				event.preventDefault();
+				event.stopPropagation();
+				if (!state.destructive) finish(true);
 			}
 		};
 		document.addEventListener("keydown", onKey, true);
 		return () => document.removeEventListener("keydown", onKey, true);
-	}, [state, phase, finish]);
-
-	// Initial focus, once per open: the prompt input, else the confirm button.
-	// Runs on open only — re-focusing on every keystroke stole typing.
-	useEffect(() => {
-		if (!state) return;
-		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		const raf = requestAnimationFrame(() => {
-			const dlg = document.querySelector<HTMLElement>(".gui-dialog--prompt, .gui-dialog--confirm");
-			const target = dlg?.querySelector<HTMLElement>(state.kind === "prompt" ? "input" : "button");
-			target?.focus();
-		});
-		return () => {
-			cancelAnimationFrame(raf);
-			prevActive?.focus();
-		};
-	}, [state]);
+	}, [state, phase, finish, dialogRef]);
 
 	return (
 		<PromptContext.Provider value={prompt}>
@@ -168,6 +180,7 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 							onClick={() => finish(null)}
 						>
 							<div
+								ref={dialogRef}
 								className={`gui-dialog ${
 									state.kind === "confirm" ? "gui-dialog--confirm" : "gui-dialog--prompt"
 								}${
@@ -179,7 +192,8 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 								}`}
 								role="dialog"
 								aria-modal="true"
-								onClick={e => e.stopPropagation()}
+								aria-label={state.spec.title}
+								onClick={event => event.stopPropagation()}
 							>
 								<h3>{state.spec.title}</h3>
 								{state.kind === "prompt" ? (
@@ -187,12 +201,11 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 										className="gui-input mt-2 w-full"
 										value={value}
 										placeholder={state.spec.placeholder}
-										autoFocus
 										spellCheck={false}
-										onChange={e => setValue(e.target.value)}
-										onKeyDown={e => {
-											if (e.key === "Enter") finish(value.trim());
-											else if (e.key === "Escape") finish(null);
+										onChange={event => setValue(event.target.value)}
+										onKeyDown={event => {
+											if (event.key === "Enter") finish(value.trim());
+											else if (event.key === "Escape") finish(null);
 										}}
 									/>
 								) : null}
@@ -203,22 +216,15 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 									<button
 										type="button"
 										className="gui-btn gui-btn-primary"
-										onClick={() => (state?.kind === "prompt" ? finish(value.trim()) : finish(true))}
+										onClick={() => (state.kind === "prompt" ? finish(value.trim()) : finish(true))}
 									>
 										{state.okLabel ?? t("settings.confirm")}
 									</button>
 								</div>
 							</div>
 						</div>,
-						// Portal to document.body (DialogFrame precedent): the modal
-						// band (3000) breaks ties by DOM order, and body-level
-						// portals (the skill drawer, DialogFrame modals) mount
-						// AFTER #root — a prompt/confirm portaled into #root used
-						// to paint UNDER an open drawer, invisible and
-						// click-blocked by its full-viewport backdrop (capability
-						// center uninstall confirm never reachable). React
-						// synthetic events bubble through the component tree, so
-						// host handlers keep firing from a body portal.
+						// Body-level portals keep the confirm in the same modal band as
+						// drawers and DialogFrame instead of painting beneath them.
 						document.body,
 					)}
 			</ConfirmContext.Provider>

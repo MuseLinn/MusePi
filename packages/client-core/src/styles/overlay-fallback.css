@@ -1,0 +1,68 @@
+/* Imported after component styles so these fallbacks win the real cascade.
+ * Pseudo-element cards keep sheen in ::before; the other surfaces carry it
+ * directly in background, exactly once in either case. */
+@media (prefers-reduced-transparency: reduce) {
+	:is(.gui-menu-popup, .gui-context-menu, .gui-session-hover-card, .gui-tooltip, .gui-rail-tooltip, .gui-action-toast, .gui-update-toast, .sh-toast, .ag-drawer, .ss-card:not(.ss-card--confirm), .sh-approval, .gui-task-modal-card, .gui-palette, .gui-onboarding-card, .gui-board-focus-card, .ss-card--confirm, .gui-global-pause-card, .gui-reward-card),
+	:is(.gui-dialog, .gui-cap-drawer, .gui-sketch-board, .gui-skill-market-dialog) {
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	:is(.gui-menu-popup, .gui-context-menu, .gui-session-hover-card, .gui-tooltip, .gui-rail-tooltip, .gui-action-toast, .gui-update-toast, .sh-toast, .ag-drawer, .ss-card:not(.ss-card--confirm), .sh-approval, .gui-task-modal-card, .gui-palette, .gui-onboarding-card, .gui-board-focus-card, .ss-card--confirm, .gui-global-pause-card, .gui-reward-card) {
+		background-color: var(--color-surface-raised);
+		background-image: var(--glass-sheen);
+	}
+
+	:is(.gui-dialog, .gui-cap-drawer, .gui-sketch-board, .gui-skill-market-dialog) {
+		background-color: var(--color-surface-raised);
+	}
+
+	:is(.gui-dialog-backdrop, .gui-task-modal, .gui-palette-backdrop, .gui-cap-drawer-backdrop, .gui-skill-market-dialog-backdrop, .ag-drawer-backdrop, .ss-backdrop, .gui-sketch-veil, .gui-board-focus, .tr-img-lb-backdrop, .gui-onboarding-backdrop, .gui-global-pause--active) {
+		background-color: var(--color-bg);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	:is(.gui-menu-popup, .gui-context-menu, .gui-session-hover-card, .gui-tooltip, .gui-rail-tooltip, .gui-action-toast, .gui-update-toast, .sh-toast, .ag-drawer, .ss-card:not(.ss-card--confirm), .sh-approval, .gui-task-modal-card, .gui-palette, .gui-onboarding-card, .gui-board-focus-card, .ss-card--confirm, .gui-global-pause-card, .gui-reward-card),
+	:is(.gui-dialog, .gui-cap-drawer, .gui-sketch-board, .gui-skill-market-dialog),
+	:is(.gui-dialog-backdrop, .gui-task-modal, .gui-palette-backdrop, .gui-cap-drawer-backdrop, .gui-skill-market-dialog-backdrop, .ag-drawer-backdrop, .ss-backdrop, .gui-sketch-veil, .gui-board-focus, .tr-img-lb-backdrop, .gui-onboarding-backdrop, .gui-global-pause--active) {
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	:is(.gui-menu-popup, .gui-context-menu, .gui-session-hover-card, .gui-tooltip, .gui-rail-tooltip, .gui-action-toast, .gui-update-toast, .sh-toast, .ag-drawer, .ss-card:not(.ss-card--confirm), .sh-approval, .gui-task-modal-card, .gui-palette, .gui-onboarding-card, .gui-board-focus-card, .ss-card--confirm, .gui-global-pause-card, .gui-reward-card) {
+		background-color: var(--color-surface-raised);
+		background-image: var(--glass-sheen);
+	}
+
+	:is(.gui-dialog, .gui-cap-drawer, .gui-sketch-board, .gui-skill-market-dialog) {
+		background-color: var(--color-surface-raised);
+	}
+
+	:is(.gui-dialog-backdrop, .gui-task-modal, .gui-palette-backdrop, .gui-cap-drawer-backdrop, .gui-skill-market-dialog-backdrop, .ag-drawer-backdrop, .ss-backdrop, .gui-sketch-veil, .gui-board-focus, .tr-img-lb-backdrop, .gui-onboarding-backdrop, .gui-global-pause--active) {
+		background-color: var(--color-bg);
+	}
+}
+
+[data-platform="win32"] :is(.gui-menu-popup, .gui-context-menu, .gui-session-hover-card, .gui-tooltip, .gui-rail-tooltip, .gui-action-toast, .gui-update-toast, .sh-toast, .ag-drawer, .ss-card:not(.ss-card--confirm), .sh-approval, .gui-task-modal-card, .gui-palette, .gui-onboarding-card, .gui-board-focus-card, .ss-card--confirm, .gui-global-pause-card, .gui-reward-card),
+[data-platform="win32"] :is(.gui-dialog, .gui-cap-drawer, .gui-sketch-board, .gui-skill-market-dialog) {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+[data-platform="win32"] :is(.gui-menu-popup, .gui-context-menu, .gui-session-hover-card, .gui-tooltip, .gui-rail-tooltip, .gui-action-toast, .gui-update-toast, .sh-toast, .ag-drawer, .ss-card:not(.ss-card--confirm), .sh-approval, .gui-task-modal-card, .gui-palette, .gui-onboarding-card, .gui-board-focus-card, .ss-card--confirm, .gui-global-pause-card, .gui-reward-card) {
+	background-color: var(--color-surface-raised);
+	background-image: var(--glass-sheen);
+}
+
+[data-platform="win32"] :is(.gui-dialog, .gui-cap-drawer, .gui-sketch-board, .gui-skill-market-dialog) {
+	background-color: var(--color-surface-raised);
+}
+
+[data-platform="win32"] :is(.gui-dialog-backdrop, .gui-task-modal, .gui-palette-backdrop, .gui-cap-drawer-backdrop, .gui-skill-market-dialog-backdrop, .ag-drawer-backdrop, .ss-backdrop, .gui-sketch-veil, .gui-board-focus, .tr-img-lb-backdrop, .gui-onboarding-backdrop, .gui-global-pause--active) {
+	background-color: var(--color-bg);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}

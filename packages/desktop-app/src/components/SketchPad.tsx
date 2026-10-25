@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { isTopModal, t, useModalFocus } from "@musepi/client-core";
 import type Konva from "konva";
 import {
 	ArrowUpRight,
@@ -238,6 +238,7 @@ export function SketchPad({
 	onClose(): void;
 }): ReactNode {
 	const wrapRef = useRef<HTMLDivElement | null>(null);
+	const veilRef = useModalFocus<HTMLDivElement>(true);
 	const stageRef = useRef<Konva.Stage | null>(null);
 	const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
 	const [tool, setTool] = useState<Tool>("pen");
@@ -571,7 +572,7 @@ export function SketchPad({
 			onClose();
 			return;
 		}
-		void confirm(t("composer.sketchDiscardTitle"), t("general.discard")).then(ok => {
+		void confirm(t("composer.sketchDiscardTitle"), t("general.discard"), { destructive: true }).then(ok => {
 			if (ok) onClose();
 		});
 	}, [dirty, confirm, onClose, textEditor, closeTextEditor]);
@@ -581,8 +582,11 @@ export function SketchPad({
 	// on Escape (see requestClose).
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
+			const veil = veilRef.current;
+			if (!veil || !isTopModal(veil)) return;
 			if (e.key === "Escape") {
 				e.preventDefault();
+				e.stopPropagation();
 				requestClose();
 			} else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
 				e.preventDefault();
@@ -590,9 +594,9 @@ export function SketchPad({
 				else undo();
 			}
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [requestClose, undo, redo]);
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [requestClose, undo, redo, veilRef]);
 
 	const onPointerDown = useCallback(
 		(e: Konva.KonvaEventObject<PointerEvent>): void => {
@@ -1026,7 +1030,13 @@ export function SketchPad({
 	const drawing = tool !== "select" && tool !== "eraser" && tool !== "text";
 
 	return (
-		<div className={`gui-sketch-veil${closing ? " gui-sketch-veil--closing" : ""}`} role="dialog" aria-modal="true">
+		<div
+			ref={veilRef}
+			className={`gui-sketch-veil${closing ? " gui-sketch-veil--closing" : ""}`}
+			role="dialog"
+			aria-modal="true"
+			aria-label={t("composer.sketch")}
+		>
 			<div className="gui-sketch-board">
 				<div className="gui-sketch-toolbar">
 					<button

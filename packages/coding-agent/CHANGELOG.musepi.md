@@ -6,7 +6,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Changed
+- **提示、通知、抽屉和弹窗统一了玻璃质感与可读性**：六类浮层共享一致的边缘、光泽和阴影；关闭动效或减少动态效果时，入场与出场都会立即完成。降低透明度、系统不支持背景模糊以及 Windows 无模糊路径会使用清晰的不透明底色。嵌套弹窗只响应最上层的键盘操作，危险删除确认也不会再被 Enter 误触发。
+  - EN: Tooltips, toasts, drawers, and dialogs now share consistent glass edges, sheen, and shadows across six overlay types. Entrance and exit motion both stop when animation is disabled or reduced motion is requested. Reduced transparency, missing backdrop-filter support, and Windows without blur use readable opaque surfaces. Only the top nested dialog handles keyboard input, and destructive confirmations can no longer be triggered accidentally with Enter.
+
 ### Fixed
+- **会话切换浮层完整显示了**：多会话主机的标题按钮打开的工作区 sheet 不再被顶栏裁到屏幕外，移动和桌面视口都能查看会话列表、关闭浮层并恢复焦点。
+  - EN: The session switcher now opens fully in view. The workspace sheet opened from a multi-session host title is no longer clipped above the screen by the header, so mobile and desktop users can see the session list, close the sheet, and restore focus.
 - **Windows 版又能正常收到更新了**：最近一次版本发布的 Windows 安装包和更新清单漏传了，旧客户端点「检查更新」会一直失败；修复后新版本照常附带安装包与更新清单。
   - EN: Windows builds receive updates again. The most recent release shipped without its Windows installer and update manifest, so older clients failed every "check for updates"; new releases now include the installer and manifest again.
 - **检查更新遇到「 release 还没带上更新清单」会说清楚了**：发布暂时缺了当前平台的更新元数据时，设置页以前显示一句笼统的「检查更新失败」，让人误会是自己网络出问题；现在明确提示「未找到当前平台的更新发布信息」，真正的网络故障仍然单独归类。

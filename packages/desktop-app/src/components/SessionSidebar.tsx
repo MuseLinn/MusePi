@@ -633,7 +633,9 @@ export function SessionSidebar({
 	const removeProject = (path: string): void => {
 		// Disambiguated too (issue #15) — "remove demo?" is ambiguous when two
 		// different folders are both called demo.
-		void confirm(`${t("general.removeProject")} ${projectLabel(path, projects)}?`, t("general.remove")).then(ok => {
+		void confirm(`${t("general.removeProject")} ${projectLabel(path, projects)}?`, t("general.remove"), {
+			destructive: true,
+		}).then(ok => {
 			if (!ok) return;
 			setProjects(prev => prev.filter(p => p !== path));
 			setCollapsedProjects(prev => prev.filter(p => p !== path));

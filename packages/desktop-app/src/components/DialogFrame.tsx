@@ -1,3 +1,4 @@
+import { isTopModal, useModalFocus } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -29,42 +30,25 @@ export function DialogFrame({
 	const [mounted, setMounted] = useState(open);
 	const [phase, setPhase] = useState<"enter" | "open" | "closing">(open ? "enter" : "open");
 	const rafRef = useRef<number | null>(null);
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const dialogRef = useRef<HTMLDivElement | null>(null);
+	const timerRef = useRef<Timer | null>(null);
+	const dialogRef = useModalFocus<HTMLDivElement>(mounted);
 	const onCloseRef = useRef(onClose);
+	const phaseRef = useRef(phase);
 	onCloseRef.current = onClose;
+	phaseRef.current = phase;
 
-	// Keyboard + focus priority: while a modal is up, Enter/Escape must land
-	// on IT, not the page behind (the composer used to swallow Enter while
-	// the onboarding overlay or a confirm dialog was open). Opening moves
-	// focus into the dialog (first focusable element, else the dialog
-	// itself); Escape closes via onClose; focus is restored on unmount.
 	useEffect(() => {
 		if (!mounted) return;
-		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape" && phase !== "closing") {
-				e.preventDefault();
-				e.stopPropagation();
-				onCloseRef.current();
-			}
+			const dialog = dialogRef.current;
+			if (!dialog || !isTopModal(dialog) || e.key !== "Escape" || phaseRef.current === "closing") return;
+			e.preventDefault();
+			e.stopPropagation();
+			onCloseRef.current();
 		};
-		// Capture phase: the modal wins over any handler behind it.
 		document.addEventListener("keydown", onKey, true);
-		const raf = requestAnimationFrame(() => {
-			const dlg = dialogRef.current;
-			if (!dlg) return;
-			const focusable = dlg.querySelector<HTMLElement>(
-				'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
-			);
-			(focusable ?? dlg).focus();
-		});
-		return () => {
-			document.removeEventListener("keydown", onKey, true);
-			cancelAnimationFrame(raf);
-			prevActive?.focus();
-		};
-	}, [mounted, phase]);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [mounted, dialogRef]);
 
 	useEffect(() => {
 		if (open) {

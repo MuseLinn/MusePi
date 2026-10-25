@@ -793,7 +793,8 @@
 	align-items: center;
 	justify-content: center;
 	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
-	backdrop-filter: blur(10px);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
 	/* Two-phase enter (useTwoPhaseEnter): the mount frame stays at opacity
 	 * 0 so the frosted scrim composites before gui-fade-in — animating a
 	 * freshly-mounted backdrop-filter element makes Chromium skip its
@@ -816,11 +817,12 @@
 	 * then spans the whole modal instead of its natural height. */
 	display: flex;
 	flex-direction: column;
-	/* Visible rounded frame (kimi maximized container). */
-	border: 1px solid color-mix(in oklab, var(--color-text) 22%, transparent);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-2xl);
-	background: var(--color-surface-raised);
-	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
 	padding: 16px;
 	box-sizing: border-box;
 }

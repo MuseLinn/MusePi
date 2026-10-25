@@ -25,6 +25,7 @@ import { t } from "./i18n/index.js";
 import "@musepi/client-core/src/styles/tokens.css";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
+import "@musepi/client-core/src/styles/overlay-fallback.css";
 
 interface TrayAccount {
 	label: string;

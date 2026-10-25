@@ -440,7 +440,7 @@ turn
 - **曲线统一锚点**：常规变形 `--spring`（linear()）；entrance"弹入" `--spring-liquid = cubic-bezier(0.34,1.56,0.64,1)`（两面对齐到此，写进规范防漂移）；退出 `--spring-snappy`（无 overshoot）；俏皮（宠物/彩蛋）`--spring-bouncy`。
 - **时长阶梯**（desktop `--gui-motion-*` 保留，取值成规范）：130ms 菜单浮层 → 160ms 淡入淡出 → 180ms chip/小件 → 240ms 高度形变/滚动 → 280ms 模糊 → 480ms 大高度形变上限；高度形变一律 delta/6 capped；位移 6px（小）/10px（大）；模糊量 8px/24px。
 - **一镜到底（核心交互原则）**：场景切换不许黑场/闪白/整屏淡入淡出——共享元素持稳定 identity（data-morph-id）从原位置连续变形（desktop `morphFrame` 先例收编：单 rAF 链 translate+scale 插值）；非共享元素就地收缩/滑出（高度形变到 0 + 8px 下滑），整屏 opacity 动画禁用（系统级 overlay 除外）；会话切换（welcome→chat、chat→chat）按此执行，聊天内发送视为同场景增量；场景 morph 总长 300-420ms。
-- **降级**：`gui-motion-off`/`prefers-reduced-motion` → morph 退化即时切换（玻璃材质保留，材质不是动效）；`[data-platform="win32"]` → blur 归零，sheen+rim 补强 2%（blur 缺席的观感补偿成规范）。
+- **降级**：`gui-motion-off`/`prefers-reduced-motion` → morph 与浮层 entrance/exit 都即时完成（玻璃材质保留，材质不是动效）；`prefers-reduced-transparency`、不支持 `backdrop-filter` 与 `[data-platform="win32"]` → 浮层 blur 归零，切换不透明可读底色并保留 border/sheen/rim/shadow。
 
 ### Token 映射表（落地契约）
 
@@ -498,6 +498,19 @@ A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部�
 
 > Normative for every modal dialog / full-screen overlay in the desktop GUI. **Every value below is a codified existing value** — the §5s M1.10 ladder plus current component values; inventing new tokens, curves, or scrim recipes for dialogs is prohibited. Verified against the component inventory in `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3.
 
+### Overlay selection: six surface types
+
+| Type | Use and examples | Material | Keyboard and focus | Scrim |
+|---|---|---|---|---|
+| Tooltip | Shared `gui-tooltip`, `RailTooltip` | **L2 float**: strong glass fill, border, complete top/bottom rim, sheen and shadow | Never moves focus; the anchor owns `aria-describedby`; tooltip content is not an action surface | None |
+| Toast | `ActionToast`, `UpdateToast`, client-core `Toasts` | **L2 float**, neutral fill with status carried by icon/accent | Non-modal; actions and close buttons are keyboard reachable; hover or focus pauses expiry, errors persist until dismissed | None |
+| Alert / approval | `ApprovalCard`, blocking tool decisions | **L2 float**, semantic status colors over the shared glass | `alertdialog` semantics without a page-wide focus trap; approve/deny controls own their activation keys | None |
+| Drawer / sheet | `AgentDrawer`, `SessionsSheet`, capability drawer | **L2 float** on the container only; content rows stay paper-like | Shared modal stack: only the top layer handles Tab and Escape; closing restores a connected opener | Standard |
+| Modal / palette | `DialogFrame`, `TaskModal`, board/media overlays, `CommandPalette` | **L3 overlay** with the complete glass recipe | Shared modals trap focus only at the stack top; palette focuses its input, supports arrow navigation and closes on Escape | Standard; heavy glass only for full-screen tour/system surfaces |
+| Confirmation | Promise confirm, client-core `ConfirmDialog` | **L3 overlay**, compact size; `ss-card--confirm` distinguishes it from an L2 sheet | Ordinary Enter confirms; destructive Enter never confirms and starts on Cancel; Escape cancels only at the stack top | Standard |
+
+`gui-motion-off` and `prefers-reduced-motion` remove both entrance and exit animation. `prefers-reduced-transparency`, lack of `backdrop-filter`, and Windows without blur retain border, rim, sheen and shadow over an opaque readable surface; the persistent transcript and composer never acquire overlay blur.
+
 ### Enter/exit motion ladder
 
 | Surface | Curve | Duration | Notes |
@@ -541,16 +554,16 @@ New dialog-like components land **only** in the 3000/4000/9999 bands; 120/200/21
 
 ### Keyboard contract
 
-1. **A modal owns the keyboard the moment it opens**: Escape is claimed on `document` in the **capture phase** (DialogFrame.tsx, prompt-dialog.tsx, AnnouncementOverlay.tsx precedents).
-2. **Focus in/out**: opening moves focus to the first focusable element (prompt dialogs focus the input, confirm dialogs the confirm button); closing restores it to `prevActive`.
-3. **Confirm dialogs: Enter = confirm, Escape = cancel**; prompt inputs: Enter submits; **destroy-grade confirmations (deleting a session/project): Escape still cancels, Enter must be clicked** — no "type-to-confirm" mode, the current contract stands.
+1. **Only the top shared modal owns the keyboard**: Escape is claimed on `document` in the **capture phase**; lower nested modals stay open but do not handle Tab or Escape.
+2. **Focus in/out**: opening moves focus to the first focusable element (prompt dialogs focus the input, destructive confirms focus Cancel); closing the top layer restores a still-connected opener, while closing a lower layer never steals focus.
+3. **Ordinary confirm: Enter = confirm, Escape = cancel**; prompt inputs: Enter submits. **Destructive confirmations never confirm on Enter** — Cancel has initial focus and an explicit confirm-button activation is required; Escape still cancels at the stack top.
 4. **Forced/system-level overlays swallow Escape**: GlobalPause's Escape = resume (semantically a close); a future forced-update layer ignores Escape and must swallow held Enter/Space.
 5. **DialogFrame stays mounted and is driven by `open`**; prompt/confirm close defers its promise resolution until the 180ms exit finishes — restated verbatim from the AGENTS.md GUI rules as rule 5 of this spec.
 
 ### Material & degradation
 
-- Dialog cards are **L3 overlay** (§5s tier table): `--glass-bg-strong` base + rim + `--glass-sheen` + `--glass-shadow` double layer — `.gui-dialog` conforms. **TaskModal and the palette card are opaque-surface debt**: they migrate to L3 with M1.10 batch C (decision ⑧; glass only on the container layer, card content stays paper-like). Tracked as TODO comments at both card rules.
-- Degradation trio per §5s: `gui-motion-off` / `prefers-reduced-motion` → exits snap with no animation and no intermediate frames (every dialog component carries the rule; onboarding was the precedent); `[data-platform="win32"]` blur zeroed, sheen+rim boosted — glass-scrim acceptance on Windows follows the M1.10 §6.3 dual-platform screenshot flow.
+- Dialog, TaskModal, palette and confirmation cards are **L3 overlay** (§5s tier table): `--glass-bg-strong` + border + complete top/bottom rim + `--glass-sheen` + `--glass-shadow`. Glass belongs to the container; card content stays paper-like.
+- `gui-motion-off` / `prefers-reduced-motion` disable both entrance and exit with no intermediate frames. `prefers-reduced-transparency`, unsupported `backdrop-filter`, and Windows without blur use an opaque readable fill while retaining border, rim, sheen and shadow; scrims become opaque.
 
 ## 5v. Right-panel tab strip: tab-primary completion (M1.12, approved 2026-09-29; source `docs/archive/0.5.0-promo-gap-analysis.md` v3 + interactive prototype `docs/review/tab-primary-prototype.html` v2)
 
@@ -686,8 +699,8 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
   error banner: its detail may be a plain string or `{message, kind}`, and it defaults to
   `error` to preserve the old banner semantics. Daemon-connection errors keep the top
   banner.
-- **Content**: message + accent action button. Glass at 88% + shadow-overlay, 200ms
-  enter (`translateY(8px)` → 0).
+- **Content**: message + accent action button. L2 strong glass fill with complete top/bottom rim,
+  sheen and glass shadow; 200ms enter (`translateY(8px)` → 0).
 - **Rule — same message replaces, never stacks.** Archiving three sessions in a row must
   not build a three-row wall of identical toasts; the newest undo is the one still
   actionable. This is enforced in the store, not the view.

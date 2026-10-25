@@ -1360,13 +1360,9 @@
 	min-height: 0;
 }
 
-/* Skill detail drawer (设计稿 2:665) —— portal 到 body 的右侧悬浮抽屉
- * (DialogFrame 同款 fixed 弹层:能力中心列表滚动不再带走面板),§5u 取档:
- * 标准 scrim(bg 55% + blur 6px)、背板 160ms 纯 opacity 淡入、卡片 240ms
- * --spring-liquid 入场、出场 140ms --spring-snappy(宿主保持挂载 180ms,
- * 由组件内定时器卸载)、z 3000 模态带。四面内缩留出圆角;表面为 L3
- * overlay 配方(强底 + inset rim + sheen + 双层影,照 .gui-dialog);
- * 收起由 --closing 态播 out 动画,180ms 定时器真正卸载。 */
+/* Skill detail drawer — portal 到 body 的右侧悬浮抽屉。
+ * 标准 scrim、160ms 背板淡入、240ms 卡片入场、140ms 出场；
+ * 表面为 L2 float 配方，宿主在出场后卸载。 */
 .gui-skill-installed-rest {
 	position: relative;
 	display: flex;
@@ -1403,17 +1399,12 @@
 	width: min(480px, calc(100% - 32px));
 	display: flex;
 	flex-direction: column;
-	/* L3 overlay recipe (§5s 层级表 / §5u Material):强底 + inset rim
-	 * (非对称 1px 高光)+ sheen(::before)+ 双层影 —— 照 .gui-dialog。 */
-	border: 0;
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-2xl);
-	background: color-mix(in oklab, var(--color-surface) 72%, transparent);
+	background: var(--glass-bg-strong);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow:
-		inset 0 1px 0 var(--glass-edge-hi),
-		inset 0 -1px 0 var(--glass-edge-lo),
-		var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
+	box-shadow: var(--glass-shadow);
 	overflow: hidden;
 	animation: gui-cap-drawer-in 240ms var(--spring-liquid, var(--spring)) both;
 }
@@ -1472,9 +1463,7 @@
 	}
 }
 
-/* Motion-off / reduced-motion: exit snaps instead of animating (the 180ms
- * unmount timer still fires — DialogFrame parity, §5u); prefers-reduced-
- * motion additionally closes immediately in JS (requestClose). */
+/* Both entrance and exit become immediate when motion is disabled. */
 .gui-motion-off .gui-cap-drawer,
 .gui-motion-off .gui-cap-drawer-root--closing .gui-cap-drawer,
 .gui-motion-off .gui-cap-drawer-backdrop,
@@ -1486,7 +1475,7 @@
 	.gui-cap-drawer-root--closing .gui-cap-drawer,
 	.gui-cap-drawer-backdrop,
 	.gui-cap-drawer-root--closing .gui-cap-drawer-backdrop {
-		animation-duration: 1ms;
+		animation: none;
 	}
 }
 
@@ -5085,10 +5074,8 @@
 	color: var(--color-text-faint);
 }
 
-/* 「+ 添加技能」与卡片预览弹窗：§5u 档 L3 覆盖层 —— 与 .gui-cap-drawer /
- * .gui-dialog 同一套液态玻璃配方（surface 78% + 玻璃 token 模糊 + 内高光
- * 边 + sheen + 双层影），z-index 进 3000 模态带，240ms spring 入场 /
- * 140ms snappy 退场（closing 类驱动，JS 180ms 后卸载）。 */
+/* 「+ 添加技能」与卡片预览弹窗：L3 玻璃底、边框、sheen 与共享阴影；
+ * z-index 3000，220ms 入场 / 140ms 退场，closing 后由 JS 卸载。 */
 .gui-skill-market-dialog-backdrop {
 	position: fixed;
 	inset: 0;
@@ -5110,15 +5097,12 @@
 	width: min(440px, calc(100vw - 48px));
 	max-height: min(78vh, 720px);
 	padding: 18px;
-	border: 0;
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-2xl);
-	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
+	background: var(--glass-bg-strong);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow:
-		inset 0 1px 0 var(--glass-edge-hi),
-		inset 0 -1px 0 var(--glass-edge-lo),
-		var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
+	box-shadow: var(--glass-shadow);
 	overflow: hidden;
 	animation: gui-skill-market-dialog-in 220ms var(--spring) both;
 	outline: none;
@@ -5197,7 +5181,7 @@
 	.gui-skill-market-dialog-backdrop--closing .gui-skill-market-dialog,
 	.gui-skill-market-dialog-backdrop,
 	.gui-skill-market-dialog-backdrop--closing {
-		animation-duration: 1ms;
+		animation: none;
 	}
 }
 

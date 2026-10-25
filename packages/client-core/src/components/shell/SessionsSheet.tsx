@@ -2,11 +2,13 @@ import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { Check, Loader2, Pencil, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
 import type { SessionClient } from "../../lib/client";
 import { formatWhen, shortenPath } from "../../lib/format";
 import { haptic } from "../../lib/haptics";
+import { isTopModal, useModalFocus } from "../../lib/modal-focus";
 
 /**
  * Floating bottom sheet for switching live sessions (openchamber
@@ -44,14 +46,17 @@ export function SessionsSheet({
 	// owns the swiped id so opening row B snaps row A shut.
 	const [swipedId, setSwipedId] = useState<string | null>(null);
 
-	// Esc closes.
 	useEffect(() => {
 		if (!open) return;
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") onClose();
+		const onKey = (event: KeyboardEvent): void => {
+			const sheet = sheetRef.current;
+			if (event.key !== "Escape" || !sheet || !isTopModal(sheet)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			onClose();
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
 	}, [open, onClose]);
 	// Reset drag when the sheet (re)opens.
 	useEffect(() => {
@@ -64,6 +69,7 @@ export function SessionsSheet({
 	// `visible` keeps the DOM during the exit animation so a close never
 	// pops the card off screen instantly (DialogFrame convention).
 	const [stage, setStage] = useState<"hidden" | "open" | "closing">(open ? "open" : "hidden");
+	const sheetRef = useModalFocus<HTMLDivElement>(stage !== "hidden");
 	useEffect(() => {
 		setStage(prev => {
 			if (open) return "open";
@@ -122,9 +128,10 @@ export function SessionsSheet({
 
 	if (stage === "hidden") return null;
 
-	return (
+	const sheet = (
 		<div className={`ss-backdrop${stage === "closing" ? " ss-closing" : ""}`} role="presentation" onClick={onClose}>
 			<div
+				ref={sheetRef}
 				className={`ss-card${stage === "closing" ? " ss-closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
@@ -171,6 +178,7 @@ export function SessionsSheet({
 			</div>
 		</div>
 	);
+	return typeof document === "undefined" ? sheet : createPortal(sheet, document.body);
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -301,9 +309,10 @@ function SwipeableRow({
 
 	return (
 		<div className="ss-swipe">
-			<div className="ss-swipe-actions" aria-hidden={open}>
+			<div className="ss-swipe-actions" aria-hidden={!open} inert={!open}>
 				<button
 					type="button"
+					tabIndex={open ? 0 : -1}
 					className="ss-swipe-btn ss-swipe-btn--rename"
 					onClick={() => {
 						setTitle(session.title ?? "");
@@ -316,6 +325,7 @@ function SwipeableRow({
 				</button>
 				<button
 					type="button"
+					tabIndex={open ? 0 : -1}
 					className={`ss-swipe-btn${confirming ? " ss-swipe-btn--confirm" : " ss-swipe-btn--delete"}`}
 					onClick={() => void doDelete()}
 				>

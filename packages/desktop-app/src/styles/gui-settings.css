@@ -3328,13 +3328,12 @@
 	max-height: min(70vh, 560px);
 	display: flex;
 	flex-direction: column;
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-2xl);
-	/* TODO(M1.10 批次 C): 迁移 L3 overlay 玻璃（--glass-bg-strong+rim+sheen+shadow），欠账见 gui-design.md §5u */
-	background: var(--color-surface-raised);
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 24px 64px rgba(0, 0, 0, 0.45);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
 	overflow: hidden;
 	/* Two-phase enter (useTwoPhaseEnter): pending at opacity 0, --entered
 	 * plays gui-menu-in next frame; --closing plays the exit while the
@@ -3352,15 +3351,19 @@
 	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
-/* Motion-off / reduced-motion: exit snaps instead of animating (the
- * unmount timer in CommandPalette still fires — onboarding parity, §5u). */
+.gui-motion-off .gui-palette--entered,
 .gui-motion-off .gui-palette--closing,
-.gui-motion-off .gui-palette-backdrop--closing {
+.gui-motion-off .gui-palette-backdrop:has(> .gui-palette--entered):not(.gui-palette-backdrop--closing),
+.gui-motion-off .gui-palette-backdrop--closing,
+.gui-motion-off .gui-palette-body {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
+	.gui-palette--entered,
 	.gui-palette--closing,
-	.gui-palette-backdrop--closing {
+	.gui-palette-backdrop:has(> .gui-palette--entered):not(.gui-palette-backdrop--closing),
+	.gui-palette-backdrop--closing,
+	.gui-palette-body {
 		animation: none;
 	}
 }
@@ -6149,18 +6152,16 @@ body.gui-resizing {
 		color: var(--color-text);
 	}
 
-	.gui-settings-search-pop {
-		position: absolute;
-		top: calc(100% + 6px);
-		left: 0;
-		z-index: 50;
-		width: 232px;
-		max-width: calc(100vw - 96px);
+	.gui-settings-search-popup {
+		width: min(280px, calc(100vw - 16px));
+		padding: 0;
 		overflow: hidden;
-		border: 1px solid var(--border);
+	}
+
+	.gui-settings-search-pop {
+		overflow: hidden;
 		border-radius: var(--radius-lg);
 		background: var(--color-surface-raised);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 	}
 
 	.gui-settings-search-pop-input {

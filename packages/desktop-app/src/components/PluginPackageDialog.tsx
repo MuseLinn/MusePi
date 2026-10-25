@@ -75,7 +75,9 @@ export function PluginPackageDialog({
 
 	const askUninstall = (): void => {
 		if (!pkg) return;
-		void confirm(t("tools.pluginUninstallConfirm", { name: pkg.name }), t("tools.uninstall")).then(ok => {
+		void confirm(t("tools.pluginUninstallConfirm", { name: pkg.name }), t("tools.uninstall"), {
+			destructive: true,
+		}).then(ok => {
 			if (ok) onUninstall(pkg);
 		});
 	};

@@ -16,7 +16,15 @@
  * again; the settings footer button reopens it on demand.
  */
 
-import { setLocale, type TranslationKey, t, useAccentPreference, useThemePreference } from "@musepi/client-core";
+import {
+	isTopModal,
+	setLocale,
+	type TranslationKey,
+	t,
+	useAccentPreference,
+	useModalFocus,
+	useThemePreference,
+} from "@musepi/client-core";
 import { KeyRound, Languages, Sparkles } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
@@ -1320,6 +1328,7 @@ export function OnboardingOverlay({
 	// so it composites before gui-fade-in (mount-frame animation on a
 	// backdrop-filter element kills the frost — gui-implementation.md §6.5).
 	const enteredCls = useTwoPhaseEnter(open);
+	const overlayRef = useModalFocus<HTMLDivElement>(open);
 
 	const requestClose = useCallback((): void => {
 		setClosing(true);
@@ -1374,12 +1383,13 @@ export function OnboardingOverlay({
 	// Keyboard priority: while the primer is up, Enter advances (next step /
 	// finish) and Escape steps back / closes on the first step — the page
 	// behind (composer) must not swallow them. Inputs keep their own Enter
-	// (import key / login prompt), so the handler skips text fields. The
-	// panel is focused on open so keys land on it.
+	// (import key / login prompt), so the handler skips text fields. Nested
+	// dialogs retain keyboard ownership until they close.
 	useEffect(() => {
 		if (!open) return;
-		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		const onKey = (e: KeyboardEvent): void => {
+			const overlay = overlayRef.current;
+			if (!overlay || !isTopModal(overlay)) return;
 			const t = e.target as HTMLElement | null;
 			const typing =
 				t &&
@@ -1401,21 +1411,18 @@ export function OnboardingOverlay({
 			}
 		};
 		document.addEventListener("keydown", onKey, true);
-		const raf = requestAnimationFrame(() => {
-			document.querySelector<HTMLElement>(".gui-onboarding-backdrop button")?.focus();
-		});
-		return () => {
-			document.removeEventListener("keydown", onKey, true);
-			cancelAnimationFrame(raf);
-			prevActive?.focus();
-		};
-	}, [open, step, finish, requestClose]);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [open, step, finish, requestClose, overlayRef]);
 
 	if (!open) return null;
 	const current = STEPS[step];
 	const last = step === STEPS.length - 1;
 	return (
 		<div
+			ref={overlayRef}
+			role="dialog"
+			aria-modal="true"
+			aria-label={t("settings.onboardingBadge")}
 			className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${
 				closing ? " gui-onboarding-backdrop--closing" : ""
 			}`}

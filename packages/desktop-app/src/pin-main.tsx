@@ -9,6 +9,7 @@ import "@musepi/client-core/src/styles/tokens.css";
 import "@musepi/client-core/src/styles/base.css";
 import "./styles/fonts.css";
 import "./styles/gui.css";
+import "@musepi/client-core/src/styles/overlay-fallback.css";
 
 /** Preload's electronAPI (types live in lib/electron.ts); we only need the
  *  pin-top toggle and dismiss here — accessed via a narrow local cast. */

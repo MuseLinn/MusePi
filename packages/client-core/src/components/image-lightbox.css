@@ -18,9 +18,9 @@
 	position: absolute;
 	inset: 0;
 	z-index: 0;
-	background: color-mix(in oklab, #000 62%, transparent);
-	backdrop-filter: blur(14px);
-	-webkit-backdrop-filter: blur(14px);
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
 	animation: tr-img-lb-in 160ms ease-out;
 }
 
@@ -312,9 +312,21 @@
 	border-color: #d9a441;
 }
 
-/* Motion-off degradation (M1.10 §3.4): the morphs are skipped in JS
- * (image-morph.motionDisabled — gui-motion-off class + this media query),
- * and the CSS fades collapse too, so no intermediate frames play at all. */
+/* JS skips morphs and CSS skips every entrance, navigation and exit. */
+.gui-motion-off .tr-img-lb,
+.gui-motion-off .tr-img-lb-backdrop,
+.gui-motion-off .tr-img-lb--closing,
+.gui-motion-off .tr-img-lb--closing .tr-img-lb-frame,
+.gui-motion-off .tr-img-lb--morph-closing .tr-img-lb-backdrop,
+.gui-motion-off .tr-img-lb--morph-closing .tr-img-lb-actions,
+.gui-motion-off .tr-img-lb--morph-closing .tr-img-lb-tools,
+.gui-motion-off .tr-img-lb--morph-closing .tr-img-lb-nav,
+.gui-motion-off .tr-img-lb--morph-closing .tr-img-lb-count,
+.gui-motion-off .tr-img-lb-frame--next,
+.gui-motion-off .tr-img-lb-frame--prev {
+	animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.tr-img-lb,
 	.tr-img-lb-backdrop,

@@ -1,4 +1,11 @@
-import { Markdown, type MarketplaceCardAction, MarketplaceGrid, t } from "@musepi/client-core";
+import {
+	isTopModal,
+	Markdown,
+	type MarketplaceCardAction,
+	MarketplaceGrid,
+	t,
+	useModalFocus,
+} from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -317,7 +324,7 @@ function SkillDrawer({
 	// 启停开关的就地确认（WorkBuddy 同款提示条语义，抽屉内 1.8s 自消退）。
 	const [flash, setFlash] = useState<string | null>(null);
 	const { confirm } = useConfirm();
-	const drawerRef = useRef<HTMLDivElement | null>(null);
+	const drawerRef = useModalFocus<HTMLDivElement>(true);
 	const closeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
@@ -363,37 +370,19 @@ function SkillDrawer({
 		[],
 	);
 
-	// §5u keyboard contract (DialogFrame precedent): the drawer owns the
-	// keyboard while open — Escape is claimed on document in the capture
-	// phase (wins over any handler behind), opening moves focus to the
-	// first focusable element (else the drawer itself) and closing restores
-	// it to the previously active element.
 	const requestCloseRef = useRef(requestClose);
 	requestCloseRef.current = requestClose;
 	useEffect(() => {
-		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") {
-				e.preventDefault();
-				e.stopPropagation();
-				requestCloseRef.current();
-			}
+		const onKey = (event: KeyboardEvent): void => {
+			const drawer = drawerRef.current;
+			if (event.key !== "Escape" || !drawer || !isTopModal(drawer)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			requestCloseRef.current();
 		};
 		document.addEventListener("keydown", onKey, true);
-		const raf = requestAnimationFrame(() => {
-			const drawer = drawerRef.current;
-			if (!drawer) return;
-			const focusable = drawer.querySelector<HTMLElement>(
-				'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
-			);
-			(focusable ?? drawer).focus();
-		});
-		return () => {
-			document.removeEventListener("keydown", onKey, true);
-			cancelAnimationFrame(raf);
-			prevActive?.focus();
-		};
-	}, []);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [drawerRef]);
 
 	// 「已复制」反馈自动消退(按钮图标回位,不弹 toast —— 抽屉内就地反馈)。
 	useEffect(() => {
@@ -430,7 +419,9 @@ function SkillDrawer({
 	};
 
 	const removeSkill = (): void => {
-		void confirm(t("tools.deleteSkillConfirmWithName", { name: skill.name }), t("settings.delete")).then(ok => {
+		void confirm(t("tools.deleteSkillConfirmWithName", { name: skill.name }), t("settings.delete"), {
+			destructive: true,
+		}).then(ok => {
 			if (!ok) return;
 			void rpc
 				.request("skills.delete", { name: skill.name })
@@ -462,7 +453,12 @@ function SkillDrawer({
 	// ancestor creates a containing block that hijacks position:fixed, and
 	// an in-flow root would scroll away with the capability-center list.
 	return createPortal(
-		<div className={`gui-cap-drawer-root${closing ? " gui-cap-drawer-root--closing" : ""}`} role="dialog" aria-modal>
+		<div
+			className={`gui-cap-drawer-root${closing ? " gui-cap-drawer-root--closing" : ""}`}
+			role="dialog"
+			aria-modal="true"
+			aria-label={skill.name}
+		>
 			<div className="gui-cap-drawer-backdrop" onClick={requestClose} />
 			<div ref={drawerRef} className="gui-cap-drawer" tabIndex={-1}>
 				<div className="gui-cap-drawer-head">
@@ -779,6 +775,7 @@ function InstalledSkillsPane({
 				? t("tools.uninstallSkillsConfirmPartialWithNWithSkipped", { n: names.length, skipped })
 				: t("tools.uninstallSkillsConfirmWithN", { n: names.length }),
 			t("tools.uninstall"),
+			{ destructive: true },
 		);
 		if (!ok) return;
 		setBusy(true);

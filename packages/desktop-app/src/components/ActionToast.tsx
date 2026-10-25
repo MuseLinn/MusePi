@@ -1,25 +1,86 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { dismissActionToast, getToasts, subscribeActionToasts } from "../lib/action-toast";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import {
+	type ActionToast,
+	dismissActionToast,
+	getToasts,
+	pauseActionToast,
+	resumeActionToast,
+	subscribeActionToasts,
+} from "../lib/action-toast";
 import { Icon } from "../vendor/oc-icons";
 
-/**
- * The unified in-app toast stack: icon + message + one optional action,
- * bottom-right above the update toast's slot. Every transient notice —
- * undo offers, action feedback, routed `musepi-gui-toast` reports — lands
- * here so the app has ONE internal notification surface.
- */
+function ActionToastItem({ toast }: { toast: ActionToast }): ReactNode {
+	const interaction = useRef({ hover: false, focus: false });
+	const resumeIfIdle = (): void => {
+		if (!interaction.current.hover && !interaction.current.focus) resumeActionToast(toast.id);
+	};
+	const isError = toast.kind === "error";
+
+	return (
+		<div
+			className={`gui-action-toast gui-action-toast--${toast.kind}`}
+			role={isError ? "alert" : "status"}
+			aria-live={isError ? "assertive" : "polite"}
+			aria-atomic="true"
+			onMouseEnter={() => {
+				interaction.current.hover = true;
+				pauseActionToast(toast.id);
+			}}
+			onMouseLeave={() => {
+				interaction.current.hover = false;
+				resumeIfIdle();
+			}}
+			onFocusCapture={() => {
+				interaction.current.focus = true;
+				pauseActionToast(toast.id);
+			}}
+			onBlurCapture={event => {
+				if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+				interaction.current.focus = false;
+				resumeIfIdle();
+			}}
+		>
+			<Icon
+				name={toast.kind === "success" ? "check" : isError ? "error-warning" : "information"}
+				className="gui-action-toast-icon"
+			/>
+			<span className="gui-action-toast-msg">{toast.message}</span>
+			{toast.actionLabel && (
+				<button
+					type="button"
+					className="gui-action-toast-btn"
+					onClick={() => {
+						toast.onAction?.();
+						dismissActionToast(toast.id);
+					}}
+				>
+					{toast.actionLabel}
+				</button>
+			)}
+			<button
+				type="button"
+				className="gui-action-toast-close gui-update-toast-close"
+				onClick={() => dismissActionToast(toast.id)}
+				title={t("settings.dismiss")}
+				aria-label={t("settings.dismiss")}
+			>
+				<span aria-hidden="true">×</span>
+			</button>
+		</div>
+	);
+}
+
+/** Unified bottom-right stack for local actions and application notices. */
 export function ActionToastStack(): ReactNode {
 	const toasts = useSyncExternalStore(subscribeActionToasts, getToasts);
-	// Per-id timer ownership: a toast that is clicked and dismissed early must
-	// not leave a timer that later removes a *different* toast's slot.
-	const [, setTick] = useState(0);
 	useEffect(() => {
-		const timers = toasts.map(toast =>
-			window.setTimeout(() => dismissActionToast(toast.id), Math.max(0, toast.expiresAt - Date.now())),
-		);
-		setTick(n => n + 1);
+		const timers = toasts
+			.filter(toast => Number.isFinite(toast.expiresAt))
+			.map(toast =>
+				window.setTimeout(() => dismissActionToast(toast.id), Math.max(0, toast.expiresAt - Date.now())),
+			);
 		return () => {
 			for (const timer of timers) window.clearTimeout(timer);
 		};
@@ -27,27 +88,9 @@ export function ActionToastStack(): ReactNode {
 
 	if (toasts.length === 0) return null;
 	return (
-		<div className="gui-action-toasts" role="status" aria-live="polite">
+		<div className="gui-action-toasts">
 			{toasts.map(toast => (
-				<div key={toast.id} className={`gui-action-toast gui-action-toast--${toast.kind}`}>
-					<Icon
-						name={toast.kind === "success" ? "check" : toast.kind === "error" ? "error-warning" : "information"}
-						className="gui-action-toast-icon"
-					/>
-					<span className="gui-action-toast-msg">{toast.message}</span>
-					{toast.actionLabel && (
-						<button
-							type="button"
-							className="gui-action-toast-btn"
-							onClick={() => {
-								toast.onAction?.();
-								dismissActionToast(toast.id);
-							}}
-						>
-							{toast.actionLabel}
-						</button>
-					)}
-				</div>
+				<ActionToastItem key={toast.id} toast={toast} />
 			))}
 		</div>
 	);

@@ -422,7 +422,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	const remove = (e: ExtensionItem): void => {
 		if (!rpc) return;
-		void confirm(t("tools.deleteSkillConfirmWithName", { name: e.name }), t("settings.delete")).then(ok => {
+		void confirm(t("tools.deleteSkillConfirmWithName", { name: e.name }), t("settings.delete"), {
+			destructive: true,
+		}).then(ok => {
 			if (!ok) return;
 			void rpc
 				.request("skills.delete", { name: e.name })

@@ -312,7 +312,7 @@ function MemoryMaintenance({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				.finally(() => setBusy(null));
 		};
 		if (confirmText)
-			void confirm(confirmText).then(ok => {
+			void confirm(confirmText, undefined, { destructive: true }).then(ok => {
 				if (ok) go();
 			});
 		else go();

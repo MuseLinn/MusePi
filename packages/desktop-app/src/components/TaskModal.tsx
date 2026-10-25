@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core/src/i18n/index.js";
+import { isTopModal, t } from "@musepi/client-core";
 import { hasTask, type WidgetTask } from "@musepi/client-core/src/widgets/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -31,13 +31,16 @@ export function TaskModal({
 		setClosing(true);
 		setTimeout(onClose, 150);
 	};
-	// Esc closes the modal.
 	useEffect(() => {
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") close();
+		const onKey = (event: KeyboardEvent): void => {
+			const dialog = trapRef.current;
+			if (event.key !== "Escape" || !dialog || !isTopModal(dialog)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			close();
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
 	}, [close]);
 
 	// Focus trap: Tab/Shift+Tab stay inside the modal; focus restored to
@@ -49,6 +52,7 @@ export function TaskModal({
 			className={`gui-task-modal${enteredCls ? " gui-task-modal--entered" : ""}${closing ? " gui-task-modal--closing" : ""}`}
 			role="dialog"
 			aria-modal="true"
+			aria-label={t("settings.widgetTaskModal")}
 			onClick={close}
 		>
 			<div className="gui-task-modal-card" onClick={e => e.stopPropagation()}>

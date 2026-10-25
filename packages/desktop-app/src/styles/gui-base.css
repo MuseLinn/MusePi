@@ -120,14 +120,15 @@ html:root body {
  * surface frost whatever the page drew underneath it. macOS keeps its
  * transparent root: the vibrancy material is sampled there, and
  * covering it would throw away the one platform whose glass works
- * end to end.
+ * end to end. Per-pixel transparent windows opt out explicitly while
+ * retaining platform-scoped overlay rules.
  *
  * `:root[data-platform=…]`, not `[data-platform=…]`: the bare attribute
  * form is (0,1,1) and loses to the `html:root body { transparent }`
  * above at (0,1,2) — silently, since source order is already correct.
  */
-:root[data-platform="win32"] body,
-:root[data-platform="linux"] body {
+:root[data-platform="win32"]:not([data-transparent-window]) body,
+:root[data-platform="linux"]:not([data-transparent-window]) body {
 	background: var(--bg);
 }
 

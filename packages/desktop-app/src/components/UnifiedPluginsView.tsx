@@ -493,7 +493,9 @@ export function UnifiedPluginsView({
 	/** 卸载是删除性的：先确认再执行。 */
 	const uninstallWithConfirm = useCallback(
 		(p: PluginPackageEntry): void => {
-			void confirm(t("tools.pluginUninstallConfirm", { name: p.name }), t("tools.uninstall")).then(ok => {
+			void confirm(t("tools.pluginUninstallConfirm", { name: p.name }), t("tools.uninstall"), {
+				destructive: true,
+			}).then(ok => {
 				if (ok) void uninstallPackage(p);
 			});
 		},

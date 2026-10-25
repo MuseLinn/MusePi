@@ -505,12 +505,24 @@
 	gap: 2px;
 	max-width: 260px;
 	padding: 7px 9px;
-	border: 1px solid var(--border);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-lg);
-	background: var(--color-surface);
-	box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
-	animation: gui-browser-pop 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+	animation: gui-browser-pop 130ms var(--spring-liquid);
 	pointer-events: none;
+}
+
+.gui-motion-off .gui-rail-tooltip {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-rail-tooltip {
+		animation: none;
+	}
 }
 .gui-rail-tooltip-label {
 	font-size: 0.75rem;
@@ -1395,6 +1407,22 @@ body.gui-resizing .gui-pane-resize-x::after {
 	transform: translateY(0) scale(1);
 	opacity: 1;
 	transition-delay: 80ms;
+}
+
+.gui-motion-off .gui-global-pause,
+.gui-motion-off .gui-global-pause--active,
+.gui-motion-off .gui-global-pause-card,
+.gui-motion-off .gui-global-pause--active .gui-global-pause-card {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-global-pause,
+	.gui-global-pause--active,
+	.gui-global-pause-card,
+	.gui-global-pause--active .gui-global-pause-card {
+		transition: none;
+	}
 }
 
 .gui-global-pause-icon {

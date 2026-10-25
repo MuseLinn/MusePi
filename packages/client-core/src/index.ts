@@ -117,6 +117,7 @@ export {
 export { useLocale } from "./i18n/use-locale.js";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
+export * from "./lib/modal-focus";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
 export {
 	type ArchivedSession,
@@ -148,5 +149,6 @@ export {
 	useThemePreference,
 	useUiThemePreferences,
 } from "./lib/theme";
+export * from "./lib/tooltips";
 export * from "./tool-render";
 export { DiffBlock, type DiffLayout } from "./tool-render/parts";

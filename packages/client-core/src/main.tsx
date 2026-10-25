@@ -2,8 +2,10 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
+import { initTooltips } from "./lib/tooltips";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import "./styles/overlay-fallback.css";
 import "./i18n";
 
 // Desktop web entry (index.html). The Capacitor shell redirects to mobile.html
@@ -53,6 +55,7 @@ if (!(globalThis as { MusePiCompatHost?: unknown }).MusePiCompatHost) {
 	};
 }
 
+initTooltips();
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
 createRoot(root).render(<App />);

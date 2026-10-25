@@ -192,8 +192,10 @@
 	position: fixed;
 	inset: 0;
 	z-index: 35;
-	background: var(--backdrop);
-	animation: ag-fade-in 150ms ease-out;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	animation: ag-fade-in 160ms ease-out;
 }
 
 @keyframes ag-fade-in {
@@ -214,12 +216,12 @@
 	display: flex;
 	flex-direction: column;
 	width: min(440px, 92vw);
-	border-left: 1px solid var(--border-strong);
-	background: var(--bg-overlay);
-	box-shadow:
-		-12px 0 32px color-mix(in srgb, var(--bg-inset) 55%, transparent),
-		-32px 0 80px color-mix(in srgb, var(--bg-inset) 35%, transparent);
-	animation: ag-drawer-in 150ms ease-out;
+	border-left: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	box-shadow: var(--glass-shadow);
+	animation: ag-drawer-in 240ms var(--spring-liquid);
 }
 
 @keyframes ag-drawer-in {
@@ -424,8 +426,14 @@
 	border-color: var(--ring);
 }
 
+.gui-motion-off .ag-drawer,
+.gui-motion-off .ag-drawer-backdrop {
+	animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-	.ag-drawer {
+	.ag-drawer,
+	.ag-drawer-backdrop {
 		animation: none;
 	}
 	.ag-dot--running {

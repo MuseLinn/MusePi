@@ -206,11 +206,11 @@ export function CollabDialog({
 	};
 
 	/** 解绑 (unlink): stop the channel AND drop its persisted credentials.
-	 *  Destructive (the next start needs a fresh QR login), so it sits behind
-	 *  a confirm dialog — Enter confirms, Escape cancels (prompt-dialog). */
+	 *  Destructive (the next start needs a fresh QR login), so confirmation
+	 *  requires an explicit click; Escape cancels. */
 	const unlinkChannel = async (kind: string): Promise<void> => {
 		if (!rpc) return;
-		const ok = await confirm(t("settings.unlinkChannelConfirm"), t("settings.unlink"));
+		const ok = await confirm(t("settings.unlinkChannelConfirm"), t("settings.unlink"), { destructive: true });
 		if (!ok) return;
 		await rpc.request("channels.unlink", { kind }).catch(() => {});
 		await refreshChannels();

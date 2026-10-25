@@ -1,5 +1,7 @@
 import { t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { RpcClient } from "../lib/rpc";
 
 /**
  * 受管浏览器引导（`browser.gui`）。
@@ -28,7 +30,7 @@ export function BrowserGuiHint({
 	activeTools: ReadonlyMap<string, { toolName: string }> | undefined;
 	/** 浏览器面板是当前面板 tab（提前触发的判据）。 */
 	browserPanelOpen: boolean;
-	rpc: import("../lib/rpc").RpcClient;
+	rpc: RpcClient;
 	/** Switch the right rail to the browser surface. */
 	onView(): void;
 	/** Expand the ContextPanel if folded. */
@@ -78,7 +80,7 @@ export function BrowserGuiHint({
 		setVisible(false);
 	};
 
-	return (
+	const hint = (
 		<div className="gui-update-toast" role="status" data-testid="browser-gui-hint">
 			<div className="gui-update-toast-head">
 				<span className="gui-update-toast-title">{t("settings.watchAgentSBrowser")}</span>
@@ -102,4 +104,6 @@ export function BrowserGuiHint({
 			</div>
 		</div>
 	);
+	const corner = document.querySelector(".gui-toast-corner");
+	return corner ? createPortal(hint, corner) : hint;
 }

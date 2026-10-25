@@ -318,7 +318,7 @@ export function ContextPanel({
 	const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
 	const runMaintenance = async (op: "shake" | "fresh" | "clear"): Promise<void> => {
 		if (!rpc || !snap?.sessionId || maintenanceBusy) return;
-		if (op === "clear" && !(await confirm(t("tools.confirmClearContext")))) return;
+		if (op === "clear" && !(await confirm(t("tools.confirmClearContext"), undefined, { destructive: true }))) return;
 		setMaintenanceBusy(op);
 		setMaintenanceStatus(null);
 		try {
@@ -670,7 +670,11 @@ export function ContextPanel({
 	const closeTabWithGuard = useCallback(
 		async (id: string): Promise<void> => {
 			const tab = panelTabs.tabs.find(t => t.id === id);
-			if (tab?.dirty && !(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway")))) return;
+			if (
+				tab?.dirty &&
+				!(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway"), { destructive: true }))
+			)
+				return;
 			panelTabs.close(id);
 		},
 		[panelTabs, confirm],
@@ -695,7 +699,10 @@ export function ContextPanel({
 			const keep = new Set<string>();
 			for (const id of ids) {
 				const tab = panelTabs.tabs.find(t => t.id === id);
-				if (tab?.dirty && !(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway")))) {
+				if (
+					tab?.dirty &&
+					!(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway"), { destructive: true }))
+				) {
 					keep.add(id);
 				}
 			}

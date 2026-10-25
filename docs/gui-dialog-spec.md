@@ -1,19 +1,17 @@
 # 弹窗与浮层规格
 
-> 状态：2026-10-04 定稿，为 `docs/gui-design.md` §5e / §5u 的执行细则。规范正文，不是变更记录。
+> 状态：2026-10-25 更新，为 `docs/gui-design.md` §5e / §5u 的执行细则。规范正文，不是变更记录。
 > 适用范围：`packages/desktop-app/src/components/` 与 `packages/client-core/src/components/` 下所有 Dialog / Panel / Popover / Sheet / Menu / Modal / Overlay 组件。
 
-本文件存在的原因：41 个浮层组件共用一个基座（`DialogFrame`），但尺寸、滚动与焦点此前没有任何统一约定，于是每个弹窗各自在样式表里发明一个修饰类。2026-10-04 快捷键弹窗的修复过程中，同一个弹窗上连续暴露四类缺陷 —— 修饰类被基类遮蔽而从未生效、样式块括号缺失导致其后规则全失效、内容重复渲染、滚动列表硬裁切。**四类都不会让任何门禁失败。** 本文件把约定写死，让下一次同类问题在 review 阶段就被挡住。
+本文件规定尺寸、滚动、焦点与键盘契约；六类浮层的选择与材质见 `docs/gui-design.md` §5u。
 
 ---
 
-## 1. 基座：只有 `DialogFrame`
-
-浮层分三层，各自有唯一入口。不要绕过。
+## 1. 基座与共享焦点
 
 | 层         | 入口                                                          | 何时用                                             |
 | ---------- | ------------------------------------------------------------- | -------------------------------------------------- |
-| 模态对话框 | `DialogFrame`（`desktop-app/src/components/DialogFrame.tsx`） | 需要用户先处理完才能继续的：设置、确认、快捷键说明 |
+| 模态对话框 | `DialogFrame`；client-core 危险/普通确认使用 `ConfirmDialog` | 需要用户先处理完才能继续的：设置、确认、快捷键说明 |
 | 非模态浮层 | `ContextMenu` / `MenuPopup` / `AskPopover`                    | 锚定在元素上的菜单、气泡                           |
 | 内嵌面板   | 右栏 / 底部 dock 的既有容器（`gui-surface-tabpanel` 一族）    | 与主内容并存的常驻区域                             |
 
@@ -21,11 +19,11 @@
 
 - **两阶段进出场**：首帧 opacity 0 且不带动画类，让磨砂背板先合成，避免"透明→玻璃"闪一下；随后 `--entered` 跑缩放淡入。`open` 翻 false 后组件保持挂载直到退场动画结束。
 - **常驻挂载**：宿主必须无条件渲染并用 `open` 驱动。**不要条件挂载**（`{open && <DialogFrame/>}` 会丢掉退场动画）。
-- **键盘归属**：弹窗打开期间 `Enter` / `Escape` 归它，不落到背后的页面（composer 会吞 Enter）。Escape 走 `onClose`。
-- **焦点**：打开时把焦点移入弹窗（第一个可聚焦元素，否则弹窗本身）；卸载时归还给打开前的元素。
+- **键盘归属**：只有共享栈顶弹窗处理 Escape；普通确认允许 Enter，危险确认禁止 Enter 提交。任何按键都不得漏给背后的 composer。
+- **焦点**：共享 `useModalFocus` 在打开时移焦（第一个可聚焦元素，否则弹窗本身），关闭栈顶时归还可连接的 opener；Tab / Shift+Tab 仅在栈顶循环。
 - **`label` 必填**：作为 `role="dialog"` 的可访问名称。
 
-AGENTS.md 里关于模态必须独占键盘的那条规则，是这条契约的文字版；两者冲突时以本节为准，因为这里是实现事实。
+其他私有 modal、drawer、sheet 不强制改用 `DialogFrame`，但必须复用 `useModalFocus` / `isTopModal`，不得另写平行焦点栈。
 
 ---
 
@@ -83,10 +81,11 @@ AGENTS.md 里关于模态必须独占键盘的那条规则，是这条契约的�
 
 ## 5. 焦点与叠层
 
-- **同层只有一个模态。** 需要第二个模态时，先关掉第一个。不要叠两个 `DialogFrame`。
-- 遮罩层层级由 `DialogFrame` 的 portal 决定，本文件不新增约定。
+- **嵌套 modal 允许共存。** `useModalFocus` 按激活顺序压栈；只有 `isTopModal` 命中的栈顶处理 Tab / Shift+Tab 和 Escape，底层保持打开但不响应这些键。
+- 关闭栈顶时，若 opener 仍连接则归还焦点；opener 已断开则不抛错、不强行选新焦点。关闭底层或任意组件卸载都不得从剩余栈顶抢焦点。
+- `CommandPalette` 保留自己的输入焦点、方向键导航和 Escape 处理，不属于共享栈；不要假设所有带 `role="dialog"` 的元素都自动入栈。
 - 浮层里的可聚焦元素必须能被 Tab 走通；不可聚焦的装饰元素标 `aria-hidden`。
-- 任何 `Enter` 有歧义的场景（发送消息 / 提交表单），在浮层里显式声明归属，不要指望浏览器默认。
+- 任何 `Enter` 有歧义的场景（发送消息 / 提交表单），在浮层里显式声明归属，不要指望浏览器默认。普通确认允许 Enter；`destructive: true` 禁止 Enter 提交，Promise confirm 初始聚焦 Cancel，Escape 仅由栈顶认领。
 
 ---
 
@@ -94,14 +93,15 @@ AGENTS.md 里关于模态必须独占键盘的那条规则，是这条契约的�
 
 写完一个浮层，逐条核对：
 
-- [ ] 用 `DialogFrame`，无条件挂载，用 `open` 驱动
+- [ ] `DialogFrame` 无条件挂载并用 `open` 驱动；私有宿主保留既有挂载契约，但焦点必须接入共享栈
 - [ ] 传了 `label`
 - [ ] 尺寸取自第 2 节的四档之一；修饰类写成 `.gui-dialog.<名>`
 - [ ] 修饰类所在文件的 `@import` 顺序已确认（`gui-composer.css` 之前 = 必须复合选择器）
 - [ ] 可滚动的话：滚动容器加了 `min-height: 0` + `flex`，羽化按滚动位置开关
 - [ ] 没有依赖未在生成产物里的 Tailwind 工具类
 - [ ] 内容量 > 组内间距
-- [ ] Escape 关闭、焦点入栈、关闭后归还
+- [ ] 只有栈顶处理 Escape 与 Tab，关闭后归还可连接的 opener；危险确认不允许 Enter 提交
+- [ ] L2/L3 材质取自六类选择表，motion-off/reduced-motion 同时关闭入场和出场
 - [ ] `bun run --cwd=packages/desktop-app check` 与该包的测试通过
 
 ---

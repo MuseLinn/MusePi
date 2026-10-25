@@ -153,6 +153,15 @@ daemon RPC:
 13. **锁宽测量 `width:"auto"` 覆盖 CSS `max-content`**(2026-08-11):morph 测量目标宽度时 `style.width = "auto"` 对块级元素=撑满包含块(覆盖 CSS `width:max-content`),toW 退化为容器宽 → 宽度过渡静默跳过(高度正常,视觉"只缩高不缩宽"再跳变)。**必须 `style.width = ""`(删 inline 声明回 CSS 值)**。
 14. **浮层卡面 class 双应用 = 嵌套双画圆角**(2026-08-15,自定义强调色选色器):`useFloatingMenu(…, { className })` 的 class 落在**外层 portal 容器**,内容组件根若带**同一卡面 class**(ColorPickerPanel 根 `gui-color-picker`),两层同时拿到磨砂+圆角+阴影 → 背景多画一层圆角容器(`div.gui-menu-popup.gui-color-picker.gui-menu-popup--entered > div.gui-color-picker`)。规则:**卡面 class 只能出现在一层**——传 className 时内容平铺(proj/todo/queue/creds 类);不传时内容根自持卡面(quota/context/color-picker 类)。验证:`document.querySelectorAll('.gui-color-picker').length === 1` 且外层 computed `border-radius: 0`、`background: transparent`。
 
+## 6b. 浮层材质、降级与 modal 栈
+
+- **材质归属**：tooltip、toast、alert/approval 与 drawer/sheet 容器使用 L2（`--glass-bg-strong` + `--glass-border` + `--glass-sheen` + `--glass-shadow`）；modal、palette 与 confirmation 卡使用更高层级的 L3，token 集合相同。阴影 token 同时拥有上下内缘，包括底缘；不得再叠加第二套 rim 或阴影。`ConfirmDialog` 使用 `ss-card--confirm`，避免与 SessionsSheet 的 L2 角色混用。`ApprovalCard` 使用语义文字/动作色，不使用固定深色底。
+- **回退归属**：`client-core/src/styles/overlay-fallback.css` 集中定义 `prefers-reduced-transparency`、不支持 `backdrop-filter` 与 `[data-platform="win32"]` 的浮层规则。所有使用共享浮层样式的入口都在组件样式之后导入它，确保回退在真实 desktop 级联中胜出，不被后续卡片/scrim 声明夺回。桌面 `initTooltips` 在委托共享初始化之前先写入 `shellPlatform()` 的 `data-platform`，因此 main、pin、pet 窗口都能匹配 Windows 规则。pet 在 `pet-window.css` / `gui.css` 后加载 tokens 与回退，并设置 `data-transparent-window`，使页面豁免 Windows/Linux 不透明工作区背板，同时不影响 tooltip/overlay 规则；只有这些浮层表面转为不透明。这些路径关闭背景采样，使用不透明 `--color-surface-raised` 底，同时保留共享边框、sheen 和阴影；scrim 使用不透明 `--color-bg`。已由 `::before` 承载 sheen 的卡片只用不透明背景，sheen 只画一层。桌面浮层正常路径仍使用 `--gui-glass-blur` / `--gui-glass-saturate`。任何规则都不得给常驻 transcript 或 composer 新增 blur。
+- **动效**：此浮层族的入场和出场都同时受 `.gui-motion-off` 与 `prefers-reduced-motion` 禁用；关闭定时器仍可负责卸载，但不得留下 1ms 动画或中间视觉帧。tooltip 显隐 transition 和 SketchPad 关闭 transition 同样包含在内，不只检查 CSS keyframes。
+- **共享栈**：`useModalFocus` 记录 opener 并压入每个活跃 dialog；`isTopModal` 门控 Tab 与 Escape。仅栈顶锁焦或响应 Escape，底层保持打开。关闭栈顶后归还可连接的 opener；关闭底层或组件卸载不得从剩余栈顶抢焦点。消费者包括 `DialogFrame`、Promise prompt/confirm、client-core `ConfirmDialog`、`AgentDrawer`、`SessionsSheet`、`TaskModal`、能力抽屉、Board 放大卡、SketchPad、Onboarding/Announcement 与 ImageLightbox。RewardOverlay 自己注册共享栈并提供 dialog ARIA；AnnouncementOverlay 仅在非 reward 分支激活卡片 hook，因此 reward 切换到 Markdown 后仍会入栈。SessionsSheet 将 backdrop portal 到 `document.body`，带滤镜的 header 不得成为其 fixed 定位包含块。`CommandPalette` 保留自己的输入框焦点、方向键导航和 Escape 处理，不因名称含 palette 就隐式加入共享栈。
+- **确认键**：普通确认允许 Enter。Promise confirm 与 client-core `ConfirmDialog` 在 `destructive: true` 时都抑制 Enter；Promise 版本初始聚焦 Cancel，显式激活确认按钮仍可执行。只有确认框位于共享栈顶时 Escape 才取消。Promise prompt/confirm 在 180ms 出场后 settle；请求被替换或宿主卸载时也会 settle，不留下悬挂 Promise。
+- **临时表面**：共享 tooltip 初始化保留既有 `aria-describedby` token，支持悬停、焦点和触屏长按，提示本身不可聚焦。toast 在悬停或焦点内暂停，恢复时续算剩余时长；错误持续显示并 assertive 播报，其他级别使用 polite status 播报。
+
 ## 7. macOS 应用图标处理(2026-08-06 查证 + 修复)
 
 三条独立路径,规则完全不同:

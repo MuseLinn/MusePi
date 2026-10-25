@@ -805,7 +805,7 @@ export function NotesPane({
 		}
 	};
 	const deletePlan = async (id: string): Promise<void> => {
-		const ok = await confirm(t("general.confirmDeletePlan"));
+		const ok = await confirm(t("general.confirmDeletePlan"), undefined, { destructive: true });
 		if (!ok) return;
 		try {
 			await rpc.request("plans.delete", { cwd, id });

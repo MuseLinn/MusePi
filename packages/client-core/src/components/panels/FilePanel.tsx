@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
+import { ConfirmDialog } from "../shell/ConfirmDialog";
 
 /**
  * Guest workspace file panel: workspace.tree rendered as an expandable
@@ -35,6 +36,7 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 	const [renameValue, setRenameValue] = useState("");
 	const [newFileName, setNewFileName] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [pendingDelete, setPendingDelete] = useState<WorkspaceEntry | null>(null);
 
 	const load = useCallback(async (): Promise<void> => {
 		try {
@@ -76,25 +78,27 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 		[client],
 	);
 
-	const del = useCallback(
-		async (entry: WorkspaceEntry): Promise<void> => {
-			if (!window.confirm(t("guest.deleteFileWithName.info", { name: entry.name }))) return;
-			setBusy(true);
-			try {
-				await client.rpc("fs.delete", { path: entry.path });
-				await load();
-				if (selected?.path === entry.path) {
-					setSelected(null);
-					setPreview(null);
-				}
-			} catch (err) {
-				setError(err instanceof Error ? err.message : String(err));
-			} finally {
-				setBusy(false);
+	const del = useCallback((entry: WorkspaceEntry): void => {
+		setPendingDelete(entry);
+	}, []);
+
+	const confirmDelete = useCallback(async (): Promise<void> => {
+		if (!pendingDelete) return;
+		setBusy(true);
+		try {
+			await client.rpc("fs.delete", { path: pendingDelete.path });
+			await load();
+			if (selected?.path === pendingDelete.path) {
+				setSelected(null);
+				setPreview(null);
 			}
-		},
-		[client, load, selected],
-	);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBusy(false);
+			setPendingDelete(null);
+		}
+	}, [client, load, pendingDelete, selected]);
 
 	const doRename = useCallback(async (): Promise<void> => {
 		if (!renaming || !renameValue.trim()) return;
@@ -205,6 +209,15 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 					</button>
 				</div>
 			)}
+			<ConfirmDialog
+				open={pendingDelete !== null}
+				title={pendingDelete ? t("guest.deleteFileWithName.info", { name: pendingDelete.name }) : ""}
+				confirmLabel={t("settings.delete")}
+				busy={busy}
+				destructive
+				onConfirm={() => void confirmDelete()}
+				onClose={() => setPendingDelete(null)}
+			/>
 		</div>
 	);
 }

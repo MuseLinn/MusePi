@@ -177,7 +177,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	const disableAuth = async (): Promise<void> => {
 		if (!rpc) return;
-		const ok = await confirm(t("general.confirmDisableGithubAuth"));
+		const ok = await confirm(t("general.confirmDisableGithubAuth"), undefined, { destructive: true });
 		if (!ok) return;
 		setAuthLoading(true);
 		try {
@@ -248,7 +248,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 	};
 	const removeIdentity = async (id: string): Promise<void> => {
-		const ok = await confirm(t("general.confirmDeleteIdentity"));
+		const ok = await confirm(t("general.confirmDeleteIdentity"), undefined, { destructive: true });
 		if (!ok) return;
 		saveIdentities(identities.filter(i => i.id !== id));
 		if (defaultIdentity === id) {

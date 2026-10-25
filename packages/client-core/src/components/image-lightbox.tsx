@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Download, Pencil, X } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n/index.js";
+import { isTopModal, useModalFocus } from "../lib/modal-focus";
 import {
 	computeMorph,
 	MORPH_EASING_IN,
@@ -62,6 +63,7 @@ export function ImageLightbox({
 }): ReactNode {
 	const open = index !== null && index >= 0 && index < items.length;
 	const hasNav = items.length > 1;
+	const dialogRef = useModalFocus<HTMLDivElement>(open);
 
 	// ── Annotations (open-science FigureBlock absorption) ────────────────
 	const [annotateMode, setAnnotateMode] = useState(false);
@@ -331,29 +333,33 @@ export function ImageLightbox({
 
 	useEffect(() => {
 		if (!open) return;
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") {
+		const onKey = (event: KeyboardEvent): void => {
+			const dialog = dialogRef.current;
+			if (!dialog || !isTopModal(dialog)) return;
+			if (event.key === "Escape") {
+				event.preventDefault();
+				event.stopPropagation();
 				onClose();
-			} else if (hasNav && (e.key === "ArrowLeft" || e.key === "ArrowUp")) {
-				e.preventDefault();
+			} else if (hasNav && (event.key === "ArrowLeft" || event.key === "ArrowUp")) {
+				event.preventDefault();
 				onIndexChange((index - 1 + items.length) % items.length);
-			} else if (hasNav && (e.key === "ArrowRight" || e.key === "ArrowDown")) {
-				e.preventDefault();
+			} else if (hasNav && (event.key === "ArrowRight" || event.key === "ArrowDown")) {
+				event.preventDefault();
 				onIndexChange((index + 1) % items.length);
-			} else if (e.key === "+" || e.key === "=") {
-				e.preventDefault();
+			} else if (event.key === "+" || event.key === "=") {
+				event.preventDefault();
 				zoomBy(ZOOM_STEP);
-			} else if (e.key === "-") {
-				e.preventDefault();
+			} else if (event.key === "-") {
+				event.preventDefault();
 				zoomBy(1 / ZOOM_STEP);
-			} else if (e.key === "0") {
-				e.preventDefault();
+			} else if (event.key === "0") {
+				event.preventDefault();
 				resetView();
 			}
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [open, hasNav, index, items.length, onClose, onIndexChange]);
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [open, hasNav, index, items.length, onClose, onIndexChange, dialogRef]);
 
 	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
 		if (annotateMode || viewRef.current.scale <= 1) return;
@@ -430,6 +436,7 @@ export function ImageLightbox({
 			role="dialog"
 			aria-modal="true"
 			aria-label={t("settings.previewImage")}
+			ref={dialogRef}
 			onMouseDown={isClosing || morphClosing ? undefined : onClose}
 		>
 			{/* Backdrop plate: the dimmed/blurred floor is NOT a shared element,

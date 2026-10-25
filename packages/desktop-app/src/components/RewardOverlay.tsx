@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { isTopModal, t, useModalFocus } from "@musepi/client-core";
 import { CountUp } from "@musepi/client-core/src/widgets/count-up";
 import { CircleCheck, Gift, RotateCcw, Share2, X } from "lucide-react";
 import type { ReactNode } from "react";
@@ -46,6 +46,7 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 	const [shared, setShared] = useState(false);
 	const enteredCls = useTwoPhaseEnter(true);
 	const tiltRef = useRef<HTMLDivElement | null>(null);
+	const cardRef = useModalFocus<HTMLDivElement>(true);
 
 	const requestClose = useCallback((): void => {
 		setClosing(true);
@@ -60,18 +61,17 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 		sfxFor("complete");
 	}, []);
 
-	// Escape closes the reward — capture phase wins over the page behind.
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") {
-				e.preventDefault();
-				e.stopPropagation();
-				requestClose();
-			}
+			const card = cardRef.current;
+			if (e.key !== "Escape" || !card || !isTopModal(card)) return;
+			e.preventDefault();
+			e.stopPropagation();
+			requestClose();
 		};
 		document.addEventListener("keydown", onKey, true);
 		return () => document.removeEventListener("keydown", onKey, true);
-	}, [requestClose]);
+	}, [requestClose, cardRef]);
 
 	const onTilt = useCallback((e: React.PointerEvent): void => {
 		const el = tiltRef.current;
@@ -105,7 +105,14 @@ export function RewardOverlay({ payload, onClose }: { payload: RewardPayload; on
 		<div
 			className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${closing ? " gui-onboarding-backdrop--closing" : ""}`}
 		>
-			<div className={`gui-reward-card${closing ? " gui-reward-card--closing" : ""}`}>
+			<div
+				ref={cardRef}
+				tabIndex={-1}
+				role="dialog"
+				aria-modal="true"
+				aria-label={payload.successTitle ?? t("reward.rewardClaimSuccess")}
+				className={`gui-reward-card${closing ? " gui-reward-card--closing" : ""}`}
+			>
 				<div className="gui-reward-sky" onPointerLeave={resetTilt} onPointerMove={onTilt}>
 					<span className="gui-reward-stars" aria-hidden />
 					<span className="gui-reward-shoot gui-reward-shoot--a" aria-hidden />

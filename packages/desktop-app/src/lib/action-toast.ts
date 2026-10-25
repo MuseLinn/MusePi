@@ -27,7 +27,7 @@ export interface ActionToast {
 	actionLabel?: string;
 	/** Runs on click, then the toast dismisses itself. */
 	onAction?(): void;
-	/** Epoch ms; the toast is gone by then. */
+	/** Epoch ms; Infinity while paused or for persistent errors. */
 	expiresAt: number;
 }
 
@@ -38,6 +38,7 @@ let toasts: readonly ActionToast[] = [];
 let seq = 0;
 
 const listeners = new Set<() => void>();
+const pausedRemaining = new Map<number, number>();
 
 function emit(): void {
 	for (const listener of listeners) listener();
@@ -54,19 +55,42 @@ export function pushActionToast(
 	toast: Omit<ActionToast, "id" | "expiresAt" | "kind"> & { kind?: ActionToastKind },
 ): number {
 	const id = ++seq;
+	const kind = toast.kind ?? "info";
 	const next: ActionToast = {
-		kind: "info",
 		...toast,
+		kind,
 		id,
-		expiresAt: Date.now() + ACTION_TOAST_TTL_MS,
+		expiresAt: kind === "error" ? Number.POSITIVE_INFINITY : Date.now() + ACTION_TOAST_TTL_MS,
 	};
+	for (const previous of toasts) {
+		if (previous.message === toast.message) pausedRemaining.delete(previous.id);
+	}
 	toasts = [...toasts.filter(t => t.message !== toast.message), next];
 	emit();
 	return id;
 }
 
+/** Freeze the remaining lifetime and publish an infinite deadline so the view drops its timer. */
+export function pauseActionToast(id: number): void {
+	const toast = toasts.find(t => t.id === id);
+	if (!toast || pausedRemaining.has(id) || !Number.isFinite(toast.expiresAt)) return;
+	pausedRemaining.set(id, Math.max(0, toast.expiresAt - Date.now()));
+	toasts = toasts.map(t => (t.id === id ? { ...t, expiresAt: Number.POSITIVE_INFINITY } : t));
+	emit();
+}
+
+/** Resume from the frozen remainder; unknown or unpaused ids are no-ops. */
+export function resumeActionToast(id: number): void {
+	const remaining = pausedRemaining.get(id);
+	if (remaining === undefined) return;
+	pausedRemaining.delete(id);
+	toasts = toasts.map(t => (t.id === id ? { ...t, expiresAt: Date.now() + remaining } : t));
+	emit();
+}
+
 /** Drop one by id (the toast's own timer fired, or it was clicked). */
 export function dismissActionToast(id: number): void {
+	pausedRemaining.delete(id);
 	if (!toasts.some(t => t.id === id)) return;
 	toasts = toasts.filter(t => t.id !== id);
 	emit();

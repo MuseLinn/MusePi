@@ -62,9 +62,8 @@ export const MORPH_EASING_OUT = "cubic-bezier(0.4, 0, 0.2, 1)";
 /** Scene-morph档 from the M1.10 §3.2 ladder (300-420ms). */
 export const MORPH_MS = 360;
 
-/** Motion-off degradation (M1.10 §3.4): the desktop shell's kill-switch
- *  class or the OS reduced-motion preference both collapse the morph to
- *  the plain fade — no intermediate frames may play. */
+/** Motion-off degradation: the desktop shell's kill-switch class or the OS
+ *  reduced-motion preference skips the morph and every CSS fade. */
 export function motionDisabled(): boolean {
 	if (typeof document === "undefined") return true;
 	if (document.documentElement.classList.contains("gui-motion-off")) return true;

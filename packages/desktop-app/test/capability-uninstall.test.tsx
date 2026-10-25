@@ -171,6 +171,26 @@ describe("能力中心卸载确认弹窗 — 层级与类名契约", () => {
 		unmount();
 		document.querySelector(".gui-dialog-backdrop")?.remove();
 	});
+
+	test("顶层确认框独占 Escape，技能抽屉不跟随关闭", async () => {
+		const { rpc } = makeRpc();
+		const { unmount } = await renderCenter(rpc);
+		await act(async () => {
+			document.querySelector<HTMLElement>(".gui-cap-card")!.click();
+		});
+		await act(async () => {
+			document.querySelector<HTMLElement>(".gui-cap-drawer-delete")!.click();
+		});
+
+		await act(async () => {
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+		});
+		await sleep(250);
+
+		expect(document.querySelector(".gui-dialog-backdrop")).toBeNull();
+		expect(document.querySelector(".gui-cap-drawer-root")).not.toBeNull();
+		unmount();
+	});
 });
 
 describe("能力中心卸载 — 确认回调真实触发卸载 RPC 并刷新列表", () => {

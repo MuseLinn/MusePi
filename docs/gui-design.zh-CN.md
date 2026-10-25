@@ -397,6 +397,19 @@ turn
 
 > 对桌面 GUI 全部模态弹窗 / 全屏覆盖层生效。**以下全部取值为现存值收编**——§5s M1.10 阶梯 + 各组件现行值；禁止为弹窗发明新 token、新曲线、新 scrim 配方。组件盘点依据 `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3。
 
+### 浮层选择：六类表面
+
+| 类别 | 用途与示例 | 材质 | 键盘与焦点 | scrim |
+|---|---|---|---|---|
+| Tooltip | 共享 `gui-tooltip`、`RailTooltip` | **L2 float**：强玻璃底、边框、完整上下缘、sheen 与阴影 | 不移动焦点；触发器持有 `aria-describedby`；提示内容不是操作面 | 无 |
+| Toast | `ActionToast`、`UpdateToast`、client-core `Toasts` | **L2 float**，中性底色，状态由图标/accent 表达 | 非模态；动作与关闭钮可键盘到达；悬停或焦点暂停过期，错误须手动关闭 | 无 |
+| Alert / approval | `ApprovalCard`、需要决策的工具调用 | **L2 float**，共享玻璃上叠语义状态色 | `alertdialog` 语义但不全页锁焦；批准/拒绝控件各自处理激活键 | 无 |
+| Drawer / sheet | `AgentDrawer`、`SessionsSheet`、能力抽屉 | 仅容器取 **L2 float**；内容行保持纸面感 | 共享 modal 栈：仅栈顶处理 Tab 与 Escape；关闭后归还可连接的 opener | 标准 |
+| Modal / palette | `DialogFrame`、`TaskModal`、看板/媒体覆盖层、`CommandPalette` | **L3 overlay** 完整玻璃配方 | 共享 modal 仅在栈顶锁焦；palette 聚焦输入框、支持方向键导航并以 Escape 关闭 | 标准；仅全屏导览/系统面使用重玻璃 |
+| Confirmation | Promise confirm、client-core `ConfirmDialog` | **L3 overlay** 紧凑尺寸；`ss-card--confirm` 与 L2 sheet 区分 | 普通确认 Enter 提交；危险确认 Enter 永不提交且初始焦点在 Cancel；仅栈顶 Escape 取消 | 标准 |
+
+`gui-motion-off` 与 `prefers-reduced-motion` 同时取消入场和出场动画。`prefers-reduced-transparency`、不支持 `backdrop-filter` 以及 Windows 无 blur 时，保留边框、上下缘、sheen 和阴影，底色切换为不透明可读表面；常驻 transcript 与 composer 不得新增浮层 blur。
+
 ### 出入场动效阶梯
 
 | 场景 | 曲线 | 时长 | 说明 |
@@ -440,16 +453,16 @@ turn
 
 ### 键盘契约
 
-1. **模态开启即拥有键盘**：Escape 一律在 `document` **capture 相位**认领（DialogFrame.tsx、prompt-dialog.tsx、AnnouncementOverlay.tsx 先例）。
-2. **焦点进出**：打开移焦至首个可聚焦元素（prompt 类聚焦输入框，confirm 类聚焦确认键），关闭还原至 `prevActive`。
-3. **confirm 弹窗 Enter=确认、Escape=取消**；prompt 输入框内 Enter=提交；**Destroy 级确认（删除会话/项目）Escape 仍=取消，Enter 需点击**——不启用"危险确认要打字"模式，维持现契约。
+1. **只有共享栈顶模态拥有键盘**：Escape 在 `document` **capture 相位**认领；嵌套底层保持打开，但不处理 Tab 或 Escape。
+2. **焦点进出**：打开移焦至首个可聚焦元素（prompt 类聚焦输入框，危险确认聚焦 Cancel）；关闭栈顶后归还可连接的 opener，关闭底层绝不抢焦点。
+3. **普通 confirm 弹窗 Enter=确认、Escape=取消**；prompt 输入框内 Enter=提交。**危险确认绝不以 Enter 提交**——初始焦点在 Cancel，必须显式激活确认按钮；栈顶 Escape 仍取消。
 4. **强制/系统级覆盖层吞 Escape**：GlobalPause 的 Escape=恢复（语义等价关闭）；未来强制更新层 Escape 无效且需吞掉按住的 Enter/Space。
 5. **DialogFrame 常驻挂载驱动 `open`**；prompt/confirm 关闭延迟 promise 兑现至 180ms 出场完毕——AGENTS.md GUI 规则原样重申，作为本规范第 5 条。
 
 ### 材质与降级
 
-- 弹窗卡片一律 **L3 overlay**（§5s 层级表）：`--glass-bg-strong` 底 + rim + `--glass-sheen` + `--glass-shadow` 双层——`.gui-dialog` 已达标。**TaskModal 与 palette 卡是实底欠账**：随 M1.10 批次 C 迁移（决策⑧；玻璃只给容器浮层，卡内内容保持纸面感）。两处卡规则处均以 TODO 注释立欠账。
-- 降级三件套照 §5s：`gui-motion-off` / `prefers-reduced-motion` → 出场免动画、无中间帧（全部弹窗组件均带该规则；onboarding 为先例）；`[data-platform="win32"]` blur 归零、sheen+rim 补强——Windows 玻璃 scrim 观感验收按 M1.10 §6.3 双平台截图流程走。
+- Dialog、TaskModal、palette 与确认卡均为 **L3 overlay**（§5s 层级表）：`--glass-bg-strong` + 边框 + 完整上下缘 + `--glass-sheen` + `--glass-shadow`。玻璃只属于容器，卡内内容保持纸面感。
+- `gui-motion-off` / `prefers-reduced-motion` 同时取消入场和出场，不留中间帧。`prefers-reduced-transparency`、不支持 `backdrop-filter` 以及 Windows 无 blur 时使用不透明可读底色，保留边框、上下缘、sheen 和阴影；scrim 也转为不透明。
 
 ## 5v. 右栏标签带：tab-primary 补全（M1.12，2026-09-29 批复；源 `docs/archive/0.5.0-promo-gap-analysis.md` 第三版 + 交互原型 `docs/review/tab-primary-prototype.html` v2）
 
@@ -580,8 +593,8 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
   图标与描边按 kind 微染，玻璃底色保持中性。应用级 `musepi-gui-toast` 事件改路由进这条
   栈（此前走顶部错误横幅）：detail 允许纯字符串或 `{message, kind}`，缺省 `error` 以保留
   旧横幅语义；守护进程连接类错误仍用顶部横幅。
-- **内容**：文案 + accent 动作按钮。88% 玻璃 + shadow-overlay，200ms 入场
-  （`translateY(8px)` → 0）。
+- **内容**：文案 + accent 动作按钮。L2 强玻璃底 + 完整上下缘 + sheen + glass-shadow，
+  200ms 入场（`translateY(8px)` → 0）。
 - **规则——同文案替换，绝不堆叠**。连续归档三个会话不该立起一堵一模一样的 toast；
   最新那条撤销才是仍可操作的那条。该约束落在 store 里，而非视图里。
 - **每一次归档都给撤销**，包括「归档并立即跳走」的头部动作 —— 这是全应用最不可恢复的

@@ -5,6 +5,7 @@ import { DotMatrixMark } from "./components/shell/DotMatrixMark";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/mobile.css";
+import "./styles/overlay-fallback.css";
 import "./i18n";
 import {
 	getSystemBarInsets,
@@ -13,6 +14,7 @@ import {
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,
 } from "./lib/capacitor";
+import { initTooltips } from "./lib/tooltips";
 
 // Capacitor keyboard bridge: with Keyboard resize 'none' the WebView keeps its
 // full height when the soft keyboard opens, so the visual viewport never
@@ -134,6 +136,7 @@ function Root(): React.JSX.Element {
 	return <App />;
 }
 
+initTooltips();
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
 createRoot(root).render(<Root />);

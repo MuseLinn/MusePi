@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { fmtCost, fmtDuration, fmtTokens } from "../../lib/format";
+import { isTopModal, useModalFocus } from "../../lib/modal-focus";
 import { decideTranscriptPoll } from "../../lib/transcript-poll";
 import { useGuestSelector } from "../../lib/use-guest";
 import { SessionErrorDock } from "../transcript/session-error-dock";
@@ -30,14 +31,19 @@ export function AgentDrawer(props: {
 	const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
+	const drawerRef = useModalFocus<HTMLElement>(true);
 
 	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") onClose();
+		const onKey = (event: KeyboardEvent): void => {
+			const drawer = drawerRef.current;
+			if (event.key !== "Escape" || !drawer || !isTopModal(drawer)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			onClose();
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [onClose, drawerRef]);
 
 	/**
 	 * The live poll, hoisted so the session dock's no-reply check can re-read the
@@ -126,7 +132,7 @@ export function AgentDrawer(props: {
 			: null;
 
 	return (
-		<aside className="ag-drawer" role="dialog" aria-label={agent.displayName}>
+		<aside ref={drawerRef} className="ag-drawer" role="dialog" aria-modal="true" aria-label={agent.displayName}>
 			<header className="ag-drawer-head">
 				<div className="ag-drawer-title">
 					<span className="ag-drawer-name">{agent.displayName}</span>
