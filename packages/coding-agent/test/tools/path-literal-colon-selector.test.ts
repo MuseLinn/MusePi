@@ -66,14 +66,17 @@ describe("literal colon filename resolution (issue #4618)", () => {
 			expect(await splitPathAndSelPreferringLiteral(literal, tmpDir)).toEqual({ path: literal });
 		});
 
-		it("keeps a shell-escaped literal path intact when the resolved file exists", async () => {
-			await fs.mkdir(path.join(tmpDir, "dir"), { recursive: true });
-			await Bun.write(path.join(tmpDir, "dir", "a b:1-2"), "escaped literal\n");
+		it.skipIf(process.platform === "win32")(
+			"keeps a shell-escaped literal path intact when the resolved file exists",
+			async () => {
+				await fs.mkdir(path.join(tmpDir, "dir"), { recursive: true });
+				await Bun.write(path.join(tmpDir, "dir", "a b:1-2"), "escaped literal\n");
 
-			expect(await splitPathAndSelPreferringLiteral("dir/a\\ b:1-2", tmpDir)).toEqual({
-				path: "dir/a\\ b:1-2",
-			});
-		});
+				expect(await splitPathAndSelPreferringLiteral("dir/a\\ b:1-2", tmpDir)).toEqual({
+					path: "dir/a\\ b:1-2",
+				});
+			},
+		);
 
 		it("falls back to selector interpretation when the literal path does not exist", async () => {
 			// No file created — the selector split wins because the raw path
@@ -146,16 +149,19 @@ describe("literal colon filename resolution (issue #4618)", () => {
 			expect(output).not.toMatch(/not found/i);
 		});
 
-		it("reads a shell-escaped literal file whose name ends in a selector-shaped suffix", async () => {
-			await fs.mkdir(path.join(tmpDir, "dir"), { recursive: true });
-			await Bun.write(path.join(tmpDir, "dir", "a b:1-2"), "escaped literal read\n");
+		it.skipIf(process.platform === "win32")(
+			"reads a shell-escaped literal file whose name ends in a selector-shaped suffix",
+			async () => {
+				await fs.mkdir(path.join(tmpDir, "dir"), { recursive: true });
+				await Bun.write(path.join(tmpDir, "dir", "a b:1-2"), "escaped literal read\n");
 
-			const tool = new ReadTool(createSession());
-			const result = await tool.execute("read-escaped-literal", { path: "dir/a\\ b:1-2" });
-			const output = getText(result);
+				const tool = new ReadTool(createSession());
+				const result = await tool.execute("read-escaped-literal", { path: "dir/a\\ b:1-2" });
+				const output = getText(result);
 
-			expect(output).toContain("escaped literal read");
-		});
+				expect(output).toContain("escaped literal read");
+			},
+		);
 
 		it("prefers a real `foo:1-2` file over interpreting `:1-2` as a range on `foo`", async () => {
 			await Bun.write(path.join(tmpDir, "foo"), "line 1\nline 2\nline 3\n");
@@ -247,19 +253,22 @@ describe("literal colon filename resolution (issue #4618)", () => {
 			expect(output).not.toMatch(/not found/i);
 		});
 
-		it("searches a shell-escaped literal file whose name ends in a selector-shaped suffix", async () => {
-			await fs.mkdir(path.join(tmpDir, "dir"), { recursive: true });
-			await Bun.write(path.join(tmpDir, "dir", "a b:1-2"), "escaped literal needle\n");
+		it.skipIf(process.platform === "win32")(
+			"searches a shell-escaped literal file whose name ends in a selector-shaped suffix",
+			async () => {
+				await fs.mkdir(path.join(tmpDir, "dir"), { recursive: true });
+				await Bun.write(path.join(tmpDir, "dir", "a b:1-2"), "escaped literal needle\n");
 
-			const tool = new GrepTool(createSession());
-			const result = await tool.execute("grep-escaped-literal", {
-				pattern: "needle",
-				path: "dir/a\\ b:1-2",
-			});
-			const output = getText(result);
+				const tool = new GrepTool(createSession());
+				const result = await tool.execute("grep-escaped-literal", {
+					pattern: "needle",
+					path: "dir/a\\ b:1-2",
+				});
+				const output = getText(result);
 
-			expect(output).toContain("escaped literal needle");
-		});
+				expect(output).toContain("escaped literal needle");
+			},
+		);
 
 		it("searches a literal file whose name contains a semicolon and selector-shaped tail (`a;b:1-2`)", async () => {
 			// Semicolon is the delimited-path separator; without a raw-literal

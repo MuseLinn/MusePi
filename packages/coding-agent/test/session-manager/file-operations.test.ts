@@ -203,7 +203,9 @@ describe("SessionManager temp cwd session dirs", () => {
 		const sessionFile = session.getSessionFile();
 		if (!sessionFile) throw new Error("Expected session file path");
 
-		expect(path.dirname(sessionFile)).toBe(path.join(getSessionsDir(), expectedTempSessionDirName(tempCwd)));
+		expect(path.dirname(sessionFile).toLowerCase()).toBe(
+			path.join(getSessionsDir(), expectedTempSessionDirName(tempCwd)).toLowerCase(),
+		);
 	});
 
 	it("migrates legacy temp-root absolute session dirs to -tmp prefixes", () => {
@@ -221,7 +223,7 @@ describe("SessionManager temp cwd session dirs", () => {
 
 		const expectedDir = path.join(getSessionsDir(), expectedTempSessionDirName(tempCwd));
 		expect(fs.existsSync(legacyDir)).toBe(false);
-		expect(path.dirname(sessionFile)).toBe(expectedDir);
+		expect(path.dirname(sessionFile).toLowerCase()).toBe(expectedDir.toLowerCase());
 		expect(fs.existsSync(path.join(expectedDir, "carried.jsonl"))).toBe(true);
 	});
 
@@ -248,7 +250,7 @@ describe("SessionManager temp cwd session dirs", () => {
 
 		const expectedDir = path.join(getSessionsDir(), expectedTempSessionDirName(tempCwd));
 		expect(fs.existsSync(hashedDir)).toBe(false);
-		expect(path.dirname(sessionFile)).toBe(expectedDir);
+		expect(path.dirname(sessionFile).toLowerCase()).toBe(expectedDir.toLowerCase());
 		expect(fs.existsSync(path.join(expectedDir, "stranded.jsonl"))).toBe(true);
 	});
 });

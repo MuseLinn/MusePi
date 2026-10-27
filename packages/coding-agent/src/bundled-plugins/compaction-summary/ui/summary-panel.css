@@ -1,0 +1,73 @@
+.compaction-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 12px;
+	color: var(--color-text);
+}
+
+.compaction-summary-header {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 16px;
+	border: var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	box-shadow: var(--glass-shadow);
+}
+
+.compaction-summary-header h2 {
+	margin: 0;
+	font-size: var(--ui-font-size-lg);
+}
+
+.compaction-summary-tokens {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	font-family: var(--gui-font-mono, ui-monospace, monospace);
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-secondary);
+}
+
+.compaction-summary-tokens strong {
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.compaction-summary-method {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.compaction-summary-warning {
+	padding: 10px 12px;
+	border-radius: var(--radius-lg);
+	background: var(--color-warning-soft, color-mix(in oklab, var(--color-warning, #b07d22) 12%, transparent));
+	color: var(--color-warning, #b07d22);
+	font-size: var(--ui-font-size-sm);
+}
+
+.compaction-summary-body {
+	margin: 0;
+	padding: 4px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+	font-size: var(--ui-font-size);
+	line-height: 1.75;
+	color: var(--color-text-secondary);
+}
+
+.compaction-summary-state {
+	padding: 24px 12px;
+	text-align: center;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+}
+
+.compaction-summary-state--error {
+	color: var(--color-danger);
+}

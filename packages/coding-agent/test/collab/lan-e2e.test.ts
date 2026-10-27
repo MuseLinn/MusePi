@@ -169,23 +169,25 @@ describe("LAN share end-to-end", () => {
 	it("startTunnel('ngrok') forwards the provider through LocalShareManager", async () => {
 		// Drive the full /collab tunnel ngrok path: relay + provider selection +
 		// fake ngrok found via PATH.
-		const { chmodSync, mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
-		const { tmpdir } = await import("node:os");
-		const { join } = await import("node:path");
-		const dir = mkdtempSync(join(tmpdir(), "lan-ngrok-fake-"));
+		const { rmSync } = await import("node:fs");
+		const { delimiter, join } = await import("node:path");
+		const { compileNativeFixture, createNativeFixtureTempDir } = await import("../helpers/native-fixture");
+		const dir = createNativeFixtureTempDir("lan-ngrok-");
+		const binary = join(dir, process.platform === "win32" ? "ngrok.exe" : "ngrok");
+		await compileNativeFixture(join(import.meta.dir, "..", "fixtures", "fake-ngrok.ts"), binary, {
+			"process.env.FAKE_NGROK_OUTPUT": JSON.stringify('{"url":"https://fake123.ngrok-free.app"}'),
+			"process.env.FAKE_NGROK_EXIT_CODE": JSON.stringify(""),
+			"process.env.FAKE_NGROK_DELAY_MS": JSON.stringify("0"),
+		});
 		const prevPath = process.env.PATH;
 		try {
-			writeFileSync(
-				join(dir, "ngrok"),
-				`#!/usr/bin/env node\nprocess.stdout.write('{"url":"https://fake123.ngrok-free.app"}\\n');\nsetInterval(() => {}, 1000);\n`,
-			);
-			chmodSync(join(dir, "ngrok"), 0o755);
-			process.env.PATH = `${dir}:${prevPath}`;
+			process.env.PATH = `${dir}${delimiter}${prevPath ?? ""}`;
 			const manager = new LocalShareManager({ port: 0 });
 			managers.push(manager);
-			const urls = await manager.startTunnel("ngrok");
+			const urls = await manager.startTunnel("ngrok", { verifyReachable: false });
 			expect(urls.joinUrl).toBe("https://fake123.ngrok-free.app");
 			expect(urls.webJoinUrl).toBe("https://fake123.ngrok-free.app");
+			await manager.stop();
 		} finally {
 			if (prevPath === undefined) delete process.env.PATH;
 			else process.env.PATH = prevPath;

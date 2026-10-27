@@ -332,11 +332,12 @@ describe("composer tail geometry", () => {
 		}
 	});
 
-	it("registers the back-to-bottom button as a composer inset reader", async () => {
+	it("keeps the back-to-bottom button above the composer and floating cards as their heights change", async () => {
 		let reader: HTMLElement | null = null;
 		const registerComposerInsetReader = (element: HTMLElement | null): (() => void) | undefined => {
 			reader = element;
-			element?.style.setProperty("--chat-composer-inset", "48px");
+			element?.style.setProperty("--chat-composer-inset", "96px");
+			element?.style.setProperty("--chat-floating-panel-clearance", "72px");
 			return element ? () => {} : undefined;
 		};
 		const { container, root } = await mount(
@@ -350,12 +351,60 @@ describe("composer tail geometry", () => {
 				fireScroll(scroller);
 			});
 			expect(reader !== null && reader === container.querySelector(".tr-back-bottom")).toBe(true);
-			expect((reader! as HTMLElement).style.bottom).toBe(
-				"calc(14px + var(--chat-composer-inset, 0px) + var(--chat-floating-panel-clearance, 0px))",
+			const button = reader! as HTMLElement;
+			expect(button.style.bottom).toBe(
+				"calc(24px + var(--chat-composer-inset, 0px) + var(--chat-floating-panel-clearance, 0px))",
 			);
-			expect((reader! as HTMLElement).style.getPropertyValue("--chat-composer-inset")).toBe("48px");
+			expect(button.style.getPropertyValue("--chat-composer-inset")).toBe("96px");
+			expect(button.style.getPropertyValue("--chat-floating-panel-clearance")).toBe("72px");
+
+			button.style.setProperty("--chat-composer-inset", "184px");
+			button.style.setProperty("--chat-floating-panel-clearance", "128px");
+			expect(button.style.getPropertyValue("--chat-composer-inset")).toBe("184px");
+			expect(button.style.getPropertyValue("--chat-floating-panel-clearance")).toBe("128px");
+			expect(button.style.bottom).toContain("24px");
 		} finally {
 			await act(async () => root.unmount());
 		}
+	});
+});
+
+describe("compaction summary action", () => {
+	it("shows before and after tokens and opens the selected compaction through a native button", async () => {
+		const opened: string[] = [];
+		const entry = {
+			type: "compaction" as const,
+			id: "compaction-1",
+			parentId: null,
+			timestamp: "2026-10-27T00:00:00Z",
+			summary: "Current task and evidence",
+			firstKeptEntryId: "later",
+			tokensBefore: 791_000,
+			tokensAfter: 76_600,
+		};
+		const { container, root } = await mount(
+			transcriptEl([entry], { onOpenCompaction: (selected: { id: string }) => opened.push(selected.id) }),
+		);
+		const button = container.querySelector<HTMLButtonElement>(".tr-compaction-open");
+		expect(button?.tagName).toBe("BUTTON");
+		expect(button?.textContent).toContain("791k → 76.6k tokens");
+		await act(async () => button?.click());
+		expect(opened).toEqual(["compaction-1"]);
+		await act(async () => root.unmount());
+	});
+
+	it("keeps legacy compaction entries free of an invented after-token value", async () => {
+		const entry = {
+			type: "compaction" as const,
+			id: "compaction-legacy",
+			parentId: null,
+			timestamp: "2026-10-27T00:00:00Z",
+			summary: "Legacy",
+			firstKeptEntryId: "later",
+			tokensBefore: 1000,
+		};
+		const { container, root } = await mount(transcriptEl([entry]));
+		expect(container.querySelector(".tr-divider")?.textContent).not.toContain("→");
+		await act(async () => root.unmount());
 	});
 });

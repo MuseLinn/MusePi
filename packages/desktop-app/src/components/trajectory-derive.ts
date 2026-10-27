@@ -4,7 +4,7 @@
  * 失败模式:TrajectoryView 的 memo 依赖(entries / roundDurations /
  * activePathIds)每个流式帧都换引用(store snapshot 每帧 spread 新数组,
  * leafWalk 沿 snap?.entries 重建 → 新 Set),导致 buildTrajectoryTree
- * 每帧对全量历史(全量补全后上万条)跑两遍遍历 + 文本截断——长会话流式
+ * 每帧对已加载历史窗口跑两遍遍历 + 文本截断——长会话流式
  * 下这是每帧数百 ms 的热路径。depthOf 在父链断裂时跳过记忆化,单次
  * 重算内部再退化为 O(n²)(已在 trajectory-data 内修掉)。
  *

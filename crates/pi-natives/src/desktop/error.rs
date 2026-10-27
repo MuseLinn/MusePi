@@ -107,10 +107,12 @@ impl DesktopError {
 		Self::new(ErrorCode::Closed, "desktop session is closed")
 	}
 
+	#[cfg(any(target_os = "windows", test))]
 	pub(crate) fn cancelled(message: impl Into<String>) -> Self {
 		Self::new(ErrorCode::Cancelled, message)
 	}
 
+	#[cfg(target_os = "windows")]
 	pub(crate) fn input_busy(message: impl Into<String>) -> Self {
 		Self::new(ErrorCode::InputBusy, message)
 	}

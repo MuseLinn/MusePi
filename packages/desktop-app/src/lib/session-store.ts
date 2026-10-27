@@ -21,6 +21,7 @@ import {
 	type SubagentProgressPayload,
 } from "@musepi/pi-wire";
 import { MaterializedView } from "@musepi/sdk";
+import { type FetchHistoryPage, loadAlignedHistoryBatch } from "./history-batch";
 import { dispatchNotification, documentUnfocused, type FocusReport, type NotifyContext } from "./notify";
 import type { StreamEvent } from "./rpc";
 import { sfxFor } from "./sfx";
@@ -82,6 +83,7 @@ export interface GuiSessionState {
 	activeTools: ReadonlyMap<string, ActiveTool>;
 	working: boolean;
 	cursor: number;
+	historyLoading?: boolean;
 	/** Subagent visuals (details panel): snapshots, progress, lifecycle. */
 	agents: readonly AgentSnapshot[];
 	progress: ReadonlyMap<string, SubagentProgressPayload>;
@@ -344,6 +346,9 @@ export class GuiSessionStore {
 	#historyBlocked = false;
 	/** Oldest loaded entry id — the session.history cursor. */
 	#beforeId: string | null = null;
+	#historyLoading = false;
+	#historyEpoch = 0;
+	#historyRequest: Promise<boolean> | null = null;
 
 	/** True while the daemon still has history older than the loaded tail. */
 	get hasMore(): boolean {
@@ -358,6 +363,48 @@ export class GuiSessionStore {
 	/** session.history cursor for the next older page (null = exhausted). */
 	get historyBeforeId(): string | null {
 		return this.#beforeId;
+	}
+
+	loadOlder(fetchPage: FetchHistoryPage): Promise<boolean> {
+		if (this.#historyRequest) return this.#historyRequest;
+		const firstCursor = this.#beforeId;
+		if (!this.#hasMore || !firstCursor) return Promise.resolve(false);
+		const epoch = this.#historyEpoch;
+		this.#historyLoading = true;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+		const request = (async (): Promise<boolean> => {
+			try {
+				const batch = await loadAlignedHistoryBatch(fetchPage, firstCursor);
+				if (epoch !== this.#historyEpoch) return false;
+				if (batch.stale) {
+					this.markHistoryStale();
+					return false;
+				}
+				if (batch.entries.length === 0) {
+					this.#historyBlocked = true;
+					this.#hasMore = false;
+					return false;
+				}
+				this.prependEntries(batch.entries, batch.remaining, batch.nextBeforeId);
+				return true;
+			} catch {
+				if (epoch === this.#historyEpoch) {
+					this.#historyBlocked = true;
+					this.#hasMore = false;
+				}
+				return false;
+			} finally {
+				if (epoch === this.#historyEpoch) {
+					this.#historyRequest = null;
+					this.#historyLoading = false;
+					this.#snapshot = this.#buildSnapshot();
+					this.#emit();
+				}
+			}
+		})();
+		this.#historyRequest = request;
+		return request;
 	}
 
 	/**
@@ -477,6 +524,9 @@ export class GuiSessionStore {
 		tail?: { hasMore: boolean; beforeId: string | null };
 	}): void {
 		if (this.#resyncTriggered) return;
+		this.#historyEpoch += 1;
+		this.#historyRequest = null;
+		this.#historyLoading = false;
 		this.#view =
 			MaterializedView.fromSnapshot(this.#sessionId, this.#cwd, snapshot) ??
 			MaterializedView.replay(this.#sessionId, this.#cwd, []);
@@ -631,6 +681,7 @@ export class GuiSessionStore {
 			// without turn_end and would pin the stop capsule on forever.
 			working: this.#working,
 			cursor: snap.cursor,
+			historyLoading: this.#historyLoading,
 			agents: [...this.#agents.values()],
 			progress: this.#progress,
 			lifecycle: this.#lifecycle,
@@ -1199,6 +1250,9 @@ export class GuiSessionStore {
 	}
 
 	dispose(): void {
+		this.#historyEpoch += 1;
+		this.#historyRequest = null;
+		this.#historyLoading = false;
 		this.#clearGapTimer();
 		if (this.#flushWindow !== null) {
 			clearTimeout(this.#flushWindow);

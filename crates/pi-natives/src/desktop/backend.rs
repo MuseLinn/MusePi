@@ -16,7 +16,7 @@ pub enum DeliveryMode {
 }
 
 impl DeliveryMode {
-	pub(crate) fn parse(value: Option<&str>) -> Self {
+	pub fn parse(value: Option<&str>) -> Self {
 		if value.is_some_and(|value| value.trim().eq_ignore_ascii_case("foreground")) {
 			Self::Foreground
 		} else {
@@ -34,7 +34,7 @@ pub enum MouseButton {
 }
 
 impl MouseButton {
-	pub(crate) fn parse(value: Option<&str>) -> CoreResult<Self> {
+	pub fn parse(value: Option<&str>) -> CoreResult<Self> {
 		match value.map(str::trim) {
 			None => Ok(Self::Left),
 			Some(value) if value.eq_ignore_ascii_case("left") => Ok(Self::Left),
@@ -59,6 +59,7 @@ pub struct Modifiers {
 /// following move, and after button-up respectively. `0` skips that wait; it
 /// does not promise zero latency or that the target can process the stream.
 /// Defaults mirror the field-tested click/drag cadence.
+#[cfg(any(target_os = "windows", test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::struct_field_names, reason = "shared `_ms` suffix documents the millisecond unit")]
 pub struct InputTiming {
@@ -68,6 +69,7 @@ pub struct InputTiming {
 	pub after_ms:       u16,
 }
 
+#[cfg(any(target_os = "windows", test))]
 impl InputTiming {
 	/// Single-click cadence.
 	pub const CLICK: Self =
@@ -80,9 +82,9 @@ impl InputTiming {
 /// Upper bound for drag paths so a malformed path cannot queue an unbounded
 /// event burst. Enforced once in `Worker::process` so every backend inherits
 /// it.
-pub(crate) const MAX_DRAG_POINTS: usize = 1024;
+pub const MAX_DRAG_POINTS: usize = 1024;
 
-pub(crate) fn check_drag_len(path: &[(f64, f64)]) -> CoreResult<()> {
+pub fn check_drag_len(path: &[(f64, f64)]) -> CoreResult<()> {
 	if path.len() > MAX_DRAG_POINTS {
 		return Err(DesktopError::input_failed(format!(
 			"drag path has {} points, exceeding the {MAX_DRAG_POINTS}-point limit",

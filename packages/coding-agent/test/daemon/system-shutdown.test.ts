@@ -167,6 +167,10 @@ describe("system.shutdown", () => {
 		expect(typeof ack.busy).toBe("number");
 
 		expect(await waitForClosed(port)).toBe(true);
+		const completionDeadline = Date.now() + 10_000;
+		while (!exited() && Date.now() < completionDeadline) {
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
 		// The owner's completion hook fired only after teardown finished — the
 		// ordering the real process-exit path depends on.
 		expect(exited()).toBe(true);

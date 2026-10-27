@@ -33,10 +33,15 @@ describe("withSlowHint", () => {
 
 	test("a slow request reports the elapsed time, then keeps ticking", async () => {
 		const ticks: number[] = [];
-		const value = await withSlowHint(delay("ok", RPC_SLOW_HINT_AFTER_MS + RPC_SLOW_HINT_INTERVAL_MS + 60), t =>
-			ticks.push(t.elapsedMs),
-		);
-		expect(value).toBe("ok");
+		const request = Promise.withResolvers<string>();
+		const secondTick = Promise.withResolvers<void>();
+		const pending = withSlowHint(request.promise, t => {
+			ticks.push(t.elapsedMs);
+			if (ticks.length === 2) secondTick.resolve();
+		});
+		await secondTick.promise;
+		request.resolve("ok");
+		expect(await pending).toBe("ok");
 		// One tick at the threshold, one per interval after it — never one
 		// per millisecond, and never zero.
 		expect(ticks.length).toBeGreaterThanOrEqual(2);

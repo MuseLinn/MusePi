@@ -1,7 +1,18 @@
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { resetModelCacheForTests } from "@musepi/pi-catalog/model-cache";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { HistoryStorage } from "@musepi/pi-coding-agent/session/history-storage";
+import { resetSessionTitleIndexForTests } from "@musepi/pi-coding-agent/session/title-index";
 import { __resetDirsFromEnvForTests, getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
+
+export function resetAgentStoresForTest(): void {
+	AgentStorage.resetInstance();
+	HistoryStorage.resetInstance();
+	resetSessionTitleIndexForTests();
+	resetModelCacheForTests();
+}
 
 /**
  * Agent-dir isolation for tests that exercise real session storage
@@ -94,6 +105,7 @@ export async function isolateAgentDirForTest(prefix: string): Promise<string> {
 
 /** Restore the agent directory captured by the first isolate call and remove the temp dir. */
 export async function restoreAgentDirForTest(isolatedDir: string): Promise<void> {
+	resetAgentStoresForTest();
 	if (originalAgentDir) {
 		setAgentDir(originalAgentDir);
 	} else {

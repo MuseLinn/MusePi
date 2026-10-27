@@ -945,7 +945,7 @@ export class DaemonServer {
 		this.#services.register(
 			new SessionService({
 				knownSessions: () => this.#host.knownSessions(),
-				snapshot: async sessionId => tailSnapshot(await this.#host.snapshot(sessionId)),
+				snapshot: sessionId => this.#host.snapshot(sessionId),
 				checkpointSeq: sessionId => this.#host.checkpointSeq(sessionId),
 				setResumeLive: (conn, live) => {
 					// Per-connection attribution (P0-7): see #resumeLiveByConn.
@@ -1813,9 +1813,10 @@ export class DaemonServer {
 			}
 			case "system.capabilities":
 				return { protocol: 1, capabilities: { subscribe: true } };
+			case "system.prewarmStart":
+				startSdkPrewarm();
+				return { started: true };
 			case "system.prewarmStatus":
-				// GUI boot splash waits on this (waitForSdkPrewarm in app.tsx)
-				// so the first session op is never cold.
 				return { ready: sdkPrewarmed };
 			case "system.features":
 				return {};
@@ -4152,19 +4153,51 @@ export class DaemonServer {
 					stale: false,
 				};
 			}
+			case "session.compaction": {
+				const p = (params ?? {}) as { sessionId?: unknown; entryId?: unknown };
+				if (typeof p.sessionId !== "string") throw new Error("sessionId required");
+				if (typeof p.entryId !== "string") throw new Error("entryId required");
+				const snap = (await this.#host.snapshot(p.sessionId)) as { entries?: unknown[] } | null;
+				const entries = Array.isArray(snap?.entries) ? snap.entries : [];
+				const entry = entries.findLast(
+					candidate => (candidate as { id?: unknown; type?: unknown } | null)?.id === p.entryId,
+				);
+				return { entry: entry && (entry as { type?: unknown }).type === "compaction" ? entry : null };
+			}
 			case "session.turns": {
-				// Full-turn index over the materialized snapshot
-				// (session.history parity): the client tails 200 entries
-				// and pages older chunks in, so its own buildTurnIndex only
-				// covers the LOADED window — the rail dropped unloaded
-				// turns on long sessions. Scanning the in-memory snapshot
-				// here costs the same as session.history and returns one
-				// ~120B record per turn (20k turns ≈ 2.4MB, loopback).
-				const p = (params ?? {}) as { sessionId?: unknown };
+				const p = (params ?? {}) as { sessionId?: unknown; beforeTurn?: unknown; limit?: unknown };
 				if (typeof p.sessionId !== "string") throw new Error("sessionId required");
 				const snap = (await this.#host.snapshot(p.sessionId)) as { entries?: unknown[] } | null;
 				const entries = Array.isArray(snap?.entries) ? snap.entries : [];
-				return { turns: buildDaemonTurnIndex(entries), totalEntries: entries.length };
+				const turns = buildDaemonTurnIndex(entries);
+				if (p.beforeTurn === undefined && p.limit === undefined) {
+					return { turns, totalEntries: entries.length };
+				}
+				const max = Math.min(Math.max(Number.isFinite(p.limit) ? (p.limit as number) : 200, 1), 1000);
+				let end = turns.length;
+				if (typeof p.beforeTurn === "string") {
+					end = turns.findLastIndex(turn => turn.entryId === p.beforeTurn);
+					if (end < 0) {
+						return {
+							turns: [],
+							totalEntries: entries.length,
+							hasMore: false,
+							remaining: 0,
+							nextBeforeTurn: null,
+							stale: true,
+						};
+					}
+				}
+				const from = Math.max(0, end - max);
+				const page = turns.slice(from, end);
+				return {
+					turns: page,
+					totalEntries: entries.length,
+					hasMore: from > 0,
+					remaining: from,
+					nextBeforeTurn: page[0]?.entryId ?? null,
+					stale: false,
+				};
 			}
 			case "session.resume": {
 				// 实现归 SessionService（resumeLive 登记 + 压缩检查点判定）；
@@ -8312,14 +8345,25 @@ async function handleRpcLine(server: DaemonServer, line: string, conn: DaemonCon
 
 // ── Server bootstrap ────────────────────────────────────────────────────────
 
-/**
- * True once the background SDK prewarm (startDaemon) has finished loading
- * the lazy `../sdk` module graph. The GUI holds its boot splash on
- * system.prewarmStatus until this flips, so the first session.create /
- * session.resume never pays the multi-second import cost (splash covers
- * the prewarm window — 偷偷预热).
- */
 let sdkPrewarmed = false;
+let sdkPrewarmStarted = false;
+
+/** Start the optional session-SDK warmup after the client's first paint.
+ * Session operations may also start the same module import on demand. */
+function startSdkPrewarm(): void {
+	if (sdkPrewarmStarted) return;
+	sdkPrewarmStarted = true;
+	void import("../sdk")
+		.then(() => {
+			sdkPrewarmed = true;
+			logger.debug("sdk prewarmed for daemon session ops");
+		})
+		.catch(err => {
+			logger.warn("sdk prewarm failed (first session op will pay the import cost)", {
+				error: err instanceof Error ? err.message : String(err),
+			});
+		});
+}
 
 /** Resolve the renderer dist dir the compat HTTP server serves. Env
  *  MUSEPI_RENDERER_DIST overrides; defaults to the workspace sibling
@@ -8370,27 +8414,6 @@ export async function startDaemon(
 	// P2：服务挂载全部落定后才开监听——半装配的 daemon 不接受任何连接。
 	// 挂载失败在这里抛出，经 commands/serve.ts 冒泡成启动失败。
 	await server.settleHostServices();
-
-	// Prewarm the lazy SDK module graph in the background so the FIRST
-	// session.create / session.resume does not pay the multi-second import
-	// cost (measured ~4s: provider registry, tool registry, catalog,
-	// extensions). The daemon intentionally keeps startup cheap (createAgentSession
-	// is a lazy import), so the cost is shifted here — after daemon boot the
-	// first GUI-initiated session op is already warm. Bun's module cache makes
-	// the later `await import("../sdk")` in createSession resolve instantly.
-	// The GUI holds its boot splash until system.prewarmStatus reports ready
-	// (waitForSdkPrewarm in app.tsx), so the user never hits the un-warmed
-	// window even right after the daemon is spawned.
-	void import("../sdk")
-		.then(() => {
-			sdkPrewarmed = true;
-			logger.debug("sdk prewarmed for daemon session ops");
-		})
-		.catch(err => {
-			logger.warn("sdk prewarm failed (first session op will pay the import cost)", {
-				error: err instanceof Error ? err.message : String(err),
-			});
-		});
 
 	// Process-global freeze state rides to every subscribed GUI (daemon-wide
 	// pause overlay stays in sync across clients regardless of which one

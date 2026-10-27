@@ -16,10 +16,10 @@ import { dlopen, FFIType } from "bun:ffi";
  * which detaches the child from any inherited console. The Python kernel
  * runs user code that imports NumPy/pandas; those native extensions
  * (`numpy/_core/_multiarray_umath.pyd` + bundled OpenBLAS/SLEEF thread-pool
- * init) can deadlock inside `LoadLibraryExW` when no console is attached,
- * and a console-less child cannot receive SIGINT via
- * `GenerateConsoleCtrlEvent` (the recovery path the host relies on). See
- * issue #1960.
+ * init) can deadlock inside `LoadLibraryExW` when no console is attached.
+ * Console inheritance also keeps the legacy `GenerateConsoleCtrlEvent` SIGINT
+ * fallback usable; normal Windows cancellation uses the runner control channel.
+ * See issue #1960.
  *
  * So on Windows we hide only when the host itself has no console to share.
  * In any launch where a console is attached — even one with every stdio

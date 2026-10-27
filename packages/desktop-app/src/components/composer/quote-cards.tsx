@@ -22,7 +22,7 @@ export function QuoteCards({
 	return (
 		<div className="gui-quote-contexts">
 			{contexts.map((context, index) => (
-				<div className="gui-quote-card" key={`${index}-${displayContextQuote(context).slice(0, 32)}`}>
+				<div className="gui-quote-card" key={index}>
 					<div className="gui-quote-context-body">
 						{context.kind === "browser-annotation" ? (
 							<div className="gui-quote-context-meta">

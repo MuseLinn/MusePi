@@ -54,8 +54,11 @@ lang: zh-CN
 - **任务日历选择**：有计划任务的日期打开当日任务列表，同一天有多个任务时也逐条可选。从当日列表或状态看板卡片选择任务会进入可见的任务详情视图，而不是只修改内部选中 id。
 - **扩展控制中心**(设置「扩展」tab):section 占满设置视口(`gui-skills-section` = `height:100%` flex column,`gui-ext-center` `flex:1; min-height:0`)——左列表(`gui-ext-list-scroll`)与右详情(`gui-ext-detail`)在各自圆角容器内**独立滚动**,设置页整体不滚(TUI /extensions 面板 parity);两栏统一细滚动条(8px、thumb `text-faint 30%`、hover 50%,与 xterm 同配方);指令内容不限高(pre 无 max-height),随详情区整体滚动,避免嵌套滚动。
 - **内容边界羽化(ScrollShadow,2026-08-21 审计,2026-09-27 纵横通用化)**:`useScrollShadow` hook + CSS `mask-image` linear-gradient 实现边缘渐变淡出——透明→实色柔带,仅内容溢出且滚离边缘才挂载。共享实现在 client-core(`src/lib/scroll-shadow.ts`):单容器用 `attachScrollShadow`/`useScrollShadow`,raw-HTML 滚动容器子树(markdown 表格/代码块/KaTeX/mermaid 走 `dangerouslySetInnerHTML`,React 拿不到内部 ref)用 `useDeepScrollShadow` 深扫描增量补挂。四方向属性(`data-top|bottom|left|right-scroll`)驱动 mask:纵向容器上下羽化,横向容器(消息内 markdown 表格、代码块、工具渲染 diff、tab 条、chip 排)左右羽化,走共享 `:is(...)` mask 规则(桌面端 `gui-chat.css` 横向段,带宽 `--gui-fade-x`;client-core `transcript.css` 横向段)。已覆盖:`.gui-transcript`(聊天)/`.gui-sessions-list`(会话列表)/`.gui-settings-nav-scroll|content`(设置)/`.gui-model-list`/`.gui-notes-editor`/`.pet-bubbles`/`.mp-grid-shell`(插件市场)/`.ag-panel`(agents)/`.gui-model-tabs`/`.gui-surface-tabs`/`.gui-ext-tabs`/`.gui-code-preview-body`/`.gui-ext-detail-code pre`/`.gui-changes-file-diff`/`.gui-panel-tabs`(右栏 tab 条)+ 消息内 `.tr-table-scroll`/`.tr-md pre`/`.katex-display`/`.tr-mermaid*`/`.tr-usage`/`.tv-pre|.tv-diff|.tv-diff-sbs-cell`/`.sh-wspanel-tabs|.sh-changes-diff|.sh-attach-chips`。**通用载体 `FadeScroll`**(`components/FadeScroll.tsx` + `.gui-fade-scroll` 规则,现经同一组属性支持双方向)接无专用 class 的泛化滚动容器——欢迎页内联 chip 排即用此类。mask 羽化的是内容本身,透明/玻璃容器同样正确;静态 mask 不受 `gui-motion-off` 影响。一条约束:`mask-image` 不能双轴叠加,纵横同时溢出的容器只得到后写方向的羽化——这些类只用于单方向滚动容器。
-- **空态**:WelcomeComposer 大输入框(品牌/问候/提示 + composer),输入即建会话;专注模式(⌘⇧E)输入框铺满。
+- **空态**:WelcomeComposer 大输入框(品牌/问候/提示 + composer),输入即建会话;专注模式(⌘⇧E)输入框铺满。placeholder 与补充提示保持静态，不再轮播。空态与会话输入框共用跟随指针的装饰光晕，减少动态效果时关闭。专注模式下，挂靠桌宠移到输入框内部，并为其保留 64px 的无文字区域，不再被顶边裁切。
+- **启动闪屏**：桌宠跟随当前主题色板，品牌字下方的加载轨道持续运动；视觉轨道之外保留辅助技术可读的隐藏原生 `<progress>`，减少动态效果时放慢而不是静止。不再有标语、卡死诊断或提前出现的重试按钮。慢启动仍是加载状态；只有真实连接失败才进入带重试和手动连接的恢复页。
 - **消息流**:复用 guest-client `tr-*` 类;用户消息右对齐圆角气泡,助手消息全宽无气泡;40px gutter 放头像。
+- **长会话历史**:打开先落在最新条目,只有向上导航或显式跳转时才按需加载更早页面。分页保持当前阅读位置,不会用空白或陈旧结果替换当前会话;加载失败时保留已加载内容,并明确提示更早历史不可用。advisor 只读记录不会仅因没有普通 assistant 回复就显示「无应答」停靠条。地图与轨迹共用同一有界窗口:打开时不补齐全量历史,加载更早只请求下一页,并保留展开、选中、缩放和平移状态。
+- **压缩摘要**：transcript 原生按钮在数据可用时显示压缩前 → 后 token，并在可恢复的右侧标签中打开完整摘要。标签只持久化压缩条目 id，正文从 daemon 重新读取；旧记录保持仅压缩前的展示。bundled Cordis 面板复用共享玻璃表面和 token 格式，加载、缺失与失败状态均有明确呈现，不用陈旧内容代替。
 
 ### 轨迹时间轴与检视(DSH Trajectory Overview parity,2026-08-21)
 
@@ -65,6 +68,7 @@ lang: zh-CN
 - **列对齐契约(2026-08-21 实测)**:事件行内,工具名称/参数/结果/文本全部与条目名称**左对齐**(同列 x 一致,`.traj-content` 内零左缩进);turn 头的 `Turn N` 标签与事件 tag 同宽(`min-width: 62px`),使 **turn 摘要列与事件内容列精确对齐**(实测 x 相等)——新增/改动行排版时保持此契约。
 - 拖拽(pointer capture,位移 ≥3px)= 选中时间区间;区间覆盖层 accent 18% + 左右 1px 强调边;激活 chip(`traj-focus-chip`)显示「聚焦 hh:mm:ss – hh:mm:ss」+ ✕。
 - 单击某 turn 段 = 选中该**整轮**;单击空白 = 清除;Esc 优先清区间、再清选中(与模态键盘契约一致)。
+- **键盘同权**:Overview 轮段、地图轮卡和可跳转的地图/轨迹行均可聚焦,Enter/Space 执行与单击相同的主操作。分支计数折叠是独立于行跳转按钮的真实按钮。焦点描边始终可见,键盘焦点与悬停一样会显示行内操作。
 - 悬停段/点 → 提示(`traj-ov-tip`,`gui-fade-in` 120ms):标题 + 起止/精确时刻 + 时长;离开 140ms 延时隐藏,便于在提示间滑移。**时长口语化**:0.8s / 12.3s / 1m 23s / 1h 02m(`durationText`,状态栏同语感)。
 - **聚焦模式**:区间激活时列表 turn/事件置灰(`.traj-event--dim` 0.35 + saturate .6 / `.traj-turn-group--dim` 0.45),区间内记录保持原样——不裁剪只降噪,dsh 同款"聚焦"而非"过滤"。
 - **选择检视**:点击行 = 选中(accent 45% 描边 + 8% 底);检视面板(`traj-inspector`)在时间条下方:头部 kind 标签 + 标题 + ✕;网格行 = 时间(全格式)/轮次/回合用时(roundDurations 命中才显示)/具体时刻(mono);**settled assistant 记录另显模型请求统计**——令牌(`↑{in+cacheWrite} ↓{out} ☍{cacheRead}`,k/M 紧凑化)/请求耗时/首字节延迟/速率(`output/duration` tok/s,同 transcript usage 行语感);Input/Output 块(`traj-inspector-pre`,max-height 132 内滚、pre-wrap)。
@@ -238,7 +242,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **拖拽排序**:`@dnd-kit` 全套(PointerSensor distance 8 + TouchSensor delay 200/tolerance 6),在**完整 order** 上 arrayMove 后整表回写 localStorage(`writeSurfaceOrder`)。扩展槽 tab(`ext:`)不进 SortableContext。
 - **⌘/Ctrl 长按揭示序号**:按住修饰键 500ms → rail 图标右上角显示 1..N(对应 ⌘1..8 跳转);松开、失焦、或真的按了数字键即消费并消除,下次按住才回来。app.tsx 的 ⌘1..8 处理器不变,这边只负责可视化。
 - **角标**:live 计数(当前仅 git 变更文件数,99+ 封顶)优先于序号;序号只在修饰键长按时出现。a11y 标签把计数读进 `aria-label`(「git,3 个已更改文件」)。
-- **富 tooltip**:registry 每项带可选 `description`(i18n key);hover 150ms 后在图标左侧弹出(label + description + 角标描述行),单个 portal 由 rail 层托管(`RailTooltip`),拖拽中抑制。rail 是贴视口右缘的定宽列,几何恒定,不需要 floating-ui 的 flip/shift。
+- **富 tooltip**:registry 每项带可选 `description`(i18n key);hover 与键盘焦点共用 150ms 延迟,触屏静止长按 500ms 后打开、释放关闭。单个 portal 由 rail 层托管(`RailTooltip`),优先显示在图标左侧,但通过 flip/shift 保持在视口内,并在滚动/缩放时跟随锚点。Escape 不移动焦点即可关闭;拖拽中抑制。显隐只过渡透明度,减少动态效果时立即完成。
 - **不做**:surface 显示/隐藏配置弹窗(openchamber 的 equalizer 入口)——右键隐藏 + overflow 恢复已覆盖,不做弹窗。
 - **rail 右键隐藏(2026-10-15,openchamber 吸收 A2)**:rail 图标右键 →「隐藏表面」(`ContextMenu`;图标按钮仍是唯一的拖拽 activator)。隐藏 id 持久化,rail、⌘1..8 跳转、陈旧顺序回填三处过滤;已打开的面板不强制关闭。从「…」overflow 菜单「显示已隐藏的表面」分区逐个恢复(有隐藏项时 overflow 按钮常显)。
 - **按表面记忆宽度(2026-10-15,吸收 A3)**:`musepi-gui-right-widths` 映射(`surfaceId → px`,200–1200 钳制);切换表面载入其记忆宽度(默认 `defaultWidthFraction`),拖拽结束写回。旧单键只做首次回退。RightRail 原先按 surface 切 effect 写宽度的代码删除(写了没人读,归 ContextPanel 统一拥有)。
@@ -264,6 +268,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 - **画布自适应**:`.gui-board-surface` 布局宽固定 BASE_W(1092),`transform: scale(容器宽/1092)` 适配窗口;effect 依赖 `activeId`(挂载时 home 视图 ref null → deps `[]` 时 scale 永驻 1,画布 1092 布局溢出被裁——已修);`overflow-x: hidden` + `overflow-y: auto`(transform 不改布局,窄窗口必出横向滚动条伪影)。
 - **ChromaGroup 组光效**(reactbits ChromaGrid parity,`components/ChromaGroup.tsx`):容器 pointermove 写 `--cg-x/--cg-y`(零 re-render),`.gui-chroma-glow` 纯 CSS 三层 RGB 错位径向渐变 + `mix-blend-mode: screen` + hover 淡入 + `gui-motion-off` 隐藏——**一个共享光晕同时照亮组内所有卡片**(看板画布 + 模型供应商网格);伙伴预设/桌宠市场**不适用**(滚动密集小卡网格上整片背景泛光 + 固定 inset-0 在滚动容器被裁——用户实测回退)。
+- **合集预览是静态的同心圆角卡面**：预览按宽高共同适配且不放大，内层圆角随预览单元格 padding 递减。行情、历史、音乐和视频卡保留深色辨识度，同时共享标准玻璃高光、边框、阴影与主题强调色。实时请求、刷新定时器、音频分析和播放只属于真实看板，不在合集页启动。
 
 ### 设置搜索与新建项目
 
@@ -295,7 +300,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 ## 5i. 会话悬浮卡与 design 空态(2026-09-19)
 
 - **会话悬浮卡**(WorkBuddy 悬浮弹窗对齐 + 我们的 mode 行):行上悬浮 ~350ms 在行右侧浮出 288px 磨砂卡——标题(2 行截断)、fork 来源、**模式 chip**(accent 着色,`mode {id}` 命名链未知预设回落默认模式,与 ContextPanel 同规)、任务工作空间(cwd basename,title 全路径)、最后活跃 + 创建时间。架构:行经**模块级 bus**(`SessionHoverCard.tsx` 的 `reportSessionHover`/`clearSessionHover`)上报——不给 memo 化的 `SessionRow` 加任何 props;卡片(每侧栏一实例)从 `sessionMeta` 现查 cwd/modeId 并 **portal 到 document.body**(侧栏的玻璃/transform 祖先会劫持 fixed 定位)。卡片取代行原生 `title` 气泡。两阶段入场(opacity 经 `--entered` 翻转、动画只动 transform)遵守 `.gui-menu-popup` 的 backdrop 规则;滚动(capture)/点击行/离行即收,跨行移动有 120ms 宽限。
-- **design 预设空态**(设计稿 08 欢迎页对齐):design 预设 armed 时欢迎页输入框与会话 composer 同款——同一行风格 chips(`composer/design-styles.tsx`,共享 `DesignStyleChips` + `DESIGN_STYLES`)渲染在输入卡上方,点风格即写入 `design style brief update {style}` 句;placeholder 切为 `design empty placeholder`,不再轮播能力提示。模式 chip 背后的数据链:daemon `session.modes`/header → view-store `mode_id` 列(幂等迁移)→ `session.list` → app `sessionMeta` → 悬浮卡。
+- **design 预设空态**(设计稿 08 欢迎页对齐):design 预设 armed 时欢迎页输入框与会话 composer 同款——同一行风格 chips(`composer/design-styles.tsx`,共享 `DesignStyleChips` + `DESIGN_STYLES`)渲染在输入卡上方,点风格即写入 `design style brief update {style}` 句;placeholder 从静态基础提示切为 `design empty placeholder`。模式 chip 背后的数据链:daemon `session.modes`/header → view-store `mode_id` 列(幂等迁移)→ `session.list` → app `sessionMeta` → 悬浮卡。
 
 ## 5j. 桌宠眼动、pet 头像预设与主题跟随色板(2026-09-19)
 
@@ -372,7 +377,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 本轮由三条用户诉求驱动:「这个小球的定制放到常规Agent头像那里去?」「挂靠输入框时的小球稍微大一点?」「耳机稍微大一点?」。
 
 - **外观细节组住在预览旁边**:光泽开关 + 配饰选择器从伴侣页尾部搬到常规页 Agent 头像网格正下方。宠物头像卡就是活的 `BuiltinPetSprite`——拨动开关立刻在上方网格里读到反馈,而不是跑到另一个页面去看。组件自持状态(自己解析、订阅 `omp-pet-changed` 重解析),挂哪都成立;伴侣页保留形象选择/尺寸/导入。
-- **挂靠球的上限跟着画走,不跟着历史走**:46px 上限定 box 还背着 ~1.28× rig 的年代;padding 卸掉后(box ≈ 1.04× 球)同一上限读起来偏小。上限 46 → 52,下限 34 → 38——仍低于当年"巨球"的视觉(那时 60px box 是 ~47px 球;现在 52px box 是 ~50px 球且无一物外溢)。
+- **挂靠球保留清晰的响应式盒子**：容器查询 clamp 为 48–64px；≤380px 的输入框保持 46px，即完整面部的下限，不进入 micro 变体。矢量球体填满盒子的 100%，不再停留在 fallback 尺寸，因此图形与可点击包装层同步缩放。宿主仍通过 `--gui-composer-pet-size` 覆盖尺寸，不在 JS 中指定像素几何。
 - **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
 ## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/archive/0.5.0-m1-transcript-design.md`）
@@ -739,7 +744,7 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 
 - **工作态尾部**（`ChatView.tsx` 尾部 spacer）：会话工作中，预留带不再跟随增长余量，改为预留 `max(--chat-composer-tail-inset, --chat-composer-inset + 8px)`——输入框玻璃与最后一行的间距重新等于悬浮间隙。状态条（工作中 / 实时尾部渐隐）住在那个间隙里；没有这条 max，长进余量区的输入框（排队消息、状态条）会让最后一行整场回合都压在玻璃下。
 - **悬浮面板 clearance**（`lib/composer-inset-readers.ts`）：提问卡位于输入框上方，`position: absolute; bottom: calc(100% + 4px)`——高度永远进不了 wrap 的 ResizeObserver 测量，不另开通道就会在它弹出时盖住末尾消息。面板挂载期间发布 `ceil(height + 4px)` 为 `--chat-floating-panel-clearance`（ResizeObserver 监听面板，卸载时 withdraw）；尾部 spacer 与末尾渐隐带都加上这个变量。两条通道都只写到 reader 叶子上，绝不写列（列上的自定义属性会让每个虚拟行重排样式）。
-- **明确不做**：不移植 `--chat-status-row-clearance`——工作条是 wrap 的子节点，已被测量；回到底部按钮不做 clearance 偏移（提问卡弹出时可能与之重叠，边缘场景，接受）。
+- **回到底部按钮 clearance**：按钮叠加同一组实测 composer inset 与浮动面板 clearance，再保留 24px 安全间距。输入文本、附件/引用卡和统计行改变整个 composer 高度时，按钮始终位于其上方安全区。工作条是被测 wrap 的子节点，因此不需要单独的 `--chat-status-row-clearance`。
 
 ## 5af. 连接器进工作状态面板 + 空态选择（2026-10-21）
 

@@ -1960,19 +1960,22 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 	}
 
 	#readDataVersion(): number {
-		const row = this.#db.query("PRAGMA data_version").get() as { data_version?: number } | null;
+		using statement = this.#db.query("PRAGMA data_version");
+		const row = statement.get() as { data_version?: number } | null;
 		return row?.data_version ?? 0;
 	}
 
 	#readAuthRevision(): number {
-		const row = this.#db.query("SELECT revision FROM auth_change_revision WHERE id = 1").get() as {
+		using statement = this.#db.query("SELECT revision FROM auth_change_revision WHERE id = 1");
+		const row = statement.get() as {
 			revision?: number;
 		} | null;
 		return row?.revision ?? 0;
 	}
 
 	#readLocalAuthRevision(): number {
-		const row = this.#db.query("SELECT revision FROM auth_local_change_revision WHERE id = 1").get() as {
+		using statement = this.#db.query("SELECT revision FROM auth_local_change_revision WHERE id = 1");
+		const row = statement.get() as {
 			revision?: number;
 		} | null;
 		return row?.revision ?? 0;

@@ -19,12 +19,7 @@ describe("FileIndexService search enabled gate", () => {
 		fs.writeFileSync(path.join(dir, "note.ts"), "export const hello = 'world marker';\n");
 	});
 
-	afterAll(async () => {
-		// Windows + bun:sqlite: explicit prepare() handles outlive close()
-		// until the finalizers run — force GC before removing the temp dir.
-		Bun.gc(true);
-		await Bun.sleep(100);
-		Bun.gc(true);
+	afterAll(() => {
 		fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 	});
 

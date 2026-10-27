@@ -160,24 +160,19 @@ if (process.env.OMP_SOFTWARE_GL === "1") {
 
 const DEV = !app.isPackaged;
 
-// ── Startup phase recorder ──────────────────────────────────────
-// Cold start crosses three processes (this one, the Bun daemon, the
-// renderer) and the GUI also holds its splash on a daemon prewarm — so
-// "slow boot" has never had a single number attached to it. Marks are
-// opt-in behind MUSEPI_STARTUP_PERF=1 and print as
-// `[startup-performance] <phase> +Nms`, which is all a slow launch needs
-// to be attributed to a phase instead of argued about. Phase names are a
-// fixed vocabulary: adding one is a deliberate act, not a debug leftover.
+// Opt-in startup phase recorder. Main-process marks use one process clock;
+// renderer marks arrive through the preload IPC bridge with their own clock.
 const STARTUP_PERF = process.env.MUSEPI_STARTUP_PERF === "1";
 const startupT0 = process.hrtime.bigint();
-// Renderer-side marks carry this prefix so createWindow's relay can tell a
-// startup mark from ordinary renderer chatter.
-const STARTUP_MARK_PREFIX = "[renderer-startup] ";
 function markStartup(phase, details) {
 	if (!STARTUP_PERF) return;
 	const ms = Number(process.hrtime.bigint() - startupT0) / 1e6;
-	console.log(`[startup-performance] ${phase} +${ms.toFixed(0)}ms${details ? ` ${JSON.stringify(details)}` : ""}`);
+	process.stdout.write(`[startup-performance] ${phase} +${ms.toFixed(0)}ms${details ? ` ${JSON.stringify(details)}` : ""}\n`);
 }
+ipcMain.on("startup-mark", (_event, phase) => {
+	if (!STARTUP_PERF || typeof phase !== "string") return;
+	process.stdout.write(`[renderer-startup] ${phase}\n`);
+});
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
 const ICON_PATH = path.resolve(__dirname, "..", "build", "icon.png");
 
@@ -1782,9 +1777,10 @@ function ensureTray() {
 		// port must count as "no daemon": otherwise the tray WS never opens,
 		// update() never runs, and the tray icon is never created.
 		if (port && !(await portOpen(port))) port = null;
-		// Fall back to the renderer's DEFAULT_URL port (packages/desktop-app/src/app.tsx) —
-		// the daemon binds it and it is the documented default.
-		if (!port && (await portOpen(8300))) port = 8300;
+		// Match the renderer's explicit isolation port when a smoke launch sets one.
+		const configuredPort = Number(process.env.MUSEPI_GUI_DAEMON_PORT);
+		const defaultPort = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535 ? configuredPort : 8300;
+		if (!port && (await portOpen(defaultPort))) port = defaultPort;
 		if (!port) {
 			trayController.update([]);
 			closeTrayWs();
@@ -2936,16 +2932,6 @@ async function createWindow() {
 	const loadLocal = () => mainWindow.loadFile(path.join(DIST_DIR, "index.html"));
 	mainWindow.webContents.once("dom-ready", () => markStartup("renderer.dom-ready"));
 	mainWindow.webContents.once("did-finish-load", () => markStartup("renderer.loaded"));
-	// Renderer marks: the renderer has no logger of its own, so it emits them
-	// as prefixed console lines and they are forwarded here verbatim. Only
-	// that prefix is relayed — the rest of the renderer's console stays out of
-	// the terminal, and the relay itself is off unless MUSEPI_STARTUP_PERF=1.
-	mainWindow.webContents.on("console-message", event => {
-		if (!STARTUP_PERF) return;
-		const line = event.message ?? "";
-		if (!line.startsWith(STARTUP_MARK_PREFIX)) return;
-		console.log(line.slice(STARTUP_MARK_PREFIX.length).trim());
-	});
 	if (compatUrl) {
 		// Defense-in-depth: a listener can die between the liveness probe and
 		// loadURL (or serve a broken page) — never white-screen on it.

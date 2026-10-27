@@ -5,7 +5,8 @@ type PragmaTableInfoRow = {
 };
 
 function addColumnIfMissing(db: Database, table: string, column: string, definition: string): boolean {
-	const rows = db.query(`PRAGMA table_info(${table})`).all() as PragmaTableInfoRow[];
+	using statement = db.query(`PRAGMA table_info(${table})`);
+	const rows = statement.all() as PragmaTableInfoRow[];
 	for (const row of rows) {
 		if (row.name === column) {
 			return false;

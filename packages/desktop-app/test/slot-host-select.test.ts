@@ -1,6 +1,6 @@
 import "./dom-shim";
 import { describe, expect, it } from "bun:test";
-import { type SlotComponent, selectTranscriptNodeComponents } from "../src/lib/slot-host";
+import { type SlotComponent, selectPanelTabComponent, selectTranscriptNodeComponents } from "../src/lib/slot-host";
 
 /** Minimal SlotComponent fixture — only entryKinds/order matter for dispatch. */
 function comp(over: Partial<SlotComponent> & { slot: string; extensionId: string; code: string }): SlotComponent {
@@ -55,5 +55,15 @@ describe("selectTranscriptNodeComponents", () => {
 			"low",
 			"high",
 		]);
+	});
+});
+
+describe("selectPanelTabComponent", () => {
+	it("selects by the column's own view rather than a globally active view", () => {
+		const compaction = comp({ slot: "panel.tab.compaction", extensionId: "summary", code: "c" });
+		const other = comp({ slot: "panel.tab.other", extensionId: "other", code: "c" });
+		expect(selectPanelTabComponent([compaction, other], "ext:panel.tab.compaction")).toBe(compaction);
+		expect(selectPanelTabComponent([compaction, other], "ext:panel.tab.other")).toBe(other);
+		expect(selectPanelTabComponent([compaction], "context")).toBeUndefined();
 	});
 });

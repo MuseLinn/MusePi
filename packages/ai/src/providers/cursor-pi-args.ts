@@ -117,13 +117,13 @@ export function piGrepSkip(offset?: number): number | undefined {
  * pattern ignores the path, and an absent or `.` path leaves the pattern
  * standing alone rather than building a `./`- or `//`-prefixed spec.
  *
- * Uses `node:path` rather than string surgery so Windows absolutes (`C:\…`,
- * UNC) are recognised and separators stay normalized.
+ * Uses POSIX separators for the combined glob spec; the host path resolver still
+ * recognises Windows absolute patterns (`C:\…`, UNC).
  */
 export function piJoinPath(basePath: string | undefined, pattern: string): string {
 	if (path.isAbsolute(pattern)) return pattern;
 	if (!basePath || basePath === ".") return pattern;
-	return path.join(basePath, pattern);
+	return path.posix.join(basePath, pattern);
 }
 
 /**

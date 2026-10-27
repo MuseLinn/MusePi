@@ -43,6 +43,7 @@ describe("omp read MCP resources", () => {
 			env: {
 				...process.env,
 				HOME: root,
+				USERPROFILE: root,
 				NO_COLOR: "1",
 				PI_CODING_AGENT_DIR: agentDir,
 			},

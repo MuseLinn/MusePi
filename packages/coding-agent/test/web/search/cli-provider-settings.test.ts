@@ -8,6 +8,7 @@ import {
 } from "@musepi/pi-coding-agent/web/search/provider";
 import { __resetDirsFromEnvForTests, setAgentDir, TempDir } from "@musepi/pi-utils";
 import { runSearchCommand } from "../../../src/cli/web-search-cli";
+import { resetAgentStoresForTest } from "../../helpers/isolate-agent-dir";
 
 const WEB_SEARCH_ENV_KEYS = [
 	"ANTHROPIC_API_KEY",
@@ -97,6 +98,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	vi.restoreAllMocks();
+	resetAgentStoresForTest();
 	resetSettingsForTest();
 	setSearchProviderOrder([]);
 	setExcludedSearchProviders([]);

@@ -6,7 +6,7 @@ import type { AgentToolResult } from "@musepi/pi-agent-core";
 import type { FetchImpl, ImageContent, TextContent } from "@musepi/pi-ai";
 import { htmlToMarkdown } from "@musepi/pi-natives";
 import { type Component, Text } from "@musepi/pi-tui";
-import { $which, ptree, truncate } from "@musepi/pi-utils";
+import { $which, ptree, removeWithRetries, truncate } from "@musepi/pi-utils";
 import { type ArchiveFormat, listArchiveRoot, sniffArchiveFormat } from "@musepi/pi-utils/ar";
 import type { Settings } from "../config/settings";
 import { readEditableNotebookText } from "../edit/notebook";
@@ -872,7 +872,7 @@ async function withTempBinaryFile<T>(
 		await Bun.write(tempPath, bytes);
 		return await readTempFile(tempPath);
 	} finally {
-		await fs.rm(tempDir, { recursive: true, force: true });
+		await removeWithRetries(tempDir);
 	}
 }
 

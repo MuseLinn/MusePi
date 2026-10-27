@@ -3,9 +3,11 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { HistoryStorage } from "@musepi/pi-coding-agent/session/history-storage";
 import type { SessionHeader } from "@musepi/pi-coding-agent/session/session-entries";
 import { loadEntriesFromFile } from "@musepi/pi-coding-agent/session/session-loader";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { resetSessionTitleIndexForTests } from "@musepi/pi-coding-agent/session/title-index";
 import { stripOuterDoubleQuotes } from "@musepi/pi-coding-agent/tools/path-utils";
 import { getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
 
@@ -82,6 +84,8 @@ describe("SessionManager.moveTo", () => {
 			setAgentDir(fallbackAgentDir);
 			delete process.env.PI_CODING_AGENT_DIR;
 		}
+		HistoryStorage.resetInstance();
+		resetSessionTitleIndexForTests();
 		await fsp.rm(testAgentDir, { recursive: true, force: true });
 	});
 
@@ -369,6 +373,7 @@ describe("SessionManager.moveTo", () => {
 		if (!movedFile) throw new Error("Expected moved session file");
 		const entries = await loadEntriesFromFile(movedFile);
 		expect(entries.some(entry => entry.type === "title_change" && entry.title === "during move")).toBe(true);
+		await session.close();
 	});
 
 	it("materializes an ensureOnDisk session when moveTo races the queued rewrite", async () => {
@@ -467,6 +472,7 @@ describe("SessionManager.moveTo", () => {
 			allowMoveToResume.resolve();
 			await move;
 			await session.flush();
+			await Promise.all([session.close(), reopened.close()]);
 		} finally {
 			allowMoveToResume.resolve();
 			renameSpy.mockRestore();

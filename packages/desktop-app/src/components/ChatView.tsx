@@ -24,6 +24,7 @@ import {
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { pushActionToast } from "../lib/action-toast";
 import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import {
 	publishComposerInsets,
@@ -40,10 +41,9 @@ import {
 } from "../lib/composer-tail-inset";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
-import { HISTORY_PAGE_MESSAGES, loadAlignedHistoryBatch } from "../lib/history-batch";
+import { HISTORY_PAGE_MESSAGES } from "../lib/history-batch";
 import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
-import { lightenOverviewEntry } from "../lib/message-tree";
 import { dispatchNotification } from "../lib/notify";
 import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -59,7 +59,7 @@ import {
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
-import { surfaceById } from "../lib/surfaces/registry";
+import { COMPACTION_PANEL_SURFACE, compactionTabDescriptor, surfaceById } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
 import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
@@ -92,7 +92,7 @@ import { TurnMapCanvas } from "./TurnMapCanvas";
 import { TurnRail } from "./TurnRail";
 import { WelcomeComposer } from "./WelcomeComposer";
 
-/** session.history 分页响应(ensureFullHistory 全量补全的循环形态)。 */
+/** session.history 分页响应，供 store 按需请求下一页。 */
 interface HistoryPage {
 	entries: SessionEntry[];
 	hasMore: boolean;
@@ -945,6 +945,17 @@ export function ChatView({
 		},
 		[panelTabs.open, tabLabelFor],
 	);
+	const openCompaction = useCallback(
+		(entry: Extract<SessionEntry, { type: "compaction" }>): void => {
+			if (!extTabsRef.current.some(item => `ext:${item.slot}` === COMPACTION_PANEL_SURFACE)) {
+				pushActionToast({ kind: "error", message: t("transcript.compactionSummaryUnavailable") });
+				return;
+			}
+			panelTabs.open(compactionTabDescriptor(entry.id, tabLabelFor(COMPACTION_PANEL_SURFACE)));
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		},
+		[panelTabs.open, tabLabelFor, rightPanelOpen, focusMode, onExpandRightPanel],
+	);
 	// transcript.node seat dispatch: extensions register renderers for specific
 	// node kinds (transcriptNodeKind). A matched renderer OWNS the entry's
 	// rendering (may include the built-in children base or render fully custom);
@@ -1580,8 +1591,9 @@ export function ChatView({
 	// the oldest loaded entry. Pages the next chunk from session.history
 	// (cursor = oldest loaded entry id) and prepends it into the store —
 	// the daemon keeps the full transcript, nothing is lost.
-	const loadOlderRef = useRef(false);
-	const [loadingOlder, setLoadingOlder] = useState(false);
+	const activeHistoryStoreRef = useRef(store);
+	activeHistoryStoreRef.current = store;
+	const loadingOlder = snap?.historyLoading === true;
 	// Key-based prepend anchoring (Transcript.anchorCtlRef): captured before
 	// the session.history RPC, restored after the prepend commits — the old
 	// scrollHeight-delta compensation jumped blindly (streaming tail growth
@@ -1625,46 +1637,18 @@ export function ChatView({
 		}
 	}, [rpc, store]);
 	const loadOlder = useCallback(async (): Promise<void> => {
-		if (!rpc || !store || loadOlderRef.current || !store.hasMore) return;
-		const firstCursor = store.historyBeforeId;
-		if (!firstCursor) return;
-		loadOlderRef.current = true;
-		setLoadingOlder(true);
+		if (!rpc || !store) return;
 		const anchor: TranscriptAnchor | null = anchorCtlRef.current?.capture() ?? null;
 		const sessionId = store.sessionId;
-		try {
-			// Turn-aligned batch. The walk, its
-			// bound and its cursor discipline live in lib/history-batch.ts — the point
-			// is that the batch starts on a turn boundary so the rail's top tick is a
-			// whole turn, not a fragment of one.
-			const batch = await loadAlignedHistoryBatch(
-				beforeId =>
-					rpc.request<HistoryPage>("session.history", {
-						sessionId,
-						beforeId,
-						maxMessages: HISTORY_PAGE_MESSAGES,
-					}),
-				firstCursor,
-			);
-			if (batch.stale) {
-				// P0-3: the anchor no longer exists upstream — stop paging
-				// instead of re-issuing the same cursor on every scroll.
-				store.markHistoryStale();
-				return;
-			}
-			if (batch.entries.length === 0) return;
-			store.prependEntries(batch.entries, batch.remaining, batch.nextBeforeId);
+		const loaded = await store.loadOlder(beforeId =>
+			rpc.request<HistoryPage>("session.history", { sessionId, beforeId, maxMessages: HISTORY_PAGE_MESSAGES }),
+		);
+		if (!loaded || activeHistoryStoreRef.current !== store) return;
+		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
-				requestAnimationFrame(() => {
-					if (anchor) anchorCtlRef.current?.restore(anchor);
-				});
+				if (anchor && activeHistoryStoreRef.current === store) anchorCtlRef.current?.restore(anchor);
 			});
-		} catch {
-			// daemon rejected (unknown session) — keep as-is
-		} finally {
-			loadOlderRef.current = false;
-			setLoadingOlder(false);
-		}
+		});
 	}, [rpc, store]);
 	// Stable identity for the Transcript observer (rebuilding the observer
 	// on every render would thrash the IntersectionObserver).
@@ -1772,155 +1756,11 @@ export function ChatView({
 	const selectedHit = findIndex >= 0 ? findHits[findIndex] : undefined;
 	useEffect(() => {
 		if (selectedHit) jumpToHit(selectedHit);
-	}, [selectedHit, jumpToHit]); // Full-history backfill for the overview surfaces (轮级地图 / 消息级画布 /
-	// 轨迹统计): the daemon tails only 200 entries and pages older chunks on
-	// scroll, so snap.entries covers just the loaded window — the turn map
-	// silently collapsed a 164-turn session to ~4 turns (verified live on
-	// 01a06854, 9988 entries). These surfaces visualize the WHOLE session, so
-	// on first open we loop session.history (cursor = oldest accumulated id,
-	// 1000/call, loopback) into a LOCAL array — deliberately NOT via
-	// store.prependEntries, which would disturb the transcript's render
-	// window and fold state. Jumps still work: requestJump pages the target
-	// region in through the normal transcript path.
-	const [fullEntries, setFullEntries] = useState<SessionEntry[] | null>(null);
-	const [fullLoading, setFullLoading] = useState(false);
-	/** 全量补全失败（RPC 拒绝 / 传输抖动 / stale 游标，P0-4）：不再永久
-	 *  闩锁——下次进入概览或点重试即可再来一次，且给可见降级提示。 */
-	const [fullError, setFullError] = useState(false);
-	const fullSessionKeyRef = useRef<string | null>(null);
-	const fullLoadingRef = useRef(false);
-	const fullTokenRef = useRef(0);
-	const ensureFullHistory = useCallback(async (): Promise<void> => {
-		if (!rpc || !store?.sessionId) return;
-		if (fullSessionKeyRef.current === store.sessionId) return;
-		if (fullLoadingRef.current) return;
-		const token = ++fullTokenRef.current;
-		fullLoadingRef.current = true;
-		fullSessionKeyRef.current = store.sessionId;
-		setFullLoading(true);
-		try {
-			// P0-4: the overview copy is CONTENT-STRIPPED at ingest
-			// (lightenOverviewEntry) — the overview surfaces only ever read
-			// display-level text (≤400 chars) and structural fields, so the
-			// second local array no longer retains full message bodies (long
-			// sessions used to hold hundreds of MB duplicated here). Truncation
-			// is display-identical: every consumer cap (80/120/220/160) is
-			// below the ingest cap.
-			let acc: SessionEntry[] = (snap?.entries ?? []).map(e => lightenOverviewEntry(e) as SessionEntry);
-			let beforeId: string | undefined = (snap?.entries ?? [])[0]?.id;
-			// P0-3: the daemon anchors at the LAST occurrence of a duplicated id
-			// and may answer with a page partially overlapping what we already
-			// hold — absorb only the rows we have never seen, so duplicate
-			// journal ids can never double entries in the map/trajectory.
-			const seen = new Set(acc.map(e => e.id));
-			// 60 × 1000 = 60k entries cap: far beyond any realistic session;
-			// beyond that the overview falls back to the loaded window.
-			for (let guard = 0; guard < 60; guard++) {
-				const res: HistoryPage = await rpc.request<HistoryPage>("session.history", {
-					sessionId: store.sessionId,
-					beforeId,
-					maxMessages: 1000,
-				});
-				if (token !== fullTokenRef.current) return;
-				if (res?.stale) {
-					// P0-3: never loop on a dead cursor — but surface it as a
-					// retryable failure (P0-4), not a silent partial view.
-					throw new Error("stale history cursor");
-				}
-				const fresh = (res?.entries ?? [])
-					.filter(e => !seen.has(e.id))
-					.map(e => lightenOverviewEntry(e) as SessionEntry);
-				if (fresh.length === 0) break; // zero-progress page — fail soft
-				for (const e of fresh) seen.add(e.id);
-				acc = [...fresh, ...acc];
-				// P0-3: the daemon's explicit anchor wins — on a fully-
-				// overlapped page it still moves the cursor, so the loop
-				// makes monotone progress instead of spinning in place.
-				const olderId: string | null = res.nextBeforeId ?? fresh[0]?.id ?? null;
-				if (olderId === null || olderId === beforeId) break;
-				beforeId = olderId;
-				if (!res.hasMore || res.remaining <= 0) break;
-			}
-			if (token === fullTokenRef.current) {
-				setFullEntries(acc);
-				setFullError(false);
-			}
-		} catch {
-			// daemon rejected / transport hiccup / stale cursor: reset the latch
-			// so the next overview entry or the retry button re-runs the
-			// backfill, and flag the visible degradation hint (P0-4 — the old
-			// code latched the session key before the loop, so any single
-			// failure permanently disabled the full view for that session).
-			if (token === fullTokenRef.current) {
-				setFullEntries(null);
-				setFullError(true);
-				fullSessionKeyRef.current = null;
-			}
-		} finally {
-			if (token === fullTokenRef.current) setFullLoading(false);
-			fullLoadingRef.current = false;
-		}
-	}, [rpc, store, snap?.entries]);
-	// Session switch: drop the previous session's full copy before the new
-	// overview can accidentally read stale turns.
-	useEffect(() => {
-		fullTokenRef.current++;
-		fullLoadingRef.current = false;
-		fullSessionKeyRef.current = null;
-		setFullEntries(null);
-		setFullLoading(false);
-		setFullError(false);
-	}, [store?.sessionId]);
-	// Canvas (turn/message map) entry: backfill full history in the
-	// background; the map renders the loaded window immediately and swaps to
-	// the full set when the loop lands.
-	useEffect(() => {
-		if (viewMode === "canvas") void ensureFullHistory();
-	}, [viewMode, ensureFullHistory]);
-	// Entries fed to the overview surfaces: the full copy when available,
-	// LIVE-MERGED with the tail window — not a frozen either/or. The old
-	// `fullEntries ?? snap.entries` froze the map at first-open: the full
-	// history grab could run mid-turn and permanently bake the optimistic
-	// echo ghost (`user:optimistic-*`) plus every later round into the map
-	// never appearing (verified live: map stuck at "1 轮" after a 3rd turn
-	// sent from inside the map view). Merge = full copy minus ghosts as the
-	// base, plus any tail rows the base has never seen (id-absent AND at/after
-	// the base's oldest timestamp). Identity: cached on (fullEntries, live id
-	// signature) so streaming frame replacement (new object, same id) does
-	// NOT rebuild the array every frame — buildTrajectoryTree is O(n) and the
-	// map would refit/recompute per frame otherwise.
-	const overviewMergeRef = useRef<{
-		full: SessionEntry[];
-		liveSig: string;
-		result: SessionEntry[];
-	} | null>(null);
-	const overviewEntries = useMemo(() => {
-		const live = (snap?.entries ?? []) as SessionEntry[];
-		if (!fullEntries) {
-			overviewMergeRef.current = null;
-			return live;
-		}
-		// P1-12: the id SET is a pure function of (structureRev, length) —
-		// every id-affecting mutation (push/prepend/optimistic echo) moves
-		// one of the two, while a content upsert moves neither. The old
-		// per-frame `live.map(e => e.id).join(" ")` allocated an O(n)
-		// signature string on EVERY streaming frame just to key this cache.
-		const liveSig = `${snap?.structureRev ?? 0}:${live.length}`;
-		const cache = overviewMergeRef.current;
-		if (cache && cache.full === fullEntries && cache.liveSig === liveSig) return cache.result;
-		const base = fullEntries.filter(e => typeof e.id !== "string" || !e.id.startsWith("user:optimistic-"));
-		const seen = new Set(base.map(e => e.id));
-		const cutoff = base[0]?.timestamp ?? "";
-		const extra = live.filter(
-			e =>
-				!seen.has(e.id) &&
-				(typeof e.id !== "string" || !e.id.startsWith("user:optimistic-")) &&
-				(cutoff === "" || e.timestamp >= cutoff),
-		);
-		const result = extra.length > 0 ? [...base, ...extra] : base;
-		overviewMergeRef.current = { full: fullEntries, liveSig, result };
-		return result;
-	}, [fullEntries, snap?.entries, snap?.structureRev]);
+	}, [selectedHit, jumpToHit]);
+	// Overview surfaces share the transcript's bounded history window. Older
+	// pages arrive only through store.loadOlder (explicit map/trajectory action
+	// or a targeted jump), so opening a long session never backfills everything.
+	const overviewEntries = (snap?.entries ?? []) as SessionEntry[];
 	// 激活路径过滤(概览面):回退/切分支后,时间线/统计只应呈现"当前这条分
 	// 支"的轮次——兄弟分支的轮属于树视图(地图/分支树保留全量淡显),不属于
 	// 会话在视内容。与 transcript 同一套 leaf-walk 契约;null = 拓扑不可信且
@@ -1953,7 +1793,7 @@ export function ChatView({
 			return;
 		}
 		let cancelled = false;
-		rpc.request<{ turns: TurnIndexItem[] }>("session.turns", { sessionId: store.sessionId })
+		rpc.request<{ turns: TurnIndexItem[] }>("session.turns", { sessionId: store.sessionId, limit: 200 })
 			.then(res => {
 				if (!cancelled) setDaemonTurns(Array.isArray(res?.turns) ? res.turns : null);
 			})
@@ -1969,9 +1809,11 @@ export function ChatView({
 	const loadedTurns = useMemo(() => buildTurnIndex(snap?.entries ?? []), [snap?.entries]);
 	const railTurns = useMemo(() => {
 		if (!daemonTurns) return loadedTurns;
-		const lastTs = daemonTurns.length > 0 ? daemonTurns[daemonTurns.length - 1].timestamp : null;
-		const extra = lastTs === null ? loadedTurns : loadedTurns.filter(t => t.timestamp > lastTs);
-		return extra.length > 0 ? [...daemonTurns, ...extra] : daemonTurns;
+		const byId = new Map(daemonTurns.map(turn => [turn.entryId, turn]));
+		for (const turn of loadedTurns) {
+			if (!byId.has(turn.entryId)) byId.set(turn.entryId, turn);
+		}
+		return [...byId.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 	}, [daemonTurns, loadedTurns]);
 	// 分支在视:导航条只标激活路径上的轮次(兄弟分支的轮属于树视图,不在
 	// 当前这条会话里)。仅在本地拓扑可信(walk complete)时过滤——那时整条
@@ -2368,6 +2210,7 @@ export function ChatView({
 	 * virtualized row and restyles all of them. See composer-inset-readers.
 	 */
 	useEffect(() => {
+		if (!showChat) return;
 		const body = chatBodyRef.current;
 		const wrap = composerWrapRef.current;
 		if (!body || !wrap || typeof ResizeObserver === "undefined") return;
@@ -2384,7 +2227,7 @@ export function ChatView({
 			forgetComposerSlot(body);
 			withdrawComposerInsets(body);
 		};
-	}, []);
+	}, [showChat]);
 
 	// The ask card floats ABOVE the composer (`bottom: calc(100% + 4px)` in
 	// gui-misc.css — the 4px gap is part of the clearance). Its box never
@@ -2699,7 +2542,11 @@ export function ChatView({
 											{viewMode === "canvas" ? (
 												<TurnMapCanvas
 													entries={overviewEntries}
-													loading={fullLoading && fullEntries === null}
+													loading={snap?.historyLoading === true && overviewEntries.length === 0}
+													hasMore={store?.hasMore ?? false}
+													loadingOlder={snap?.historyLoading === true}
+													historyBlocked={store?.historyBlocked ?? false}
+													onLoadOlder={onLoadOlderStable}
 													roundDurations={snap?.roundDurations}
 													leafId={effectiveLeaf}
 													activePathIds={trustedPathIds}
@@ -2749,6 +2596,7 @@ export function ChatView({
 																thinkingLevel={resolvedThinkingLevel ?? undefined}
 																host={host}
 																renderTranscriptNode={renderTranscriptNode}
+																onOpenCompaction={openCompaction}
 																/* Codex 编辑预览 parity: the lightbox edit button
 																 * opens the composer's sketch board with the image
 																 * as its base layer (event channel — the board
@@ -3145,11 +2993,13 @@ export function ChatView({
 										{/* Session-level failure dock: a round the runtime gave up on, or one
 										 *  that produced neither a reply nor an error. Docked above the composer
 										 *  rather than in the message flow, and cleared by the next send. */}
-										<SessionErrorDock
-											entries={visibleEntries}
-											working={snap?.working ?? false}
-											verifyTranscript={verifyTranscript}
-										/>
+										{!readOnly && (
+											<SessionErrorDock
+												entries={visibleEntries}
+												working={snap?.working ?? false}
+												verifyTranscript={verifyTranscript}
+											/>
+										)}
 										{snap?.approvals.map(a => (
 											<ApprovalCard
 												key={a.requestId}
@@ -3248,9 +3098,9 @@ export function ChatView({
 									agentHost={host}
 									extTabs={extTabs}
 									overviewEntries={overviewEntries}
-									overviewLoading={fullLoading && fullEntries === null}
-									overviewError={fullError}
-									onEnsureFullHistory={() => void ensureFullHistory()}
+									overviewLoading={snap?.historyLoading === true}
+									overviewError={store?.historyBlocked ?? false}
+									onLoadOlderHistory={onLoadOlderStable}
 									onJumpToEntry={entryId => requestJump({ entryId })}
 									leafId={effectiveLeaf}
 									activePathIds={trustedPathIds}

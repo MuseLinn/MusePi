@@ -1,5 +1,6 @@
 import {
 	bindTranslationNamespace,
+	fmtTokens,
 	getLocaleSnapshot,
 	registerExternalToolRenderers,
 	registerTranslationNamespace,
@@ -430,6 +431,16 @@ export interface SlotComponentProps {
 	slot?: string;
 	/** Extension path that contributed this component. */
 	extensionId?: string;
+	/** Current right-panel tab instance; present only for panel.tab.* mounts. */
+	panelTab?: {
+		id: string;
+		surface: string;
+		target: string | null;
+		label: string;
+		readOnly: boolean;
+	};
+	/** Shared token formatter so plugin readouts match the host transcript. */
+	formatTokens?: (value: number) => string;
 	/** Settings read/write proxy bound to this extension's keys
 	 *  (settings.get/settings.set RPC — the daemon gates writes on
 	 *  registerSetting keys). Keyed settings-item components receive it;
@@ -597,6 +608,11 @@ export function selectTranscriptNodeComponents(components: readonly SlotComponen
 		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
+/** Resolve one extension surface for the column being rendered. */
+export function selectPanelTabComponent(components: readonly SlotComponent[], view: string): SlotComponent | undefined {
+	return components.find(component => `ext:${component.slot}` === view);
+}
+
 /** Mount every extension-contributed component registered for a slot. */
 export function SlotComponentHost({
 	rpc,
@@ -634,6 +650,7 @@ export function SlotComponentMount({
 	sessionId,
 	cwd,
 	settingsScope,
+	panelTab,
 	node,
 	turn,
 	configForm,
@@ -644,6 +661,8 @@ export function SlotComponentMount({
 	cwd?: string;
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
 	settingsScope?: SlotComponentProps["settingsScope"];
+	/** Current right-panel tab instance (panel.tab.* only). */
+	panelTab?: SlotComponentProps["panelTab"];
 	/** transcript.node seat 节点上下文: 命中
 	 *  kind 的组件收到它,可用 node.children 增强或完全自绘。 */
 	node?: SlotComponentProps["node"];
@@ -778,6 +797,8 @@ export function SlotComponentMount({
 		extensionId: item.extensionId,
 		settingsScope,
 		configForm: resolvedConfigForm,
+		panelTab,
+		formatTokens: fmtTokens,
 		node,
 		turn,
 		// 扩展 RPC 桥(registerRpc):绑定当前

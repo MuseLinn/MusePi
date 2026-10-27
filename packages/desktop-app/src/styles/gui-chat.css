@@ -495,8 +495,7 @@
 	font-weight: 500;
 }
 
-/* Hover tooltip (openchamber Tooltip parity, hand-written — see
- * RailTooltip.tsx; the rail's fixed geometry needs no collision lib). */
+/* Rich rail tooltip; RailTooltip shares the global anchor/collision helper. */
 .gui-rail-tooltip {
 	position: fixed;
 	z-index: 70;
@@ -511,17 +510,22 @@
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: var(--glass-shadow);
-	animation: gui-browser-pop 130ms var(--spring-liquid);
-	pointer-events: none;
+	opacity: 0;
+	transition: opacity 120ms var(--spring-liquid);
+	pointer-events: auto;
+}
+
+.gui-rail-tooltip--show {
+	opacity: 1;
 }
 
 .gui-motion-off .gui-rail-tooltip {
-	animation: none;
+	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.gui-rail-tooltip {
-		animation: none;
+		transition: none;
 	}
 }
 .gui-rail-tooltip-label {

@@ -283,3 +283,10 @@ export function writeModelCache<TApi extends Api>(
 		// Cache writes are best-effort; failures should not break model resolution.
 	}
 }
+
+/** @internal Close the shared cache before removing an isolated agent directory — test-only. */
+export function resetModelCacheForTests(): void {
+	sharedDb?.close();
+	sharedDb = null;
+	sharedDbPath = null;
+}

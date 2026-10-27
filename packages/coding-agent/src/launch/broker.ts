@@ -800,17 +800,18 @@ class DaemonBroker {
 		const logPath = path.join(record.dir, LOG_FILE);
 		const output = await fs.open(logPath, "a", 0o600);
 		try {
-			const process = Bun.spawn([record.spec.application, ...record.spec.args], {
+			const child = Bun.spawn([record.spec.application, ...record.spec.args], {
 				cwd: record.spec.cwd,
 				env: workerEnvFromParent(record.spec.env),
 				stdio: ["ignore", output.fd, output.fd],
 				...DAEMON_SPAWN_OPTIONS,
+				...resolveDaemonSpawnOptions({ platform: process.platform, surviveParent: true }),
 			});
-			record.process = process;
-			record.snapshot.pid = process.pid;
+			record.process = child;
+			record.snapshot.pid = child.pid;
 			this.#persist(record);
-			process.unref();
-			void process.exited
+			child.unref();
+			void child.exited
 				.then(exitCode => this.#settle(record, generation, exitCode))
 				.catch(error =>
 					this.#settle(record, generation, undefined, error instanceof Error ? error.message : String(error)),

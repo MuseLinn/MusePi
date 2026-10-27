@@ -38,11 +38,29 @@ export function shouldRestartDaemon(
 // `browser.managedBridge` is what lets the agent's browser tool take over the
 // right-pane managed browser by default; a daemon without it keeps starting
 // an invisible headless Chromium with no visible cause.
-export const REQUIRED_DAEMON_METHODS: readonly string[] = ["skills.marketplace.query", "browser.managedBridge"];
+export const REQUIRED_DAEMON_METHODS: readonly string[] = [
+	"skills.marketplace.query",
+	"browser.managedBridge",
+	"session.compaction",
+];
 // NOTE: `marketplace.sources.*` (plugin-marketplace source management) was
 // implemented then rolled back — the plugin marketplace is deferred until
 // MusePi's plugin system settles (it may be reworked wholesale). If it
 // ships, re-add "marketplace.sources.list" here and the 4 daemon RPCs.
+
+/** Side-effect-free parameters for each capability probe. Validation errors
+ * still prove the method exists; only an unknown-method response proves absence. */
+export function daemonMethodProbeParams(method: string): Record<string, unknown> {
+	if (method === "skills.marketplace.query") return { sources: [] };
+	if (method === "session.compaction") return { entryId: "__capability_probe__" };
+	return {};
+}
+
+/** Whether an RPC failure explicitly reports an unregistered method. */
+export function isMissingDaemonMethodError(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : String(error);
+	return /Unknown method|Method not found/i.test(message);
+}
 
 /**
  * Given the set of methods the daemon actually answered, return the ones it

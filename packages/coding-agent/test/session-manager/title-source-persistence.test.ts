@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { HistoryStorage } from "@musepi/pi-coding-agent/session/history-storage";
 import {
 	CURRENT_SESSION_VERSION,
 	SESSION_TITLE_SLOT_BYTES,
@@ -12,6 +13,7 @@ import { loadEntriesFromFile } from "@musepi/pi-coding-agent/session/session-loa
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { FileSessionStorage, type WriteTextAtomicOptions } from "@musepi/pi-coding-agent/session/session-storage";
 import type { SessionTitleUpdate } from "@musepi/pi-coding-agent/session/session-title-slot";
+import { resetSessionTitleIndexForTests } from "@musepi/pi-coding-agent/session/title-index";
 import { getConfigRootDir, removeSyncWithRetries, setAgentDir } from "@musepi/pi-utils";
 
 import { makeAssistantMessage } from "./helpers";
@@ -78,6 +80,8 @@ describe("session title source persistence", () => {
 			setAgentDir(fallbackAgentDir);
 			delete process.env.PI_CODING_AGENT_DIR;
 		}
+		HistoryStorage.resetInstance();
+		resetSessionTitleIndexForTests();
 		removeSyncWithRetries(testAgentDir);
 	});
 
@@ -105,6 +109,7 @@ describe("session title source persistence", () => {
 		const reopened = await SessionManager.open(sessionFile!);
 		expect(reopened.getSessionName()).toBe("Auto title");
 		expect(reopened.titleSource).toBe("auto");
+		await Promise.all([session.close(), reopened.close()]);
 	});
 
 	it("persists user title source across reopen", async () => {
@@ -123,6 +128,7 @@ describe("session title source persistence", () => {
 		const reopened = await SessionManager.open(sessionFile!);
 		expect(reopened.getSessionName()).toBe("Manual title");
 		expect(reopened.titleSource).toBe("user");
+		await Promise.all([session.close(), reopened.close()]);
 	});
 
 	it("loads legacy slotless files with header titles", async () => {
@@ -147,6 +153,7 @@ describe("session title source persistence", () => {
 		const reopened = await SessionManager.open(file);
 		expect(reopened.getSessionName()).toBe("Legacy title");
 		expect(reopened.titleSource).toBe("user");
+		await reopened.close();
 	});
 
 	it("renames slotted sessions by updating the fixed title slot and appending an audit entry", async () => {
@@ -181,6 +188,7 @@ describe("session title source persistence", () => {
 		const titleChanges = entries.filter(entry => entry.type === TITLE_CHANGE_ENTRY_TYPE);
 		expect(titleChanges.map(entry => entry.title)).toEqual(["Auto title", "Manual title"]);
 		expect(titleChanges.map(entry => entry.trigger)).toEqual(["initial", "rename"]);
+		await session.close();
 	});
 
 	it("notifies name-change subscribers only after successful applied names", async () => {

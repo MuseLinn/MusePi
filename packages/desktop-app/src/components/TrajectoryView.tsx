@@ -15,7 +15,12 @@ import { FadeScroll } from "./FadeScroll";
 import { StateIcon } from "./StateIcon";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import { turnEndEventOf, turnUserEventOf } from "./TurnMapCanvas";
-import { isTrajectoryEventInRange, type RoundDurationMap, type TrajectoryEvent } from "./trajectory-data";
+import {
+	isTrajectoryEventInRange,
+	type RoundDurationMap,
+	type TrajectoryEvent,
+	trajectoryTurnKey,
+} from "./trajectory-data";
 import { createTrajectoryDeriveCache, deriveTrajectoryTree } from "./trajectory-derive";
 
 /** 令牌数紧凑化(1.2k / 45.6k / 1.8M)——与 transcript usage 行同语感。 */
@@ -49,7 +54,18 @@ function EventRow({
 	children?: ReactNode;
 }): ReactNode {
 	return (
-		<div className="traj-row" onClick={() => onSelect(selected ? null : ev.id)}>
+		<div
+			className="traj-row"
+			role="button"
+			tabIndex={0}
+			aria-pressed={selected}
+			onClick={() => onSelect(selected ? null : ev.id)}
+			onKeyDown={e => {
+				if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+				e.preventDefault();
+				onSelect(selected ? null : ev.id);
+			}}
+		>
 			<div
 				className={`traj-event traj-event--${ev.kind}${selected ? " traj-event--selected" : ""}${dimmed ? " traj-event--dim" : ""}`}
 			>
@@ -291,21 +307,20 @@ export function TreeNodeRow({
 				<span className="traj-trow-text">
 					{treeTextOf(node.entry) || (kind === "toolResult" ? (treeToolNameOf(node.entry) ?? "") : "")}
 				</span>
-				{childCount > 1 && (
-					<span
-						className={`traj-trow-badge${isCollapsed ? " traj-trow-badge--closed" : ""}`}
-						title={
-							isCollapsed ? t("transcript.trajectoryExpandBranch") : t("transcript.trajectoryCollapseBranch")
-						}
-						onClick={e => {
-							e.stopPropagation();
-							onToggleCollapse(node.id);
-						}}
-					>
-						{childCount}
-					</span>
-				)}
 			</button>
+			{childCount > 1 && (
+				<button
+					type="button"
+					className={`traj-trow-badge${isCollapsed ? " traj-trow-badge--closed" : ""}`}
+					title={isCollapsed ? t("transcript.trajectoryExpandBranch") : t("transcript.trajectoryCollapseBranch")}
+					aria-label={
+						isCollapsed ? t("transcript.trajectoryExpandBranch") : t("transcript.trajectoryCollapseBranch")
+					}
+					onClick={() => onToggleCollapse(node.id)}
+				>
+					{childCount}
+				</button>
+			)}
 			{(onBranchTo || onSwitchTo || onForkAt) && (
 				<span className="traj-trow-actions">
 					{/* branchAt 按 kind 分派:user 锚 = 重答(父级 + 草稿);
@@ -361,7 +376,7 @@ export function TrajectoryView({
 	pathEntries,
 	fullLoading,
 	fullError,
-	onEnsureFullHistory,
+	onLoadOlderHistory,
 	modelId,
 	roundDurations,
 	onJumpToEntry,
@@ -372,18 +387,16 @@ export function TrajectoryView({
 	onForkAt,
 }: {
 	entries: readonly unknown[];
-	/** 全量历史(ChatView ensureFullHistory 补全):提供时覆盖 entries —
-	 *  统计/时间线/分支树面向整个会话,而不是守护进程尾窗的 200 条。 */
+	/** 当前已累积的历史窗口；提供时覆盖 entries，并按需向前增长。 */
 	fullEntries?: readonly unknown[] | null;
 	/** 激活路径过滤集(见上方解构注释);null = 不过滤。 */
 	pathEntries?: readonly unknown[] | null;
-	/** 全量历史补全中。 */
+	/** 下一页历史正在加载。 */
 	fullLoading?: boolean;
-	/** 全量历史补全失败(P0-4,可重试)——显示降级提示 + 重试入口,不再
-	 *  静默只覆盖加载窗。 */
+	/** 更早历史不可达或加载失败——显示降级提示与重试入口。 */
 	fullError?: boolean;
-	/** 挂载即请求补全全量历史(ChatView wiring)。 */
-	onEnsureFullHistory?: () => void;
+	/** 挂载或重试时只请求下一页，不做全量补全。 */
+	onLoadOlderHistory?: () => void;
 	modelId?: string;
 	/** daemon agent_end 冻结的整轮用时(Map 或持久化 [ms,ms][] 形态)。 */
 	roundDurations?: RoundDurationMap;
@@ -405,10 +418,10 @@ export function TrajectoryView({
 	onForkAt?(id: string): void;
 }): ReactNode {
 	const [mode, setModeState] = useState<"timeline" | "tree">("timeline");
-	// 挂载即补全全量历史(轨迹统计只覆盖加载窗是用户报过的"轮次数不对")。
+	// 挂载时先推进一页；store 在无更早历史或请求在途时直接返回。
 	useEffect(() => {
-		onEnsureFullHistory?.();
-	}, [onEnsureFullHistory]);
+		onLoadOlderHistory?.();
+	}, [onLoadOlderHistory]);
 	// startTransition:时间线↔分支树互切是整列表 mount(超长会话上万行),
 	// 可中断渲染让切换即时响应,配合行级 content-visibility 跳过屏外布局。
 	// isPending 驱动顶部细进度条——切换立即有"正在响应"的反馈,不再像卡死。
@@ -435,13 +448,13 @@ export function TrajectoryView({
 	// 只挂轮头(164 个)而不是上万事件行,切进轨迹视图不再卡一整帧。
 	// 派生默认值用 render 期调整(React 官方 derived-state 模式):数据
 	// 身份变化(尾窗→全量)时重算一次;用户手动的展开/折叠不因此重置。
-	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
+	const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 	const collapseKeyRef = useRef<unknown>(null);
 	const collapseEntries = timelineInput;
 	if (collapseKeyRef.current !== collapseEntries) {
 		collapseKeyRef.current = collapseEntries;
 		const eventCount = turns.reduce((n, g) => n + g.events.length, 0);
-		if (eventCount > 400) setCollapsed(new Set(turns.map(g => g.turn)));
+		if (eventCount > 400) setCollapsed(new Set(turns.map(trajectoryTurnKey)));
 	}
 	// 检视器选中记录(id;null = 未选中)。close 走 inspectorClosing 播退场,
 	// selectedId 只在动画结束(unmount 前的 finishClose)才清空——弹窗保持
@@ -451,7 +464,7 @@ export function TrajectoryView({
 	// Overview 时间轴拖拽区间(聚焦模式;null = 全量)。
 	const [range, setRange] = useState<TimelineRange | null>(null);
 	// 区间跳转落点 turn(一次性脉冲高亮)。
-	const [flashTurn, setFlashTurn] = useState<number | null>(null);
+	const [flashTurn, setFlashTurn] = useState<string | null>(null);
 	// 事件列表滚动容器(区间→列表自动定位跳转)。
 	const listRef = useRef<HTMLDivElement | null>(null);
 	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
@@ -632,10 +645,10 @@ export function TrajectoryView({
 	};
 	useEffect(() => {
 		if (!range) return;
-		let firstTurn: number | null = null;
+		let firstTurn: string | null = null;
 		for (const group of turns) {
 			if (group.events.some(ev => isTrajectoryEventInRange(ev, range.startMs, range.endMs))) {
-				firstTurn = group.turn;
+				firstTurn = trajectoryTurnKey(group);
 				break;
 			}
 		}
@@ -693,17 +706,17 @@ export function TrajectoryView({
 				}
 				return;
 			}
-			const row = scroller.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
+			const row = scroller.querySelector<HTMLElement>(`[data-trajectory-turn="${CSS.escape(target)}"]`);
 			if (row) scrollToRow(row);
 		};
 		afterPaint(() => scrollToTarget());
 	}, [range, turns, mode]);
 
-	const toggleTurn = (turn: number): void => {
+	const toggleTurn = (turnKey: string): void => {
 		setCollapsed(prev => {
 			const next = new Set(prev);
-			if (next.has(turn)) next.delete(turn);
-			else next.add(turn);
+			if (next.has(turnKey)) next.delete(turnKey);
+			else next.add(turnKey);
 			return next;
 		});
 	};
@@ -739,7 +752,7 @@ export function TrajectoryView({
 					<button
 						type="button"
 						className="traj-fold-all"
-						onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(turns.map(g => g.turn)))}
+						onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(turns.map(trajectoryTurnKey)))}
 					>
 						<Icon name={collapsed.size > 0 ? "arrow-down-s" : "arrow-up-double"} className="h-3 w-3" />
 						{collapsed.size > 0 ? t("transcript.trajectoryExpandAll") : t("transcript.trajectoryCollapseAll")}
@@ -767,16 +780,11 @@ export function TrajectoryView({
 					<div className="gui-ctx-stat-l">{t("settings.trajectoryModel")}</div>
 				</div>
 			</div>
-			{/* 全量历史补全中:统计当前只覆盖加载窗,补全后自动刷新。 */}
-			{fullLoading === true && !fullEntries && (
-				<div className="traj-loading-note">{t("transcript.turnMapLoadingHistory")}</div>
-			)}
-			{/* P0-4 补全失败的显式降级:不再静默只覆盖加载窗——点按重试
-			    (ensureFullHistory 的闩锁已在失败时复位)。 */}
-			{fullError === true && !fullEntries && fullLoading !== true && (
-				<button type="button" className="traj-loading-note traj-error-note" onClick={onEnsureFullHistory}>
-					{t("transcript.trajectoryHistoryPartialRetry")}
-				</button>
+			{/* 下一页加载中：当前窗口保持可读，新条目到位后增量合并。 */}
+			{fullLoading === true && <div className="traj-loading-note">{t("transcript.turnMapLoadingHistory")}</div>}
+			{/* 历史不可达或加载失败时保留当前窗口，并停止自动分页。 */}
+			{fullError === true && fullLoading !== true && (
+				<div className="traj-loading-note traj-error-note">{t("settings.olderHistoryUnavailable")}</div>
 			)}
 			{/* Overview 时间轴:拖拽区间聚焦 / 悬停时刻提示 / 单击整轮。 */}
 			{turns.length > 0 && (
@@ -874,7 +882,8 @@ export function TrajectoryView({
 				) : (
 					<div className="flex flex-col">
 						{turns.map(group => {
-							const isCollapsed = collapsed.has(group.turn);
+							const turnKey = trajectoryTurnKey(group);
+							const isCollapsed = collapsed.has(turnKey);
 							const assistant = group.events.find(ev => ev.kind === "assistant");
 							const toolCount = group.events.filter(ev => ev.kind === "tool").length;
 							const firstTs = group.firstTs
@@ -896,16 +905,16 @@ export function TrajectoryView({
 							const switchAnchor = onSwitchTo ? turnEndEventOf(group) : undefined;
 							return (
 								<div
-									key={group.turn}
-									data-trajectory-turn={group.turn}
-									className={`traj-turn-group${inRange ? "" : " traj-turn-group--dim"}${flashTurn === group.turn ? " traj-turn-group--flash" : ""}`}
+									key={turnKey}
+									data-trajectory-turn={turnKey}
+									className={`traj-turn-group${inRange ? "" : " traj-turn-group--dim"}${flashTurn === turnKey ? " traj-turn-group--flash" : ""}`}
 								>
 									<div className="traj-turn-headrow">
 										<button
 											type="button"
 											className="traj-turn-head"
 											aria-expanded={!isCollapsed}
-											onClick={() => toggleTurn(group.turn)}
+											onClick={() => toggleTurn(turnKey)}
 										>
 											<StateIcon
 												on={isCollapsed}
@@ -915,7 +924,9 @@ export function TrajectoryView({
 											<span className="traj-turn-tag">
 												{group.turn === 0
 													? t("settings.trajectorySystemEvents")
-													: `Turn ${group.displayTurnLabel ?? group.displayTurn ?? group.turn}`}
+													: t("transcript.turnMapTurnLabel", {
+															turn: group.displayTurnLabel ?? group.displayTurn ?? group.turn,
+														})}
 											</span>
 											<span className="traj-turn-summary">
 												{assistant ? assistant.title : `${group.events.length} events`}

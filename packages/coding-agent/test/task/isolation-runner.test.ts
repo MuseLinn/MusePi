@@ -49,6 +49,7 @@ async function seedFooRepo(finalContent: string): Promise<{ repoRoot: string; pa
 	tempRoots.push(repoRoot);
 
 	await git(repoRoot, "init");
+	await git(repoRoot, "config", "core.autocrlf", "false");
 	await git(repoRoot, "config", "user.email", "repro@example.com");
 	await git(repoRoot, "config", "user.name", "Repro");
 	await Bun.write(path.join(repoRoot, "foo.txt"), "old\n");

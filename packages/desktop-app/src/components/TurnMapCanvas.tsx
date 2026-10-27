@@ -6,7 +6,7 @@ import { timeFormatOptions } from "../lib/appearance";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
-import type { RoundDurationMap, TrajectoryEvent } from "./trajectory-data";
+import { type RoundDurationMap, type TrajectoryEvent, trajectoryTurnKey } from "./trajectory-data";
 import { createTrajectoryDeriveCache, deriveTrajectoryTree } from "./trajectory-derive";
 import {
 	layoutTurnMap,
@@ -159,7 +159,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 	isExpanded: boolean;
 	searchDim: boolean;
 	searchHit: boolean;
-	onToggle(turn: number): void;
+	onToggle(turnKey: string): void;
 	onJump(node: TurnMapNode): void;
 	/** 事件卡单击/双击:跳到对话视图该 entry(entry 级,同 onJumpToEntry 通道)。 */
 	onJumpEvent(ev: TrajectoryEvent): void;
@@ -185,7 +185,15 @@ export const TmNodeCard = memo(function TmNodeCard({
 		<div
 			className={`tm-node${isExpanded ? "" : " tm-node--compact"}${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
 			style={{ left: n.x, top: n.y, width: TURN_NODE_W, height: n.h }}
-			onClick={() => onToggle(n.group.turn)}
+			role="button"
+			tabIndex={0}
+			aria-expanded={isExpanded}
+			onClick={() => onToggle(trajectoryTurnKey(n.group))}
+			onKeyDown={e => {
+				if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+				e.preventDefault();
+				onToggle(trajectoryTurnKey(n.group));
+			}}
 			onDoubleClick={() => onJump(n)}
 			onContextMenu={e => {
 				e.preventDefault();
@@ -199,7 +207,9 @@ export const TmNodeCard = memo(function TmNodeCard({
 				<>
 					<div className="tm-node-head">
 						<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-							{n.group.turn === 0 ? t("settings.trajectorySystemEvents") : `Turn ${shownTurn}`}
+							{n.group.turn === 0
+								? t("settings.trajectorySystemEvents")
+								: t("transcript.turnMapTurnLabel", { turn: shownTurn })}
 							{n.advisor && (
 								<em className="tm-turn-advisor">
 									<Icon name="sparkling" className="h-2.5 w-2.5" />
@@ -244,6 +254,16 @@ export const TmNodeCard = memo(function TmNodeCard({
 								<div
 									key={ev.id}
 									className={`tm-lane-row tm-lane-row--${ev.kind}${canJump ? " tm-lane-row--link" : ""}`}
+									role={canJump ? "button" : undefined}
+									tabIndex={canJump ? 0 : undefined}
+									aria-label={canJump ? t("settings.trajectoryJump") : undefined}
+									onKeyDown={e => {
+										if (!canJump || e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " "))
+											return;
+										e.preventDefault();
+										e.stopPropagation();
+										onJumpEvent(ev);
+									}}
 									onClick={e => {
 										e.stopPropagation();
 										// 单击 = 跳到对话视图该事件(纯导航);无 entryId 纯展示。
@@ -332,7 +352,9 @@ export const TmNodeCard = memo(function TmNodeCard({
 			) : (
 				<div className="tm-compact">
 					<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-						{n.group.turn === 0 ? t("settings.trajectorySystemEvents") : `Turn ${shownTurn}`}
+						{n.group.turn === 0
+							? t("settings.trajectorySystemEvents")
+							: t("transcript.turnMapTurnLabel", { turn: shownTurn })}
 					</span>
 					<span className="tm-compact-summary" title={summary}>
 						{summary || `${n.group.events.length} events`}
@@ -355,6 +377,10 @@ export function TurnMapCanvas({
 	leafId,
 	activePathIds,
 	loading,
+	hasMore,
+	loadingOlder,
+	historyBlocked,
+	onLoadOlder,
 	onJumpToEntry,
 	onSwitchToBranch,
 	onBranchTo,
@@ -367,8 +393,16 @@ export function TurnMapCanvas({
 	leafId?: string | null;
 	/** 活动路径 id 集;用于当前轮高亮。 */
 	activePathIds?: ReadonlySet<string>;
-	/** 全量历史补全中(尾窗数据先渲染,补全后整体替换)。 */
+	/** 初始窗口加载中。 */
 	loading?: boolean;
+	/** 当前窗口之前还有可请求的历史页。 */
+	hasMore?: boolean;
+	/** 按需历史页正在加载。 */
+	loadingOlder?: boolean;
+	/** 更早历史已不可达，给用户可见的终止状态。 */
+	historyBlocked?: boolean;
+	/** 显式请求下一页更早历史，不在打开地图时自动拉全量。 */
+	onLoadOlder?: () => void;
 	/** 双击/右键跳转:跳回对话并定位该轮(父层切回 chat + requestJump)。 */
 	onJumpToEntry?: (entryId: string) => void;
 	/** 切换到此分支:移动会话叶子到该分支末尾(session.branchAt,显式
@@ -385,8 +419,8 @@ export function TurnMapCanvas({
 	const [dragging, setDragging] = useState(false);
 	// 单击/双击消歧(单击 = 切换折叠,双击 = 跳对话)。
 	const singleClickTimer = useRef<number | undefined>(undefined);
-	// 折叠/展开状态机(会话内内存态,不进 URL/持久化):集合内 = 展开泳道。
-	const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+	// 展开状态跟随轮起始 entry id,历史前插改变 journal turn 时不会换卡。
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 	// 右键菜单(node = 轮卡;event = 事件卡——事件级右键以该事件为锚)。
 	const [ctxMenu, setCtxMenu] = useState<{
 		x: number;
@@ -413,7 +447,15 @@ export function TurnMapCanvas({
 	const layout = useMemo(() => layoutTurnMap(turns, expanded, direction), [turns, expanded, direction]);
 	const { nodes, edges, main, width, height } = layout;
 
-	// 当前轮:活动路径上最靠后的主线轮(无路径信息 = 主线尾轮)。
+	// 叶子优先服从会话 leafId;缺少路径信息时不能拿 journal 尾轮代替活跃叶。
+	const leafTurn = useMemo(() => {
+		if (leafId != null) {
+			const leaf = nodes.find(n => n.group.events.some(e => e.entryId === leafId));
+			if (leaf) return leaf.group.turn;
+		}
+		return main[main.length - 1]?.group.turn ?? null;
+	}, [leafId, nodes, main]);
+	// 当前轮:活动路径上最靠后的主线轮;无路径信息时跟随真实叶子。
 	const currentTurn = useMemo(() => {
 		if (activePathIds) {
 			for (let i = main.length - 1; i >= 0; i--) {
@@ -422,10 +464,8 @@ export function TurnMapCanvas({
 				}
 			}
 		}
-		return main[main.length - 1]?.group.turn ?? null;
-	}, [main, activePathIds]);
-	// 叶子轮(会话尾)= 主线最后一轮:金色发光描边。
-	const leafTurn = main[main.length - 1]?.group.turn ?? null;
+		return leafTurn;
+	}, [main, activePathIds, leafTurn]);
 
 	// 搜索:命中轮摘要高亮、其余淡显。
 	const searchMatchTurns = useMemo(() => {
@@ -498,20 +538,11 @@ export function TurnMapCanvas({
 		return visibleTurnMapNodes(nodes, vp);
 	}, [nodes, view, wrapSize]);
 	const visibleTurns = useMemo(() => new Set(visibleNodes.map(n => n.group.turn)), [visibleNodes]);
-	// 全量历史补全落地 / 新轮出现:重新适配。以 turns.length 为信号而不是
-	// entries 身份——ChatView 的 overviewEntries 现在是活合并,流式期间每帧
-	// 替换条目对象,身份每帧都变;按身份 refit 会让地图在流式期间每帧重新
-	// 适配(抖动)。轮数变化(尾窗→全量、新分支长出新一轮)才是真正需要
-	// 重新适配的时刻;撤回/切分支只改路径不改轮数,视野保持不动。
-	const turnCountRef = useRef(turns.length);
+	// 历史补全和流式新轮保留用户视口;只有显式重置或方向切换才重新 fit。
+	const fittedDirectionRef = useRef(direction);
 	useEffect(() => {
-		if (turnCountRef.current === turns.length) return;
-		turnCountRef.current = turns.length;
-		needsFitRef.current = true;
-		fitView();
-	}, [turns.length, fitView]);
-	// 方向切换:几何转置,旧视野不成立——重新适配。
-	useEffect(() => {
+		if (fittedDirectionRef.current === direction) return;
+		fittedDirectionRef.current = direction;
 		needsFitRef.current = true;
 		fitView();
 	}, [direction, fitView]);
@@ -592,7 +623,7 @@ export function TurnMapCanvas({
 	}, []);
 
 	// 单击 = 切换折叠/展开;双击 = 跳对话。
-	const handleClick = useCallback((turn: number) => {
+	const handleClick = useCallback((turnKey: string) => {
 		const suppressed = suppressClick.current;
 		suppressClick.current = false;
 		if (suppressed) return;
@@ -601,8 +632,8 @@ export function TurnMapCanvas({
 			singleClickTimer.current = undefined;
 			setExpanded(prev => {
 				const next = new Set(prev);
-				if (next.has(turn)) next.delete(turn);
-				else next.add(turn);
+				if (next.has(turnKey)) next.delete(turnKey);
+				else next.add(turnKey);
 				return next;
 			});
 		}, 220);
@@ -652,7 +683,7 @@ export function TurnMapCanvas({
 	}, []);
 
 	// 顶栏批量折叠/展开 + 方向切换。
-	const allTurns = useMemo(() => new Set(nodes.map(n => n.group.turn)), [nodes]);
+	const allTurns = useMemo(() => new Set(nodes.map(n => trajectoryTurnKey(n.group))), [nodes]);
 	const anyExpanded = expanded.size > 0;
 	const toggleAll = useCallback(() => {
 		setExpanded(anyExpanded ? new Set() : allTurns);
@@ -822,6 +853,19 @@ export function TurnMapCanvas({
 					<em className="tm-title-count">{tLoose("transcript.turnMapTurnsCount", { count: stats.turns })}</em>
 					{loading === true && <em className="tm-title-loading">{t("transcript.turnMapLoadingHistory")}</em>}
 				</span>
+				{hasMore && (
+					<button
+						type="button"
+						className="tm-topbar-btn tm-load-older"
+						title={loadingOlder ? t("transcript.turnMapLoadingHistory") : t("settings.loadMore")}
+						aria-label={loadingOlder ? t("transcript.turnMapLoadingHistory") : t("settings.loadMore")}
+						disabled={loadingOlder}
+						onClick={() => onLoadOlder?.()}
+					>
+						<Icon name="arrow-up" className="h-3 w-3" />
+					</button>
+				)}
+				{historyBlocked && <span className="tm-history-blocked">{t("settings.olderHistoryUnavailable")}</span>}
 				{turns.length > 0 && <TimelineOverview turns={turns} selection={range} onSelectionChange={setRange} />}
 				<div className="tm-search" role="search">
 					<Icon name="search" className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
@@ -984,19 +1028,19 @@ export function TurnMapCanvas({
 								>
 									{tLoose("transcript.turnMapBranch", {
 										turn:
-											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurnLabel ??
-											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ??
+											nodes.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurnLabel ??
+											nodes.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ??
 											lane.sourceTurn,
 									})}
 								</div>
 							))}
 						{visibleNodes.map(n => (
 							<TmNodeCard
-								key={n.group.turn}
+								key={trajectoryTurnKey(n.group)}
 								n={n}
 								isLeaf={leafTurn === n.group.turn}
 								isCurrent={currentTurn === n.group.turn}
-								isExpanded={expanded.has(n.group.turn)}
+								isExpanded={expanded.has(trajectoryTurnKey(n.group))}
 								searchDim={hasSearch && searchMatchTurns !== null && !searchMatchTurns.has(n.group.turn)}
 								searchHit={hasSearch && (searchMatchTurns?.has(n.group.turn) ?? false)}
 								onToggle={handleClick}

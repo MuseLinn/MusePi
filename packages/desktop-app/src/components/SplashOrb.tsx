@@ -1,19 +1,6 @@
-/** Launch-splash orb mascot — a posed still of the desktop pet (PetSprite):
- * gold sphere + white over-ear wearables. NO orbit ring: the real pet draws
- * its ring (rx 104) fully behind the opaque shell (r 114.27), so a still
- * shows no ring — 2026-09-28 user flagged the earlier ringed stills as
- * "和实际有差异". Geometry is copied verbatim from the landing page's .mp-orb
- * so the brand mark renders identically everywhere. Pure SVG + CSS animation
- * hooks (gui-splash-orb-*), no mascot engine: the splash is a still, not a
- * pet.
- *
- * 2026-10-03 — the face was hand-drawn here (two bare ovals + a thin arc) and
- * matched NONE of the pet's 12 eye shapes, which is why the splash read as
- * "特别呆" next to a living pet. It now uses the pet's own `happy` rings,
- * verbatim from `lib/pet-face.ts` ENCODED_EYES.happy, in the pet's own
- * placement (no shift — this is a still OF the pet). The specular highlight
- * ellipses are gone: on a static mark they read as a 3D render, not a mark.
- * Regenerate both from .workbuddy/brand-qa/icon-v3/gen.py. */
+/** Static launch form of the desktop pet. Shell and accessory paints follow
+ * the live `gui-pet-*` palette; the face stays white. Geometry and happy-eye
+ * rings match `PetSprite`, without mounting the interactive mascot engine. */
 import type React from "react";
 
 /** `happy` eye rings from lib/pet-face.ts, 48 measured points each. */
@@ -33,18 +20,18 @@ export function SplashOrb(): React.JSX.Element {
 		>
 			<defs>
 				<radialGradient id="gui-splash-orb-shell" cx="0.34" cy="0.26" r="0.92">
-					<stop offset="0" stopColor="oklch(89.07% 0.0798 79.84)" />
-					<stop offset="0.5" stopColor="oklch(65% 0.105 79.84)" />
-					<stop offset="1" stopColor="oklch(33% 0.08 79.84)" />
+					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(89.07% 0.0798 79.84))" />
+					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(65% 0.105 79.84))" />
+					<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(33% 0.08 79.84))" />
 				</radialGradient>
 				<linearGradient id="gui-splash-orb-wear" x1="0" y1="0" x2="0" y2="1">
 					<stop offset="0" stopColor="oklch(97% 0.004 95)" />
 					<stop offset="1" stopColor="oklch(90% 0.006 95)" />
 				</linearGradient>
 				<linearGradient id="gui-splash-orb-rose" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0" stopColor="oklch(83% 0.05 40)" />
-					<stop offset="0.55" stopColor="oklch(72% 0.075 35)" />
-					<stop offset="1" stopColor="oklch(58% 0.07 32)" />
+					<stop offset="0" stopColor="var(--gui-pet-gold-a, oklch(83% 0.05 40))" />
+					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, oklch(72% 0.075 35))" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-c, oklch(58% 0.07 32))" />
 				</linearGradient>
 				<radialGradient id="gui-splash-orb-eye" cx="0.5" cy="0.3" r="0.78">
 					<stop offset="0" stopColor="#ffffff" />
@@ -93,7 +80,7 @@ export function SplashOrb(): React.JSX.Element {
 					height="30"
 					rx="4.5"
 					fill="url(#gui-splash-orb-rose)"
-					stroke="oklch(58% 0.07 32)"
+					stroke="var(--gui-pet-gold-c, oklch(58% 0.07 32))"
 					strokeWidth="1.2"
 				/>
 				<rect
@@ -103,7 +90,7 @@ export function SplashOrb(): React.JSX.Element {
 					height="30"
 					rx="4.5"
 					fill="url(#gui-splash-orb-rose)"
-					stroke="oklch(58% 0.07 32)"
+					stroke="var(--gui-pet-gold-c, oklch(58% 0.07 32))"
 					strokeWidth="1.2"
 				/>
 				<g transform="translate(-2 104.27) rotate(-14)">
@@ -150,7 +137,7 @@ export function SplashOrb(): React.JSX.Element {
 						height="10"
 						rx="2.4"
 						fill="url(#gui-splash-orb-rose)"
-						stroke="oklch(58% 0.07 32)"
+						stroke="var(--gui-pet-gold-c, oklch(58% 0.07 32))"
 						strokeWidth="1.2"
 					/>
 				</g>

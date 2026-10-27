@@ -37,7 +37,8 @@ function placeholders(count: number): string {
 }
 
 function hasTable(db: Database, name: string): boolean {
-	return db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== null;
+	using statement = db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+	return statement.get(name) !== null;
 }
 
 function copyDatabase(source: DatabasePath, destination: string): void {
@@ -71,44 +72,39 @@ export function hasPendingMigration(db: Database): boolean {
 	if (!hasTable(db, "triples")) return false;
 	const marks = placeholders(ANNOTATION_KINDS.length);
 	if (!hasTable(db, "annotations")) {
-		return db.query(`SELECT 1 FROM triples WHERE predicate IN (${marks}) LIMIT 1`).get(...ANNOTATION_KINDS) !== null;
+		using statement = db.query(`SELECT 1 FROM triples WHERE predicate IN (${marks}) LIMIT 1`);
+		return statement.get(...ANNOTATION_KINDS) !== null;
 	}
-	return (
-		db
-			.query(`
-				SELECT 1
-				FROM triples t
-				WHERE t.predicate IN (${marks})
-				  AND NOT EXISTS (
-					  SELECT 1 FROM annotations a
-					  WHERE a.memory_id = t.subject
-						AND a.kind = t.predicate
-						AND a.value = t.object
-				  )
-				LIMIT 1
-			`)
-			.get(...ANNOTATION_KINDS) !== null
-	);
+	using statement = db.query(`
+		SELECT 1
+		FROM triples t
+		WHERE t.predicate IN (${marks})
+		  AND NOT EXISTS (
+			  SELECT 1 FROM annotations a
+			  WHERE a.memory_id = t.subject
+				AND a.kind = t.predicate
+				AND a.value = t.object
+		  )
+		LIMIT 1
+	`);
+	return statement.get(...ANNOTATION_KINDS) !== null;
 }
 function classifyRows(db: Database): Classification {
 	if (!hasTable(db, "triples")) return { rows: [], total: 0 };
-	const totalRow = db.query("SELECT COUNT(*) AS count FROM triples").get() as { count: number };
+	using countStatement = db.query("SELECT COUNT(*) AS count FROM triples");
+	const totalRow = countStatement.get() as { count: number };
 	const marks = placeholders(ANNOTATION_KINDS.length);
-	const candidates = db
-		.query(`
-			SELECT id, subject, predicate, object, source, confidence, created_at
-			FROM triples
-			WHERE predicate IN (${marks})
-			ORDER BY id ASC
-		`)
-		.all(...ANNOTATION_KINDS) as TripleCandidateRow[];
+	using candidateStatement = db.query(`
+		SELECT id, subject, predicate, object, source, confidence, created_at
+		FROM triples
+		WHERE predicate IN (${marks})
+		ORDER BY id ASC
+	`);
+	const candidates = candidateStatement.all(...ANNOTATION_KINDS) as TripleCandidateRow[];
 	if (!hasTable(db, "annotations")) return { rows: candidates, total: totalRow.count };
 	const rows = candidates.filter(row => {
-		return (
-			db
-				.query("SELECT 1 FROM annotations WHERE memory_id = ? AND kind = ? AND value = ? LIMIT 1")
-				.get(row.subject, row.predicate, row.object) === null
-		);
+		using statement = db.query("SELECT 1 FROM annotations WHERE memory_id = ? AND kind = ? AND value = ? LIMIT 1");
+		return statement.get(row.subject, row.predicate, row.object) === null;
 	});
 	return { rows, total: totalRow.count };
 }

@@ -10,9 +10,13 @@ export TMPDIR="$TMP_WORK_DIR"
 
 NATIVES_PACKAGE="$ROOT_DIR/packages/natives/package.json"
 NATIVES_PACKAGE_INITIAL="$WORK_DIR/natives-package.initial.json"
+TOOL_VIEWS_GENERATED="$ROOT_DIR/packages/coding-agent/src/export/html/tool-views.generated.js"
+TOOL_VIEWS_INITIAL="$WORK_DIR/tool-views.generated.initial.js"
 cp "$NATIVES_PACKAGE" "$NATIVES_PACKAGE_INITIAL"
+cp "$TOOL_VIEWS_GENERATED" "$TOOL_VIEWS_INITIAL"
 restore_workspace() {
    cp "$NATIVES_PACKAGE_INITIAL" "$NATIVES_PACKAGE"
+   cp "$TOOL_VIEWS_INITIAL" "$TOOL_VIEWS_GENERATED"
    rm -rf "$WORK_DIR"
 }
 trap restore_workspace EXIT
@@ -47,7 +51,7 @@ find_tarball() {
       exit 1
    fi
 
-   echo "${matches[0]}"
+   echo "file:../tarballs/$(basename "${matches[0]}")"
 }
 
 align_native_manifest() {
@@ -55,9 +59,8 @@ align_native_manifest() {
    local addon
    local candidate_version
    local candidates=()
-   shopt -s nullglob
-   candidates=("$ROOT_DIR"/packages/natives/native/pi_natives.*.node)
-   shopt -u nullglob
+   HOST_ADDON_FILENAME="$(bun -e 'import { detectHostAvx2Support, resolveLocalHostAddon } from "./scripts/host-detect.ts"; process.stdout.write(resolveLocalHostAddon({ platform: process.platform, arch: process.arch, avx2: detectHostAvx2Support() }).filename);')"
+   candidates=("$ROOT_DIR/packages/natives/native/$HOST_ADDON_FILENAME")
 
    if [ "${#candidates[@]}" -eq 0 ]; then
       echo "No native addon found for install smoke" >&2
@@ -112,10 +115,15 @@ host_tag="$(bun -e "process.stdout.write(\`\${process.platform}-\${process.arch}
 # dependency. Reproduce that exact published topology so this smoke proves the
 # installed core resolves its addon through the leaf, not a bundled binary.
 
-# 1. Generate + pack the host-platform leaf (carries the built `.node`).
-bun --cwd=packages/natives run gen:npm --tag "$host_tag" >/dev/null
+# 1. Generate + pack the host-platform leaf (carries only the freshly built
+#    host addon, not stale ISA siblings left by earlier local builds).
+HOST_PACKAGE_DIR="$WORK_DIR/natives-host-package"
+mkdir -p "$HOST_PACKAGE_DIR/native"
+cp "$ROOT_DIR/packages/natives/package.json" "$HOST_PACKAGE_DIR/package.json"
+cp "$ROOT_DIR/packages/natives/native/$HOST_ADDON_FILENAME" "$HOST_PACKAGE_DIR/native/$HOST_ADDON_FILENAME"
+HOST_PACKAGE_DIR="$HOST_PACKAGE_DIR" HOST_TAG="$host_tag" bun -e 'import { generateNpmPackages } from "./packages/natives/scripts/gen-npm-packages.ts"; await generateNpmPackages({ packageDir: process.env.HOST_PACKAGE_DIR, tags: [process.env.HOST_TAG ?? ""] });'
 (
-   cd "$ROOT_DIR/packages/natives/npm/$host_tag"
+   cd "$HOST_PACKAGE_DIR/npm/$host_tag"
    bun pm pack --destination "$TARBALL_DIR" --quiet >/dev/null
 )
 

@@ -2664,6 +2664,7 @@ export function resetSettingsForTest(): void {
 		ref.deref()?.cancelPendingSaves();
 	}
 	liveSettingsInstances.clear();
+	globalInstance?.getStorage()?.close();
 	globalInstance = null;
 	globalInstancePromise = null;
 	clearBoundSettingsMethods();

@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
@@ -38,6 +39,7 @@ describe("issue #1022 — path-scoped enabledModels respected by default fallbac
 
 	afterEach(() => {
 		resetSettingsForTest();
+		AgentStorage.resetInstance();
 		if (fs.existsSync(testDir)) removeSyncWithRetries(testDir);
 	});
 

@@ -220,9 +220,8 @@ function BoardHome({
 								<Icon name="close" className="h-3 w-3" />
 							</span>
 						)}
-						{/* Live preview: 2×2 grid of the first four widgets (kimi
-						 * layout — preview on top, name + count below), rendered
-						 * legibly and replayed on every visit. */}
+						{/* Static 2×2 preview of the first four widgets; live work
+						 * starts only when the real board mounts. */}
 						<div className="gui-board-home-preview">
 							{b.widgets.slice(0, 4).map((w, wi) => {
 								const def = widgetDef(w.type);
@@ -234,7 +233,9 @@ function BoardHome({
 										data-tone={def.tone ?? "default"}
 										style={{ animationDelay: `${bi * 60 + wi * 90}ms` }}
 									>
-										<def.Component data={w.data} update={() => {}} />
+										<WidgetFit>
+											<def.Component data={w.data} update={() => {}} preview />
+										</WidgetFit>
 									</div>
 								);
 							})}

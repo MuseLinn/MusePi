@@ -486,6 +486,12 @@
 	display: none;
 }
 
+@media (prefers-reduced-motion: reduce) {
+	.gui-spotlight-glow {
+		display: none;
+	}
+}
+
 /* ── Board page (kimi-work parity, M1) ─────────────────────────────────── */
 .gui-board {
 	display: flex;
@@ -1956,9 +1962,8 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 
 /* Board home (collection list, kimi kanban-home parity). */
 .gui-board-home {
-	/* Block flow: sticky children (the create bar) behave reliably here —
-	 * flex containers constrain sticky offsets. */
-	display: block;
+	display: flex;
+	flex-direction: column;
 	padding: 20px 24px;
 	overflow-y: auto;
 	/* Fill the board view so the create bar can stick to the bottom. */
@@ -2006,7 +2011,9 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 
 .gui-board-home-grid {
 	display: grid;
+	flex-shrink: 0;
 	grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+	grid-auto-rows: minmax(300px, auto);
 	gap: 14px;
 }
 
@@ -2035,7 +2042,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	min-height: 120px;
+	min-height: 300px;
 	border-style: dashed;
 	color: var(--color-text-muted);
 }
@@ -2096,7 +2103,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	color: var(--color-text-faint);
 }
 
-.gui-board-home-create {
+.gui-board-home-create.gui-spotlight {
 	/* Floating frosted-glass bar (sticky at the bottom of the collection
 	 * view, kimi's chat-to-create affordance): translucent surface +
 	 * backdrop blur, feathered edge via a wide soft glow. */
@@ -2105,7 +2112,8 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	gap: 8px;
 	width: min(760px, 100%);
-	margin: 6px auto 0;
+	margin: auto auto 0;
+	flex-shrink: 0;
 	padding: 8px;
 	border-radius: var(--radius-2xl);
 	background: color-mix(in oklab, var(--color-surface-raised) 62%, transparent);
@@ -2245,8 +2253,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-bottom-color: var(--color-accent);
 }
 
-/* Collection-card live preview: the first four widgets rendered mini,
- * refreshed on every visit with a staggered pixel-fade entry. */
+/* Static collection preview with a staggered pixel-fade entry. */
 .gui-board-home-preview {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -2286,12 +2293,8 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	}
 }
 
-.gui-board-home-preview-cell > * {
-	/* Slightly smaller than the board card so the four previews read as
-	 * refined miniatures (kimi collection-card previews). */
-	transform: scale(0.78);
-	transform-origin: top left;
-	width: 128%;
+.gui-board-home-preview-cell .gui-widget-fit-inner > * {
+	border-radius: var(--radius-sm);
 }
 
 .gui-motion-off .gui-board-home-preview-cell {

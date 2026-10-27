@@ -169,12 +169,13 @@ daemon RPC:
 ## 6b. 浮层材质、降级与 modal 栈
 
 - **材质归属**：tooltip、toast、alert/approval 与 drawer/sheet 容器使用 L2（`--glass-bg-strong` + `--glass-border` + `--glass-sheen` + `--glass-shadow`）；modal、palette 与 confirmation 卡使用更高层级的 L3，token 集合相同。阴影 token 同时拥有上下内缘，包括底缘；不得再叠加第二套 rim 或阴影。`ConfirmDialog` 使用 `ss-card--confirm`，避免与 SessionsSheet 的 L2 角色混用。`ApprovalCard` 使用语义文字/动作色，不使用固定深色底。
-- **回退归属**：`client-core/src/styles/overlay-fallback.css` 集中定义 `prefers-reduced-transparency`、不支持 `backdrop-filter` 与 `[data-platform="win32"]` 的浮层规则。所有使用共享浮层样式的入口都在组件样式之后导入它，确保回退在真实 desktop 级联中胜出，不被后续卡片/scrim 声明夺回。桌面 `initTooltips` 在委托共享初始化之前先写入 `shellPlatform()` 的 `data-platform`，因此 main、pin、pet 窗口都能匹配 Windows 规则。pet 在 `pet-window.css` / `gui.css` 后加载 tokens 与回退，并设置 `data-transparent-window`，使页面豁免 Windows/Linux 不透明工作区背板，同时不影响 tooltip/overlay 规则；只有这些浮层表面转为不透明。这些路径关闭背景采样，使用不透明 `--color-surface-raised` 底，同时保留共享边框、sheen 和阴影；scrim 使用不透明 `--color-bg`。已由 `::before` 承载 sheen 的卡片只用不透明背景，sheen 只画一层。桌面浮层正常路径仍使用 `--gui-glass-blur` / `--gui-glass-saturate`。任何规则都不得给常驻 transcript 或 composer 新增 blur。
+- **回退归属**：`client-core/src/styles/overlay-fallback.css` 集中定义 `prefers-reduced-transparency`、不支持 `backdrop-filter` 与 `[data-platform="win32"]` 的浮层规则。所有使用共享浮层样式的入口都在组件样式之后导入它，确保回退在真实 desktop 级联中胜出，不被后续卡片/scrim 声明夺回。桌面 `initTooltips` 在安装桌面 tooltip 行为之前先写入 `shellPlatform()` 的 `data-platform`，因此 main、pin、pet 窗口都能匹配 Windows 规则。pet 在 `pet-window.css` / `gui.css` 后加载 tokens 与回退，并设置 `data-transparent-window`，使页面豁免 Windows/Linux 不透明工作区背板，同时不影响 tooltip/overlay 规则；只有这些浮层表面转为不透明。这些路径关闭背景采样，使用不透明 `--color-surface-raised` 底，同时保留共享边框、sheen 和阴影；scrim 使用不透明 `--color-bg`。已由 `::before` 承载 sheen 的卡片只用不透明背景，sheen 只画一层。桌面浮层正常路径仍使用 `--gui-glass-blur` / `--gui-glass-saturate`。任何规则都不得给常驻 transcript 或 composer 新增 blur。
 - **动效**：此浮层族的入场和出场都同时受 `.gui-motion-off` 与 `prefers-reduced-motion` 禁用；关闭定时器仍可负责卸载，但不得留下 1ms 动画或中间视觉帧。tooltip 显隐 transition 和 SketchPad 关闭 transition 同样包含在内，不只检查 CSS keyframes。
 - **共享栈**：`useModalFocus` 记录 opener 并压入每个活跃 dialog；`isTopModal` 门控 Tab 与 Escape。仅栈顶锁焦或响应 Escape，底层保持打开。关闭栈顶后归还可连接的 opener；关闭底层或组件卸载不得从剩余栈顶抢焦点。消费者包括 `DialogFrame`、Promise prompt/confirm、client-core `ConfirmDialog`、`AgentDrawer`、`SessionsSheet`、`TaskModal`、能力抽屉、Board 放大卡、SketchPad、Onboarding/Announcement 与 ImageLightbox。RewardOverlay 自己注册共享栈并提供 dialog ARIA；AnnouncementOverlay 仅在非 reward 分支激活卡片 hook，因此 reward 切换到 Markdown 后仍会入栈。SessionsSheet 将 backdrop portal 到 `document.body`，带滤镜的 header 不得成为其 fixed 定位包含块。`CommandPalette` 保留自己的输入框焦点、方向键导航和 Escape 处理，不因名称含 palette 就隐式加入共享栈。
 - **确认键**：普通确认允许 Enter。Promise confirm 与 client-core `ConfirmDialog` 在 `destructive: true` 时都抑制 Enter；Promise 版本初始聚焦 Cancel，显式激活确认按钮仍可执行。只有确认框位于共享栈顶时 Escape 才取消。Promise prompt/confirm 在 180ms 出场后 settle；请求被替换或宿主卸载时也会 settle，不留下悬挂 Promise。
-- **临时表面**：共享 tooltip 初始化保留既有 `aria-describedby` token，支持悬停、焦点和触屏长按，提示本身不可聚焦。toast 在悬停或焦点内暂停，恢复时续算剩余时长；错误持续显示并 assertive 播报，其他级别使用 polite status 播报。
+- **临时表面**：桌面 tooltip 初始化保留既有 `aria-describedby` token，以触发元素的矩形做 flip/shift 定位，不再使用指针坐标。悬停与焦点共用 150ms 打开延迟；触屏静止长按 500ms 打开，移动取消，释放关闭。可见提示在滚动/缩放时跟随锚点；指针移到提示内容上时保持打开，离开锚点与内容后才关闭。Escape 取消等待中或可见的提示并认领按键，不移动焦点。提示本身不可聚焦。toast 在悬停或焦点内暂停，恢复时续算剩余时长；错误持续显示并 assertive 播报，其他级别使用 polite status 播报。
 - **面板空态与标签动效**：右侧零标签时，`.gui-panel-empty` 通过现有 flex 高度链让限宽自适应卡片 grid 垂直居中。`useTabMotion` 为 surface 与托管浏览器标签统一展示层 entering/closing：恢复不重播，打开 130ms、关闭 140ms；关闭中重开会取消退场，卸载会清理全部定时器。closing 项 inert、对辅助技术隐藏，并退出 roving tabindex 与 dnd items。业务标签仍立即关闭；浏览器 ref detach、guest-gone 和 main dispose 顺序绝不等动画。motion-off 与 reduced-motion 同时取消两类动画。
+- **面板实例注入**：`SlotComponentMount` 向扩展组件传入 `panelTab` 与共享 `fmtTokens`。`ContextPanel` 按当前列的 `bodyView` 解析扩展内容，不使用全局激活 view，分栏不会挂载彼此内容。压缩标签描述只保存 `surface/target/dedupeKey`；`session.compaction` 返回当前会话与 id 对应的条目，`tokensAfter`、`method`、`warning` 对旧记录均为可选。bundled `compaction-summary` 插件通过 `panel.tab.compaction` 注册，不新增第二套标签存储，也不让 Cordis 进入 `wire` 或 `agent`。
 
 ## 7. macOS 应用图标处理(2026-08-06 查证 + 修复)
 
@@ -184,7 +185,7 @@ daemon RPC:
 2. **dev 模式 Dock 图标** = `app.dock.setIcon(image)`:官方语义只是"贴图到 NSDockTile",**不经过 LaunchServices,系统遮罩不生效** → 传全出血方形 PNG 就是方角(用户看到"图标是方的"的根因)。dev 必须用**预圆角 PNG**(`build/icon-dock.png`)。**填充率以 kimi 实测为准 = 80.5%**(2026-08-06 `/Applications/Kimi.app/Contents/Resources/icon.icns` 解出 1024,alpha bbox x100-923):深色卡 824/1024 居中 + 四角 superellipse n=5 切圆 + 四周对称透明边距。**全出血 100% 会让 Dock 里图标比 kimi 大 ~24%**(用户"始终大一点"根因;92% 内缩版仍 >80.5%);"禁止内缩"的上一版结论错误——kimi 官方桌面资产就是卡中卡,与邻位 app 视觉统一优先。Python/numpy 生成。打包版 icns 同样带 80.5% 边距(卡中卡是设计,不是遮罩错误)。
 3. **窗口 icon**(`BrowserWindow icon`)= Linux/Windows 窗口 chrome;macOS 上 Cmd+Tab/窗口预览由系统按 bundle/Dock 图标渲染(全出血 + 系统遮罩),窗口预览显示"大方块"是**窗口内容预览**而非图标,系统行为。
 
-**splash 内嵌 logo**(`src/vendor/logo.png`)= UI 内 img,系统遮罩不适用,同样要预圆角版本(512,与 icon-dock 同源同参数);`.gui-splash-logo` **不能再加 CSS border-radius**(双重圆角)。换图标 = 三处同步:`build/icon.icns`(打包)+ `build/icon-dock.png`(dev Dock)+ `src/vendor/logo.png`(splash/内嵌)。
+**启动页与启动调度**：`SplashOrb` 与桌面桌宠共用 `gui-pet-*` 主题色板。`StartupSplash` 用 CSS 不确定轨道提供持续反馈，同时保留辅助技术可读的隐藏原生 `<progress>`；减少动态效果时放慢轨道。慢启动不会出现 stall 诊断或重试按钮，既有 `!rpc` 分支仍是唯一恢复页。renderer 不等待 `system.prewarmStatus`；`boot.done` 后以非阻塞方式调用 `system.prewarmStart`，若会话操作先需要 SDK，daemon 也会按需加载同一模块。欢迎页的模型、语言和思考默认值也在后台到达，慢 `settings.get` 不再阻塞首屏。主动重启 daemon 时，被替换客户端记入 `ExpectedDisconnects`，其关闭不会再触发第二次 boot。能力探测没有副作用，只有明确的 unknown-method 错误才算能力缺失。换图标仍需同步 `build/icon.icns`（打包）与 `build/icon-dock.png`（dev Dock）。
 
 ## 8. 验证工作流(改 UI 的必做项)
 
@@ -208,6 +209,7 @@ daemon RPC:
 **daemon 是刻意 `detached` + `unref` 的**：这样 GUI 崩溃后它还活着，正在跑的回合能跑完（崩溃永远走不到退出路径）。代价是 GUI 被硬杀会留下没人认领的 daemon，而过去的唯一回收手段是 `daemon-start` 的盲杀 `kill(port)`。注册表把「端口被占 → 杀掉」换成证据，对齐 openchamber 的 `managed-process-registry`。
 
 - **存储**：`<MUSEPI_DAEMON_DIR>/managed/<pid>.json`，我们 spawn 的 daemon 一个进程一个文件。之所以一 pid 一文件而非共享 JSON：多个壳/工作区并发运行，共享文件的读改写在并发下会互相覆盖。在监听成功后才写（从未就绪的进程不值得回收），写临时文件再 rename，崩溃不会留下截断的 JSON。
+- **启动协调**：`start()` 先接管已在监听的 daemon，不再重复 spawn；同一 daemon 目录与端口的并发调用共享一次启动。首次编译允许 60 秒，不再在 10 秒时误报失败，超时仍保留子进程 stderr。能力探测统一使用 `daemonMethodProbeParams`，其中 `session.compaction` 使用无副作用的 `entryId`，避免把参数校验失败误判为 daemon 陈旧并触发重启循环。
 - **回收条件——三条同时成立，缺一不可**：① pid 在我们的注册表里（我们 spawn 的）；② **身份双向绑定 pid↔端口**——`ws.port`（daemon 自己写的）仍指向记录的端口 **且** `listenerPid(port) === 记录的 pid`；③ 记录的 owner pid 已死。任何无法证实的一律不动：验证必须是正向的，绝不假设。
 - **为什么要双向校验**：端口活着只能证明「有个 daemon 在跑」，不能证明「记录里这个 pid 就是它」。一个被回收的 pid 恰好活着、而端口被无关服务占着时，纯存活性校验会放行并把它 SIGTERM 掉——把这个校验削弱成只查存活性时，测试立刻把它自己的 bun 进程杀了（`test/daemon-registry.test.ts` 有 revert-verify）。
 - **永远不会成为候选**：别的 GUI、开机自启、终端 `musepi serve` 起的 daemon 从不登记，回收器根本看不见。退出路径仍用 `ownsDaemon()`（`client.pid`），未改动。
@@ -336,12 +338,14 @@ daemon RPC:
 - **`isTrajectoryEventInRange(ev, startMs, endMs)`**:闭区间判定;**无 `tsMs` 的事件永不命中**(区间模式从不误亮未知时刻)。纯函数,组件与测试共用。
 - **`usage` / `durationMs` / `ttftMs`(2026-08-21 补)**:wire `AssistantMessage` 自带 `usage(WireUsage)`/`duration`/`ttft`(settled 回合才有)——MaterializedView **整存 wire message**,所以 `snap.entries[].message` 原样携带,轨迹事件直接提取,**零 daemon 改动**;与 transcript usage 行(`guest-client Transcript.tsx usageRow`,`display.showTokenUsage` 门控)同源。未 settled 的 assistant 事件不虚构统计。
 - **`TimelineOverview`**:时间域 = 全部 turn 的 [最早 startMs, 最晚 endMs];无有效时刻(max ≤ min)直接返回 null 不渲染。
+- **历史窗口身份与拓扑**:事件 id 来自源 entry/tool-call id,不来自加载窗口内的 journal 轮号。`TrajectoryTurnGroup.id` 是轮起始 entry id,`parentId` 记录最近的父轮,`trajectoryTurnKey` 是共享 UI 状态键;因此地图展开、轨迹折叠/选中、React key 和区间滚动目标在历史前插后仍指向同一轮。无 active-path 时的分支回退索引所有 entry 类型,包括 advisor `custom_message` 链节;嵌套分支边使用记录的父轮,即使父轮自身也在支线。
 
 ### 组件行为
 
 - 拖拽区间:**pointer capture** + 位移 ≥3px 才提交;单击段 = 选中该整轮、单击空白 = 清除;`msAtClientX` 经 `getBoundingClientRect` 反算,零 re-render 依赖。
 - Esc 键:**先清区间、再清选中**(`window` keydown,依赖 [range, selectedId]——与模态键盘契约同序)。
 - 聚焦 = **置灰不裁剪**(`.traj-event--dim` 0.35 + saturate .6),DSH 同款"聚焦而非过滤"。
+- 地图数据增长不会强制重新 fit:仅初次适配、显式重置和真正切换横/纵方向会触发 fit。Overview 轮段、地图轮卡、可跳转事件行和独立分支折叠按钮都把单击操作暴露给 Enter/Space,并带可见焦点样式。
 
 ### 坑
 
@@ -1015,9 +1019,15 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 
 ## 54. 滚动锚定补 scroller 盒观察、顶栏减法与实例迁移、侧边通道角色语义（2026-10-21）
 
-**最新消息被 composer 遮挡的根因与修复**（`client-core` Transcript 跟随钉底 effect）：原 ResizeObserver 只 observe 内容盒（`.tr-root`）。视口尺寸变化——拖窗口、切布局、新开会话——只改滚动视口盒、不动内容盒，scrollTop 保持原位，底部几条消息滑进输入框底下；切走再切回之所以"又好了"，是重挂时的一次性重钉盖住了症状。修复：RO 同时 observe `scrollerRef`（视口盒）与内容后的 tail sibling，跟随期任何视口或尾部变化都重锚 live edge；上翻释放 `following` 后，tail 增长不得抢滚动。「回到底部」按钮经 `registerComposerInsetReader` 读取当前 composer inset 与浮动面板 clearance 并抬升 bottom；web 不注入 reader，保留 CSS 14px。EN 版滚动锚定条目已同步。
+**最新消息被 composer 遮挡的根因与修复**（`client-core` Transcript 跟随钉底 effect）：原 ResizeObserver 只 observe 内容盒（`.tr-root`）。视口尺寸变化——拖窗口、切布局、新开会话——只改滚动视口盒、不动内容盒，scrollTop 保持原位，底部几条消息滑进输入框底下；切走再切回之所以"又好了"，是重挂时的一次性重钉盖住了症状。修复：RO 同时 observe `scrollerRef`（视口盒）与内容后的 tail sibling，跟随期任何视口或尾部变化都重锚 live edge；上翻释放 `following` 后，tail 增长不得抢滚动。「回到底部」按钮经 `registerComposerInsetReader` 读取当前 composer inset 与浮动面板 clearance，并在这两项实测高度之外再保留 24px 安全间距，输入框、附件/引用卡和统计行改变高度时仍停在上方安全区；web 不注入 reader，保留 CSS 24px。EN 版滚动锚定条目已同步。
 
-**空态提示语轮播纪律**（`WelcomeComposer.tsx`）：placeholder 轮播 interval 依赖加 `focused`——失焦即停、聚焦回第 0 条；否则切专注模式时轮播与形态动画叠加造成卡顿。专注模式 tips 换行：形态动画期间隐藏 `.gui-tip`（`gui-morphing` 兄弟选择器）+ `max-width:100% text-wrap:balance`。
+**Composer inset publisher 跟随聊天场景。** `ChatView` 在 `showChat` 变为 true 时启动 `ResizeObserver`，不再只在组件首次挂载时尝试。欢迎页进入会话后，wrap 的实测高度会发布给已注册及后续注册的 reader，不会永远停留在 CSS 默认值。
+
+**空态提示保持静态**（`WelcomeComposer.tsx`）：placeholder 与会话输入框使用同一基础文案，补充提示只在挂载时选择一次，不再创建轮播 interval。`ComposerFrame` 复用 `SpotlightCard` 的指针光晕，共享组件直接更新光晕样式，指针移动不会重渲染输入区子树；frame 保持 `overflow: visible` 以容纳桌宠和浮层，光晕继承圆角并在减少动态效果时移除。
+
+**专注与看板合集几何**：带桌宠的专注输入框把桌宠放在顶边内侧 6px，并在整个文本栈上方预留 64px；空态 textarea 使用 `box-sizing: border-box`，水平 padding 不再挤压 placeholder 提前换行。看板首页采用 flex 纵列，快捷输入条通过 `margin-top: auto` 与 `position: sticky; bottom: 14px` 固定在底部，短内容与长滚动页面均成立；合集卡片与「新建看板」共用 300px 最小高度。
+
+**合集预览使用显式渲染模式**：`BoardPage` 通过 widget 注册表传入 `preview`。`WidgetFit` 同时观察容器与内容，并取 `min(1, 容器宽/内容宽, 容器高/内容高)`，避免异步内容从任一轴溢出。预览单元格持有外圆角，其直接 widget 卡面减去 4px padding。汇率、股票、历史和音乐预览渲染种子数据，不启动 fetch、JSONP、interval 或音频 `requestAnimationFrame`；不传 `preview` 时保留真实看板的实时行为。
 
 **composer 停靠栏胶囊几何**（`gui-workspace.css`）：`.gui-composer-dock` 从 `align-items: stretch` 改 `flex-start`——连接器胶囊按内容自适应宽、靠左，不再整行铺满（`.gui-slot-error` 单独 `align-self: stretch` 保全宽）；ChatView 悬浮 composer 包裹 `pb-3 → pb-1`，「性能与用量」胶囊与底部间距收紧。
 
@@ -1034,5 +1044,13 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 最近会话 `MenuPopup` 由非 tab 标题和标签带外的紧凑按钮共享，因此 tab 模式保留新建与最近会话导航，且不改变标签标题盒。标签测试在 `afterAll` 恢复入口 locale，只移除自身 hosts。隔离 seed 在切换前记录 `preSeedLocale`，收尾恢复该精确值，最终文件分别验证英文与非英文入口。
 
 **验证**：`SESSION_TAB_TEST_ENTRY_LOCALE=zh-CN bun test packages/desktop-app/test/session-tabs-strip-00-isolation-seed.test.ts packages/desktop-app/test/session-tabs.test.ts packages/desktop-app/test/session-tabs-strip.test.tsx packages/desktop-app/test/session-tabs-strip.test.tsx-after.test.ts packages/desktop-app/test/session-tabs-strip.test.tsx-after.test.ts-locale.test.ts packages/desktop-app/test/session-markdown.test.ts` 覆盖迁移、持久化、尺寸、固定手势、每个按 ID 动作、tab 模式导航与跨文件隔离；将入口改为 `en-US` 验证另一方向。`bun --cwd=packages/desktop-app run check` 覆盖 Biome 与类型。
+
+## 56. 历史新鲜度与有限轮次索引分页
+
+- **历史恢复会比较缓存与 SDK transcript 的新鲜度。** `session-host.snapshot` 不再因为 ViewStore 快照存在就直接返回。缓存最新条目早于 transcript 尾部时，恢复会跳过该快照和 journal，改为投影 transcript；时间相同则保留缓存投影。普通会话与独立写入的 advisor recorder 都走这一判定，缓存末尾的 user 消息不会遮住已经完成的 assistant 回复。
+- **首屏 transcript 窗口保持有界。** `session.resume`、`session.snapshot`、`session.subscribe` 经 `tailSnapshot` 返回最新 200 条及 `tail.hasMore`/`tail.beforeId`；`session.history` 保留既有 `beforeId` 游标，按时间正序返回更早条目。游标失效会明确返回 `stale`，不会用重叠的最新页冒充向前分页。
+- **`session.turns` 支持可选的轮次游标分页。** 传入 `limit` 时返回最新的有限轮次页；`beforeTurn` 使用本页最老轮次的 `entryId` 向前翻页且不重页。分页响应携带 `hasMore`、`remaining`、`nextBeforeTurn` 和 `stale`。不传这些参数时仍返回旧客户端需要的完整索引。
+- **桌面分页按 store 隔离且单在途。** `GuiSessionStore.loadOlder` 共享同一个在途请求，在快照中公开 `historyLoading`，并用快照代际丢弃刷新或销毁后才完成的旧页面。传输失败和空页保留已加载条目、结束 loading，并通过既有 `historyBlocked` 提示失败，不会无限重复请求。`ChatView` 只在发起分页的 store 仍为当前 store 时恢复前置内容的滚动锚点；advisor 只读路径不挂载 `SessionErrorDock`，因此 advisor-only 记录不会触发普通会话的无应答复检。
+- **地图与轨迹共用同一个有界窗口。** 打开地图或轨迹不再主动补齐全量历史；`TurnMapCanvas` 的加载更早按钮通过与对话相同的 store 路径只请求下一页，定位旧消息时才按目标继续翻页。两个视图都在保留已加载条目的同时展示加载中与历史终止状态。`session.turns` 使用 `limit: 200`，已加载轮次按 `entryId` 合并，前插页面不会让导航条重复或乱序。
 
 当前的 display-context 传输、FilePane 引用生产者、子会话折叠和角色/回退模型思考等级契约见 **`docs/gui-context-and-session.md`**。

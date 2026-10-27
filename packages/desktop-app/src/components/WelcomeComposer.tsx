@@ -104,9 +104,8 @@ function greeting(hour: number): string {
 	return t("settings.lateTakeCare");
 }
 
-/** Rotating tips shown under the composer (splash/shimmer refresh). Keys are
- * translated at render time (t is locale-aware), so a locale switch updates
- * the tip line without a reload. */
+/** Static tip shown under the composer. Keys are translated at render time
+ * (t is locale-aware), so a locale switch updates the tip line without a reload. */
 // English keys double as the en-US fallback (the i18n map only carries
 // zh-CN); zh translations live in guest-client/src/i18n/zh-CN.ts.
 const TIP_KEYS = [
@@ -125,12 +124,6 @@ const TIP_KEYS = [
 	"settings.pickPresetModeNew",
 	"settings.customizeScrollbarSkinAppearance",
 ] as const;
-
-/** Pick a random tip key, avoiding the current one. */
-function nextTip(current: (typeof TIP_KEYS)[number]): (typeof TIP_KEYS)[number] {
-	const pool = TIP_KEYS.filter(x => x !== current);
-	return pool[Math.floor(Math.random() * pool.length)] ?? TIP_KEYS[0]!;
-}
 
 /** One chip in the empty-state composer. Shape-compatible with the session
  *  composer's ComposerAttachment (composer-frame renders both), plus the raw
@@ -155,7 +148,7 @@ interface WelcomeAttachment {
 /**
  * Empty-state composer: large centered input with a
  * border-beam accent, a faint brand watermark, a time-aware greeting, and a
- * rotating tip line that refreshes with a shimmer.
+ * static tip line.
  *
  * ONE composer, two states: the attachment surface here is the session
  * composer's, verbatim — same chips, same attach menu (images / sketch /
@@ -542,9 +535,7 @@ export function WelcomeComposer({
 			cancelled = true;
 		};
 	}, [rpc, ladderModelId]);
-	const [tipKey, setTipKey] = useState<(typeof TIP_KEYS)[number]>(
-		() => TIP_KEYS[Math.floor(Math.random() * TIP_KEYS.length)]!,
-	);
+	const [tipKey] = useState<(typeof TIP_KEYS)[number]>(() => TIP_KEYS[Math.floor(Math.random() * TIP_KEYS.length)]!);
 	// Git branch selector: current branch +
 	// local branch list for the active project; hidden outside a repo.
 	const [branchInfo, setBranchInfo] = useState<{ current: string | null; branches: string[] } | null>(null);
@@ -731,28 +722,6 @@ export function WelcomeComposer({
 		showMore || collapsing
 			? suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT + extraShown)
 			: suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT);
-	// Empty-state placeholder carousel (new-task 空态 hints).
-	const PLACEHOLDER_TIPS = [
-		"composer.askAnythingCommands.info",
-		"settings.welcomeTipSearchWeb",
-		"settings.welcomeTipVoiceInput",
-		"settings.welcomeTipTaskCenter",
-		"settings.welcomeTipAnnotateImage",
-		"settings.welcomeTipAutoresearch",
-	] as const;
-	// Empty-state placeholder rotates through capability hints (new-task
-	// 空态): keep the base shortcut hint first, then surface the newer
-	// features (web search / images / boards / diagrams) so the empty
-	// composer teaches what the agent can do.
-	const [tipIdx, setTipIdx] = useState(0);
-	// The carousel only runs while the cursor is IN the composer: a marquee
-	// nobody is looking at still composites every 4s and made focus-mode
-	// transitions jank. Blurred → static base hint.
-	useEffect(() => {
-		if (!focused) return;
-		const id = setInterval(() => setTipIdx(i => (i + 1) % PLACEHOLDER_TIPS.length), 4000);
-		return () => clearInterval(id);
-	}, [focused]);
 	const applySuggestion = (prompt: string): void => {
 		setText(prompt);
 		requestAnimationFrame(() => autosize(taRef.current));
@@ -1196,20 +1165,6 @@ export function WelcomeComposer({
 	// explicitly when leaving focus mode.
 	useEffect(() => {
 		autosize(taRef.current);
-	}, []);
-
-	// Rotate the tip every ~6s with a shimmer refresh (key change re-triggers).
-	useEffect(() => {
-		let id = setInterval(() => setTipKey(prev => nextTip(prev)), 6000);
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") id = setInterval(() => setTipKey(prev => nextTip(prev)), 6000);
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
 	}, []);
 
 	/** Attachment intake — the session composer's `addFiles`, mirrored for the
@@ -2370,7 +2325,7 @@ export function WelcomeComposer({
 												? railState.placeholder
 												: isDesignArmed
 													? t("composer.designEmptyPlaceholder")
-													: t(PLACEHOLDER_TIPS[focused ? tipIdx : 0]!))
+													: t("composer.askAnythingCommands.info"))
 										}
 										spellCheck={(() => {
 											try {
@@ -2428,8 +2383,7 @@ export function WelcomeComposer({
 							data-testid="gui-creation-assetslot"
 						/>
 					)}
-					{/* Rotating tip with shimmer refresh (key change re-triggers);
-					 * t() runs at render time so locale switches land immediately. */}
+					{/* Static tip; t() runs at render time so locale switches land immediately. */}
 					<p key={tipKey} className="gui-tip mt-5 text-[14px] text-[var(--color-text-faint)]">
 						{t(tipKey).replace("{mod}", modLabel()).replace("⌘", modLabel())}
 					</p>

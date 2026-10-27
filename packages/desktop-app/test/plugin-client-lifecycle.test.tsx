@@ -26,7 +26,12 @@ const ITEM_BASE = {
 };
 
 /** Mount one component and return the root plus an unmount helper. */
-function mount(code: string): { unmount: () => Promise<void> } {
+function mount(
+	code: string,
+	panelTab?: { id: string; surface: string; target: string | null; label: string; readOnly: boolean },
+): {
+	unmount: () => Promise<void>;
+} {
 	let root: Root | null = null;
 	const container = document.createElement("div");
 	document.body.appendChild(container);
@@ -40,6 +45,7 @@ function mount(code: string): { unmount: () => Promise<void> } {
 				cwd: "/tmp",
 				item: item as never,
 				settingsScope: null,
+				panelTab,
 			}),
 		);
 	});
@@ -127,6 +133,25 @@ describe("plugin module apply(ctx)", () => {
 		const seen = (window as never as { __probeCtx: { slot: string; extensionId: string } }).__probeCtx;
 		expect(seen.slot).toBe("composer.model");
 		expect(seen.extensionId).toBe("/pkg/index.ts");
+		await handle.unmount();
+	});
+
+	test("the component receives the current panel tab instance", async () => {
+		const code = `
+			export default function Probe(props) {
+				window.__probePanelTarget = props.panelTab?.target;
+				return null;
+			}
+		`;
+		const handle = mount(code, {
+			id: "ext:panel.tab.compaction::c1",
+			surface: "ext:panel.tab.compaction",
+			target: "c1",
+			label: "压缩摘要",
+			readOnly: true,
+		});
+		await settle();
+		expect((window as never as { __probePanelTarget: string }).__probePanelTarget).toBe("c1");
 		await handle.unmount();
 	});
 

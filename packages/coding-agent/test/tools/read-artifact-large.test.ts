@@ -9,6 +9,7 @@ import {
 } from "@musepi/pi-coding-agent/internal-urls/registry-helpers";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
+import { shortenPath } from "@musepi/pi-coding-agent/tools/render-utils";
 
 function getTextOutput(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content
@@ -67,7 +68,7 @@ describe("read tool large artifact handling", () => {
 
 		expect(output).toContain("Unbounded raw read blocked for artifact://0");
 		expect(output).toContain("artifact://0:raw:1-3000");
-		expect(output).toContain(artifactDir);
+		expect(output).toContain(shortenPath(artifactDir));
 		expect(output).not.toContain("line-001");
 	});
 
@@ -117,7 +118,7 @@ describe("read tool large artifact handling", () => {
 			const output = getTextOutput(result);
 			// artifactDir sits under the (mocked) home, so shortenPath rewrites the
 			// prefix to `~` — the notice must NOT leak the absolute artifact path.
-			expect(output).toContain(`~${path.sep}session`);
+			expect(output).toContain("~/session");
 			expect(output).not.toContain(artifactDir);
 		} finally {
 			homeSpy.mockRestore();

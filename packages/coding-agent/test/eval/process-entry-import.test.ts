@@ -11,6 +11,7 @@ it("imports the CLI entry graph without loading dotenv before profile bootstrap"
 	);
 	delete env.OMP_PROCESS_ENTRY_ENV_PROBE;
 	env.HOME = tempDir.path();
+	env.USERPROFILE = tempDir.path();
 	const fixture = path.resolve(import.meta.dir, "../fixtures/js-process-entry-import.ts");
 	const proc = Bun.spawn([process.execPath, fixture], {
 		env,

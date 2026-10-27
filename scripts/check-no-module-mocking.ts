@@ -134,7 +134,13 @@ async function main(): Promise<void> {
 	const hits: ModuleMockingHit[] = [];
 	for (const file of files) {
 		if (!/\.(test|spec)\.tsx?$/.test(file)) continue;
-		const source = await fs.promises.readFile(path.resolve(file), "utf8");
+		let source: string;
+		try {
+			source = await fs.promises.readFile(path.resolve(file), "utf8");
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+			throw error;
+		}
 		hits.push(...findModuleMocking(file, source));
 	}
 

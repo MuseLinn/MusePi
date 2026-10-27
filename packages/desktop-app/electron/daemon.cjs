@@ -28,7 +28,8 @@ let SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi
 let PORT_FILE = path.join(SOCKET_DIR, "ws.port");
 let WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
 let CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");
-const STARTUP_TIMEOUT_MS = 10_000;
+const STARTUP_TIMEOUT_MS = 60_000;
+const pendingStarts = new Map();
 /**
  * How long the daemon gets to finish a cooperative `system.shutdown` (release
  * sessions, kill PTYs, flush the journal) before the shell escalates to
@@ -198,12 +199,17 @@ function daemonCommand(port) {
  * Launch `musepi serve --port <port>` detached and wait for the listener.
  * Resolves the bound port (matches the requested one) or rejects.
  */
-async function start(port, env = {}) {
+async function startInternal(port, env = {}) {
+	if (probe() === port && (await portOpen(port))) {
+		console.error("[daemon] adopt existing listener on :" + port);
+		return port;
+	}
 	const { program, args } = daemonCommand(port);
 	console.error("[daemon] start", program, args.join(" "));
+	let daemonStderr = "";
 	const child = spawn(program, args, {
 		detached: true,
-		stdio: "ignore",
+		stdio: ["ignore", "ignore", "pipe"],
 		// Windows: without this the spawned daemon opens a visible console
 		// window every GUI launch (same fix proma/opencode/kimi apply to
 		// every child spawn from Electron main).
@@ -212,6 +218,9 @@ async function start(port, env = {}) {
 		// runs from src/cli.ts (not musepi.ts), so without this system.meta
 		// reports the OMP engine version as the MusePi version.
 		env: { ...process.env, MUSEPI_VERSION: guiVersion(), ...env },
+	});
+	child.stderr.on("data", chunk => {
+		daemonStderr = `${daemonStderr}${chunk.toString()}`.slice(-4000);
 	});
 	child.unref();
 
@@ -255,11 +264,25 @@ async function start(port, env = {}) {
 		// with nothing to act on (ARM Windows report: 找不到可执行程序).
 		if (child.exitCode !== null || child.signalCode !== null) {
 			console.error("[daemon] child exited", child.exitCode, child.signalCode, "program:", program);
-			throw new Error(`daemon exited during startup (${program})`);
+			throw new Error(`daemon exited during startup (${program})${daemonStderr.trim() ? `: ${daemonStderr.trim()}` : ""}`);
 		}
 		await new Promise(r => setTimeout(r, 100));
 	}
-	throw new Error("timed out waiting for daemon to bind");
+	throw new Error(`timed out waiting for daemon to bind${daemonStderr.trim() ? `: ${daemonStderr.trim()}` : ""}`);
+}
+
+/** Share one startup per daemon directory and port. */
+async function start(port, env = {}) {
+	const key = `${SOCKET_DIR}\0${port}`;
+	const pending = pendingStarts.get(key);
+	if (pending) return pending;
+	const startup = startInternal(port, env);
+	pendingStarts.set(key, startup);
+	try {
+		return await startup;
+	} finally {
+		pendingStarts.delete(key);
+	}
 }
 
 /** Resolve the pid of the process listening on 127.0.0.1:port.

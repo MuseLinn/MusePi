@@ -143,11 +143,11 @@ export class FileIndexService {
 		this.#db.run("PRAGMA busy_timeout = 5000");
 		this.#db.run("PRAGMA journal_mode = WAL");
 		this.#db.run(SCHEMA);
-		const row = this.#db.query("SELECT value FROM idx_meta WHERE key = 'enabled'").get() as
-			| { value: string }
-			| undefined;
+		using enabledStatement = this.#db.query("SELECT value FROM idx_meta WHERE key = 'enabled'");
+		const row = enabledStatement.get() as { value: string } | undefined;
 		this.#enabled = row?.value === "1";
-		this.#files = (this.#db.query("SELECT COUNT(*) AS n FROM idx_files").get() as { n: number }).n;
+		using countStatement = this.#db.query("SELECT COUNT(*) AS n FROM idx_files");
+		this.#files = (countStatement.get() as { n: number }).n;
 	}
 
 	get enabled(): boolean {
@@ -169,11 +169,10 @@ export class FileIndexService {
 	/** Enable/disable (persisted in idx_meta). */
 	setEnabled(on: boolean): void {
 		this.#enabled = on;
-		this.#db
-			.query(
-				"INSERT INTO idx_meta (key, value) VALUES ('enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-			)
-			.run(on ? "1" : "0");
+		using statement = this.#db.query(
+			"INSERT INTO idx_meta (key, value) VALUES ('enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+		);
+		statement.run(on ? "1" : "0");
 	}
 
 	/**
@@ -217,13 +216,13 @@ export class FileIndexService {
 	async #scanDir(dir: string): Promise<void> {
 		const seen = new Set<string>();
 		let skipped = 0;
-		const upsert = this.#db.prepare(
+		using upsert = this.#db.prepare(
 			"INSERT INTO idx_files (path, mtime, size) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET mtime = excluded.mtime, size = excluded.size",
 		);
-		const insertFts = this.#db.prepare("INSERT INTO idx_fts (path, content, expanded) VALUES (?, ?, ?)");
-		const updateContent = this.#db.prepare("UPDATE idx_fts SET content = ?, expanded = ? WHERE path = ?");
-		const deleteRow = this.#db.prepare("DELETE FROM idx_files WHERE path = ?");
-		const deleteFts = this.#db.prepare("DELETE FROM idx_fts WHERE path = ?");
+		using insertFts = this.#db.prepare("INSERT INTO idx_fts (path, content, expanded) VALUES (?, ?, ?)");
+		using updateContent = this.#db.prepare("UPDATE idx_fts SET content = ?, expanded = ? WHERE path = ?");
+		using deleteRow = this.#db.prepare("DELETE FROM idx_files WHERE path = ?");
+		using deleteFts = this.#db.prepare("DELETE FROM idx_fts WHERE path = ?");
 
 		let files = 0;
 		let tx = 0;
@@ -263,9 +262,8 @@ export class FileIndexService {
 						skipped++;
 						continue;
 					}
-					const existing = this.#db.query("SELECT mtime, size FROM idx_files WHERE path = ?").get(p) as
-						| { mtime: number; size: number }
-						| undefined;
+					using existingStatement = this.#db.query("SELECT mtime, size FROM idx_files WHERE path = ?");
+					const existing = existingStatement.get(p) as { mtime: number; size: number } | undefined;
 					if (existing && existing.mtime === st.mtimeMs && existing.size === st.size) {
 						continue; // unchanged
 					}
@@ -307,19 +305,23 @@ export class FileIndexService {
 
 		// Drop rows whose files disappeared since the last scan (chunked —
 		// SQLite binds at most 999 params per statement).
-		const all = this.#db.query("SELECT path FROM idx_files").all() as { path: string }[];
+		using allStatement = this.#db.query("SELECT path FROM idx_files");
+		const all = allStatement.all() as { path: string }[];
 		const gone = all.filter(r => !seen.has(r.path));
 		if (gone.length > 0) {
 			const chunkSize = 400;
 			for (let i = 0; i < gone.length; i += chunkSize) {
 				const chunk = gone.slice(i, i + chunkSize);
 				const placeholders = chunk.map(() => "?").join(",");
-				this.#db.query(`DELETE FROM idx_files WHERE path IN (${placeholders})`).run(...chunk.map(r => r.path));
-				this.#db.query(`DELETE FROM idx_fts WHERE path IN (${placeholders})`).run(...chunk.map(r => r.path));
+				using deleteFilesStatement = this.#db.query(`DELETE FROM idx_files WHERE path IN (${placeholders})`);
+				deleteFilesStatement.run(...chunk.map(r => r.path));
+				using deleteFtsStatement = this.#db.query(`DELETE FROM idx_fts WHERE path IN (${placeholders})`);
+				deleteFtsStatement.run(...chunk.map(r => r.path));
 			}
 		}
 
-		this.#files = (this.#db.query("SELECT COUNT(*) AS n FROM idx_files").get() as { n: number }).n;
+		using countStatement = this.#db.query("SELECT COUNT(*) AS n FROM idx_files");
+		this.#files = (countStatement.get() as { n: number }).n;
 		this.#skipped += skipped;
 	}
 
@@ -333,12 +335,11 @@ export class FileIndexService {
 		if (!this.#enabled) return [];
 		if (!query.trim()) return [];
 		try {
-			const rows = this.#db
-				.query(
-					`SELECT path, snippet(idx_fts, 1, '\u0001', '\u0002', '…', 16) AS snip
-					 FROM idx_fts WHERE expanded MATCH ? ORDER BY rank LIMIT ?`,
-				)
-				.all(indexQuery(query), limit) as { path: string; snip: string }[];
+			using statement = this.#db.query(
+				`SELECT path, snippet(idx_fts, 1, '\u0001', '\u0002', '…', 16) AS snip
+				 FROM idx_fts WHERE expanded MATCH ? ORDER BY rank LIMIT ?`,
+			);
+			const rows = statement.all(indexQuery(query), limit) as { path: string; snip: string }[];
 			return rows.map(r => ({ path: r.path, snippet: r.snip }));
 		} catch {
 			// Malformed query (e.g. bare `*`) — treat as no matches.

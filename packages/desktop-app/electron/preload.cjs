@@ -11,6 +11,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Node platform of the desktop shell ("darwin" | "win32" | "linux") —
 	 *  gates macOS-only features (haptics, native window glass). */
 	platform: process.platform,
+	/** Opt-in startup tracing; read-only in the sandboxed renderer. */
+	startupPerf: process.env.MUSEPI_STARTUP_PERF === "1",
+	startupMark: (phase) => ipcRenderer.send("startup-mark", phase),
+	daemonPort: (() => {
+		const value = Number(process.env.MUSEPI_GUI_DAEMON_PORT);
+		return Number.isInteger(value) && value > 0 && value <= 65535 ? value : null;
+	})(),
 	/**
 	 * Absolute path of a dropped `File`, or "" when it has none.
 	 *

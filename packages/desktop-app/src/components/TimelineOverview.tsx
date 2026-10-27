@@ -147,7 +147,7 @@ export function TimelineOverview({
 	};
 
 	return (
-		<div className="traj-ov-wrap" role="img" aria-label={t("settings.trajectoryTimeline")}>
+		<div className="traj-ov-wrap" role="group" aria-label={t("settings.trajectoryTimeline")}>
 			{/* 时钟行在绘图区之外(DSH 标签列 parity 的变体):起止时刻 + 总时长
 			 * 不再 absolute 进 track 内部——旧布局里起点附近的条/点被时钟文字
 			 * 盖住,投影域也被迫横跨含文字的全宽。 */}
@@ -249,12 +249,24 @@ export function TimelineOverview({
 							<div
 								key={group.turn}
 								className={`traj-ov-segment${active ? " traj-ov-segment--active" : ""}`}
+								role="button"
+								tabIndex={0}
+								aria-label={t("transcript.turnMapTurnLabel", {
+									turn: group.displayTurnLabel ?? group.displayTurn ?? group.turn,
+								})}
 								data-turn={group.turn}
 								style={{ left: `${left}%`, width: `${width}%` }}
+								onKeyDown={e => {
+									if (e.key !== "Enter" && e.key !== " ") return;
+									e.preventDefault();
+									commitRange(start, end);
+								}}
 								onPointerEnter={() => {
 									showHover({
 										leftPct: Math.min(98, left + width / 2),
-										title: `Turn ${group.turn}`,
+										title: t("transcript.turnMapTurnLabel", {
+											turn: group.displayTurnLabel ?? group.displayTurn ?? group.turn,
+										}),
 										time: `${clock(start, longSpan)} → ${clock(end, longSpan)}`,
 										duration: durationText(group.endMs !== undefined ? group.endMs - start : 0),
 									});

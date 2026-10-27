@@ -167,3 +167,83 @@ describe("GuiSessionStore history paging (P0-3)", () => {
 		});
 	});
 });
+
+describe("GuiSessionStore history loading state machine", () => {
+	it("loads one older page on demand and settles without refetching", async () => {
+		const tail = msg("latest");
+		const older = msg("older");
+		const store = storeWithTail([tail]);
+		let calls = 0;
+		const loading = store.loadOlder(async () => {
+			calls++;
+			expect(store.getSnapshot().historyLoading).toBe(true);
+			return { entries: [older], hasMore: false, remaining: 0, nextBeforeId: older.id };
+		});
+
+		await expect(loading).resolves.toBe(true);
+		expect(store.getSnapshot().entries.map(entry => entry.id)).toEqual([older.id, tail.id]);
+		expect(store.getSnapshot().historyLoading).toBe(false);
+		await expect(store.loadOlder(async () => null)).resolves.toBe(false);
+		expect(calls).toBe(1);
+	});
+
+	it("coalesces overlapping requests into one page", async () => {
+		const store = storeWithTail([msg("latest")]);
+		const gate = Promise.withResolvers<null>();
+		let calls = 0;
+		const fetchPage = async (): Promise<null> => {
+			calls++;
+			await gate.promise;
+			return null;
+		};
+		const first = store.loadOlder(fetchPage);
+		const second = store.loadOlder(fetchPage);
+		gate.resolve(null);
+		await expect(Promise.all([first, second])).resolves.toEqual([false, false]);
+		expect(calls).toBe(1);
+	});
+
+	it("keeps the loaded tail and reports a failed page instead of looking empty or loading forever", async () => {
+		const tail = msg("latest");
+		const store = storeWithTail([tail]);
+		await expect(
+			store.loadOlder(async () => {
+				throw new Error("offline");
+			}),
+		).resolves.toBe(false);
+		expect(store.getSnapshot().entries.map(entry => entry.id)).toEqual([tail.id]);
+		expect(store.getSnapshot().historyLoading).toBe(false);
+		expect(store.historyBlocked).toBe(true);
+		expect(store.hasMore).toBe(false);
+	});
+
+	it("treats an empty page for known older history as a visible terminal failure", async () => {
+		const tail = msg("latest");
+		const store = storeWithTail([tail]);
+		await expect(store.loadOlder(async () => null)).resolves.toBe(false);
+		expect(store.getSnapshot().entries.map(entry => entry.id)).toEqual([tail.id]);
+		expect(store.getSnapshot().historyLoading).toBe(false);
+		expect(store.historyBlocked).toBe(true);
+		expect(store.hasMore).toBe(false);
+	});
+
+	it("drops a page started before a snapshot reload", async () => {
+		const staleTail = msg("stale tail");
+		const freshTail = msg("fresh tail");
+		const stalePage = msg("stale older page");
+		const store = storeWithTail([staleTail]);
+		const gate = Promise.withResolvers<{
+			entries: SessionEntry[];
+			hasMore: boolean;
+			remaining: number;
+			nextBeforeId: string;
+		}>();
+		const loading = store.loadOlder(() => gate.promise);
+		store.reloadFromSnapshot({ entries: [freshTail], cursor: 2, tail: { hasMore: true, beforeId: freshTail.id } });
+		gate.resolve({ entries: [stalePage], hasMore: false, remaining: 0, nextBeforeId: stalePage.id });
+
+		await expect(loading).resolves.toBe(false);
+		expect(store.getSnapshot().entries.map(entry => entry.id)).toEqual([freshTail.id]);
+		expect(store.getSnapshot().historyLoading).toBe(false);
+	});
+});

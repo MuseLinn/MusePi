@@ -2,8 +2,7 @@
 	"extends": "../tsconfig.workspace.json",
 	"include": [
 		"src",
-		"scripts",
-		"test"
+		"scripts"
 	],
 	"compilerOptions": {
 		"jsx": "react-jsx",
@@ -16,7 +15,8 @@
 		"types": [
 			"bun",
 			"react",
-			"react-dom"
+			"react-dom",
+			"assets"
 		],
 		"paths": {
 			"@musepi/client-core/src/*": [

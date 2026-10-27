@@ -53,11 +53,25 @@ interface FxRow {
 	dir: "up" | "down" | "";
 }
 
+const PREVIEW_RATES: Record<string, number> = { EUR: 7.8123, USD: 7.1234, JPY: 0.0478, KRW: 0.0052 };
+function previewRows(pairs: readonly FxPair[]): FxRow[] {
+	return pairs.map(pair => ({
+		code: pair.code,
+		note: pair.note,
+		cur: PREVIEW_RATES[pair.code] ?? 1,
+		series: [0.94, 0.97, 0.95, 1.01, 0.99, 1.03, 1],
+		delta: { cls: "up" as const, text: "▲ 0.0012" },
+		dir: "up" as const,
+	}));
+}
+
 export function FxCard({
 	data,
+	preview = false,
 }: {
 	data: Record<string, unknown>;
 	update(patch: Record<string, unknown>): void;
+	preview?: boolean;
 }): ReactNode {
 	const rawPairs = Array.isArray(data.pairs) ? (data.pairs as FxPair[]) : [];
 	const pairs = rawPairs.length > 0 ? rawPairs : (fxDefaults().pairs as FxPair[]);
@@ -65,11 +79,12 @@ export function FxCard({
 	const title = typeof data.title === "string" && data.title !== "" ? data.title : "汇率";
 
 	const rowsElRef = useRef<HTMLDivElement | null>(null);
-	const [status, setStatus] = useState("加载中…");
-	const [dotCls, setDotCls] = useState(" gui-fx-dot--loading");
-	const [rows, setRows] = useState<FxRow[]>([]);
+	const [status, setStatus] = useState(preview ? "示例汇率" : "加载中…");
+	const [dotCls, setDotCls] = useState(preview ? "" : " gui-fx-dot--loading");
+	const [rows, setRows] = useState<FxRow[]>(() => (preview ? previewRows(pairs) : []));
 
 	useEffect(() => {
+		if (preview) return;
 		let hist: Record<string, number[]> | null = null;
 		let live: Record<string, number> | null = null;
 		let countdown = REFRESH;

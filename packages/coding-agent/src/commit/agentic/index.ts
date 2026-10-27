@@ -10,6 +10,7 @@ import type { CommitCommandArgs, ConventionalAnalysis, NumstatEntry } from "../.
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
 import { discoverAuthStorage, discoverContextFiles, loadCliExtensionProviders } from "../../sdk";
+import type { AuthStorage } from "../../session/auth-storage";
 import * as git from "../../utils/git";
 import { abortOnGitFailure, pushOrAbort } from "../execute";
 import { type ExistingChangelogEntries, runCommitAgentSession } from "./agent";
@@ -29,7 +30,19 @@ interface CommitExecutionContext {
 export async function runAgenticCommit(args: CommitCommandArgs): Promise<{ usedFallback: boolean }> {
 	const cwd = getProjectDir();
 	const [settings, authStorage] = await Promise.all([Settings.init({ cwd }), discoverAuthStorage()]);
+	try {
+		return await runAgenticCommitWithResources(args, cwd, settings, authStorage);
+	} finally {
+		authStorage.close();
+	}
+}
 
+async function runAgenticCommitWithResources(
+	args: CommitCommandArgs,
+	cwd: string,
+	settings: Settings,
+	authStorage: AuthStorage,
+): Promise<{ usedFallback: boolean }> {
 	process.stdout.write("● Resolving model...\n");
 	const modelRegistry = new ModelRegistry(authStorage);
 	await modelRegistry.refresh();

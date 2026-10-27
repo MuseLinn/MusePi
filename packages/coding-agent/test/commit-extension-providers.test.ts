@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as path from "node:path";
+import { resetModelCacheForTests } from "@musepi/pi-catalog/model-cache";
 import { runCommitCommand } from "@musepi/pi-coding-agent/commit";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { HistoryStorage } from "@musepi/pi-coding-agent/session/history-storage";
+import { resetSessionTitleIndexForTests } from "@musepi/pi-coding-agent/session/title-index";
 import { getProjectAgentDir, setAgentDir, setProjectDir, TempDir } from "@musepi/pi-utils";
 import { $ } from "bun";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
@@ -60,6 +64,10 @@ beforeEach(async () => {
 afterEach(async () => {
 	restoreSettingsTestState(settingsState);
 	settingsState = undefined;
+	AgentStorage.resetInstance();
+	HistoryStorage.resetInstance();
+	resetSessionTitleIndexForTests();
+	resetModelCacheForTests();
 	await tmp.remove();
 	await agentTmp.remove();
 });

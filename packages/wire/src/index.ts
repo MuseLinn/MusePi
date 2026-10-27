@@ -205,6 +205,12 @@ export interface CompactionEntry extends EntryBase {
 	shortSummary?: string;
 	firstKeptEntryId: string;
 	tokensBefore: number;
+	/** Estimated context tokens after the rewrite; absent on legacy entries. */
+	tokensAfter?: number;
+	/** Compaction strategy used for display; absent on legacy/extension entries. */
+	method?: string;
+	/** Non-fatal progress warning attached to this compaction. */
+	warning?: string;
 }
 
 export interface BranchSummaryEntry extends EntryBase {

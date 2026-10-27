@@ -15,6 +15,7 @@ import type {
 } from "@musepi/pi-coding-agent/cleanse/types";
 import { createProgressReporter } from "@musepi/pi-coding-agent/cli/progress-reporter";
 import { resolveCliArgv } from "@musepi/pi-coding-agent/cli-commands";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -124,7 +125,7 @@ describe("cleanse diagnostics", () => {
 
 			expect(suite.checkers).toHaveLength(0);
 		} finally {
-			await fs.rm(root, { recursive: true, force: true });
+			await removeWithRetries(root);
 		}
 	});
 });

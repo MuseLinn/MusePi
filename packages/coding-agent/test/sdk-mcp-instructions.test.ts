@@ -3,11 +3,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AuthStorage } from "@musepi/pi-ai";
+import { resetModelCacheForTests } from "@musepi/pi-catalog/model-cache";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { HistoryStorage } from "@musepi/pi-coding-agent/session/history-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { resetSessionTitleIndexForTests } from "@musepi/pi-coding-agent/session/title-index";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 import { getAgentDir, setAgentDir } from "@musepi/pi-utils/dirs";
 import {
@@ -57,6 +61,10 @@ describe("createAgentSession MCP server instructions (deferred UI)", () => {
 
 	afterAll(() => {
 		authStorage.close();
+		AgentStorage.resetInstance();
+		HistoryStorage.resetInstance();
+		resetSessionTitleIndexForTests();
+		resetModelCacheForTests();
 		setAgentDir(originalAgentDir);
 		for (const dir of [registryDir, isolatedHome]) {
 			if (dir && fs.existsSync(dir)) {

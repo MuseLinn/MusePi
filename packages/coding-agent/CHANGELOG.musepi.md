@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **压缩摘要可以在右侧标签中打开了**：自动压缩后，会话中的横幅会显示压缩前后 token；点击「查看摘要」即可阅读完整内容，关闭或分栏后仍按原条目恢复。摘要面板由可替换的内置插件提供，右侧扩展组件也能获得各自标签的 target 与统一 token 格式。
+  - EN: Compaction summaries now open in right-panel tabs. The transcript banner shows before/after token counts, and "View summary" opens the full text, restored against the same entry after closing or splitting tabs. The panel is provided by a replaceable bundled plugin, and right-panel extension components receive their own tab target and shared token formatting.
 - **内置浏览器的 Agent 操作现在看得见，也能随时接管**：页面会显示操作边框、当前动作和已控制时长；点击「我来接管」停止本轮自动化后，当前页面和登录状态仍然保留，可以马上手动继续。设备工具条同时支持尺寸、显示比例和外框背景调整。
   - EN: Built-in browser automation is now visible and easy to take over. The page shows an operation ring, current action, and elapsed control time; "Take over" stops the current turn while preserving the page and login state for immediate manual use. The device toolbar also supports dimensions, display scale, and frame background.
 - **浏览器工具调用现在展示具体步骤和重试结果**：查看页面、点击、填写、滚动和截图等操作会实时列在卡片中，刷新历史后仍然保留；连续调用自动汇总页面与操作次数，已成功的重试不再被误报为最终失败，展开仍可查看完整过程。
@@ -22,6 +24,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The agent can now read a note in full. The knowledge tool's `show` used to accept plans only — asking "what does that note say" produced an error and the agent had to go digging through files on disk; `show` with `kind: "note"` now returns the note's complete body (`list` still gives an 80-character preview; use `show` for the full text).
 
 ### Changed
+- **冷启动更快，启动桌宠也会跟随主题色**：加载指示在品牌动画结束后仍持续活动；首屏不再等待后台 SDK 预热或慢设置读取，daemon 主动重启不再被误判为掉线而重复启动，能力探测也不会再发起远程请求。启动页仅保留品牌与进度，只有真实连接失败才进入恢复页。
+  - EN: Cold starts are faster, and the startup pet now follows the theme. Loading feedback keeps moving after the brand intro; the shell no longer waits for background SDK prewarming or slow settings discovery, intentional daemon restarts no longer trigger duplicate recovery boots, and capability probes avoid remote requests. Only a real connection failure opens the recovery view.
+- **输入框增加跟随鼠标的光晕，空态提示不再轮播**：空态与会话输入框共享细腻的指针光晕，移动时不触发输入区重渲染，减少动态效果时自动关闭；placeholder 和补充提示保持静止，降低视觉干扰。
+  - EN: Composers gain a subtle pointer-follow glow while empty-state hints stay still. The effect does not rerender the input subtree and turns off under reduced motion; placeholders and supplementary tips no longer rotate, reducing visual distraction.
+- **悬浮提示现在稳定跟随触发元素，键盘和触屏也能一致使用**：提示按锚点定位并在窗口边缘自动翻转或内移，滚动和缩放时不再突然消失或错位；悬停与键盘焦点使用相同延迟，触屏支持长按，Escape 可直接关闭，减少动态效果时不再有多余位移。
+  - EN: Tooltips now stay anchored and work consistently with keyboards and touch. They flip or shift at viewport edges, follow the trigger through scrolling and resizing, use the same delay for hover and focus, support touch long-press, and close with Escape. Reduced motion no longer leaves positional transitions.
 - **Issue/PR 工具区和右侧标签更整齐流畅了**：搜索与 PR/问题子页签归入同一工具栏，筛选器不再多层挤压换行；右侧零标签页改为垂直居中的自适应卡片网格。右侧与内置浏览器标签新增统一的打开/关闭动效，减少动态效果时立即完成，浏览器页面销毁顺序不受影响。
   - EN: Issue/PR tools and panel tabs are cleaner and smoother. Search and the PR/issues subtabs now share one toolbar, while filters keep their own structured row. The empty right panel is now a vertically centered adaptive card grid. Surface and built-in browser tabs share open/close motion that snaps under reduced motion without changing WebView disposal order.
 - **提示、通知、抽屉和弹窗统一了玻璃质感与可读性**：六类浮层共享一致的边缘、光泽和阴影；关闭动效或减少动态效果时，入场与出场都会立即完成。降低透明度、系统不支持背景模糊以及 Windows 无模糊路径会使用清晰的不透明底色。嵌套弹窗只响应最上层的键盘操作，危险删除确认也不会再被 Enter 误触发。
@@ -32,8 +40,28 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Task center, boards, issues & pull requests, and capability center now share one page-header layout for titles, back navigation, descriptions, actions, and tabs. The task calendar exposes every task for a selected day, and both calendar and status-board items open the corresponding task details.
 
 ### Fixed
-- **文件、代码、网页和会话引用统一成结构化卡片了**：引用不再把大段裸文本塞进输入框；来源、选区、评论、预览和移除都在卡片里处理，发送后仍保留专用展示。文件预览现在可以直接引用选中的代码及行号，队列和持久化不会丢来源。
-  - EN: File, code, browser, and chat references now share structured cards. Sources, selections, comments, previews, and removal stay out of the raw textarea and remain visible after sending. File previews can quote selected code with line numbers, while queues and persistence preserve the source.
+- **本地 daemon 启动不再轻易超时或重复拉起**：慢编译不再被 10 秒时限误杀，并发启动共享同一过程，已有 daemon 会直接接管；能力探测使用合法参数，避免把参数校验失败误判为旧版本并反复重启。
+  - EN: Local daemon startup no longer times out or spawns duplicates unnecessarily. Slow compilation is allowed to finish, concurrent starts share one process, and an existing daemon is adopted instead of replaced. Capability probes now use valid parameters, preventing validation errors from being mistaken for an outdated daemon and causing restart loops.
+- **专注输入框和看板合集更整齐流畅**：专注模式的桌宠不再被顶部裁切，提示文本不会因盒模型提前换行；合集卡片按宽高完整适配并保持同心圆角，深色示例卡统一液态玻璃层次。合集预览改用静态示例，不再同时启动行情请求、刷新定时器和音频动画；真实看板仍保留实时能力，快捷输入框始终吸住底部。
+  - EN: Focus mode and board collections are cleaner and smoother. The composer pet is no longer clipped, placeholders no longer wrap early, and collection cards fit both axes with concentric radii and a unified dark liquid-glass treatment. Collection previews now use static examples instead of starting market requests, refresh timers, and audio animation together; real boards keep live behavior, and the quick-create input stays pinned to the bottom.
+- **长会话和地图不再打开就拉取全部历史**：对话、地图和右侧轨迹共享最新有限窗口；只有主动加载更早内容或定位旧消息时才按页读取，轮次索引从最新 200 轮开始，前插内容按条目身份去重，不再反复累积或卡住首屏。
+  - EN: Long sessions and the map no longer fetch the entire history on open. Chat, map, and trajectory share a bounded newest window; older pages load only on demand or when locating an old message. The turn index starts with the latest 200 turns and prepended entries are deduplicated by identity, preventing repeated accumulation and stalled first paint.
+- **会话地图和轨迹在历史加载后保持清晰与一致**：advisor 链节不再制造幻影分支，嵌套分支连接真实父轮；加载更早历史不会把展开/折叠或选中状态转移到其他轮次，也不会重置地图缩放与平移。轮卡、轨迹事件和 Overview 轮段均可用键盘操作。
+  - EN: The session map and trajectory stay coherent while history loads. Advisor links no longer create phantom branches, nested branches connect to their real parent turn, and older-history prepends preserve expansion, collapse, selection, zoom, and pan state. Turn cards, trajectory events, and Overview segments are keyboard-operable.
+- **历史会话和 advisor 记录不再被陈旧缓存误报为未回答**：恢复时会核对磁盘 transcript 是否已有更新的完成记录；轮次索引也可从最新有限窗口开始，按需向前分页，旧客户端的无参请求保持兼容。
+  - EN: Historical sessions and advisor records are no longer reported as unanswered because of a stale cache. Recovery now checks whether the on-disk transcript contains newer completed records. Turn indexes can also start with a bounded newest window and page backward on demand, while parameter-free requests from older clients remain compatible.
+- **长会话分页更稳定，advisor 只读记录不再误报无应答**：历史页面按当前会话隔离加载，重复触发共享同一请求，切换或刷新后旧页面不会覆盖新内容；失败会保留现有消息并明确提示，advisor 记录也不再进入普通会话的无应答检查。
+  - EN: Long-session paging is more reliable, and read-only advisor records no longer report a missing reply. History loads are isolated to the current session, repeated triggers share one request, and stale pages cannot overwrite a newer snapshot. Failures preserve visible messages with an explicit notice, while advisor records skip ordinary unanswered-prompt checks.
+- **首次进入会话就会正确测量输入区高度**：从欢迎页打开会话时，消息尾部、渐隐带和跳转按钮现在能立即获得真实输入区高度，不再一直使用默认间距而遮住最新内容。
+  - EN: The composer is measured correctly on the first session entry. Opening a session from the welcome scene now publishes its real height to the transcript tail, fade band, and jump control immediately instead of retaining fallback spacing that could cover the newest content.
+- **CLI 先选定状态目录再加载环境变量**：启动时不再过早读取默认 `.env`，`--home` 或 `MUSEPI_HOME` 选定目录中的环境配置会在命令模块加载时正确生效。
+  - EN: The CLI now selects its state home before loading environment variables. Startup no longer reads the default `.env` too early; environment configuration from the directory selected by `--home` or `MUSEPI_HOME` takes effect correctly when command modules load.
+- **并发归档不会再绕过同会话的构建上限**：文件收集阶段也会占用构建槽位，快速重复发起归档时最多同时运行两个任务，不再因请求重叠而全部启动。
+  - EN: Concurrent archives no longer bypass the per-session build limit. File collection now reserves a build slot, so rapid overlapping requests start at most two builds instead of all running at once.
+- **跳到最新按钮和输入框桌宠不再难用**：跳到最新按钮始终位于输入框上方安全区，输入框增高、附件/引用卡或统计行变化时仍保持间距，不再遮住消息底部；输入框旁的品牌球体桌宠也已放大，窄窗口下眼睛、轮廓和点击区域依然清晰协调。
+  - EN: The jump-to-latest control and composer pet are easier to use. The control stays in the safe area above the composer with consistent spacing as the input, attachment or quote cards, and stats row change height, without covering the message tail. The brand orb is larger too, with clear eyes and outline and a coordinated click target across window widths.
+- **文件、代码、网页和会话引用统一成结构化卡片了**：引用不再把大段裸文本塞进输入框；来源、选区、评论、预览和移除都在卡片里处理，发送后仍保留专用展示。文件预览现在可以直接引用选中的代码及行号，队列和持久化不会丢来源；连续编辑批注也不会再卸载输入框或丢失焦点。
+  - EN: File, code, browser, and chat references now share structured cards. Sources, selections, comments, previews, and removal stay out of the raw textarea and remain visible after sending. File previews can quote selected code with line numbers, while queues and persistence preserve the source. Continuous annotation editing no longer remounts the input or drops focus.
 - **折叠子会话不再把父会话一起藏掉**：父行始终保持可见，只有子行执行高度动画；「全部展开/收起」现在能跨所有列表实例工作，展开时恢复原来的子会话。
   - EN: Collapsing sub-sessions no longer hides the parent. Parent rows remain visible while only child rows animate, and "expand/collapse all" now works across every list instance and restores the original children on expansion.
 - **角色和回退模型可以分别选择 Auto 与思考等级了**：主角色和每个回退项都有独立的 inherit/auto/off/模型支持等级；`provider/id:auto` 不再被误当模型名或被 clamp 清除，修改一个回退项不会覆盖其他项。
@@ -78,6 +106,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Shell commands now count as commands. Auto-approved bash tool calls used to be tallied as "other operations", so the run summary read "ran N other operations"; they now land in the commands segment.
 - **插件加载和热更新不再被类型文件拖慢**：运行时依赖图会跳过 `import type` 和 `export type`，不再递归读取 SDK 的整条类型导入链；实际运行模块及其子模块热更新保持原有行为。
   - EN: Plugin loading and hot reload no longer get bogged down by type files. The runtime dependency graph skips `import type` and `export type` instead of recursively reading the SDK's type-import chain, while runtime modules retain their existing submodule HMR behavior.
+- **Windows 上中断 Python 执行不再丢失内核状态**：无控制台的桌面或服务进程也能通过控制通道请求 `KeyboardInterrupt`，并行 `agent()` 会及时取消且保留之前定义的变量；只有中断长时间无响应时才关闭并重建内核。
+  - EN: Interrupting Python execution on Windows no longer discards kernel state. Desktop and service processes without a console can request `KeyboardInterrupt` through the control channel, cancelling parallel `agent()` calls promptly while preserving previously defined variables. The kernel is terminated and recreated only when interruption stays unresponsive.
+- **Cursor 的文件搜索在 Windows 使用正确的 glob 路径**：`pi_grep` 与 `pi_find` 拼接目录和匹配模式时保留工具协议需要的 `/` 分隔符，不再生成无法匹配的混合路径。
+  - EN: Cursor file searches now use correct glob paths on Windows. `pi_grep` and `pi_find` join directories and patterns with the `/` separator required by the tool protocol instead of producing unusable mixed-separator paths.
+- **MCP 资源读取不再静默空返回**：`musepi read` 会等待已发现的服务器完成连接，再读取原生 URI 或 `mcp://` 资源；异步 CLI 命令在输出或错误写完前不会提前以成功状态退出。
+  - EN: MCP resource reads no longer return empty success. `musepi read` waits for discovered servers to connect before reading native or `mcp://` URIs, and asynchronous CLI commands stay alive until their output or error has been written.
+- **Windows 后台服务在 broker 替换后继续运行**：detached daemon 不再随启动它的 broker 退出；启动失败会附带子进程的实际错误，便于直接定位权限、路径或运行时问题。
+  - EN: Windows background daemons now survive broker replacement. Detached processes no longer exit with their original broker, and startup failures include the child process error to make permission, path, and runtime issues directly diagnosable.
+- **Windows 的文件过滤与远程数据库读取更可靠**：带行号的 grep 在原生路径使用不同分隔符时仍按范围过滤；远程 SQLite 内容不再因临时文件清理竞争被误降级为二进制通知，设置存储也能确定性关闭。
+  - EN: File filtering and remote database reads are more reliable on Windows. Line-ranged grep now respects ranges across native path separators, remote SQLite content is no longer downgraded to a binary notice by a temporary-file cleanup race, and settings storage closes deterministically.
 
 ## [0.6.0] - 2026-10-22
 

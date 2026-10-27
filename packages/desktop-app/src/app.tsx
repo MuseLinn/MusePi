@@ -1,7 +1,5 @@
 import {
-	BlurText,
 	getLocaleSnapshot,
-	ShinyText,
 	setLocale,
 	subscribeLocale,
 	t,
@@ -39,14 +37,20 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
-import { SplashOrb } from "./components/SplashOrb";
+import { StartupSplash } from "./components/StartupSplash";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { type ActionToastKind, pushActionToast } from "./lib/action-toast";
 import { applyAppearancePrefs } from "./lib/appearance";
-import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMethods } from "./lib/daemon-version";
+import {
+	daemonMethodProbeParams,
+	isMissingDaemonMethodError,
+	REQUIRED_DAEMON_METHODS,
+	shouldRestartDaemon,
+	shouldRestartForMissingMethods,
+} from "./lib/daemon-version";
 import { openMiniChat, pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
@@ -58,7 +62,7 @@ import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSigna
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
-import { RpcClient, type StreamEvent } from "./lib/rpc";
+import { ExpectedDisconnects, RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { buildSessionMarkdown, markdownFileName } from "./lib/session-markdown";
@@ -94,30 +98,21 @@ import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
 
-const DEFAULT_URL = "ws://127.0.0.1:8300";
+const STARTUP_SHELL =
+	typeof window === "undefined"
+		? undefined
+		: (
+				window as unknown as {
+					electronAPI?: { startupPerf?: boolean; startupMark?(phase: string): void; daemonPort?: number | null };
+				}
+			).electronAPI;
+const DEFAULT_PORT = STARTUP_SHELL?.daemonPort ?? 8300;
+const DEFAULT_URL = `ws://127.0.0.1:${DEFAULT_PORT}`;
 
-/**
- * Splash → recovery affordance threshold: a boot attempt still in flight
- * after this long grows a diagnosis line + retry on the splash instead of
- * holding it forever. A cold start pays daemon spawn + the ~8s prewarm
- * wait, so the bar must sit ABOVE the worst legitimate cold boot, not
- * above the animation.
- */
-const BOOT_STALL_MS = 20_000;
-
-/**
- * Renderer-side startup marks. Silent unless the launch sets
- * MUSEPI_STARTUP_PERF=1, and even then only as a prefixed line that the
- * main process relays to the terminal (electron/main.cjs) — the
- * renderer's own console output is never forwarded. Boot crosses the
- * WS handshake, the daemon prewarm and the version/capability gate, so
- * without marks a slow launch can only be attributed by guess.
- */
-const STARTUP_PERF = typeof process !== "undefined" && process.env?.MUSEPI_STARTUP_PERF === "1";
-const STARTUP_MARK_PREFIX = "[renderer-startup] ";
+/** Renderer-side startup marks, sent over the opt-in preload IPC bridge. */
 function markStartup(phase: string): void {
-	if (!STARTUP_PERF) return;
-	console.info(`${STARTUP_MARK_PREFIX}${phase} +${Math.round(performance.now())}ms`);
+	if (STARTUP_SHELL?.startupPerf !== true) return;
+	STARTUP_SHELL.startupMark?.(`${phase} +${Math.round(performance.now())}ms`);
 }
 
 /** Transient RPC-error banner: how long a failure stays visible before
@@ -599,23 +594,6 @@ function AppInner(): ReactNode {
 	const [store, setStore] = useState<GuiSessionStore | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
-	// Boot stall recovery: the splash
-	// must never be a dead end. When a boot attempt exceeds BOOT_STALL_MS the
-	// splash grows a diagnosis line + retry, while `booting` itself stays in
-	// charge of the transition (a slow but eventually-successful boot still
-	// lands in the app — the stall block only ADDS affordance, it never gates).
-	// bootSeq re-arms the timer on every attempt: `booting` alone cannot, since
-	// a retry keeps it true and would never retrigger this effect.
-	const [bootStalled, setBootStalled] = useState(false);
-	const [bootSeq, setBootSeq] = useState(0);
-	useEffect(() => {
-		if (!booting) {
-			setBootStalled(false);
-			return;
-		}
-		const timer = setTimeout(() => setBootStalled(true), BOOT_STALL_MS);
-		return () => clearTimeout(timer);
-	}, [booting, bootSeq]);
 	// Session-open loading overlay (React-Bits-style skeleton): armed by
 	// openSession with a 250ms flicker threshold, cleared when the store
 	// lands (or the open fails). MUST sit above the booting/connect early
@@ -1068,6 +1046,7 @@ function AppInner(): ReactNode {
 	const [presetThinkingLevel, setPresetThinkingLevel] = useState<ThinkingLevel | null | undefined>(undefined);
 	const bootRef = useRef(false);
 	const rpcRef = useRef<RpcClient | null>(null);
+	const expectedDisconnectsRef = useRef(new ExpectedDisconnects());
 	const storeRef = useRef<GuiSessionStore | null>(null);
 	// Latest active-session tree label — read by the pet state pusher
 	// (effect closure) without re-subscribing the effect per render.
@@ -1340,6 +1319,7 @@ function AppInner(): ReactNode {
 			rpcRef.current = client;
 			client.onStatus = phase => {
 				if (phase === "closed") {
+					if (expectedDisconnectsRef.current.consume(client)) return;
 					setStatus("closed");
 					// Unannounced drop (daemon restart / machine sleep): the
 					// in-place auto-reconnect restore froze the main-window
@@ -1507,42 +1487,46 @@ function AppInner(): ReactNode {
 			// call also pulls the daemon interface language (settings.locale) and
 			// the thinking default — both are config.yml-backed single sources
 			// (F1/F2 audit fixes, 2026-08-11); the renderer mirrors them locally.
-			try {
-				const res = await client.request<{
-					modelRoles?: Record<string, string>;
-					"settings.locale"?: string;
-					defaultThinkingLevel?: string;
-				}>("settings.get", {
-					keys: ["modelRoles", "settings.locale", "defaultThinkingLevel"],
-				});
-				const dflt = res?.defaultThinkingLevel;
-				const dfltLevel =
-					dflt === "auto" || (THINKING_LEVELS as readonly string[]).includes(dflt ?? "")
-						? (dflt as ThinkingLevel)
-						: undefined;
-				if (res?.modelRoles?.default) {
-					const role = splitRoleValue(res.modelRoles.default);
-					// Bare selector for the model preselect; the thinking suffix
-					// feeds the thinking preselect (null → inherit → falls back
-					// to the configured defaultThinkingLevel; "off" → off).
-					if (role) {
-						setPresetModelId(role.model);
-						setDefaultModelId(role.model);
-						setPresetThinkingLevel(
-							role.level === null ? dfltLevel : role.level === "off" ? null : (role.level as ThinkingLevel),
-						);
+			// Slow settings discovery must not hold the shell: defaults arrive in place.
+			void (async (): Promise<void> => {
+				try {
+					const res = await client.request<{
+						modelRoles?: Record<string, string>;
+						"settings.locale"?: string;
+						defaultThinkingLevel?: string;
+					}>("settings.get", {
+						keys: ["modelRoles", "settings.locale", "defaultThinkingLevel"],
+					});
+					if (rpcRef.current !== client) return;
+					const dflt = res?.defaultThinkingLevel;
+					const dfltLevel =
+						dflt === "auto" || (THINKING_LEVELS as readonly string[]).includes(dflt ?? "")
+							? (dflt as ThinkingLevel)
+							: undefined;
+					if (res?.modelRoles?.default) {
+						const role = splitRoleValue(res.modelRoles.default);
+						// Bare selector for the model preselect; the thinking suffix
+						// feeds the thinking preselect (null → inherit → falls back
+						// to the configured defaultThinkingLevel; "off" → off).
+						if (role) {
+							setPresetModelId(role.model);
+							setDefaultModelId(role.model);
+							setPresetThinkingLevel(
+								role.level === null ? dfltLevel : role.level === "off" ? null : (role.level as ThinkingLevel),
+							);
+						} else {
+							setPresetModelId(res.modelRoles.default);
+							setDefaultModelId(res.modelRoles.default);
+						}
 					} else {
-						setPresetModelId(res.modelRoles.default);
-						setDefaultModelId(res.modelRoles.default);
+						setPresetThinkingLevel(dfltLevel);
 					}
-				} else {
-					setPresetThinkingLevel(dfltLevel);
+					const locale = res?.["settings.locale"];
+					if (locale === "zh-CN" || locale === "en-US") setLocale(locale);
+				} catch {
+					// settings RPC unavailable (older daemon) — localStorage fallback stands
 				}
-				const locale = res?.["settings.locale"];
-				if (locale === "zh-CN" || locale === "en-US") setLocale(locale);
-			} catch {
-				// settings RPC unavailable (older daemon) — localStorage fallback stands
-			}
+			})();
 			return true;
 		},
 		[refreshSessions],
@@ -1554,40 +1538,11 @@ function AppInner(): ReactNode {
 	// fails does the error page (with manual entry as advanced option) appear.
 	const boot = useCallback(async (): Promise<void> => {
 		setBooting(true);
-		setBootSeq(seq => seq + 1); // re-arms the boot-stall timer (see bootStalled)
 		setConnectError(null);
-		// Splash hold: the entrance animation (logo settle 620ms + wordmark
-		// blur-in ~330ms ≈ 950ms) should always be seen, and a COLD start
-		// (daemon spawned just now) needs extra cover while the daemon
-		// prewarms the lazy SDK module graph. A WARM start (daemon already
-		// running — the default URL or a probed port connects in ~300ms)
-		// only holds for the animation itself, so relaunches feel instant
-		// instead of a fixed 2s stare (2026-08-11 fixed hold).
+		// Let the brand intro finish on fast connections. SDK prewarming stays
+		// in the daemon and never holds the interactive shell hostage.
 		markStartup("boot.start");
 		const t0 = performance.now();
-		let coldStart = false;
-		// The daemon prewarms the lazy SDK module graph in the background
-		// (startDaemon). Hold the splash until it reports ready so the FIRST
-		// session.create / session.resume — right after the daemon was
-		// spawned — never pays the ~4s import cost. Non-fatal: an older
-		// daemon without the RPC (or a failed prewarm) just proceeds and the
-		// first session op pays the cost as before.
-		const waitForPrewarm = async (): Promise<void> => {
-			const client = rpcRef.current;
-			if (!client) return;
-			const deadline = Date.now() + 8_000;
-			for (;;) {
-				try {
-					const st = await client.request<{ ready?: boolean }>("system.prewarmStatus");
-					if (st?.ready === true) return;
-					markStartup("prewarm.ready");
-				} catch {
-					return; // older daemon without the RPC — nothing to wait for
-				}
-				if (Date.now() >= deadline) return;
-				await new Promise(resolve => setTimeout(resolve, 300));
-			}
-		};
 		// Remote hosts (instance switcher) skip the Electron version gate and
 		// the local probe/spawn fallback — those only make sense for the
 		// machine's own daemon.
@@ -1603,7 +1558,6 @@ function AppInner(): ReactNode {
 		const tryUrl = async (u: string): Promise<boolean> => {
 			try {
 				await connect(u);
-				await waitForPrewarm();
 				// OTA/发布一致性:daemon 是 detached 进程(daemon.cjs spawn
 				// detached:true),GUI 重启从不刷新它 —— 新版本 GUI 连旧
 				// daemon 会看不到新功能(2026-08-17 实测)。daemon.cjs
@@ -1644,9 +1598,9 @@ function AppInner(): ReactNode {
 							const answered: string[] = [];
 							for (const method of REQUIRED_DAEMON_METHODS) {
 								const ok = await rpc
-									.request(method, method === "skills.marketplace.query" ? { pageSize: 1 } : {})
+									.request(method, daemonMethodProbeParams(method))
 									.then(() => true)
-									.catch(() => false);
+									.catch(err => !isMissingDaemonMethodError(err));
 								if (ok) answered.push(method);
 							}
 							stale = shouldRestartForMissingMethods(answered);
@@ -1674,10 +1628,10 @@ function AppInner(): ReactNode {
 						markStartup("version.gate");
 						if (stale) {
 							capabilityRestarted.add(u);
-							const port = Number.parseInt(new URL(u).port, 10) || 8300;
+							const port = Number.parseInt(new URL(u).port, 10) || DEFAULT_PORT;
+							expectedDisconnectsRef.current.expect(rpc);
 							await api.restartDaemon(port);
 							await connect(u);
-							await waitForPrewarm();
 							markStartup("daemon.restarted");
 						}
 					}
@@ -1694,8 +1648,7 @@ function AppInner(): ReactNode {
 				const port = await probeDaemonPort();
 				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) return;
 				try {
-					coldStart = true;
-					const spawned = await startDaemonViaShell(8300);
+					const spawned = await startDaemonViaShell(DEFAULT_PORT);
 					markStartup("daemon.spawned");
 					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) return;
 					// The spawn returned a port but the first WebSocket handshake
@@ -1707,7 +1660,7 @@ function AppInner(): ReactNode {
 				}
 			}
 		} finally {
-			const holdMs = coldStart ? 2000 : 1100;
+			const holdMs = 950;
 			const elapsed = performance.now() - t0;
 			if (elapsed < holdMs) {
 				const { promise, resolve } = Promise.withResolvers<void>();
@@ -1716,6 +1669,7 @@ function AppInner(): ReactNode {
 			}
 			markStartup("boot.done");
 			setBooting(false);
+			void rpcRef.current?.request("system.prewarmStart").catch(() => {});
 		}
 	}, [connect, url]);
 
@@ -3482,38 +3436,7 @@ function AppInner(): ReactNode {
 	if (booting) {
 		return (
 			<div className="gui-shell">
-				<div className="gui-splash">
-					{/* Launch splash: the IP orb mascot (SplashOrb, geometry parity
-					 * with the desktop pet and the landing page) settles with a glow
-					 * bloom and a short finite float; the wordmark blurs in
-					 * char-by-char and a shine band sweeps the tagline. All
-					 * animations are FINITE (see .gui-splash-orb / shiny rules) —
-					 * the splash can outlive its intro, and infinite paints wedge
-					 * the renderer. gui-motion-off kills all of it (static). */}
-					<div className="gui-splash-inner">
-						<div className="gui-splash-orb">
-							<SplashOrb />
-						</div>
-						<BlurText text="MusePi" className="gui-splash-wordmark" stepMs={55} />
-						<ShinyText
-							text={t("settings.yourPairEngineer.info")}
-							className="gui-splash-tagline"
-							speed={3.4}
-							shineColor="var(--color-accent)"
-						/>
-					</div>
-					{/* Boot stall recovery: appears only after
-					 * BOOT_STALL_MS of an in-flight attempt — a slow boot still
-					 * lands in the app; this adds an exit, it never gates one. */}
-					{bootStalled && (
-						<div className="gui-splash-stall">
-							<p className="gui-splash-stall-text">{t("general.bootTakingLongerThan")}</p>
-							<button className="gui-btn gui-btn-primary" type="button" onClick={() => void boot()}>
-								{t("settings.retry")}
-							</button>
-						</div>
-					)}
-				</div>
+				<StartupSplash />
 			</div>
 		);
 	}

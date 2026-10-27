@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { TempDir } from "@musepi/pi-utils";
@@ -519,22 +519,14 @@ describe("runEvalAgent", () => {
 });
 
 describe("agent() through eval runtimes", () => {
-	// One shared JS worker backs every agent() JavaScript test below. Spawning a
-	// worker (thread + module-graph import) is fixed infrastructure cost, not
-	// behavior under test; reusing it keeps the suite fast. Each run still threads
-	// its own ToolSession (settings/mock are read live through the bridge per call)
-	// and top-level `const`/`let` are demoted to `var`, so reuse never leaks state
-	// these tests observe. Torn down in afterAll via disposeAllVmContexts().
+	// Process-backed runtimes must close before Bun reaps dangling children at the
+	// test boundary. Fresh contexts also prevent cross-test worker state leaks.
 	const sharedJsSessionId = "agent-bridge-shared-js";
 
-	afterEach(() => {
+	afterEach(async () => {
+		await Promise.all([disposeAllVmContexts(), disposeAllKernelSessions()]);
 		vi.restoreAllMocks();
 		vi.useRealTimers();
-	});
-
-	afterAll(async () => {
-		await disposeAllVmContexts();
-		await disposeAllKernelSessions();
 	});
 
 	it("exposes agent() in JavaScript and parses structured output", async () => {
@@ -587,7 +579,7 @@ describe("agent() through eval runtimes", () => {
 			{ cwd: tempDir.path(), sessionId: sharedJsSessionId, session, sessionFile },
 		);
 
-		expect(result.exitCode).toBe(0);
+		expect(result.exitCode, result.output).toBe(0);
 		expect(JSON.parse(result.output.trim())).toEqual(["a", "b", "c", "d"]);
 		expect(barrier.maxInFlight()).toBeGreaterThan(1);
 		expect(barrier.maxInFlight()).toBeLessThanOrEqual(2);
@@ -782,7 +774,7 @@ describe("agent() through eval runtimes", () => {
 			kernelMode: "session",
 			toolSession: session,
 		});
-		expect(after.exitCode).toBe(0);
+		expect(after.exitCode, after.output).toBe(0);
 		expect(after.output.trim()).toBe("4242");
 	}, 30_000);
 
@@ -1419,8 +1411,8 @@ describe("runEvalAgent isolation", () => {
 			caught = err as Error;
 		}
 		expect(caught).toBeDefined();
-		const match = caught?.message.match(/(\/[^\s,]+?\.nested-0-sub_nested\.patch)/);
-		expect(match).not.toBeNull();
+		const match = caught?.message.match(/Captured nested patch preserved at (.+?\.nested-0-sub_nested\.patch)\./);
+		expect(match, caught?.message).not.toBeNull();
 		const persistedPath = match?.[1];
 		expect(persistedPath).toBeDefined();
 		const contents = await fs.readFile(persistedPath!, "utf-8");

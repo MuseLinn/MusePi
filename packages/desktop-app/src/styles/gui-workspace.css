@@ -2723,6 +2723,22 @@
 
 
 /* ── 会话轨迹视图(DSH Trajectory 参考吸收) ─────────────────────────── */
+.traj-row:focus-visible,
+.traj-ov-segment:focus-visible,
+.traj-trow-badge:focus-visible,
+.tm-node:focus-visible,
+.tm-lane-row--link:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+	outline-offset: 2px;
+}
+
+.traj-row:focus-visible .traj-event-jump,
+.traj-trow:focus-within .traj-trow-actions,
+.traj-turn-group:focus-within .traj-turn-actions,
+.tm-lane-row--link:focus-visible .tm-lane-actions {
+	opacity: 1;
+}
+
 .traj-row {
 	/* minmax(0,1fr)(事件行) + auto(跳转小按钮):行点击选中检视、箭头点击跳转,
 	 * 结构上避免按钮包裹整行导致的 flex 塌缩/点击吞并(2026-08-21 实测)。
@@ -5416,13 +5432,20 @@
 	color: var(--color-text-muted);
 }
 
-/* 全量历史补全中提示:小号弱色 + 呼吸,补全后整个标题区自动刷新。 */
+/* 历史页加载与终止状态复用同一小号说明，避免挤压搜索和地图操作。 */
 .tm-title-loading {
 	font-style: normal;
 	font-size: 11px;
 	font-weight: 500;
 	color: var(--color-accent);
 	animation: tm-pulse 1.6s ease-in-out infinite;
+}
+
+.tm-history-blocked {
+	max-width: 220px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
 }
 
 @keyframes tm-pulse {
@@ -5433,6 +5456,18 @@
 	50% {
 		opacity: 1;
 	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tm-title-loading,
+	.traj-loading-note {
+		animation: none;
+	}
+}
+
+.gui-motion-off .tm-title-loading,
+.gui-motion-off .traj-loading-note {
+	animation: none;
 }
 
 /* 轨迹面板同款补全提示(统计卡片下方一行)。 */

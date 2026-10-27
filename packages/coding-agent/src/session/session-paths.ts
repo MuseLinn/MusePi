@@ -84,12 +84,12 @@ function getDefaultSessionDirName(cwd: string): {
 	const tempRelative = path.relative(canonicalTempRoot, canonicalCwd);
 	let encodedDirName: string;
 	let scope: "home" | "tmp" | "abs";
-	if (homeRelative === "" || (!homeRelative.startsWith("..") && !path.isAbsolute(homeRelative))) {
-		encodedDirName = encodeRelativeSessionDirName("-", homeRelative);
-		scope = "home";
-	} else if (tempRelative === "" || (!tempRelative.startsWith("..") && !path.isAbsolute(tempRelative))) {
+	if (tempRelative === "" || (!tempRelative.startsWith("..") && !path.isAbsolute(tempRelative))) {
 		encodedDirName = encodeRelativeSessionDirName("-tmp", tempRelative);
 		scope = "tmp";
+	} else if (homeRelative === "" || (!homeRelative.startsWith("..") && !path.isAbsolute(homeRelative))) {
+		encodedDirName = encodeRelativeSessionDirName("-", homeRelative);
+		scope = "home";
 	} else {
 		encodedDirName = encodeLegacyAbsoluteSessionDirName(canonicalCwd);
 		scope = "abs";
@@ -181,6 +181,29 @@ function migrateHashedSessionDir(hashedDirName: string, sessionDir: string, sess
 	}
 }
 
+function migrateHomeScopedTempSessionDir(cwd: string, sessionDir: string, sessionsRoot: string): void {
+	const canonicalTempRoot = normalizePathForComparison(os.tmpdir());
+	const canonicalCwd = normalizePathForComparison(path.resolve(cwd));
+	const tempRelative = path.relative(canonicalTempRoot, canonicalCwd);
+	if (tempRelative.startsWith("..") || path.isAbsolute(tempRelative)) return;
+	const canonicalHome = normalizePathForComparison(os.homedir());
+	const homeRelative = path.relative(canonicalHome, canonicalCwd);
+	if (homeRelative.startsWith("..") || path.isAbsolute(homeRelative)) return;
+	const oldDirName = encodeRelativeSessionDirName("-", homeRelative);
+	if (oldDirName === path.basename(sessionDir)) return;
+	const oldDir = path.join(sessionsRoot, resolveCaseVariantDirName(sessionsRoot, oldDirName));
+	if (oldDir === sessionDir || !fs.existsSync(oldDir)) return;
+	try {
+		migrateSessionDirPath(oldDir, sessionDir);
+	} catch (error) {
+		logger.warn("Failed to migrate home-scoped temp session directory", {
+			oldPath: oldDir,
+			newPath: sessionDir,
+			error: String(error),
+		});
+	}
+}
+
 export function resolveManagedSessionRoot(sessionDir: string, cwd: string): string | undefined {
 	const currentDirName = path.basename(sessionDir);
 	const { encodedDirName } = getDefaultSessionDirName(cwd);
@@ -246,6 +269,7 @@ export function computeDefaultSessionDir(
 	const sessionDir = path.join(sessionsRoot, resolveCaseVariantDirName(sessionsRoot, encodedDirName));
 	migrateLegacyAbsoluteSessionDir(resolvedCwd, sessionDir, sessionsRoot);
 	migrateHashedSessionDir(hashedDirName, sessionDir, sessionsRoot);
+	migrateHomeScopedTempSessionDir(resolvedCwd, sessionDir, sessionsRoot);
 	storage.ensureDirSync(sessionDir);
 	return sessionDir;
 }

@@ -30,7 +30,7 @@ import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-wi
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
-import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/slot-host";
+import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount, selectPanelTabComponent } from "../lib/slot-host";
 import { SURFACES, surfaceById, widthForSurface, writeSurfaceWidth } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
@@ -164,7 +164,7 @@ export function ContextPanel({
 	overviewEntries,
 	overviewLoading,
 	overviewError,
-	onEnsureFullHistory,
+	onLoadOlderHistory,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
@@ -187,15 +187,14 @@ export function ContextPanel({
 	/** Extension panel-tab slots (panel.tab.*); nav items live in the
 	 *  RightRail — the panel only renders their content. */
 	extTabs?: import("../lib/slot-host").SlotComponent[];
-	/** 全量历史(ChatView ensureFullHistory 补全)——轨迹统计/时间线/分支树
-	 *  面向整个会话而不是守护进程尾窗的 200 条。 */
+	/** 当前已累积的历史窗口，与对话共用同一分页数据。 */
 	overviewEntries?: readonly unknown[] | null;
-	/** 全量历史补全中。 */
+	/** 下一页历史正在加载。 */
 	overviewLoading?: boolean;
-	/** 全量历史补全失败（可重试，P0-4）——轨迹面板据此显示降级提示。 */
+	/** 更早历史不可达或加载失败——轨迹面板据此显示降级提示。 */
 	overviewError?: boolean;
-	/** 轨迹面板挂载即请求补全(ChatView wiring)。 */
-	onEnsureFullHistory?(): void;
+	/** 轨迹面板挂载或重试时只请求下一页。 */
+	onLoadOlderHistory?(): void;
 	/** Active view — DERIVED from the active panel tab inside this component
 	 *  (tab-primary, docs §3.3.2): the panel body switches on the active
 	 *  tab's surface, so a view/tab disagreement is unrepresentable.
@@ -832,7 +831,7 @@ export function ContextPanel({
 				pathEntries={pathEntries ?? null}
 				fullLoading={overviewLoading}
 				fullError={overviewError}
-				onEnsureFullHistory={onEnsureFullHistory}
+				onLoadOlderHistory={onLoadOlderHistory}
 				modelId={snap?.state?.model?.id}
 				roundDurations={snap?.roundDurations}
 				onJumpToEntry={onJumpToEntry}
@@ -928,10 +927,16 @@ export function ContextPanel({
 					</>
 				) : typeof bodyView === "string" && bodyView.startsWith("ext:") ? (
 					(() => {
-						const item = extTabs.find(x => `ext:${x.slot}` === view);
+						const item = selectPanelTabComponent(extTabs, bodyView);
 						return item ? (
 							<FadeScroll className="h-full overflow-y-auto">
-								<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
+								<SlotComponentMount
+									item={item}
+									rpc={rpc}
+									sessionId={snap?.sessionId}
+									cwd={cwd}
+									panelTab={bodyTab ?? undefined}
+								/>
 							</FadeScroll>
 						) : null;
 					})()

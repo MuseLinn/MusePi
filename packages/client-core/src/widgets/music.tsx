@@ -87,9 +87,11 @@ function parseRgb(color: string): [number, number, number] | null {
 export function MusicCard({
 	data,
 	update,
+	preview = false,
 }: {
 	data: Record<string, unknown>;
 	update(patch: Record<string, unknown>): void;
+	preview?: boolean;
 }): ReactNode {
 	const rawQueue = Array.isArray(data.queue) ? (data.queue as MusicTrack[]) : [];
 	const queue = rawQueue.length > 0 ? rawQueue : (musicDefaults().queue as MusicTrack[]);
@@ -122,6 +124,7 @@ export function MusicCard({
 
 	// ── canvas spectrum (ported from the kimi viz loop) ────────────────
 	useEffect(() => {
+		if (preview) return;
 		const canvas = canvasRef.current;
 		if (!canvas) return;
 		const vctx = canvas.getContext("2d");

@@ -98,7 +98,7 @@ describe("security publication", () => {
 			undefined as never,
 		);
 		expect((await fs.stat(plan.output.root)).isDirectory()).toBeTrue();
-		expect((await fs.stat(plan.output.root)).mode & 0o777).toBe(0o700);
+		if (process.platform !== "win32") expect((await fs.stat(plan.output.root)).mode & 0o777).toBe(0o700);
 		expect((await fs.readdir(plan.output.root)).sort()).toEqual([
 			"findings.json",
 			"provenance.json",

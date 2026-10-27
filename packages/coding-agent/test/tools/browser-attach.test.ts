@@ -110,7 +110,10 @@ describe("pickElectronTarget", () => {
 	test.skipIf(!CHROMIUM_AVAILABLE)(
 		"navigates a fresh attached tab to the requested URL",
 		async () => {
-			const launched = await acquireBrowser({ kind: "headless", headless: true }, { cwd: process.cwd() });
+			const launched = await acquireBrowser(
+				{ kind: "headless", headless: true },
+				{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
+			);
 			if (!("browser" in launched)) throw new Error("Expected a Puppeteer browser");
 			const endpoint = new URL(launched.browser.wsEndpoint());
 			let attached: BrowserHandle | undefined;
@@ -121,7 +124,7 @@ describe("pickElectronTarget", () => {
 			try {
 				attached = await acquireBrowser(
 					{ kind: "connected", cdpUrl: `http://${endpoint.host}` },
-					{ cwd: process.cwd() },
+					{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
 				);
 				const { tab } = await acquireTab(tabName, attached, {
 					url: requested,
@@ -133,7 +136,7 @@ describe("pickElectronTarget", () => {
 				expect(tab.info.url).toBe(requested);
 			} finally {
 				if (opened) await releaseTab(tabName, { kill: false });
-				else if (attached) await releaseBrowser(attached, { kill: false });
+				if (attached) await releaseBrowser(attached, { kill: false });
 				await releaseBrowser(launched, { kill: true });
 			}
 		},
@@ -151,28 +154,29 @@ describe("pickElectronTarget", () => {
 					return new Promise<Response>(() => {});
 				},
 			});
-			const launched = await acquireBrowser({ kind: "headless", headless: true }, { cwd: process.cwd() });
+			const launched = await acquireBrowser(
+				{ kind: "headless", headless: true },
+				{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
+			);
 			if (!("browser" in launched)) throw new Error("Expected a Puppeteer browser");
 			const endpoint = new URL(launched.browser.wsEndpoint());
 			let attached: BrowserHandle | undefined;
 
-			let attempted = false;
 			try {
 				attached = await acquireBrowser(
 					{ kind: "connected", cdpUrl: `http://${endpoint.host}` },
-					{ cwd: process.cwd() },
+					{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
 				);
-				attempted = true;
 				await expect(
 					acquireTab(`attach-failure-${process.pid}-${Math.random().toString(36).slice(2)}`, attached, {
 						url: `http://127.0.0.1:${server.port}/hang`,
 						waitUntil: "domcontentloaded",
-						timeoutMs: 100,
+						timeoutMs: 1_000,
 					}),
 				).rejects.toThrow(/Navigation timeout/i);
 				expect(requestCount).toBe(1);
 			} finally {
-				if (attached && !attempted) await releaseBrowser(attached, { kill: false });
+				if (attached) await releaseBrowser(attached, { kill: false });
 				await releaseBrowser(launched, { kill: true });
 				await server.stop(true);
 			}

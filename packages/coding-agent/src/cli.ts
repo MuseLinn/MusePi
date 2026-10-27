@@ -17,7 +17,6 @@ try {
 import { stat } from "node:fs/promises";
 import * as path from "node:path";
 import { parentPort } from "node:worker_threads";
-import { logger } from "@musepi/pi-utils";
 import type { CliConfig, CommandMetadata } from "@musepi/pi-utils/cli";
 import {
 	APP_NAME,
@@ -28,6 +27,7 @@ import {
 	setHome,
 	VERSION,
 } from "@musepi/pi-utils/dirs";
+import * as logger from "@musepi/pi-utils/logger";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import { setProcessName } from "@musepi/pi-utils/process-name";
 import { declareWorkerHostEntry, installWorkerInbox, isWorkerHostSelector } from "@musepi/pi-utils/worker-host";
@@ -475,6 +475,9 @@ export async function runCli(argv: string[]): Promise<void> {
 
 // Floating call instead of top-level await: TLA forces `--bytecode` (CJS
 // lowering) builds to fail, and the entrypoint needs nothing after this.
+// A floating promise does not keep Bun alive by itself, so hold a referenced
+// timer until the command settles; asynchronous cleanup may otherwise leave no
+// active handles while the command still has output or an error to report.
 // The catch mirrors what an unhandled TLA rejection produced: error dump to
 // stderr, exit code 1. Success paths resolve without touching the exit code.
 // Guarded so importing `runCli` (profile CLI tests, SDK embedding) does not
@@ -482,8 +485,11 @@ export async function runCli(argv: string[]): Promise<void> {
 // their entry with `import.meta.main === false`, so the worker-host dispatch
 // is admitted via `!Bun.isMainThread`.
 if (isProcessEntry || !Bun.isMainThread) {
-	runCli(process.argv.slice(2)).catch((err: unknown) => {
-		process.stderr.write(`${Bun.inspect(err, { colors: process.stderr.isTTY === true })}\n`);
-		process.exit(1);
-	});
+	const keepAlive = setInterval(() => {}, 60_000);
+	runCli(process.argv.slice(2))
+		.catch((err: unknown) => {
+			process.stderr.write(`${Bun.inspect(err, { colors: process.stderr.isTTY === true })}\n`);
+			process.exit(1);
+		})
+		.finally(() => clearInterval(keepAlive));
 }

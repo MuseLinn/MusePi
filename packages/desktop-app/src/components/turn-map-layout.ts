@@ -130,7 +130,7 @@ export interface TurnMapJunction {
  */
 export function layoutTurnMap(
 	turns: readonly TrajectoryTurnGroup[],
-	expanded: ReadonlySet<number> = new Set(),
+	expanded: ReadonlySet<number | string> = new Set(),
 	direction: TurnMapDirection = "v",
 ): TurnMapLayout {
 	const horizontal = direction === "h";
@@ -155,7 +155,7 @@ export function layoutTurnMap(
 	for (const group of rounds) {
 		const branch = group.events[0]?.branch === true;
 		const advisor = group.events[0]?.kind === "advisor";
-		const extra = expanded.has(group.turn) ? turnExpandedExtra(group.events) : 0;
+		const extra = expanded.has(group.id ?? group.turn) ? turnExpandedExtra(group.events) : 0;
 		const h = extra > 0 ? TURN_NODE_H + extra : TURN_NODE_COMPACT_H;
 		// 主线 advance 步长:v = 卡高 + 展开增量 + 间距(展开占纵向);
 		// h = 卡宽 + 间距(展开增量向卡下方生长,不占横向)。
@@ -179,16 +179,15 @@ export function layoutTurnMap(
 		} else {
 			if (!lastWasBranch) lane += 1;
 			lastWasBranch = true;
-			// 分叉源 = 树上深度-1 的主线轮(兄弟轮共享同一父轮:撤回/重答
-			// 的新轮挂在上一轮末尾,与旧轮是兄弟,不是旧轮的子轮)。深度
-			// 缺失(链断回退 journal 序)时回退旧行为"上一个主线轮"。实机
-			// 回归 2026-10-01:旧规则按 journal 顺序取"上一个主线轮",把
-			// 兄弟轮画成旧轮的子节点(分叉锚点错位一整轮)。
+			// 优先使用派生层记录的真实父轮,父轮自身在支线时也不会错接。
+			// 旧快照没有 parentId 时才按深度回退到主线,再退回最近主线轮。
 			const branchDepth = group.events[0]?.pathTurn;
 			const source =
+				(group.parentId !== undefined ? nodes.find(n => n.group.id === group.parentId) : undefined) ??
 				(branchDepth !== undefined && branchDepth > 1
 					? main.find(m => (m.group.displayTurn ?? m.group.turn) === branchDepth - 1)
-					: undefined) ?? main[main.length - 1];
+					: undefined) ??
+				main[main.length - 1];
 			const sourceTurn = source?.group.turn ?? 0;
 			if (!laneSource.has(lane)) laneSource.set(lane, sourceTurn);
 			if (horizontal) {
@@ -216,7 +215,7 @@ export function layoutTurnMap(
 			} else {
 				// 车道列 x 固定按车道序;列内从分叉源下缘起向下排。
 				const x = lane * (TURN_NODE_W + TURN_LANE_GAP);
-				const y = Math.max(lanePos.get(lane) ?? 0, (source?.y ?? 0) + TURN_NODE_H + TURN_GAP_Y);
+				const y = Math.max(lanePos.get(lane) ?? 0, (source?.y ?? 0) + (source?.h ?? TURN_NODE_H) + TURN_GAP_Y);
 				node = {
 					group,
 					lane,
@@ -242,7 +241,7 @@ export function layoutTurnMap(
 	const junctionBySource = new Map<number, TurnMapJunction>();
 	for (const n of nodes) {
 		if (!n.branch) continue;
-		const source = main.find(m => m.group.turn === n.sourceTurn);
+		const source = nodes.find(m => m.group.turn === n.sourceTurn);
 		if (!source) continue;
 		const jx = horizontal ? source.x + TURN_NODE_W + TURN_GAP_Y / 2 : source.x + TURN_NODE_W / 2;
 		const jy = horizontal ? source.y + source.h / 2 : source.y + source.h + TURN_GAP_Y / 2;

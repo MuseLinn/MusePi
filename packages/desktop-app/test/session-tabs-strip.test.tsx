@@ -1,5 +1,5 @@
 import "./happy-dom-shim";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { getLocaleSnapshot, setLocale } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -7,9 +7,17 @@ import { GuiHeader } from "../src/components/GuiHeader";
 import { SessionTabsStrip } from "../src/components/SessionTabsStrip";
 import type { RpcClient } from "../src/lib/rpc";
 
-const entryLocale = getLocaleSnapshot();
-setLocale("en-US");
-afterAll(() => setLocale(entryLocale));
+function testInEnglish(name: string, run: () => void | Promise<void>): void {
+	test(name, async () => {
+		const previous = getLocaleSnapshot();
+		setLocale("en-US");
+		try {
+			await run();
+		} finally {
+			setLocale(previous);
+		}
+	});
+}
 
 const mounted: Root[] = [];
 const hosts: HTMLElement[] = [];
@@ -125,7 +133,7 @@ afterEach(() => {
 });
 
 describe("SessionTabsStrip preview", () => {
-	test("active and inactive tabs share the same title structure", () => {
+	testInEnglish("active and inactive tabs share the same title structure", () => {
 		const { host } = renderStrip("a");
 		const rows = Array.from(host.querySelectorAll<HTMLElement>(".gui-session-tab"));
 		expect(rows).toHaveLength(2);
@@ -137,7 +145,7 @@ describe("SessionTabsStrip preview", () => {
 		expect(rows[0]!.querySelector(".gui-session-tab-label--preview")).toBeNull();
 	});
 
-	test("clicking an open preview pins it before activating by id", () => {
+	testInEnglish("clicking an open preview pins it before activating by id", () => {
 		const { calls, host } = renderStrip("a");
 		const preview = host.querySelectorAll<HTMLElement>(".gui-session-tab")[1]!;
 		act(() => preview.click());
@@ -147,14 +155,14 @@ describe("SessionTabsStrip preview", () => {
 		]);
 	});
 
-	test("clicking the active preview pins without reactivating", () => {
+	testInEnglish("clicking the active preview pins without reactivating", () => {
 		const { calls, host } = renderStrip("b");
 		const preview = host.querySelectorAll<HTMLElement>(".gui-session-tab")[1]!;
 		act(() => preview.click());
 		expect(calls).toEqual([["keep", "b"]]);
 	});
 
-	test("double-clicking a preview pins that tab", () => {
+	testInEnglish("double-clicking a preview pins that tab", () => {
 		const { calls, host } = renderStrip("a");
 		const preview = host.querySelectorAll<HTMLElement>(".gui-session-tab")[1]!;
 		act(() => {
@@ -165,7 +173,7 @@ describe("SessionTabsStrip preview", () => {
 });
 
 describe("SessionTabsStrip shared menu", () => {
-	test("ellipsis and right-click expose the same full action model", () => {
+	testInEnglish("ellipsis and right-click expose the same full action model", () => {
 		const { calls, host } = renderStrip("a");
 		const preview = host.querySelectorAll<HTMLElement>(".gui-session-tab")[1]!;
 		act(() => {
@@ -193,7 +201,7 @@ describe("SessionTabsStrip shared menu", () => {
 		expect(menuLabels(host)).toEqual(contextLabels);
 	});
 
-	test("every menu action targets the right-clicked tab without selecting it", () => {
+	testInEnglish("every menu action targets the right-clicked tab without selecting it", () => {
 		const { calls, host } = renderStrip("a");
 		const preview = host.querySelectorAll<HTMLElement>(".gui-session-tab")[1]!;
 		const cases: [string, ActionName][] = [
@@ -220,7 +228,7 @@ describe("SessionTabsStrip shared menu", () => {
 });
 
 describe("GuiHeader tab navigation", () => {
-	test("keeps new-session and recent-session navigation available with tabs", async () => {
+	testInEnglish("keeps new-session and recent-session navigation available with tabs", async () => {
 		const { host, selected, newSessions } = await renderHeader();
 		const switcher = host.querySelector<HTMLButtonElement>("button[aria-label='Recent sessions']");
 		expect(switcher).not.toBeNull();

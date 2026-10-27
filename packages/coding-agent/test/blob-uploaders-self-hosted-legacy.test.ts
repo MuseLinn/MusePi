@@ -11,6 +11,7 @@ import {
 } from "../src/blob-broker/uploader-runtime";
 import { createLegacyUploader } from "../src/blob-broker/uploaders-legacy";
 import { createSelfHostedUploader } from "../src/blob-broker/uploaders-self-hosted";
+import { compileNativeFixture, createNativeFixtureTempDir } from "./helpers/native-fixture";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const request: BlobUploadRequest = {
@@ -76,13 +77,20 @@ describe("self-hosted uploader wire contracts", () => {
 	});
 
 	it("does not corrupt FTP command stdin or mis-map the remote path to its public URL", async () => {
-		const temp = fs.mkdtempSync(path.join(os.tmpdir(), "omp-ftp-uploader-"));
+		const temp = createNativeFixtureTempDir("ftp-uploader-");
 		try {
-			const executable = path.join(temp, "fake-curl");
+			const executable = path.join(temp, process.platform === "win32" ? "fake-curl.exe" : "fake-curl");
 			const argsFile = path.join(temp, "args");
 			const bodyFile = path.join(temp, "body");
-			fs.writeFileSync(executable, `#!/bin/sh\nprintf '%s\\n' "$@" > '${argsFile}'\ncat > '${bodyFile}'\n`);
-			fs.chmodSync(executable, 0o755);
+			if (process.platform === "win32") {
+				await compileNativeFixture(path.join(import.meta.dir, "fixtures", "fake-curl.ts"), executable, {
+					"process.env.FAKE_CURL_ARGS_FILE": JSON.stringify(argsFile),
+					"process.env.FAKE_CURL_BODY_FILE": JSON.stringify(bodyFile),
+				});
+			} else {
+				fs.writeFileSync(executable, `#!/bin/sh\nprintf '%s\\n' "$@" > '${argsFile}'\ncat > '${bodyFile}'\n`);
+				fs.chmodSync(executable, 0o755);
+			}
 			const uploader = requiredUploader(
 				createSelfHostedUploader(
 					"ftp",

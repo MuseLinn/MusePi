@@ -1,0 +1,13 @@
+{
+	"name": "musepi-compaction-summary",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Read compaction summaries in a restorable right-panel tab.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "▤",
+		"description": "Open compaction summaries with before/after token counts in the right panel.",
+		"extensions": ["./index.ts"]
+	}
+}

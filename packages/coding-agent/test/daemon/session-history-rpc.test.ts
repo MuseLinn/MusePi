@@ -26,6 +26,8 @@ function serverWith(entries: { id: string }[]): { server: DaemonServer; conn: Da
 	const host = {
 		cwd: () => "/tmp",
 		snapshot: () => Promise.resolve({ entries }),
+		checkpointSeq: () => Promise.resolve(0),
+		get: () => undefined,
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
@@ -129,5 +131,133 @@ describe("session.history paging (P0-3)", () => {
 			entries: unknown[];
 		};
 		expect(huge.entries).toHaveLength(5);
+	});
+});
+
+describe("session.resume history window", () => {
+	test("keeps the older-history cursor after tailing the full snapshot exactly once", async () => {
+		const all = Array.from({ length: 250 }, (_, index) => entry(`e${index + 1}`));
+		const { server, conn } = serverWith(all);
+		const res = (await server.handle("session.resume", { sessionId: SESSION }, conn)) as {
+			snapshot: { entries: { id: string }[]; tail: { hasMore: boolean; beforeId: string | null } };
+		};
+		expect(res.snapshot.entries).toHaveLength(200);
+		expect(res.snapshot.entries[0]?.id).toBe("e51");
+		expect(res.snapshot.tail).toEqual({ hasMore: true, beforeId: "e51" });
+	});
+});
+
+describe("session.turns paging", () => {
+	function transcript(turnCount: number): { id: string }[] {
+		return Array.from({ length: turnCount }, (_, index) => {
+			const at = new Date(1_700_000_000_000 + index * 2000).toISOString();
+			return [
+				{
+					id: `u${index + 1}`,
+					type: "message",
+					timestamp: at,
+					message: { role: "user", content: `question ${index + 1}`, timestamp: Date.parse(at) },
+				},
+				{
+					id: `a${index + 1}`,
+					type: "message",
+					timestamp: new Date(Date.parse(at) + 1000).toISOString(),
+					message: { role: "assistant", content: `answer ${index + 1}`, timestamp: Date.parse(at) + 1000 },
+				},
+			];
+		}).flat();
+	}
+
+	test("a limited first page returns the newest turns and beforeTurn walks older without overlap", async () => {
+		const { server, conn } = serverWith(transcript(5));
+		const first = (await server.handle("session.turns", { sessionId: SESSION, limit: 2 }, conn)) as {
+			turns: { entryId: string }[];
+			hasMore: boolean;
+			nextBeforeTurn: string | null;
+		};
+		expect(first.turns.map(turn => turn.entryId)).toEqual(["u4", "u5"]);
+		expect(first.hasMore).toBe(true);
+		expect(first.nextBeforeTurn).toBe("u4");
+
+		const second = (await server.handle(
+			"session.turns",
+			{ sessionId: SESSION, beforeTurn: first.nextBeforeTurn, limit: 2 },
+			conn,
+		)) as { turns: { entryId: string }[]; hasMore: boolean; nextBeforeTurn: string | null };
+		expect(second.turns.map(turn => turn.entryId)).toEqual(["u2", "u3"]);
+		expect(second.hasMore).toBe(true);
+
+		const third = (await server.handle(
+			"session.turns",
+			{ sessionId: SESSION, beforeTurn: second.nextBeforeTurn, limit: 2 },
+			conn,
+		)) as { turns: { entryId: string }[]; hasMore: boolean };
+		expect(third.turns.map(turn => turn.entryId)).toEqual(["u1"]);
+		expect(third.hasMore).toBe(false);
+	});
+
+	test("an unknown beforeTurn is stale instead of overlapping the newest page", async () => {
+		const { server, conn } = serverWith(transcript(3));
+		const res = (await server.handle(
+			"session.turns",
+			{ sessionId: SESSION, beforeTurn: "gone", limit: 2 },
+			conn,
+		)) as {
+			turns: unknown[];
+			stale: boolean;
+		};
+		expect(res.stale).toBe(true);
+		expect(res.turns).toEqual([]);
+	});
+
+	test("an unparameterized legacy request still returns the full turn index", async () => {
+		const { server, conn } = serverWith(transcript(4));
+		const res = (await server.handle("session.turns", { sessionId: SESSION }, conn)) as {
+			turns: { entryId: string }[];
+			totalEntries: number;
+		};
+		expect(res.turns.map(turn => turn.entryId)).toEqual(["u1", "u2", "u3", "u4"]);
+		expect(res.totalEntries).toBe(8);
+	});
+});
+
+describe("session.compaction", () => {
+	test("returns the requested summary with post-compaction display metadata", async () => {
+		const compacted = {
+			...entry("c1"),
+			type: "compaction",
+			summary: "Keep the current task and verification evidence.",
+			tokensBefore: 791_000,
+			tokensAfter: 76_600,
+			method: "soft",
+			warning: "Keep verifying",
+		};
+		const { server, conn } = serverWith([compacted]);
+		const res = (await server.handle("session.compaction", { sessionId: SESSION, entryId: "c1" }, conn)) as {
+			entry: typeof compacted | null;
+		};
+		expect(res.entry).toEqual(compacted);
+	});
+
+	test("returns null for an unknown entry and preserves legacy entries without optional metadata", async () => {
+		const legacy = { ...entry("legacy"), type: "compaction", summary: "Older session", tokensBefore: 1000 };
+		const { server, conn } = serverWith([legacy]);
+		const missing = (await server.handle("session.compaction", { sessionId: SESSION, entryId: "gone" }, conn)) as {
+			entry: unknown;
+		};
+		expect(missing.entry).toBeNull();
+		const found = (await server.handle("session.compaction", { sessionId: SESSION, entryId: "legacy" }, conn)) as {
+			entry: { tokensAfter?: number; method?: string };
+		};
+		expect(found.entry.tokensAfter).toBeUndefined();
+		expect(found.entry.method).toBeUndefined();
+	});
+
+	test("requires both session and entry ids", async () => {
+		const { server, conn } = serverWith([]);
+		await expect(server.handle("session.compaction", { entryId: "c1" }, conn)).rejects.toThrow("sessionId required");
+		await expect(server.handle("session.compaction", { sessionId: SESSION }, conn)).rejects.toThrow(
+			"entryId required",
+		);
 	});
 });

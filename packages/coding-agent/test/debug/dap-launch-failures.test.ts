@@ -447,7 +447,8 @@ describe("DAP launch failure handling", () => {
 
 	it("kills the detached adapter process when it never dials back on the TCP client-addr path", async () => {
 		const originalPlatform = process.platform;
-		Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+		if (originalPlatform !== "win32")
+			Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
 		try {
 			const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-debug-tcp-leak-"));
 			try {
@@ -482,7 +483,8 @@ describe("DAP launch failure handling", () => {
 				await removeWithRetries(cwd);
 			}
 		} finally {
-			Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+			if (originalPlatform !== "win32")
+				Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
 		}
 	});
 });

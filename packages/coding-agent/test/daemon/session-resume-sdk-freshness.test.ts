@@ -149,4 +149,41 @@ describe("history resume prefers a fresher SDK transcript over a thin journal", 
 			await fs.promises.rm(tmp, { recursive: true, force: true });
 		}
 	}, 20_000);
+
+	test("stale persisted snapshot + newer advisor transcript serves the completed reply", async () => {
+		const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "resume-freshness-store-"));
+		const sessionId = crypto.randomUUID();
+		const base = Date.now();
+		const sessionDir = computeDefaultSessionDir(tmp, new FileSessionStorage());
+		await fs.promises.mkdir(sessionDir, { recursive: true });
+		const iso = new Date(base).toISOString().replace(/[:.]/g, "-");
+		const sdkFile = path.join(sessionDir, `${iso}_${sessionId}.jsonl`);
+		await fs.promises.writeFile(sdkFile, `${linesFor(sessionId, base).join("\n")}\n`);
+		const host = new DaemonSessionHost({ cwd: tmp });
+		try {
+			host.viewStore.upsert(sessionId, {
+				header: { type: "session", id: sessionId, timestamp: new Date(base).toISOString(), cwd: tmp },
+				entries: [
+					{
+						type: "message",
+						id: `user:${base}`,
+						parentId: null,
+						timestamp: new Date(base).toISOString(),
+						message: { role: "user", content: [{ type: "text", text: "first question" }], timestamp: base },
+					},
+				],
+				state: { isStreaming: false, queuedMessageCount: 0, cwd: tmp, participants: [] },
+				agents: [],
+				cursor: 1,
+			});
+
+			const snap = await host.snapshot(sessionId);
+			const entries = snap.entries as Array<{ type: string; message?: { role?: string; stopReason?: string } }>;
+			expect(entries.some(e => e.type === "message" && e.message?.role === "assistant")).toBe(true);
+		} finally {
+			host.dispose();
+			await fs.promises.rm(sdkFile, { force: true });
+			await fs.promises.rm(tmp, { recursive: true, force: true });
+		}
+	}, 20_000);
 });

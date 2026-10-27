@@ -61,12 +61,14 @@ export interface BaseKernelOptions<TExecuteOptions extends KernelExecuteOptions 
 	traceIpc: boolean;
 	/** Wire payload asking the runner to exit cleanly. */
 	exitPayload: string;
-	/** How long to wait after SIGINT before escalating to subprocess termination. */
+	/** How long to wait after an interrupt request before escalating to subprocess termination. */
 	interruptEscalationMs: number;
 	/** Default grace period applied by {@link BaseKernel.shutdown}. */
 	shutdownGraceMs: number;
 	/** Serializes an execution request into the runner's wire protocol. */
 	buildPayload: (code: string, msgId: string, options?: TExecuteOptions) => string;
+	/** In-band alternative for hosts that cannot deliver SIGINT to the runner. */
+	buildInterruptPayload?: (msgId: string) => string;
 }
 
 export type FrameType = "started" | "stdout" | "stderr" | "display" | "result" | "error" | "done";
@@ -212,10 +214,10 @@ export abstract class BaseKernel<TExecuteOptions extends KernelExecuteOptions = 
 				finalize();
 				return;
 			}
-			void this.interrupt();
+			void this.interrupt(msgId);
 			const escalation = setTimeout(() => {
 				if (pending.settled) return;
-				logger.warn(`${this.#options.languageName} runner did not respond to SIGINT; terminating subprocess`, {
+				logger.warn(`${this.#options.languageName} runner did not respond to interrupt; terminating subprocess`, {
 					kernelId: this.id,
 				});
 				pending.kernelKilled = true;
@@ -282,8 +284,16 @@ export abstract class BaseKernel<TExecuteOptions extends KernelExecuteOptions = 
 		return promise;
 	}
 
-	async interrupt(): Promise<void> {
+	async interrupt(msgId?: string): Promise<void> {
 		if (!this.#proc || this.#disposed) return;
+		if (process.platform === "win32" && this.#options.buildInterruptPayload && msgId) {
+			try {
+				await this.#writeLine(this.#options.buildInterruptPayload(msgId));
+				return;
+			} catch {
+				// Fall back to the process signal when the control channel is unavailable.
+			}
+		}
 		try {
 			this.#proc.kill("SIGINT");
 		} catch (err) {

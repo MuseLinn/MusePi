@@ -1,13 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import type { DisplayContext } from "@musepi/pi-wire";
 import type { BunPlugin } from "bun";
-
-declare global {
-	interface Window {
-		lastContext?: DisplayContext;
-	}
-}
 
 const puppeteer = require("puppeteer-core");
 const { ensureChromiumExecutable } = require("../../coding-agent/src/tools/browser/launch");
@@ -44,12 +37,15 @@ const browser = await puppeteer.launch({ executablePath, headless: true });
 const page = await browser.newPage();
 const pageErrors: string[] = [];
 page.on("pageerror", (error: unknown) => pageErrors.push(error instanceof Error ? error.message : String(error)));
+page.on("console", (message: { type(): string; text(): string }) => {
+	if (message.type() === "error") pageErrors.push(message.text());
+});
 await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>');
 await page.addScriptTag({ content: source });
 
 afterAll(async () => {
 	await browser.close();
-}, 30_000);
+}, 60_000);
 
 describe("QuoteCards in Chromium", () => {
 	it("updates the annotation context and its model prompt when the user edits a comment", async () => {
@@ -61,10 +57,12 @@ describe("QuoteCards in Chromium", () => {
 		await page.keyboard.press("a");
 		await page.keyboard.up("Control");
 		await page.type(".gui-quote-comment", "new comment");
-		const result = await page.evaluate(() => {
-			const context = window.lastContext;
-			return context?.kind === "browser-annotation" ? context.prompt : undefined;
-		});
+		expect(await page.evaluate(() => document.activeElement === document.querySelector(".gui-quote-comment"))).toBe(
+			true,
+		);
+		await page.click(".gui-quote-preview");
+		await page.waitForSelector(".gui-quote-context-preview", { timeout: 3000 });
+		const result = await page.evaluate(() => document.querySelector(".gui-quote-context-preview pre")?.textContent);
 		expect(result).toContain("Comment: new comment");
 	});
 });

@@ -46,11 +46,29 @@ interface Quote {
 	series: number[];
 }
 
+function previewQuotes(rows: readonly StockRow[]): Quote[] {
+	const prices = [1688.5, 253.4, 106.28];
+	const changes = [0.53, -0.84, 0.02];
+	return rows.map((row, index) => ({
+		name: row.name,
+		label: row.label,
+		badge: row.badge,
+		price: prices[index] ?? 100,
+		change: changes[index] ?? 0,
+		pct: changes[index] ?? 0,
+		volume: 0,
+		time: "示例",
+		series: [96, 99, 97, 102, 100, 104, 101],
+	}));
+}
+
 export function StocksCard({
 	data,
+	preview = false,
 }: {
 	data: Record<string, unknown>;
 	update(patch: Record<string, unknown>): void;
+	preview?: boolean;
 }): ReactNode {
 	const rawRows = Array.isArray(data.rows) ? (data.rows as StockRow[]) : [];
 	const rows = rawRows.length > 0 ? rawRows : (stocksDefaults().rows as StockRow[]);
@@ -58,12 +76,13 @@ export function StocksCard({
 	const title = typeof data.title === "string" && data.title !== "" ? data.title : "A股盯盘";
 
 	const rowsElRef = useRef<HTMLDivElement | null>(null);
-	const [status, setStatus] = useState("实时 A 股行情 · 每个交易日自动刷新");
-	const [dotCls, setDotCls] = useState(" gui-stocks-dot--loading");
-	const [quotes, setQuotes] = useState<Quote[] | null>(null);
+	const [status, setStatus] = useState(preview ? "示例行情" : "实时 A 股行情 · 每个交易日自动刷新");
+	const [dotCls, setDotCls] = useState(preview ? "" : " gui-stocks-dot--loading");
+	const [quotes, setQuotes] = useState<Quote[] | null>(() => (preview ? previewQuotes(rows) : null));
 	const [loadError, setLoadError] = useState<string | null>(null);
 
 	useEffect(() => {
+		if (preview) return;
 		let cancelled = false;
 		const loadScript = (url: string): Promise<void> =>
 			new Promise((resolve, reject) => {

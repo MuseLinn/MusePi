@@ -456,13 +456,9 @@
  * `.gui-composer-pet--micro`).
  *
  * The pet sizes against the COMPOSER'S OWN WIDTH (`--gui-composer-pet-size`),
- * which is what actually varies across the welcome hero and the session
- * composer. Cap 52px (2026-09-21, was 46; before that 60): the art shed its
- * floor/antenna padding (box ≈ 1.04× the ball), which made the old cap read
- * undersized at the same perch — the user asked for 「稍微大一点」. 52 keeps
- * the ball below the input's first row height; the 60px "giant ball" era had
- * a 1.28× rig around a 47px ball, so a 52px box is a ~50px ball — comparable,
- * but now the box IS the ball and no decoration spills past it.
+ * from a 48px floor to a 64px cap. Narrow composers stay at 46px or above so
+ * the eyes, outline and mouth remain resolved instead of falling into the
+ * micro face. The wrapper grows with the art, preserving the click target.
  * Hosts that need a specific size override `--gui-composer-pet-size`.
  *
  * ── Why the box and not the SVG ───────────────────────────────────────────
@@ -479,7 +475,8 @@
 	z-index:1;
 	cursor:pointer;
 	display:flex;
-	width:var(--gui-composer-pet-size, clamp(38px, 4.6cqw + 27px, 52px));
+	width:var(--gui-composer-pet-size, clamp(48px, 5.2cqw + 30px, 64px));
+	height:var(--gui-composer-pet-size, clamp(48px, 5.2cqw + 30px, 64px));
 	filter:drop-shadow(0 2px 6px #00000047);
 	align-items: flex-end;
 	justify-content:flex-end;
@@ -493,6 +490,16 @@
 	transform-origin:50% 100%;
 	transition:transform .18s cubic-bezier(.22,1,.36,1),filter .18s cubic-bezier(.22,1,.36,1);
 	-webkit-tap-highlight-color:transparent;
+}
+.gui-composer-pet>.gui-pet
+{
+	width:100%;
+}
+.gui-composer--focused .gui-composer-pet,
+.gui-welcome[data-focused] .gui-composer-pet
+{
+	top:6px;
+	bottom:auto;
 }
 .gui-composer-pet>*
 {
@@ -523,14 +530,13 @@
 	68%{transform:translateY(-3px) scale(1,.99)}
 	100%{transform:translateY(0) scale(1)}
 }
-/* Very narrow composers (mobile, split panes): the box can no longer carry a
- * legible face, so drop the mouth and thin the eye — a clean silhouette with
- * two lights reads better than a smudge of tiny geometry. */
+/* Narrow composers keep the full face at the 46px micro threshold. */
 @container (max-width: 380px)
 {
 	.gui-composer-pet
 	{
-		width:var(--gui-composer-pet-size, 38px);
+		width:var(--gui-composer-pet-size, 46px);
+		height:var(--gui-composer-pet-size, 46px);
 	}
 }
 /* ── Micro variant ────────────────────────────────────────────────────────

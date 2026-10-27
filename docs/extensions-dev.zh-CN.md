@@ -139,7 +139,7 @@ export default function (pi: ExtensionAPI): void {
 - 默认导出 React 组件；
 - 通过 `React` 标识符引用 React（daemon 编译时改写为 `window.MusePiReact`）——**禁止 `import ... from "react"`**，否则绑定第二份 react 副本，hooks dispatcher 变 null（实测坑）；
 - type-only import 可（编译擦除）；
-- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId }` —— `rpc` 是 daemon RPC 桥（models.list/session.setModel 等），`sessionId`/`cwd` 是宿主当前会话上下文，`slot`/`extensionId` 是身份。组件不依赖任何一项仍可工作；
+- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly`，分栏时也对应本列。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
 - **样式**：组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`（组件卸载即移除）——不要依赖全局样式文件；
 - **失败可见**：编译失败/加载失败在宿主处以红色错误块显示（不再静默消失）；运行时错误有 `gui-slot-error` 样式。
 
@@ -161,6 +161,8 @@ slot 以 `settings.` 开头且 `extensionId` 位于包目录下的组件 —— 
 musepi-auth-hub）设置界面的落点。
 
 **数据流**：daemon `bun.build` 把模块编译为自包含 ESM（react 绑定宿主实例）→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob：动态 import 挂载。**信任模型**：扩展本就在 daemon 进程执行任意代码，渲染其组件不构成新提权。
+
+**面板实例示例**：bundled `compaction-summary` Cordis 插件注册 `panel.tab.compaction`，UI 读取 `panelTab.target` 并调用 `session.compaction { sessionId, entryId }`。会话绑定内容必须走这种受校验的 daemon RPC，不能使用不提供会话 actions 的 `registerRpc` 裸 runtime。恢复的标签只保存 entry id；target 改变或组件卸载后，必须丢弃未完成的旧响应。
 
 **设置卡片（settings.item + settingsScope）**：注册 `slot: "settings.item.<extId>"`（extId = 扩展目录名）的组件，会在**扩展中心**（设置 → 扩展）底部按扩展获得一张卡片（扩展未启用则不显示）。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名，建议用 `扩展名.xxx` 前缀**（与 registerSetting 的 `display.taskCardStyle` 同约定）避免与其他扩展冲突；写入只放行 registerSetting 注册过的键，未注册键写会抛 read-only。**写时校验（registerSetting 的 `validate` 字段）**：扩展可为注册的设置键提供 `validate(value)` 回调——返回错误字符串即拒写（daemon `settings.set` RPC 抛错，GUI 显示原因），返回 `void` 放行。schema 无法表达的约束（端点可达性、跨键一致性、枚举外值）由此在**写入时**拒绝，而非用到时才炸。无任何扩展注册该槽位时分区显示空态文案。
 

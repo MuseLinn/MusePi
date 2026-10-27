@@ -1,5 +1,5 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { useRef, useState } from "react";
+import type { CSSProperties, HTMLAttributes, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { useRef } from "react";
 
 /**
  * Mouse-follow spotlight card (reactbits SpotlightCard parity,
@@ -13,41 +13,45 @@ export function SpotlightCard({
 	className,
 	spotlightColor = "rgba(255, 255, 255, 0.12)",
 	glowSize = 240,
-}: {
+	...props
+}: HTMLAttributes<HTMLDivElement> & {
 	children: ReactNode;
-	className?: string;
 	/** Glow tint (theme-aware callers pass an accent-tinted rgba). */
 	spotlightColor?: string;
 	/** Glow radius, px. */
 	glowSize?: number;
 }): ReactNode {
 	const ref = useRef<HTMLDivElement | null>(null);
-	const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-	const [opacity, setOpacity] = useState(0);
+	const glowRef = useRef<HTMLDivElement | null>(null);
+	const background = (x: number, y: number): string =>
+		`radial-gradient(${glowSize}px circle at ${Math.round(x)}px ${Math.round(y)}px, ${spotlightColor}, transparent 70%)`;
 
 	const onMove = (e: ReactMouseEvent<HTMLDivElement>): void => {
 		const el = ref.current;
-		if (!el) return;
+		const glow = glowRef.current;
+		if (!el || !glow) return;
 		const rect = el.getBoundingClientRect();
-		setPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+		glow.style.background = background(e.clientX - rect.left, e.clientY - rect.top);
 	};
 
 	// Touch: pointer events cover mouse + touch. No pointermove on tap-only
 	// screens, so keep a faint center glow by default (opacity starts low).
-	const style: CSSProperties = {
-		background: `radial-gradient(${glowSize}px circle at ${Math.round(pos.x)}px ${Math.round(pos.y)}px, ${spotlightColor}, transparent 70%)`,
-		opacity: opacity || 0.25,
-	};
+	const style: CSSProperties = { background: background(0, 0), opacity: 0.25 };
 
 	return (
 		<div
+			{...props}
 			ref={ref}
 			className={`gui-spotlight${className ? ` ${className}` : ""}`}
 			onPointerMove={onMove}
-			onPointerEnter={() => setOpacity(1)}
-			onPointerLeave={() => setOpacity(0)}
+			onPointerEnter={() => {
+				if (glowRef.current) glowRef.current.style.opacity = "1";
+			}}
+			onPointerLeave={() => {
+				if (glowRef.current) glowRef.current.style.opacity = "0.25";
+			}}
 		>
-			<div className="gui-spotlight-glow" aria-hidden="true" style={style} />
+			<div ref={glowRef} className="gui-spotlight-glow" aria-hidden="true" style={style} />
 			{children}
 		</div>
 	);

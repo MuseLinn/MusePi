@@ -2,13 +2,16 @@
  * Navigation policy (browser.policy.restrictToPublic): URL normalization,
  * private-address rejection and the DNS re-check guard.
  */
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import * as dns from "node:dns/promises";
 import {
 	assertSafeBrowserDestination,
 	assertSafeBrowserUrl,
 	isPrivateAddress,
 	normalizeBrowserUrl,
 } from "@musepi/pi-coding-agent/tools/browser/policy";
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("isPrivateAddress", () => {
 	it("flags localhost and .local hosts", () => {
@@ -93,8 +96,13 @@ describe("assertSafeBrowserDestination", () => {
 	});
 
 	it("rejects private-address DNS results even for public-looking hosts", async () => {
-		// 127.0.0.1.nip.io resolves to 127.0.0.1 — a public-looking hostname
-		// whose DNS lands on loopback (the DNS-rebinding guard's target case).
+		const lookupFake = (async (_hostname: string, options: unknown) => {
+			if (typeof options === "object" && options !== null && "all" in options && options.all) {
+				return [{ address: "127.0.0.1", family: 4 }];
+			}
+			return { address: "127.0.0.1", family: 4 };
+		}) as unknown as typeof dns.lookup;
+		vi.spyOn(dns, "lookup").mockImplementation(lookupFake);
 		await expect(assertSafeBrowserDestination("https://127.0.0.1.nip.io")).rejects.toThrow(/localhost|private/);
 	});
 });

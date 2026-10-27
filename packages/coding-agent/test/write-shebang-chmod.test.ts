@@ -46,22 +46,25 @@ describe("write tool shebang chmod", () => {
 		await removeWithRetries(tmpDir);
 	});
 
-	it("marks files starting with #! as executable and flags the result", async () => {
-		const filePath = path.join(tmpDir, "run.sh");
-		const tool = new WriteTool(createSession(tmpDir));
+	it.skipIf(process.platform === "win32")(
+		"marks files starting with #! as executable and flags the result",
+		async () => {
+			const filePath = path.join(tmpDir, "run.sh");
+			const tool = new WriteTool(createSession(tmpDir));
 
-		const result = await tool.execute("call-1", {
-			path: filePath,
-			content: "#!/bin/sh\necho hi\n",
-		});
+			const result = await tool.execute("call-1", {
+				path: filePath,
+				content: "#!/bin/sh\necho hi\n",
+			});
 
-		const stat = await fs.stat(filePath);
-		// All three execute bits flipped on (chmod a+x semantics).
-		expect(stat.mode & 0o111).toBe(0o111);
-		// Notice remains model-facing so callers see that chmod changed the file mode.
-		expect(details(result).madeExecutable).toBe(true);
-		expect(resultText(result)).toContain("[Notice: Made executable via chmod +x]");
-	});
+			const stat = await fs.stat(filePath);
+			// All three execute bits flipped on (chmod a+x semantics).
+			expect(stat.mode & 0o111).toBe(0o111);
+			// Notice remains model-facing so callers see that chmod changed the file mode.
+			expect(details(result).madeExecutable).toBe(true);
+			expect(resultText(result)).toContain("[Notice: Made executable via chmod +x]");
+		},
+	);
 
 	it("does not chmod files without a shebang", async () => {
 		const filePath = path.join(tmpDir, "data.txt");
@@ -77,7 +80,7 @@ describe("write tool shebang chmod", () => {
 		expect(details(result).madeExecutable).toBeUndefined();
 	});
 
-	it("does not re-flag when file is already executable", async () => {
+	it.skipIf(process.platform === "win32")("does not re-flag when file is already executable", async () => {
 		const filePath = path.join(tmpDir, "preexec.sh");
 		await fs.writeFile(filePath, "#!/bin/sh\nold\n");
 		await fs.chmod(filePath, 0o755);

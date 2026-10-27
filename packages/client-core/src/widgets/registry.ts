@@ -78,6 +78,8 @@ export interface WidgetDef {
 	Component(props: {
 		data: Record<string, unknown>;
 		update(patch: Record<string, unknown>): void;
+		/** Static collection preview: disable live requests and animation work. */
+		preview?: boolean;
 		/** Push an intent back to the conversation (kimi sendPrompt parity):
 		 *  inline chat widgets call this to hand results to the agent; the
 		 *  board (no conversation) simply never passes it, and components

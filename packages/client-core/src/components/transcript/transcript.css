@@ -949,6 +949,33 @@ button.tr-display-context-source:hover {
 	color: var(--accent);
 }
 
+.tr-compaction-open {
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
+}
+
+.tr-compaction-open > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.tr-compaction-open:hover,
+.tr-compaction-open:focus-visible {
+	color: var(--accent);
+}
+
+.tr-compaction-view {
+	color: var(--accent);
+	font-size: 12px;
+	letter-spacing: normal;
+	text-transform: none;
+}
+
 .tr-marker {
 	color: var(--fg-faint);
 	font-family: var(--font-mono);
@@ -3630,7 +3657,7 @@ a.tr-tool-search-title:hover {
  * flow, but shouldShowBackToBottom hides it there anyway. */
 .tr-back-bottom {
 	position: sticky;
-	bottom: 14px;
+	bottom: 24px;
 	z-index: 5;
 	display: flex;
 	align-items: center;

@@ -1023,7 +1023,9 @@ describe("github tool", () => {
 			const cfg = runGit(fixture.repoRoot, ["config", "--get-regexp", "^branch\\.pr-123\\."]);
 			expect(cfg).toContain("branch.pr-123.pushremote forksrc");
 			expect(cfg).toContain(`branch.pr-123.merge refs/heads/${fixture.headRefName}`);
-			expect(runGit(fixture.repoRoot, ["worktree", "list", "--porcelain"])).toContain(`worktree ${worktreePath}`);
+			expect(runGit(fixture.repoRoot, ["worktree", "list", "--porcelain"]).replaceAll("/", path.sep)).toContain(
+				`worktree ${worktreePath}`,
+			);
 			expect(runGit(worktreePath, ["branch", "--show-current"])).toBe("pr-123");
 		});
 	});

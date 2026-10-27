@@ -45,7 +45,7 @@ const freshProject = (): void => {
 	// A fresh project per case: the store keys on the slug, and sharing one
 	// would leak a case's items into the next.
 	CWD = `C:\\proj-knowledge-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-	SLUG = projectSlug(SLUG);
+	SLUG = projectSlug(CWD);
 };
 let isolated: string;
 let original: string | undefined;
@@ -210,6 +210,14 @@ describe("project addressing", () => {
 		const fromId = resolveProject({ projectId: fromDir }, "/somewhere/else");
 		expect(fromId).toBe(fromDir);
 		expect(resolveProject({}, CWD)).toBe(fromDir);
+	});
+
+	it("accepts Windows absolute directories independently of the host path flavor", () => {
+		const windowsDirectory = "C:\\work\\knowledge-project";
+		const fromDirectory = resolveProject({ directory: windowsDirectory }, "/somewhere/else");
+		expect(fromDirectory).toBe(projectSlug(windowsDirectory));
+		expect(resolveProject({}, windowsDirectory)).toBe(fromDirectory);
+		expect(resolveProject({ projectId: fromDirectory }, "/somewhere/else")).toBe(fromDirectory);
 	});
 
 	it("refuses both spellings at once, because they can disagree", () => {

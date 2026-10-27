@@ -51,7 +51,11 @@ function hover(element: HTMLElement, entering: boolean): void {
 }
 
 function advance(ms: number): void {
-	act(() => vi.advanceTimersByTime(ms));
+	const startedAt = Date.now();
+	act(() => {
+		vi.advanceTimersByTime(ms);
+		setSystemTime(startedAt + ms);
+	});
 }
 
 beforeEach(() => {

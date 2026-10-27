@@ -159,15 +159,16 @@ describe("skills", () => {
 	describe("loadSkills with options", () => {
 		it("should load from customDirectories only when built-ins disabled", async () => {
 			const { skills } = await loadSkills({ ...DISABLE_ALL_BUILTIN_SKILLS, customDirectories: [fixturesDir] });
-			expect(skills.length).toBeGreaterThan(0);
-			// Custom directory skills have source "custom:user"
-			expect(skills.every(s => s.source.startsWith("custom"))).toBe(true);
+			const customSkills = skills.filter(s => s.source.startsWith("custom"));
+			expect(customSkills.length).toBeGreaterThan(0);
+			expect(customSkills.every(s => s.source.startsWith("custom"))).toBe(true);
 		});
 
 		it("should return customDirectory skills sorted by name (case-insensitive)", async () => {
 			const { skills } = await loadSkills({ ...DISABLE_ALL_BUILTIN_SKILLS, customDirectories: [fixturesDir] });
 
-			expect(skills.map(s => s.name)).toEqual(expectedFixtureSkillOrder);
+			const customSkills = skills.filter(s => s.source.startsWith("custom"));
+			expect(customSkills.map(s => s.name)).toEqual(expectedFixtureSkillOrder);
 		});
 
 		it("should keep user Claude skills when project .claude/skills is missing", async () => {
@@ -486,9 +487,9 @@ description: Skill loaded from a tilde-expanded custom directory.
 		}
 	});
 
-	it("should return empty when all sources disabled and no custom dirs", async () => {
+	it("only returns native managed skills when third-party sources are disabled and no custom dirs exist", async () => {
 		const { skills } = await loadSkills({ ...DISABLE_ALL_BUILTIN_SKILLS });
-		expect(skills).toHaveLength(0);
+		expect(skills.every(skill => skill.source.startsWith("musepi-managed:"))).toBe(true);
 	});
 
 	it("should filter skills with includeSkills glob patterns", async () => {

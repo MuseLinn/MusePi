@@ -381,18 +381,17 @@ export function reconcileEmbeddingModel(beam: BeamMemoryState): void {
 
 	// Stop at the first row whose stamped model differs from the active one
 	// (NULL/unstamped counts as a mismatch via `IS NOT`).
-	const mismatch = beam.db.query("SELECT 1 FROM memory_embeddings WHERE model IS NOT ? LIMIT 1").get(active);
+	using mismatchStatement = beam.db.query("SELECT 1 FROM memory_embeddings WHERE model IS NOT ? LIMIT 1");
+	const mismatch = mismatchStatement.get(active);
 	if (mismatch) {
-		const staleModels = beam.db
-			.query("SELECT DISTINCT model FROM memory_embeddings WHERE model IS NOT ?")
-			.all(active) as { model: string | null }[];
-		const live = beam.db
-			.query(`
-				SELECT id AS memoryId, COALESCE(embed_text, content) AS content FROM working_memory WHERE superseded_by IS NULL
-				UNION ALL
-				SELECT id AS memoryId, content FROM episodic_memory WHERE superseded_by IS NULL
-			`)
-			.all() as EmbedItem[];
+		using staleModelsStatement = beam.db.query("SELECT DISTINCT model FROM memory_embeddings WHERE model IS NOT ?");
+		const staleModels = staleModelsStatement.all(active) as { model: string | null }[];
+		using liveStatement = beam.db.query(`
+			SELECT id AS memoryId, COALESCE(embed_text, content) AS content FROM working_memory WHERE superseded_by IS NULL
+			UNION ALL
+			SELECT id AS memoryId, content FROM episodic_memory WHERE superseded_by IS NULL
+		`);
+		const live = liveStatement.all() as EmbedItem[];
 
 		transaction(beam.db, () => {
 			beam.db.run("DELETE FROM memory_embeddings");
@@ -419,15 +418,14 @@ export function reconcileEmbeddingModel(beam: BeamMemoryState): void {
 	// exit after the wipe) can leave live memories with no active-model embedding. Treating an
 	// empty/partial table as "reconciled" would strand them FTS-only, so re-enqueue any live
 	// row still missing an active-model embedding.
-	const missing = beam.db
-		.query(`
-			SELECT id AS memoryId, COALESCE(embed_text, content) AS content FROM working_memory
-			WHERE superseded_by IS NULL AND id NOT IN (SELECT memory_id FROM memory_embeddings WHERE model = ?)
-			UNION ALL
-			SELECT id AS memoryId, content FROM episodic_memory
-			WHERE superseded_by IS NULL AND id NOT IN (SELECT memory_id FROM memory_embeddings WHERE model = ?)
-		`)
-		.all(active, active) as EmbedItem[];
+	using missingStatement = beam.db.query(`
+		SELECT id AS memoryId, COALESCE(embed_text, content) AS content FROM working_memory
+		WHERE superseded_by IS NULL AND id NOT IN (SELECT memory_id FROM memory_embeddings WHERE model = ?)
+		UNION ALL
+		SELECT id AS memoryId, content FROM episodic_memory
+		WHERE superseded_by IS NULL AND id NOT IN (SELECT memory_id FROM memory_embeddings WHERE model = ?)
+	`);
+	const missing = missingStatement.all(active, active) as EmbedItem[];
 	if (missing.length === 0) return;
 	logger.info("mnemopi: resuming interrupted embedding rebuild", { to: active, count: missing.length });
 	rebuild(missing);

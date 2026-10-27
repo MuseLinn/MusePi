@@ -2,6 +2,7 @@ import { vi } from "bun:test";
 import { resetSettingsForTest } from "@musepi/pi-coding-agent/config/settings";
 import { isTuiTight, setTuiTight } from "@musepi/pi-tui";
 import { getAgentDir, getProjectDir, setAgentDir, setProjectDir } from "@musepi/pi-utils";
+import { resetAgentStoresForTest } from "./isolate-agent-dir";
 
 export interface SettingsTestState {
 	agentDir: string;
@@ -30,6 +31,7 @@ export function beginSettingsTest(): SettingsTestState {
 
 export function restoreSettingsTestState(state: SettingsTestState | undefined): void {
 	vi.restoreAllMocks();
+	resetAgentStoresForTest();
 	resetSettingsForTest();
 	if (!state) return;
 

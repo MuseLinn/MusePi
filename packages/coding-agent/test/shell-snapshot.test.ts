@@ -239,87 +239,101 @@ describe("shell-snapshot fn-env helper", () => {
 });
 
 describe("getOrCreateSnapshot", () => {
-	it("re-exports env vars referenced by snapshotted functions (issue #3470)", async () => {
-		const home = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-3470-"));
-		await fs.writeFile(
-			path.join(home, ".bashrc"),
-			[
-				`export __MISE_EXE=${REAL_ECHO}`,
-				`export FOO_TEST_DIR=/opt/foo`,
-				`mise () { command "$__MISE_EXE" "$@"; }`,
-				`shout () { echo "$FOO_TEST_DIR"; }`,
-				``,
-			].join("\n"),
-		);
+	it.skipIf(process.platform === "win32")(
+		"re-exports env vars referenced by snapshotted functions (issue #3470)",
+		async () => {
+			const home = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-3470-"));
+			await fs.writeFile(
+				path.join(home, ".bashrc"),
+				[
+					`export __MISE_EXE=${REAL_ECHO}`,
+					`export FOO_TEST_DIR=/opt/foo`,
+					`mise () { command "$__MISE_EXE" "$@"; }`,
+					`shout () { echo "$FOO_TEST_DIR"; }`,
+					``,
+				].join("\n"),
+			);
 
-		// Symlink bash under a unique path so this call misses the process-wide
-		// snapshot cache (`cachedSnapshotPaths` is keyed on the shell path, and
-		// sibling tests in the same worker create a cached `/usr/bin/bash` entry
-		// from a different HOME before this test runs).
-		const realBash = REAL_BASH;
-		if (!existsSync(realBash)) return;
-		const shellLink = path.join(home, "bash-omp-3470");
-		await fs.symlink(realBash, shellLink);
+			// Symlink bash under a unique path so this call misses the process-wide
+			// snapshot cache (`cachedSnapshotPaths` is keyed on the shell path, and
+			// sibling tests in the same worker create a cached `/usr/bin/bash` entry
+			// from a different HOME before this test runs).
+			const realBash = REAL_BASH;
+			if (!existsSync(realBash)) return;
+			const shellLink = path.join(home, "bash-omp-3470");
+			await fs.symlink(realBash, shellLink);
 
-		// `getShellConfigFile` honours `env.HOME` so the spawned shell sources
-		// our fixture bashrc rather than the test runner's home.
-		const env = { ...process.env, HOME: home };
-		const snapshotPath = await getOrCreateSnapshot(shellLink, env);
-		expect(snapshotPath).not.toBeNull();
-		const content = await fs.readFile(snapshotPath!, "utf8");
+			// `getShellConfigFile` honours `env.HOME` so the spawned shell sources
+			// our fixture bashrc rather than the test runner's home.
+			const env = { ...process.env, HOME: home };
+			const snapshotPath = await getOrCreateSnapshot(shellLink, env);
+			expect(snapshotPath).not.toBeNull();
+			const content = await fs.readFile(snapshotPath!, "utf8");
 
-		expect(content).toContain(`export __MISE_EXE='${REAL_ECHO}'`);
-		expect(content).toContain(`export FOO_TEST_DIR='/opt/foo'`);
+			expect(content).toContain(`export __MISE_EXE='${REAL_ECHO}'`);
+			expect(content).toContain(`export FOO_TEST_DIR='/opt/foo'`);
 
-		// Replay the snapshot in a fresh bash with `set -u` and confirm the
-		// mise() function resolves cleanly instead of dying on the empty var.
-		const replay = Bun.spawn(
-			[realBash, "--noprofile", "--norc", "-c", `set -u; source "$1"; mise hello world; shout`, "_", snapshotPath!],
-			{ stdout: "pipe", stderr: "pipe" },
-		);
-		const stdout = await readStream(replay.stdout as ReadableStream<Uint8Array> | null);
-		const stderr = await readStream(replay.stderr as ReadableStream<Uint8Array> | null);
-		await replay.exited;
-		expect({ exitCode: replay.exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
-		expect(stdout).toBe("hello world\n/opt/foo\n");
+			// Replay the snapshot in a fresh bash with `set -u` and confirm the
+			// mise() function resolves cleanly instead of dying on the empty var.
+			const replay = Bun.spawn(
+				[
+					realBash,
+					"--noprofile",
+					"--norc",
+					"-c",
+					`set -u; source "$1"; mise hello world; shout`,
+					"_",
+					snapshotPath!,
+				],
+				{ stdout: "pipe", stderr: "pipe" },
+			);
+			const stdout = await readStream(replay.stdout as ReadableStream<Uint8Array> | null);
+			const stderr = await readStream(replay.stderr as ReadableStream<Uint8Array> | null);
+			await replay.exited;
+			expect({ exitCode: replay.exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
+			expect(stdout).toBe("hello world\n/opt/foo\n");
 
-		// PR-review hardening: snapshot file must be group/world-unreadable since
-		// it now inlines env-var values. Directory must be 0700 for the same
-		// reason — UUID filenames shouldn't leak via `ls /tmp/omp-shell-snapshots-$(id -u)`.
-		const fileStat = await fs.stat(snapshotPath!);
-		expect(fileStat.mode & 0o077).toBe(0);
-		const dirStat = await fs.stat(path.dirname(snapshotPath!));
-		expect(dirStat.mode & 0o077).toBe(0);
-	});
+			// PR-review hardening: snapshot file must be group/world-unreadable since
+			// it now inlines env-var values. Directory must be 0700 for the same
+			// reason — UUID filenames shouldn't leak via `ls /tmp/omp-shell-snapshots-$(id -u)`.
+			const fileStat = await fs.stat(snapshotPath!);
+			expect(fileStat.mode & 0o077).toBe(0);
+			const dirStat = await fs.stat(path.dirname(snapshotPath!));
+			expect(dirStat.mode & 0o077).toBe(0);
+		},
+	);
 
-	it("keeps the snapshot file at 0600 even when the rc file resets umask to 022", async () => {
-		// PR-review regression: previous revision ran `umask 077` BEFORE sourcing
-		// the rc, so a typical `.bashrc` with `umask 022` reopened the world-read
-		// window between the shell's first `>|` and the JS post-spawn chmod.
-		// Fix: JS now pre-creates the file at 0600 (shell `>|`/`>>` preserve the
-		// inode mode) AND the script re-applies `umask 077` after the source.
-		const home = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-umask-"));
-		await fs.writeFile(
-			path.join(home, ".bashrc"),
-			[`umask 022`, `export __MISE_EXE=${REAL_ECHO}`, `mise () { command "$__MISE_EXE" "$@"; }`, ``].join("\n"),
-		);
+	it.skipIf(process.platform === "win32")(
+		"keeps the snapshot file at 0600 even when the rc file resets umask to 022",
+		async () => {
+			// PR-review regression: previous revision ran `umask 077` BEFORE sourcing
+			// the rc, so a typical `.bashrc` with `umask 022` reopened the world-read
+			// window between the shell's first `>|` and the JS post-spawn chmod.
+			// Fix: JS now pre-creates the file at 0600 (shell `>|`/`>>` preserve the
+			// inode mode) AND the script re-applies `umask 077` after the source.
+			const home = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-umask-"));
+			await fs.writeFile(
+				path.join(home, ".bashrc"),
+				[`umask 022`, `export __MISE_EXE=${REAL_ECHO}`, `mise () { command "$__MISE_EXE" "$@"; }`, ``].join("\n"),
+			);
 
-		const realBash = REAL_BASH;
-		if (!existsSync(realBash)) return;
-		const shellLink = path.join(home, "bash-omp-umask");
-		await fs.symlink(realBash, shellLink);
+			const realBash = REAL_BASH;
+			if (!existsSync(realBash)) return;
+			const shellLink = path.join(home, "bash-omp-umask");
+			await fs.symlink(realBash, shellLink);
 
-		const env = { ...process.env, HOME: home };
-		const snapshotPath = await getOrCreateSnapshot(shellLink, env);
-		expect(snapshotPath).not.toBeNull();
+			const env = { ...process.env, HOME: home };
+			const snapshotPath = await getOrCreateSnapshot(shellLink, env);
+			expect(snapshotPath).not.toBeNull();
 
-		// Snapshot file must be 0600 — verifies the mode survives an rc-injected
-		// `umask 022` AND that captured env was actually written (sanity: non-empty).
-		const fileStat = await fs.stat(snapshotPath!);
-		expect(fileStat.mode & 0o077).toBe(0);
-		const content = await fs.readFile(snapshotPath!, "utf8");
-		expect(content).toContain(`export __MISE_EXE='${REAL_ECHO}'`);
-	});
+			// Snapshot file must be 0600 — verifies the mode survives an rc-injected
+			// `umask 022` AND that captured env was actually written (sanity: non-empty).
+			const fileStat = await fs.stat(snapshotPath!);
+			expect(fileStat.mode & 0o077).toBe(0);
+			const content = await fs.readFile(snapshotPath!, "utf8");
+			expect(content).toContain(`export __MISE_EXE='${REAL_ECHO}'`);
+		},
+	);
 	it("cleans up the empty snapshot file when the shell exits with a non-zero code", async () => {
 		const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-fail-"));
 		const originalTmpDir = process.env.TMPDIR;
@@ -398,27 +412,30 @@ describe("getOrCreateSnapshot", () => {
 		}
 	}, 5000); // increase test timeout to 5s to accommodate the 2s snapshot timeout
 
-	it("keeps snapshots in a uid-scoped dir so accounts sharing /tmp cannot collide", async () => {
-		// Regression: the dir used to be a single fixed `omp-shell-snapshots` name
-		// under the shared `os.tmpdir()`, created 0700. The first account to run omp
-		// owned it and every other account's pre-create write died with EACCES.
-		const realBash = REAL_BASH;
-		if (!existsSync(realBash)) return;
-		const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-uid-"));
-		const originalTmpDir = process.env.TMPDIR;
-		process.env.TMPDIR = testRoot;
-		try {
-			const shellLink = path.join(testRoot, "bash-omp-uid");
-			await fs.symlink(realBash, shellLink);
-			const snapshotPath = await getOrCreateSnapshot(shellLink, { ...process.env, HOME: testRoot });
-			expect(snapshotPath).not.toBeNull();
-			expect(path.dirname(snapshotPath!)).toBe(snapshotDirIn(testRoot));
-		} finally {
-			if (originalTmpDir === undefined) delete process.env.TMPDIR;
-			else process.env.TMPDIR = originalTmpDir;
-			await fs.rm(testRoot, { recursive: true, force: true });
-		}
-	});
+	it.skipIf(process.platform === "win32")(
+		"keeps snapshots in a uid-scoped dir so accounts sharing /tmp cannot collide",
+		async () => {
+			// Regression: the dir used to be a single fixed `omp-shell-snapshots` name
+			// under the shared `os.tmpdir()`, created 0700. The first account to run omp
+			// owned it and every other account's pre-create write died with EACCES.
+			const realBash = REAL_BASH;
+			if (!existsSync(realBash)) return;
+			const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-snap-uid-"));
+			const originalTmpDir = process.env.TMPDIR;
+			process.env.TMPDIR = testRoot;
+			try {
+				const shellLink = path.join(testRoot, "bash-omp-uid");
+				await fs.symlink(realBash, shellLink);
+				const snapshotPath = await getOrCreateSnapshot(shellLink, { ...process.env, HOME: testRoot });
+				expect(snapshotPath).not.toBeNull();
+				expect(path.dirname(snapshotPath!)).toBe(snapshotDirIn(testRoot));
+			} finally {
+				if (originalTmpDir === undefined) delete process.env.TMPDIR;
+				else process.env.TMPDIR = originalTmpDir;
+				await fs.rm(testRoot, { recursive: true, force: true });
+			}
+		},
+	);
 
 	it("returns null instead of throwing when the snapshot dir is unusable", async () => {
 		// Regression: `mkdirSync` and the pre-create `writeFileSync` both sat

@@ -7,10 +7,12 @@
 //! the system input queue. Window-message delivery (`Background` on a window
 //! target) touches neither and bypasses the lease.
 
+#[cfg(any(target_os = "windows", test))]
 use super::{backend::DeliveryMode, types::Target};
 
 /// Reports whether an input request needs the cross-session real-input lease.
-pub(crate) const fn needs_lease(target: &Target, mode: DeliveryMode) -> bool {
+#[cfg(any(target_os = "windows", test))]
+pub const fn needs_lease(target: &Target, mode: DeliveryMode) -> bool {
 	match mode {
 		DeliveryMode::Foreground => true,
 		// `Background` on the desktop target still goes through global input.

@@ -44,6 +44,7 @@ describe("createAgentSession skills option", () => {
 	let skillsDir: string;
 	let tempHomeDir = "";
 	let originalHome: string | undefined;
+	let originalUserProfile: string | undefined;
 	// Auth storage (SQLite DB) and the model registry are immutable across these tests: skill
 	// discovery never touches models, and building them per test would make createAgentSession call
 	// modelRegistry.refreshInBackground(), whose online model discovery saturates the event loop and
@@ -70,8 +71,10 @@ describe("createAgentSession skills option", () => {
 		skillsDir = path.join(getProjectAgentDir(tempDir), "skills", "test-skill");
 		fs.mkdirSync(skillsDir, { recursive: true });
 		originalHome = process.env.HOME;
+		originalUserProfile = process.env.USERPROFILE;
 		tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sdk-home-"));
 		process.env.HOME = tempHomeDir;
+		process.env.USERPROFILE = tempHomeDir;
 		// The dirs resolver froze at import time against the original HOME; a
 		// prior test's setAgentDir may also have left PI_CODING_AGENT_DIR set.
 		// Rebuild from the swapped HOME so getAgentDir() points into the temp
@@ -113,7 +116,7 @@ Loaded via symbolic link.
 	});
 
 	afterEach(() => {
-		cleanupTempHome(() => ({ tempDir, tempHomeDir, originalHome }))();
+		cleanupTempHome(() => ({ tempDir, tempHomeDir, originalHome, originalUserProfile }))();
 		// Rebuild the resolver against the restored HOME so later suites see the
 		// real agent dir again (the beforeEach swap leaves it on the temp home).
 		delete process.env.PI_CODING_AGENT_DIR;

@@ -2570,20 +2570,26 @@ export class DaemonSessionHost {
 			return snap;
 		};
 		const persisted = this.#store.load(sessionId);
+		let preferSdkTranscript = false;
 		if (persisted) {
 			const headerCwd =
 				persisted.header && typeof persisted.header === "object"
 					? String((persisted.header as { cwd?: string }).cwd ?? "")
 					: "";
 			const view = MaterializedView.fromSnapshot(sessionId, headerCwd, persisted);
-			if (view) return idleHistory(view);
+			if (view) {
+				const newestPersistedTs =
+					persisted.entries.findLast(entry => typeof entry.timestamp === "string")?.timestamp ?? null;
+				preferSdkTranscript = await this.#sdkSupersedesCachedHistory(sessionId, newestPersistedTs);
+				if (!preferSdkTranscript) return idleHistory(view);
+			}
 		}
 		const journal = new AppendJournal(JOURNAL_DIR, sessionId);
 		await journal.open();
 		try {
 			const { checkpoint, events, newestTs } = await journal.replaySource();
-			let useReplay = checkpoint !== null || events.length > 0;
-			if (useReplay && checkpoint === null && (await this.#sdkSupersedesJournal(sessionId, newestTs))) {
+			let useReplay = !preferSdkTranscript && (checkpoint !== null || events.length > 0);
+			if (useReplay && checkpoint === null && (await this.#sdkSupersedesCachedHistory(sessionId, newestTs))) {
 				// The journal missed records the SDK transcript holds (async
 				// write lag/loss, cross-instance rewrite, crash between
 				// seq-assign and flush): a replay would serve a fragment
@@ -2662,23 +2668,21 @@ export class DaemonSessionHost {
 	}
 
 	/**
-	 * True when the SDK transcript provably holds records the journal
-	 * missed, so a checkpoint-less journal replay must not stand in for
-	 * it. Same-process ordering makes this sound: the session manager
-	 * persists entries synchronously per record while journal appends go
-	 * through an async chain, so a journal that saw every record can never
-	 * lag the SDK tail. Ties keep the journal.
+	 * True when the SDK transcript provably holds records the cached history
+	 * missed. Same-process ordering makes this sound: the session manager
+	 * persists entries synchronously per record while snapshot and journal
+	 * writes go through an async chain. Ties keep the cached projection.
 	 */
-	async #sdkSupersedesJournal(sessionId: string, journalNewestTs: string | null): Promise<boolean> {
-		if (journalNewestTs === null) return false;
-		const journalMs = Date.parse(journalNewestTs);
-		if (!Number.isFinite(journalMs)) return false;
+	async #sdkSupersedesCachedHistory(sessionId: string, cachedNewestTs: string | null): Promise<boolean> {
+		if (cachedNewestTs === null) return false;
+		const cachedMs = Date.parse(cachedNewestTs);
+		if (!Number.isFinite(cachedMs)) return false;
 		const { resolveResumableSession } = await import("../session/session-listing");
 		const match = await resolveResumableSession(sessionId, this.#options.cwd ?? "");
 		if (!match) return false;
 		const sdkMs = await readSdkNewestTimestamp(match.session.path);
 		if (sdkMs === null) return false;
-		return sdkMs > journalMs;
+		return sdkMs > cachedMs;
 	}
 
 	/**

@@ -573,3 +573,55 @@ describe("轨迹时序字段(Overview 时间轴数据源)", () => {
 		expect(unsettled.ttftMs).toBeUndefined();
 	});
 });
+
+describe("history-window identity and complete entry topology", () => {
+	const msg = (id: string, parentId: string | null, role: string, text: string, second: number): unknown => ({
+		type: "message",
+		id,
+		parentId,
+		timestamp: new Date(second * 1000).toISOString(),
+		message: { role, content: [{ type: "text", text }] },
+	});
+	const advisor = (id: string, parentId: string, second: number): unknown => ({
+		type: "custom_message",
+		customType: "advisor",
+		display: true,
+		id,
+		parentId,
+		timestamp: new Date(second * 1000).toISOString(),
+		details: { notes: [{ note: "keep the chain" }] },
+	});
+
+	it("keeps advisor-linked messages on the main chain without an active-path hint", () => {
+		const entries = [
+			msg("u1", null, "user", "one", 1),
+			msg("a1", "u1", "assistant", "answer", 2),
+			advisor("adv1", "a1", 3),
+			msg("a2", "adv1", "assistant", "follow-up", 4),
+			msg("u2", "a2", "user", "two", 5),
+		];
+		const { events } = buildTrajectory(entries);
+		expect(events.filter(e => e.branch).map(e => e.entryId)).toEqual([]);
+	});
+
+	it("keeps event and turn identity stable when older history is prepended", () => {
+		const tail = [msg("u2", "a1", "user", "two", 3), msg("a2", "u2", "assistant", "second", 4)];
+		const older = [msg("u1", null, "user", "one", 1), msg("a1", "u1", "assistant", "first", 2)];
+		const before = buildTrajectoryTree(tail).turns[0]!;
+		const after = buildTrajectoryTree([...older, ...tail]).turns.find(g => g.events[0]?.entryId === "u2")!;
+		expect(after.events.map(e => e.id)).toEqual(before.events.map(e => e.id));
+		expect(after).toMatchObject({ id: "u2" });
+	});
+
+	it("records the real parent turn for branches below another branch", () => {
+		const entries = [
+			msg("u1", null, "user", "root", 1),
+			msg("a1", "u1", "assistant", "root answer", 2),
+			msg("u2", "a1", "user", "old branch", 3),
+			msg("a2", "u2", "assistant", "old answer", 4),
+			msg("u3", "a2", "user", "nested branch", 5),
+		];
+		const { events } = buildTrajectory(entries);
+		expect(events.find(e => e.entryId === "u3")).toMatchObject({ parentTurnId: "u2" });
+	});
+});

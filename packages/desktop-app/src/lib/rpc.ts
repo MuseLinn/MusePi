@@ -75,6 +75,22 @@ const KEEPALIVE_INTERVAL_MS = 20_000;
  *  force-close so the close handler's reconnect path takes over. */
 const KEEPALIVE_DEAD_MS = 45_000;
 
+/** Tracks replaced clients whose close event is part of an intentional daemon
+ * restart. Consuming once lets later unexpected closes recover normally. */
+export class ExpectedDisconnects {
+	readonly #clients = new WeakSet<RpcClient>();
+
+	expect(client: RpcClient): void {
+		this.#clients.add(client);
+	}
+
+	consume(client: RpcClient): boolean {
+		const expected = this.#clients.has(client);
+		if (expected) this.#clients.delete(client);
+		return expected;
+	}
+}
+
 export class RpcClient {
 	readonly #url: string;
 	#ws: WebSocket | null = null;

@@ -147,7 +147,7 @@ describe("enumeratePythonRuntimes", () => {
 			{},
 		);
 
-		expect(runtime.pythonPath).toBe(path.join(path.sep, "work", ".venv", "bin", "python"));
+		expect(runtime.pythonPath).toBe(path.resolve(path.join(path.sep, "work"), path.join(".venv", "bin", "python")));
 	});
 
 	it("throws from resolvePythonRuntime when no interpreter can be found", () => {

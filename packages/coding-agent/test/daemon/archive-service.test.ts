@@ -11,7 +11,7 @@
  * rule matters because two selected directories can each hold a `README.md` and
  * a zip with two entries of one name silently loses one of them.
  */
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
@@ -89,19 +89,91 @@ describe("ArchiveService.build", () => {
 		}
 	});
 
-	test("refuses a third concurrent build for the same session", async () => {
-		// Two is generous; a third means the client re-requests without reading
-		// the first id, and honouring it means every request opens the same files.
+	test("refuses a third build while two builds are reading files", async () => {
 		const { service, root } = await setup();
+		const selected = path.join(root, "a.txt");
+		const releaseReads = Promise.withResolvers<void>();
+		const bothReading = Promise.withResolvers<void>();
+		let reads = 0;
+		const realFile = Bun.file.bind(Bun);
+		const fileSpy = vi.spyOn(Bun, "file").mockImplementation((source, options) => {
+			const handle = realFile(source as string, options);
+			if (source !== selected) return handle;
+			return new Proxy(handle, {
+				get(target, property) {
+					if (property !== "arrayBuffer") return Reflect.get(target, property, target);
+					return async () => {
+						reads += 1;
+						if (reads === 2) bothReading.resolve();
+						await releaseReads.promise;
+						return target.arrayBuffer();
+					};
+				},
+			});
+		});
 		try {
-			for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(root, `f${i}.txt`), "x".repeat(2048));
-			const paths = Array.from({ length: 40 }, (_, i) => path.join(root, `f${i}.txt`));
-			const a = await service.build({ sessionId: "s", paths });
-			const b = await service.build({ sessionId: "s", paths });
+			fs.writeFileSync(selected, "A");
+			const a = await service.build({ sessionId: "s", paths: [selected] });
+			const b = await service.build({ sessionId: "s", paths: [selected] });
 			expect("id" in a && "id" in b).toBe(true);
-			const third = await service.build({ sessionId: "s", paths });
+			await bothReading.promise;
+			const third = await service.build({ sessionId: "s", paths: [selected] });
 			expect(third).toMatchObject({ error: expect.stringContaining("builds running") });
 		} finally {
+			releaseReads.resolve();
+			fileSpy.mockRestore();
+			await fsp.rm(root, { recursive: true, force: true });
+		}
+	});
+
+	test("reserves a build slot before an overlapping request starts collecting files", async () => {
+		const { service, root } = await setup();
+		try {
+			const selected = path.join(root, "a.txt");
+			fs.writeFileSync(selected, "A");
+			const results = await Promise.all([
+				service.build({ sessionId: "s", paths: [selected] }),
+				service.build({ sessionId: "s", paths: [selected] }),
+				service.build({ sessionId: "s", paths: [selected] }),
+			]);
+			expect(results.filter(result => "id" in result)).toHaveLength(2);
+			expect(results.filter(result => "error" in result)).toEqual([
+				{ error: expect.stringContaining("builds running") },
+			]);
+		} finally {
+			await fsp.rm(root, { recursive: true, force: true });
+		}
+	});
+
+	test("keeps another request's slot when an earlier collection finishes", async () => {
+		const { service, root } = await setup();
+		const selected = path.join(root, "a.txt");
+		const releaseStat = Promise.withResolvers<void>();
+		const statStarted = Promise.withResolvers<void>();
+		const realStat = fsp.stat.bind(fsp);
+		const statSpy = vi.spyOn(fsp, "stat").mockImplementation((async (target: fs.PathLike) => {
+			if (target === selected) {
+				statStarted.resolve();
+				await releaseStat.promise;
+			}
+			return realStat(target);
+		}) as typeof fsp.stat);
+		try {
+			fs.writeFileSync(selected, "A");
+			const first = service.build({ sessionId: "s", paths: [path.join(root, "missing.txt")] });
+			const second = service.build({ sessionId: "s", paths: [selected] });
+			await statStarted.promise;
+			await first;
+			const third = service.build({ sessionId: "s", paths: [selected] });
+			const fourth = service.build({ sessionId: "s", paths: [selected] });
+			releaseStat.resolve();
+			const [, secondResult, thirdResult, fourthResult] = await Promise.all([first, second, third, fourth]);
+			expect(secondResult).toMatchObject({ id: expect.any(String) });
+			expect(thirdResult).toMatchObject({ id: expect.any(String) });
+			expect(fourthResult).toMatchObject({ error: expect.stringContaining("builds running") });
+		} finally {
+			releaseStat.resolve();
+			statSpy.mockRestore();
 			await fsp.rm(root, { recursive: true, force: true });
 		}
 	});

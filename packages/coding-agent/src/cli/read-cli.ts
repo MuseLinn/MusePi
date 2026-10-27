@@ -68,6 +68,9 @@ export async function runReadCommand(cmd: ReadCommandArgs): Promise<void> {
 			mcpManager = result.manager;
 			session.mcpManager = mcpManager;
 			MCPManager.setInstance(mcpManager);
+			await Promise.allSettled(
+				result.manager.getAllServerNames().map(name => result.manager.waitForConnection(name)),
+			);
 		}
 
 		const tool = wrapToolWithMetaNotice(new ReadTool(session));

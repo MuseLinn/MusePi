@@ -649,6 +649,7 @@ export interface DesktopCapabilities {
   input: boolean
   ax: boolean
   backgroundWindowInput: boolean
+  overlay: boolean
   deliveryModes: Array<string>
   capturePermission: string
   inputPermission: string

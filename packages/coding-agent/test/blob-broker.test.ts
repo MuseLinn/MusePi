@@ -347,7 +347,11 @@ describe("uploaders", () => {
 		await fs.promises.chmod(stub, 0o755);
 		cleanups.push(() => void fs.promises.rm(stub, { force: true }));
 
-		const uploader = createCommandUploader(`${stub} --x {file} {ext}`);
+		const command =
+			process.platform === "win32"
+				? `${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(import.meta.dir, "fixtures", "command-uploader.ts"))}`
+				: stub;
+		const uploader = createCommandUploader(`${command} --x {file} {ext}`);
 		const publication = await uploader.upload({
 			bytes: new Uint8Array(Buffer.from("payload")),
 			mimeType: "image/png",

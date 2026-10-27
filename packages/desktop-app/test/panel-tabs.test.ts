@@ -19,6 +19,7 @@ import {
 	tabsInColumn,
 	upsertPanelTab,
 } from "../src/lib/panel-tabs";
+import { compactionTabDescriptor } from "../src/lib/surfaces/registry";
 
 // Panel-level heterogeneous tab model (openchamber ContextPanel parity): one
 // strip hosts every surface's instances, the rail launches tabs. The
@@ -435,5 +436,19 @@ describe("upsertPanelTab forceNew", () => {
 		// column-1 tab, which is the invariant the strip's rendering relies on.
 		const columns = out.tabs.map(t => t.column);
 		expect(columns).toEqual([...columns].sort());
+	});
+});
+
+describe("compactionTabDescriptor", () => {
+	it("persists only the compaction address and restores the same tab", () => {
+		const descriptor = compactionTabDescriptor("c1", "压缩摘要");
+		const opened = upsertPanelTab(EMPTY_PANEL_TAB_STATE, descriptor, { now: 1 });
+		expect(opened.tabs[0]?.id).toBe("ext:panel.tab.compaction::c1");
+		expect(opened.tabs[0]?.target).toBe("c1");
+		expect(opened.tabs[0]?.readOnly).toBe(true);
+		const restored = restorePanelTabs(JSON.parse(JSON.stringify(serializePanelTabs(opened))));
+		expect(restored.tabs[0]?.id).toBe(opened.tabs[0]?.id);
+		expect(restored.tabs[0]?.target).toBe("c1");
+		expect(JSON.stringify(restored)).not.toContain("summary body");
 	});
 });

@@ -227,7 +227,8 @@ describe("Settings.reloadForCwd", () => {
 		});
 
 		afterEach(() => {
-			resetSettingsForTest();
+			restoreSettingsTestState(settingsState);
+			settingsState = undefined;
 			if (fs.existsSync(testDir)) {
 				removeSyncWithRetries(testDir);
 			}

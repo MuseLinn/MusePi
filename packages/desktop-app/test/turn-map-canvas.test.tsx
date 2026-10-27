@@ -1,6 +1,8 @@
 import "./happy-dom-shim";
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { t, tLoose } from "@musepi/client-core";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TmNodeCard, TurnMapCanvas, turnEndEventOf, turnUserEventOf } from "../src/components/TurnMapCanvas";
 import type { TrajectoryEvent } from "../src/components/trajectory-data";
@@ -225,5 +227,65 @@ describe("TurnMapCanvas SSR 冒烟", () => {
 		// 搜索导航(既有回归,保持覆盖)。
 		expect(t("settings.trajectorySearchPrevious")).not.toBe(t("settings.trajectorySearchNext"));
 		expect(t("settings.trajectorySearchPrevious")).not.toBe(t("settings.trajectoryClearFilter"));
+	});
+});
+
+const mountedRoots = new Set<Root>();
+afterEach(async () => {
+	for (const root of mountedRoots) await act(async () => root.unmount());
+	mountedRoots.clear();
+	document.body.innerHTML = "";
+});
+
+function windowEntries(from: number, to: number): unknown[] {
+	const result: unknown[] = [];
+	for (let i = from; i <= to; i++) {
+		result.push(
+			{
+				type: "message",
+				id: `u${i}`,
+				parentId: i === 1 ? null : `a${i - 1}`,
+				timestamp: new Date(i * 2000).toISOString(),
+				message: { role: "user", content: [{ type: "text", text: `user ${i}` }] },
+			},
+			{
+				type: "message",
+				id: `a${i}`,
+				parentId: `u${i}`,
+				timestamp: new Date(i * 2000 + 1000).toISOString(),
+				message: { role: "assistant", content: [{ type: "text", text: `assistant ${i}` }] },
+			},
+		);
+	}
+	return result;
+}
+
+describe("history-window map interaction", () => {
+	it("preserves the expanded turn and zoom transform when older history arrives", async () => {
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		mountedRoots.add(root);
+		await act(async () => root.render(<TurnMapCanvas entries={windowEntries(2, 3)} />));
+		await act(async () => container.querySelector<HTMLElement>(".tm-node")?.click());
+		await act(async () => Bun.sleep(260));
+		expect(container.querySelectorAll(".tm-node:not(.tm-node--compact)")).toHaveLength(1);
+
+		await act(async () => container.querySelectorAll<HTMLButtonElement>(".tm-zoom-btn")[1]?.click());
+		const before = container.querySelector<HTMLElement>(".tm-world")?.style.transform;
+		await act(async () => root.render(<TurnMapCanvas entries={windowEntries(1, 3)} />));
+
+		const cards = [...container.querySelectorAll<HTMLElement>(".tm-node")];
+		expect(cards[0]?.className).toContain("tm-node--compact");
+		expect(cards[1]?.className).not.toContain("tm-node--compact");
+		expect(cards[1]?.textContent).toContain("user 2");
+		expect(container.querySelector<HTMLElement>(".tm-world")?.style.transform).toBe(before);
+	});
+
+	it("exposes turn cards as keyboard-operable buttons", () => {
+		const html = renderCard(turnNode(baseEvents), false);
+		expect(html).toContain('role="button"');
+		expect(html).toContain('tabindex="0"');
+		expect(html).toContain('aria-expanded="false"');
 	});
 });

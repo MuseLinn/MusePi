@@ -160,6 +160,7 @@ describe("SearXNG web search provider", () => {
 			expect(response.answer).toBe("Forty-two\n\nLegacy answer\n\nHallo\nGuten Tag");
 			expect(response.sources[0]?.snippet).toBe("Fallback snippet");
 		} finally {
+			resetSettingsForTest();
 			await removeWithRetries(agentDir);
 		}
 	});
@@ -196,6 +197,7 @@ describe("SearXNG web search provider", () => {
 				`Basic ${Buffer.from("alice:s3cret", "utf-8").toString("base64")}`,
 			);
 		} finally {
+			resetSettingsForTest();
 			await removeWithRetries(agentDir);
 		}
 	});
@@ -380,6 +382,7 @@ describe("SearXNG web search provider", () => {
 			const searchUrl = requested.find(url => url.pathname === "/search");
 			expect(searchUrl?.searchParams.get("engines")).toBe("duckduckgo,brave,unknown");
 		} finally {
+			resetSettingsForTest();
 			await removeWithRetries(agentDir);
 		}
 	});
@@ -413,6 +416,7 @@ describe("SearXNG web search provider", () => {
 			const searchUrl = requested.find(url => url.pathname === "/search");
 			expect(searchUrl?.searchParams.get("engines")).toBe("ddg,brave");
 		} finally {
+			resetSettingsForTest();
 			await removeWithRetries(agentDir);
 		}
 	});

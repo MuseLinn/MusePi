@@ -97,6 +97,7 @@ describe("worktree isolation helpers", () => {
 		beforeAll(async () => {
 			repo = await fs.mkdtemp(path.join(os.tmpdir(), "omp-worktree-"));
 			await runGit(repo, ["init", "-q", "-b", BASE_BRANCH]);
+			await runGit(repo, ["config", "core.autocrlf", "false"]);
 			await runGit(repo, ["config", "user.email", "test@example.com"]);
 			await runGit(repo, ["config", "user.name", "Test User"]);
 			await Promise.all([
@@ -281,7 +282,8 @@ describe("worktree isolation helpers", () => {
 				expect(delta.rootPatch).toContain("+downstream edit");
 			});
 
-			it("cleans restored stash files with literal pathspecs", async () => {
+			// Windows forbids both ':' and '*' in filenames, so the real pathspec fixture is POSIX-only.
+			it.skipIf(process.platform === "win32")("cleans restored stash files with literal pathspecs", async () => {
 				// Force the fallback branch: preflight would normally refuse this
 				// pop before Git can restore anything, but mode/delete edge cases can
 				// still pass preflight and fail during the actual stash pop. Git can
@@ -844,6 +846,7 @@ describe("applyNestedPatches", () => {
 	beforeEach(async () => {
 		parentRepo = await fs.mkdtemp(path.join(os.tmpdir(), "omp-nested-apply-"));
 		await runGit(parentRepo, ["init", "-q", "-b", "main"]);
+		await runGit(parentRepo, ["config", "core.autocrlf", "false"]);
 		await runGit(parentRepo, ["config", "user.email", "test@example.com"]);
 		await runGit(parentRepo, ["config", "user.name", "Test User"]);
 		await fs.writeFile(path.join(parentRepo, ".gitignore"), "sub/\n");
@@ -854,6 +857,7 @@ describe("applyNestedPatches", () => {
 		nestedDir = path.join(parentRepo, nestedRel);
 		await fs.mkdir(nestedDir, { recursive: true });
 		await runGit(nestedDir, ["init", "-q", "-b", "main"]);
+		await runGit(nestedDir, ["config", "core.autocrlf", "false"]);
 		await runGit(nestedDir, ["config", "user.email", "test@example.com"]);
 		await runGit(nestedDir, ["config", "user.name", "Test User"]);
 		await fs.writeFile(path.join(nestedDir, "file.txt"), "v1\n");
@@ -960,6 +964,7 @@ describe("commitToBranch preserves agent commits", () => {
 		parent = await fs.mkdtemp(path.join(os.tmpdir(), "omp-commit-parent-"));
 		isolation = await fs.mkdtemp(path.join(os.tmpdir(), "omp-commit-iso-"));
 		await gitr(parent, ["init", "-q", "-b", "main"]);
+		await gitr(parent, ["config", "core.autocrlf", "false"]);
 		await gitr(parent, ["config", "user.email", "user@example.com"]);
 		await gitr(parent, ["config", "user.name", "Parent User"]);
 		await fs.writeFile(
@@ -974,6 +979,8 @@ describe("commitToBranch preserves agent commits", () => {
 		// isolation backends would arrange them at runtime.
 		await fs.rm(isolation, { recursive: true, force: true });
 		await gitr(parent, ["clone", "-q", "--no-hardlinks", "--local", parent, isolation]);
+		await gitr(isolation, ["config", "core.autocrlf", "false"]);
+		await gitr(isolation, ["reset", "--hard", "HEAD"]);
 		await gitr(isolation, ["config", "user.email", "agent@example.com"]);
 		await gitr(isolation, ["config", "user.name", "Agent User"]);
 	});

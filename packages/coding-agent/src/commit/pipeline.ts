@@ -5,6 +5,7 @@ import { getProjectDir, logger, prompt } from "@musepi/pi-utils";
 import { ModelRegistry } from "../config/model-registry";
 import { Settings } from "../config/settings";
 import { discoverAuthStorage, loadCliExtensionProviders } from "../sdk";
+import type { AuthStorage } from "../session/auth-storage";
 import { loadProjectContextFiles } from "../system-prompt";
 import * as git from "../utils/git";
 import { runAgenticCommit } from "./agentic";
@@ -47,8 +48,21 @@ export async function runCommitCommand(args: CommitCommandArgs): Promise<{ usedF
 async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const cwd = getProjectDir();
 	const settings = await Settings.init({ cwd });
-	const commitSettings = settings.getGroup("commit");
 	const authStorage = await discoverAuthStorage();
+	try {
+		await runLegacyCommitWithResources(args, cwd, settings, authStorage);
+	} finally {
+		authStorage.close();
+	}
+}
+
+async function runLegacyCommitWithResources(
+	args: CommitCommandArgs,
+	cwd: string,
+	settings: Settings,
+	authStorage: AuthStorage,
+): Promise<void> {
+	const commitSettings = settings.getGroup("commit");
 	const modelRegistry = new ModelRegistry(authStorage);
 	await modelRegistry.refresh();
 	await loadCliExtensionProviders(modelRegistry, settings, cwd);

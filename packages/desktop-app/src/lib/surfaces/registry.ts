@@ -4,6 +4,7 @@
  * hides, and sizes the panel accordingly. Pure module data + persistence,
  * no React.
  */
+import type { PanelTabDescriptor } from "../panel-tabs";
 import type { RpcClient } from "../rpc";
 
 export type SurfaceAvailability = "always" | "has-content";
@@ -51,6 +52,19 @@ export interface SurfaceDescriptor {
 	/** 可选：是否有一个对应“是否有内容”的判定 */
 	hasContent?(ctx: SurfaceProps): boolean;
 	render?(rpc: RpcClient | null, props: SurfaceProps): unknown;
+}
+
+export const COMPACTION_PANEL_SURFACE = "ext:panel.tab.compaction";
+
+/** Address-only descriptor: summary content is re-read from the daemon. */
+export function compactionTabDescriptor(entryId: string, label: string): PanelTabDescriptor {
+	return {
+		surface: COMPACTION_PANEL_SURFACE,
+		target: entryId,
+		dedupeKey: entryId,
+		label,
+		readOnly: true,
+	};
 }
 
 /* ── 内置 surface ─────────────────────────────────────────────── */

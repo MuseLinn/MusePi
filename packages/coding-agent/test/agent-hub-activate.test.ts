@@ -370,7 +370,6 @@ describe("Agent hub Enter activation", () => {
 		hub.dispose();
 	});
 	it("yields to a macrotask while streaming a large session", async () => {
-		vi.useFakeTimers();
 		using tempDir = TempDir.createSync("@omp-agent-hub-responsive-");
 		const sessionFile = path.join(tempDir.path(), "session.jsonl");
 		const entry = JSON.stringify({
@@ -397,15 +396,9 @@ describe("Agent hub Enter activation", () => {
 		).finally(() => {
 			complete = true;
 		});
-		try {
-			for (let i = 0; i < 20_000 && visited < 8_192 && !complete; i++) await Promise.resolve();
-			expect(visited).toBeGreaterThanOrEqual(8_192);
-			vi.runOnlyPendingTimers();
-			await visit;
-			expect(yieldedBeforeComplete).toBe(true);
-		} finally {
-			vi.useRealTimers();
-		}
+		await visit;
+		expect(visited).toBe(8_193);
+		expect(yieldedBeforeComplete).toBe(true);
 	});
 
 	it("does not generically revive active or tombstoned Vibe children copied by a post-exit fork", async () => {

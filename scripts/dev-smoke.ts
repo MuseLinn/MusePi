@@ -38,7 +38,9 @@ if (cmd.length === 0) {
 	process.exit(2);
 }
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-smoke-"));
+const smokeTempRoot = path.resolve(import.meta.dir, "..", ".tmp");
+fs.mkdirSync(smokeTempRoot, { recursive: true });
+const root = fs.mkdtempSync(path.join(smokeTempRoot, "musepi-smoke-"));
 const agentDir = path.join(root, "agent");
 const daemonDir = path.join(root, "daemon");
 fs.mkdirSync(agentDir, { recursive: true });

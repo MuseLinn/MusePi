@@ -140,9 +140,12 @@ function sendText(ws: RawWs, text: string): void {
 
 async function rpc(ws: RawWs, id: number, method: string, params?: unknown): Promise<unknown> {
 	sendText(ws, JSON.stringify({ jsonrpc: "2.0", id, method, params }));
-	const frame = await ws.nextFrame();
-	expect(frame.opcode).toBe(OP_TEXT);
-	return JSON.parse(new TextDecoder().decode(frame.payload)) as unknown;
+	for (;;) {
+		const frame = await ws.nextFrame();
+		if (frame.opcode !== OP_TEXT) continue;
+		const message = JSON.parse(new TextDecoder().decode(frame.payload)) as { id?: number };
+		if (message.id === id) return message as unknown;
+	}
 }
 
 async function tmpDir(): Promise<string> {

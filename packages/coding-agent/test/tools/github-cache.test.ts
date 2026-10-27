@@ -189,11 +189,12 @@ describe("github-cache db layer", () => {
 		process.env.OMP_GITHUB_CACHE_DB = path.join(parent, "github-cache.db");
 		resetCacheForTests();
 
+		const modeBefore = (await fs.stat(parent)).mode & 0o777;
 		const db = openDb();
 
 		expect(db).not.toBeNull();
 		const stat = await fs.stat(parent);
-		expect(stat.mode & 0o777).toBe(0o755);
+		expect(stat.mode & 0o777).toBe(modeBefore);
 	});
 
 	it("preserves rows across openDb() and honors the configured hard TTL via per-lookup sweep", async () => {

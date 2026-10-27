@@ -14,6 +14,7 @@ import * as fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { $ } from "bun";
+import { resolveCargoBinary } from "../../../scripts/cargo-binary";
 import { detectHostAvx2Support, resolveLocalHostAddon } from "../../../scripts/host-detect";
 import { generateEnumExports } from "./gen-enums";
 
@@ -288,9 +289,17 @@ try {
 	// toolchain from the *cwd*, not --manifest-path, and napi spawns cargo
 	// with cwd=this package — so a rust-toolchain.toml here is required.
 	// (crates/pi-natives/rust-toolchain.toml covers direct cargo use.)
+	const cargoBinary = await resolveCargoBinary(repoRoot);
+	const buildTempDir = path.join(repoRoot, ".tmp", "native-build");
+	if (process.platform === "win32") fsSync.mkdirSync(buildTempDir, { recursive: true });
 	const buildResult = await $`${process.execPath} ${napiBin} ${napiArgs}`
 		.env({
 			RUSTUP_TOOLCHAIN: "nightly",
+			...(process.platform === "win32" ? { TEMP: buildTempDir, TMP: buildTempDir } : {}),
+			PATH:
+				cargoBinary === "cargo"
+					? (process.env.PATH ?? "")
+					: `${path.dirname(cargoBinary)}${path.delimiter}${process.env.PATH ?? ""}`,
 		})
 		.nothrow();
 	if (buildResult.exitCode !== 0) {

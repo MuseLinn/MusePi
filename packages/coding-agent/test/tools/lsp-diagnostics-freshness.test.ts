@@ -694,7 +694,7 @@ describe("LSP diagnostics freshness", () => {
 	it("suppresses TypeScript project diagnostics for orphan files but keeps syntax errors", async () => {
 		const server: ServerConfig = {
 			...TEST_SERVER,
-			rootMarkers: ["package.json", "tsconfig.json", "jsconfig.json"],
+			rootMarkers: [".omp-lsp-orphan-test-root"],
 		};
 		const orphanDir = TempDir.createSync("@omp-lsp-orphan-");
 		try {

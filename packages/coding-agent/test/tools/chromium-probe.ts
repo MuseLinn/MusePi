@@ -10,8 +10,13 @@ async function chromiumCanLaunch(): Promise<boolean> {
 	try {
 		const executable = await ensureChromiumExecutable();
 		if (!executable) return false;
-		const probe = Bun.spawnSync([executable, "--version"], { stdout: "ignore", stderr: "ignore" });
-		return probe.exitCode === 0;
+		const child = Bun.spawn([executable, "--version"], { stdout: "ignore", stderr: "ignore" });
+		const timeout = setTimeout(() => child.kill("SIGKILL"), 5_000);
+		try {
+			return (await child.exited) === 0;
+		} finally {
+			clearTimeout(timeout);
+		}
 	} catch {
 		return false;
 	}

@@ -72,7 +72,7 @@ describe("issue #3464: ollama-cloud task backoff", () => {
 				requestedModels.push(`${model.provider}/${model.id}`);
 				if (model.provider === primary.provider && model.id === primary.id && primaryAttempts === 0) {
 					primaryAttempts += 1;
-					mock.push({ throw: "rate limit exceeded retry-after-ms=200" });
+					mock.push({ throw: "rate limit exceeded retry-after-ms=60000" });
 				} else {
 					mock.push({ content: [`ok:${model.provider}/${model.id}`] });
 				}

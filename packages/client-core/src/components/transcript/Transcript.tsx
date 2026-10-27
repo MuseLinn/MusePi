@@ -255,6 +255,8 @@ export interface TranscriptProps {
 	 *  re-answer via backfilled `text`; assistant/toolResult nodes pass
 	 *  `includeTarget: true` to keep the node and continue from it. */
 	onFork?(messageId: string, text: string | undefined, includeTarget?: boolean): void;
+	/** Open the full summary for a compaction entry in the host UI. */
+	onOpenCompaction?(entry: Extract<SessionEntry, { type: "compaction" }>): void;
 	/** Lazy history backfill: fires when the tail window
 	 *  is fully expanded AND the user keeps scrolling up — the caller pages
 	 *  the next older chunk from session.history and prepends it. */
@@ -697,6 +699,8 @@ interface EntryRowProps {
 	onSaveImage?(text: string, element: HTMLElement | null): void | Promise<void>;
 	/** Open the full-size image preview lightbox (transcript-level state). */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** Open the full summary for a compaction entry in the host UI. */
+	onOpenCompaction?(entry: Extract<SessionEntry, { type: "compaction" }>): void;
 	/** Advisor-card expansion for THIS entry (transcript-level state keyed by
 	 *  entry id — survives the row's virtualized unmount/remount). */
 	advisorOpen?: boolean;
@@ -803,6 +807,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	if (prev.onSpeak !== next.onSpeak || prev.onSaveImage !== next.onSaveImage) return false;
 	if (prev.speaking !== next.speaking || prev.onStopSpeak !== next.onStopSpeak) return false;
 	if (prev.onPreviewImage !== next.onPreviewImage) return false;
+	if (prev.onOpenCompaction !== next.onOpenCompaction) return false;
 	if (prev.advisorOpen !== next.advisorOpen || prev.onToggleAdvisor !== next.onToggleAdvisor) return false;
 	if (prev.renderTranscriptNode !== next.renderTranscriptNode) return false;
 	const e = next.entry;
@@ -1054,6 +1059,7 @@ const EntryRow = memo(function EntryRow({
 	onSpeak,
 	onSaveImage,
 	onPreviewImage,
+	onOpenCompaction,
 	advisorOpen = false,
 	onToggleAdvisor,
 	speaking,
@@ -1186,14 +1192,29 @@ const EntryRow = memo(function EntryRow({
 					advisorOpen,
 					onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
 				});
-			case "compaction":
+			case "compaction": {
+				const label =
+					entry.tokensAfter === undefined
+						? t("transcript.contextCompactedTokensWithCount", { count: fmtTokens(entry.tokensBefore) })
+						: t("transcript.contextCompactedTokensBeforeAfter", {
+								before: fmtTokens(entry.tokensBefore),
+								after: fmtTokens(entry.tokensAfter),
+							});
 				return (
 					<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
-						<span>
-							{t("transcript.contextCompactedTokensWithCount", { count: fmtTokens(entry.tokensBefore) })}
-						</span>
+						{onOpenCompaction ? (
+							<button type="button" className="tr-compaction-open" onClick={() => onOpenCompaction(entry)}>
+								<span>
+									{label}
+									<span className="tr-compaction-view">{t("transcript.viewCompactionSummary")}</span>
+								</span>
+							</button>
+						) : (
+							<span>{label}</span>
+						)}
 					</div>
 				);
+			}
 			case "branch_summary":
 				return (
 					<div className="tr-divider" title={entry.summary}>
@@ -1266,6 +1287,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		onRetry,
 		onRevert,
 		onFork,
+		onOpenCompaction,
 		onLoadOlder,
 		loadingOlder = false,
 		historyBlocked = false,
@@ -2385,6 +2407,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						onSpeak={onSpeak}
 						onSaveImage={onSaveImage}
 						onPreviewImage={openPreview}
+						onOpenCompaction={onOpenCompaction}
 						speaking={speakingId != null && speakingId === entry.id}
 						onStopSpeak={onStopSpeak}
 						retryTarget={retryTargets.get(entry.id) ?? null}
@@ -2586,7 +2609,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						registerComposerInsetReader
 							? {
 									bottom:
-										"calc(14px + var(--chat-composer-inset, 0px) + var(--chat-floating-panel-clearance, 0px))",
+										"calc(24px + var(--chat-composer-inset, 0px) + var(--chat-floating-panel-clearance, 0px))",
 								}
 							: undefined
 					}

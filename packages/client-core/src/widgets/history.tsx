@@ -58,9 +58,11 @@ function readVar(el: HTMLElement, name: string, fallback: string): string {
 
 export function HistoryCard({
 	data,
+	preview = false,
 }: {
 	data: Record<string, unknown>;
 	update(patch: Record<string, unknown>): void;
+	preview?: boolean;
 }): ReactNode {
 	const header = typeof data.header === "string" && data.header !== "" ? data.header : "HISTORY";
 	const seedEvents = (Array.isArray(data.events) ? (data.events as HistoryEvent[]) : []) as HistoryEvent[];
@@ -75,8 +77,8 @@ export function HistoryCard({
 	const dateRef = useRef<HTMLSpanElement | null>(null);
 
 	const [all, setAll] = useState<HistoryEvent[]>(seed);
-	const [source, setSource] = useState("数据来源 · 正在连接可用线路…");
-	const [rows, setRows] = useState<HistoryEvent[]>([]);
+	const [source, setSource] = useState(preview ? "示例事件" : "数据来源 · 正在连接可用线路…");
+	const [rows, setRows] = useState<HistoryEvent[]>(preview ? seed : []);
 	const [loading, setLoading] = useState(false);
 	const [offline, setOffline] = useState(false);
 	const { resolved } = useThemePreference();
@@ -175,6 +177,7 @@ export function HistoryCard({
 	// ── data load: 60s API → yum6 fallback → seed offline ──────────────
 	const loadRef = useRef(0);
 	useEffect(() => {
+		if (preview) return;
 		const gen = ++loadRef.current;
 		setLoading(true);
 		setOffline(false);

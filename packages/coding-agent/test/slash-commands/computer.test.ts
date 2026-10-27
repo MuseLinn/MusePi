@@ -10,6 +10,7 @@ const capabilities: DesktopCapabilities = {
 	input: true,
 	ax: true,
 	backgroundWindowInput: true,
+	overlay: false,
 	deliveryModes: ["background", "foreground"],
 	capturePermission: "granted",
 	inputPermission: "granted",

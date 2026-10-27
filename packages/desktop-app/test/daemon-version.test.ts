@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+	daemonMethodProbeParams,
+	isMissingDaemonMethodError,
 	missingDaemonMethods,
 	REQUIRED_DAEMON_METHODS,
 	shouldRestartDaemon,
@@ -56,4 +58,17 @@ test("reports only the methods that are actually absent", () => {
 
 test("treats an empty answered set as a fully stale daemon", () => {
 	expect(shouldRestartForMissingMethods([])).toBe(true);
+});
+
+test("uses side-effect-free params for each capability probe", () => {
+	expect(daemonMethodProbeParams("skills.marketplace.query")).toEqual({ sources: [] });
+	expect(daemonMethodProbeParams("session.compaction")).toEqual({ entryId: "__capability_probe__" });
+	expect(daemonMethodProbeParams("browser.managedBridge")).toEqual({});
+});
+
+test("only an explicit unknown-method error proves a capability is absent", () => {
+	expect(isMissingDaemonMethodError(new Error("Unknown method: session.compaction"))).toBe(true);
+	expect(isMissingDaemonMethodError(new Error("Method not found"))).toBe(true);
+	expect(isMissingDaemonMethodError(new Error("sessionId required"))).toBe(false);
+	expect(isMissingDaemonMethodError(new Error("request timeout: skills.marketplace.query"))).toBe(false);
 });

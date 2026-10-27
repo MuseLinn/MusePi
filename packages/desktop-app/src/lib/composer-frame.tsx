@@ -2,7 +2,7 @@ import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { closestCenter, DndContext, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ImageLightbox, t } from "@musepi/client-core";
+import { ImageLightbox, SpotlightCard, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon, type IconName } from "../vendor/oc-icons";
@@ -453,10 +453,11 @@ export function ComposerFrame({
 		onReorderAttachments(fromId, toId);
 	};
 	const frame = (
-		<div
-			className={`${className} gui-composer-frame gui-liquid-glass`}
+		<SpotlightCard
+			className={`${className} gui-composer-frame gui-liquid-glass gui-composer-spotlight`}
 			data-enhancing={enhancing || undefined}
 			data-chat-input={chatInput ? "true" : undefined}
+			data-pet={pet ? "true" : undefined}
 			// data-flip-anchor rides on the hero wrapper (BorderBeam) when
 			// present — the morph must transform the element that carries
 			// the shadow + beam, not the frame inside it.
@@ -536,7 +537,7 @@ export function ComposerFrame({
 				<div className="gui-composer-left">{footerLeft}</div>
 				<div className="gui-composer-right">{footerRight}</div>
 			</div>
-		</div>
+		</SpotlightCard>
 	);
 	const lightbox = (
 		<ImageLightbox

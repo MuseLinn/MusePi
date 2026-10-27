@@ -186,6 +186,8 @@ class _RunnerState:
         self.last_install_marker: int = 0
         self.loop: asyncio.AbstractEventLoop | None = None
         self.active_executions: int = 0
+        self.requested_rids: set[str] = set()
+        self.pending_interrupts: set[str] = set()
         # Best-effort attribution target for captured fd-1 bytes (child
         # processes inheriting stdout). With overlapping requests the most
         # recently started one wins — strictly better than dropping the bytes.
@@ -1169,6 +1171,19 @@ def _end_exec_sigint() -> None:
         _install_idle_sigint()
 
 
+def _request_exec_interrupt(rid: str) -> None:
+    if rid not in _STATE.requested_rids:
+        return
+    _STATE.pending_interrupts.add(rid)
+    if _STATE.active_executions == 0:
+        return
+    try:
+        signal.raise_signal(signal.SIGINT)
+    except (OSError, ValueError) as exc:
+        _RAW_STDERR.write(f"Failed to deliver in-band interrupt: {exc}\n")
+        _RAW_STDERR.flush()
+
+
 _MANAGED_ENV_KEYS = (
     "PI_SESSION_FILE",
     "PI_ARTIFACTS_DIR",
@@ -1277,8 +1292,10 @@ async def _handle_request_async(req: dict) -> None:
             )
             return
 
-        _begin_exec_sigint()
         try:
+            _begin_exec_sigint()
+            if rid in _STATE.pending_interrupts:
+                raise KeyboardInterrupt()
             await _exec_source_async(transformed, _STATE.user_ns)
         except KeyboardInterrupt:
             cancelled = True
@@ -1308,6 +1325,8 @@ async def _handle_request_async(req: dict) -> None:
             }
         )
     finally:
+        _STATE.requested_rids.discard(rid)
+        _STATE.pending_interrupts.discard(rid)
         if _STATE.capture_rid == rid:
             _STATE.capture_rid = None
         _flush_stream_proxies(rid)
@@ -1365,6 +1384,13 @@ def _read_stdin(loop: asyncio.AbstractEventLoop, queue: asyncio.Queue, stdin) ->
                 }
             )
             continue
+        rid = req.get("id")
+        if req.get("type") == "interrupt":
+            if isinstance(rid, str):
+                _request_exec_interrupt(rid)
+            continue
+        if isinstance(rid, str):
+            _STATE.requested_rids.add(rid)
         loop.call_soon_threadsafe(queue.put_nowait, req)
     loop.call_soon_threadsafe(queue.put_nowait, {"type": "exit"})
 

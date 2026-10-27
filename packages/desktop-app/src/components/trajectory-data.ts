@@ -25,6 +25,8 @@ export interface TrajectoryEvent {
 	 *  追加序号("2-1"/"2-2",journal 创建序),独子/根轮保持纯深度。深度
 	 *  链断 = undefined,展示层回退 displayTurn。 */
 	pathTurnLabel?: string;
+	/** 最近的父轮起始 entry id;布局用它连接嵌套分支,而不是猜测深度前驱。 */
+	parentTurnId?: string;
 	timestamp?: string;
 	/** 源 wire entry id — 轨迹行点击跳转 transcript 用。 */
 	entryId?: string;
@@ -70,36 +72,39 @@ function stringifyArgs(args: unknown): string {
 }
 
 /**
- * first-child 主线启发式的分支集合:不在「根 → 每节点首子」链上的 message
- * 条目全部判为分支。buildTrajectory 首次用到时对自己的批次惰性计算;
- * trajectory-derive 的断点续派生必须用全量输入调本函数经 init 注入
- * (增量片段批次缺前缀,就地算会把前缀条目错判)。追加条目不改变既有
- * 节点的首子/根关系 → 集合对「已验证前缀」稳定,可跨帧复用。
+ * first-child 主线启发式的分支集合。索引包含每一种 entry:advisor 等
+ * custom_message 也是父链成员,跳过它们会把后续消息误判成孤儿分支。
+ * buildTrajectory 首次用到时对自己的批次惰性计算;trajectory-derive
+ * 必须从全量输入注入,增量片段不能单独推断。追加条目不改变既有节点的
+ * 首子/根关系,所以已验证前缀的分支结论可跨帧复用。
  */
 export function computeBranchIds(entries: readonly unknown[]): ReadonlySet<string> {
 	const childrenOf = new Map<string, string[]>();
 	const ids = new Set<string>();
-	let rootId: string | null = null;
+	const roots: string[] = [];
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
-		const e2 = raw as { id?: unknown; parentId?: unknown; type?: unknown };
-		if (typeof e2.id !== "string" || e2.type !== "message") continue;
-		ids.add(e2.id);
-		const pid = e2.parentId === null || typeof e2.parentId !== "string" ? null : e2.parentId;
-		if (pid !== null) {
-			const arr = childrenOf.get(pid) ?? [];
-			arr.push(e2.id);
-			childrenOf.set(pid, arr);
-		} else if (rootId === null) {
-			rootId = e2.id;
+		const entry = raw as { id?: unknown; parentId?: unknown };
+		if (typeof entry.id !== "string") continue;
+		ids.add(entry.id);
+		const parentId = typeof entry.parentId === "string" ? entry.parentId : null;
+		if (parentId !== null) {
+			const children = childrenOf.get(parentId) ?? [];
+			children.push(entry.id);
+			childrenOf.set(parentId, children);
+		} else {
+			roots.push(entry.id);
 		}
 	}
-	// 主线 = 从根沿 first-child 下行;其余全部 = 分支。
-	const main = new Set<string>();
-	let cur = rootId;
-	while (cur !== null && ids.has(cur)) {
-		main.add(cur);
-		cur = childrenOf.get(cur)?.[0] ?? null;
+	const main = new Set<string>(roots);
+	for (const root of roots) {
+		const seen = new Set<string>();
+		let current: string | null = root;
+		while (current !== null && ids.has(current) && !seen.has(current)) {
+			seen.add(current);
+			main.add(current);
+			current = childrenOf.get(current)?.[0] ?? null;
+		}
 	}
 	const branch = new Set<string>();
 	for (const id of ids) if (!main.has(id)) branch.add(id);
@@ -131,6 +136,8 @@ export interface TrajectoryRunState {
 	 *  init 恢复,增量片段里归属前缀轮的 assistant/tool 事件与一次性
 	 *  派生同标签(共价契约)。 */
 	turnLabel: string | undefined;
+	/** 当前轮的父轮起始 entry id;随断点恢复,供嵌套分支连接真实父轮。 */
+	turnParentId: string | undefined;
 	/** 已消费条目产生的事件数(断点拼接用,纯函数调用恒为 0 可忽略)。 */
 	eventCount: number;
 	/** toolCallId → 最近的 TOOL 事件(结果回填)。跨增量片段共享同一引用。 */
@@ -153,6 +160,7 @@ export function initialTrajectoryRunState(): TrajectoryRunState {
 		firstTs: undefined,
 		lastTs: undefined,
 		turnLabel: undefined,
+		turnParentId: undefined,
 		eventCount: 0,
 		toolIndex: new Map<string, TrajectoryEvent>(),
 		branchIds: undefined,
@@ -361,6 +369,7 @@ export function buildTrajectory(
 		return branchIds.has(id);
 	};
 	let currentTurnLabel: string | undefined = init?.turnLabel;
+	let currentTurnParentId: string | undefined = init?.turnParentId;
 	for (const [index, raw] of entries.entries()) {
 		if (!raw || typeof raw !== "object") continue;
 		if (hooks?.probe) hooks.probe.derivedEntries += 1;
@@ -370,6 +379,7 @@ export function buildTrajectory(
 			firstTs,
 			lastTs,
 			turnLabel: currentTurnLabel,
+			turnParentId: currentTurnParentId,
 			eventCount: baseEventCount + events.length,
 			toolIndex,
 			branchIds,
@@ -423,6 +433,8 @@ export function buildTrajectory(
 			if (msg.role === "user") {
 				turn += 1;
 				currentTurnLabel = entryId !== undefined ? turnLabelOf(entryId, pathTurn) : undefined;
+				currentTurnParentId =
+					entryId !== undefined ? (siblingIndex().parentStartOf.get(entryId) ?? undefined) : undefined;
 				const text = Array.isArray(msg.content)
 					? msg.content
 							.filter((c: { type?: string; text?: string }) => c?.type === "text")
@@ -431,12 +443,13 @@ export function buildTrajectory(
 					: String(msg.content ?? "");
 				if (text.trim())
 					events.push({
-						id: `user:${turn}:${ts}`,
+						id: `user:${entryId ?? `${turn}:${ts}`}`,
 						kind: "user",
 						title: truncate(text.trim(), 80),
 						turn,
 						pathTurn,
 						pathTurnLabel: currentTurnLabel,
+						parentTurnId: currentTurnParentId,
 						timestamp: entry.timestamp,
 						entryId,
 						tsMs,
@@ -461,13 +474,14 @@ export function buildTrajectory(
 					else if (part?.type === "toolCall" && part.name) {
 						toolCalls += 1;
 						const ev: TrajectoryEvent = {
-							id: `tool:${turn}:${part.name}:${toolCalls}`,
+							id: `tool:${part.id ?? entryId ?? `${turn}:${toolCalls}`}`,
 							kind: "tool",
 							title: part.name,
 							body: stringifyArgs(part.arguments),
 							turn,
 							pathTurn,
 							pathTurnLabel: currentTurnLabel,
+							parentTurnId: currentTurnParentId,
 							timestamp: entry.timestamp,
 							entryId,
 							tsMs,
@@ -480,13 +494,14 @@ export function buildTrajectory(
 				const summary = text.trim() || (thinking.trim() ? `💭 ${truncate(thinking.trim(), 120)}` : "");
 				if (summary) {
 					events.push({
-						id: `assistant:${turn}:${ts}`,
+						id: `assistant:${entryId ?? `${turn}:${ts}`}`,
 						kind: "assistant",
 						title: truncate(summary, 120),
 						body: truncate(summary),
 						turn,
 						pathTurn,
 						pathTurnLabel: currentTurnLabel,
+						parentTurnId: currentTurnParentId,
 						timestamp: entry.timestamp,
 						entryId,
 						tsMs,
@@ -527,13 +542,16 @@ export function buildTrajectory(
 			const text = noteText || contentText;
 			const advisorPathTurn = entryId !== undefined ? depthOf(entryId) : undefined;
 			currentTurnLabel = entryId !== undefined ? turnLabelOf(entryId, advisorPathTurn) : undefined;
+			currentTurnParentId =
+				entryId !== undefined ? (siblingIndex().parentStartOf.get(entryId) ?? undefined) : undefined;
 			events.push({
-				id: `advisor:${turn}:${ts}`,
+				id: `advisor:${entryId ?? `${turn}:${ts}`}`,
 				kind: "advisor",
 				title: truncate(text.trim(), 80) || "advisor",
 				turn,
 				pathTurn: advisorPathTurn,
 				pathTurnLabel: currentTurnLabel,
+				parentTurnId: currentTurnParentId,
 				timestamp: entry.timestamp,
 				entryId,
 				tsMs,
@@ -544,11 +562,12 @@ export function buildTrajectory(
 			// 与 model_change 同款 system 事件——title 用原始类型名，组件层
 			// 映射 i18n（保持纯逻辑无 i18n 依赖）。
 			events.push({
-				id: `tool_registry:${ts}`,
+				id: `tool_registry:${entryId ?? ts}`,
 				kind: "system",
 				title: "tool_registry",
 				turn,
 				pathTurn: entryId !== undefined ? depthOf(entryId) : undefined,
+				parentTurnId: currentTurnParentId,
 				timestamp: entry.timestamp,
 				entryId,
 				tsMs,
@@ -556,11 +575,12 @@ export function buildTrajectory(
 		} else if (type === "model_change" || type === "thinking_level_change") {
 			// system 事件:title 用原始类型名,组件层映射 i18n(保持纯逻辑无 i18n 依赖)。
 			events.push({
-				id: `${type}:${ts}`,
+				id: `${type}:${entryId ?? ts}`,
 				kind: "system",
 				title: type,
 				turn,
 				pathTurn: entryId !== undefined ? depthOf(entryId) : undefined,
+				parentTurnId: currentTurnParentId,
 				timestamp: entry.timestamp,
 				entryId,
 				tsMs,
@@ -574,6 +594,7 @@ export function buildTrajectory(
 		firstTs,
 		lastTs,
 		turnLabel: currentTurnLabel,
+		turnParentId: currentTurnParentId,
 		eventCount: baseEventCount + events.length,
 		toolIndex,
 		branchIds,
@@ -601,6 +622,10 @@ export function buildTrajectory(
  *  TrajectoryView 与单元测试共用。 */
 export interface TrajectoryTurnGroup {
 	turn: number;
+	/** 稳定轮身份 = 轮起始 entry id;历史前插只改 journal turn,不改此 id。 */
+	id?: string;
+	/** 父轮稳定身份;嵌套分支的布局边以此为准。 */
+	parentId?: string;
 	/** 展示编号 = 组内事件的树深度(pathTurn);无 = 回退 turn(journal 序)。 */
 	displayTurn?: number;
 	/** 展示标签 = 组内事件的 pathTurnLabel(深度 + 同父兄弟序,如
@@ -639,6 +664,11 @@ function roundDurationsOf(src: RoundDurationMap | undefined): ReadonlyMap<number
 	return m;
 }
 
+/** UI 状态使用的稳定轮键;手写/旧测试 fixture 没有 entry id 时回退 journal 序。 */
+export function trajectoryTurnKey(group: TrajectoryTurnGroup): string {
+	return group.id ?? `turn:${group.turn}`;
+}
+
 /** 按事件分组成轮(turn 字段已有;roundDurations 锚定回合时长)。纯逻辑,
  *  buildTrajectoryTree / trajectory-derive 共用。 */
 export function groupTrajectoryTurns(
@@ -652,6 +682,8 @@ export function groupTrajectoryTurns(
 		if (!group || group.turn !== ev.turn) {
 			group = {
 				turn: ev.turn,
+				id: ev.entryId ?? ev.id,
+				parentId: ev.parentTurnId,
 				// 展示编号 = 组内事件的树深度(pathTurn);链断(undefined)回退
 				// journal 序 turn,不把断链深度当真编号。
 				displayTurn: ev.pathTurn ?? ev.turn,

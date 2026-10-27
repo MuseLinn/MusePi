@@ -2,14 +2,12 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Fit a widget's natural content into its container height.
+ * Fit a widget's natural content into its container.
  *
- * Widgets are fluid-width (they stretch to the card) with natural
- * heights; when a card is shorter than its content the widget would be
- * clipped. This wrapper measures the content's natural height and
- * shrinks it (top-anchored scale, never enlarged) so everything stays
- * fully visible. Used by the board canvas cards, the focus modal and
- * the pinned desktop window alike.
+ * The wrapper measures both content axes and shrinks uniformly (centered,
+ * never enlarged) so fluid content stays fully visible. It observes the
+ * container and content because data updates can change either measurement.
+ * Used by board cards, collection previews, focus modals and pinned windows.
  */
 export function WidgetFit({ children }: { children: ReactNode }): ReactNode {
 	const outerRef = useRef<HTMLDivElement | null>(null);
@@ -20,15 +18,17 @@ export function WidgetFit({ children }: { children: ReactNode }): ReactNode {
 		const inner = innerRef.current;
 		if (!outer || !inner) return;
 		const apply = (): void => {
+			const ow = outer.clientWidth;
 			const oh = outer.clientHeight;
+			const iw = inner.scrollWidth;
 			const ih = inner.scrollHeight;
-			if (!oh || !ih) return;
-			const s = Math.min(1, oh / ih);
-			setScale(Math.max(0.3, s));
+			if (!ow || !oh || !iw || !ih) return;
+			setScale(Math.min(1, ow / iw, oh / ih));
 		};
 		apply();
 		const ro = new ResizeObserver(apply);
 		ro.observe(outer);
+		ro.observe(inner);
 		return () => ro.disconnect();
 	}, []);
 	return (

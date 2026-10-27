@@ -216,6 +216,7 @@ export class ArchiveService implements DaemonService {
 	readonly #archivesDir: () => string;
 	/** id → record. The only place a build's progress lives. */
 	readonly #builds = new Map<string, BuildRecord>();
+	readonly #collectingBySession = new Map<string, number>();
 	#seq = 0;
 
 	constructor(deps: ArchiveServiceDeps = {}) {
@@ -234,31 +235,40 @@ export class ArchiveService implements DaemonService {
 		if (paths.length === 0) return { error: "paths required (empty selection)" };
 		if (paths.length > MAX_SELECTION) return { error: `selection too large (max ${MAX_SELECTION})` };
 
+		const sessionId = params.sessionId ?? "";
+		const collecting = this.#collectingBySession.get(sessionId) ?? 0;
 		const active = [...this.#builds.values()].filter(
-			r => r.sessionId === (params.sessionId ?? "") && r.state.state === "building",
+			r => r.sessionId === sessionId && r.state.state === "building",
 		).length;
-		if (active >= MAX_ACTIVE_BUILDS_PER_SESSION) {
-			return { error: `session already has ${active} builds running` };
+		if (active + collecting >= MAX_ACTIVE_BUILDS_PER_SESSION) {
+			return { error: `session already has ${active + collecting} builds running` };
 		}
 
-		const collected = await collect(paths.map(String));
-		if (collected === TOO_LARGE) return { error: `selection expands to more than ${MAX_ENTRIES} files` };
-		if (collected.length === 0) return { error: "selection contains no readable files" };
+		this.#collectingBySession.set(sessionId, collecting + 1);
+		try {
+			const collected = await collect(paths.map(String));
+			if (collected === TOO_LARGE) return { error: `selection expands to more than ${MAX_ENTRIES} files` };
+			if (collected.length === 0) return { error: "selection contains no readable files" };
 
-		const id = `${Date.now().toString(36)}-${(++this.#seq).toString(36)}`;
-		const record: BuildRecord = {
-			id,
-			sessionId: params.sessionId ?? "",
-			state: { state: "building", done: 0, total: collected.length, bytes: 0 },
-			finishedAtMs: 0,
-		};
-		this.#builds.set(id, record);
-		// Detached on purpose, and awaited nowhere: a zip failure must reach the
-		// record's state and the person polling, not the process's
-		// unhandledRejection handler, which in this host means a postmortem that
-		// drops every live session.
-		void this.#run(record, collected, this.#target(id, params.name));
-		return { id, entries: collected.length };
+			const id = `${Date.now().toString(36)}-${(++this.#seq).toString(36)}`;
+			const record: BuildRecord = {
+				id,
+				sessionId,
+				state: { state: "building", done: 0, total: collected.length, bytes: 0 },
+				finishedAtMs: 0,
+			};
+			this.#builds.set(id, record);
+			// Detached on purpose, and awaited nowhere: a zip failure must reach the
+			// record's state and the person polling, not the process's
+			// unhandledRejection handler, which in this host means a postmortem that
+			// drops every live session.
+			void this.#run(record, collected, this.#target(id, params.name));
+			return { id, entries: collected.length };
+		} finally {
+			const remaining = (this.#collectingBySession.get(sessionId) ?? 1) - 1;
+			if (remaining === 0) this.#collectingBySession.delete(sessionId);
+			else this.#collectingBySession.set(sessionId, remaining);
+		}
 	}
 
 	/**

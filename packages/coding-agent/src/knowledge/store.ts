@@ -126,7 +126,9 @@ export function resolveProject(input: { projectId?: unknown; directory?: unknown
 		return projectId;
 	}
 	const target = directory !== "" ? directory : fallbackDirectory;
-	if (!path.isAbsolute(target)) throw new Error("An absolute project directory is required");
+	if (!path.isAbsolute(target) && !path.win32.isAbsolute(target)) {
+		throw new Error("An absolute project directory is required");
+	}
 	return projectSlug(target);
 }
 

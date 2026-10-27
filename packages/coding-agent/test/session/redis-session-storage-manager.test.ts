@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import * as path from "node:path";
 import type { Usage } from "@musepi/pi-ai";
 import {
 	RedisSessionStorage,
@@ -172,7 +173,7 @@ describe("SessionManager + RedisSessionStorage", () => {
 		const sessionFile = manager.getSessionFile();
 		expect(sessionFile).toBeDefined();
 		const sessionFilePath = sessionFile as string;
-		expect(sessionFilePath.startsWith(sessionDir)).toBe(true);
+		expect(path.dirname(sessionFilePath)).toBe(path.normalize(sessionDir));
 
 		// `appendMessage` queues the cold-path rewrite onto SessionManager's
 		// internal persist chain via a fire-and-forget call. `flush()` awaits

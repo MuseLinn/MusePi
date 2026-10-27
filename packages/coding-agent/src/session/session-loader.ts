@@ -109,7 +109,7 @@ export async function visitEntriesFromFileStream(
 		}
 		bytesSinceYield = 0;
 		entriesSinceYield = 0;
-		await Bun.sleep(0);
+		await Bun.sleep(1);
 	};
 
 	const drain = async (): Promise<void> => {

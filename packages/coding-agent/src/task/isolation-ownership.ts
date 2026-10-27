@@ -32,8 +32,8 @@ export interface IsolationOwner {
  * validate so an exact string compare rejects a recycled pid.
  *
  * Linux reads `/proc/<pid>/stat` field 22 (start time in clock ticks since
- * boot); other Unixes shell out to `ps -o lstart`. Platforms that report
- * neither (e.g. Windows) yield `null`, degrading to a pid-only liveness check.
+ * boot); other Unixes shell out to `ps -o lstart`; Windows uses the process
+ * start time reported by PowerShell. An unavailable or exited process yields null.
  */
 async function processStartToken(pid: number): Promise<string | null> {
 	if (process.platform === "linux") {
@@ -50,6 +50,22 @@ async function processStartToken(pid: number): Promise<string | null> {
 		if (commEnd < 0) return null;
 		const starttime = stat.slice(commEnd + 2).split(" ")[19];
 		return starttime && starttime.length > 0 ? starttime : null;
+	}
+	if (process.platform === "win32") {
+		const powershell = path.join(
+			process.env.SystemRoot ?? "C:\\Windows",
+			"System32",
+			"WindowsPowerShell",
+			"v1.0",
+			"powershell.exe",
+		);
+		const res =
+			await $`${powershell} -NoProfile -NonInteractive -Command "(Get-Process -Id ${pid}).StartTime.ToString('o')"`
+				.quiet()
+				.nothrow();
+		if (res.exitCode !== 0) return null;
+		const started = res.text().trim();
+		return started.length > 0 ? started : null;
 	}
 	const res = await $`ps -o lstart= -p ${pid}`.quiet().nothrow();
 	if (res.exitCode !== 0) return null;

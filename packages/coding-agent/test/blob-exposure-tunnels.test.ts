@@ -12,6 +12,7 @@ import {
 	parseZrokUrl,
 	startExposure,
 } from "../src/blob-broker/exposure";
+import { compileNativeFixture, createNativeFixtureTempDir } from "./helpers/native-fixture";
 
 const PORT = 43127;
 const originalPath = process.env.PATH;
@@ -90,40 +91,28 @@ async function waitForSignal(invocation: FakeInvocation): Promise<void> {
 }
 
 async function stopAndObserve(exposure: ActiveExposure, invocation: FakeInvocation): Promise<void> {
+	if (process.platform === "win32") {
+		exposure.stop();
+		await exposure.exited;
+		return;
+	}
 	const signalObserved = waitForSignal(invocation);
 	exposure.stop();
 	await Promise.all([exposure.exited, signalObserved]);
 	expect(fs.readFileSync(invocation.signalsFile, "utf8")).toContain("SIGTERM");
 }
 
-beforeAll(() => {
-	fakeBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-blob-tunnels-"));
-	const target = path.join(fakeBinDir, "fake-tunnel");
-	fs.writeFileSync(
-		target,
-		`#!/bin/sh\n` +
-			`: > "$OMP_FAKE_TUNNEL_ARGS"\n` +
-			`for arg do printf '%s\\n' "$arg" >> "$OMP_FAKE_TUNNEL_ARGS"; done\n` +
-			`printf 'run\\n' >> "$OMP_FAKE_TUNNEL_RUNS"\n` +
-			`trap 'printf "SIGINT\\n" >> "$OMP_FAKE_TUNNEL_SIGNALS"; exit 0' INT\n` +
-			`trap 'printf "SIGTERM\\n" >> "$OMP_FAKE_TUNNEL_SIGNALS"; exit 0' TERM\n` +
-			`if [ -n "$OMP_FAKE_TUNNEL_OUTPUT" ]; then printf '%s\\n' "$OMP_FAKE_TUNNEL_OUTPUT"; fi\n` +
-			`if [ -n "$OMP_FAKE_TUNNEL_RESTART_MARKER" ]; then\n` +
-			`  if [ ! -e "$OMP_FAKE_TUNNEL_RESTART_MARKER" ]; then\n` +
-			`    printf 'first\\n' > "$OMP_FAKE_TUNNEL_RESTART_MARKER"\n` +
-			`    exit 23\n` +
-			`  fi\n` +
-			`  printf 'restarted\\n' >> "$OMP_FAKE_TUNNEL_RESTART_MARKER"\n` +
-			`fi\n` +
-			`if [ -n "$OMP_FAKE_TUNNEL_EXIT_CODE" ]; then exit "$OMP_FAKE_TUNNEL_EXIT_CODE"; fi\n` +
-			`while :; do /bin/sleep 1; done\n`,
-	);
-	fs.chmodSync(target, 0o755);
+beforeAll(async () => {
+	fakeBinDir = createNativeFixtureTempDir("blob-tunnels-");
+	const target = path.join(fakeBinDir, process.platform === "win32" ? "fake-tunnel.exe" : "fake-tunnel");
+	await compileNativeFixture(path.join(import.meta.dir, "fixtures", "fake-tunnel.ts"), target);
 	for (const name of ["ssh", "devtunnel", "zrok", "bore", "cloudflared"]) {
-		fs.symlinkSync(target, path.join(fakeBinDir, name));
+		const alias = path.join(fakeBinDir, process.platform === "win32" ? `${name}.exe` : name);
+		if (process.platform === "win32") fs.linkSync(target, alias);
+		else fs.symlinkSync(target, alias);
 	}
 	process.env.PATH = fakeBinDir;
-});
+}, 60_000);
 
 afterAll(async () => {
 	for (const active of activeExposures) active.stop();

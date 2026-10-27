@@ -448,3 +448,27 @@ describe("visibleTurnMapNodes", () => {
 		expect(vis.some(n => n.group.turn === 1)).toBe(true);
 	});
 });
+
+describe("turn parent linkage", () => {
+	it("connects a nested branch to its actual parent branch instead of the latest main turn", () => {
+		const group = (turn: number, id: string, parentId?: string): TrajectoryTurnGroup => ({
+			turn,
+			displayTurn: turn,
+			events: [
+				{
+					id,
+					entryId: id,
+					kind: "user",
+					title: id,
+					turn,
+					pathTurn: turn,
+					branch: turn > 1 || undefined,
+				},
+			],
+			...({ id, parentId } as { id: string; parentId?: string }),
+		});
+		const layout = layoutTurnMap([group(1, "u1"), group(2, "u2", "u1"), group(3, "u3", "u2")]);
+		const nested = layout.edges.find(e => e.to.group.turn === 3);
+		expect(nested?.from.group.turn).toBe(2);
+	});
+});

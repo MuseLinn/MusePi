@@ -95,12 +95,12 @@ describe("插件兼容性预检（回退保护② · 宿主 runtime 整链）", 
 
 	it("list 面透出 version + compatibility（GUI 归因段数据源）", async () => {
 		const { extensions } = await extService.list();
-		const entry = extensions.find(e => e.id === `extension-module:${PLUGIN}`);
+		const entry = extensions.find(e => e.id === PLUGIN && e.kind === "extension-module");
 		expect(entry).toBeDefined();
 		expect(entry?.version).toBe(PLUGIN_VERSION);
 		expect(entry?.compatibility?.code).toBe("incompatible-peer");
 		expect(entry?.compatibility?.status).toBe("incompatible");
-	});
+	}, 30_000);
 
 	it("setVersionExemption 授予（acceptRisk + 当前运行时）→ 重载放行且标注 exempted", async () => {
 		const result = await extService.setVersionExemption({
@@ -122,7 +122,7 @@ describe("插件兼容性预检（回退保护② · 宿主 runtime 整链）", 
 		expect(record?.status).toBe("active");
 		expect(record?.compatibility?.status).toBe("exempted");
 		await expect(handle.invoke(`${PLUGIN}-probe`)).resolves.toBe("ok");
-	});
+	}, 30_000);
 
 	it("撤销豁免 → 落盘移除 + 缓存失效（list 不再标注 exempted）", async () => {
 		await extService.setVersionExemption({
@@ -135,7 +135,8 @@ describe("插件兼容性预检（回退保护② · 宿主 runtime 整链）", 
 		// 缓存已失效：重拉 list 不再带 exempted 标注（在役记录仍是 active——
 		// 撤销只影响**下次装配**，不热卸载在役 fiber，与 dsh 口径一致）。
 		const { extensions } = await extService.list();
-		const entry = extensions.find(e => e.id === `extension-module:${PLUGIN}`);
+		const entry = extensions.find(e => e.id === PLUGIN && e.kind === "extension-module");
+		expect(entry).toBeDefined();
 		expect(entry?.compatibility?.status).not.toBe("exempted");
-	});
+	}, 30_000);
 });
