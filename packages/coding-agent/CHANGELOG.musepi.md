@@ -6,6 +6,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+- **Deadline 到期不会再吞掉排队中的后续消息**：停止边界现在会在轮询前后各检查一次 Deadline；轮询期间到期时，hook 能收到取消信号，消息仍保留在队列中，已经到期的回合则不再发起新的出队。
+  - EN: Follow-up messages now stay queued across deadline boundaries. The stop path checks the deadline before and after polling: hooks receive cancellation when it expires mid-poll, while an already-expired run starts no new dequeue.
+
 ## [0.6.1] - 2026-10-27
 
 ### Added
