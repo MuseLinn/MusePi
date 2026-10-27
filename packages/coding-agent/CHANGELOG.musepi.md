@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-27
+
 ### Added
 - **压缩摘要可以在右侧标签中打开了**：自动压缩后，会话中的横幅会显示压缩前后 token；点击「查看摘要」即可阅读完整内容，关闭或分栏后仍按原条目恢复。摘要面板由可替换的内置插件提供，右侧扩展组件也能获得各自标签的 target 与统一 token 格式。
   - EN: Compaction summaries now open in right-panel tabs. The transcript banner shows before/after token counts, and "View summary" opens the full text, restored against the same entry after closing or splitting tabs. The panel is provided by a replaceable bundled plugin, and right-panel extension components receive their own tab target and shared token formatting.
