@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-29
+
 ### Changed
 - **内置浏览器的接管提示和交互动效更完整了**：Agent 在后台标签操作时也会提示，并可一键切回对应标签；接管期间会阻止重复请求，操作结束后通过淡出和滑动完成退出。
   - EN: Built-in browser takeover now has more complete feedback and motion. Background agent tabs surface an activity notice with a quick way back, takeover requests cannot be duplicated while cancellation is pending, and operations finish with a fade-and-slide exit.
