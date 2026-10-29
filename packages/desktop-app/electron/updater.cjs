@@ -55,7 +55,11 @@ const { autoUpdater } = require("electron-updater");
 const { BrowserWindow, session, shell } = electronModule;
 const fs = require("node:fs");
 const nodePath = require("node:path");
-const { classifyUpdateError, isMissingUpdateFeedError } = require("./update-logic.cjs");
+const {
+	classifyUpdateError,
+	isMissingUpdateFeedError,
+	releaseDownloadUrl,
+} = require("./update-logic.cjs");
 
 // ── File log ─────────────────────────────────────────────────────────────
 // Everything the updater does also lands in ~/Library/Logs/MusePi/updater.log
@@ -122,6 +126,7 @@ function clearError() {
  *  RPC uses — no api.github.com rate limits). */
 const RELEASE_MANIFEST_URL =
 	"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
+const RELEASES_PAGE = "https://github.com/MuseLinn/MusePi/releases/latest";
 
 /** Notes-fetch URL: `OMP_UPDATE_MANIFEST_URL` env → `package.json
  *  update.manifestUrl` → default (documented override chain for testing /
@@ -146,7 +151,7 @@ function manifestUrl() {
 let manifestCache;
 let manifestInFlight = null;
 
-/** Fetch and cache the release manifest ({notes, url}). */
+/** Fetch and cache the release manifest ({notes, url, downloads}). */
 function fetchManifest() {
 	if (manifestCache !== undefined) return Promise.resolve(manifestCache);
 	if (!manifestInFlight) {
@@ -158,11 +163,13 @@ function fetchManifest() {
 					return null;
 				}
 				const data = await res.json();
+				const rawDownloads = data?.downloads && typeof data.downloads === "object" && !Array.isArray(data.downloads) ? data.downloads : {};
 				manifestCache = {
 					notes: typeof data?.notes === "string" && data.notes ? data.notes : null,
-					// Direct installer URL (dmg on macOS) — the manual install path
-					// uses it when OTA cannot work.
 					url: typeof data?.url === "string" && data.url ? data.url : "",
+					downloads: Object.fromEntries(
+						Object.entries(rawDownloads).filter(([, value]) => typeof value === "string" && value),
+					),
 				};
 				return manifestCache;
 			} catch (err) {
@@ -180,7 +187,7 @@ function fetchManifestNotes() {
 	return fetchManifest().then(meta => meta?.notes ?? null);
 }
 
-/** Cached manifest metadata ({notes, url}) — resolves null when unavailable. */
+/** Cached manifest metadata ({notes, url, downloads}) — resolves null when unavailable. */
 function fetchManifestMeta() {
 	return fetchManifest();
 }
@@ -397,8 +404,8 @@ async function checkForUpdates() {
 			latest,
 			current,
 			notes: meta?.notes ?? null,
-			/** Manual-install fallback (dmg/exe) from the release manifest. */
-			url: meta?.url ?? "",
+			/** Platform-matched installer, or the releases page when none is published. */
+			url: releaseDownloadUrl(meta, process.platform, process.arch, RELEASES_PAGE),
 			/** false ⇒ Squirrel cannot install here (ad-hoc signed macOS build);
 			 *  the renderer must offer the manual installer instead. */
 			otaCapable: otaCapable(),

@@ -96,6 +96,14 @@ function nextPollDelayMs(consecutiveFailures, opts = {}) {
 	return Math.round(lower + (upper - lower) * Math.min(1, Math.max(0, random())));
 }
 
+function releaseDownloadUrl(manifest, platform, arch, releasesPage) {
+	const downloads = manifest?.downloads;
+	const targeted = downloads?.[`${platform}-${arch}`];
+	if (typeof targeted === "string" && targeted) return targeted;
+	if (platform === "darwin" && arch === "arm64" && typeof manifest?.url === "string") return manifest.url;
+	return releasesPage;
+}
+
 module.exports = {
 	UPDATE_OPERATIONS,
 	NETWORK_ERROR_PATTERN,
@@ -107,4 +115,5 @@ module.exports = {
 	isMissingUpdateFeedError,
 	classifyUpdateError,
 	nextPollDelayMs,
+	releaseDownloadUrl,
 };

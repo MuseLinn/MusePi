@@ -371,6 +371,13 @@ jobs:
               const manifest = {
                 version: pkg.version,
                 url: `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64.dmg`,
+                downloads: {
+                  "darwin-arm64": `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64.dmg`,
+                  "win32-x64": `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-setup.exe`,
+                  "win32-arm64": `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64-setup.exe`,
+                  "linux-x64": `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-x86_64.AppImage`,
+                  "linux-arm64": `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64.AppImage`,
+                },
                 notes,
               };
               fs.writeFileSync("packages/desktop-app/update-manifest.json", JSON.stringify(manifest, null, "\t") + "\n");

@@ -1,5 +1,5 @@
 {
-	"_comment": "MusePi OTA manifest (Electron updater.cjs + daemon updates.check read this). Channel: this exact file is attached as an ASSET named update-manifest.json to each GitHub release — /releases/latest/download/update-manifest.json redirects to the newest copy (BitFun parity, no API rate limit). At each release: bump version, set url (direct download of the packaged app) + bilingual notes {zh,en}, and upload the file with the release assets.",
+	"_comment": "MusePi OTA manifest for Electron updater.cjs and daemon updates.check. Clients read this asset through /releases/latest/download/update-manifest.json. The release workflow generates version, url, platform-specific downloads, and notes.",
 	"version": "0.4.4",
 	"url": "",
 	"notes": {

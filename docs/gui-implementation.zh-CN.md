@@ -80,6 +80,9 @@ daemon RPC:
 
 语义:状态三色点 绿 active / 灰 disabled / 橙 shadowed(详情显 shadowedBy)。provider 关闭后其条目从列表消失(loadCapability 层行为,与 TUI 同源,不是 bug)。内置判定 provider native|omp-managed|builtin-defaults。
 
+- **组件配置态与生效态**：`PluginComponentDesc.enabled` 只表示组件不在自己的黑名单中。详情弹层仅在 `item.state === "active" && !item.loadError && component.enabled` 时显示绿色/开启；父插件停用后保留组件选择，但开关不可操作并显示继承停用原因，不清空黑名单。
+- **profile/bundle 组合**：`bundles.composition` 同时返回组合层/行和 `availableBundles`，已选但缺失的包也在内。`bundles.setEnabled{name,enabled}` 串行写入当前 profile 的 `musepi.profile.bundles`，保留其他清单字段，DSH profile 字段直接忽略；启用要求包已安装且 `dsh.bundle.patch` 可读，缺失的已选项仍可停用。`bundles.rows.setEnabled` 仍把行覆盖写入 `cordis.patch.yml`。读取组合不创建文件。普通插件启停仍归 runtime lock。同一组合中的 Agent preset 声明按文件 > profile > 扩展的顺序进入 `modes.list` 与 SDK；`modes.getDefault`/`modes.setDefault` 读写 `agent-preset-registry.config.selectedDefault`，出现首条消息后拒绝切换 preset。
+
 ## 3. Git 设置与功能(实现)
 
 - **GitHub OAuth 令牌** = `github.authStatus`(spawn `gh auth status` 文本 + `gh api user` 解析 login/email——**勿用 `gh auth status --json`**,字段名随 gh 版本变)+ 认证卡片(头像字母/用户名/邮箱/「已通过 gh CLI 认证」/禁用——logout 用 `--yes` 防交互阻塞)。
@@ -429,6 +432,7 @@ daemon RPC:
 - **下载状态**（updater-state 推送）：`preparing` 由 `updater-download` 同步置位（不确定态进度条——覆盖点击 → 首字节之间 electron-updater 尚未发 `download-progress` 的空窗；重入保护让双击安全），`downloading` 显示百分比 + 已传/总量 MB + `bytesPerSecond`，`downloaded` 显示完成行 + 立即重启。被关掉的 toast 会在 `preparing`/`downloaded` 推送时**复活**——`autoInstallOnAppQuit=false` 下立即重启是唯一安装路径，必须始终可达（设置页的应用内「下载更新」按钮同样依赖该复活）。关闭播 180ms 退出动画（close-timer + `--closing` 类，prompt-dialog parity）；下载失败提供重试 + 「前往下载」。
 - **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`（纯字符串——`{zh,en}` 形状留给未来拆分 manifest；daemon `updates.check` 两种都透传），弹窗读 `CHANGELOG.musepi.md`。两条链路靠构造保持同步：`gui-release.yml` 用 `sectionMatch`（首个 `## [x.y.z]` 块）从最新一节切出 manifest 的 `notes`，所以发版只写那一节即可。
 - 桥接统一走 `packages/desktop-app/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
+- **按平台回退**：更新清单的 `downloads` 以 `<平台>-<架构>` 为键；旧 `url` 仅保留作 macOS ARM64 兼容路径，其他目标缺失时回退版本发布页。
 
 ### 发布产物与 CLI 关系（2026-08-23 实测确认）
 

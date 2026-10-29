@@ -6,6 +6,22 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+- **能力中心可以直接管理 profile 的 bundle 组合**：「组合」页列出已安装和缺失的已选 bundle，启停会真实写入 `musepi.profile.bundles`，组合行覆盖仍保存在 profile 的 `cordis.patch.yml`；普通插件和会话级 Agent preset 继续沿用各自的管理入口。
+  - EN: The capability center can now manage profile bundle compositions. The Composition tab lists installed bundles and missing selections, writes toggles to `musepi.profile.bundles`, and keeps row overrides in the profile's `cordis.patch.yml`; ordinary plugins and session-scoped Agent presets retain their own management surfaces.
+
+### Changed
+- **Computer Use 默认开启**：新会话默认注册桌面控制工具，审批策略和操作系统权限检查仍按原流程执行；可在插件页或会话中显式关闭。
+  - EN: Computer Use is now enabled by default. New sessions register the desktop-control tool while approval policies and OS permission checks remain unchanged; it can still be disabled explicitly from the plugin page or within a session.
+- **Agent preset 与 profile 使用同一组合声明模型**：bundle 中的 Agent preset 会进入预设列表和真实会话解析，默认值保存在 profile 的 `agent-preset-registry.config.selectedDefault`；首轮后 preset 锁定，已有会话保留原组合，profile 字段统一为 `musepi.profile.bundles`，DSH 字段直接忽略。
+  - EN: Agent presets and profiles now share one composition model. Bundle declarations flow into the preset list and real session resolution, defaults persist in the profile's `agent-preset-registry.config.selectedDefault`, presets lock after the first turn, existing sessions keep their composition, and only `musepi.profile.bundles` is supported, with DSH profile fields ignored.
+
+### Fixed
+- **Windows 手动下载会匹配当前平台**：更新清单按平台和架构提供安装器地址，Windows 不再跳到 macOS ARM64 下载页；旧清单缺少当前平台目标时回退版本发布页。
+  - EN: Manual downloads on Windows now match the current platform. The update manifest maps each platform and architecture to the correct installer instead of sending Windows users to macOS ARM64, and older manifests without a matching target fall back to the releases page.
+- **父插件停用时组件不再显示为仍在运行**：组件选择会保留，但只有父插件和组件自身都允许时才显示绿色可用状态；父插件停用期间组件开关不可操作，重新启用后恢复原选择。读取组合页也不再自动创建空 profile 文件。
+  - EN: Components no longer appear active while their parent plugin is disabled. Selections are preserved, but green availability requires both the parent and component to be enabled; controls are disabled while the parent is off and restore on re-enable. Reading the Composition tab no longer creates empty profile files.
+
 ## [0.6.3] - 2026-10-29
 
 ### Fixed

@@ -6,6 +6,7 @@ import {
 	isMissingUpdateFeedError,
 	isNetworkError,
 	nextPollDelayMs,
+	releaseDownloadUrl,
 	UPDATE_POLL_BASE_MS,
 	UPDATE_POLL_JITTER,
 	UPDATE_POLL_MAX_MS,
@@ -102,6 +103,29 @@ describe("isMissingUpdateFeedError", () => {
 		expect(isMissingUpdateFeedError(new Error("Cannot download MusePi-0.6.0-setup.exe: HttpError: 404"))).toBe(false);
 		expect(isMissingUpdateFeedError("Request failed with status code 404")).toBe(false);
 		expect(isMissingUpdateFeedError(undefined)).toBe(false);
+	});
+});
+
+describe("release download URLs", () => {
+	const releasesPage = "https://github.com/MuseLinn/MusePi/releases/latest";
+	const manifest = {
+		url: "https://github.com/MuseLinn/MusePi/releases/download/v0.6.4/MusePi-0.6.4-arm64.dmg",
+		downloads: {
+			"darwin-arm64": "https://github.com/MuseLinn/MusePi/releases/download/v0.6.4/MusePi-0.6.4-arm64.dmg",
+			"win32-x64": "https://github.com/MuseLinn/MusePi/releases/download/v0.6.4/MusePi-0.6.4-setup.exe",
+			"win32-arm64": "https://github.com/MuseLinn/MusePi/releases/download/v0.6.4/MusePi-0.6.4-arm64-setup.exe",
+		},
+	};
+
+	test("selects the installer for the current Windows architecture", () => {
+		expect(releaseDownloadUrl(manifest, "win32", "x64", releasesPage)).toBe(manifest.downloads["win32-x64"]);
+		expect(releaseDownloadUrl(manifest, "win32", "arm64", releasesPage)).toBe(manifest.downloads["win32-arm64"]);
+	});
+
+	test("keeps the legacy macOS URL off other platforms", () => {
+		const legacy = { url: manifest.url };
+		expect(releaseDownloadUrl(legacy, "darwin", "arm64", releasesPage)).toBe(manifest.url);
+		expect(releaseDownloadUrl(legacy, "win32", "x64", releasesPage)).toBe(releasesPage);
 	});
 });
 

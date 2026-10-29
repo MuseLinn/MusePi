@@ -2345,13 +2345,15 @@ export class DaemonServer {
 			}
 			case "bundles.composition": {
 				// profile 组合读面：这个 profile 叠了哪些 bundle、组合出哪些行、
-				// 每行的插件在这台机器上能不能用。只读——组合是从磁盘现算的派
-				// 生状态，没有可启停的东西（行的启停来自组合，包的启停走
-				// plugins.packages）。
+				// 每行的插件在这台机器上能不能用；已安装/缺失的 bundle 一并下发。
+				// bundle 选择走 bundles.setEnabled，行覆盖走 bundles.rows.setEnabled。
 				return this.#services.get<BundleService>("bundles").composition();
 			}
 			case "bundles.profile": {
 				return this.#services.get<BundleService>("bundles").profile();
+			}
+			case "bundles.setEnabled": {
+				return this.#services.get<BundleService>("bundles").setBundleEnabled(params ?? {});
 			}
 			case "bundles.entries": {
 				// 组合能挂载的扩展入口文件路径：组合面回答「这个 profile 叠了什么」，
@@ -2571,6 +2573,7 @@ export class DaemonServer {
 					hasPrompt: boolean;
 					promptComplete: boolean;
 					settingsKeys: string[];
+					plugins?: { name: string; id?: string; enabled?: boolean }[];
 					source?: "extension";
 				}> = ids.map(id => {
 					const def = loadModeFile(dir, id);
@@ -2596,11 +2599,29 @@ export class DaemonServer {
 						plugins: def?.plugins ?? [],
 					};
 				});
-				// Modes v2 §5.5:扩展声明预设(registerMode)合并进列表 ——
-				// 文件 id 冲突时文件优先(用户数据层压扩展代码层),与
-				// resolve 的 extraModes 兜底同一优先级规则。
-				const { collectExtensionModes } = await import("./extension-artifact-compiler");
 				const fileIds = new Set(ids);
+				const { collectProfilePresetDefinitions } = await import(
+					"../extensibility/plugins/profile/profile-presets"
+				);
+				for (const def of await collectProfilePresetDefinitions(this.#host.cwd(), os.homedir())) {
+					if (fileIds.has(def.id)) continue;
+					fileIds.add(def.id);
+					modes.push({
+						id: def.id,
+						builtin: false,
+						label: def.label,
+						description: def.description,
+						extends: def.extends ?? [],
+						extensions: def.extensions,
+						hasPrompt: (def.prompt?.length ?? 0) > 0,
+						promptComplete: def.promptComplete === true,
+						settingsKeys: Object.keys(def.settings ?? {}),
+						plugins: def.plugins ?? [],
+						source: "extension",
+					});
+				}
+				// 文件 > profile > 扩展代码层，与 createModeResolver 的查找优先级一致。
+				const { collectExtensionModes } = await import("./extension-artifact-compiler");
 				for (const em of await collectExtensionModes(
 					await this.#services.get<ExtensionService>("extensions").getExtensions(),
 					this.#host.cwd(),
@@ -2610,6 +2631,18 @@ export class DaemonServer {
 					modes.push(em);
 				}
 				return { modes, modesDir: dir };
+			}
+			case "modes.getDefault": {
+				const { readDefaultPresetId } = await import("../extensibility/plugins/profile/profile-presets");
+				return { id: await readDefaultPresetId(this.#host.cwd(), os.homedir()) };
+			}
+			case "modes.setDefault": {
+				const p = (params ?? {}) as { id?: unknown };
+				if (typeof p.id !== "string" || p.id === "") throw new Error("mode id is required");
+				const { writeDefaultPresetId } = await import("../extensibility/plugins/profile/profile-presets");
+				const id = await writeDefaultPresetId(this.#host.cwd(), os.homedir(), p.id);
+				this.#services.get<EventService>("events").broadcastModesChanged();
+				return { ok: true, id };
 			}
 			case "modes.get": {
 				// 单预设完整定义(设置页编辑器用):modes.list 是摘要,编辑页
