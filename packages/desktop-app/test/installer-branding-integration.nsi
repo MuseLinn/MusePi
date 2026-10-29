@@ -42,10 +42,7 @@ ShowInstDetails show
 !define MUI_WELCOMEFINISHPAGE_BITMAP   "${BUILD_RESOURCES_DIR}\installerSidebar.bmp"
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "${BUILD_RESOURCES_DIR}\uninstallerSidebar.bmp"
 
-; ── 页面：欢迎页（宿主）→ 目录 → 安装 → 完成 ──────────────────────────
-!ifmacrodef customWelcomePage
-  !insertmacro customWelcomePage
-!endif
+; ── 原生页面声明与真实模板一致；customInit 后静默跳过 ─────────────────
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -56,6 +53,12 @@ ShowInstDetails show
 !ifmacrodef customHeader
   !insertmacro customHeader
 !endif
+
+Function .onInit
+  !ifmacrodef customInit
+    !insertmacro customInit
+  !endif
+FunctionEnd
 
 Section "install"
   ; 证明"NSIS 读到了宿主给出的答案"：把解析结果写进安装目录，

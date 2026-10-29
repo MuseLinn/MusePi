@@ -1,27 +1,17 @@
 name: "bun install (shared cache)"
 description: >
-   Ensure bun is on PATH, then run `bun install --frozen-lockfile` with a shared
-   package store. bun setup is skipped when the runner image already ships it
-   (the preloaded omp-kata image), and only fetched on runners that lack it
-   (e.g. GitHub-hosted). Self-hosted omp-kata runners use the mounted Bun store
-   PVC; GitHub-hosted runners use the stock actions/cache backend.
+   Install the Bun version declared by the root packageManager field, then run
+   `bun install --frozen-lockfile` with a shared package store. Self-hosted
+   omp-kata runners use the mounted Bun store PVC; GitHub-hosted runners use
+   the stock actions/cache backend.
 
 runs:
    using: composite
    steps:
-      - name: Detect environment
+      - name: Detect cache backend
         id: env
         shell: bash
         run: |
-           # bun is baked into the omp-kata runner image — only fetch it when the
-           # runner doesn't already provide it (GitHub-hosted), so we don't
-           # re-download bun from GitHub releases on every job.
-           if command -v bun >/dev/null 2>&1; then
-             echo "setup_bun=false" >> "$GITHUB_OUTPUT"
-             echo "bun present: $(bun --version) (preloaded image)"
-           else
-             echo "setup_bun=true" >> "$GITHUB_OUTPUT"
-           fi
            # The repo keys "are we on can.internal infra?" off $BAZEL_REMOTE_USER
            # (the bazel-remote-ci secret is envFrom-injected into every omp-kata
            # runner pod). RUNNER_ENVIRONMENT is empty on ARC pods, so it is not a
@@ -34,13 +24,11 @@ runs:
              echo "cache=gha" >> "$GITHUB_OUTPUT"
              echo "bun cache backend: GitHub Actions cache"
            fi
-      - name: Install bun when absent
-        if: steps.env.outputs.setup_bun == 'true'
-        shell: bash
-        run: |
-           export BUN_INSTALL="${HOME}/.bun"
-           curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.14"
-           echo "${BUN_INSTALL}/bin" >> "$GITHUB_PATH"
+      - name: Install repository Bun version
+        id: bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+           bun-version-file: package.json
 
       # Off-infra (GitHub-hosted): stock actions/cache for the bun store.
       - name: Cache bun store (GitHub cache)
@@ -48,7 +36,7 @@ runs:
         uses: actions/cache@v4
         with:
            path: ~/.bun/install/cache
-           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+           key: bun-${{ runner.os }}-${{ steps.bun.outputs.bun-version }}-${{ hashFiles('**/bun.lock') }}
 
       # On-infra (omp-kata): the pod mounts a shared PVC at bun's store path.
       - name: Prepare mounted bun store

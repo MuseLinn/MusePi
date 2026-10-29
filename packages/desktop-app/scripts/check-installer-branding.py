@@ -7,7 +7,7 @@ electron-builder's real contract:
   * defines electron-builder injects (PROJECT_DIR / BUILD_RESOURCES_DIR /
     PRODUCT_NAME / VERSION / APP_FILENAME)
   * page-before-language-before-LangString ordering
-  * the !ifmacrodef call sites for customWelcomePage / customHeader
+  * the customHeader call site and the .onInit -> customInit startup path
 
 The script is fed through **stdin with -INPUTCHARSET UTF8**, exactly how
 electron-builder invokes makensis (NsisTarget.js `executeMakensis`). That is

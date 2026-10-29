@@ -111,7 +111,7 @@
     "build:native": "bun --cwd=packages/natives run build",
     "test": "bun scripts/ci-test-ts.ts local",
     "test:ts": "bun scripts/ci-test-ts.ts local-ts",
-    "test:scripts": "bun test scripts/ci-release-build-binaries.test.ts scripts/musl-release.test.ts scripts/ci-release-publish.test.ts scripts/release.test.ts scripts/check-changelog-i18n.test.ts scripts/check-changelog-voice.test.ts scripts/check-catalog-refs.test.ts scripts/check-radius-tokens.test.ts scripts/verify-client-ui-i18n.test.ts scripts/check-docs.test.ts",
+    "test:scripts": "bun test scripts/ci-contract.test.ts scripts/ci-require-workflow-success.test.ts scripts/ci-release-build-binaries.test.ts scripts/musl-release.test.ts scripts/ci-release-publish.test.ts scripts/release.test.ts scripts/check-changelog-i18n.test.ts scripts/check-changelog-voice.test.ts scripts/check-catalog-refs.test.ts scripts/check-radius-tokens.test.ts scripts/verify-client-ui-i18n.test.ts scripts/check-docs.test.ts",
     "test:rs": "bun scripts/run-rs-task.ts test:rs",
     "check": "bun run --parallel check:ts check:rs",
     "check:ts": "bun run check:tools && bun run --workspaces --if-present check",

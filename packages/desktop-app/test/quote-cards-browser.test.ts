@@ -25,7 +25,7 @@ const reactAliasPlugin: BunPlugin = {
 const executablePath = await ensureChromiumExecutable();
 if (!executablePath) throw new Error("No Chromium executable resolved");
 const build = await Bun.build({
-	entrypoints: [path.resolve(import.meta.dir, "../../../.tmp/quote-cards-browser.fixture.tsx")],
+	entrypoints: [path.resolve(import.meta.dir, "quote-cards-browser.fixture.tsx")],
 	target: "browser",
 	format: "esm",
 	define: { "process.env.NODE_ENV": '"development"' },

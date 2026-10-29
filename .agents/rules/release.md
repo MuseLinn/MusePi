@@ -20,4 +20,4 @@ Internal issue attribution uses `([#123](https://github.com/can1357/oh-my-pi/iss
 - `bun run check:changelog-i18n` checks bilingual entry shape.
 - `bun run release` performs version bump, changelog finalization, commit, tag, publish, and creation of new unreleased sections.
 
-Run release only when the user requests it. Before release, ensure all user-facing changes since the last release are represented and both changelog checks pass. A release request is explicit authorization for the script's normal commit/tag/publish flow; it does not authorize unrelated Git operations.
+Run release only when the user requests it. Before release, ensure all user-facing changes since the last release are represented and both changelog checks pass. Publication jobs must require their validation gate in both `needs` and `if`; a gate that does not block publication is not a release guarantee. A release request is explicit authorization for the script's normal commit/tag/publish flow; it does not authorize unrelated Git operations.

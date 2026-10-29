@@ -6,7 +6,7 @@
 ;   !include "assistedInstaller.nsh"    -> MUI_PAGE_* inserted here
 ;   !insertmacro addLangs               -> MUI_LANGUAGE lines
 ;   !ifmacrodef customHeader            -> our LangStrings
-;   !ifmacrodef customWelcomePage       -> our welcome page macro body
+;   Function .onInit                    -> customInit starts the self-drawn host
 ;
 ; MUI requires pages before languages, and LangString only after
 ; MUI_LANGUAGE — so this order is not cosmetic, it is the contract the
@@ -42,9 +42,6 @@ RequestExecutionLevel user
 
 ; ── pages first (mirrors assistedInstaller.nsh) ──────────────────────────
 !ifndef BUILD_UNINSTALLER
-  !ifmacrodef customWelcomePage
-    !insertmacro customWelcomePage
-  !endif
   !insertmacro MUI_PAGE_DIRECTORY
   !insertmacro MUI_PAGE_INSTFILES
   !insertmacro MUI_PAGE_FINISH
@@ -64,6 +61,12 @@ RequestExecutionLevel user
 !ifmacrodef customHeader
   !insertmacro customHeader
 !endif
+
+Function .onInit
+  !ifmacrodef customInit
+    !insertmacro customInit
+  !endif
+FunctionEnd
 
 Section "install"
 SectionEnd

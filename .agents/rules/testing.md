@@ -32,6 +32,8 @@ Production behavior follows RED → GREEN: reproduce the contract failure, watch
 
 ## Verification and failure reporting
 
+For CI workflows, test sharding, runtime-version drift, or nondeterministic async tests, follow `.agents/skills/musepi-ci-test-reliability/SKILL.md`.
+
 Use package scripts as the command source of truth. Start with affected contracts and package checks, then run the repository checks required for the deliverable and the original end-to-end scenario.
 
 - Read exit codes and failure counts; never infer success from a diff or another agent's report.

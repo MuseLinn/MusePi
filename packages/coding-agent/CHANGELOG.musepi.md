@@ -6,6 +6,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+- **Windows 安装器不再混显 NSIS 原生页面**：交互安装只显示与客户端同风格的自绘向导，NSIS 改为在后台完成文件安装，不再出现两套安装界面交替打开的情况。
+  - EN: The Windows installer no longer mixes in native NSIS pages. Interactive setup shows only the client-styled custom wizard while NSIS installs files in the background, eliminating the alternating setup interfaces.
+
 ## [0.6.2] - 2026-10-29
 
 ### Changed

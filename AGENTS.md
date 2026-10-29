@@ -35,6 +35,7 @@ This file is the always-loaded hot path: execution boundaries, repository routin
 | TypeScript, Bun, shared helpers, logging, TUI output | `.agents/rules/code-quality.md` |
 | Packages, generated catalog, workers, capability seams | `.agents/rules/architecture.md` |
 | Tests, smoke runs, session/daemon isolation, verification | `.agents/rules/testing.md` |
+| CI workflows, test sharding, runtime versions, flaky/async tests | `.agents/skills/musepi-ci-test-reliability/SKILL.md` |
 | Documentation, bilingual pairs, package READMEs, agent-facing docs | `.agents/rules/documentation.md` |
 | Changelog and release | `.agents/rules/release.md` |
 | GUI design or interaction | `docs/gui-design.md`, `docs/gui-design.zh-CN.md`; dialogs also `docs/gui-dialog-spec.md`, widgets also `docs/gui-widget-spec.md` |

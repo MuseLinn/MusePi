@@ -27,7 +27,7 @@ jobs:
       # now, and keeps the repository free of a file that would go stale.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: "1.4"
+          bun-version-file: "package.json"
       - name: Generate sitemap and robots.txt
         run: bun scripts/build-site-sitemap.ts
       # docs/ keeps the Jekyll layout; the landing itself is the standalone

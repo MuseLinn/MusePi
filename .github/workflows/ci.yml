@@ -143,14 +143,10 @@ jobs:
          - name: Build collab web
            run: bun run collab:web:build
 
-   # Rust validation (tests, clippy, rustfmt) runs on non-PR events only.
-   # Native-changing PRs are rare enough that they do not warrant PR-side
-   # Rust validation or a PR-side addon build (see native_addons): Rust is
-   # validated post-merge on main (kata remote cache, warm) and again at
-   # release. A skipped required check still satisfies branch protection.
+   # Rust validation runs before merge as well as on main and release, using
+   # the same hosted bazel cache as the x64 addon build.
    rust_validate:
       name: Validate Rust workspace (bazel)
-      if: github.event_name != 'pull_request'
       runs-on: ubuntu-22.04
       steps:
          - uses: actions/checkout@v4
@@ -190,63 +186,18 @@ jobs:
          - name: Rustfmt
            run: bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=rustfmt //crates/...
 
-   # Provides the native addons every downstream TS job installs. PRs build
-   # the linux-x64 pair locally (the @musepi/pi-natives-* npm leaves were
-   # never published — E404 — see the win32 job for the same migration);
-   # fork runs restore the default-branch bazel cache. A PR whose TS tests
-   # depend on changed native behavior fails visibly and the native side
-   # lands via main.
-   # Main (kata, cluster remote cache) builds all Linux-hosted targets with
-   # bazel. Job name says "bazel" for continuity with required checks.
-   # Native addons 拆 3 个并行 job（2026-08-12）：hosted ubuntu-22.04 仅 14GB
-   # 盘，6 平台 bazel 冷构建累积产物爆盘（No space left on device）。拆组后
-   # 各 job 独立 VM、磁盘减半；依赖共享分组（x64 gnu / arm / musl-x64+win32）。
-   # PR 只取 x64（npm release addons），arm/musl/win 仅 main 构建。
-   # Provides the native addons the TS jobs install. Every TS job installs only
-   # `linux-x64-baseline/-modern` and therefore `needs: [native_addons_x64]`, NOT
-   # the four-platform `native_addons` aggregate below — the aggregate also waits
-   # on arm64, the slowest addon leg, and queuing the whole test fan-out behind it
-   # left main effectively untested (a run cancelled during that build reached
-   # zero test buckets). The aggregate still exists for the release path, whose
-   # binaries do need the other platforms.
+   # PRs and main build the linux-x64 pair locally; fork runs restore the
+   # default-branch bazel cache. Main additionally builds the platforms needed
+   # by release artifacts. TS jobs depend only on the x64 artifact, not the
+   # slower cross-platform release aggregate.
    native_addons_x64:
       name: Build native addons (x64 gnu)
       runs-on: ubuntu-22.04
-      # Main pushes no longer cancel an in-flight run, so a wedged addon build
-      # would hold the whole CI-refs/heads/main concurrency group for the 6h
-      # default and starve every later push. The slowest observed build is arm64
-      # at 22-27 min; 60 min is >2x that and still bounds the damage.
+      # Bound a wedged build so it cannot occupy the main concurrency group for
+      # the 6h Actions default. The slowest observed addon leg took 22-27 min.
       timeout-minutes: 60
       steps:
          - uses: actions/checkout@v4
-
-         # ---- PR + main path: bazel build of the linux-x64 pair ----
-         # (2026-09-18) PRs used to fetch release addons from the
-         # @musepi/pi-natives-linux-x64 npm leaf, but those packages were
-         # never published (E404 forever) — same dead end win32 already
-         # migrated away from. PRs now build locally like main does; fork
-         # runs can restore the default-branch bazel cache, so it stays
-         # cheap. arm/musl/win remain main-only (disk + time, see job notes).
-         # Make the policy visible on the rare native-touching PR instead of
-         # leaving a reviewer to wonder which addons the tests exercised.
-         # Best-effort: a diff-API failure must not fail the job over a notice.
-         - name: Note native changes tested against release addons
-           if: github.event_name == 'pull_request'
-           shell: bash
-           env:
-              GH_TOKEN: ${{ github.token }}
-           run: |
-              if gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null \
-                 | grep -qE '^(crates/|bazel/|Cargo\.(toml|lock)|MODULE\.bazel(\.lock)?|BUILD\.bazel|\.bazelrc|\.bazelignore|\.bazelversion|rust-toolchain\.toml|rustfmt\.toml)'; then
-                echo "::notice title=Native sources changed::PR CI tests against the latest release addons by design; native changes are validated post-merge on main and at release."
-              fi
-
-         # PRs DO build x64: the required TS test buckets install these addons,
-         # so a fork PR with no build could never go green (its uploads were
-         # skipped → download-artifact failed → tests skipped → red forever).
-         # Fork PRs can restore the default-branch bazel cache, so this stays
-         # cheap. arm/musl/win remain main-only (disk + time, see job notes).
-         # ---- main path: bazel build of all Linux-hosted targets ----
          - id: cache
            uses: ./.github/actions/bazel-cache
            with:
@@ -285,6 +236,7 @@ jobs:
 
    native_addons_arm:
       name: Build native addons (arm64)
+      if: github.event_name != 'pull_request'
       runs-on: ubuntu-22.04
       # Main pushes no longer cancel an in-flight run, so a wedged addon build
       # would hold the whole CI-refs/heads/main concurrency group for the 6h
@@ -327,6 +279,7 @@ jobs:
 
    native_addons_musl:
       name: Build native addons (musl-x64)
+      if: github.event_name != 'pull_request'
       runs-on: ubuntu-22.04
       # Main pushes no longer cancel an in-flight run, so a wedged addon build
       # would hold the whole CI-refs/heads/main concurrency group for the 6h
@@ -373,6 +326,7 @@ jobs:
    # 首次加载工具链需较大磁盘；工具链缓存后后续 run 复用。
    native_addons_win:
       name: Build native addons (win32)
+      if: github.event_name != 'pull_request'
       runs-on: ubuntu-22.04
       # Main pushes no longer cancel an in-flight run, so a wedged addon build
       # would hold the whole CI-refs/heads/main concurrency group for the 6h
@@ -696,7 +650,7 @@ jobs:
          - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
          - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
            with:
-              bun-version: "1.4"
+              bun-version-file: "package.json"
          - name: Cache bun dependencies
            uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
            with:
@@ -767,7 +721,7 @@ jobs:
          - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
          - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
            with:
-              bun-version: "1.4"
+              bun-version-file: "package.json"
          - name: Cache bun dependencies
            uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
            with:
@@ -823,14 +777,13 @@ jobs:
    # validation passes and every binary built. Runs on one linux runner: leaf
    release_github:
       name: Publish GitHub release
-      # TUI binary + browser-relay assets publish once every platform's
-      # binary built successfully — the test fan-out (release_gate) is a
-      # quality signal, not a binary-publish prerequisite, so a flaky or
-      # long-failing test job no longer strands the CLI update channel.
+      # Binary builds overlap the test fan-out, but publication requires every
+      # validation job and every platform build to succeed.
       if: ${{ needs.release_metadata.outputs.is-release == 'true' && !cancelled() &&
+         needs.release_gate.result == 'success' &&
          needs.release_binary.result == 'success' &&
          needs.release_binary_darwin.result == 'success' }}
-      needs: [release_metadata, release_binary, release_binary_darwin]
+      needs: [release_metadata, release_gate, release_binary, release_binary_darwin]
       runs-on: ubuntu-22.04
       permissions:
          contents: write
@@ -838,7 +791,7 @@ jobs:
          - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
          - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
            with:
-              bun-version: "1.4"
+              bun-version-file: "package.json"
          - name: Generate release notes from CHANGELOGs
            env:
               # `gh release list` (used to find the latest published GitHub
@@ -934,7 +887,7 @@ jobs:
          - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
            if: env.HAS_TAP_KEY == 'true'
            with:
-              bun-version: "1.4"
+              bun-version-file: "package.json"
          - name: Check out the Homebrew tap
            if: env.HAS_TAP_KEY == 'true'
            uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

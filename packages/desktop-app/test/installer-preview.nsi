@@ -40,7 +40,7 @@ ShowInstDetails show
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 
-; 生产用的品牌化定义（配色 / 欢迎页 / 完成页 / LangString）
+; 生产用的自绘宿主启动、答案解析与卸载定义
 !include "${PROJECT_DIR}\release\installer-branding.nsh"
 
 ; ── 位图 ─────────────────────────────────────────────────────────────────
@@ -53,10 +53,7 @@ ShowInstDetails show
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_HEADERIMAGE_BITMAP           "${BUILD_RESOURCES_DIR}\installerHeader.bmp"
 
-; ── 页面：顺序与 electron-builder assisted 模板一致 ──────────────────────
-!ifmacrodef customWelcomePage
-  !insertmacro customWelcomePage
-!endif
+; ── 原生页面声明与真实模板一致；customInit 后静默跳过 ─────────────────
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 
@@ -78,6 +75,12 @@ FunctionEnd
 !ifmacrodef customHeader
   !insertmacro customHeader
 !endif
+
+Function .onInit
+  !ifmacrodef customInit
+    !insertmacro customInit
+  !endif
+FunctionEnd
 
 Section "install"
   SetOutPath "$INSTDIR"

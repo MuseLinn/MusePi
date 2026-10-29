@@ -4,7 +4,9 @@ import { HttpTransport } from "@musepi/pi-coding-agent/mcp/transports/http";
 
 const encoder = new TextEncoder();
 const REQUEST_TIMEOUT_MS = 50;
-const GUARD_TIMEOUT_MS = 500;
+// Bounds waits for real socket events without treating CI scheduling delay as a
+// product timeout. The outer test budget remains the hang detector.
+const GUARD_TIMEOUT_MS = 5000;
 
 let server: Bun.Server<undefined> | null = null;
 
