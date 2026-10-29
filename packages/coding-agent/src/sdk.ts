@@ -110,6 +110,7 @@ import {
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
+import { collectProfilePresetDefinitions } from "./extensibility/plugins/profile/profile-presets";
 import { loadSessionPlugins } from "./extensibility/plugins/runtime/session-loader";
 import {
 	loadSkills as loadSkillsInternal,
@@ -632,6 +633,8 @@ export interface CreateAgentSessionOptions {
 
 	/** 预设目录(测试/嵌入可覆盖;默认 <home>/.musepi/modes,决策 #5)。 */
 	modeDir?: string;
+	/** Profile/plugin composition root used to resolve bundle-declared presets. */
+	profileHome?: string;
 	/**
 	 * Legacy alias for `settings`. Older Pi extensions pass SettingsManager.create(...)
 	 * through this field; accept it so their SDK calls keep the configured settings.
@@ -1587,7 +1590,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// 建好后切换为 runner.getExtensionModes()(含热启用/禁用的扩展,§6.2)。
 	let extensionRunnerRef: ExtensionRunner | undefined;
 	let initialExtensionModes: Array<{ extensionId: string; mode: ExtensionModeDefinition }> = [];
+	let profileModes: ModeDefinition[] = [];
 	const extensionModeLookup: ExtraModeLookup = modeId => {
+		const profileMatch = profileModes.find(mode => mode.id === modeId);
+		if (profileMatch) return { ...profileMatch };
 		const current = extensionRunnerRef ? extensionRunnerRef.getExtensionModes() : initialExtensionModes;
 		const match = current.find(s => s.mode.id === modeId);
 		return match ? ({ ...match.mode } as ModeDefinition) : undefined;
@@ -2418,6 +2424,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		if (options.modeId) {
 			const modeDir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
 			ensureModeTemplates(modeDir);
+			profileModes = await collectProfilePresetDefinitions(cwd, options.profileHome ?? os.homedir());
 			modeRuntime.resolved = createModeResolver(modeDir, { extraModes: extensionModeLookup }).resolve(
 				options.modeId,
 			);
@@ -3976,7 +3983,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			try {
 				const dir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
 				ensureModeTemplates(dir);
-				next = createModeResolver(dir).resolve(modeId);
+				next = createModeResolver(dir, { extraModes: extensionModeLookup }).resolve(modeId);
 			} catch (error) {
 				return { ok: false, error: error instanceof Error ? error.message : String(error) };
 			}

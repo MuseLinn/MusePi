@@ -499,10 +499,17 @@ export class ExtensionService implements DaemonService {
 			};
 			const dir = this.#deps.modesDir?.() ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
 			ensureModeTemplates(dir);
-			for (const id of listModeIds(dir)) {
+			const definitions = new Map(listModeIds(dir).map(id => [id, loadModeFile(dir, id)]));
+			const { collectProfilePresetDefinitions } = await import(
+				"../../extensibility/plugins/profile/profile-presets"
+			);
+			for (const def of await collectProfilePresetDefinitions(this.#deps.cwd(), os.homedir())) {
+				if (!definitions.has(def.id)) definitions.set(def.id, def);
+			}
+			for (const id of definitions.keys()) {
 				let resolved: ResolvedMode | undefined;
 				try {
-					resolved = resolveMode(id, mid => loadModeFile(dir, mid));
+					resolved = resolveMode(id, mid => definitions.get(mid) ?? loadModeFile(dir, mid));
 				} catch {
 					continue; // 环/悬空预设不参与启用面，与 modes.list 容错同口径
 				}

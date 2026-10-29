@@ -3051,7 +3051,7 @@ export const settings = {
 	"settings.yes": "Yes",
 	"settings.modesTitle": "Presets",
 	"settings.modesDescription":
-		"Named presets = extension whitelist + prompt sections + settings overrides (Work / Design / Minimal). Files live at ~/.musepi/modes/<id>.json; the built-in standard / minimal templates are generated on first visit.",
+		"Session-scoped Agent presets = plugin composition + extension whitelist + prompt sections + settings overrides. Application profile/bundle assembly is managed in the capability center's Composition tab. Files live at ~/.musepi/modes/<id>.json.",
 	"settings.modesEmpty": "No presets yet.",
 	"settings.modesBased": "Based on",
 	"settings.modesValidate": "Validate",

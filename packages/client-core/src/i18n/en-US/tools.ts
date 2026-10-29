@@ -477,7 +477,7 @@ export const tools = {
 		"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. The toggle mirrors browser.enabled; config fields are the browser.* settings keys.",
 	"tools.extBuiltinComputer": "Computer Use",
 	"tools.extBuiltinComputerDesc":
-		"Scriptable host-desktop control tool (screenshots, input, accessibility tree). Off by default; the toggle mirrors computer.enabled; config fields are the computer.* settings keys.",
+		"Scriptable host-desktop control tool (screenshots, input, accessibility tree). On by default; the toggle mirrors computer.enabled; config fields are the computer.* settings keys.",
 	"tools.extBuiltinLsp": "LSP",
 	"tools.extBuiltinLspDesc":
 		"Code intelligence via language servers (definitions, references, diagnostics, rename). The toggle mirrors lsp.enabled; config fields are the lsp.* settings keys.",
@@ -602,6 +602,10 @@ export const tools = {
 	// bundle/profile composition surface (capability center "Composition" tab)
 	"tools.bundleTitle": "Composition",
 	"tools.bundleProfile": "Profile",
+	"tools.bundleAvailable": "Available bundles",
+	"tools.bundleSelected": "Selected",
+	"tools.bundleMissing": "Files missing",
+	"tools.bundleUnreadable": "Unreadable",
 	"tools.bundleRows": "{count} rows composed",
 	"tools.bundleDisabledCount": "{count} off",
 	"tools.bundleConditionalCount": "{count} conditional",
@@ -619,15 +623,17 @@ export const tools = {
 		"This row's enablement comes from an expression this host does not evaluate, so it cannot be toggled here.",
 	"tools.bundleNoCompositionTitle": "This profile declares no composition",
 	"tools.bundleNoCompositionDesc":
-		"A composition is declared by the profile manifest: list the bundles a profile stacks under dsh.profile.bundles in the profile directory's package.json, and the composed rows and their per-row toggles appear here.",
+		"Select an available bundle below to start a composition. Selections are written to the profile manifest's musepi.profile.bundles, then the composed rows and their per-row toggles appear here.",
 	"tools.bundleNoRowsTitle": "The composition is empty",
 	"tools.bundleNoRowsDesc": "The bundles this profile stacks insert no rows.",
 	"tools.extAddPlugin": "Add plugin",
 	"tools.extPluginComponents": "Included components",
 	"tools.extPluginComponentsDesc":
-		"Toggle components independently: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths; terminal-backend components leave the provider resolution chain; file-backend components remove their tool families from the tool set and stop the index scan.",
+		"Components can be toggled independently only while their parent plugin is active: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths; terminal-backend components leave the provider resolution chain; file-backend components remove their tool families from the tool set and stop the index scan.",
 	"tools.extComponentCount": "components ×{count}",
 	"tools.extComponentDenied": "Disabled via component denylist",
+	"tools.extComponentParentDisabled":
+		"Parent plugin is off; the component selection is preserved and resumes when the parent is enabled.",
 	"tools.extPluginDetails": "Plugin details",
 	"tools.extPluginsSettingsDesc":
 		"Browse every plugin as cards: click a card for the liquid-glass detail — enable, configure and toggle components.",

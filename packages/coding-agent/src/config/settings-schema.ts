@@ -4565,7 +4565,7 @@ export const SETTINGS_SCHEMA = {
 
 	"computer.enabled": {
 		type: "boolean",
-		default: false,
+		default: true,
 		ui: {
 			tab: "tools",
 			group: "Available Tools",

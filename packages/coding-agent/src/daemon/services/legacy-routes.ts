@@ -125,6 +125,8 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"models.refreshRuntime",
 	"modes.delete",
 	"modes.get",
+	"modes.getDefault",
+	"modes.setDefault",
 	"modes.list",
 	"modes.save",
 	"modes.validate",

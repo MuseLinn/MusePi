@@ -7,12 +7,10 @@
  * installed a bundle otherwise sees it install cleanly and contribute nothing,
  * which reads as the host being broken.
  *
- * It is a READ surface by design. Composition is derived state — recomputed
- * from the profile manifest and the bundles' patch files on demand — so there
- * is nothing here to enable, disable, or persist. A row's enablement comes from
- * the composition (`bundles.rows.setEnabled`), and a bundle's enablement from
- * the plugin inventory it already belongs to (`plugins.packages`), which is
- * where the host already had one.
+ * Composition is derived state recomputed from the profile manifest and the
+ * bundles' patch files. Selecting a bundle writes the profile's ordered bundle
+ * list (`bundles.setEnabled`); overriding a composed row writes the profile's
+ * own patch (`bundles.rows.setEnabled`). Reading never creates profile files.
  *
  * Capability seam (M2-2.4):
  * - Input: RPC `bundles.composition` (the active profile's layer stack),
@@ -37,11 +35,13 @@ import {
 	mountableRows,
 } from "../../extensibility/plugins/dsh/dsh-apply";
 import {
-	ensureProfileCompositionExample,
+	type BundlePackageView,
+	listInstalledBundles,
 	type ProfileCompositionNote,
 	profileDirFor,
 	readProfileComposition,
 	resolveBundleDirs,
+	writeProfileBundles,
 } from "../../extensibility/plugins/profile/profile-composition";
 import { writeRowEnabled } from "../../extensibility/plugins/profile/profile-patch-edit";
 import type { DaemonService } from "./types";
@@ -93,6 +93,7 @@ export interface BundleCompositionView {
 	readonly detail?: string;
 	/** Bundle package names the profile stacks, in order. */
 	readonly bundles: readonly string[];
+	readonly availableBundles: readonly BundlePackageView[];
 	readonly layers: readonly BundleLayerView[];
 	readonly rows: readonly BundleRowView[];
 	/** Rows whose enabledness came from an expression this host will not run. */
@@ -129,11 +130,13 @@ export class BundleService implements DaemonService {
 	readonly routes = {
 		"bundles.composition": "composition",
 		"bundles.profile": "profile",
+		"bundles.setEnabled": "setBundleEnabled",
 		"bundles.rows.setEnabled": "setRowEnabled",
 		"bundles.entries": "entries",
 	} as const;
 
 	readonly #deps: BundleServiceDeps;
+	#bundleMutation: Promise<void> = Promise.resolve();
 	#cache: { at: number; view: BundleCompositionView } | null = null;
 	/**
 	 * The application the cached view was built from, kept so `entries` can
@@ -157,6 +160,62 @@ export class BundleService implements DaemonService {
 		this.#cache = null;
 		this.#application = null;
 		this.#deps.invalidate();
+	}
+
+	/** RPC bundles.setEnabled — select or remove a bundle in the active profile. */
+	async setBundleEnabled(params: unknown): Promise<{
+		ok: boolean;
+		enabled?: boolean;
+		bundles?: readonly string[];
+		error?: string;
+	}> {
+		const run = this.#bundleMutation.then(
+			() => this.#writeBundleSelection(params),
+			() => this.#writeBundleSelection(params),
+		);
+		this.#bundleMutation = run.then(
+			() => undefined,
+			() => undefined,
+		);
+		return run;
+	}
+
+	async #writeBundleSelection(params: unknown): Promise<{
+		ok: boolean;
+		enabled?: boolean;
+		bundles?: readonly string[];
+		error?: string;
+	}> {
+		const p = (params ?? {}) as { name?: unknown; enabled?: unknown };
+		if (typeof p.name !== "string" || p.name === "" || typeof p.enabled !== "boolean") {
+			return { ok: false, error: "name and enabled are required" };
+		}
+		const name = this.#activeProfileName();
+		const note = await readProfileComposition(name, this.#deps.home());
+		if (note.kind === "unreadable") return { ok: false, error: note.reason };
+		const selected = note.kind === "ok" ? [...note.composition.bundles] : [];
+		if (selected.includes(p.name) === p.enabled) {
+			return { ok: true, enabled: p.enabled, bundles: selected };
+		}
+		if (p.enabled) {
+			const catalog = await listInstalledBundles(profileDirFor(name, this.#deps.home()), this.#deps.home());
+			const candidate = catalog.find(bundle => bundle.name === p.name);
+			if (!candidate?.path || !candidate.readable) {
+				return { ok: false, error: `"${p.name}" 不是可读取的已安装 bundle` };
+			}
+		}
+		const bundles = p.enabled
+			? [...selected.filter(bundle => bundle !== p.name), p.name]
+			: selected.filter(bundle => bundle !== p.name);
+		try {
+			await writeProfileBundles(name, bundles, this.#deps.home());
+			this.invalidate();
+			const composition = await this.composition();
+			await this.#deps.refreshExtensions?.();
+			return { ok: true, enabled: p.enabled, bundles: composition.bundles };
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
 	}
 
 	/**
@@ -200,7 +259,7 @@ export class BundleService implements DaemonService {
 
 		const profile = await readProfileComposition(before.profile, this.#deps.home());
 		if (profile.kind !== "ok") {
-			return { ok: false, error: "该 profile 没有组合清单（缺少 dsh.profile.bundles），无处写入" };
+			return { ok: false, error: "该 profile 没有组合清单（缺少 musepi.profile.bundles），无处写入" };
 		}
 		// The profile's own patch file is where the override belongs; a profile
 		// that ships none gets one created beside its manifest.
@@ -276,25 +335,6 @@ export class BundleService implements DaemonService {
 		}
 	}
 
-	/**
-	 * Drop a worked example into a profile that declares nothing, so the
-	 * combination surface is discoverable after an upgrade.
-	 *
-	 * Only missing files are created, and only for a profile whose manifest was
-	 * ABSENT (not for one that failed to parse — a broken manifest is the
-	 * person's to fix, and papering over it would hide the breakage).
-	 */
-	async #writeExampleIfAbsent(name: string, note: ProfileCompositionNote): Promise<BundleCompositionView["declared"]> {
-		if (note.kind === "unreadable") return note.kind;
-		try {
-			await ensureProfileCompositionExample(profileDirFor(name, this.#deps.home()));
-		} catch {
-			// A read-only home must not turn an informational read into an error.
-			return note.kind;
-		}
-		return note.kind;
-	}
-
 	/** RPC bundles.composition: the active profile's composed row list. */
 	async composition(): Promise<BundleCompositionView> {
 		const cached = this.#cache;
@@ -305,23 +345,15 @@ export class BundleService implements DaemonService {
 	}
 	async #compute(name: string): Promise<BundleCompositionView> {
 		const note = await readProfileComposition(name, this.#deps.home());
+		const availableBundles = await listInstalledBundles(profileDirFor(name, this.#deps.home()), this.#deps.home());
 
 		if (note.kind !== "ok") {
-			// A profile that declares no composition is an ordinary state, not a
-			// failure: the answer is an empty stack with the reason attached.
-			//
-			// The empty state is also the one place worth writing to: an upgraded
-			// installation whose profile predates the composition model has no
-			// manifest, and without a worked example the combination tab asks
-			// someone to declare a field they have no reason to know exists. The
-			// write only ever creates missing files, so it cannot disturb a
-			// profile that declares anything.
-			const example = await this.#writeExampleIfAbsent(name, note);
 			return {
 				profile: name,
-				declared: example,
+				declared: note.kind,
 				...(note.kind === "unreadable" ? { detail: note.reason } : {}),
 				bundles: [],
+				availableBundles,
 				layers: [],
 				rows: [],
 				conditionalRows: [],
@@ -353,6 +385,7 @@ export class BundleService implements DaemonService {
 			profile: name,
 			declared: "ok",
 			bundles: note.composition.bundles,
+			availableBundles,
 			layers: application.layers,
 			rows: application.composition.rows.map(row => {
 				const issue = issueByRow.get(row.id);

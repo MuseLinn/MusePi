@@ -19,7 +19,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { applyDshProfile, mountableRows } from "../dsh/dsh-apply";
-import { ensureProfileCompositionExample, readProfileComposition, resolveBundleDirs } from "./profile-composition";
+import {
+	ensureProfileCompositionExample,
+	listInstalledBundles,
+	readProfileComposition,
+	resolveBundleDirs,
+	writeProfileBundles,
+} from "./profile-composition";
 
 let home: string;
 let profileDir: string;
@@ -48,14 +54,14 @@ describe("profile composition (bundle layer stack)", () => {
 			path.join(profileDir, "package.json"),
 			JSON.stringify({
 				name: "desktop",
-				dsh: { profile: { bundles: ["@demo/schedule-bundle"] } },
+				musepi: { profile: { bundles: ["@demo/schedule-bundle"] } },
 			}),
 		);
 		write(
 			path.join(bundleDir, "package.json"),
 			JSON.stringify({
 				name: "@demo/schedule-bundle",
-				dsh: { bundle: { patch: "../cordis.patch.yml" } },
+				dsh: { bundle: { patch: "./cordis.patch.yml" } },
 			}),
 		);
 		write(
@@ -194,7 +200,7 @@ describe("ensureProfileCompositionExample (post-upgrade discoverability)", () =>
 	it("never overwrites a manifest the person already has", async () => {
 		const dir = path.join(home, ".musepi", "profiles", "mine");
 		fs.mkdirSync(dir, { recursive: true });
-		const mine = JSON.stringify({ name: "mine", dsh: { profile: { bundles: ["@demo/x"] } } });
+		const mine = JSON.stringify({ name: "mine", musepi: { profile: { bundles: ["@demo/x"] } } });
 		fs.writeFileSync(path.join(dir, "package.json"), mine, "utf8");
 
 		expect(await ensureProfileCompositionExample(dir)).toBe("skipped");
@@ -209,5 +215,110 @@ describe("ensureProfileCompositionExample (post-upgrade discoverability)", () =>
 
 		expect(await ensureProfileCompositionExample(dir)).toBe("skipped");
 		expect(fs.existsSync(path.join(dir, "package.json"))).toBe(false);
+	});
+});
+
+describe("profile bundle writes and inventory", () => {
+	it("creates a new profile directory when the first bundle is selected", async () => {
+		const composition = await writeProfileBundles("brand-new", ["@demo/bundle"], home);
+		const manifestPath = path.join(home, ".musepi", "profiles", "brand-new", "package.json");
+		const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+			musepi: { profile: { bundles: string[] } };
+			dsh?: unknown;
+		};
+
+		expect(composition.bundles).toEqual(["@demo/bundle"]);
+		expect(manifest.musepi.profile.bundles).toEqual(["@demo/bundle"]);
+		expect(manifest.dsh).toBeUndefined();
+	});
+
+	it("preserves unrelated manifest fields and can write an explicit empty list", async () => {
+		const dir = path.join(home, ".musepi", "profiles", "custom");
+		write(
+			path.join(dir, "package.json"),
+			JSON.stringify({
+				name: "custom",
+				custom: { keep: true },
+				dependencies: { "@demo/plugin": "1.0.0" },
+				dsh: { profile: { bundles: ["@demo/old"] }, other: "keep" },
+			}),
+		);
+
+		const composition = await writeProfileBundles("custom", [], home);
+		const manifest = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as Record<string, unknown>;
+
+		expect(composition.bundles).toEqual([]);
+		expect(manifest.custom).toEqual({ keep: true });
+		expect(manifest.dependencies).toEqual({ "@demo/plugin": "1.0.0" });
+		expect(manifest.dsh).toEqual({ profile: { bundles: ["@demo/old"] }, other: "keep" });
+		expect(manifest.musepi).toEqual({ profile: { bundles: [] } });
+		expect(fs.readdirSync(dir).filter(file => file.includes(".tmp"))).toEqual([]);
+	});
+
+	it("updates an existing musepi alias when no dsh profile exists", async () => {
+		const dir = path.join(home, ".musepi", "profiles", "alias");
+		write(path.join(dir, "package.json"), JSON.stringify({ name: "alias", musepi: { profile: { bundles: [] } } }));
+
+		await writeProfileBundles("alias", ["@demo/bundle"], home);
+		const manifest = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as {
+			dsh?: unknown;
+			musepi: { profile: { bundles: string[] } };
+		};
+
+		expect(manifest.musepi.profile.bundles).toEqual(["@demo/bundle"]);
+		expect(manifest.dsh).toBeUndefined();
+	});
+
+	it("ignores the DSH namespace instead of treating it as a second profile format", async () => {
+		const dir = path.join(home, ".musepi", "profiles", "dual");
+		write(
+			path.join(dir, "package.json"),
+			JSON.stringify({
+				dsh: { profile: { bundles: ["@demo/legacy"] } },
+				musepi: { profile: { bundles: ["@demo/current"] } },
+			}),
+		);
+
+		const note = await readProfileComposition("dual", home);
+
+		expect(note.kind).toBe("ok");
+		if (note.kind !== "ok") throw new Error("dual-namespace profile should be readable");
+		expect(note.composition.bundles).toEqual(["@demo/current"]);
+	});
+
+	it("reports no composition when only the DSH namespace is present", async () => {
+		const dir = path.join(home, ".musepi", "profiles", "legacy-only");
+		write(path.join(dir, "package.json"), JSON.stringify({ dsh: { profile: { bundles: ["@demo/legacy"] } } }));
+
+		const note = await readProfileComposition("legacy-only", home);
+
+		expect(note.kind).toBe("no-manifest");
+	});
+
+	it("keeps selected-but-deleted bundles visible beside installed bundles", async () => {
+		const dir = path.join(home, ".musepi", "profiles", "inventory");
+		write(path.join(dir, "package.json"), JSON.stringify({ musepi: { profile: { bundles: ["@demo/missing"] } } }));
+		write(
+			path.join(dir, "node_modules", "@demo", "installed", "package.json"),
+			JSON.stringify({
+				name: "@demo/installed",
+				version: "1.2.3",
+				description: "Installed bundle",
+				dsh: { bundle: { patch: "./cordis.patch.yml" } },
+			}),
+		);
+		write(path.join(dir, "node_modules", "@demo", "installed", "cordis.patch.yml"), "");
+
+		const bundles = await listInstalledBundles(dir, home);
+		const missing = bundles.find(bundle => bundle.name === "@demo/missing");
+		const installed = bundles.find(bundle => bundle.name === "@demo/installed");
+
+		expect(missing).toMatchObject({ selected: true, path: null, readable: false });
+		expect(installed).toMatchObject({
+			selected: false,
+			readable: true,
+			version: "1.2.3",
+			description: "Installed bundle",
+		});
 	});
 });

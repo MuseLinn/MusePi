@@ -103,6 +103,20 @@ describe("AgentSession setMode busy gate (modes v2)", () => {
 		expect(modeSwitcher).toHaveBeenLastCalledWith(null, { hot: undefined });
 	});
 
+	it("locks the preset after the session has started", async () => {
+		const { session: s } = createSession();
+		s.sessionManager.appendMessage({
+			role: "user",
+			content: "Start the first turn",
+			timestamp: Date.now(),
+		});
+
+		const result = await s.setMode(MODE_ID, { hot: true });
+
+		expect(result).toEqual({ ok: false, error: "This session has already started" });
+		expect(modeSwitcher).not.toHaveBeenCalled();
+	});
+
 	it("returns an error without a mode-capable factory", async () => {
 		const mock = createMockModel({ responses: [{ content: ["Done"] }] });
 		const agent = new Agent({

@@ -73,7 +73,7 @@ export function ModesSection({
 	const [newDesc, setNewDesc] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [saveMsg, setSaveMsg] = useState<string | null>(null);
-	/** 当前默认预设(新会话;localStorage 持久化,app.tsx welcome 同步)。 */
+	/** 当前默认预设(新会话;profile patch 持久化,localStorage 仅作旧版回退)。 */
 	const [defaultModeId, setDefaultModeId] = useState<string | null>(
 		() => localStorage.getItem("musepi-gui-default-mode") ?? "work",
 	);
@@ -103,6 +103,12 @@ export function ModesSection({
 					setModes([]);
 					setErrors([String(error)]);
 				});
+			void rpc
+				.request<{ id: string }>("modes.getDefault", {})
+				.then(res => {
+					if (alive) setDefaultModeId(res.id);
+				})
+				.catch(() => {});
 		};
 		load();
 		const id = setInterval(load, 5000);
@@ -127,10 +133,13 @@ export function ModesSection({
 	};
 
 	const setDefault = (id: string): void => {
-		setDefaultModeId(id);
-		localStorage.setItem("musepi-gui-default-mode", id);
-		// welcome 预设 chip 同步(与 musepi-gui-default-model-changed 同模式)。
-		window.dispatchEvent(new CustomEvent("musepi-gui-default-mode-changed", { detail: id }));
+		void rpc
+			?.request("modes.setDefault", { id })
+			.then(() => {
+				setDefaultModeId(id);
+				window.dispatchEvent(new CustomEvent("musepi-gui-default-mode-changed", { detail: id }));
+			})
+			.catch(error => setErrors([String(error)]));
 	};
 
 	/** 「查看配置」:只读展示继承展开结果。数据源零新 RPC——根定义 modes.get,

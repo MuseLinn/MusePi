@@ -39,7 +39,7 @@ function write(file: string, content: string): void {
 function profileWith(rows: string[], profilePatch?: string): void {
 	write(
 		path.join(profileDir, "package.json"),
-		JSON.stringify({ name: "test", dsh: { profile: { bundles: ["@demo/bundle"] } } }),
+		JSON.stringify({ name: "test", musepi: { profile: { bundles: ["@demo/bundle"] } } }),
 	);
 	write(
 		path.join(bundleDir, "package.json"),
@@ -79,6 +79,8 @@ describe("BundleService.composition", () => {
 		expect(view.rows).toEqual([]);
 		expect(view.bundles).toEqual([]);
 		expect(view.unevaluatedExpressions).toBe(0);
+		expect(fs.existsSync(path.join(profileDir, "package.json"))).toBe(false);
+		expect(fs.existsSync(path.join(profileDir, "cordis.patch.yml"))).toBe(false);
 	});
 
 	it("reports each composed row with its plugin issue rather than dropping it", async () => {
@@ -302,5 +304,63 @@ describe("BundleService.setRowEnabled (control surface)", () => {
 		const view = await service().entries();
 
 		expect(view.paths).toEqual([]);
+	});
+});
+
+describe("BundleService.setBundleEnabled", () => {
+	it("selects an installed bundle once and refreshes only for a real change", async () => {
+		profileWith(["- insert:", "    - id: alpha", "      name: '@demo/plugin-alpha'"]);
+		write(path.join(profileDir, "package.json"), JSON.stringify({ musepi: { profile: { bundles: [] } } }));
+		let scans = 0;
+		const svc = new BundleService({
+			cwd: () => profileDir,
+			home: () => home,
+			invalidate: () => {},
+			profileName: () => "desktop",
+			refreshExtensions: async () => {
+				scans += 1;
+			},
+		});
+
+		expect((await svc.setBundleEnabled({ name: "@demo/bundle", enabled: true })).ok).toBe(true);
+		expect((await svc.setBundleEnabled({ name: "@demo/bundle", enabled: true })).ok).toBe(true);
+		const manifest = JSON.parse(fs.readFileSync(path.join(profileDir, "package.json"), "utf8")) as {
+			musepi: { profile: { bundles: string[] } };
+		};
+
+		expect(manifest.musepi.profile.bundles).toEqual(["@demo/bundle"]);
+		expect(scans).toBe(1);
+	});
+
+	it("refuses to select a package that is not a bundle without writing", async () => {
+		write(
+			path.join(profileDir, "package.json"),
+			JSON.stringify({ custom: true, musepi: { profile: { bundles: [] } } }),
+		);
+		write(
+			path.join(profileDir, "node_modules", "@demo", "plain", "package.json"),
+			JSON.stringify({ name: "@demo/plain" }),
+		);
+		const before = fs.readFileSync(path.join(profileDir, "package.json"), "utf8");
+
+		const result = await service().setBundleEnabled({ name: "@demo/plain", enabled: true });
+
+		expect(result.ok).toBe(false);
+		expect(fs.readFileSync(path.join(profileDir, "package.json"), "utf8")).toBe(before);
+	});
+
+	it("lets a missing selected bundle be removed and clears duplicate selections", async () => {
+		write(
+			path.join(profileDir, "package.json"),
+			JSON.stringify({ musepi: { profile: { bundles: ["@demo/missing", "@demo/missing"] } } }),
+		);
+
+		const result = await service().setBundleEnabled({ name: "@demo/missing", enabled: false });
+		const manifest = JSON.parse(fs.readFileSync(path.join(profileDir, "package.json"), "utf8")) as {
+			musepi: { profile: { bundles: string[] } };
+		};
+
+		expect(result.ok).toBe(true);
+		expect(manifest.musepi.profile.bundles).toEqual([]);
 	});
 });

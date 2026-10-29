@@ -34,6 +34,8 @@ musepi-omp 是 oh-my-pi 的 fork，扩展运行时同源，但 musepi 在**加�
 
 **结论**：能力上 **OMP Plugin ⊂ MusePi Plugin**。新扩展一律按 MusePi Plugin 写（免费获得 GUI 管理）；只在纯 OMP 环境跑才按上游最小形态写。
 
+普通插件包由 `package.json` 的 `musepi` 块声明入口、配置与资源（见 §13），启停归 runtime lock。应用 profile 通过 `musepi.profile.bundles` 选择 bundle，行级覆盖写入该 profile 的 `cordis.patch.yml`；仅支持 `musepi.profile.bundles`，DSH profile 字段直接忽略。Agent preset 也作为插件行声明在同一组合中，按文件 > profile > 扩展的顺序解析。新会话默认值保存在 profile 的 `agent-preset-registry.config.selectedDefault`；会话开始首轮后 preset 锁定，已有会话保留原组合。组件开关与父插件开关相互独立：父插件停用时保留组件选择，但只有父插件与组件两道门都允许时组件才实际生效。
+
 ## 2. 扩展能做什么（能力面）
 
 一个扩展模块可以组合：

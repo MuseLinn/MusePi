@@ -46,7 +46,7 @@ musepi-omp 是 oh-my-pi 的 fork,扩展运行时同源,但 musepi 在**加载、
 - GUI 里 pi/omp 遗产归设置侧「**扩展与插件**」控制中心;自有插件系统品牌一律「**插件**」。
 - 两者的分界是**来源**不是能力:一个用 `pi.extensions` 装载的模块在界面上也可能表现为一个卡片。
 
-在 **musepi 自己的插件体系内部没有第二层**:一个插件包就是一个插件,`package.json` 的 `musepi` 块声明它提供哪些入口/配置/资源(见 §13),装上即可用。DSH 另有一层 `cordis.patch.yml` Loader 配置(把包的几行插进插件树),我们不需要 —— 插件由 `pi.extensions` 运行时发现。对照核实见 §15。
+An ordinary plugin package declares its entries, configuration, and resources in `package.json`'s `musepi` block and uses the runtime lock for enablement. The application profile selects bundles through `musepi.profile.bundles`, with row overrides in its `cordis.patch.yml`; Only `musepi.profile.bundles` is supported; DSH profile fields are ignored. Agent presets are declared as plugin rows inside that same composition and resolve in file > profile > extension order. Their new-session default lives in the profile's `agent-preset-registry.config.selectedDefault`; once a session starts, its preset is locked and its existing composition is retained. Component switches remain independent of the parent switch: a component selection is preserved while its parent is off, but the component is not active until both gates allow it.
 
 ## 2. 扩展能做什么(能力面)
 

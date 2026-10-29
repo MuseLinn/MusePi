@@ -4926,6 +4926,9 @@ export class AgentSession {
 		if (!this.#modeSwitcher) {
 			return { ok: false, error: "mode switching is unavailable for this session" };
 		}
+		if (this.sessionManager.getEntries().some(entry => entry.type === "message")) {
+			return { ok: false, error: "This session has already started" };
+		}
 		if (this.isStreaming) {
 			this.#pendingModeSwitch = { modeId, hot: opts.hot };
 			return { ok: true, deferred: true };

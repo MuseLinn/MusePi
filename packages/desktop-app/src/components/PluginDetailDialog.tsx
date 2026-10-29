@@ -198,6 +198,7 @@ function ComponentsSection({
 }): ReactNode {
 	const [busy, setBusy] = useState<string | null>(null);
 	if (!item.components || item.components.length === 0) return null;
+	const parentActive = item.state === "active" && !item.loadError;
 
 	const toggle = (componentId: string, enabled: boolean): void => {
 		if (!rpc || busy) return;
@@ -226,15 +227,18 @@ function ComponentsSection({
 					const description =
 						(item.builtin ? builtinText(`ext builtin ${item.name} component ${c.id} desc`) : null) ??
 						c.description;
+					const effective = parentActive && c.enabled;
 					return (
 						<div key={c.id} className="gui-plugin-component-row">
 							<div className="min-w-0 flex-1">
 								<div className="gui-plugin-component-name">
-									<span className={`gui-ext-dot${c.enabled ? "" : " gui-ext-dot--off"}`} />
+									<span className={`gui-ext-dot${effective ? "" : " gui-ext-dot--off"}`} />
 									{name}
 								</div>
 								{description ? <div className="gui-plugin-component-desc">{description}</div> : null}
-								{!c.enabled && c.disabledReason ? (
+								{!parentActive && c.enabled ? (
+									<div className="gui-plugin-component-denied">{t("tools.extComponentParentDisabled")}</div>
+								) : !c.enabled && c.disabledReason ? (
 									<div className="gui-plugin-component-denied">{t("tools.extComponentDenied")}</div>
 								) : null}
 								{c.runtime && c.runtime.fiberState !== "ACTIVE" ? (
@@ -248,10 +252,10 @@ function ComponentsSection({
 								<button
 									type="button"
 									role="switch"
-									aria-checked={c.enabled}
+									aria-checked={effective}
 									aria-label={`${t("tools.pluginEnable")} ${name}`}
-									className={`gui-toggle gui-toggle--sm${c.enabled ? " gui-toggle--on" : ""}`}
-									disabled={busy === c.id}
+									className={`gui-toggle gui-toggle--sm${effective ? " gui-toggle--on" : ""}`}
+									disabled={busy === c.id || !parentActive}
 									onClick={() => toggle(c.id, !c.enabled)}
 								>
 									<span className="gui-toggle-knob" />

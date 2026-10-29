@@ -51,9 +51,9 @@ describe("AgentSession.setComputerToolEnabled", () => {
 		});
 		sessions.push(session);
 
-		// computer.enabled defaults to false: absent from registry and slate.
-		expect(session.getAllToolNames()).not.toContain("computer");
-		expect(session.getActiveToolNames()).not.toContain("computer");
+		// computer.enabled defaults to true: present in registry and slate.
+		expect(session.getAllToolNames()).toContain("computer");
+		expect(session.getActiveToolNames()).toContain("computer");
 
 		// The /computer command's enable path: slate refresh + runtime override.
 		expect(await session.setComputerToolEnabled(true)).toBe(true);

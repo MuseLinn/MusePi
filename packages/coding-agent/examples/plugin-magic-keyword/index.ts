@@ -1,7 +1,7 @@
 /**
  * Example MusePi plugin package.
  *
- * A plugin package is the unit a profile stacks (see `dsh.profile.bundles`):
+ * A plugin package is the unit a profile stacks (see `musepi.profile.bundles`):
  * one npm package that contributes capabilities at load time, rather than a
  * static entry in the host's built-in registry. This one shows the whole
  * surface a plugin can use:

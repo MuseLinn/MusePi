@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { BUILTIN_TOOLS, createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
 import { BUILTIN_MODE_TEMPLATES, BUILTIN_TEMPLATE_REVISION, LEGACY_TEMPLATES } from "../../src/presets/resolve";
 
 /**
@@ -27,15 +27,26 @@ describe("chat preset tool narrowing", () => {
 		expect(denylist as string[]).toContain("task");
 	});
 
-	it("upgrades revision-5 chat files but keeps edited ones", () => {
+	it("makes an explicit choice for every current built-in tool", () => {
+		const denylist = BUILTIN_MODE_TEMPLATES.chat?.settings?.["tools.disabled"] as string[];
+		const keep = new Set(["bash", "ask"]);
+		for (const name of Object.keys(BUILTIN_TOOLS)) {
+			if (!keep.has(name)) expect(denylist).toContain(name);
+		}
+	});
+
+	it("upgrades revision-5 and revision-6 chat files but keeps edited ones", () => {
 		// The upgrade chain is what puts the narrowing in front of existing users
 		// without trampling their edits: a file still matching the v5 snapshot
 		// moves up; anything else stays as the person wrote it.
 		const rev5 = LEGACY_TEMPLATES[5]?.chat;
 		expect(rev5).toBeDefined();
 		expect(rev5?.settings?.["tools.disabled"]).toBeUndefined();
+		const rev6 = LEGACY_TEMPLATES[6]?.chat;
+		expect(rev6).toBeDefined();
+		expect(rev6?.settings?.["tools.disabled"]).not.toContain("knowledge");
 		// And the current template stamps the new revision.
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(6);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(7);
 	});
 
 	it("createTools honours the denylist the template writes", async () => {

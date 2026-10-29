@@ -791,6 +791,12 @@ function AppInner(): ReactNode {
 					console.warn("[gui] modes.list failed; falling back to builtin modes", err);
 					if (alive) setWelcomeModes(WELCOME_MODES_FALLBACK);
 				});
+			void rpc
+				.request<{ id: string }>("modes.getDefault", {})
+				.then(res => {
+					if (alive) setWelcomeModeId(res.id);
+				})
+				.catch(() => {});
 		};
 		load();
 		const off = rpc.addEventListener(event => {

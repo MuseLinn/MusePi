@@ -164,9 +164,7 @@ const CONDITIONS: Record<string, () => boolean> = {
 	sttPluginEnabled: () => subsystemVisible("stt.enabled"),
 	ttsPluginEnabled: () => subsystemVisible("speech.enabled"),
 	browserPluginEnabled: () => subsystemVisible("browser.enabled"),
-	// computer.enabled 带 unsetDisabled 语义(schema 默认即 false,未设置 =
-	// 停用),故读不到/未设置按隐藏处理 —— 与 /extensions 仪表盘对 computer
-	// 行的呈现一致,不 fail-open。
+	// computer.enabled 默认开启，读取失败仍按未启用处理，避免失效配置意外开放桌面控制。
 	computerPluginEnabled: () => readSubsystemEnabled("computer.enabled") === true,
 	summarizeActive: () => {
 		try {

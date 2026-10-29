@@ -171,16 +171,15 @@ describe("更多内置子系统插件单元(terminal/browser/computer/lsp)", () 
 		expect(settings.getRaw("browser.headless")).toBe(false);
 	});
 
-	test("computer 默认关闭:镜像 default false,状态如实上报 disabled", async () => {
+	test("computer 默认开启:镜像 default true,可显式停用", async () => {
 		const listed = await service.list();
 		const computer = listed.extensions.find(e => e.id === "computer:computer");
-		expect(computer?.state).toBe("disabled");
-		expect(computer?.disabledReason).toBe("item-disabled");
+		expect(computer?.state).toBe("active");
 
-		await service.setEnabled({ id: "computer:computer", enabled: true });
+		await service.setEnabled({ id: "computer:computer", enabled: false });
 		const after = (await service.list()).extensions.find(e => e.id === "computer:computer");
-		expect(after?.state).toBe("active");
-		expect(settings.getRaw("computer.enabled")).toBe(true);
+		expect(after?.state).toBe("disabled");
+		expect(settings.getRaw("computer.enabled")).toBe(false);
 	});
 
 	test("lsp 单元:镜像 lsp.enabled + 配置字段即 lsp.* 设置键", async () => {

@@ -21,7 +21,7 @@ User setup, safety guidance, platform permissions, and verified limitations: [Na
 
 ## Availability and declaration
 
-- `computer.enabled` gates registration and defaults to `false`. The `/computer` slash command toggles it for the current session without persisting settings. `/computer status` reports enabled/active state, controller settings, active model, and effective native/function exposure. Explicit enablement and the controller survive model switches while exposure is recomputed for the selected model.
+- `computer.enabled` gates registration and defaults to `true`. The `/computer` slash command toggles it for the current session without persisting settings. `/computer status` reports enabled/active state, controller settings, active model, and effective native/function exposure. Explicit enablement and the controller survive model switches while exposure is recomputed for the selected model.
 - Enabled tool load mode: `essential`.
 - Concurrency: `exclusive`.
 - Native descriptor: `{ type: "computer" }`.
@@ -35,7 +35,7 @@ Unlike `browser`, `computer` operates the entire visible host session. It can ac
 
 | Setting | Type | Default | Contract |
 |---|---|---:|---|
-| `computer.enabled` | boolean | `false` | Register tool. |
+| `computer.enabled` | boolean | `true` | Register tool. |
 | `computer.backend` | `auto \| native` | `auto` | Both prohibit non-native fallback. |
 | `computer.display` | string | `all` | `all` or numeric native monitor ID. |
 | `computer.maxWidth` | number | `1920` | Maximum composite PNG width. Image transports that cannot preserve original detail, including GitHub Copilot Responses and xAI OAuth, cap the effective width at `1280`; Claude-family models use the same cap as a compatibility fallback. |

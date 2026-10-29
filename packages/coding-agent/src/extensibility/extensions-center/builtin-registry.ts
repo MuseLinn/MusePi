@@ -161,7 +161,7 @@ export interface BuiltinExtensionDef {
 	description?: string;
 	/** 镜像设置键的内置扩展(state 由设置驱动,setEnabled 写设置而非禁用列表)。
 	 *  unsetDisabled:设置从未写入时按禁用呈现(用于 schema 默认值即 false
-	 *  的键,如 computer.enabled);缺省仍按「未设置 = 启用」处理。 */
+	 *  的键);缺省仍按「未设置 = 启用」处理。 */
 	settingsMirror?: { key: string; on: unknown; off: unknown; unsetDisabled?: boolean };
 	/**
 	 * dsh 式插件配置表单声明(字段键即设置键):daemon 的 extensions.list
@@ -504,8 +504,8 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		name: "computer",
 		displayName: "Computer Use",
 		description:
-			"Scriptable host-desktop control tool (screenshots, input, accessibility tree). Off by default; toggle mirrors computer.enabled.",
-		settingsMirror: { key: "computer.enabled", on: true, off: false, unsetDisabled: true },
+			"Scriptable host-desktop control tool (screenshots, input, accessibility tree). On by default; toggle mirrors computer.enabled.",
+		settingsMirror: { key: "computer.enabled", on: true, off: false },
 		components: [
 			{
 				id: "computer",
@@ -612,7 +612,7 @@ export function findBuiltinDef(id: string): BuiltinExtensionDef | undefined {
 
 /**
  * 镜像设置项的禁用判定:设置值 === off 即禁用;声明了 unsetDisabled
- * 的项未设置时按禁用(schema 默认值即 false,如 computer.enabled),
+ * 的项未设置时按禁用(schema 默认值即 false),
  * 其余未设置一律视为启用。daemon extensions.list 与 TUI 仪表盘共用此口径。
  */
 export function builtinMirrorDisabled(def: BuiltinExtensionDef, getRaw: (key: string) => unknown): boolean {

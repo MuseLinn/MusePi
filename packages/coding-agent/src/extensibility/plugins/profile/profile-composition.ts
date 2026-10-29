@@ -24,8 +24,11 @@
  * @module extensibility/plugins/profile-composition
  */
 
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getConfigDirName, getPluginsDir, logger } from "@musepi/pi-utils";
+import { describeDshBundle } from "../dsh/dsh-bundle";
 
 /** One profile's composition inputs, as declared. */
 export interface ProfileComposition {
@@ -71,15 +74,12 @@ export function profileDirFor(name: string, home: string): string {
 /**
  * Read a profile's composition inputs from its directory.
  *
- * The manifest field is `dsh.profile.bundles` (DSH's spelling, so a profile
- * authored for DSH means the same thing here). The `musepi` spelling is
- * accepted as an alias because a profile authored for this host should not
- * have to pretend to be a DSH one.
+ * The only supported manifest field is `musepi.profile.bundles`.
  */
 export async function readProfileComposition(name: string, home: string): Promise<ProfileCompositionNote> {
 	const dir = profileDirFor(name, home);
 	const manifestPath = path.join(dir, "package.json");
-	let manifest: { dsh?: { profile?: { bundles?: unknown } }; musepi?: { profile?: { bundles?: unknown } } };
+	let manifest: { musepi?: { profile?: { bundles?: unknown } } };
 	try {
 		manifest = (await Bun.file(manifestPath).json()) as typeof manifest;
 	} catch (error) {
@@ -91,7 +91,7 @@ export async function readProfileComposition(name: string, home: string): Promis
 		return { kind: "unreadable", dir, reason: error instanceof Error ? error.message : String(error) };
 	}
 
-	const declared = manifest.dsh?.profile?.bundles ?? manifest.musepi?.profile?.bundles;
+	const declared = manifest.musepi?.profile?.bundles;
 	if (declared === undefined) return { kind: "no-manifest", dir };
 	if (!Array.isArray(declared) || declared.some(entry => typeof entry !== "string")) {
 		return { kind: "unreadable", dir, reason: "profile.bundles must be an array of package names" };
@@ -140,6 +140,104 @@ export async function resolveBundleDirs(
 	return out;
 }
 
+export interface BundlePackageView {
+	readonly name: string;
+	readonly version: string;
+	readonly path: string | null;
+	readonly selected: boolean;
+	readonly readable: boolean;
+	readonly description?: string;
+}
+
+type ProfileManifestBlock = Record<string, unknown> & { profile?: Record<string, unknown> };
+type ProfileManifest = Record<string, unknown> & { dsh?: ProfileManifestBlock; musepi?: ProfileManifestBlock };
+
+/** Write the ordered bundle selection without replacing the rest of the profile manifest. */
+export async function writeProfileBundles(
+	name: string,
+	bundles: readonly string[],
+	home: string,
+): Promise<ProfileComposition> {
+	const dir = profileDirFor(name, home);
+	const manifestPath = path.join(dir, "package.json");
+	let manifest: ProfileManifest = { name: path.basename(dir), private: true };
+	try {
+		manifest = (await Bun.file(manifestPath).json()) as ProfileManifest;
+	} catch (error) {
+		if ((error as { code?: string }).code !== "ENOENT") throw error;
+	}
+	const block: ProfileManifestBlock = { ...(manifest.musepi ?? {}) };
+	block.profile = { ...(block.profile ?? {}), bundles: [...bundles] };
+	manifest.musepi = block;
+
+	const temporaryPath = path.join(dir, `.package.json.${process.pid}.${randomUUID()}.tmp`);
+	try {
+		await fs.mkdir(dir, { recursive: true });
+		await fs.writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
+		await fs.rename(temporaryPath, manifestPath);
+	} finally {
+		await fs.rm(temporaryPath, { force: true });
+	}
+	const note = await readProfileComposition(name, home);
+	if (note.kind !== "ok")
+		throw new Error(note.kind === "unreadable" ? note.reason : "profile bundle write did not persist");
+	return note.composition;
+}
+
+/** List bundle packages beside the profile, including selected packages whose files are missing. */
+export async function listInstalledBundles(profileDir: string, home: string): Promise<BundlePackageView[]> {
+	let selectedNames: string[] = [];
+	try {
+		const manifest = (await Bun.file(path.join(profileDir, "package.json")).json()) as ProfileManifest;
+		const declared = manifest.musepi?.profile?.bundles;
+		if (Array.isArray(declared))
+			selectedNames = declared.filter((entry): entry is string => typeof entry === "string");
+	} catch {
+		selectedNames = [];
+	}
+	const selected = new Set(selectedNames);
+	const bundles = new Map<string, BundlePackageView>();
+	const anchors = [path.join(getPluginsDir(home), "node_modules"), path.join(profileDir, "node_modules")];
+	for (const anchor of anchors) {
+		for (const pattern of ["*/package.json", "@*/*/package.json"]) {
+			let files: string[] = [];
+			try {
+				files = [...new Bun.Glob(pattern).scanSync({ cwd: anchor, onlyFiles: true })].sort();
+			} catch (error) {
+				if ((error as { code?: string }).code !== "ENOENT") throw error;
+			}
+			for (const relative of files) {
+				const manifestPath = path.join(anchor, relative);
+				try {
+					const pkg = (await Bun.file(manifestPath).json()) as {
+						name?: string;
+						version?: string;
+						description?: string;
+						dsh?: { bundle?: { patch?: unknown } };
+					};
+					if (!pkg.name || pkg.dsh?.bundle?.patch === undefined || bundles.has(pkg.name)) continue;
+					const dir = path.dirname(manifestPath);
+					const inventory = await describeDshBundle(dir);
+					bundles.set(pkg.name, {
+						name: pkg.name,
+						version: typeof pkg.version === "string" ? pkg.version : "",
+						path: dir,
+						selected: selected.has(pkg.name),
+						readable: inventory.isBundle && inventory.unreadable.length === 0,
+						...(typeof pkg.description === "string" ? { description: pkg.description } : {}),
+					});
+				} catch (error) {
+					logger.debug("profile bundle inventory: package unreadable", { path: manifestPath, err: error });
+				}
+			}
+		}
+	}
+	for (const name of selectedNames) {
+		if (!bundles.has(name)) bundles.set(name, { name, version: "", path: null, selected: true, readable: false });
+	}
+	return [...bundles.values()];
+}
+
 /**
  * Write a worked example into a profile that declares no composition, so the
  * combination surface is discoverable after an upgrade instead of looking like
@@ -151,7 +249,7 @@ export async function resolveBundleDirs(
  *  a patch, or either of those in an unreadable state is left exactly as it is;
  *  nothing here can overwrite a declaration a person made.
  * - **The example names no bundle.** It is a skeleton showing the
- *  `dsh.profile.bundles` field and the patch form, so it composes to an empty
+ *  `musepi.profile.bundles` field and the patch form, so it composes to an empty
  *  stack rather than pulling packages this installation may not have.
  *
  * Without this the feature is invisible after an upgrade: an existing profile
@@ -170,7 +268,7 @@ export async function ensureProfileCompositionExample(profileDir: string): Promi
 			{
 				name: path.basename(profileDir),
 				private: true,
-				dsh: {
+				musepi: {
 					profile: {
 						// The bundle packages this profile stacks, in order — a
 						// later bundle may reconfigure a row an earlier one

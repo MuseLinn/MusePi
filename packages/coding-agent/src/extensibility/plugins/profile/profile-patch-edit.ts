@@ -93,6 +93,24 @@ function overrideNodes(document: Document): EntryNode[] {
 	return out;
 }
 
+function declarationNodes(document: Document): EntryNode[] {
+	const items = (document.contents as { items: unknown[] }).items;
+	const out: EntryNode[] = [];
+	for (const item of items) {
+		if (!isMap(item)) continue;
+		const node = item as unknown as EntryNode;
+		const inserted = node.get("insert") as unknown;
+		const entries = Array.isArray(inserted) ? inserted : (inserted as { items?: unknown[] })?.items;
+		if (!entries) continue;
+		for (const entry of entries) {
+			if (!isMap(entry)) continue;
+			const child = entry as unknown as EntryNode;
+			if (typeof child.get("id") === "string" && child.get("id") !== "") out.push(child);
+		}
+	}
+	return out;
+}
+
 /**
  * Set a row's enablement by writing an id-targeted override into the profile's
  * own patch file — the same write DSH performs.
@@ -139,6 +157,43 @@ export async function writeRowEnabled(
 		(document.contents as unknown as { add(value: unknown): void }).add({ id, disabled: !enabled });
 	}
 
+	await fs.writeFile(patchPath, String(document), "utf8");
+	return { kind: "updated", changed: true };
+}
+
+/** Set one config value on an id-addressed row while preserving the rest of the patch. */
+export async function writeRowConfigValue(
+	patchPath: string,
+	id: string,
+	name: string,
+	key: string,
+	value: unknown,
+): Promise<PatchWriteResult> {
+	const document = await readPatch(patchPath);
+	if (!document) {
+		await fs.mkdir(path.dirname(patchPath), { recursive: true });
+		await fs.writeFile(
+			patchPath,
+			`- id: ${quoteIfNeeded(id)}\n  name: ${quoteIfNeeded(name)}\n  config:\n    ${key}: ${quoteIfNeeded(String(value))}\n`,
+			"utf8",
+		);
+		return { kind: "created" };
+	}
+	const target = [...declarationNodes(document)].reverse().find(node => {
+		if (node.get("id") !== id) return false;
+		const declared = node.get("name");
+		return declared === undefined || declared === null || declared === name;
+	});
+	if (target) {
+		const config = target.get("config") as EntryNode | undefined;
+		if (config?.get(key) === value) return { kind: "updated", changed: false };
+		if (config && typeof config.set === "function") config.set(key, value);
+		else target.set("config", { [key]: value });
+	} else {
+		(document.contents as unknown as { add(value: unknown): void }).add({
+			insert: [{ id, name, config: { [key]: value } }],
+		});
+	}
 	await fs.writeFile(patchPath, String(document), "utf8");
 	return { kind: "updated", changed: true };
 }

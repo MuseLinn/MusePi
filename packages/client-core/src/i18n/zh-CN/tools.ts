@@ -462,7 +462,7 @@ export const tools = {
 		"脚本化 Chromium 自动化工具（puppeteer）与应用内托管浏览器桥。开关镜像 browser.enabled；配置项即 browser.* 设置键。",
 	"tools.extBuiltinComputer": "电脑控制",
 	"tools.extBuiltinComputerDesc":
-		"可脚本化的宿主桌面控制工具（截图、输入、无障碍树），默认关闭。开关镜像 computer.enabled；配置项即 computer.* 设置键。",
+		"可脚本化的宿主桌面控制工具（截图、输入、无障碍树），默认开启。开关镜像 computer.enabled；配置项即 computer.* 设置键。",
 	"tools.extBuiltinLsp": "语言服务器（LSP）",
 	"tools.extBuiltinLspDesc":
 		"经语言服务器提供代码智能（定义、引用、诊断、重命名）。开关镜像 lsp.enabled；配置项即 lsp.* 设置键。",
@@ -576,6 +576,10 @@ export const tools = {
 	// bundle/profile 组合面（能力中心「组合」tab）
 	"tools.bundleTitle": "组合",
 	"tools.bundleProfile": "Profile",
+	"tools.bundleAvailable": "可用组合包",
+	"tools.bundleSelected": "已加入组合",
+	"tools.bundleMissing": "文件缺失",
+	"tools.bundleUnreadable": "无法读取",
 	"tools.bundleRows": "组合出 {count} 行",
 	"tools.bundleDisabledCount": "已关闭 {count}",
 	"tools.bundleConditionalCount": "条件启停 {count}",
@@ -592,15 +596,16 @@ export const tools = {
 	"tools.bundleConditionalHint": "该行的启停由一个表达式决定，本宿主不执行表达式，无法在此切换。",
 	"tools.bundleNoCompositionTitle": "当前 profile 没有声明组合",
 	"tools.bundleNoCompositionDesc":
-		"组合由 profile 清单声明：在 profile 目录的 package.json 里写 dsh.profile.bundles 列出它叠了哪些 bundle，即可在这里看到组合结果与逐行启停。",
+		"从下方可用组合包中选择即可建立组合；选择会写入 profile 清单的 musepi.profile.bundles，随后可查看组合结果并逐行启停。",
 	"tools.bundleNoRowsTitle": "组合为空",
 	"tools.bundleNoRowsDesc": "这个 profile 叠的 bundle 没有插入任何行。",
 	"tools.extAddPlugin": "添加插件",
 	"tools.extPluginComponents": "包含的组件",
 	"tools.extPluginComponentsDesc":
-		"组件独立启停：工具组件禁用后从 agent 工具集移除，语音引擎组件禁用后从模型目录与转写/朗读路径移除，终端后端组件禁用后从 provider 解析链移除，文件后端组件禁用后对应工具族从工具集移除、索引停止扫描。",
+		"组件仅在父插件启用时可独立启停：工具组件禁用后从 agent 工具集移除，语音引擎组件禁用后从模型目录与转写/朗读路径移除，终端后端组件禁用后从 provider 解析链移除，文件后端组件禁用后对应工具族从工具集移除、索引停止扫描。",
 	"tools.extComponentCount": "组件 ×{count}",
 	"tools.extComponentDenied": "已被组件黑名单禁用",
+	"tools.extComponentParentDisabled": "父插件已停用；组件选择已保留，启用父插件后恢复。",
 	"tools.extPluginDetails": "插件详情",
 	"tools.extPluginsSettingsDesc": "卡片式查看全部插件：点击卡片打开液态玻璃详情，启用、配置与切换组件。",
 	"tools.extOpenPluginDetails": "查看详情",

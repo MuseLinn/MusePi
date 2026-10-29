@@ -382,6 +382,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 				"security_scan",
 				"task",
 				"hub",
+				"knowledge",
 				"todo",
 				"web_search",
 				"write",
@@ -445,7 +446,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 6;
+export const BUILTIN_TEMPLATE_REVISION = 7;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -580,6 +581,59 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 				},
 			],
 			settings: { "compaction.enabled": false },
+		},
+	},
+	// v6: chat 已有工具黑名单，但尚未覆盖 knowledge。
+	6: {
+		chat: {
+			id: "chat",
+			label: "Chat",
+			description: "极简对话:仅核心对话工具 + 固定 prompt + 无压缩",
+			modelRole: "fast",
+			extensions: [],
+			promptComplete: true,
+			runtimeContext: false,
+			prompt: [
+				{
+					name: "mode:chat:persona",
+					order: 0,
+					text: "你是一名简洁的对话助手。只回答结论,不做多余分析;优先给出最小可行的方案。",
+				},
+			],
+			settings: {
+				"compaction.enabled": false,
+				"tools.disabled": [
+					"read",
+					"edit",
+					"ast_grep",
+					"ast_edit",
+					"debug",
+					"eval",
+					"github",
+					"glob",
+					"grep",
+					"lsp",
+					"inspect_image",
+					"browser",
+					"computer",
+					"checkpoint",
+					"rewind",
+					"security_scan",
+					"task",
+					"hub",
+					"todo",
+					"web_search",
+					"write",
+					"board",
+					"widget",
+					"memory_edit",
+					"retain",
+					"recall",
+					"reflect",
+					"learn",
+					"manage_skill",
+				],
+			},
 		},
 	},
 };

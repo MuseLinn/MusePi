@@ -524,7 +524,7 @@ computer:
 
 | 键 | 类型 | 默认值 | 备注 |
 |---|---|---|---|
-| `computer.enabled` | boolean | `false` | 启用原生 computer tool。具备原生能力的 OpenAI GA model 使用 `{ "type": "computer" }` wire 形式；其余所有 function-calling model 把 `computer` 当作普通 function tool。`/computer` slash command 只为当前 session 切换此项。 |
+| `computer.enabled` | boolean | `true` | 启用原生 computer tool。具备原生能力的 OpenAI GA model 使用 `{ "type": "computer" }` wire 形式；其余所有 function-calling model 把 `computer` 当作普通 function tool。`/computer` slash command 只为当前 session 切换此项。 |
 | `computer.backend` | enum | `auto` | `auto` 或 `native`；两者都要求原生捕获/输入，绝不回退到 browser automation。 |
 | `computer.display` | string | `all` | 合成所有活跃 display，或使用成功 computer 结果中报告的数字 display ID。 |
 | `computer.maxWidth` | number | `1920` | 合成截图最大宽度（像素）。无法保持原始细节的 image transport——包括 GitHub Copilot Responses 和 xAI OAuth——将有效宽度限制在 `1280`；Claude 系 model 作为兼容性 fallback 也采用同样的限制。 |

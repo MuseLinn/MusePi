@@ -58,6 +58,7 @@ const composition = (over: Record<string, unknown> = {}): Record<string, unknown
 	profile: "desktop",
 	declared: "ok",
 	bundles: ["@demo/bundle"],
+	availableBundles: [],
 	layers: [{ name: "@demo/bundle", rows: 1, overrides: 0, unreadable: [] }],
 	rows: [row()],
 	conditionalRows: [],
@@ -111,6 +112,16 @@ async function renderToHost(rpc: unknown): Promise<{ host: HTMLElement; cleanup(
 }
 
 describe("BundleView", () => {
+	it("renders an older daemon response that has no bundle catalog field", async () => {
+		const legacy = composition();
+		delete legacy.availableBundles;
+		const { rpc } = rpcStub({ "bundles.composition": legacy });
+
+		const text = await renderToText(rpc);
+
+		expect(text).toContain("schedule");
+	});
+
 	it("names the composed rows it was given", async () => {
 		const { rpc } = rpcStub({ "bundles.composition": composition() });
 
@@ -129,7 +140,7 @@ describe("BundleView", () => {
 
 		// The empty state names what a profile would do to declare one, so the
 		// tab is not a dead end.
-		expect(text).toContain("dsh.profile.bundles");
+		expect(text).toContain("musepi.profile.bundles");
 	});
 
 	it("reports unevaluated expressions rather than hiding the rows they gate", async () => {
@@ -198,6 +209,61 @@ describe("BundleView", () => {
 		const write = calls.find(call => call.method === "bundles.rows.setEnabled");
 		// The request asks for the OPPOSITE of the row's current state.
 		expect(write?.params).toEqual({ id: "schedule", enabled: false });
+		await cleanup();
+	});
+
+	it("offers an installed bundle even when the composition has no rows", async () => {
+		const { rpc, calls } = rpcStub({
+			"bundles.composition": composition({
+				bundles: [],
+				availableBundles: [
+					{
+						name: "@demo/bundle",
+						version: "1.0.0",
+						path: "/plugins/@demo/bundle",
+						selected: false,
+						readable: true,
+					},
+				],
+				layers: [],
+				rows: [],
+			}),
+			"bundles.setEnabled": { ok: true, enabled: true, bundles: ["@demo/bundle"] },
+		});
+
+		const { host, cleanup } = await renderToHost(rpc);
+		expect(host.textContent).toContain("@demo/bundle");
+		const toggle = host.querySelector('[role="switch"]');
+		await act(async () => {
+			toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+
+		expect(calls.find(call => call.method === "bundles.setEnabled")?.params).toEqual({
+			name: "@demo/bundle",
+			enabled: true,
+		});
+		await cleanup();
+	});
+
+	it("keeps a missing selected bundle visible and allows deselection", async () => {
+		const { rpc, calls } = rpcStub({
+			"bundles.composition": composition({
+				availableBundles: [{ name: "@demo/missing", version: "", path: null, selected: true, readable: false }],
+			}),
+			"bundles.setEnabled": { ok: true, enabled: false, bundles: [] },
+		});
+
+		const { host, cleanup } = await renderToHost(rpc);
+		expect(host.textContent).toContain("@demo/missing");
+		const toggle = host.querySelector('[role="switch"]');
+		await act(async () => {
+			toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+
+		expect(calls.find(call => call.method === "bundles.setEnabled")?.params).toEqual({
+			name: "@demo/missing",
+			enabled: false,
+		});
 		await cleanup();
 	});
 });

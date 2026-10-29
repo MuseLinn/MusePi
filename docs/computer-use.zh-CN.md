@@ -54,7 +54,7 @@ musepi config get computer.enabled
 
 | 键 | 默认值 | 含义 |
 |---|---:|---|
-| `computer.enabled` | `false` | 注册必需的 `computer` tool。 |
+| `computer.enabled` | `true` | 注册必需的 `computer` tool。 |
 | `computer.backend` | `auto` | `auto` 或 `native`。两者都需要原生 backend；两者都不会回退到浏览器或软件自动化。 |
 | `computer.display` | `all` | 合成每个活动的显示，或选择一个数值型原生 display ID。 |
 | `computer.maxWidth` | `1920` | 最大合成截图宽度（像素）。无法保留原始细节的图像传输（包括 GitHub Copilot Responses 与 xAI OAuth）会将有效宽度上限设为 `1280`；Claude 系列 model 使用同样的上限作为兼容性回退。 |

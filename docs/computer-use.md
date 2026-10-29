@@ -53,7 +53,7 @@ Inside a running session, the `/computer` slash command (`/computer`, `/computer
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `computer.enabled` | `false` | Register the essential `computer` tool. |
+| `computer.enabled` | `true` | Register the essential `computer` tool. |
 | `computer.backend` | `auto` | `auto` or `native`. Both require a native backend; neither falls back to browser or software automation. |
 | `computer.display` | `all` | Composite every active display, or select one numeric native display ID. |
 | `computer.maxWidth` | `1920` | Maximum composite screenshot width in pixels. Image transports that cannot preserve original detail, including GitHub Copilot Responses and xAI OAuth, cap the effective width at `1280`; Claude-family models use the same cap as a compatibility fallback. |

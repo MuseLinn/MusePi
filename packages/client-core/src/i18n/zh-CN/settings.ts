@@ -2900,7 +2900,7 @@ export const settings = {
 	"settings.yes": "是",
 	"settings.modesTitle": "预设",
 	"settings.modesDescription":
-		"命名预设 = 扩展工具集白名单 + 提示词区块 + settings 覆盖(Work / Design / Minimal)。文件保存在 ~/.musepi/modes/<id>.json;内置 standard / minimal 模板首次访问自动生成。",
+		"会话级 Agent 预设 = 插件组合 + 扩展工具集白名单 + 提示词区块 + settings 覆盖；应用级 profile/bundle 装配在能力中心「组合」中管理。文件保存在 ~/.musepi/modes/<id>.json。",
 	"settings.modesEmpty": "暂无预设。",
 	"settings.modesBased": "基于",
 	"settings.modesValidate": "校验",

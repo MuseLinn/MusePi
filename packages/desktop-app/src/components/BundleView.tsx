@@ -37,11 +37,21 @@ interface BundleLayer {
 	unreadable: string[];
 }
 
+interface BundlePackage {
+	name: string;
+	version: string;
+	path: string | null;
+	selected: boolean;
+	readable: boolean;
+	description?: string;
+}
+
 interface BundleComposition {
 	profile: string;
 	declared: "ok" | "no-manifest" | "unreadable";
 	detail?: string;
 	bundles: string[];
+	availableBundles: BundlePackage[];
 	layers: BundleLayer[];
 	rows: BundleRow[];
 	conditionalRows: string[];
@@ -98,6 +108,27 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		[rpc, busyId, load],
 	);
 
+	const toggleBundle = useCallback(
+		(bundle: BundlePackage): void => {
+			if (!rpc || busyId) return;
+			const key = `bundle:${bundle.name}`;
+			setBusyId(key);
+			void rpc
+				.request<{ ok: boolean; error?: string }>("bundles.setEnabled", {
+					name: bundle.name,
+					enabled: !bundle.selected,
+				})
+				.then(res => {
+					if (!res.ok) setError(res.error ?? null);
+					else setError(null);
+					load();
+				})
+				.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+				.finally(() => setBusyId(current => (current === key ? null : current)));
+		},
+		[rpc, busyId, load],
+	);
+
 	const counts = useMemo(() => {
 		const rows = composition?.rows ?? [];
 		return {
@@ -115,6 +146,43 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		);
 	}
 
+	const availableBundles = composition.availableBundles ?? [];
+	const bundleCatalog = availableBundles.length > 0 && (
+		<div className="gui-ext-group">
+			<div className="gui-ext-group-title">{tLoose("tools.bundleAvailable")}</div>
+			{availableBundles.map(bundle => (
+				<div key={bundle.name} className="gui-ext-provider">
+					<div className="gui-ext-provider-h">
+						<span
+							className={`gui-ext-dot${bundle.selected && bundle.path && bundle.readable ? "" : " gui-ext-dot--off"}`}
+						/>
+						<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{bundle.name}</span>
+						{bundle.version ? <span className="gui-ext-item-tag">v{bundle.version}</span> : null}
+						{bundle.path === null ? (
+							<span className="gui-ext-item-tag gui-ext-item-tag--err">{tLoose("tools.bundleMissing")}</span>
+						) : !bundle.readable ? (
+							<span className="gui-ext-item-tag gui-ext-item-tag--err">{tLoose("tools.bundleUnreadable")}</span>
+						) : bundle.selected ? (
+							<span className="gui-ext-item-tag gui-ext-item-tag--preset">{tLoose("tools.bundleSelected")}</span>
+						) : null}
+						<button
+							type="button"
+							role="switch"
+							aria-checked={bundle.selected}
+							aria-label={`${tLoose("tools.pluginEnable")} ${bundle.name}`}
+							className={`gui-toggle gui-toggle--sm${bundle.selected ? " gui-toggle--on" : ""}`}
+							disabled={busyId !== null || (!bundle.selected && (!bundle.path || !bundle.readable))}
+							onClick={() => toggleBundle(bundle)}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					</div>
+					{bundle.description ? <div className="gui-ext-plugins-meta">{bundle.description}</div> : null}
+				</div>
+			))}
+		</div>
+	);
+
 	// A profile that declares no composition is the ordinary case, not an error
 	// state — say what a profile would do to declare one.
 	if (composition.declared !== "ok") {
@@ -130,6 +198,7 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						{composition.declared === "unreadable" ? composition.detail : tLoose("tools.bundleNoCompositionDesc")}
 					</p>
 				</div>
+				{bundleCatalog}
 			</div>
 		);
 	}
@@ -154,6 +223,7 @@ export function BundleView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 			)}
 			<div className="gui-ext-list-scroll">
+				{bundleCatalog}
 				<div className="gui-ext-group">
 					<div className="gui-ext-group-title">
 						{tLoose("tools.bundleLayers")} · {composition.layers.length}
