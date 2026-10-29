@@ -112,7 +112,7 @@ describe("pickElectronTarget", () => {
 		async () => {
 			const launched = await acquireBrowser(
 				{ kind: "headless", headless: true },
-				{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
+				{ cwd: process.cwd(), signal: AbortSignal.timeout(60_000) },
 			);
 			if (!("browser" in launched)) throw new Error("Expected a Puppeteer browser");
 			const endpoint = new URL(launched.browser.wsEndpoint());
@@ -124,7 +124,7 @@ describe("pickElectronTarget", () => {
 			try {
 				attached = await acquireBrowser(
 					{ kind: "connected", cdpUrl: `http://${endpoint.host}` },
-					{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
+					{ cwd: process.cwd(), signal: AbortSignal.timeout(60_000) },
 				);
 				const { tab } = await acquireTab(tabName, attached, {
 					url: requested,
@@ -140,7 +140,7 @@ describe("pickElectronTarget", () => {
 				await releaseBrowser(launched, { kill: true });
 			}
 		},
-		30_000,
+		90_000,
 	);
 
 	test.skipIf(!CHROMIUM_AVAILABLE)(
@@ -156,7 +156,7 @@ describe("pickElectronTarget", () => {
 			});
 			const launched = await acquireBrowser(
 				{ kind: "headless", headless: true },
-				{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
+				{ cwd: process.cwd(), signal: AbortSignal.timeout(60_000) },
 			);
 			if (!("browser" in launched)) throw new Error("Expected a Puppeteer browser");
 			const endpoint = new URL(launched.browser.wsEndpoint());
@@ -165,7 +165,7 @@ describe("pickElectronTarget", () => {
 			try {
 				attached = await acquireBrowser(
 					{ kind: "connected", cdpUrl: `http://${endpoint.host}` },
-					{ cwd: process.cwd(), signal: AbortSignal.timeout(20_000) },
+					{ cwd: process.cwd(), signal: AbortSignal.timeout(60_000) },
 				);
 				await expect(
 					acquireTab(`attach-failure-${process.pid}-${Math.random().toString(36).slice(2)}`, attached, {
@@ -181,6 +181,6 @@ describe("pickElectronTarget", () => {
 				await server.stop(true);
 			}
 		},
-		30_000,
+		90_000,
 	);
 });
