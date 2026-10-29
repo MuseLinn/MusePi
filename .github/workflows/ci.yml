@@ -411,6 +411,10 @@ jobs:
            with:
               artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
+         - name: Select preinstalled Chrome for browser tests
+           run: |
+              chrome="$(command -v google-chrome)"
+              echo "PUPPETEER_EXECUTABLE_PATH=$chrome" >> "$GITHUB_ENV"
          - name: Test workspace packages and repo scripts (TS)
            env:
               MUSEPI_TEST_CONCURRENCY: "4"

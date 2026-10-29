@@ -77,7 +77,7 @@ describe("tokenizeCredentialProcessCommand", () => {
 	});
 
 	test("unquoted Windows paths preserve literal backslashes", () => {
-		expect(tokenizeCredentialProcessCommand(String.raw`C:\tools\auth.exe C:\fixtures\good.js`)).toEqual([
+		expect(tokenizeCredentialProcessCommand(String.raw`C:\tools\auth.exe C:\fixtures\good.js`, "win32")).toEqual([
 			String.raw`C:\tools\auth.exe`,
 			String.raw`C:\fixtures\good.js`,
 		]);

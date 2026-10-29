@@ -631,7 +631,7 @@ function isBatchScript(executable: string): boolean {
  * a backslash only escapes `$`, `` ` ``, `"`, and `\` — every other backslash
  * is preserved verbatim, which is what makes Windows paths like
  * `"C:\Program Files\tool\auth.exe"` survive tokenization. */
-export function tokenizeCredentialProcessCommand(cmd: string): string[] {
+export function tokenizeCredentialProcessCommand(cmd: string, platform: NodeJS.Platform = process.platform): string[] {
 	const tokens: string[] = [];
 	let current = "";
 	let hasToken = false;
@@ -652,7 +652,7 @@ export function tokenizeCredentialProcessCommand(cmd: string): string[] {
 			if (ch === "\\" && i + 1 < cmd.length) {
 				const next = cmd[i + 1];
 				if (
-					process.platform !== "win32" ||
+					platform !== "win32" ||
 					next === " " ||
 					next === "\t" ||
 					next === "\n" ||
