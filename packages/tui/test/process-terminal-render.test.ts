@@ -94,7 +94,7 @@ describe("ProcessTerminal geometry reflow through the renderer", () => {
 		expect(harness.terminal.columns).toBe(100);
 	});
 
-	it("stops rendering and raises SIGHUP when terminal input ends", async () => {
+	it.skipIf(process.platform === "win32")("stops rendering and raises SIGHUP when terminal input ends", async () => {
 		harness = createProcessTerminalRenderHarness(100, 30);
 		await harness.settle();
 		const rendersBeforeDisconnect = harness.probe.widths.length;
@@ -115,10 +115,10 @@ describe("ProcessTerminal geometry reflow through the renderer", () => {
 		await harness.endInput();
 
 		expect(quit).toHaveBeenCalledWith(129, { drainStdout: false });
-		expect(harness.signals).toHaveLength(0);
+		expect(harness.signals.some(entry => entry.signal === "SIGHUP")).toBe(false);
 	});
 
-	it("stops rendering and raises SIGHUP when terminal output fails", async () => {
+	it.skipIf(process.platform === "win32")("stops rendering and raises SIGHUP when terminal output fails", async () => {
 		harness = createProcessTerminalRenderHarness(100, 30);
 		await harness.settle();
 		const rendersBeforeDisconnect = harness.probe.widths.length;

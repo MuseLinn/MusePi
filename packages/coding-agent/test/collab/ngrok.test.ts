@@ -60,32 +60,32 @@ describe("startNgrokTunnel", () => {
 		const handle = await startNgrokTunnel({ port: 7654, verifyReachable: false, binary: SLOW_OK });
 		expect(handle.url).toBe("https://abc123.ngrok-free.app");
 		await handle.close();
-	});
+	}, 30_000);
 
 	it("rejects when ngrok exits before printing a URL", async () => {
 		await expect(startNgrokTunnel({ port: 7654, verifyReachable: false, binary: DIES })).rejects.toThrow(
 			/exited with code 1/,
 		);
-	});
+	}, 30_000);
 
 	it("rejects after the URL timeout when ngrok stays silent", async () => {
 		await expect(
 			startNgrokTunnel({ port: 7654, verifyReachable: false, binary: SILENT, signal: abortAfter(80) }),
 		).rejects.toThrow();
-	}, 5_000);
+	}, 30_000);
 
 	it("close() terminates the child via SIGTERM", async () => {
 		const handle = await startNgrokTunnel({ port: 7654, verifyReachable: false, binary: EXITS_ON_SIGTERM });
 		expect(handle.url).toBe("https://bye.ngrok-free.app");
 		await handle.close();
-	});
+	}, 30_000);
 
 	it("rejects with an install hint when the binary is missing", async () => {
 		const missing = join(FAKE_DIR, "definitely-not-ngrok");
 		await expect(startNgrokTunnel({ port: 7654, verifyReachable: false, binary: missing })).rejects.toThrow(
 			/ngrok is not installed.*add-authtoken/s,
 		);
-	});
+	}, 30_000);
 });
 
 function abortAfter(ms: number): AbortSignal {

@@ -15,9 +15,9 @@ const PRISTINE: Array<[NodeJS.Process["stdin"] | NodeJS.Process["stdout"], strin
 ];
 
 // One frame interval is ~33ms (TUI.#MIN_RENDER_INTERVAL_MS); two frames of
-// headroom keeps the scheduler-driven paint deterministic without slowing the
-// suite materially.
-const SETTLE_MS = 67;
+// headroom keeps the scheduler-driven paint deterministic. ConPTY additionally
+// coalesces large paints for 150ms, so waiting only two frames can read stale output.
+const SETTLE_MS = process.platform === "win32" ? 250 : 67;
 
 /**
  * A root component that records the width it is asked to render at. The renderer

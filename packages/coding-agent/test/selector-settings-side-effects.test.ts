@@ -538,8 +538,9 @@ describe("selector setting side effects", () => {
 			`modelRoles:\n  default: ${projectSelector}\n`,
 		);
 
+		let settings!: Settings;
 		try {
-			const settings = await Settings.loadIsolated({
+			settings = await Settings.loadIsolated({
 				cwd: projectDir,
 				agentDir: testDir,
 				inMemory: true,
@@ -625,6 +626,7 @@ describe("selector setting side effects", () => {
 				hub.dispose();
 			}
 		} finally {
+			settings?.getStorage()?.close();
 			if (fs.existsSync(testDir)) removeSyncWithRetries(testDir);
 		}
 	});
@@ -646,8 +648,9 @@ describe("selector setting side effects", () => {
 		fs.mkdirSync(projectDir, { recursive: true });
 		fs.writeFileSync(overlayPath, `modelRoles:\n  default: ${overlaySelector}\n`);
 
+		let settings!: Settings;
 		try {
-			const settings = await Settings.loadIsolated({
+			settings = await Settings.loadIsolated({
 				cwd: projectDir,
 				agentDir: testDir,
 				configFiles: [overlayPath],
@@ -754,6 +757,7 @@ describe("selector setting side effects", () => {
 				hub.dispose();
 			}
 		} finally {
+			settings?.getStorage()?.close();
 			if (fs.existsSync(testDir)) removeSyncWithRetries(testDir);
 		}
 	});
@@ -1351,8 +1355,9 @@ describe("selector setting side effects", () => {
 		fs.mkdirSync(projectDir, { recursive: true });
 		fs.writeFileSync(overlayPath, `modelRoles:\n  default: ${overlaySelector}\n`);
 
+		let settings!: Settings;
 		try {
-			const settings = await Settings.loadIsolated({
+			settings = await Settings.loadIsolated({
 				cwd: projectDir,
 				agentDir: testDir,
 				inMemory: true,
@@ -1437,6 +1442,7 @@ describe("selector setting side effects", () => {
 				hub.dispose();
 			}
 		} finally {
+			settings?.getStorage()?.close();
 			if (fs.existsSync(testDir)) removeSyncWithRetries(testDir);
 		}
 	});
@@ -1459,8 +1465,9 @@ describe("selector setting side effects", () => {
 		fs.mkdirSync(projectDir, { recursive: true });
 		fs.writeFileSync(overlayPath, `modelRoles:\n  default: ${sharedSelector}\n`);
 
+		let settings!: Settings;
 		try {
-			const settings = await Settings.loadIsolated({
+			settings = await Settings.loadIsolated({
 				cwd: projectDir,
 				agentDir: testDir,
 				inMemory: true,
@@ -1544,6 +1551,7 @@ describe("selector setting side effects", () => {
 				hub.dispose();
 			}
 		} finally {
+			settings?.getStorage()?.close();
 			if (fs.existsSync(testDir)) removeSyncWithRetries(testDir);
 		}
 	});

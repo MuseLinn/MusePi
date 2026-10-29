@@ -57,17 +57,24 @@ function runtimeVersionOf(value: unknown): string {
 	return value;
 }
 
-/** 区间语法校验（Bun.semver.satisfies 对非法区间返回 true 不抛错,
- *  1.4.2 实测裸 "^" 既判 valid 又判满足——必须双重探针：order 不抛 +
- *  区间含数字字面量）。 */
+const RANGE_VERSION = String.raw`(?:0|[1-9]\d*|[xX*])(?:\.(?:0|[1-9]\d*|[xX*])){0,2}(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`;
+const RANGE_COMPARATOR = new RegExp(`^(?:\\^|~|>=|<=|>|<|=)?${RANGE_VERSION}$`);
+const RANGE_VERSION_ONLY = new RegExp(`^${RANGE_VERSION}$`);
+
 function isValidRange(range: string): boolean {
-	if (!/\d/.test(range)) return false;
-	try {
-		Bun.semver.order("0.0.0", range);
-		return true;
-	} catch {
-		return false;
-	}
+	const trimmed = range.trim();
+	if (!trimmed) return false;
+	// Bun.semver.order accepts versions, not ranges; satisfies also accepts
+	// garbage as a wildcard, so validate the range grammar before using it.
+	const normalized = trimmed.replace(/(^|\s)(>=|<=|>|<|=|\^|~)\s+/g, "$1$2");
+	return normalized.split("||").every(alternative => {
+		const value = alternative.trim();
+		if (!value) return false;
+		const hyphen = value.split(/\s+-\s+/);
+		if (hyphen.length === 2) return hyphen.every(part => RANGE_VERSION_ONLY.test(part));
+		if (hyphen.length !== 1) return false;
+		return value.split(/\s+/).every(part => RANGE_COMPARATOR.test(part));
+	});
 }
 
 /** 预发布运行时按 base 版本复检（等价 includePrerelease 意图,见头注释）。 */

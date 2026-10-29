@@ -650,7 +650,22 @@ export function tokenizeCredentialProcessCommand(cmd: string): string[] {
 				continue;
 			}
 			if (ch === "\\" && i + 1 < cmd.length) {
-				current += cmd[++i];
+				const next = cmd[i + 1];
+				if (
+					process.platform !== "win32" ||
+					next === " " ||
+					next === "\t" ||
+					next === "\n" ||
+					next === "\r" ||
+					next === '"' ||
+					next === "'" ||
+					next === "\\"
+				) {
+					current += next;
+					i++;
+				} else {
+					current += ch;
+				}
 				hasToken = true;
 				continue;
 			}

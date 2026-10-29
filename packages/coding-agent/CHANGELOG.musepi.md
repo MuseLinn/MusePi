@@ -6,9 +6,15 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-10-29
+
 ### Fixed
 - **Windows 安装器不再混显 NSIS 原生页面**：交互安装只显示与客户端同风格的自绘向导，NSIS 改为在后台完成文件安装，不再出现两套安装界面交替打开的情况。
   - EN: The Windows installer no longer mixes in native NSIS pages. Interactive setup shows only the client-styled custom wizard while NSIS installs files in the background, eliminating the alternating setup interfaces.
+- **插件兼容性检查不再误拒合法版本区间**：`^0.6.0`、预发布运行时和常见 SemVer 区间会按实际兼容性判定，同时继续拦截空区间和非法配置。
+  - EN: Plugin compatibility checks no longer reject valid version ranges. Caret ranges, prerelease runtimes, and common SemVer ranges are evaluated correctly, while empty and malformed requirements remain blocked.
+- **Windows 凭据进程和路径显示恢复正常**：未加引号的 `credential_process` 路径不再丢失反斜杠，跨盘符的工具工作目录也会正确缩短为用户主目录形式。
+  - EN: Windows credential processes and path display work again. Unquoted credential_process paths retain their backslashes, and tool working directories on another drive shorten correctly relative to the user's home directory.
 
 ## [0.6.2] - 2026-10-29
 

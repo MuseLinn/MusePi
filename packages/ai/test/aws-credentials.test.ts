@@ -76,6 +76,13 @@ describe("tokenizeCredentialProcessCommand", () => {
 		expect(tokenizeCredentialProcessCommand(`a\\ b c`)).toEqual(["a b", "c"]);
 	});
 
+	test("unquoted Windows paths preserve literal backslashes", () => {
+		expect(tokenizeCredentialProcessCommand(String.raw`C:\tools\auth.exe C:\fixtures\good.js`)).toEqual([
+			String.raw`C:\tools\auth.exe`,
+			String.raw`C:\fixtures\good.js`,
+		]);
+	});
+
 	test("rejects unterminated quotes", () => {
 		expect(() => tokenizeCredentialProcessCommand(`"unterminated`)).toThrow(/unterminated/);
 		expect(() => tokenizeCredentialProcessCommand(`'half`)).toThrow(/unterminated/);

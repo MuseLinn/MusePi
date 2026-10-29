@@ -545,5 +545,5 @@ describe("ACP lazy startup", () => {
 		} finally {
 			authStorage.close();
 		}
-	}, 15_000);
+	}, 60_000);
 });

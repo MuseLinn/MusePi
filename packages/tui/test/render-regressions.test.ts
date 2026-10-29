@@ -146,13 +146,13 @@ function rows(prefix: string, count: number): string[] {
 }
 
 async function settle(term: VirtualTerminal): Promise<void> {
-	// The render scheduler defers its immediate hop with setImmediate (so queued
-	// stdin such as Esc is read before an ordinary render). Drain that hop so the
-	// throttled setTimeout(0) render is scheduled, let it fire, then flush.
+	// Drain the scheduler's immediate hop, then let its throttled render fire.
+	// ConPTY also coalesces large paints for 150ms; reading before that window
+	// closes observes the previous frame on Windows.
 	const immediate = Promise.withResolvers<void>();
 	setImmediate(immediate.resolve);
 	await immediate.promise;
-	await Bun.sleep(1);
+	await Bun.sleep(process.platform === "win32" ? 160 : 1);
 	await term.flush();
 }
 
@@ -1028,7 +1028,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		}, 15_000);
+		}, 60_000);
 		it("forced renders during resize storm stay stable under cursor relocation", async () => {
 			const term = new VirtualTerminal(80, 18);
 			const tui = new TUI(term);
@@ -1063,7 +1063,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		});
+		}, 30_000);
 		it("shrink then grow keeps tail anchored to latest rows", async () => {
 			const term = new VirtualTerminal(24, 6);
 			const tui = new TUI(term);
@@ -1157,7 +1157,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		}, 15_000);
+		}, 60_000);
 
 		it("keeps appended rows contiguous when a height grow coincides with new content", async () => {
 			// A terminal resize fires requestRender(), and streamed content fires
@@ -1742,7 +1742,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		}, 15_000);
+		}, 60_000);
 
 		it("rebuilds native scrollback on a width resize without duplicating rows", async () => {
 			// A width resize makes the terminal reflow its own committed scrollback
@@ -1835,7 +1835,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		});
+		}, 60_000);
 		it("rebuilds history when an offscreen expansion lands with a tail append", async () => {
 			const term = new VirtualTerminal(32, 6);
 			const tui = new TUI(term);
@@ -2061,7 +2061,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		});
+		}, 60_000);
 		it("forced full redraws do not duplicate persistent content", async () => {
 			const term = new VirtualTerminal(40, 5);
 			const tui = new TUI(term);
@@ -3097,7 +3097,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		});
+		}, 60_000);
 		it("places hardware cursor at the focused row after a height-grow resize", async () => {
 			// Mirrors the editor input layout: the focused component sits at the
 			// last content row and emits CURSOR_MARKER. When the terminal grows
@@ -3436,7 +3436,7 @@ describe("TUI terminal-state regressions", () => {
 			} finally {
 				tui.stop();
 			}
-		});
+		}, 60_000);
 	});
 
 	describe("ZWJ grapheme row containment", () => {

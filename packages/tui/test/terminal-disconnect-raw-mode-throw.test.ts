@@ -52,31 +52,34 @@ describe("ProcessTerminal disconnect with a revoked pty", () => {
 		setTerminalHeadless(previousHeadless);
 	});
 
-	it("still signals SIGHUP when restoring raw mode throws on a revoked fd", () => {
-		// Raw mode goes on during start(); the pty is revoked after that, so the
-		// restore call inside stop() is the one that fails.
-		let started = false;
-		Object.defineProperty(process.stdin, "setRawMode", {
-			value: () => {
-				if (started) throw new Error(REVOKED_PTY);
-				started = true;
-				return process.stdin;
-			},
-			configurable: true,
-		});
+	it.skipIf(process.platform === "win32")(
+		"still signals SIGHUP when restoring raw mode throws on a revoked fd",
+		() => {
+			// Raw mode goes on during start(); the pty is revoked after that, so the
+			// restore call inside stop() is the one that fails.
+			let started = false;
+			Object.defineProperty(process.stdin, "setRawMode", {
+				value: () => {
+					if (started) throw new Error(REVOKED_PTY);
+					started = true;
+					return process.stdin;
+				},
+				configurable: true,
+			});
 
-		const terminal = new ProcessTerminal();
-		terminal.start(
-			() => {},
-			() => {},
-			() => terminal.stop(), // what the app wires as onDisconnect
-		);
+			const terminal = new ProcessTerminal();
+			terminal.start(
+				() => {},
+				() => {},
+				() => terminal.stop(), // what the app wires as onDisconnect
+			);
 
-		expect(() => process.stdin.emit("end")).not.toThrow();
-		expect(signals).toContain("SIGHUP");
-	});
+			expect(() => process.stdin.emit("end")).not.toThrow();
+			expect(signals).toContain("SIGHUP");
+		},
+	);
 
-	it("treats an initial EIO enabling raw mode as a terminal disconnect", () => {
+	it.skipIf(process.platform === "win32")("treats an initial EIO enabling raw mode as a terminal disconnect", () => {
 		Object.defineProperty(process.stdin, "setRawMode", {
 			value: () => {
 				throw new Error("setRawMode failed with errno: 5");
@@ -116,7 +119,7 @@ describe("ProcessTerminal disconnect with a revoked pty", () => {
 		expect(() => terminal.stop()).toThrow(REVOKED_PTY);
 	});
 
-	it("still signals SIGHUP when the disconnect handler itself throws", () => {
+	it.skipIf(process.platform === "win32")("still signals SIGHUP when the disconnect handler itself throws", () => {
 		Object.defineProperty(process.stdin, "setRawMode", { value: () => process.stdin, configurable: true });
 
 		const terminal = new ProcessTerminal();

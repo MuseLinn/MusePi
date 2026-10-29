@@ -98,10 +98,10 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 	it("enables kitty when the DA1 sentinel arrives before the kitty reply (#2042)", async () => {
 		harness = createProcessTerminalRenderHarness(100, 30);
 		await harness.settle();
-		harness.writes.length = 0;
 
 		// Superset/Electron-xterm answers DA1 before `CSI ? u`. The kitty reply
-		// must override the premature modifyOtherKeys fallback.
+		// must override the premature modifyOtherKeys fallback. Keep startup output
+		// because the fallback may already have fired during the initial settle.
 		await harness.feed("\x1b[?1;2c", "\x1b[?0u");
 
 		const out = harness.writes.join("");
@@ -117,10 +117,9 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 	it("keeps the modifyOtherKeys fallback when only DA1 ever replies", async () => {
 		harness = createProcessTerminalRenderHarness(100, 30);
 		await harness.settle();
-		harness.writes.length = 0;
 
 		// Terminals that ignore `CSI ? u` answer DA1 only — modifyOtherKeys is
-		// the right answer there.
+		// the right answer there. The fallback may already be in the startup output.
 		await harness.feed("\x1b[?1;2c");
 
 		const out = harness.writes.join("");
@@ -160,7 +159,6 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 		delete Bun.env.SSH_CLIENT;
 		harness = createProcessTerminalRenderHarness(100, 30);
 		await harness.settle();
-		harness.writes.length = 0;
 
 		await harness.feed("\x1b[?1;2c");
 
@@ -174,7 +172,6 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 	it("reasserts modifyOtherKeys fallback when fullscreen overlays enter the alternate screen", async () => {
 		harness = createProcessTerminalRenderHarness(100, 30);
 		await harness.settle();
-		harness.writes.length = 0;
 
 		await harness.feed("\x1b[?1;2c");
 		expect(harness.writes.join("")).toContain("\x1b[>4;2m");
