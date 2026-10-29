@@ -30,6 +30,7 @@ interface ProviderInfo {
 	name: string;
 	available: boolean;
 	storeCredentialsAs?: string;
+	loginKind?: "oauth" | "api-key";
 	loggedIn: boolean;
 }
 

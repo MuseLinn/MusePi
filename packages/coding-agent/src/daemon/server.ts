@@ -6871,6 +6871,7 @@ export class DaemonServer {
 						name: info.name,
 						available: info.available,
 						storeCredentialsAs: info.storeCredentialsAs,
+						loginKind: info.loginKind,
 						// An extension-registered provider with an OAuth flow keeps
 						// its accounts in its own pool, so AuthStorage is empty while
 						// the provider works. Counting only AuthStorage marked those

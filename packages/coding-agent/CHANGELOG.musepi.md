@@ -6,7 +6,19 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Changed
+- **内置浏览器的接管提示和交互动效更完整了**：Agent 在后台标签操作时也会提示，并可一键切回对应标签；接管期间会阻止重复请求，操作结束后通过淡出和滑动完成退出。
+  - EN: Built-in browser takeover now has more complete feedback and motion. Background agent tabs surface an activity notice with a quick way back, takeover requests cannot be duplicated while cancellation is pending, and operations finish with a fade-and-slide exit.
+
 ### Fixed
+- **Windows 安装器现在会真正打开自定义安装向导**：打包配置已接入 WebView2 安装器，不再错误地回退到 NSIS 默认页面。
+  - EN: The Windows installer now actually opens the custom wizard. The packaging configuration loads the WebView2 installer instead of silently falling back to the stock NSIS pages.
+- **Windows 安装器不再依赖系统临时目录是否可用**：安装包会先创建当前用户私有的临时目录，再启动原有自绘向导，避免“Can’t initialize plug-ins directory”；静默更新参数和 OTA 校验数据保持有效。
+  - EN: The Windows installer no longer depends on a usable system temporary directory. A native bootstrap creates a private per-user temporary directory before launching the same custom wizard, preventing "Can't initialize plug-ins directory" while preserving silent-update arguments and OTA checksums.
+- **供应商登录和 API Key 导入恢复正常**：首次打开供应商设置不再关闭共享凭据数据库；纯 API Key 供应商只显示一个导入动作，导入失败也会在弹窗中明确显示。
+  - EN: Provider login and API-key import work again. Opening provider settings no longer closes the shared credential database, API-key-only providers show one import action, and import failures remain visible in the dialog.
+- **原生构建不再输出无效依赖警告**：移除了未使用的工作区主页字段和重复/错位的 serde 依赖声明，测试所需依赖仍然保留。
+  - EN: Native builds no longer emit unused-dependency warnings. The unused workspace homepage and duplicate or misplaced serde declarations were removed while retaining the dependencies required by tests.
 - **Deadline 到期不会再吞掉排队中的后续消息**：停止边界现在会在轮询前后各检查一次 Deadline；轮询期间到期时，hook 能收到取消信号，消息仍保留在队列中，已经到期的回合则不再发起新的出队。
   - EN: Follow-up messages now stay queued across deadline boundaries. The stop path checks the deadline before and after polling: hooks receive cancellation when it expires mid-poll, while an already-expired run starts no new dequeue.
 

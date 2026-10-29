@@ -102,11 +102,12 @@ interface BuiltinProviderInfo {
 	name: string;
 	loggedIn: boolean;
 	available: boolean;
+	loginKind?: "oauth" | "api-key";
 }
 interface ApiProviderInfo {
 	id: string;
 	name: string;
-	configured: boolean;
+	configured?: boolean;
 }
 
 /** One stored credential row (providers.credentials — settings provider-card
@@ -793,11 +794,17 @@ function ProviderSetup({
 	const oboRows: OboRow[] = (() => {
 		const map = new Map<string, OboRow>();
 		for (const p of builtins ?? []) {
+			const oauth = p.loginKind !== "api-key";
 			map.set(p.id, {
 				id: p.id,
 				name: p.name,
-				kind: p.loggedIn ? "configured" : "login",
-				addAnother: () => void login(p.id),
+				kind: p.loggedIn ? "configured" : oauth ? "login" : "import",
+				addAnother: oauth
+					? () => void login(p.id)
+					: () => {
+							setError(null);
+							setImportTarget(p);
+						},
 			});
 		}
 		for (const p of importable) {

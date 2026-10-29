@@ -74,6 +74,8 @@ export interface ProviderDefinition {
 	readonly prepareModelDiscovery?: ProviderModelDiscoveryPreparer;
 	// --- interactive login (OAuthProviderInterface-compatible) ---
 	readonly login?: (callbacks: OAuthLoginCallbacks) => Promise<OAuthCredentials | string>;
+	/** Browser/device authorization or API-key-only setup. Inferred from the OAuth flow fields when omitted. */
+	readonly loginKind?: "oauth" | "api-key";
 	readonly refreshToken?: (credentials: OAuthCredentials) => Promise<OAuthCredentials>;
 	readonly getApiKey?: (credentials: OAuthCredentials) => string;
 	/** Store OAuth credentials under a different provider id (e.g. `openai-codex-device` ⇒ `openai-codex`). */

@@ -72,6 +72,32 @@ describe("provider registry auth surface", () => {
 		expect(ids).not.toContain("openai");
 	});
 
+	test("login metadata separates browser authorization from API-key-only setup", () => {
+		const providers = getOAuthProviders();
+		const oauthIds = providers.filter(provider => provider.loginKind === "oauth").map(provider => provider.id);
+		expect(oauthIds).toEqual(
+			expect.arrayContaining([
+				"anthropic",
+				"cursor",
+				"devin",
+				"gitlab-duo",
+				"gitlab-duo-agent",
+				"google-antigravity",
+				"google-gemini-cli",
+				"github-copilot",
+				"kilo",
+				"kimi-code",
+				"openai-codex",
+				"openai-codex-device",
+				"xai-oauth",
+				"zai-coding-plan",
+			]),
+		);
+		for (const id of ["agnes", "agnes-global", "openrouter"]) {
+			expect(providers.find(provider => provider.id === id)?.loginKind).toBe("api-key");
+		}
+	});
+
 	test("paste-code login set is derived from pasteCodeFlow", () => {
 		expect([...PASTE_CODE_LOGIN_PROVIDERS].sort()).toEqual(
 			[

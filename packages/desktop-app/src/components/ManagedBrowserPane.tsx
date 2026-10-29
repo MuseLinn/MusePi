@@ -785,8 +785,10 @@ export function ManagedBrowserPane({
 	// Agent occupancy (§3.2.5): only when the dispatched op targets the tab
 	// on screen — background-tab work paints the ledger, not this chrome.
 	const agentBusy = host.activity?.status === "dispatched" && host.activity.tabId === host.activeId && !isBlank;
-	const handleTakeover = useCallback((): void => {
-		void takeoverAgentOp(host.activity?.tabId).finally(() => onTakeover?.());
+	const agentOutOfView = host.activity?.status === "dispatched" && host.activity.tabId !== host.activeId;
+	const handleTakeover = useCallback(async (): Promise<void> => {
+		await takeoverAgentOp(host.activity?.tabId);
+		onTakeover?.();
 	}, [host.activity?.tabId, onTakeover]);
 	const tabMotion = useTabMotion(host.tabs);
 
@@ -1159,9 +1161,13 @@ export function ManagedBrowserPane({
 				style={{ overflow: pageOverflow.x || pageOverflow.y ? "auto" : "hidden" }}
 			>
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
-				{agentBusy && (
+				{(agentBusy || agentOutOfView) && (
 					<BrowserControlOverlay
 						activity={host.activity}
+						inView={agentBusy}
+						onReveal={() => {
+							if (host.activity) selectTab(host.activity.tabId);
+						}}
 						onTakeover={handleTakeover}
 						frameRect={controlRect ?? undefined}
 					/>

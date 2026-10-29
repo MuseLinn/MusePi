@@ -30,6 +30,7 @@ interface ProviderInfo {
 	name: string;
 	available: boolean;
 	storeCredentialsAs?: string;
+	loginKind?: "oauth" | "api-key";
 	loggedIn: boolean;
 }
 
@@ -239,6 +240,7 @@ export function ModelSection({
 	// Provider awaiting an imported API key (/setup parity modal).
 	const [apiKeyTarget, setApiKeyTarget] = useState<string | null>(null);
 	const [apiKeyValue, setApiKeyValue] = useState("");
+	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 	// Unified provider list: subscription (OAuth) + API-key providers merged
 	// by CREDENTIAL STORAGE KEY (`storeCredentialsAs ?? id`), not raw id.
 	//
@@ -254,6 +256,7 @@ export function ModelSection({
 			{
 				key: string;
 				id: string;
+				loginId: string;
 				name: string;
 				loggedIn: boolean;
 				configured: boolean;
@@ -269,6 +272,8 @@ export function ModelSection({
 			const key = p.storeCredentialsAs ?? p.id;
 			const existing = map.get(key);
 			if (existing) {
+				if (!existing.canLogin && p.loginKind !== "api-key") existing.loginId = p.id;
+				existing.canLogin = existing.canLogin || p.loginKind !== "api-key";
 				existing.alternateLogins.push({ id: p.id, name: p.name });
 				existing.loggedIn = existing.loggedIn || p.loggedIn;
 				existing.available = existing.available || p.available;
@@ -277,13 +282,14 @@ export function ModelSection({
 			map.set(key, {
 				key,
 				id: p.id,
+				loginId: p.id,
 				name: p.name,
 				loggedIn: p.loggedIn,
 				configured: false,
 				models: [],
 				modelCount: 0,
 				available: p.available,
-				canLogin: true,
+				canLogin: p.loginKind !== "api-key",
 				canImport: false,
 				alternateLogins: [],
 			});
@@ -303,6 +309,7 @@ export function ModelSection({
 				map.set(key, {
 					key,
 					id: p.id,
+					loginId: p.id,
 					// API-key providers from the daemon may ship an EMPTY name —
 					// fall back to the id so the card header never renders blank
 					// (user: bottom cards showed no provider name at all).
@@ -598,13 +605,14 @@ export function ModelSection({
 	const submitApiKey = async (): Promise<void> => {
 		if (!rpc || !apiKeyTarget || !apiKeyValue.trim()) return;
 		const providerId = apiKeyTarget;
+		setApiKeyError(null);
 		try {
 			await rpc.request("providers.importApiKey", { providerId, apiKey: apiKeyValue.trim() });
 			setApiKeyTarget(null);
 			setApiKeyValue("");
 			onChanged();
-		} catch {
-			// keep the modal open; the daemon error shows nothing fatal
+		} catch (error) {
+			setApiKeyError(error instanceof Error ? error.message : String(error));
 		}
 	};
 
@@ -1118,8 +1126,8 @@ export function ModelSection({
 							<button
 								type="button"
 								className="gui-btn gui-btn-approve"
-								disabled={!known?.available || pendingLogins.includes(p.provider)}
-								onClick={() => void onLogin(p.provider)}
+								disabled={!known?.available || pendingLogins.includes(known?.loginId ?? p.provider)}
+								onClick={() => void onLogin(known?.loginId ?? p.provider)}
 							>
 								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
 								{t("settings.login")}
@@ -1264,7 +1272,10 @@ export function ModelSection({
 								type="password"
 								value={apiKeyValue}
 								placeholder="sk-…"
-								onChange={e => setApiKeyValue(e.target.value)}
+								onChange={e => {
+									setApiKeyValue(e.target.value);
+									setApiKeyError(null);
+								}}
 								onKeyDown={e => {
 									if (e.key === "Enter" && apiKeyValue.trim()) void submitApiKey();
 								}}
@@ -1281,6 +1292,11 @@ export function ModelSection({
 								{t("settings.cancel")}
 							</button>
 						</div>
+						{apiKeyError && (
+							<div className="gui-github-flow-hint" role="alert">
+								{apiKeyError}
+							</div>
+						)}
 					</div>
 				)}
 			</DialogFrame>
@@ -1701,10 +1717,10 @@ export function ModelSection({
 																			<button
 																				type="button"
 																				className="gui-view-opt"
-																				disabled={p.canLogin && pendingLogins.includes(p.id)}
+																				disabled={p.canLogin && pendingLogins.includes(p.loginId)}
 																				onClick={() => {
 																					setCredsMenu(null);
-																					if (p.canLogin) void onLogin(p.id);
+																					if (p.canLogin) void onLogin(p.loginId);
 																					else {
 																						setApiKeyTarget(p.id);
 																						setApiKeyValue("");
@@ -1780,10 +1796,12 @@ export function ModelSection({
 																				<button
 																					type="button"
 																					className="gui-view-opt"
-																					disabled={!p.available || pendingLogins.includes(p.id)}
+																					disabled={
+																						!p.available || pendingLogins.includes(p.loginId)
+																					}
 																					onClick={() => {
 																						setActionsMenu(null);
-																						void onLogin(p.id);
+																						void onLogin(p.loginId);
 																					}}
 																				>
 																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />

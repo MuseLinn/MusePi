@@ -6027,8 +6027,40 @@ body.gui-resizing {
 	pointer-events: auto;
 }
 
-.gui-browser-control-takeover:hover {
+.gui-browser-control-takeover:hover:not(:disabled) {
 	background: color-mix(in oklab, var(--color-accent) 24%, transparent);
+}
+
+.gui-browser-control-takeover:disabled {
+	cursor: wait;
+	opacity: 0.65;
+}
+
+.gui-browser-control-reveal {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border-radius: 999px;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	pointer-events: auto;
+}
+
+.gui-browser-control-reveal:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-browser-control-frame--out-of-view {
+	border-color: transparent;
+	box-shadow: none;
+}
+
+.gui-browser-control-frame[data-browser-control="closing"] {
+	opacity: 0;
+	transform: translateY(5px);
+	transition: opacity 180ms ease-out, transform 180ms ease-out;
 }
 
 .gui-browser-control-takeover:focus-visible {

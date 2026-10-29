@@ -73,6 +73,7 @@
 	"build": {
 		"appId": "com.musepi.gui",
 		"productName": "MusePi",
+		"afterAllArtifactBuild": "scripts/wrap-windows-installer.mjs",
 		"directories": {
 			"output": "release",
 			"buildResources": "build"
@@ -126,7 +127,7 @@
 			"createDesktopShortcut": "always",
 			"createStartMenuShortcut": true,
 			"shortcutName": "MusePi",
-			"include": "release/ensure-shortcuts.nsh",
+			"include": "release/installer-branding.nsh",
 			"uninstallDisplayName": "MusePi ${version}",
 			"deleteAppDataOnUninstall": false,
 			"installerLanguages": ["zh_CN", "en_US"],

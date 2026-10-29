@@ -23,6 +23,9 @@ const builtInOAuthProviders: OAuthProviderInfo[] = PROVIDER_REGISTRY.filter(
 	name: provider.name,
 	available: provider.available ?? true,
 	storeCredentialsAs: provider.storeCredentialsAs,
+	loginKind:
+		provider.loginKind ??
+		(provider.refreshToken || provider.callbackPort !== undefined || provider.pasteCodeFlow ? "oauth" : "api-key"),
 }));
 
 const customOAuthProviders = new Map<string, OAuthProviderInterface>();
@@ -182,6 +185,7 @@ export function getOAuthProviders(): OAuthProviderInfo[] {
 		name: provider.name,
 		available: true,
 		storeCredentialsAs: provider.storeCredentialsAs,
+		loginKind: provider.loginKind ?? (provider.refreshToken ? "oauth" : "api-key"),
 	}));
 	return [...builtInOAuthProviders, ...customProviders];
 }

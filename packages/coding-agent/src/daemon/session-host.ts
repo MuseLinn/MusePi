@@ -1031,8 +1031,6 @@ export class DaemonSessionHost {
 	/** In-flight ensureRegistry bootstrap (dedupes concurrent provider/model
 	 *  RPCs); cleared on settle so a failed bootstrap can be retried. */
 	#registryBootstrap: Promise<ModelRegistry | null> | null = null;
-	/** Unique-per-invocation suffix for throwaway bootstrap agent ids. */
-	#bootstrapCounter = 0;
 	async #withSessionBootstrapLock<T>(fn: () => Promise<T>): Promise<T> {
 		const prev = this.#bootstrapChain;
 		let release!: () => void;
@@ -2268,11 +2266,7 @@ export class DaemonSessionHost {
 		});
 	}
 
-	/**
-	 * Ensure the shared registry exists, lazily booting a minimal session
-	 * (kept only long enough to extract the registry) when no live session
-	 * has been created yet — history-only GUI starts never create one.
-	 */
+	/** Ensure the shared registry exists without requiring a live session. */
 	async ensureRegistry(): Promise<ModelRegistry | null> {
 		if (this.#registry) return this.#registry;
 		// Deduplicate concurrent bootstraps (the GUI fires several
@@ -2280,28 +2274,9 @@ export class DaemonSessionHost {
 		// same in-flight promise, and the shared session-bootstrap lock
 		// serializes this against a racing sessions.create.
 		this.#registryBootstrap ??= this.#withSessionBootstrapLock(async () => {
-			// Lazy import keeps daemon startup cheap (same rationale as
-			// createSession): the registry bootstrap is only needed when
-			// provider/model RPCs arrive without any live session ever having
-			// been created.
-			const { createAgentSession } = await import("../sdk");
-			// Bootstrap as a SUBORDINATE agent on a throwaway UNIQUE id — never
-			// top-level "Main": a main-kind bootstrap pre-registers the
-			// process-global agent id (racing a concurrent sessions.create fails
-			// that session with 'Agent "Main" was replaced during session
-			// initialization'), and its dispose tears down
-			// AgentLifecycleManager.global() under every live session. The id
-			// must be unique PER INVOCATION too: two concurrent bootstraps on the
-			// same fixed id fail each other the same way.
-			const result = await createAgentSession({
-				cwd: this.#options.cwd ?? process.cwd(),
-				hasUI: false,
-				parentTaskPrefix: `registry-bootstrap-${++this.#bootstrapCounter}`,
-				eventBus: this.#eventBus,
-			});
-			this.#registry = result.session.modelRegistry;
-			this.#settings ??= result.session.settings as unknown as Settings;
-			await result.session.dispose?.();
+			const discovery = await this.#discoveryFor(this.#options.cwd ?? process.cwd(), getAgentDir());
+			this.#registry = discovery.modelRegistry;
+			this.#settings ??= discovery.settings;
 			return this.#registry;
 		}).finally(() => {
 			this.#registryBootstrap = null;

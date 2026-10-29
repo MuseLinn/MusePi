@@ -45,6 +45,9 @@
 !define MUI_INSTFILESPAGE_COLORS "${MUSE_TEXT} ${MUSE_BG}"
 !define MUI_INSTFILESPAGE_PROGRESSBAR colored
 
+; 卸载器构建会跳过安装欢迎页；不要保留未被引用的安装变量和函数（/WX 会失败）。
+!ifndef BUILD_UNINSTALLER
+
 ; ── 变量 ──────────────────────────────────────────────────────────────
 Var MuseInstallPath
 Var MuseLanguage
@@ -205,6 +208,8 @@ Function MuseApplyHostAnswers
     StrCpy $INSTDIR $MuseInstallPath
   ${EndIf}
 FunctionEnd
+
+!endif
 
 ; ──────────────────────────────────────────────────────────────────────
 ; 快捷方式：ensure-shortcuts.nsh 已经定义了 customInstall 并**无条件**重建

@@ -68,6 +68,8 @@ export interface OAuthProviderInfo {
 	 * entry back to the model provider it authenticates.
 	 */
 	storeCredentialsAs?: string;
+	/** Distinguishes subscription authorization from a paste-only API-key setup. */
+	loginKind: "oauth" | "api-key";
 }
 
 export interface OAuthController {
@@ -93,4 +95,5 @@ export interface OAuthProviderInterface {
 	getApiKey?(credentials: OAuthCredentials): string;
 	/** Store resulting OAuth credentials under a different provider id. */
 	readonly storeCredentialsAs?: string;
+	readonly loginKind?: "oauth" | "api-key";
 }

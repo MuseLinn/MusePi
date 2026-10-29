@@ -1,4 +1,4 @@
-﻿; Minimal harness to compile-check the MusePi installer branding include
+; Minimal harness to compile-check the MusePi installer branding include
 ; without running a full electron-builder packaging pass.
 ;
 ; It mirrors electron-builder's real ordering (installer.nsi):
@@ -41,12 +41,20 @@ RequestExecutionLevel user
 !include "${PROJECT_DIR}\release\installer-branding.nsh"
 
 ; ── pages first (mirrors assistedInstaller.nsh) ──────────────────────────
-!ifmacrodef customWelcomePage
-  !insertmacro customWelcomePage
+!ifndef BUILD_UNINSTALLER
+  !ifmacrodef customWelcomePage
+    !insertmacro customWelcomePage
+  !endif
+  !insertmacro MUI_PAGE_DIRECTORY
+  !insertmacro MUI_PAGE_INSTFILES
+  !insertmacro MUI_PAGE_FINISH
+!else
+  !ifmacrodef customUnWelcomePage
+    !insertmacro customUnWelcomePage
+  !endif
+  !insertmacro MUI_UNPAGE_INSTFILES
+  !insertmacro MUI_UNPAGE_FINISH
 !endif
-!insertmacro MUI_PAGE_DIRECTORY
-!insertmacro MUI_PAGE_INSTFILES
-!insertmacro MUI_PAGE_FINISH
 
 ; ── then languages (mirrors !insertmacro addLangs) ───────────────────────
 !insertmacro MUI_LANGUAGE "SimpChinese"

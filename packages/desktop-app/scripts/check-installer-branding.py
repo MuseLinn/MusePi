@@ -27,6 +27,7 @@ Exit codes: 0 ok, 1 compile failure or missing asset.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -58,8 +59,8 @@ def find_makensis() -> Path | None:
 
     local_appdata = os.environ.get("LOCALAPPDATA")
     if local_appdata:
-        cache = Path(local_appdata) / "electron-builder" / "Cache" / "nsis"
-        matches = sorted(cache.glob("nsis-*/Bin/makensis.exe"))
+        cache = Path(local_appdata) / "electron-builder" / "Cache"
+        matches = sorted(cache.glob("nsis-*/**/Bin/makensis.exe"))
         if matches:
             return matches[-1]
     return None
@@ -98,12 +99,23 @@ def check_bom() -> list[str]:
     return problems
 
 
-def compile_check(makensis: Path) -> tuple[bool, str]:
+def check_builder_wiring() -> list[str]:
+    """The release config must load the WebView2 wizard, not only its shortcut helper."""
+    package = json.loads((APP_DIR / "package.json").read_text(encoding="utf-8"))
+    include = package.get("build", {}).get("nsis", {}).get("include")
+    if include != "release/installer-branding.nsh":
+        return [f"build.nsis.include must be release/installer-branding.nsh, got {include!r}"]
+    return []
+
+
+def compile_check(makensis: Path, *, uninstaller: bool = False) -> tuple[bool, str]:
     """Feed the harness through stdin exactly like electron-builder does."""
     defines = [
         f"-DPROJECT_DIR={APP_DIR}",
         f"-DBUILD_RESOURCES_DIR={BUILD_DIR}",
     ]
+    if uninstaller:
+        defines.append("-DBUILD_UNINSTALLER")
     script = HARNESS.read_text(encoding="utf-8")
     proc = subprocess.run(
         [str(makensis), "/V2", "/INPUTCHARSET", "UTF8", *defines, "-"],
@@ -116,22 +128,25 @@ def compile_check(makensis: Path) -> tuple[bool, str]:
     output = (proc.stdout or "") + (proc.stderr or "")
     # A harness without WriteUninstaller legitimately emits warning 6020.
     fatal = [line for line in output.splitlines() if line.strip() and "6020" not in line and "warning" not in line.lower()]
-    return proc.returncode == 0, "\n".join(fatal) if fatal else output.strip()
+    ok = proc.returncode == 0 and "6001:" not in output and "6010:" not in output
+    return ok, "\n".join(fatal) if fatal else output.strip()
 
 
 def main() -> int:
-    problems = check_assets() + check_bom()
+    problems = check_assets() + check_bom() + check_builder_wiring()
 
     makensis = find_makensis()
     if makensis is None:
         problems.append(
             "makensis not found — install NSIS or run any electron-builder win build once "
-            "(it caches NSIS under LOCALAPPDATA/electron-builder/Cache/nsis)"
+            "(it caches NSIS under LOCALAPPDATA/electron-builder/Cache)"
         )
     else:
-        ok, detail = compile_check(makensis)
-        if not ok:
-            problems.append(f"makensis failed:\n{detail}")
+        for uninstaller in (False, True):
+            ok, detail = compile_check(makensis, uninstaller=uninstaller)
+            if not ok:
+                phase = "uninstaller" if uninstaller else "installer"
+                problems.append(f"makensis {phase} failed:\n{detail}")
 
     if problems:
         print("[installer-branding] FAILED", file=sys.stderr)
