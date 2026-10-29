@@ -30,10 +30,40 @@ describe("requireSuccessfulWorkflow", () => {
 		expect(url).toBe("https://example.test/run/42");
 	});
 
-	it("rejects a CI run that is still pending instead of publishing early", async () => {
+	it("waits for a pending CI run and publishes only after it succeeds", async () => {
+		let calls = 0;
+		let sleeps = 0;
+		const url = await requireSuccessfulWorkflow({
+			...base,
+			pollIntervalMs: 1,
+			sleepImpl: async () => {
+				sleeps++;
+			},
+			fetchImpl: async () => {
+				calls++;
+				const completed = calls > 1;
+				return response([
+					{
+						id: 42,
+						name: "CI",
+						status: completed ? "completed" : "in_progress",
+						conclusion: completed ? "success" : null,
+						html_url: "https://example.test/run/42",
+					},
+				]);
+			},
+		});
+
+		expect(url).toBe("https://example.test/run/42");
+		expect(calls).toBe(2);
+		expect(sleeps).toBe(1);
+	});
+
+	it("times out instead of waiting forever for a pending CI run", async () => {
 		await expect(
 			requireSuccessfulWorkflow({
 				...base,
+				timeoutMs: 0,
 				fetchImpl: async () =>
 					response([
 						{
@@ -45,7 +75,7 @@ describe("requireSuccessfulWorkflow", () => {
 						},
 					]),
 			}),
-		).rejects.toThrow("in_progress");
+		).rejects.toThrow("Timed out");
 	});
 
 	it("rejects a completed failed CI run", async () => {
