@@ -96,6 +96,47 @@ function nextPollDelayMs(consecutiveFailures, opts = {}) {
 	return Math.round(lower + (upper - lower) * Math.min(1, Math.max(0, random())));
 }
 
+const CHANNEL_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.([1-9]\d*))?$/;
+
+function parseChannelVersion(version) {
+	const match = CHANNEL_VERSION_RE.exec(String(version).trim());
+	if (!match) return null;
+	return { core: match.slice(1, 4).map(Number), beta: match[4] === undefined ? null : Number(match[4]) };
+}
+
+function releaseChannelForVersion(version) {
+	const parsed = parseChannelVersion(version);
+	return parsed && parsed.beta !== null ? "beta" : "stable";
+}
+
+function isNewerVersion(latest, current) {
+	const a = parseChannelVersion(latest);
+	const b = parseChannelVersion(current);
+	if (!a || !b) return false;
+	for (let i = 0; i < 3; i++) {
+		if (a.core[i] !== b.core[i]) return a.core[i] > b.core[i];
+	}
+	if (a.beta === b.beta) return false;
+	if (a.beta === null) return true;
+	if (b.beta === null) return false;
+	return a.beta > b.beta;
+}
+
+function updateFeedForVersion(version) {
+	if (releaseChannelForVersion(version) !== "beta") return null;
+	return {
+		provider: "generic",
+		url: "https://github.com/MuseLinn/MusePi/releases/download/channel-beta",
+		channel: "beta",
+	};
+}
+
+function updateManifestUrlForVersion(version) {
+	return releaseChannelForVersion(version) === "beta"
+		? "https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json"
+		: "https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
+}
+
 function releaseDownloadUrl(manifest, platform, arch, releasesPage) {
 	const downloads = manifest?.downloads;
 	const targeted = downloads?.[`${platform}-${arch}`];
@@ -115,5 +156,9 @@ module.exports = {
 	isMissingUpdateFeedError,
 	classifyUpdateError,
 	nextPollDelayMs,
+	releaseChannelForVersion,
 	releaseDownloadUrl,
+	isNewerVersion,
+	updateFeedForVersion,
+	updateManifestUrlForVersion,
 };

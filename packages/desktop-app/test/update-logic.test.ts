@@ -5,11 +5,15 @@ import {
 	classifyUpdateError,
 	isMissingUpdateFeedError,
 	isNetworkError,
+	isNewerVersion,
 	nextPollDelayMs,
+	releaseChannelForVersion,
 	releaseDownloadUrl,
 	UPDATE_POLL_BASE_MS,
 	UPDATE_POLL_JITTER,
 	UPDATE_POLL_MAX_MS,
+	updateFeedForVersion,
+	updateManifestUrlForVersion,
 	// @ts-expect-error — untyped CJS module (electron/, outside tsconfig include)
 } from "../electron/update-logic.cjs";
 
@@ -103,6 +107,33 @@ describe("isMissingUpdateFeedError", () => {
 		expect(isMissingUpdateFeedError(new Error("Cannot download MusePi-0.6.0-setup.exe: HttpError: 404"))).toBe(false);
 		expect(isMissingUpdateFeedError("Request failed with status code 404")).toBe(false);
 		expect(isMissingUpdateFeedError(undefined)).toBe(false);
+	});
+});
+
+describe("release channels", () => {
+	test("orders numbered betas before their stable release", () => {
+		expect(isNewerVersion("0.6.4-beta.2", "0.6.4-beta.1")).toBe(true);
+		expect(isNewerVersion("0.6.4-beta.10", "0.6.4-beta.2")).toBe(true);
+		expect(isNewerVersion("0.6.4-beta.1", "0.6.4-beta.2")).toBe(false);
+		expect(isNewerVersion("0.6.4", "0.6.4-beta.2")).toBe(true);
+		expect(isNewerVersion("0.6.4-beta.2", "0.6.4")).toBe(false);
+	});
+
+	test("routes beta feeds and manifests to channel-beta", () => {
+		expect(releaseChannelForVersion("0.6.4-beta.1")).toBe("beta");
+		expect(releaseChannelForVersion("0.6.3")).toBe("stable");
+		expect(updateFeedForVersion("0.6.4-beta.1")).toEqual({
+			provider: "generic",
+			url: "https://github.com/MuseLinn/MusePi/releases/download/channel-beta",
+			channel: "beta",
+		});
+		expect(updateFeedForVersion("0.6.3")).toBeNull();
+		expect(updateManifestUrlForVersion("0.6.4-beta.1")).toBe(
+			"https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json",
+		);
+		expect(updateManifestUrlForVersion("0.6.3")).toBe(
+			"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json",
+		);
 	});
 });
 

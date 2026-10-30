@@ -330,6 +330,17 @@ describe("update-cli install target detection", () => {
 		expect(method).toBe("brew");
 	});
 
+	it("bypasses stable-only repository managers for beta binary updates", () => {
+		const target = resolveUpdateTargetFromPath("/opt/homebrew/bin/musepi", undefined, {
+			allowPackageManagers: true,
+			allowRepositoryManagers: false,
+			homebrewPrefix: "/opt/homebrew",
+			miseBinDirs: ["/opt/homebrew/bin"],
+		});
+
+		expect(target).toEqual({ method: "binary", path: "/opt/homebrew/bin/musepi", replacesSymlink: false });
+	});
+
 	it("uses mise update when prioritized musepi is in an active mise bin path", () => {
 		const method = resolveUpdateMethodForTest(
 			"/Users/test/.local/share/mise/installs/github-MuseLinn-MusePi/latest/bin/musepi",
@@ -722,6 +733,21 @@ describe("update-cli release binary integrity", () => {
 			size: Buffer.byteLength(content),
 			digest,
 		});
+	});
+
+	it("accepts a prerelease asset only from the beta channel release", () => {
+		const betaTag = "v17.1.3-beta.2";
+		const betaUrl = `https://github.com/MuseLinn/MusePi/releases/download/channel-beta/${binaryName}`;
+		const betaRelease = releaseAsset({ browser_download_url: betaUrl });
+		betaRelease.tag_name = "channel-beta";
+		betaRelease.prerelease = true;
+
+		expect(resolveReleaseBinaryAsset(betaRelease, betaTag, binaryName)).toEqual({
+			url: betaUrl,
+			size: Buffer.byteLength(content),
+			digest,
+		});
+		expect(() => resolveReleaseBinaryAsset(betaRelease, tag, binaryName)).toThrow("tag mismatch");
 	});
 
 	it("rejects missing and unsupported release asset digests", () => {
@@ -1380,6 +1406,26 @@ describe("verifyBinaryAtPath env sanitization", () => {
 				if (prev === undefined) delete process.env.MUSEPI_VERSION;
 				else process.env.MUSEPI_VERSION = prev;
 			}
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("verifies the complete beta version after a binary update", async () => {
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-verify-beta-"));
+		try {
+			const ext = process.platform === "win32" ? ".cmd" : "";
+			const probe = path.join(dir, `fake-musepi${ext}`);
+			const body =
+				process.platform === "win32"
+					? "@echo off\r\necho fake-musepi/9.9.8-beta.2\r\n"
+					: '#!/bin/sh\necho "fake-musepi/9.9.8-beta.2"\n';
+			await Bun.write(probe, body);
+			if (process.platform !== "win32") await fs.chmod(probe, 0o755);
+
+			const result = await verifyBinaryAtPathForTest(probe, "9.9.8-beta.2");
+			expect(result.ok).toBe(true);
+			expect(result.actual).toBe("9.9.8-beta.2");
 		} finally {
 			await fs.rm(dir, { recursive: true, force: true });
 		}

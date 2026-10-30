@@ -3,7 +3,12 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { $ } from "bun";
-import { inspectPackedTarball, isVersionAlreadyPublished, prepareNativeCorePackage } from "./ci-release-publish.ts";
+import {
+	inspectPackedTarball,
+	isVersionAlreadyPublished,
+	npmPublishDistTag,
+	prepareNativeCorePackage,
+} from "./ci-release-publish.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -39,6 +44,12 @@ describe("release publish", () => {
 		expect(isVersionAlreadyPublished("npm error code EPUBLISHCONFLICT")).toBe(true);
 		expect(isVersionAlreadyPublished("You cannot publish over the previously published versions: 1.2.3.")).toBe(true);
 		expect(isVersionAlreadyPublished("cannot publish over the previously published version")).toBe(false);
+	});
+
+	it("keeps prereleases off the npm latest dist-tag", () => {
+		expect(npmPublishDistTag("1.2.3")).toBe("latest");
+		expect(npmPublishDistTag("1.2.4-beta.1")).toBe("beta");
+		expect(npmPublishDistTag("1.2.4-rc.1")).toBe("latest");
 	});
 
 	it("ships every file required by the lazy desktop export in the native core", async () => {

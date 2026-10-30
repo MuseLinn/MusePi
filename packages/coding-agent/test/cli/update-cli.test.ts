@@ -118,6 +118,52 @@ describe("getLatestRelease rename pointers", () => {
 		]);
 	});
 
+	it("reads the beta npm dist-tag for beta builds", async () => {
+		const urls = stubRegistry({
+			"@musepi/pi-coding-agent": { version: "0.6.4-beta.2", musepi: { dist: "npm" } },
+		});
+
+		const release = await getLatestRelease({ channel: "beta" });
+
+		expect(release.version).toBe("0.6.4-beta.2");
+		expect(urls).toEqual(["https://registry.npmjs.org/@musepi/pi-coding-agent/beta"]);
+	});
+
+	it("resolves beta binary updates from the mutable channel-beta release manifest", async () => {
+		const urls: string[] = [];
+		const manifestUrl = "https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json";
+		const fetchStub = Object.assign(
+			async (input: FetchInput) => {
+				const url = String(input);
+				urls.push(url);
+				if (url.startsWith("https://registry.npmjs.org/")) {
+					return new Response(null, { status: 404, statusText: "Not Found" });
+				}
+				if (url === "https://api.github.com/repos/MuseLinn/MusePi/releases/tags/channel-beta") {
+					return Response.json({
+						tag_name: "channel-beta",
+						draft: false,
+						prerelease: true,
+						assets: [{ name: "update-manifest.json", state: "uploaded", browser_download_url: manifestUrl }],
+					});
+				}
+				if (url === manifestUrl) return Response.json({ version: "0.6.4-beta.2" });
+				return new Response(null, { status: 404, statusText: "Not Found" });
+			},
+			{ preconnect: globalThis.fetch.preconnect },
+		);
+		vi.spyOn(globalThis, "fetch").mockImplementation(fetchStub);
+
+		const release = await getLatestRelease({ channel: "beta" });
+
+		expect(release).toMatchObject({ tag: "v0.6.4-beta.2", version: "0.6.4-beta.2", dist: "binary" });
+		expect(urls).toEqual([
+			"https://registry.npmjs.org/@musepi/pi-coding-agent/beta",
+			"https://api.github.com/repos/MuseLinn/MusePi/releases/tags/channel-beta",
+			manifestUrl,
+		]);
+	});
+
 	it("propagates non-404 registry failures without falling back to GitHub", async () => {
 		const fetchStub = Object.assign(
 			async () => new Response(null, { status: 500, statusText: "Internal Server Error" }),

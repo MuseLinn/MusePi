@@ -827,10 +827,15 @@ jobs:
               bun run ci:release:checksums SHA256SUMS.txt \
                 packages/coding-agent/binaries/musepi-* \
                 packages/browser-relay/dist/musepi-browser-relay-extension.zip
+         - name: Reject beta channel rollback
+           if: contains(needs.release_metadata.outputs.release-tag, '-beta.')
+           shell: bash
+           run: bun scripts/gui-release-channel.ts check-promotion "${{ needs.release_metadata.outputs.release-tag }}" --remote
          - name: Create GitHub Release
            uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
            with:
-              tag_name: ${{ needs.release_metadata.outputs.release-tag }}
+              tag_name: ${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') && 'channel-beta' || needs.release_metadata.outputs.release-tag }}
+              prerelease: ${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') }}
               files: |
                  packages/coding-agent/binaries/musepi-*
                  packages/browser-relay/dist/musepi-browser-relay-extension.zip
@@ -851,7 +856,7 @@ jobs:
       steps:
          - name: Download published macOS arm64 binary
            run: |
-              curl -fsSL -o musepi-darwin-arm64 "https://github.com/${{ github.repository }}/releases/download/${{ needs.release_metadata.outputs.release-tag }}/musepi-darwin-arm64"
+              curl -fsSL -o musepi-darwin-arm64 "https://github.com/${{ github.repository }}/releases/download/${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') && 'channel-beta' || needs.release_metadata.outputs.release-tag }}/musepi-darwin-arm64"
               chmod +x musepi-darwin-arm64
          - name: Verify published macOS arm64 binary
            run: |
@@ -880,6 +885,7 @@ jobs:
    release_brew:
       name: Update Homebrew tap
       if: ${{ needs.release_metadata.outputs.is-release == 'true' && !cancelled() &&
+         !contains(needs.release_metadata.outputs.release-tag, '-beta.') &&
          needs.release_github_verify.result == 'success' }}
       needs: [release_metadata, release_github_verify]
       runs-on: ubuntu-22.04

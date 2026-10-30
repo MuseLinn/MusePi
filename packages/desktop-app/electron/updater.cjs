@@ -3,10 +3,9 @@
  * contract (checkForUpdates → UpdateCheckResult) plus download/install
  * controls (updater-download / updater-install / updater-state).
  *
- * electron-updater reads the feed from the electron-builder publish config
- * (GitHub provider → latest.yml per platform). The daemon-side update flow
- * (changelog.display, "no-update-source") is unchanged — the old
- * update-manifest.json asset still exists for the daemon RPC.
+ * Stable builds read latest.yml through the electron-builder GitHub config;
+ * beta builds read beta.yml from the channel-beta release. The daemon-side
+ * update flow uses update-manifest.json from the matching channel.
  */
 "use strict";
 
@@ -58,7 +57,10 @@ const nodePath = require("node:path");
 const {
 	classifyUpdateError,
 	isMissingUpdateFeedError,
+	isNewerVersion,
 	releaseDownloadUrl,
+	updateFeedForVersion,
+	updateManifestUrlForVersion,
 } = require("./update-logic.cjs");
 
 // ── File log ─────────────────────────────────────────────────────────────
@@ -122,22 +124,21 @@ function clearError() {
 	state.error = null;
 }
 
-/** Release notes asset on the latest GitHub release (same redirect the daemon
- *  RPC uses — no api.github.com rate limits). */
-const RELEASE_MANIFEST_URL =
+const DEFAULT_STABLE_MANIFEST_URL =
 	"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
 const RELEASES_PAGE = "https://github.com/MuseLinn/MusePi/releases/latest";
 
-/** Notes-fetch URL: `OMP_UPDATE_MANIFEST_URL` env → `package.json
- *  update.manifestUrl` → default (documented override chain for testing /
- *  self-hosted manifests; the electron-updater feed itself comes from the
- *  build publish config, not the manifest). */
 function manifestUrl() {
+	const channelUrl = updateManifestUrlForVersion(app.getVersion());
 	try {
 		const pkg = require("../package.json");
-		return process.env.OMP_UPDATE_MANIFEST_URL || pkg?.update?.manifestUrl || RELEASE_MANIFEST_URL;
+		const configured = pkg?.update?.manifestUrl;
+		return (
+			process.env.OMP_UPDATE_MANIFEST_URL ||
+			(configured && configured !== DEFAULT_STABLE_MANIFEST_URL ? configured : channelUrl)
+		);
 	} catch {
-		return RELEASE_MANIFEST_URL;
+		return channelUrl;
 	}
 }
 
@@ -232,23 +233,6 @@ function otaCapable() {
 	return detectSigning() !== "adhoc";
 }
 
-/** Base-version compare ("0.4.16" vs "0.4.9"); prerelease suffix stripped —
- *  stable clients (allowPrerelease=false) never see beta latest.yml anyway. */
-function isNewerVersion(latest, current) {
-	const parse = (v) =>
-		String(v)
-			.split("-")[0]
-			.split(".")
-			.map((n) => Number.parseInt(n, 10) || 0);
-	const a = parse(latest);
-	const b = parse(current);
-	for (let i = 0; i < Math.max(a.length, b.length); i++) {
-		const diff = (a[i] ?? 0) - (b[i] ?? 0);
-		if (diff !== 0) return diff > 0;
-	}
-	return false;
-}
-
 /** Subscription list for upstream → renderer events (set by main.cjs). */
 let sendToRenderer = null; // (channel, data) => void
 
@@ -280,6 +264,9 @@ function setTaskbarProgress(value) {
 
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
+const updateFeed = updateFeedForVersion(app.getVersion());
+autoUpdater.allowPrerelease = updateFeed !== null;
+if (updateFeed) autoUpdater.setFeedURL(updateFeed);
 
 autoUpdater.on("checking-for-update", () => {
 	state.status = "checking";

@@ -11,7 +11,17 @@ import * as path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { truncateToWidth } from "@musepi/pi-tui/utils";
-import { $env, $which, APP_NAME, compareVersions, formatBytes, isEnoent, VERSION } from "@musepi/pi-utils";
+import {
+	$env,
+	$which,
+	APP_NAME,
+	compareVersions,
+	formatBytes,
+	isEnoent,
+	type ReleaseChannel,
+	releaseChannelForVersion,
+	VERSION,
+} from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import { withFileLock } from "@musepi/pi-utils/file-lock";
 import { $ } from "bun";
@@ -178,19 +188,21 @@ export function resolveReleaseBinaryAsset(
 	if (!isRecord(release)) {
 		throw new Error("Invalid GitHub release metadata");
 	}
-	if (release.tag_name !== expectedTag) {
-		throw new Error(`GitHub release tag mismatch: expected ${expectedTag}`);
+	const channel = releaseChannelForVersion(expectedTag);
+	const releaseTag = channel === "beta" ? "channel-beta" : expectedTag;
+	if (release.tag_name !== releaseTag) {
+		throw new Error(`GitHub release tag mismatch: expected ${releaseTag}`);
 	}
-	if (release.draft !== false || release.prerelease !== false) {
-		throw new Error(`GitHub release ${expectedTag} is not a published stable release`);
+	if (release.draft !== false || release.prerelease !== (channel === "beta")) {
+		throw new Error(`GitHub release ${releaseTag} is not a published ${channel} release`);
 	}
 	if (!Array.isArray(release.assets)) {
-		throw new Error(`GitHub release ${expectedTag} has no asset list`);
+		throw new Error(`GitHub release ${releaseTag} has no asset list`);
 	}
 
 	const matches = release.assets.filter(asset => isRecord(asset) && asset.name === binaryName);
 	if (matches.length !== 1) {
-		throw new Error(`GitHub release ${expectedTag} has ${matches.length} assets named ${binaryName}`);
+		throw new Error(`GitHub release ${releaseTag} has ${matches.length} assets named ${binaryName}`);
 	}
 
 	const asset = matches[0];
@@ -208,7 +220,7 @@ export function resolveReleaseBinaryAsset(
 		throw new Error(`GitHub release asset ${binaryName} has an unsupported digest`);
 	}
 
-	const expectedUrl = `https://github.com/${REPO}/releases/download/${expectedTag}/${binaryName}`;
+	const expectedUrl = `https://github.com/${REPO}/releases/download/${releaseTag}/${binaryName}`;
 	if (asset.browser_download_url !== expectedUrl) {
 		throw new Error(`GitHub release asset ${binaryName} has an unexpected download URL`);
 	}
@@ -227,6 +239,8 @@ async function getReleaseBinaryAsset(
 	githubToken: string | undefined = $env.GITHUB_TOKEN || $env.GH_TOKEN,
 ): Promise<ReleaseBinaryAsset> {
 	const tag = `v${expectedVersion}`;
+	const channel = releaseChannelForVersion(expectedVersion);
+	const releaseTag = channel === "beta" ? "channel-beta" : tag;
 	const headers: Record<string, string> = {
 		Accept: "application/vnd.github+json",
 		"X-GitHub-Api-Version": "2022-11-28",
@@ -235,7 +249,7 @@ async function getReleaseBinaryAsset(
 
 	let response: Response;
 	try {
-		response = await fetchImpl(`${GITHUB_API}/repos/${REPO}/releases/tags/${encodeURIComponent(tag)}`, {
+		response = await fetchImpl(`${GITHUB_API}/repos/${REPO}/releases/tags/${encodeURIComponent(releaseTag)}`, {
 			headers,
 			signal: withTimeoutSignal(RELEASE_METADATA_TIMEOUT_MS),
 		});
@@ -530,6 +544,7 @@ interface UpdateMethodResolutionOptions {
 	homebrewPrefix?: string;
 	miseBinDirs?: readonly string[];
 	miseDataDir?: string;
+	allowRepositoryManagers?: boolean;
 	npmBinDir?: string;
 	/** Bun's configured global package directory, independent of its bin directory. */
 	bunGlobalDir?: string;
@@ -565,6 +580,7 @@ function resolveUpdateMethod(
 		homebrewPrefix,
 		miseBinDirs = [],
 		miseDataDir,
+		allowRepositoryManagers = true,
 		npmBinDir,
 		musepiIsRegularFile = false,
 		musepiLinkTarget,
@@ -573,9 +589,13 @@ function resolveUpdateMethod(
 	const isWindowsScriptLauncher =
 		launcherExtension === ".cmd" || launcherExtension === ".ps1" || launcherExtension === ".bat";
 	if (isPathInDirectory(musepiPath, NIX_STORE_DIR)) return "nix";
-	if (homebrewPrefix && isPathInDirectory(musepiPath, path.join(homebrewPrefix, "bin"))) return "brew";
-	if (miseBinDirs.some(dir => isPathInDirectory(musepiPath, dir))) return "mise";
-	if (miseDataDir && isPathInDirectory(musepiPath, path.join(miseDataDir, "shims"))) return "mise";
+	if (allowRepositoryManagers && homebrewPrefix && isPathInDirectory(musepiPath, path.join(homebrewPrefix, "bin"))) {
+		return "brew";
+	}
+	if (allowRepositoryManagers && miseBinDirs.some(dir => isPathInDirectory(musepiPath, dir))) return "mise";
+	if (allowRepositoryManagers && miseDataDir && isPathInDirectory(musepiPath, path.join(miseDataDir, "shims"))) {
+		return "mise";
+	}
 	// A plain executable file in a package-manager bin dir is the standalone
 	// binary the installer placed there, not an npm/bun-managed install (those
 	// symlink into node_modules on POSIX). When the global bin dir overlaps the
@@ -659,17 +679,19 @@ export function resolveUpdateTargetFromPath(
 /**
  * Resolve how the running install should be updated.
  *
- * `allowPackageManagers: false` skips the `bun pm bin -g` / `npm prefix -g`
- * probes entirely — used for binary-only releases, where routing through a
- * package manager is never valid and the probes would be wasted subprocesses.
- * Homebrew/mise detection always runs: both managers install GitHub release
- * binaries and stay valid regardless of how the release is distributed.
+ * `allowPackageManagers: false` skips bun/npm probes for binary-only releases.
+ * `allowRepositoryManagers: false` keeps beta updates away from stable-only
+ * Homebrew formulae and mise release selection.
  */
-async function resolveUpdateTarget(options: { allowPackageManagers: boolean }): Promise<UpdateTarget> {
+async function resolveUpdateTarget(options: {
+	allowPackageManagers: boolean;
+	allowRepositoryManagers?: boolean;
+}): Promise<UpdateTarget> {
+	const allowRepositoryManagers = options.allowRepositoryManagers ?? true;
 	const bunBinDir = options.allowPackageManagers ? await getBunGlobalBinDir() : undefined;
 	const npmBinDir = options.allowPackageManagers ? await getNpmGlobalBinDir() : undefined;
-	const homebrewPrefix = await getHomebrewFormulaPrefix();
-	const miseAvailable = $which("mise") !== undefined;
+	const homebrewPrefix = allowRepositoryManagers ? await getHomebrewFormulaPrefix() : undefined;
+	const miseAvailable = allowRepositoryManagers && $which("mise") !== undefined;
 	const miseBinDirs = miseAvailable ? await getMiseBinDirs() : [];
 	const miseDataDir = miseAvailable ? getMiseDataDir() : undefined;
 	const musepiPath = resolveOmpPath();
@@ -677,6 +699,7 @@ async function resolveUpdateTarget(options: { allowPackageManagers: boolean }): 
 	if (musepiPath) {
 		return resolveUpdateTargetFromPath(musepiPath, bunBinDir, {
 			allowPackageManagers: options.allowPackageManagers,
+			allowRepositoryManagers,
 			bunGlobalDir: options.allowPackageManagers ? process.env.BUN_INSTALL_GLOBAL_DIR : undefined,
 			homebrewPrefix,
 			miseBinDirs,
@@ -696,10 +719,11 @@ const MAX_RENAME_HOPS = 3;
 async function fetchLatestManifest(
 	pkg: string,
 	timeoutMs: number,
+	channel: ReleaseChannel,
 ): Promise<{ version: string; manifest: Record<string, unknown> }> {
 	let response: Response;
 	try {
-		response = await fetch(`${NPM_REGISTRY}${pkg}/latest`, {
+		response = await fetch(`${NPM_REGISTRY}${pkg}/${channel === "beta" ? "beta" : "latest"}`, {
 			signal: withTimeoutSignal(timeoutMs),
 		});
 	} catch (err) {
@@ -720,6 +744,9 @@ async function fetchLatestManifest(
 	if (!isRecord(data) || typeof data.version !== "string") {
 		throw new Error(`Malformed npm registry response for ${pkg}: missing version`);
 	}
+	if (releaseChannelForVersion(data.version) !== channel) {
+		throw new Error(`Malformed npm registry response for ${pkg}: expected a ${channel} version`);
+	}
 	return { version: data.version, manifest: data };
 }
 
@@ -736,29 +763,32 @@ async function fetchLatestManifest(
  * ({@link getLatestReleaseFromGitHub}), which routes the update through the
  * standalone-binary replacement path.
  */
-export async function getLatestRelease(options: { timeoutMs?: number } = {}): Promise<ReleaseInfo> {
+export async function getLatestRelease(
+	options: { timeoutMs?: number; channel?: ReleaseChannel } = {},
+): Promise<ReleaseInfo> {
 	const timeoutMs = options.timeoutMs ?? RELEASE_METADATA_TIMEOUT_MS;
+	const channel = options.channel ?? releaseChannelForVersion(VERSION);
 	try {
-		return await getLatestNpmRelease(timeoutMs);
+		return await getLatestNpmRelease(timeoutMs, channel);
 	} catch (err) {
 		if (err instanceof Error && (err as Error & { status?: number }).status === 404) {
-			return getLatestReleaseFromGitHub(timeoutMs);
+			return getLatestReleaseFromGitHub(timeoutMs, channel);
 		}
 		throw err;
 	}
 }
 
-async function getLatestNpmRelease(timeoutMs: number): Promise<ReleaseInfo> {
+async function getLatestNpmRelease(timeoutMs: number, channel: ReleaseChannel): Promise<ReleaseInfo> {
 	const packages: ReleasePackages = { ...CURRENT_PACKAGES };
 	const visited = new Set([packages.pkg]);
-	let latest = await fetchLatestManifest(packages.pkg, timeoutMs);
+	let latest = await fetchLatestManifest(packages.pkg, timeoutMs, channel);
 	for (let hop = 0; hop < MAX_RENAME_HOPS; hop++) {
 		const rename = resolveReleaseRename(latest.manifest);
 		if (!rename || visited.has(rename.pkg)) break;
 		visited.add(rename.pkg);
 		packages.pkg = rename.pkg;
 		if (rename.natives) packages.natives = rename.natives;
-		latest = await fetchLatestManifest(packages.pkg, timeoutMs);
+		latest = await fetchLatestManifest(packages.pkg, timeoutMs, channel);
 	}
 
 	return {
@@ -769,13 +799,37 @@ async function getLatestNpmRelease(timeoutMs: number): Promise<ReleaseInfo> {
 	};
 }
 
-/**
- * Resolve the latest release from the GitHub releases feed. Used when the npm
- * registry 404s (MusePi's package is not published there); the release
- * carries `dist: "binary"` so {@link shouldForceBinaryUpdate} routes the
- * update through the standalone-binary replacement path.
- */
-async function getLatestReleaseFromGitHub(timeoutMs: number): Promise<ReleaseInfo> {
+async function getBetaChannelVersion(
+	release: Record<string, unknown>,
+	headers: Record<string, string>,
+	timeoutMs: number,
+): Promise<string> {
+	if (release.tag_name !== "channel-beta" || release.draft !== false || release.prerelease !== true) {
+		throw new Error("Malformed GitHub channel-beta release metadata");
+	}
+	const manifestUrl = `https://github.com/${REPO}/releases/download/channel-beta/update-manifest.json`;
+	const assets = Array.isArray(release.assets) ? release.assets : [];
+	const matches = assets.filter(
+		asset => isRecord(asset) && asset.name === "update-manifest.json" && asset.browser_download_url === manifestUrl,
+	);
+	if (matches.length !== 1 || !isRecord(matches[0]) || matches[0].state !== "uploaded") {
+		throw new Error("GitHub channel-beta release has no uploaded update manifest");
+	}
+	const response = await fetch(manifestUrl, { headers, signal: withTimeoutSignal(timeoutMs) });
+	if (!response.ok) throw new Error(`Failed to fetch beta update manifest: ${response.statusText}`);
+	const manifest: unknown = await response.json();
+	if (
+		!isRecord(manifest) ||
+		typeof manifest.version !== "string" ||
+		releaseChannelForVersion(manifest.version) !== "beta"
+	) {
+		throw new Error("Malformed beta update manifest: missing beta version");
+	}
+	return manifest.version;
+}
+
+/** Resolve the stable latest release or the mutable beta channel release. */
+async function getLatestReleaseFromGitHub(timeoutMs: number, channel: ReleaseChannel): Promise<ReleaseInfo> {
 	const headers: Record<string, string> = {
 		Accept: "application/vnd.github+json",
 		"X-GitHub-Api-Version": "2022-11-28",
@@ -785,7 +839,8 @@ async function getLatestReleaseFromGitHub(timeoutMs: number): Promise<ReleaseInf
 
 	let response: Response;
 	try {
-		response = await fetch(`${GITHUB_API}/repos/${REPO}/releases/latest`, {
+		const endpoint = channel === "beta" ? "releases/tags/channel-beta" : "releases/latest";
+		response = await fetch(`${GITHUB_API}/repos/${REPO}/${endpoint}`, {
 			headers,
 			signal: withTimeoutSignal(timeoutMs),
 		});
@@ -810,11 +865,11 @@ async function getLatestReleaseFromGitHub(timeoutMs: number): Promise<ReleaseInf
 	if (!isRecord(data) || typeof data.tag_name !== "string") {
 		throw new Error("Malformed GitHub release response: missing tag_name");
 	}
-	const tag = data.tag_name;
-	const version = tag.startsWith("v") ? tag.slice(1) : tag;
+	const version =
+		channel === "beta" ? await getBetaChannelVersion(data, headers, timeoutMs) : data.tag_name.replace(/^v/, "");
 
 	return {
-		tag,
+		tag: `v${version}`,
 		version,
 		dist: "binary",
 		packages: CURRENT_PACKAGES,
@@ -1149,8 +1204,8 @@ async function verifyBinaryAtPath(binaryPath: string, expectedVersion: string): 
 		const result = await $`${binaryPath} --version`.env(env).quiet().nothrow();
 		if (result.exitCode !== 0) return { ok: false, path: binaryPath };
 		const output = result.text().trim();
-		// Output format: "musepi/X.Y.Z"
-		const match = output.match(/\/(\d+\.\d+\.\d+)/);
+		// Output format: "musepi/X.Y.Z" or "musepi/X.Y.Z-beta.N"
+		const match = output.match(/\/(\d+\.\d+\.\d+(?:-beta\.[1-9]\d*)?)/);
 		const actual = match?.[1];
 		return { ok: actual === expectedVersion, actual, path: binaryPath };
 	} catch {
@@ -1852,7 +1907,10 @@ export async function runUpdateCommand(opts: { force: boolean; check: boolean })
 	// same PATH entry live.
 	try {
 		const forceBinary = shouldForceBinaryUpdate(release);
-		const target = await resolveUpdateTarget({ allowPackageManagers: !forceBinary });
+		const target = await resolveUpdateTarget({
+			allowPackageManagers: !forceBinary,
+			allowRepositoryManagers: releaseChannelForVersion(VERSION) === "stable",
+		});
 		if (target.method === "nix") {
 			console.log(chalk.yellow("This installation is managed by Nix and cannot update itself."));
 			console.log(chalk.dim("Update the flake input or profile that provides musepi, then rebuild."));

@@ -403,20 +403,19 @@ Naming normalization in `docs/gui-design.md` §0 (session list / message tree / 
 
 ## 17. OTA update channel + tri-state send/stop button run-level working semantics (2026-08-22)
 
-### OTA update channels (GitHub release asset redirects, bitfun parity)
+### OTA update channels (GitHub release asset redirects)
 
-Three sites, one source, all via `/releases/latest/download/update-manifest.json` (302 to the latest release asset, no api.github.com rate limits):
+The installed artifact fixes the update channel; there is no runtime channel switch.
 
-| Location | Purpose | Default |
-|---|---|---|
-| `packages/desktop-app/electron/updater.cjs` | main-process OTA check (`checkForUpdates`) + release-notes fetch (`fetchManifestNotes`) | `RELEASE_MANIFEST_URL` constant |
-| `packages/desktop-app/package.json` `update.manifestUrl` | overrides the notes-fetch default at packaging | same URL |
-| `daemon/server.ts` `updates.check` | daemon-side version/notes probe (legacy — UpdateToast moved to `updater-notes`; RPC kept for parity) | same URL (hardcoded) |
+| Channel | Versions | npm dist-tag | GitHub release and desktop feed |
+|---|---|---|---|
+| Stable | `x.y.z` | `latest` | GitHub Latest, `latest*.yml`, `/releases/latest/download/update-manifest.json` |
+| Beta | `x.y.z-beta.N` | `beta` | Mutable `channel-beta` prerelease, `beta*.yml`, `/releases/download/channel-beta/update-manifest.json` |
 
-- **Resolution order** (updater.cjs `manifestUrl()`, notes fetch only — the electron-updater feed comes from the build publish config): `OMP_UPDATE_MANIFEST_URL` env → `package.json update.manifestUrl` → `RELEASE_MANIFEST_URL` default.
-- **Graceful 404 degradation**: before the repo goes public, `releases/latest` 404s → `{enabled:false, reason:"no-update-source"}`, settings page shows "No public update source yet (available after publishing)"; `updates.check` returns `{latest:null}`, announcement panel stays silent.
-- **Release contract**: `update-manifest.json` (`{version,url,notes}`) uploads as an asset named `update-manifest.json` with every GitHub release — `/releases/latest/download/<asset>` auto-redirects to the latest copy, no branch changes needed. **url = direct dmg link, notes = feature descriptions, version matching package.json**.
-- **Initialization must not hardcode raw.githubusercontent**: the old channel `raw.githubusercontent.com/MuseLinn/MusePi/main/packages/desktop-app/update-manifest.json` 404s unconditionally while the repo is private (effectively a dead link); everything switched to release assets.
+- The CLI and desktop workflows publish their assets into the same release for the selected channel. Beta publication rejects a candidate that is not newer than the current channel manifest, then reads the uploaded manifest back and verifies its version.
+- `updater.cjs`, `updates.check`, and `musepi update` derive the channel from the running version. Beta desktop builds use a generic feed rooted at `releases/download/channel-beta`; stable builds retain the GitHub Latest provider.
+- Manifest resolution is `OMP_UPDATE_MANIFEST_URL` → a custom `package.json update.manifestUrl` → the channel default. The manifest contains `{version,url,notes}`; `url` is the direct installer link and `version` matches `package.json`.
+- A missing feed or manifest returns the no-update verdict without treating the network as broken. Update metadata uses release assets, not `raw.githubusercontent.com`.
 
 ### Tri-state send/stop button: run-level working (turn-level boundary trap)
 
@@ -434,7 +433,7 @@ Three sites, one source, all via `/releases/latest/download/update-manifest.json
 - **Download states** (updater-state pushes): `preparing` is set synchronously by `updater-download` (indeterminate bar — covers the click → first-byte gap before electron-updater emits `download-progress`, and its re-entry guard makes double-clicks safe), `downloading` shows percent + transferred/total MB + `bytesPerSecond`, `downloaded` shows the success row + 立即重启. A dismissed toast **revives** on `preparing`/`downloaded` pushes — with `autoInstallOnAppQuit=false`, 立即重启 is the only install path, so it must stay reachable (the settings page's in-app 下载更新 button relies on the same revival). Dismissal plays a 180ms exit animation (close-timer + `--closing` class, prompt-dialog parity); download failure offers retry + "Go to download".
 - **"Skip this version" remembers per version** (`localStorage["musepi-update-skip-version"]`, bitfun-style) — same version won't nag again; **release notes and the "What's new" dialog are two independent chains**: the toast reads `update-manifest.json`'s `notes` (a plain string — the `{zh,en}` shape is reserved for a future split manifest; daemon `updates.check` passes both through), the dialog reads `CHANGELOG.musepi.md`. They stay in sync by construction: `gui-release.yml` slices the manifest `notes` out of the newest `CHANGELOG.musepi.md` section (`sectionMatch`, first `## [x.y.z]` block), so a release only has to write that one section.
 - Bridging goes uniformly through `packages/desktop-app/src/lib/electron.ts`'s `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` types (no inline window assertions in components).
-- **Platform-matched fallback**: the release manifest carries `downloads` keyed by `<platform>-<arch>`; legacy `url` remains only the macOS ARM64 compatibility path, and other missing targets fall back to the releases page.
+- **Platform-matched fallback and final-artifact integrity**: the release manifest carries `downloads` keyed by `<platform>-<arch>`; legacy `url` remains only the macOS ARM64 compatibility path, and other missing targets fall back to the releases page. Before the publish job merges Windows feeds, `gui-release-channel.ts` hashes every final wrapped exe and rewrites its SHA-512 and byte size, including the x64 top-level default. A missing asset fails the release instead of publishing stale metadata.
 
 ### Release artifacts and CLI relationship (confirmed by measurement 2026-08-23)
 
@@ -451,10 +450,10 @@ Contracts, RPC shapes and pitfalls for work landed after the earlier sections; d
 
 ### OTA update via electron-updater (v0.4.4, 2026-08-24)
 `docs/archive/ota-update-design.md`. Replaces §17's "Go to download" with **download → verify → install → restart** (electron-updater v6.4.1 + GitHub provider):
-- **Config**: `packages/desktop-app/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}` (emits `latest*.yml`). Never set `allowPrerelease` — 6.4.1 derives it (prerelease version → beta channel; stable → `/releases/latest`, prereleases ignored).
+- **Config**: stable builds use `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}` and emit `latest*.yml`. Beta builds emit `beta*.yml`; `updater.cjs` sets `allowPrerelease=true` and selects the generic `channel-beta` feed so electron-updater does not resolve beta through GitHub's Latest or Atom feeds.
 - **IPC**: `updater-check` (enriched result `{enabled,newer,latest,current,notes}` — updateInfo vs `app.getVersion()`, notes fetched beside the feed check)/`updater-download`/`updater-install`/`updater-notes` (renderer→main) + `updater-state` (`idle/available/checking/preparing/downloading(percent+bytes)/verifying/downloaded/error`; since 2026-09-26 `error` is the structured `{kind,message,technicalDetails?}`, see below) + `update-available` + `updater-flash-frame` (2026-09-26, taskbar flash). `autoDownload=false`, `autoInstallOnAppQuit=false`.
 - **Daemon sidecar**: `updater-install` awaits `kill(daemonPort)` then `setImmediate(() => autoUpdater.quitAndInstall())` (setImmediate flushes the IPC reply first); the vendored daemon lands with the new app.
-- **macOS needs `.zip`**: MacUpdater `findFile(files,"zip",…)` throws `ERR_UPDATER_ZIP_FILE_NOT_FOUND` without it — `mac.target` must include `"zip"` and CI must ship `*.zip` (also buys blockmap deltas). Beta: `-beta` tag → `-c.publish.channel=beta` + prerelease; CI yml wildcards widened `latest*.yml`→`*.yml` (the gap that dropped beta feeds).
+- **macOS needs `.zip`**: MacUpdater `findFile(files,"zip",…)` throws `ERR_UPDATER_ZIP_FILE_NOT_FOUND` without it — `mac.target` must include `"zip"` and CI must ship `*.zip` (also buys blockmap deltas). Beta packaging uses `-c.publish.channel=beta`; both CLI and GUI assets upload to the `channel-beta` prerelease.
 - **Degradation**: unsigned Windows NSIS → SmartScreen confirm; ad-hoc macOS dmg → verification failure falls back to "Go to download"; Linux AppImage replaces itself without signing.
 
 ### Update UX layering (B-face of the installer/update dialogs design, 2026-09-26)

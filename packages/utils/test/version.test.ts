@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { compareVersions } from "../src/version";
+import { compareVersions, releaseChannelForVersion, updateManifestUrlForVersion } from "../src/version";
 
 describe("compareVersions", () => {
 	it("trims whitespace and strips one leading v/V", () => {
@@ -68,5 +68,23 @@ describe("compareVersions", () => {
 		expect(compareVersions("1.0.0", "3.0.0")).toBe(-1);
 		// exact numeric comparison beyond float precision
 		expect(compareVersions("1.2.99999999999999999999", "1.2.100000000000000000000")).toBe(-1);
+	});
+});
+
+describe("release channels", () => {
+	it("selects beta only for numbered beta builds", () => {
+		expect(releaseChannelForVersion("0.6.4-beta.1")).toBe("beta");
+		expect(releaseChannelForVersion("v0.6.4-beta.12")).toBe("beta");
+		expect(releaseChannelForVersion("0.6.4")).toBe("stable");
+		expect(releaseChannelForVersion("0.6.4-rc.1")).toBe("stable");
+	});
+
+	it("keeps stable manifests on latest and beta manifests on channel-beta", () => {
+		expect(updateManifestUrlForVersion("0.6.3")).toBe(
+			"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json",
+		);
+		expect(updateManifestUrlForVersion("0.6.4-beta.1")).toBe(
+			"https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json",
+		);
 	});
 });

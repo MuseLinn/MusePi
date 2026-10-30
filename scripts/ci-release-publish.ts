@@ -35,6 +35,7 @@ import {
 	generateNpmPackages,
 	LEAF_TARGETS,
 } from "../packages/natives/scripts/gen-npm-packages.ts";
+import { releaseChannelForVersion } from "../packages/utils/src/version.ts";
 import { fixDtsExtensions } from "./fix-dts-extensions.ts";
 
 export interface PublishPackage {
@@ -250,9 +251,16 @@ export async function inspectPackedTarball(tarballPath: string): Promise<PackedT
 	return { name: manifest.name, version: manifest.version, path: tarballPath };
 }
 
+export function npmPublishDistTag(version: string): "latest" | "beta" {
+	return releaseChannelForVersion(version) === "beta" ? "beta" : "latest";
+}
+
 async function packAndPublish(dir: string, name: string): Promise<void> {
 	if (isDryRun) {
-		console.log(`DRY RUN bun pm pack && npm publish --access public (${path.relative(repoRoot, dir)})`);
+		const manifest = (await Bun.file(path.join(dir, "package.json")).json()) as PackageManifest;
+		console.log(
+			`DRY RUN bun pm pack && npm publish --access public --tag ${npmPublishDistTag(manifest.version ?? "")} (${path.relative(repoRoot, dir)})`,
+		);
 		return;
 	}
 	console.log(`Publishing ${name}…`);
@@ -274,7 +282,10 @@ async function packAndPublish(dir: string, name: string): Promise<void> {
 			console.log(`Skipping ${packedTarball.name} (version already published)`);
 			return;
 		}
-		const result = await $`npm publish ${packedTarball.path} --access public`.quiet().nothrow();
+		const result =
+			await $`npm publish ${packedTarball.path} --access public --tag ${npmPublishDistTag(packedTarball.version)}`
+				.quiet()
+				.nothrow();
 		const output = `${result.stdout.toString()}${result.stderr.toString()}`.trim();
 		if (output) console.log(output);
 		if (result.exitCode !== 0) {

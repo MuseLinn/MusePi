@@ -1,5 +1,5 @@
 {
-	"_comment": "MusePi OTA manifest for Electron updater.cjs and daemon updates.check. Clients read this asset through /releases/latest/download/update-manifest.json. The release workflow generates version, url, platform-specific downloads, and notes.",
+	"_comment": "MusePi OTA manifest for Electron updater.cjs and daemon updates.check. Stable clients read this asset through /releases/latest/download/update-manifest.json; beta clients read /releases/download/channel-beta/update-manifest.json. The release workflow generates version, url, platform-specific downloads, and notes and verifies the uploaded manifest.",
 	"version": "0.4.4",
 	"url": "",
 	"notes": {

@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **稳定版与测试版现在使用彼此隔离的更新通道**：测试版采用 `x.y.z-beta.N` 版本号，CLI、桌面客户端和 npm 都只会检测测试版更新；稳定版继续只接收稳定版。发布会阻止旧测试版覆盖新版本，并在上传后核对更新清单。
+  - EN: Stable and beta builds now use isolated update channels. Numbered beta releases check only beta updates across the CLI, desktop app, and npm, while stable builds remain on stable releases. Publishing rejects beta rollbacks and verifies the uploaded update manifest.
 - **能力中心可以直接管理 profile 的 bundle 组合**：「组合」页列出已安装和缺失的已选 bundle，启停会真实写入 `musepi.profile.bundles`，组合行覆盖仍保存在 profile 的 `cordis.patch.yml`；普通插件和会话级 Agent preset 继续沿用各自的管理入口。
   - EN: The capability center can now manage profile bundle compositions. The Composition tab lists installed bundles and missing selections, writes toggles to `musepi.profile.bundles`, and keeps row overrides in the profile's `cordis.patch.yml`; ordinary plugins and session-scoped Agent presets retain their own management surfaces.
 
@@ -17,8 +19,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Agent presets and profiles now share one composition model. Bundle declarations flow into the preset list and real session resolution, defaults persist in the profile's `agent-preset-registry.config.selectedDefault`, presets lock after the first turn, existing sessions keep their composition, and only `musepi.profile.bundles` is supported, with DSH profile fields ignored.
 
 ### Fixed
-- **Windows 手动下载会匹配当前平台**：更新清单按平台和架构提供安装器地址，Windows 不再跳到 macOS ARM64 下载页；旧清单缺少当前平台目标时回退版本发布页。
-  - EN: Manual downloads on Windows now match the current platform. The update manifest maps each platform and architecture to the correct installer instead of sending Windows users to macOS ARM64, and older manifests without a matching target fall back to the releases page.
+- **Windows 更新不再因过期校验值失败，手动下载也会匹配当前平台**：发布前会按最终安装器重算 SHA-512 和文件大小，避免二次包装后的安装包与旧更新元数据一起发布；更新清单按平台和架构提供安装器地址，Windows 不再跳到 macOS ARM64 下载页。
+  - EN: Windows updates no longer fail because of stale checksums, and manual downloads now match the current platform. Publishing recomputes SHA-512 and file size from final installers so wrapped packages cannot ship with old metadata, while the update manifest maps each platform and architecture to the correct installer instead of sending Windows users to macOS ARM64.
 - **父插件停用时组件不再显示为仍在运行**：组件选择会保留，但只有父插件和组件自身都允许时才显示绿色可用状态；父插件停用期间组件开关不可操作，重新启用后恢复原选择。读取组合页也不再自动创建空 profile 文件。
   - EN: Components no longer appear active while their parent plugin is disabled. Selections are preserved, but green availability requires both the parent and component to be enabled; controls are disabled while the parent is off and restore on re-enable. Reading the Composition tab no longer creates empty profile files.
 

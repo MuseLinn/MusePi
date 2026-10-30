@@ -67,4 +67,25 @@ describe("CI runtime and delivery contracts", () => {
 		const steps = allSteps(workflow.jobs?.publish);
 		expect(steps.some(step => step.run?.includes("scripts/ci-require-workflow-success.ts CI"))).toBe(true);
 	});
+
+	it("publishes beta CLI and GUI assets to the shared prerelease channel", () => {
+		for (const file of [".github/workflows/ci.yml", ".github/workflows/gui-release.yml"]) {
+			const steps = allSteps(readYaml(file));
+			const release = steps.find(step => step.uses?.startsWith("softprops/action-gh-release@"));
+			expect(release?.with?.tag_name, file).toContain("channel-beta");
+			expect(release?.with?.prerelease, file).toContain("-beta.");
+		}
+	});
+
+	it("keeps beta releases out of the stable Homebrew formula", () => {
+		const publish = readYaml(".github/workflows/ci.yml").jobs?.release_brew;
+		expect(publish?.if).toContain("!contains(needs.release_metadata.outputs.release-tag, '-beta.')");
+	});
+
+	it("verifies the published GUI manifest version after upload", () => {
+		const steps = allSteps(readYaml(".github/workflows/gui-release.yml").jobs?.publish);
+		const upload = steps.findIndex(step => step.uses?.startsWith("softprops/action-gh-release@"));
+		const verify = steps.findIndex(step => step.run?.includes("gui-release-channel.ts verify-published"));
+		expect(verify).toBeGreaterThan(upload);
+	});
 });

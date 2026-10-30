@@ -1,4 +1,17 @@
 const DIGITS = /^\d+$/;
+const NUMBERED_BETA_VERSION = /^v?\d+\.\d+\.\d+-beta\.[1-9]\d*$/;
+
+export type ReleaseChannel = "stable" | "beta";
+
+export function releaseChannelForVersion(version: string): ReleaseChannel {
+	return NUMBERED_BETA_VERSION.test(version.trim()) ? "beta" : "stable";
+}
+
+export function updateManifestUrlForVersion(version: string): string {
+	return releaseChannelForVersion(version) === "beta"
+		? "https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json"
+		: "https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
+}
 
 /**
  * Compare two version strings.

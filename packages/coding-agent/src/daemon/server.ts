@@ -34,7 +34,16 @@ import { resolveModelCapabilities } from "@musepi/pi-catalog/identity";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
 import { DesktopSession, getWorkProfile } from "@musepi/pi-natives";
-import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
+import {
+	$env,
+	getAgentDir,
+	getConfigRootDir,
+	getSessionsDir,
+	logger,
+	prompt,
+	updateManifestUrlForVersion,
+	VERSION,
+} from "@musepi/pi-utils";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
 	MessageDisplayContext,
@@ -1773,20 +1782,17 @@ export class DaemonServer {
 					: null;
 			}
 			case "updates.check": {
-				// Version probe (Electron updater.cjs parity — the same
-				// update-manifest.json asset on the latest GitHub release,
-				// resolved via the /releases/latest/download redirect).
 				// Respects startup.checkUpdate; network failure or
 				// up-to-date resolve to null so the GUI never nags.
 				const settings = await this.#settingsForRpc();
 				if (!settings.get("startup.checkUpdate")) {
 					return { latest: null };
 				}
+				const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
 				try {
-					const res = await fetch(
-						"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json",
-						{ signal: AbortSignal.timeout(8_000) },
-					);
+					const res = await fetch(updateManifestUrlForVersion(currentVersion), {
+						signal: AbortSignal.timeout(8_000),
+					});
 					if (!res.ok) return { latest: null, notes: null };
 					const data = (await res.json()) as {
 						version?: unknown;
@@ -1796,7 +1802,6 @@ export class DaemonServer {
 						notes?: string | { zh?: string; en?: string };
 					};
 					const latest = typeof data.version === "string" ? data.version : undefined;
-					const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
 					const notes =
 						typeof data.notes === "string"
 							? data.notes

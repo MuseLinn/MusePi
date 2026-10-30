@@ -24,21 +24,11 @@ const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 /** Android app manifest — versionName/versionCode live here, hardcoded (see 3c). */
 const gradlePath = "packages/mobile/android/app/build.gradle";
 /**
- * Strict explicit-version guard: three numeric dot-segments with an optional
- * leading `v` and NO prerelease suffix. Prereleases are rejected because the
- * downstream publish (`scripts/ci-release-publish.ts`) runs `npm publish` with
- * no `--tag`, which would promote a prerelease to the npm `latest` dist-tag —
- * hitting every unqualified install and the `/latest` endpoint `musepi update`
- * reads. Bump keywords (major/minor/patch) are handled separately and must not
- * be routed through this check.
- *
- * Returns the normalized bare version (leading `v` stripped) when accepted, or
- * `null` when rejected. Callers must use the returned value for all writes so
- * no downstream manifest (package.json, Cargo.toml, tag) ever sees a `v`
- * prefix — Cargo rejects `version = "v17.2.8"`.
+ * Returns a normalized stable or numbered-beta version. Other prerelease
+ * channels are rejected so they cannot enter the stable or beta feeds.
  */
 export function validateExplicitVersion(version: string): string | null {
-	const match = /^v?((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(version);
+	const match = /^v?((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-beta\.[1-9]\d*)?)$/.exec(version);
 	return match ? match[1] : null;
 }
 
@@ -259,7 +249,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		const normalized = validateExplicitVersion(versionOrBump);
 		if (normalized === null) {
 			console.error(
-				`Error: Invalid version "${versionOrBump}". Expected a semver like 17.2.8 or v17.2.8 (prereleases such as 17.2.8-rc.1 are not supported by this release path), or a bump keyword (major/minor/patch).`,
+				`Error: Invalid version "${versionOrBump}". Expected 17.2.8, v17.2.8, or a numbered beta like 17.2.8-beta.1, or a bump keyword (major/minor/patch).`,
 			);
 			process.exit(1);
 		}

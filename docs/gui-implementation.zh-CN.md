@@ -401,20 +401,19 @@ daemon RPC:
 
 ## 17. OTA 更新渠道 + 三合一按钮 run 级 working 语义（2026-08-22）
 
-### OTA 更新渠道（GitHub release 资产重定向，bitfun parity）
+### OTA 更新渠道（GitHub release 资产重定向）
 
-三处同源，统一走 `/releases/latest/download/update-manifest.json`（302 到最新 release 资产，无 api.github.com 限流）：
+安装产物决定更新通道，不提供运行时切换。
 
-| 位置 | 用途 | 默认值 |
-|---|---|---|
-| `packages/desktop-app/electron/updater.cjs` | 主进程 OTA 检查（`checkForUpdates`）+ 更新说明拉取（`fetchManifestNotes`） | `RELEASE_MANIFEST_URL` 常量 |
-| `packages/desktop-app/package.json` `update.manifestUrl` | 打包时覆盖 notes 拉取默认 | 同 URL |
-| `daemon/server.ts` `updates.check` | daemon 侧版本/notes 探测（遗留——UpdateToast 已改走 `updater-notes`；RPC 保留对等） | 同 URL（硬编码） |
+| 通道 | 版本号 | npm dist-tag | GitHub release 与桌面 feed |
+|---|---|---|---|
+| 稳定版 | `x.y.z` | `latest` | GitHub Latest、`latest*.yml`、`/releases/latest/download/update-manifest.json` |
+| 测试版 | `x.y.z-beta.N` | `beta` | 可变 `channel-beta` prerelease、`beta*.yml`、`/releases/download/channel-beta/update-manifest.json` |
 
-- **解析顺序**（updater.cjs `manifestUrl()`，仅 notes 拉取——electron-updater 的 feed 来自 build publish config）：`OMP_UPDATE_MANIFEST_URL` env → `package.json update.manifestUrl` → `RELEASE_MANIFEST_URL` 默认。
-- **404 优雅降级**：repo 公开前 `releases/latest` 404 → `{enabled:false, reason:"no-update-source"}`，设置页显示「尚未发布公开更新源（发布后可用）」；`updates.check` 返回 `{latest:null}`，公告面板不弹。
-- **发版契约**：`update-manifest.json`（`{version,url,notes}`）作为名为 `update-manifest.json` 的资产随每个 GitHub release 上传——`/releases/latest/download/<asset>` 自动重定向到最新拷贝，无需改分支。**url 填 dmg 直链、notes 填新功能说明、version 与 package.json 一致**。
-- **初始化不能写死 raw.githubusercontent**：旧渠道 `raw.githubusercontent.com/MuseLinn/MusePi/main/packages/desktop-app/update-manifest.json` 在 repo 私有时必 404（等于死链），已全部切到 release 资产。
+- CLI 与桌面工作流向所选通道的同一个 release 发布资产。测试版发布前会拒绝不高于当前通道清单的候选版本，上传后读回清单并核对版本。
+- `updater.cjs`、`updates.check` 与 `musepi update` 根据运行版本推导通道。测试版客户端使用以 `releases/download/channel-beta` 为根的 generic feed；稳定版保留 GitHub Latest provider。
+- 清单解析顺序为 `OMP_UPDATE_MANIFEST_URL` → 自定义 `package.json update.manifestUrl` → 通道默认值。清单包含 `{version,url,notes}`；`url` 是安装包直链，`version` 与 `package.json` 一致。
+- feed 或清单缺失时返回无更新结果，不误报为网络故障。更新元数据使用 release 资产，不使用 `raw.githubusercontent.com`。
 
 ### 三合一发送/停止按钮：run 级 working（turn 级边界陷阱）
 
@@ -432,7 +431,7 @@ daemon RPC:
 - **下载状态**（updater-state 推送）：`preparing` 由 `updater-download` 同步置位（不确定态进度条——覆盖点击 → 首字节之间 electron-updater 尚未发 `download-progress` 的空窗；重入保护让双击安全），`downloading` 显示百分比 + 已传/总量 MB + `bytesPerSecond`，`downloaded` 显示完成行 + 立即重启。被关掉的 toast 会在 `preparing`/`downloaded` 推送时**复活**——`autoInstallOnAppQuit=false` 下立即重启是唯一安装路径，必须始终可达（设置页的应用内「下载更新」按钮同样依赖该复活）。关闭播 180ms 退出动画（close-timer + `--closing` 类，prompt-dialog parity）；下载失败提供重试 + 「前往下载」。
 - **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`（纯字符串——`{zh,en}` 形状留给未来拆分 manifest；daemon `updates.check` 两种都透传），弹窗读 `CHANGELOG.musepi.md`。两条链路靠构造保持同步：`gui-release.yml` 用 `sectionMatch`（首个 `## [x.y.z]` 块）从最新一节切出 manifest 的 `notes`，所以发版只写那一节即可。
 - 桥接统一走 `packages/desktop-app/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
-- **按平台回退**：更新清单的 `downloads` 以 `<平台>-<架构>` 为键；旧 `url` 仅保留作 macOS ARM64 兼容路径，其他目标缺失时回退版本发布页。
+- **按平台回退与最终产物完整性**：更新清单的 `downloads` 以 `<平台>-<架构>` 为键；旧 `url` 仅保留作 macOS ARM64 兼容路径，其他目标缺失时回退版本发布页。发布任务合并 Windows feed 前，`gui-release-channel.ts` 对每个最终二次包装 exe 重算 SHA-512 与字节大小，并同步 x64 顶层默认值；资产缺失直接让发布失败，不再上传过期元数据。
 
 ### 发布产物与 CLI 关系（2026-08-23 实测确认）
 
@@ -449,10 +448,10 @@ daemon RPC:
 
 ### OTA 经 electron-updater 更新（v0.4.4，2026-08-24）
 `docs/archive/ota-update-design.md`。把 §17 的「前往下载」改为 **下载 → 校验 → 安装 → 重启**（electron-updater v6.4.1 + GitHub provider）：
-- **配置**：`packages/desktop-app/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}`（生成 `latest*.yml`）。**不要手动设 `allowPrerelease`**——6.4.1 按当前版本号自动推导（prerelease 版本 → beta 通道；稳定版 → `/releases/latest`，忽略 prerelease）。
+- **配置**：稳定版使用 `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}` 并生成 `latest*.yml`。测试版生成 `beta*.yml`；`updater.cjs` 设置 `allowPrerelease=true` 并选择 generic `channel-beta` feed，避免 electron-updater 经 GitHub Latest 或 Atom feed 解析测试版。
 - **IPC**：`updater-check`（富结果 `{enabled,newer,latest,current,notes}`——updateInfo 与 `app.getVersion()` 比对，notes 与 feed 检查并行拉取）/`updater-download`/`updater-install`/`updater-notes`（renderer→main）+ `updater-state`（`idle/available/checking/preparing/downloading(percent+bytes)/verifying/downloaded/error`；2026-09-26 起 `error` 为结构化 `{kind,message,technicalDetails?}`，见下）+ `update-available` + `updater-flash-frame`（2026-09-26，任务栏闪烁）。`autoDownload=false`、`autoInstallOnAppQuit=false`。
 - **daemon sidecar**：`updater-install` 先 `kill(daemonPort)` 再 `setImmediate(() => autoUpdater.quitAndInstall())`（setImmediate 先 flush IPC reply）；vendored daemon 随新版 app 一起生效。
-- **macOS 需 `.zip`**：MacUpdater `findFile(files,"zip",…)` 无 zip 会抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`——`mac.target` 必须含 `"zip"` 且 CI 带上传 `*.zip`（顺带赢 blockmap 差量）。Beta：`-beta` tag → `-c.publish.channel=beta` + prerelease；CI yml 通配从 `latest*.yml` 放宽为 `*.yml`（此前会丢 beta feed 的缺口）。
+- **macOS 需 `.zip`**：MacUpdater `findFile(files,"zip",…)` 无 zip 会抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`——`mac.target` 必须含 `"zip"` 且 CI 带上传 `*.zip`（顺带赢 blockmap 差量）。测试版打包使用 `-c.publish.channel=beta`；CLI 与 GUI 资产都上传到 `channel-beta` prerelease。
 - **降级**：未签名 Windows NSIS → SmartScreen 确认；ad-hoc macOS dmg → 校验失败回退「前往下载」；Linux AppImage 免签自替换。
 
 ### 更新 UX 分层（安装器/更新弹窗设计稿 B 面，2026-09-26）

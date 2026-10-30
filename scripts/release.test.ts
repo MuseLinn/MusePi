@@ -21,15 +21,20 @@ describe("validateExplicitVersion", () => {
 		expect(validateExplicitVersion("18.0.00")).toBe(null);
 	});
 
-	test("rejects prerelease suffixes (not supported by this release path)", () => {
-		// Prereleases would be published as npm `latest` because the downstream
-		// publish runs `npm publish` with no `--tag`.
+	test("rejects prerelease channels other than numbered beta releases", () => {
 		expect(validateExplicitVersion("17.2.8-rc.1")).toBe(null);
 		expect(validateExplicitVersion("v17.2.8-beta")).toBe(null);
+		expect(validateExplicitVersion("17.2.8-beta.0")).toBe(null);
+		expect(validateExplicitVersion("17.2.8-beta.01")).toBe(null);
 		expect(validateExplicitVersion("1.0.0-alpha")).toBe(null);
 		expect(validateExplicitVersion("1.0.0-alpha.1.2")).toBe(null);
 		expect(validateExplicitVersion("1.0.0-0.3.7")).toBe(null);
 		expect(validateExplicitVersion("1.0.0-x.7.z.92")).toBe(null);
+	});
+
+	test("accepts numbered beta versions and normalizes a leading v", () => {
+		expect(validateExplicitVersion("17.2.8-beta.1")).toBe("17.2.8-beta.1");
+		expect(validateExplicitVersion("v17.2.8-beta.12")).toBe("17.2.8-beta.12");
 	});
 
 	test("accepts bare three-segment numeric versions and returns them unchanged", () => {
