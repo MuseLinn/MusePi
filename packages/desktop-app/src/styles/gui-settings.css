@@ -6274,6 +6274,12 @@ body.gui-resizing {
 	color: var(--color-success, var(--color-accent));
 	font-size: 11px;
 }
+.gui-stt-row-actions {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 8px;
+}
 .gui-stt-row-progress {
 	display: flex;
 	align-items: center;

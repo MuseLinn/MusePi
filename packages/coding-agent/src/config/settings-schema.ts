@@ -2668,6 +2668,39 @@ export const SETTINGS_SCHEMA = {
 			condition: "sttPluginEnabled",
 		},
 	},
+	"stt.speakerMode": {
+		type: "enum",
+		values: ["off", "prefer", "strict"],
+		default: "off",
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Speaker Verification",
+			description:
+				"Verify the enrolled speaker before transcription. Prefer allows uncertain text as a draft without auto-submit; strict requires confirmed target speech. Off preserves the existing behavior.",
+			options: [
+				{ value: "off", label: "Off", description: "Do not verify the speaker" },
+				{
+					value: "prefer",
+					label: "Prefer enrolled voice",
+					description: "Allow uncertain text as a draft without auto-submit",
+				},
+				{ value: "strict", label: "Strict", description: "Transcribe only confirmed target speech" },
+			],
+			condition: "sttPluginEnabled",
+		},
+	},
+	"stt.enhanceAudio": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Speech Enhancement",
+			description: "Apply local DPDFNet noise suppression before speaker verification and transcription.",
+			condition: "sttPluginEnabled",
+		},
+	},
 	"stt.submitTrigger": {
 		type: "enum",
 		values: STT_SUBMIT_TRIGGER_VALUES,

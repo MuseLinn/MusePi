@@ -3212,6 +3212,16 @@ export const settings = {
 	"Speech Vocalization Voice": "语音朗读声音",
 	"Speech-to-Text": "语音转文字",
 	"Speech-to-Text Submit Trigger": "语音转文字提交触发",
+	"Speaker Verification": "机主声纹验证",
+	"Speech Enhancement": "语音降噪",
+	"Prefer enrolled voice": "优先机主声音",
+	"Transcribe only confirmed target speech": "仅转写已确认的机主语音",
+	"Do not verify the speaker": "不验证说话人",
+	"Allow uncertain text as a draft without auto-submit": "灰区文本仅保留草稿，不自动提交",
+	"Verify the enrolled speaker before transcription. Prefer allows uncertain text as a draft without auto-submit; strict requires confirmed target speech. Off preserves the existing behavior.":
+		"转写前验证已录入的机主声纹。优先模式将灰区文本仅保留为草稿，严格模式仅接受已确认的机主语音，关闭则保持原有行为。",
+	"Apply local DPDFNet noise suppression before speaker verification and transcription.":
+		"在声纹验证与转写前，使用本地 DPDFNet 抑制环境噪声。",
 	"Spend eligible saved resets without prompting.": "无提示地花费符合条件的已保存重置。",
 	Standard: "标准",
 	"Standard symbols (default)": "标准符号（默认）",

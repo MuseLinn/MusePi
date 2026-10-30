@@ -268,16 +268,12 @@
 	cursor: default;
 }
 
-/* ── Voice dictation strip (composer children, above the textarea) ──────
- * The mic button is a compact motion-only control (its 30px capsule had no
- * room for copy — user direction); the live waveform, the clock and the
- * phase copy live HERE instead, inside the input card where there is room.
- * Bars are pure CSS (staggered scaleY, no JS height driving); the real mic
- * RMS modulates only the strip's opacity via --voice-level. */
+/* ── Voice dictation strip (composer children, above the textarea) ────── */
 .gui-voice-strip {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	min-height: 42px;
 	margin: 6px 2px 0;
 	padding: 5px 10px;
 	border-radius: var(--radius-md);
@@ -285,40 +281,80 @@
 	--voice-level: 0;
 }
 
+.gui-voice-visual {
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 72px;
+	height: 28px;
+	flex: none;
+}
+
+.gui-voice-ring {
+	position: absolute;
+	width: 24px;
+	height: 24px;
+	border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
+	border-radius: 50%;
+	transform: scale(calc(0.8 + var(--voice-level) * 0.45));
+	opacity: calc(0.2 + var(--voice-level) * 0.65);
+	transition: transform var(--gui-motion-chip) var(--gui-ease-out), opacity var(--gui-motion-chip) linear;
+}
+
+.gui-voice-ring--outer {
+	width: 32px;
+	height: 32px;
+	box-shadow: 0 0 16px color-mix(in oklab, var(--color-danger) calc(var(--voice-level) * 24%), transparent);
+}
+
+.gui-voice-ring--inner {
+	width: 20px;
+	height: 20px;
+}
+
 .gui-voice-wave {
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	height: 16px;
-	flex: none;
-	opacity: calc(0.5 + 0.5 * var(--voice-level));
-	transition: opacity 120ms linear;
+	height: 18px;
+	opacity: calc(0.55 + 0.45 * var(--voice-level));
 }
 
 .gui-voice-wave i {
-	width: 3px;
-	height: 14px;
+	width: 2px;
+	height: 16px;
 	border-radius: 50%;
 	background: var(--color-danger);
-	transform: scaleY(0.25);
-	animation: gui-voice-bar 0.9s ease-in-out infinite;
-}
-
-@keyframes gui-voice-bar {
-	0%,
-	100% {
-		transform: scaleY(0.25);
-	}
-	50% {
-		transform: scaleY(1);
-	}
+	transform-origin: center;
+	transition: transform 80ms linear;
 }
 
 .gui-voice-strip-label {
+	flex: none;
 	font-size: 12px;
 	line-height: 1;
 	font-variant-numeric: tabular-nums;
 	color: var(--color-danger);
+}
+
+.gui-voice-partial {
+	flex: 1;
+	min-width: 0;
+	min-height: 18px;
+	overflow: hidden;
+	color: var(--color-text-muted);
+	font-size: 13px;
+	line-height: 18px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0;
+	transform: translateY(var(--gui-motion-slide-y));
+	transition: transform var(--gui-motion-fade-in) var(--gui-ease-out), opacity var(--gui-motion-fade-in) ease;
+}
+
+.gui-voice-partial--visible {
+	opacity: 1;
+	transform: translateY(0);
 }
 
 .gui-voice-strip-hint {
@@ -328,23 +364,121 @@
 	color: var(--color-text-muted);
 }
 
-/* Transcribing: the wave idles down and the phase copy takes over — the
- * model itself is still working, there is nothing to hear anymore. */
 .gui-voice-strip--transcribing {
 	background: color-mix(in oklab, var(--color-text-muted) 8%, transparent);
 }
 
-.gui-voice-strip--transcribing .gui-voice-wave {
-	opacity: 0.35;
+.gui-voice-strip--transcribing .gui-voice-visual {
+	opacity: 0.45;
 }
 
-.gui-voice-strip--transcribing .gui-voice-wave i {
-	background: var(--color-text-muted);
-	animation-duration: 2.4s;
-}
-
+.gui-voice-strip--transcribing .gui-voice-wave i,
 .gui-voice-strip--transcribing .gui-voice-strip-label {
+	background: var(--color-text-muted);
 	color: var(--color-text-muted);
+}
+
+.gui-motion-off .gui-voice-ring,
+.gui-motion-off .gui-voice-wave i,
+.gui-motion-off .gui-voice-partial {
+	transition: none;
+	transform: none;
+}
+
+.gui-dialog.gui-voice-enroll {
+	width: min(480px, 90vw);
+}
+
+.gui-voice-enroll-body {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 20px;
+	min-height: 326px;
+	text-align: center;
+}
+
+.gui-voice-enroll-heading {
+	position: absolute;
+	top: 0;
+	font-size: 20px;
+	font-weight: 500;
+}
+
+.gui-voice-enroll-orb {
+	display: grid;
+	place-items: center;
+	width: 88px;
+	height: 88px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
+	border-radius: 50%;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+	box-shadow: 0 0 calc(12px + var(--enroll-level) * 20px) color-mix(in oklab, var(--color-accent) 18%, transparent);
+	transform: scale(calc(1 + var(--enroll-level) * 0.04));
+	transition: transform var(--gui-motion-chip) var(--spring), box-shadow var(--gui-motion-chip) ease;
+}
+
+.gui-voice-enroll-progress {
+	display: flex;
+	gap: 8px;
+	min-height: 6px;
+}
+
+.gui-voice-enroll-progress i {
+	width: 32px;
+	height: 4px;
+	border-radius: 50%;
+	background: var(--border);
+}
+
+.gui-voice-enroll-progress i[data-complete="true"] {
+	background: var(--color-accent);
+}
+
+.gui-voice-enroll-prompt {
+	max-width: 340px;
+	min-height: 48px;
+	font-size: 16px;
+	line-height: 24px;
+}
+
+.gui-voice-enroll-error {
+	position: absolute;
+	right: 0;
+	bottom: 48px;
+	left: 0;
+	align-self: stretch;
+	min-height: 20px;
+	color: var(--color-danger);
+}
+
+.gui-voice-enroll-actions {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.gui-motion-off .gui-voice-enroll-orb {
+	transition: none;
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-voice-ring,
+	.gui-voice-wave i,
+	.gui-voice-partial,
+	.gui-voice-enroll-orb {
+		transition: none;
+		transform: none;
+	}
 }
 
 /* ── Attach (paperclip) menu: image picker + mode toggles ─────────────── */

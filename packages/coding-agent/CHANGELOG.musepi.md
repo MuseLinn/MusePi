@@ -11,6 +11,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Stable and beta builds now use isolated update channels. Numbered beta releases check only beta updates across the CLI, desktop app, and npm, while stable builds remain on stable releases. Publishing rejects beta rollbacks and verifies the uploaded update manifest.
 - **能力中心可以直接管理 profile 的 bundle 组合**：「组合」页列出已安装和缺失的已选 bundle，启停会真实写入 `musepi.profile.bundles`，组合行覆盖仍保存在 profile 的 `cordis.patch.yml`；普通插件和会话级 Agent preset 继续沿用各自的管理入口。
   - EN: The capability center can now manage profile bundle compositions. The Composition tab lists installed bundles and missing selections, writes toggles to `musepi.profile.bundles`, and keeps row overrides in the profile's `cordis.patch.yml`; ordinary plugins and session-scoped Agent presets retain their own management surfaces.
+- **语音输入支持实时草稿、机主声纹与可选降噪**：桌面和 TUI 会分段显示临时文本，正式结果随说话停顿逐步进入输入框；可录入本机声纹以减少旁人误录入，灰区只保留草稿且不自动提交，严格模式仅转写已确认语音。录音动效由真实音量驱动，减少动态效果时保留静态进度。
+  - EN: Voice input now supports live drafts, owner voiceprints, and optional noise suppression. Desktop and TUI show temporary text in segments and insert finalized results as speech pauses; local voiceprint enrollment reduces accidental transcription of other people, uncertain speech stays a draft without auto-submit, and strict mode transcribes only confirmed speech. Recording motion follows actual volume, with static progress under reduced motion.
+- **语音模型可以下载后删除并释放磁盘空间**：STT 与 TTS 缓存行新增确认删除，先停止对应 worker 再清理本地模型，不会在删除后立即自动重新下载。
+  - EN: Speech models can now be deleted after download to reclaim disk space. Cached STT and TTS rows offer confirmed deletion, stop the corresponding worker before removing local files, and do not immediately download the deleted model again.
 
 ### Changed
 - **Computer Use 默认开启**：新会话默认注册桌面控制工具，审批策略和操作系统权限检查仍按原流程执行；可在插件页或会话中显式关闭。
@@ -23,6 +27,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Windows updates no longer fail because of stale checksums, and manual downloads now match the current platform. Publishing recomputes SHA-512 and file size from final installers so wrapped packages cannot ship with old metadata, while the update manifest maps each platform and architecture to the correct installer instead of sending Windows users to macOS ARM64.
 - **父插件停用时组件不再显示为仍在运行**：组件选择会保留，但只有父插件和组件自身都允许时才显示绿色可用状态；父插件停用期间组件开关不可操作，重新启用后恢复原选择。读取组合页也不再自动创建空 profile 文件。
   - EN: Components no longer appear active while their parent plugin is disabled. Selections are preserved, but green availability requires both the parent and component to be enabled; controls are disabled while the parent is off and restore on re-enable. Reading the Composition tab no longer creates empty profile files.
+- **语音设置页恢复完整配置项**：语音、静音阈值、提交触发、朗读和输入设备等既有设置重新与模型管理一起显示，声纹录入内容也在固定弹窗中垂直居中。
+  - EN: The voice settings page once again shows the complete configuration. Existing speech, silence threshold, submit trigger, playback, and input-device settings appear alongside model management, and voice enrollment content is vertically centered in its fixed dialog.
 
 ## [0.6.3] - 2026-10-29
 
