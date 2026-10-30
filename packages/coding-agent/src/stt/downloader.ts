@@ -76,6 +76,12 @@ export async function isSttModelCached(key: string): Promise<boolean> {
 	}
 }
 
+export async function deleteSttModel(key: string): Promise<void> {
+	const spec = resolveSttModelSpec(key);
+	await sttClient.terminate();
+	await fs.rm(path.join(getTinyModelsCacheDir(), spec.repo), { recursive: true, force: true });
+}
+
 /**
  * Download (or warm from cache) the selected ONNX Whisper model via the speech
  * worker, resolving once the model is fully present and loaded. Streams real

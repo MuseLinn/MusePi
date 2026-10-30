@@ -159,6 +159,7 @@ const TAB_WORKER_ARG = "__omp_worker_tab";
 const JS_EVAL_WORKER_ARG = "__omp_worker_js_eval";
 const JS_EVAL_PROCESS_ARG = "__omp_worker_js_eval_process";
 const STT_WORKER_ARG = "__omp_worker_stt";
+const VOICE_FRONTEND_WORKER_ARG = "__omp_worker_voice_frontend";
 const TTS_WORKER_ARG = "__omp_worker_tts";
 const MNEMOPI_EMBED_WORKER_ARG = "__omp_worker_mnemopi_embed";
 
@@ -224,6 +225,11 @@ async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 	if (arg === STT_WORKER_ARG) {
 		const { startSttWorker } = await import("./stt/asr-worker");
 		await runIpcSubprocessWorker(startSttWorker);
+		return true;
+	}
+	if (arg === VOICE_FRONTEND_WORKER_ARG) {
+		const { startVoiceFrontendWorker } = await import("./voice/frontend/worker");
+		await runIpcSubprocessWorker(startVoiceFrontendWorker);
 		return true;
 	}
 	if (arg === TTS_WORKER_ARG) {

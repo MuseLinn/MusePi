@@ -46,6 +46,13 @@ export async function isTtsModelCached(modelKey: string): Promise<boolean> {
 	}
 }
 
+export async function deleteTtsModel(modelKey: string): Promise<void> {
+	const spec = getTtsLocalModelSpec(modelKey);
+	if (!spec) throw new Error(`unknown TTS model: ${modelKey}`);
+	await ttsClient.terminate();
+	await fs.rm(path.join(getTinyModelsCacheDir(), ...spec.repo.split("/")), { recursive: true, force: true });
+}
+
 /**
  * Ensure the selected local TTS model is downloaded into the transformers.js
  * cache (and warm in the worker), streaming integer-percent Hub progress. The

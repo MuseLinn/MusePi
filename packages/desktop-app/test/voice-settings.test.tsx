@@ -4,7 +4,8 @@ import { setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { MockAssistantRow, MockConversationPreview, MockUserRow } from "../src/components/MockConversationPreview";
-import { SpeakAction, TtsModelPickerCard } from "../src/components/settings-sections/voice";
+import { SpeakAction, TtsModelPickerCard, VoiceSection } from "../src/components/settings-sections/voice";
+import { PromptProvider } from "../src/lib/prompt-dialog";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
 
 /**
@@ -99,9 +100,9 @@ describe("朗读模型卡 (TtsModelPickerCard)", () => {
 		expect(rows.length).toBe(2);
 		const kokoro = rows[0]!;
 		const melotts = rows[1]!;
-		// Cached tier → ready marker, no download button.
+		// Cached tier → ready marker + delete action, never a download button.
 		expect(kokoro.querySelector(".gui-stt-row-ready")).not.toBeNull();
-		expect(kokoro.querySelector("button.gui-btn")).toBeNull();
+		expect(kokoro.querySelector("button.gui-btn")?.textContent).toContain("删除模型");
 		// Uncached tier → an enabled download button.
 		const downloadBtn = melotts.querySelector<HTMLButtonElement>("button.gui-btn");
 		expect(downloadBtn).not.toBeNull();
@@ -293,5 +294,62 @@ describe("语音测试共用模拟会话视图", () => {
 		expect(speakBtn.classList.contains("tr-action--error")).toBe(true);
 		expect(speakBtn.title).toBe("Failed to download model.onnx: HTTP 404");
 		expect(speakBtn.querySelector("use")?.getAttribute("href")).toBe("#oc-error-warning");
+	});
+});
+
+describe("voice settings schema", () => {
+	test("keeps the existing Speech group visible beside model management", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("settings.schema", {
+			interaction: [
+				{ key: "stt.enabled", type: "boolean", default: true, ui: { group: "Speech", label: "Speech-to-Text" } },
+			],
+		});
+		fake.responses.set("settings.get", {});
+		fake.responses.set("voice.speakerStatus", { hasProfile: false });
+		fake.responses.set("stt.modelStatus", { models: [], downloads: [], defaultKey: "balanced" });
+		fake.responses.set("tts.modelStatus", { models: [], downloads: [], defaultKey: "kokoro" });
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		act(() => root.render(createElement(VoiceSection, { rpc: asRpc(fake) })));
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 20));
+		});
+		expect(host.textContent).toContain("语音转文字");
+		act(() => root.unmount());
+		host.remove();
+	});
+});
+
+describe("local model management", () => {
+	test("deletes a cached model after confirmation without starting a download", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("tts.modelStatus", statusResponse());
+		fake.responses.set("settings.get", { "tts.localModel": "kokoro" });
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		act(() =>
+			root.render(createElement(PromptProvider, null, createElement(TtsModelPickerCard, { rpc: asRpc(fake) }))),
+		);
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 20));
+		});
+		const row = host.querySelectorAll(".gui-stt-row")[0]!;
+		act(() => row.querySelector<HTMLButtonElement>("button.gui-btn")!.click());
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
+		const dialog = document.body.querySelector('[role="dialog"]')!;
+		const confirm = [...dialog.querySelectorAll("button")].find(button => button.textContent?.trim() === "删除模型")!;
+		await act(async () => confirm.click());
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 220));
+		});
+		expect(fake.calls("tts.modelDelete")).toEqual([{ modelKey: "kokoro" }]);
+		expect(fake.calls("tts.modelDownload")).toEqual([]);
+		act(() => root.unmount());
+		host.remove();
 	});
 });

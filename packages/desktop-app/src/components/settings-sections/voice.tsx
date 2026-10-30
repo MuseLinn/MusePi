@@ -30,6 +30,7 @@ import {
 } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../../i18n/voice";
+import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
@@ -42,6 +43,7 @@ import {
 	type VoiceActivity,
 } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
+import { SpeakerEnrollment } from "../composer/speaker-enrollment";
 import { MockComposer, MockConversationPreview, MockUserRow } from "../MockConversationPreview";
 import { SchemaTabSection } from "./schema";
 
@@ -216,6 +218,9 @@ export function SpeechModelPicker({
 	const [voiceSelected, setVoiceSelected] = useState<string | null>(null);
 	const [active, setActive] = useState<ActiveDownload | null>(null);
 	const [error, setError] = useState<{ modelKey: string; message: string } | null>(null);
+	const [deletingKey, setDeletingKey] = useState<string | null>(null);
+	const skipAutoFetch = useRef(false);
+	const { confirm } = useConfirm();
 	// Single settlement timer: cleared before rescheduling and on unmount,
 	// so stacked terminal events can never fire stale refreshes.
 	const settleTimer = useRef<number | null>(null);
@@ -309,6 +314,33 @@ export function SpeechModelPicker({
 		[rpc, downloadMethod],
 	);
 
+	const remove = useCallback(
+		async (modelKey: string): Promise<void> => {
+			if (!rpc || deletingKey) return;
+			const accepted = await confirm(
+				tLoose("Delete this local model and free its disk space?"),
+				tLoose("Delete model"),
+				{
+					destructive: true,
+				},
+			);
+			if (!accepted) return;
+			setDeletingKey(modelKey);
+			setError(null);
+			try {
+				await rpc.request(statusMethod === "stt.modelStatus" ? "stt.modelDelete" : "tts.modelDelete", { modelKey });
+				skipAutoFetch.current = true;
+				setSelected(previous => (previous === modelKey ? "" : previous));
+				refresh();
+			} catch (cause) {
+				setError({ modelKey, message: cause instanceof Error ? cause.message : String(cause) });
+			} finally {
+				setDeletingKey(null);
+			}
+		},
+		[rpc, deletingKey, confirm, statusMethod, refresh],
+	);
+
 	const select = (modelKey: string): void => {
 		if (!rpc || modelKey === selected) return;
 		setSelected(modelKey);
@@ -342,6 +374,10 @@ export function SpeechModelPicker({
 	const selectedRow = visibleModels?.find(m => m.key === selected) ?? null;
 	useEffect(() => {
 		if (!autoFetchOnSelect) return;
+		if (skipAutoFetch.current) {
+			skipAutoFetch.current = false;
+			return;
+		}
 		if (!selectedRow || selectedRow.cached || active !== null) return;
 		download(selectedRow.key);
 	}, [selectedRow, active, download, autoFetchOnSelect]);
@@ -438,7 +474,17 @@ export function SpeechModelPicker({
 									</div>
 								)}
 								{m.cached ? (
-									<span className="gui-stt-row-ready">✓ {t("settings.modelReadyOffline")}</span>
+									<span className="gui-stt-row-actions">
+										<span className="gui-stt-row-ready">✓ {t("settings.modelReadyOffline")}</span>
+										<button
+											type="button"
+											className="gui-btn"
+											disabled={!rpc || deletingKey !== null || active !== null}
+											onClick={() => void remove(m.key)}
+										>
+											{deletingKey === m.key ? "…" : tLoose("Delete model")}
+										</button>
+									</span>
 								) : !isActive ? (
 									<button
 										type="button"
@@ -747,6 +793,8 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [dictatedMessages, setDictatedMessages] = useState<string[]>([]);
 	const [dictationError, setDictationError] = useState<string | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
+	const [enrollmentOpen, setEnrollmentOpen] = useState(false);
+	const [hasVoiceProfile, setHasVoiceProfile] = useState(false);
 	// 插件单元状态（页面由插件驱动）：voice:stt / voice:tts 关闭时，
 	// 对应 schema 行、模型选择器与测试入口整体隐藏。数据源是全局 registry
 	// 单例（extensions.changed 即时刷新）——能力中心里拨插件/组件开关，
@@ -771,13 +819,23 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			return true;
 		}
 	})();
+	const refreshSpeaker = useCallback(async () => {
+		if (!rpc) return;
+		try {
+			const status = await rpc.request<{ hasProfile: boolean }>("voice.speakerStatus", {});
+			setHasVoiceProfile(status.hasProfile);
+		} catch {
+			setHasVoiceProfile(false);
+		}
+	}, [rpc]);
 
 	useEffect(() => {
 		void enumerateMicDevices()
 			.then(setDevices)
 			.catch(() => setDevices([]));
+		void refreshSpeaker();
 		return () => stopRef.current?.();
-	}, []);
+	}, [refreshSpeaker]);
 
 	const toggleDictation = (): void => {
 		if (dictating) {
@@ -845,9 +903,32 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<SchemaTabSection
 				rpc={rpc}
 				tabs={["interaction"]}
-				groups={["speech"]}
+				groups={["Speech"]}
 				excludeKeys={["stt.modelName", "tts.localModel"]}
 				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts."] as const))]}
+			/>
+			{sttOn && (
+				<div className="gui-settings-section">
+					<div className="gui-settings-row">
+						<div className="min-w-0 flex-1">
+							<div className="gui-settings-row-label">{tLoose("Your voice")}</div>
+							<div className="gui-settings-row-desc">
+								{tLoose("Only your voiceprint is stored on this device.")}
+							</div>
+						</div>
+						<button type="button" className="gui-btn" disabled={!rpc} onClick={() => setEnrollmentOpen(true)}>
+							<Icon name="mic" className="h-3.5 w-3.5" />
+							{hasVoiceProfile ? tLoose("Re-enroll") : tLoose("Enroll voice")}
+						</button>
+					</div>
+				</div>
+			)}
+			<SpeakerEnrollment
+				open={enrollmentOpen}
+				onClose={() => setEnrollmentOpen(false)}
+				rpc={rpc}
+				hasProfile={hasVoiceProfile}
+				onChanged={() => void refreshSpeaker()}
 			/>
 			{sttOn ? (
 				<SttModelPickerCard rpc={rpc} hiddenTiers={sttHiddenTiers} />

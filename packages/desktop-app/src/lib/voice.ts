@@ -4,6 +4,7 @@
  * VoiceActivity) with startDictationOpts (VAD auto-stop + device + language),
  * speak voice/rate options, enumerateMicDevices, and barge-in (duck/pause).
  */
+import { isVoiceFrontendStreamEvent, type VoiceGateState } from "@musepi/pi-wire";
 import { getLocaleSnapshot, t } from "../i18n/index.js";
 import type { RpcClient } from "./rpc";
 
@@ -35,6 +36,11 @@ export interface DictateOptions {
 	vadEndMs?: number;
 	/** 打断已播放 TTS：duck(降到 25%) 或 pause */
 	bargeIn?: "duck" | "pause";
+	streaming?: boolean;
+	onPartial?(text: string): void;
+	onSegment?(text: string, state: VoiceGateState): void;
+	onReview?(text: string): void;
+	onEmpty?(): void;
 	onFinal(text: string): void;
 	onError(message: string): void;
 	onState?(activity: VoiceActivity): void;
@@ -116,11 +122,12 @@ export function quantiseForWire(pcm: Float32Array): number[] {
 	return Array.from(pcm, v => Math.round(v * 1e5) / 1e5);
 }
 
-function recordPcm(opts: {
+export function recordPcm(opts: {
 	maxSeconds?: number;
 	deviceId?: string;
 	vadEndMs?: number;
 	onLevel?: (rms: number) => void;
+	onChunk?: (samples: Float32Array) => void;
 	/** Polled after the mic opens and on every audio frame: a cancel that
 	 *  raced ahead of getUserMedia still closes the stream immediately. */
 	isCancelled?: () => boolean;
@@ -192,7 +199,9 @@ function recordPcm(opts: {
 					return;
 				}
 				const data = e.inputBuffer.getChannelData(0);
-				chunks.push(new Float32Array(data));
+				const chunk = new Float32Array(data);
+				chunks.push(chunk);
+				opts.onChunk?.(resampleToTargetRate(chunk, ctx.sampleRate));
 				let sum = 0;
 				for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
 				const rms = Math.min(1, Math.sqrt(sum / data.length) * 4);
@@ -275,12 +284,111 @@ export function setVoiceInputDevice(deviceId: string | null): void {
 	}
 }
 
+export interface FrontendDictationOptions {
+	rpc: RpcClient;
+	modelKey: string;
+	language?: string;
+	speakerMode: "off" | "prefer" | "strict";
+	enhanceAudio: boolean;
+	onPartial(text: string): void;
+	onSegment(text: string, state: VoiceGateState): void;
+	onFinal(text: string): void;
+	onReview(text: string): void;
+	onEmpty(): void;
+	onError(message: string): void;
+}
+
+export interface FrontendDictationHandle {
+	pushAudio(samples: Float32Array): void;
+	stop(): Promise<void>;
+	cancel(): void;
+}
+
+export async function openFrontendDictation(opts: FrontendDictationOptions): Promise<FrontendDictationHandle> {
+	const { rpc } = opts;
+	const { sessionId } = await rpc.request<{ sessionId: string }>("voice.frontendStreamStart", {
+		modelKey: opts.modelKey,
+		language: opts.language,
+		speakerMode: opts.speakerMode,
+		enhanceAudio: opts.enhanceAudio,
+	});
+	let active = true;
+	let queue = Promise.resolve();
+	let stopPromise: Promise<void> | null = null;
+	const segments = new Map<number, { text: string; state: VoiceGateState }>();
+	const off = rpc.addEventListener(event => {
+		if (!active || !isVoiceFrontendStreamEvent(event.payload) || event.payload.sessionId !== sessionId) return;
+		const incoming = event.payload;
+		if (incoming.type === "voice.frontendPartial") {
+			opts.onPartial(incoming.text);
+			return;
+		}
+		if (incoming.state === "reject") return;
+		segments.set(incoming.segmentId, { text: incoming.text, state: incoming.state });
+		opts.onSegment(incoming.text, incoming.state);
+	});
+	return {
+		pushAudio(samples) {
+			if (!active) return;
+			const audio = quantiseForWire(samples);
+			queue = queue.then(() => rpc.request("voice.frontendStreamAudio", { sessionId, audio })).then(() => undefined);
+			void queue.catch(error => {
+				if (!active) return;
+				active = false;
+				off();
+				opts.onError(error instanceof Error ? error.message : String(error));
+			});
+		},
+		stop() {
+			stopPromise ??= (async () => {
+				if (!active) return;
+				await queue;
+				if (!active) return;
+				const response = await rpc.request<{ results: { text: string; state: VoiceGateState }[] }>(
+					"voice.frontendStreamStop",
+					{ sessionId },
+				);
+				if (!active) return;
+				active = false;
+				off();
+				for (const [segmentId, result] of response.results.entries()) {
+					if (!segments.has(segmentId) && result.text && result.state !== "reject")
+						segments.set(segmentId, { text: result.text, state: result.state });
+				}
+				const ordered = [...segments.entries()].sort(([a], [b]) => a - b).map(([, segment]) => segment);
+				const text = ordered
+					.map(segment => segment.text.trim())
+					.filter(Boolean)
+					.join(" ");
+				if (!text) {
+					opts.onEmpty();
+					return;
+				}
+				if (ordered.some(segment => segment.state === "uncertain")) opts.onReview(text);
+				else opts.onFinal(text);
+			})().catch(error => {
+				active = false;
+				off();
+				opts.onError(error instanceof Error ? error.message : String(error));
+			});
+			return stopPromise;
+		},
+		cancel() {
+			if (!active) return;
+			active = false;
+			off();
+			void rpc.request("voice.frontendStreamCancel", { sessionId }).catch(() => {});
+		},
+	};
+}
+
 export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	const { rpc, onFinal, onError, onState } = opts;
 	if (!rpc) return webSpeechFallback(onFinal, onError, opts.language);
 
 	let cancelled = false;
 	let rec: { stop(): void } | null = null;
+	let frontend: FrontendDictationHandle | null = null;
 	const startedAt = Date.now();
 	let lastTick = 0;
 	// Esc-to-cancel support: the module-level cancelActiveDictation() needs a
@@ -288,6 +396,7 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	const session = {
 		cancel(): void {
 			cancelled = true;
+			frontend?.cancel();
 			rec?.stop();
 			activeDictation = null;
 			onState?.({ phase: "stopped" });
@@ -311,9 +420,11 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 		let vadEndMs = opts.vadEndMs;
 		let configuredLanguage: string | undefined;
 		let configuredModel: string | undefined;
+		let speakerMode: "off" | "prefer" | "strict" = "off";
+		let enhanceAudio = false;
 		try {
 			const v = await rpc.request<Record<string, unknown> | null>("settings.get", {
-				keys: ["stt.vadEndMs", "stt.language", "stt.modelName"],
+				keys: ["stt.vadEndMs", "stt.language", "stt.modelName", "stt.speakerMode", "stt.enhanceAudio"],
 			});
 			const parsed = Number(v?.["stt.vadEndMs"]);
 			if (Number.isFinite(parsed) && parsed > 0) vadEndMs = parsed;
@@ -328,6 +439,9 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 				configuredLanguage = "zh";
 			}
 			configuredModel = typeof v?.["stt.modelName"] === "string" ? (v["stt.modelName"] as string) : undefined;
+			if (v?.["stt.speakerMode"] === "prefer" || v?.["stt.speakerMode"] === "strict")
+				speakerMode = v["stt.speakerMode"];
+			enhanceAudio = v?.["stt.enhanceAudio"] === true;
 		} catch {
 			// settings unavailable — keep the 15 s cap behaviour
 		}
@@ -344,6 +458,41 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 				/* preheat is best-effort: the transcribe path reports real failures */
 			});
 		const language = opts.language ?? configuredLanguage;
+		if (opts.streaming) {
+			try {
+				frontend = await openFrontendDictation({
+					rpc,
+					modelKey: preheatKey,
+					language,
+					speakerMode,
+					enhanceAudio,
+					onPartial: text => opts.onPartial?.(text),
+					onSegment: (text, state) => opts.onSegment?.(text, state),
+					onFinal,
+					onReview: text => opts.onReview?.(text),
+					onEmpty: () => {
+						if (cancelled) return;
+						opts.onEmpty?.();
+						onState?.({ phase: "done" });
+					},
+					onError: message => {
+						if (cancelled) return;
+						onError(message);
+						onState?.({ phase: "error", message });
+					},
+				});
+			} catch (error) {
+				if (cancelled) return;
+				const message = friendlyDictationError(error instanceof Error ? error.message : String(error));
+				onError(message);
+				onState?.({ phase: "error", message });
+				return;
+			}
+		}
+		if (cancelled) {
+			frontend?.cancel();
+			return;
+		}
 		// #9: `done` resolves when the recording FINISHES (VAD end / 15s cap /
 		// stop button) — the transcribe call below now receives the full
 		// buffer, and settings' vadEndMs actually gates the auto-stop.
@@ -352,6 +501,7 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 			deviceId: opts.deviceId,
 			vadEndMs,
 			isCancelled: () => cancelled,
+			onChunk: samples => frontend?.pushAudio(samples),
 			onLevel: level => {
 				if (cancelled) return;
 				const now = Date.now();
@@ -366,14 +516,22 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 		const recorded = await recording.done;
 		if (cancelled) return;
 		if (!recorded) {
-			// The composer surfaces this inline (no toast); the Web Speech
-			// fallback below still gets a chance to answer the utterance.
-			onState?.({ phase: "error", message: friendlyDictationError("microphone unavailable") });
+			frontend?.cancel();
+			const message = friendlyDictationError("microphone unavailable");
+			onState?.({ phase: "error", message });
+			if (frontend) {
+				onError(message);
+				return;
+			}
 			const stop = webSpeechFallback(onFinal, onError, language);
 			if (stop) rec = { stop };
 			return;
 		}
 		onState?.({ phase: "transcribing" });
+		if (frontend) {
+			await frontend.stop();
+			return;
+		}
 		try {
 			const res = await rpc.request<{ text: string }>(
 				"stt.transcribe",

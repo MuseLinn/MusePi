@@ -6,6 +6,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+- **语音输入支持实时草稿、机主声纹与可选降噪**：桌面和 TUI 会分段显示临时文本，正式结果随说话停顿逐步进入输入框；可录入本机声纹以减少旁人误录入，灰区只保留草稿且不自动提交，严格模式仅转写已确认语音。录音动效由真实音量驱动，减少动态效果时保留静态进度。
+  - EN: Voice input now supports live drafts, owner voiceprints, and optional noise suppression. Desktop and TUI show temporary text in segments and insert finalized results as speech pauses; local voiceprint enrollment reduces accidental transcription of other people, uncertain speech stays a draft without auto-submit, and strict mode transcribes only confirmed speech. Recording motion follows actual volume, with static progress under reduced motion.
+- **语音模型可以下载后删除并释放磁盘空间**：STT 与 TTS 缓存行新增确认删除，先停止对应 worker 再清理本地模型，不会在删除后立即自动重新下载。
+  - EN: Speech models can now be deleted after download to reclaim disk space. Cached STT and TTS rows offer confirmed deletion, stop the corresponding worker before removing local files, and do not immediately download the deleted model again.
+
+### Fixed
+- **语音设置页恢复完整配置项**：语音、静音阈值、提交触发、朗读和输入设备等既有设置重新与模型管理一起显示，声纹录入内容也在固定弹窗中垂直居中。
+  - EN: The voice settings page once again shows the complete configuration. Existing speech, silence threshold, submit trigger, playback, and input-device settings appear alongside model management, and voice enrollment content is vertically centered in its fixed dialog.
+
 ## [0.6.3] - 2026-10-29
 
 ### Fixed

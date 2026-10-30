@@ -5132,6 +5132,136 @@ export class DaemonServer {
 				}
 				return { ok: true, persisted: true };
 			}
+			case "voice.speakerStatus": {
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				return getVoiceFrontendService().status();
+			}
+			case "voice.speakerEnrollmentStart": {
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				return getVoiceFrontendService().enrollmentStart();
+			}
+			case "voice.speakerEnrollmentAdd": {
+				const p = (params ?? {}) as { audio?: number[]; sampleRate?: number };
+				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
+				if (p.sampleRate !== undefined && p.sampleRate !== 16_000) throw new Error("sampleRate must be 16000");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				return getVoiceFrontendService().enrollmentAdd({ audio: p.audio, sampleRate: 16_000 });
+			}
+			case "voice.speakerEnrollmentFinish": {
+				const p = (params ?? {}) as { audio?: number[]; sampleRate?: number };
+				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
+				if (p.sampleRate !== undefined && p.sampleRate !== 16_000) throw new Error("sampleRate must be 16000");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				return getVoiceFrontendService().enrollmentFinish({ audio: p.audio, sampleRate: 16_000 });
+			}
+			case "voice.speakerEnrollmentCancel": {
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				getVoiceFrontendService().enrollmentCancel();
+				return { ok: true };
+			}
+			case "voice.speakerDelete": {
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				await getVoiceFrontendService().speakerDelete();
+				return { ok: true };
+			}
+			case "voice.frontendProcess": {
+				const p = (params ?? {}) as {
+					audio?: number[];
+					sampleRate?: number;
+					targetMs?: number;
+					speakerMode?: "off" | "prefer" | "strict";
+					enhanceAudio?: boolean;
+					enrollment?: number[][];
+					acceptThreshold?: number;
+					rejectThreshold?: number;
+				};
+				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
+				if (p.sampleRate !== undefined && p.sampleRate !== 16_000) throw new Error("sampleRate must be 16000");
+				if (p.speakerMode && !["off", "prefer", "strict"].includes(p.speakerMode))
+					throw new Error("invalid speakerMode");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				return getVoiceFrontendService().process({
+					audio: Float32Array.from(p.audio),
+					sampleRate: 16_000,
+					targetMs: p.targetMs ?? (p.audio.length / 16_000) * 1000,
+					speakerMode: p.speakerMode ?? "off",
+					enhanceAudio: p.enhanceAudio ?? false,
+					enrollment: p.enrollment,
+					acceptThreshold: p.acceptThreshold,
+					rejectThreshold: p.rejectThreshold,
+				});
+			}
+			case "voice.frontendStreamStart": {
+				const p = (params ?? {}) as {
+					modelKey?: string;
+					language?: string;
+					speakerMode?: "off" | "prefer" | "strict";
+					enhanceAudio?: boolean;
+					enrollment?: number[][];
+					acceptThreshold?: number;
+					rejectThreshold?: number;
+				};
+				if (!p.modelKey) throw new Error("modelKey required");
+				const { isSttModelKey } = await import("../stt/models");
+				if (!isSttModelKey(p.modelKey)) throw new Error(`unknown speech model: ${p.modelKey}`);
+				if (p.speakerMode && !["off", "prefer", "strict"].includes(p.speakerMode))
+					throw new Error("invalid speakerMode");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				const events = this.#services.get<EventService>("events");
+				const sessionId = await getVoiceFrontendService().streamStart(
+					{
+						modelKey: p.modelKey,
+						language: p.language,
+						speakerMode: p.speakerMode ?? "off",
+						enhanceAudio: p.enhanceAudio ?? false,
+						enrollment: p.enrollment,
+						acceptThreshold: p.acceptThreshold,
+						rejectThreshold: p.rejectThreshold,
+					},
+					{
+						onPartial: result => {
+							events.broadcast({
+								type: "voice.frontendPartial",
+								sessionId,
+								segmentId: result.segmentId,
+								text: result.text,
+								state: result.state,
+							});
+						},
+						onSegment: result => {
+							events.broadcast({
+								type: "voice.frontendSegment",
+								sessionId,
+								segmentId: result.segmentId,
+								text: result.text,
+								state: result.state,
+							});
+						},
+					},
+				);
+				return { sessionId };
+			}
+			case "voice.frontendStreamAudio": {
+				const p = (params ?? {}) as { sessionId?: string; audio?: number[] };
+				if (!p.sessionId) throw new Error("sessionId required");
+				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				getVoiceFrontendService().streamAudio(p.sessionId, Float32Array.from(p.audio));
+				return { ok: true };
+			}
+			case "voice.frontendStreamStop": {
+				const p = (params ?? {}) as { sessionId?: string };
+				if (!p.sessionId) throw new Error("sessionId required");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				return { results: await getVoiceFrontendService().streamStop(p.sessionId) };
+			}
+			case "voice.frontendStreamCancel": {
+				const p = (params ?? {}) as { sessionId?: string };
+				if (!p.sessionId) throw new Error("sessionId required");
+				const { getVoiceFrontendService } = await import("../voice/frontend/service");
+				getVoiceFrontendService().streamCancel(p.sessionId);
+				return { ok: true };
+			}
 			case "stt.modelStatus": {
 				// GUI voice page: which speech models are already on disk, so
 				// the panel can show "ready" vs "needs download" per option.
@@ -5176,6 +5306,16 @@ export class DaemonServer {
 					defaultKey,
 					defaultCached: models.find(m => m.key === defaultKey)?.cached ?? false,
 				} satisfies SttModelStatusResponse;
+			}
+			case "stt.modelDelete": {
+				const p = (params ?? {}) as { modelKey?: string };
+				if (!p.modelKey) throw new Error("modelKey required");
+				const { isSttModelKey } = await import("../stt/models");
+				if (!isSttModelKey(p.modelKey)) throw new Error(`unknown speech model: ${p.modelKey}`);
+				if (this.#sttDownloads.size > 0) throw new Error("stop the model download before deleting it");
+				const { deleteSttModel } = await import("../stt/downloader");
+				await deleteSttModel(p.modelKey);
+				return { ok: true };
 			}
 			case "stt.modelDownload": {
 				// Kick off a speech-model download WITHOUT awaiting it: the
@@ -5333,6 +5473,16 @@ export class DaemonServer {
 					defaultKey = resolveEnabledTtsModel(undefined).key;
 				}
 				return { models, downloads: [...this.#ttsDownloads.keys()], defaultKey } satisfies TtsModelStatusResponse;
+			}
+			case "tts.modelDelete": {
+				const p = (params ?? {}) as { modelKey?: string };
+				if (!p.modelKey) throw new Error("modelKey required");
+				const { isTtsLocalModelKey } = await import("../tts/models");
+				if (!isTtsLocalModelKey(p.modelKey)) throw new Error(`unknown TTS model: ${p.modelKey}`);
+				if (this.#ttsDownloads.size > 0) throw new Error("stop the model download before deleting it");
+				const { deleteTtsModel } = await import("../tts/downloader");
+				await deleteTtsModel(p.modelKey);
+				return { ok: true };
 			}
 			case "tts.modelDownload": {
 				// Kick off a local TTS model download WITHOUT awaiting it —

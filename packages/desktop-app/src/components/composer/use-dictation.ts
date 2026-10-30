@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
-import { cancelActiveDictation, evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../../lib/voice";
+import {
+	cancelActiveDictation,
+	evaluateSubmitTrigger,
+	getVoiceInputDevice,
+	type SttSubmitTrigger,
+	startDictationOpts,
+} from "../../lib/voice";
 
 /**
  * Dictation lifecycle: idle → recording → transcribing → (insert | error).
@@ -30,6 +36,8 @@ export interface DictationController {
 	seconds: number;
 	/** Mic RMS level (0..1); live during the recording phase only. */
 	level: number;
+	/** Volatile ASR preview; only finalized segments enter the draft. */
+	partialText: string;
 	/** Last dictation failure (friendly copy); auto-dismisses after 6 s. */
 	error: string | null;
 	toggle(): void;
@@ -64,6 +72,7 @@ export function useDictation(opts: {
 	}, [phase]);
 	const [seconds, setSeconds] = useState(0);
 	const [level, setLevel] = useState(0);
+	const [partialText, setPartialText] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const errorTimer = useRef<number | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
@@ -78,6 +87,7 @@ export function useDictation(opts: {
 	// may report both onError and an error onState for the same failure).
 	const settle = useCallback((): void => {
 		stopRef.current = null;
+		setPartialText("");
 		setPhase("idle");
 	}, []);
 
@@ -100,19 +110,34 @@ export function useDictation(opts: {
 		}
 		setSeconds(0);
 		setLevel(0);
-		const stop = startDictation(
-			transcript => {
-				const { submit, trimTrailing } = evaluateSubmitTrigger(transcript, optsRef.current.sttSubmitTrigger);
-				if (submit) optsRef.current.onSubmit(transcript.slice(0, transcript.length - trimTrailing));
-				else optsRef.current.onInsert(transcript);
+		setPartialText("");
+		let streamed = false;
+		const stop = startDictationOpts({
+			rpc,
+			deviceId: getVoiceInputDevice() ?? undefined,
+			streaming: true,
+			onPartial: setPartialText,
+			onSegment: text => {
+				streamed = true;
+				setPartialText("");
+				optsRef.current.onInsert(text);
+			},
+			onReview: transcript => {
+				if (!streamed) optsRef.current.onInsert(transcript);
 				settle();
 			},
-			message => {
+			onFinal: transcript => {
+				const { submit, trimTrailing } = evaluateSubmitTrigger(transcript, optsRef.current.sttSubmitTrigger);
+				if (submit) optsRef.current.onSubmit(transcript.slice(0, transcript.length - trimTrailing));
+				else if (!streamed) optsRef.current.onInsert(transcript);
+				settle();
+			},
+			onEmpty: settle,
+			onError: message => {
 				settle();
 				showError(message);
 			},
-			rpc,
-			activity => {
+			onState: activity => {
 				if (activity.phase === "recording") {
 					setPhase("recording");
 					setSeconds(activity.seconds);
@@ -127,7 +152,7 @@ export function useDictation(opts: {
 					showError(activity.message);
 				}
 			},
-		);
+		});
 		stopRef.current = stop ?? null;
 		if (stop) setPhase("recording");
 	}, [rpc, settle, showError]);
@@ -165,5 +190,5 @@ export function useDictation(opts: {
 		setError(null);
 	}, []);
 
-	return { phase, seconds, level, error, toggle, dismissError };
+	return { phase, seconds, level, partialText, error, toggle, dismissError };
 }

@@ -2338,7 +2338,12 @@ export function Composer({
 				}
 			>
 				{dictation.phase !== "idle" && (
-					<VoiceStatusStrip phase={dictation.phase} seconds={dictation.seconds} level={dictation.level} />
+					<VoiceStatusStrip
+						phase={dictation.phase}
+						seconds={dictation.seconds}
+						level={dictation.level}
+						partialText={dictation.partialText}
+					/>
 				)}
 				{dictation.error && (
 					<div className="gui-voice-error" role="status" aria-live="polite">

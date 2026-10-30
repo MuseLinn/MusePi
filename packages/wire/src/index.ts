@@ -898,3 +898,45 @@ export * from "./plugin-config";
 
 /** 可见窗口性能折叠(`session.contextUsage.windowStats`,daemon 与 renderer 共用)。 */
 export * from "./window-stats";
+
+export type VoiceGateState = "accept" | "uncertain" | "reject";
+
+export interface VoiceSpeakerStatusResponse {
+	hasProfile: boolean;
+	model: string | null;
+	sampleCount: number;
+	acceptThreshold: number | null;
+	rejectThreshold: number | null;
+}
+
+export interface VoiceFrontendProcessResponse {
+	audio: number[];
+	state: VoiceGateState;
+	score: number | null;
+	enhanced: boolean;
+	segmentId: number;
+}
+
+export interface VoiceFrontendStreamResult {
+	segmentId: number;
+	text: string;
+	state: VoiceGateState;
+	score: number | null;
+	enhanced: boolean;
+}
+
+export type VoiceFrontendStreamEvent =
+	| { type: "voice.frontendPartial"; sessionId: string; segmentId: number; text: string; state: VoiceGateState }
+	| { type: "voice.frontendSegment"; sessionId: string; segmentId: number; text: string; state: VoiceGateState };
+
+export function isVoiceFrontendStreamEvent(value: unknown): value is VoiceFrontendStreamEvent {
+	if (typeof value !== "object" || value === null) return false;
+	const event = value as Record<string, unknown>;
+	return (
+		(event.type === "voice.frontendPartial" || event.type === "voice.frontendSegment") &&
+		typeof event.sessionId === "string" &&
+		typeof event.segmentId === "number" &&
+		typeof event.text === "string" &&
+		(event.state === "accept" || event.state === "uncertain" || event.state === "reject")
+	);
+}

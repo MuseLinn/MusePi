@@ -2,6 +2,8 @@ import { AudioCapture } from "@musepi/pi-natives";
 import { logger } from "@musepi/pi-utils";
 import { settings } from "../config/settings";
 import { resolveEnabledSttModel } from "../voice/engine-denylist";
+import type { GateState, SpeakerMode } from "../voice/frontend/gate";
+import { getVoiceFrontendService } from "../voice/frontend/service";
 import { type SttStreamHandle, sttClient } from "./asr-client";
 import { downloadSttModel, isSttModelCached } from "./downloader";
 import { evaluateSubmitTrigger } from "./submit-trigger";
@@ -46,6 +48,7 @@ export class STTController {
 	#streamRecorder: CaptureHandle | null = null;
 	#streamEditor: Editor | null = null;
 	#streamCommitted = false;
+	#streamNeedsReview = false;
 	#streamAbort: AbortController | null = null;
 	#streamUtterance = "";
 
@@ -175,29 +178,65 @@ export class STTController {
 		const language = settings.get("stt.language") as string | undefined;
 		this.#streamEditor = editor;
 		this.#streamCommitted = false;
+		this.#streamNeedsReview = false;
 		this.#streamUtterance = "";
 		this.#streamAbort = new AbortController();
-		const stream = sttClient.startStream(modelKey, {
-			language: language || undefined,
-			signal: this.#streamAbort.signal,
-			onPartial: text => {
-				if (this.#disposed || this.#state !== "recording") return;
-				this.#streamEditor?.setVolatileText(this.#prefixed(text));
+		const onPartial = (text: string): void => {
+			if (this.#disposed || this.#state !== "recording") return;
+			this.#streamEditor?.setVolatileText(this.#prefixed(text));
+			options.requestRender?.();
+		};
+		const onSegment = (text: string, state: GateState): void => {
+			if (this.#disposed) return;
+			if (state === "reject") {
+				this.#streamEditor?.clearVolatileText();
 				options.requestRender?.();
-			},
-			onSegment: text => {
-				if (this.#disposed) return;
-				const prefixed = this.#prefixed(text);
-				if (prefixed) {
-					this.#streamEditor?.commitVolatileText(prefixed);
-					this.#streamCommitted = true;
-					this.#streamUtterance += prefixed;
-				} else {
-					this.#streamEditor?.clearVolatileText();
-				}
-				options.requestRender?.();
-			},
-		});
+				return;
+			}
+			if (state === "uncertain") this.#streamNeedsReview = true;
+			const prefixed = this.#prefixed(text);
+			if (prefixed) {
+				this.#streamEditor?.commitVolatileText(prefixed);
+				this.#streamCommitted = true;
+				this.#streamUtterance += prefixed;
+			} else {
+				this.#streamEditor?.clearVolatileText();
+			}
+			options.requestRender?.();
+		};
+		const speakerMode = (settings.get("stt.speakerMode") as SpeakerMode | undefined) ?? "off";
+		const enhanceAudio = settings.get("stt.enhanceAudio") === true;
+		let stream: SttStreamHandle;
+		if (speakerMode === "off" && !enhanceAudio) {
+			stream = sttClient.startStream(modelKey, {
+				language: language || undefined,
+				signal: this.#streamAbort.signal,
+				onPartial,
+				onSegment: text => onSegment(text, "accept"),
+			});
+		} else {
+			const frontend = getVoiceFrontendService();
+			const sessionId = await frontend.streamStart(
+				{ modelKey, language: language || undefined, speakerMode, enhanceAudio },
+				{
+					onPartial: result => onPartial(result.text),
+					onSegment: result => onSegment(result.text, result.state),
+				},
+			);
+			stream = {
+				pushAudio: samples => frontend.streamAudio(sessionId, samples),
+				stop: async () => {
+					const results = await frontend.streamStop(sessionId);
+					if (results.some(result => result.state === "uncertain")) this.#streamNeedsReview = true;
+					return results
+						.filter(result => result.state !== "reject")
+						.map(result => result.text.trim())
+						.filter(Boolean)
+						.join(" ");
+				},
+				cancel: () => frontend.streamCancel(sessionId),
+			};
+		}
 		this.#stream = stream;
 		let recorder: CaptureHandle;
 		try {
@@ -283,7 +322,7 @@ export class STTController {
 		options.requestRender?.();
 		if (!failed) options.showStatus(this.#streamCommitted ? "" : "No speech detected.");
 
-		if (this.#streamCommitted && !failed && this.#streamEditor) {
+		if (this.#streamCommitted && !failed && !this.#streamNeedsReview && this.#streamEditor) {
 			const trigger = settings.get("stt.submitTrigger");
 			const { submit, trimTrailing } = evaluateSubmitTrigger(this.#streamUtterance, trigger);
 			if (trimTrailing > 0) {
@@ -303,6 +342,7 @@ export class STTController {
 		this.#streamRecorder = null;
 		this.#streamEditor = null;
 		this.#streamCommitted = false;
+		this.#streamNeedsReview = false;
 		this.#streamAbort = null;
 		this.#streamUtterance = "";
 	}

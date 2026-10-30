@@ -81,27 +81,18 @@ export function VoiceButton({
 	);
 }
 
-/** Bar animation seeds: a negative delay per bar desyncs the shared scaleY
- *  keyframes and a slightly different duration per bar keeps the wave from
- *  reading as a mechanical metronome. Computed once. */
-const VOICE_WAVE_BARS = Array.from({ length: 13 }, (_, i) => ({
-	delay: `${(-i * 0.11).toFixed(2)}s`,
-	duration: `${(0.72 + (i % 4) * 0.09).toFixed(2)}s`,
-}));
+const VOICE_WAVE_BARS = Array.from({ length: 13 }, (_, index) => 0.35 + ((index * 7) % 10) / 14);
 
-/** In-input voice feedback strip (composer children, above the textarea):
- *  while dictating, the waveform that used to be crammed into the mic
- *  capsule lives here instead, where there is room for the clock and the
- *  phase copy. Bars are pure CSS (staggered scaleY); the real mic RMS only
- *  modulates the strip's opacity via `--voice-level` (no JS height driving). */
 export function VoiceStatusStrip({
 	phase,
 	seconds,
 	level,
+	partialText = "",
 }: {
 	phase: "recording" | "transcribing";
 	seconds: number;
 	level: number;
+	partialText?: string;
 }): ReactNode {
 	return (
 		<div
@@ -110,14 +101,19 @@ export function VoiceStatusStrip({
 			role="status"
 			aria-live="polite"
 		>
-			<span className="gui-voice-wave" aria-hidden>
-				{VOICE_WAVE_BARS.map((bar, i) => (
-					<i key={i} style={{ animationDelay: bar.delay, animationDuration: bar.duration }} />
-				))}
+			<span className="gui-voice-visual" aria-hidden>
+				<i className="gui-voice-ring gui-voice-ring--outer" />
+				<i className="gui-voice-ring gui-voice-ring--inner" />
+				<span className="gui-voice-wave">
+					{VOICE_WAVE_BARS.map((weight, index) => (
+						<i key={index} style={{ transform: `scaleY(${Math.min(1, 0.18 + level * weight)})` }} />
+					))}
+				</span>
 			</span>
 			<span className="gui-voice-strip-label">
 				{phase === "recording" ? `${seconds}s` : t("settings.voiceTranscribing")}
 			</span>
+			<span className={`gui-voice-partial${partialText ? " gui-voice-partial--visible" : ""}`}>{partialText}</span>
 			<span className="gui-voice-strip-hint">{t("settings.voiceEscCancel")}</span>
 		</div>
 	);

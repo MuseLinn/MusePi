@@ -86,8 +86,73 @@ export interface SherpaOfflineTts {
 	generateAsync(request: { text: string; sid?: number; speed?: number }): Promise<SherpaGeneratedAudio>;
 }
 
+export interface SherpaSpeakerEmbeddingStream {
+	acceptWaveform(audio: { samples: Float32Array; sampleRate: number }): void;
+	inputFinished(): void;
+}
+
+export interface SherpaSpeakerEmbeddingExtractor {
+	readonly dim: number;
+	createStream(): SherpaSpeakerEmbeddingStream;
+	isReady(stream: SherpaSpeakerEmbeddingStream): boolean;
+	compute(stream: SherpaSpeakerEmbeddingStream): Float32Array;
+}
+
+export interface SherpaVad {
+	acceptWaveform(samples: Float32Array): void;
+	isEmpty(): boolean;
+	front(): { start: number; samples: Float32Array };
+	pop(): void;
+	flush(): void;
+	reset(): void;
+}
+
+export interface SherpaOnlineDenoiser {
+	readonly sampleRate: number;
+	readonly frameShiftInSamples: number;
+	run(audio: { samples: Float32Array; sampleRate: number }): { samples: Float32Array; sampleRate: number };
+	flush(): { samples: Float32Array; sampleRate: number };
+	reset(): void;
+}
+
 /** The native sherpa-onnx module surface used by the speech workers. */
 export interface SherpaRuntime {
+	Vad: {
+		new (
+			config: {
+				sileroVad: {
+					model: string;
+					threshold: number;
+					minSpeechDuration: number;
+					minSilenceDuration: number;
+					windowSize: number;
+				};
+				sampleRate: number;
+				numThreads: number;
+				debug: number;
+				provider: string;
+			},
+			bufferSizeInSeconds: number,
+		): SherpaVad;
+	};
+	OnlineSpeechDenoiser: {
+		new (config: {
+			model: {
+				dpdfnet: { model: string };
+				numThreads: number;
+				debug: number;
+				provider: string;
+			};
+		}): SherpaOnlineDenoiser;
+	};
+	SpeakerEmbeddingExtractor: {
+		new (config: {
+			model: string;
+			numThreads: number;
+			debug: number;
+			provider: string;
+		}): SherpaSpeakerEmbeddingExtractor;
+	};
 	OfflineRecognizer: {
 		createAsync(config: SherpaOfflineConfig): Promise<SherpaOfflineRecognizer>;
 	};
