@@ -465,7 +465,11 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	// 7. Commit
 	console.log("Committing...");
 	await git(["add", "."]);
-	await git(["commit", "-m", `chore: bump version to ${version}`]);
+	if ((await git(["diff", "--cached", "--name-only"]).text()).trim()) {
+		await git(["commit", "-m", `chore: bump version to ${version}`]);
+	} else {
+		console.log("  Version already committed; skipping empty commit");
+	}
 	console.log();
 
 	// 8. Tag, then push branch + tag atomically — pushing the tag by object id.
