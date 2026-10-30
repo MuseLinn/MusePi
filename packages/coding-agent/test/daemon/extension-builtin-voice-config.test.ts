@@ -252,7 +252,7 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 		const after = (await service.list()).extensions.find(e => e.id === "computer:computer");
 		expect(after?.components?.[0].enabled).toBe(false);
 		expect(after?.components?.[0].disabledReason).toBe("tools-denied");
-		// 单元总开关不受组件开关影响(正交；computer unsetDisabled 未设置 = disabled)。
+		// 单元总开关不受组件开关影响。
 		expect(after?.state).toBe(before?.state);
 
 		await service.setComponentEnabled({ id: "computer:computer", component: "computer", enabled: true });

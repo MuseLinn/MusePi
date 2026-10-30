@@ -65,7 +65,6 @@ describe("浏览器 backend 组件通道（browser-backend deny）", () => {
 			key: "computer.enabled",
 			on: true,
 			off: false,
-			unsetDisabled: true,
 		});
 		expect(computer?.components?.map(c => [c.id, c.deny])).toEqual([["computer", "tool"]]);
 	});

@@ -55,7 +55,9 @@ describe("插件归属设置随插件停用隐藏(TUI /settings)", () => {
 		expect(getSettingDef("browser.cdpUrl")?.condition?.()).toBe(false);
 	});
 
-	test("computerPluginEnabled 随 unsetDisabled 语义:未设置即隐藏(默认停用)", () => {
+	test("computerPluginEnabled 默认启用,显式停用后继承停用", () => {
+		expect(getSettingDef("computer.display")?.condition?.()).toBe(true);
+		settings.set("computer.enabled", false);
 		expect(getSettingDef("computer.display")?.condition?.()).toBe(false);
 		settings.set("computer.enabled", true);
 		expect(getSettingDef("computer.display")?.condition?.()).toBe(true);
