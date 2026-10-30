@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-10-30
+
 ### Added
 - **稳定版与测试版现在使用彼此隔离的更新通道**：测试版采用 `x.y.z-beta.N` 版本号，CLI、桌面客户端和 npm 都只会检测测试版更新；稳定版继续只接收稳定版。发布会阻止旧测试版覆盖新版本，并在上传后核对更新清单。
   - EN: Stable and beta builds now use isolated update channels. Numbered beta releases check only beta updates across the CLI, desktop app, and npm, while stable builds remain on stable releases. Publishing rejects beta rollbacks and verifies the uploaded update manifest.
