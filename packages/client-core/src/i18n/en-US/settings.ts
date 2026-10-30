@@ -4553,6 +4553,16 @@ export const settings = {
 	"Speech rate (0.5–2)": "Speech rate (0.5–2)",
 	"Speech-to-Text": "Speech-to-Text",
 	"Speech-to-Text Submit Trigger": "Speech-to-Text Submit Trigger",
+	"Speaker Verification": "Speaker Verification",
+	"Speech Enhancement": "Speech Enhancement",
+	"Prefer enrolled voice": "Prefer enrolled voice",
+	"Transcribe only confirmed target speech": "Transcribe only confirmed target speech",
+	"Do not verify the speaker": "Do not verify the speaker",
+	"Allow uncertain text as a draft without auto-submit": "Allow uncertain text as a draft without auto-submit",
+	"Verify the enrolled speaker before transcription. Prefer allows uncertain text as a draft without auto-submit; strict requires confirmed target speech. Off preserves the existing behavior.":
+		"Verify the enrolled speaker before transcription. Prefer allows uncertain text as a draft without auto-submit; strict requires confirmed target speech. Off preserves the existing behavior.",
+	"Apply local DPDFNet noise suppression before speaker verification and transcription.":
+		"Apply local DPDFNet noise suppression before speaker verification and transcription.",
 	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).":
 		"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).",
 	"Spend eligible saved resets without prompting.": "Spend eligible saved resets without prompting.",
