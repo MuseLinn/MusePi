@@ -55,6 +55,16 @@ describe("CI runtime and delivery contracts", () => {
 		expect(result.stdout.toString()).toContain("==> packages/desktop-app");
 	});
 
+	it("gates releases on the real Electron desktop smoke job", () => {
+		const workflow = readYaml(".github/workflows/ci.yml");
+		const smoke = workflow.jobs?.test_desktop_smoke;
+		const steps = allSteps(smoke);
+		expect(steps.some(step => step.run?.includes("bun run ci:test:desktop-smoke"))).toBe(true);
+		const gate = workflow.jobs?.release_gate;
+		expect(gate?.needs).toContain("test_desktop_smoke");
+		expect(gate?.if).toContain("needs.test_desktop_smoke.result == 'success'");
+	});
+
 	it("does not publish CLI binaries when the release validation gate failed", () => {
 		const workflow = readYaml(".github/workflows/ci.yml");
 		const publish = workflow.jobs?.release_github;

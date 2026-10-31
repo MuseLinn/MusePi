@@ -44,13 +44,13 @@ import { Reveal } from "./Reveal";
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 180;
 
-import { petForId } from "../lib/pet";
+import { type PetdexPackage, petForId, petId } from "../lib/pet";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
-import { PetSprite } from "./PetSprite";
+import { PetSprite, usePetDecor } from "./PetSprite";
 
 const STEPS = [
 	{ icon: Languages, key: "settings.onboardingStep1" },
@@ -157,26 +157,17 @@ function StepDemo({ step, petMode }: { step: number; petMode: "input" | "desktop
 	);
 }
 
+type PreviewPet = { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage };
+
 function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desktop" }): ReactNode {
 	// Hooks MUST run before every early return (React hook rules — the step
 	// branches below bail out early). The pet state is only rendered at
 	// step 6, but loading it unconditionally is cheap and keeps the hook
 	// count stable across step changes.
-	const [pet, setPet] = useState<ReturnType<typeof petForId> | null>(() => {
-		try {
-			return petForId(localStorage.getItem("musepi-gui-pet-id") ?? "musepi");
-		} catch {
-			return petForId("musepi");
-		}
-	});
+	const [pet, setPet] = useState<PreviewPet>(() => petForId(petId()));
+	const decor = usePetDecor();
 	useEffect(() => {
-		const on = (): void => {
-			try {
-				setPet(petForId(localStorage.getItem("musepi-gui-pet-id") ?? "musepi"));
-			} catch {
-				// ignore
-			}
-		};
+		const on = (): void => setPet(petForId(petId()));
 		window.addEventListener("omp-pet-changed", on);
 		return () => window.removeEventListener("omp-pet-changed", on);
 	}, []);
@@ -272,13 +263,30 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 			</div>
 		);
 	}
-	// Step 6 — personalization: chat rows with the LIVE AgentAvatar
-	// (follows the orbs/hexagon/star choice) + the composer with the pet
-	// docked at its top-right — the REAL selected pet (musepi-gui-pet-id,
-	// builtin or petdex) shown as its static rest frame, like the actual
-	// composer (gui-composer-pet positioning). The pet is SMALLER than the
-	// real composer's (the mock window is scaled) and only shows in
-	// "tools.input" mode — "desktop" moves it to its own window.
+	// Step 6 — personalization: both display locations render the REAL
+	// selected pet and decoration. Desktop mode gets its own pet-and-bubble
+	// scene instead of leaving an empty composer where the pet used to be.
+	if (petMode === "desktop") {
+		return (
+			<div className="gui-obo-morph-fill gui-obo-pers-desktop" role="img" aria-label={t("settings.petModeDesktop")}>
+				<div className="gui-obo-pers-desktop-bubble" aria-hidden="true">
+					<span className="gui-obo-pers-desktop-title">{t("settings.petBubbleKindCompleted")}</span>
+					<span className="gui-obo-pers-desktop-status">{t("settings.petBubblesCount", { count: 1 })}</span>
+				</div>
+				<div className="gui-obo-pers-desktop-pet" aria-hidden="true">
+					<PetSprite
+						mood="rest"
+						pet={pet}
+						size={48}
+						scale={0.56}
+						frozen
+						gloss={decor.gloss}
+						accessory={decor.accessory}
+					/>
+				</div>
+			</div>
+		);
+	}
 	return (
 		<div className="gui-obo-morph-fill gui-obo-morph-fill--chat">
 			<div className="gui-obo-pers-row gui-obo-pers-row--user">
@@ -298,11 +306,9 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 			</div>
 			<div className="gui-obo-pers-composer">
 				<div className="gui-obo-pers-input" />
-				{petMode === "input" && pet && (
-					<div className="gui-obo-pers-pet" aria-hidden="true">
-						<PetSprite mood="rest" pet={pet} size={16} frozen />
-					</div>
-				)}
+				<div className="gui-obo-pers-pet" aria-hidden="true">
+					<PetSprite mood="rest" pet={pet} size={16} frozen gloss={decor.gloss} accessory={decor.accessory} />
+				</div>
 			</div>
 		</div>
 	);
@@ -1635,10 +1641,11 @@ export function OnboardingOverlay({
 						</div>
 					</div>
 					<div className="gui-onboarding-visual">
-						{/* Demo index remap (DEMO_STEP): the demo vocabulary still
-						 * speaks the original 8 steps — appearance for the merged
-						 * first step, provider for model setup, chat for done. */}
-						<StepDemo step={DEMO_STEP[step] ?? 0} petMode={persPetMode} />
+						{/* Personalization switches from the completion demo to the live pet. */}
+						<StepDemo
+							step={branch === "personalize" && last ? 6 : (DEMO_STEP[step] ?? 0)}
+							petMode={persPetMode}
+						/>
 					</div>
 				</div>
 			</div>

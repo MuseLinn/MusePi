@@ -34,13 +34,16 @@
 	--pet-surface: oklch(0.24 0.012 60 / 0.66);
 	--pet-chip-bg: oklch(0.28 0.014 60);
 	--pet-chip-bg-hover: oklch(0.36 0.016 60);
+	/* Bubble geometry is independent of the shared radius scale. The same
+	 * 20px face is used by the priority card, decorative backs and header. */
+	--radius-xl: 20px;
 	/* Unified bubble-stack width — the collapsed card AND the expanded list
 	 * share one OUTER box (240px card + 20px horizontal shadow room each
 	 * side), so the window width is constant across the collapsed ⇄
 	 * expanded switch. No vw-based width here: in the content-sized bubble
 	 * window a vw width feeds back into the reported window size and
 	 * converges to nothing. */
-	--pet-stack-width: 280px;
+	--pet-stack-width: 360px;
 	/* ── Bubble kind accents ─────────────────────────────────────────────
 	 * Every notification used to render identically apart from `error`
 	 * getting a red border — a finished task, a failure, a question that
@@ -185,30 +188,21 @@
 	transform: scaleX(-1);
 }
 
-/* Bubble stack above the pet — iOS Notification-Center style. Collapsed:
- * only the newest bubble (a frosted card with an "N more" count chip);
- * clicked → the full list expands (scrolls inside the window instead of
- * clipped past the top edge — the window grows upward to fit). Glass
- * recipe matches the main window (.gui-main: translucent surface +
- * blur(24px) saturate(180%)). The card self-draws its frosted-sheen
- * (translucent tint + highlight + hairline) on the transparent window
- * body. */
+/* Bubble stack above the pet. Both collapse states keep one outer width;
+ * only the height and content change. The 60px transparent perimeter makes
+ * room for the shared --glass-shadow. The hitbox report excludes it, so the
+ * extra window area remains click-through. */
 .pet-bubbles {
+	/* Re-scope the shared token after tokens.css loads; the 20px bubble face
+	 * must not inherit the global 12px --radius-xl value. */
+	--radius-xl: 20px;
 	position: absolute;
-	/* bottom:174px puts the stack's bottom EDGE at y=116 (290−174) — 20px
-	 * above the rabbit's visual top (y≈136; the sprite frame is 134). */
 	bottom: 174px;
 	left: 50%;
 	transform: translateX(-50%);
-	/* Unified width (see --pet-stack-width): one fixed box for the
-	 * collapsed card and the expanded list, so the window width and the
-	 * shadow/feather boundary never change between states (the morph is
-	 * height-only). The 20px horizontal padding is the transparent shadow
-	 * room for the cards' box-shadow (0 4px 20px ≈ 20px each side) —
-	 * identical in both states so the boxes match. */
 	width: var(--pet-stack-width);
 	box-sizing: border-box;
-	padding: 0 20px;
+	padding: 0 60px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -218,30 +212,22 @@
 
 .pet-bubble {
 	position: relative;
+	z-index: 2;
 	width: 100%;
 	max-width: none;
 	box-sizing: border-box;
 	padding: 10px 14px;
-	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
-	border-radius: var(--radius-2xl);
-	/* Glass-look surface (kimi-work bubble parity): a translucent tint +
-	 * diagonal sheen + a bright top-edge hairline fake the frosted look.
-	 * The window is fully transparent (per-pixel alpha), so the body
-	 * behind the card is desktop — no native vibrancy layer to blur; the
-	 * self-drawn recipe is the one and only glass path on every platform. */
-	background:
-		linear-gradient(135deg, color-mix(in oklab, var(--color-text) 12%, transparent) 0%, transparent 38%),
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 9%, transparent), transparent 48%),
-		var(--pet-surface);
-	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, var(--color-text) 22%, transparent),
-		inset 0 -1px 0 color-mix(in oklab, #000 12%, transparent),
-		0 6px 24px rgba(0, 0, 0, 0.35),
-		0 2px 8px rgba(0, 0, 0, 0.28);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	/* The transparent desktop window has no reliable native backdrop layer.
+	 * Mix the shared glass fill with the pet's readable base instead of
+	 * claiming that CSS backdrop-filter blurs the OS desktop. */
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-surface));
+	box-shadow: var(--glass-shadow);
 	pointer-events: auto;
-	/* Blur/fade transitions for the collapse morph — spring easing
-	 * (--spring) for a natural settle instead of the default ease. */
-	transition: filter 160ms var(--spring, ease), opacity 160ms var(--spring, ease);
+	transition:
+		filter 180ms var(--spring-snappy, ease),
+		opacity 180ms var(--spring-snappy, ease);
 }
 
 /* Collapsed stack card — same fixed width as the expanded list (the
@@ -254,17 +240,16 @@
 
 .pet-bubble__more {
 	position: absolute;
+	z-index: 4;
 	top: -9px;
-	left: 12px;
+	left: 52px;
 	padding: 1px 8px;
-	border: 1px solid color-mix(in oklab, var(--color-text) 22%, transparent);
+	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
-		color-mix(in oklab, var(--pet-chip-bg) 82%, transparent);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-chip-bg));
 	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
-		0 2px 8px rgba(0, 0, 0, 0.25);
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
 	color: var(--color-text);
 	font-size: 10.5px;
 	font-weight: 600;
@@ -272,17 +257,41 @@
 	pointer-events: none;
 }
 
-/* Expanded stack — header row (count + collapse) over the full list.
- * Height follows content (window auto-sizes to it); the cap only kicks
- * in for huge stacks, which then scroll inside the window. */
+/* Decorative backs make the collapsed state a real visual stack. They are
+ * not duplicate content and never receive input; the priority card remains
+ * the only interactive card until the user expands the list. */
+.pet-bubbles__stack-layer {
+	position: absolute;
+	left: 60px;
+	right: 60px;
+	top: 0;
+	bottom: 0;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg) 76%, var(--pet-surface));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
+	transform-origin: 50% 100%;
+	pointer-events: none;
+}
+
+.pet-bubbles__stack-layer--near {
+	z-index: 1;
+	transform: translateY(-7px) scale(0.96);
+}
+
+.pet-bubbles__stack-layer--far {
+	z-index: 0;
+	transform: translateY(-13px) scale(0.92);
+}
+
+/* Expanded stack — header row over the full priority list. The 60px
+ * padding belongs inside the scrollport so --glass-shadow is not clipped. */
 .pet-bubbles--expanded {
 	align-items: stretch;
-	/* Vertical shadow room INSIDE the scrollport: overflow-y scrolls and
-	 * would clip the cards' box-shadows at the padding-box edge — 20px top
-	 * (head shadow 0 4px 16px ≈ 20px up) + 24px bottom (card shadow
-	 * 0 4px 20px ≈ 24px down) keep them inside the scroll area. */
-	padding: 20px 20px 24px;
-	max-height: 360px;
+	padding: 60px;
+	max-height: 480px;
 	overflow-y: auto;
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
@@ -327,17 +336,15 @@
 	opacity: 0.55;
 }
 
-/* Cards in the expanded list pop in with a blur-to-sharp settle and a
- * small slide from the collapsed card's position (iOS Notification-
- * Center feel). */
+/* Entrances share the liquid spring; exits and hover fades stay snappy. */
 .pet-bubbles--expanded .pet-bubble {
-	animation: pet-bubble-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: pet-bubble-pop 240ms var(--spring-liquid) both;
 }
 
 @keyframes pet-bubble-pop {
 	from {
 		opacity: 0;
-		transform: translateY(-8px);
+		transform: translateY(-8px) scale(0.98);
 		filter: blur(6px);
 	}
 	to {
@@ -353,14 +360,10 @@
 	justify-content: space-between;
 	gap: 8px;
 	padding: 6px 10px;
-	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-xl);
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
-		color-mix(in oklab, var(--pet-panel-bg) 85%, transparent);
-	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
-		0 4px 16px rgba(0, 0, 0, 0.3);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-panel-bg));
+	box-shadow: var(--glass-shadow);
 	font-size: 11px;
 	pointer-events: auto;
 	flex-shrink: 0;
@@ -371,7 +374,6 @@
 	font-weight: 600;
 }
 
-/* 清除全部 — quiet text button at the head's right edge (kimi parity). */
 .pet-bubbles__clear {
 	padding: 2px 8px;
 	border: none;
@@ -382,20 +384,19 @@
 	font-weight: 600;
 	cursor: pointer;
 	pointer-events: auto;
+	transition:
+		background 160ms var(--spring-snappy, ease),
+		color 160ms var(--spring-snappy, ease);
 }
 
 .pet-bubbles__clear:hover {
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	background: var(--glass-bg-strong);
 	color: var(--color-text);
 }
 
-/* ∨ collapse fab — round glass button floating just above the pet, to the
- * right of the sprite (kimi parity). Sibling of the expanded stack, outside
- * the scrollport so it never scrolls away. */
+/* The collapse control sits outside the scrollport and remains reachable. */
 .pet-bubbles__fab {
 	position: absolute;
-	/* The stack's bottom edge sits at bottom:174px (see .pet-bubbles);
-	 * park the fab in the 8px gap between the stack and the sprite top. */
 	bottom: 158px;
 	left: calc(50% + 44px);
 	width: 26px;
@@ -403,33 +404,27 @@
 	padding: 0;
 	display: grid;
 	place-items: center;
-	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
+	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
-		var(--pet-surface);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-surface));
 	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
-		0 3px 10px rgba(0, 0, 0, 0.35);
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		0 6px 18px oklch(0 0 0 / 28%);
 	color: var(--color-text);
 	font-size: 13px;
 	line-height: 1;
 	cursor: pointer;
 	pointer-events: auto;
-	animation: pet-bubble-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: pet-bubble-pop 240ms var(--spring-liquid) both;
+	transition: transform 180ms var(--spring-liquid);
 }
 
 .pet-bubbles__fab:hover {
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 10%, transparent), transparent 45%),
-		var(--pet-chip-bg-hover, var(--pet-surface));
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 76%, var(--pet-chip-bg-hover));
+	transform: translateY(-2px);
 }
 
-/* ── Bubble hover quick actions (kimi-work parity) ──────────────────────
- * A right-aligned row of round glass chips, hidden until the card is
- * hovered (opacity + rise). ✓ is the primary confirm (approval → 批准,
- * completion/error → 标记已读并关闭); ✗ denies an approval; 💬 expands the
- * inline reply row. */
 .pet-bubble__actions {
 	display: flex;
 	align-items: center;
@@ -439,7 +434,9 @@
 	padding-left: 4px;
 	opacity: 0;
 	transform: translateY(3px);
-	transition: opacity 140ms var(--spring, ease), transform 140ms var(--spring, ease);
+	transition:
+		opacity 160ms var(--spring-snappy, ease),
+		transform 220ms var(--spring-liquid);
 	pointer-events: none;
 }
 
@@ -456,20 +453,25 @@
 	padding: 0;
 	display: grid;
 	place-items: center;
-	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
+	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 6%, transparent), transparent 50%),
-		var(--pet-chip-bg);
-	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-text) 10%, transparent);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg) 62%, var(--pet-chip-bg));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
 	color: var(--color-text);
 	font-size: 12px;
 	line-height: 1;
 	cursor: pointer;
+	transition:
+		background 160ms var(--spring-snappy, ease),
+		color 160ms var(--spring-snappy, ease),
+		transform 180ms var(--spring-liquid);
 }
 
 .pet-bubble__action:hover {
-	background: var(--pet-chip-bg-hover);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 68%, var(--pet-chip-bg-hover));
+	transform: translateY(-1px);
 }
 
 .pet-bubble__action--active {
@@ -481,11 +483,11 @@
  * solid button per card so the confirm action is obvious at a glance. */
 .pet-bubble__action--primary {
 	background: color-mix(in oklab, var(--color-accent) 82%, var(--pet-chip-bg));
-	border-color: color-mix(in oklab, var(--color-accent) 70%, transparent);
-	color: var(--color-accent-foreground, #fff);
+	border-color: color-mix(in oklab, var(--color-accent) 70%, var(--glass-border));
+	color: var(--color-accent-fg);
 	font-weight: 700;
 	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, #fff 22%, transparent),
+		inset 0 1px 0 var(--glass-edge-hi),
 		0 2px 8px color-mix(in oklab, var(--color-accent) 38%, transparent);
 }
 
@@ -494,24 +496,23 @@
 }
 
 .pet-bubble__action--deny:hover {
-	border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
+	border-color: color-mix(in oklab, var(--color-danger) 55%, var(--glass-border));
 	color: var(--color-danger);
 }
 
-/* ── Inline reply row ────────────────────────────────────────────────────
- * Grows under the bubble's text when 💬 is clicked (kimi parity: input +
- * round ↑ send). */
 .pet-bubble__reply {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	margin-top: 6px;
 	padding: 4px 4px 4px 10px;
-	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
+	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background: color-mix(in oklab, var(--pet-panel-bg) 72%, transparent);
-	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-text) 8%, transparent);
-	animation: pet-bubble-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg) 60%, var(--pet-panel-bg));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
+	animation: pet-bubble-pop 220ms var(--spring-liquid) both;
 }
 
 .pet-bubble__reply-input {
@@ -754,14 +755,17 @@ html.bubbles-root body {
 	flex-direction: column;
 	align-items: center;
 	justify-content: flex-end;
-	/* Top/left/right room for card shadows (0 6px 24px ≈ 24px) and the
-	 * stack-chip overhang (-9px); bottom room for the fab shadow. */
-	padding: 24px 20px 10px;
+	/* The stack owns horizontal shadow room. The body adds the vertical
+	 * room required by the shared 60px --glass-shadow and the fab. */
+	padding: 60px 0;
 	box-sizing: border-box;
 }
 
 html.bubbles-root .pet-bubbles {
-	position: static;
+	/* Stay in document flow, but establish the containing block for the
+	 * collapsed card backs and count chip. Static positioning sized those
+	 * absolute layers against the whole window instead of the priority card. */
+	position: relative;
 	bottom: auto;
 	left: auto;
 	transform: none;
@@ -862,30 +866,48 @@ html.bubbles-root .pet-bubbles__fab {
 	padding: 0 7px;
 	display: grid;
 	place-items: center;
-	border: 1px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 70%, var(--glass-border));
 	border-radius: 999px;
-	background:
-		linear-gradient(180deg, color-mix(in oklab, #fff 18%, transparent), transparent 45%),
-		color-mix(in oklab, var(--color-accent) 88%, var(--pet-surface));
+	background: var(--glass-sheen), color-mix(in oklab, var(--color-accent) 88%, var(--pet-surface));
 	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, #fff 24%, transparent),
+		inset 0 1px 0 var(--glass-edge-hi),
 		0 3px 12px color-mix(in oklab, var(--color-accent) 45%, transparent);
-	color: var(--color-accent-foreground, #fff);
+	color: var(--color-accent-fg);
 	font-size: 12px;
 	font-weight: 700;
 	line-height: 1;
 	cursor: pointer;
 	pointer-events: auto;
-	animation: pet-badge-pop 260ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: pet-badge-pop 240ms var(--spring-liquid);
 }
 
 .pet-bubbles__badge:hover {
-	background:
-		linear-gradient(180deg, color-mix(in oklab, #fff 22%, transparent), transparent 45%),
-		var(--color-accent);
+	background: var(--glass-sheen), var(--color-accent);
 }
 
 html.bubbles-root .pet-bubbles__badge {
 	position: static;
 	margin-top: 8px;
+}
+
+.gui-motion-off .pet-bubble,
+.gui-motion-off .pet-bubbles__fab,
+.gui-motion-off .pet-bubbles__badge,
+.gui-motion-off .pet-bubble__actions,
+.gui-motion-off .pet-bubble__action,
+.gui-motion-off .pet-bubble__reply {
+	animation: none !important;
+	transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pet-bubble,
+	.pet-bubbles__fab,
+	.pet-bubbles__badge,
+	.pet-bubble__actions,
+	.pet-bubble__action,
+	.pet-bubble__reply {
+		animation: none !important;
+		transition: none !important;
+	}
 }

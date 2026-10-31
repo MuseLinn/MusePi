@@ -1195,6 +1195,7 @@ export const settings = {
 	"settings.petBubbleKindSubtask": "子任务",
 	"settings.petBubbleConfirm": "确认",
 	"settings.petBubbleReply": "回复",
+	"settings.petBubbleOpen": "打开会话",
 	"settings.petBubbleDeny": "拒绝",
 	"settings.petBubbleStop": "停止",
 	"settings.petPanelMessages": "消息",

@@ -6,6 +6,24 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Changed
+- **球体桌宠拖拽改为连续矢量表演**：球体不再套用 Petdex 的行走帧、左右镜像或额外弹跳；拖动速度会形成连续倾斜与拉伸，释放后带阻尼落地，并与会话动作、交互动效和眼动自然组合。
+  - EN: The orb desktop pet now uses continuous vector gestures while dragging. It no longer inherits Petdex walk rows, horizontal mirroring, or an extra bounce; pointer velocity produces smooth tilt and stretch, release settles with a damped landing, and these gestures compose with session motion, interaction reactions, and gaze.
+- **桌宠会话气泡支持展开、收起和独立打开**：气泡统一为 20px 圆角；点击折叠卡片正文展开列表，点击展开卡片正文收起，↗ 只负责打开会话；回复、审批和关闭等按钮不再误触正文操作。
+  - EN: Desktop pet conversation bubbles now support expansion, collapse, and explicit opening. Cards use a 20px radius; clicking a stacked card body expands the list, clicking an expanded card body collapses it, and ↗ opens the conversation. Reply, approval, dismiss, and other action buttons no longer trigger the card body.
+- **桌宠气泡升级为液态玻璃堆叠**：收起时显示优先卡片、近层与远层背卡及剩余条数，展开后保留完整快捷操作；卡片、头部、回复框和控件共享 MusePi 的玻璃材质与弹性动效，透明阴影区域不会被裁切。减少动态效果时直接显示完整文字并跳过尺寸形变。
+  - EN: Desktop pet bubbles now use liquid-glass stacking. The collapsed state shows the priority card, near and far card backs, and the remaining count; expansion retains the full quick actions. Cards, the header, reply field, and controls share MusePi's glass material and spring motion, with transparent shadow clearance preserved. Reduced motion shows complete text immediately and skips size morphs.
+- **引导页个性化改为真实桌宠预览**：可直接选择矢量球体、内置 Petdex 或已导入桌宠，实时查看光泽、配饰和显示位置效果；桌面模式会展示独立桌宠与玻璃气泡，Petdex 不再出现无效的装饰开关。
+  - EN: Onboarding personalization now uses live pet previews. Users can select the vector orb, a built-in Petdex preset, or an imported pet and immediately preview gloss, accessories, and display placement. Desktop mode shows the independent pet with a glass bubble, while Petdex options no longer expose ineffective decoration controls.
+- **桌宠眼神跟随更自然**：眼球快速跟随指针，头部与耳机以较慢速度跟随；指针静止 3 秒后平滑回中，眨眼间隔加入自然变化，同时保留各状态的凝视与禁止眨眼规则。
+  - EN: Desktop pet gaze now feels more natural. The eyes follow the pointer quickly while the head and headphones respond more slowly; the head smoothly recentres after three seconds of pointer inactivity. Blink intervals vary naturally while each state's fixed-gaze and no-blink rules remain intact.
+
+### Fixed
+- **桌宠会话气泡恢复显示**：修正气泡窗口与桌面桥接层的尺寸、可见性和点击区域接口名称，会话卡片、展开列表、回复入口和隐藏计数角标可正常呈现；窗口高度现在包含控件间距与阴影留白，展开列表下方的圆形收起按钮不再被裁切。
+  - EN: Desktop pet conversation bubbles are visible again. The bubble window now uses the correct desktop-bridge method names for content size, visibility, and hit testing, so session cards, the expanded list, reply controls, and the hidden-count badge render correctly. Window height now includes control spacing and shadow clearance, so the circular collapse button below the expanded list is no longer clipped.
+- **Petdex 状态动画恢复完整图集裁切**：状态帧按完整 8×9 图集计算背景尺寸，不再把整张精灵图压缩进单帧；切回矢量球体时会清除 Petdex 的镜像、拖拽和弹跳残留。
+  - EN: Petdex state animations now crop the complete sprite atlas correctly. Background sizing uses the full 8×9 sheet instead of squeezing it into one frame, and switching back to the vector orb clears residual Petdex mirroring, dragging, and squash state.
+
 ## [0.6.4] - 2026-10-30
 
 ### Added

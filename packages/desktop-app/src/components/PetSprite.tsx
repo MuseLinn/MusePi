@@ -50,7 +50,16 @@ import {
 	stateDirection,
 	toPath,
 } from "../lib/pet-face";
+import { advanceGazeMotion, createGazeMotionState, type GazeVec, nextBlinkDelay } from "../lib/pet-gaze";
+import {
+	advancePetGesture,
+	createPetGestureMotion,
+	type PetGestureInput,
+	petGestureTransform,
+} from "../lib/pet-gesture";
 import { gazeDrift, INTERACTION_MOTION, MOOD_MOTION, motionTransform, STATE_MOTION } from "../lib/pet-motion";
+
+export type { GazeVec } from "../lib/pet-gaze";
 
 /** Live pet prefs: re-resolves when settings change (the settings page
  *  dispatches "omp-pet-changed" after saving; storage events cover other
@@ -107,6 +116,8 @@ interface MascotRefs {
 	eyeRefs: [RefObject<SVGPathElement | null>, RefObject<SVGPathElement | null>];
 	mouthRef: RefObject<SVGPathElement | null>;
 	shellRef: RefObject<SVGGElement | null>;
+	/** Outer builtin-only gesture rig. Session motion stays on shellRef. */
+	gestureTransformRef: RefObject<SVGGElement | null>;
 	/** The wearable group (headphones). The engine leans it with the gaze so
 	 *  the wear reads as sitting on a turning head, not pasted on the front. */
 	accessoryRef: RefObject<SVGGElement | null>;
@@ -122,21 +133,10 @@ interface MascotRefs {
  *  it is cycling a slideshow. */
 const DRIFT_MAX = 0.18;
 
-/** Cursor gaze target, normalized to ±1 from the pet's centre (main window:
- *  pointermove over the avatar; pet window: the main process's click-through
- *  poll). Lived in a ref on purpose — the engine reads it per frame, so a
- *  stream of pointer updates never re-renders React. */
-export interface GazeVec {
-	x: number;
-	y: number;
-}
+/** Cursor gaze lives in a ref: the engine reads it per frame, so a stream of
+ *  pointer updates never re-renders React. Samples carry renderer timestamps
+ *  so a stationary pointer can return attention to centre without more IPC. */
 export type GazeRef = RefObject<GazeVec | null>;
-/** Attention ease-in (ms): how fast the eyes adopt a cursor target. */
-const GAZE_ATTACK_MS = 220;
-/** Attention ease-out (ms): how slowly the pet "looks away" again. */
-const GAZE_RELEASE_MS = 380;
-/** Eye glide time constant (ms): exponential smoothing toward the target. */
-const GAZE_GLIDE_MS = 120;
 
 /** Morph duration constants (ms). Down-blink is fast, up-blink is slower —
  *  a symmetric blink reads mechanical. */
@@ -178,13 +178,16 @@ function useMascotEngine(
 	interaction?: PetInteraction | null,
 	state?: PetState | null,
 	tier: PetEffectTier = "full",
+	gestureRef?: RefObject<PetGestureInput>,
 ): MascotRefs {
 	const eye0 = useRef<SVGPathElement | null>(null);
 	const eye1 = useRef<SVGPathElement | null>(null);
 	const mouthRef = useRef<SVGPathElement | null>(null);
 	const shellRef = useRef<SVGGElement | null>(null);
+	const gestureTransformRef = useRef<SVGGElement | null>(null);
 	const accessoryRef = useRef<SVGGElement | null>(null);
-	const gazeSmooth = useRef({ x: 0, y: 0, att: 0 });
+	const gazeSmooth = useRef(createGazeMotionState());
+	const gestureSmooth = useRef(createPetGestureMotion());
 	// ── Cross-direction continuity (refs, NOT effect closure): every mood
 	// or interaction change re-runs the frame effect, and anything a switch
 	// must NOT reset outlives it in these.
@@ -254,11 +257,13 @@ function useMascotEngine(
 			const elapsed = phaseRef.current;
 			const entryElapsed = entryRef.current;
 
-			// ── blink: fast close, slower open, on the mood's cadence.
+			// ── blink: fast close, slower open. Each state's cadence is the
+			// centre of a jittered interval, not a fixed metronome. Zero keeps
+			// the no-blink contract; an in-flight blink still finishes.
 			const blink = blinkRef.current;
 			if (prepped.blinkMs > 0 && blink.t >= 1 && now >= blink.next) {
 				blink.t = 0;
-				blink.next = now + prepped.blinkMs;
+				blink.next = now + nextBlinkDelay(prepped.blinkMs, Math.random());
 			}
 			if (blink.t < 1) blink.t = Math.min(1, blink.t + dt / (blink.t < 0.5 ? BLINK_DOWN_MS : BLINK_UP_MS));
 
@@ -291,25 +296,16 @@ function useMascotEngine(
 			lastExpr.current = rings;
 			lastSpec.current = spec;
 
-			// ── gaze: authored look bias plus an idle saccade, applied as a yaw
-			// so the eyes slide across the sphere and compress at the limb. When
-			// a cursor target is present the eyes ease toward it (GAZE_GLIDE)
-			// while attention (attack/release) blends the authored drift out —
-			// so the orb "notices" you without snapping, and keeps a residue
-			// of its idle personality while tracking.
-			const target = gazeRef?.current ?? null;
-			const gs = gazeSmooth.current;
-			if (target) {
-				const k = 1 - Math.exp(-dt / GAZE_GLIDE_MS);
-				gs.x += (target.x - gs.x) * k;
-				gs.y += (target.y - gs.y) * k;
-				gs.att = Math.min(1, gs.att + dt / GAZE_ATTACK_MS);
-			} else {
-				gs.att = Math.max(0, gs.att - dt / GAZE_RELEASE_MS);
-			}
+			// ── gaze: the eyes and head sample the same pointer through
+			// independent time constants. A stationary sample becomes a centre
+			// target after three seconds; removing the source instead releases
+			// attention back to the state's authored drift.
+			const gs = advanceGazeMotion(gazeSmooth.current, gazeRef?.current ?? null, dt, now);
 			const gaze = gazeDrift(elapsed, prepped.look);
-			const gx = (gaze.x * (1 - gs.att) + gs.x * gs.att) * GAZE_TRAVEL.x;
-			const gy = (gaze.y * (1 - gs.att) + gs.y * gs.att) * GAZE_TRAVEL.y;
+			const gx = (gaze.x * (1 - gs.attention) + gs.eyeX * gs.attention) * GAZE_TRAVEL.x;
+			const gy = (gaze.y * (1 - gs.attention) + gs.eyeY * gs.attention) * GAZE_TRAVEL.y;
+			const headGx = gs.headX * gs.attention * GAZE_TRAVEL.x;
+			const headGy = gs.headY * gs.attention * GAZE_TRAVEL.y;
 			const yaw = gazeYaw(gx);
 			const face: Face = [
 				applyYaw(
@@ -328,39 +324,30 @@ function useMascotEngine(
 			mouthRef.current?.setAttribute("d", mouthPath(frame, spec));
 			mouthRef.current?.setAttribute("stroke-width", mouthStroke(spec).toFixed(2));
 
-			// ── body. The face already lives in the orb's own coordinate space,
-			// so the rig carries only the mood's motion. The motion helper
-			// pivots around the box it is given, so it gets the orb box and the
-			// rig keeps its padding shift in front of the motion.
+			// ── body. The slower head channel rolls the rig toward the pointer;
+			// the faster eye channel stays on the sphere's projected face.
 			const shell = shellRef.current;
 			if (shell) {
-				// Loops ride the persistent phase; the one-shot enter/settle
-				// ride the per-entry clock (replayed on every direction change).
+				// Loops ride the persistent phase; one-shot motion rides the
+				// per-entry clock and replays on every direction change.
 				const motion = motionTransform(prepped.motion, elapsed, prepped.strength, FACE_BOX, entryElapsed);
-				// Head-turn coupling: the rig rolls a hair TOWARD the gaze, the
-				// way a whole head turns to look. blobstudio's lookAt reads as
-				// "the body joins the eyes"; eyes-in-place alone is what made
-				// our gaze read as slidey rather than attentive. ~1° at full
-				// deflection — the accessory's own lean was reduced by the same
-				// amount, so the total tilt the wear shows is unchanged.
 				shell.setAttribute(
 					"transform",
-					`translate(${SIDE} ${TOP}) ${motion} rotate(${(gx * GAZE_ROLL).toFixed(2)} ${ORB_C} ${ORB_C})`.trim(),
+					`translate(${SIDE} ${TOP}) ${motion} rotate(${(headGx * GAZE_ROLL).toFixed(2)} ${ORB_C} ${ORB_C})`.trim(),
 				);
 			}
-			// ── the wearable leans with the gaze. The face turns inside the
-			// ball (eyes slide + yaw); the headphones pivot a hair the same
-			// way so the cups track the head's turn along the shell surface.
-			// Amplitudes are small on purpose: ±6px of slide and ±2° of roll
-			// at full deflection reads as physical — more reads as the wear
-			// detaching from the body it is sitting on. The roll here is only
-			// the PART the rig does not already carry (GAZE_ROLL above): the
-			// cups hang off the shell, so they inherit its head-turn too.
+			const gestureRig = gestureTransformRef.current;
+			if (gestureRig) {
+				const gesture = advancePetGesture(gestureSmooth.current, gestureRef?.current ?? null, dt, now);
+				gestureRig.setAttribute("transform", petGestureTransform(gesture, FACE_BOX));
+			}
+			// Wearables use the same slow head channel. Their local roll adds
+			// only the part not already inherited from the shell.
 			const acc = accessoryRef.current;
 			if (acc) {
 				acc.setAttribute(
 					"transform",
-					`translate(${(gx * 0.3).toFixed(2)} ${(gy * 0.24).toFixed(2)}) rotate(${(gx * 0.06).toFixed(2)} ${ORB_C} ${ORB_C}) translate(${ORB_C} ${ORB_C}) scale(${HEADPHONE_SCALE}) translate(${-ORB_C} ${-ORB_C})`,
+					`translate(${(headGx * 0.3).toFixed(2)} ${(headGy * 0.24).toFixed(2)}) rotate(${(headGx * 0.06).toFixed(2)} ${ORB_C} ${ORB_C}) translate(${ORB_C} ${ORB_C}) scale(${HEADPHONE_SCALE}) translate(${-ORB_C} ${-ORB_C})`,
 				);
 			}
 			raf = requestAnimationFrame(tick);
@@ -369,7 +356,7 @@ function useMascotEngine(
 		return () => cancelAnimationFrame(raf);
 	}, [prepped]);
 
-	return { eyeRefs: [eye0, eye1], mouthRef, shellRef, accessoryRef, entryClockRef: entryRef };
+	return { eyeRefs: [eye0, eye1], mouthRef, shellRef, gestureTransformRef, accessoryRef, entryClockRef: entryRef };
 }
 
 /** Blend two mouth specs. All four numbers are independent, so a plain
@@ -507,6 +494,7 @@ function Mascot({
 	state,
 	tier = "full",
 	gazeRef,
+	gestureRef,
 	interaction,
 	gloss,
 	accessory = "none",
@@ -518,11 +506,12 @@ function Mascot({
 	/** Render-size tier: which effects survive and how loud the body moves. */
 	tier?: PetEffectTier;
 	gazeRef?: GazeRef;
+	gestureRef?: RefObject<PetGestureInput>;
 	interaction?: PetInteraction | null;
 	gloss: boolean;
 	accessory?: PetAccessory;
 }): ReactNode {
-	const refs = useMascotEngine(mood, gazeRef, interaction, state, tier);
+	const refs = useMascotEngine(mood, gazeRef, interaction, state, tier, gestureRef);
 	// The shared body unit — ring, shell, gloss, face and wearables — that
 	// the effects layer drives DIRECTLY per frame (the dots dissolve it, the
 	// glyph steps it aside). A DOM ref, not engine state: writing it through
@@ -558,6 +547,7 @@ function Silhouette({
 	eyeRefs,
 	mouthRef,
 	shellRef,
+	gestureTransformRef,
 	accessoryRef,
 	entryClockRef,
 	bodyRef,
@@ -689,175 +679,183 @@ function Silhouette({
 					 * nothing else, while the session has 31 things to say. */}
 					<PetEffects state={state} layer="behind" tier={tier} clockRef={entryClockRef} bodyRef={bodyRef} />
 				</g>
-				<g ref={shellRef} transform={`translate(${SIDE} ${TOP})`}>
-					{/* The body unit the effects drive directly (bodyRef): the
-					 * dots dissolve it, the glyph steps it aside. Everything
-					 * that IS the pet rides inside — wearables too, so the
-					 * headphones dissolve with the ball instead of hovering
-					 * over a dot. */}
-					<g ref={bodyRef}>
-						{/* Orbit ring, back half — behind the shell, so the front arc
-						 * reads as the same loop coming round. */}
-						<ellipse
-							className="gui-pet-svg__ring gui-pet-svg__ring--back"
-							cx={ORB_C}
-							cy={ORB_C + 3}
-							rx="104"
-							ry="34"
-							transform={`rotate(-18 ${ORB_C} ${ORB_C + 3})`}
-						/>
-						{/* Shell — the orb itself, which is also the face's sphere. */}
-						<circle className="gui-pet-svg__shell" cx={ORB_C} cy={ORB_C} r={ORB_R} />
-						{/* Crown gloss + secondary catch-light + specular sweep:
-						 * cheap sphericity, and the one decoration that is correct
-						 * in every context (pet-decor.ts). Off → the shell reads as
-						 * a flat silhouette, which is the quieter look some users
-						 * asked for. */}
-						{gloss && (
-							<>
-								<ellipse
-									className="gui-pet-svg__gloss"
-									cx={ORB_C - 34}
-									cy={ORB_C - 57}
-									rx="31"
-									ry="14"
-									transform={`rotate(-22 ${ORB_C - 34} ${ORB_C - 57})`}
-								/>
-								<ellipse
-									className="gui-pet-svg__gloss-dot"
-									cx={ORB_C - 56}
-									cy={ORB_C - 30}
-									rx="7"
-									ry="4"
-									transform={`rotate(-22 ${ORB_C - 56} ${ORB_C - 30})`}
-								/>
-								<ellipse
-									className="gui-pet-svg__sweep"
-									cx={ORB_C - 20}
-									cy={ORB_C - 64}
-									rx="15"
-									ry="5.6"
-									transform={`rotate(-22 ${ORB_C - 20} ${ORB_C - 64})`}
-								/>
-							</>
-						)}
-						{/* The face, in the engine's own coordinates — no offset needed,
-						 * because the rig already sits on the sphere centre. All three
-						 * paths are rewritten every frame. */}
-						<g className={faceClass}>
-							<path className="gui-pet-svg__eye" ref={eyeRefs[0]} />
-							<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
-							<path className="gui-pet-svg__mouth" ref={mouthRef} />
+				<g ref={gestureTransformRef} className="gui-pet-svg__gesture">
+					<g ref={shellRef} transform={`translate(${SIDE} ${TOP})`}>
+						{/* The body unit the effects drive directly (bodyRef): the
+						 * dots dissolve it, the glyph steps it aside. Everything
+						 * that IS the pet rides inside — wearables too, so the
+						 * headphones dissolve with the ball instead of hovering
+						 * over a dot. */}
+						<g ref={bodyRef}>
+							{/* Orbit ring, back half — behind the shell, so the front arc
+							 * reads as the same loop coming round. */}
+							<ellipse
+								className="gui-pet-svg__ring gui-pet-svg__ring--back"
+								cx={ORB_C}
+								cy={ORB_C + 3}
+								rx="104"
+								ry="34"
+								transform={`rotate(-18 ${ORB_C} ${ORB_C + 3})`}
+							/>
+							{/* Shell — the orb itself, which is also the face's sphere. */}
+							<circle className="gui-pet-svg__shell" cx={ORB_C} cy={ORB_C} r={ORB_R} />
+							{/* Crown gloss + secondary catch-light + specular sweep:
+							 * cheap sphericity, and the one decoration that is correct
+							 * in every context (pet-decor.ts). Off → the shell reads as
+							 * a flat silhouette, which is the quieter look some users
+							 * asked for. */}
+							{gloss && (
+								<>
+									<ellipse
+										className="gui-pet-svg__gloss"
+										cx={ORB_C - 34}
+										cy={ORB_C - 57}
+										rx="31"
+										ry="14"
+										transform={`rotate(-22 ${ORB_C - 34} ${ORB_C - 57})`}
+									/>
+									<ellipse
+										className="gui-pet-svg__gloss-dot"
+										cx={ORB_C - 56}
+										cy={ORB_C - 30}
+										rx="7"
+										ry="4"
+										transform={`rotate(-22 ${ORB_C - 56} ${ORB_C - 30})`}
+									/>
+									<ellipse
+										className="gui-pet-svg__sweep"
+										cx={ORB_C - 20}
+										cy={ORB_C - 64}
+										rx="15"
+										ry="5.6"
+										transform={`rotate(-22 ${ORB_C - 20} ${ORB_C - 64})`}
+									/>
+								</>
+							)}
+							{/* The face, in the engine's own coordinates — no offset needed,
+							 * because the rig already sits on the sphere centre. All three
+							 * paths are rewritten every frame. */}
+							<g className={faceClass}>
+								<path className="gui-pet-svg__eye" ref={eyeRefs[0]} />
+								<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
+								<path className="gui-pet-svg__mouth" ref={mouthRef} />
+							</g>
+							{/* ── Wearable accessories (pet-decor.ts PetAccessory) ──
+							 * Static art in orb-local coordinates: they scale with the
+							 * ball and ride the body motion for free. Both are authored
+							 * to stay inside the rig's TOP/SIDE padding — the note's
+							 * stem top and the band apex were checked against the
+							 * viewBox (TOP=24 / SIDE=20) so nothing clips. */}
+							{accessory === "headphones" && (
+								<g ref={accessoryRef} className="gui-pet-svg__accessory">
+									{/* ── Canopy (AirPods Max knit mesh) ── a wide white
+									 * arc held between TWO rose-gold frame rails. The old
+									 * single thin band read as a halo on a bald head
+									 * (2026-09-20 user: 「看着有点像秃头」) and then as
+									 * the wrong colour entirely (「耳机是白色的吧，不是
+									 * 现在这种灰黑色的，那种 AirPods Max 一样的白色和玫
+									 * 瑰金色」). The three radii are concentric about the
+									 * arc's own centre (114.27, 119.31 for the mesh), so
+									 * the frame rails hug the mesh edge for its whole
+									 * run — outer r 128 over endpoints y 74, inner r 118.5
+									 * over y 84, apexes −0.5 / −11.6, inside TOP 24. */}
+									<path
+										d={`M -2 ${ORB_C - 36} A 123.3 123.3 0 0 1 ${2 * ORB_C + 2} ${ORB_C - 36}`}
+										fill="none"
+										stroke="url(#gui-pet-grad-wear)"
+										strokeWidth="14"
+										strokeLinecap="round"
+									/>
+									<path
+										d="M -2 74 A 128 128 0 0 1 230.54 74"
+										fill="none"
+										stroke="url(#gui-pet-grad-rose)"
+										strokeWidth="2.6"
+										strokeLinecap="round"
+									/>
+									<path
+										d="M -2 84 A 118.5 118.5 0 0 1 230.54 84"
+										fill="none"
+										stroke="url(#gui-pet-grad-rose)"
+										strokeWidth="2.6"
+										strokeLinecap="round"
+									/>
+									{/* ── Telescoping arms ── rose-gold, the extension
+									 * joint between canopy rail and cup. Un-tilted in orb
+									 * coordinates: the rails end vertically here, and a
+									 * tilt would pull the arm's foot off the rail it has
+									 * to meet. */}
+									<rect
+										x={-6.5}
+										y={74}
+										width={9}
+										height={30}
+										rx={4.5}
+										fill="url(#gui-pet-grad-rose)"
+										stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
+										strokeWidth="1.2"
+									/>
+									<rect
+										x={2 * ORB_C - 2.5}
+										y={74}
+										width={9}
+										height={30}
+										rx={4.5}
+										fill="url(#gui-pet-grad-rose)"
+										stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
+										strokeWidth="1.2"
+									/>
+									{/* ── Cups ── each authored in its own centred frame so
+									 * the layers stay concentric while the tilt reads as
+									 * one rigid object. The right cup carries the Digital
+									 * Crown. */}
+									<g transform={`translate(${ORB_C - ORB_R - 2} ${ORB_C - 10}) rotate(-14)`}>
+										<HeadphoneCup />
+									</g>
+									<g transform={`translate(${ORB_C + ORB_R + 2} ${ORB_C - 10}) rotate(14)`}>
+										<HeadphoneCup crown />
+									</g>
+								</g>
+							)}
+							{accessory === "note" && (
+								<g className="gui-pet-svg__accessory">
+									{/* An eighth-note mark ON the shell's upper right — a
+									 * decal, not a floating charm (a floater would clip at
+									 * the rig's headroom and read as the old beacon noise).
+									 * Head + stem + flag, all in the ring's gold. */}
+									<ellipse
+										cx={ORB_C + 40}
+										cy={ORB_C - 64}
+										rx="11.5"
+										ry="8.8"
+										transform={`rotate(-18 ${ORB_C + 40} ${ORB_C - 64})`}
+										fill="url(#gui-pet-grad-ring)"
+									/>
+									<path
+										d={`M ${ORB_C + 50} ${ORB_C - 62} L ${ORB_C + 50} ${ORB_C - 100}`}
+										stroke="url(#gui-pet-grad-ring)"
+										strokeWidth="5.5"
+										strokeLinecap="round"
+									/>
+									<path
+										d={`M ${ORB_C + 50} ${ORB_C - 100} C ${ORB_C + 63} ${ORB_C - 94}, ${ORB_C + 66} ${ORB_C - 82}, ${ORB_C + 57} ${ORB_C - 70}`}
+										fill="none"
+										stroke="url(#gui-pet-grad-ring)"
+										strokeWidth="5.5"
+										strokeLinecap="round"
+									/>
+									{/* Echo dot — keeps the mark from reading as a lone
+									 * speck; tucked back inside the shell edge. */}
+									<circle
+										cx={ORB_C + 58}
+										cy={ORB_C - 44}
+										r="4"
+										fill="url(#gui-pet-grad-ring)"
+										opacity="0.75"
+									/>
+								</g>
+							)}
 						</g>
-						{/* ── Wearable accessories (pet-decor.ts PetAccessory) ──
-						 * Static art in orb-local coordinates: they scale with the
-						 * ball and ride the body motion for free. Both are authored
-						 * to stay inside the rig's TOP/SIDE padding — the note's
-						 * stem top and the band apex were checked against the
-						 * viewBox (TOP=24 / SIDE=20) so nothing clips. */}
-						{accessory === "headphones" && (
-							<g ref={accessoryRef} className="gui-pet-svg__accessory">
-								{/* ── Canopy (AirPods Max knit mesh) ── a wide white
-								 * arc held between TWO rose-gold frame rails. The old
-								 * single thin band read as a halo on a bald head
-								 * (2026-09-20 user: 「看着有点像秃头」) and then as
-								 * the wrong colour entirely (「耳机是白色的吧，不是
-								 * 现在这种灰黑色的，那种 AirPods Max 一样的白色和玫
-								 * 瑰金色」). The three radii are concentric about the
-								 * arc's own centre (114.27, 119.31 for the mesh), so
-								 * the frame rails hug the mesh edge for its whole
-								 * run — outer r 128 over endpoints y 74, inner r 118.5
-								 * over y 84, apexes −0.5 / −11.6, inside TOP 24. */}
-								<path
-									d={`M -2 ${ORB_C - 36} A 123.3 123.3 0 0 1 ${2 * ORB_C + 2} ${ORB_C - 36}`}
-									fill="none"
-									stroke="url(#gui-pet-grad-wear)"
-									strokeWidth="14"
-									strokeLinecap="round"
-								/>
-								<path
-									d="M -2 74 A 128 128 0 0 1 230.54 74"
-									fill="none"
-									stroke="url(#gui-pet-grad-rose)"
-									strokeWidth="2.6"
-									strokeLinecap="round"
-								/>
-								<path
-									d="M -2 84 A 118.5 118.5 0 0 1 230.54 84"
-									fill="none"
-									stroke="url(#gui-pet-grad-rose)"
-									strokeWidth="2.6"
-									strokeLinecap="round"
-								/>
-								{/* ── Telescoping arms ── rose-gold, the extension
-								 * joint between canopy rail and cup. Un-tilted in orb
-								 * coordinates: the rails end vertically here, and a
-								 * tilt would pull the arm's foot off the rail it has
-								 * to meet. */}
-								<rect
-									x={-6.5}
-									y={74}
-									width={9}
-									height={30}
-									rx={4.5}
-									fill="url(#gui-pet-grad-rose)"
-									stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
-									strokeWidth="1.2"
-								/>
-								<rect
-									x={2 * ORB_C - 2.5}
-									y={74}
-									width={9}
-									height={30}
-									rx={4.5}
-									fill="url(#gui-pet-grad-rose)"
-									stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
-									strokeWidth="1.2"
-								/>
-								{/* ── Cups ── each authored in its own centred frame so
-								 * the layers stay concentric while the tilt reads as
-								 * one rigid object. The right cup carries the Digital
-								 * Crown. */}
-								<g transform={`translate(${ORB_C - ORB_R - 2} ${ORB_C - 10}) rotate(-14)`}>
-									<HeadphoneCup />
-								</g>
-								<g transform={`translate(${ORB_C + ORB_R + 2} ${ORB_C - 10}) rotate(14)`}>
-									<HeadphoneCup crown />
-								</g>
-							</g>
-						)}
-						{accessory === "note" && (
-							<g className="gui-pet-svg__accessory">
-								{/* An eighth-note mark ON the shell's upper right — a
-								 * decal, not a floating charm (a floater would clip at
-								 * the rig's headroom and read as the old beacon noise).
-								 * Head + stem + flag, all in the ring's gold. */}
-								<ellipse
-									cx={ORB_C + 40}
-									cy={ORB_C - 64}
-									rx="11.5"
-									ry="8.8"
-									transform={`rotate(-18 ${ORB_C + 40} ${ORB_C - 64})`}
-									fill="url(#gui-pet-grad-ring)"
-								/>
-								<path
-									d={`M ${ORB_C + 50} ${ORB_C - 62} L ${ORB_C + 50} ${ORB_C - 100}`}
-									stroke="url(#gui-pet-grad-ring)"
-									strokeWidth="5.5"
-									strokeLinecap="round"
-								/>
-								<path
-									d={`M ${ORB_C + 50} ${ORB_C - 100} C ${ORB_C + 63} ${ORB_C - 94}, ${ORB_C + 66} ${ORB_C - 82}, ${ORB_C + 57} ${ORB_C - 70}`}
-									fill="none"
-									stroke="url(#gui-pet-grad-ring)"
-									strokeWidth="5.5"
-									strokeLinecap="round"
-								/>
-								{/* Echo dot — keeps the mark from reading as a lone
-								 * speck; tucked back inside the shell edge. */}
-								<circle cx={ORB_C + 58} cy={ORB_C - 44} r="4" fill="url(#gui-pet-grad-ring)" opacity="0.75" />
-							</g>
-						)}
 					</g>
 				</g>
 				<g transform={`translate(${SIDE} ${TOP})`}>
@@ -883,6 +881,7 @@ export function BuiltinPetSprite({
 	state,
 	tier,
 	gazeRef,
+	gestureRef,
 	interaction,
 	gloss = true,
 	accessory = "none",
@@ -892,6 +891,7 @@ export function BuiltinPetSprite({
 	state?: PetState | null;
 	tier?: PetEffectTier;
 	gazeRef?: GazeRef;
+	gestureRef?: RefObject<PetGestureInput>;
 	interaction?: PetInteraction | null;
 	gloss?: boolean;
 	accessory?: PetAccessory;
@@ -902,6 +902,7 @@ export function BuiltinPetSprite({
 			state={state}
 			tier={tier}
 			gazeRef={gazeRef}
+			gestureRef={gestureRef}
 			interaction={interaction}
 			gloss={gloss}
 			accessory={accessory}
@@ -1031,7 +1032,9 @@ function PetdexStateStage({
 		width: `${artW}px`,
 		height: `${artH}px`,
 		backgroundImage: `url("${src}")`,
-		backgroundSize: `${artW}px ${artH}px`,
+		// The element is ONE frame; the background remains the WHOLE atlas.
+		// Sizing both to artW/artH squeezed every frame into that one box.
+		backgroundSize: isSvg ? `${artW}px ${artH}px` : `${artW * PETDEX_COLUMNS}px ${artH * PETDEX_ROWS}px`,
 		backgroundPosition: isSvg ? "0 0" : `0 ${-(row * artH)}px`,
 		// The JS motion owns the body transform in state mode — the mood's
 		// CSS transform animation would compound with it.
@@ -1239,6 +1242,7 @@ export function PetSprite({
 	scale,
 	frozen = false,
 	gazeRef,
+	gestureRef,
 	interaction,
 	gloss,
 	accessory,
@@ -1276,6 +1280,8 @@ export function PetSprite({
 	/** Eye-tracking target for the builtin sprite (petdex sheets ignore it —
 	 *  their frames are baked bitmaps, the eyes cannot move). */
 	gazeRef?: GazeRef;
+	/** Pointer gesture input for the builtin's independent deformation rig. */
+	gestureRef?: RefObject<PetGestureInput>;
 	/** Transient user reaction, layered over `mood`. Builtin-only: an imported
 	 *  spritesheet has no reaction rows to play, so it is ignored there rather
 	 *  than remapping the pet to an unrelated row. */
@@ -1321,6 +1327,7 @@ export function PetSprite({
 				state={state}
 				tier={tier}
 				gazeRef={gazeRef}
+				gestureRef={gestureRef}
 				interaction={interaction}
 				gloss={gloss}
 				accessory={accessory}

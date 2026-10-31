@@ -1270,6 +1270,64 @@
 	height: 16px;
 }
 
+/* Desktop display mode: a separate companion scene, not an empty composer.
+ * The live PetSprite and glass bubble use the same preferences and materials
+ * as the real desktop windows without pretending to be an OS screenshot. */
+.gui-obo-pers-desktop {
+	position: relative;
+	overflow: hidden;
+	isolation: isolate;
+	background:
+		radial-gradient(circle at 78% 76%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 38%),
+		color-mix(in oklab, var(--color-surface) 84%, var(--color-surface-raised));
+}
+
+.gui-obo-pers-desktop-bubble {
+	position: absolute;
+	top: 30px;
+	left: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	width: min(162px, calc(100% - 88px));
+	padding: 11px 13px;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 92%, var(--color-surface));
+	box-shadow: var(--glass-shadow);
+	color: var(--fg);
+}
+
+.gui-obo-pers-desktop-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.gui-obo-pers-desktop-status {
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+}
+
+.gui-obo-pers-desktop-pet {
+	position: absolute;
+	right: 22px;
+	bottom: 20px;
+	display: grid;
+	place-items: center;
+	width: 52px;
+	height: 52px;
+	pointer-events: none;
+	filter: drop-shadow(0 5px 8px color-mix(in oklab, var(--color-text) 18%, transparent));
+}
+
+.gui-obo-pers-desktop-pet > .gui-pet {
+	--gui-pet-height: 48px;
+	width: auto;
+	height: 48px;
+}
+
 /* Provider step demo: rows mirroring the real ProviderSetup list; the
  * middle row's login button cycles to "✓ 已登录" (in-place morph). */
 .gui-obo-providers {

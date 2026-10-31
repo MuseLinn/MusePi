@@ -551,6 +551,36 @@ jobs:
          - name: CLI smoke test
            run: bun run ci:test:smoke
 
+   test_desktop_smoke:
+      name: Test desktop pet smoke (Electron)
+      runs-on: ubuntu-22.04
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
+      timeout-minutes: 15
+      steps:
+         - uses: actions/checkout@v4
+         - uses: ./.github/actions/setup-system-deps
+         - uses: ./.github/actions/bun-install
+         - uses: ./.github/actions/native-artifacts
+           with:
+              artifact: native-addons-x64
+              targets: linux-x64-baseline linux-x64-modern
+         - name: Install Electron display dependencies
+           run: |
+              sudo apt-get update
+              sudo apt-get install -y xvfb libgtk-3-0 libgbm1 libnss3 libasound2 libxss1
+         - name: Desktop pet smoke test
+           env:
+              MUSEPI_PET_SMOKE_OUT: ${{ runner.temp }}/musepi-pet-smoke
+           run: xvfb-run -a bun run ci:test:desktop-smoke
+         - name: Upload desktop smoke diagnostics
+           if: failure()
+           uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+           with:
+              name: desktop-pet-smoke-diagnostics
+              path: ${{ runner.temp }}/musepi-pet-smoke/
+              retention-days: 3
+
    install_methods:
       name: Install method smoke tests
       runs-on: ubuntu-22.04
@@ -584,9 +614,9 @@ jobs:
          needs.test_coding_agent_ui.result == 'success' &&
          needs.test_coding_agent_runtime.result == 'success' &&
          needs.test_coding_agent_native.result == 'success' &&
-         needs.test_smoke.result == 'success' && needs.check.result == 'success' &&
-         needs.install_methods.result == 'success' }}
-      needs: [release_metadata, check, rust_validate, native_addons, test_workspace, test_coding_agent_singleton, test_ts_native, test_coding_agent_ui, test_coding_agent_runtime, test_coding_agent_native, test_smoke, install_methods]
+         needs.test_smoke.result == 'success' && needs.test_desktop_smoke.result == 'success' &&
+         needs.check.result == 'success' && needs.install_methods.result == 'success' }}
+      needs: [release_metadata, check, rust_validate, native_addons, test_workspace, test_coding_agent_singleton, test_ts_native, test_coding_agent_ui, test_coding_agent_runtime, test_coding_agent_native, test_smoke, test_desktop_smoke, install_methods]
       runs-on: ubuntu-22.04
       steps:
          - run: echo "release validation green"

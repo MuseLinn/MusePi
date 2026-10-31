@@ -45,9 +45,9 @@
  *
  * Sizing (split window, 2026-09-21): the bubbles live in their OWN window
  * (bubbles.html) whose size IS the content — the renderer reports the
- * content union via bubblesSetContentSize, its interactive card union via
- * bubblesSetHitbox (the transparent padding ring stays click-through), and
- * its occupancy via bubblesSetVisible (empty stack → the main process
+ * content union via setBubblesContentSize, its interactive card union via
+ * setBubblesHitbox (the transparent padding ring stays click-through), and
+ * its occupancy via setBubblesVisible (empty stack → the main process
  * hides the window). The main process (layoutBubblesWindow) pins the
  * window above the sprite and follows the pet on every move.
  */
@@ -75,10 +75,10 @@ interface PetBubblesBridge {
 	petMarkAllRead?(): Promise<unknown>;
 	/** Report the content size the window must take (CSS px). The main
 	 *  process sizes the bubbles window to exactly this. */
-	bubblesSetContentSize?(size: { width: number; height: number }): Promise<unknown>;
+	setBubblesContentSize?(size: { width: number; height: number }): Promise<unknown>;
 	/** Report whether any bubble is showing — empty stack hides the
 	 *  window entirely. */
-	bubblesSetVisible?(visible: boolean): Promise<unknown>;
+	setBubblesVisible?(visible: boolean): Promise<unknown>;
 	/** Report the collapse mode + live item count — the main process
 	 *  mirrors it to the pet window so its badge only lights when the
 	 *  stack is fully hidden (kimi parity: badge = restore, not
@@ -90,7 +90,7 @@ interface PetBubblesBridge {
 	onBubblesRestore?(cb: () => void): () => void;
 	/** Report the interactive card union (window-relative CSS px) — the
 	 *  main process keeps the transparent padding ring click-through. */
-	bubblesSetHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
+	setBubblesHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	/** Ask the main window to re-push its latest pet state (on mount — the
 	 *  push also carries the active pet descriptor, which this window
 	 *  cannot read from localStorage under file://). */
@@ -99,6 +99,13 @@ interface PetBubblesBridge {
 
 const BUBBLE_MS = 8000;
 const MAX_VISIBLE_BUBBLES = 5;
+
+function bubbleMotionOff(): boolean {
+	return (
+		document.documentElement.classList.contains("gui-motion-off") ||
+		window.matchMedia("(prefers-reduced-motion: reduce)").matches
+	);
+}
 
 /** Stack collapse state (kimi-work parity): the full list, the single
  *  stacked card, or fully hidden behind a count badge by the pet. */
@@ -291,14 +298,16 @@ export function PetBubbles(): ReactNode {
 		});
 	}, []);
 
-	// Light/dark scheme mirror (same as the pet window).
+	// Mirror theme and the application's motion preference into this window.
 	useEffect(() => {
 		const doc = document.documentElement;
 		const applyScheme = (): void => {
 			let pref: "system" | "light" | "dark" = "system";
+			let motionOff = false;
 			try {
 				const v = localStorage.getItem("omp-collab-theme");
 				if (v === "light" || v === "dark" || v === "system") pref = v;
+				motionOff = localStorage.getItem("musepi-gui-motion") === "off";
 			} catch {
 				/* storage unavailable — follow the system */
 			}
@@ -307,6 +316,7 @@ export function PetBubbles(): ReactNode {
 			doc.dataset.theme = resolved;
 			doc.dataset.colorScheme = resolved;
 			doc.style.colorScheme = resolved;
+			doc.classList.toggle("gui-motion-off", motionOff);
 		};
 		applyScheme();
 		const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -317,14 +327,25 @@ export function PetBubbles(): ReactNode {
 				applyScheme();
 			}
 		};
+		const onStorage = (event: StorageEvent): void => {
+			if (event.key === "musepi-gui-motion" || event.key === "omp-collab-theme") applyScheme();
+		};
 		mq.addEventListener("change", onMq);
-		return () => mq.removeEventListener("change", onMq);
+		window.addEventListener("storage", onStorage);
+		return () => {
+			mq.removeEventListener("change", onMq);
+			window.removeEventListener("storage", onStorage);
+		};
 	}, []);
 
-	// Typewriter reveal for notification bubbles (session cards render
-	// their title/status rows directly — no reveal needed).
+	// Typewriter reveal for notification bubbles. Reduced motion shows the
+	// complete message immediately instead of animating each character.
 	useEffect(() => {
 		if (bubbles.length === 0 || bubbles.every(b => b.visible === b.text)) return;
+		if (bubbleMotionOff()) {
+			setBubbles(prev => prev.map(b => (b.visible === b.text ? b : { ...b, visible: b.text })));
+			return;
+		}
 		const timer = window.setInterval(() => {
 			setBubbles(prev => {
 				let changed = false;
@@ -342,15 +363,16 @@ export function PetBubbles(): ReactNode {
 	}, [bubbles]);
 
 	// Report the content union — the bubbles window is sized to exactly
-	// this. The window's body padding (pet-window.css .bubbles-root) is the
-	// transparent shadow ring AROUND the measured boxes, so the measured
-	// stack/fab/badge layout boxes alone are what must fit.
+	// this. Include the body's transparent shadow ring and the vertical
+	// margins between the stack and fab/badge; summing element heights alone
+	// clips the fab below the window.
 	useEffect(() => {
-		if (!bridge?.bubblesSetContentSize) return;
+		if (!bridge?.setBubblesContentSize) return;
 		const MEASURED = ".pet-bubbles, .pet-bubbles__fab, .pet-bubbles__badge";
 		const report = (): void => {
+			const bodyStyle = getComputedStyle(document.body);
 			let w = 0;
-			let h = 0;
+			let h = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
 			for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) {
 				// Entrance/leaving keyframes transform the box; getBoundingClientRect
 				// includes the transform, so a mid-animation report would size the
@@ -360,10 +382,12 @@ export function PetBubbles(): ReactNode {
 				const r = el.getBoundingClientRect();
 				const animating =
 					typeof el.getAnimations === "function" && el.getAnimations().some(a => a.playState === "running");
+				const style = getComputedStyle(el);
 				w = Math.max(w, animating ? el.offsetWidth : r.width);
-				h += animating ? el.offsetHeight : r.height;
+				h +=
+					(animating ? el.offsetHeight : r.height) + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
 			}
-			void bridge.bubblesSetContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
+			void bridge.setBubblesContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
 			// Transforms do not fire ResizeObserver — re-report when an
 			// entrance/leaving animation settles.
 			for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) {
@@ -395,7 +419,7 @@ export function PetBubbles(): ReactNode {
 	// still counts as occupancy (it IS the visible content).
 	const itemCount = bubbles.length + cards.length;
 	useEffect(() => {
-		void bridge?.bubblesSetVisible?.(itemCount > 0);
+		void bridge?.setBubblesVisible?.(itemCount > 0);
 	}, [itemCount]);
 
 	// Mirror the collapse mode to the main process → pet-window badge.
@@ -411,7 +435,7 @@ export function PetBubbles(): ReactNode {
 	// getBoundingClientRect is viewport-relative (this window == viewport).
 	// The fab/badge ride outside the card union but are interactive too.
 	useEffect(() => {
-		if (!bridge?.bubblesSetHitbox) return;
+		if (!bridge?.setBubblesHitbox) return;
 		const INTERACTIVE = ".pet-bubble, .pet-bubbles__fab, .pet-bubbles__badge";
 		const report = (): void => {
 			let left = Infinity;
@@ -426,7 +450,7 @@ export function PetBubbles(): ReactNode {
 				right = Math.max(right, r.right);
 				bottom = Math.max(bottom, r.bottom);
 			}
-			void bridge.bubblesSetHitbox?.(
+			void bridge.setBubblesHitbox?.(
 				left === Infinity
 					? null
 					: {
@@ -449,22 +473,20 @@ export function PetBubbles(): ReactNode {
 		};
 	}, []);
 
-	// Collapse-state switches with a size morph: capture the old size,
-	// swap the view (renderer locks the container to `from` via the
-	// inline style), then measure the target size and transition.
+	// Capture the old box, render the new state at that size, then hand the
+	// width and height to the shared liquid spring. Reduced motion skips the
+	// intermediate box entirely.
 	const switchMode = (next: StackMode): void => {
 		if (next === stackMode) return;
 		const r = stackRef.current?.getBoundingClientRect();
 		setStackMode(next);
-		setStackMorph(r ? { from: { width: r.width, height: r.height } } : null);
+		setStackMorph(!bubbleMotionOff() && r ? { from: { width: r.width, height: r.height } } : null);
 		if (next === "hidden") {
 			setReplyFor(null);
 			setReplyText("");
 		}
 	};
 
-	// Pet-window badge click → restore the fully-hidden stack (refs dodge
-	// the stale closure — the listener subscribes once).
 	const stackModeRef = useRef(stackMode);
 	stackModeRef.current = stackMode;
 	const switchModeRef = useRef(switchMode);
@@ -475,24 +497,17 @@ export function PetBubbles(): ReactNode {
 		});
 	}, []);
 
-	// Expanded list scroll feather (transcript parity): the stack scrolls
-	// inside the window, and data-top-scroll / data-bottom-scroll flip the
-	// mask-image top/bottom fade on as content overflows and scrolls away
-	// from an edge — no hard-cut rows at the scrollport.
 	useScrollShadow(stackRef);
 
 	useEffect(() => {
 		if (!stackMorph) return;
 		const el = stackRef.current;
-		if (!el) {
+		if (!el || bubbleMotionOff()) {
 			setStackMorph(null);
 			return;
 		}
-		// The renderer locks the container to `from` (inline size).
-		// Measuring needs the TRUE content size: scrollHeight bottoms
-		// out at the locked client height and the locked width masks the
-		// max-content target, so lift the lock, measure, then re-lock —
-		// same frame, no paint in between.
+		// Lift the inline lock to measure the true target, then restore it in
+		// the same frame. No paint can occur between these operations.
 		el.style.transition = "none";
 		el.style.width = "";
 		el.style.height = "";
@@ -500,15 +515,13 @@ export function PetBubbles(): ReactNode {
 		const toH = el.getBoundingClientRect().height;
 		el.style.width = `${stackMorph.from.width}px`;
 		el.style.height = `${stackMorph.from.height}px`;
-		void el.offsetHeight; // commit the lock before transitioning
+		void el.offsetHeight;
 		if (Math.abs(toH - stackMorph.from.height) < 1 && Math.abs(toW - stackMorph.from.width) < 1) {
 			setStackMorph(null);
 			return;
 		}
-		// Spring with overshoot (cubic-bezier y > 1) — the size sweeps
-		// past the target and settles back (iOS Notification-Center bounce).
-		el.style.transition =
-			"width 320ms cubic-bezier(0.34, 1.4, 0.64, 1), height 320ms cubic-bezier(0.34, 1.4, 0.64, 1)";
+		const liquid = getComputedStyle(el).getPropertyValue("--spring-liquid").trim() || "ease";
+		el.style.transition = `width 320ms ${liquid}, height 320ms ${liquid}`;
 		el.style.width = `${toW}px`;
 		el.style.height = `${toH}px`;
 		const done = (): void => {
@@ -649,12 +662,13 @@ export function PetBubbles(): ReactNode {
 
 	if (itemCount === 0) return null;
 
-	// Display order (top → bottom): question/approval bubbles first (they
-	// block the agent), then the authoritative session cards (working
-	// first — the main window pre-sorts them), then transient notes.
-	// In the stacked view every card's body click EXPANDS the list (kimi
-	// parity) — the jump-to-session click lives in the expanded list; the
-	// quick-action buttons stopPropagation, so they keep working in both.
+	// A stacked stack with multiple cards expands before an action runs. This
+	// prevents a hidden priority card from being replied to or dismissed by
+	// accident. Expanded card bodies collapse; ↗ remains the explicit open action.
+	const runAction = (action: () => void): void => {
+		if (stackMode === "stacked" && itemCount > 1) switchMode("expanded");
+		else action();
+	};
 	const items: ReactNode[] = [
 		...cards.map((c): ReactNode => {
 			const replyKey = `c:${c.sessionId}`;
@@ -663,7 +677,7 @@ export function PetBubbles(): ReactNode {
 				<div
 					key={replyKey}
 					className={`pet-bubble pet-bubble--session pet-bubble--${c.phase}${unread ? " pet-bubble--unread" : ""}`}
-					onClick={() => (stackMode === "stacked" ? switchMode("expanded") : openCard(c))}
+					onClick={() => switchMode(stackMode === "stacked" ? "expanded" : "stacked")}
 				>
 					<button
 						type="button"
@@ -671,7 +685,7 @@ export function PetBubbles(): ReactNode {
 						aria-label="dismiss"
 						onClick={e => {
 							e.stopPropagation();
-							dismissCard(c);
+							runAction(() => dismissCard(c));
 						}}
 					>
 						×
@@ -691,13 +705,27 @@ export function PetBubbles(): ReactNode {
 					<div className="pet-bubble__actions">
 						<button
 							type="button"
+							className="pet-bubble__action pet-bubble__action--open"
+							aria-label={t("settings.petBubbleOpen")}
+							title={t("settings.petBubbleOpen")}
+							onClick={e => {
+								e.stopPropagation();
+								runAction(() => openCard(c));
+							}}
+						>
+							↗
+						</button>
+						<button
+							type="button"
 							className={`pet-bubble__action${replyFor === replyKey ? " pet-bubble__action--active" : ""}`}
 							aria-label={t("settings.petBubbleReply")}
 							title={t("settings.petBubbleReply")}
 							onClick={e => {
 								e.stopPropagation();
-								setReplyFor(prev => (prev === replyKey ? null : replyKey));
-								setReplyText("");
+								runAction(() => {
+									setReplyFor(prev => (prev === replyKey ? null : replyKey));
+									setReplyText("");
+								});
 							}}
 						>
 							💬
@@ -710,7 +738,7 @@ export function PetBubbles(): ReactNode {
 								title={t("settings.petBubbleStop")}
 								onClick={e => {
 									e.stopPropagation();
-									stopCard(c);
+									runAction(() => stopCard(c));
 								}}
 							>
 								■
@@ -723,7 +751,7 @@ export function PetBubbles(): ReactNode {
 								title={t("settings.petBubbleConfirm")}
 								onClick={e => {
 									e.stopPropagation();
-									dismissCard(c);
+									runAction(() => dismissCard(c));
 								}}
 							>
 								✓
@@ -740,17 +768,7 @@ export function PetBubbles(): ReactNode {
 				<div
 					key={replyKey}
 					className={`pet-bubble pet-bubble--${b.kind}`}
-					onClick={() => {
-						if (stackMode === "stacked") {
-							switchMode("expanded");
-							return;
-						}
-						if (b.sessionId) {
-							void bridge?.petOpenSession?.(b.sessionId);
-							return;
-						}
-						void bridge?.focusMainWindow?.();
-					}}
+					onClick={() => switchMode(stackMode === "stacked" ? "expanded" : "stacked")}
 				>
 					<button
 						type="button"
@@ -766,6 +784,21 @@ export function PetBubbles(): ReactNode {
 					{bubbleKindLabel(b.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(b.kind)}</span>}
 					<div className="pet-bubble__text">{b.visible}</div>
 					<div className="pet-bubble__actions">
+						<button
+							type="button"
+							className="pet-bubble__action pet-bubble__action--open"
+							aria-label={t("settings.petBubbleOpen")}
+							title={t("settings.petBubbleOpen")}
+							onClick={e => {
+								e.stopPropagation();
+								runAction(() => {
+									if (b.sessionId) void bridge?.petOpenSession?.(b.sessionId);
+									else void bridge?.focusMainWindow?.();
+								});
+							}}
+						>
+							↗
+						</button>
 						{b.sessionId && (
 							<button
 								type="button"
@@ -774,8 +807,10 @@ export function PetBubbles(): ReactNode {
 								title={t("settings.petBubbleReply")}
 								onClick={e => {
 									e.stopPropagation();
-									setReplyFor(prev => (prev === replyKey ? null : replyKey));
-									setReplyText("");
+									runAction(() => {
+										setReplyFor(prev => (prev === replyKey ? null : replyKey));
+										setReplyText("");
+									});
 								}}
 							>
 								💬
@@ -788,7 +823,7 @@ export function PetBubbles(): ReactNode {
 							title={t("settings.petBubbleConfirm")}
 							onClick={e => {
 								e.stopPropagation();
-								confirmBubble(b);
+								runAction(() => confirmBubble(b));
 							}}
 						>
 							✓
@@ -801,7 +836,7 @@ export function PetBubbles(): ReactNode {
 								title={t("settings.petBubbleDeny")}
 								onClick={e => {
 									e.stopPropagation();
-									denyBubble(b);
+									runAction(() => denyBubble(b));
 								}}
 							>
 								✗
@@ -890,6 +925,8 @@ export function PetBubbles(): ReactNode {
 				}
 				aria-live="polite"
 			>
+				{more > 1 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--far" aria-hidden />}
+				{more > 0 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--near" aria-hidden />}
 				{more > 0 && <span className="pet-bubble__more">{t("settings.petBubblesMore", { count: more })}</span>}
 				{top}
 			</div>

@@ -259,7 +259,7 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 				gx /= len;
 				gy /= len;
 			}
-			gazeRef.current = { x: gx, y: gy };
+			gazeRef.current = { x: gx, y: gy, at: performance.now() };
 		};
 		window.addEventListener("pointermove", onMove);
 		return () => window.removeEventListener("pointermove", onMove);

@@ -130,8 +130,8 @@ try {
 	// window. Shared by the pet page and the bubbles page (evaluateOnNew-
 	// Document is per-page).
 	const stubBridge = () => {
-		const listeners = { activity: [], approvalResolved: [] };
-		const calls = { petReply: [], petApprove: [], petMarkRead: [], petMarkAllRead: [], petOpenSession: [], focusMainWindow: 0, setPetContentSize: [], bubblesSetContentSize: [], bubblesSetVisible: [], bubblesSetHitbox: [] };
+		const listeners = { activity: [], approvalResolved: [], gaze: [], hover: [] };
+		const calls = { petReply: [], petApprove: [], petMarkRead: [], petMarkAllRead: [], petOpenSession: [], focusMainWindow: 0, setPetContentSize: [], setBubblesContentSize: [], setBubblesVisible: [], setBubblesHitbox: [] };
 		(window).__petStub = { listeners, calls };
 		(window).electronAPI = {
 			onPetActivity: cb => {
@@ -140,6 +140,14 @@ try {
 					const i = listeners.activity.indexOf(cb);
 					if (i >= 0) listeners.activity.splice(i, 1);
 				};
+			},
+			onPetGaze: cb => {
+				listeners.gaze.push(cb);
+				return () => {};
+			},
+			onPetHover: cb => {
+				listeners.hover.push(cb);
+				return () => {};
 			},
 			onPetApprovalResolved: cb => {
 				listeners.approvalResolved.push(cb);
@@ -152,16 +160,16 @@ try {
 				calls.setPetContentSize.push(s);
 				return Promise.resolve();
 			},
-			bubblesSetContentSize: s => {
-				calls.bubblesSetContentSize.push(s);
+			setBubblesContentSize: s => {
+				calls.setBubblesContentSize.push(s);
 				return Promise.resolve();
 			},
-			bubblesSetVisible: v => {
-				calls.bubblesSetVisible.push(v);
+			setBubblesVisible: v => {
+				calls.setBubblesVisible.push(v);
 				return Promise.resolve();
 			},
-			bubblesSetHitbox: r => {
-				calls.bubblesSetHitbox.push(r);
+			setBubblesHitbox: r => {
+				calls.setBubblesHitbox.push(r);
 				return Promise.resolve();
 			},
 			petReply: (text, sessionId) => {
@@ -190,7 +198,7 @@ try {
 			},
 		};
 	};
-	await page.evaluateOnNewDocument(stubBridge);
+	await page.evaluateOnNewDocument(`//!world=main\n(${stubBridge.toString()})()`);
 
 	await page.goto(`file:///${distPetHtml.replace(/\\/g, "/")}`, { waitUntil: "load" });
 	await page.waitForSelector(".pet-window", { timeout: 10_000 });
@@ -198,14 +206,21 @@ try {
 
 	const pushActivity = (pg, payload) =>
 		pg.evaluate(p => {
+			//!world=main
 			const stub = (window).__petStub;
 			for (const cb of stub.listeners.activity) cb(p);
 		}, payload);
+	const pushGaze = (pg, x, y) =>
+		pg.evaluate((x, y) => {
+			//!world=main
+			const stub = (window).__petStub;
+			for (const cb of stub.listeners.gaze) cb({ x, y, at: performance.now() });
+		}, x, y);
 
 	// Dark scheme + working mood, like a live session. Push the accent
 	// explicitly — applyPetPalette only runs on a theme/accent payload, and
 	// without it the six --gui-pet-* vars stay unset (SVG fallbacks).
-	await pushActivity(page, { theme: "dark", mood: "working", petState: "working" });
+	await pushActivity(page, { theme: "dark", mood: "working", petState: "working", pet: { kind: "builtin", id: "musepi-note-bot" } });
 	await pushActivity(page, { accent: "oklch(0.7507 0.1295 79.85)" });
 	await sleep(400);
 	const paletteDbg = await page.evaluate(() => ({
@@ -227,6 +242,80 @@ try {
 		await sleep(150);
 		await pg.screenshot({ path: path.join(shotsDir, `${name}.png`), captureBeyondViewport: false });
 	};
+	const headRoll = () =>
+		page.evaluate(() => {
+			const rigs = [...document.querySelectorAll(".gui-pet-svg__body g")];
+			const transform = rigs.map(el => el.getAttribute("transform") ?? "").find(value => value.startsWith("translate(20 24)") && value.includes("rotate(")) ?? "";
+			const rolls = [...transform.matchAll(/rotate\((-?[\d.]+) -?[\d.]+ -?[\d.]+\)/g)];
+			return Number(rolls.at(-1)?.[1] ?? 0);
+		});
+
+	// A stationary pointer stops producing IPC. Use the idle face so the
+	// measured eyes and head are visible rather than dissolved into work dots.
+	await pushActivity(page, { mood: "rest", petState: "idle" });
+	await sleep(500);
+	await pushGaze(page, 1, 0);
+	await sleep(700);
+	const engagedRoll = await headRoll();
+	await shot("pet-gaze-engaged");
+	await sleep(3600);
+	const centredRoll = await headRoll();
+	await shot("pet-gaze-centred");
+	check(
+		"stationary gaze smoothly recentres head attention",
+		Math.abs(engagedRoll) > 0.3 && Math.abs(centredRoll) < 0.2,
+		`engaged=${engagedRoll} centred=${centredRoll}`,
+	);
+	// Pointer state must not replace the orb's authored session direction.
+	await page.evaluate(() => {
+		//!world=main
+		for (const cb of window.__petStub.listeners.hover) cb(true);
+	});
+	await sleep(250);
+	const hoverDirection = await page.evaluate(() => ({
+		mood: document.querySelector(".gui-pet-svg--rest") !== null,
+		state: document.querySelector(".gui-pet-svg--idle") !== null,
+		mirrored: document.querySelector(".pet-window__pet-flip--mirror") !== null,
+	}));
+	check("orb hover preserves its session direction", hoverDirection.mood && hoverDirection.state && !hoverDirection.mirrored, JSON.stringify(hoverDirection));
+	await page.evaluate(() => {
+		//!world=main
+		for (const cb of window.__petStub.listeners.hover) cb(false);
+	});
+
+	const dragBox = await page.evaluate(() => {
+		const r = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
+		return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+	});
+	if (dragBox) {
+		await page.mouse.move(dragBox.x, dragBox.y);
+		await page.mouse.down();
+		await page.mouse.move(dragBox.x + 48, dragBox.y - 12, { steps: 4 });
+		await sleep(250);
+		const dragDirection = await page.evaluate(() => ({
+			mood: document.querySelector(".gui-pet-svg--rest") !== null,
+			state: document.querySelector(".gui-pet-svg--idle") !== null,
+			petdexDrag: document.querySelector(".gui-pet-svg--dragging") !== null,
+			mirrored: document.querySelector(".pet-window__pet-flip--mirror") !== null,
+			gesture: document.querySelector(".gui-pet-svg__gesture")?.getAttribute("transform") ?? "",
+		}));
+		check("orb drag never selects the Petdex walking row or mirrors", dragDirection.mood && dragDirection.state && !dragDirection.petdexDrag && !dragDirection.mirrored && dragDirection.gesture.length > 0, JSON.stringify(dragDirection));
+		await shot("pet-orb-drag");
+		await page.mouse.move(dragBox.x - 48, dragBox.y - 12, { steps: 4 });
+		await sleep(32);
+		const reversed = await page.evaluate(() => ({
+			mirrored: document.querySelector(".pet-window__pet-flip--mirror") !== null,
+			gesture: document.querySelector(".gui-pet-svg__gesture")?.getAttribute("transform") ?? "",
+		}));
+		check("orb reversal stays on the continuous gesture rig", !reversed.mirrored && reversed.gesture.length > 0, JSON.stringify(reversed));
+		await page.mouse.up();
+		await sleep(1100);
+		const released = await page.evaluate(() => document.querySelector(".gui-pet-svg__gesture")?.getAttribute("transform") ?? "");
+		check("orb release settles without residual tilt", !released.includes("rotate("), released);
+	} else {
+		check("orb drag never selects the Petdex walking row or mirrors", false, "pet not found");
+	}
+	await pushActivity(page, { mood: "working", petState: "working" });
 
 	// ── 1. Gold BEFORE (HEAD formulas) / AFTER (shipped) ─────────────────
 	// Snapshot the SHIPPED palette first — the app derives these vars into
@@ -269,7 +358,7 @@ try {
 	const distBubblesHtml = path.join(desktopDir, "dist", "bubbles.html");
 	const bubblesPage = await browser.newPage();
 	await bubblesPage.setViewport({ width: 480, height: 400 });
-	await bubblesPage.evaluateOnNewDocument(stubBridge);
+	await bubblesPage.evaluateOnNewDocument(`//!world=main\n(${stubBridge.toString()})()`);
 	await bubblesPage.goto(`file:///${distBubblesHtml.replace(/\\/g, "/")}`, { waitUntil: "load" });
 	await bubblesPage.waitForSelector("#root", { timeout: 10_000 });
 	await sleep(600);
@@ -279,7 +368,9 @@ try {
 	}));
 	check("bubbles window renders with bubbles-root re-scope", rootScope.bubblesRoot, JSON.stringify(rootScope));
 	await pushActivity(bubblesPage, { theme: "dark" });
-	await pushActivity(bubblesPage, { bubble: { kind: "completed", text: "构建完成，0 错误。", sessionId: "verify-s1" } });
+	await pushActivity(bubblesPage, {
+		sessions: [{ sessionId: "verify-s1", title: "构建桌面客户端", phase: "done", statusText: "已完成", replyPreview: "构建完成，0 错误。" }],
+	});
 	await sleep(300);
 	await pushActivity(bubblesPage, { approval: { requestId: "verify-r1", tool: "bash" } });
 	await sleep(600);
@@ -296,17 +387,23 @@ try {
 		stackInfo.top && /[1-9]/.test(stackInfo.moreText ?? ""),
 		JSON.stringify(stackInfo),
 	);
+	const bubbleRadius = await bubblesPage.evaluate(() => {
+		const card = document.querySelector(".pet-bubble");
+		return card ? getComputedStyle(card).borderTopLeftRadius : "missing";
+	});
+	check("bubble cards keep their own 20px radius", bubbleRadius === "20px", bubbleRadius);
 	// Window split contract: the renderer reports content size + visible +
 	// hitbox to the main process (which owns the window geometry).
 	const splitReports = await bubblesPage.evaluate(() => {
+		//!world=main
 		const calls = (window).__petStub.calls;
-		const last = calls.bubblesSetContentSize.at(-1) ?? { width: 0, height: 0 };
+		const last = calls.setBubblesContentSize.at(-1) ?? { width: 0, height: 0 };
 		return {
 			sized: last.width > 0 && last.height > 0,
 			last,
-			visible: calls.bubblesSetVisible.at(-1) === true,
-			hitboxCalls: calls.bubblesSetHitbox,
-			hitbox: (calls.bubblesSetHitbox.at(-1) ?? null) !== null,
+			visible: calls.setBubblesVisible.at(-1) === true,
+			hitboxCalls: calls.setBubblesHitbox,
+			hitbox: (calls.setBubblesHitbox.at(-1) ?? null) !== null,
 		};
 	});
 	check(
@@ -347,17 +444,32 @@ try {
 	check("expanded list with ∨ fab and 清除全部", expandedState.expanded && expandedState.fab && expandedState.clearAll, JSON.stringify(expandedState));
 	await shotPg(bubblesPage, "pet-bubbles-expanded");
 
-	// Reply path: the completed bubble owns a sessionId → it alone offers
-	// the 💬 reply action. Click it → type → Enter → stub captured petReply.
-	await bubblesPage.click(".pet-bubbles--expanded .pet-bubble--completed .pet-bubble__action");
+	// Reply and open actions must not activate the card body's collapse.
+	await bubblesPage.click(".pet-bubbles--expanded .pet-bubble--done .pet-bubble__action--open + .pet-bubble__action");
 	await sleep(300);
 	const inputThere = await bubblesPage.evaluate(() => !!document.querySelector(".pet-bubble__reply-input"));
 	check("reply action opens the inline input", inputThere);
 	await bubblesPage.type(".pet-bubble__reply-input", "好的，继续");
 	await bubblesPage.keyboard.press("Enter");
 	await sleep(250);
-	const replyCall = await bubblesPage.evaluate(() => (window).__petStub.calls.petReply);
+	const replyCall = await bubblesPage.evaluate(`//!world=main\nwindow.__petStub.calls.petReply`);
 	check("inline reply sends via petReply bridge", replyCall.length === 1 && replyCall[0]?.text === "好的，继续", JSON.stringify(replyCall));
+	await bubblesPage.click(".pet-bubbles--expanded .pet-bubble--done .pet-bubble__action--open");
+	await sleep(200);
+	const openState = await bubblesPage.evaluate(() => ({
+		//!world=main
+		calls: window.__petStub.calls.petOpenSession,
+		expanded: !!document.querySelector(".pet-bubbles--expanded"),
+	}));
+	check("open action keeps the list expanded and opens its session", openState.expanded && openState.calls.at(-1) === "verify-s1", JSON.stringify(openState));
+	await bubblesPage.click(".pet-bubbles--expanded .pet-bubble--done .pet-bubble__body");
+	await sleep(500);
+	const collapsed = await bubblesPage.evaluate(() => ({
+		//!world=main
+		stacked: !!document.querySelector(".pet-bubbles--stacked"),
+		openCalls: window.__petStub.calls.petOpenSession.length,
+	}));
+	check("expanded card body collapses without opening the session", collapsed.stacked && collapsed.openCalls === 1, JSON.stringify(collapsed));
 
 	// ── 3. Interaction on click ──────────────────────────────────────────
 	await page.mouse.move(10, 10); // move off bubbles
@@ -369,31 +481,31 @@ try {
 		return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 	});
 	if (petBox) {
-		// ONE gesture: down (startled + squash fire immediately) → up
-		// (deferred single-click action fires after the 300ms double-click
-		// window + 20ms). A second pointerdown would void the defer.
+		// The builtin uses its own interaction spring, not the Petdex wrapper squash.
 		await page.mouse.move(petBox.x, petBox.y);
 		await page.mouse.down();
 		await sleep(120);
-		const startled = await page.evaluate(() => !!document.querySelector(".gui-pet-svg--startled") || !!document.querySelector(".pet-window__squash"));
-		check("pointerdown triggers the startled/squash reaction", startled);
+		const startled = await page.evaluate(() => ({
+			face: !!document.querySelector(".gui-pet-svg--startled"),
+			doubleSquash: !!document.querySelector(".pet-window__squash"),
+		}));
+		check("pointerdown triggers one builtin startled reaction", startled.face && !startled.doubleSquash, JSON.stringify(startled));
 		await page.mouse.up();
-		// The deferred single-click action fires at DOUBLE_CLICK_MS+20
-		// (~320ms after pointerup): interaction → "greeting", and the squash
-		// effect replays on the flip wrapper (petdex sheets carry no reaction
-		// rows — the window-level squash IS the visible reaction).
 		await sleep(380);
-		const squashReplayed = await page.evaluate(() => !!document.querySelector(".pet-window__squash"));
-		await sleep(300); // let the reaction finish before the focus check
-		const focusCalls = await page.evaluate(() => (window).__petStub.calls.focusMainWindow);
+		const greeting = await page.evaluate(() => ({
+			face: !!document.querySelector(".gui-pet-svg--greeting"),
+			doubleSquash: !!document.querySelector(".pet-window__squash"),
+		}));
+		await sleep(300);
+		const focusCalls = await page.evaluate(`//!world=main\nwindow.__petStub.calls.focusMainWindow`);
 		check(
-			"single click triggers greeting (squash replay; panel IPC gone)",
-			squashReplayed && focusCalls >= 1,
-			`squash=${squashReplayed} focusCalls=${focusCalls}`,
+			"single click triggers greeting without a second squash",
+			greeting.face && !greeting.doubleSquash && focusCalls >= 1,
+			`${JSON.stringify(greeting)} focusCalls=${focusCalls}`,
 		);
 	} else {
-		check("pointerdown triggers the startled/squash reaction", false, "pet not found");
-		check("single click triggers greeting (squash replay; panel IPC gone)", false, "pet not found");
+		check("pointerdown triggers one builtin startled reaction", false, "pet not found");
+		check("single click triggers greeting without a second squash", false, "pet not found");
 	}
 
 	// ── 4. Panel gone ────────────────────────────────────────────────────

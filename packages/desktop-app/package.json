@@ -21,6 +21,7 @@
 		"desktop:rebuild": "bun run build && bun scripts/desktop-run.mjs",
 		"desktop:dev": "bun scripts/dev-desktop.mjs",
 		"desktop:run": "electron .",
+		"smoke:pet": "node scripts/verify-desktop-pet-electron.mjs",
 		"check": "biome check . && bun run check:types",
 		"check:types": "tsgo -p tsconfig.json --noEmit",
 		"lint": "biome lint .",

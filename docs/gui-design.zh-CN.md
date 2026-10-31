@@ -123,13 +123,15 @@ lang: zh-CN
 
 - **预置**:10 个内置 Petdex 预置(`src/lib/pet.ts` 的 `BUILTIN_PETDEX`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
 - **形象选择**:`.gui-pet-trigger` 行显示当前伙伴缩略图 + 名称 + 箭头(展开翻转);预览缩略图用 `zoom: 0.55`。删除按钮只出现在导入卡,hover 显现,`stopPropagation` 防选中。
-- **渲染形态**(PetSprite.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`PETDEX_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。
+- **渲染形态**(PetSprite.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`PETDEX_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。内置球体不使用 Petdex 的悬停/拖拽行和方向镜像：指针速度驱动独立的连续手势层，产生倾斜、拉伸、提起与阻尼落地；该层与会话动作、交互动效和眼动组合。
 - **尺寸归一化与大小调节**(2026-08-06):所有 Petdex 形象按 **rest 行内容高度统一渲染**(`PET_CONTENT_TARGET_H = 100`,k = 100/contentH)——导入包的帧尺寸各异(Doraemon 192×208 vs 内置 96×104),不归一化会 2 倍大小、阴影溢出画布。contentH 来源:内置走 `BUILTIN_PETDEX.contentH`(实测写死),导入包 import 时 `measurePetdex()` 测量,旧包由 `migratePetdexContent()`(usePet 挂载时)自动补测回写。**伙伴大小滑块**(设置 → 伙伴,`musepi-gui-pet-scale` 60–150%,默认 100)乘在归一化之上;桌面宠物窗口由主窗口桥 `pet-activity {scale}` 推送(跨窗口 localStorage 不可靠),输入框内宠物直接读 pref。
-- **窗口与阴影边界**:宠物窗口 320×290 基础尺寸(`PET_WINDOW_SIZE`),宠物锚定 `bottom: 52px`(帧 [134,238],偏上更居中)——**必须给 drop-shadow 留足辐射空间**(rest 0 6px 16px ≈ 22px → 30px 余量;hover 0 10px 22px ≈ 32px + bump ≈ 2px → 18px 余量),否则阴影在窗口底边被硬切(割裂感)。**恢复单窗口(2026-09-16)**:气泡/面板回到 pet 窗口内(`bottom: 174px` 气泡栈定位重新生效);窗口在需要时向上生长(底边固定)。
-- **气泡栈(单窗口,2026-09-16 回并)**:最多 5 条(`MAX_VISIBLE_BUBBLES`)、最新在上、打字机逐条显示、× 关闭、8s 自动消失;**iOS Notification-Center 折叠形态**——折叠时只显示最新一条 + 「N more」chip,点击展开完整列表;折叠↔展开是**宽高双轴 morph**(320ms overshoot,`stackMorph` 过渡 width+height,窗口经内容尺寸上报跟随);深色圆角气泡 + 边框 + 轻阴影,卡片自绘磨砂玻璃面(自绘 tint + 高光 + 发丝线)——2026-08-22 的材质决策不变。2026-08-11 的双窗口拆分(独立 bubble 窗口追着宠物跑)是非 100% 缩放下"宠物↔气泡"漂移的根因,已回退。
+- **窗口与阴影边界**：宠物窗口固定为 320×290（`PET_WINDOW_SIZE`），宠物锚定 `bottom: 52px`，并保留足够的投影空间。窗口只包含 sprite 和隐藏气泡栈的数量角标。会话卡片位于独立、按内容定尺的 `bubbles.html` 窗口，锚定在 sprite 上方，限制在当前工作区内，并随宠物移动。空气泡栈会隐藏该窗口。单击不再打开交互面板。
+- **气泡栈**：临时通知最多 5 条（`MAX_VISIBLE_BUBBLES`），非问题通知 8 秒后自动消失。卡片使用 20px 圆角、自绘玻璃材质和宽高双轴形变。三种模式为 `stacked`（优先卡片加「N more」标记）、`expanded`（完整列表）和 `hidden`（点击数量角标恢复）。点击折叠卡片正文展开列表；点击展开卡片正文收起列表。独立的 ↗ 按钮打开会话或主窗口。回复、打开、批准、拒绝、停止、关闭和清除操作不会触发卡片正文；收起控件按 `expanded → stacked → hidden` 逐层切换。
+- **气泡材质与动效**：卡片、装饰背层、展开头部、收起控件、快捷操作、回复框和计数表面复用共享 `--glass-*` 材质。收起态的近层与远层背卡不参与交互，布局尺寸与 240px 优先卡片一致。360px 外层气泡栈和 60px 阴影留白保证窗口宽度稳定，并避免控件被裁切。宽高形变与入场使用 `--spring-liquid`，短促控件反馈使用 `--spring-snappy`。减少动态效果时立即显示完整文字，并跳过入场和尺寸形变动画。
+- **引导页个性化使用真实桌宠预览**：矢量球体位于第一项，其后是内置 Petdex 预设和导入包。每个选项渲染真实的 `PetSprite`；光泽和配饰控制只适用于矢量球体。右侧预览跟随所选桌宠和装饰。输入框模式显示挂靠输入框的桌宠；桌面模式显示独立桌宠与玻璃气泡。
 - **气泡 kind 区分(2026-09-19)**:`bubble.kind`(`completed`/`error`/`question`/`subtask`,`lib/pet.ts`)此前**只有 `error` 有样式**——另外三种渲染完全相同,而 `question` 是唯一**阻塞 agent** 的 kind,最紧急的气泡看起来和信息类一样。现在每条气泡都带 `--pet-kind` accent token(`pet-window.css` `:root`:completed = `--color-accent`、error = `--color-danger`、question = `--color-accent`、subtask = 42% 文字色 tint),驱动 **2.5px 左侧规则**(`.pet-bubble::before`),并在正文与页脚之间加大写 kind 标签(`.pet-bubble__kind`,zh/en i18n `pet bubble kind *`);`error` 与 `question` 额外给边框上色(55% mix)——`question` 最响亮,因为它要求动作。两个实现陷阱:① 左规则必须用 **`background-color`,绝不能用 `background` 简写**——当 `var()` 的值是 `color-mix()` 结果时,Chromium 在解析期就丢弃该简写,规则什么都不画(实测:`background-image: none`,几何正常 2.5×47.75px);② 未知 kind 由标签 helper 返回 `null`,不产出误导性标签。
 - **桌宠常驻普通窗口之上,但给全屏让路(2026-09-19)**:桌宠是桌面伙伴,所以常驻置顶层——但「行为得体」由三条规范定义,且三条都用户可见。① **不能下沉**。置顶断言在可见期间每 5s 重施加一次,因为 Windows 会在边缘吸附与睡眠唤醒时降级该层级且永不恢复;层级用 `pop-up-menu`(高于任务栏级 UI),不是 `floating`。② **不能抢全屏**。当别的应用占满屏幕——游戏、视频、演示——桌宠在该应用退出前退出置顶层,退出后回来。这是「伙伴」与「骚扰」的分界,而且必须对**别人的**应用生效,不能只管自家窗口。桌面本身永远不算全屏:点壁纸、Alt-Tab 都不许把桌宠赶走。③ **必须能回来**。拔掉显示器、DPI 变化、笔记本睡眠唤醒,都不许把桌宠留在屏幕外、被不可见地 cloak、或尺寸错乱(看着被放大、且每睡一次就更大一圈,是用户报成「坏掉了」的那种失败)。以上任一情况之后,桌宠回到合理位置,但**若用户是特意把它停在一个可达处,就不得移动它**——DPI 事件不是给用户手放位置重新居中的许可。
-- **交互面板(单窗口,2026-09-16 回并)**:点击宠物在 pet 窗口内 sprite 上方切换面板(2026-08-11 的 bubble 窗口版本已删)。面板 = 实时任务摘要(working/idle + 当前工具 + 最近消息,1s 节流推送 + 打开时即时快照)+ 审批卡(批准/拒绝走主窗口 `tool.approve/deny`,**另配全局热键 `Ctrl/Cmd+Shift+Y/N`**——仅在"有 pending 审批且宠物可见"时注册)+ 快捷回复(有会话 steer/followUp,无会话 createSession 首条消息)+ 会话标题 + ↗ 打开主窗口按钮 + tab(消息/最近会话)。面板 316px 固定宽、absolute 底部锚定在宠物区上方(`bottom: 170px`),高度随内容(窗口经 `pet-set-content-size` 向上生长);**入场 gating 依旧**:面板 mount 时 `opacity:0`,等窗口 resize 事件(120ms 兜底)再播 `pet-panel--in`——窗口生长比 React commit 晚一次 IPC 往返,立即播动画会把面板裁剪。面板 i18n(locale 经 `pet-activity {locale}` 推送)。气泡在面板打开时隐藏。**空闲睡眠(2026-09-16)**:60s 无手势且无任务活动 → sprite 调暗 + 漂浮 "z z z"(`.pet-window__pet--sleeping`,纯 CSS——导入包无需新帧);任何手势或 mood 变化唤醒。
+- **宠物手势与睡眠**：单击播放问候动画并将主窗口置前；双击随机播放一种交互，且不重复上一次选择。会话卡片提供回复、停止、确认和打开操作；审批卡片提供批准/拒绝操作，并在待审批期间保留全局 `Ctrl/Cmd+Shift+Y/N` 热键。连续 60 秒没有手势或任务活动后，sprite 调暗并漂浮「z z z」（`.pet-window__pet--sleeping`）；任何手势或 mood 变化都会唤醒。
 
 ## 5. i18n 与音效
 
@@ -157,7 +159,7 @@ lang: zh-CN
 | opencode(`../opencode` dev) | 会话树/header/服务器实例/设置 v2 形态 | 音效三分类(agent/permissions/errors)是活动音效配置的蓝本 |
 | openchamber(`../openchamber` v1.18.1) | 三栏 shell/设置布局/通知模板/远程实例(SSH+端口转发) | 设置页形态主参考;消息局部选择悬浮/保存为图片/基于回答新会话(2026-08-07 已落地局部选择+保存图片,fork 模态未做) |
 | bitfun(`../bitfun` main) | 伙伴(Petdex/帧动画/mood)/SSH 远程工作区/审批 | 桌宠视觉与交互主参考 |
-| clawd-on-desk(`/tmp/clawd-on-desk`,rullerzhou-afk,AGPL) | 桌宠浮窗布局/权限气泡/状态指示 | **内容驱动窗口设计参考**(2026-08-11 分析):固定宽度 + 高度自适应(窗口宽度不变→无锚定裁剪);气泡堆布局优先级 下方→侧边(空间多侧,右优先)→角落;入场从桌宠侧滑入(translateX 60→0 弹簧)。「宽度先行」思想(尺寸稳定后再动效)已落地面板入场 gating |
+| clawd-on-desk(`/tmp/clawd-on-desk`,rullerzhou-afk,AGPL) | 桌宠浮窗布局/权限气泡/状态指示 | **内容驱动窗口设计参考**(2026-08-11 分析):固定宽度 + 高度自适应(窗口宽度不变→无锚定裁剪);气泡堆布局优先级 下方→侧边(空间多侧,右优先)→角落;入场从桌宠侧滑入(translateX 60→0 弹簧)。当前气泡窗口先测量完整布局再上报尺寸，入场动画不会驱动窗口尺寸反馈循环 |
 | kimi-code(`../kimi-code`) | 图标卡中卡 80.5%/点阵品牌背景/供应商网格 | Dock 视觉对齐基准 |
 | ZCode | 连接向导 4 步(SSH/Docker) | ConnectDialog 步骤骨架 |
 | `../ui-references/aicss/` | AI 界面 CSS 配方(thinking/code-block/comparison-table…) | 消息流细节对照 |
@@ -352,9 +354,9 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **用户 SVG 导入 = 单帧 petdex 包**(`PetdexPackage.format: "svg"`):渲染端文件选择(≤512KB、`<svg` 嗅探、带 viewBox 文本兜底的 Image 解码以对付无尺寸 SVG)存为 `format:"svg"`、`rows:[1]`、`contentH = height`——预设网格、触发器、composer 与桌面桌宠全部经**现有** PetdexSprite 路径渲染(`backgroundPosition` 钉在 `0 0`;行偏移会在 hover/拖行时把整张图移出盒子)。心情系统对单静态帧降级为 transform 行(bob/lift/wiggle),与缺行的精灵表一致。
 - **头像小球空白**——`.gui-pet-svg` **自身没有尺寸规则**(gui-pet.css 用 `.gui-pet svg` 后代选择器定尺寸);任何不套 `.gui-pet` 包装就渲染精灵的调用点会塌成 0。该规则升级为组件:`PetBox`(包装器 + 两个变量),包装器从导出的 `PET_BOX_RATIO` 发布 `--gui-pet-ratio`——样式表字面量只作水合兜底,重调 VIEW 不再静默失同步每个宿主。
 - **石墨球**——桌宠窗口从不加载 `tokens.css`,根上不存在 `--accent`,`applyPetPalette` 落到硬编码暖石墨兜底("黑色带点黄")。从源头修:`pet-window.css :root` 携带品牌金 `--accent` 字面量(主窗口的主题推送仍会覆盖它)。教训:**推送管线需要在接收端有正确默认值**,而不只在发送端。
-- **面板裁切 + 遮挡**——`.pet-panel` 的 `max-height: calc(100vh - 180px)` 度量的是**它想让它变高的那个窗口**:高度上报量的是被钳住的盒子、只请求刚好的高度、窗口变高、上限跟着变大——恶性反馈循环收敛到一个约 112px 的矮面板(截图 3)。卡片现在**不带 max-height**;窗口才是约束(经 `pet-set-content-size` 向上生长,main.cjs 内按工作区钳制),`.pet-panel__body`(`min-height:0; overflow-y:auto`)是唯一 scrollport。第二处:面板开关订阅挂在 `[panelOpen]` 上重注册,落在拆卸/重注册交换窗内的点击跑的是**旧** handler——面板开着却"又开一次"、且关不掉。改为挂载一次、读 `panelOpenRef`。
-- **拖拽位置偏移**——`persistPetPos` 存的是**浮层展开时变高的窗口**的左上角 `y`;按基础高度恢复会让宠物下坠"长高量",贴底边的矩形则直接过不了可见性检查(位置"被遗忘"→回落默认角落)。锚点改为宠物的**底边**(`bottom: (y+h)/dip`,恢复为 `y = bottom − base`)——精灵悬挂其上的不变量,与 `reconcilePetWindow` 保持的是同一个。命中盒上报加了覆盖浮层元素的 `ResizeObserver`(切 tab / 形变改内容尺寸而不改窗口尺寸;旧命中盒会让点击穿透轮询落错位置)。
-- **去重(clawd pass)**:删除仍在描述已废弃气泡窗口的过时双窗口注释块(main.cjs 托盘段、bubble × 关闭处理器、桌宠窗口 backgroundColor 注、pet-main 开关文档)——描述不存在架构的注释比没有注释更糟。
+- **历史面板裁切 + 遮挡**——已移除的窗内 `.pet-panel` 对自己上报的高度设置上限，形成窗口尺寸反馈循环；开关订阅在重注册时也可能执行旧 handler。当前契约没有窗内面板。独立的 `bubbles.html` 卡片上报未钳制的内容尺寸，由主进程把独立窗口限制在工作区内。
+- **历史拖拽位置偏移**——已移除的单窗口会随浮层改变高度，只恢复左上角位置会移动 sprite。当前桌宠窗口保持固定尺寸，气泡窗口跟随它，但不改变它的边界。`pet-drag-client` 从同一组光标/窗口锚点推导拖拽位置；持久化的 `{x,y,w,h,dock}` 在恢复前按显示器工作区校验。
+- **当前窗口架构**——`pet.html` 只包含 sprite 和隐藏气泡栈角标；独立的 `bubbles.html` 窗口承载会话与审批卡片。两个窗口都不会改变对方的尺寸。
 
 ## 5n. 语音输入交互:只承动效的麦克风按钮与输入框内状态条(2026-09-20)
 
@@ -362,7 +364,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 - **30px 胶囊是动效预算,不是文案预算**(`composer/action-buttons.tsx` 的 `VoiceButton`):按钮只通过染色 + 脉冲(录音中)与 spinner(转写中)承载状态——秒数时钟、相位文案、取消提示永不回灌。控件装不下自己的反馈时,把反馈挪到装得下的地方;在胶囊里缩小字号读作坏了,不是紧凑。
 - **反馈长在输入卡内部**(`VoiceStatusStrip`,composer children、textarea 上方——与错误胶囊同位):13 根 bar 的波形 + 秒数/「转写中…」+ Esc 提示。它是**整个转录等待期**唯一的反馈面——旧流程在录音一停就什么都没有了,文字在几秒死寂后"凭空出现"。经 `role="status"` / `aria-live="polite"` 播报。
-- **真实音频驱动视觉状态**：麦克风 RMS 直接缩放波形与多层声环，不播放自主循环假波形。临时识别文本占据预留预览区，不挤压输入框；减少动态效果时保留静态波形、进度和全部文字，不再播放过渡。
+- **真实音频驱动视觉状态**：麦克风 RMS 直接缩放波形与多层声环，不播放自主循环假波形；转写阶段移除波形，避免误认为仍在录音。临时识别文本优先占据弹性预览区，无文本时显示当前阶段提示；窄输入框先隐藏辅助波形，再收起取消文字。减少动态效果时保留静态状态、进度和全部文字，停止波形过渡与处理环旋转。
 - **预览与正式文本分流**（`use-dictation.ts`）：`partial` 只更新临时预览，`segment` 才插入正式文本。任一分段为 `uncertain` 时整段只保留草稿并禁止自动提交；`reject` 不产生转写。取消后迟到事件全部失效。停止录音后仍立即进入转写相位。
 - **声纹录入使用固定且垂直居中的 `DialogFrame`**：四段朗读加一次独立验证，显示真实进度，只保留一个主操作；失败只重录当前段。声环由真实 RMS 驱动，减少动态效果时保留静态进度与错误。音频计算向量后立即释放，本机只保存声纹向量。
 - **语音设置保持完整且可管理**：schema 过滤使用权威的 `Speech` 分组，既有识别、朗读和提交触发项不再消失。已缓存 STT/TTS 模型经确认后可删除；先停止对应 worker 再清缓存，当前页面不会立刻重新下载刚删除的模型。

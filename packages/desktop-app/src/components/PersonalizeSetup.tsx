@@ -1,38 +1,38 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
-import { BUILTIN_PETDEX, loadPetdex, type PetdexPackage } from "../lib/pet";
+import { BUILTIN_PETDEX, BUILTIN_SVG_ID, loadPetdex, type PetdexPackage, petForId, petId, setPetId } from "../lib/pet";
+import {
+	PET_ACCESSORIES,
+	PET_DECOR_FLAGS,
+	type PetAccessory,
+	type PetDecor,
+	petDecor,
+	setPetAccessory,
+	setPetDecorFlag,
+} from "../lib/pet-decor";
 import type { RpcClient } from "../lib/rpc";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
+import { PetSprite } from "./PetSprite";
 import { StateIcon } from "./StateIcon";
 
-/**
- * Onboarding personalization step (post-provider setup): pick the agent
- * avatar style, the streaming reveal toggle and the desktop-pet theme —
- * all live-previewed and persisted exactly like the settings rows they
- * mirror (设置 → 常规 / 伙伴 / display.smoothStreaming).
- */
+/** Onboarding personalization uses the same pet, decoration, avatar and
+ * streaming preferences as Settings. Every pet card and the right-hand
+ * desktop/composer preview render the selected PetSprite, including decor. */
 export function PersonalizeSetup({
 	rpc,
 	petMode,
 	onPetModeChange,
 }: {
 	rpc: RpcClient | null;
-	/** Pet display mode — lifted to OnboardingOverlay so the preview (right
-	 *  pane) hides the pet in "desktop" mode and shows it in "input". */
 	petMode: "input" | "desktop";
 	onPetModeChange: (mode: "input" | "desktop") => void;
 }): ReactNode {
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [smooth, setSmooth] = useState(true);
-	const [selectedPet, setSelectedPet] = useState<string>(() => {
-		try {
-			return localStorage.getItem("musepi-gui-pet-id") ?? "musepi";
-		} catch {
-			return "musepi";
-		}
-	});
-	const [petdex, setPetdex] = useState<PetdexPackage[]>(() => loadPetdex());
+	const [selectedPet, setSelectedPet] = useState<string>(() => petId());
+	const [petdex] = useState<PetdexPackage[]>(() => loadPetdex());
+	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
 
 	useEffect(() => {
 		if (!rpc) return;
@@ -75,28 +75,31 @@ export function PersonalizeSetup({
 	const pickPet = (id: string): void => {
 		tapFeedback();
 		setSelectedPet(id);
-		try {
-			localStorage.setItem("musepi-gui-pet-id", id);
-		} catch {
-			// storage unavailable
-		}
+		setPetId(id);
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
 
 	const petOptions = [
-		...BUILTIN_PETDEX,
-		...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: "" })),
+		{
+			id: BUILTIN_SVG_ID,
+			displayName: t("settings.builtinPet"),
+			description: t("settings.builtinPetDescription"),
+		},
+		...BUILTIN_PETDEX.map(p => ({
+			id: p.id,
+			displayName: t(p.displayName as TranslationKey),
+			description: t(p.description as TranslationKey),
+		})),
+		...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: p.description ?? "" })),
 	];
-	// Where the pet lives: docked inside the composer ("input") or its own
-	// desktop window ("desktop") — musepi-gui-pet-mode, same key the pet host
-	// reads. State is lifted (OnboardingOverlay) so the chat preview on the
-	// right reflects the choice live.
+	const builtinSelected = petForId(selectedPet).kind === "builtin";
+
 	const pickPetMode = (mode: "input" | "desktop"): void => {
 		onPetModeChange(mode);
 		try {
 			localStorage.setItem("musepi-gui-pet-mode", mode);
 		} catch {
-			// ignore
+			// storage unavailable
 		}
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
@@ -157,27 +160,111 @@ export function PersonalizeSetup({
 				</button>
 			</div>
 
-			<div className="gui-obo-pers-section">
-				<div className="gui-obo-pers-label">{t("settings.petTheme")}</div>
-				<div className="gui-obo-pet-grid">
-					{petOptions.map(p => (
-						<button
-							key={p.id}
-							type="button"
-							className={`gui-obo-pet-chip${selectedPet === p.id ? " gui-obo-pet-chip--active" : ""}`}
-							title={p.description || p.displayName}
-							aria-pressed={selectedPet === p.id}
-							onClick={() => pickPet(p.id)}
-						>
-							<StateIcon
-								on={selectedPet === p.id}
-								pair={["checkbox-circle", "checkbox-blank"]}
-								className="h-3.5 w-3.5"
-							/>
-							<span className="gui-obo-pet-name">{p.displayName}</span>
-						</button>
-					))}
+			<div className="gui-obo-pers-section gui-obo-pers-section--stack">
+				<div className="gui-obo-pers-label">{t("tools.petAppearance")}</div>
+				<div className="gui-obo-pet-grid" role="radiogroup" aria-label={t("tools.petAppearance")}>
+					{petOptions.map((p, index) => {
+						const selected = selectedPet === p.id;
+						return (
+							<button
+								key={p.id}
+								type="button"
+								role="radio"
+								data-pet-option
+								className={`gui-obo-pet-chip${selected ? " gui-obo-pet-chip--active" : ""}`}
+								title={p.description || p.displayName}
+								aria-checked={selected}
+								tabIndex={selected ? 0 : -1}
+								onClick={() => pickPet(p.id)}
+								onKeyDown={e => {
+									let nextIndex: number | null = null;
+									if (e.key === "ArrowRight" || e.key === "ArrowDown")
+										nextIndex = (index + 1) % petOptions.length;
+									if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+										nextIndex = (index - 1 + petOptions.length) % petOptions.length;
+									if (e.key === "Home") nextIndex = 0;
+									if (e.key === "End") nextIndex = petOptions.length - 1;
+									if (nextIndex === null) return;
+									e.preventDefault();
+									const next = petOptions[nextIndex];
+									if (!next) return;
+									pickPet(next.id);
+									e.currentTarget.parentElement
+										?.querySelectorAll<HTMLButtonElement>("[data-pet-option]")
+										.item(nextIndex)
+										.focus();
+								}}
+							>
+								<span className="gui-obo-pet-preview" aria-hidden="true">
+									<PetSprite
+										mood="rest"
+										pet={petForId(p.id)}
+										size={40}
+										scale={0.48}
+										frozen
+										gloss={decor.gloss}
+										accessory={decor.accessory}
+									/>
+								</span>
+								<span className="gui-obo-pet-name">
+									{p.displayName}
+									<StateIcon
+										on={selected}
+										pair={["checkbox-circle", "checkbox-blank"]}
+										className="gui-obo-pet-check"
+									/>
+								</span>
+							</button>
+						);
+					})}
 				</div>
+			</div>
+
+			<div className="gui-obo-pers-decor">
+				{PET_DECOR_FLAGS.map(flag => (
+					<div className="gui-obo-pers-decor-row" key={flag.key}>
+						<span className="gui-obo-pers-label">{t(flag.labelKey as TranslationKey)}</span>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={decor[flag.key]}
+							className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
+							disabled={!builtinSelected}
+							onClick={() => {
+								const value = !decor[flag.key];
+								setDecor({ ...decor, [flag.key]: value });
+								setPetDecorFlag(flag.key, value);
+							}}
+							aria-label={t(flag.labelKey as TranslationKey)}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					</div>
+				))}
+				<div className="gui-obo-pers-decor-row">
+					<span className="gui-obo-pers-label">{t("settings.petAccessory")}</span>
+					<div className="gui-obo-pet-accessories" role="radiogroup" aria-label={t("settings.petAccessory")}>
+						{PET_ACCESSORIES.map((value: PetAccessory) => (
+							<button
+								key={value}
+								type="button"
+								role="radio"
+								aria-checked={decor.accessory === value}
+								className={`gui-obo-seg${decor.accessory === value ? " gui-obo-seg--active" : ""}`}
+								disabled={!builtinSelected}
+								onClick={() => {
+									setDecor({ ...decor, accessory: value });
+									setPetAccessory(value);
+								}}
+							>
+								{t(`pet accessory ${value}` as TranslationKey)}
+							</button>
+						))}
+					</div>
+				</div>
+				<p className="gui-obo-pers-decor-note">
+					{builtinSelected ? t("settings.petDecorDescription") : t("settings.petDecorDescriptionImported")}
+				</p>
 			</div>
 		</div>
 	);

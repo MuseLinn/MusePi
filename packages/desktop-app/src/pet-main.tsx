@@ -49,6 +49,7 @@ import {
 	petScale,
 	randomPetInteraction,
 } from "./lib/pet";
+import type { PetGestureInput } from "./lib/pet-gesture";
 import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
 
@@ -160,6 +161,16 @@ function PetApp(): ReactNode {
 	const [sleeping, setSleeping] = useState(false);
 	const bridge = (window as unknown as { electronAPI?: PetBridge }).electronAPI;
 	const bumpRef = useRef<HTMLDivElement>(null);
+	// The builtin frame loop samples this input directly. Pointer events update
+	// only refs; Petdex continues to use its spritesheet rows and mirror state.
+	const gestureRef = useRef<PetGestureInput>({
+		pressed: false,
+		dragging: false,
+		vx: 0,
+		vy: 0,
+		at: 0,
+		releasedAt: null,
+	});
 	// RAF-coalesced drag move: pointermove can fire 120Hz+, and firing one
 	// IPC per event queues up behind the main process's setPosition — the
 	// window then lags the cursor and the lag noise shows up as jitter.
@@ -260,12 +271,12 @@ function PetApp(): ReactNode {
 	useEffect(() => {
 		if (!bridge?.onPetGaze) return;
 		return bridge.onPetGaze?.(gaze => {
-			gazeRef.current = { x: gazeMirrorRef.current ? -gaze.x : gaze.x, y: gaze.y };
+			gazeRef.current = { x: gazeMirrorRef.current ? -gaze.x : gaze.x, y: gaze.y, at: performance.now() };
 		});
 	}, []);
 	useEffect(() => {
-		gazeMirrorRef.current = flip || dockSide === "left";
-	}, [flip, dockSide]);
+		gazeMirrorRef.current = pet.kind === "petdex" && (flip || dockSide === "left");
+	}, [flip, dockSide, pet.kind]);
 
 	// Dock side after an edge snap (settings → 宠物 → 挂靠左右侧): the
 	// main process pushes it; the edge highlight bar follows.
@@ -486,24 +497,57 @@ function PetApp(): ReactNode {
 		el.classList.add("gui-pet-bump");
 	}, []);
 
-	// Blob squash (blobstudio.xyz parity): every poke reaction replays a
-	// quick squash-and-stretch on the sprite wrapper — the press gets a
-	// physical "clicked" feel even on petdex sheets, whose faces cannot
-	// change. Dozing is a slow wind-down, not a poke: no squash.
+	// Petdex needs the wrapper squash because its frames cannot react. The
+	// builtin already owns an interaction spring and a press deformation;
+	// applying both would double its bounce.
 	const squashRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		if (!interaction || interaction === "dozing") return;
+		if (pet.kind !== "petdex" || !interaction || interaction === "dozing") return;
 		const el = squashRef.current;
 		if (!el) return;
 		el.classList.remove("pet-window__squash");
-		void el.offsetWidth; // force reflow so the class re-triggers
+		void el.offsetWidth;
 		el.classList.add("pet-window__squash");
-	}, [interaction]);
+	}, [interaction, pet.kind]);
+
+	const releaseGesture = (): void => {
+		const now = performance.now();
+		gestureRef.current = {
+			pressed: false,
+			dragging: false,
+			vx: 0,
+			vy: 0,
+			at: now,
+			releasedAt: now,
+		};
+	};
+
+	// The renderer kind is the mechanism boundary. A selection change ends the
+	// old mechanism's gesture before the other engine mounts: Petdex must not
+	// inherit orb deformation, and the orb must not inherit a bitmap mirror,
+	// walk row or pending window move. Display position remains independent.
+	useEffect(() => {
+		setDragging(false);
+		setFlip(false);
+		setAmbientMood(null);
+		setInteraction(null);
+		const drag = dragRef.current;
+		drag.pressed = false;
+		drag.dragging = false;
+		drag.dirAcc = 0;
+		drag.moved = false;
+		if (dragMoveRafRef.current !== null) cancelAnimationFrame(dragMoveRafRef.current);
+		dragMoveRafRef.current = null;
+		pendingMoveRef.current = null;
+		releaseGesture();
+		void bridge?.petDragEnd?.();
+	}, [pet.kind]);
 
 	const resetDrag = (): void => {
 		if (!dragRef.current.pressed) return;
 		dragRef.current.pressed = false;
 		dragRef.current.dragging = false;
+		releaseGesture();
 		dragMoveRafRef.current = null;
 		pendingMoveRef.current = null;
 		if (dragging) {
@@ -543,11 +587,10 @@ function PetApp(): ReactNode {
 		// A gesture wakes the sleeper (and restarts the 60s timer via the
 		// hover state this pointerdown is about to produce).
 		setSleeping(false);
-		// Poke reaction: the FIRST press of a burst startles, a quick
-		// follow-up delights. A press that turns into a drag gets overridden
-		// by `dragging` in displayMood, so reacting here is safe — the drag
-		// takes visual priority the instant it crosses the threshold.
+		// The first press startles and a quick follow-up delights. The builtin
+		// keeps that expression during a drag; Petdex switches to its walk row.
 		const now = performance.now();
+		gestureRef.current = { pressed: true, dragging: false, vx: 0, vy: 0, at: now, releasedAt: null };
 		const combo = now - lastPokeRef.current <= POKE_COMBO_MS;
 		const nextPokes = combo ? Math.min(pokes + 1, 4) : 1;
 		setPokes(nextPokes);
@@ -600,18 +643,26 @@ function PetApp(): ReactNode {
 			setDragging(true);
 		}
 		if (s.dragging) {
-			// Mirror the walk frames to match travel direction. Deltas are
-			// accumulated and flipped only past a threshold: raw per-move
-			// deltas jitter ±1–2px, which would stutter the pet left/right.
-			// The frames are a leftward walk cycle — rightward travel
-			// (accumulated positive) needs mirroring.
-			s.dirAcc += e.clientX - s.lastX;
-			if (s.dirAcc > DIR_FLIP_THRESHOLD_PX) {
-				setFlip(true);
-				s.dirAcc = 0;
-			} else if (s.dirAcc < -DIR_FLIP_THRESHOLD_PX) {
-				setFlip(false);
-				s.dirAcc = 0;
+			const moveNow = performance.now();
+			const moveDt = Math.max(8, moveNow - gestureRef.current.at);
+			gestureRef.current = {
+				pressed: true,
+				dragging: true,
+				vx: ((e.clientX - s.lastX) * 1000) / moveDt,
+				vy: ((e.clientY - s.lastY) * 1000) / moveDt,
+				at: moveNow,
+				releasedAt: null,
+			};
+			if (pet.kind === "petdex") {
+				// Only bitmap walk frames need directional mirroring.
+				s.dirAcc += e.clientX - s.lastX;
+				if (s.dirAcc > DIR_FLIP_THRESHOLD_PX) {
+					setFlip(true);
+					s.dirAcc = 0;
+				} else if (s.dirAcc < -DIR_FLIP_THRESHOLD_PX) {
+					setFlip(false);
+					s.dirAcc = 0;
+				}
 			}
 			queueDragMove(e.clientX, e.clientY);
 			s.lastX = e.clientX;
@@ -627,6 +678,7 @@ function PetApp(): ReactNode {
 		const s = dragRef.current;
 		s.pressed = false;
 		s.dragging = false;
+		releaseGesture();
 		if (s.moved) {
 			// A completed drag is a drag, never a click — the greeting must
 			// not fire after moving the pet.
@@ -668,27 +720,20 @@ function PetApp(): ReactNode {
 
 	if (!enabled) return null;
 
-	const displayMood = dragging ? "dragging" : hovering ? "hover" : (ambientMood ?? mood);
-	// The session state yields to every local choreography: dragging and hover
-	// are pointer states, and the ambient idle choreography swaps the idle ROW
-	// for a livelier one — two choreographies fighting over the same face is
-	// exactly what made the old behaviour read as random.
-	const displayState = dragging || hovering || ambientMood ? null : sessionState;
-	// Reactions yield to drag and sleep — but NOT to hover. The pet window is
-	// click-through, so `hovering` comes from the main process's cursor poll
-	// and is TRUE for the entire duration of any click gesture: the cursor is
-	// necessarily inside the hitbox from pointerdown to pointerup. Yielding to
-	// it made every reaction dead on arrival — double-click sets `interaction`,
-	// the same frame's hover state wipes it, and the pet sits there unchanged
-	// (2026-09-20 user: 「桌宠双击可能由于鼠标悬停的状态导致无交互状态」).
-	// Drag still wins: while dragging the pet is already answering the pointer
-	// with a whole different row, and a poke face fighting it read as noise.
-	// Sleep still wins: once the eyes have closed the dozing face is the only
-	// readable thing and the zzz layer carries that state on its own.
-	const displayInteraction = dragging || sleeping ? null : interaction;
-	// Docked to the left edge the pet faces OUT of the screen (the walk
-	// frames face left) — mirror it so it always faces the workspace.
-	const mirrored = flip || dockSide === "left";
+	const petdexPointer = pet.kind === "petdex" && (dragging || hovering);
+	const displayMood =
+		pet.kind === "petdex" && dragging
+			? "dragging"
+			: pet.kind === "petdex" && hovering
+				? "hover"
+				: (ambientMood ?? mood);
+	// Pointer rows belong to Petdex. The orb keeps its session direction and
+	// composes pointer deformation on the independent gesture rig.
+	const displayState = petdexPointer || ambientMood ? null : sessionState;
+	// Sleep owns the face. Petdex drag owns its walk row; the builtin keeps its
+	// poke expression while the gesture rig carries the drag.
+	const displayInteraction = (pet.kind === "petdex" && dragging) || sleeping ? null : interaction;
+	const mirrored = pet.kind === "petdex" && (flip || dockSide === "left");
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
@@ -751,8 +796,9 @@ function PetApp(): ReactNode {
 							scale={sizeScale}
 							gloss={decor.gloss}
 							accessory={decor.accessory}
-							frozen={displayMood === "hover"}
+							frozen={pet.kind === "petdex" && displayMood === "hover"}
 							gazeRef={gazeRef}
+							gestureRef={gestureRef}
 							interaction={displayInteraction}
 						/>
 					</div>
