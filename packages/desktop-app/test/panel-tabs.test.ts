@@ -17,6 +17,7 @@ import {
 	setPanelSplit,
 	setPanelTabDirty,
 	tabsInColumn,
+	toolPanelTabDescriptor,
 	upsertPanelTab,
 } from "../src/lib/panel-tabs";
 import { compactionTabDescriptor } from "../src/lib/surfaces/registry";
@@ -503,5 +504,40 @@ describe("compactionTabDescriptor", () => {
 		expect(restored.tabs[0]?.id).toBe(opened.tabs[0]?.id);
 		expect(restored.tabs[0]?.target).toBe("c1");
 		expect(JSON.stringify(restored)).not.toContain("summary body");
+	});
+});
+
+describe("toolPanelTabDescriptor", () => {
+	it("accepts a successful tool's explicit panel request and rejects malformed or failed results", () => {
+		const entry = {
+			type: "message",
+			id: "m1",
+			parentId: null,
+			timestamp: new Date(0).toISOString(),
+			message: {
+				role: "toolResult",
+				toolCallId: "call1",
+				toolName: "android_emulator",
+				content: [],
+				isError: false,
+				timestamp: 0,
+				details: {
+					panelTab: {
+						surface: "ext:panel.tab.android-emulator",
+						target: "emulator-5554",
+						dedupeKey: "emulator-5554",
+						label: "Android · emulator-5554",
+					},
+				},
+			},
+		} as const;
+		expect(toolPanelTabDescriptor(entry)).toEqual(entry.message.details.panelTab);
+		expect(toolPanelTabDescriptor({ ...entry, message: { ...entry.message, isError: true } })).toBeNull();
+		expect(
+			toolPanelTabDescriptor({
+				...entry,
+				message: { ...entry.message, details: { panelTab: { surface: "files", target: "README.md" } } },
+			}),
+		).toBeNull();
 	});
 });

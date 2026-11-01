@@ -263,6 +263,13 @@ function onPointerOut(event: PointerEvent): void {
 function onPointerDown(event: PointerEvent): void {
 	if (event.pointerType !== "touch") {
 		touchFocusEl = null;
+		const el = findTitled(event.target);
+		// Activating a control ends its hover explanation. Keep it dismissed
+		// through the resulting focus event; pointer re-entry can show it again.
+		if (el && (pendingEl === el || shownEl === el || titleEl === el)) {
+			dismissedEl = el;
+			hide(false);
+		}
 		return;
 	}
 	const el = findTitled(event.target);
@@ -294,7 +301,7 @@ function finishTouch(event: PointerEvent): void {
 function onFocusIn(event: FocusEvent): void {
 	if (touch || event.target === tipEl) return;
 	const el = findTitled(event.target);
-	if (!el || touchFocusEl === el) return;
+	if (!el || touchFocusEl === el || dismissedEl === el) return;
 	const rect = el.getBoundingClientRect();
 	if (rect.width === 0 && rect.height === 0) return;
 	focusedEl = el;

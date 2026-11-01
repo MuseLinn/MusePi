@@ -55,6 +55,7 @@ export interface SlotDeclaration {
  */
 export const EXTENSION_SLOT_DECLARATION = {
 	exact: {
+		"app.capability": { kind: "single" },
 		"panel.right": { kind: "list" },
 		"rail.right": { kind: "list" },
 		"settings.extensions": { kind: "list" },

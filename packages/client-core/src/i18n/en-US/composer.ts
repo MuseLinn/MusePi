@@ -5,6 +5,7 @@ export const composer = {
 	"composer.typeYourResponse": "Type your response…",
 	"composer.readOnlySessionWatching": "Read-only session — watching only",
 	"composer.askAnythingCommands.info": "Ask anything, / for commands, @ for context…",
+	"composer.askAnythingShort": "Ask anything…",
 	"composer.waitingSession": "Waiting for session…",
 	"composer.submitResponse": "Submit response",
 	"composer.send": "Send (Enter)",
@@ -85,7 +86,7 @@ export const composer = {
 	"composer.voiceFailedWithReason": "Voice input failed: {reason}",
 	"composer.voiceNeedsDaemonBackend": "Voice input needs the daemon backend",
 	"composer.voiceNeedsDaemonBody":
-		"collab-direct sessions can't transcribe voice — connect through the daemon to use it",
+		"Remote access sessions can't transcribe voice — connect through the desktop daemon to use it",
 	"composer.voiceGuideOk": "Got it",
 	"composer.ttsNeedsDaemonBackend": "Read-aloud needs the daemon backend",
 	// ── SketchPad (Codex 绘画 parity) ─────────────────────────────────────

@@ -24,6 +24,7 @@ import {
 	type SessionState,
 	type SubagentLifecyclePayload,
 	type SubagentProgressPayload,
+	type ToolApprovalRequest,
 	type WorkspaceSessionInfo,
 } from "@musepi/pi-wire";
 import type { TranslationKey } from "../i18n/index.js";
@@ -50,15 +51,8 @@ export interface Notice {
 	at: number;
 }
 
-/** Daemon `approval-request` event payload — a tool call awaiting the host's
- *  approve/deny. `prompt` is the full formatted body (Allow tool / Reason /
- *  command+args) the GUI card shows so the host decides on the real action. */
-export interface ApprovalRequest {
-	requestId: string;
-	tool: string;
-	args: unknown;
-	prompt: string | null;
-}
+/** A tool call awaiting the authoritative host's approve/deny decision. */
+export type ApprovalRequest = ToolApprovalRequest;
 
 /** The client surface the shell renders against — shared by the collab guest
  *  (GuestClient) and the daemon host (HostClient) transports. The host view
@@ -66,7 +60,7 @@ export interface ApprovalRequest {
 export interface SessionClient {
 	subscribe(listener: () => void): () => void;
 	getSnapshot(): GuestSnapshot;
-	sendPrompt(text: string, images?: ImageContent[]): void;
+	sendPrompt(text: string, images?: ImageContent[]): Promise<void>;
 
 	/** Session-level config (thinking ladder) — sanitized host-side; the UI
 	 *  updates from the returned `state` broadcast, never optimistically. */
@@ -90,8 +84,8 @@ export interface SessionClient {
 	 */
 	onDaemonEvent(listener: (payload: Record<string, unknown>) => void): () => void;
 	/** Pending tool approval for the host to approve/deny (see
-	 *  {@link ApprovalRequest}); null when none. The collab guest never sees
-	 *  approvals — always null. */
+	 *  {@link ApprovalRequest}); null when none. Writable collab guests receive
+	 *  the same queue as the daemon host; read-only guests never receive it. */
 	readonly approvalRequest: ApprovalRequest | null;
 	respondApproval(requestId: string, approve: boolean): void;
 	readonly plaintext: boolean;
@@ -135,8 +129,7 @@ export interface GuestSnapshot {
 	 *  re-issue after the guest toggled an option — the dialog stays mounted
 	 *  and options are disabled until the follow-up frame arrives. */
 	uiRequestPending: boolean;
-	/** Pending tool approval the host must approve/deny (daemon host-mode only;
-	 *  the collab guest never sees approvals — always null). */
+	/** Pending tool approval shared by the daemon host and writable guests. */
 	approvalRequest: ApprovalRequest | null;
 	/** Capped at 50, newest last. */
 	notices: readonly Notice[];
@@ -214,6 +207,8 @@ export class GuestClient {
 	#uiRequest: CollabUiRequest | null = null;
 	#uiRequestPending = false;
 	#uiRequestQueue: CollabUiRequest[] = [];
+	#approvalRequest: ApprovalRequest | null = null;
+	#approvalQueue: ApprovalRequest[] = [];
 	#notices: readonly Notice[] = [];
 	#snapshot: GuestSnapshot;
 	/** Non-null while a window flush of listener notifications is pending. */
@@ -279,11 +274,44 @@ export class GuestClient {
 		return this.#plaintext;
 	}
 
-	sendPrompt(text: string, images?: ImageContent[]): void {
+	async sendPrompt(text: string, images?: ImageContent[]): Promise<void> {
+		if (this.#workspace !== null && this.#focusedSessionId === null) {
+			const created = await this.rpc<{ sessionId: string }>("session.create", {});
+			if (this.#focusedSessionId !== null) throw new Error("Session selection changed before the prompt was sent");
+			this.selectWorkspaceSession(created.sessionId);
+			await this.#waitForFocusedSession(created.sessionId);
+		}
 		this.#socket.send({
 			t: "prompt",
 			text,
 			images: images && images.length > 0 ? images : undefined,
+		});
+	}
+
+	/** A workspace focus is asynchronous host-side. Wait for its fresh snapshot
+	 *  before prompting so the first message cannot land in the previous session. */
+	#waitForFocusedSession(sessionId: string): Promise<void> {
+		return new Promise<void>((resolve, reject) => {
+			let unsubscribe: (() => void) | null = null;
+			const timer = setTimeout(() => {
+				unsubscribe?.();
+				reject(new Error("Timed out waiting for the new session"));
+			}, WELCOME_TIMEOUT_MS);
+			const finish = (error?: Error): void => {
+				clearTimeout(timer);
+				unsubscribe?.();
+				if (error) reject(error);
+				else resolve();
+			};
+			unsubscribe = this.subscribe(() => {
+				if (this.#focusedSessionId !== sessionId) {
+					finish(new Error("Session selection changed before the prompt was sent"));
+				} else if (this.#phase === "live") {
+					finish();
+				} else if (this.#phase === "ended") {
+					finish(new Error(this.#endedReason ?? "Connection ended"));
+				}
+			});
 		});
 	}
 
@@ -325,17 +353,24 @@ export class GuestClient {
 	/** Focus a session from the workspace directory (null returns to it). */
 	selectWorkspaceSession(sessionId: string | null): void {
 		this.#focusedSessionId = sessionId;
-		if (sessionId !== null) {
-			// A focus switch streams a fresh welcome; reset the live accumulators.
-			this.#entries = [];
-			this.#stream = null;
-			this.#streamDone = false;
-			this.#activeTools = new Map();
-			this.#progress = new Map();
-			this.#lifecycle = new Map();
-			this.#working = false;
-			this.#phase = "waiting";
-		}
+		this.#clearApprovals();
+		// Both a focus switch and a return to the draft discard the previous
+		// session's rendered state. The next welcome (or workspace directory)
+		// must never leave the old transcript visible under a new title.
+		this.#header = null;
+		this.#entries = [];
+		this.#state = null;
+		this.#agents = [];
+		this.#stream = null;
+		this.#streamDone = false;
+		this.#activeTools = new Map();
+		this.#progress = new Map();
+		this.#lifecycle = new Map();
+		this.#working = false;
+		this.#compacting = false;
+		this.#roundDurations = new Map();
+		this.#clearUiRequests();
+		if (sessionId !== null) this.#phase = "waiting";
 		this.#socket.send({ t: "workspace-select", sessionId });
 		this.#commit();
 	}
@@ -344,15 +379,13 @@ export class GuestClient {
 		this.#socket.send({ t: "agent-cmd", cmd, agentId, text });
 	}
 
-	/** Tool approvals are host-side only (the collab guest never receives
-	 *  `approval-request` frames) — a no-op on the guest transport. */
-	respondApproval(_requestId: string, _approve: boolean): void {
-		// no-op
+	/** Send a decision without settling locally; the host broadcasts the end frame. */
+	respondApproval(requestId: string, approve: boolean): void {
+		this.#socket.send({ t: "approval-response", requestId, approved: approve });
 	}
 
-	/** Tool approvals are host-side only — always null on the guest. */
-	get approvalRequest(): null {
-		return null;
+	get approvalRequest(): ApprovalRequest | null {
+		return this.#approvalRequest;
 	}
 
 	/**
@@ -451,6 +484,7 @@ export class GuestClient {
 		}
 		this.#pendingRpcs.clear();
 		this.#clearUiRequests();
+		this.#clearApprovals();
 		this.#commit();
 		this.#socket.close();
 	}
@@ -516,6 +550,7 @@ export class GuestClient {
 				this.#working = frame.state.isStreaming;
 				this.#readOnly = frame.readOnly === true;
 				this.#clearUiRequests();
+				this.#clearApprovals();
 				this.#welcomed = true;
 				this.#clearWelcomeTimer();
 				if (frame.entryCount === 0) {
@@ -595,6 +630,26 @@ export class GuestClient {
 				if (this.#uiRequest?.reqId === frame.reqId) this.#showNextUiRequest();
 				else this.#uiRequestQueue = this.#uiRequestQueue.filter(request => request.reqId !== frame.reqId);
 				break;
+			case "approval-request": {
+				if (this.#readOnly) break;
+				const request = frame.request;
+				if (this.#approvalRequest?.requestId === request.requestId) {
+					this.#approvalRequest = request;
+				} else if (this.#approvalQueue.some(item => item.requestId === request.requestId)) {
+					this.#approvalQueue = this.#approvalQueue.map(item =>
+						item.requestId === request.requestId ? request : item,
+					);
+				} else if (this.#approvalRequest) {
+					this.#approvalQueue = [...this.#approvalQueue, request];
+				} else {
+					this.#approvalRequest = request;
+				}
+				break;
+			}
+			case "approval-request-end":
+				if (this.#approvalRequest?.requestId === frame.requestId) this.#showNextApproval();
+				else this.#approvalQueue = this.#approvalQueue.filter(request => request.requestId !== frame.requestId);
+				break;
 			case "transcript": {
 				const pending = this.#pendingTranscripts.get(frame.reqId);
 				if (pending) {
@@ -619,8 +674,14 @@ export class GuestClient {
 			}
 			case "workspace":
 				this.#workspace = frame.sessions;
-				this.#focusedSessionId = null;
-				this.#phase = "workspace";
+				// Directory refreshes also arrive while a session is focused or
+				// hydrating. Keep that selection: only reconnects and an existing
+				// directory focus return to the workspace draft.
+				if (this.#phase === "reconnecting" || this.#focusedSessionId === null) {
+					this.#focusedSessionId = null;
+					this.#clearApprovals();
+					this.#phase = "workspace";
+				}
 				// Workspace mode never sends a welcome until a session is
 				// focused — cancel the hello timeout or guests time out on
 				// the directory.
@@ -800,6 +861,17 @@ export class GuestClient {
 		this.#uiRequestQueue = rest;
 	}
 
+	#clearApprovals(): void {
+		this.#approvalRequest = null;
+		this.#approvalQueue = [];
+	}
+
+	#showNextApproval(): void {
+		const [next, ...rest] = this.#approvalQueue;
+		this.#approvalRequest = next ?? null;
+		this.#approvalQueue = rest;
+	}
+
 	#buildSnapshot(): GuestSnapshot {
 		return {
 			phase: this.#phase,
@@ -821,7 +893,7 @@ export class GuestClient {
 			focusedSessionId: this.#focusedSessionId,
 			uiRequest: this.#uiRequest,
 			uiRequestPending: this.#uiRequestPending,
-			approvalRequest: null,
+			approvalRequest: this.#approvalRequest,
 			notices: this.#notices,
 		};
 	}

@@ -129,6 +129,22 @@ describe("builtin registry — provider 口径与标注", () => {
 		expect(annotated[0]?.builtin).toBe(true);
 		expect(annotated[1]?.builtin).toBeUndefined();
 	});
+
+	it("uses native discovery scope for desktop bundled plugins outside bundled-plugins directories", () => {
+		const scanned: Extension[] = [
+			{
+				id: "musepi-capability-center",
+				kind: "plugin-module",
+				name: "musepi-capability-center",
+				displayName: "musepi-capability-center",
+				path: "D:/product/desktop-app/src/plugins/capability-center/index.ts",
+				source: { provider: "musepi-extensions", providerName: "MusePi Plugins", level: "native" },
+				state: "active",
+				raw: {},
+			},
+		];
+		expect(annotateBuiltinExtensions(scanned)[0]?.builtin).toBe(true);
+	});
 });
 
 describe("builtin registry — settingsMirror 禁用判定", () => {

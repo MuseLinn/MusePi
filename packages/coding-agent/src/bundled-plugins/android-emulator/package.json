@@ -1,0 +1,29 @@
+{
+	"name": "musepi-android-emulator",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Interactive Android emulator preview and mobile debugging in MusePi.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "▣",
+		"description": "View and operate Android emulators, install APKs, inspect UI trees and read logcat.",
+		"extensions": ["./index.ts"],
+		"config": [
+			{
+				"key": "adbPath",
+				"type": "path",
+				"label": "ADB executable",
+				"description": "Optional absolute path to adb. Uses PATH when empty.",
+				"default": ""
+			},
+			{
+				"key": "emulatorPath",
+				"type": "path",
+				"label": "Android emulator executable",
+				"description": "Optional absolute path to emulator. Uses PATH when empty.",
+				"default": ""
+			}
+		]
+	}
+}

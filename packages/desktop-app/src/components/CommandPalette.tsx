@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tapFeedback } from "../lib/haptic";
+import { useFocusTrap } from "../lib/use-focus-trap";
 import type { RpcClient } from "../lib/rpc";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
@@ -70,6 +71,10 @@ export function CommandPalette({
 	// gui-menu-out before unmounting. Two-phase enter via the hook.
 	const [visible, setVisible] = useState(open);
 	const [closing, setClosing] = useState(false);
+	// On a closed → open transition the first render still returns null while
+	// `visible` catches up. Arm the trap only after the dialog has mounted;
+	// otherwise it captures no opener, installs no Tab handler, and never retries.
+	const dialogRef = useFocusTrap<HTMLDivElement>(open && visible);
 	const enteredCls = useTwoPhaseEnter(open);
 	useEffect(() => {
 		if (open) {
@@ -164,19 +169,18 @@ export function CommandPalette({
 
 	useEffect(() => {
 		if (!open) return;
-		inputRef.current?.focus();
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key === "Escape") {
 				// Claim the key (lib/escape-stop): unclaimed Escape interrupts
 				// the running turn.
 				e.preventDefault();
 				onClose();
-			} else if (e.key === "ArrowDown") {
+			} else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 				e.preventDefault();
-				setActive(n => n + 1);
-			} else if (e.key === "ArrowUp") {
-				e.preventDefault();
-				setActive(n => Math.max(0, n - 1));
+				const count = listRef.current?.querySelectorAll("[data-palette-row]").length ?? 0;
+				if (count === 0) return;
+				const delta = e.key === "ArrowDown" ? 1 : -1;
+				setActive(n => (n + delta + count) % count);
 			}
 		};
 		document.addEventListener("keydown", onKey);
@@ -254,7 +258,11 @@ export function CommandPalette({
 	}));
 	const showTasks = tab !== "actions";
 	const showActions = tab !== "tasks";
+	const taskOffset = showActions ? actions.length + panels.length : 0;
 	const items = [...(showActions ? actions : []), ...(showActions ? panels : []), ...(showTasks ? taskRows : [])];
+	useEffect(() => {
+		setActive(current => Math.max(0, Math.min(current, items.length - 1)));
+	}, [items.length]);
 	useEffect(() => {
 		listRef.current
 			?.querySelector<HTMLElement>(`[data-palette-row="${active}"]`)
@@ -265,6 +273,7 @@ export function CommandPalette({
 	return createPortal(
 		<div className={`gui-palette-backdrop${closing ? " gui-palette-backdrop--closing" : ""}`} onClick={onClose}>
 			<div
+				ref={dialogRef}
 				className={`gui-palette${enteredCls ? " gui-palette--entered" : ""}${closing ? " gui-palette--closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
@@ -281,6 +290,11 @@ export function CommandPalette({
 					<Icon name="search" className="h-4 w-4 flex-shrink-0 text-[var(--color-text-faint)]" />
 					<input
 						ref={inputRef}
+						role="combobox"
+						aria-autocomplete="list"
+						aria-controls="gui-palette-listbox"
+						aria-expanded={open}
+						aria-activedescendant={items[active] ? `gui-palette-option-${active}` : undefined}
 						value={query}
 						onChange={e => setQuery(e.target.value)}
 						placeholder={t("general.searchActionsTasksMessages")}
@@ -314,7 +328,7 @@ export function CommandPalette({
 						</button>
 					))}
 				</div>
-				<div className="gui-palette-body" key={tab} ref={listRef}>
+				<div className="gui-palette-body" id="gui-palette-listbox" role="listbox" key={tab} ref={listRef}>
 					{showActions && (
 						<div className="gui-palette-section">
 							<div className="gui-palette-section-title">{t("general.suggestions")}</div>
@@ -322,6 +336,10 @@ export function CommandPalette({
 								<button
 									key={a.label}
 									type="button"
+									role="option"
+									id={`gui-palette-option-${i}`}
+									aria-selected={active === i}
+									tabIndex={-1}
 									data-palette-row={i}
 									className={`gui-palette-row${active === i ? " gui-palette-row--active" : ""}`}
 									onMouseEnter={() => setActive(i)}
@@ -343,6 +361,10 @@ export function CommandPalette({
 									<button
 										key={p.label}
 										type="button"
+										role="option"
+										id={`gui-palette-option-${idx}`}
+										aria-selected={active === idx}
+										tabIndex={-1}
 										data-palette-row={idx}
 										className={`gui-palette-row${active === idx ? " gui-palette-row--active" : ""}`}
 										onMouseEnter={() => setActive(idx)}
@@ -367,11 +389,15 @@ export function CommandPalette({
 								<div className="gui-palette-empty">{t("general.noResults")}</div>
 							) : (
 								taskRows.map((r, i) => {
-									const idx = actions.length + panels.length + i;
+									const idx = taskOffset + i;
 									return (
 										<button
 											key={r.label + idx}
 											type="button"
+											role="option"
+											id={`gui-palette-option-${idx}`}
+											aria-selected={active === idx}
+											tabIndex={-1}
 											data-palette-row={idx}
 											className={`gui-palette-row${active === idx ? " gui-palette-row--active" : ""}`}
 											onMouseEnter={() => setActive(idx)}

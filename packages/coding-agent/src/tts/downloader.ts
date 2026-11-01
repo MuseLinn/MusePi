@@ -56,19 +56,26 @@ export async function deleteTtsModel(modelKey: string): Promise<void> {
 /**
  * Ensure the selected local TTS model is downloaded into the transformers.js
  * cache (and warm in the worker), streaming integer-percent Hub progress. The
- * worker resolves the request once every model file is cached. Returns `false`
- * if the worker is unavailable or the download failed.
+ * worker resolves the request once every model file is cached.
+ *
+ * @param modelKey Registered local TTS model to download.
+ * @param onProgress Receives display progress for the download and model load.
+ * @param signal Cancels the pending request without stopping a running worker.
+ * @param onError Receives the worker failure text before a failed request resolves.
+ * @returns Whether the model downloaded and loaded successfully.
  */
 export async function downloadTtsModel(
 	modelKey: string,
 	onProgress?: (progress: TtsDownloadProgress) => void,
 	signal?: AbortSignal,
+	onError?: (message: string) => void,
 ): Promise<boolean> {
 	const spec = getTtsLocalModelSpec(modelKey);
 	if (!spec) return false;
 	onProgress?.({ stage: t("commands.preparingWith0", spec.label) });
 	return ttsClient.downloadModel(spec.key, {
 		signal,
+		onError,
 		onProgress: event => {
 			if (event.status === "ready" || event.status === "done") {
 				onProgress?.({ stage: t("commands.readyWith0", spec.label), percent: 100 });

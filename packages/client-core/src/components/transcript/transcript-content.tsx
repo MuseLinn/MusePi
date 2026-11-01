@@ -497,6 +497,20 @@ function DisplayContextCard({
 				>
 					{source}
 				</button>
+			) : context.kind === "file-quote" ? (
+				<button
+					type="button"
+					className="tr-display-context-source"
+					onClick={() =>
+						window.dispatchEvent(
+							new CustomEvent("musepi-open-file", {
+								detail: { path: context.path, pdf: context.pdf, quote: context.quote },
+							}),
+						)
+					}
+				>
+					{source}{context.pdf ? ` · PDF ${context.pdf.startPage}-${context.pdf.endPage}` : ""}
+				</button>
 			) : (
 				<span className="tr-display-context-source">{source}</span>
 			)}

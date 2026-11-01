@@ -15,7 +15,7 @@
  */
 
 /** Visual kind: drives the leading icon and the tint. */
-export type ActionToastKind = "info" | "success" | "error";
+export type ActionToastKind = "info" | "success" | "warning" | "error";
 
 export interface ActionToast {
 	id: number;
@@ -23,6 +23,12 @@ export interface ActionToast {
 	kind: ActionToastKind;
 	/** Localized body copy, e.g. "已归档会话". */
 	message: string;
+	/** Optional concise heading above the body copy. */
+	title?: string;
+	/** Technical context that can wrap independently of the body copy. */
+	details?: string;
+	/** Stable source identity; replaces earlier content from that source. */
+	dedupeKey?: string;
 	/** Localized button copy. Omitted → a plain notice with no button. */
 	actionLabel?: string;
 	/** Runs on click, then the toast dismisses itself. */
@@ -33,6 +39,8 @@ export interface ActionToast {
 
 /** Long enough to read and click, short enough not to stack up. */
 export const ACTION_TOAST_TTL_MS = 6000;
+/** Bound the visible corner; persistent errors do not crowd out newer errors. */
+export const MAX_ACTION_TOASTS = 3;
 
 let toasts: readonly ActionToast[] = [];
 let seq = 0;
@@ -48,24 +56,32 @@ export function getToasts(): readonly ActionToast[] {
 	return toasts;
 }
 
-/** Show a toast. A new toast replaces any earlier one carrying the same
- *  message — repeated archiving of different sessions should not stack up
- *  identical rows, and the newest undo is the relevant one. */
-export function pushActionToast(
-	toast: Omit<ActionToast, "id" | "expiresAt" | "kind"> & { kind?: ActionToastKind },
-): number {
+export type ActionToastInput = Omit<ActionToast, "id" | "expiresAt" | "kind"> & { kind?: ActionToastKind };
+
+/** Show a toast. Repeated sources replace their earlier content. */
+export function pushActionToast(toast: ActionToastInput): number {
 	const id = ++seq;
 	const kind = toast.kind ?? "info";
+	const dedupeKey = toast.dedupeKey ?? `message:${toast.message}`;
 	const next: ActionToast = {
 		...toast,
 		kind,
 		id,
 		expiresAt: kind === "error" ? Number.POSITIVE_INFINITY : Date.now() + ACTION_TOAST_TTL_MS,
 	};
-	for (const previous of toasts) {
-		if (previous.message === toast.message) pausedRemaining.delete(previous.id);
+	const retained = toasts.filter(previous => {
+		const previousKey = previous.dedupeKey ?? `message:${previous.message}`;
+		if (previousKey !== dedupeKey) return true;
+		pausedRemaining.delete(previous.id);
+		return false;
+	});
+	retained.push(next);
+	while (retained.length > MAX_ACTION_TOASTS) {
+		const transient = retained.findIndex(previous => previous.kind !== "error");
+		const [evicted] = retained.splice(transient >= 0 ? transient : 0, 1);
+		if (evicted) pausedRemaining.delete(evicted.id);
 	}
-	toasts = [...toasts.filter(t => t.message !== toast.message), next];
+	toasts = retained;
 	emit();
 	return id;
 }
@@ -93,6 +109,15 @@ export function dismissActionToast(id: number): void {
 	pausedRemaining.delete(id);
 	if (!toasts.some(t => t.id === id)) return;
 	toasts = toasts.filter(t => t.id !== id);
+	emit();
+}
+
+/** Clear a recovered source without disturbing unrelated persistent errors. */
+export function dismissActionToastSource(dedupeKey: string): void {
+	const dismissed = toasts.filter(toast => toast.dedupeKey === dedupeKey);
+	if (dismissed.length === 0) return;
+	for (const toast of dismissed) pausedRemaining.delete(toast.id);
+	toasts = toasts.filter(toast => toast.dedupeKey !== dedupeKey);
 	emit();
 }
 

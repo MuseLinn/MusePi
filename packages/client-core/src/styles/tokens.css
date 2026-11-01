@@ -16,7 +16,7 @@
 	/* text */
 	--fg: oklch(0.93 0.008 60);
 	--fg-muted: oklch(0.72 0.01 60);
-	--fg-faint: oklch(0.55 0.01 60);
+	--fg-faint: oklch(0.64 0.01 60);
 
 	/* one accent: brand gold. These oklch numbers ARE #d9a441 (the π brand
 	 * gold) — the same gold the TUI theme (theme/defaults/musepi.json), the
@@ -65,6 +65,29 @@
 	--radius-lg: 8px;
 	--radius-xl: 12px;
 	--radius-2xl: 16px;
+
+	/* Shared 4px spacing rhythm and control geometry. Component-specific
+	 * layout can still use other values; shared controls consume these tokens. */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--control-height-sm: 32px;
+	--control-height-md: 36px;
+	--control-height-touch: 44px;
+
+	/* Named stacking layers for portaled UI. Keep local stacking contexts
+	 * inside components; cross-surface layers consume these tokens. */
+	--z-dropdown: 1000;
+	--z-overlay: 2500;
+	--z-hover-card: 2600;
+	--z-modal: 3000;
+	--z-command: 4000;
+	--z-menu: 4100;
+	--z-system: 9999;
+	--z-tooltip: 10000;
 
 	/* non-pinned helpers (kept here so no raw colors leak outside this file) */
 	--shadow-overlay: 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%);
@@ -123,6 +146,34 @@
 	--color-danger: var(--err);
 	--color-danger-soft: color-mix(in srgb, var(--err) 14%, transparent);
 	--color-danger-bd: color-mix(in srgb, var(--err) 35%, transparent);
+
+	/* Compatibility names used by ported components. Keep every semantic
+	 * reference on the same theme-aware source instead of leaving browser
+	 * fallbacks to decide the color. */
+	--color-bg-subtle: var(--bg-inset);
+	--color-bg-active: var(--bg-overlay);
+	--color-surface-2: var(--bg-raised);
+	--color-surface-hover: var(--glass-bg);
+	--color-hover: var(--glass-bg);
+	--color-text-secondary: var(--fg-muted);
+	--color-text-tertiary: var(--fg-faint);
+	--color-text-dim: var(--fg-faint);
+	--color-fg: var(--fg);
+	--color-muted: var(--fg-muted);
+	--color-primary: var(--accent);
+	--color-accent-muted: var(--accent-muted);
+	--color-accent-contrast: var(--accent-fg);
+	--color-accent-foreground: var(--accent-fg);
+	--color-on-accent: var(--accent-fg);
+	--color-border: var(--border);
+	--color-bd: var(--border);
+	--color-success: var(--ok);
+	--color-error: var(--err);
+	--color-red: var(--err);
+	--color-warning-bg: var(--color-warning-soft);
+	--color-warning-fg: var(--warn);
+	--color-info: var(--accent);
+	--color-shadow: oklch(0 0 0);
 
 	/* chart series (kimi widget design-system parity): categorical order
 	 * blue → red → green → purple → neutral; use same-hue opacity steps for
@@ -228,7 +279,7 @@
 
 	--fg: oklch(0.26 0.03 60);
 	--fg-muted: oklch(0.46 0.03 60);
-	--fg-faint: oklch(0.58 0.025 60);
+	--fg-faint: oklch(0.52 0.025 60);
 
 	--accent: oklch(0.62 0.115 79.85);
 	--accent-fg: oklch(0.99 0.01 80);
@@ -312,7 +363,7 @@
 
 		--fg: oklch(0.26 0.03 60);
 		--fg-muted: oklch(0.46 0.03 60);
-		--fg-faint: oklch(0.58 0.025 60);
+		--fg-faint: oklch(0.52 0.025 60);
 
 		--accent: oklch(0.62 0.115 79.85);
 		--accent-fg: oklch(0.99 0.01 80);

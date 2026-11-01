@@ -170,6 +170,23 @@ describe("SessionTabsStrip preview", () => {
 		});
 		expect(calls).toContainEqual(["keep", "b"]);
 	});
+
+	testInEnglish("tabs expose roving focus and arrow navigation without button nesting", () => {
+		const { calls, host } = renderStrip("a");
+		const rows = Array.from(host.querySelectorAll<HTMLElement>('[role="tab"]'));
+		expect(rows.map(row => row.tabIndex)).toEqual([0, -1]);
+		expect(rows[0]?.getAttribute("aria-controls")).toBe("session-panel-a");
+		expect(host.querySelector(".gui-session-tab-slot")?.getAttribute("role")).toBeNull();
+
+		act(() => rows[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
+		expect(document.activeElement).toBe(rows[1]);
+		expect(calls).toEqual([]);
+		act(() => rows[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+		expect(calls).toEqual([
+			["keep", "b"],
+			["select", "b"],
+		]);
+	});
 });
 
 describe("SessionTabsStrip shared menu", () => {

@@ -165,3 +165,6 @@ packages/.desktop-build/
 
 # Browser-panel screenshots land here; they are verification artifacts, not sources.
 .openchamber/
+
+# JiuwenSwarm runtime file operation logs
+.agent_history/

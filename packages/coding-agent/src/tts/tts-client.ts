@@ -30,7 +30,12 @@ type PendingRequest =
 			/** Receives the worker's error text when synthesis fails (RPC layers surface it). */
 			onError?: (message: string) => void;
 	  }
-	| { kind: "download"; modelKey: TtsLocalModelKey; resolve: (ok: boolean) => void }
+	| {
+			kind: "download";
+			modelKey: TtsLocalModelKey;
+			resolve: (ok: boolean) => void;
+			onError?: (message: string) => void;
+	  }
 	| { kind: "stream"; modelKey: TtsLocalModelKey; channel: AudioChunkChannel };
 
 export interface TtsSynthesizeOptions {
@@ -43,6 +48,7 @@ export interface TtsSynthesizeOptions {
 export interface TtsDownloadOptions {
 	signal?: AbortSignal;
 	onProgress?: (event: TtsProgressEvent) => void;
+	onError?: (message: string) => void;
 }
 
 export interface TtsStreamOptions {
@@ -325,7 +331,7 @@ export class TtsClient {
 			const worker = this.#ensureWorker();
 			const id = String(++this.#nextRequestId);
 			const { promise, resolve } = Promise.withResolvers<boolean>();
-			this.#addPending(id, { kind: "download", modelKey, resolve });
+			this.#addPending(id, { kind: "download", modelKey, resolve, onError: options.onError });
 			const abort = (): void => {
 				const pending = this.#pending.get(id);
 				if (pending?.kind !== "download") return;
@@ -341,10 +347,9 @@ export class TtsClient {
 				this.#deletePending(id);
 			}
 		} catch (error) {
-			logger.debug("tts: local model download failed", {
-				modelKey,
-				error: error instanceof Error ? error.message : String(error),
-			});
+			const message = error instanceof Error ? error.message : String(error);
+			logger.debug("tts: local model download failed", { modelKey, error: message });
+			options.onError?.(message);
 			return false;
 		} finally {
 			unsubscribe?.();
@@ -450,17 +455,17 @@ export class TtsClient {
 			if (pending.kind === "download") pending.resolve(true);
 			return;
 		}
-		// A synthesis failure must be visible, not silent: the promise contract
-		// resolves `null` (callers treat it as "no audio"), so the worker's error
-		// text reaches callers only through this onError hook, this log line and
-		// the progress event.
+		// Keep the false/null return contracts while forwarding the actionable
+		// worker error to the RPC layer.
 		logger.warn("tts: worker returned error", { modelKey: pending.modelKey, error: message.error });
 		this.#emitProgress({ modelKey: pending.modelKey, status: "error" });
 		if (pending.kind === "synthesize") {
 			pending.onError?.(message.error);
 			pending.resolve(null);
-		} else if (pending.kind === "download") pending.resolve(false);
-		else pending.channel.fail(new Error(message.error));
+		} else if (pending.kind === "download") {
+			pending.onError?.(message.error);
+			pending.resolve(false);
+		} else pending.channel.fail(new Error(message.error));
 		void this.terminate();
 	}
 
@@ -475,8 +480,10 @@ export class TtsClient {
 			if (pending.kind === "synthesize") {
 				pending.onError?.(error.message);
 				pending.resolve(null);
-			} else if (pending.kind === "download") pending.resolve(false);
-			else pending.channel.fail(error);
+			} else if (pending.kind === "download") {
+				pending.onError?.(error.message);
+				pending.resolve(false);
+			} else pending.channel.fail(error);
 		}
 		this.#pending.clear();
 		void this.terminate();

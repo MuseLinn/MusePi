@@ -538,6 +538,8 @@ export function SettingsNav({
 				<button
 					type="button"
 					className="gui-settings-nav"
+					title={t("settings.onboarding")}
+					aria-label={t("settings.onboarding")}
 					onClick={() => window.dispatchEvent(new CustomEvent("musepi-open-onboarding"))}
 				>
 					<Icon name="rocket" className="h-4 w-4" />
@@ -546,6 +548,8 @@ export function SettingsNav({
 				<button
 					type="button"
 					className="gui-settings-nav"
+					title={t("settings.whatSNew")}
+					aria-label={t("settings.whatSNew")}
 					onClick={() => window.dispatchEvent(new CustomEvent("musepi-open-announcement"))}
 				>
 					<Icon name="sparkling" className="h-4 w-4" />

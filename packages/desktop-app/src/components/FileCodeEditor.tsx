@@ -16,7 +16,8 @@ import type { RpcClient } from "../lib/rpc";
 
 export function createFileEditorModel(monaco: typeof Monaco, path: string, value: string): Monaco.editor.ITextModel {
 	const uri = monaco.Uri.file(path);
-	const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(value, undefined, uri);
+	const existing = monaco.editor.getModel(uri);
+	const model = existing ?? monaco.editor.createModel(value, undefined, uri);
 	adoptMonacoPeekModel(monaco, path);
 	model.updateOptions({ tabSize: 2, insertSpaces: true });
 	return model;

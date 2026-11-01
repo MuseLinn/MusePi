@@ -327,19 +327,33 @@ async function downloadSherpaTtsFile(
 	await fs.rename(part, dest);
 }
 
+interface EnsureSherpaTtsFilesOptions {
+	cacheDir?: string;
+	downloadFile?: typeof downloadSherpaTtsFile;
+}
+
 /**
  * Ensure all sherpa-onnx TTS files for a tier (flat `model`/`tokens`/`lexicon`
  * plus, when declared, the jieba dict dir and the rule FSTs) are present in the
  * cache, downloading any missing, and return their absolute paths in
  * OfflineTtsConfig shape.
+ *
+ * @param spec Sherpa model file manifest.
+ * @param modelKey Model tier used in progress events.
+ * @param transport Worker event transport.
+ * @param requestId Request used in progress events.
+ * @param options Optional cache and downloader overrides for isolated tests.
+ * @returns Absolute paths required by `OfflineTts.createAsync`.
  */
-async function ensureSherpaTtsFiles(
+export async function ensureSherpaTtsFiles(
 	spec: SherpaTtsLocalModelSpec,
 	modelKey: TtsLocalModelKey,
 	transport: TtsTransport,
 	requestId: string,
+	options: EnsureSherpaTtsFilesOptions = {},
 ): Promise<{ model: string; tokens: string; lexicon: string; dictDir?: string; ruleFsts?: string }> {
-	const dir = path.join(getTinyModelsCacheDir(), spec.repo);
+	const dir = path.join(options.cacheDir ?? getTinyModelsCacheDir(), spec.repo);
+	const downloadFile = options.downloadFile ?? downloadSherpaTtsFile;
 	await fs.mkdir(dir, { recursive: true });
 	const resolved: Record<string, string> = {};
 	for (const role in spec.files) {
@@ -350,7 +364,7 @@ async function ensureSherpaTtsFiles(
 			.stat(dest)
 			.then(stats => stats.size > 0)
 			.catch(() => false);
-		if (!present) await downloadSherpaTtsFile(spec.repo, filename, dest, modelKey, transport, requestId);
+		if (!present) await downloadFile(spec.repo, filename, dest, modelKey, transport, requestId);
 		resolved[key] = dest;
 	}
 	let dictDir: string | undefined;
@@ -364,19 +378,20 @@ async function ensureSherpaTtsFiles(
 				.then(stats => stats.size > 0)
 				.catch(() => false);
 			if (!present)
-				await downloadSherpaTtsFile(
-					spec.repo,
-					`${spec.dict.dir}/${filename}`,
-					dest,
-					modelKey,
-					transport,
-					requestId,
-				);
+				await downloadFile(spec.repo, `${spec.dict.dir}/${filename}`, dest, modelKey, transport, requestId);
 		}
 	}
-	const ruleFsts = spec.ruleFsts?.length
-		? spec.ruleFsts.map(filename => path.join(dir, filename)).join(",")
-		: undefined;
+	const ruleFstPaths: string[] = [];
+	for (const filename of spec.ruleFsts ?? []) {
+		const dest = path.join(dir, filename);
+		const present = await fs
+			.stat(dest)
+			.then(stats => stats.size > 0)
+			.catch(() => false);
+		if (!present) await downloadFile(spec.repo, filename, dest, modelKey, transport, requestId);
+		ruleFstPaths.push(dest);
+	}
+	const ruleFsts = ruleFstPaths.length > 0 ? ruleFstPaths.join(",") : undefined;
 	return { model: resolved.model!, tokens: resolved.tokens!, lexicon: resolved.lexicon!, dictDir, ruleFsts };
 }
 

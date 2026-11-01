@@ -268,125 +268,225 @@
 	cursor: default;
 }
 
-/* ── Voice dictation strip (composer children, above the textarea) ────── */
+/* ── Voice dictation strip (composer children, above the textarea) ──────
+ * A quiet status row inside the composer, not a second boxed input. The
+ * phase and live transcript carry the meaning; the wave is only a level meter. */
 .gui-voice-strip {
+	--voice-level: 0;
+	--voice-state-color: var(--color-danger);
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	min-height: 42px;
-	margin: 6px 2px 0;
-	padding: 5px 10px;
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--color-danger) 9%, transparent);
-	--voice-level: 0;
+	gap: 8px;
+	min-height: 34px;
+	margin: 2px 2px 0;
+	padding: 2px 4px 4px;
 }
 
 .gui-voice-visual {
 	position: relative;
 	display: grid;
 	place-items: center;
-	width: 72px;
-	height: 28px;
+	width: 30px;
+	height: 30px;
 	flex: none;
+	border: 0.5px solid color-mix(in oklab, var(--voice-state-color) 24%, transparent);
+	border-radius: 50%;
+	background:
+		radial-gradient(circle at 32% 22%, color-mix(in oklab, #fff 58%, transparent), transparent 46%),
+		color-mix(in oklab, var(--voice-state-color) 12%, var(--color-surface-raised));
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, #fff 42%, transparent),
+		0 3px 12px color-mix(in oklab, var(--voice-state-color) 10%, transparent);
+	color: var(--voice-state-color);
+}
+
+.gui-voice-mic {
+	position: relative;
+	z-index: 1;
+	width: 14px;
+	height: 14px;
+	filter: drop-shadow(0 1px 2px color-mix(in oklab, var(--voice-state-color) 22%, transparent));
 }
 
 .gui-voice-ring {
 	position: absolute;
-	width: 24px;
-	height: 24px;
-	border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
+	width: 28px;
+	height: 28px;
+	border: 1px solid color-mix(in oklab, var(--voice-state-color) 42%, transparent);
 	border-radius: 50%;
-	transform: scale(calc(0.8 + var(--voice-level) * 0.45));
-	opacity: calc(0.2 + var(--voice-level) * 0.65);
+	transform: scale(calc(0.92 + var(--voice-level) * 0.32));
+	opacity: calc(0.16 + var(--voice-level) * 0.5);
 	transition: transform var(--gui-motion-chip) var(--gui-ease-out), opacity var(--gui-motion-chip) linear;
 }
 
 .gui-voice-ring--outer {
-	width: 32px;
-	height: 32px;
-	box-shadow: 0 0 16px color-mix(in oklab, var(--color-danger) calc(var(--voice-level) * 24%), transparent);
+	width: 36px;
+	height: 36px;
+	box-shadow: 0 0 14px color-mix(in oklab, var(--voice-state-color) calc(var(--voice-level) * 20%), transparent);
 }
 
 .gui-voice-ring--inner {
-	width: 20px;
-	height: 20px;
+	width: 32px;
+	height: 32px;
+}
+
+.gui-voice-strip-summary {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	flex: none;
+	white-space: nowrap;
+}
+
+.gui-voice-strip-label {
+	color: var(--color-text-secondary);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	line-height: 18px;
+}
+
+.gui-voice-strip-time {
+	color: var(--voice-state-color);
+	font-size: var(--ui-font-size-xs);
+	font-variant-numeric: tabular-nums;
+	line-height: 18px;
 }
 
 .gui-voice-wave {
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: 2px;
-	height: 18px;
+	width: 52px;
+	height: 20px;
+	flex: none;
 	opacity: calc(0.55 + 0.45 * var(--voice-level));
 }
 
 .gui-voice-wave i {
 	width: 2px;
 	height: 16px;
-	border-radius: 50%;
-	background: var(--color-danger);
+	border-radius: 999px;
+	background: var(--voice-state-color);
+	transform: scaleY(var(--voice-bar-scale, 0.18));
 	transform-origin: center;
 	transition: transform 80ms linear;
 }
 
-.gui-voice-strip-label {
-	flex: none;
-	font-size: 12px;
-	line-height: 1;
-	font-variant-numeric: tabular-nums;
-	color: var(--color-danger);
-}
-
 .gui-voice-partial {
 	flex: 1;
-	min-width: 0;
-	min-height: 18px;
+	min-width: 48px;
 	overflow: hidden;
 	color: var(--color-text-muted);
-	font-size: 13px;
-	line-height: 18px;
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	opacity: 0;
+	opacity: 0.72;
 	transform: translateY(var(--gui-motion-slide-y));
 	transition: transform var(--gui-motion-fade-in) var(--gui-ease-out), opacity var(--gui-motion-fade-in) ease;
 }
 
 .gui-voice-partial--visible {
+	color: var(--color-text-secondary);
 	opacity: 1;
 	transform: translateY(0);
 }
 
 .gui-voice-strip-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
 	margin-left: auto;
 	flex: none;
-	font-size: 11px;
 	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-voice-strip-hint kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 27px;
+	height: 21px;
+	padding: 0 5px;
+	border: 0.5px solid var(--border);
+	border-bottom-width: 2px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 58%, transparent);
+	box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 24%, transparent);
+	color: var(--color-text-muted);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	line-height: 1;
 }
 
 .gui-voice-strip--transcribing {
-	background: color-mix(in oklab, var(--color-text-muted) 8%, transparent);
+	--voice-state-color: var(--color-accent);
 }
 
-.gui-voice-strip--transcribing .gui-voice-visual {
-	opacity: 0.45;
+.gui-voice-strip--transcribing .gui-voice-ring {
+	transform: none;
+	opacity: 0.2;
 }
 
-.gui-voice-strip--transcribing .gui-voice-wave i,
-.gui-voice-strip--transcribing .gui-voice-strip-label {
-	background: var(--color-text-muted);
-	color: var(--color-text-muted);
+.gui-voice-strip--transcribing .gui-voice-spinner {
+	width: 15px;
+	height: 15px;
+	border-color: color-mix(in oklab, var(--color-accent) 24%, transparent);
+	border-top-color: var(--color-accent);
+}
+
+@container (max-width: 480px) {
+	.gui-voice-wave {
+		display: none;
+	}
+}
+
+@container (max-width: 340px) {
+	.gui-voice-strip {
+		flex-wrap: wrap;
+		gap: 0 6px;
+	}
+
+	.gui-voice-strip-summary {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.gui-voice-strip-label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.gui-voice-partial {
+		order: 4;
+		flex: 0 0 calc(100% - 36px);
+		min-width: 0;
+		margin-left: 36px;
+		line-height: 18px;
+	}
+
+	.gui-voice-strip-hint {
+		order: 3;
+	}
+
+	.gui-voice-strip-hint > span {
+		display: none;
+	}
 }
 
 .gui-motion-off .gui-voice-ring,
 .gui-motion-off .gui-voice-wave i,
-.gui-motion-off .gui-voice-partial {
+.gui-motion-off .gui-voice-partial,
+.gui-motion-off .gui-voice-spinner {
+	animation: none;
 	transition: none;
 	transform: none;
 }
 
 .gui-dialog.gui-voice-enroll {
-	width: min(480px, 90vw);
+	width: min(600px, 90vw);
 }
 
 .gui-voice-enroll-body {
@@ -395,30 +495,106 @@
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 20px;
-	min-height: 326px;
+	gap: 14px;
+	min-height: 410px;
 	text-align: center;
 }
 
 .gui-voice-enroll-heading {
-	position: absolute;
-	top: 0;
 	font-size: 20px;
-	font-weight: 500;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.gui-voice-enroll-stage {
+	--enroll-level: 0;
+	--enroll-state-color: var(--color-accent);
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 126px;
+	height: 126px;
+	flex: none;
+	color: var(--enroll-state-color);
+}
+
+.gui-voice-enroll-stage[data-state="error"] {
+	--enroll-state-color: var(--color-danger);
+}
+
+.gui-voice-enroll-stage[data-state="accepted"],
+.gui-voice-enroll-stage[data-state="complete"] {
+	--enroll-state-color: var(--color-ok);
+}
+
+.gui-voice-enroll-ring {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	transform: rotate(-90deg);
+}
+
+.gui-voice-enroll-ring circle {
+	fill: none;
+	stroke-width: 1.5;
+}
+
+.gui-voice-enroll-ring-track {
+	stroke: color-mix(in oklab, var(--enroll-state-color) 16%, transparent);
+}
+
+.gui-voice-enroll-ring-value {
+	stroke: var(--enroll-state-color);
+	stroke-linecap: round;
+	transition: stroke-dasharray var(--gui-motion-height) var(--gui-ease-out);
 }
 
 .gui-voice-enroll-orb {
 	display: grid;
 	place-items: center;
-	width: 88px;
-	height: 88px;
-	border: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
+	width: 92px;
+	height: 92px;
+	border: 1px solid color-mix(in oklab, var(--enroll-state-color) 42%, var(--glass-border));
 	border-radius: 50%;
-	color: var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-	box-shadow: 0 0 calc(12px + var(--enroll-level) * 20px) color-mix(in oklab, var(--color-accent) 18%, transparent);
-	transform: scale(calc(1 + var(--enroll-level) * 0.04));
-	transition: transform var(--gui-motion-chip) var(--spring), box-shadow var(--gui-motion-chip) ease;
+	background:
+		var(--glass-sheen),
+		color-mix(in oklab, var(--enroll-state-color) 10%, var(--glass-bg-strong));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		0 0 calc(18px + var(--enroll-level) * 28px)
+			color-mix(in oklab, var(--enroll-state-color) calc(12% + var(--enroll-level) * 22%), transparent);
+	transform: scale(calc(1 + var(--enroll-level) * 0.055));
+	transition:
+		transform var(--gui-motion-chip) var(--spring),
+		box-shadow var(--gui-motion-chip) ease,
+		border-color var(--gui-motion-fade-in) ease,
+		background var(--gui-motion-fade-in) ease;
+}
+
+.gui-voice-enroll-stage[data-state="preparing"] .gui-voice-enroll-orb,
+.gui-voice-enroll-stage[data-state="processing"] .gui-voice-enroll-orb {
+	animation: gui-voice-enroll-spin var(--gui-motion-speech-spin, 1.2s) linear infinite;
+}
+
+.gui-voice-enroll-stage[data-state="accepted"] .gui-voice-enroll-orb,
+.gui-voice-enroll-stage[data-state="complete"] .gui-voice-enroll-orb {
+	animation: gui-voice-enroll-accepted var(--gui-motion-height) var(--spring);
+}
+
+@keyframes gui-voice-enroll-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes gui-voice-enroll-accepted {
+	50% {
+		transform: scale(1.06);
+	}
 }
 
 .gui-voice-enroll-progress {
@@ -428,45 +604,67 @@
 }
 
 .gui-voice-enroll-progress i {
-	width: 32px;
+	width: 30px;
 	height: 4px;
-	border-radius: 50%;
+	border-radius: 999px;
 	background: var(--border);
+	transition: background var(--gui-motion-fade-in) ease;
 }
 
 .gui-voice-enroll-progress i[data-complete="true"] {
 	background: var(--color-accent);
 }
 
+.gui-voice-enroll-copy {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-height: 112px;
+	animation: gui-fade-in var(--gui-motion-fade-in) ease;
+}
+
+.gui-voice-enroll-state {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 550;
+	color: var(--enroll-state-color, var(--color-text));
+}
+
+.gui-voice-enroll-instruction {
+	margin-top: 8px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
 .gui-voice-enroll-prompt {
-	max-width: 340px;
+	max-width: 380px;
 	min-height: 48px;
+	margin-top: 4px;
 	font-size: 16px;
 	line-height: 24px;
 }
 
-.gui-voice-enroll-error {
-	position: absolute;
-	right: 0;
-	bottom: 48px;
-	left: 0;
+.gui-voice-enroll-feedback {
 	align-self: stretch;
 	min-height: 20px;
+}
+
+.gui-voice-enroll-error {
 	color: var(--color-danger);
+	font-size: var(--ui-font-size-sm);
 }
 
 .gui-voice-enroll-actions {
-	position: absolute;
-	right: 0;
-	bottom: 0;
-	left: 0;
 	display: flex;
 	justify-content: center;
 	flex-wrap: wrap;
 	gap: 8px;
 }
 
-.gui-motion-off .gui-voice-enroll-orb {
+.gui-motion-off .gui-voice-enroll-orb,
+.gui-motion-off .gui-voice-enroll-ring-value,
+.gui-motion-off .gui-voice-enroll-progress i,
+.gui-motion-off .gui-voice-enroll-copy {
+	animation: none;
 	transition: none;
 	transform: none;
 }
@@ -475,7 +673,12 @@
 	.gui-voice-ring,
 	.gui-voice-wave i,
 	.gui-voice-partial,
-	.gui-voice-enroll-orb {
+	.gui-voice-spinner,
+	.gui-voice-enroll-orb,
+	.gui-voice-enroll-ring-value,
+	.gui-voice-enroll-progress i,
+	.gui-voice-enroll-copy {
+		animation: none;
 		transition: none;
 		transform: none;
 	}
@@ -1269,10 +1472,10 @@ button.gui-stats-pill {
  * lib/tooltips.ts owns flip/shift geometry and repositions on scroll/resize. */
 .gui-tooltip {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--z-tooltip);
 	max-width: 340px;
-	padding: 4px 9px;
-	border-radius: var(--radius-md);
+	padding: 6px 9px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--glass-border);
 	background: var(--glass-sheen), var(--glass-bg-strong);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -1307,9 +1510,10 @@ button.gui-stats-pill {
 
 .gui-btn {
 	display: inline-flex;
+	min-height: var(--control-height-sm);
 	align-items: center;
 	gap: 6px;
-	padding: 6px 14px;
+	padding: var(--space-1) var(--space-3);
 	/* ZCode dialog buttons: rounded (radius-lg), not squared */
 	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
@@ -1846,7 +2050,7 @@ button.gui-stats-pill {
 .gui-dialog-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 3000;
+	z-index: var(--z-modal);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -2285,7 +2489,7 @@ button.gui-stats-pill {
 .gui-sketch-veil {
 	position: fixed;
 	inset: 0;
-	z-index: 2500;
+	z-index: var(--z-overlay);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -3268,7 +3472,7 @@ button.gui-stats-pill {
  * pointer-events none, aria-hidden. */
 .gui-mention-pop {
 	position: fixed;
-	z-index: 2600;
+	z-index: var(--z-hover-card);
 	transform: translate(0, -100%);
 	display: flex;
 	align-items: center;

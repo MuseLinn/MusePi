@@ -78,6 +78,22 @@ export async function enumerateMicDevices(): Promise<MicDevice[]> {
 	}
 }
 
+/** Check microphone access only after an explicit user action. Every acquired
+ * track is stopped before returning; no recording is retained or uploaded. */
+export async function probeMicrophone(): Promise<"ready" | "denied" | "unavailable"> {
+	if (!navigator.mediaDevices?.getUserMedia) return "unavailable";
+	let stream: MediaStream | null = null;
+	try {
+		stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+		return stream.getTracks().some(track => track.readyState === "live") ? "ready" : "unavailable";
+	} catch (cause) {
+		const name = typeof cause === "object" && cause !== null && "name" in cause ? String(cause.name) : "";
+		return name === "NotAllowedError" || name === "SecurityError" ? "denied" : "unavailable";
+	} finally {
+		stream?.getTracks().forEach(track => track.stop());
+	}
+}
+
 /* ── 录音（16kHz mono float PCM + 能量端点 VAD） ───────────────── */
 // #9: recordPcm used to return the moment the mic opened, handing the
 // caller a snapshot of an EMPTY chunk list — dictation transcribed

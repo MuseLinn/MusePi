@@ -20,10 +20,108 @@ import type {
 } from "@musepi/pi-wire";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
+import {
+	Children,
+	Component,
+	Fragment,
+	Profiler,
+	PureComponent,
+	StrictMode,
+	Suspense,
+	cloneElement,
+	createContext,
+	createElement,
+	createRef,
+	forwardRef,
+	lazy,
+	memo,
+	startTransition,
+	use,
+	useActionState,
+	useCallback,
+	useContext,
+	useDebugValue,
+	useDeferredValue,
+	useEffect,
+	useEffectEvent,
+	useId,
+	useImperativeHandle,
+	useInsertionEffect,
+	useLayoutEffect,
+	useMemo,
+	useOptimistic,
+	useReducer,
+	useRef,
+	useState,
+	useSyncExternalStore,
+	useTransition,
+} from "react";
+import * as ReactDOM from "react-dom";
+import * as ReactDOMClient from "react-dom/client";
+import { jsx, jsxs } from "react/jsx-runtime";
+import {
+	FILE_WORKSPACE_SLOT,
+	FILE_WORKSPACE_SURFACE,
+	type FileWorkspaceHost,
+} from "./file-workspace";
 import type { RpcClient } from "./rpc";
+
+export const hostReactBindings = {
+	...React,
+	Children,
+	Component,
+	Fragment,
+	Profiler,
+	PureComponent,
+	StrictMode,
+	Suspense,
+	cloneElement,
+	createContext,
+	createElement,
+	createRef,
+	forwardRef,
+	lazy,
+	memo,
+	startTransition,
+	use,
+	useActionState,
+	useCallback,
+	useContext,
+	useDebugValue,
+	useDeferredValue,
+	useEffect,
+	useEffectEvent,
+	useId,
+	useImperativeHandle,
+	useInsertionEffect,
+	useLayoutEffect,
+	useMemo,
+	useOptimistic,
+	useReducer,
+	useRef,
+	useState,
+	useSyncExternalStore,
+	useTransition,
+	createPortal: ReactDOM.createPortal,
+	jsx,
+	jsxs,
+	// These are host values, not an ESM namespace. The compiler's CommonJS
+	// interop must wrap the complete object for `import React from "react"`.
+	__esModule: false,
+};
+export const hostReactDOMBindings = {
+	...ReactDOM,
+	createPortal: ReactDOM.createPortal,
+	flushSync: ReactDOM.flushSync,
+	version: ReactDOM.version,
+	__esModule: false,
+};
+export const hostReactDOMClientBindings = {
+	...ReactDOMClient,
+	createRoot: ReactDOMClient.createRoot,
+	hydrateRoot: ReactDOMClient.hydrateRoot,
+	__esModule: false,
+};
 
 /**
  * The React surface compiled plugin modules bind to: the artifact compiler
@@ -34,7 +132,9 @@ import type { RpcClient } from "./rpc";
  * spread the namespace and add the portal entry.
  */
 function exposeHostReact(): void {
-	(window as unknown as { MusePiReact: unknown }).MusePiReact = { ...React, createPortal };
+	(window as unknown as { MusePiReact: unknown }).MusePiReact = hostReactBindings;
+	(window as unknown as { MusePiReactDOM: unknown }).MusePiReactDOM = hostReactDOMBindings;
+	(window as unknown as { MusePiReactDOMClient: unknown }).MusePiReactDOMClient = hostReactDOMClientBindings;
 	// The plugin's other platform surface: its own translation namespace.
 	//
 	// A compiled plugin module cannot import from client-core, so the namespace
@@ -53,6 +153,8 @@ function exposeHostReact(): void {
 		subscribe: subscribeLocale,
 	};
 }
+
+exposeHostReact();
 
 /**
  * Renderer-side component slots: extensions
@@ -85,6 +187,8 @@ function slot(name: string): string {
 
 /** First slot id — the settings page's extension-contributed section. */
 export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
+/** Full capability-center page slot. */
+export const CAPABILITY_CENTER_SLOT = slot("app.capability");
 /** Right-side workspace panel slot. */
 export const RIGHT_PANEL_SLOT = slot("panel.right");
 /** Right-edge 44px icon rail slot. */
@@ -165,6 +269,8 @@ export interface SlotComponent {
 	css?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** On-demand panel tabs render when opened but have no rail launcher. */
+	availability?: "always" | "on-demand";
 	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
 	 *  renderer owns. No entryKinds → does not participate in per-kind
 	 *  dispatch (targets other exact slots). */
@@ -421,6 +527,11 @@ interface PluginClientContext {
 	/** The extension entry path this component came from. */
 	readonly extensionId: string;
 }
+export interface CapabilityCenterPageNavigation {
+	tab: "skills" | "plugins" | "marketplace";
+	onTabChange(tab: "skills" | "plugins" | "marketplace"): void;
+	onBack(): void;
+}
 export interface SlotComponentProps {
 	/** Daemon RPC bridge (models.list / session.setModel / …). */
 	rpc?: RpcClient | null;
@@ -432,6 +543,8 @@ export interface SlotComponentProps {
 	slot?: string;
 	/** Extension path that contributed this component. */
 	extensionId?: string;
+	/** Navigation contract for the full-page app.capability mount. */
+	page?: CapabilityCenterPageNavigation;
 	/** Current right-panel tab instance; present only for panel.tab.* mounts. */
 	panelTab?: {
 		id: string;
@@ -621,7 +734,9 @@ export function selectPanelTabComponent(components: readonly SlotComponent[], vi
 }
 
 export function selectLaunchablePanelTabs(components: readonly SlotComponent[]): SlotComponent[] {
-	return components.filter(component => component.slot !== FILE_WORKSPACE_SLOT);
+	return components.filter(
+		component => component.slot !== FILE_WORKSPACE_SLOT && component.availability !== "on-demand",
+	);
 }
 
 /** Mount every extension-contributed component registered for a slot. */
@@ -630,11 +745,13 @@ export function SlotComponentHost({
 	slot,
 	sessionId,
 	cwd,
+	page,
 }: {
 	rpc: RpcClient | null;
 	slot: string;
 	sessionId?: string | null;
 	cwd?: string;
+	page?: SlotComponentProps["page"];
 }): ReactNode {
 	const items = useSlotComponents(rpc, slot);
 	return (
@@ -646,6 +763,7 @@ export function SlotComponentHost({
 					rpc={rpc}
 					sessionId={sessionId}
 					cwd={cwd}
+					page={page}
 				/>
 			))}
 		</>
@@ -660,6 +778,7 @@ export function SlotComponentMount({
 	rpc,
 	sessionId,
 	cwd,
+	page,
 	settingsScope,
 	panelTab,
 	fileWorkspace,
@@ -671,6 +790,7 @@ export function SlotComponentMount({
 	rpc?: RpcClient | null;
 	sessionId?: string | null;
 	cwd?: string;
+	page?: SlotComponentProps["page"];
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
 	settingsScope?: SlotComponentProps["settingsScope"];
 	/** Current right-panel tab instance (panel.tab.* only). */
@@ -791,7 +911,7 @@ export function SlotComponentMount({
 			moduleTeardown.current?.();
 			moduleTeardown.current = null;
 		};
-	}, [item]);
+	}, [item.code, item.error, item.extensionId, item.slot]);
 	if (error) {
 		return (
 			<div className="gui-slot-error" role="alert">
@@ -807,6 +927,7 @@ export function SlotComponentMount({
 		rpc,
 		sessionId,
 		cwd,
+		page,
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,
@@ -837,7 +958,7 @@ export function SlotComponentMount({
  * toolViews(daemon 编译好的 ESM)blob-import
  * 并注册进 guest-client 的 tool-render 外部注册表,transcript 按工具名
  * 分派时扩展渲染器覆盖内置。模块 default export 必须是 ToolRenderer
- * 形状({ Summary, Body?, Card? })。任何宿主挂载一次即可 ——
+ * 形状({ label?, Icon?, Summary, Body?, Card? })。任何宿主挂载一次即可 ——
  * registry 是全局单例(guest-client module 级)。
  */
 export function useExtensionToolViews(rpc: RpcClient | null): void {
@@ -875,7 +996,7 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 						console.warn(`toolview for "${item.tool}" missing default export (component or ToolRenderer)`);
 						continue;
 					}
-					registered[item.tool] = renderer;
+					registered[item.tool] = item.label && !renderer.label ? { ...renderer, label: item.label } : renderer;
 				} catch (e) {
 					console.warn(`toolview "${item.tool}" load failed`, e);
 				}

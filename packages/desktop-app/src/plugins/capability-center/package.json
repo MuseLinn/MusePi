@@ -1,0 +1,12 @@
+{
+	"name": "musepi-capability-center",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned skills, plugins, and marketplace page.",
+	"type": "module",
+	"musepi": {
+		"icon": "✦",
+		"description": "Browse and manage capabilities at package and bundle granularity.",
+		"extensions": ["./index.ts"]
+	}
+}

@@ -14,7 +14,7 @@
 
   --text: #ececef;
   --text-muted: #a2a2ac;
-  --text-faint: #6d6d76;
+  --text-faint: #8a8a93;
 
   --accent: #e0a94a;         /* 荧光琥珀：比遗产色略亮，近黑底上更像发光体 */
   --accent-hi: #f4c874;
@@ -449,6 +449,18 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 }
 .mp-dl-caret:hover { color: var(--text); background: var(--bg-2); border-color: var(--accent-line); }
 .mp-dl.is-open .mp-dl-caret { color: var(--accent); border-color: var(--accent-line); }
+.mp-dl-caret--primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: transparent;
+  border-left-color: var(--accent-line);
+}
+.mp-dl-caret--primary:hover,
+.mp-dl.is-open .mp-dl-caret--primary {
+  color: var(--accent-ink);
+  background: var(--accent-hi);
+  border-color: transparent;
+}
 .mp-dl-menu {
   position: absolute;
   top: calc(100% + 10px);
@@ -515,6 +527,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-section-desc a { color: var(--accent); border-bottom: 1px solid var(--accent-line); }
 
 /* ===== 产品界面预览：真实应用截图 ===== */
+.mp-shot-grid { display: grid; gap: 32px; }
 .mp-shot {
   margin: 0 auto;
   max-width: 1080px;
@@ -645,7 +658,6 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   border-color: var(--accent-line);
   box-shadow: inset 0 1px 0 var(--line-inner), 0 0 44px -20px var(--accent-glow), 0 30px 60px -40px rgba(0,0,0,0.9);
 }
-.mp-plan--soon { opacity: 0.62; }
 .mp-plan-tag {
   position: absolute;
   top: -12px;

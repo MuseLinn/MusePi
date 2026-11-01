@@ -5,12 +5,12 @@
  * right pane is an animated, purely-visual mini-demo of each feature
  * (CSS keyframes, replays on step switch).
  *
- * Step 4 is interactive — provider setup: builtin providers can OAuth-login
- * or import an API key (daemon providers.* RPCs, same flow as Settings), and
- * custom OpenAI-compatible endpoints get a one-shot test-connection button
- * (providers.testConnection) before models.add persists them. Step 5 is
- * appearance: language + light/dark theme, applied live. A fresh install can
- * therefore go from zero to a working model without touching settings.
+ * The main spine combines language and appearance, provider setup, session
+ * tabs, voice setup, and optional completion branches. Provider setup uses
+ * the same daemon RPCs as Settings. Session tabs use the same preference as
+ * the header, with a recommended default only on the first run. Voice setup
+ * recommends a recognition model by locale without downloading it eagerly.
+ * A fresh install can therefore configure the essentials without opening Settings.
  *
  * Completing it stores musepi-gui-onboarding-done so it never auto-opens
  * again; the settings footer button reopens it on demand.
@@ -25,18 +25,20 @@ import {
 	useModalFocus,
 	useThemePreference,
 } from "@musepi/client-core";
-import { KeyRound, Languages, Sparkles } from "lucide";
+import { KeyRound, Languages, Layers, Mic, Sparkles } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
 import { usePrompt } from "../lib/prompt-dialog";
+import { readSessionTabsEnabled, setSessionTabsEnabled } from "../lib/session-tabs";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
 import { GuiSelect } from "./GuiSelect";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { MenuPopup } from "./MenuPopup";
 import { ModelBrandIcon } from "./model-brand-icon";
+import { OnboardingVoiceSetup } from "./OnboardingVoiceSetup";
 import { PersonalizeSetup } from "./PersonalizeSetup";
 import { EndpointCandidatesDialog, QuickProviderChips, URL_HINTS, useEndpointModels } from "./provider-setup-shared";
 import { Reveal } from "./Reveal";
@@ -55,6 +57,8 @@ import { PetSprite, usePetDecor } from "./PetSprite";
 const STEPS = [
 	{ icon: Languages, key: "settings.onboardingStep1" },
 	{ icon: KeyRound, key: "settings.onboardingStep6" },
+	{ icon: Layers, key: "settings.onboardingStep3" },
+	{ icon: Mic, key: "settings.onboardingStepVoice" },
 	{ icon: Sparkles, key: "onboarding done" },
 ] as const;
 
@@ -65,13 +69,16 @@ export const ONBOARDING_PROVIDER_STEP = 1;
 
 /** Main-spine step → right-pane demo index (DemoContent still speaks the
  *  original 8-step vocabulary): 语言/外观 merged → appearance demo,
- *  model setup → provider demo, done → chat demo. */
-const DEMO_STEP: readonly number[] = [1, 5, 3];
+ *  model setup → provider demo, session tabs → sessions demo, voice → mic demo,
+ *  done → chat demo. */
+const DEMO_STEP: readonly number[] = [1, 5, 2, 7, 3];
 
 /** Per-step title — each page carries its own heading, not "Welcome". */
 const STEP_TITLES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
 	"settings.onboardingStep1": "settings.onboardingTitleMain1",
 	"settings.onboardingStep6": "settings.onboardingTitle6",
+	"settings.onboardingStep3": "settings.onboardingTitle3",
+	"settings.onboardingStepVoice": "settings.onboardingTitleVoice",
 	"onboarding done": "settings.onboardingTitleDone",
 };
 
@@ -80,19 +87,35 @@ const STEP_TITLES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
 const STEP_BODIES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
 	"settings.onboardingStep1": "settings.onboardingStepMain1",
 	"settings.onboardingStep6": "settings.onboardingStep6",
+	"settings.onboardingStep3": "settings.onboardingStep3",
+	"settings.onboardingStepVoice": "settings.onboardingStepVoice",
 	"onboarding done": "settings.onboardingStepDone",
 };
 
 /** Feature bullets per promo step (steps 3–5) — each page carries real
  *  product facts, not a single sentence. */
 const PROMO_FEATURES = {
-	"settings.onboardingStep3": ["settings.onboardingFeatS1", "settings.onboardingFeatS2", "settings.onboardingFeatS3"],
-	"settings.onboardingStep4": ["settings.onboardingFeatC1", "settings.onboardingFeatC2", "settings.onboardingFeatC3"],
+	"settings.onboardingStep3": [
+		"settings.onboardingFeatS1",
+		"settings.onboardingFeatS2",
+		"settings.onboardingFeatS3",
+		"settings.onboardingFeatS4",
+		"settings.onboardingFeatS5",
+	],
+	"settings.onboardingStep4": [
+		"settings.onboardingFeatC1",
+		"settings.onboardingFeatC2",
+		"settings.onboardingFeatC3",
+		"settings.onboardingFeatC4",
+		"settings.onboardingFeatC5",
+		"settings.onboardingFeatC6",
+	],
 	"settings.onboardingStep5": [
 		"settings.onboardingFeatT1",
 		"settings.onboardingFeatT2",
 		"settings.onboardingFeatT3",
 		"settings.onboardingFeatT4",
+		"settings.onboardingFeatT5",
 	],
 } as const;
 
@@ -128,7 +151,15 @@ interface CredentialInfo {
  * entrance animations replay. The right preview container (rounded panel)
  * never remounts; the content morphs inside it.
  */
-function StepDemo({ step, petMode }: { step: number; petMode: "input" | "desktop" }): ReactNode {
+function StepDemo({
+	step,
+	petMode,
+	sessionTabsEnabled,
+}: {
+	step: number;
+	petMode: "input" | "desktop";
+	sessionTabsEnabled: boolean;
+}): ReactNode {
 	// Sidebar active row: steps 0-2 highlight their row, the rest use row 1.
 	const sideActive = [0, 1, 2].includes(step) ? step : 0;
 	return (
@@ -149,7 +180,7 @@ function StepDemo({ step, petMode }: { step: number; petMode: "input" | "desktop
 						))}
 					</div>
 					<div className="gui-obo-morph-content" key={`morph-${step}`}>
-						<DemoContent step={step} petMode={petMode} />
+						<DemoContent step={step} petMode={petMode} sessionTabsEnabled={sessionTabsEnabled} />
 					</div>
 				</div>
 			</div>
@@ -159,7 +190,15 @@ function StepDemo({ step, petMode }: { step: number; petMode: "input" | "desktop
 
 type PreviewPet = { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage };
 
-function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desktop" }): ReactNode {
+function DemoContent({
+	step,
+	petMode,
+	sessionTabsEnabled,
+}: {
+	step: number;
+	petMode: "input" | "desktop";
+	sessionTabsEnabled: boolean;
+}): ReactNode {
 	// Hooks MUST run before every early return (React hook rules — the step
 	// branches below bail out early). The pet state is only rendered at
 	// step 6, but loading it unconditionally is cheap and keeps the hook
@@ -196,10 +235,18 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 		);
 	}
 	if (step === 2) {
-		// Sessions — sidebar navigation mock.
+		// Session tabs — the preview follows the real onboarding toggle.
 		return (
 			<div className="gui-obo-morph-fill">
-				<div className="gui-obo-main-bar" />
+				{sessionTabsEnabled ? (
+					<div className="gui-obo-session-tabs" aria-hidden="true">
+						<span className="gui-obo-session-tab gui-obo-session-tab--active" />
+						<span className="gui-obo-session-tab" />
+						<span className="gui-obo-session-tab gui-obo-session-tab--short" />
+					</div>
+				) : (
+					<div className="gui-obo-main-bar" />
+				)}
 				<div className="gui-obo-main-lines" />
 			</div>
 		);
@@ -259,6 +306,20 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 					<span className="gui-obo-provider-dot" />
 					<span className="gui-obo-provider-skel" />
 					<span className="gui-obo-provider-btn">{t("settings.login")}</span>
+				</div>
+			</div>
+		);
+	}
+	if (step === 7) {
+		return (
+			<div className="gui-obo-morph-fill gui-obo-voice-preview" aria-hidden="true">
+				<span className="gui-obo-voice-preview-orb">
+					<Icon name="mic" />
+				</span>
+				<div className="gui-obo-voice-preview-wave">
+					{Array.from({ length: 7 }, (_, index) => (
+						<i key={index} />
+					))}
 				</div>
 			</div>
 		);
@@ -327,6 +388,36 @@ function FeatureList({ keys }: { keys: readonly TranslationKey[] }): ReactNode {
 				</div>
 			))}
 		</div>
+	);
+}
+
+function SessionTabsSetup({ enabled, onChange }: { enabled: boolean; onChange(enabled: boolean): void }): ReactNode {
+	return (
+		<>
+			<div className="gui-obo-preference">
+				<div className="gui-obo-preference-copy">
+					<div className="gui-obo-preference-label">
+						<span>{t("settings.sessionTabs")}</span>
+						<span className="gui-obo-recommended">{t("settings.onboardingRecommended")}</span>
+					</div>
+					<div className="gui-obo-preference-description">{t("settings.onboardingSessionTabsDescription")}</div>
+				</div>
+				<button
+					type="button"
+					role="switch"
+					aria-checked={enabled}
+					aria-label={t("settings.sessionTabs")}
+					className={`gui-toggle${enabled ? " gui-toggle--on" : ""}`}
+					onClick={() => {
+						tapFeedback();
+						onChange(!enabled);
+					}}
+				>
+					<span className="gui-toggle-knob" />
+				</button>
+			</div>
+			<FeatureList keys={PROMO_FEATURES["settings.onboardingStep3"]} />
+		</>
 	);
 }
 
@@ -1319,11 +1410,17 @@ export function OnboardingOverlay({
 }): ReactNode {
 	const [open, setOpen] = useState(onboardingPending);
 	const [step, setStep] = useState(0);
-	// Done-step optional branches (3+3 restructure): the completion step
-	// hosts import / personalize / feature-tour as a single-open accordion.
-	// Collapsed by default — the Enter spine (next/finish) never routes
-	// through them; a focused branch control keeps its own Enter.
-	const [branch, setBranch] = useState<"import" | "personalize" | "features" | "design" | null>(null);
+	// First run recommends session tabs; a manual replay reads the current
+	// preference instead of silently turning the feature on again.
+	const [sessionTabsEnabled, setSessionTabsEnabledState] = useState(() =>
+		readSessionTabsEnabled(open && onboardingPending()),
+	);
+	// Preserve the voice-model choice while the voice step is unmounted.
+	const [voiceModelKey, setVoiceModelKey] = useState("");
+	// The completion step opens on the feature tour so current workflows are
+	// visible without hunting through the optional setup accordions. The Enter
+	// spine still goes straight to finish; branch controls keep their own Enter.
+	const [branch, setBranch] = useState<"import" | "personalize" | "features" | "design" | null>("features");
 	// Pet display mode shared by the personalize step's controls (left) and
 	// the chat preview (right): "desktop" hides the pet from the preview's
 	// composer — it lives in its own desktop window there.
@@ -1359,6 +1456,7 @@ export function OnboardingOverlay({
 			const raw = (e as CustomEvent<{ step?: number }>).detail?.step;
 			const step = typeof raw === "number" && Number.isInteger(raw) && raw >= 0 && raw < STEPS.length ? raw : 0;
 			setStep(step);
+			setSessionTabsEnabledState(readSessionTabsEnabled());
 			setClosing(false);
 			setOpen(true);
 		};
@@ -1378,6 +1476,7 @@ export function OnboardingOverlay({
 		} catch {
 			// ignore
 		}
+		setSessionTabsEnabled(sessionTabsEnabled);
 		try {
 			localStorage.setItem(DONE_KEY, "1");
 		} catch {
@@ -1391,7 +1490,7 @@ export function OnboardingOverlay({
 			() => window.dispatchEvent(new CustomEvent("musepi-onboarding-finished", { detail: { firstRun } })),
 			ONBOARDING_EXIT_MS + 40,
 		);
-	}, [requestClose]);
+	}, [requestClose, sessionTabsEnabled]);
 
 	// Keyboard priority: while the primer is up, Enter advances (next step /
 	// finish) and Escape steps back / closes on the first step — the page
@@ -1471,7 +1570,7 @@ export function OnboardingOverlay({
 							{t(STEP_BODIES[current.key])}
 						</div>
 						{/* Step content scrolls inside the pane (provider config is
-						 * tall); dots + actions stay pinned. Main spine = 3 steps;
+						 * tall); dots + actions stay pinned. Main spine = 5 steps;
 						 * the optional branches (import/personalize/feature tour)
 						 * live in the done step's accordion and never block Enter. */}
 						<div className="gui-obo-step-body">
@@ -1483,6 +1582,18 @@ export function OnboardingOverlay({
 							)}
 							{step === 1 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
 							{step === 2 && (
+								<SessionTabsSetup
+									enabled={sessionTabsEnabled}
+									onChange={enabled => {
+										setSessionTabsEnabledState(enabled);
+										setSessionTabsEnabled(enabled);
+									}}
+								/>
+							)}
+							{step === 3 && (
+								<OnboardingVoiceSetup rpc={rpc} selectedKey={voiceModelKey} onSelectedKey={setVoiceModelKey} />
+							)}
+							{step === 4 && (
 								<div className="gui-obo-branches">
 									<div className="gui-obo-branch">
 										<button
@@ -1575,26 +1686,16 @@ export function OnboardingOverlay({
 										</button>
 										<Reveal open={branch === "features"}>
 											<div className="flex flex-col gap-3">
-												{(
-													[
-														"settings.onboardingTitle3",
-														"settings.onboardingTitle4",
-														"settings.onboardingTitle5",
-													] as const
-												).map(k => (
+												{(["settings.onboardingTitle4", "settings.onboardingTitle5"] as const).map(k => (
 													<div key={k}>
 														<div className="mb-1 text-[13px] font-medium">{t(k)}</div>
 														<FeatureList
 															keys={
 																PROMO_FEATURES[
-																	(
-																		{
-																			"settings.onboardingTitle3": "settings.onboardingStep3",
-																			"settings.onboardingTitle4": "settings.onboardingStep4",
-																			"settings.onboardingTitle5": "settings.onboardingStep5",
-																		} as const
-																	)[k]
-																] ?? []
+																	k === "settings.onboardingTitle4"
+																		? "settings.onboardingStep4"
+																		: "settings.onboardingStep5"
+																]
 															}
 														/>
 													</div>
@@ -1641,10 +1742,14 @@ export function OnboardingOverlay({
 						</div>
 					</div>
 					<div className="gui-onboarding-visual">
-						{/* Personalization switches from the completion demo to the live pet. */}
+						{/* Demo index remap (DEMO_STEP): the demo vocabulary still
+						 * speaks the original 8 steps — appearance for the merged
+						 * first step, provider for model setup, session tabs for the preference
+						 * step, and chat for done. Personalization switches to its live pet demo. */}
 						<StepDemo
 							step={branch === "personalize" && last ? 6 : (DEMO_STEP[step] ?? 0)}
 							petMode={persPetMode}
+							sessionTabsEnabled={sessionTabsEnabled}
 						/>
 					</div>
 				</div>

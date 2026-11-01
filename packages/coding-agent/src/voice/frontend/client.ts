@@ -37,7 +37,10 @@ export class VoiceFrontendClient {
 	readonly #pending = new Map<string, PendingRequest>();
 	#nextId = 0;
 
-	constructor(transport: VoiceFrontendTransport, asrStreamFactory: AsrStreamFactory = sttClient.startStream) {
+	constructor(
+		transport: VoiceFrontendTransport,
+		asrStreamFactory: AsrStreamFactory = (modelKey, options) => sttClient.startStream(modelKey, options),
+	) {
 		this.#transport = transport;
 		this.#asrStreamFactory = asrStreamFactory;
 		this.#unsubscribe = transport.onMessage(message => this.#handleMessage(message));

@@ -29,6 +29,51 @@ describe("extension slot components", () => {
 		// 性,不是加载速度(图快照遍历是 HMR 设计本身,另列性能优化)。
 	}, 120_000);
 
+	test("maps named React imports to the host instance instead of bundling a second React", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "ext-react-host-"));
+		const entry = path.join(dir, "index.ts");
+		await writeFile(
+			entry,
+			`export default function (pi: any): void { pi.registerComponent({ slot: "app.capability", moduleUrl: "./page.tsx" }); }`,
+		);
+		await writeFile(
+			path.join(dir, "page.tsx"),
+			`import { useState } from "react";
+			import { createContext } from "react/index.js";
+			const context = createContext("deep");
+			export default function Page() { const [value] = useState("host"); return <span>{value}{context._currentValue}</span>; }`,
+		);
+		try {
+			const components = await collectSlotComponents(
+				[{ kind: "plugin-module", state: "active", path: entry }],
+				process.cwd(),
+			);
+			expect(components).toHaveLength(1);
+			expect(components[0]?.error).toBeUndefined();
+			const previousWindow = Reflect.get(globalThis, "window");
+			Reflect.set(globalThis, "window", {
+				MusePiReact: {
+					useState: <T>(value: T) => [value],
+					createContext: () => ({ _currentValue: "mapped" }),
+					createElement: (type: string, props: Record<string, unknown>, ...children: unknown[]) => ({
+						type,
+						props: { ...props, children },
+					}),
+				},
+			});
+			try {
+				const module = await import(
+					`data:text/javascript;base64,${Buffer.from(components[0]!.code).toString("base64")}`
+				);
+				expect(module.default()).toEqual({ type: "span", props: { children: ["host", "mapped"] } });
+			} finally {
+				Reflect.set(globalThis, "window", previousWindow);
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	}, 60_000);
+
 	test("skips non-extension-module entries and shadowed states", async () => {
 		const components = await collectSlotComponents(
 			[

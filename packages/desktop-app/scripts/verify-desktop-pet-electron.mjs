@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopDir = path.resolve(scriptDir, "..");
@@ -99,6 +99,75 @@ async function gestureState(page) {
 	}));
 }
 
+function nativeWindowBounds() {
+	if (process.platform !== "win32") throw new Error("Native pet window bounds currently require the Windows smoke harness");
+	const script = String.raw`
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class PetSmokeNative {
+  public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+}
+'@
+$rows = @()
+[void][PetSmokeNative]::EnumWindows({
+  param($hwnd, $lParam)
+  if ([PetSmokeNative]::IsWindowVisible($hwnd)) {
+    $text = New-Object System.Text.StringBuilder 512
+    [void][PetSmokeNative]::GetWindowText($hwnd, $text, $text.Capacity)
+    $title = $text.ToString()
+    if ($title -eq "MusePi Pet" -or $title -eq "MusePi Pet Bubbles") {
+      $rect = New-Object PetSmokeNative+RECT
+      [void][PetSmokeNative]::GetWindowRect($hwnd, [ref]$rect)
+      $script:rows += [PSCustomObject]@{ Title=$title; Left=$rect.Left; Top=$rect.Top; Right=$rect.Right; Bottom=$rect.Bottom }
+    }
+  }
+  return $true
+}, [IntPtr]::Zero)
+$rows | ConvertTo-Json -Compress
+`;
+	const run = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
+	if (run.status !== 0) throw new Error(`Native window query failed: ${run.stderr || run.stdout}`);
+	const parsed = JSON.parse(run.stdout);
+	const rows = Array.isArray(parsed) ? parsed : [parsed];
+	return Object.fromEntries(
+		rows.map(row => [row.Title, { left: row.Left, top: row.Top, right: row.Right, bottom: row.Bottom }]),
+	);
+}
+
+function positionNativeCursor(dipX, dipY, dpr, button = null) {
+	if (process.platform !== "win32") return;
+	const x = Math.round(dipX * dpr);
+	const y = Math.round(dipY * dpr);
+	const buttonScript = button === "down"
+		? "[PetSmokeCursor]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)"
+		: button === "up"
+			? "[PetSmokeCursor]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)"
+			: "";
+	const script = String.raw`
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PetSmokeCursor {
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+}
+'@
+[void][PetSmokeCursor]::SetProcessDpiAwarenessContext([IntPtr]::new(-4))
+if (-not [PetSmokeCursor]::SetCursorPos(${x}, ${y})) { throw "SetCursorPos failed" }
+${buttonScript}
+`;
+	const run = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
+	if (run.status !== 0) throw new Error(`Native cursor positioning failed: ${run.stderr || run.stdout}`);
+}
+
 try {
 	const port = await findCdpPort();
 	const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: null });
@@ -130,6 +199,9 @@ try {
 			await capture("onboarding-initial-failure", mainPage);
 			throw new Error(`${String(error)}; initial state=${JSON.stringify(state)}; rendererErrors=${JSON.stringify(rendererErrors)}`);
 		}
+		// Keep the same preload bridge, but unmount the real App so its recent-
+		// session polling cannot overwrite the deterministic activity fixtures.
+		await mainPage.goto(pathToFileURL(path.join(desktopDir, "dist", "pin.html")).href);
 		await mainPage.evaluate(`//!world=main
 			window.__petPhase2 = { opens: [], commands: [] };
 			window.electronAPI.onPetOpenSession(id => window.__petPhase2.opens.push(id));
@@ -173,14 +245,52 @@ try {
 		});
 		const geometry = await petPage.evaluate(() => {
 			const rect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
-			return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
+			return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, dpr: devicePixelRatio } : null;
 		});
 		if (!geometry) throw new Error("Pet hit area was not found");
-		await petPage.mouse.move(geometry.x, geometry.y);
-		await petPage.mouse.down();
-		for (const offset of [12, 28, 44]) {
-			await petPage.mouse.move(geometry.x + offset, geometry.y - offset / 4);
-			await sleep(40);
+		const petNativeBeforeDrag = process.platform === "win32" ? nativeWindowBounds()["MusePi Pet"] : null;
+		const moveDragOffset = async offset => {
+			if (petNativeBeforeDrag) {
+				positionNativeCursor(
+					petNativeBeforeDrag.left + geometry.x + offset,
+					petNativeBeforeDrag.top + geometry.y - offset / 4,
+					geometry.dpr,
+				);
+			} else {
+				await petPage.mouse.move(geometry.x + offset, geometry.y - offset / 4);
+			}
+			await sleep(60);
+		};
+		if (petNativeBeforeDrag) {
+			// CDP input does not move the OS cursor and mixing it with native
+			// motion loses pointer capture. Use one native input stream for
+			// Windows so the cursor anchor and pointer buttons stay consistent.
+			const dragX = petNativeBeforeDrag.left + geometry.x;
+			const dragY = petNativeBeforeDrag.top + geometry.y;
+			positionNativeCursor(dragX, dragY, geometry.dpr);
+			// The native click-through poll runs every 120ms. Let it enable the
+			// pet hitbox before pressing, otherwise the down event reaches the desktop.
+			await sleep(200);
+			positionNativeCursor(dragX, dragY, geometry.dpr, "down");
+		} else {
+			await petPage.mouse.move(geometry.x, geometry.y);
+			await petPage.mouse.down();
+		}
+		for (const offset of [12, 28, 44]) await moveDragOffset(offset);
+		if (petNativeBeforeDrag) {
+			const petNativeAfterDrag = nativeWindowBounds()["MusePi Pet"];
+			const nativeDragDelta = {
+				x: petNativeAfterDrag.left - petNativeBeforeDrag.left,
+				y: petNativeAfterDrag.top - petNativeBeforeDrag.top,
+			};
+			// The first 12px move crosses the threshold and establishes the
+			// anchor; only subsequent cursor travel moves the native window.
+			const nativeExpectedDelta = { x: 44 - 12, y: -11 + 3 };
+			check(
+				"real native pet drag tracks the pointer in DIP without DPR scaling",
+				Math.abs(nativeDragDelta.x - nativeExpectedDelta.x) <= 2 && Math.abs(nativeDragDelta.y - nativeExpectedDelta.y) <= 2,
+				{ petNativeBeforeDrag, petNativeAfterDrag, nativeDragDelta, nativeExpectedDelta },
+			);
 		}
 		const dragged = await gestureState(petPage);
 		const dragEvents = await petPage.evaluate(() => window.__petPhase2Events);
@@ -190,13 +300,19 @@ try {
 			{ ...dragged, events: dragEvents },
 		);
 		await capture("pet-orb-drag-electron", petPage);
-		for (const offset of [24, 0, -28]) {
-			await petPage.mouse.move(geometry.x + offset, geometry.y - offset / 4);
-			await sleep(40);
-		}
+		for (const offset of [24, 0, -28]) await moveDragOffset(offset);
 		const reversed = await gestureState(petPage);
 		check("real Electron orb reversal remains continuous and unmirrored", reversed.gesture.length > 0 && !reversed.mirrored && !reversed.petdexDrag, reversed);
-		await petPage.mouse.up();
+		if (petNativeBeforeDrag) {
+			positionNativeCursor(
+				petNativeBeforeDrag.left + geometry.x - 28,
+				petNativeBeforeDrag.top + geometry.y + 7,
+				geometry.dpr,
+				"up",
+			);
+		} else {
+			await petPage.mouse.up();
+		}
 		await petPage.waitForFunction(() => !(document.querySelector(".gui-pet-svg__gesture")?.getAttribute("transform") ?? "").includes("rotate("), { timeout: 4000 });
 		const released = await gestureState(petPage);
 		check("real Electron orb release settles without residual tilt", !released.gesture.includes("rotate(") && !released.mirrored, released);
@@ -290,15 +406,33 @@ try {
 			window.__petPhase2Timer = setInterval(window.__petPhase2Push, 150);
 		`);
 		let bubblesPage;
+		let observedBubblesPage;
+		const bubbleRendererErrors = [];
 		for (let attempt = 0; attempt < 75; attempt++) {
 			const pages = await browser.pages();
 			bubblesPage = pages.find(page => page.url().includes("/bubbles.html"));
-			if (bubblesPage && await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubble--session")))) break;
+			if (bubblesPage && bubblesPage !== observedBubblesPage) {
+				observedBubblesPage = bubblesPage;
+				bubblesPage.on("pageerror", error => bubbleRendererErrors.push(String(error)));
+				bubblesPage.on("console", message => {
+					if (message.type() === "error") bubbleRendererErrors.push(message.text());
+				});
+			}
+			if (bubblesPage && await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--stacked > .pet-bubble")))) break;
 			bubblesPage = undefined;
 			await sleep(200);
 		}
 		await mainPage.evaluate(`//!world=main\nclearInterval(window.__petPhase2Timer)`);
-		if (!bubblesPage) throw new Error("Real bubbles window did not render its session card");
+		if (!bubblesPage) {
+			const debug = observedBubblesPage
+				? await observedBubblesPage.evaluate(() => ({
+					bodyText: document.body.innerText.slice(0, 1200),
+					root: document.querySelector("#root")?.innerHTML.slice(0, 1600) ?? "",
+				}))
+				: { pages: (await browser.pages()).map(page => page.url()) };
+			if (observedBubblesPage) await capture("pet-bubbles-render-failure", observedBubblesPage);
+			throw new Error(`Real bubbles window did not render its session card: ${JSON.stringify({ debug, bubbleRendererErrors, rendererErrors })}`);
+		}
 		await sleep(600);
 		const stacked = await bubblesPage.evaluate(() => {
 			const card = document.querySelector(".pet-bubble");
@@ -336,6 +470,51 @@ try {
 			stacked.backgroundImage.includes("linear-gradient") && stacked.borderColor !== "rgba(0, 0, 0, 0)" && stacked.boxShadow !== "none",
 			{ backgroundImage: stacked.backgroundImage, borderColor: stacked.borderColor, boxShadow: stacked.boxShadow },
 		);
+		check("real priority card uses the 320px reference width", stacked.cardSize?.width === 320, stacked.cardSize);
+		if (process.platform === "win32") {
+			await petPage.waitForFunction(() => {
+				const pet = document.querySelector(".pet-window__pet");
+				return !pet || pet.getAnimations().every(animation => animation.playState !== "running");
+			}, { timeout: 3000 });
+			// Let the final renderer rect report reach the native bubble layout.
+			await sleep(100);
+			const nativeWindows = nativeWindowBounds();
+			const bubbleNativeBounds = nativeWindows["MusePi Pet Bubbles"];
+			const petNativeBounds = nativeWindows["MusePi Pet"];
+			const petSprite = await petPage.evaluate(() => ({
+				top: document.querySelector(".pet-window__pet")?.getBoundingClientRect().top ?? 0,
+				dpr: devicePixelRatio,
+			}));
+			// Win32 GetWindowRect and renderer client rects are both DIP here.
+			// Multiplying only the DOM offset by DPR mixes coordinate systems.
+			const nativeGap = petNativeBounds.top + petSprite.top - bubbleNativeBounds.bottom;
+			const expectedGap = 8;
+			check("real native windows keep an 8px bubble-to-sprite gap", Math.abs(nativeGap - expectedGap) <= 1, {
+				bubbleNativeBounds,
+				petNativeBounds,
+				petSprite,
+				nativeGap,
+				expectedGap,
+			});
+		}
+		check(
+			"real stacked mode shows the shared arrow beside the pet",
+			await petPage.evaluate(() => document.querySelector(".pet-window__badge")?.textContent === "⌃"),
+		);
+		await petPage.click(".pet-window__badge");
+		await petPage.waitForFunction(() => Boolean(document.querySelector(".pet-window__badge--hidden")), { timeout: 3000 });
+		const countMode = await petPage.evaluate(() => ({
+			text: document.querySelector(".pet-window__badge")?.textContent ?? "",
+			bubbleContent: Boolean(document.querySelector(".pet-bubbles")),
+		}));
+		const countBubbleContent = await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles")));
+		check("real pet control advances stacked to count and hides cards", countMode.text === "3" && !countBubbleContent, {
+			...countMode,
+			bubbleContent: countBubbleContent,
+		});
+		await petPage.click(".pet-window__badge");
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
+		check("real pet control restores count to stacked without marking cards read", true);
 		await capture("pet-bubbles-stacked-native", bubblesPage);
 		await bubblesPage.evaluate(() => {
 			window.__petPhase2MorphTransitions = [];
@@ -350,7 +529,7 @@ try {
 				}
 			}).observe(stack, { attributes: true, attributeFilter: ["class", "style"] });
 		});
-		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble .pet-bubble__body");
+		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
 		await sleep(700);
 		check("real stacked card expands from its body", await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--expanded"))));
 		const morph = await bubblesPage.evaluate(() => window.__petPhase2MorphTransitions);
@@ -368,21 +547,35 @@ try {
 				return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
 			};
 			const inside = bounds => Boolean(bounds) && bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight;
-			const fab = rect(document.querySelector(".pet-bubbles__fab"));
+			const clear = rect(document.querySelector(".pet-bubbles__clear"));
 			const stack = rect(document.querySelector(".pet-bubbles"));
 			const actions = Array.from(document.querySelectorAll(".pet-bubble button"))
 				.filter(element => element.getClientRects().length > 0)
 				.map(element => ({ className: element.className, ...rect(element) }));
+			const unreadActions = document.querySelector(".pet-bubble--unread .pet-bubble__actions");
 			return {
 				viewport: { width: innerWidth, height: innerHeight },
 				scrollWidth: document.documentElement.scrollWidth,
-				fab,
+				clear,
 				stack,
 				actions,
-				ok: inside(fab) && inside(stack) && actions.every(inside) && document.documentElement.scrollWidth <= innerWidth,
+				fabPresent: Boolean(document.querySelector(".pet-bubbles__fab")),
+				unreadActionsWidth: unreadActions?.getBoundingClientRect().width ?? 0,
+				ok: inside(clear) && inside(stack) && actions.every(inside) && document.documentElement.scrollWidth <= innerWidth,
 			};
 		});
 		check("real expanded bubble controls stay inside the window", expandedGeometry.ok, expandedGeometry);
+		check(
+			"real expanded mode removes the duplicate fab and exposes unread actions",
+			!expandedGeometry.fabPresent && Math.abs(expandedGeometry.unreadActionsWidth - 30) < 0.01,
+			expandedGeometry,
+		);
+		await bubblesPage.hover(".pet-bubble--session");
+		await bubblesPage.waitForFunction(
+			() => getComputedStyle(document.querySelector(".pet-bubble--session .pet-bubble__dismiss")).opacity === "1",
+			{ timeout: 1500 },
+		);
+		check("real dismiss control appears on card hover", true);
 
 		await bubblesPage.click(".pet-bubble--session .pet-bubble__action--open + .pet-bubble__action");
 		await sleep(200);
@@ -393,7 +586,7 @@ try {
 		const opensAfterReply = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.opens`);
 		check("real reply action neither collapses nor opens the card", reply.input && reply.expanded && opensAfterReply.length === 0, { ...reply, opensAfterReply });
 		const materials = await bubblesPage.evaluate(() =>
-			[".pet-bubbles__head", ".pet-bubbles__fab", ".pet-bubble__reply"].map(selector => {
+			[".pet-bubbles__clear", ".pet-bubble__reply"].map(selector => {
 				const element = document.querySelector(selector);
 				const style = element ? getComputedStyle(element) : null;
 				const bounds = element?.getBoundingClientRect();
@@ -406,24 +599,28 @@ try {
 			}),
 		);
 		check(
-			"real expanded header, fab and reply share glass and stay visible",
+			"real expanded clear control and reply share glass and stay visible",
 			materials.every(item => item.backgroundImage.includes("linear-gradient") && item.borderColor !== "rgba(0, 0, 0, 0)" && item.inside),
 			materials,
 		);
 		await bubblesPage.keyboard.press("Escape");
-		await bubblesPage.click(".pet-bubble--session .pet-bubble__action--open");
+		await bubblesPage.click(".pet-bubble--session .pet-bubble__body");
 		await sleep(250);
 		const opened = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.opens`);
-		check("real open action invokes only the explicit session entry", opened.length === 1 && opened[0] === "phase2-session" && await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--expanded"))), opened);
-
-		await bubblesPage.click(".pet-bubble--session .pet-bubble__body");
-		await sleep(500);
-		const collapsed = await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--stacked")));
+		check(
+			"real expanded body opens its session and keeps the list expanded",
+			opened.length === 1 && opened[0] === "phase2-session" && await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--expanded"))),
+			opened,
+		);
+		await petPage.click(".pet-window__badge");
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
 		const opensAfterCollapse = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.opens`);
-		check("real expanded body collapses without opening again", collapsed && opensAfterCollapse.length === 1, { collapsed, opensAfterCollapse });
+		check("real pet control collapses expanded to stacked without opening again", opensAfterCollapse.length === 1, opensAfterCollapse);
 
-		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble .pet-bubble__body");
+		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
 		await sleep(600);
+		await bubblesPage.hover(".pet-bubble--question .pet-bubble__action--primary");
+		await sleep(180);
 		await bubblesPage.click(".pet-bubble--question .pet-bubble__action--primary");
 		await sleep(250);
 		const approval = await bubblesPage.evaluate(() => ({
@@ -433,13 +630,109 @@ try {
 		const commands = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.commands`);
 		check("real approval confirms without activating the card body", !approval.question && approval.expanded && commands.some(command => command.type === "approve" && command.requestId === "phase2-approval" && command.approved === true), { ...approval, commands });
 
+		await bubblesPage.hover(".pet-bubble--session .pet-bubble__dismiss");
+		await sleep(180);
 		await bubblesPage.click(".pet-bubble--session .pet-bubble__dismiss");
 		await sleep(250);
 		const dismissed = await bubblesPage.evaluate(() => document.querySelectorAll(".pet-bubble").length);
 		check("real dismiss closes only its own card", dismissed === 1, dismissed);
+		await bubblesPage.hover(".pet-bubble--session .pet-bubble__dismiss");
+		await sleep(180);
 		await bubblesPage.click(".pet-bubble--session .pet-bubble__dismiss");
 		await bubblesPage.waitForFunction(() => document.querySelectorAll(".pet-bubble").length === 0, { timeout: 3000 });
 		check("real working card dismiss clears the remaining card", true);
+
+		await mainPage.evaluate(`//!world=main
+			window.__petPriorityWorking = { ...window.__petPhase2SecondCard, activityKey: "working-1" };
+			window.__petPriorityDone = { ...window.__petPhase2Card, activityKey: "done-1" };
+			window.electronAPI.petActivity({ sessions: [window.__petPriorityWorking] });
+		`);
+		await bubblesPage.waitForFunction(() => document.querySelector(".pet-bubble--working"), { timeout: 3000 });
+		await mainPage.evaluate(`//!world=main
+			window.electronAPI.petActivity({ sessions: [window.__petPriorityWorking, window.__petPriorityDone] });
+		`);
+		await bubblesPage.waitForFunction(() => document.querySelector(".pet-bubble--done"), { timeout: 3000 });
+		const priorityTitle = () => bubblesPage.evaluate(() => document.querySelector(".pet-bubbles > .pet-bubble .pet-bubble__title")?.textContent ?? "");
+		check("real new completion promotes ahead of a working card", await priorityTitle() === "桌宠原生验证", await priorityTitle());
+		await mainPage.evaluate(`//!world=main
+			window.electronAPI.petActivity({ sessions: [window.__petPriorityDone, window.__petPriorityWorking] });
+		`);
+		await sleep(150);
+		check("real repeated snapshots do not steal notification priority", await priorityTitle() === "桌宠原生验证", await priorityTitle());
+		await mainPage.evaluate(`//!world=main
+			window.__petPriorityWorking = { ...window.__petPriorityWorking, phase: "error", activityKey: "working-2" };
+			window.electronAPI.petActivity({ sessions: [window.__petPriorityDone, window.__petPriorityWorking] });
+		`);
+		await bubblesPage.waitForFunction(() => document.querySelector(".pet-bubble--error"), { timeout: 3000 });
+		check("real new error activity takes priority", await priorityTitle() === "后台会话", await priorityTitle());
+
+		// Native mode clicks are covered above. Drive the control directly here
+		// to isolate notification state from native window movement and hitbox polling.
+		await petPage.evaluate(() => document.querySelector(".pet-window__badge")?.click());
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
+		await petPage.evaluate(() => document.querySelector(".pet-window__badge")?.click());
+		await petPage.waitForFunction(() => Boolean(document.querySelector(".pet-window__badge--hidden")), { timeout: 3000 });
+		check(
+			"real count mode keeps the pet control and hidden cards in sync",
+			await petPage.evaluate(() => document.querySelector(".pet-window__badge")?.textContent === "2") &&
+				(await bubblesPage.evaluate(() => !document.querySelector(".pet-bubbles"))),
+		);
+		await mainPage.evaluate(`//!world=main
+			window.electronAPI.petActivity({ sessions: [window.__petPriorityDone, window.__petPriorityWorking] });
+		`);
+		await sleep(200);
+		check(
+			"real unchanged activity stays in count mode",
+			await bubblesPage.evaluate(() => !document.querySelector(".pet-bubbles")),
+		);
+		await mainPage.evaluate(`//!world=main
+			window.__petPriorityDone = { ...window.__petPriorityDone, activityKey: "done-2" };
+			window.electronAPI.petActivity({
+				sessions: [window.__petPriorityDone, window.__petPriorityWorking],
+				approval: { requestId: "clear-approval", tool: "bash" }
+			});
+		`);
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
+		check(
+			"real new activity and approval restore stacked mode",
+			await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--stacked > .pet-bubble--question"))),
+		);
+
+		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--expanded")), { timeout: 3000 });
+		const commandsBeforeClear = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.commands`);
+		await bubblesPage.click(".pet-bubbles__clear");
+		await bubblesPage.waitForFunction(() => !document.querySelector(".pet-bubbles"), { timeout: 3000 });
+		const commandsAfterClear = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.commands`);
+		check(
+			"real clear-all has no read or approval side effects",
+			JSON.stringify(commandsAfterClear) === JSON.stringify(commandsBeforeClear),
+			{ commandsBeforeClear, commandsAfterClear },
+		);
+		await mainPage.evaluate(`//!world=main
+			window.electronAPI.petActivity({
+				sessions: [window.__petPriorityDone, window.__petPriorityWorking],
+				approval: { requestId: "clear-approval", tool: "bash" }
+			});
+		`);
+		await sleep(200);
+		check(
+			"real cleared activity and request stay dismissed on repeated polls",
+			await bubblesPage.evaluate(() => !document.querySelector(".pet-bubbles")),
+		);
+		await mainPage.evaluate(`//!world=main
+			window.__petPriorityDone = { ...window.__petPriorityDone, activityKey: "done-3" };
+			window.electronAPI.petActivity({
+				sessions: [window.__petPriorityDone, window.__petPriorityWorking],
+				approval: { requestId: "clear-approval-2", tool: "bash" }
+			});
+		`);
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
+		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
+		await bubblesPage.waitForFunction(() => document.querySelectorAll(".pet-bubbles--expanded .pet-bubble").length === 2, { timeout: 3000 });
+		check("real new activity revision and request id can notify again", true);
+		await bubblesPage.click(".pet-bubbles__clear");
+		await bubblesPage.waitForFunction(() => !document.querySelector(".pet-bubbles"), { timeout: 3000 });
 
 		await bubblesPage.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 		await mainPage.evaluate(`//!world=main
@@ -448,10 +741,24 @@ try {
 				bubble: { kind: "subtask", text: "减少动态效果完整消息" }
 			});
 		`);
-		await bubblesPage.waitForFunction(
-			() => document.querySelector(".pet-bubble--subtask .pet-bubble__text")?.textContent === "减少动态效果完整消息",
-			{ timeout: 3000 },
-		);
+		// Informational subtasks do not displace a higher-priority session card.
+		// Expand the stack before checking this bubble's reduced-motion rendering.
+		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--expanded")), { timeout: 3000 });
+		try {
+			await bubblesPage.waitForFunction(
+				() => document.querySelector(".pet-bubble--subtask .pet-bubble__text")?.textContent === "减少动态效果完整消息",
+				{ timeout: 3000 },
+			);
+		} catch (error) {
+			const state = await bubblesPage.evaluate(() => ({
+				bodyText: document.body.innerText,
+				root: document.querySelector("#root")?.innerHTML ?? "",
+				reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+			}));
+			await capture("pet-reduced-motion-failure", bubblesPage);
+			throw new Error(`${String(error)}; reduced-motion state=${JSON.stringify(state)}; bubbleRendererErrors=${JSON.stringify(bubbleRendererErrors)}`);
+		}
 		const reducedText = await bubblesPage.evaluate(() => ({
 			matches: matchMedia("(prefers-reduced-motion: reduce)").matches,
 			text: document.querySelector(".pet-bubble--subtask .pet-bubble__text")?.textContent ?? "",
@@ -463,10 +770,10 @@ try {
 			reducedText,
 		);
 		if (await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--expanded")))) {
-			await bubblesPage.click(".pet-bubbles__fab");
+			await petPage.click(".pet-window__badge");
 			await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
 		}
-		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble .pet-bubble__body");
+		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
 		await sleep(120);
 		const reducedMorph = await bubblesPage.evaluate(() => ({
 			expanded: Boolean(document.querySelector(".pet-bubbles--expanded")),
@@ -475,6 +782,8 @@ try {
 		}));
 		check("real reduced motion expands without a residual size morph", reducedMorph.expanded && !reducedMorph.morphing && !reducedMorph.transition, reducedMorph);
 
+		await mainPage.goto(pathToFileURL(path.join(desktopDir, "dist", "index.html")).href);
+		await mainPage.waitForFunction(() => Boolean(document.querySelector(".gui-onboarding-backdrop")), { timeout: 30000 });
 		await mainPage.bringToFront();
 		await mainPage.evaluate(`//!world=main
 			const lastStep = document.querySelectorAll(".gui-onboarding-dot").length - 1;

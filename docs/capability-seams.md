@@ -13,6 +13,9 @@
 | channels（IM 通道） | `packages/coding-agent/src/channels/types.ts`（`ChannelAdapter`） | 同文件头部 |
 | 扩展 API（register* 面） | `packages/coding-agent/src/extensibility/extensions/types.ts`（`ExtensionAPI`） | 同文件头部 + `docs/extensions-dev.md` |
 | GUI 渲染侧（widget/插槽/节点 kind） | `packages/client-core/src/widgets/registry.ts`、`packages/collab-proto/src/extension-slots.ts` | 各文件头部 |
+| Android 模拟器插件 | `packages/coding-agent/src/bundled-plugins/android-emulator/index.ts`（扩展隔离的 RPC / `android_emulator`） | 同文件头部 |
+| Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
+| Cordis 能力中心 | `packages/desktop-app/src/plugins/capability-center/index.ts`（`app.capability`） | 同文件头部 |
 | Cordis 文件工作区 | `packages/desktop-app/src/plugins/file-workspace/index.ts`（`panel.tab.files`） | 同文件头部 |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。

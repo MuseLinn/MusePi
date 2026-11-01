@@ -1,3 +1,5 @@
+import type { SessionEntry } from "@musepi/pi-wire";
+
 /**
  * Panel-level heterogeneous tab model (openchamber ContextPanel parity).
  *
@@ -42,6 +44,22 @@ export interface PanelTabDescriptor {
 	readOnly?: boolean;
 	/** Replaceable file preview. Any non-preview reopen pins an existing tab. */
 	preview?: boolean;
+}
+
+export function toolPanelTabDescriptor(entry: SessionEntry): PanelTabDescriptor | null {
+	if (entry.type !== "message" || entry.message.role !== "toolResult" || entry.message.isError) return null;
+	const details = entry.message.details;
+	if (!details || typeof details !== "object") return null;
+	const request = (details as { panelTab?: unknown }).panelTab;
+	if (!request || typeof request !== "object") return null;
+	const value = request as Record<string, unknown>;
+	if (typeof value.surface !== "string" || !value.surface.startsWith("ext:panel.tab.")) return null;
+	if (value.surface.length > 200) return null;
+	const target = typeof value.target === "string" && value.target.length <= 4096 ? value.target : undefined;
+	const label = typeof value.label === "string" && value.label.length <= 200 ? value.label : undefined;
+	const dedupeKey =
+		typeof value.dedupeKey === "string" && value.dedupeKey.length <= 4096 ? value.dedupeKey : undefined;
+	return { surface: value.surface, target, label, dedupeKey };
 }
 
 export interface PanelTab {

@@ -503,13 +503,16 @@
 	flex-direction: column;
 	gap: 2px;
 	max-width: 260px;
-	padding: 7px 9px;
+	padding: 6px 9px;
 	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-lg);
 	background: var(--glass-sheen), var(--glass-bg-strong);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: var(--glass-shadow);
+	color: var(--color-text);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
 	opacity: 0;
 	transition: opacity 120ms var(--spring-liquid);
 	pointer-events: auto;
@@ -1359,7 +1362,7 @@ body.gui-resizing .gui-pane-resize-x::after {
 .gui-global-pause {
 	position: fixed;
 	inset: 0;
-	z-index: 9999;
+	z-index: var(--z-system);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1780,16 +1783,24 @@ body.gui-resizing .gui-pane-resize-x::after {
 	position: absolute;
 	inset-inline-end: 5px;
 	top: 50%;
-	display: none;
+	display: inline-flex;
 	align-items: center;
 	gap: 1px;
+	opacity: 0;
+	pointer-events: none;
 	transform: translateY(-50%);
+	transition: opacity 120ms ease-out;
 }
 
 .gui-session-tab:hover .gui-session-tab-controls,
-.gui-session-tab-controls[data-open="true"],
-.gui-session-tab-controls:has(:focus-visible) {
-	display: inline-flex;
+.gui-session-tab:focus-within .gui-session-tab-controls,
+.gui-session-tab-controls[data-open="true"] {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.gui-session-tab:focus-within .gui-session-tab-main {
+	padding-right: 42px;
 }
 
 .gui-session-tab:hover .gui-session-tab-working,
@@ -5713,7 +5724,7 @@ body.gui-resizing .gui-pane-right {
 	/* Popup tier: portal-rendered above every card (user report: the logout
 	 * menu was covered by neighbouring provider cards). In portal mode the
 	 * inline style overrides position/insets; this keeps the stacking tier. */
-	z-index: 1000;
+	z-index: var(--z-dropdown);
 	min-width: 250px;
 	max-width: 320px;
 	padding: 4px;

@@ -9,23 +9,27 @@ import {
 	MessageSquare,
 	Package,
 	PanelRight,
+	SquarePen,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { createPortal } from "react-dom";
 import { type TranslationKey, t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
+import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { fmtPercent, shortenPath } from "../../lib/format";
+import { useShellLayout } from "../../lib/responsive-shell";
 import { sessionTitleMorphId, useMorphTarget } from "../../lib/scene-morph";
 import { useGuestSelector } from "../../lib/use-guest";
 import { AccentToggle } from "./AccentToggle";
+import { HostManager } from "./HostManager";
 import { LanguageToggle } from "./LanguageToggle";
-import { ServerSwitcher } from "./ServerSwitcher";
 import { SessionsSheet } from "./SessionsSheet";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Guest side panels reachable from the header nav. */
-export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench" | "voice";
+export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench" | "voice" | "settings";
 
 export interface HeaderBarProps {
 	client: SessionClient;
@@ -47,6 +51,8 @@ export interface HeaderBarProps {
 	focusedSessionId: string | null;
 	/** Focus a session from the switcher sheet. */
 	onSelectSession(id: string): void;
+	/** Return to an empty draft without creating a session until the first send. */
+	onNewSession(): void;
 }
 
 const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [
@@ -71,15 +77,25 @@ export function HeaderBar({
 	sessions,
 	focusedSessionId,
 	onSelectSession,
+	onNewSession,
 }: HeaderBarProps): ReactNode {
 	// Field-level subscriptions: the header only re-renders when its own
 	// fields change, never on every transcript/notice frame.
+	const mobile = isMobileShell();
+	const layout = useShellLayout();
+	const narrow = layout !== "wide";
 	const header = useGuestSelector(client, s => s.header);
 	const state = useGuestSelector(client, s => s.state);
 	const phase = useGuestSelector(client, s => s.phase);
 	const readOnly = useGuestSelector(client, s => s.readOnly);
 	const subCount = useGuestSelector(client, s => s.agents.filter(a => a.kind === "sub").length);
-	const title = header?.title ?? state?.sessionName ?? t("settings.session2");
+	const draftSession = mobile && sessions !== null && focusedSessionId === null;
+	const title =
+		activePanel === "settings"
+			? t("settings.settings")
+			: draftSession
+				? t("settings.newSession")
+				: (header?.title ?? state?.sessionName ?? t("settings.session2"));
 	// Mobile 列表↔会话 morph target (M1.10 §3.3 批次 B): the title flies in
 	// from the tapped workspace card's title (shared session-title id). The
 	// id is absent on the directory view, where no counterpart exists. The
@@ -98,17 +114,11 @@ export function HeaderBar({
 				: null);
 	}
 
-	// The session switcher sheet is only reachable on multi-session hosts.
-	const canSwitch = sessions != null && sessions.length > 0;
+	// Compact browser windows get the same reachable session/settings sheet as
+	// native shells, including when the workspace has no sessions yet.
+	const canSwitch = activePanel !== "settings" && sessions != null && (mobile || narrow || sessions.length > 0);
 	const [sheetOpen, setSheetOpen] = useState(false);
-
-	// Narrow phones: 4 panel buttons + theme + server + rail + leave overflow
-	// a 390px header. Collapse the panel buttons into one "general.panels" menu
-	// (design doc §4.3: panels are core entries, kept — but folded).
-	const [narrow, setNarrow] = useState(() => {
-		if (typeof window === "undefined" || !window.matchMedia) return false;
-		return window.matchMedia("(max-width: 520px)").matches;
-	});
+	const [hostManagerOpen, setHostManagerOpen] = useState(false);
 	const [panelMenuOpen, setPanelMenuOpen] = useState(false);
 	// Android back key closes the collapsed panels menu before the layers
 	// beneath (rail/panel/workspace) — priority 84, under the server
@@ -121,14 +131,6 @@ export function HeaderBar({
 			return true;
 		}, []),
 	);
-	useEffect(() => {
-		if (typeof window === "undefined" || !window.matchMedia) return;
-		const mq = window.matchMedia("(max-width: 520px)");
-		const onChange = (e: MediaQueryListEvent) => setNarrow(e.matches);
-		setNarrow(mq.matches);
-		mq.addEventListener("change", onChange);
-		return () => mq.removeEventListener("change", onChange);
-	}, []);
 
 	const togglePanel = (panel: GuestPanel): void => {
 		onSelectPanel(activePanel === panel ? null : panel);
@@ -228,30 +230,36 @@ export function HeaderBar({
 						>
 							<LayoutDashboard size={14} />
 						</button>
-						{panelMenuOpen && (
-							<>
-								<div className="sh-switcher-overlay" onClick={() => setPanelMenuOpen(false)} />
-								<div className="sh-switcher-pop sh-panel-menu-pop" role="menu" aria-label={t("general.panels")}>
-									<div className="sh-switcher-title">{t("general.panels")}</div>
-									{PANEL_BUTTONS.map(({ panel, icon, title }) => (
-										<button
-											key={panel}
-											type="button"
-											role="menuitem"
-											className={
-												activePanel === panel
-													? "sh-switcher-item sh-panel-menu-item sh-switcher-item--cur"
-													: "sh-switcher-item sh-panel-menu-item"
-											}
-											onClick={() => togglePanel(panel)}
-										>
-											{icon}
-											<span>{t(title)}</span>
-										</button>
-									))}
-								</div>
-							</>
-						)}
+						{panelMenuOpen &&
+							createPortal(
+								<>
+									<div className="sh-switcher-overlay" onClick={() => setPanelMenuOpen(false)} />
+									<div
+										className="sh-switcher-pop sh-panel-menu-pop"
+										role="menu"
+										aria-label={t("general.panels")}
+									>
+										<div className="sh-switcher-title">{t("general.panels")}</div>
+										{PANEL_BUTTONS.map(({ panel, icon, title }) => (
+											<button
+												key={panel}
+												type="button"
+												role="menuitem"
+												className={
+													activePanel === panel
+														? "sh-switcher-item sh-panel-menu-item sh-switcher-item--cur"
+														: "sh-switcher-item sh-panel-menu-item"
+												}
+												onClick={() => togglePanel(panel)}
+											>
+												{icon}
+												<span>{t(title)}</span>
+											</button>
+										))}
+									</div>
+								</>,
+								document.body,
+							)}
 					</span>
 				) : (
 					<span className="sh-header-nav">
@@ -268,10 +276,28 @@ export function HeaderBar({
 						))}
 					</span>
 				)}
-				<ThemeToggle />
-				<AccentToggle />
-				<LanguageToggle />
-				<ServerSwitcher currentLink={currentLink} onSwitchTo={onSwitchTo} />
+				{(mobile || narrow) &&
+					sessions !== null &&
+					activePanel === null &&
+					(mobile || focusedSessionId !== null) && (
+						<button
+							type="button"
+							className="sh-btn sh-btn-icon"
+							onClick={onNewSession}
+							title={t("settings.newSession")}
+							aria-label={t("settings.newSession")}
+						>
+							<SquarePen size={16} />
+						</button>
+					)}
+				{!mobile && !narrow && (
+					<>
+						<ThemeToggle />
+						<AccentToggle />
+						<LanguageToggle />
+						<HostManager currentLink={currentLink} phase={phase} onSwitchTo={onSwitchTo} onLeave={onLeave} />
+					</>
+				)}
 				<button
 					type="button"
 					className={railOpen ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
@@ -281,9 +307,11 @@ export function HeaderBar({
 					<PanelRight size={14} />
 					{subCount > 0 && <span className="sh-badge">{subCount}</span>}
 				</button>
-				<button type="button" className="sh-btn sh-btn-icon" onClick={onLeave} title={t("shell.leaveSession")}>
-					<LogOut size={14} />
-				</button>
+				{!mobile && !narrow && (
+					<button type="button" className="sh-btn sh-btn-icon" onClick={onLeave} title={t("shell.leaveSession")}>
+						<LogOut size={14} />
+					</button>
+				)}
 			</div>
 			{sessions != null && (
 				<SessionsSheet
@@ -293,6 +321,29 @@ export function HeaderBar({
 					onSelect={onSelectSession}
 					open={sheetOpen}
 					onClose={() => setSheetOpen(false)}
+					onNewSession={() => {
+						setSheetOpen(false);
+						onNewSession();
+					}}
+					onOpenSettings={() => {
+						setSheetOpen(false);
+						onSelectPanel("settings");
+					}}
+					onOpenHosts={() => {
+						setSheetOpen(false);
+						setHostManagerOpen(true);
+					}}
+				/>
+			)}
+			{(mobile || narrow) && (
+				<HostManager
+					currentLink={currentLink}
+					phase={phase}
+					onSwitchTo={onSwitchTo}
+					onLeave={onLeave}
+					open={hostManagerOpen}
+					onOpenChange={setHostManagerOpen}
+					hideTrigger
 				/>
 			)}
 		</header>

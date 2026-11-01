@@ -139,6 +139,8 @@ export function ToolView(props: ToolViewProps): ReactNode {
 
 	const isError = props.result?.isError === true;
 	const status = props.running ? "run" : isError ? "err" : props.result ? "ok" : "pending";
+	const displayName = xdev ? `xd://${name}` : (renderer.label ?? name);
+	const ToolIcon = renderer.Icon;
 	const partial = props.running && !props.result && props.partial ? stripAnsi(replaceTabs(props.partial)) : "";
 	// Progressive per-line reveal (aicss streaming-text): each line fades in
 	// with a stagger, plus a steady caret while the tool keeps streaming.
@@ -180,7 +182,12 @@ export function ToolView(props: ToolViewProps): ReactNode {
 				) : (
 					<span className={`tv-status tv-status--${status}`} aria-hidden="true" />
 				)}
-				<span className="tv-name">{xdev ? `xd://${name}` : name}</span>
+				{ToolIcon ? (
+					<span className="tv-tool-icon" aria-hidden="true">
+						<ToolIcon />
+					</span>
+				) : null}
+				<span className="tv-name">{displayName}</span>
 				<span className="tv-sum">
 					<renderer.Summary {...renderProps} />
 				</span>

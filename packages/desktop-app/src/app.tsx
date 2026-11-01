@@ -14,9 +14,7 @@ import { ActionToastStack } from "./components/ActionToast";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
-import { CapabilityCenterPage } from "./components/CapabilityCenterPage";
 import { ChatView } from "./components/ChatView";
-import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import type { CreationMessage } from "./components/CreationModeRow";
@@ -31,6 +29,7 @@ import { ManagedBrowserHost } from "./components/ManagedBrowserHost";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
 import type { ReminderRow } from "./components/RemindersPanel";
+import { RemoteAccessDialog } from "./components/RemoteAccessDialog";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import type { SessionListNode } from "./components/SessionList";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -42,7 +41,7 @@ import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
-import { type ActionToastKind, pushActionToast } from "./lib/action-toast";
+import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import {
 	daemonMethodProbeParams,
@@ -91,12 +90,24 @@ import {
 import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
+import {
+	CAPABILITY_CENTER_SLOT,
+	hostReactBindings,
+	hostReactDOMBindings,
+	hostReactDOMClientBindings,
+	SlotComponentHost,
+	useSlotComponents,
+} from "./lib/slot-host";
 import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
+
+(window as unknown as { MusePiReact: unknown }).MusePiReact = hostReactBindings;
+(window as unknown as { MusePiReactDOM: unknown }).MusePiReactDOM = hostReactDOMBindings;
+(window as unknown as { MusePiReactDOMClient: unknown }).MusePiReactDOMClient = hostReactDOMClientBindings;
 
 const STARTUP_SHELL =
 	typeof window === "undefined"
@@ -204,6 +215,10 @@ interface SessionMetaRow {
 	modeId?: string;
 	/** 子代理数（session.list agentCount,不含 advisor）。 */
 	agentCount?: number;
+	/** Auxiliary sessions stay in session.list for navigation and inspection,
+	 *  but do not appear in ambient pet, welcome or tray projections. */
+	subagent?: boolean;
+	advisor?: boolean;
 }
 
 /** Poll-row equality at field granularity: every field the poll lane writes
@@ -221,7 +236,9 @@ function pollRowEquals(old: SessionMetaRow, r: SessionMetaRow & { id: string }):
 		old.updatedAt === (r.updatedAt ?? old.updatedAt) &&
 		old.cwd === (r.cwd ?? old.cwd) &&
 		old.modeId === (r.modeId ?? old.modeId) &&
-		old.agentCount === (r.agentCount ?? 0)
+		old.agentCount === (r.agentCount ?? 0) &&
+		old.subagent === (r.subagent === true) &&
+		old.advisor === (r.advisor === true)
 	);
 }
 
@@ -470,16 +487,20 @@ function AppInner(): ReactNode {
 	// Shared in-app toast: any pane (welcome branch checkout, browser
 	// annotation, image copy, …) dispatches `musepi-gui-toast` — route it into
 	// the unified bottom-right toast stack instead of the top error banner:
-	// these are transient action feedbacks, not daemon failures. Detail is the
-	// message string, or `{ message, kind }` to carry a visual kind.
+	// these are transient action feedbacks, not daemon failures. Detail accepts
+	// the shared toast input so callers can add a title, details, and source key.
 	useEffect(() => {
 		const onToast = (e: Event): void => {
-			const detail = (e as CustomEvent<string | { message?: string; kind?: ActionToastKind }>).detail;
+			const detail = (e as CustomEvent<string | (Omit<ActionToastInput, "message"> & { message?: string })>).detail;
 			const message = typeof detail === "string" ? detail : detail?.message;
 			if (!message) return;
 			// 历史语义：未带 kind 的事件原本一律进错误横幅，默认 error 保持
 			// 该信号；成功的反馈（标注已附加、已移入 worktree）显式传 kind 覆盖。
-			pushActionToast({ kind: typeof detail === "object" ? (detail.kind ?? "error") : "error", message });
+			pushActionToast(
+				typeof detail === "object"
+					? { ...detail, kind: detail.kind ?? "error", message }
+					: { kind: "error", message },
+			);
 		};
 		window.addEventListener("musepi-gui-toast", onToast);
 		return () => window.removeEventListener("musepi-gui-toast", onToast);
@@ -609,7 +630,26 @@ function AppInner(): ReactNode {
 	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
+	const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
 	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
+	const toggleSidebar = useCallback((): void => {
+		if (window.matchMedia("(max-width: 720px)").matches) {
+			setNarrowSidebarOpen(open => !open);
+			return;
+		}
+		setSideCollapsed(collapsed => {
+			localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
+			return !collapsed;
+		});
+	}, []);
+	useEffect(() => {
+		const query = window.matchMedia("(max-width: 720px)");
+		const onChange = (): void => {
+			if (!query.matches) setNarrowSidebarOpen(false);
+		};
+		query.addEventListener("change", onChange);
+		return () => query.removeEventListener("change", onChange);
+	}, []);
 	// Side-rail width drag. (The right panel has its own drag on the normalized
 	// pointer-drag primitive — see ContextPanel.)
 	const startResize = (startX: number, startW: number, min: number, max: number): void => {
@@ -696,6 +736,8 @@ function AppInner(): ReactNode {
 	const [boardOpen, setBoardOpen] = useState(false);
 	const [scheduledOpen, setScheduledOpen] = useState(false);
 	const [capabilityOpen, setCapabilityOpen] = useState(false);
+	const capabilityComponents = useSlotComponents(rpc, CAPABILITY_CENTER_SLOT);
+	const capabilityAvailable = capabilityComponents.length > 0;
 	const [prBoardOpen, setPrBoardOpen] = useState(false);
 	// Cron-run notifications: poll cron.list while the app is up; a run that
 	// finishes fires the standard completion/error notification + pet bubble,
@@ -823,7 +865,7 @@ function AppInner(): ReactNode {
 	// 这里，页面内部不再各自 useState(initialTab)——否则人在能力中心时经
 	// 侧边栏悬停菜单点另一个 tab 只更新了 state、组件不重挂载，永远不跳）。
 	// musepi-open-capability 事件的可选 detail.tab 载荷与侧边栏悬停菜单都写这里。
-	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "composition" | "marketplace">("skills");
+	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "prboard" | "chat"): void => {});
 	useEffect(() => {
@@ -846,6 +888,7 @@ function AppInner(): ReactNode {
 		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab）；无载荷的旧
 		// 调用方保持默认 skills tab。
 		const onOpenCapability = (e: Event): void => {
+			if (!capabilityAvailable) return;
 			const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
 			setCapabilityTab(tab === "marketplace" || tab === "plugins" ? tab : "skills");
 			viewSwapRef.current("capability");
@@ -856,7 +899,7 @@ function AppInner(): ReactNode {
 			window.removeEventListener("musepi-open-scheduled-task", onOpenScheduledTask);
 			window.removeEventListener("musepi-open-capability", onOpenCapability);
 		};
-	}, []);
+	}, [capabilityAvailable]);
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
 	// composer 自定义补充 preselect).
 	const [settingsSection, setSettingsSection] = useState<"skills" | "suggestions" | "providers" | undefined>(
@@ -950,6 +993,9 @@ function AppInner(): ReactNode {
 			setPrBoardOpen(to === "prboard");
 		}, 150);
 	};
+	useEffect(() => {
+		if (capabilityOpen && !capabilityAvailable) viewSwapRef.current("chat");
+	}, [capabilityOpen, capabilityAvailable]);
 	// Settings shell visible across the whole close transition (blur-out
 	// 150ms before unmount). While active it REPLACES the main layout by
 	// slot: the nav column fills the sidebar slot (.gui-settings-nav-slot)
@@ -1114,7 +1160,7 @@ function AppInner(): ReactNode {
 	 *  retroactively unread — only activity AFTER this feature exists marks
 	 *  unread. The selected session is kept read while the user watches it. */
 	const applyReadStatus = useCallback(
-		(rows: ReadonlyArray<{ id: string; messageCount?: number }>): void => {
+		(rows: ReadonlyArray<{ id: string; messageCount?: number; subagent?: boolean; advisor?: boolean }>): void => {
 			if (!readSeededRef.current) {
 				readCountRef.current = new Map(rows.map(r => [r.id, r.messageCount ?? 0]));
 				readSeededRef.current = true;
@@ -1135,7 +1181,7 @@ function AppInner(): ReactNode {
 				const prev = readCountRef.current.get(r.id) ?? 0;
 				if (count <= prev) continue;
 				readCountRef.current.set(r.id, count);
-				if (r.id !== selected) grew.push(r.id);
+				if (r.id !== selected && r.subagent !== true && r.advisor !== true) grew.push(r.id);
 			}
 			// Prune read-cursors of deleted sessions.
 			for (const id of [...readCountRef.current.keys()]) {
@@ -1232,6 +1278,8 @@ function AppInner(): ReactNode {
 									status: r.status,
 									modeId: r.modeId,
 									agentCount: r.agentCount ?? 0,
+									subagent: r.subagent === true,
+									advisor: r.advisor === true,
 								},
 							]),
 						),
@@ -1281,6 +1329,8 @@ function AppInner(): ReactNode {
 								cwd: r.cwd ?? old?.cwd,
 								modeId: r.modeId ?? old?.modeId,
 								agentCount: r.agentCount ?? 0,
+								subagent: r.subagent === true,
+								advisor: r.advisor === true,
 							});
 						}
 						return next ?? prev;
@@ -2076,6 +2126,7 @@ function AppInner(): ReactNode {
 	// call site would re-render every row on each app render.
 	const selectSession = useCallback(
 		(sessionId: string): void => {
+			setNarrowSidebarOpen(false);
 			void openSession(sessionId);
 		},
 		[openSession],
@@ -2868,11 +2919,14 @@ function AppInner(): ReactNode {
 			const unread = unreadSessionsRef.current;
 			const selected = selectedIdRef.current;
 			for (const [id, meta] of sessionMetaRef.current) {
+				if (meta.subagent || meta.advisor) continue;
 				const title = meta.title ?? findLabel(treeRef.current, id) ?? t("settings.petSessionUntitled");
 				if (meta.working) {
 					const live = id === selected;
+					const activityKey = `${meta.updatedAt ?? ""}:${meta.messageCount ?? 0}`;
 					cards.push({
 						sessionId: id,
+						activityKey,
 						title,
 						phase: "working",
 						statusText:
@@ -2884,6 +2938,7 @@ function AppInner(): ReactNode {
 				} else if (unread.has(id)) {
 					cards.push({
 						sessionId: id,
+						activityKey: `${meta.updatedAt ?? ""}:${meta.messageCount ?? 0}`,
 						title,
 						phase: meta.status === "error" ? "error" : "done",
 						statusText: meta.status === "error" ? t("settings.petSessionError") : t("settings.petSessionDone"),
@@ -3101,11 +3156,14 @@ function AppInner(): ReactNode {
 			const walk = (nodes: SessionListNode[]): { id: string; label: string; timestamp: number }[] => {
 				const rows: { id: string; label: string; timestamp: number }[] = [];
 				for (const n of nodes) {
-					rows.push({
-						id: n.entry.id,
-						label: n.entry.label ?? n.label ?? "",
-						timestamp: new Date(n.entry.timestamp).getTime(),
-					});
+					const meta = sessionMetaRef.current.get(n.entry.id);
+					if (!meta?.subagent && !meta?.advisor) {
+						rows.push({
+							id: n.entry.id,
+							label: n.entry.label ?? n.label ?? "",
+							timestamp: new Date(n.entry.timestamp).getTime(),
+						});
+					}
 					rows.push(...walk(n.children));
 				}
 				return rows;
@@ -3367,10 +3425,7 @@ function AppInner(): ReactNode {
 				pickProjectFolder();
 			} else if (mod && eventMatches(e, "toggle-sidebar")) {
 				e.preventDefault();
-				setSideCollapsed(v => {
-					localStorage.setItem("musepi-gui-side", v ? "1" : "0");
-					return !v;
-				});
+				toggleSidebar();
 			} else if (mod && eventMatches(e, "toggle-terminal")) {
 				e.preventDefault();
 				toggleTerminalDock();
@@ -3508,11 +3563,14 @@ function AppInner(): ReactNode {
 		const rows: { id: string; label: string; timestamp: number }[] = [];
 		const walk = (nodes: SessionListNode[]): void => {
 			for (const n of nodes) {
-				rows.push({
-					id: n.entry.id,
-					label: n.entry.label ?? n.label ?? "",
-					timestamp: new Date(n.entry.timestamp).getTime(),
-				});
+				const meta = sessionMeta.get(n.entry.id);
+				if (!meta?.subagent && !meta?.advisor) {
+					rows.push({
+						id: n.entry.id,
+						label: n.entry.label ?? n.label ?? "",
+						timestamp: new Date(n.entry.timestamp).getTime(),
+					});
+				}
 				walk(n.children);
 			}
 		};
@@ -3531,6 +3589,7 @@ function AppInner(): ReactNode {
 	const reminders = ((): ReminderRow[] => {
 		const rows: ReminderRow[] = [];
 		for (const [id, meta] of sessionMeta) {
+			if (meta.subagent || meta.advisor) continue;
 			if (id === selectedId) continue;
 			const working = meta.working === true && meta.paused !== true;
 			const unread = unreadSessions.has(id);
@@ -3793,10 +3852,27 @@ function AppInner(): ReactNode {
 							}}
 						/>
 					)}
+					{narrowSidebarOpen && (
+						<button
+							type="button"
+							className="gui-sidebar-drawer-backdrop"
+							aria-label={t("transcript.closeSidebar")}
+							tabIndex={-1}
+							onClick={() => setNarrowSidebarOpen(false)}
+						/>
+					)}
 					{/* Sidebar keeper: display:none (not unmount) while the settings
 					 * shell occupies the sidebar slot — expanded groups / tab state
-					 * survive the settings round-trip. */}
-					<div className={shell.sideKeeperHidden ? "gui-side-keeper gui-side-keeper--hidden" : "gui-side-keeper"}>
+					 * survive the settings round-trip. Narrow windows use the same
+					 * mounted sidebar as a drawer instead of deleting its content. */}
+					<div
+						className={`${shell.sideKeeperHidden ? "gui-side-keeper gui-side-keeper--hidden" : "gui-side-keeper"}${narrowSidebarOpen ? " gui-side-keeper--drawer-open" : ""}`}
+						onClickCapture={event => {
+							if (narrowSidebarOpen && event.target instanceof Element && event.target.closest("button")) {
+								setNarrowSidebarOpen(false);
+							}
+						}}
+					>
 						<SessionSidebar
 							nodes={tree}
 							sessionMeta={sessionMeta}
@@ -3815,15 +3891,23 @@ function AppInner(): ReactNode {
 							cronGlow={cronGlow}
 							// 侧边栏能力中心按钮：直接点击落到「技能」tab
 							// （发现分段）；悬停菜单才直达各 tab。
-							onOpenCapability={() => {
-								setCapabilityTab("skills");
-								viewSwapRef.current("capability");
-							}}
+							onOpenCapability={
+								capabilityAvailable
+									? () => {
+											setCapabilityTab("skills");
+											viewSwapRef.current("capability");
+										}
+									: undefined
+							}
 							capabilityActive={capabilityOpen}
-							onOpenCapabilityTab={tab => {
-								setCapabilityTab(tab);
-								viewSwapRef.current("capability");
-							}}
+							onOpenCapabilityTab={
+								capabilityAvailable
+									? tab => {
+											setCapabilityTab(tab);
+											viewSwapRef.current("capability");
+										}
+									: undefined
+							}
 							onOpenSettings={openSettings}
 							onOpenCollab={() => setCollabOpen(true)}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
@@ -3838,7 +3922,7 @@ function AppInner(): ReactNode {
 							onCreateProject={() => setNewProjectOpen(true)}
 							onImportSessions={() => setImportOpen(true)}
 							modeCatalog={welcomeModes}
-							collapsed={sideCollapsed}
+							collapsed={narrowSidebarOpen ? false : sideCollapsed}
 							width={sideWidth}
 							onDeleteArchived={deleteSession}
 							onDeleteSession={deleteSession}
@@ -3880,13 +3964,8 @@ function AppInner(): ReactNode {
 							<GuiHeader
 								store={store}
 								rpc={rpc}
-								sideCollapsed={sideCollapsed}
-								onToggleSidebar={() => {
-									setSideCollapsed(v => {
-										localStorage.setItem("musepi-gui-side", v ? "1" : "0");
-										return !v;
-									});
-								}}
+								sideCollapsed={narrowSidebarOpen ? false : sideCollapsed}
+								onToggleSidebar={toggleSidebar}
 								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
 								onTogglePause={() => void togglePause()}
@@ -4112,22 +4191,28 @@ function AppInner(): ReactNode {
 											) : leavingView === "capability" ? (
 												/* Leaving capability center → chat: blur out first. */
 												<ChatSurfaceShell leave>
-													<CapabilityCenterPage
+													<SlotComponentHost
 														rpc={rpc}
-														onBack={() => viewSwapRef.current("chat")}
-														tab={capabilityTab}
-														onTabChange={setCapabilityTab}
+														slot={CAPABILITY_CENTER_SLOT}
+														page={{
+															tab: capabilityTab,
+															onTabChange: setCapabilityTab,
+															onBack: () => viewSwapRef.current("chat"),
+														}}
 													/>
 												</ChatSurfaceShell>
 											) : capabilityOpen ? (
 												/* Capability center (设计稿 05: sidebar first-class entry —
 												 * skills / plugins / marketplace over one card language). */
 												<ChatSurfaceShell>
-													<CapabilityCenterPage
+													<SlotComponentHost
 														rpc={rpc}
-														onBack={() => viewSwapRef.current("chat")}
-														tab={capabilityTab}
-														onTabChange={setCapabilityTab}
+														slot={CAPABILITY_CENTER_SLOT}
+														page={{
+															tab: capabilityTab,
+															onTabChange: setCapabilityTab,
+															onBack: () => viewSwapRef.current("chat"),
+														}}
 													/>
 												</ChatSurfaceShell>
 											) : leavingView === "prboard" ? (
@@ -4181,7 +4266,7 @@ function AppInner(): ReactNode {
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
 			<CreationSavedToast saved={creationSaved} rpc={rpc} onDone={() => setCreationSaved(null)} />
-			<CollabDialog
+			<RemoteAccessDialog
 				rpc={rpc}
 				sessionId={store?.sessionId ?? null}
 				sessionTitle={activeSessionLabel}
@@ -4278,12 +4363,7 @@ function AppInner(): ReactNode {
 					pickProjectFolder();
 				}}
 				onSettings={openSettings}
-				onToggleSidebar={() => {
-					setSideCollapsed(v => {
-						localStorage.setItem("musepi-gui-side", v ? "1" : "0");
-						return !v;
-					});
-				}}
+				onToggleSidebar={toggleSidebar}
 				onToggleTerminal={toggleTerminalDock}
 				onTogglePreview={() => {
 					setRightCollapsed(v => {
@@ -4291,8 +4371,8 @@ function AppInner(): ReactNode {
 						return !v;
 					});
 				}}
-				onSelectSession={id => void openSession(id)}
-				onOpenCapability={() => viewSwapRef.current("capability")}
+				onSelectSession={selectSession}
+				onOpenCapability={capabilityAvailable ? () => viewSwapRef.current("capability") : undefined}
 			/>
 			{/* Process-global freeze overlay: covers the entire window
 			 * (settings dialogs included) with a frosted-glass scrim. */}

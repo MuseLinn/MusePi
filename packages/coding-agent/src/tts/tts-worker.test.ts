@@ -1,6 +1,20 @@
 import { describe, expect, it } from "bun:test";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { getTtsLocalModelSpec, sherpaTtsRequiredFiles } from "./models";
 import type { TtsTransport, TtsWorkerInbound, TtsWorkerOutbound } from "./tts-protocol";
-import { startTtsWorker } from "./tts-worker";
+import { ensureSherpaTtsFiles, startTtsWorker } from "./tts-worker";
+
+function createTransport(sent: TtsWorkerOutbound[] = []): TtsTransport {
+	return {
+		send: message => sent.push(message),
+		sendAndFlush: async message => {
+			sent.push(message);
+		},
+		onMessage: () => () => {},
+	};
+}
 
 /**
  * Worker error-channel contract: a failed request must produce an outbound
@@ -12,17 +26,12 @@ import { startTtsWorker } from "./tts-worker";
 function createHarness() {
 	const sent: TtsWorkerOutbound[] = [];
 	let handler: ((message: TtsWorkerInbound) => void) | null = null;
-	const transport: TtsTransport = {
-		send: message => sent.push(message),
-		sendAndFlush: async message => {
-			sent.push(message);
-		},
-		onMessage: h => {
-			handler = h;
-			return () => {
-				handler = null;
-			};
-		},
+	const transport = createTransport(sent);
+	transport.onMessage = h => {
+		handler = h;
+		return () => {
+			handler = null;
+		};
 	};
 	startTtsWorker(transport);
 	return {
@@ -38,6 +47,35 @@ async function until(condition: () => boolean, timeoutMs = 2_000): Promise<void>
 		await Bun.sleep(5);
 	}
 }
+
+describe("sherpa TTS file downloads", () => {
+	it("downloads every manifest file, including the Chinese rule FSTs", async () => {
+		const spec = getTtsLocalModelSpec("melotts-zh");
+		if (spec?.engine !== "sherpa") throw new Error("expected the MeloTTS sherpa manifest");
+		const cacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-tts-files-"));
+		const downloaded: string[] = [];
+		try {
+			const files = await ensureSherpaTtsFiles(spec, "melotts-zh", createTransport(), "files", {
+				cacheDir,
+				downloadFile: async (_repo, filename, dest) => {
+					downloaded.push(filename);
+					await Bun.write(dest, filename);
+				},
+			});
+			const required = sherpaTtsRequiredFiles(spec);
+			expect(downloaded).toEqual(required);
+			for (const filename of required) {
+				const dest = path.join(cacheDir, ...spec.repo.split("/"), ...filename.split("/"));
+				expect((await fs.stat(dest)).size).toBeGreaterThan(0);
+			}
+			expect(files.ruleFsts?.split(",")).toEqual(
+				spec.ruleFsts?.map(filename => path.join(cacheDir, spec.repo, filename)),
+			);
+		} finally {
+			await fs.rm(cacheDir, { recursive: true, force: true });
+		}
+	});
+});
 
 describe("tts worker error channel", () => {
 	it("answers a streaming session for an unknown model with an error message, not silence", async () => {

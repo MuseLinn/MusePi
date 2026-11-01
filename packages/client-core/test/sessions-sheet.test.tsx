@@ -220,6 +220,41 @@ describe("SessionsSheet always-mounted close path", () => {
 		}
 	});
 
+	it("keeps draft, host management and settings reachable from an empty mobile directory", async () => {
+		window.Capacitor = { isNativePlatform: () => true };
+		const actions: string[] = [];
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		try {
+			await act(async () => {
+				root.render(
+					<SessionsSheet
+						client={fakeClient()}
+						sessions={[]}
+						currentId={null}
+						onSelect={() => {}}
+						open
+						onClose={() => {}}
+						onNewSession={() => actions.push("new")}
+						onOpenHosts={() => actions.push("hosts")}
+						onOpenSettings={() => actions.push("settings")}
+					/>,
+				);
+			});
+			const buttons = [...document.querySelectorAll<HTMLButtonElement>(".ss-footer-action")];
+			expect(buttons).toHaveLength(3);
+			for (const button of buttons) {
+				await act(async () => button.click());
+			}
+			expect(actions).toEqual(["new", "hosts", "settings"]);
+		} finally {
+			await act(async () => root.unmount());
+			host.remove();
+			delete window.Capacitor;
+		}
+	});
+
 	it("keeps concealed swipe actions inert and out of the Tab order", async () => {
 		const host = document.createElement("div");
 		document.body.appendChild(host);

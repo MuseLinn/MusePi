@@ -17,11 +17,13 @@ import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
+import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
 import { processImageFile, revokePreviews, toImageContent } from "../../lib/image";
 import { type NativeRecognition, nativeVoiceSupport, startNativeRecognition } from "../../lib/native-voice";
+import { useShellLayout } from "../../lib/responsive-shell";
 import { useMorphTarget } from "../../lib/scene-morph";
 import { useScrollShadow } from "../../lib/scroll-shadow";
 import type { TtsSnapshot } from "../../lib/tts";
@@ -53,17 +55,22 @@ export interface ComposerProps {
 	client: SessionClient;
 }
 
-/** Textarea metrics: line-height 20px + 8px vertical padding × 2 (kept in sync with shell.css). */
-const LINE_PX = 20;
-const PAD_Y = 16;
+/** Textarea metrics: line-height 22px + 6px vertical padding × 2 (kept in sync with shell.css). */
+const LINE_PX = 22;
+const PAD_Y = 12;
 const MAX_ROWS = 8;
 
-function autosize(el: HTMLTextAreaElement | null): void {
+function autosize(el: HTMLTextAreaElement | null, singleLine = false): void {
 	if (!el) return;
+	if (singleLine) {
+		el.style.height = `${LINE_PX + PAD_Y}px`;
+		el.style.overflowY = "hidden";
+		return;
+	}
 	el.style.height = "0px";
 	const max = MAX_ROWS * LINE_PX + PAD_Y;
 	el.style.height = `${Math.max(LINE_PX + PAD_Y, Math.min(el.scrollHeight, max))}px`;
-	el.style.overflowY = el.scrollHeight > max ? "general.auto" : "hidden";
+	el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
 }
 
 /**
@@ -741,20 +748,25 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 	};
 
 	return (
-		<div className="sh-composer-inner">
-			<textarea
-				ref={taRef}
-				className="sh-composer-input"
-				value={draft}
-				onChange={e => setDraft(e.target.value)}
-				onKeyDown={onKeyDown}
-				onCompositionStart={onCompositionStart}
-				onCompositionEnd={onCompositionEnd}
-				placeholder={t("composer.typeYourResponse")}
-				rows={1}
-				spellCheck={false}
-			/>
-			<div className="sh-composer-actions">
+		<div className="sh-composer-inner" data-expanded="true">
+			<div className="sh-composer-editor">
+				<textarea
+					ref={taRef}
+					className="sh-composer-input"
+					value={draft}
+					onChange={e => {
+						setDraft(e.target.value);
+						autosize(e.currentTarget);
+					}}
+					onKeyDown={onKeyDown}
+					onCompositionStart={onCompositionStart}
+					onCompositionEnd={onCompositionEnd}
+					placeholder={t("composer.typeYourResponse")}
+					rows={1}
+					spellCheck={false}
+				/>
+			</div>
+			<div className="sh-composer-end">
 				<button
 					type="button"
 					className="sh-btn sh-btn-primary"
@@ -769,7 +781,12 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 }
 
 export function Composer({ client }: ComposerProps): ReactNode {
+	const layout = useShellLayout();
+	const [engaged, setEngaged] = useState(false);
 	const [text, setText] = useState("");
+	const [sending, setSending] = useState(false);
+	const [sendError, setSendError] = useState<string | null>(null);
+	const sendingRef = useRef(false);
 	// Shared-element morph target (M1.10 §3.3 批次 B): the textarea and the
 	// send button fly in from the connect screen's input/button on connect.
 	// Same ref object the autosize/focus logic already uses.
@@ -800,6 +817,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	// Field-level subscriptions: input state and turn liveness only — never
 	// re-rendered on transcript or notice frames.
 	const live = useGuestSelector(client, s => s.phase) === "live";
+	const draftSession = useGuestSelector(client, s => s.workspace !== null && s.focusedSessionId === null);
 	const readOnly = useGuestSelector(client, s => s.readOnly);
 	const uiRequest = useGuestSelector(client, s => s.uiRequest);
 	// True while a multi-select (checkbox) answer awaits the host's re-issue
@@ -822,7 +840,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const empty = useGuestSelector(client, s => s.entries.length === 0 && s.stream === null && !s.working);
 	const model = useGuestSelector(client, s => s.state?.model ?? null);
 	const thinking = useGuestSelector(client, s => s.state?.thinkingLevel ?? null);
-	const canPrompt = live && !readOnly;
+	const canPrompt = (live || draftSession) && !readOnly;
 	// Voice input (daemon `stt.transcribe`; design 「语音四帧」): recognized
 	// text lands in the textarea draft, editable before sending. The voice
 	// slot replaces the textarea while recording/transcribing.
@@ -841,23 +859,42 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	// the input slot while active — sending mid-recording would be surprising.
 	const canSend =
 		canPrompt &&
+		!sending &&
 		voice.kind === "idle" &&
 		(text.trim().length > 0 || pending.length > 0 || uiRequest?.kind === "editor");
+	const expanded =
+		layout !== "compact" ||
+		engaged ||
+		attachOpen ||
+		modelSheetOpen ||
+		pending.length > 0 ||
+		voice.kind !== "idle" ||
+		text.includes("\n");
 
 	useLayoutEffect(() => {
-		autosize(taRef.current);
-	}, []);
+		autosize(taRef.current, !expanded);
+	}, [expanded, text]);
 
-	const send = useCallback((): void => {
+	const send = useCallback(async (): Promise<void> => {
 		const trimmed = text.trim();
-		if (!live || readOnly) return;
+		if (!canPrompt || sendingRef.current) return;
 		if (!trimmed && pending.length === 0) return;
-		client.sendPrompt(trimmed, toImageContent(pending));
-		revokePreviews(pending);
-		setPending([]);
-		setText("");
-		haptic(8);
-	}, [client, live, readOnly, text, pending]);
+		sendingRef.current = true;
+		setSending(true);
+		setSendError(null);
+		try {
+			await client.sendPrompt(trimmed, toImageContent(pending));
+			revokePreviews(pending);
+			setPending([]);
+			setText("");
+			haptic(8);
+		} catch (error) {
+			setSendError(error instanceof Error ? error.message : String(error));
+		} finally {
+			sendingRef.current = false;
+			setSending(false);
+		}
+	}, [client, canPrompt, text, pending]);
 
 	/** Encodes picked image files into pending attachments (queued behind the
 	 * current state; failures reject individually without blocking the batch). */
@@ -890,7 +927,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
 		if (shouldSubmitOnEnter(e, composingRef.current)) {
 			e.preventDefault();
-			send();
+			void send();
 		}
 	};
 
@@ -975,9 +1012,15 @@ export function Composer({ client }: ComposerProps): ReactNode {
 
 	return (
 		<div className="sh-composer">
+			{sendError && (
+				<p className="sh-composer-error" role="alert">
+					{sendError}
+				</p>
+			)}
 			{canPrompt && empty && (
 				<div className="sh-composer-suggest">
 					<SuggestionChips
+						compact={draftSession}
 						onPick={prompt => {
 							setText(prompt);
 							taRef.current?.focus();
@@ -1005,56 +1048,69 @@ export function Composer({ client }: ComposerProps): ReactNode {
 				</div>
 			)}
 			{(ttsSnap.phase !== "idle" || ttsSnap.guide || ttsSnap.error !== null) && <TtsBar snap={ttsSnap} tts={tts} />}
-			<div className="sh-composer-inner">
-				{voice.kind === "guide" ? (
-					<VoiceGuide
-						onDismiss={voiceCtl.dismiss}
-						onRetry={nativeVoiceSupport().recognition ? voiceCtl.retryNative : undefined}
-					/>
-				) : voice.kind === "setup" ? (
-					<VoiceSetupCard
-						state={voice}
-						onInstall={() => voiceCtl.installModel(voice.modelKey)}
-						onRetry={() => voiceCtl.installModel(voice.modelKey)}
-						onDismiss={voiceCtl.dismiss}
-						onNative={nativeVoiceSupport().recognition ? voiceCtl.retryNative : undefined}
-					/>
-				) : voiceBusy || voice.kind === "error" ? (
-					<VoiceBar voice={voice} onStop={voiceCtl.stop} onCancel={voiceCtl.cancel} onDiscard={voiceCtl.discard} />
-				) : (
-					<textarea
-						ref={taRef}
-						className="sh-composer-input"
-						data-morph-id="composer-input"
-						value={text}
-						onChange={e => setText(e.target.value)}
-						onKeyDown={onKeyDown}
-						onCompositionStart={onCompositionStart}
-						onCompositionEnd={onCompositionEnd}
-						placeholder={
-							readOnly
-								? t("composer.readOnlySessionWatching")
-								: live
-									? t("composer.askAnythingCommands.info")
-									: t("composer.waitingSession")
-						}
-						disabled={!canPrompt}
-						rows={1}
-						spellCheck={false}
-					/>
-				)}
-				<div className="sh-composer-actions">
-					{canPrompt && voice.kind === "idle" && (
+			<div className="sh-composer-inner" data-layout={layout} data-expanded={expanded}>
+				<div className="sh-composer-editor">
+					{voice.kind === "guide" ? (
+						<VoiceGuide
+							onDismiss={voiceCtl.dismiss}
+							onRetry={nativeVoiceSupport().recognition ? voiceCtl.retryNative : undefined}
+						/>
+					) : voice.kind === "setup" ? (
+						<VoiceSetupCard
+							state={voice}
+							onInstall={() => voiceCtl.installModel(voice.modelKey)}
+							onRetry={() => voiceCtl.installModel(voice.modelKey)}
+							onDismiss={voiceCtl.dismiss}
+							onNative={nativeVoiceSupport().recognition ? voiceCtl.retryNative : undefined}
+						/>
+					) : voiceBusy || voice.kind === "error" ? (
+						<VoiceBar
+							voice={voice}
+							onStop={voiceCtl.stop}
+							onCancel={voiceCtl.cancel}
+							onDiscard={voiceCtl.discard}
+						/>
+					) : (
+						<textarea
+							ref={taRef}
+							className="sh-composer-input"
+							data-morph-id="composer-input"
+							value={text}
+							onChange={e => setText(e.target.value)}
+							onFocus={() => setEngaged(true)}
+							onBlur={() => setEngaged(false)}
+							onKeyDown={onKeyDown}
+							onCompositionStart={onCompositionStart}
+							onCompositionEnd={onCompositionEnd}
+							placeholder={
+								readOnly
+									? t("composer.readOnlySessionWatching")
+									: canPrompt
+										? isMobileShell()
+											? t("composer.askAnythingShort")
+											: t("composer.askAnythingCommands.info")
+										: t("composer.waitingSession")
+							}
+							disabled={!canPrompt}
+							rows={1}
+							spellCheck={false}
+						/>
+					)}
+				</div>
+				<div className="sh-composer-leading">
+					{canPrompt && (
 						<button
 							type="button"
 							className="sh-btn sh-attach-btn"
-							onClick={voiceCtl.start}
-							title={t("settings.voiceInput")}
-							aria-label={t("settings.voiceInput")}
+							onClick={() => setAttachOpen(true)}
+							title={t("general.addImages")}
+							aria-label={t("general.addImages")}
 						>
-							<Mic size={15} />
+							<Plus size={18} />
 						</button>
 					)}
+				</div>
+				<div className="sh-composer-actions">
 					{canPrompt && (
 						<button
 							type="button"
@@ -1064,18 +1120,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							title={t("settings.voiceOutputAutoRead")}
 							aria-label={t("settings.voiceOutputAutoRead")}
 						>
-							<Volume2 size={15} />
-						</button>
-					)}
-					{canPrompt && (
-						<button
-							type="button"
-							className="sh-btn sh-attach-btn"
-							onClick={() => setAttachOpen(true)}
-							title={t("general.addImages")}
-							aria-label={t("general.addImages")}
-						>
-							<Plus size={15} />
+							<Volume2 size={16} />
 						</button>
 					)}
 					{canPrompt && (model || thinking) && (
@@ -1084,6 +1129,9 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								<button
 									type="button"
 									className="sh-mt-seg"
+									onPointerDown={event => {
+										if (layout === "compact") event.preventDefault();
+									}}
 									onClick={() => {
 										setModelSheetOpen(true);
 										haptic(8);
@@ -1098,6 +1146,9 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							<button
 								type="button"
 								className="sh-mt-seg"
+								onPointerDown={event => {
+									if (layout === "compact") event.preventDefault();
+								}}
 								onClick={() => {
 									setModelSheetOpen(true);
 									haptic(8);
@@ -1106,13 +1157,13 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							>
 								<Brain size={13} aria-hidden />
 								<span>
-									{
+									{t(
 										THINKING_KEY[
 											(THINKING_LADDER as readonly string[]).includes(thinking ?? "")
 												? (thinking as ThinkingLadder)
 												: "auto"
-										]
-									}
+										],
+									)}
 								</span>
 							</button>
 						</div>
@@ -1123,11 +1174,21 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							<span className="sh-queued-label">{t("settings.queued")} </span>×{queued}
 						</span>
 					)}
+				</div>
+				<div className="sh-composer-end">
+					{canPrompt && voice.kind === "idle" && !busy && !sending && (layout !== "compact" || !canSend) && (
+						<button
+							type="button"
+							className="sh-btn sh-attach-btn sh-composer-mic"
+							onClick={voiceCtl.start}
+							title={t("settings.voiceInput")}
+							aria-label={t("settings.voiceInput")}
+						>
+							<Mic size={17} />
+						</button>
+					)}
 					{busy && !readOnly ? (
 						showWorking ? (
-							/* 三合一 send control (desktop GUI parity): the same button
-							 * that sends becomes the live working display — accent pill
-							 * with the dot-matrix bloom; tap aborts the turn. */
 							<button
 								type="button"
 								className="sh-btn sh-btn-send-work"
@@ -1145,10 +1206,6 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								</span>
 							</button>
 						) : (
-							/* Suppressed states (design doc §B): a blocking card owns
-							 * the wait feedback, so the animated pill stays hidden —
-							 * but abort must remain reachable, hence a quiet ghost
-							 * stop instead of the matrix bloom. */
 							<button
 								type="button"
 								className="sh-btn sh-btn-send-wait"
@@ -1163,26 +1220,27 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								<Square size={12} />
 							</button>
 						)
-					) : (
+					) : layout !== "compact" || canSend || sending ? (
 						<button
 							type="button"
 							ref={sendMorphRef}
-							className="sh-btn sh-btn-primary"
+							className="sh-btn sh-btn-primary sh-composer-send"
 							data-morph-id="composer-send"
 							onClick={send}
 							disabled={!canSend}
 							title={t("composer.send")}
+							aria-label={t("composer.send")}
 						>
-							<SendHorizontal size={12} /> <span className="sh-btn-label">{t("settings.send")}</span>
+							<SendHorizontal size={15} /> <span className="sh-btn-label">{t("settings.send")}</span>
 						</button>
-					)}
+					) : null}
 				</div>
 			</div>
 			{/* Hidden pickers: refs stay mounted at the composer root so the
 			 * attach sheet can trigger them and unmount freely. */}
 			<input
 				ref={galleryRef}
-				type="tools.file"
+				type="file"
 				accept="image/*"
 				multiple
 				hidden
@@ -1193,7 +1251,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 			/>
 			<input
 				ref={cameraRef}
-				type="tools.file"
+				type="file"
 				accept="image/*"
 				capture="environment"
 				hidden

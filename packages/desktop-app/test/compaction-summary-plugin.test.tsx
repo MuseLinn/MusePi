@@ -45,7 +45,13 @@ describe("compaction summary plugin", () => {
 			logger: { info() {} },
 		} as never);
 		expect(registrations).toEqual([
-			{ slot: "panel.tab.compaction", moduleUrl: "./ui/summary-panel.tsx", label: "压缩摘要", order: 20 },
+			{
+				slot: "panel.tab.compaction",
+				moduleUrl: "./ui/summary-panel.tsx",
+				label: "压缩摘要",
+				order: 20,
+				availability: "on-demand",
+			},
 		]);
 	});
 

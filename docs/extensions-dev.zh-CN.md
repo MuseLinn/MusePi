@@ -36,6 +36,8 @@ musepi-omp 是 oh-my-pi 的 fork，扩展运行时同源，但 musepi 在**加�
 
 普通插件包由 `package.json` 的 `musepi` 块声明入口、配置与资源（见 §13），启停归 runtime lock。应用 profile 通过 `musepi.profile.bundles` 选择 bundle，行级覆盖写入该 profile 的 `cordis.patch.yml`；仅支持 `musepi.profile.bundles`，DSH profile 字段直接忽略。Agent preset 也作为插件行声明在同一组合中，按文件 > profile > 扩展的顺序解析。新会话默认值保存在 profile 的 `agent-preset-registry.config.selectedDefault`；会话开始首轮后 preset 锁定，已有会话保留原组合。组件开关与父插件开关相互独立：父插件停用时保留组件选择，但只有父插件与组件两道门都允许时组件才实际生效。
 
+「插件」视图按同一种卡片管理普通包与 profile bundle。普通包开关写 runtime lock，bundle 开关写 `musepi.profile.bundles`；已选但无法读取的 bundle 仍保留显示。层与行的详细组合继续通过 `bundles.composition` 提供，不再设置独立「组合」页。preset 行在每个会话中挂载为真实 Cordis fiber：`isolate` 创建按服务隔离的子 realm，切换模式先销毁旧 preset fiber，再挂载新组合。插件自有 skill 与其他资源一起通过 `registerSkill` 声明，并随插件启停；Android 模拟器即采用这一生命周期。
+
 ## 2. 扩展能做什么（能力面）
 
 一个扩展模块可以组合：
@@ -106,9 +108,9 @@ export default function myExtension(pi: ExtensionAPI) {
 - **内置注册表**（`extensibility/extensions-center/builtin-registry.ts` 的 `BUILTIN_EXTENSIONS`）：随代码分发的部署物，以 `musepi-extensions` provider 的 builtin 项呈现（provider=native 语义不扩大），path 恒为空（只读，不可改删/rollback），带"内置"徽章。三类语义：
   - `settingsMirror`（样式/桌面壳/magic keywords）：设置键即事实源，`extensions.setEnabled` 写镜像键，daemon 与 TUI 仪表盘按 `builtinMirrorDisabled` 读回；
   - 通用项：走 `settings.disabledExtensions`，可禁用；
-  - `readonly: true`（主题包/渲染器包）：只读展示，无禁用语义，UI 不渲染开关——登记仅为可见性，不发明语义。
+  - `readonly: true`（主题包/渲染器包）：只读展示，无禁用语义，UI 不渲染开关，daemon 的 `extensions.setEnabled` 也拒绝启停请求——登记仅为可见性，不写入无效标记。
   - `annotate: true`（bundled skills）：不产生独立条目，只给扫描出的同 id 行打 `builtin` 标记（bundled skill 的安装行已由 native 扫描呈现，重复登记会出现两行）。
-  - 0.5.0 M2.1 登记清单：bundled skills ×6（清单源 `src/bundled-skills/index.ts`）、magic keywords ×3（镜像 `magicKeywords.<kw>`）、modes 主题包 ×1（raw.themes = `getBuiltinThemes()`）、tool-render 卡片工具包 ×1（raw.tools = client-core `tool-render/card-tools.ts` 权威清单的快照，契约测试守交集）。**内置 hooks 不存在**：hook 全部是文件/插件态，经 native 扫描自然可见，登记数为 0。
+  - 0.5.0 M2.1 登记清单：bundled skills ×7（清单源 `src/bundled-skills/index.ts`）、magic keywords ×3（镜像 `magicKeywords.<kw>`）、modes 主题包 ×1（raw.themes = `getBuiltinThemes()`）、tool-render 卡片工具包 ×1（raw.tools = client-core `tool-render/card-tools.ts` 权威清单的快照，契约测试守交集）。**内置 hooks 不存在**：hook 全部是文件/插件态，经 native 扫描自然可见，登记数为 0。
 - **插件安装**（`~/.musepi/plugins/`）：provider = user，可启停。
 - 测试/示例扩展（如 `harmony-leak` 夹具）是测试资产，不算产品扩展。
 
@@ -140,12 +142,12 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**（编译时强制）：
 - 默认导出 React 组件；
 - JSX 使用 `window.MusePiReact.createElement`。`react`、`react-dom`、`react-dom/client` 和 `react/jsx-runtime` 的普通或 type-only import 都由 daemon 映射到宿主 React，不会打包第二份 React；不得绕过这条映射，自行打包或从其他地址加载 React；
-- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly/dedupeKey`，分栏时也对应本列。保留的 `panel.tab.files` 挂载还会收到 `fileWorkspace`，即宿主拥有的文件标签、草稿、定位请求和编辑历史契约。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
+- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly/dedupeKey`，分栏时也对应本列。保留的 `panel.tab.files` 挂载还会收到 `fileWorkspace`，即宿主拥有的文件标签、草稿、定位请求和编辑历史契约。整页槽位通过 `page` 注入导航；`app.capability` 具体接收 `page: { tab, onTabChange, onBack }`，不是顶层导航 props。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
 - **样式**：组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`（组件卸载即移除）——不要依赖全局样式文件；
 - **失败可见**：编译失败/加载失败在宿主处以红色错误块显示（不再静默消失）；运行时错误有 `gui-slot-error` 样式。
 
 **槽位清单**（daemon `assertKnownComponentSlot` 校验，未知槽名注册会抛错；单一权威见 `packages/collab-proto/src/extension-slots.ts`）：
-- `panel.tab.<id>` — 右面板动态 tab（图标 + 内容区）。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
+- `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
 - `settings.tab.<id>` — 设置页左侧导航项：扩展声明一个设置页即出现在设置导航，内容区挂载组件。
 - `rail.<id>` — 右缘图标轨（前缀命名空间；`rail.right` 是保留的精确槽）
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端（list 语义，多扩展可同槽）
@@ -166,6 +168,8 @@ musepi-auth-hub）设置界面的落点。
 **面板实例示例**：bundled `compaction-summary` Cordis 插件注册 `panel.tab.compaction`，UI 读取 `panelTab.target` 并调用 `session.compaction { sessionId, entryId }`。会话绑定内容必须走这种受校验的 daemon RPC，不能使用不提供会话 actions 的 `registerRpc` 裸 runtime。恢复的标签只保存 entry id；target 改变或组件卸载后，必须丢弃未完成的旧响应。
 
 **文件工作区示例**：内置 `file-workspace` Cordis 插件注册保留的 `panel.tab.files` 槽位。它读取 `panelTab.dedupeKey` 区分树根与文件页，并通过宿主注入的 `fileWorkspace` 契约操作草稿、dirty 状态、定位请求和历史。停用插件会移除文件渲染与启动入口，但标签和草稿所有权不会转移到插件。
+
+**Android 模拟器示例**：内置 `android-emulator` 插件贡献 `panel.tab.android-emulator`、扩展隔离的 RPC 方法和 `android_emulator` Agent 工具。当可执行文件不在 `PATH` 中时，在插件配置里设置 `adbPath` 与 `emulatorPath` 绝对路径。面板可启动 AVD、显示并操作设备、安装当前工作区内的 APK、启动 Activity、查看 UI 树和日志。内置 `android-emulator` skill 定义 build → install → launch → wait → screenshot/UI-tree/logcat 验证流程。PNG 轮询不是视频流，文本注入只支持单行可打印 ASCII。禁用插件会移除注册并销毁共享服务，但不会终止已有设备。
 
 **设置卡片（settings.item + settingsScope）**：注册 `slot: "settings.item.<extId>"`（extId = 扩展目录名）的组件，会在**扩展中心**（设置 → 扩展）底部按扩展获得一张卡片（扩展未启用则不显示）。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名，建议用 `扩展名.xxx` 前缀**（与 registerSetting 的 `display.taskCardStyle` 同约定）避免与其他扩展冲突；写入只放行 registerSetting 注册过的键，未注册键写会抛 read-only。**写时校验（registerSetting 的 `validate` 字段）**：扩展可为注册的设置键提供 `validate(value)` 回调——返回错误字符串即拒写（daemon `settings.set` RPC 抛错，GUI 显示原因），返回 `void` 放行。schema 无法表达的约束（端点可达性、跨键一致性、枚举外值）由此在**写入时**拒绝，而非用到时才炸。无任何扩展注册该槽位时分区显示空态文案。
 

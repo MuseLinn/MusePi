@@ -1,47 +1,35 @@
-import { t, tLoose } from "@musepi/client-core";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import type { RpcClient } from "../lib/rpc";
-import { Icon, type IconName } from "../vendor/oc-icons";
-import { BundleView } from "./BundleView";
-import { CapabilityCenter } from "./CapabilityCenter";
-import { MarketplaceView } from "./MarketplaceView";
-import { SkillMarketView } from "./SkillMarketView";
-import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./UnifiedPluginsView";
-import { WorkspacePageHeader } from "./WorkspacePageHeader";
+import { CapabilityCenter } from "../../components/CapabilityCenter";
+import { MarketplaceView } from "../../components/MarketplaceView";
+import { SkillMarketView } from "../../components/SkillMarketView";
+import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "../../components/UnifiedPluginsView";
+import { WorkspacePageHeader } from "../../components/WorkspacePageHeader";
+import { dismissActionToastSource, pushActionToast } from "../../lib/action-toast";
+import { setPluginManagementEnabled } from "../../lib/plugin-management";
+import type { RpcClient } from "../../lib/rpc";
+import { Icon, type IconName } from "../../vendor/oc-icons";
 
-/**
- * 能力中心 (capability center) — the FIRST-CLASS sidebar page (设计稿 05:
- * 系统侧栏一级导航), split from the settings-side 扩展控制中心 which keeps
- * the config/diagnosis perspective (概览/能力清单/插件/市场/槽位诊断).
- *
- * Three tabs share one card/filter/drawer language (设计稿 05):
- *   技能  — installed skills + acquire (skills.install / Git URL), with the
- *           skill detail drawer (CapabilityCenter two-screen).
- *   插件  — unified plugin list (UnifiedPluginsView): marketplace/npm
- *           plugin packages + hot-loaded extension modules, each item
- *           tagged by source category (内置/项目级/用户级, skill 管理
- *           同款) like the settings-side tab.
- *   市场  — the remote marketplace catalog (marketplace.list / install).
- */
-
-type Tab = "skills" | "plugins" | "composition" | "marketplace";
+/** First-class Skills / Plugins / Marketplace page owned by the desktop Cordis plugin. */
+export type Tab = "skills" | "plugins" | "marketplace";
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
 type SkillPane = "discover" | "installed";
 
 export function CapabilityCenterPage({
 	rpc,
-	onBack,
-	tab,
-	onTabChange,
+	page: { onBack, tab, onTabChange },
 }: {
 	rpc: RpcClient | null;
-	onBack(): void;
-	/** 受控当前 tab（app.tsx 的 capabilityTab state）：侧边栏悬停菜单、
-	 * 扩展控制中心 CTA 等外部入口在页面已挂载时也能切 tab——组件只在
-	 * mount 时读一次的 initialTab 会让这些跳转静默失效。 */
-	tab: Tab;
-	onTabChange(tab: Tab): void;
+	/** SlotComponentMount keeps full-page navigation under the `page` prop. */
+	page: {
+		onBack(): void;
+		/** 受控当前 tab（app.tsx 的 capabilityTab state）：侧边栏悬停菜单、
+		 * 扩展控制中心 CTA 等外部入口在页面已挂载时也能切 tab——组件只在
+		 * mount 时读一次的 initialTab 会让这些跳转静默失效。 */
+		tab: Tab;
+		onTabChange(tab: Tab): void;
+	};
 }): ReactNode {
 	// The design spec puts the remote catalog INSIDE 技能 as a 发现 sub-pane
 	// (我安装的 is the other half). 市场 stays as its own tab because the
@@ -52,6 +40,20 @@ export function CapabilityCenterPage({
 	// 「我安装的 N」的计数:只为标签上的数字,列表本身由 CapabilityCenter
 	// 自己拉取(它有 warnings/来源过滤等更完整的模型)。
 	const [installedCount, setInstalledCount] = useState(0);
+	const reportPluginsError = useCallback((details: string, title = t("tools.extLoadFailed")): void => {
+		setPluginsError(details);
+		pushActionToast({
+			kind: "error",
+			title,
+			message: t("settings.plugins"),
+			details,
+			dedupeKey: "capability-center:plugins",
+		});
+	}, []);
+	const clearPluginsError = useCallback((): void => {
+		setPluginsError(null);
+		dismissActionToastSource("capability-center:plugins");
+	}, []);
 
 	const loadInstalledCount = useCallback((): void => {
 		if (!rpc) return;
@@ -79,9 +81,13 @@ export function CapabilityCenterPage({
 			void rpc
 				.request<{ plugins: PluginEntry[] }>("plugins.packages", {})
 				.then(res => {
-					if (alive) setPlugins(res?.plugins ?? []);
+					if (!alive) return;
+					setPlugins(res?.plugins ?? []);
+					clearPluginsError();
 				})
-				.catch((e: unknown) => alive && setPluginsError(e instanceof Error ? e.message : String(e)));
+				.catch((e: unknown) => {
+					if (alive) reportPluginsError(e instanceof Error ? e.message : String(e));
+				});
 		};
 		load();
 		const unlisten = rpc.addEventListener(event => {
@@ -92,30 +98,26 @@ export function CapabilityCenterPage({
 			alive = false;
 			unlisten();
 		};
-	}, [rpc]);
+	}, [rpc, clearPluginsError, reportPluginsError]);
 
 	const togglePlugin = (p: PluginEntry): void => {
 		if (!rpc) return;
-		void rpc
-			// The daemon re-loads the plugin's extension entries after the write
-			// and reports the real outcome (`ok: false` + reason when the load
-			// fails) — the toggle must reflect THAT, not the write intent, or a
-			// broken plugin shows "enabled" while nothing registered.
-			.request<{ ok: boolean; enabled: boolean; error?: string }>("plugins.setEnabled", {
-				name: p.name,
-				enabled: !p.enabled,
-			})
+		void setPluginManagementEnabled(rpc, p, !p.enabled)
 			.then(res => {
 				if (res.ok) {
-					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: res.enabled } : x)));
-					setPluginsError(null);
+					setPlugins(prev =>
+						prev.map(x => (x.name === p.name ? { ...x, enabled: res.enabled ?? !p.enabled } : x)),
+					);
+					clearPluginsError();
 				} else {
 					// Load failed: leave the toggle where it was and surface why.
 					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: false } : x)));
-					setPluginsError(`${p.name}: ${res.error ?? "load failed"}`);
+					reportPluginsError(`${p.name}: ${res.error ?? "load failed"}`, t("tools.operationFailed"));
 				}
 			})
-			.catch((err: unknown) => setPluginsError(err instanceof Error ? err.message : String(err)));
+			.catch((err: unknown) =>
+				reportPluginsError(err instanceof Error ? err.message : String(err), t("tools.operationFailed")),
+			);
 	};
 	// No daemon-side plugin removal RPC (list/packages/setEnabled only) — the
 	// enable toggle is the management surface; removal happens on disk.
@@ -123,7 +125,6 @@ export function CapabilityCenterPage({
 	const tabs: { id: Tab; label: string; icon: IconName }[] = [
 		{ id: "skills", label: t("tools.skillsTab"), icon: "sparkling" },
 		{ id: "plugins", label: t("settings.plugins"), icon: "plug" },
-		{ id: "composition", label: tLoose("tools.bundleTitle"), icon: "stack" },
 		{ id: "marketplace", label: t("guest.marketplace"), icon: "plug-2" },
 	];
 
@@ -197,13 +198,8 @@ export function CapabilityCenterPage({
 						pluginsError={pluginsError}
 						onTogglePackage={togglePlugin}
 						onOpenMarketplace={() => onTabChange("marketplace")}
-						onError={setPluginsError}
+						onError={reportPluginsError}
 					/>
-				</div>
-				<div className={`gui-capability-pane${tab === "composition" ? " gui-capability-pane--on" : ""}`}>
-					{/* profile/bundle 组合面：装上了，然后呢——这个 profile 叠了哪些
-					 * bundle、组合出哪些行、每行现在是什么状态、行的启停。 */}
-					<BundleView rpc={rpc} />
 				</div>
 				<div className={`gui-capability-pane${tab === "marketplace" ? " gui-capability-pane--on" : ""}`}>
 					<MarketplaceView rpc={rpc} />
@@ -212,3 +208,5 @@ export function CapabilityCenterPage({
 		</div>
 	);
 }
+
+export default CapabilityCenterPage;

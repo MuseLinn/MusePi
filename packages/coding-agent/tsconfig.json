@@ -11,5 +11,8 @@
 		// starts. `session-tree-nav.bench.ts` sat that way after its subject was
 		// split out of `session-manager`.
 		"bench"
-	]
+	],
+	"compilerOptions": {
+		"jsx": "react-jsx"
+	}
 }

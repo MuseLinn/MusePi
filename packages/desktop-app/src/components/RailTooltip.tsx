@@ -157,12 +157,36 @@ export function RailTooltip({
 		return () => document.removeEventListener("keydown", onKeyDown, true);
 	}, [anchor, hoveredTip, touchTip]);
 
+	useEffect(() => {
+		const onWindowBlur = (): void => {
+			dismissedRef.current = anchor;
+			if (touchTimerRef.current !== null) window.clearTimeout(touchTimerRef.current);
+			touchTimerRef.current = null;
+			touchRef.current = null;
+			setTouchTip(null);
+			setHoveredTip(null);
+			setShown(false);
+		};
+		window.addEventListener("blur", onWindowBlur);
+		return () => window.removeEventListener("blur", onWindowBlur);
+	}, [anchor]);
+
 	useLayoutEffect(() => {
 		if (!activeAnchor || !visible || !activeLabel) {
 			setPos(null);
 			return;
 		}
+		const closeDisconnected = (): void => {
+			setTouchTip(null);
+			setHoveredTip(null);
+			setShown(false);
+			setPos(null);
+		};
 		const place = (): void => {
+			if (!activeAnchor.isConnected) {
+				closeDisconnected();
+				return;
+			}
 			const tip = tipRef.current;
 			if (!tip) return;
 			placeTooltip(tip, activeAnchor, "left", 260);
@@ -170,9 +194,11 @@ export function RailTooltip({
 		};
 		place();
 		document.addEventListener("scroll", place, true);
+		document.addEventListener("wheel", place, true);
 		window.addEventListener("resize", place);
 		return () => {
 			document.removeEventListener("scroll", place, true);
+			document.removeEventListener("wheel", place, true);
 			window.removeEventListener("resize", place);
 		};
 	}, [activeAnchor, activeDescription, activeExtra, activeLabel, visible]);

@@ -42,9 +42,9 @@ import type { Extension, ExtensionAPI } from "../../extensions/types";
 import { entryNeedsGraphSnapshot, loadLegacyPiModule } from "../compat/legacy-pi-compat";
 import {
 	type CordisPluginEntry,
+	declaredInject,
 	hostOnlyRegistry,
 	isCordisPluginEntry,
-	missingServiceDependencies,
 	type PluginEntryFactory,
 	resolvePluginEntry,
 	type ServiceRegistry,
@@ -105,6 +105,8 @@ export interface MountContext {
 	 * mount that is not part of a running plugin set (tests, one-off loads).
 	 */
 	serviceRegistry?: ServiceRegistry;
+	/** Extra dependencies declared by a composition row, in addition to the module's own `inject`. */
+	additionalInject?: readonly string[];
 	/**
 	 * Wraps the API so registrations become fiber effects (the ledger). The
 	 * cordis runtime passes its own; tests can pass identity.
@@ -272,7 +274,9 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 
 	// Declared dependencies are checked BEFORE binding (see the doc above).
 	{
-		const missing = missingServiceDependencies(entry, ctx.serviceRegistry ?? hostOnlyRegistry());
+		const registry = ctx.serviceRegistry ?? hostOnlyRegistry();
+		const required = new Set([...declaredInject(entry), ...(ctx.additionalInject ?? [])]);
+		const missing = [...required].filter(name => !registry.host.has(name) && !registry.hasProvided(name));
 		if (missing.length > 0) {
 			const providers = missing.map(name => {
 				const who = ctx.serviceRegistry?.providerOf(name);

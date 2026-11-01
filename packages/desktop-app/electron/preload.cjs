@@ -263,15 +263,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	 *  — the transparent padding ring and the gaps stay click-through. */
 	setBubblesHitbox: (rect) => ipcRenderer.invoke("bubbles-set-hitbox", rect),
 	/** Bubbles window: report the collapse mode + live item count — the
-	 *  main process mirrors it to the pet window's hidden-stack badge. */
+	 *  main process mirrors it to the pet window's three-state control. */
 	bubblesSetMode: (mode, count) => ipcRenderer.invoke("bubbles-set-mode", { mode, count }),
-	/** Pet window badge click → restore the fully-hidden bubble stack. */
-	bubblesRestoreStack: () => ipcRenderer.invoke("bubbles-restore-stack"),
-	/** Bubbles window: the pet-window badge asked to restore the stack. */
-	onBubblesRestore: (cb) => {
+	/** Pet window control → advance expanded → stacked → count → stacked. */
+	bubblesAdvanceMode: () => ipcRenderer.invoke("bubbles-advance-mode"),
+	/** Bubbles window: the pet-window control requested the next mode. */
+	onBubblesAdvance: (cb) => {
 		const listener = () => cb();
-		ipcRenderer.on("bubbles:restore", listener);
-		return () => ipcRenderer.removeListener("bubbles:restore", listener);
+		ipcRenderer.on("bubbles:advance", listener);
+		return () => ipcRenderer.removeListener("bubbles:advance", listener);
 	},
 	/** Pet window: a global hotkey (Ctrl/Cmd+Shift+Y / N) decided a tool
 	 *  approval — drop the card without an activity round-trip. */

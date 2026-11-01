@@ -2,7 +2,6 @@ import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import * as React from "react";
 import { act } from "react";
 import { GlobalRegistrator } from "../../client-core/node_modules/@happy-dom/global-registrator";
-// @ts-expect-error The daemon compiles this renderer with its own JSX settings.
 import StatsRow from "../src/bundled-plugins/stats-pills/ui/stats-row";
 
 interface Root {

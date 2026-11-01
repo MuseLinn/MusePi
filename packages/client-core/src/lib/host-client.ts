@@ -147,9 +147,9 @@ export class HostClient implements SessionClient {
 		};
 	}
 
-	sendPrompt(text: string, images?: ImageContent[]): void {
+	async sendPrompt(text: string, images?: ImageContent[]): Promise<void> {
 		if (!this.#sessionId) return;
-		void this.#rpc("session.send", {
+		await this.#rpc("session.send", {
 			sessionId: this.#sessionId,
 			text,
 			images: images && images.length > 0 ? images : undefined,

@@ -275,7 +275,7 @@
 	 * custom-provider dialog) portal to the React root — with 1000 they
 	 * painted under their own dialog's backdrop and were invisible. The
 	 * mutex means only one is open at a time, so 4100 cannot stack. */
-	z-index: 4100;
+	z-index: var(--z-menu);
 	/* Two-phase enter: the popup paints transparent first (useFloatingMenu
 	 * adds --entered on the next frame), so Chromium composites the frosted
 	 * backdrop before the scale starts. The enter keyframes animate ONLY
@@ -1806,7 +1806,7 @@
 	position: absolute;
 	top: calc(100% + 6px);
 	left: 0;
-	z-index: 1000;
+	z-index: var(--z-dropdown);
 	min-width: 190px;
 	padding: 4px;
 	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
@@ -3287,7 +3287,7 @@
 .gui-palette-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 4000;
+	z-index: var(--z-command);
 	display: flex;
 	align-items: flex-start;
 	justify-content: center;
@@ -3924,6 +3924,10 @@ body.gui-resizing {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	text-align: left;
+}
+
+.gui-surface-tab--preview .gui-surface-tab-title {
+	font-style: italic;
 }
 
 .gui-surface-tab-dirty {

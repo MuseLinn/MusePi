@@ -95,28 +95,60 @@
   var dlMain = dl ? dl.querySelector(".mp-dl-main") : null;
   var dlItems = dlMenu ? Array.prototype.slice.call(dlMenu.querySelectorAll(".mp-dl-item")) : [];
 
-  function closeDl() {
+  function closeDl(restoreFocus) {
     if (!dl || dlMenu.hidden) return;
     dlMenu.hidden = true;
     dl.classList.remove("is-open");
     dlCaret.setAttribute("aria-expanded", "false");
+    if (restoreFocus) dlCaret.focus();
+  }
+  function openDl(index) {
+    dlMenu.hidden = false;
+    dl.classList.add("is-open");
+    dlCaret.setAttribute("aria-expanded", "true");
+    if (dlItems.length) dlItems[Math.max(0, Math.min(index, dlItems.length - 1))].focus();
   }
   if (dl && dlCaret && dlMenu) {
-    dlCaret.addEventListener("click", function () {
-      if (dlMenu.hidden) {
-        dlMenu.hidden = false;
-        dl.classList.add("is-open");
-        dlCaret.setAttribute("aria-expanded", "true");
-      } else {
-        closeDl();
-      }
+    dlItems.forEach(function (a) {
+      a.tabIndex = -1;
+      a.addEventListener("click", function () { closeDl(false); });
     });
-    dlItems.forEach(function (a) { a.addEventListener("click", closeDl); });
+    dlCaret.addEventListener("click", function () {
+      if (dlMenu.hidden) openDl(0);
+      else closeDl(true);
+    });
+    dlCaret.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      if (dlMenu.hidden) openDl(e.key === "ArrowDown" ? 0 : dlItems.length - 1);
+      else (e.key === "ArrowDown" ? dlItems[0] : dlItems[dlItems.length - 1]).focus();
+    });
+    dlMenu.addEventListener("keydown", function (e) {
+      var current = dlItems.indexOf(document.activeElement);
+      var next = current;
+      if (e.key === "ArrowDown") next = (current + 1 + dlItems.length) % dlItems.length;
+      else if (e.key === "ArrowUp") next = (current - 1 + dlItems.length) % dlItems.length;
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = dlItems.length - 1;
+      else if (e.key === "Escape") {
+        e.preventDefault();
+        closeDl(true);
+        return;
+      } else if (e.key === "Tab") {
+        closeDl(false);
+        return;
+      } else return;
+      e.preventDefault();
+      if (dlItems[next]) dlItems[next].focus();
+    });
     document.addEventListener("click", function (e) {
-      if (!dl.contains(e.target)) closeDl();
+      if (!dl.contains(e.target)) closeDl(false);
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeDl();
+      if (e.key === "Escape" && !dlMenu.hidden) {
+        e.preventDefault();
+        closeDl(true);
+      }
     });
   }
 

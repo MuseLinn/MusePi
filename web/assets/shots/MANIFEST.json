@@ -1,11 +1,12 @@
 {
-  "capturedAt": "2026-10-22T23:47:56.354Z",
+  "capturedAt": "2026-11-01T19:54:29+08:00",
   "viewport": {
     "width": 1440,
     "height": 900,
     "deviceScaleFactor": 2
   },
   "shots": [
-    "app-session.png"
+    "app-session.webp",
+    "app-editor.webp"
   ]
 }

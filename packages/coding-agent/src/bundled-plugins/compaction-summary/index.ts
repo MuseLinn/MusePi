@@ -11,6 +11,7 @@ export function apply(pi: ExtensionAPI): void {
 		moduleUrl: "./ui/summary-panel.tsx",
 		label: "压缩摘要",
 		order: 20,
+		availability: "on-demand",
 	});
 }
 

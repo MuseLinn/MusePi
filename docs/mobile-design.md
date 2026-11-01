@@ -84,32 +84,44 @@ MusePi 移动端是 **桌面 agent 的"随身遥控器"**，不是桌面客户�
 ### 3.1 屏幕地图
 
 ```
-Connect（连接引导）                    ← 未连接 / 退出会话
-  ├─ QR 扫描（原生壳）
-  ├─ 配对码 + 地址（纯 ws）
-  ├─ 粘贴 /collab 链接
-  └─ 最近连接列表（点按直连 / 删除）
+Connect（远程工作区入口）               ← 未连接 / 断开电脑
+  ├─ 品牌与主标题 / 外观与语言
+  ├─ 已保存的电脑（点按直连 / 删除）
+  └─ 连接另一台电脑
+      ├─ 扫描桌面二维码（原生壳主按钮）
+      ├─ 配对码 + 地址（次级折叠表单）
+      └─ 远程访问链接（次级折叠表单）
       │
       ▼ connect
-Workspace（工作区，可选）              ← 多会话 host 才出现（workspace !== null）
-  ├─ 项目分组侧栏（可折叠）
-  └─ 会话卡片网格（working/paused/idle + 消息数 + 相对时间）
+Draft（多会话手机的默认新会话草稿）     ← 不提前创建 host 会话
+  ├─ 简洁问候与静态输入引导
+  ├─ 三条建议（点按只填草稿，不直接发送）
+  └─ Composer：输入 / 附件 / 发送
       │
-      ▼ 聚焦会话
-Session（会话）
-  ├─ Header：返回 / 标题 / cwd / 状态（dot·gauge·avatars）/ 面板入口 / 连接切换 / 退出
+      ▼ 首次发送：创建 → 选择 → 等待 live 快照 → prompt
+Session（已有会话或已水合的新会话）
+  ├─ Header：返回 / 标题（打开会话 Sheet）/ 核心动作
   ├─ Transcript：消息流 + 工具卡片 + 图片 + mermaid + 附件
-  ├─ Composer：输入 / 发送 / 停止 / queued 计数；ask 模式（select/editor）
-  └─ 覆盖层：AgentsRail（右侧抽屉）· AgentDrawer（agent 详情）· 面板（board/scheduled/files）
-        · ServerSwitcher popover · Toasts · Banners
+  └─ Composer：输入 / 发送 / 停止 / queued 计数；ask 模式（select/editor）
+
+SessionsSheet（标题触发）
+  ├─ 会话列表（空列表也可打开）
+  └─ 固定底部：新会话 / 管理电脑 / 设置
+
+Settings（独立全屏页）
+  ├─ 外观与语言 / 电脑管理 / 语音
+  └─ 断开当前电脑
+
+桌面 web 保留 Workspace 目录；不采用手机草稿导航。
+覆盖层：AgentsRail · AgentDrawer · HostManager · PanelMenu · Toasts · Banners。
 ```
 
 ### 3.2 层叠模型（z-order + back 层栈，从底到顶）
 
 ```
 0   sh-app（header + main + composer 常驻骨架）
-1   sh-main 内：workspace / 面板 / transcript（互斥三态）
-2   sh-rail + backdrop（agents 抽屉，≤768px 绝对定位覆盖）
+1   sh-main 内：draft/workspace / 面板或设置 / transcript（互斥三态）
+2   sh-rail + backdrop（agents 抽屉，<840px 绝对定位覆盖）
 3   ag-drawer + backdrop（agent 详情，全屏宽 min(440px, 92vw)）
 4   sh-ended / sh-banner（连接态横幅，常驻可感知）
 5   sh-toasts（瞬时，4 条封顶）
@@ -124,41 +136,39 @@ Session（会话）
 | 100 | AgentDrawer | 最顶层，agent 详情 |
 | 95 | QrScanner | 扫码全屏覆盖（ConnectScreen） |
 | 90 | SessionsSheet | 会话切换底部 sheet |
-| 85 | ServerSwitcher | 多服务器切换 popover |
-| 84 | PanelMenu（窄屏） | ≤520px 折叠面板菜单 |
+| 85 | HostManager | 电脑管理底部玻璃 Sheet |
+| 84 | PanelMenu（窄屏） | ≤520px 折叠面板底部浮层 |
 | 80 | AgentsRail | 子代理抽屉 |
-| 60 | 面板（board/scheduled/files） | 全屏面板 |
-| 40 | Workspace 返回 | 会话聚焦 → 工作区目录 |
+| 60 | 面板或设置 | 全屏页面返回当前草稿或会话 |
+| 40 | 会话返回 | 手机：会话 → 新草稿；桌面 web：会话 → 工作区目录 |
 
 规则：
 - 同一时刻最多一层"模态覆盖"（rail / drawer / 面板三选一互斥，但 drawer 可叠于 rail 上）；
 - 返回键按优先级从高到低处理，一次按压只关闭最上层，绝不关闭两层；
-- 手机上 workspace 与 session 是**平级切换**（header 返回按钮 + workspace 内聚焦），不叠加。
+- 手机上的“新会话”和“返回”只清空焦点，不调用 `session.create`；只有首次发送才创建会话。
 
 ### 3.3 自适应规则（SIZE 类，非设备检测）
 
-| 断点 | 布局 |
-|---|---|
-| > 1024px | 桌面 web 全功能（本规范不覆盖） |
-| 600–1024px | 平板/折叠屏展开：connect 卡片 480px 封顶；workspace 侧栏保留桌面形态；面板全屏 |
-| ≤ 640px | 手机：header 收窄、chips/度量隐藏、按钮标签隐藏、输入 16px、触控目标 44px |
-| ≤ 520px | 手机窄：header 装饰控件（accent/language/avatars/dot）折叠，只留核心控制；面板按钮折叠为"面板"菜单（§4.3） |
-| ≤ 420px | 小屏：connect 卡片全宽、配对行纵向堆叠 |
+共享 `responsive-shell.ts` 的 `ShellLayout` 是整体布局的唯一断点来源，原生壳与远程浏览器共用，不读取 UA：
 
-断点由 CSS `@media (max-width)` 驱动；`--safe-top/--safe-bottom/--mp-keyboard-inset` 由 JS/插件
-注入（§6.1）。未来 foldable 形态（展开/折叠运行中切换）由容器查询或 SIZE 类承担，不做设备 UA 判断。
+| 布局 | 判定 | 行为 |
+|---|---|---|
+| compact | 宽度 `<600px`；或高度 `<480px` 且宽度 `<1024px` | 手机及短横屏：单列、覆盖式 rail、两段式 Composer |
+| medium | 不满足 compact，且宽度 `600–839px` | 折叠屏展开／小平板：内容仍有充足宽度，rail 保持覆盖，避免压缩 transcript |
+| wide | 不满足 compact，且宽度 `≥840px` | 平板／远程网页：agents rail 可常驻，完整 Composer 控制区 |
+
+`--safe-top/--safe-bottom/--mp-keyboard-inset` 由 JS/插件注入（§6.1）。运行中折叠、展开或旋转会重新计算 SIZE 类。640／520／420px 仅保留局部排版精修，不再充当整体布局断点。桌面 web 的 Workspace 目录行为不随手机草稿导航改变。
 
 ## 4. 屏幕规格
 
-### 4.1 Connect（连接引导）
+### 4.1 Connect（远程工作区入口）
 
-目标：**3 秒内到达最近会话**。层级：最近连接（一键）> QR / 配对码（日常）> 粘贴链接（兜底）。
+目标：**3 秒内到达最近会话**。层级：品牌与任务导向的大标题 → 已保存电脑（一键）→ 扫描桌面二维码（新连接主按钮）→ 配对码／远程访问链接（次级折叠表单）。
 
+- 页面：手机使用开放布局，不用一整块技术表单卡包住所有内容；保留低对比度点阵与 accent 洗光，装饰不得干扰文字；
 - 头部：品牌 lockup + 主题/accent/语言切换（与桌面一致，`--order` 语义化排序）；
-- 最近连接：`secure-store` 优先、localStorage 镜像（防隐私模式空转）；删除即 `✕`，无需确认
-  （可随时重连恢复）；**仅成功连接（welcome 帧到达后）才记录到最近列表**，失败/超时不记录；
-- 方法卡片：QR（仅原生壳；`getUserMedia` + jsQR 纯 JS 解码，无插件）→ 配对码（纯 ws 常可用）→ 粘贴链接；
-  手风琴 `useCollapseHeight` 保持挂载可动画（aria-hidden + inert 折叠态）；
+- 已保存电脑：列表显示电脑名称、地址、电脑图标和进入箭头；元数据与凭证分离，原生壳的新房间凭证只写 OS 安全存储，浏览器使用 localStorage；删除即 `✕`，无需确认（可随时重连恢复）；**仅成功连接（welcome 帧到达后）才记录**，失败/超时不记录；
+- 新连接：原生扫码使用 accent 主按钮（`getUserMedia` + jsQR 纯 JS 解码，无插件）；配对码与链接使用次级折叠表单，`useCollapseHeight` 保持挂载可动画（`aria-expanded` 表达触发器状态，`aria-hidden + inert` 表达折叠态）；
 - 配对流程：6 位码 + 电脑地址 → `pair.resolve`（6s 超时，友好错误文案）→ 记住地址（secure）；
 - 跳过态：`sh-connect-card--empty` 空态 + "connect to a computer" 返回引导；`SKIP_KEY` 持久化；
 - 错误：`localError ?? error` 单行展示，`key={shown}` 触发重渲染动画。
@@ -166,13 +176,15 @@ Session（会话）
 验收：断网时打开配对码 → 6s 内出"cannot reach the computer — same Wi-Fi?"；QR 权限拒绝 →
 "scan failed — use the pair code instead"；跳过态重启后仍跳过。
 
-### 4.2 Workspace（工作区）
+### 4.2 新会话草稿与桌面工作区
 
-- 顶部：标题 + 副文案"tap one to watch it live"；
-- 卡片：标题 / working(旋转) · paused · idle 状态徽标 / 相对时间 / 消息数 / cwd（shortenPath）/ history chip；
-- 项目分组侧栏：≤768px 转横向顶部限高 220px 可折叠条（`.sh-ws-sidebar`）；
-- 空态："no sessions yet"。
-- 交互：点卡片 → `selectWorkspaceSession(id)` 聚焦；header 返回键 → `selectWorkspaceSession(null)`。
+- 多会话手机连接后默认显示新会话草稿，不显示工作区卡片主页；问候与输入提示保持静态，建议最多三条且只填入输入框；可输入时使用手机短提示，不显示“等待会话”或被裁切的长提示；
+- 顶栏标题打开 SessionsSheet。列表为空时仍显示固定的“新会话 / 管理电脑 / 设置”底部动作；会话行使用不透明表面，滑动露出的重命名和删除按钮不得透过行背景与文字重叠；
+- 从列表点选已有会话后进入 transcript；新会话按钮、header 返回和系统返回均只清除焦点并回到草稿，同时清除旧会话的消息、流式状态、工具、进度、UI 请求和审批，旧 transcript 不得留在草稿下；
+- 首次发送必须依次完成 `session.create`、选择新会话、等待该会话的 `live` 快照，再发送 prompt，防止首条消息落入主机先前会话；创建后或水合期间收到的普通 workspace 目录刷新只更新目录，不得清除焦点或审批，重连才回到草稿；
+- 创建或水合失败时不发送 prompt，保留文字与图片草稿并显示错误；发送期间禁止重复提交，只有成功后才清空草稿；
+- 设置是独立页面，不显示会话 Sheet 的标题下拉；电脑管理保留完整电脑名称，并使用设置语义文案。触摸点按后不得因随后的焦点事件重新弹出滞留 tooltip，长按提示保持不变；
+- 桌面 web 保留 Workspace：项目分组侧栏、会话卡片网格、点卡片聚焦、返回目录，行为不因手机草稿改变。
 
 ### 4.3 Session（会话）
 
@@ -182,14 +194,15 @@ Session（会话）
 
 | 元素 | ≤640px | ≤520px | 理由 |
 |---|---|---|---|
-| 返回（面板/workspace） | ✅ 常显 | ✅ | 导航必需 |
-| 标题 + cwd | 标题 ✅ / cwd ❌ | 标题 ✅ | cwd 冗余（卡片已示） |
-| read-only / model / thinking chips | ❌ | ❌ | 只读有 banner 兜底 |
-| context gauge | 只显示百分比数字（track 隐藏） | 百分比 ❌ | 数字即信息 |
-| avatars / dot | ✅ | ❌ | 会话状态已由 banner/dot 表达，窄屏删 |
-| 面板按钮（board/scheduled/files） | ✅ 4 按钮 | ✅ 折叠为 1 个"面板"菜单 | 核心功能入口，窄屏折叠保入口控溢出 |
-| theme / accent / language 切换 | ✅ | ❌ | 装饰性；connect 屏仍可达 |
-| server switcher / rail / leave | ✅ | ✅ | 会话级操作，保留 |
+| 返回（面板/设置/会话） | ✅ 常显 | ✅ | 导航必需 |
+| 标题 + cwd | 标题 ✅ / cwd ❌ | 标题 ✅，单行省略并打开会话 Sheet | cwd 冗余 |
+| read-only / model / thinking chips | ❌ | ❌ | 只读有专门提示 |
+| context gauge | ❌ | ❌ | 顶栏只保留核心动作 |
+| avatars / dot | ❌ | ❌ | 连接状态由 banner 表达 |
+| 面板按钮 | 折叠为 1 个"面板"菜单 | 同左 | 保留功能入口并控制溢出 |
+| 新会话 | ✅ | ✅ | 高频核心动作，只清空焦点 |
+| theme / accent / language | 设置页 | 设置页 | 顶栏不放装饰性控件 |
+| 电脑管理 / 退出 | 会话 Sheet / 设置页 | 同左 | 避免顶栏拥挤 |
 
 触控目标：`sh-btn-icon` ≤640px 时 `min-width/min-height: 44px`（§5.3）。
 
@@ -204,7 +217,8 @@ Session（会话）
 
 #### Composer（移动端）
 
-- 布局：输入框 + 发送/停止按钮；≤640px 隐藏文字标签（`sh-btn-label`），纯图标 44px 热区；
+- **compact 两段式**：收起态只保留「＋／textarea／语音或发送」；聚焦、附件或模型 Sheet、待发送文件、语音活动、多行文本会展开完整模型、思考等级与编辑控制。medium／wide 始终显示完整控制区；局部 ≤640px 规则只负责隐藏文字标签并保留 44px 图标热区；
+- **编辑器连续性**：textarea 始终挂载，展开／收起和 Sheet 开关不得卸载它。compact 的模型与思考按钮在 pointer-down 阻止失焦默认行为，避免按钮在 click 前随控制区收起而消失；
 - 键盘：`--mp-keyboard-inset` 垫底（§6.1），输入框 16px 防 iOS 聚焦缩放（已实现）；
 - IME：Enter 提交必须经过 composition guard（已实现），中文输入法候选确认不触发发送；
 - ask 模式：`select` 选项大按钮（≥44px）、`editor` 预填输入框 —— 是移动端"被询问时快速回应"
@@ -215,15 +229,15 @@ Session（会话）
   时无缝替换选中态。单选（radio）点选项立即提交；
 - queued 计数：`×N` 徽标（标签在 ≤640px 隐藏，数字保留）。
 
-### 4.4 面板（board / scheduled / files）
+### 4.4 面板与独立设置
 
-移动端全屏（`sh-panel`），header 返回按钮（MessageSquare 图标）回 transcript；与 rail 互斥。
-面板内滚动与键盘处理同 transcript 契约。P3 迁入工作区抽屉（§10）。
+面板和设置均为移动端全屏页面，header 返回按钮回到进入前的草稿或会话；与 rail 互斥，页面内滚动与键盘处理同 transcript 契约。设置集中提供外观、语言、电脑管理、语音和断开连接，不挤占顶栏。P3 再把工作区功能迁入抽屉（§10）。
 
 ### 4.5 覆盖层
 
-- **AgentsRail**：≤768px 右侧绝对定位抽屉（280px / 85vw）+ backdrop；子代理首次出现自动展开
-  （autoOpenedRef，已有）；
+- **HostManager**：≤520px 使用底部玻璃 Sheet，最大高度 `min(76dvh, 680px)`，列表内部滚动；宽屏继续使用液态玻璃对话框；
+- **PanelMenu**：≤520px 使用底部玻璃浮层，保留四个面板入口与显式关闭；共享既有 back-stack 优先级；
+- **AgentsRail**：compact／medium 为右侧绝对定位抽屉（280px / 85vw）+ backdrop；wide 才可常驻。子代理首次出现只在 wide 自动展开，其他布局必须由用户显式打开；
 - **AgentDrawer**：`min(440px, 92vw)` 右滑入（`ag-drawer-in` 150ms）；含 agent 名/生命周期/进度；
 - **Banners**：connecting/waiting/reconnecting 横幅 + ended 全屏卡片（Rejoin / New link）；
 - **Toasts**：右上堆叠，info 4s / warning 8s / error 常驻可关，4 条封顶。
@@ -257,10 +271,8 @@ Session（会话）
 
 ### 5.3 触控目标与间距
 
-- 图标按钮（header / composer 动作）≤640px：`min-width/height: 44px`；`sh-btn` 保持视觉 22px 内边距，
-  热区扩展不改变视觉；
-- 选项按钮（ask select / connect method / workspace 卡片）：min-height 44px（已有 connect-method）；
-- 输入框：16px 字体（已有），`caret-color` 跟随 accent；
+- 移动端正文默认 15px，设置提供 13／15／17px 三档；输入框保持 16px，`caret-color` 跟随 accent；
+- 图标按钮、选项按钮及触屏公式／Mermaid／表格操作均以 44px 为最小触控尺寸；紧凑视觉样式不缩小实际热区；
 - 行距：消息行 ≥ 8px 垂直间距（已有），群组按钮间 ≥ 4px 缝隙防误触。
 
 ### 5.4 触屏无 hover 的处理
@@ -280,20 +292,20 @@ Session（会话）
   `scrollIntoView({ block: "center" })` 提升聚焦输入）；
 - 桌面 web 不加载 mobile.tsx，`--mp-keyboard-inset` 恒 0。
 
-### 6.2 状态栏与安全区
+### 6.2 状态栏、安全区与启动反馈
 
-- `StatusBar.setOverlaysWebView({ overlay: true })` + `setStyle`（跟随 `data-theme`）+ 透明背景
-  （`setupImmersiveSystemBars`，boot 即执行，覆盖所有 Android 版本/ROM 的首帧闪色）；
-- `--safe-top/--safe-bottom`：`env(safe-area-inset-*)` 原生支持时由 CSS 承担；旧 WebView
-  （卓易通类兼容层）无 env → JS 固定 24/12px 降级 + StatusBar.getInfo().height() 精确覆盖；
-- 消费方：header `padding-top`、composer/connect `padding-bottom`。
+- `StatusBar.setOverlaysWebView({ overlay: true })` + 透明背景；`setupImmersiveSystemBars` 在启动时设置图标样式，并监听 `data-theme` 变化同步浅色／深色状态栏；
+- `--safe-top/--safe-bottom`：`env(safe-area-inset-*)` 原生支持时由 CSS 承担；旧 WebView 使用 JS 固定安全区降级，再由原生插件返回的真实系统栏高度覆盖；
+- 消费方：header `padding-top`、composer/connect `padding-bottom`；
+- `mobile.html` 与主入口允许用户页面缩放；移动入口加载共享 `fonts.css`，使用与桌面一致的打包字体。`BootSplash` 在实时应用上方显示启动覆盖层，不阻塞连接和初始状态加载；Android 原生资源同时提供 `values-night` 启动主题；
+- 本轮状态栏、软键盘与原生启动行为尚未在真实 Android 设备复验，沿用旧模拟器记录不代表这些新改动已通过设备验收。
 
 ### 6.3 返回键分层导航（Android back）
 
 - 壳：`@capacitor/app` 的 `backButton` 事件在原生壳内拦截（`mobile.tsx`）；
-- 分发：`lib/back-stack.ts` 层栈注册表（2026-08-31 重构）。每个模态覆盖层
-  （AgentDrawer / SessionsSheet / ServerSwitcher / 窄屏面板菜单 / AgentsRail / 面板 /
-  Workspace 返回）用 `useBackLayer(priority, active, handler)` 注册自己的关闭 handler；
+- 分发：`lib/back-stack.ts` 层栈注册表。每个模态覆盖层
+  （AgentDrawer / SessionsSheet / HostManager / 窄屏面板菜单 / AgentsRail / 面板或设置 /
+  会话返回）用 `useBackLayer(priority, active, handler)` 注册自己的关闭 handler；
   `setupAndroidBackHandler` 调 `dispatchBack()` 从最高优先级到最低逐个尝试，第一个
   消费的停止——**一次 back 只关一层**，不再广播 CustomEvent；
 - 桌面 web 不加载该监听，浏览器历史不受影响；
@@ -325,14 +337,14 @@ Session（会话）
 
 | 项 | 标准 | 现状 |
 |---|---|---|
-| 触控目标 | ≥44px（≤640px） | 本次补 |
-| 对比度 | 文本 ≥ 4.5:1（token 体系已满足，验证 `--fg-muted` on `--bg`） | ✅ |
+| 触控目标 | ≥44px，紧凑视觉不缩小实际热区 | ✅ |
+| 对比度 | 文本 ≥ 4.5:1；默认语义色提高弱文字对比度，移植主题需逐一实测 | 默认 token 已调整，未全量实测 |
 | 焦点可见 | `--ring` cyan 焦点环（键盘导航） | ✅ |
 | 语义 | `role="alert/status/alertdialog/menu"`、`aria-label`、`aria-hidden + inert` 折叠区 | ✅ |
 | 动效 | `prefers-reduced-motion` 全量覆盖（sh-fade-in / drawer / reveal） | ✅ |
-| 触屏无 hover | 操作行常显（§5.4） | 本次补 |
+| 触屏无 hover | 操作行常显（§5.4） | ✅ |
 | IME | composition guard 防误提交 | ✅ |
-| 缩放 | 输入 16px 防 iOS 聚焦缩放；`maximum-scale=1` 禁双击缩放（移动壳） | ✅ |
+| 缩放 | 页面允许用户缩放；输入 16px 只用于避免聚焦时自动放大，不禁止页面缩放 | ✅ |
 | 读屏 | 消息文本即内容（无 canvas 化 transcript） | ✅ |
 
 ## 8. 性能预算
@@ -359,6 +371,10 @@ Session（会话）
 - [ ] 最近连接：连接一次 → 列表出现；删除即消失；重启应用仍在（secure-store）
 
 **会话**
+- [ ] 多会话手机默认进入新草稿；桌面 web 仍进入工作区目录
+- [ ] 会话 Sheet 空列表也可达新会话、电脑管理和独立设置；设置返回原草稿或会话
+- [ ] 已有会话可进入并返回新草稿，返回本身不创建会话
+- [ ] 首次发送先创建并水合目标会话再发 prompt；失败保留文字和图片，连点不重复提交
 - [ ] transcript 流式渲染；中文输入法 Enter 确认合成、不误发消息
 - [ ] 停止按钮中断 turn；queued 计数显示
 - [ ] 面板往返、rail 展开/收起、agent 详情 drawer 关闭路径全部可达（含系统返回键）
@@ -366,7 +382,7 @@ Session（会话）
 
 **原生**
 - [ ] Android 13+ 首次连接弹通知权限；拒绝后无崩溃、无重复请求；授权后后台消息触发本地通知
-- [ ] 系统返回键：drawer → rail → 面板 → workspace 逐层关闭，最后退出
+- [ ] 系统返回键：drawer → rail → 面板或设置 → 新草稿逐层关闭，最后退出
 - [ ] 键盘弹出时 composer 上移不遮挡；输入 16px 无聚焦缩放；状态栏图标随主题变色
 - [ ] 窄屏 header 无溢出（390px 基准）；44px 触控目标热区
 
@@ -387,7 +403,7 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
   双通道 + 冷启动 stash；通知 `extra.link` 经 `localNotificationActionPerformed` 路由，见 §11.3）；
 - 应用图标角标（未读会话数）✅（`@capawesome/capacitor-badge` ShortcutBadger，小米/华为/OPPO
   启动器支持；前台恢复自动清零；`Capacitor.Plugins.Badge` 直取，规避 bundle 动态 import 解析）；
-- 平板/折叠屏布局 ✅（≥768px rail 常驻为左侧栏，transcript 全宽，见 §11.4）；
+- 平板/折叠屏布局 ✅（共享 compact／medium／wide 断点；≥840px 的 wide 才允许 rail 常驻，见 §3.3、§11.4）；
 - PWA 清单 ✅（`mobile.webmanifest` + mobile.html manifest link，可安装 standalone）。
 
 ### P3（后续）
@@ -464,10 +480,9 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
   与既有 `setupAndroidBackHandler` 教训一致）。Pixel launcher 不支持 badge（ShortcutBadger
   `supported=false`），API 本身验证通过（set 3 → get 3 → clear 0）；小米/华为/OPPO 启动器可用。
 
-### 11.4 平板布局 + PWA（2026-08-25）
+### 11.4 平板布局 + PWA（2026-08-25，2026-11-01 更新断点）
 
-- ≥768px：agents rail 从全屏覆盖层变为常驻左侧列（`position: static; width: 300px`，backdrop 隐藏），
-  transcript 保持全宽 —— 两栏工作布局（内容 + rail），面板/工作区仍全屏（内容密集场景）。
+- 当前契约：`<840px` 的 compact／medium 使用覆盖式 agents rail；`≥840px` 的 wide 从覆盖层变为常驻列（`position: static; width: 300px`，backdrop 隐藏），形成内容 + rail 两栏布局。短横屏按 §3.3 归入 compact。只有 wide 会在首个子代理出现时自动展开 rail。
 - PWA：`public/mobile.webmanifest`（MusePi 品牌，standalone，4 尺寸图标）+ mobile.html
   `<link rel="manifest">`——安卓 Chrome 可"添加到主屏幕"。
 ### 11.5 引导界面重做 + 真机专属 bug 修复（2026-08-25）
@@ -642,9 +657,9 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 ### 12.1 A1 — 返回键层栈完整化（back-stack）
 
-**缺陷**：`musepi:back` 是 window CustomEvent，`Session` 组件集中监听但只处理 drawer/rail/panel/workspace 四层，SessionsSheet/QrScanner/ServerSwitcher 三个模态覆盖层未进层栈，导致"一次 back 关两层"或"扫码时按返回直接退应用"。
+**缺陷**：`musepi:back` 是 window CustomEvent，`Session` 组件集中监听但只处理 drawer/rail/panel/workspace 四层，SessionsSheet/QrScanner/HostManager 三个模态覆盖层未进层栈，导致"一次 back 关两层"或"扫码时按返回直接退应用"。
 
-**修复**：新建 `lib/back-stack.ts` 模块级层栈注册表。每个模态组件用 `useBackLayer(priority, active, handler)` hook 注册自己的关闭 handler。`setupAndroidBackHandler` 改调 `dispatchBack()` 从最高优先级到最低逐个尝试，第一个返回 true 的消费并停止，确保一次 back 关一层。优先级（从最上层到最下层）：AgentDrawer(100) > QrScanner(95) > SessionsSheet(90) > ServerSwitcher(85) > PanelMenu(84) > AgentsRail(80) > Panel(60) > Workspace(40)。删除原 `BACK_EVENT` CustomEvent 机制。
+**修复**：新建 `lib/back-stack.ts` 模块级层栈注册表。每个模态组件用 `useBackLayer(priority, active, handler)` hook 注册自己的关闭 handler。`setupAndroidBackHandler` 改调 `dispatchBack()` 从最高优先级到最低逐个尝试，第一个返回 true 的消费并停止，确保一次 back 关一层。优先级（从最上层到最下层）：AgentDrawer(100) > QrScanner(95) > SessionsSheet(90) > HostManager(85) > PanelMenu(84) > AgentsRail(80) > Panel(60) > Workspace(40)。删除原 `BACK_EVENT` CustomEvent 机制。
 
 **契约测试**：`test/back-stack.test.ts`（6 个用例：优先级排序、消费后注销、同优先顺序、跨层消费、整体重置）。
 
@@ -666,9 +681,9 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 ### 12.4 A4 — 连接记录时机
 
-**缺陷**：`ConnectScreen.connect()` 在 `onConnect` 前调用 `rememberConnection`，失败连接（bad link、pair 超时、QR 坏链接）仍进入最近列表，用户需手动删除。
+**缺陷**：`ConnectScreen.connect()` 在 `onConnect` 前调用 `rememberHost`，失败连接（bad link、pair 超时、QR 坏链接）仍进入最近列表，用户需手动删除。
 
-**修复**：`GuestClient` 新增 `onWelcome` 回调，仅在首个 welcome 帧（首次连接成功）触发。`App.connect` 在 `onWelcome` 里调用 `rememberConnection(link, name)`。ConnectScreen 移除提前 `rememberConnection`。`#welcomed` 已 true 时重连 welcome 不重复触发。
+**修复**：`GuestClient` 新增 `onWelcome` 回调，仅在首个 welcome 帧（首次连接成功）触发。`App.connect` 在 `onWelcome` 里调用 `rememberHost(link, name)`。ConnectScreen 移除提前 `rememberHost`。`#welcomed` 已 true 时重连 welcome 不重复触发。
 
 **契约测试**：`test/welcome-hook.test.ts`（4 个用例：首次 welcome 触发、重连不触发、无 welcome 不触发、坏链接构造抛异常）。
 
@@ -684,7 +699,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 **缺陷**：≤520px 时 header-right 有 4 个面板按钮（44px×4）+ theme/server/rail/leave 共约 382px + 左侧标题约 124px = 506px > 390px 基准屏，必然水平溢出。
 
-**修复**：HeaderBar 在 ≤520px 时把 4 个面板按钮折叠成 1 个"面板"菜单按钮（LayoutDashboard 图标），点击弹出 popover 列出 4 项（复用 ServerSwitcher popover 视觉）。Back 层注册优先级 84。CSS 补 `.sh-header-nav` 定位上下文、`.sh-panel-menu-item` 按钮样式。
+**修复**：HeaderBar 在 ≤520px 时把 4 个面板按钮折叠成 1 个"面板"菜单按钮（LayoutDashboard 图标），点击弹出 popover 列出 4 项（复用 HostManager popover 视觉）。Back 层注册优先级 84。CSS 补 `.sh-header-nav` 定位上下文、`.sh-panel-menu-item` 按钮样式。
 
 **契约测试**：`test/header-bar-narrow.test.tsx`（2 个用例：宽屏 4 按钮、窄屏折叠菜单 + 原按钮消失）。
 
@@ -699,8 +714,8 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 | `src/app.tsx` | Session 四层迁移到 useBackLayer；connect 改 onWelcome 写 hash+记录 |
 | `src/components/shell/Composer.tsx` | checkbox pending 禁用 + helpText |
 | `src/components/shell/SessionsSheet.tsx` | 常挂载 + visible/closing 状态机 + back 层注册 |
-| `src/components/shell/ServerSwitcher.tsx` | useBackLayer 注册 |
-| `src/components/shell/ConnectScreen.tsx` | useBackLayer scanner + 移除提前 rememberConnection |
+| `src/components/shell/HostManager.tsx` | useBackLayer 注册 |
+| `src/components/shell/ConnectScreen.tsx` | useBackLayer scanner + 移除提前 rememberHost |
 | `src/components/shell/HeaderBar.tsx` | ≤520px 面板折叠 + useBackLayer panelMenu |
 | `src/components/shell/shell.css` | 退场动画 keyframes + reduced-motion 豁免 + panel-menu 样式 |
 | `test/back-stack.test.ts` | 新建 |
@@ -708,3 +723,12 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 | `test/ask-multi.test.tsx` | 新建 |
 | `test/welcome-hook.test.ts` | 新建 |
 | `test/header-bar-narrow.test.tsx` | 新建 |
+
+## 13. 主机管理、恢复与远程审批
+
+- `lib/hosts.ts` 统一保存主机元数据与候选路径。公开元数据不含完整房间链接；原生壳把新凭证写入 Android Keystore／iOS Keychain，不新增 localStorage 明文镜像。旧最近连接仅在凭证写入成功后迁移。
+- 连接页和会话顶栏 HostManager 共用同一份主机列表。支持添加、切换、重命名、删除；删除当前主机或添加主机会退出当前会话并回到连接页。列表仅展示地址，不展示 E2E key 或写入令牌。
+- 启动优先级：显式 hash → 原生冷启动深链 → `/__daemon.json` 本地 HostClient → 最近保存的 Guest 主机。连接代数与取消标记防止慢探测覆盖用户的新连接。
+- CollabSocket 自己负责 live／reconnecting 状态的重连。应用层只在 Guest 已 ended，或允许自动恢复的空状态下响应回前台／online；HostClient 不重复建连。用户主动退出后，自动恢复保持关闭，直到下一次显式连接。
+- 可写 Guest 通过 `approval-request`／`approval-response` 处理工具审批。daemon ApprovalBridge 是唯一结算方；主机完成后所有设备同步清除请求。只读 Guest 不接收审批，welcome、会话结束、工作区目录与取消聚焦都会清理过期请求。
+- 桌面分享对话框使用 `RemoteAccessDialog` 与 `remote-access.start/status/stop/pair.generate`。旧 `collab.*` RPC、`/collab` 深链和协议包保持兼容，不建立第二套分享状态。

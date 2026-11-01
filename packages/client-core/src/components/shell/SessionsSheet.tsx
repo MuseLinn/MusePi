@@ -1,10 +1,11 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
-import { Check, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { Check, Loader2, Pencil, Server, Settings, SquarePen, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
+import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { formatWhen, shortenPath } from "../../lib/format";
 import { haptic } from "../../lib/haptics";
@@ -31,6 +32,9 @@ export function SessionsSheet({
 	onSelect,
 	open,
 	onClose,
+	onNewSession,
+	onOpenSettings,
+	onOpenHosts,
 }: {
 	client: SessionClient;
 	sessions: readonly WorkspaceSessionInfo[];
@@ -38,6 +42,9 @@ export function SessionsSheet({
 	onSelect(id: string): void;
 	open: boolean;
 	onClose(): void;
+	onNewSession?(): void;
+	onOpenSettings?(): void;
+	onOpenHosts?(): void;
 }): ReactNode {
 	const [dragY, setDragY] = useState(0);
 	const dragging = useRef(false);
@@ -175,6 +182,22 @@ export function SessionsSheet({
 						);
 					})}
 				</div>
+				{isMobileShell() && (
+					<div className="ss-footer">
+						<button type="button" className="ss-footer-action ss-footer-action--new" onClick={onNewSession}>
+							<SquarePen size={17} aria-hidden />
+							<span>{t("settings.newSession")}</span>
+						</button>
+						<button type="button" className="ss-footer-action" onClick={onOpenHosts}>
+							<Server size={17} aria-hidden />
+							<span>{t("settings.manageHosts")}</span>
+						</button>
+						<button type="button" className="ss-footer-action" onClick={onOpenSettings}>
+							<Settings size={17} aria-hidden />
+							<span>{t("settings.settings")}</span>
+						</button>
+					</div>
+				)}
 			</div>
 		</div>
 	);

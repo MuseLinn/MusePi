@@ -8,7 +8,11 @@ import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
-import { removeSyncWithRetries } from "@musepi/pi-utils";
+import { logger, removeSyncWithRetries } from "@musepi/pi-utils";
+
+declare global {
+	var __profilePresetDisposed: boolean | undefined;
+}
 
 let home: string;
 let modeDir: string;
@@ -26,6 +30,20 @@ beforeEach(async () => {
 	modelRegistry = new ModelRegistry(authStorage);
 	const bundleDir = path.join(home, ".musepi", "plugins", "node_modules", "@musepi", "preset-bundle");
 	fs.mkdirSync(bundleDir, { recursive: true });
+	const activeDir = path.join(home, ".musepi", "plugins", "node_modules", "@demo", "active");
+	fs.mkdirSync(activeDir, { recursive: true });
+	await Bun.write(
+		path.join(activeDir, "package.json"),
+		JSON.stringify({ name: "@demo/active", version: "1.0.0", musepi: { extensions: ["./index.js"] } }),
+	);
+	await Bun.write(
+		path.join(activeDir, "index.js"),
+		`export function apply(pi) { pi.registerTool({ name: "profile_preset_tool", description: "profile preset", parameters: {}, execute: async () => ({ content: [] }) }); pi.effect(() => { globalThis.__profilePresetDisposed = true; }); }`,
+	);
+	await Bun.write(
+		path.join(home, ".musepi", "plugins", "musepi-plugins.lock.json"),
+		JSON.stringify({ plugins: { "@demo/active": { version: "1.0.0", enabled: true, enabledFeatures: null } } }),
+	);
 	await Bun.write(
 		path.join(home, ".musepi", "package.json"),
 		JSON.stringify({ musepi: { profile: { bundles: ["@musepi/preset-bundle"] } } }),
@@ -68,9 +86,24 @@ async function createWithMode(id: string): Promise<AgentSession> {
 
 describe("profile Agent preset resolution", () => {
 	it("resolves a bundle-declared preset through the real SDK path", async () => {
+		const errors = vi.spyOn(logger, "error");
 		const session = await createWithMode("review");
 
+		expect(errors.mock.calls).toEqual([]);
 		expect(session.agent.state.systemPrompt.join("\n")).toContain("Profile reviewer");
+		expect(session.getAllToolNames()).toContain("profile_preset_tool");
+	});
+
+	it("removes preset tools and disposes their fibers on a mode switch", async () => {
+		const session = await createWithMode("review");
+		expect(session.getAllToolNames()).toContain("profile_preset_tool");
+
+		const result = await session.setMode("chat");
+
+		expect(result).toEqual({ ok: true });
+		expect(session.getAllToolNames()).not.toContain("profile_preset_tool");
+		expect(globalThis.__profilePresetDisposed).toBe(true);
+		delete globalThis.__profilePresetDisposed;
 	});
 
 	it("keeps a file preset authoritative when its id collides with the profile", async () => {

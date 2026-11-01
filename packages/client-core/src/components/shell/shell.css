@@ -273,10 +273,11 @@
 /* ---- shared controls ---- */
 .sh-btn {
 	display: inline-flex;
+	min-height: var(--control-height-sm);
 	align-items: center;
-	gap: 5px;
-	padding: 4px 10px;
-	font-size: var(--ui-font-size-xs);
+	gap: 6px;
+	padding: var(--space-1) var(--space-3);
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	color: var(--fg-muted);
 	background: var(--bg-raised);
@@ -413,7 +414,20 @@
 	display: flex;
 	align-items: baseline;
 	gap: 10px;
+	flex: 1 1 0;
 	min-width: 0;
+	overflow: hidden;
+}
+
+.sh-header .sh-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-header .sh-title-btn {
+	flex: 0 1 auto;
 }
 
 .sh-header-right {
@@ -586,29 +600,69 @@
 .sh-composer {
 	padding: 12px 14px;
 	padding-bottom: calc(12px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
-	border-top: 1px solid var(--border);
-	background: var(--bg);
+	background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--bg) 82%, transparent) 32%);
 	/* Keyboard inset changes should track the IME, not jump. */
 	transition: padding-bottom 220ms var(--spring);
 }
 
 .sh-composer-inner {
-	display: flex;
-	align-items: flex-end;
-	gap: 10px;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas:
+		"editor editor editor"
+		"leading actions end";
+	align-items: end;
+	gap: 6px 8px;
+	width: 100%;
 	max-width: 880px;
 	margin: 0 auto;
-	/* Desktop composer parity: floating card with hairline ring + soft
-	 * shadow instead of a flat strip (AI Agent Input pattern). */
-	padding: 8px 10px;
-	border: 0.5px solid var(--border);
+	padding: 8px;
+	border: 0.5px solid var(--glass-border);
 	border-radius: var(--radius-xl);
-	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
-	box-shadow: var(--shadow-overlay);
+	background:
+		var(--glass-sheen),
+		color-mix(in oklab, var(--color-surface-raised) 48%, transparent);
+	box-shadow: var(--gui-input-shadow, var(--shadow-overlay));
+	container-type: inline-size;
 	transition:
 		border-color 160ms var(--spring),
 		box-shadow 160ms var(--spring),
-		background 160ms var(--spring);
+		background 160ms var(--spring),
+		border-radius 220ms var(--spring-liquid);
+}
+
+.sh-composer-editor {
+	grid-area: editor;
+	min-width: 0;
+}
+
+.sh-composer-leading,
+.sh-composer-end {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.sh-composer-leading {
+	grid-area: leading;
+}
+
+.sh-composer-end {
+	grid-area: end;
+	justify-content: flex-end;
+}
+
+.sh-composer-inner[data-layout="compact"][data-expanded="false"] {
+	grid-template-areas: "leading editor end";
+	align-items: center;
+	gap: 4px;
+	padding: 4px 6px;
+	border-radius: 999px;
+}
+
+.sh-composer-inner[data-layout="compact"][data-expanded="false"] .sh-composer-actions {
+	display: none;
 }
 
 .sh-composer-inner:focus-within {
@@ -619,12 +673,14 @@
 }
 
 .sh-composer-input {
-	flex: 1;
+	display: block;
+	width: 100%;
 	min-width: 0;
-	padding: 6px 4px;
+	padding: 6px 8px;
 	font-size: var(--ui-font-size);
 	line-height: 22px;
 	color: var(--fg);
+	caret-color: var(--accent);
 	background: transparent;
 	border: none;
 	border-radius: var(--radius-lg);
@@ -694,15 +750,25 @@
 	text-overflow: ellipsis;
 }
 .sh-composer-actions {
+	grid-area: actions;
 	display: flex;
 	align-items: center;
+	justify-content: flex-start;
 	gap: 6px;
-	/* Shrink before the textarea is crushed: when the actions row runs out
-	 * of width (narrow phones + long "working" label + queued counter), the
-	 * pill degrades label-first instead of overlapping the input. */
-	flex: 0 1 auto;
 	min-width: 0;
-	padding-bottom: 1px;
+	overflow: hidden;
+}
+
+.sh-composer-send {
+	min-width: 40px;
+	min-height: 40px;
+	justify-content: center;
+	border-radius: 999px;
+}
+
+.sh-composer-leading .sh-btn,
+.sh-composer-end .sh-btn {
+	justify-content: center;
 }
 
 /* ── Voice input (daemon stt.transcribe; design 「语音四帧」) ───────────────
@@ -1260,7 +1326,7 @@
 /* ---- shared tooltip ---- */
 .gui-tooltip {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--z-tooltip);
 	max-width: 340px;
 	padding: 4px 9px;
 	border: 1px solid var(--glass-border);
@@ -1432,6 +1498,7 @@
 
 .sh-connect-card {
 	width: 100%;
+	min-width: 0;
 	max-width: 400px;
 	max-height: 100%;
 	overflow-y: auto;
@@ -1497,12 +1564,21 @@
 	gap: 12px;
 }
 
+.sh-connect-preferences {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: none;
+}
+
 .sh-lockup {
 	display: inline-flex;
 	align-items: center;
 	gap: 9px;
+	flex: none;
 	font: 500 16px / 1.4 var(--font-mono);
 	letter-spacing: 0.02em;
+	white-space: nowrap;
 	margin: 0;
 }
 
@@ -1619,6 +1695,7 @@
 }
 
 .sh-connect-method--scan:hover {
+	background: var(--color-accent);
 	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
 	box-shadow:
 		0 4px 16px color-mix(in oklab, var(--color-accent) 22%, transparent),
@@ -1870,6 +1947,219 @@
 	}
 }
 
+/* Remote-workspace hierarchy: brand and task first, saved computers next,
+ * connection protocols last. The phone uses an open page, not a form card. */
+.sh-connect-card {
+	max-width: 520px;
+	gap: 20px;
+	padding: 28px 32px;
+	background: var(--glass-sheen), var(--glass-bg);
+	border-color: var(--glass-border);
+	box-shadow: var(--glass-shadow);
+}
+.sh-connect-head {
+	min-height: 44px;
+}
+.sh-connect-preferences .sh-theme-toggle {
+	width: 44px;
+	height: 44px;
+	background: var(--glass-bg);
+	border-color: var(--glass-border);
+}
+.sh-connect-hero {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 16px 0 4px;
+}
+.sh-connect-hero--compact {
+	padding-top: 4px;
+}
+.sh-connect-eyebrow {
+	color: var(--color-accent);
+	font: 500 var(--ui-font-size-xs) / 1.4 var(--font-mono);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+.sh-connect-hero h1 {
+	max-width: 420px;
+	margin: 0;
+	color: var(--fg);
+	font-size: clamp(28px, 5vw, 38px);
+	font-weight: 500;
+	line-height: 1.16;
+	letter-spacing: -0.035em;
+}
+.sh-connect-hero p {
+	max-width: 400px;
+	margin: 0;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.65;
+}
+.sh-connect-section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 20px;
+	padding: 0 2px;
+}
+.sh-connect-count {
+	min-width: 22px;
+	color: var(--fg-faint);
+	font: 500 var(--ui-font-size-xs) / 1 var(--font-mono);
+	text-align: right;
+}
+.sh-connect-recent,
+.sh-connect-methods,
+.sh-connect-recent-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.sh-connect-recent-item {
+	min-height: 64px;
+	gap: 0;
+	padding: 0;
+	overflow: hidden;
+	background: var(--glass-bg);
+	border-color: var(--glass-border);
+	border-radius: var(--radius-xl);
+}
+.sh-connect-recent-item--primary {
+	background: linear-gradient(
+		110deg,
+		color-mix(in oklab, var(--color-accent) 12%, var(--glass-bg)),
+		var(--glass-bg)
+	);
+	border-color: color-mix(in oklab, var(--color-accent) 28%, var(--glass-border));
+}
+.sh-connect-recent-main {
+	flex-direction: row;
+	align-items: center;
+	align-self: stretch;
+	gap: 12px;
+	padding: 10px 4px 10px 14px;
+	color: var(--fg);
+}
+.sh-connect-recent-icon {
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	flex: none;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	border-radius: var(--radius-lg);
+}
+.sh-connect-recent-copy {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+.sh-connect-recent-open {
+	flex: none;
+	color: var(--fg-faint);
+}
+.sh-connect-recent-rm {
+	margin: 0 4px;
+	background: transparent;
+	border-color: transparent;
+}
+.sh-connect-methods {
+	gap: 8px;
+}
+.sh-connect-method {
+	min-height: 68px;
+	padding: 12px 14px;
+	background: color-mix(in oklab, var(--bg-raised) 52%, transparent);
+	border-color: var(--glass-border);
+}
+.sh-connect-method--scan {
+	color: var(--accent-fg);
+	background: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 72%, var(--fg));
+	box-shadow: 0 10px 28px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+.sh-connect-method--scan .sh-connect-method-ico {
+	color: var(--accent-fg);
+	background: color-mix(in oklab, var(--accent-fg) 12%, transparent);
+}
+.sh-connect-method--scan .sh-connect-method-desc,
+.sh-connect-method--scan .sh-connect-method-chev {
+	color: color-mix(in oklab, var(--accent-fg) 76%, transparent);
+}
+.sh-connect-method-ico {
+	width: 38px;
+	height: 38px;
+	border-radius: var(--radius-lg);
+}
+.sh-connect-method-title {
+	font-size: var(--ui-font-size-sm);
+}
+.sh-connect-method-desc {
+	max-width: 340px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+}
+.sh-connect-card div.sh-connect-method {
+	min-height: 0;
+}
+
+@media (max-width: 640px) {
+	.sh-connect {
+		padding: 12px 20px;
+		padding-top: calc(12px + var(--safe-top, 0px));
+		padding-bottom: calc(20px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+		background:
+			radial-gradient(110% 55% at 50% 0%, color-mix(in oklab, var(--color-accent) 10%, transparent), transparent 70%),
+			radial-gradient(color-mix(in oklab, var(--fg) 4%, transparent) 1px, transparent 1.5px) 0 0 / 22px 22px,
+			var(--bg);
+	}
+	.sh-connect-card {
+		max-width: 480px;
+		max-height: none;
+		gap: 18px;
+		padding: 0;
+		overflow: visible;
+		background: transparent;
+		border: 0;
+		box-shadow: none;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+	.sh-connect-head {
+		min-height: 44px;
+	}
+	.sh-connect-hero {
+		padding: 22px 0 6px;
+	}
+	.sh-connect-hero h1 {
+		max-width: 340px;
+		font-size: clamp(30px, 9vw, 38px);
+	}
+	.sh-connect-hero p {
+		max-width: 340px;
+	}
+	.sh-connect-matrix {
+		top: 44px;
+		right: -20px;
+		left: -20px;
+		height: 190px;
+		opacity: 0.34;
+	}
+	.sh-connect-method {
+		min-height: 66px;
+	}
+	.sh-connect-skip {
+		align-self: center;
+		min-height: 44px;
+		margin-top: 0;
+	}
+}
+
 /* ---- server switcher (multi-server management) ---- */
 .sh-switcher {
 	position: relative;
@@ -1973,6 +2263,100 @@
 	flex: none;
 	color: var(--fg-faint);
 }
+
+/* Saved-host manager: a compact HostChip opens one shared glass surface. */
+.sh-host-chip {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	max-width: 180px;
+	min-height: 32px;
+	padding: 4px 8px;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-bg);
+	color: var(--fg-muted);
+	box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+	transition: transform 160ms var(--spring-snappy);
+}
+.sh-host-chip:active {
+	transform: scale(0.97);
+}
+.sh-host-chip--open {
+	color: var(--color-accent);
+}
+.sh-host-chip-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-sm);
+}
+.sh-host-manager-backdrop {
+	align-items: center;
+	padding: 24px;
+}
+.sh-host-manager.ss-card {
+	display: flex;
+	flex-direction: column;
+	max-width: 560px;
+	max-height: min(720px, calc(100dvh - 48px));
+	margin: 0;
+	animation: ss-card-in 240ms var(--spring-liquid);
+}
+.sh-host-manager-head-actions {
+	display: flex;
+	gap: 4px;
+}
+.sh-host-manager-status {
+	margin: 2px 0 0;
+	color: var(--fg-faint);
+	font-size: 11px;
+}
+.sh-host-manager-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-height: 0;
+	padding: 4px 10px 12px;
+	overflow-y: auto;
+}
+.sh-host-manager-item {
+	min-height: 52px;
+}
+.sh-host-manager-edit {
+	flex: 1;
+	min-width: 0;
+}
+.sh-host-path {
+	flex: none;
+	padding: 2px 6px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	color: var(--fg-faint);
+	font-size: 10px;
+}
+@media (max-width: 599px) {
+	.sh-host-chip {
+		max-width: 112px;
+	}
+	.sh-host-manager-backdrop {
+		padding: 0;
+	}
+	.sh-host-manager.ss-card {
+		max-width: none;
+		max-height: none;
+		height: 100%;
+		padding-top: var(--safe-top, 0px);
+		border-radius: 0;
+	}
+	.sh-host-manager-list {
+		padding-bottom: calc(12px + var(--safe-bottom, 0px));
+	}
+	.sh-host-manager-item {
+		flex-wrap: wrap;
+	}
+}
 .sh-connect-submit {
 	justify-content: center;
 	padding: 10px 14px;
@@ -2043,7 +2427,7 @@
 
 
 /* ---- responsive mobile styles ---- */
-@media (max-width: 768px) {
+@media (max-width: 839px) {
 	.sh-main {
 		position: relative;
 	}
@@ -2066,6 +2450,12 @@
 		background: var(--backdrop);
 		animation: sh-fade-in 150ms ease-out;
 	}
+	.sh-cwd,
+	.sh-chip-meta,
+	.sh-gauge,
+	.sh-avatars {
+		display: none;
+	}
 }
 
 @keyframes sh-fade-in {
@@ -2077,40 +2467,27 @@
 	}
 }
 
-@media (max-width: 640px) {
-	.sh-cwd {
+@media (max-width: 599px) {
+	.sh-cwd,
+	.sh-chip-meta,
+	.sh-gauge,
+	.sh-avatars {
 		display: none;
 	}
-	.sh-chip-meta {
-		display: none;
-	}
-	.sh-gauge-track {
-		display: none;
-	}
-	.sh-btn-label {
-		display: none;
-	}
+	.sh-btn-label,
 	.sh-queued-label {
 		display: none;
 	}
-	.sh-composer-actions .sh-btn {
+	.sh-composer-inner :is(.sh-composer-actions, .sh-composer-leading, .sh-composer-end) .sh-btn {
+		min-width: 44px;
+		min-height: 44px;
 		padding: 8px;
 	}
-	/* Mobile touch floor: 44px hit area for icon buttons and composer
-	 * actions (iOS HIG / Material3 tap-target guidance). The visual padding
-	 * is unchanged — the min-size extends the hit area, not the look. */
 	.sh-btn-icon {
 		min-width: 44px;
 		min-height: 44px;
 	}
-	.sh-composer-actions .sh-btn {
-		min-width: 44px;
-		min-height: 44px;
-	}
-	/* Squeeze fix: the working pill keeps its 44px touch floor via
-	 * min-height only — min-width is dropped so a long label + the queued
-	 * counter can never crowd the input out of the row. */
-	.sh-composer-actions .sh-btn-send-work {
+	.sh-composer-inner .sh-btn-send-work {
 		min-width: 0;
 		padding: 8px 10px;
 	}
@@ -2124,24 +2501,132 @@
 	.sh-ask-option-label {
 		font-size: 16px;
 	}
+	.sh-mt-capsule,
+	.sh-mt-seg {
+		height: 44px;
+	}
 }
 
-/* Narrow phones: drop decorative header controls — participant avatars,
- * the phase dot, and the accent/language toggles (still reachable on the
- * connect screen). The theme toggle stays: it is the one setting users
- * flip mid-session. :has() needs Chromium 105+/Safari 15.4+ — the Android
- * WebView baseline is 111, and desktop browsers all support it. */
-@media (max-width: 520px) {
+/* Compact phones and short landscape windows use the same shell layout as
+ * shellLayoutForViewport(). Appearance controls stay on the connect screen. */
+@media (max-width: 599px), (max-height: 479px) and (max-width: 1023px) {
 	.sh-avatars,
-	.sh-dot,
+	.sh-header-right > .sh-dot,
+	.sh-header-right > .gui-seg,
 	.sh-header .sh-theme-toggle:has(.sh-accent-dot),
 	.sh-header .sh-theme-toggle:has(.sh-lang-code) {
 		display: none;
 	}
+
+	.sh-header {
+		gap: 6px;
+		padding-right: 8px;
+		padding-left: 8px;
+	}
+	.sh-header .sh-title {
+		font-size: var(--ui-font-size-sm);
+		font-weight: 600;
+	}
+	.sh-header-right {
+		gap: 0;
+		padding: 2px;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius-xl);
+		box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+	}
+	.sh-header-right .sh-btn-icon,
+	.sh-header-right .sh-host-chip {
+		width: 44px;
+		min-width: 44px;
+		height: 44px;
+		min-height: 44px;
+		justify-content: center;
+		padding: 0;
+		background: transparent;
+		border-color: transparent;
+		box-shadow: none;
+	}
+	.sh-header-nav {
+		gap: 0;
+	}
+	.sh-host-chip-label {
+		display: none;
+	}
+	.sh-host-chip .sh-dot {
+		position: absolute;
+		right: 7px;
+		bottom: 7px;
+		width: 6px;
+		height: 6px;
+		box-shadow: 0 0 0 2px var(--bg);
+	}
+	.sh-panel-menu-pop {
+		position: fixed;
+		top: auto;
+		right: 12px;
+		bottom: calc(12px + var(--safe-bottom, 0px));
+		left: 12px;
+		width: auto;
+		padding: 12px;
+		border-radius: var(--radius-2xl);
+	}
+	.sh-panel-menu-item {
+		min-height: 48px;
+		padding: 10px 12px;
+	}
+	.sh-host-manager-backdrop {
+		align-items: flex-end;
+		padding: 0 12px calc(12px + var(--safe-bottom, 0px));
+	}
+	.sh-host-manager.ss-card {
+		width: 100%;
+		height: auto;
+		max-height: min(76dvh, 680px);
+		padding-top: 0;
+		border-radius: var(--radius-2xl);
+	}
+	.sh-host-manager-list {
+		padding-bottom: 12px;
+	}
+	.sh-host-manager-item {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto 44px 44px;
+		gap: 4px 8px;
+		padding: 8px;
+	}
+	.sh-host-manager-item .sh-switcher-main,
+	.sh-host-manager-item .sh-host-manager-edit {
+		grid-column: 1 / -1;
+		width: 100%;
+	}
+	.sh-host-manager-item .sh-host-path {
+		grid-column: 1;
+		grid-row: 2;
+		justify-self: start;
+	}
+	.sh-host-manager-item .sh-switcher-cur-chip {
+		grid-column: 2;
+		grid-row: 2;
+	}
+	.sh-host-manager-item .sh-host-rename,
+	.sh-host-manager-item .sh-host-remove {
+		grid-row: 2;
+		width: 44px;
+		min-width: 44px;
+		height: 44px;
+		min-height: 44px;
+	}
+	.sh-host-manager-item .sh-host-rename {
+		grid-column: 3;
+	}
+	.sh-host-manager-item .sh-host-remove {
+		grid-column: 4;
+	}
 }
 
-/* ---- mobile touch enhancements (phone / small tablet) ---- */
-@media (max-width: 640px) {
+/* Portrait small-tablet geometry must not override the compact ≤599px rules. */
+@media (min-width: 600px) and (max-width: 640px) and (min-height: 480px) {
 	.sh-header {
 		gap: 8px;
 		padding: 8px 10px;
@@ -2153,6 +2638,10 @@
 	.sh-header-right {
 		gap: 4px;
 	}
+}
+
+/* Touch scrolling and composer safe areas also apply to compact landscape. */
+@media (max-width: 640px), (max-height: 479px) and (max-width: 1023px) {
 	.sh-composer {
 		padding: 8px 10px;
 		padding-bottom: calc(8px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
@@ -2185,6 +2674,53 @@
 	 * as "disabled" on touch (no :hover to reveal intent). */
 	.sh-btn:active {
 		transform: scale(0.96);
+	}
+}
+
+/* Touch target floor is input-based, not width-based: tablets and landscape
+ * phones need the same 44px controls as narrow phones. */
+@media (pointer: coarse) {
+	.sh-btn-icon,
+	.sh-header .sh-host-chip {
+		min-width: 44px;
+		min-height: 44px;
+	}
+	.sh-composer-inner :is(.sh-composer-actions, .sh-composer-leading, .sh-composer-end) .sh-btn {
+		min-width: 44px;
+		min-height: 44px;
+	}
+	.sh-composer-inner .sh-btn-send-work {
+		min-width: 0;
+	}
+	.sh-mt-capsule,
+	.sh-mt-seg,
+	.sh-panel-menu-item,
+	.sh-attach-option {
+		min-height: 44px;
+	}
+	.sh-attach-chips {
+		padding-top: 18px;
+		padding-right: 18px;
+	}
+	.sh-attach-remove {
+		top: -18px;
+		right: -18px;
+		width: 44px;
+		height: 44px;
+		border: 0;
+		background: transparent;
+	}
+	.sh-attach-remove::before {
+		content: "";
+		position: absolute;
+		width: 17px;
+		height: 17px;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-full);
+		background: var(--bg-inset);
+	}
+	.sh-attach-remove svg {
+		position: relative;
 	}
 }
 
@@ -2415,7 +2951,7 @@
 	padding: 40px 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 839px) {
 	.sh-workspace {
 		flex-direction: column;
 		padding: 20px 14px 60px;
@@ -2611,7 +3147,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	padding: 18px 20px;
+	padding: 18px 20px calc(18px + var(--mp-keyboard-inset, 0px));
+	scroll-padding-bottom: calc(18px + var(--mp-keyboard-inset, 0px));
 	overflow: hidden auto;
 }
 
@@ -3072,6 +3609,21 @@
 	animation: ss-card-in 240ms var(--spring-liquid);
 }
 
+@media (min-width: 600px) {
+	.ss-backdrop {
+		align-items: center;
+		padding: 24px;
+	}
+	.ss-card {
+		max-width: 560px;
+		max-height: calc(100dvh - 48px);
+		margin: 0;
+	}
+	.ss-card--confirm {
+		max-width: 380px;
+	}
+}
+
 /* Drag handle zone (grabber + head). touch-action:none so downward drag isn't
  * hijacked by the list scroll; the list below scrolls normally. */
 .ss-drag {
@@ -3142,7 +3694,7 @@
 	padding: 8px 12px;
 	border: none;
 	border-radius: var(--radius-lg);
-	background: none;
+	background: var(--bg-raised);
 	color: var(--fg);
 	font: inherit;
 	text-align: left;
@@ -3154,7 +3706,7 @@
 }
 
 .ss-item--active {
-	background: var(--accent-muted);
+	background: color-mix(in oklab, var(--accent-muted) 55%, var(--bg-raised));
 	color: var(--accent);
 }
 
@@ -4503,4 +5055,198 @@
 	background: var(--accent);
 	/* Percent ticks arrive as a stream — ease so it reads as progress, not jumps. */
 	transition: width 0.25s linear;
+}
+
+/* Mobile navigation footer and full-screen settings. */
+.ss-card:has(> .ss-footer) {
+	display: flex;
+	flex-direction: column;
+	max-height: min(82dvh, 720px);
+}
+
+.ss-card:has(> .ss-footer) .ss-list {
+	flex: 1;
+	min-height: 0;
+}
+
+.ss-footer {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 6px;
+	padding: 10px 12px calc(10px + var(--safe-bottom, 0px));
+	border-top: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg);
+}
+
+.ss-footer-action {
+	display: flex;
+	min-width: 0;
+	min-height: 56px;
+	padding: 8px 4px;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+.ss-footer-action:active {
+	background: var(--bg-inset);
+	color: var(--fg);
+	transform: scale(0.98);
+}
+
+.ss-footer-action--new {
+	color: var(--accent);
+	background: var(--accent-muted);
+}
+
+.sh-composer-error {
+	max-width: 880px;
+	margin: 0 auto 8px;
+	padding: 8px 12px;
+	border: 1px solid color-mix(in oklab, var(--err) 35%, transparent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--err) 8%, transparent);
+	color: var(--err);
+	font-size: var(--ui-font-size-sm);
+}
+
+.sh-mobile-settings {
+	width: min(100%, 720px);
+	margin: 0 auto;
+	padding: 20px 16px calc(32px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+}
+
+.sh-mobile-settings-head {
+	margin-bottom: 24px;
+}
+
+.sh-mobile-settings-head h2 {
+	margin: 0 0 8px;
+	font-size: var(--ui-font-size-xl);
+	font-weight: 650;
+	letter-spacing: -0.02em;
+}
+
+.sh-mobile-settings-head p,
+.sh-mobile-setting-description {
+	margin: 0;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.6;
+}
+
+.sh-mobile-settings-section {
+	margin-bottom: 16px;
+	padding: 16px;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg);
+	box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+}
+
+.sh-mobile-settings-section > h3 {
+	margin: 0 0 12px;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.sh-mobile-setting-row {
+	display: flex;
+	min-height: 52px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	border-bottom: 1px solid var(--border);
+}
+
+.sh-mobile-setting-row:last-child {
+	border-bottom: 0;
+}
+
+.sh-mobile-setting-row--stack {
+	align-items: stretch;
+	flex-direction: column;
+	justify-content: center;
+	gap: 8px;
+	padding: 10px 0;
+}
+
+.sh-mobile-font-size {
+	max-width: none;
+}
+
+.sh-mobile-settings-section .sh-host-switcher {
+	display: block;
+	margin-top: 12px;
+}
+
+.sh-mobile-settings-section .sh-host-chip {
+	width: 100%;
+	max-width: none;
+	min-height: 48px;
+	justify-content: flex-start;
+}
+
+.sh-mobile-settings-section .sh-host-chip-label {
+	display: block;
+}
+
+.sh-mobile-settings-section .sh-host-chip .sh-dot {
+	position: static;
+	width: 8px;
+	height: 8px;
+	margin-left: auto;
+}
+
+.sh-mobile-settings-voice {
+	padding: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.sh-mobile-settings-voice .sh-vp {
+	padding: 0;
+}
+
+.sh-mobile-settings-voice .sh-panel-head {
+	padding: 0 0 16px;
+}
+
+.sh-mobile-disconnect {
+	display: flex;
+	width: 100%;
+	min-height: 48px;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	border: 1px solid color-mix(in oklab, var(--err) 25%, var(--glass-border));
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--err) 6%, var(--glass-bg));
+	color: var(--err);
+}
+
+@media (max-width: 640px) {
+	.sh-welcome-hint {
+		padding-top: clamp(48px, 14vh, 128px);
+	}
+
+	.sh-composer-suggest .sh-suggest {
+		flex-wrap: nowrap;
+		justify-content: flex-start;
+		overflow-x: auto;
+		padding: 2px 2px 6px;
+		scrollbar-width: none;
+	}
+
+	.sh-composer-suggest .sh-suggest-chip {
+		flex: none;
+		min-height: 36px;
+	}
 }

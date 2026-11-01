@@ -637,6 +637,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 export async function discoverBundledPluginPaths(): Promise<string[]> {
 	const roots = [
 		path.resolve(import.meta.dir, "..", "bundled-plugins"),
+		path.resolve(import.meta.dir, "../../../desktop-app/src/plugins"),
 		path.resolve(process.cwd(), "bundled-plugins"),
 	];
 	const seen = new Set<string>();

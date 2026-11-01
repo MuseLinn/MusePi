@@ -9,6 +9,7 @@ let lastMoveX = 0;
 let lastMoveY = 0;
 let suppressReShow = false;
 let touch: { el: Element; pointerId: number; x: number; y: number } | null = null;
+let lastTouchAt = 0;
 
 const SHOW_DELAY = 250;
 const TOUCH_DELAY = 500;
@@ -143,6 +144,7 @@ function onPointerOver(event: PointerEvent): void {
 
 function onPointerDown(event: PointerEvent): void {
 	if (event.pointerType !== "touch") return;
+	lastTouchAt = Date.now();
 	const el = findTitled(event.target);
 	if (!el) return;
 	const text = el.getAttribute("title")?.trim() ?? "";
@@ -190,7 +192,7 @@ function finishTouch(event: PointerEvent): void {
 }
 
 function onFocusIn(event: FocusEvent): void {
-	if (touch || event.target === tipEl) return;
+	if (touch || Date.now() - lastTouchAt < 1000 || event.target === tipEl) return;
 	const el = findTitled(event.target);
 	if (!el || el === currentEl) return;
 	const text = el.getAttribute("title")?.trim() ?? "";

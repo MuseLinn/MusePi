@@ -16,6 +16,7 @@ import {
 	resolveCompatibilityPath,
 	setVersionExemption,
 } from "../../extensibility/plugins/compat/compatibility-store";
+import type { PluginManagementPackage } from "../../extensibility/plugins/profile/plugin-management";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { WebRouteRegistry } from "../web-routes";
@@ -138,17 +139,7 @@ export class ExtensionService implements DaemonService {
 	 *  tab, enabled + disabled). */
 	#pluginPackagesCache: {
 		at: number;
-		plugins: {
-			name: string;
-			version: string;
-			path: string;
-			scope: "user" | "project";
-			enabled: boolean;
-			description: string | null;
-			tools: number;
-			commands: number;
-			handlers: number;
-		}[];
+		plugins: PluginManagementPackage[];
 	} | null = null;
 
 	/** TTL cache of the unified extension scan (extensions.list — the
@@ -620,6 +611,10 @@ export class ExtensionService implements DaemonService {
 			settings = this.#deps.settings();
 		}
 		if (!settings) throw new Error("settings unavailable");
+		const builtinDef = (await import("../../extensibility/extensions-center/builtin-registry")).findBuiltinDef(p.id);
+		if (builtinDef?.readonly) {
+			throw new Error(`extensions.setEnabled: ${p.id} is read-only and has no enablement control`);
+		}
 		if (p.id === "desktop-shell:shell") {
 			// Desktop shell toggle: enabled -> the GUI shell loads the
 			// runtime-served renderer; disabled -> local bundle. The
@@ -663,9 +658,7 @@ export class ExtensionService implements DaemonService {
 		// Generic settings-mirror builtins (task-card style, magic
 		// keywords): the mirrored setting IS the source of truth —
 		// write it instead of the disabledExtensions list.
-		const mirrorDef = (await import("../../extensibility/extensions-center/builtin-registry")).findBuiltinDef(
-			p.id,
-		)?.settingsMirror;
+		const mirrorDef = builtinDef?.settingsMirror;
 		if (mirrorDef) {
 			settings.set(
 				mirrorDef.key as Parameters<Settings["set"]>[0],
@@ -939,27 +932,10 @@ export class ExtensionService implements DaemonService {
 		// settings → plugins tab. Session-independent; TTL-cached so
 		// the list doesn't re-walk node_modules on each tab switch.
 		if (!this.#pluginPackagesCache || Date.now() - this.#pluginPackagesCache.at > 10_000) {
-			const { getAllPlugins } = await import("../../extensibility/plugins/runtime/loader");
-			const installed = await getAllPlugins(this.#deps.cwd());
+			const { listPluginManagementPackages } = await import("../../extensibility/plugins/profile/plugin-management");
 			this.#pluginPackagesCache = {
 				at: Date.now(),
-				plugins: installed.map(p => ({
-					name: p.name,
-					version: p.version,
-					path: p.path,
-					scope: p.scope,
-					enabled: p.enabled,
-					description: p.manifest.description ?? null,
-					icon: typeof p.manifest.icon === "string" ? p.manifest.icon : null,
-					tools: p.manifest.tools ? 1 : 0,
-					commands: Array.isArray(p.manifest.commands) ? p.manifest.commands.length : p.manifest.commands ? 1 : 0,
-					handlers:
-						typeof p.manifest.hooks === "string"
-							? 1
-							: p.manifest.hooks
-								? Object.keys(p.manifest.hooks).length
-								: 0,
-				})),
+				plugins: await listPluginManagementPackages(this.#deps.cwd(), os.homedir()),
 			};
 		}
 		return this.#pluginPackagesCache;

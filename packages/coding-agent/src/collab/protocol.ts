@@ -14,6 +14,7 @@ import type {
 	GuestFrame,
 	Participant,
 	SessionState,
+	ToolApprovalRequest,
 	AgentSnapshot as WireAgentSnapshot,
 } from "@musepi/pi-wire";
 import { DEFAULT_RELAY_URL, ENVELOPE_HEADER_LENGTH, ROOM_ID_BYTES } from "@musepi/pi-wire";
@@ -121,6 +122,8 @@ export type CollabFrame =
 	| { t: "agents"; agents: AgentSnapshot[] }
 	| { t: "ui-request"; request: CollabUiRequest }
 	| { t: "ui-request-end"; reqId: number }
+	| { t: "approval-request"; request: ToolApprovalRequest }
+	| { t: "approval-request-end"; requestId: string }
 	/** Targeted reply to fetch-transcript; `error` marks a terminal read failure that guests must surface without hot retrying. */
 	| { t: "transcript"; reqId: number; text: string; newSize: number; error?: string }
 	/** Targeted reply to rpc-request; `ok:false` carries the failure reason. */

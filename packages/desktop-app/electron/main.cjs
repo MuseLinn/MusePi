@@ -524,13 +524,11 @@ let bubblesContentSize = { width: 0, height: 0 };
 let bubblesHitbox = null;
 let bubblesIgnoreState = null;
 /** Collapse mode + live item count reported by the bubbles window — the
- *  pet-window badge is ONLY this indicator (kimi parity: hidden stack →
- *  count badge → click restores). Main-owned so a late-loading pet
- *  window can be brought up to date on its did-finish-load. */
+ *  pet window owns the single three-state control. Main-owned so a
+ *  late-loading pet window can be brought up to date on did-finish-load. */
 let bubblesModeState = { mode: "stacked", count: 0 };
-/** Stack bottom → sprite top clearance (was bottom:174px vs sprite top
- *  y≈136 in the 290px pet window → 20px). */
-const BUBBLES_GAP_ABOVE_PET = 20;
+/** Visual gap between the lowest bubble edge and the sprite's top. */
+const BUBBLES_GAP_ABOVE_PET = 8;
 
 function createBubblesWindow() {
 	if (bubblesWindow && !bubblesWindow.isDestroyed()) return bubblesWindow;
@@ -2537,9 +2535,7 @@ ipcMain.handle("bubbles-set-hitbox", (_event, rect) => {
 	updateBubblesClickThrough();
 	return { ok: true };
 });
-// Collapse mode + item count from the bubbles window → mirrored to the pet
-// window as its badge state (kimi parity: the badge is ONLY the hidden-
-// stack indicator, never a boot-time unread count, never 一键已读).
+// Mirror collapse mode + item count to the pet-side three-state control.
 ipcMain.handle("bubbles-set-mode", (_event, state) => {
 	if (state && typeof state.mode === "string") {
 		bubblesModeState = {
@@ -2552,10 +2548,10 @@ ipcMain.handle("bubbles-set-mode", (_event, state) => {
 	}
 	return { ok: true };
 });
-// Pet-window badge click → the bubbles window restores its hidden stack.
-ipcMain.handle("bubbles-restore-stack", () => {
+// One pet-side control advances expanded → stacked → count → stacked.
+ipcMain.handle("bubbles-advance-mode", () => {
 	if (bubblesWindow && !bubblesWindow.isDestroyed()) {
-		bubblesWindow.webContents.send("bubbles:restore");
+		bubblesWindow.webContents.send("bubbles:advance");
 	}
 	return { ok: true };
 });

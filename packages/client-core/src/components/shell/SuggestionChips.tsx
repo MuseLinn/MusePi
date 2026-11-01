@@ -39,10 +39,16 @@ const EXTRA_SUGGESTIONS: SuggestionDef[] = [
 	{ labelKey: "general.chipDrawDiagram", promptKey: "general.suggestDrawDiagram" },
 ];
 
-export function SuggestionChips({ onPick }: { onPick(prompt: string): void }): ReactNode {
+export function SuggestionChips({
+	onPick,
+	compact = false,
+}: {
+	onPick(prompt: string): void;
+	compact?: boolean;
+}): ReactNode {
 	const [expanded, setExpanded] = useState(false);
-	const collapsed = DEFAULT_SUGGESTIONS;
-	const items = expanded ? [...collapsed, ...EXTRA_SUGGESTIONS] : collapsed;
+	const collapsed = compact ? DEFAULT_SUGGESTIONS.slice(0, 3) : DEFAULT_SUGGESTIONS;
+	const items = !compact && expanded ? [...collapsed, ...EXTRA_SUGGESTIONS] : collapsed;
 	return (
 		<div className="sh-suggest">
 			{items.map((s, i) => {
@@ -62,15 +68,17 @@ export function SuggestionChips({ onPick }: { onPick(prompt: string): void }): R
 					</button>
 				);
 			})}
-			<button
-				type="button"
-				className="sh-suggest-chip sh-suggest-chip--more"
-				title={expanded ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
-				aria-label={expanded ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
-				onClick={() => setExpanded(e => !e)}
-			>
-				{expanded ? "✕" : "+"}
-			</button>
+			{!compact && (
+				<button
+					type="button"
+					className="sh-suggest-chip sh-suggest-chip--more"
+					title={expanded ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
+					aria-label={expanded ? t("general.collapseSuggestions") : t("general.moreSuggestions")}
+					onClick={() => setExpanded(e => !e)}
+				>
+					{expanded ? "✕" : "+"}
+				</button>
+			)}
 		</div>
 	);
 }

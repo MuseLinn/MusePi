@@ -438,7 +438,7 @@
 .gui-session-hover-card {
 	position: fixed;
 	/* Above chat content, below dialog backdrops (3000) / menus (4100). */
-	z-index: 2600;
+	z-index: var(--z-hover-card);
 	width: 288px;
 	padding: 12px 14px 10px;
 	border-radius: var(--radius-lg);
@@ -1813,7 +1813,7 @@
 	width: auto;
 	height: auto;
 	border: 1px solid var(--glass-border) !important;
-	border-radius: var(--radius-lg);
+	border-radius: 8px !important;
 	background: var(--glass-sheen), var(--glass-bg-strong) !important;
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -2164,9 +2164,44 @@
 	}
 }
 
+.gui-sidebar-drawer-backdrop {
+	display: none;
+}
+
 @media (max-width: 720px) {
-	.gui-sidebar {
+	.gui-resize-x--side {
 		display: none;
+	}
+
+	.gui-sidebar-drawer-backdrop {
+		position: absolute;
+		inset: 0;
+		z-index: 60;
+		display: block;
+		border: 0;
+		padding: 0;
+		background: var(--backdrop);
+	}
+
+	.gui-side-keeper {
+		position: absolute;
+		inset: 0 auto 0 0;
+		z-index: 61;
+		visibility: hidden;
+		transform: translateX(-100%);
+		transition:
+			transform 200ms var(--spring),
+			visibility 200ms;
+	}
+
+	.gui-side-keeper--drawer-open {
+		visibility: visible;
+		transform: translateX(0);
+	}
+
+	.gui-side-keeper > .gui-pane-side {
+		height: 100%;
+		box-shadow: var(--shadow-overlay);
 	}
 }
 .gui-chat-col {

@@ -1213,6 +1213,10 @@ export function BoardPage({
 						<div className="gui-board-empty">
 							<div className="gui-board-empty-title">{t("settings.boardEmptyTitle")}</div>
 							<div className="gui-board-empty-desc">{t("settings.boardEmptyDesc")}</div>
+							<button type="button" className="gui-btn" onClick={() => setEditMode(true)}>
+								<Icon name="add-circle" className="h-4 w-4" />
+								{t("settings.boardAddWidget")}
+							</button>
 						</div>
 					)}
 					{ghost && (

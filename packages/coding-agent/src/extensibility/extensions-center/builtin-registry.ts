@@ -16,7 +16,7 @@
  *
  * 登记清单(0.5.0 M2.1 起逐步迁移;现状):
  * - 样式/桌面壳(2,settingsMirror 可禁用);
- * - bundled skills(6,annotate-only:安装后由 native 扫描呈现为 skill 行,
+ * - bundled skills(7,annotate-only:安装后由 native 扫描呈现为 skill 行,
  *   注册表只做"内置"标注,不产生重复行;禁走该行自身的 disabledExtensions,
  *   运行时 skills 装配确实消费);
  * - magic keywords(3)已迁出:由 src/bundled-plugins/magic-keywords 插件包
@@ -232,6 +232,14 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		annotate: true as const,
 		raw: { name, kind: "bundled-skill" },
 	})),
+	{
+		kind: "plugin-module",
+		name: "capability-center",
+		displayName: "MusePi Capability Center",
+		description: "Skills, package/bundle management, and marketplace in one Cordis-owned page.",
+		annotate: true,
+		raw: { name: "capability-center", kind: "plugin-module" },
+	},
 	{
 		kind: "plugin-module",
 		name: "file-workspace",

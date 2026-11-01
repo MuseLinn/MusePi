@@ -241,4 +241,12 @@ describe("P1 route coverage", () => {
 		const missing = SESSION_TREE_ROUTES.filter(route => !cases.has(route));
 		expect(missing).toEqual([]);
 	});
+
+	it("remote-access RPC aliases stay routable alongside legacy collab clients", () => {
+		const cases = new Set(switchCases());
+		for (const action of ["start", "status", "stop", "pair.generate"]) {
+			expect(cases.has(`remote-access.${action}`)).toBe(true);
+			expect(cases.has(`collab.${action}`)).toBe(true);
+		}
+	});
 });

@@ -103,6 +103,10 @@ export interface ToolRenderProps {
 }
 
 export interface ToolRenderer {
+	/** Human-readable tool name in the shared card chrome. Defaults to the wire name. */
+	label?: string;
+	/** Optional tool glyph beside the label; the shared chrome owns status and layout. */
+	Icon?: ComponentType;
 	/** Inline single-line header summary. Must not render block elements. */
 	Summary: ComponentType<ToolRenderProps>;
 	/** Expanded body. Omit when the summary already says everything. */

@@ -45,6 +45,7 @@ import { HISTORY_PAGE_MESSAGES } from "../lib/history-batch";
 import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { dispatchNotification } from "../lib/notify";
+import { toolPanelTabDescriptor } from "../lib/panel-tabs";
 import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
@@ -926,8 +927,8 @@ export function ChatView({
 	// 地图单一投影:轮级(0.5.0-map-redesign——节点 = 轮,164 轮 = 164 张卡)。
 	// 消息级画布(SessionTreeCanvas)已下线:两套同数据源视图收敛为一个轮级
 	// 地图,消息级分支结构由 ContextPanel 的 TrajectoryView 分支树模式承担。
-	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
-	// the panel only renders their content.
+	// Extension panel-tab slots (panel.tab.*) — launchable items live in the
+	// rail; the panel also mounts tool- and session-provided on-demand tabs.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
 	// Declared AFTER extTabs: its dependency array reads extTabs, and that
 	// array is evaluated during render (a TDZ reference would crash here).
@@ -967,6 +968,35 @@ export function ChatView({
 		},
 		[panelTabs.open, tabLabelFor, rightPanelOpen, focusMode, onExpandRightPanel],
 	);
+	const toolPanelRequests = useRef<{
+		store: GuiSessionStore | null;
+		baseline: boolean;
+		seen: Set<string>;
+	}>({ store: null, baseline: false, seen: new Set() });
+	useEffect(() => {
+		const state = toolPanelRequests.current;
+		if (state.store !== store) {
+			state.store = store;
+			state.baseline = false;
+			state.seen.clear();
+		}
+		const requests = (snap?.entries ?? []).flatMap(entry => {
+			const descriptor = toolPanelTabDescriptor(entry);
+			return descriptor ? [{ id: entry.id, descriptor }] : [];
+		});
+		if (!state.baseline) {
+			state.baseline = true;
+			for (const request of requests) state.seen.add(request.id);
+			return;
+		}
+		for (const request of requests) {
+			if (state.seen.has(request.id)) continue;
+			if (!extTabsRef.current.some(item => `ext:${item.slot}` === request.descriptor.surface)) continue;
+			state.seen.add(request.id);
+			panelTabs.open(request.descriptor);
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		}
+	}, [store, snap?.entries, panelTabs.open, rightPanelOpen, focusMode, onExpandRightPanel]);
 	// transcript.node seat dispatch: extensions register renderers for specific
 	// node kinds (transcriptNodeKind). A matched renderer OWNS the entry's
 	// rendering (may include the built-in children base or render fully custom);
@@ -2353,7 +2383,11 @@ export function ChatView({
 	}, [focusMode]);
 
 	return (
-		<main className="gui-pane-center relative flex min-h-0 min-w-0 flex-1 flex-col">
+		<main
+			id={`session-panel-${store?.sessionId ?? "welcome"}`}
+			role="tabpanel"
+			className="gui-pane-center relative flex min-h-0 min-w-0 flex-1 flex-col"
+		>
 			{/* Selection→ask popover (session-scoped throwaway turns). */}
 			<AskPopover rpc={rpc} sessionId={store?.sessionId ?? null} />
 			{/* Window drag strip: the 8px margin above the floating surface

@@ -10,6 +10,7 @@
  * gh surfaces a readable error instead of a blank pane.
  */
 import { Markdown, Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
+import { createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyToClipboard, openExternalUrl } from "../lib/electron";
@@ -31,6 +32,7 @@ interface GhPr {
 	headRefName: string;
 	baseRefName: string;
 	url: string;
+	comments?: unknown[];
 	statusCheckRollup?: unknown;
 	mergeable?: boolean;
 	mergeStateStatus?: string;
@@ -90,6 +92,27 @@ interface GhComment {
 	createdAt?: string;
 }
 
+interface GhReview extends GhComment {
+	state: string;
+	submittedAt?: string;
+	url?: string;
+}
+
+interface GhPrReviewComment extends GhComment {
+	id: number;
+	path: string;
+	line: number | null;
+	originalLine: number | null;
+	startLine: number | null;
+	originalStartLine: number | null;
+	side: "LEFT" | "RIGHT" | null;
+	startSide: "LEFT" | "RIGHT" | null;
+	diffHunk: string;
+	inReplyToId: number | null;
+	url: string;
+	outdated: boolean;
+}
+
 /** Full PR detail from `github.prView` — everything the list row doesn't carry. */
 interface GhPrDetail extends GhPr {
 	body: string;
@@ -97,8 +120,200 @@ interface GhPrDetail extends GhPr {
 	reviewers: { login: string }[];
 	assignees: { login: string }[];
 	comments: GhComment[];
+	reviews?: GhReview[];
+	reviewComments?: GhPrReviewComment[];
+	reviewCommentsError?: string;
 	createdAt?: string;
 	closedAt?: string | null;
+}
+
+function reviewStateLabel(state: string): string {
+	switch (state) {
+		case "APPROVED":
+			return t("pr review state approved");
+		case "CHANGES_REQUESTED":
+			return t("pr review state changes requested");
+		case "COMMENTED":
+			return t("pr review state commented");
+		case "DISMISSED":
+			return t("pr review state dismissed");
+		case "PENDING":
+			return t("pr review state pending");
+		default:
+			return state;
+	}
+}
+
+function ReviewList({ reviews }: { reviews: GhReview[] }): ReactNode {
+	if (reviews.length === 0) return null;
+	return (
+		<div className="gui-pr-detail-section gui-pr-reviews">
+			<span className="gui-pr-detail-label">{t("pr reviews {count}", { count: reviews.length })}</span>
+			{reviews.map((review, index) => (
+				<article
+					key={`${review.author?.login ?? "review"}-${review.submittedAt ?? index}`}
+					className="gui-pr-comment"
+				>
+					<span className="gui-pr-comment-meta">
+						<strong>{review.author?.login}</strong>
+						<span>{reviewStateLabel(review.state)}</span>
+						{(review.submittedAt ?? review.createdAt) && (
+							<time>{new Date(review.submittedAt ?? review.createdAt!).toLocaleString()}</time>
+						)}
+					</span>
+					{review.body.trim() && (
+						<div className="gui-pr-comment-body">
+							<Markdown text={review.body} />
+						</div>
+					)}
+				</article>
+			))}
+		</div>
+	);
+}
+
+/** A reply normally names the thread root. Follow the parent chain anyway so
+ * an orphaned or nested reply remains visible instead of disappearing. */
+function groupReviewThreads(comments: GhPrReviewComment[]): Array<{
+	root: GhPrReviewComment;
+	replies: GhPrReviewComment[];
+}> {
+	const byId = new Map(comments.map(comment => [comment.id, comment]));
+	const threads = new Map<number, { root: GhPrReviewComment; replies: GhPrReviewComment[] }>();
+	for (const comment of comments) {
+		let root = comment;
+		const seen = new Set<number>();
+		while (root.inReplyToId !== null && !seen.has(root.id)) {
+			seen.add(root.id);
+			const parent = byId.get(root.inReplyToId);
+			if (!parent) break;
+			root = parent;
+		}
+		const thread = threads.get(root.id) ?? { root, replies: [] };
+		if (comment.id !== root.id) thread.replies.push(comment);
+		threads.set(root.id, thread);
+	}
+	return [...threads.values()];
+}
+
+function workspaceReviewPath(path: string): string | null {
+	const normalized = path.trim().replaceAll("\\", "/");
+	if (!normalized || normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) return null;
+	if (normalized.split("/").some(segment => segment === "" || segment === "..")) return null;
+	return normalized;
+}
+
+function ReviewCommentBody({ comment }: { comment: GhPrReviewComment }): ReactNode {
+	return (
+		<>
+			<span className="gui-pr-comment-meta">
+				<strong>{comment.author.login}</strong>
+				{comment.createdAt && <time>{new Date(comment.createdAt).toLocaleString()}</time>}
+			</span>
+			<div className="gui-pr-comment-body">
+				<Markdown text={comment.body} />
+			</div>
+		</>
+	);
+}
+
+function ReviewCommentList({
+	number,
+	comments,
+	error,
+}: {
+	number: number;
+	comments: GhPrReviewComment[];
+	error?: string;
+}): ReactNode {
+	if (comments.length === 0 && !error) return null;
+	const threads = groupReviewThreads(comments);
+	const quote = (comment: GhPrReviewComment): void => {
+		const path = workspaceReviewPath(comment.path);
+		if (!path) return;
+		const displayContext = createFileQuoteContext({
+			path,
+			quote: comment.diffHunk,
+			language: "diff",
+			comment: `PR #${number} review by @${comment.author.login}:\n${comment.body}`,
+		});
+		window.dispatchEvent(new CustomEvent("musepi-gui-quote-append", { detail: { text: "", displayContext } }));
+	};
+	return (
+		<div className="gui-pr-detail-section gui-pr-review-discussions">
+			<span className="gui-pr-detail-label">{t("pr review discussions {count}", { count: threads.length })}</span>
+			{error && (
+				<p className="gui-pr-review-error" role="status">
+					{t("pr review comments unavailable")}: {error}
+				</p>
+			)}
+			{threads.map(({ root, replies }) => {
+				const path = workspaceReviewPath(root.path);
+				const canOpen = path !== null && root.side === "RIGHT" && root.line !== null && !root.outdated;
+				return (
+					<article key={root.id} className="gui-pr-review-thread">
+						<div className="gui-pr-review-location">
+							<span className="gui-pr-review-path">
+								{root.path}
+								{root.line !== null ? `:${root.line}` : ""}
+							</span>
+							{root.outdated && <span className="gui-pr-review-outdated">{t("pr review outdated")}</span>}
+						</div>
+						<ReviewCommentBody comment={root} />
+						<div className="gui-pr-review-actions">
+							<button
+								type="button"
+								className="gui-pane-action gui-pr-review-open"
+								disabled={!canOpen}
+								title={canOpen ? t("pr open code at line") : t("pr review line unavailable")}
+								onClick={() => {
+									if (!canOpen || !path || root.line === null) return;
+									window.dispatchEvent(
+										new CustomEvent("musepi-open-file", {
+											detail: { path, line: root.line, column: 1, pin: true },
+										}),
+									);
+								}}
+							>
+								<Icon name="code" className="h-3.5 w-3.5" />
+								<span>{t("pr open code")}</span>
+							</button>
+							<button
+								type="button"
+								className="gui-pane-action gui-pr-review-quote"
+								disabled={!path}
+								onClick={() => quote(root)}
+							>
+								<Icon name="chat-1" className="h-3.5 w-3.5" />
+								<span>{t("pr quote review")}</span>
+							</button>
+							{root.url && (
+								<button
+									type="button"
+									className="gui-pane-action"
+									onClick={() => void openExternalUrl(root.url)}
+								>
+									<Icon name="external-link" className="h-3.5 w-3.5" />
+									<span>{t("open in browser")}</span>
+								</button>
+							)}
+						</div>
+						{root.diffHunk && (
+							<details className="gui-pr-review-diff">
+								<summary>{t("pr review diff")}</summary>
+								<pre>{root.diffHunk}</pre>
+							</details>
+						)}
+						{replies.map(reply => (
+							<div key={reply.id} className="gui-pr-comment gui-pr-review-reply">
+								<ReviewCommentBody comment={reply} />
+							</div>
+						))}
+					</article>
+				);
+			})}
+		</div>
+	);
 }
 
 /** gh's statusCheckRollup is heterogeneous: CheckRun ({name, conclusion,
@@ -182,6 +397,12 @@ function CommentComposer({ busy, onSubmit }: { busy: boolean; onSubmit(body: str
 				<textarea
 					value={draft}
 					onChange={event => setDraft(event.target.value)}
+					onKeyDown={event => {
+						if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.nativeEvent.isComposing)
+							return;
+						event.preventDefault();
+						void submit();
+					}}
 					placeholder={t("pr comment placeholder")}
 					rows={4}
 					disabled={busy}
@@ -196,6 +417,52 @@ function CommentComposer({ busy, onSubmit }: { busy: boolean; onSubmit(body: str
 				<span>{t("pr comment submit")}</span>
 			</button>
 		</form>
+	);
+}
+
+function ReviewComposer({
+	busy,
+	onSubmit,
+}: {
+	busy: boolean;
+	onSubmit(event: "approve" | "request-changes", body: string): Promise<boolean>;
+}): ReactNode {
+	const [draft, setDraft] = useState("");
+	const submit = async (event: "approve" | "request-changes"): Promise<void> => {
+		if (busy || (event === "request-changes" && !draft.trim())) return;
+		if (await onSubmit(event, draft.trim())) setDraft("");
+	};
+	return (
+		<div className="gui-pr-comment-composer gui-pr-review-composer">
+			<label>
+				<span className="gui-pr-detail-label">{t("pr submit review")}</span>
+				<textarea
+					value={draft}
+					onChange={event => setDraft(event.target.value)}
+					placeholder={t("pr review body placeholder")}
+					rows={3}
+					disabled={busy}
+				/>
+			</label>
+			<div className="flex flex-wrap gap-2">
+				<button
+					type="button"
+					className="gui-btn gui-pr-review-approve"
+					disabled={busy}
+					onClick={() => void submit("approve")}
+				>
+					{t("pr review approve")}
+				</button>
+				<button
+					type="button"
+					className="gui-btn gui-pr-review-request-changes"
+					disabled={busy || !draft.trim()}
+					onClick={() => void submit("request-changes")}
+				>
+					{t("pr review request changes")}
+				</button>
+			</div>
+		</div>
 	);
 }
 
@@ -325,6 +592,25 @@ function PrDetail({
 			setBusy(false);
 		}
 	};
+	const postReview = async (event: "approve" | "request-changes", body: string): Promise<boolean> => {
+		if (busy) return false;
+		setBusy(true);
+		setActionError(null);
+		try {
+			const res = await rpc
+				.request<{ ok?: boolean; error?: string }>("github.prReview", { cwd, number, event, body })
+				.catch(() => null);
+			if (!res?.ok) {
+				setActionError(res?.error ?? t("general.requestFailed"));
+				return false;
+			}
+			onChanged();
+			if (mounted.current) load();
+			return true;
+		} finally {
+			setBusy(false);
+		}
+	};
 	if (error) return <div className="gui-pr-detail gui-pr-error">{error}</div>;
 	if (detail === undefined)
 		return (
@@ -421,7 +707,14 @@ function PrDetail({
 			<div className="gui-pr-detail-body">
 				<Markdown text={detail.body?.trim() || t("pr no description")} />
 			</div>
+			<ReviewList reviews={detail.reviews ?? []} />
+			<ReviewCommentList
+				number={detail.number}
+				comments={detail.reviewComments ?? []}
+				error={detail.reviewCommentsError}
+			/>
 			<CommentList comments={detail.comments} />
+			{open && !detail.isDraft && <ReviewComposer busy={busy} onSubmit={postReview} />}
 			<CommentComposer busy={busy} onSubmit={postComment} />
 			{open && !detail.isDraft && (
 				<div className="gui-pr-merge-row">
@@ -791,6 +1084,27 @@ function PrWorkspace({
 	);
 }
 
+const LIST_FOCUS_REFRESH_MS = 60_000;
+
+/** Initial load plus focus recovery for long-lived board panes. The request
+ * sequence inside each loader still prevents an older response from winning. */
+function useFocusRefreshedLoad(load: () => void): () => void {
+	const lastRequestedAt = useRef(0);
+	const request = useCallback((): void => {
+		lastRequestedAt.current = Date.now();
+		load();
+	}, [load]);
+	useEffect(request, [request]);
+	useEffect(() => {
+		const onFocus = (): void => {
+			if (Date.now() - lastRequestedAt.current >= LIST_FOCUS_REFRESH_MS) request();
+		};
+		window.addEventListener("focus", onFocus);
+		return () => window.removeEventListener("focus", onFocus);
+	}, [request]);
+	return request;
+}
+
 function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: string }): ReactNode {
 	const [data, setData] = useState<{
 		pr: GhPr | null;
@@ -832,8 +1146,7 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 			});
 		});
 	}, [rpc, cwd, prState]);
-	useEffect(load, [load]);
-	const refresh = useCallback((): void => load(), [load]);
+	const refresh = useFocusRefreshedLoad(load);
 	const pr = data?.pr ?? null;
 	// 搜索词过滤（编号/标题）；链接形态不改列表，交给「打开链接」行。
 	const filteredPrs = (data?.prs ?? []).filter(p2 => matchesQuery(query, p2.number, p2.title));
@@ -962,6 +1275,12 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 																: "pr checks pending") as TranslationKey,
 													)}
 												/>
+											)}
+											{(pr.comments?.length ?? 0) > 0 && (
+												<span className="flex flex-shrink-0 items-center gap-1 text-[10.5px] text-[var(--color-text-faint)]">
+													<Icon name="chat-1" className="h-3 w-3" />
+													{pr.comments?.length ?? 0}
+												</span>
 											)}
 											<span className="gui-pr-list-branches text-[10.5px] text-[var(--color-text-faint)]">
 												{pr.headRefName} → {pr.baseRefName}
@@ -1219,7 +1538,7 @@ function IssuesPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: s
 				if (seq === listRequestSeq.current) setError(err instanceof Error ? err.message : String(err));
 			});
 	}, [rpc, cwd, state, labelFilter, authorFilter]);
-	useEffect(load, [load]);
+	useFocusRefreshedLoad(load);
 	const filteredIssues = (issues ?? []).filter(i => matchesQuery(query, i.number, i.title));
 	useEffect(() => {
 		const visible = (issues ?? []).filter(i => matchesQuery(query, i.number, i.title));

@@ -16,44 +16,27 @@
  *    single click on the pet greets it and raises the main window instead;
  *    everything the panel did now lives on the bubbles themselves
  *  - hovering a bubble reveals its quick actions: ✓ confirm (approval →
- *    批准, completion/error → 标记已读并关闭, transient → 关闭), ✗ deny on
- *    approval bubbles, and 💬 回复 on session bubbles — the reply button
- *    expands an inline input that sends via petReply (no panel hop)
+ *    批准, other cards → 关闭), ✗ deny on approval bubbles, and 💬 回复 on
+ *    session bubbles — the reply button expands an inline input that sends
+ *    via petReply (no panel hop)
  *
- * 2026-09-22 bubble v3 (kimi-work four-screenshot parity, user review):
- *  - AUTHORITATIVE session cards: the main window pushes `sessions`
- *    (working + unread finished) synthesized from its session.list poll and
- *    unread derivation — background sessions notify exactly like the
- *    active one, replacing per-event completion/error bubble pushes
- *  - two-line card: bold title row + dim status row (working → 正在使用 X…,
- *    done → 已完成, error → ❗ 出错了), optional reply preview
- *  - phase-scoped hover actions: working cards get 💬 回复 + ■ 停止
- *    (petStopSession → session.abort); done/error cards get 💬 + ✓ 确认,
- *    and the ✓/❗ are ALWAYS visible on unread cards (kimi parity — no
- *    hover needed to see the acknowledge target)
- *  - card click → petOpenSession (jump to that conversation)
- *  - three-state collapse: expanded ⇄ stacked (spring morph, existing)
- *    → hidden: the ⌄ fab collapses one level at a time (expanded →
- *    stacked → hidden), hidden shows a count BADGE floating by the pet;
- *    clicking the badge restores the stack
- *  - the PET WINDOW's own corner badge is now the SAME hidden-stack
- *    indicator (2026-09-22 user: 角标点击还是一键已读不对 / 一启动就有
- *    角标): it mirrors this window's collapse mode via bubblesSetMode,
- *    shows the hidden item count only while mode === "hidden", and
- *    clicking it asks this window to restore (bubbles:restore) — never
- *    mark-all-read, and never lit at boot (fresh stack starts "stacked")
+ * Session cards are authoritative: the main window pushes working and unread
+ * main sessions. A stacked card with multiple items expands first; an expanded
+ * card opens its session and leaves the list expanded. Quick actions, inline
+ * replies and approvals stay on the cards. Dismissal never marks a session read.
  *
- * Sizing (split window, 2026-09-21): the bubbles live in their OWN window
- * (bubbles.html) whose size IS the content — the renderer reports the
- * content union via setBubblesContentSize, its interactive card union via
- * setBubblesHitbox (the transparent padding ring stays click-through), and
- * its occupancy via setBubblesVisible (empty stack → the main process
- * hides the window). The main process (layoutBubblesWindow) pins the
- * window above the sprite and follows the pet on every move.
+ * One pet-side control advances expanded → stacked → count → stacked. Count
+ * mode hides this window; it never marks sessions read. Expanded mode has only
+ * a small clear-all control above the list.
+ *
+ * The standalone window is content-sized. The renderer reports content bounds,
+ * interactive bounds (including overhanging controls) and occupancy. Count mode
+ * and an empty stack both hide the window. The main process pins its bottom 8px
+ * above the sprite and follows every pet move.
  */
 
 import { setLocale, t } from "@musepi/client-core";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
 import type { PetActivity, PetSessionCard } from "./lib/pet";
 import { useScrollShadow } from "./lib/use-scroll-shadow";
 
@@ -69,25 +52,16 @@ interface PetBubblesBridge {
 	petStopSession?(sessionId: string): Promise<unknown>;
 	focusMainWindow?(): Promise<unknown>;
 	petOpenSession?(sessionId: string): Promise<unknown>;
-	/** Card ✓/× dismiss → mark that session read (the main window owns the
-	 *  unread badge; acknowledging the notification must clear it too). */
-	petMarkRead?(sessionId: string): Promise<unknown>;
-	petMarkAllRead?(): Promise<unknown>;
 	/** Report the content size the window must take (CSS px). The main
 	 *  process sizes the bubbles window to exactly this. */
 	setBubblesContentSize?(size: { width: number; height: number }): Promise<unknown>;
 	/** Report whether any bubble is showing — empty stack hides the
 	 *  window entirely. */
 	setBubblesVisible?(visible: boolean): Promise<unknown>;
-	/** Report the collapse mode + live item count — the main process
-	 *  mirrors it to the pet window so its badge only lights when the
-	 *  stack is fully hidden (kimi parity: badge = restore, not
-	 *  mark-all-read). */
+	/** Mirror the collapse mode + live item count to the pet-side control. */
 	bubblesSetMode?(mode: "expanded" | "stacked" | "hidden", count: number): Promise<unknown>;
-	/** Pet-window badge click → restore the fully-hidden stack. */
-	bubblesRestoreStack?(): Promise<unknown>;
-	/** bubblesRestoreStack arrived — switch hidden → stacked. */
-	onBubblesRestore?(cb: () => void): () => void;
+	/** The pet-side control requested expanded → stacked → hidden → stacked. */
+	onBubblesAdvance?(cb: () => void): () => void;
 	/** Report the interactive card union (window-relative CSS px) — the
 	 *  main process keeps the transparent padding ring click-through. */
 	setBubblesHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
@@ -121,6 +95,14 @@ interface Bubble {
 	/** Tool-approval request — ✓/✗ on the hover actions decide it. */
 	requestId?: string;
 	visible: string;
+}
+
+/** Remember dismissal per activity revision, not only per phase. A later turn
+ *  must be able to surface the same session again. */
+function sessionActivityKey(card: PetSessionCard): string {
+	const revision = card.activityKey?.trim();
+	if (revision) return ["revision", card.sessionId, revision].join("\0");
+	return ["legacy", card.sessionId, card.title, card.phase, card.statusText, card.replyPreview ?? ""].join("\0");
 }
 
 /** Short tag shown on each notification card so the four notification
@@ -157,10 +139,16 @@ export function PetBubbles(): ReactNode {
 	// render the new view locked to that size, then transition (spring).
 	const [stackMorph, setStackMorph] = useState<{ from: { width: number; height: number } } | null>(null);
 	const stackRef = useRef<HTMLDivElement | null>(null);
-	// Session cards the user hid with ×/■ — suppressed while the phase is
-	// unchanged (a 1s re-push would otherwise resurrect them instantly);
-	// a phase flip (working → done) surfaces the card again.
+	// Dismissals and notifications are scoped to an activity revision. A poll
+	// with the same snapshot cannot undo the user's action; a new turn can.
 	const hiddenSessionsRef = useRef<Map<string, string>>(new Map());
+	const notifiedSessionsRef = useRef<Map<string, { activityKey: string; kinds: Set<string> }>>(new Map());
+	const dismissedRequestIdsRef = useRef<Set<string>>(new Set());
+	const notifiedRequestIdsRef = useRef<Set<string>>(new Set());
+	// The newest actionable notification moves to the front once. Ordinary
+	// polls retain the existing order instead of repeatedly stealing priority.
+	const priorityItemRef = useRef<string | null>(null);
+	const nextBubbleIdRef = useRef(1);
 	// Inline reply: which card/bubble's input is open (null = none). Keys:
 	// `c:<sessionId>` for session cards, `b:<bubble id>` for bubbles.
 	const [replyFor, setReplyFor] = useState<string | null>(null);
@@ -170,39 +158,63 @@ export function PetBubbles(): ReactNode {
 
 	// pet:activity — session cards, bubbles, approvals, theme/locale push.
 	useEffect(() => {
+		const promote = (key: string): void => {
+			priorityItemRef.current = key;
+			// A genuinely new notification leaves count mode, but an unchanged
+			// polling snapshot never reopens cards the user hid.
+			setStackMode(current => (current === "hidden" ? "stacked" : current));
+		};
 		const off = bridge?.onPetActivity?.(payload => {
 			if (Array.isArray(payload.sessions)) {
-				// Authoritative list — replace wholesale. Cards the user
-				// dismissed stay suppressed until their phase changes.
 				const hidden = hiddenSessionsRef.current;
+				for (const card of payload.sessions) {
+					const kind = card.phase === "working" ? null : card.phase;
+					if (!kind) continue;
+					const activityKey = sessionActivityKey(card);
+					let notified = notifiedSessionsRef.current.get(card.sessionId);
+					if (!notified || notified.activityKey !== activityKey) {
+						notified = { activityKey, kinds: new Set() };
+						notifiedSessionsRef.current.set(card.sessionId, notified);
+					}
+					if (!notified.kinds.has(kind)) {
+						notified.kinds.add(kind);
+						if (hidden.get(card.sessionId) !== activityKey) promote(`c:${card.sessionId}`);
+					}
+				}
+				// Authoritative list — replace wholesale. Dismissal memory is
+				// keyed by activity revision so a later turn can reappear.
 				setCards(
-					payload.sessions.filter(c => {
-						const h = hidden.get(c.sessionId);
-						if (!h) return true;
-						if (h === c.phase) return false;
-						hidden.delete(c.sessionId);
+					payload.sessions.filter(card => {
+						const activityKey = sessionActivityKey(card);
+						const dismissed = hidden.get(card.sessionId);
+						if (dismissed === activityKey) return false;
+						if (dismissed) hidden.delete(card.sessionId);
 						return true;
 					}),
 				);
 			}
 			if (payload.approval?.requestId) {
-				// Tool approval → its own question bubble with ✓/✗ hover
-				// actions. Duplicate requestIds collapse into one bubble.
 				const approval = payload.approval;
-				setBubbles(prev =>
-					prev.some(b => b.requestId === approval.requestId)
-						? prev
-						: [
-								...prev,
-								{
-									id: Date.now(),
-									kind: "question",
-									text: t("settings.petApprovalWithTool", { tool: approval.tool }),
-									requestId: approval.requestId,
-									visible: "",
-								},
-							].slice(-MAX_VISIBLE_BUBBLES),
-				);
+				const { requestId } = approval;
+				if (!dismissedRequestIdsRef.current.has(requestId) && !notifiedRequestIdsRef.current.has(requestId)) {
+					notifiedRequestIdsRef.current.add(requestId);
+					const id = nextBubbleIdRef.current++;
+					promote(`b:${id}`);
+					setBubbles(prev =>
+						prev.some(b => b.requestId === requestId)
+							? prev
+							: [
+									...prev,
+									{
+										id,
+										kind: "question",
+										text: t("settings.petApprovalWithTool", { tool: approval.tool }),
+										requestId,
+										visible: "",
+									},
+								].slice(-MAX_VISIBLE_BUBBLES),
+					);
+				}
 			}
 			if (payload.bubble?.text) {
 				const bubble = payload.bubble;
@@ -210,8 +222,13 @@ export function PetBubbles(): ReactNode {
 				// authoritative session cards — skip them here so a
 				// background session never double-notifies.
 				const superseded = !!bubble.sessionId && (bubble.kind === "completed" || bubble.kind === "error");
-				if (!superseded) {
-					const id = Date.now();
+				const dismissedRequest = !!bubble.requestId && dismissedRequestIdsRef.current.has(bubble.requestId);
+				if (!superseded && !dismissedRequest) {
+					const newRequest = !!bubble.requestId && !notifiedRequestIdsRef.current.has(bubble.requestId);
+					if (bubble.requestId && newRequest) notifiedRequestIdsRef.current.add(bubble.requestId);
+					const id = nextBubbleIdRef.current++;
+					const actionable = bubble.kind === "question" || bubble.kind === "error" || bubble.kind === "completed";
+					if (actionable && (!bubble.requestId || newRequest)) promote(`b:${id}`);
 					setBubbles(prev => {
 						const next = bubble.sessionId
 							? // Replace the prior bubble for this session — each session
@@ -221,7 +238,7 @@ export function PetBubbles(): ReactNode {
 								? prev.map(b =>
 										b.sessionId === bubble.sessionId
 											? {
-													id: b.id,
+													id,
 													kind: bubble.kind,
 													text: bubble.text,
 													sessionId: bubble.sessionId,
@@ -256,18 +273,18 @@ export function PetBubbles(): ReactNode {
 					});
 					// Transient bubbles auto-dismiss; question bubbles persist
 					// until decided (completion/error live on the cards now).
-					if (bubble.kind === "question") return;
-					window.setTimeout(() => {
-						setBubbles(prev => prev.filter(b => b.id !== id));
-					}, BUBBLE_MS);
+					if (bubble.kind !== "question") {
+						window.setTimeout(() => {
+							setBubbles(prev => prev.filter(b => b.id !== id));
+						}, BUBBLE_MS);
+					}
 				}
 			}
 			if (typeof payload.locale === "string") setLocale(payload.locale);
-			// Sessions opened/acknowledged in the main window are read —
-			// dismiss their cards and bubbles (read 闭环).
+			// Opening or acknowledging in the main window removes its cards.
+			// Unrelated local dismissals remain suppressed.
 			if (Array.isArray(payload.dismissSessions) && payload.dismissSessions.length > 0) {
 				const ids = new Set(payload.dismissSessions);
-				hiddenSessionsRef.current.clear();
 				setBubbles(prev => {
 					const next = prev.filter(b => !(b.sessionId && ids.has(b.sessionId)));
 					return next.length === prev.length ? prev : next;
@@ -363,22 +380,16 @@ export function PetBubbles(): ReactNode {
 	}, [bubbles]);
 
 	// Report the content union — the bubbles window is sized to exactly
-	// this. Include the body's transparent shadow ring and the vertical
-	// margins between the stack and fab/badge; summing element heights alone
-	// clips the fab below the window.
+	// Measure only the stack. The pet-side control lives in another window.
+	// Layout boxes avoid feeding entrance transforms back into window size.
 	useEffect(() => {
 		if (!bridge?.setBubblesContentSize) return;
-		const MEASURED = ".pet-bubbles, .pet-bubbles__fab, .pet-bubbles__badge";
+		const MEASURED = ".pet-bubbles";
 		const report = (): void => {
 			const bodyStyle = getComputedStyle(document.body);
 			let w = 0;
 			let h = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
 			for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) {
-				// Entrance/leaving keyframes transform the box; getBoundingClientRect
-				// includes the transform, so a mid-animation report would size the
-				// window to the animating (shrunk) box. The layout box (offset*)
-				// ignores transforms — use it while the element animates; the
-				// animationend re-report below settles the final size.
 				const r = el.getBoundingClientRect();
 				const animating =
 					typeof el.getAnimations === "function" && el.getAnimations().some(a => a.playState === "running");
@@ -386,22 +397,13 @@ export function PetBubbles(): ReactNode {
 				w = Math.max(w, animating ? el.offsetWidth : r.width);
 				h +=
 					(animating ? el.offsetHeight : r.height) + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
-			}
-			void bridge.setBubblesContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
-			// Transforms do not fire ResizeObserver — re-report when an
-			// entrance/leaving animation settles.
-			for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) {
 				el.addEventListener("animationend", report, { once: true });
 			}
+			void bridge.setBubblesContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
 		};
 		const ro = new ResizeObserver(report);
 		for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) ro.observe(el);
 		report();
-		// Delayed re-reports: typewriter growth / stack expand change the
-		// box after mount; the mutation observer catches newly mounted
-		// content elements (bubbles appear/disappear, stack expands, the
-		// inline reply row opens) and characterData picks up the typewriter's
-		// per-tick text growth.
 		const timer = window.setTimeout(report, 300);
 		const mo = new MutationObserver(report);
 		const root = document.getElementById("root");
@@ -413,30 +415,19 @@ export function PetBubbles(): ReactNode {
 		};
 	}, []);
 
-	// Show/hide the window with the stack's occupancy: an empty stack
-	// renders nothing — the main process hides the window so the
-	// transparent body never blocks the desktop. The hidden-mode badge
-	// still counts as occupancy (it IS the visible content).
 	const itemCount = bubbles.length + cards.length;
 	useEffect(() => {
-		void bridge?.setBubblesVisible?.(itemCount > 0);
-	}, [itemCount]);
-
-	// Mirror the collapse mode to the main process → pet-window badge.
-	// A fresh window starts "stacked", so the badge can never be spuriously
-	// lit at boot (2026-09-22 user: 一启动程序没有会话怎么就有角标).
-	useEffect(() => {
+		// Mirror the mode before hiding the native window. The reverse order can
+		// leave the pet showing the previous mode when the hidden renderer stalls.
 		void bridge?.bubblesSetMode?.(stackMode, itemCount);
-	}, [stackMode, itemCount]);
+		void bridge?.setBubblesVisible?.(itemCount > 0 && stackMode !== "hidden");
+	}, [itemCount, stackMode]);
 
-	// Report the interactive card union — the main process keeps the
-	// transparent padding ring and the gaps click-through. Window-relative
-	// coords: the cards live inside the body's padding box, and
-	// getBoundingClientRect is viewport-relative (this window == viewport).
-	// The fab/badge ride outside the card union but are interactive too.
+	// Include overhanging dismiss buttons and the clear-all capsule. Re-report
+	// after transitions so their delayed hover reveal never remains click-through.
 	useEffect(() => {
 		if (!bridge?.setBubblesHitbox) return;
-		const INTERACTIVE = ".pet-bubble, .pet-bubbles__fab, .pet-bubbles__badge";
+		const INTERACTIVE = ".pet-bubble, .pet-bubble__dismiss, .pet-bubbles__head, .pet-bubbles__clear";
 		const report = (): void => {
 			let left = Infinity;
 			let top = Infinity;
@@ -449,6 +440,8 @@ export function PetBubbles(): ReactNode {
 				top = Math.min(top, r.top);
 				right = Math.max(right, r.right);
 				bottom = Math.max(bottom, r.bottom);
+				el.addEventListener("animationend", report, { once: true });
+				el.addEventListener("transitionend", report, { once: true });
 			}
 			void bridge.setBubblesHitbox?.(
 				left === Infinity
@@ -462,6 +455,7 @@ export function PetBubbles(): ReactNode {
 			);
 		};
 		report();
+		const timer = window.setTimeout(report, 300);
 		const ro = new ResizeObserver(report);
 		const mo = new MutationObserver(report);
 		const root = document.getElementById("root");
@@ -470,12 +464,10 @@ export function PetBubbles(): ReactNode {
 		return () => {
 			ro.disconnect();
 			mo.disconnect();
+			window.clearTimeout(timer);
 		};
 	}, []);
 
-	// Capture the old box, render the new state at that size, then hand the
-	// width and height to the shared liquid spring. Reduced motion skips the
-	// intermediate box entirely.
 	const switchMode = (next: StackMode): void => {
 		if (next === stackMode) return;
 		const r = stackRef.current?.getBoundingClientRect();
@@ -492,8 +484,9 @@ export function PetBubbles(): ReactNode {
 	const switchModeRef = useRef(switchMode);
 	switchModeRef.current = switchMode;
 	useEffect(() => {
-		return bridge?.onBubblesRestore?.(() => {
-			if (stackModeRef.current === "hidden") switchModeRef.current("stacked");
+		return bridge?.onBubblesAdvance?.(() => {
+			const current = stackModeRef.current;
+			switchModeRef.current(current === "expanded" ? "stacked" : current === "stacked" ? "hidden" : "stacked");
 		});
 	}, []);
 
@@ -540,12 +533,10 @@ export function PetBubbles(): ReactNode {
 
 	// ── Session card actions ──────────────────────────────────────────────
 
-	/** × / ✓ on a card. Finished cards acknowledge = mark the session read
-	 *  (badge 闭环); working cards just hide (the user didn't ask to stop
-	 *  the run — suppress until the phase changes). */
+	/** × / ✓ closes only this activity card. Read state remains owned by the
+	 *  main window; a later activity revision may surface the session again. */
 	const dismissCard = (c: PetSessionCard): void => {
-		if (c.phase === "working") hiddenSessionsRef.current.set(c.sessionId, c.phase);
-		else void bridge?.petMarkRead?.(c.sessionId);
+		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
 		setCards(prev => prev.filter(x => x.sessionId !== c.sessionId));
 		if (replyFor === `c:${c.sessionId}`) {
 			setReplyFor(null);
@@ -553,11 +544,10 @@ export function PetBubbles(): ReactNode {
 		}
 	};
 
-	/** ■ stop — abort the run; hide the card (it flips to done/unread or
-	 *  vanishes on the main window's next poll either way). */
+	/** ■ stop — abort the run and dismiss only the current activity card. */
 	const stopCard = (c: PetSessionCard): void => {
 		void bridge?.petStopSession?.(c.sessionId);
-		hiddenSessionsRef.current.set(c.sessionId, c.phase);
+		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
 		setCards(prev => prev.filter(x => x.sessionId !== c.sessionId));
 		if (replyFor === `c:${c.sessionId}`) {
 			setReplyFor(null);
@@ -573,6 +563,7 @@ export function PetBubbles(): ReactNode {
 	// ── Notification bubble actions ───────────────────────────────────────
 
 	const dismissBubble = (b: Bubble): void => {
+		if (b.requestId) dismissedRequestIdsRef.current.add(b.requestId);
 		setBubbles(prev => prev.filter(x => x.id !== b.id));
 		if (replyFor === `b:${b.id}`) {
 			setReplyFor(null);
@@ -644,15 +635,13 @@ export function PetBubbles(): ReactNode {
 	);
 
 	const clearAll = (): void => {
-		// Read 闭环 for every session card + the badge in one pass.
-		for (const c of cards) {
-			if (c.phase !== "working") void bridge?.petMarkRead?.(c.sessionId);
+		// Clear only the visible activity cards. This never marks conversations
+		// read and never decides pending approvals on the user's behalf.
+		for (const card of cards) hiddenSessionsRef.current.set(card.sessionId, sessionActivityKey(card));
+		for (const bubble of bubbles) {
+			if (bubble.requestId) dismissedRequestIdsRef.current.add(bubble.requestId);
 		}
-		for (const b of bubbles) {
-			if (b.requestId) void bridge?.petApprove?.(b.requestId, true);
-		}
-		void bridge?.petMarkAllRead?.();
-		hiddenSessionsRef.current.clear();
+		priorityItemRef.current = null;
 		setCards([]);
 		setBubbles([]);
 		setReplyFor(null);
@@ -664,7 +653,7 @@ export function PetBubbles(): ReactNode {
 
 	// A stacked stack with multiple cards expands before an action runs. This
 	// prevents a hidden priority card from being replied to or dismissed by
-	// accident. Expanded card bodies collapse; ↗ remains the explicit open action.
+	// accident. Expanded cards keep the list open when their session opens.
 	const runAction = (action: () => void): void => {
 		if (stackMode === "stacked" && itemCount > 1) switchMode("expanded");
 		else action();
@@ -677,7 +666,7 @@ export function PetBubbles(): ReactNode {
 				<div
 					key={replyKey}
 					className={`pet-bubble pet-bubble--session pet-bubble--${c.phase}${unread ? " pet-bubble--unread" : ""}`}
-					onClick={() => switchMode(stackMode === "stacked" ? "expanded" : "stacked")}
+					onClick={() => runAction(() => openCard(c))}
 				>
 					<button
 						type="button"
@@ -768,7 +757,12 @@ export function PetBubbles(): ReactNode {
 				<div
 					key={replyKey}
 					className={`pet-bubble pet-bubble--${b.kind}`}
-					onClick={() => switchMode(stackMode === "stacked" ? "expanded" : "stacked")}
+					onClick={() =>
+						runAction(() => {
+							if (b.sessionId) void bridge?.petOpenSession?.(b.sessionId);
+							else void bridge?.focusMainWindow?.();
+						})
+					}
 				>
 					<button
 						type="button"
@@ -848,89 +842,46 @@ export function PetBubbles(): ReactNode {
 			);
 		}),
 	];
+	const priorityIndex = items.findIndex(item => isValidElement(item) && item.key === priorityItemRef.current);
+	if (priorityIndex > 0) items.unshift(items.splice(priorityIndex, 1)[0]!);
 
-	// Fully hidden: only the count badge floats by the pet (kimi parity —
-	// the ⌄ fab's third state). Clicking it restores the stack.
-	if (stackMode === "hidden") {
-		return (
-			<button
-				type="button"
-				className="pet-bubbles__badge"
-				aria-label={t("settings.petBubblesCount", { count: itemCount })}
-				title={t("settings.petBubblesShow")}
-				onClick={() => switchMode("stacked")}
-			>
-				{itemCount}
-			</button>
-		);
-	}
+	if (stackMode === "hidden") return null;
 
-	// Collapse fab (⌄): one level at a time — expanded → stacked → hidden.
-	const fab = (
-		<button
-			type="button"
-			className="pet-bubbles__fab"
-			aria-label={stackMode === "expanded" ? t("settings.petBubblesCollapse") : t("settings.petBubblesHide")}
-			title={stackMode === "expanded" ? t("settings.petBubblesCollapse") : t("settings.petBubblesHide")}
-			onClick={() => switchMode(stackMode === "expanded" ? "stacked" : "hidden")}
-		>
-			⌄
-		</button>
-	);
-
-	// Expanded: header row (count + 清除全部) over the full priority list.
 	if (stackMode === "expanded") {
 		return (
-			<>
-				<div
-					ref={stackRef}
-					className={`pet-bubbles pet-bubbles--expanded${stackMorph ? " pet-bubbles--morphing" : ""}`}
-					style={
-						stackMorph
-							? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` }
-							: undefined
-					}
-					data-top-scroll="false"
-					data-bottom-scroll="false"
-					aria-live="polite"
-				>
-					<div className="pet-bubbles__head">
-						<span className="pet-bubbles__count">{t("settings.petBubblesCount", { count: itemCount })}</span>
-						<button type="button" className="pet-bubbles__clear" onClick={clearAll}>
-							{t("settings.petBubblesClearAll")}
-						</button>
-					</div>
-					{items}
-				</div>
-				{/* Collapse fab — ⌄ parks just above the pet, outside the
-				 * scrollport so it never scrolls away. */}
-				{fab}
-			</>
-		);
-	}
-
-	// Stacked: the top-priority card + "N more" chip; clicking the body
-	// expands the list (spring morph). The card itself owns the click —
-	// no wrapper interception — because its quick-action buttons already
-	// stopPropagation.
-	const top = items[0];
-	const more = items.length - 1;
-	return (
-		<>
 			<div
 				ref={stackRef}
-				className={`pet-bubbles pet-bubbles--stacked${stackMorph ? " pet-bubbles--morphing pet-bubbles--shrinking" : ""}`}
+				className={`pet-bubbles pet-bubbles--expanded${stackMorph ? " pet-bubbles--morphing" : ""}`}
 				style={
 					stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : undefined
 				}
+				data-top-scroll="false"
+				data-bottom-scroll="false"
 				aria-live="polite"
 			>
-				{more > 1 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--far" aria-hidden />}
-				{more > 0 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--near" aria-hidden />}
-				{more > 0 && <span className="pet-bubble__more">{t("settings.petBubblesMore", { count: more })}</span>}
-				{top}
+				<div className="pet-bubbles__head">
+					<button type="button" className="pet-bubbles__clear" onClick={clearAll}>
+						{t("settings.petBubblesClearAll")}
+					</button>
+				</div>
+				{items}
 			</div>
-			{fab}
-		</>
+		);
+	}
+
+	const top = items[0];
+	const more = items.length - 1;
+	return (
+		<div
+			ref={stackRef}
+			className={`pet-bubbles pet-bubbles--stacked${stackMorph ? " pet-bubbles--morphing pet-bubbles--shrinking" : ""}`}
+			style={stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : undefined}
+			aria-live="polite"
+		>
+			{more > 1 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--far" aria-hidden />}
+			{more > 0 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--near" aria-hidden />}
+			{more > 0 && <span className="pet-bubble__more">{t("settings.petBubblesMore", { count: more })}</span>}
+			{top}
+		</div>
 	);
 }

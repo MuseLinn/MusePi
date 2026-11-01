@@ -1,6 +1,8 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dismissActionToastSource, pushActionToast } from "../lib/action-toast";
+import { setPluginManagementEnabled } from "../lib/plugin-management";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import {
@@ -257,6 +259,20 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const providers = data?.providers ?? [];
 	const unhosted = useUnhostedSlots(rpc);
 	const [error, setError] = useState<string | null>(null);
+	const reportError = useCallback((details: string): void => {
+		setError(details);
+		pushActionToast({
+			kind: "error",
+			title: t("tools.operationFailed"),
+			message: t("tools.capabilityCenter"),
+			details,
+			dedupeKey: "extensions-center",
+		});
+	}, []);
+	const clearError = useCallback((): void => {
+		setError(null);
+		dismissActionToastSource("extensions-center");
+	}, []);
 	// 设计稿 07 五 tab：概览 / 能力清单 / 插件 / 市场 / 槽位诊断 —— 配置与
 	// 诊断视角；发现与安装（消费者视角）在一级「能力中心」（CapabilityCenterPage）。
 	const [view, setView] = useState<"overview" | "inventory" | "plugins" | "marketplace" | "diagnostics">("overview");
@@ -376,8 +392,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		// daemon 广播 extensions.changed → 单例重拉,不本地乐观更新。
 		void rpc
 			.request("extensions.setEnabled", { id: e.id, enabled: next })
-			.then(() => setError(null))
-			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+			.then(clearError)
+			.catch((err: unknown) => reportError(err instanceof Error ? err.message : String(err)));
 	};
 
 	/** omp 生态智能兼容:shadowed 项显式启用/取消(写 forceEnabledExtensions)。
@@ -387,37 +403,33 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		if (!rpc) return;
 		void rpc
 			.request("extensions.setForceEnabled", { id: e.id, enabled: next })
-			.then(() => setError(null))
-			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+			.then(clearError)
+			.catch((err: unknown) => reportError(err instanceof Error ? err.message : String(err)));
 	};
 
 	const toggleProvider = (p: ProviderInfo): void => {
 		if (!rpc) return;
 		void rpc
 			.request("extensions.setProviderEnabled", { providerId: p.id, enabled: !p.enabled })
-			.then(() => setError(null))
-			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+			.then(clearError)
+			.catch((err: unknown) => reportError(err instanceof Error ? err.message : String(err)));
 	};
 
 	const togglePlugin = (p: PluginEntry): void => {
 		if (!rpc) return;
-		void rpc
-			// Same contract as CapabilityCenterPage: the daemon reports the real
-			// post-write load outcome; a failed load must not flip the toggle.
-			.request<{ ok: boolean; enabled: boolean; error?: string }>("plugins.setEnabled", {
-				name: p.name,
-				enabled: !p.enabled,
-			})
+		void setPluginManagementEnabled(rpc, p, !p.enabled)
 			.then(res => {
 				if (res.ok) {
-					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: res.enabled } : x)));
-					setError(null);
+					setPlugins(prev =>
+						prev.map(x => (x.name === p.name ? { ...x, enabled: res.enabled ?? !p.enabled } : x)),
+					);
+					clearError();
 				} else {
 					setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: false } : x)));
-					setError(`${p.name}: ${res.error ?? "load failed"}`);
+					reportError(`${p.name}: ${res.error ?? "load failed"}`);
 				}
 			})
-			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+			.catch((err: unknown) => reportError(err instanceof Error ? err.message : String(err)));
 	};
 
 	const remove = (e: ExtensionItem): void => {
@@ -430,9 +442,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 				.request("skills.delete", { name: e.name })
 				.then(() => {
 					if (selectedId === e.id) setSelectedId(null);
-					setError(null);
+					clearError();
 				})
-				.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+				.catch((err: unknown) => reportError(err instanceof Error ? err.message : String(err)));
 		});
 	};
 
@@ -629,7 +641,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 						pluginsError={pluginsError}
 						onTogglePackage={togglePlugin}
 						onOpenMarketplace={() => setView("marketplace")}
-						onError={setError}
+						onError={reportError}
 						variant="cards"
 					/>
 				) : view === "marketplace" ? (

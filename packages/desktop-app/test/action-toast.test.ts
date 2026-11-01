@@ -8,8 +8,11 @@ import type { BrowserGuiHint as BrowserGuiHintComponent } from "../src/component
 import {
 	ACTION_TOAST_TTL_MS,
 	dismissActionToast,
+	dismissActionToastSource,
 	getToasts,
+	pauseActionToast,
 	pushActionToast,
+	resumeActionToast,
 	subscribeActionToasts,
 } from "../src/lib/action-toast";
 import type { RpcClient } from "../src/lib/rpc";
@@ -138,6 +141,57 @@ describe("action toast store", () => {
 		expect(toasts[0]?.id).not.toBe(first);
 	});
 
+	test("a stable dedupe key replaces updated content from the same source", () => {
+		const first = pushActionToast({
+			message: "正在加载插件",
+			dedupeKey: "capability-center:load",
+		});
+		const second = pushActionToast({
+			message: "插件加载失败",
+			dedupeKey: "capability-center:load",
+			kind: "error",
+		});
+
+		expect(getToasts()).toHaveLength(1);
+		expect(getToasts()[0]?.id).toBe(second);
+		expect(getToasts()[0]?.id).not.toBe(first);
+		expect(getToasts()[0]?.message).toBe("插件加载失败");
+	});
+
+	test("recovery dismisses only the persistent error from that source", () => {
+		pushActionToast({ message: "列表不可用", kind: "error", dedupeKey: "plugins:load" });
+		const unrelated = pushActionToast({ message: "保存失败", kind: "error", dedupeKey: "file:save" });
+
+		dismissActionToastSource("plugins:load");
+		expect(getToasts().map(toast => toast.id)).toEqual([unrelated]);
+	});
+
+	test("the stack keeps three notices and evicts the oldest non-error first", () => {
+		const persistent = pushActionToast({ message: "需要处理", kind: "error" });
+		const oldestTransient = pushActionToast({ message: "第一条" });
+		const secondTransient = pushActionToast({ message: "第二条" });
+		const newest = pushActionToast({ message: "第三条" });
+
+		expect(getToasts().map(toast => toast.id)).toEqual([persistent, secondTransient, newest]);
+		expect(getToasts().some(toast => toast.id === oldestTransient)).toBe(false);
+		expect(getToasts()).toHaveLength(3);
+	});
+
+	test("evicting a paused toast also clears its resumable state", () => {
+		const paused = pushActionToast({ message: "已暂停" });
+		pauseActionToast(paused);
+		pushActionToast({ message: "第二条" });
+		pushActionToast({ message: "第三条" });
+		pushActionToast({ message: "第四条" });
+		let notified = 0;
+		const unsubscribe = subscribeActionToasts(() => notified++);
+
+		resumeActionToast(paused);
+		unsubscribe();
+		expect(notified).toBe(0);
+		expect(getToasts()).toHaveLength(3);
+	});
+
 	test("distinct messages coexist and dismissing one leaves the other", () => {
 		const a = pushActionToast({
 			message: "会话已归档",
@@ -247,6 +301,27 @@ describe("ActionToastStack", () => {
 
 		advance(60_000);
 		expect(getToasts()).toHaveLength(1);
+	});
+
+	test("a warning expires and renders its title and technical details", () => {
+		vi.useFakeTimers();
+		mountStack();
+		act(() =>
+			pushActionToast({
+				kind: "warning",
+				title: "保存失败",
+				message: "请检查文件权限后重试",
+				details: "EPERM: operation not permitted",
+			}),
+		);
+		const toast = toastElement();
+		expect(toast.classList.contains("gui-action-toast--warning")).toBe(true);
+		expect(toast.getAttribute("role")).toBe("status");
+		expect(toast.querySelector(".gui-action-toast-title")?.textContent).toBe("保存失败");
+		expect(toast.querySelector(".gui-action-toast-details")?.textContent).toBe("EPERM: operation not permitted");
+
+		advance(ACTION_TOAST_TTL_MS);
+		expect(getToasts()).toHaveLength(0);
 	});
 });
 

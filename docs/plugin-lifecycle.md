@@ -35,7 +35,7 @@ A complete migration has four parts:
 3. **Consumption**: prompt generation, UI rendering, commands, and other consumers read that registry rather than a parallel static implementation.
 4. **Disposal**: unloading removes the registrations and their visible/runtime effects.
 
-`magic-keywords` follows all four: the package contributes notice templates and gradients, `AgentSession` builds notices through the registry, and editor highlighting uses only registered highlighters. An empty registry therefore means no notice and no highlight. `stats-pills` owns the composer dock component through the same slot lifecycle.
+`magic-keywords` follows all four: the package contributes notice templates and gradients, `AgentSession` builds notices through the registry, and editor highlighting uses only registered highlighters. An empty registry therefore means no notice and no highlight. `stats-pills` owns the composer dock component through the same slot lifecycle. `android-emulator` shares one ADB service between its RPC namespace, right-panel component, and Agent tool; disposal waits for the active capture and terminates only emulator processes started by that plugin instance.
 
 ## Side effects and state
 
@@ -57,7 +57,13 @@ First mount shares the process module instance; explicit reload re-evaluates the
 
 Host-level plugins live under `musepi-dynamic-plugins` in `daemon/cordis-dynamic-plugins.ts`. They support inspection, independent component fibers, RPC dispatch, enable/disable, reload, and unload. Session-level loading uses the session extension context. Do not share a host singleton as an implicit session service.
 
+Cordis packaging does not make every built-in row optional. A built-in entry declared `readonly: true` remains inspectable but has no enablement control: the GUI and TUI do not offer a toggle, and `extensions.setEnabled` rejects a disable request instead of writing an ineffective flag.
+
 A component declared in `musepi.components` has its own fiber when it has an entry. Its state can be `active`, `disabled`, `failed`, or `unloaded`; declarations remain inspectable after the plugin is disabled.
+
+Preset compositions use `CordisPresetRuntime`, not the legacy extension loader as their lifecycle owner. Each row mounts through `scope.plugin()`. `isolate` maps to `Context.isolate(name)`, so a provider and its consumers must share a default context or an isolated group to see the same service object. `Extension` is only the registration record consumed by the tool/UI bridge. Switching a preset removes old tools and disposes old fibers; session teardown does the same.
+
+Plugin-owned skills live beside the plugin and are declared during `apply` with `registerSkill`. They do not use the standalone bundled-skill installer. Disabling the plugin removes its skill, tools, components, and effects together; standalone file skills installed by a user remain independent.
 
 ## Migration checklist
 

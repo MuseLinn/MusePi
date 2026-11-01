@@ -8,19 +8,26 @@ import type { RpcClient } from "../src/lib/rpc";
 class FakeRpc {
 	readonly requests: { method: string; params: unknown }[] = [];
 	accept = true;
+	holdAdd = false;
+	private pendingAdd: ((value: { accepted: boolean; reason?: string }) => void) | null = null;
 
 	request<T>(method: string, params?: unknown): Promise<T> {
 		this.requests.push({ method, params });
 		if (method === "voice.speakerEnrollmentAdd") {
-			const count = this.requests.filter(request => request.method === method).length;
-			return Promise.resolve({
-				accepted: this.accept,
-				reason: this.accept ? undefined : "Try again",
-				count: this.accept ? count : count - 1,
-			} as T);
+			if (this.holdAdd) {
+				return new Promise<T>(resolve => {
+					this.pendingAdd = value => resolve(value as T);
+				});
+			}
+			return Promise.resolve({ accepted: this.accept, reason: this.accept ? undefined : "Try again" } as T);
 		}
 		if (method === "voice.speakerEnrollmentFinish") return Promise.resolve({ ok: true } as T);
 		return Promise.resolve({ ok: true } as T);
+	}
+
+	releaseAdd(): void {
+		this.pendingAdd?.({ accepted: this.accept, reason: this.accept ? undefined : "Try again" });
+		this.pendingAdd = null;
 	}
 }
 
@@ -74,12 +81,12 @@ describe("speaker enrollment", () => {
 		expect(rpc.requests.filter(request => request.method === "voice.speakerEnrollmentAdd").length).toBe(4);
 		expect(rpc.requests.filter(request => request.method === "voice.speakerEnrollmentFinish").length).toBe(1);
 		expect(host.textContent).toContain("Voice ready");
+		expect(host.querySelector<HTMLButtonElement>(".gui-voice-enroll-primary")?.textContent).toContain("Finish");
 	});
 
 	test("reopening after completion starts a fresh enrollment", async () => {
 		const { host, finish } = harness();
 		for (let count = 0; count < 5; count++) await record(host, finish);
-		expect(host.querySelector(".gui-voice-enroll-primary")).toBeNull();
 		const root = mounted.at(-1)!.root;
 		act(() => root.render(createElement(SpeakerEnrollment, { open: false, onClose: () => {}, rpc: null })));
 		act(() => root.render(createElement(SpeakerEnrollment, { open: true, onClose: () => {}, rpc: null })));
@@ -93,10 +100,23 @@ describe("speaker enrollment", () => {
 		rpc.accept = false;
 		await record(host, finish);
 		expect(host.querySelectorAll("[data-complete='true']").length).toBe(1);
+		expect(host.querySelector(".gui-voice-enroll-stage")?.getAttribute("data-state")).toBe("error");
 		expect(host.textContent).toContain("Try again");
 		rpc.accept = true;
 		await record(host, finish);
 		expect(host.querySelectorAll("[data-complete='true']").length).toBe(2);
+	});
+
+	test("recording, processing and accepted expose distinct feedback states", async () => {
+		const { rpc, host, finish } = harness();
+		expect(host.querySelector(".gui-voice-enroll-stage")?.getAttribute("data-state")).toBe("idle");
+		rpc.holdAdd = true;
+		await act(async () => host.querySelector<HTMLButtonElement>(".gui-voice-enroll-primary")!.click());
+		expect(host.querySelector(".gui-voice-enroll-stage")?.getAttribute("data-state")).toBe("recording");
+		await act(async () => finish(new Float32Array(64_000).fill(0.1)));
+		expect(host.querySelector(".gui-voice-enroll-stage")?.getAttribute("data-state")).toBe("processing");
+		await act(async () => rpc.releaseAdd());
+		expect(host.querySelector(".gui-voice-enroll-stage")?.getAttribute("data-state")).toBe("accepted");
 	});
 
 	test("reduced motion retains equivalent textual progress and a stable progress region", async () => {

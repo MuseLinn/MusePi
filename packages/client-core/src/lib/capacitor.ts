@@ -23,6 +23,8 @@ import { dispatchBack } from "./back-stack";
 declare global {
 	interface Window {
 		Capacitor?: {
+			/** Platform check remains false for Capacitor's browser bridge. */
+			isNativePlatform?: () => boolean;
 			/** Low-level bridge: call a native-registered plugin by name. */
 			nativePromise?: <T = unknown>(
 				pluginName: string,
@@ -67,9 +69,9 @@ declare global {
 	}
 }
 
-/** True inside the Capacitor WebView (native bridge present). */
+/** True only in the native WebView, not in Capacitor's browser bridge. */
 export function isNativeShell(): boolean {
-	return typeof window !== "undefined" && window.Capacitor != null;
+	return typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() === true;
 }
 
 /** True inside the HarmonyOS WebView shell (ArkTS javaScriptProxy present). */

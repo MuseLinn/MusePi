@@ -120,10 +120,17 @@ function SessionTabItem({
 			className={`gui-session-tab-slot${isDragging ? " gui-session-tab-slot--dragging" : ""}`}
 			{...attributes}
 			{...listeners}
+			/* dnd-kit defaults this wrapper to a button. The inner element owns the
+			 * tab semantics, so exposing both roles creates invalid nested controls. */
+			role={undefined}
+			tabIndex={undefined}
 		>
 			<div
 				role="tab"
+				id={`session-tab-${tab.id}`}
+				aria-controls={`session-panel-${tab.id}`}
 				aria-selected={isActive}
+				tabIndex={isActive ? 0 : -1}
 				data-active-session-tab={isActive ? true : undefined}
 				className={`gui-session-tab group/session-tab${isActive ? " gui-session-tab--active" : ""}`}
 				onClick={select}
@@ -131,6 +138,22 @@ function SessionTabItem({
 					if (isPreview) actions.onKeepOpen(tab.id);
 				}}
 				onKeyDown={event => {
+					if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+						event.preventDefault();
+						const list = event.currentTarget.closest('[role="tablist"]');
+						const all = Array.from(list?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []);
+						const current = all.indexOf(event.currentTarget);
+						if (current < 0 || all.length === 0) return;
+						const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+						const next =
+							event.key === "Home"
+								? 0
+								: event.key === "End"
+									? all.length - 1
+									: (current + (forward ? 1 : -1) + all.length) % all.length;
+						all[next]?.focus();
+						return;
+					}
 					if (event.key === "Enter" || event.key === " ") {
 						event.preventDefault();
 						select();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ToolCard } from "../src/components/transcript/ToolCard";
 import { ToolView } from "../src/tool-render/ToolView";
+import { registerExternalToolRenderers } from "../src/tool-render/registry";
 
 describe("ToolView xd:// dispatches", () => {
 	it("renders successful execute-mode xdev writes as the inner generate_image tool", () => {
@@ -177,5 +178,26 @@ describe("ToolView xd:// dispatches", () => {
 		expect(live).toContain("4");
 		expect(historical).toContain("#go");
 		expect(historical).toContain("4");
+	});
+
+	it("uses an extension tool view's label and icon in the shared card chrome", () => {
+		registerExternalToolRenderers({
+			android_emulator: {
+				label: "Android 模拟器",
+				Icon: () => <svg data-testid="android-tool-icon" />,
+				Summary: ({ args }) => <span>截图 · {String(args.device)}</span>,
+			},
+		});
+		try {
+			const html = renderToStaticMarkup(
+				<ToolView name="android_emulator" args={{ action: "screenshot", device: "emulator-5554" }} />,
+			);
+			expect(html).toContain("Android 模拟器");
+			expect(html).toContain('data-testid="android-tool-icon"');
+			expect(html).toContain("截图 · emulator-5554");
+			expect(html).not.toContain(">android_emulator</span>");
+		} finally {
+			registerExternalToolRenderers({});
+		}
 	});
 });

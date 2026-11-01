@@ -123,6 +123,15 @@ describe("extension toggle — disabledExtensions 覆盖层（M2-2.3）", () => 
 		expect(settings.getRaw("display.taskCardStyle")).toBe("swarm");
 		expect(settings.get("disabledExtensions")).toEqual([]);
 	});
+
+	test("只读内置项拒绝直接 RPC 启停且不写覆盖层", async () => {
+		const settings = Settings.isolated();
+		settings.set("disabledExtensions", ["rule:other"]);
+		const service = makeService(settings, tmpCwd, agentDir);
+
+		await expect(service.setEnabled({ id: "theme:builtin-themes", enabled: false })).rejects.toThrow(/read-only/);
+		expect(settings.get("disabledExtensions")).toEqual(["rule:other"]);
+	});
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

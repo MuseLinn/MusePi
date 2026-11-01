@@ -1120,6 +1120,12 @@ export class ExtensionRunner {
 		return names;
 	}
 
+	/** Adopt an already-mounted Cordis plugin's registrations without importing its module again. */
+	async adoptExtension(extension: Extension): Promise<string[]> {
+		if (!this.getExtensionByPath(extension.resolvedPath)) this.extensions.push(extension);
+		return this.activateExtensionTools(extension.resolvedPath);
+	}
+
 	/**
 	 * Hot-reload one extension entry (P5 session-level HMR v2).
 	 *

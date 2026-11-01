@@ -80,6 +80,18 @@ describe("selectPanelTabComponent", () => {
 });
 
 describe("selectLaunchablePanelTabs", () => {
+	it("keeps session-provided tabs out of the rail without hiding their open content", () => {
+		const compaction = comp({
+			slot: "panel.tab.compaction",
+			extensionId: "summary",
+			code: "c",
+			availability: "on-demand",
+		});
+		const tool = comp({ slot: "panel.tab.tool", extensionId: "tool", code: "c" });
+		expect(selectLaunchablePanelTabs([compaction, tool])).toEqual([tool]);
+		expect(selectPanelTabComponent([compaction, tool], "ext:panel.tab.compaction")).toBe(compaction);
+	});
+
 	it("keeps the reserved file slot out of the generic extension launcher", () => {
 		const files = comp({ slot: "panel.tab.files", extensionId: "file-workspace", code: "c" });
 		const tool = comp({ slot: "panel.tab.tool", extensionId: "tool", code: "c" });

@@ -7,7 +7,7 @@ import "@musepi/client-core/src/components/shell/shell.css";
 import "@musepi/client-core/src/components/transcript/transcript.css";
 import "@musepi/client-core/src/components/agents/agents.css";
 import "@musepi/client-core/src/tool-render/tool-render.css";
-import "./styles/fonts.css";
+import "@musepi/client-core/src/styles/fonts.css";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
 import "@musepi/client-core/src/styles/overlay-fallback.css";

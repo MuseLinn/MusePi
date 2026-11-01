@@ -24,6 +24,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { $ } from "bun";
+import { main as checkCssTokens } from "./check-css-tokens";
 
 export interface CssStructureProblem {
 	/** Repo-relative path of the offending stylesheet. */
@@ -102,18 +103,29 @@ export function checkCssStructure(file: string, source: string): CssStructurePro
 async function main(): Promise<void> {
 	// Interpolated rather than inline: Bun Shell globs an inline `*.css` itself
 	// and fails before git ever sees it.
-	const listed = await $`git ls-files ${"*.css"}`.quiet().nothrow();
-	if (listed.exitCode !== 0) throw new Error("git ls-files *.css failed");
-	const files = listed
+	// Include untracked product stylesheets as well as tracked ones. A rename
+	// leaves the old cached path in this list until staging, so missing files are
+	// expected and must not hide the new stylesheet from the gate. Restrict the
+	// scan to first-party source roots; reference checkouts can contain minified
+	// or otherwise non-conforming third-party CSS that this gate does not own.
+	const listed = await $`git ls-files --cached --others --exclude-standard -- packages web`.quiet().nothrow();
+	if (listed.exitCode !== 0) throw new Error("git ls-files for product CSS failed");
+	const candidates = listed
 		.text()
 		.split("\n")
 		.map(l => l.trim())
-		.filter(l => l.length > 0);
+		.filter(l => l.endsWith(".css"));
 
+	const files: string[] = [];
 	const problems: CssStructureProblem[] = [];
-	for (const file of files) {
-		const source = await fs.readFile(path.resolve(file), "utf8");
-		problems.push(...checkCssStructure(file, source));
+	for (const file of candidates) {
+		try {
+			const source = await fs.readFile(path.resolve(file), "utf8");
+			files.push(file);
+			problems.push(...checkCssStructure(file, source));
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		}
 	}
 
 	if (problems.length > 0) {
@@ -126,6 +138,8 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 	console.log(`css-structure: OK — ${files.length} stylesheet(s) balanced`);
+	const tokenStatus = checkCssTokens();
+	if (tokenStatus !== 0) process.exit(tokenStatus);
 }
 
 if (import.meta.main) await main();

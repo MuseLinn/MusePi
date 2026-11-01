@@ -67,7 +67,7 @@ export async function loadSessionPlugins(
 	const admissible = await sessionAdmissiblePaths(paths, errors);
 	if (admissible.length === 0) return { extensions, errors, runtime };
 
-	const readConfig = options.readConfig ?? (await defaultConfigReader());
+	const readConfig = options.readConfig ?? (await defaultSessionConfigReader());
 	for (const entryPath of admissible) {
 		// No `wrapApi`: `mountPlugin` builds the API itself from `ctx.runtime`,
 		// `cwd` and `eventBus` — the three things that make this the SESSION's
@@ -115,7 +115,7 @@ async function sessionAdmissiblePaths(
 }
 
 /** The default config reader: the plugin's declared fields, filled from the store. */
-async function defaultConfigReader(): Promise<MountContext["readConfig"]> {
+export async function defaultSessionConfigReader(): Promise<MountContext["readConfig"]> {
 	const [
 		{ readPluginConfigStore },
 		{ coerceConfigValues },

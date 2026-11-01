@@ -36,7 +36,7 @@ MusePi 插件同时负责注册与消费。一个包如果只出现在扩展中�
 3. **消费**：prompt、UI、命令等消费者读取同一注册表，而不是平行的静态实现。
 4. **销毁**：卸载同时移除注册及其可见和运行时效果。
 
-`magic-keywords` 覆盖这四步：包贡献提示模板和渐变，`AgentSession` 通过注册表生成提示，编辑器高亮也只读注册表。注册表为空时因此没有提示，也没有高亮。`stats-pills` 通过同一插槽生命周期拥有 composer dock 组件。
+`magic-keywords` 覆盖这四步：包贡献提示模板和渐变，`AgentSession` 通过注册表生成提示，编辑器高亮也只读注册表。注册表为空时因此没有提示，也没有高亮。`stats-pills` 通过同一插槽生命周期拥有 composer dock 组件。`android-emulator` 让 RPC 命名空间、右侧面板组件和 Agent 工具共享一个 ADB 服务；销毁时等待在途截图，并且只终止该插件实例启动的模拟器进程。
 
 ## 副作用与状态
 
@@ -58,7 +58,13 @@ fiber 作用域值使用 `pi.state`，支持 `get`、`set`、`has`、`delete`、
 
 宿主级插件位于 `daemon/cordis-dynamic-plugins.ts` 的 `musepi-dynamic-plugins` 下，支持检视、独立组件 fiber、RPC 派发、启停、reload 和 unload。会话级装载使用会话扩展上下文。不要把宿主单例隐式当作会话服务。
 
+Cordis 插件化不代表每个内置条目都可停用。声明 `readonly: true` 的内置条目仍可检视，但没有启停控制：GUI 与 TUI 不提供开关，`extensions.setEnabled` 会拒绝禁用请求，而不是写入无效标记。
+
 `musepi.components` 中带 entry 的组件拥有独立 fiber，其状态可以是 `active`、`disabled`、`failed`、`unloaded`；插件禁用后声明仍可检视。
+
+preset 组合使用 `CordisPresetRuntime`，不以 legacy 扩展装载器作为生命周期所有者。每行通过 `scope.plugin()` 挂载，`isolate` 映射为 `Context.isolate(name)`；provider 与消费者只有位于同一默认 Context 或隔离 group 中才能看到同一个服务对象。`Extension` 只是工具/UI 桥消费的注册记录。切换 preset 会移除旧工具并销毁旧 fiber，会话销毁也遵循同一顺序。
+
+插件自有 skill 放在插件目录内，并在 `apply` 中通过 `registerSkill` 声明，不再走独立的 bundled-skill 安装器。禁用插件会同时移除它的 skill、工具、组件和 effect；用户独立安装的文件 skill 不受影响。
 
 ## 迁移检查
 

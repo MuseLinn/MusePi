@@ -58,6 +58,8 @@ export interface ApprovalBridge {
 	/** Answer a pending request. Returns false when unknown/already resolved.
 	 *  `note` is the operator's free-text reason. */
 	resolve(requestId: string, approved: boolean, note?: string): boolean;
+	/** Observe additions and resolutions of the authoritative pending table. */
+	subscribe(listener: () => void): () => void;
 	/** Active ask requests keyed by requestId. */
 	pendingAsks: Map<string, PendingAsk>;
 	/** Answer a pending ask. Returns false when unknown/already resolved.
@@ -74,6 +76,10 @@ export function createApprovalBridge(
 ): ApprovalBridge {
 	const pending = new Map<string, PendingApproval>();
 	const pendingAsks = new Map<string, PendingAsk>();
+	const listeners = new Set<() => void>();
+	const notifyApprovals = (): void => {
+		for (const listener of listeners) listener();
+	};
 
 	const makeAskId = (): string => `daemon-ask-${Date.now()}-${++counter}`;
 
@@ -115,11 +121,13 @@ export function createApprovalBridge(
 				resolve: (approved: boolean, note?: string) => {
 					if (!pending.has(requestId)) return;
 					pending.delete(requestId);
+					notifyApprovals();
 					resolve(note ? { approved, note } : { approved });
 				},
 			};
 			pending.set(requestId, record);
 			onRequest(record);
+			notifyApprovals();
 			const answer = await promise;
 			if (!answer.approved && answer.note) {
 				// The label contract has no room for a reason, so a noted denial
@@ -212,6 +220,10 @@ export function createApprovalBridge(
 			// the select promise (double-resolve guard lives there).
 			record.resolve(approved, note);
 			return true;
+		},
+		subscribe(listener) {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
 		},
 		pendingAsks,
 		resolveAsk(requestId, answer) {

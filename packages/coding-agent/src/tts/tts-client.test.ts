@@ -12,12 +12,18 @@ import type { TtsProgressEvent, TtsWorkerInbound, TtsWorkerOutbound } from "./tt
  * pre-fix code logged at debug only, which is why the melotts-zh synthesis
  * failure reached the GUI as unexplained silence.
  */
-function createErrorWorker(errorText: string): RefCountedWorkerHandle<TtsWorkerInbound, TtsWorkerOutbound> {
+function createErrorWorker(
+	errorText: string,
+	channel: "message" | "worker" = "message",
+): RefCountedWorkerHandle<TtsWorkerInbound, TtsWorkerOutbound> {
 	let messageHandler: ((message: TtsWorkerOutbound) => void) | null = null;
+	let errorHandler: ((error: Error) => void) | null = null;
 	return {
 		send(message: TtsWorkerInbound) {
 			queueMicrotask(() => {
-				if (message.type !== "ping") messageHandler?.({ type: "error", id: message.id, error: errorText });
+				if (message.type === "ping") return;
+				if (channel === "worker") errorHandler?.(new Error(errorText));
+				else messageHandler?.({ type: "error", id: message.id, error: errorText });
 			});
 		},
 		onMessage(handler: (message: TtsWorkerOutbound) => void) {
@@ -26,11 +32,15 @@ function createErrorWorker(errorText: string): RefCountedWorkerHandle<TtsWorkerI
 				messageHandler = null;
 			};
 		},
-		onError() {
-			return () => {};
+		onError(handler: (error: Error) => void) {
+			errorHandler = handler;
+			return () => {
+				errorHandler = null;
+			};
 		},
 		async terminate() {
 			messageHandler = null;
+			errorHandler = null;
 		},
 		ref() {},
 		unref() {},
@@ -66,6 +76,24 @@ describe("TtsClient worker-error visibility", () => {
 		const audio = await client.synthesize("melotts-zh", "你好", { onError: message => errors.push(message) });
 		expect(audio).toBeNull();
 		expect(errors).toEqual(["Failed to download model.onnx: HTTP 404"]);
+		await client.terminate();
+	});
+
+	it("delivers the worker's error text through the download onError hook", async () => {
+		const client = new TtsClient(() => createErrorWorker("OfflineTts.createAsync rejected the model config"));
+		const errors: string[] = [];
+		const ok = await client.downloadModel("melotts-zh", { onError: message => errors.push(message) });
+		expect(ok).toBe(false);
+		expect(errors).toEqual(["OfflineTts.createAsync rejected the model config"]);
+		await client.terminate();
+	});
+
+	it("forwards a worker-process failure to a pending download", async () => {
+		const client = new TtsClient(() => createErrorWorker("tts subprocess exited", "worker"));
+		const errors: string[] = [];
+		const ok = await client.downloadModel("melotts-zh", { onError: message => errors.push(message) });
+		expect(ok).toBe(false);
+		expect(errors).toEqual(["tts subprocess exited"]);
 		await client.terminate();
 	});
 

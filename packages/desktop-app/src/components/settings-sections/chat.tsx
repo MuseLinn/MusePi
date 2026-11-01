@@ -366,14 +366,14 @@ export function ChatSection(): ReactNode {
 							window.dispatchEvent(new Event(STATS_MODE_EVENT));
 						}}
 					/>
-					<PrefToggle
-						label={t("settings.sessionTabs")}
-						description={t("settings.sessionTabsDescription")}
-						storageKey={SESSION_TABS_ENABLED_KEY}
-						on={false}
-						onChange={() => window.dispatchEvent(new Event(SESSION_TABS_CHANGED_EVENT))}
-					/>
 				</div>
+				<PrefToggle
+					label={t("settings.sessionTabs")}
+					description={t("settings.sessionTabsDescription")}
+					storageKey={SESSION_TABS_ENABLED_KEY}
+					on={false}
+					onChange={() => window.dispatchEvent(new Event(SESSION_TABS_CHANGED_EVENT))}
+				/>
 			</div>
 
 			<div className="gui-settings-section">

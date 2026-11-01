@@ -26,13 +26,30 @@ export const MAX_SESSION_TABS = 10;
 
 /** Live view of the settings toggle (multi-session header tabs). */
 export function useSessionTabsEnabled(): boolean {
-	return useSyncExternalStore(subscribeEnabled, () => readEnabled());
+	return useSyncExternalStore(subscribeEnabled, () => readSessionTabsEnabled());
 }
 
-function readEnabled(storage: StorageLike | null = defaultStorage()): boolean {
+/** Read the persisted toggle. First-run onboarding passes its recommended
+ * default; ordinary callers keep the historical opt-in default. */
+export function readSessionTabsEnabled(defaultWhenUnset = false): boolean {
+	return readEnabled(defaultStorage(), defaultWhenUnset);
+}
+
+/** Persist the shared preference and notify the header in this window. */
+export function setSessionTabsEnabled(enabled: boolean): void {
+	try {
+		localStorage.setItem(SESSION_TABS_ENABLED_KEY, enabled ? "1" : "0");
+	} catch {
+		// Storage can be unavailable in embedded or restricted contexts.
+	}
+	if (typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_TABS_CHANGED_EVENT));
+}
+
+function readEnabled(storage: StorageLike | null, defaultWhenUnset: boolean): boolean {
 	if (!storage) return false;
 	try {
-		return storage.getItem(SESSION_TABS_ENABLED_KEY) === "1";
+		const stored = storage.getItem(SESSION_TABS_ENABLED_KEY);
+		return stored === null ? defaultWhenUnset : stored === "1";
 	} catch {
 		return false;
 	}

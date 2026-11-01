@@ -12,7 +12,7 @@
  *   100 — AgentDrawer (most modal)
  *    95 — QrScanner (ConnectScreen)
  *    90 — SessionsSheet
- *    85 — ServerSwitcher
+ *    85 — HostManager
  *    80 — AgentsRail
  *    60 — Panel (board/scheduled/files)
  *    40 — Workspace back (session → directory)

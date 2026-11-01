@@ -37,13 +37,9 @@
 	/* Bubble geometry is independent of the shared radius scale. The same
 	 * 20px face is used by the priority card, decorative backs and header. */
 	--radius-xl: 20px;
-	/* Unified bubble-stack width — the collapsed card AND the expanded list
-	 * share one OUTER box (240px card + 20px horizontal shadow room each
-	 * side), so the window width is constant across the collapsed ⇄
-	 * expanded switch. No vw-based width here: in the content-sized bubble
-	 * window a vw width feeds back into the reported window size and
-	 * converges to nothing. */
-	--pet-stack-width: 360px;
+	/* One 320px card plus a 12px shadow perimeter on each side. A fixed
+	 * width avoids a content-sized-window feedback loop. */
+	--pet-stack-width: 344px;
 	/* ── Bubble kind accents ─────────────────────────────────────────────
 	 * Every notification used to render identically apart from `error`
 	 * getting a red border — a finished task, a failure, a question that
@@ -188,13 +184,8 @@
 	transform: scaleX(-1);
 }
 
-/* Bubble stack above the pet. Both collapse states keep one outer width;
- * only the height and content change. The 60px transparent perimeter makes
- * room for the shared --glass-shadow. The hitbox report excludes it, so the
- * extra window area remains click-through. */
+/* One 320px card column with a 12px transparent shadow perimeter. */
 .pet-bubbles {
-	/* Re-scope the shared token after tokens.css loads; the 20px bubble face
-	 * must not inherit the global 12px --radius-xl value. */
 	--radius-xl: 20px;
 	position: absolute;
 	bottom: 174px;
@@ -202,32 +193,41 @@
 	transform: translateX(-50%);
 	width: var(--pet-stack-width);
 	box-sizing: border-box;
-	padding: 0 60px;
+	padding: 0 12px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	pointer-events: none;
 }
 
 .pet-bubble {
 	position: relative;
 	z-index: 2;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
 	width: 100%;
-	max-width: none;
+	max-width: 320px;
 	box-sizing: border-box;
-	padding: 10px 14px;
+	padding: 10px 12px;
 	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-xl);
-	/* The transparent desktop window has no reliable native backdrop layer.
-	 * Mix the shared glass fill with the pet's readable base instead of
-	 * claiming that CSS backdrop-filter blurs the OS desktop. */
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-surface));
+	/* Transparent desktop windows cannot reliably sample the OS wallpaper.
+	 * A 90% base keeps text readable; the shared sheen retains liquid glass. */
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 90%, var(--pet-surface));
 	box-shadow: var(--glass-shadow);
 	pointer-events: auto;
 	transition:
+		background 160ms var(--spring-snappy, ease),
 		filter 180ms var(--spring-snappy, ease),
 		opacity 180ms var(--spring-snappy, ease);
+}
+
+.pet-bubble:hover,
+.pet-bubble:focus-within {
+	background: var(--glass-sheen),
+		color-mix(in oklab, var(--glass-bg-strong) 94%, var(--color-text) 6%);
 }
 
 /* Collapsed stack card — same fixed width as the expanded list (the
@@ -262,8 +262,8 @@
  * the only interactive card until the user expands the list. */
 .pet-bubbles__stack-layer {
 	position: absolute;
-	left: 60px;
-	right: 60px;
+	left: 12px;
+	right: 12px;
 	top: 0;
 	bottom: 0;
 	border: 1px solid var(--glass-border);
@@ -286,12 +286,11 @@
 	transform: translateY(-13px) scale(0.92);
 }
 
-/* Expanded stack — header row over the full priority list. The 60px
- * padding belongs inside the scrollport so --glass-shadow is not clipped. */
+/* The expanded list reserves only enough transparent room for its shadow. */
 .pet-bubbles--expanded {
 	align-items: stretch;
-	padding: 60px;
-	max-height: 480px;
+	padding: 12px;
+	max-height: 380px;
 	overflow-y: auto;
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
@@ -357,29 +356,19 @@
 .pet-bubbles__head {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 6px 10px;
-	border: 1px solid var(--glass-border);
-	border-radius: var(--radius-xl);
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-panel-bg));
-	box-shadow: var(--glass-shadow);
-	font-size: 11px;
+	justify-content: flex-end;
+	min-height: 22px;
 	pointer-events: auto;
 	flex-shrink: 0;
 }
 
-.pet-bubbles__count {
-	color: var(--color-text);
-	font-weight: 600;
-}
-
 .pet-bubbles__clear {
-	padding: 2px 8px;
-	border: none;
+	padding: 3px 9px;
+	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background: transparent;
-	color: color-mix(in oklab, var(--color-text) 62%, transparent);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 90%, var(--pet-panel-bg));
+	box-shadow: var(--glass-shadow);
+	color: color-mix(in oklab, var(--color-text) 72%, transparent);
 	font-size: 11px;
 	font-weight: 600;
 	cursor: pointer;
@@ -390,60 +379,32 @@
 }
 
 .pet-bubbles__clear:hover {
-	background: var(--glass-bg-strong);
+	background: var(--glass-sheen), var(--glass-bg-strong);
 	color: var(--color-text);
-}
-
-/* The collapse control sits outside the scrollport and remains reachable. */
-.pet-bubbles__fab {
-	position: absolute;
-	bottom: 158px;
-	left: calc(50% + 44px);
-	width: 26px;
-	height: 26px;
-	padding: 0;
-	display: grid;
-	place-items: center;
-	border: 1px solid var(--glass-border);
-	border-radius: 999px;
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 72%, var(--pet-surface));
-	box-shadow:
-		inset 0 1px 0 var(--glass-edge-hi),
-		inset 0 -1px 0 var(--glass-edge-lo),
-		0 6px 18px oklch(0 0 0 / 28%);
-	color: var(--color-text);
-	font-size: 13px;
-	line-height: 1;
-	cursor: pointer;
-	pointer-events: auto;
-	animation: pet-bubble-pop 240ms var(--spring-liquid) both;
-	transition: transform 180ms var(--spring-liquid);
-}
-
-.pet-bubbles__fab:hover {
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 76%, var(--pet-chip-bg-hover));
-	transform: translateY(-2px);
 }
 
 .pet-bubble__actions {
+	grid-column: 2;
+	grid-row: 1 / span 3;
+	align-self: center;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	justify-content: flex-end;
-	gap: 6px;
-	margin-top: 6px;
-	padding-left: 4px;
+	justify-content: center;
+	gap: 4px;
+	width: 0;
+	overflow: hidden;
 	opacity: 0;
-	transform: translateY(3px);
 	transition:
-		opacity 160ms var(--spring-snappy, ease),
-		transform 220ms var(--spring-liquid);
+		width 180ms var(--spring-liquid),
+		opacity 140ms var(--spring-snappy, ease);
 	pointer-events: none;
 }
 
 .pet-bubble:hover .pet-bubble__actions,
-.pet-bubble__actions:focus-within {
+.pet-bubble:focus-within .pet-bubble__actions {
+	width: 30px;
 	opacity: 1;
-	transform: none;
 	pointer-events: auto;
 }
 
@@ -501,6 +462,7 @@
 }
 
 .pet-bubble__reply {
+	grid-column: 1 / -1;
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -668,9 +630,9 @@
 .pet-bubble__dismiss {
 	position: absolute;
 	top: -7px;
-	right: -7px;
-	width: 18px;
-	height: 18px;
+	left: -7px;
+	width: 20px;
+	height: 20px;
 	padding: 0;
 	display: grid;
 	place-items: center;
@@ -682,54 +644,59 @@
 	line-height: 1;
 	cursor: pointer;
 	pointer-events: auto;
+	opacity: 0;
+	transition: opacity 120ms var(--spring-snappy, ease) 140ms;
+}
+
+.pet-bubble:hover .pet-bubble__dismiss,
+.pet-bubble:focus-within .pet-bubble__dismiss,
+.pet-bubble__dismiss:focus-visible {
+	opacity: 1;
+	transition-delay: 0ms;
 }
 
 .pet-bubble__dismiss:hover {
 	background: var(--pet-chip-bg-hover);
 }
 
-/* ── Unread badge (completion count, floats over the pet) ──────────────
- * Anchored to the sprite's top-right corner (the stage shrink-wraps the
- * sprite) instead of the window — a window-anchored badge floated ~70px
- * right of the pet in empty space. Docked right, the sprite sits flush
- * to the screen edge, so the badge pulls fully inside its box. */
+/* One 30px glass control for expanded, stacked and count modes. */
 .pet-window__badge {
 	position: absolute;
-	/* Straddle the sprite's top-right corner so it reads as the pet's
-	 * badge, not a detached window chip. */
-	top: -8px;
-	right: -6px;
+	right: -38px;
+	bottom: -4px;
 	z-index: 5;
-	min-width: 18px;
-	height: 18px;
-	padding: 0 5px;
+	min-width: 30px;
+	width: 30px;
+	height: 30px;
+	padding: 0;
 	display: grid;
 	place-items: center;
-	border: 0;
+	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background: #e5484d;
-	color: #fff;
-	font-size: 10.5px;
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 90%, var(--pet-surface));
+	color: var(--color-text);
+	font-size: 13px;
 	font-weight: 700;
 	line-height: 1;
-	box-shadow: 0 0 10px rgba(229, 72, 77, 0.55);
-	/* The stage is click-through (only the pet is interactive); the badge
-	 * re-enables itself — clicking it marks every session read. */
+	box-shadow: var(--glass-shadow);
 	pointer-events: auto;
 	cursor: pointer;
-	animation: pet-badge-pop 300ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: pet-badge-pop 180ms var(--spring-liquid);
+	transition: background 160ms var(--spring-snappy, ease);
 }
 
 .pet-window__badge:hover {
-	background: #f2555a;
-	box-shadow: 0 0 14px rgba(229, 72, 77, 0.8);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 94%, var(--color-text) 6%);
 }
 
-/* Docked flush to the right screen edge: the sprite's right edge IS the
- * screen edge, so right: -6px would hang the badge off-screen. Pull it
- * fully inside the sprite's box. */
+.pet-window__badge--hidden {
+	font-size: 11px;
+}
+
+/* Keep the control on-screen when the character is docked to the right. */
 .pet-window--dock-right .pet-window__badge {
-	right: 6px;
+	right: auto;
+	left: -38px;
 }
 
 @keyframes pet-badge-pop {
@@ -755,27 +722,15 @@ html.bubbles-root body {
 	flex-direction: column;
 	align-items: center;
 	justify-content: flex-end;
-	/* The stack owns horizontal shadow room. The body adds the vertical
-	 * room required by the shared 60px --glass-shadow and the fab. */
-	padding: 60px 0;
+	padding: 12px 0;
 	box-sizing: border-box;
 }
 
 html.bubbles-root .pet-bubbles {
-	/* Stay in document flow, but establish the containing block for the
-	 * collapsed card backs and count chip. Static positioning sized those
-	 * absolute layers against the whole window instead of the priority card. */
 	position: relative;
 	bottom: auto;
 	left: auto;
 	transform: none;
-}
-
-html.bubbles-root .pet-bubbles__fab {
-	position: static;
-	bottom: auto;
-	left: auto;
-	margin-top: 8px;
 }
 
 /* ── Bubble v3 (2026-09-22, kimi-work four-screenshot parity) ───────────
@@ -845,6 +800,7 @@ html.bubbles-root .pet-bubbles__fab {
  * target at a glance. Working cards stay hover-only (their row shows
  * 回复/停止 on intent, not as a nag). */
 .pet-bubble--unread .pet-bubble__actions {
+	width: 30px;
 	opacity: 1;
 	transform: none;
 	pointer-events: auto;
@@ -858,41 +814,9 @@ html.bubbles-root .pet-bubbles__fab {
 	color: var(--color-accent-foreground, #fff);
 }
 
-/* Hidden-mode count badge (kimi parity): a small accent pill floating by
- * the pet — the ⌄ fab's third state. Clicking it restores the stack. */
-.pet-bubbles__badge {
-	min-width: 24px;
-	height: 24px;
-	padding: 0 7px;
-	display: grid;
-	place-items: center;
-	border: 1px solid color-mix(in oklab, var(--color-accent) 70%, var(--glass-border));
-	border-radius: 999px;
-	background: var(--glass-sheen), color-mix(in oklab, var(--color-accent) 88%, var(--pet-surface));
-	box-shadow:
-		inset 0 1px 0 var(--glass-edge-hi),
-		0 3px 12px color-mix(in oklab, var(--color-accent) 45%, transparent);
-	color: var(--color-accent-fg);
-	font-size: 12px;
-	font-weight: 700;
-	line-height: 1;
-	cursor: pointer;
-	pointer-events: auto;
-	animation: pet-badge-pop 240ms var(--spring-liquid);
-}
-
-.pet-bubbles__badge:hover {
-	background: var(--glass-sheen), var(--color-accent);
-}
-
-html.bubbles-root .pet-bubbles__badge {
-	position: static;
-	margin-top: 8px;
-}
-
 .gui-motion-off .pet-bubble,
-.gui-motion-off .pet-bubbles__fab,
-.gui-motion-off .pet-bubbles__badge,
+.gui-motion-off .pet-window__badge,
+.gui-motion-off .pet-bubble__dismiss,
 .gui-motion-off .pet-bubble__actions,
 .gui-motion-off .pet-bubble__action,
 .gui-motion-off .pet-bubble__reply {
@@ -902,8 +826,8 @@ html.bubbles-root .pet-bubbles__badge {
 
 @media (prefers-reduced-motion: reduce) {
 	.pet-bubble,
-	.pet-bubbles__fab,
-	.pet-bubbles__badge,
+	.pet-window__badge,
+	.pet-bubble__dismiss,
 	.pet-bubble__actions,
 	.pet-bubble__action,
 	.pet-bubble__reply {

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import { DotMatrixMark } from "./components/shell/DotMatrixMark";
 import "./styles/tokens.css";
+import "./styles/fonts.css";
 import "./styles/base.css";
 import "./styles/mobile.css";
 import "./styles/overlay-fallback.css";
@@ -72,10 +73,19 @@ async function setupImmersiveSystemBars(): Promise<void> {
 	try {
 		const { StatusBar, Style } = await import("@capacitor/status-bar");
 		await StatusBar.setOverlaysWebView({ overlay: true });
-		// Style.Dark = light text (dark backgrounds), Style.Light = dark text.
-		const dark = document.documentElement.dataset.theme === "dark";
-		await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
 		await StatusBar.setBackgroundColor({ color: "#00000000" });
+		const syncStyle = async (): Promise<void> => {
+			// Style.Dark = light text (dark backgrounds), Style.Light = dark text.
+			const dark = document.documentElement.dataset.theme === "dark";
+			await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+		};
+		await syncStyle();
+		// ThemeToggle updates the root dataset after boot. Keep the native icons
+		// readable when the scheme changes without re-entering the application.
+		new MutationObserver(() => void syncStyle().catch(() => {})).observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["data-theme"],
+		});
 	} catch {
 		// Browser / desktop web — no native bars to paint under.
 	}
@@ -109,17 +119,20 @@ void setupAndroidBackHandler();
 void setupDeepLinkHandler();
 void setupNotificationTapHandler();
 
-/** Launch splash — the brand dot-matrix mark breathes/flows for a beat
- *  before the connect guide; tapping (or waiting) skips straight in. The
- *  spring curve mirrors the shell tokens. */
+/** Launch splash — an overlay above the live app, so connection and initial
+ * state loading start immediately instead of waiting for the brand animation. */
 function BootSplash({ onDone }: { onDone: () => void }): React.JSX.Element {
 	const [leaving, setLeaving] = useState(false);
 	useEffect(() => {
+		let exitTimer: ReturnType<typeof setTimeout> | undefined;
 		const timer = setTimeout(() => {
 			setLeaving(true);
-			setTimeout(onDone, 260);
+			exitTimer = setTimeout(onDone, 260);
 		}, 1400);
-		return () => clearTimeout(timer);
+		return () => {
+			clearTimeout(timer);
+			if (exitTimer) clearTimeout(exitTimer);
+		};
 	}, [onDone]);
 	return (
 		<div className={`sh-boot-splash${leaving ? " sh-boot-splash--leave" : ""}`} onClick={onDone} role="presentation">
@@ -132,8 +145,12 @@ function BootSplash({ onDone }: { onDone: () => void }): React.JSX.Element {
 
 function Root(): React.JSX.Element {
 	const [splash, setSplash] = useState(true);
-	if (splash) return <BootSplash onDone={() => setSplash(false)} />;
-	return <App />;
+	return (
+		<>
+			<App />
+			{splash && <BootSplash onDone={() => setSplash(false)} />}
+		</>
+	);
 }
 
 initTooltips();

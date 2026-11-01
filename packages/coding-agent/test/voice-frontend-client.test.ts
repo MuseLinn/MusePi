@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { type SttClient, sttClient } from "@musepi/pi-coding-agent/stt/asr-client";
 import { VoiceFrontendClient } from "@musepi/pi-coding-agent/voice/frontend/client";
 import type {
 	VoiceFrontendTransport,
@@ -38,6 +39,29 @@ const baseInput = {
 };
 
 describe("voice frontend client", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("keeps the shared ASR client as the receiver for the default stream factory", () => {
+		let receiver: SttClient | undefined;
+		vi.spyOn(sttClient, "startStream").mockImplementation(function (this: SttClient) {
+			receiver = this;
+			return {
+				pushAudio() {},
+				async stop() {
+					return "";
+				},
+				cancel() {},
+			};
+		});
+		const transport = new FakeTransport(() => ({ type: "pong", id: "unused" }));
+		const client = new VoiceFrontendClient(transport);
+		client.startStream({ ...baseInput, modelKey: "sensevoice" });
+		expect(receiver).toBe(sttClient);
+		client.close();
+	});
+
 	it("passes through off mode without enhancement or speaker verification", async () => {
 		const transport = new FakeTransport(message => {
 			const request = message as { type: string; id: string; audio: Float32Array };

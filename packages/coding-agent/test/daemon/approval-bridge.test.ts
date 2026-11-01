@@ -56,6 +56,21 @@ describe("approval bridge", () => {
 		expect(await pending).toBe("Approve");
 	});
 
+	test("subscribers observe approval creation and resolution exactly once", async () => {
+		const bridge = createApprovalBridge(noop, noop);
+		let changes = 0;
+		const unsubscribe = bridge.subscribe(() => changes++);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		expect(changes).toBe(1);
+		const requestId = [...bridge.pending.keys()][0]!;
+		expect(bridge.resolve(requestId, true)).toBe(true);
+		expect(changes).toBe(2);
+		expect(bridge.resolve(requestId, true)).toBe(false);
+		expect(changes).toBe(2);
+		unsubscribe();
+		await pending;
+	});
+
 	test("non-approval select registers an ask, resolveAsk answers it", async () => {
 		const asks: string[] = [];
 		const bridge = createApprovalBridge(noop, record => {

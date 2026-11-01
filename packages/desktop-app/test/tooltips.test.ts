@@ -203,6 +203,24 @@ describe("global tooltips", () => {
 		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
 	});
 
+	test("clicking a menu trigger dismisses its tooltip through focus until pointer re-entry", () => {
+		vi.useFakeTimers();
+		initTooltips();
+		const element = anchor("New tab");
+		showWithMouse(element);
+		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
+
+		pointer(element, "pointerdown");
+		act(() => element.dispatchEvent(new FocusEvent("focusin", { bubbles: true })));
+		advance(250);
+		expect(tooltip().getAttribute("aria-hidden")).toBe("true");
+
+		pointer(element, "pointerout", { relatedTarget: document.body });
+		pointer(element, "pointerover");
+		advance(150);
+		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
+	});
+
 	test("Escape claims the key and dismisses without moving focus", () => {
 		vi.useFakeTimers();
 		initTooltips();
@@ -386,6 +404,45 @@ describe("RailTooltip accessibility", () => {
 		advance(1);
 		expect(host.querySelector(".gui-rail-tooltip")).not.toBeNull();
 		pointer(buttons[0]!, "pointerup", { pointerType: "touch", pointerId: 7 });
+
+		expect(host.querySelector(".gui-rail-tooltip") === null).toBe(true);
+	});
+
+	test("wheel movement keeps the rich tooltip anchored", () => {
+		vi.useFakeTimers();
+		const { host, buttons } = renderRail();
+		act(() => buttons[0]!.focus());
+		advance(150);
+		const previousTop = host.querySelector<HTMLElement>(".gui-rail-tooltip")?.style.top;
+		buttons[0]!.getBoundingClientRect = () =>
+			({ x: 900, y: 100, left: 900, top: 100, right: 932, bottom: 132, width: 32, height: 32 }) as DOMRect;
+
+		act(() => document.dispatchEvent(new Event("wheel")));
+
+		expect(host.querySelector<HTMLElement>(".gui-rail-tooltip")?.style.top).not.toBe(previousTop);
+	});
+
+	test("window blur closes the rich tooltip", () => {
+		vi.useFakeTimers();
+		const { host, buttons } = renderRail();
+		act(() => buttons[0]!.focus());
+		advance(150);
+		expect(host.querySelector(".gui-rail-tooltip")).not.toBeNull();
+
+		act(() => window.dispatchEvent(new Event("blur")));
+
+		expect(host.querySelector(".gui-rail-tooltip") === null).toBe(true);
+	});
+
+	test("a disconnected anchor closes the rich tooltip during repositioning", () => {
+		vi.useFakeTimers();
+		const { host, buttons } = renderRail();
+		act(() => buttons[0]!.focus());
+		advance(150);
+		expect(host.querySelector(".gui-rail-tooltip")).not.toBeNull();
+		buttons[0]!.remove();
+
+		act(() => document.dispatchEvent(new Event("scroll")));
 
 		expect(host.querySelector(".gui-rail-tooltip") === null).toBe(true);
 	});

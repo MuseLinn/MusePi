@@ -103,6 +103,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
+import { createRemoteApprovalProvider } from "../remote-access/approval-provider";
 import type { CompactMode } from "../session/compact-modes";
 import {
 	createForeignSessionStore,
@@ -602,7 +603,8 @@ import {
 	upsertGitAccount,
 	validateGitHubToken,
 } from "./git-accounts";
-import { commentOnGithub, normalizeGithubReviewers } from "./github-mutations";
+import { commentOnGithub, normalizeGithubReviewers, reviewOnGithub } from "./github-mutations";
+import { readGithubPrReviewComments } from "./github-pr-review";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import { BoardService } from "./services/board-service";
@@ -2029,22 +2031,28 @@ export class DaemonServer {
 				// Allow/Deny in the tray menu) and usage — one round-trip
 				// per 5s poll, so the tray never fans out RPCs.
 				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
-				const sessions = (await this.#host.knownSessions()).map(r => ({
-					id: r.sessionId,
-					parentId: r.parentId,
-					kind: "session",
-					timestamp: new Date(r.createdAt).toISOString(),
-					model: r.model ?? undefined,
-					messageCount: r.messageCount,
-					cwd: r.cwd || undefined,
-					paused: this.#host.get(r.sessionId)?.pauseGate.paused ?? false,
-					source: cronIds.has(r.sessionId) ? "cron" : undefined,
-					title:
-						r.title ??
-						(this.#host.get(r.sessionId)?.autoTitle !== false
-							? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
-							: undefined),
-				}));
+				const known = await this.#host.knownSessions();
+				// Auxiliary sessions remain inspectable through session.list, but
+				// ambient surfaces show only user-facing main conversations.
+				const mainSessionIds = new Set(known.filter(r => !r.subagent && !r.advisor).map(r => r.sessionId));
+				const sessions = known
+					.filter(r => mainSessionIds.has(r.sessionId))
+					.map(r => ({
+						id: r.sessionId,
+						parentId: r.parentId,
+						kind: "session",
+						timestamp: new Date(r.createdAt).toISOString(),
+						model: r.model ?? undefined,
+						messageCount: r.messageCount,
+						cwd: r.cwd || undefined,
+						paused: this.#host.get(r.sessionId)?.pauseGate.paused ?? false,
+						source: cronIds.has(r.sessionId) ? "cron" : undefined,
+						title:
+							r.title ??
+							(this.#host.get(r.sessionId)?.autoTitle !== false
+								? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
+								: undefined),
+					}));
 				const approvals: Array<{
 					id: string;
 					sessionId: string;
@@ -2056,7 +2064,7 @@ export class DaemonServer {
 				for (const id of this.#host.sessions()) {
 					const live = this.#host.get(id);
 					if (!live) continue;
-					if (live.agentSession.isStreaming) activeCount += 1;
+					if (mainSessionIds.has(id) && live.agentSession.isStreaming) activeCount += 1;
 					const title = live.agentSession.sessionManager.getSessionName() ?? null;
 					for (const [requestId, record] of live.approvals.pending) {
 						approvals.push({
@@ -3707,7 +3715,7 @@ export class DaemonServer {
 					"--limit",
 					"50",
 					"--json",
-					"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision",
+					"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,comments,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision",
 				]);
 				if (res.exitCode === null) return { error: "gh CLI not installed" };
 				if (res.exitCode !== 0) {
@@ -3812,12 +3820,15 @@ export class DaemonServer {
 				const num = Number(p.number);
 				if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
 				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
-				const res = await runGh(cwd, [
-					"pr",
-					"view",
-					String(num),
-					"--json",
-					"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
+				const [res, review] = await Promise.all([
+					runGh(cwd, [
+						"pr",
+						"view",
+						String(num),
+						"--json",
+						"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
+					]),
+					readGithubPrReviewComments(cwd, num, runGh),
 				]);
 				if (res.exitCode === null) return { error: "gh CLI not installed" };
 				if (res.exitCode !== 0) {
@@ -3829,10 +3840,23 @@ export class DaemonServer {
 					const pr = JSON.parse(res.stdout) as {
 						reviewRequests?: { login?: string; slug?: string; name?: string }[];
 					};
-					return { pr: { ...pr, reviewers: normalizeGithubReviewers(pr.reviewRequests) } };
+					return {
+						pr: {
+							...pr,
+							reviewers: normalizeGithubReviewers(pr.reviewRequests),
+							reviewComments: review.comments,
+							...(review.error ? { reviewCommentsError: review.error } : {}),
+						},
+					};
 				} catch {
 					return { error: "invalid gh output" };
 				}
+			}
+			case "github.prReview": {
+				const p = (params ?? {}) as { cwd?: string; number?: unknown; event?: unknown; body?: unknown };
+				if (p.event !== "approve" && p.event !== "request-changes") return { error: "review event required" };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
+				return reviewOnGithub(cwd, Number(p.number), p.event, typeof p.body === "string" ? p.body : "", runGh);
 			}
 			case "github.prMerge": {
 				// Merge a PR from the board preview (method picker → confirm).
@@ -4684,7 +4708,8 @@ export class DaemonServer {
 				this.#host.close(p.sessionId);
 				return { ok: true };
 			}
-			case "collab.start": {
+			case "collab.start":
+			case "remote-access.start": {
 				const p = (params ?? {}) as { sessionId?: string; mode?: "session" | "workspace" | "tunnel" };
 				const mode = p.mode === "workspace" ? "workspace" : p.mode === "tunnel" ? "tunnel" : "session";
 				if (mode === "session" && !p.sessionId) {
@@ -4752,6 +4777,7 @@ export class DaemonServer {
 				};
 				const focusSession = (): CollabSessionLike =>
 					(focus?.agentSession as unknown as CollabSessionLike | undefined) ?? noopCollabSession;
+				const remoteApprovals = createRemoteApprovalProvider(() => focus);
 				const stubCtx = {
 					collabHost: undefined,
 					get session() {
@@ -4801,6 +4827,7 @@ export class DaemonServer {
 								);
 							}
 							focus = next;
+							remoteApprovals.refresh();
 							return true;
 						},
 						// Remote guests manage the
@@ -4845,7 +4872,7 @@ export class DaemonServer {
 				// workspace mode); with a sessionId it shares that session.
 				const collabMode: "session" | "workspace" =
 					mode === "workspace" || (mode === "tunnel" && !p.sessionId) ? "workspace" : "session";
-				const collabHost = new CollabHost(stubCtx as never, collabMode);
+				const collabHost = new CollabHost(stubCtx as never, collabMode, remoteApprovals);
 				// Tunnel shares the same loopback relay as the client-core dist;
 				// the public URL is https/wss-same-origin, so webUrl for the
 				// browser deep link is the tunnel URL itself.
@@ -4858,7 +4885,8 @@ export class DaemonServer {
 					viewLink: collabHost.viewLink,
 				};
 			}
-			case "collab.stop": {
+			case "collab.stop":
+			case "remote-access.stop": {
 				if (!this.#collab) return { ok: true };
 				await this.#collab.host.stop("stopped from gui").catch(() => {});
 				await this.#collab.transport.stop().catch(() => {});
@@ -4870,7 +4898,8 @@ export class DaemonServer {
 				}
 				return { ok: true };
 			}
-			case "collab.status": {
+			case "collab.status":
+			case "remote-access.status": {
 				if (!this.#collab) return { hosting: false };
 				return {
 					hosting: true,
@@ -4887,7 +4916,8 @@ export class DaemonServer {
 					viewLink: this.#collab.host.viewLink,
 				};
 			}
-			case "collab.pair.generate": {
+			case "collab.pair.generate":
+			case "remote-access.pair.generate": {
 				// 6-digit pair code for the mobile app. The GUI shows it next
 				// to the QR; the app resolves it against the LAN pair endpoint
 				// (pair.resolve) to fetch the full collab link.
@@ -5604,17 +5634,25 @@ export class DaemonServer {
 					// so the finally can drop it unconditionally.
 					const run = (async (): Promise<void> => {
 						try {
-							const ok = await downloadTtsModel(modelKey, progress => {
-								emitTtsEvent({
-									type: "tts.downloadProgress",
-									modelKey,
-									percent: progress.percent ?? 0,
-									label: progress.stage,
-								});
-							});
-							// downloadTtsModel reports worker/spawn failures through a
-							// `false` return, not a throw — surface both as the error event.
-							if (!ok) throw new Error("TTS model download failed");
+							let downloadError: string | undefined;
+							const ok = await downloadTtsModel(
+								modelKey,
+								progress => {
+									emitTtsEvent({
+										type: "tts.downloadProgress",
+										modelKey,
+										percent: progress.percent ?? 0,
+										label: progress.stage,
+									});
+								},
+								undefined,
+								message => {
+									downloadError = message;
+								},
+							);
+							// Preserve the worker's actionable failure text; use the generic
+							// message only when a false result has no diagnostic.
+							if (!ok) throw new Error(downloadError ?? "TTS model download failed");
 							emitTtsEvent({ type: "tts.downloadDone", modelKey });
 						} catch (err) {
 							emitTtsEvent({

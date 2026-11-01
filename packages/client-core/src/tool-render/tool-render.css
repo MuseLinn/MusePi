@@ -100,6 +100,21 @@
 	animation: tv-rot 0.7s linear infinite;
 }
 
+.tv-tool-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	color: var(--tv-muted);
+}
+
+.tv-tool-icon > svg {
+	width: 14px;
+	height: 14px;
+}
+
 .tv-name {
 	flex: none;
 	font-size: 11px;

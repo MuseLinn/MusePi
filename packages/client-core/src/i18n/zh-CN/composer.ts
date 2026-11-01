@@ -3,6 +3,7 @@ export const composer = {
 	"composer.typeYourResponse": "输入您的回复…",
 	"composer.readOnlySessionWatching": "只读会话 — 仅观看",
 	"composer.askAnythingCommands.info": "问任何事，/ 命令，@ 上下文…",
+	"composer.askAnythingShort": "问任何事…",
 	"composer.waitingSession": "等待会话…",
 	"composer.submitResponse": "提交回复",
 	"composer.send": "发送（回车）",
@@ -81,7 +82,7 @@ export const composer = {
 	"composer.voiceDiscard": "放弃录音",
 	"composer.voiceFailedWithReason": "语音输入失败：{reason}",
 	"composer.voiceNeedsDaemonBackend": "语音输入需要 daemon 后端",
-	"composer.voiceNeedsDaemonBody": "collab 直连会话暂不支持语音转写，通过 daemon 连接后可用",
+	"composer.voiceNeedsDaemonBody": "远程访问会话暂不支持语音转写，连接电脑 daemon 后可用",
 	"composer.voiceGuideOk": "知道了",
 	"composer.ttsNeedsDaemonBackend": "朗读需要 daemon 后端",
 	// ── SketchPad (Codex 绘画 parity) ─────────────────────────────────────

@@ -48,6 +48,8 @@ musepi-omp 是 oh-my-pi 的 fork,扩展运行时同源,但 musepi 在**加载、
 
 An ordinary plugin package declares its entries, configuration, and resources in `package.json`'s `musepi` block and uses the runtime lock for enablement. The application profile selects bundles through `musepi.profile.bundles`, with row overrides in its `cordis.patch.yml`; Only `musepi.profile.bundles` is supported; DSH profile fields are ignored. Agent presets are declared as plugin rows inside that same composition and resolve in file > profile > extension order. Their new-session default lives in the profile's `agent-preset-registry.config.selectedDefault`; once a session starts, its preset is locked and its existing composition is retained. Component switches remain independent of the parent switch: a component selection is preserved while its parent is off, but the component is not active until both gates allow it.
 
+The Plugins view manages packages and profile bundles at one card granularity. Ordinary package switches use the runtime lock; bundle switches update `musepi.profile.bundles`, and selected-but-unreadable bundles stay visible. Detailed layer and row composition remains available through `bundles.composition` without a separate Composition tab. Preset rows mount as real Cordis fibers in each session: `isolate` creates service-specific child realms, and switching modes disposes the old preset fibers before mounting the new composition. Plugin-owned skills are declared with `registerSkill` beside the plugin's other resources and disappear with that plugin; the Android emulator uses this lifecycle.
+
 ## 2. 扩展能做什么(能力面)
 
 一个扩展模块可以组合:
@@ -118,9 +120,9 @@ export default function myExtension(pi: ExtensionAPI) {
 - **内置注册表**(`extensibility/extensions-center/builtin-registry.ts` 的 `BUILTIN_EXTENSIONS`):随代码分发的部署物,以 `musepi-extensions` provider 的 builtin 项呈现(provider=native 语义不扩大),path 恒为空(只读,不可改删/rollback),带"内置"徽章。三类语义:
   - `settingsMirror`(样式/桌面壳/magic keywords):设置键即事实源,`extensions.setEnabled` 写镜像键,daemon 与 TUI 仪表盘按 `builtinMirrorDisabled` 读回;
   - 通用项:走 `settings.disabledExtensions`,可禁用;
-  - `readonly: true`(主题包/渲染器包):只读展示,无禁用语义,UI 不渲染开关——登记仅为可见性,不发明语义。
+  - `readonly: true`(主题包/渲染器包):只读展示,无禁用语义,UI 不渲染开关,daemon 的 `extensions.setEnabled` 也拒绝启停请求——登记仅为可见性,不写入无效标记。
   - `annotate: true`(bundled skills):不产生独立条目,只给扫描出的同 id 行打 `builtin` 标记(bundled skill 的安装行已由 native 扫描呈现,重复登记会出现两行)。
-  - 0.5.0 M2.1 登记清单:bundled skills ×6(清单源 `src/bundled-skills/index.ts`)、magic keywords ×3(镜像 `magicKeywords.<kw>`)、modes 主题包 ×1(raw.themes = `getBuiltinThemes()`)、tool-render 卡片工具包 ×1(raw.tools = client-core `tool-render/card-tools.ts` 权威清单的快照,契约测试守交集)。**内置 hooks 不存在**:hook 全部是文件/插件态,经 native 扫描自然可见,登记数为 0。
+  - 0.5.0 M2.1 登记清单:bundled skills ×7(清单源 `src/bundled-skills/index.ts`)、magic keywords ×3(镜像 `magicKeywords.<kw>`)、modes 主题包 ×1(raw.themes = `getBuiltinThemes()`)、tool-render 卡片工具包 ×1(raw.tools = client-core `tool-render/card-tools.ts` 权威清单的快照,契约测试守交集)。**内置 hooks 不存在**:hook 全部是文件/插件态,经 native 扫描自然可见,登记数为 0。
 - **插件安装**(`~/.musepi/plugins/`):provider = user,可启停。
 - 测试/示例扩展(如 `harmony-leak` 夹具)是测试资产,不算产品扩展。
 
@@ -152,12 +154,12 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**(编译时强制):
 - 默认导出 React 组件;
 - JSX 使用 `window.MusePiReact.createElement`。`react`、`react-dom`、`react-dom/client` 和 `react/jsx-runtime` 的普通或 type-only import 都由 daemon 映射到宿主 React，不会打包第二份 React；不得绕过这条映射，自行打包或从其他地址加载 React。
-- **Injected props (all optional)**: `{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, formatTokens }`. `rpc` is the daemon bridge; `sessionId`/`cwd` identify the active session; `slot`/`extensionId` identify the contribution. `panelTab` is present for `panel.tab.*` and carries the current instance's `id/surface/target/label/readOnly/dedupeKey`, including in split columns. The reserved `panel.tab.files` mount also receives `fileWorkspace`, the host-owned file-tab, draft, reveal-request, and editor-history contract. `formatTokens` keeps numeric readouts consistent with the host transcript. Components must remain usable when any prop is absent.
+- **Injected props (all optional)**: `{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, formatTokens }`. `rpc` is the daemon bridge; `sessionId`/`cwd` identify the active session; `slot`/`extensionId` identify the contribution. `panelTab` is present for `panel.tab.*` and carries the current instance's `id/surface/target/label/readOnly/dedupeKey`, including in split columns. The reserved `panel.tab.files` mount also receives `fileWorkspace`, the host-owned file-tab, draft, reveal-request, and editor-history contract. Full-page slots receive navigation under `page`; `app.capability` specifically receives `page: { tab, onTabChange, onBack }`, not top-level navigation props. `formatTokens` keeps numeric readouts consistent with the host transcript. Components must remain usable when any prop is absent.
 - **样式**:组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`(组件卸载即移除)——不要依赖全局样式文件;
 - **失败可见**:编译失败/加载失败在宿主处以红色错误块显示(不再静默消失);运行时错误有 `gui-slot-error` 样式。
 
 **槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错;单一权威见 `packages/collab-proto/src/extension-slots.ts`):
-- `panel.tab.<id>` — 右面板动态 tab(图标 + 内容区)。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
+- `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
 - `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
@@ -178,6 +180,8 @@ export default function (pi: ExtensionAPI): void {
 **Panel instance example**: the bundled `compaction-summary` Cordis plugin registers `panel.tab.compaction`; its UI reads `panelTab.target` and calls `session.compaction { sessionId, entryId }`. Session-bound content must use a validated daemon RPC like this, not the bare `registerRpc` runtime, which does not provide session actions. Restored tabs persist only the entry id; stale async responses must be ignored after the target changes or the component unmounts.
 
 **File-workspace example**: the bundled `file-workspace` Cordis plugin registers the reserved `panel.tab.files` slot. It reads `panelTab.dedupeKey` to distinguish tree roots from file pages and receives the host-owned `fileWorkspace` contract for drafts, dirty state, reveal requests, and history. Disabling the plugin removes the file renderer and launch entries; it does not transfer tab or draft ownership into the plugin.
+
+**Android emulator example**: the bundled `android-emulator` plugin contributes `panel.tab.android-emulator`, extension-scoped RPC methods, and the `android_emulator` Agent tool. Configure absolute `adbPath` and `emulatorPath` values when those executables are not on `PATH`. The panel can start an AVD, display and operate the device, install an APK from the current workspace, launch an activity, and inspect UI hierarchy and logs. Its bundled `android-emulator` skill defines the build → install → launch → wait → screenshot/UI-tree/logcat verification loop. PNG polling is not a video stream, and text injection accepts only single-line printable ASCII. Disabling the plugin removes its registrations and disposes the shared service; pre-existing devices are not terminated.
 
 **设置卡片(settings.item + settingsScope)**:注册 `slot: "settings.item.<extId>"`(extId = 扩展目录名)的组件,会在**扩展中心**(设置 → 扩展)底部按扩展获得一张卡片(扩展未启用则不显示)。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名,建议用 `扩展名.xxx` 前缀**(与 registerSetting 的 `display.taskCardStyle` 同约定)避免与其他扩展冲突;写入只放行 registerSetting 注册过的键,未注册键写会抛 read-only。**写时校验(registerSetting 的 `validate` 字段)**:扩展可为注册的设置键提供 `validate(value)` 回调——返回错误字符串即拒写(daemon `settings.set` RPC 抛错,GUI 显示原因),返回 `void` 放行。schema 无法表达的约束(端点可达性、跨键一致性、枚举外值)由此在**写入时**拒绝,而非用到时才炸。无任何扩展注册该槽位时分区显示空态文案。
 

@@ -1,7 +1,7 @@
 .gui-task-modal {
 	position: fixed;
 	inset: 0;
-	z-index: 3000;
+	z-index: var(--z-modal);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -4538,8 +4538,10 @@
 }
 .gui-action-toast {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 10px;
+	width: max-content;
+	max-width: min(420px, calc(100vw - 32px));
 	padding: 9px 12px;
 	border-radius: var(--radius-lg);
 	border: 1px solid var(--glass-border);
@@ -4572,6 +4574,12 @@
 .gui-action-toast--error .gui-action-toast-icon {
 	color: var(--color-danger, #f87171);
 }
+.gui-action-toast--warning {
+	border-color: color-mix(in oklab, var(--color-warning, #fbbf24) 40%, transparent);
+}
+.gui-action-toast--warning .gui-action-toast-icon {
+	color: var(--color-warning, #fbbf24);
+}
 .gui-action-toast--info .gui-action-toast-icon {
 	color: var(--color-text-muted);
 }
@@ -4579,9 +4587,24 @@
 	flex-shrink: 0;
 	width: 15px;
 	height: 15px;
+	margin-top: 2px;
+}
+.gui-action-toast-content {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.gui-action-toast-title {
+	font-weight: 600;
 }
 .gui-action-toast-msg {
-	white-space: nowrap;
+	line-height: 1.45;
+}
+.gui-action-toast-details {
+	margin-top: 4px;
+	color: var(--color-text-muted);
+	font-family: var(--font-mono, monospace);
+	font-size: 11px;
+	line-height: 1.45;
 }
 .gui-action-toast-btn {
 	flex-shrink: 0;

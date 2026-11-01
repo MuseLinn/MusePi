@@ -15,18 +15,18 @@ const SHARE_SCOPE_SEGMENTS: SegmentedOption<"session" | "workspace" | "tunnel">[
 	{ value: "tunnel", label: t("settings.publicTunnel") },
 ];
 
-interface CollabGuest {
+interface RemoteAccessGuest {
 	name: string;
 	role: string;
 	readOnly: boolean;
 }
 
-interface CollabInfo {
+interface RemoteAccessInfo {
 	hosting: boolean;
 	link?: string;
 	webLink?: string;
 	viewLink?: string;
-	participants?: CollabGuest[];
+	participants?: RemoteAccessGuest[];
 }
 
 /** Draw a QR symbol (collab-proto encoder, byte mode) onto a canvas. */
@@ -113,7 +113,7 @@ function channelLogo(kind: string): ReactNode {
 	}
 }
 
-export function CollabDialog({
+export function RemoteAccessDialog({
 	rpc,
 	sessionId,
 	sessionTitle,
@@ -126,7 +126,7 @@ export function CollabDialog({
 	open: boolean;
 	onClose(): void;
 }): ReactNode {
-	const [info, setInfo] = useState<CollabInfo | null>(null);
+	const [info, setInfo] = useState<RemoteAccessInfo | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
@@ -256,7 +256,7 @@ export function CollabDialog({
 	const genPairCode = async (): Promise<void> => {
 		if (!rpc) return;
 		try {
-			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("collab.pair.generate", {});
+			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("remote-access.pair.generate", {});
 			setPairCode(res.code);
 			setPairCodeExpiresAt(Date.now() + res.expiresInSeconds * 1000);
 			setNow(Date.now());
@@ -269,7 +269,7 @@ export function CollabDialog({
 	const refresh = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
 		try {
-			const st = await rpc.request<CollabInfo>("collab.status", {
+			const st = await rpc.request<RemoteAccessInfo>("remote-access.status", {
 				...(sessionId !== null ? { sessionId } : {}),
 			});
 			setInfo(st);
@@ -320,7 +320,7 @@ export function CollabDialog({
 		setBusy(true);
 		setError(null);
 		try {
-			const res = await rpc.request<CollabInfo>("collab.start", {
+			const res = await rpc.request<RemoteAccessInfo>("remote-access.start", {
 				...(sessionId !== null ? { sessionId } : {}),
 				mode,
 			});
@@ -336,7 +336,7 @@ export function CollabDialog({
 	const stopShare = async (): Promise<void> => {
 		if (!rpc) return;
 		await rpc
-			.request("collab.stop", {
+			.request("remote-access.stop", {
 				...(sessionId !== null ? { sessionId } : {}),
 			})
 			.catch(() => {});

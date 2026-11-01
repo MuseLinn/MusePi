@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import type { BunPlugin } from "bun";
 import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../capability/extension-module";
 import type { Extension } from "../extensibility/extensions/types";
 import type { PresetPluginRow } from "../presets/resolve";
@@ -38,6 +39,7 @@ export interface SlotComponent {
 	css?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	availability?: "always" | "on-demand";
 	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
 	 *  renderer owns. No entryKinds -> does not participate in per-kind node
 	 *  dispatch. Entry-key analog. */
@@ -115,6 +117,36 @@ export function invalidateExtensionLoad(entryPath: string): void {
 /** Compile cache: abs path + mtime → compiled code + extracted css. */
 const compileCache = new Map<string, { mtimeMs: number; code: string; css?: string }>();
 
+// CommonJS is intentional here. Bun's virtual-ESM interop can emit an empty
+// exports object for these host-only modules; a direct export preserves both
+// default and named imports without bundling a second React runtime.
+const HOST_REACT_MODULE = `module.exports = window.MusePiReact;`;
+const HOST_REACT_DOM_MODULE = `module.exports = window.MusePiReactDOM;`;
+const HOST_REACT_DOM_CLIENT_MODULE = `module.exports = window.MusePiReactDOMClient;`;
+const HOST_JSX_MODULE = `module.exports = window.MusePiReact;`;
+
+function hostReactPlugin(): BunPlugin {
+	return {
+		name: "musepi-host-react",
+		setup(build) {
+			build.onResolve({ filter: /^react(?:-dom)?(?:\/.*)?$/ }, args => ({
+				path: args.path,
+				namespace: "musepi-host-react",
+			}));
+			build.onLoad({ filter: /.*/, namespace: "musepi-host-react" }, args => {
+				const contents = args.path.includes("jsx-")
+					? HOST_JSX_MODULE
+					: args.path === "react-dom/client"
+						? HOST_REACT_DOM_CLIENT_MODULE
+						: args.path.startsWith("react-dom/")
+							? HOST_REACT_DOM_MODULE
+							: HOST_REACT_MODULE;
+				return { contents, loader: "js" };
+			});
+		},
+	};
+}
+
 async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extension | null> {
 	const cached = extensionLoadCache.get(entryPath);
 	if (cached && Date.now() - cached.at < EXTENSION_LOAD_TTL_MS) return cached.extension;
@@ -154,6 +186,7 @@ async function compileComponentModule(componentPath: string): Promise<{ code: st
 		target: "browser",
 		minify: true,
 		sourcemap: "none",
+		plugins: [hostReactPlugin()],
 		// Components reference React through the `React` identifier (never
 		// bare-import it): the renderer injects window.MusePiReact before
 		// mounting, so the compiled module uses the HOST's react instance —
@@ -217,6 +250,7 @@ export async function collectSlotComponents(
 					code: compiled.code,
 					...(compiled.css ? { css: compiled.css } : {}),
 					...(component.order !== undefined ? { order: component.order } : {}),
+					...(component.availability ? { availability: component.availability } : {}),
 					...(component.entryKinds && component.entryKinds.length > 0 ? { entryKinds: component.entryKinds } : {}),
 				});
 			} catch (error) {
@@ -229,6 +263,7 @@ export async function collectSlotComponents(
 					code: "",
 					error: String(error),
 					...(component.order !== undefined ? { order: component.order } : {}),
+					...(component.availability ? { availability: component.availability } : {}),
 				});
 			}
 		}

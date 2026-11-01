@@ -661,6 +661,14 @@ export type CollabUiRequestDraft =
 
 export type CollabUiRequest = CollabUiRequestDraft & { reqId: number };
 
+/** A tool call awaiting an operator decision on the authoritative host. */
+export interface ToolApprovalRequest {
+	requestId: string;
+	tool: string;
+	args: unknown;
+	prompt: string | null;
+}
+
 export type GuestFrame =
 	| {
 			t: "hello";
@@ -680,6 +688,7 @@ export type GuestFrame =
 	 *  assumes the change took effect until it sees the round-trip. */
 	| { t: "config"; thinkingLevel?: string }
 	| { t: "ui-response"; reqId: number; value?: CollabUiResponseValue }
+	| { t: "approval-response"; requestId: string; approved: boolean }
 	| { t: "abort" }
 	| { t: "agent-cmd"; cmd: "chat" | "kill" | "revive"; agentId: string; text?: string }
 	| { t: "fetch-transcript"; reqId: number; agentId: string; fromByte: number }
@@ -727,6 +736,8 @@ export type HostFrame =
 	| { t: "agents"; agents: AgentSnapshot[] }
 	| { t: "ui-request"; request: CollabUiRequest }
 	| { t: "ui-request-end"; reqId: number }
+	| { t: "approval-request"; request: ToolApprovalRequest }
+	| { t: "approval-request-end"; requestId: string }
 	/** Targeted reply to fetch-transcript; `text` is decoded JSONL from `fromByte`, `newSize` the next offset base. */
 	| { t: "transcript"; reqId: number; text: string; newSize: number; error?: string }
 	/** Targeted reply to rpc-request; `ok:false` carries the failure reason. */

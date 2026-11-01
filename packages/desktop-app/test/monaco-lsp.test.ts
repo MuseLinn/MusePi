@@ -10,6 +10,7 @@ import {
 	prepareMonacoDefinitionPeek,
 	prepareMonacoReferencesPeek,
 	registerMonacoLanguageFeatures,
+	revealEditorLocation,
 	toMonacoCompletionList,
 	toMonacoDefinitions,
 	toMonacoHover,
@@ -31,6 +32,30 @@ afterEach(async () => {
 });
 
 describe("Monaco LSP conversion", () => {
+	it("retains a location requested before the Monaco runtime initializes", async () => {
+		const monaco = await import("monaco-editor");
+		const model = createFileEditorModel(monaco, "D:\\workspace\\early-location.ts", "first\nsecond\nthird");
+		models.add(model);
+		const positions: Monaco.Position[] = [];
+		const revealedPositions: Monaco.Position[] = [];
+		const editor = {
+			getModel: () => model,
+			setPosition: (position: Monaco.Position) => positions.push(position),
+			revealPositionInCenter: (position: Monaco.Position) => revealedPositions.push(position),
+		} as Monaco.editor.IStandaloneCodeEditor;
+		const rpc = { request: async () => ({ available: false }) } as unknown as RpcClient;
+		revealEditorLocation({ path: "D:\\workspace\\early-location.ts", lineNumber: 3, column: 1 });
+		const registration = registerMonacoLanguageFeatures(monaco, rpc, "/workspace", editor, () => {});
+		try {
+			expect(positions).toHaveLength(1);
+			expect(positions[0]).toMatchObject({ lineNumber: 3, column: 1 });
+			expect(revealedPositions).toHaveLength(1);
+			expect(revealedPositions[0]).toMatchObject({ lineNumber: 3, column: 1 });
+		} finally {
+			registration.dispose();
+		}
+	});
+
 	it("converts zero-based diagnostics to one-based Monaco markers", async () => {
 		const monaco = await import("monaco-editor");
 		const markers = toMonacoMarkers(monaco, [
@@ -414,4 +439,5 @@ describe("Monaco LSP conversion", () => {
 		expect(changes.at(-1)).toEqual({ path: targetUri.fsPath, text: "const beta = 2;", saved: "const alpha = 2;" });
 		registration.dispose();
 	});
+
 });

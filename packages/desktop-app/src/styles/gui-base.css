@@ -168,6 +168,7 @@ code,
 .gui-palette,
 .gui-palette-backdrop,
 .gui-btw-card,
+.gui-tooltip,
 .gui-rail-tooltip,
 .gui-session-hover-card {
 	-webkit-app-region: no-drag;

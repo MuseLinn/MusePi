@@ -93,11 +93,8 @@ interface PetBridge {
 	 *  process to align the CHARACTER flush to a screen edge on dock. */
 	setPetRect?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	onPetDock?(cb: (side: "left" | "right" | null) => void): () => void;
-	/** Hidden-stack badge click → the bubbles window restores its stack
-	 *  (kimi parity: the badge is the restore control, NOT 一键已读 —
-	 *  mark-all-read lives in the expanded list header + reminders
-	 *  panel). */
-	bubblesRestoreStack?(): Promise<unknown>;
+	/** Pet-side control → advance expanded → stacked → count → stacked. */
+	bubblesAdvanceMode?(): Promise<unknown>;
 }
 
 const DRAG_THRESHOLD_PX = 8;
@@ -149,11 +146,12 @@ function PetApp(): ReactNode {
 	const [flip, setFlip] = useState(false);
 	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
 	const [dockSide, setDockSide] = useState<"left" | "right" | null>(null);
-	// Hidden-stack indicator (kimi parity): the count of bubble items hidden
-	// behind the fully-collapsed stack. 0 unless the bubbles window reports
-	// mode === "hidden" — so the badge never lights at boot (a fresh stack
-	// starts "stacked") and never reflects the persisted unread set.
-	const [hiddenCount, setHiddenCount] = useState(0);
+	// The single pet-side control mirrors the bubble window's three modes.
+	// It stays visible whenever items exist; only count mode shows a number.
+	const [bubblesState, setBubblesState] = useState<{ mode: "expanded" | "stacked" | "hidden"; count: number }>({
+		mode: "stacked",
+		count: 0,
+	});
 	// Sleep state: after 60s of no interaction AND
 	// no task activity, the pet dims and shows a "zzz" (CSS-only — no new
 	// sprite rows needed for imported sheets). Any gesture or mood change
@@ -228,7 +226,7 @@ function PetApp(): ReactNode {
 			if (payload.mood) setMood(payload.mood);
 			if (payload.petState) setSessionState(payload.petState);
 			if (typeof payload.scale === "number" && payload.scale > 0) setSizeScale(payload.scale);
-			if (payload.bubbles) setHiddenCount(payload.bubbles.mode === "hidden" ? payload.bubbles.count : 0);
+			if (payload.bubbles) setBubblesState(payload.bubbles);
 			if (typeof payload.locale === "string") setLocale(payload.locale);
 			// Active-pet override (petdex packages live in the main window's
 			// localStorage — unreachable from here; the descriptor arrives
@@ -435,7 +433,12 @@ function PetApp(): ReactNode {
 	// on window resize too.
 	useEffect(() => {
 		if (!bridge?.setPetHitbox) return;
+		let frame = 0;
+		const schedule = (): void => {
+			if (!frame) frame = requestAnimationFrame(report);
+		};
 		const report = (): void => {
+			frame = 0;
 			const pet = document.querySelector<HTMLElement>(".pet-window__pet");
 			const badge = document.querySelector<HTMLElement>(".pet-window__badge");
 			// Sprite-only rect: dock alignment snaps the CHARACTER flush to
@@ -473,16 +476,34 @@ function PetApp(): ReactNode {
 				};
 			}
 			void bridge.setPetHitbox?.(rect);
+			// ResizeObserver misses transform-only motion. Track the pet's finite
+			// entrance, hover and landing animations so the bubble anchor and the
+			// native hitbox never retain the pre-animation sprite position.
+			if (pet?.getAnimations().some(animation => animation.playState === "running")) schedule();
 		};
 		report();
-		window.addEventListener("resize", report);
-		const ro = new ResizeObserver(report);
-		for (const el of document.querySelectorAll(".pet-window__pet, .pet-window__badge")) {
-			ro.observe(el);
-		}
+		window.addEventListener("resize", schedule);
+		const ro = new ResizeObserver(schedule);
+		const pet = document.querySelector<HTMLElement>(".pet-window__pet");
+		for (const el of document.querySelectorAll(".pet-window__pet, .pet-window__badge")) ro.observe(el);
+		const motionEvents = [
+			"animationstart",
+			"animationend",
+			"animationcancel",
+			"transitionrun",
+			"transitionend",
+			"transitioncancel",
+		] as const;
+		for (const type of motionEvents) pet?.addEventListener(type, schedule);
+		const mo = new MutationObserver(schedule);
+		const root = document.getElementById("root");
+		if (root) mo.observe(root, { childList: true, subtree: true });
 		return () => {
-			window.removeEventListener("resize", report);
+			if (frame) cancelAnimationFrame(frame);
+			window.removeEventListener("resize", schedule);
+			for (const type of motionEvents) pet?.removeEventListener(type, schedule);
 			ro.disconnect();
+			mo.disconnect();
 		};
 	}, []);
 
@@ -737,24 +758,30 @@ function PetApp(): ReactNode {
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
-			{/* Stage: centers the sprite AND anchors the hidden-stack badge
-			 * to it — a badge anchored to the WINDOW (top/right) floats ~70px right
-			 * of the centered ~104px sprite in the 320px window. The stage
-			 * shrink-wraps the sprite, so the badge's absolute top/right
-			 * tracks the sprite's top-right corner regardless of the pet's
-			 * frame size or the user's scale. pointer-events: none keeps
-			 * only the pet interactive. */}
+			{/* The stage shrink-wraps the sprite so the single three-state
+			 * control stays 8px beside the character at every pet scale. */}
 			<div className="pet-window__stage" style={{ "--gui-pet-window-scale": sizeScale } as CSSProperties}>
-				{hiddenCount > 0 && (
+				{bubblesState.count > 0 && (
 					<button
 						type="button"
-						className="pet-window__badge"
-						role="status"
-						aria-label={t("settings.petBubblesCount", { count: hiddenCount })}
-						title={t("settings.petBubblesShow")}
-						onClick={() => void bridge?.bubblesRestoreStack?.()}
+						className={`pet-window__badge pet-window__badge--${bubblesState.mode}`}
+						aria-label={
+							bubblesState.mode === "hidden"
+								? t("settings.petBubblesShow")
+								: bubblesState.mode === "expanded"
+									? t("settings.petBubblesCollapse")
+									: t("settings.petBubblesHide")
+						}
+						title={
+							bubblesState.mode === "hidden"
+								? t("settings.petBubblesShow")
+								: bubblesState.mode === "expanded"
+									? t("settings.petBubblesCollapse")
+									: t("settings.petBubblesHide")
+						}
+						onClick={() => void bridge?.bubblesAdvanceMode?.()}
 					>
-						{hiddenCount > 99 ? "99+" : hiddenCount}
+						{bubblesState.mode === "hidden" ? (bubblesState.count > 99 ? "99+" : bubblesState.count) : "⌃"}
 					</button>
 				)}
 				<div

@@ -1,11 +1,12 @@
+import { ArrowUpRight, ChevronRight, KeyRound, Link2, Monitor, ScanLine, X } from "lucide-react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useLocale } from "../../i18n/use-locale.js";
 import { useBackLayer } from "../../lib/back-stack";
 import { isNativeShell } from "../../lib/capacitor";
-import { type Connection, loadConnections, removeConnection } from "../../lib/connections";
 import { haptic } from "../../lib/haptics";
+import { loadResolvedHosts, type ResolvedHost, removeHost } from "../../lib/hosts";
 import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
@@ -24,7 +25,6 @@ export interface ConnectScreenProps {
 	onConnect(link: string, name: string): void;
 }
 
-const RECENT_KEY = "musepi.collab.recent";
 const PAIR_HOST_KEY = "musepi.collab.pairHost";
 const SKIP_KEY = "omp-collab-skipped";
 /** Pair endpoint port (daemon server.ts PAIR_PORT). */
@@ -63,20 +63,67 @@ function resolvePairCodeOnLan(code: string, host: string): Promise<string> {
 	});
 }
 
-/**
- * Guided connect screen — the mobile/guest onboarding. Three ways to reach
- * a desktop daemon on the same network:
- *   1. Scan the desktop's QR (Capacitor barcode, lazily loaded plugin)
- *   2. Pair code + computer address (pure ws — always available)
- *   3. Paste a /collab link (power users)
- * A skip affordance dismisses the guide into a lightweight empty state; the
- * guide reopens from there (and on next launch unless skipped persists).
- */
+function SavedComputers({
+	hosts,
+	onConnect,
+	onRemove,
+}: {
+	hosts: readonly ResolvedHost[];
+	onConnect(host: ResolvedHost): void;
+	onRemove(id: string): void;
+}): ReactNode {
+	if (hosts.length === 0) return null;
+	return (
+		<section className="sh-connect-recent" aria-label={t("settings.recentConnections")}>
+			<div className="sh-connect-section-head">
+				<span className="sh-field-label">{t("settings.recentConnections")}</span>
+				<span className="sh-connect-count">{hosts.length}</span>
+			</div>
+			<div className="sh-connect-recent-list">
+				{hosts.map((host, index) => (
+					<div
+						key={host.id}
+						className={`sh-connect-recent-item${index === 0 ? " sh-connect-recent-item--primary" : ""}`}
+					>
+						<button
+							type="button"
+							className="sh-connect-recent-main"
+							title={host.candidates[0]?.address}
+							onClick={() => onConnect(host)}
+						>
+							<span className="sh-connect-recent-icon" aria-hidden="true">
+								<Monitor size={18} />
+							</span>
+							<span className="sh-connect-recent-copy">
+								<span className="sh-connect-recent-name">{host.label}</span>
+								<span className="sh-connect-recent-link">{host.candidates[0]?.address}</span>
+							</span>
+							<ArrowUpRight className="sh-connect-recent-open" size={16} aria-hidden="true" />
+						</button>
+						<button
+							type="button"
+							className="sh-btn sh-btn-icon sh-connect-recent-rm"
+							title={t("general.remove")}
+							aria-label={`${t("general.remove")} ${host.label}`}
+							onClick={() => onRemove(host.id)}
+						>
+							<X size={15} />
+						</button>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
+/** Remote-workspace entry point. Saved computers are the fastest route;
+ *  QR is the primary new-connection action, while pair codes and links are
+ *  progressively disclosed alternatives. */
 export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: ConnectScreenProps): ReactNode {
 	const [link, setLink] = useState(defaultLink ?? "");
 	const [name, setName] = useState(defaultName);
 	const [localError, setLocalError] = useState<string | null>(null);
-	const [recent, setRecent] = useState<Connection[]>(loadConnections);
+	const [recent, setRecent] = useState<ResolvedHost[]>([]);
 	const [pairCode, setPairCode] = useState("");
 	const [pairHost, setPairHost] = useState("");
 	const [pairBusy, setPairBusy] = useState(false);
@@ -114,34 +161,31 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	useLocale();
 	useCollapseHeight(openMethod === "link", linkBodyRef);
 
-	// Hydrate secure-stored state (recent connections, remembered pair host)
-	// after mount; localStorage mirrors render immediately, secure values win.
+	// Resolve host credentials asynchronously; public metadata never contains
+	// room keys. The same resolved records also drive startup restoration.
 	useEffect(() => {
 		let alive = true;
-		void (async () => {
-			const rawRecent = await secureGet(RECENT_KEY);
-			if (alive && rawRecent) {
-				try {
-					const parsed: unknown = JSON.parse(rawRecent);
-					if (Array.isArray(parsed)) setRecent(parsed as Connection[]);
-				} catch {
-					// corrupt mirror — keep current list
-				}
-			}
-			const host = await secureGet(PAIR_HOST_KEY);
+		void loadResolvedHosts().then(hosts => {
+			if (alive) setRecent(hosts);
+		});
+		void secureGet(PAIR_HOST_KEY).then(host => {
 			if (alive && host) setPairHost(host);
-		})();
+		});
 		return () => {
 			alive = false;
 		};
 	}, []);
 
 	const connect = (target: string, who: string): void => {
-		// Recording (recent list + URL hash) happens in App.connect's
-		// onWelcome hook — only after the host actually accepts the join, so
-		// a failed connect never pollutes the saved connections.
+		// Recording (host list + URL hash) happens in App.connect's onWelcome
+		// hook, so a failed connect never pollutes the saved hosts.
 		onConnect(target, who);
 		haptic(12);
+	};
+
+	const forgetHost = async (id: string): Promise<void> => {
+		await removeHost(id);
+		setRecent(await loadResolvedHosts());
 	};
 
 	const submit = (e: FormEvent<HTMLFormElement>): void => {
@@ -228,56 +272,44 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const shown = localError ?? error;
 	const native = isNativeShell();
 
-	// Skipped empty state: light brand + return-to-guide.
+	const savedComputers = (
+		<SavedComputers
+			hosts={recent}
+			onConnect={host => connect(host.link, host.deviceName)}
+			onRemove={id => void forgetHost(id)}
+		/>
+	);
+	const brand = (
+		<div className="sh-connect-head">
+			<div className="sh-lockup">
+				<span className="sh-lockup-mark" aria-hidden="true" />
+				<span className="sh-lockup-pi">π</span>
+				<BlurText text={t("shell.musepiCollab")} />
+			</div>
+			<div className="sh-connect-preferences">
+				<ThemeToggle />
+				<AccentToggle />
+				<LanguageToggle />
+			</div>
+		</div>
+	);
+
 	if (skipped) {
 		return (
 			<div className="sh-connect">
 				<div className="sh-connect-card sh-connect-card--empty">
 					<div className="sh-connect-matrix" aria-hidden="true">
-						<DotMatrixMark text="MusePi" fontSize={64} gridGap={7} dotRadius={1.6} />
+						<DotMatrixMark text="MusePi" fontSize={96} gridGap={7} dotRadius={1.6} />
 					</div>
-					<div className="sh-connect-head">
-						<div className="sh-lockup">
-							<span className="sh-lockup-mark" aria-hidden="true" />
-							<span className="sh-lockup-pi">π</span> <BlurText text={t("shell.musepiCollab")} />
-						</div>
-						<ThemeToggle />
-						<AccentToggle />
-						<LanguageToggle />
+					{brand}
+					<div className="sh-connect-hero sh-connect-hero--compact">
+						<span className="sh-connect-eyebrow">
+							<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
+						</span>
+						<h1>{t("settings.connectComputer")}</h1>
+						<p>{t("settings.notConnectedYetConnect")}</p>
 					</div>
-					<div className="sh-connect-sub">
-						<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
-					</div>
-					<p className="sh-connect-empty-text">{t("settings.notConnectedYetConnect")}</p>
-					{recent.length > 0 && (
-						<div className="sh-connect-recent">
-							<span className="sh-field-label">{t("settings.recentConnections")}</span>
-							{recent.map(r => (
-								<div key={r.link} className="sh-connect-recent-item">
-									<button
-										type="button"
-										className="sh-connect-recent-main"
-										title={r.link}
-										onClick={() => connect(r.link, r.name)}
-									>
-										<span className="sh-connect-recent-name">{r.label || r.name}</span>
-										<span className="sh-connect-recent-link">{r.link}</span>
-									</button>
-									<button
-										type="button"
-										className="sh-btn sh-btn-icon sh-connect-recent-rm"
-										title={t("general.remove")}
-										onClick={() => {
-											removeConnection(r.link);
-											setRecent(loadConnections());
-										}}
-									>
-										✕
-									</button>
-								</div>
-							))}
-						</div>
-					)}
+					{savedComputers}
 					<button type="button" className="sh-btn sh-btn-primary sh-connect-submit" onClick={returnToGuide}>
 						{t("settings.connectComputer")}
 					</button>
@@ -290,197 +322,174 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		<div className="sh-connect">
 			<div className="sh-connect-card">
 				<div className="sh-connect-matrix" aria-hidden="true">
-					<DotMatrixMark text="MusePi" fontSize={64} gridGap={7} dotRadius={1.6} />
+					<DotMatrixMark text="MusePi" fontSize={96} gridGap={7} dotRadius={1.6} />
 				</div>
-				<div className="sh-connect-head">
-					<div className="sh-lockup">
-						<span className="sh-lockup-mark" aria-hidden="true" />
-						<span className="sh-lockup-pi">π</span> <BlurText text={t("shell.musepiCollab")} />
-					</div>
-					<ThemeToggle />
-					<AccentToggle />
-					<LanguageToggle />
-				</div>
-				<div className="sh-connect-sub">
-					<ShinyText text={t("settings.connectComputerYourNetwork")} speed={3.4} spread={120} />
-				</div>
+				{brand}
+				<section className="sh-connect-hero">
+					<span className="sh-connect-eyebrow">
+						<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
+					</span>
+					<h1>{t("settings.mobileConnectTitle")}</h1>
+					<p>{t("settings.mobileConnectBody")}</p>
+				</section>
 				{offline && (
 					<div className="sh-connect-offline" role="status">
 						{t("settings.offlineShowingCached.info")}
 					</div>
 				)}
-				{recent.length > 0 && (
-					<div className="sh-connect-recent">
-						<span className="sh-field-label">{t("settings.recentConnections")}</span>
-						{recent.map(r => (
-							<div key={r.link} className="sh-connect-recent-item">
-								<button
-									type="button"
-									className="sh-connect-recent-main"
-									title={r.link}
-									onClick={() => connect(r.link, r.name)}
-								>
-									<span className="sh-connect-recent-name">{r.label || r.name}</span>
-									<span className="sh-connect-recent-link">{r.link}</span>
-								</button>
-								<button
-									type="button"
-									className="sh-btn sh-btn-icon sh-connect-recent-rm"
-									title={t("general.remove")}
-									onClick={() => {
-										removeConnection(r.link);
-										setRecent(loadConnections());
-									}}
-								>
-									✕
-								</button>
-							</div>
-						))}
+				{savedComputers}
+				<section className="sh-connect-methods" aria-label={t("settings.newConnection")}>
+					<div className="sh-connect-section-head">
+						<span className="sh-field-label">{t("settings.newConnection")}</span>
 					</div>
-				)}
 
-				{/* Method 1: scan QR (native shell only). */}
-				{native && (
-					<button
-						type="button"
-						className="sh-connect-method sh-connect-method--scan"
-						style={{ "--order": 0 } as CSSProperties}
-						onClick={() => void scanQr()}
-					>
-						<span className="sh-connect-method-ico">▣</span>
-						<span className="sh-connect-method-body">
-							<span className="sh-connect-method-title">{t("settings.scanQrCode")}</span>
-							<span className="sh-connect-method-desc">{t("settings.scanDesktopShareQr")}</span>
-						</span>
-					</button>
-				)}
+					{native && (
+						<button
+							type="button"
+							className="sh-connect-method sh-connect-method--scan"
+							style={{ "--order": 0 } as CSSProperties}
+							onClick={scanQr}
+						>
+							<span className="sh-connect-method-ico" aria-hidden="true">
+								<ScanLine size={20} />
+							</span>
+							<span className="sh-connect-method-body">
+								<span className="sh-connect-method-title">{t("settings.scanQrCode")}</span>
+								<span className="sh-connect-method-desc">{t("settings.scanDesktopShareQr")}</span>
+							</span>
+							<ArrowUpRight className="sh-connect-method-chev" size={17} aria-hidden="true" />
+						</button>
+					)}
 
-				{/* Method 2: pair code (always available — pure ws). */}
-				<div
-					className={`sh-connect-method${openMethod === "pair" ? " sh-connect-method--open" : ""}`}
-					style={{ "--order": 1 } as CSSProperties}
-				>
-					<button
-						type="button"
-						className="sh-connect-method"
-						onClick={() => setOpenMethod(openMethod === "pair" ? null : "pair")}
-					>
-						<span className="sh-connect-method-ico">⌘</span>
-						<span className="sh-connect-method-body">
-							<span className="sh-connect-method-title">{t("settings.pairCode")}</span>
-							<span className="sh-connect-method-desc">{t("settings.enter6DigitCode")}</span>
-						</span>
-						<span className="sh-connect-method-chev" aria-hidden="true">
-							›
-						</span>
-					</button>
+					{/* Method 2: pair code (always available — pure ws). */}
 					<div
-						className="sh-connect-collapse"
-						ref={pairBodyRef}
-						aria-hidden={openMethod !== "pair"}
-						inert={openMethod !== "pair"}
+						className={`sh-connect-method${openMethod === "pair" ? " sh-connect-method--open" : ""}`}
+						style={{ "--order": 1 } as CSSProperties}
 					>
-						<form className="sh-connect-pair" onSubmit={e => void resolvePair(e)}>
-							<div className="sh-connect-pair-row">
-								{/* Shared-element morph ids (M1.10 §3.3 批次 B): the
-								 * open method's input/button fly into the session
-								 * composer's textarea/send on connect. Only one
-								 * method body is open, so the visible pair wins the
-								 * cache (collapsed bodies measure 0 and are skipped). */}
+						<button
+							type="button"
+							className="sh-connect-method"
+							aria-expanded={openMethod === "pair"}
+							onClick={() => setOpenMethod(openMethod === "pair" ? null : "pair")}
+						>
+							<span className="sh-connect-method-ico" aria-hidden="true">
+								<KeyRound size={18} />
+							</span>
+							<span className="sh-connect-method-body">
+								<span className="sh-connect-method-title">{t("settings.pairCode")}</span>
+								<span className="sh-connect-method-desc">{t("settings.enter6DigitCode")}</span>
+							</span>
+							<ChevronRight className="sh-connect-method-chev" size={17} aria-hidden="true" />
+						</button>
+						<div
+							className="sh-connect-collapse"
+							ref={pairBodyRef}
+							aria-hidden={openMethod !== "pair"}
+							inert={openMethod !== "pair"}
+						>
+							<form className="sh-connect-pair" onSubmit={e => void resolvePair(e)}>
+								<div className="sh-connect-pair-row">
+									{/* Shared-element morph ids (M1.10 §3.3 批次 B): the
+									 * open method's input/button fly into the session
+									 * composer's textarea/send on connect. Only one
+									 * method body is open, so the visible pair wins the
+									 * cache (collapsed bodies measure 0 and are skipped). */}
+									<input
+										className="sh-input sh-input-mono"
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]{6}"
+										maxLength={6}
+										value={pairCode}
+										onChange={e => setPairCode(e.target.value)}
+										placeholder="123456"
+										autoComplete="off"
+										data-morph-id="composer-input"
+									/>
+									<input
+										className="sh-input sh-input-mono"
+										type="text"
+										value={pairHost}
+										onChange={e => setPairHost(e.target.value)}
+										placeholder={t("settings.computerAddress")}
+										autoComplete="off"
+										spellCheck={false}
+									/>
+									<button
+										className="sh-btn sh-btn-primary"
+										type="submit"
+										disabled={pairBusy || !pairCode.trim() || !pairHost.trim()}
+										data-morph-id="composer-send"
+									>
+										{pairBusy ? t("settings.connecting2") : t("settings.pair")}
+									</button>
+								</div>
+								<p className="sh-field-hint">{t("settings.noAddressShown.info")}</p>
+							</form>
+						</div>
+					</div>
+
+					{/* Method 3: paste link (power users). */}
+					<div
+						className={`sh-connect-method${openMethod === "link" ? " sh-connect-method--open" : ""}`}
+						style={{ "--order": 2 } as CSSProperties}
+					>
+						<button
+							type="button"
+							className="sh-connect-method"
+							aria-expanded={openMethod === "link"}
+							onClick={() => setOpenMethod(openMethod === "link" ? null : "link")}
+						>
+							<span className="sh-connect-method-ico" aria-hidden="true">
+								<Link2 size={18} />
+							</span>
+							<span className="sh-connect-method-body">
+								<span className="sh-connect-method-title">{t("settings.pasteJoinLink")}</span>
+								<span className="sh-connect-method-desc">{t("shell.wsHostPortR")}</span>
+							</span>
+							<ChevronRight className="sh-connect-method-chev" size={17} aria-hidden="true" />
+						</button>
+						<div
+							className="sh-connect-collapse"
+							ref={linkBodyRef}
+							aria-hidden={openMethod !== "link"}
+							inert={openMethod !== "link"}
+						>
+							<form className="sh-connect-pair" onSubmit={submit}>
 								<input
 									className="sh-input sh-input-mono"
 									type="text"
-									inputMode="numeric"
-									pattern="[0-9]{6}"
-									maxLength={6}
-									value={pairCode}
-									onChange={e => setPairCode(e.target.value)}
-									placeholder="123456"
+									value={link}
+									onChange={e => setLink(e.target.value)}
+									placeholder={t("shell.pasteCollabLinkAny")}
+									spellCheck={false}
 									autoComplete="off"
 									data-morph-id="composer-input"
 								/>
-								<input
-									className="sh-input sh-input-mono"
-									type="text"
-									value={pairHost}
-									onChange={e => setPairHost(e.target.value)}
-									placeholder={t("settings.computerAddress")}
-									autoComplete="off"
-									spellCheck={false}
-								/>
+								<label className="sh-field">
+									<span className="sh-field-label">{t("shell.displayName")}</span>
+									<input
+										className="sh-input"
+										type="text"
+										value={name}
+										onChange={e => setName(e.target.value)}
+										placeholder={t("settings.myPhone")}
+										spellCheck={false}
+										autoComplete="off"
+										maxLength={32}
+									/>
+								</label>
 								<button
-									className="sh-btn sh-btn-primary"
+									className="sh-btn sh-btn-primary sh-connect-submit"
 									type="submit"
-									disabled={pairBusy || !pairCode.trim() || !pairHost.trim()}
 									data-morph-id="composer-send"
 								>
-									{pairBusy ? t("settings.connecting2") : t("settings.pair")}
+									{t("settings.connect")}
 								</button>
-							</div>
-							<p className="sh-field-hint">{t("settings.noAddressShown.info")}</p>
-						</form>
+							</form>
+						</div>
 					</div>
-				</div>
-
-				{/* Method 3: paste link (power users). */}
-				<div
-					className={`sh-connect-method${openMethod === "link" ? " sh-connect-method--open" : ""}`}
-					style={{ "--order": 2 } as CSSProperties}
-				>
-					<button
-						type="button"
-						className="sh-connect-method"
-						onClick={() => setOpenMethod(openMethod === "link" ? null : "link")}
-					>
-						<span className="sh-connect-method-ico">🔗</span>
-						<span className="sh-connect-method-body">
-							<span className="sh-connect-method-title">{t("settings.pasteJoinLink")}</span>
-							<span className="sh-connect-method-desc">{t("shell.wsHostPortR")}</span>
-						</span>
-						<span className="sh-connect-method-chev" aria-hidden="true">
-							›
-						</span>
-					</button>
-					<div
-						className="sh-connect-collapse"
-						ref={linkBodyRef}
-						aria-hidden={openMethod !== "link"}
-						inert={openMethod !== "link"}
-					>
-						<form className="sh-connect-pair" onSubmit={submit}>
-							<input
-								className="sh-input sh-input-mono"
-								type="text"
-								value={link}
-								onChange={e => setLink(e.target.value)}
-								placeholder={t("shell.pasteCollabLinkAny")}
-								spellCheck={false}
-								autoComplete="off"
-								data-morph-id="composer-input"
-							/>
-							<label className="sh-field">
-								<span className="sh-field-label">{t("shell.displayName")}</span>
-								<input
-									className="sh-input"
-									type="text"
-									value={name}
-									onChange={e => setName(e.target.value)}
-									placeholder={t("settings.myPhone")}
-									spellCheck={false}
-									autoComplete="off"
-									maxLength={32}
-								/>
-							</label>
-							<button
-								className="sh-btn sh-btn-primary sh-connect-submit"
-								type="submit"
-								data-morph-id="composer-send"
-							>
-								{t("settings.connect")}
-							</button>
-						</form>
-					</div>
-				</div>
+				</section>
 
 				{shown && (
 					<div key={shown} className="sh-connect-error" role="alert">

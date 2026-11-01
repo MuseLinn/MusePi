@@ -48,11 +48,15 @@
     "preview.kicker": "Product preview",
     "preview.h2": "One screen that shows every step of the work",
     "preview.desc":
-      "The welcome workspace, for real: sessions and tasks on the left, an input box always at the ready in the middle — with models, tools and surfaces all swappable. This is no illustration — every release regenerates it automatically from the real interface.",
+      "From the welcome workspace to the file tree and code editor, these are captures of the real application, not illustrations.",
     "preview.shot.aria":
       "MusePi desktop app welcome screen in the brand dark theme: composer, suggestions and the session sidebar",
     "preview.shot.note":
-      "Real interface capture — the welcome workspace in the brand dark theme: composer, quick suggestions and session navigation, regenerated automatically from the real interface every release.",
+      "Real interface capture — the welcome workspace in the brand dark theme: composer, quick suggestions and session navigation.",
+    "preview.editor.aria":
+      "MusePi file workspace with a project tree, file tabs and an editable TypeScript file",
+    "preview.editor.note":
+      "Real interface capture — browse the project, switch files and edit code in the same workspace.",
 
     /* 三个核心功能 */
     "feat.kicker": "Why MusePi",

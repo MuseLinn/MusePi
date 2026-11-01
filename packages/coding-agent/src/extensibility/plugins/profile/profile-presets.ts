@@ -20,12 +20,24 @@ function pluginRow(value: DshValue): PresetPluginRow | null {
 	const row = record(value);
 	if (!row || typeof row.name !== "string" || row.name === "") return null;
 	const children = Array.isArray(row.config) ? row.config.map(pluginRow).filter(row => row !== null) : undefined;
+	const ownConfig = children ? undefined : record(row.config);
+	const isolateValue = record(row.isolate);
+	const isolate = isolateValue
+		? Object.fromEntries(
+				Object.entries(isolateValue).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+			)
+		: undefined;
+	const inject = Array.isArray(row.inject)
+		? row.inject.filter((name): name is string => typeof name === "string")
+		: undefined;
 	return {
 		...(typeof row.id === "string" && row.id ? { id: row.id } : {}),
 		name: row.name,
 		...(row.group === true ? { group: true } : {}),
 		...(row.disabled === true ? { enabled: false } : row.disabled === false ? { enabled: true } : {}),
-		...(children ? { config: children } : {}),
+		...(children ? { config: children } : ownConfig ? { config: ownConfig } : {}),
+		...(isolate && Object.keys(isolate).length > 0 ? { isolate } : {}),
+		...(inject && inject.length > 0 ? { inject } : {}),
 	};
 }
 

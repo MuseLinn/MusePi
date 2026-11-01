@@ -1544,7 +1544,8 @@ export interface ExtensionAPI {
 	 *  extensions.list `toolViews`; the GUI transcript dispatches it by
 	 *  tool name, replacing the built-in renderer for that tool. The
 	 *  module default export must be a `ToolRenderer`-shaped object
-	 *  (`{ Summary, Body?, Card? }`). */
+	 *  (`{ label?, Icon?, Summary, Body?, Card? }`). `label` replaces the wire
+	 *  name in the shared card chrome; `Icon` adds a glyph beside it. */
 	registerToolView(tool: string, options: { moduleUrl: string; label?: string }): void;
 
 	/** Contribute a named, ordered prompt section. Sections compose into every session prompt the extension
@@ -2498,6 +2499,9 @@ export interface ExtensionComponent {
 	label?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** panel.tab.*: always shows a rail launcher; on-demand tabs are opened by
+	 * session content or an explicit tool panel request. */
+	availability?: "always" | "on-demand";
 	/** transcript.node seat: the node kinds (transcriptNodeKind entryKey)
 	 *  this renderer owns. A component with no entryKinds does not
 	 *  participate in per-kind node dispatch (it targets other exact slots).

@@ -13,6 +13,7 @@ import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
+import { MobileSettings } from "./components/shell/MobileSettings";
 import { Toasts } from "./components/shell/Toasts";
 import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
@@ -30,9 +31,10 @@ import {
 import { GuestClient } from "./lib/client";
 import { isCompatShell } from "./lib/compat-shell";
 import { CompatSlotHost } from "./lib/compat-slot-host";
-import { rememberConnection } from "./lib/connections";
 import { HostClient } from "./lib/host-client";
+import { loadResolvedHosts, rememberHost } from "./lib/hosts";
 import { enableNativeGlass } from "./lib/native-glass";
+import { useShellLayout } from "./lib/responsive-shell";
 import { cacheMorphRects, stageLeavingScene } from "./lib/scene-morph";
 import { useTts } from "./lib/tts";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
@@ -91,8 +93,13 @@ export function App(): ReactNode {
 		stageLeavingScene(root);
 	}, []);
 
+	const connectionGenerationRef = useRef(0);
+	const autoRestoreRef = useRef(true);
+
 	const connect = useCallback(
 		(link: string, name: string): void => {
+			const generation = ++connectionGenerationRef.current;
+			autoRestoreRef.current = true;
 			// WebCrypto only exists in secure contexts (https or localhost). On
 			// plain http (a LAN IP) the guest degrades to plaintext mode — no E2E
 			// sealing, but also no self-signed-cert warning to dismiss.
@@ -106,12 +113,11 @@ export function App(): ReactNode {
 			}
 			// A failed connect (above) leaves the connect screen up — no morph.
 			stageConnectMorph();
-			// Persist the connection only after the host actually welcomed us —
-			// a failed connect (bad link, unreachable relay, 6s pair timeout)
-			// must not pollute the recent list or leave a dead deep-link in the
-			// URL that an auto-connect on reload would retry.
+			// Save only a welcomed host. A late welcome from a replaced client
+			// must not overwrite the user's newer connection or URL.
 			next.onWelcome = (): void => {
-				rememberConnection(link, name);
+				if (generation !== connectionGenerationRef.current) return;
+				void rememberHost(link, name);
 				try {
 					window.location.hash = link;
 				} catch {
@@ -125,6 +131,8 @@ export function App(): ReactNode {
 				// storage unavailable (private mode) — non-fatal
 			}
 			credsRef.current = { link, name };
+			hostRef.current = null;
+			clientRef.current = next;
 			setConnectError(null);
 			setClient(prev => {
 				prev?.close();
@@ -138,12 +146,15 @@ export function App(): ReactNode {
 	 *  No collab link, no E2E — the daemon's WS is loopback + token-gated. */
 	const connectHost = useCallback(
 		(wsUrl: string, token?: string): void => {
+			++connectionGenerationRef.current;
+			autoRestoreRef.current = true;
 			const next = new HostClient(wsUrl, token);
 			next.connect();
 			hostRef.current = { wsUrl, token };
 			credsRef.current = null;
 			setConnectError(null);
 			stageConnectMorph();
+			clientRef.current = next;
 			setClient(prev => {
 				prev?.close();
 				return next;
@@ -153,11 +164,15 @@ export function App(): ReactNode {
 	);
 
 	const leave = useCallback((): void => {
+		++connectionGenerationRef.current;
+		autoRestoreRef.current = false;
+		clientRef.current = null;
 		setClient(prev => {
 			prev?.close();
 			return null;
 		});
 		hostRef.current = null;
+		credsRef.current = null;
 		history.replaceState(null, "", window.location.pathname + window.location.search);
 	}, []);
 
@@ -191,48 +206,99 @@ export function App(): ReactNode {
 		};
 	}, []);
 
-	// Deep link: a page load with a hash auto-connects.
+	// Boot precedence: explicit hash / native deep link → local daemon config →
+	// latest saved guest host. Generation checks keep slow probes from winning
+	// over a connection the user started while they were in flight.
 	useEffect(() => {
+		const generation = connectionGenerationRef.current;
 		const link = hashLink();
-		if (link) connect(link, storedName());
-	}, [connect]);
-
-	// Host-mode boot config: when served by `musepi serve --web-port`, the
-	// daemon also serves /__daemon.json with the JSON-RPC WS origin + token.
-	// Auto-connect as host (skip ConnectScreen) unless a collab deep link is
-	// present. Absent config (dev server / static host) → ConnectScreen.
-	useEffect(() => {
-		if (hashLink()) return;
+		if (link) {
+			connect(link, storedName());
+			return;
+		}
+		const stashed = isMobileShell() ? consumePendingDeepLink() : null;
+		if (stashed) {
+			connect(stashed, storedName());
+			return;
+		}
 		let cancelled = false;
+		const current = (): boolean =>
+			!cancelled && generation === connectionGenerationRef.current && clientRef.current === null;
 		void (async () => {
 			try {
 				const res = await fetch("/__daemon.json");
-				if (!res.ok) return;
-				const config = (await res.json()) as { wsUrl?: string; token?: string };
-				if (config.wsUrl && !cancelled) connectHost(config.wsUrl, config.token);
+				if (res.ok) {
+					const config = (await res.json()) as { wsUrl?: string; token?: string };
+					if (config.wsUrl && current()) {
+						connectHost(config.wsUrl, config.token);
+						return;
+					}
+				}
 			} catch {
-				// Not served by a daemon — ConnectScreen below handles it.
+				// A static or mobile host has no local daemon config; restore below.
 			}
+			const hosts = await loadResolvedHosts();
+			const latest = hosts[0];
+			if (latest && current()) connect(latest.link, latest.deviceName);
 		})();
 		return () => {
 			cancelled = true;
 		};
-	}, [connectHost]);
+	}, [connect, connectHost]);
 
-	// Deep link: a native musepi:// URL (notification tap / QR / external link)
-	// delivered by the Capacitor App plugin — connect directly, same as hash.
+	// Native links arriving after boot replace the current session directly.
 	useEffect(() => {
 		if (!isMobileShell()) return;
-		const onLink = (e: Event): void => {
-			const link = (e as CustomEvent<{ link: string }>).detail?.link;
+		const onLink = (event: Event): void => {
+			const link = (event as CustomEvent<{ link: string }>).detail?.link;
 			if (link) connect(link, storedName());
 		};
-		// Cold start: the link arrived before this listener mounted (boot
-		// splash) — the stash drains it exactly once.
-		const stashed = consumePendingDeepLink();
-		if (stashed) connect(stashed, storedName());
 		window.addEventListener(DEEP_LINK_EVENT, onLink);
 		return () => window.removeEventListener(DEEP_LINK_EVENT, onLink);
+	}, [connect]);
+
+	// CollabSocket owns live reconnect backoff. This application-level path is
+	// only for an ended guest (or the initial empty restore), so foreground and
+	// online events can never create a second socket around a live client.
+	useEffect(() => {
+		let settling: Timer | null = null;
+		const recover = (): void => {
+			if (document.hidden || !navigator.onLine || settling !== null) return;
+			const active = clientRef.current;
+			if (active instanceof HostClient) return;
+			if (active instanceof GuestClient && active.getSnapshot().phase !== "ended") return;
+			if (active === null && !autoRestoreRef.current) return;
+			const generation = connectionGenerationRef.current;
+			const creds = credsRef.current;
+			settling = setTimeout(() => {
+				settling = null;
+			}, 0);
+			if (creds) {
+				connect(creds.link, creds.name);
+				return;
+			}
+			void loadResolvedHosts().then(hosts => {
+				const latest = hosts[0];
+				if (
+					latest &&
+					generation === connectionGenerationRef.current &&
+					clientRef.current === null &&
+					autoRestoreRef.current
+				) {
+					connect(latest.link, latest.deviceName);
+				}
+			});
+		};
+		const onVisible = (): void => {
+			if (!document.hidden) recover();
+		};
+		window.addEventListener("online", recover);
+		document.addEventListener("visibilitychange", onVisible);
+		return () => {
+			if (settling !== null) clearTimeout(settling);
+			window.removeEventListener("online", recover);
+			document.removeEventListener("visibilitychange", onVisible);
+		};
 	}, [connect]);
 
 	useEffect(() => {
@@ -537,6 +603,7 @@ function AgentsRail({
 }
 
 function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: SessionProps): ReactNode {
+	const layout = useShellLayout();
 	const [railOpen, setRailOpen] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [activePanel, setActivePanel] = useState<GuestPanel | null>(null);
@@ -561,26 +628,35 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 			openAgent: id => {
 				if (agentIds.has(id)) setSelectedId(id);
 			},
-			sendPrompt: text => client.sendPrompt(text),
+			sendPrompt: text => {
+				void client.sendPrompt(text).catch(error => {
+					console.error("[transcript] prompt failed:", error);
+				});
+			},
 		}),
 		[agentIds, client],
 	);
 
-	// Auto-open the rail the first time a subagent appears.
+	// Wide screens can reveal the first subagent without covering the transcript.
+	// Compact and medium rails are overlays, so only an explicit action opens them.
 	useEffect(() => {
-		if (subCount > 0 && !autoOpenedRef.current) {
+		if (layout === "wide" && subCount > 0 && !autoOpenedRef.current) {
 			autoOpenedRef.current = true;
 			setRailOpen(true);
 		}
-	}, [subCount]);
+	}, [layout, subCount]);
 
-	const title = header?.title ?? state?.sessionName ?? t("settings.session2");
+	const mobile = isMobileShell();
+	const draftSession = mobile && workspace !== null && focusedSessionId === null;
+	const title = draftSession
+		? t("settings.newSession")
+		: (header?.title ?? state?.sessionName ?? t("settings.session2"));
 	useEffect(() => {
 		document.title = `${title} · ${t("shell.musepiCollab")}`;
 	}, [title]);
 
 	const drawerAgent = selectedId != null ? agents.find(a => a.id === selectedId) : undefined;
-	const inWorkspace = workspace !== null && focusedSessionId === null;
+	const inWorkspace = workspace !== null && focusedSessionId === null && !mobile;
 	// Mobile 列表↔会话 morph (M1.10 §3.3 批次 B): freeze + collapse the
 	// outgoing scene and cache the shared-element rects before the state
 	// flip commits. Desktop/web shells keep the plain hard switch — the
@@ -607,6 +683,11 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 		if (!inWorkspace && activePanel === null) stageMobileSceneMorph();
 		client.selectWorkspaceSession(null);
 	}, [activePanel, client, inWorkspace, stageMobileSceneMorph]);
+	const newSession = useCallback((): void => {
+		setActivePanel(null);
+		setRailOpen(false);
+		client.selectWorkspaceSession(null);
+	}, [client]);
 	const sessionCwd = state?.cwd ?? null;
 	// Android back key: each layer registers its own close handler on the
 	// shared back stack (lib/back-stack). dispatchBack() walks from the
@@ -651,6 +732,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 			className={["sh-app", isCompatShell() ? "sh-app--compat" : null, hostMode ? "sh-app--host" : null]
 				.filter(Boolean)
 				.join(" ")}
+			data-layout={layout}
 		>
 			{isCompatShell() && <div className="compat-titlebar" aria-hidden="true" />}
 			<HeaderBar
@@ -658,7 +740,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				railOpen={railOpen}
 				onToggleRail={() => setRailOpen(open => !open)}
 				onLeave={onLeave}
-				onBack={inWorkspace ? undefined : workspace !== null ? backToWorkspace : undefined}
+				onBack={focusedSessionId !== null && workspace !== null ? backToWorkspace : undefined}
 				activePanel={activePanel}
 				currentLink={currentLink}
 				onSwitchTo={onSwitchTo}
@@ -666,6 +748,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				sessions={workspace}
 				focusedSessionId={focusedSessionId}
 				onSelectSession={selectSession}
+				onNewSession={newSession}
 			/>
 			{client.plaintext && <PlaintextBanner />}
 			<main className="sh-main">
@@ -694,6 +777,15 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 								<CompatSlotHost slot="panel.tab.workbench" className="sh-compat-panel" />
 							)}
 							{activePanel === "voice" && <VoicePanel client={client} />}
+							{activePanel === "settings" && (
+								<MobileSettings
+									client={client}
+									currentLink={currentLink}
+									phase={phase}
+									onSwitchTo={onSwitchTo}
+									onLeave={onLeave}
+								/>
+							)}
 						</div>
 					</section>
 				) : (

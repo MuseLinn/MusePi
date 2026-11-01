@@ -43,10 +43,22 @@ function ActionToastItem({ toast }: { toast: ActionToast }): ReactNode {
 			}}
 		>
 			<Icon
-				name={toast.kind === "success" ? "check" : isError ? "error-warning" : "information"}
+				name={
+					toast.kind === "success"
+						? "check"
+						: isError
+							? "error-warning"
+							: toast.kind === "warning"
+								? "alert"
+								: "information"
+				}
 				className="gui-action-toast-icon"
 			/>
-			<span className="gui-action-toast-msg">{toast.message}</span>
+			<div className="gui-action-toast-content">
+				{toast.title && <div className="gui-action-toast-title">{toast.title}</div>}
+				<div className="gui-action-toast-msg">{toast.message}</div>
+				{toast.details && <div className="gui-action-toast-details">{toast.details}</div>}
+			</div>
 			{toast.actionLabel && (
 				<button
 					type="button"

@@ -110,8 +110,9 @@ import {
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
+import { CordisPresetRuntime, type MountedPresetPlugin } from "./extensibility/plugins/preset-runtime";
 import { collectProfilePresetDefinitions } from "./extensibility/plugins/profile/profile-presets";
-import { loadSessionPlugins } from "./extensibility/plugins/runtime/session-loader";
+import { defaultSessionConfigReader, loadSessionPlugins } from "./extensibility/plugins/runtime/session-loader";
 import {
 	loadSkills as loadSkillsInternal,
 	type Skill,
@@ -1411,6 +1412,28 @@ function hashSkillContent(content: string): string {
 	return String(h >>> 0);
 }
 
+const PLUGIN_OWNED_BUNDLED_SKILLS = ["android-emulator"] as const;
+
+/** Remove only unedited legacy copies whose skill now belongs to a Cordis plugin. */
+export function migratePluginOwnedBundledSkills(skillsDir: string, manifest: Record<string, string>): boolean {
+	let dirty = false;
+	for (const name of PLUGIN_OWNED_BUNDLED_SKILLS) {
+		const previousHash = manifest[name];
+		if (previousHash === undefined) continue;
+		const target = path.join(skillsDir, name, "SKILL.md");
+		try {
+			const disk = fs.readFileSync(target, "utf8");
+			if (hashSkillContent(disk) !== String(previousHash)) continue;
+			fs.rmSync(path.dirname(target), { recursive: true, force: true });
+			delete manifest[name];
+			dirty = true;
+		} catch {
+			// A missing or unreadable file is left to the ordinary skill scanner.
+		}
+	}
+	return dirty;
+}
+
 function readBundledManifest(skillsDir: string): Record<string, string> {
 	try {
 		const parsed = JSON.parse(fs.readFileSync(path.join(skillsDir, BUNDLED_MANIFEST), "utf8")) as unknown;
@@ -1472,7 +1495,7 @@ export function ensureBundledSkills(agentDir = getAgentDir()): void {
 	bundledSkillsEnsured = true;
 	const skillsDir = bundledSkillsDir(agentDir);
 	const manifest = readBundledManifest(skillsDir);
-	let manifestDirty = false;
+	let manifestDirty = migratePluginOwnedBundledSkills(skillsDir, manifest);
 	for (const skill of BUNDLED_SKILLS) {
 		const dir = path.join(skillsDir, skill.name);
 		const target = path.join(dir, "SKILL.md");
@@ -1621,6 +1644,36 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 		return { resolved: undefined, composer, activeExtensionIds: new Set() };
 	})();
+	let cordisPresetRuntime: CordisPresetRuntime | undefined;
+	let cordisPresetRecords: MountedPresetPlugin[] = [];
+	const mountCordisPreset = async (resolved: ResolvedMode, registrationRuntime: LoadExtensionsResult["runtime"]) => {
+		const { getEnabledPlugins, resolvePluginExtensionPaths } = await import("./extensibility/plugins/runtime/loader");
+		const installed = await getEnabledPlugins(cwd, { home: options.profileHome ?? os.homedir() });
+		const runtime = new CordisPresetRuntime({
+			cwd,
+			eventBus,
+			runtime: registrationRuntime,
+			readConfig: await defaultSessionConfigReader(),
+			entryResolver: {
+				resolveEntries: async () =>
+					new Map(installed.map(plugin => [plugin.name, resolvePluginExtensionPaths(plugin)])),
+			},
+		});
+		const result = await runtime.mount(resolved.plugins);
+		cordisPresetRuntime = runtime;
+		cordisPresetRecords = result.records;
+		for (const error of result.errors) logger.error("Failed to mount Cordis preset plugin", error);
+		return result;
+	};
+	const unmountCordisPreset = async (): Promise<void> => {
+		for (const record of cordisPresetRecords) {
+			await session.removeExtensionTools([...record.extension.tools.keys()]);
+			modeRuntime.composer.removeBySource(`ext:${extensionIdOf(record.extension.path)}`);
+		}
+		await cordisPresetRuntime?.dispose();
+		cordisPresetRuntime = undefined;
+		cordisPresetRecords = [];
+	};
 	// M3 §3:projectMetadata 挂可变 ref —— session.setDesignSystem 热写
 	// designSystemId 键,rebuildSystemPrompt 闭包每次重建都重读
 	// ref.current 重解析注册表(与 modeRuntime 同一"可变状态 + 闭包重读"形态)。
@@ -2462,6 +2515,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					after: extensionsResult.extensions.length,
 				});
 			}
+		}
+		if (modeRuntime.resolved && modeRuntime.resolved.plugins.length > 0) {
+			const mounted = await mountCordisPreset(modeRuntime.resolved, extensionsResult.runtime);
+			const presetPaths = new Set(mounted.records.map(record => record.extension.resolvedPath));
+			extensionsResult.extensions = extensionsResult.extensions.filter(ext => !presetPaths.has(ext.resolvedPath));
+			extensionsResult.extensions.push(...mounted.records.map(record => record.extension));
 		}
 		// Modes v2(§5.5):扩展 prompt 区块(registerPrompt)以 source=ext:<id>
 		// 注入 composer —— 与 mode/user 区块同槽,按 order 混排;扩展 reload
@@ -3974,6 +4033,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					(settings as Settings).clearOverride(key as never);
 				}
 				appliedModeSettingsKeys.length = 0;
+				await unmountCordisPreset();
 				modeRuntime.resolved = undefined;
 				await session.refreshBaseSystemPrompt();
 				logger.info("Mode cleared", { sessionId: session.sessionId });
@@ -3986,6 +4046,15 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				next = createModeResolver(dir, { extraModes: extensionModeLookup }).resolve(modeId);
 			} catch (error) {
 				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
+			await unmountCordisPreset();
+			if (next.plugins.length > 0) {
+				const mounted = await mountCordisPreset(next, extensionsResult.runtime);
+				for (const record of mounted.records) {
+					await extensionRunner.adoptExtension(record.extension);
+					const source = `ext:${extensionIdOf(record.extension.path)}`;
+					for (const section of record.extension.promptSections) modeRuntime.composer.add({ ...section, source });
+				}
 			}
 			// 1) composer:卸载旧 mode 区块 → 挂新 mode 区块(沿用初始 base,§5.6)。
 			if (prev?.id) modeRuntime.composer.removeBySource(`mode:${prev.id}`);
@@ -4366,6 +4435,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 						await vibeRegistry.suspendScope(vibeRegistry.ownerScope(vibeParentSession), scopedAsyncJobManager);
 						await AgentLifecycleManager.global().dispose();
 					}
+					await unmountCordisPreset();
 					await originalDispose();
 				} finally {
 					unregisterUnlessParked();
@@ -4664,6 +4734,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// for already-removed listeners.
 		unsubscribeCredentialDisabled?.();
 		try {
+			await unmountCordisPreset();
 			if (hasSession) {
 				await session.dispose();
 				if (hasRegistered) unregisterUnlessParked();

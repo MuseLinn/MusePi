@@ -1552,6 +1552,24 @@ button.tr-display-context-source:hover {
 	pointer-events: auto;
 }
 
+/* Keyboard focus and touch devices have no reliable hover state. Keep the
+ * same actions visible instead of making copy/export capabilities vanish. */
+.tr-md .tr-math:focus-within .tr-math-copy,
+.tr-mermaid-block:focus-within .tr-mermaid-bar,
+.tr-table:focus-within .tr-table-bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+@media (hover: none), (pointer: coarse) {
+	.tr-md .tr-math .tr-math-copy,
+	.tr-mermaid-bar,
+	.tr-table-bar {
+		opacity: 1;
+		pointer-events: auto;
+	}
+}
+
 .tr-table-menu-wrap {
 	position: relative;
 }

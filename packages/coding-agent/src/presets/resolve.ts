@@ -69,10 +69,14 @@ export interface PresetPluginRow {
 	name: string;
 	/** Stable identity within the composition; defaults to `name`. */
 	id?: string;
-	/** Rows nested under this one; requires `group: true`. */
-	config?: PresetPluginRow[];
+	/** Child rows for a group, or the plugin's own configuration for a leaf. */
+	config?: PresetPluginRow[] | Record<string, unknown>;
 	/** Marker for a nested row list. */
 	group?: boolean;
+	/** Service names whose implementations resolve in a child Cordis realm. */
+	isolate?: Record<string, boolean>;
+	/** Additional services this row requires before its fiber can activate. */
+	inject?: readonly string[];
 	/** False keeps the row in the composition but unmounted. */
 	enabled?: boolean;
 }
@@ -175,9 +179,8 @@ function pluginRowProblems(rows: readonly PresetPluginRow[], presetId: string, a
 		const key = row.id ?? row.name;
 		if (seen.has(key)) problems.push(`${presetId}: ${label} 的 id "${key}" 重复`);
 		seen.add(key);
-		// `config` is a nested row list ONLY with `group: true`; without the
-		// marker it would be read as a plugin's own config and silently ignored.
-		if (row.config !== undefined && row.group !== true) {
+		// A group owns child rows; a leaf's object config belongs to its plugin.
+		if (row.group !== true && Array.isArray(row.config)) {
 			problems.push(`${presetId}: ${label} 有嵌套行但缺少 group: true`);
 		}
 		if (row.group === true) {

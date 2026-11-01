@@ -20,6 +20,7 @@ import type {
 	CollabUiRequest,
 	CollabUiRequestDraft,
 	CollabUiResponseValue,
+	ToolApprovalRequest,
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
 import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
@@ -159,9 +160,20 @@ export interface CollabWorkspaceContext {
 
 export type CollabHostMode = "session" | "workspace";
 
+/** Host-owned approval state exposed to writable remote devices. */
+export interface CollabApprovalProvider {
+	list(): ToolApprovalRequest[];
+	resolve(requestId: string, approved: boolean): boolean;
+	subscribe(listener: () => void): () => void;
+}
+
 export class CollabHost {
 	#ctx: InteractiveModeContext;
 	#mode: CollabHostMode;
+	#approvals?: CollabApprovalProvider;
+	#approvalUnsubscribe?: () => void;
+	#pendingApprovals = new Map<string, ToolApprovalRequest>();
+	#focusActive: boolean;
 	#socket: CollabSocket | null = null;
 	#link = "";
 	#webLink = "";
@@ -182,9 +194,11 @@ export class CollabHost {
 	#registryUnsubscribe?: () => void;
 	#stopped = false;
 
-	constructor(ctx: InteractiveModeContext, mode: CollabHostMode = "session") {
+	constructor(ctx: InteractiveModeContext, mode: CollabHostMode = "session", approvals?: CollabApprovalProvider) {
 		this.#ctx = ctx;
 		this.#mode = mode;
+		this.#approvals = approvals;
+		this.#focusActive = mode === "session";
 	}
 
 	get link(): string {
@@ -337,6 +351,8 @@ export class CollabHost {
 				this.#workspaceUnsubscribe = provider.subscribeWorkspace(() => void this.#broadcastWorkspace());
 			}
 		}
+		this.#approvalUnsubscribe = this.#approvals?.subscribe(() => this.#syncApprovals());
+		this.#syncApprovals();
 		this.#updateStatusSegment();
 	}
 
@@ -359,6 +375,9 @@ export class CollabHost {
 		this.#busUnsubscribers = [];
 		this.#registryUnsubscribe?.();
 		this.#registryUnsubscribe = undefined;
+		this.#approvalUnsubscribe?.();
+		this.#approvalUnsubscribe = undefined;
+		this.#pendingApprovals.clear();
 		clearTimeout(this.#stateDebounce ?? undefined);
 		this.#stateDebounce = null;
 		clearTimeout(this.#agentsDebounce ?? undefined);
@@ -406,6 +425,9 @@ export class CollabHost {
 				break;
 			case "ui-response":
 				this.#handleUiResponse(frame.reqId, frame.value, fromPeer);
+				break;
+			case "approval-response":
+				this.#handleApprovalResponse(frame.requestId, frame.approved, fromPeer);
 				break;
 			case "fetch-transcript":
 				void this.#handleFetchTranscript(frame.reqId, frame.agentId, frame.fromByte, fromPeer);
@@ -512,6 +534,9 @@ export class CollabHost {
 			for (const pending of this.#pendingUi.values()) {
 				socket.send({ t: "ui-request", request: pending.request }, fromPeer);
 			}
+			for (const request of this.#pendingApprovals.values()) {
+				socket.send({ t: "approval-request", request }, fromPeer);
+			}
 		}
 	}
 
@@ -545,6 +570,8 @@ export class CollabHost {
 				this.#unsubscribe = undefined;
 			}
 			this.#ctx.sessionManager.onEntryAppended = undefined;
+			this.#focusActive = false;
+			this.#syncApprovals();
 			this.#ctx.session.emitNotice("info", "Collab focus returned to the workspace directory", "collab");
 			this.#updateStatusSegment();
 			return;
@@ -590,6 +617,8 @@ export class CollabHost {
 			if (isWireSessionEntry(entry)) this.#broadcast({ t: "entry", entry: shrinkForReplication(entry) });
 			this.#scheduleStateBroadcast();
 		};
+		this.#focusActive = true;
+		this.#syncApprovals();
 		this.#scheduleStateBroadcast();
 		this.#scheduleAgentsBroadcast();
 		return true;
@@ -637,6 +666,35 @@ export class CollabHost {
 			return;
 		}
 		this.#pendingUi.get(reqId)?.settle({ kind: "answered", value });
+	}
+
+	#handleApprovalResponse(requestId: string, approved: boolean, fromPeer: number): void {
+		const peer = this.#peers.get(fromPeer);
+		if (!peer?.canWrite) {
+			this.#rejectReadOnly("responding to tool approval", fromPeer);
+			return;
+		}
+		if (!this.#pendingApprovals.has(requestId)) return;
+		this.#approvals?.resolve(requestId, approved);
+		// Providers notify through subscribe(); the extra sync also supports a
+		// provider whose resolve() does not emit its own change notification.
+		this.#syncApprovals();
+	}
+
+	#syncApprovals(): void {
+		const next = new Map<string, ToolApprovalRequest>();
+		if (this.#focusActive) {
+			for (const request of this.#approvals?.list() ?? []) next.set(request.requestId, request);
+		}
+		for (const requestId of this.#pendingApprovals.keys()) {
+			if (!next.has(requestId)) this.#sendWritablePeers({ t: "approval-request-end", requestId });
+		}
+		for (const request of next.values()) {
+			if (!this.#pendingApprovals.has(request.requestId)) {
+				this.#sendWritablePeers({ t: "approval-request", request });
+			}
+		}
+		this.#pendingApprovals = next;
 	}
 
 	/** Guest session-config: currently the thinking ladder only. The level is

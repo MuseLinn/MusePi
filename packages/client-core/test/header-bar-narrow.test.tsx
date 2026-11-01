@@ -34,6 +34,7 @@ const props = (client: GuestClient) => ({
 	sessions: null,
 	focusedSessionId: null,
 	onSelectSession: () => {},
+	onNewSession: () => {},
 });
 
 function mockMatchMedia(matches: boolean): void {

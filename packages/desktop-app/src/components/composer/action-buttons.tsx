@@ -94,9 +94,11 @@ export function VoiceStatusStrip({
 	level: number;
 	partialText?: string;
 }): ReactNode {
+	const recording = phase === "recording";
 	return (
 		<div
-			className={`gui-voice-strip${phase === "transcribing" ? " gui-voice-strip--transcribing" : ""}`}
+			className={`gui-voice-strip${recording ? "" : " gui-voice-strip--transcribing"}`}
+			data-phase={phase}
 			style={{ "--voice-level": `${Math.round(level * 100) / 100}` } as CSSProperties}
 			role="status"
 			aria-live="polite"
@@ -104,17 +106,28 @@ export function VoiceStatusStrip({
 			<span className="gui-voice-visual" aria-hidden>
 				<i className="gui-voice-ring gui-voice-ring--outer" />
 				<i className="gui-voice-ring gui-voice-ring--inner" />
-				<span className="gui-voice-wave">
+				{recording ? <Icon name="mic" className="gui-voice-mic" /> : <span className="gui-voice-spinner" />}
+			</span>
+			<span className="gui-voice-strip-summary">
+				<span className="gui-voice-strip-label">
+					{recording ? t("settings.voiceListening") : t("settings.voiceTranscribing")}
+				</span>
+				{recording && <span className="gui-voice-strip-time">{seconds}s</span>}
+			</span>
+			{recording && (
+				<span className="gui-voice-wave" aria-hidden>
 					{VOICE_WAVE_BARS.map((weight, index) => (
-						<i key={index} style={{ transform: `scaleY(${Math.min(1, 0.18 + level * weight)})` }} />
+						<i key={index} style={{ "--voice-bar-scale": Math.min(1, 0.18 + level * weight) } as CSSProperties} />
 					))}
 				</span>
+			)}
+			<span className={`gui-voice-partial${partialText ? " gui-voice-partial--visible" : ""}`}>
+				{partialText || t(recording ? "settings.voiceListeningHint" : "settings.voiceTranscribingHint")}
 			</span>
-			<span className="gui-voice-strip-label">
-				{phase === "recording" ? `${seconds}s` : t("settings.voiceTranscribing")}
+			<span className="gui-voice-strip-hint">
+				<kbd>{t("settings.voiceEscKey")}</kbd>
+				<span>{t("settings.cancel")}</span>
 			</span>
-			<span className={`gui-voice-partial${partialText ? " gui-voice-partial--visible" : ""}`}>{partialText}</span>
-			<span className="gui-voice-strip-hint">{t("settings.voiceEscCancel")}</span>
 		</div>
 	);
 }

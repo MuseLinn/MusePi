@@ -302,6 +302,7 @@ const providerRegistrations = new Map<string, { count: number; disposables: Mona
 const peekModels = new Map<string, PeekModelEntry>();
 let editorOpener: Monaco.IDisposable | null = null;
 let monacoRuntime: typeof Monaco | null = null;
+let pendingEditorLocation: EditorLocation | null = null;
 const MARKER_OWNER = "musepi-lsp";
 const DIAGNOSTICS_DEBOUNCE_MS = 300;
 
@@ -511,6 +512,7 @@ function revealOrQueuePosition(monaco: typeof Monaco, path: string, position: Mo
  * target file queues its position until FileCodeEditor finishes mounting. */
 export function revealEditorLocation(location: EditorLocation): void {
 	if (monacoRuntime) revealOrQueuePosition(monacoRuntime, location.path, location);
+	else pendingEditorLocation = location;
 }
 
 /** Release the process-wide opener when its Monaco host is torn down. */
@@ -564,6 +566,12 @@ export function registerMonacoLanguageFeatures(
 	documents.set(uri, document);
 	monacoRuntime = monaco;
 	ensureEditorOpener(monaco);
+	// Preserve the latest request made while Monaco was dynamically loading.
+	const earlyLocation = pendingEditorLocation;
+	if (earlyLocation && monaco.Uri.file(earlyLocation.path).toString() === uri) {
+		pendingEditorLocation = null;
+		revealPosition(editor, earlyLocation);
+	}
 	const pendingPosition = pendingPositions.get(uri);
 	if (pendingPosition) {
 		pendingPositions.delete(uri);

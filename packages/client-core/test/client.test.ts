@@ -392,6 +392,115 @@ describe("GuestClient frame apply", () => {
 		expect(client.getSnapshot().uiRequest).toBeNull();
 	});
 
+	it("routes tool approvals through the guest transport and advances the queue on host completion", () => {
+		const sent: GuestFrame[] = [];
+		const sendSpy = vi.spyOn(CollabSocket.prototype, "send").mockImplementation((frame: GuestFrame) => {
+			sent.push(frame);
+		});
+		try {
+			const client = liveClient();
+			const first = { requestId: "approval-1", tool: "bash", args: { command: "ls" }, prompt: "Allow bash" };
+			const second = { requestId: "approval-2", tool: "write", args: null, prompt: "Allow write" };
+			client.applyFrameForTest({ t: "approval-request", request: first });
+			client.applyFrameForTest({ t: "approval-request", request: second });
+			expect(client.approvalRequest).toEqual(first);
+			expect(client.getSnapshot().approvalRequest).toEqual(first);
+
+			client.respondApproval(first.requestId, true);
+			expect(sent).toEqual([{ t: "approval-response", requestId: first.requestId, approved: true }]);
+			// The host remains authoritative: a local click does not settle other devices.
+			expect(client.approvalRequest).toEqual(first);
+
+			client.applyFrameForTest({ t: "approval-request-end", requestId: first.requestId });
+			expect(client.approvalRequest).toEqual(second);
+			client.applyFrameForTest({ t: "approval-request-end", requestId: second.requestId });
+			expect(client.approvalRequest).toBeNull();
+		} finally {
+			sendSpy.mockRestore();
+		}
+	});
+
+	it("clears stale approvals on welcome and ignores them on a read-only link", () => {
+		const client = liveClient();
+		const request = { requestId: "approval-stale", tool: "bash", args: null, prompt: "Allow bash" };
+		client.applyFrameForTest({ t: "approval-request", request });
+		expect(client.approvalRequest).toEqual(request);
+		client.applyFrameForTest(welcomeFrame(0));
+		expect(client.approvalRequest).toBeNull();
+
+		const viewer = new GuestClient(LINK, "viewer");
+		viewer.applyFrameForTest(welcomeFrame(0, true));
+		viewer.applyFrameForTest({ t: "approval-request", request });
+		expect(viewer.approvalRequest).toBeNull();
+	});
+
+	it("clears approvals when a session ends or the guest returns to the workspace directory", () => {
+		const request = { requestId: "approval-expired", tool: "bash", args: null, prompt: "Allow bash" };
+		const ended = liveClient();
+		ended.applyFrameForTest({ t: "approval-request", request });
+		ended.applyFrameForTest({ t: "bye", reason: "host left" });
+		expect(ended.approvalRequest).toBeNull();
+
+		const sendSpy = vi.spyOn(CollabSocket.prototype, "send").mockImplementation(() => {});
+		try {
+			const directory = liveClient();
+			directory.applyFrameForTest({ t: "workspace", sessions: [] });
+			directory.applyFrameForTest({ t: "approval-request", request });
+			expect(directory.approvalRequest).toEqual(request);
+			directory.selectWorkspaceSession(null);
+			expect(directory.approvalRequest).toBeNull();
+		} finally {
+			sendSpy.mockRestore();
+		}
+	});
+
+	it("creates and hydrates a draft session before sending its first prompt", async () => {
+		const sent: GuestFrame[] = [];
+		const sendSpy = vi.spyOn(CollabSocket.prototype, "send").mockImplementation((frame: GuestFrame) => {
+			sent.push(frame);
+		});
+		try {
+			const client = liveClient();
+			client.applyFrameForTest({ t: "workspace", sessions: [] });
+			const pending = client.sendPrompt("first message");
+			expect(sent).toEqual([{ t: "rpc-request", reqId: 1, method: "session.create", params: {} }]);
+
+			client.applyFrameForTest({ t: "rpc-result", reqId: 1, ok: true, data: { sessionId: "new-session" } });
+			await Bun.sleep(0);
+			expect(sent[1]).toEqual({ t: "workspace-select", sessionId: "new-session" });
+			expect(sent.some(frame => frame.t === "prompt")).toBe(false);
+
+			// Session creation refreshes the directory before its welcome arrives.
+			// That refresh must not clear the selection or reject the first prompt.
+			client.applyFrameForTest({ t: "workspace", sessions: [] });
+			expect(client.focusedSessionId).toBe("new-session");
+			expect(client.getSnapshot().phase).toBe("waiting");
+			client.applyFrameForTest(welcomeFrame(0));
+			await pending;
+			expect(sent[2]).toEqual({ t: "prompt", text: "first message", images: undefined });
+		} finally {
+			sendSpy.mockRestore();
+		}
+	});
+
+	it("does not send a draft prompt when session creation fails", async () => {
+		const sent: GuestFrame[] = [];
+		const sendSpy = vi.spyOn(CollabSocket.prototype, "send").mockImplementation((frame: GuestFrame) => {
+			sent.push(frame);
+		});
+		try {
+			const client = liveClient();
+			client.applyFrameForTest({ t: "workspace", sessions: [] });
+			const pending = client.sendPrompt("keep this draft");
+			client.applyFrameForTest({ t: "rpc-result", reqId: 1, ok: false, error: "create denied" });
+
+			await expect(pending).rejects.toThrow("create denied");
+			expect(sent).toEqual([{ t: "rpc-request", reqId: 1, method: "session.create", params: {} }]);
+		} finally {
+			sendSpy.mockRestore();
+		}
+	});
+
 	it("snapshot reference is stable between frames and replaced per frame", () => {
 		const client = liveClient();
 		const before = client.getSnapshot();

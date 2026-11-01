@@ -7,7 +7,7 @@ import { initTooltips } from "./lib/tooltips";
 import { Icon, type IconName } from "./vendor/oc-icons";
 import "@musepi/client-core/src/styles/tokens.css";
 import "@musepi/client-core/src/styles/base.css";
-import "./styles/fonts.css";
+import "@musepi/client-core/src/styles/fonts.css";
 import "./styles/gui.css";
 import "@musepi/client-core/src/styles/overlay-fallback.css";
 

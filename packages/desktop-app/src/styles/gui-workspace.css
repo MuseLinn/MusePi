@@ -1420,7 +1420,7 @@
 .gui-cap-drawer-root {
 	position: fixed;
 	inset: 0;
-	z-index: 3000; /* §5u modal band */
+	z-index: var(--z-modal); /* §5u modal band */
 }
 
 .gui-cap-drawer-backdrop {
@@ -5140,7 +5140,7 @@
 .gui-skill-market-dialog-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 3000; /* §5u modal band */
+	z-index: var(--z-modal); /* §5u modal band */
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -6758,6 +6758,81 @@ button.traj-error-note:hover {
 	overflow-wrap: anywhere;
 	font-size: 12px;
 	line-height: 1.55;
+}
+
+.gui-pr-review-thread {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-sunken, transparent);
+}
+
+.gui-pr-review-location,
+.gui-pr-review-actions {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-pr-review-path {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--color-text-faint);
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+.gui-pr-review-outdated {
+	padding: 1px 6px;
+	border-radius: var(--radius-full);
+	background: var(--color-warning-soft, var(--color-surface-raised));
+	color: var(--color-warning, var(--color-text-faint));
+	font-size: 10px;
+}
+
+.gui-pr-review-actions .gui-pane-action {
+	width: auto;
+	padding: 3px 7px;
+	font-size: 11px;
+}
+
+.gui-pr-review-diff {
+	min-width: 0;
+	font-size: 11px;
+}
+
+.gui-pr-review-diff summary {
+	cursor: pointer;
+	color: var(--color-text-faint);
+}
+
+.gui-pr-review-diff pre {
+	max-width: 100%;
+	margin: 6px 0 0;
+	padding: 8px;
+	overflow: auto;
+	border-radius: var(--radius-md);
+	background: var(--color-bg);
+	font: 11px/1.55 var(--font-mono);
+	white-space: pre;
+}
+
+.gui-pr-review-reply {
+	margin-left: 14px;
+	border-left: 2px solid var(--border);
+	border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.gui-pr-review-error {
+	margin: 0;
+	color: var(--color-warning, var(--color-text-faint));
+	font-size: 11px;
 }
 
 /* 合并方式选择 + 两步确认按钮。 */

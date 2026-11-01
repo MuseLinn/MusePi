@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { commentOnGithub, type GhResult, normalizeGithubReviewers } from "../../src/daemon/github-mutations";
+import {
+	commentOnGithub,
+	type GhResult,
+	normalizeGithubReviewers,
+	reviewOnGithub,
+} from "../../src/daemon/github-mutations";
 
 function runner(result: GhResult): { run: (cwd: string, args: string[]) => Promise<GhResult>; calls: string[][] } {
 	const calls: string[][] = [];
@@ -32,6 +37,24 @@ describe("GitHub comment mutations", () => {
 	test("surfaces gh's failure reason", async () => {
 		const { run } = runner({ exitCode: 2, stdout: "", stderr: "comment rejected" });
 		expect(await commentOnGithub("/repo", "pr", 43, "PR note", run)).toEqual({ error: "comment rejected" });
+	});
+
+	test("submits an approval without a body and a change request with one", async () => {
+		const { run, calls } = runner({ exitCode: 0, stdout: "", stderr: "" });
+		expect(await reviewOnGithub("/repo", 43, "approve", "  ", run)).toEqual({ ok: true });
+		expect(await reviewOnGithub("/repo", 43, "request-changes", " Add coverage ", run)).toEqual({ ok: true });
+		expect(calls).toEqual([
+			["pr", "review", "43", "--approve"],
+			["pr", "review", "43", "--request-changes", "--body", "Add coverage"],
+		]);
+	});
+
+	test("requires a reason for change requests before invoking gh", async () => {
+		const { run, calls } = runner({ exitCode: 0, stdout: "", stderr: "" });
+		expect(await reviewOnGithub("/repo", 43, "request-changes", " \n", run)).toEqual({
+			error: "review body required",
+		});
+		expect(calls).toEqual([]);
 	});
 
 	test("normalizes user and team review requests into removable reviewer names", () => {

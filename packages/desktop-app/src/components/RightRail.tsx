@@ -13,7 +13,12 @@ import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
-import { RIGHT_RAIL_SLOT, SlotComponentHost, selectLaunchablePanelTabs, selectPanelTabComponent } from "../lib/slot-host";
+import {
+	RIGHT_RAIL_SLOT,
+	SlotComponentHost,
+	selectLaunchablePanelTabs,
+	selectPanelTabComponent,
+} from "../lib/slot-host";
 import {
 	readHiddenSurfaces,
 	readSurfaceOrder,
@@ -68,9 +73,8 @@ export function RightRail({
 	onToggleRightPanel?(): void;
 	/** 有打开 tab 的表面（tab-primary 模型）：喂给 has-content 回退规则。 */
 	openSurfaces?: ReadonlySet<string>;
-	/** Extension panel-tab slots (panel.tab.*), rendered as primary rail
-	 *  items after the built-in surfaces (nav unification: the rail is the
-	 *  single navigation axis — no second tab row in the panel header). */
+	/** Extension panel-tab slots (panel.tab.*). Launchable items render after
+	 *  the built-in surfaces; on-demand content is opened by its provider. */
 	extTabs?: import("../lib/slot-host").SlotComponent[];
 }): ReactNode {
 	// 顺序（目录级）
@@ -137,7 +141,7 @@ export function RightRail({
 		return out;
 	}, [hidden, fileWorkspaceAvailable]);
 
-	// The file workspace owns the persistent Files rail entry, not a second launcher.
+	// Only launchable extension tabs render as primary items after the built-ins.
 	const extItems = useMemo(
 		() => selectLaunchablePanelTabs(extTabs).map(item => ({ id: `ext:${item.slot}`, item })),
 		[extTabs],
