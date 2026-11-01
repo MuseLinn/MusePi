@@ -27,7 +27,7 @@ jobs:
          matrix:
             include:
                - {
-                    os: macos-14,
+                    os: macos-15,
                     target_id: darwin-arm64,
                     native_targets: darwin-arm64,
                     builder: mac,

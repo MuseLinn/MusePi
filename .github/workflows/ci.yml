@@ -741,7 +741,7 @@ jobs:
          matrix:
             include:
                - {
-                    os: macos-14,
+                    os: macos-15,
                     target_id: darwin-arm64,
                     binary_path: packages/coding-agent/binaries/musepi-darwin-arm64,
                     native_targets: darwin-arm64,
@@ -878,7 +878,7 @@ jobs:
       if: ${{ needs.release_metadata.outputs.is-release == 'true' && !cancelled() &&
          needs.release_github.result == 'success' }}
       needs: [release_metadata, release_github]
-      runs-on: macos-14
+      runs-on: macos-15
       permissions:
          contents: read
       env:
