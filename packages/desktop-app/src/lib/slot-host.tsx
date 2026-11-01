@@ -22,6 +22,7 @@ import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
 import type { RpcClient } from "./rpc";
 
 /**
@@ -438,7 +439,10 @@ export interface SlotComponentProps {
 		target: string | null;
 		label: string;
 		readOnly: boolean;
+		dedupeKey?: string | null;
 	};
+	/** Host-owned file tabs, drafts, reveal requests, and editor history. */
+	fileWorkspace?: FileWorkspaceHost;
 	/** Shared token formatter so plugin readouts match the host transcript. */
 	formatTokens?: (value: number) => string;
 	/** Settings read/write proxy bound to this extension's keys
@@ -610,7 +614,14 @@ export function selectTranscriptNodeComponents(components: readonly SlotComponen
 
 /** Resolve one extension surface for the column being rendered. */
 export function selectPanelTabComponent(components: readonly SlotComponent[], view: string): SlotComponent | undefined {
-	return components.find(component => `ext:${component.slot}` === view);
+	return components.find(component => {
+		if (component.slot === FILE_WORKSPACE_SLOT) return view === FILE_WORKSPACE_SURFACE;
+		return view !== FILE_WORKSPACE_SURFACE && `ext:${component.slot}` === view;
+	});
+}
+
+export function selectLaunchablePanelTabs(components: readonly SlotComponent[]): SlotComponent[] {
+	return components.filter(component => component.slot !== FILE_WORKSPACE_SLOT);
 }
 
 /** Mount every extension-contributed component registered for a slot. */
@@ -651,6 +662,7 @@ export function SlotComponentMount({
 	cwd,
 	settingsScope,
 	panelTab,
+	fileWorkspace,
 	node,
 	turn,
 	configForm,
@@ -663,6 +675,8 @@ export function SlotComponentMount({
 	settingsScope?: SlotComponentProps["settingsScope"];
 	/** Current right-panel tab instance (panel.tab.* only). */
 	panelTab?: SlotComponentProps["panelTab"];
+	/** Host-owned file workspace contract (panel.tab.files only). */
+	fileWorkspace?: SlotComponentProps["fileWorkspace"];
 	/** transcript.node seat 节点上下文: 命中
 	 *  kind 的组件收到它,可用 node.children 增强或完全自绘。 */
 	node?: SlotComponentProps["node"];
@@ -798,6 +812,7 @@ export function SlotComponentMount({
 		settingsScope,
 		configForm: resolvedConfigForm,
 		panelTab,
+		fileWorkspace,
 		formatTokens: fmtTokens,
 		node,
 		turn,

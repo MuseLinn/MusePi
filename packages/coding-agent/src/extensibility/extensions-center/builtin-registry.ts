@@ -232,6 +232,15 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		annotate: true as const,
 		raw: { name, kind: "bundled-skill" },
 	})),
+	{
+		kind: "plugin-module",
+		name: "file-workspace",
+		displayName: "MusePi File Workspace",
+		description:
+			"Workspace tree, Monaco and Markdown editing, PDF and document previews, and file references in one Cordis-owned panel.",
+		annotate: true,
+		raw: { name: "file-workspace", kind: "plugin-module" },
+	},
 	// ── magic keywords:已迁为插件包(src/bundled-plugins/magic-keywords)────
 	// 三个关键词(ultrathink/orchestrate/workflow)现在由该包经
 	// pi.registerMagicKeyword 注册,经 extension-module 条目呈现与管理 ——
@@ -641,10 +650,10 @@ export function annotateBuiltinExtensions(extensions: Extension[]): Extension[] 
 			if (!ext.description && def.description) ext.description = def.description;
 			continue;
 		}
-		// Bundled plugin package entries: normalize both dev (src/bundled-plugins)
-		// and packaged (./bundled-plugins) layouts.
-		const normalized = ext.path.replaceAll("\\", "/");
-		if (normalized.includes("/bundled-plugins/")) {
+		// Discovery owns distribution scope. Desktop bundled packages live under
+		// desktop-app/src/plugins rather than a bundled-plugins directory, so a
+		// path-only rule silently moves those official packages into Installed.
+		if (ext.source.provider === "musepi-extensions" && ext.source.level === "native") {
 			ext.builtin = true;
 		}
 	}

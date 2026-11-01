@@ -1,6 +1,11 @@
 import "./dom-shim";
 import { describe, expect, it } from "bun:test";
-import { type SlotComponent, selectPanelTabComponent, selectTranscriptNodeComponents } from "../src/lib/slot-host";
+import {
+	type SlotComponent,
+	selectLaunchablePanelTabs,
+	selectPanelTabComponent,
+	selectTranscriptNodeComponents,
+} from "../src/lib/slot-host";
 
 /** Minimal SlotComponent fixture — only entryKinds/order matter for dispatch. */
 function comp(over: Partial<SlotComponent> & { slot: string; extensionId: string; code: string }): SlotComponent {
@@ -65,5 +70,20 @@ describe("selectPanelTabComponent", () => {
 		expect(selectPanelTabComponent([compaction, other], "ext:panel.tab.compaction")).toBe(compaction);
 		expect(selectPanelTabComponent([compaction, other], "ext:panel.tab.other")).toBe(other);
 		expect(selectPanelTabComponent([compaction], "context")).toBeUndefined();
+	});
+
+	it("maps the persisted files surface to its plugin slot", () => {
+		const files = comp({ slot: "panel.tab.files", extensionId: "file-workspace", code: "c" });
+		expect(selectPanelTabComponent([files], "files")).toBe(files);
+		expect(selectPanelTabComponent([files], "ext:panel.tab.files")).toBeUndefined();
+	});
+});
+
+describe("selectLaunchablePanelTabs", () => {
+	it("keeps the reserved file slot out of the generic extension launcher", () => {
+		const files = comp({ slot: "panel.tab.files", extensionId: "file-workspace", code: "c" });
+		const tool = comp({ slot: "panel.tab.tool", extensionId: "tool", code: "c" });
+		expect(selectLaunchablePanelTabs([files, tool])).toEqual([tool]);
+		expect(selectPanelTabComponent([files, tool], "files")).toBe(files);
 	});
 });

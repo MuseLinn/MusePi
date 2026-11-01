@@ -28,36 +28,50 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { owningArtifact, useArtifactIndex } from "../lib/artifact-index";
-// Import order below is alphabetical by module path (biome).
-import { type BuiltinViewerDeps, builtinFileViewers } from "../lib/builtin-file-viewers";
-import type { EditorLocation } from "../lib/editor-navigation";
-import { listFileViewers, orderViewers, renderWithViewerList } from "../lib/file-viewers";
+import { dismissActionToastSource, pushActionToast } from "../../lib/action-toast";
+import { owningArtifact, useArtifactIndex } from "../../lib/artifact-index";
+import { type BuiltinViewerDeps, builtinFileViewers } from "../../lib/builtin-file-viewers";
+import type { EditorLocation } from "../../lib/editor-navigation";
+import { listFileViewers, orderViewers, renderWithViewerList } from "../../lib/file-viewers";
+import {
+	filePreviewPathEquals,
+	filePreviewWorkspacePath,
+	type FilePreviewBufferStore,
+	resolveFilePreviewPath,
+	type WorkspaceEntry,
+} from "../../lib/file-workspace";
 import {
 	onGitPrefsChanged,
 	readShowHidden,
 	readShowIgnored,
 	writeShowHidden,
 	writeShowIgnored,
-} from "../lib/git-prefs";
-import { useChatHighlight } from "../lib/highlight";
-import { downloadMarkdownDocx } from "../lib/markdown-docx";
-import type { MonacoPeekBuffer } from "../lib/monaco-lsp";
-import { previewMappingFor } from "../lib/preview-from-viewer";
-import { useConfirm } from "../lib/prompt-dialog";
-import type { RpcClient } from "../lib/rpc";
-import { captureSelectionContext } from "../lib/selection-capture";
-import { Icon } from "../vendor/oc-icons";
-import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-import { FileCodeEditor, type FileEditorSelection } from "./FileCodeEditor";
-import { FileDirectoryMenu } from "./FileDirectoryMenu";
-import { FileMarkdownEditor, hasYamlFrontMatter, type FileMarkdownEditorHandle } from "./FileMarkdownEditor";
-import type { PdfEditorSelection } from "./FilePdfPreview";
-import { FileOpenWith } from "./FileOpenWith";
-import { ImagePreview } from "./FilePaneImagePreview";
-import { useMarkdownFileNavigation } from "./FilePaneMarkdownNav";
-import { FontPreview, MediaPreview, MermaidPreview } from "./FilePanePreviews";
-import { SelectionToolbar } from "./SelectionToolbar";
+} from "../../lib/git-prefs";
+import { useChatHighlight } from "../../lib/highlight";
+import { downloadMarkdownDocx } from "../../lib/markdown-docx";
+import { type MonacoPeekBuffer, revealEditorLocation } from "../../lib/monaco-lsp";
+import { previewMappingFor } from "../../lib/preview-from-viewer";
+import { useConfirm } from "../../lib/prompt-dialog";
+import type { RpcClient } from "../../lib/rpc";
+import { captureSelectionContext } from "../../lib/selection-capture";
+import { Icon } from "../../vendor/oc-icons";
+import { ContextMenu, type ContextMenuItem } from "../../components/ContextMenu";
+import { FileCodeEditor, type FileEditorSelection } from "../../components/FileCodeEditor";
+import { FileDirectoryMenu } from "../../components/FileDirectoryMenu";
+import {
+	FileMarkdownEditor,
+	hasYamlFrontMatter,
+	type FileMarkdownEditorHandle,
+} from "../../components/FileMarkdownEditor";
+import { FileOpenWith } from "../../components/FileOpenWith";
+import { ImagePreview } from "../../components/FilePaneImagePreview";
+import { useMarkdownFileNavigation } from "../../components/FilePaneMarkdownNav";
+import { FontPreview, MediaPreview, MermaidPreview } from "../../components/FilePanePreviews";
+import type { PdfEditorSelection } from "../../components/FilePdfPreview";
+import { SelectionToolbar } from "../../components/SelectionToolbar";
+
+export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath };
+export type { WorkspaceEntry };
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
 const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
@@ -73,102 +87,35 @@ const HTML_VIEW_SEGMENTS: SegmentedOption<"live" | "source">[] = [
 
 /** The PDFium reader is a real split point: ordinary text and image files do
  * not pay for its engine or plugin graph. */
-const FilePdfPreview = lazy(() => import("./FilePdfPreview"));
-
-/**
- * Workspace file pane: the daemon's structured workspace.tree scan rendered
- * as an expandable, searchable, virtualized directory browser with inline
- * preview (markdown renders through the shared Markdown component, code
- * files highlight via the tree-sitter bridge, images/PDFs inline) and a
- * right-click menu (preview / open / copy path / new file / new folder /
- * rename / delete-with-confirm / refresh). Writes go through the
- * cwd-scoped fs.* RPCs (fs-ops.ts rejects `..` escapes).
- */
-export interface WorkspaceEntry {
-	name: string;
-	path: string;
-	isDir: boolean;
-	size: number;
-	mtime: number;
-	depth: number;
-}
+const FilePdfPreview = lazy(() => import("../../components/FilePdfPreview"));
 
 interface PreviewState {
 	path: string;
 	name: string;
 	size: number;
-	/** text preview content */
 	text?: string;
-	/** decoded source kept for the inline editor (same bytes as text/htmlLive) */
 	raw?: string;
-	/** highlighted text preview (tree-sitter spans) */
 	html?: string;
-	/** live-rendered HTML page (.html previews render) */
 	htmlLive?: string;
-	/** blob URL for image preview */
 	imageUrl?: string;
-	/** Original PDF bytes; the lazy reader renders only visible pages. */
 	pdfBytes?: ArrayBuffer;
-	/** docx bytes for the docx-preview renderer */
 	docxBytes?: ArrayBuffer;
-	/** xlsx/xls/csv sheets rendered to standalone HTML tables. Readonly: the
-	 *  sheet builder's output is handed to the pane to render, never edited. */
 	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
-	/** an audio/video file, played by the browser's own media element */
 	media?: { kind: "audio" | "video"; url: string };
-	/** a font file, shown as a type specimen */
 	fontUrl?: string;
-	/** a Mermaid diagram source, rendered by the transcript's diagram renderer */
 	mermaidSource?: string;
 	error?: string;
-	/** preview shown but content opens externally (unsupported binaries) */
 	external?: boolean;
-	/** The workspace artifact this file belongs to, when its directory carries
-	 *  a valid `artifact.manifest.json` (M3-3.4). Undefined for plain files —
-	 *  most of the tree is not an artifact, and the badge's absence is the
-	 *  ordinary case. */
 	artifact?: { kind: string; renderer: string; exports?: string[]; errors?: string[] };
 }
 
-/** sheet_to_html truncation point per sheet (parse-time sheetRows cap). */
 const OFFICE_SHEET_ROWS = 1000;
-
-/** Fixed virtual-row height (px); keep in sync with .gui-filepane-vrow CSS. */
 const ROW_H = 26;
 const ROW_BUFFER = 6;
-
-interface FilePreviewBuffer {
-	text: string;
-	saved: string;
-}
-
-/** Monaco and file tabs can spell the same Windows path with different slash
- * directions and drive-letter casing. Cache identity must not depend on either. */
-function filePreviewBufferKey(path: string): string {
-	const normalized = path.replace(/\\/g, "/");
-	return /^[A-Za-z]:\//.test(normalized) ? `${normalized.charAt(0).toLowerCase()}${normalized.slice(1)}` : normalized;
-}
-
-/** Module scope preserves dirty text while an inactive tab's pane is unmounted.
- * Only unsaved text is retained; saving or restoring the saved text drops it. */
-const unsavedBuffers = new Map<string, FilePreviewBuffer>();
-const unsavedBufferCache = {
-	get(path: string): FilePreviewBuffer | undefined {
-		return unsavedBuffers.get(filePreviewBufferKey(path));
-	},
-	set(path: string, buffer: FilePreviewBuffer): void {
-		unsavedBuffers.set(filePreviewBufferKey(path), buffer);
-	},
-	delete(path: string): void {
-		unsavedBuffers.delete(filePreviewBufferKey(path));
-	},
-};
 
 interface TreeNode {
 	entry: WorkspaceEntry;
 	children: TreeNode[];
-	/** Display label — "a/b" when a single-child dir chain is compressed
-	 *  (VS Code path-compression). */
 	label: string;
 }
 
@@ -184,10 +131,7 @@ interface MenuState {
 	confirmDelete?: boolean;
 }
 
-/** Build the tree from the flat scan: dirs first (parents before children —
- *  listWorkspace is depth-first), then files attached to their parent dir.
- *  A truncated or filtered scan can omit a parent; its descendants stay hidden
- *  instead of becoming misleading root entries. */
+/** Build the tree from the flat scan without promoting orphaned descendants. */
 export function buildTree(entries: WorkspaceEntry[], browseRoot = ""): TreeNode[] {
 	const seen = new Set<string>();
 	const unique = entries.filter(entry => {
@@ -199,9 +143,7 @@ export function buildTree(entries: WorkspaceEntry[], browseRoot = ""): TreeNode[
 	const files = unique.filter(e => !e.isDir);
 	const byPath = new Map<string, TreeNode>();
 	const roots: TreeNode[] = [];
-	for (const e of dirs) {
-		byPath.set(e.path, { entry: e, children: [], label: e.name });
-	}
+	for (const e of dirs) byPath.set(e.path, { entry: e, children: [], label: e.name });
 	for (const e of dirs) {
 		const node = byPath.get(e.path)!;
 		const slash = e.path.lastIndexOf("/");
@@ -227,62 +169,8 @@ function matchesQuery(entry: WorkspaceEntry, query: string): boolean {
 	return entry.name.toLowerCase().includes(q) || entry.path.toLowerCase().includes(q);
 }
 
-/** A minimal entry for a tab whose file is not in the current scan — restored
- *  from a previous session, hidden by the gitignored filter, or deleted.
- *  openPreview only needs path/name/isDir to fetch content; the scan-derived
- *  fields are zeroed and never rendered for this path. */
 function syntheticEntry(path: string): WorkspaceEntry {
 	return { path, name: path.split(/[\\/]/).pop() ?? path, isDir: false, size: 0, mtime: 0, depth: 0 };
-}
-
-/** Resolve tree-relative paths without treating Windows or UNC absolute paths
- *  as workspace children. Preview state and the unsaved cache use this form. */
-export function resolveFilePreviewPath(cwd: string, path: string): string {
-	if (path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)) return path;
-	return `${cwd.replace(/[\\/]+$/, "")}/${path}`;
-}
-
-/** fs.write accepts workspace-relative paths only. Monaco normalizes Windows
- *  paths to lowercase drive letters and backslashes, so compare Windows roots
- *  case-insensitively and return slash-separated paths to the daemon. Paths
- *  outside the workspace stay absolute and are rejected by the file service. */
-export function filePreviewWorkspacePath(cwd: string, path: string): string {
-	const root = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
-	const candidate = path.replace(/\\/g, "/");
-	const prefix = `${root}/`;
-	const windows = /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\");
-	const inside = windows ? candidate.toLowerCase().startsWith(prefix.toLowerCase()) : candidate.startsWith(prefix);
-	return inside ? candidate.slice(prefix.length) : path;
-}
-
-/** Compare canonical workspace-relative paths, including Windows drive case. */
-export function filePreviewPathEquals(cwd: string, left: string, right: string): boolean {
-	const a = filePreviewWorkspacePath(cwd, left);
-	const b = filePreviewWorkspacePath(cwd, right);
-	const windows = /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\");
-	return windows ? a.toLowerCase() === b.toLowerCase() : a === b;
-}
-
-/** Accepted close operations must survive the pane's unmount cleanup, which
- * otherwise writes the dirty buffer straight back into the cache. */
-const discardedBufferPaths = new Set<string>();
-
-export function discardFilePreviewBuffer(cwd: string, path: string): void {
-	const absolute = resolveFilePreviewPath(cwd, path);
-	unsavedBufferCache.delete(absolute);
-	discardedBufferPaths.add(filePreviewBufferKey(absolute));
-}
-
-/** Stash a dirty buffer for a deactivation, but never for an accepted close. */
-export function stashFilePreviewBuffer(path: string, buffer: FilePreviewBuffer): void {
-	if (buffer.text !== buffer.saved && !discardedBufferPaths.has(filePreviewBufferKey(path)))
-		unsavedBufferCache.set(path, buffer);
-}
-
-/** Restore a deactivated buffer. A deliberate reopen starts a new close cycle. */
-export function restoreFilePreviewBuffer(path: string): FilePreviewBuffer | null {
-	discardedBufferPaths.delete(filePreviewBufferKey(path));
-	return unsavedBufferCache.get(path) ?? null;
 }
 
 /** Flatten visible rows honoring collapse state + search query. In query
@@ -398,6 +286,7 @@ function editingIndex(rows: Array<{ node: TreeNode; depth: number }>, editing: E
 export function FilePane({
 	rpc,
 	cwd,
+	bufferStore,
 	openRequest = null,
 	activeFile = null,
 	browseRoot = null,
@@ -414,9 +303,18 @@ export function FilePane({
 }: {
 	rpc: RpcClient;
 	cwd: string;
+	bufferStore: FilePreviewBufferStore;
 	/** External reveal (artifact cards / transcript paths): preview this
 	 *  path via the same pipeline as a tree click. */
-	openRequest?: { path: string; nonce: number; pdf?: PdfEditorSelection["anchor"]; quote?: string } | null;
+	openRequest?: {
+		path: string;
+		nonce: number;
+		pdf?: PdfEditorSelection["anchor"];
+		quote?: string;
+		line?: number;
+		column?: number;
+		pin?: boolean;
+	} | null;
 	/** Tab-primary model (docs §3.3.2): file instances live in the PANEL
 	 *  strip. The pane loads whatever file tab the panel activated. */
 	activeFile?: string | null;
@@ -444,6 +342,10 @@ export function FilePane({
 	onEditorNavigate?(source: EditorLocation, target: EditorLocation): void;
 	onEditorPositionChange?(location: EditorLocation): void;
 }): ReactNode {
+	// Keep the existing editor code on one injected, host-owned draft lifecycle.
+	const unsavedBufferCache = bufferStore;
+	const stashFilePreviewBuffer = bufferStore.stash;
+	const restoreFilePreviewBuffer = bufferStore.restore;
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -778,7 +680,7 @@ export function FilePane({
 			if (onOpenFile) {
 				setSelectedPath(entry.path);
 				const absolute = resolveFilePreviewPath(cwd, entry.path);
-				if (opts?.newTab && preview && filePreviewBufferKey(preview.path) === filePreviewBufferKey(absolute)) return;
+				if (opts?.newTab && preview && filePreviewPathEquals(cwd, preview.path, absolute)) return;
 				onOpenFile(entry.path, entry.name, { pin: opts?.pin ?? false, newTab: opts?.newTab ?? false });
 				return;
 			}
@@ -827,6 +729,39 @@ export function FilePane({
 		// openPreview is stable for the lifetime of one file request.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [openRequest, onOpenFile, cwd]);
+
+	// Line-based reveals wait for the same edit buffer that Monaco will mount.
+	// Visual Markdown first returns to source mode; the next effect pass reveals
+	// after FileCodeEditor has registered the resource and consumed its content.
+	const revealedLineRequestRef = useRef(0);
+	useEffect(() => {
+		const line = openRequest?.line;
+		if (
+			!openRequest ||
+			line === undefined ||
+			!Number.isInteger(line) ||
+			line <= 0 ||
+			revealedLineRequestRef.current === openRequest.nonce ||
+			!preview ||
+			!edit ||
+			!filePreviewPathEquals(cwd, preview.path, openRequest.path)
+		) {
+			return;
+		}
+		if (extOf(preview.name) === "md" && mdRender) {
+			const latest = markdownEditorRef.current?.getMarkdown();
+			if (latest != null) updateEditText(latest);
+			setMdRender(false);
+			setFileSelection(null);
+			return;
+		}
+		revealedLineRequestRef.current = openRequest.nonce;
+		revealEditorLocation({
+			path: preview.path,
+			lineNumber: line,
+			column: openRequest.column ?? 1,
+		});
+	}, [openRequest, preview, edit, cwd, mdRender]);
 
 	// A markdown FILE preview's relative links open the target here; the
 	// hook takes the previewed file's workspace-relative path so the link
@@ -929,6 +864,22 @@ export function FilePane({
 		}
 	}, [ctx, rpc, cwd, load]);
 
+	const reportSaveError = useCallback((path: string, reason: unknown): void => {
+		const details = reason instanceof Error ? reason.message : String(reason);
+		setError(details);
+		pushActionToast({
+			kind: "error",
+			title: t("tools.extConfigSaveFailed"),
+			message: path,
+			details,
+			dedupeKey: `file:save:${path}`,
+		});
+	}, []);
+	const clearSaveError = useCallback((path: string): void => {
+		setError(null);
+		dismissActionToastSource(`file:save:${path}`);
+	}, []);
+
 	/** Persist the edited buffer. Monaco supplies its current model text for
 	 *  Ctrl+S so a pending React render cannot omit the last edit. The saved
 	 *  marker uses that same snapshot; newer typing during fs.write stays dirty. */
@@ -947,6 +898,7 @@ export function FilePane({
 				if (!result.ok) throw new Error(result.error ?? "File save failed");
 				setEdit(cur => (cur ? { ...cur, saved: text } : cur));
 				unsavedBufferCache.delete(preview.path);
+				clearSaveError(preview.path);
 				// Disk save is authoritative. A missing or slow language server must
 				// not turn a successful write into a visible save failure.
 				void rpc
@@ -954,12 +906,12 @@ export function FilePane({
 					.catch(() => {});
 				await load();
 			} catch (err) {
-				setError(err instanceof Error ? err.message : String(err));
+				reportSaveError(preview.path, err);
 			} finally {
 				setSaving(false);
 			}
 		},
-		[edit, preview, cwd, rpc, load, saving],
+		[edit, preview, cwd, rpc, load, saving, clearSaveError, reportSaveError],
 	);
 
 	const loadPeekFile = useCallback(
@@ -1006,17 +958,18 @@ export function FilePane({
 				if (!result.ok) throw new Error(result.error ?? "File save failed");
 				if (previewPathRef.current === absolute)
 					setEdit(current => (current ? { ...current, saved: text } : current));
+				clearSaveError(absolute);
 				void rpc
 					.request("editor.saved", { cwd, path: absolute, content: text }, { timeoutMs: 12_000 })
 					.catch(() => {});
 				await load();
 				return true;
 			} catch (reason) {
-				setError(reason instanceof Error ? reason.message : String(reason));
+				reportSaveError(absolute, reason);
 				return false;
 			}
 		},
-		[cwd, rpc, load],
+		[cwd, rpc, load, clearSaveError, reportSaveError],
 	);
 
 	const exportWord = useCallback(async (): Promise<void> => {

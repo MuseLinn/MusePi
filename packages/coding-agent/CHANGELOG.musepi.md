@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Changed
+- **文件工作区迁移为可启停的 Cordis 插件**：文件树、Monaco、Markdown、PDF、文档预览与引用界面由 `file-workspace` 插件统一提供，并沿用现有文件标签布局。宿主继续唯一管理标签、未保存草稿、定位请求和编辑历史；停用插件会移除文件入口，确认关闭后不会恢复已丢弃草稿。
+  - EN: The file workspace is now an enableable Cordis plugin. The file-workspace plugin provides the tree, Monaco, Markdown, PDF, document previews, and reference UI while preserving existing file-tab layouts. The host remains the sole owner of tabs, unsaved drafts, reveal requests, and editor history; disabling the plugin removes file entries, and confirmed close never restores discarded drafts.
 - **球体桌宠拖拽改为连续矢量表演**：球体不再套用 Petdex 的行走帧、左右镜像或额外弹跳；拖动速度会形成连续倾斜与拉伸，释放后带阻尼落地，并与会话动作、交互动效和眼动自然组合。
   - EN: The orb desktop pet now uses continuous vector gestures while dragging. It no longer inherits Petdex walk rows, horizontal mirroring, or an extra bounce; pointer velocity produces smooth tilt and stretch, release settles with a damped landing, and these gestures compose with session motion, interaction reactions, and gaze.
 - **桌宠会话气泡支持展开、收起和独立打开**：气泡统一为 20px 圆角；点击折叠卡片正文展开列表，点击展开卡片正文收起，↗ 只负责打开会话；回复、审批和关闭等按钮不再误触正文操作。

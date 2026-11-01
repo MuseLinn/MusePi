@@ -1,17 +1,17 @@
 import "./happy-dom-shim";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
-	buildTree,
 	discardFilePreviewBuffer,
-	FilePane,
+	filePreviewBuffers,
 	filePreviewPathEquals,
 	filePreviewWorkspacePath,
 	restoreFilePreviewBuffer,
 	stashFilePreviewBuffer,
-	type WorkspaceEntry,
-} from "../src/components/FilePane";
+} from "../src/lib/file-workspace";
+import * as monacoLsp from "../src/lib/monaco-lsp";
+import { buildTree, FilePane, type WorkspaceEntry } from "../src/plugins/file-workspace/FilePane";
 import type { RpcClient } from "../src/lib/rpc";
 
 const mounted = new Set<Root>();
@@ -39,6 +39,7 @@ afterEach(async () => {
 	for (const root of mounted) await act(async () => root.unmount());
 	mounted.clear();
 	document.body.innerHTML = "";
+	vi.restoreAllMocks();
 });
 
 describe("FilePane tree assembly", () => {
@@ -104,7 +105,7 @@ describe("FilePane panel tab opening", () => {
 		const root = createRoot(container);
 		mounted.add(root);
 		const pane = (activeFile: string | null) => (
-			<FilePane
+			<FilePane bufferStore={filePreviewBuffers}
 				key={activeFile ?? "tree"}
 				rpc={rpc}
 				cwd="/workspace"
@@ -153,7 +154,7 @@ describe("FilePane panel tab opening", () => {
 		mounted.add(root);
 		await act(async () =>
 			root.render(
-				<FilePane
+				<FilePane bufferStore={filePreviewBuffers}
 					rpc={rpc}
 					cwd="/workspace"
 					activeFile="a.txt"
@@ -197,7 +198,7 @@ describe("FilePane panel tab opening", () => {
 			document.body.appendChild(container);
 			const root = createRoot(container);
 			mounted.add(root);
-			await act(async () => root.render(<FilePane rpc={rpc} cwd="D:/workspace" openRequest={{ path, nonce: 1 }} />));
+			await act(async () => root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="D:/workspace" openRequest={{ path, nonce: 1 }} />));
 			await waitFor(() => reads.length === 1);
 			expect(reads).toEqual([path]);
 			await act(async () => root.unmount());
@@ -223,7 +224,7 @@ describe("FilePane panel tab opening", () => {
 		document.body.appendChild(container);
 		const root = createRoot(container);
 		mounted.add(root);
-		await act(async () => root.render(<FilePane rpc={rpc} cwd="/workspace" activeFile="large.pdf" />));
+		await act(async () => root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="/workspace" activeFile="large.pdf" />));
 		await waitFor(() => maxBytes !== undefined);
 		expect(maxBytes).toBe(32 * 1024 * 1024);
 	});
@@ -241,10 +242,41 @@ describe("FilePane panel tab opening", () => {
 		document.body.appendChild(container);
 		const root = createRoot(container);
 		mounted.add(root);
-		await act(async () => root.render(<FilePane rpc={rpc} cwd="/workspace" activeFile="a.txt" />));
+		await act(async () => root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="/workspace" activeFile="a.txt" />));
 		await waitFor(() => container.querySelector(".gui-filepane-editor") !== null);
 		expect(container.querySelector(".gui-filepane-preview-text")).toBeNull();
 		expect(container.querySelector(".gui-filepane-editor-bar")).toBeNull();
+	});
+
+	it("reveals an external line request once after the editor buffer is ready", async () => {
+		const reveal = vi.spyOn(monacoLsp, "revealEditorLocation").mockImplementation(() => {});
+		const rpc = {
+			request: async (method: string) => {
+				if (method === "workspace.tree") return { entries: [] };
+				if (method === "fs.readBytes") {
+					return textResponse("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve");
+				}
+				return null;
+			},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		mounted.add(root);
+		const openRequest = { path: "a.txt", nonce: 1, line: 12, column: 3, pin: true };
+		await act(async () =>
+			root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="/workspace" activeFile="a.txt" openRequest={openRequest} />),
+		);
+		await waitFor(() => reveal.mock.calls.length === 1);
+		expect(reveal).toHaveBeenCalledWith({ path: "/workspace/a.txt", lineNumber: 12, column: 3 });
+
+		await act(async () =>
+			root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="/workspace" activeFile="a.txt" openRequest={openRequest} />),
+		);
+		await settle();
+		expect(reveal).toHaveBeenCalledTimes(1);
+		reveal.mockRestore();
 	});
 
 	it("ignores a slow previous file response after the active tab changes", async () => {
@@ -266,7 +298,7 @@ describe("FilePane panel tab opening", () => {
 		document.body.appendChild(container);
 		const root = createRoot(container);
 		mounted.add(root);
-		const pane = (activeFile: string) => <FilePane rpc={rpc} cwd="/workspace" activeFile={activeFile} />;
+		const pane = (activeFile: string) => <FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="/workspace" activeFile={activeFile} />;
 		await act(async () => root.render(pane("a.txt")));
 		await waitFor(() => pending.has("/workspace/a.txt"));
 		await act(async () => root.render(pane("b.txt")));
@@ -302,7 +334,7 @@ describe("FilePane panel tab opening", () => {
 		mounted.add(root);
 		await act(async () =>
 			root.render(
-				<FilePane
+				<FilePane bufferStore={filePreviewBuffers}
 					rpc={rpc}
 					cwd="/workspace"
 					activeFile="docs/a.txt"
@@ -339,7 +371,7 @@ describe("FilePane panel tab opening", () => {
 		mounted.add(root);
 		await act(async () =>
 			root.render(
-				<FilePane
+				<FilePane bufferStore={filePreviewBuffers}
 					rpc={rpc}
 					cwd="/workspace"
 					activeFile="a.txt"
@@ -372,7 +404,7 @@ describe("FilePane panel tab opening", () => {
 		mounted.add(root);
 		await act(async () =>
 			root.render(
-				<FilePane
+				<FilePane bufferStore={filePreviewBuffers}
 					rpc={rpc}
 					cwd="/workspace"
 					activeFile="a.txt"
@@ -393,7 +425,7 @@ describe("FilePane panel tab opening", () => {
 		expect(calls).toEqual(["back", "forward"]);
 
 		await act(async () =>
-			root.render(<FilePane rpc={rpc} cwd="/workspace" activeFile="a.txt" canNavigateBack={false} />),
+			root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd="/workspace" activeFile="a.txt" canNavigateBack={false} />),
 		);
 		expect(container.querySelector<HTMLButtonElement>(".gui-filepane-history-back")?.disabled).toBe(true);
 		expect(container.querySelector<HTMLButtonElement>(".gui-filepane-history-forward")?.disabled).toBe(true);

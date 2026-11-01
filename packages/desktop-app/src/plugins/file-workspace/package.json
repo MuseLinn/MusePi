@@ -1,0 +1,12 @@
+{
+	"name": "musepi-file-workspace",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned workspace tree, editors, viewers, and file references.",
+	"type": "module",
+	"musepi": {
+		"icon": "▤",
+		"description": "浏览、编辑和引用工作区文件，支持 Monaco、Markdown、PDF 与常见文档预览。",
+		"extensions": ["./index.ts"]
+	}
+}

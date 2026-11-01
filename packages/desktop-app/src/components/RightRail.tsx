@@ -11,8 +11,9 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
-import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
+import { RIGHT_RAIL_SLOT, SlotComponentHost, selectLaunchablePanelTabs, selectPanelTabComponent } from "../lib/slot-host";
 import {
 	readHiddenSurfaces,
 	readSurfaceOrder,
@@ -108,36 +109,39 @@ export function RightRail({
 		});
 	}, []);
 
+	const fileWorkspaceAvailable = selectPanelTabComponent(extTabs, FILE_WORKSPACE_SURFACE) !== undefined;
 	// 注册表顺序 → 渲染项（过滤隐藏与 has-content 不可见；未知/扩展追加在尾）
 	const items = useMemo(() => {
 		const ordered: Array<{ id: string; s: import("../lib/surfaces/registry").SurfaceDescriptor }> = [];
 		for (const id of order) {
 			const s = surfaceById(id);
-			if (!s) continue;
+			if (!s || (id === FILE_WORKSPACE_SURFACE && !fileWorkspaceAvailable)) continue;
 			if (hiddenSet.has(id)) continue;
 			if (!surfaceVisible(s, ctx)) continue;
 			ordered.push({ id, s });
 		}
-		// Registry ids absent from a stale stored order still ship (the rail
-		// grew from tools-only to the full nav axis).
 		for (const s of SURFACES) {
+			if (s.id === FILE_WORKSPACE_SURFACE && !fileWorkspaceAvailable) continue;
 			if (!order.includes(s.id) && !hiddenSet.has(s.id) && surfaceVisible(s, ctx)) {
 				ordered.push({ id: s.id, s });
 			}
 		}
 		return ordered;
-	}, [order, hiddenSet, ctx]);
+	}, [order, hiddenSet, ctx, fileWorkspaceAvailable]);
 	const hiddenItems = useMemo(() => {
 		const out: Array<{ id: string; s: SurfaceDescriptor }> = [];
 		for (const id of hidden) {
 			const s = surfaceById(id);
-			if (s) out.push({ id, s });
+			if (s && (id !== FILE_WORKSPACE_SURFACE || fileWorkspaceAvailable)) out.push({ id, s });
 		}
 		return out;
-	}, [hidden]);
+	}, [hidden, fileWorkspaceAvailable]);
 
-	// Extension tabs render as primary items after the built-ins.
-	const extItems = useMemo(() => extTabs.map(item => ({ id: `ext:${item.slot}`, item })), [extTabs]);
+	// The file workspace owns the persistent Files rail entry, not a second launcher.
+	const extItems = useMemo(
+		() => selectLaunchablePanelTabs(extTabs).map(item => ({ id: `ext:${item.slot}`, item })),
+		[extTabs],
+	);
 
 	// primary → rail 图标；secondary → 折叠菜单
 	const primaryItems = useMemo(() => items.filter(({ s }) => s.group === "primary"), [items]);

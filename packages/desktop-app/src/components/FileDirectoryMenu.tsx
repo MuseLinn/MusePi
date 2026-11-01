@@ -2,10 +2,10 @@ import { t } from "@musepi/client-core";
 import { FileText, Folder, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import type { WorkspaceEntry } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { FadeScroll } from "./FadeScroll";
-import type { WorkspaceEntry } from "./FilePane";
 
 /** A searchable, non-modal directory menu anchored to its breadcrumb segment.
  * Directories navigate in place; files open a tab and dismiss the menu. */

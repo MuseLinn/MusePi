@@ -644,8 +644,8 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
   - 终端 dock：首次打开即挂载、永不卸载（`ChatView`——折叠是高度归零，pty + 回滚在会话切换后存活）。
   - 浏览器：`<webview>` guest 常驻 `ManagedBrowserHost`，面板只是槽位矩形，面板关闭不丢导航/会话。
   - 设置页往返：chat 列 + 侧栏 `display:none` 常驻，回来状态全在（见 §1 settings-shell 条目）。
-  - 编辑器未存文本：`FilePane` 模块级 `unsavedBufferCache`（绝对路径键；保存/改回 saved 即删条目）——
-    此前的实例级 ref 随 pane 卸载一起死，files→他表面→files 会丢未存文本。
+  - 编辑器未存文本：宿主 `lib/file-workspace.ts` 的 `filePreviewBuffers`（绝对路径键；保存/改回 saved 即删条目）
+    在 files→他表面→files 导致文件插件卸载后仍保留草稿。Cordis 插件只消费这份存储，不建立第二个草稿所有者。
     Monaco 只拥有编辑视图，不拥有文件缓冲：编辑器修改更新 `edit.text`，但 React 不得把任何值回写到已挂载的 model，
     从而保留光标、选区、撤销历史和 IME 组合输入。切换到其他路径时通过重挂编辑器创建新文档。
     初始 CRLF 和末尾换行保持不变。纯文件树标签选中首个文件后直接成为该文件页；文件页展开的非模态树再选其他文件时

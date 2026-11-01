@@ -1,7 +1,7 @@
 import "./dom-shim";
 import { describe, expect, test } from "bun:test";
 import * as XLSX from "xlsx";
-import { buildSheetModels } from "../src/components/FilePane";
+import { buildSheetModels } from "../src/plugins/file-workspace/FilePane";
 
 /** Spreadsheet preview contract: the file pane turns a workbook into escaped
  *  HTML tables, caps huge sheets, and yields to the OS app when the bytes are

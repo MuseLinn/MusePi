@@ -31,10 +31,16 @@ import {
 	pushEditorHistory,
 	updateEditorHistoryCurrent,
 } from "../lib/editor-navigation";
-import { isElectron, openExternalUrl, pickDirectory } from "../lib/electron";
+import { isElectron, openExternalUrl } from "../lib/electron";
+import {
+	discardFilePreviewBuffer,
+	FILE_WORKSPACE_SURFACE,
+	filePreviewBuffers,
+	filePreviewWorkspacePath,
+	type FileWorkspaceHost,
+} from "../lib/file-workspace";
 import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
-import { revealEditorLocation } from "../lib/monaco-lsp";
 import { type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -49,7 +55,6 @@ import { Icon, type IconName } from "../vendor/oc-icons";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ContextMenu } from "./ContextMenu";
 import { FadeScroll } from "./FadeScroll";
-import { discardFilePreviewBuffer, FilePane, filePreviewPathEquals, filePreviewWorkspacePath } from "./FilePane";
 import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
@@ -83,24 +88,6 @@ declare global {
  *  terminal lives in the bottom dock now, not here.) Exported so the
  *  right-edge rail (RightRail) renders the same icon set. */
 
-/**
- * Workspace-relative form of an absolute path, or `null` when it sits outside
- * the workspace.
- *
- * The Files add-picker receives an absolute path from a native dialog, and the
- * tab it opens carries a workspace-relative target like every other one. A
- * directory outside the workspace has no such form, and the daemon would scan
- * nothing for it — so it is refused here rather than opened as an empty tab.
- */
-function cwdRelative(cwd: string, absolute: string): string | null {
-	const slash = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
-	const norm = absolute.replace(/\\/g, "/");
-	if (norm === slash) return null;
-	const prefix = `${slash}/`;
-	if (!norm.startsWith(prefix)) return null;
-	const rel = norm.slice(prefix.length);
-	return rel === "" ? null : rel;
-}
 function fmtTokens(n: number): string {
 	if (!Number.isFinite(n)) return "0";
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -189,7 +176,15 @@ export function ContextPanel({
 	open?: boolean;
 	/** External reveal request (artifact cards / transcript paths):
 	 *  switches to the files tab and previews the path. */
-	openRequest?: { path: string; nonce: number; pdf?: PdfQuoteAnchor; quote?: string } | null;
+	openRequest?: {
+		path: string;
+		nonce: number;
+		pdf?: PdfQuoteAnchor;
+		quote?: string;
+		line?: number;
+		column?: number;
+		pin?: boolean;
+	} | null;
 	/** External browser reveal (chat link click / agent browser.open):
 	 *  switches to the browser tool and navigates the active tab. */
 	browserOpenRequest?: { url: string; nonce: number } | null;
@@ -386,13 +381,17 @@ export function ContextPanel({
 	const revealedNonceRef = useRef({ file: 0, browser: 0 });
 	useEffect(() => {
 		if (!openRequest || openRequest.nonce === revealedNonceRef.current.file) return;
+		if (!selectPanelTabComponent(extTabs, FILE_WORKSPACE_SURFACE)) return;
 		revealedNonceRef.current.file = openRequest.nonce;
-		onViewChange("files");
+		onViewChange(FILE_WORKSPACE_SURFACE);
 		const name = openRequest.path.split(/[\\/]/).pop() || openRequest.path;
-		// Register the real file tab here. Tree and file panes no longer both
-		// consume the same request, so an external reveal loads exactly once.
-		panelTabs.open({ surface: "files", target: openRequest.path, label: name, preview: true });
-	}, [openRequest, onViewChange, panelTabs.open]);
+		panelTabs.open({
+			surface: FILE_WORKSPACE_SURFACE,
+			target: openRequest.path,
+			label: name,
+			preview: openRequest.pin !== true,
+		});
+	}, [openRequest, onViewChange, panelTabs.open, extTabs]);
 
 	const syncEditorHistoryAvailability = useCallback((): void => {
 		setEditorHistoryAvailability({
@@ -433,26 +432,23 @@ export function ContextPanel({
 			editorLocationRef.current = target;
 			syncEditorHistoryAvailability();
 			if (source.path !== target.path) openEditorLocation(target, true);
-			revealEditorLocation(target);
 		},
 		[openEditorLocation, syncEditorHistoryAvailability],
 	);
 	const navigateEditorHistory = useCallback(
-		(direction: EditorHistoryDirection): void => {
+		(direction: EditorHistoryDirection): EditorLocation | null => {
 			const current = editorLocationRef.current;
 			if (current) editorHistoryRef.current = updateEditorHistoryCurrent(editorHistoryRef.current, current);
 			const result = moveEditorHistory(editorHistoryRef.current, direction);
-			if (!result) return;
+			if (!result) return null;
 			editorHistoryRef.current = result.history;
 			editorLocationRef.current = result.location;
 			syncEditorHistoryAvailability();
 			openEditorLocation(result.location, false);
-			revealEditorLocation(result.location);
+			return result.location;
 		},
 		[openEditorLocation, syncEditorHistoryAvailability],
 	);
-	const onEditorHistoryBack = useCallback(() => navigateEditorHistory("back"), [navigateEditorHistory]);
-	const onEditorHistoryForward = useCallback(() => navigateEditorHistory("forward"), [navigateEditorHistory]);
 
 	// Relay external browser reveals: switch to the browser view (the rail
 	// selects it; ManagedBrowserPane navigates on the nonce).
@@ -828,6 +824,36 @@ export function ContextPanel({
 		[panelTabs, confirm, cwd],
 	);
 
+	const fileWorkspace: FileWorkspaceHost = {
+		buffers: filePreviewBuffers,
+		openRequest,
+		openFile: (path, name, options) =>
+			panelTabs.open(
+				{
+					surface: FILE_WORKSPACE_SURFACE,
+					target: path,
+					label: name,
+					preview: !options.pin && !options.newTab,
+				},
+				{ forceNew: options.newTab === true },
+			),
+		setDirty: onFileDirty,
+		closeTab: id => void closeTabWithGuard(id),
+		onNewSession,
+		canNavigateBack: editorHistoryAvailability.back,
+		canNavigateForward: editorHistoryAvailability.forward,
+		navigateHistory: navigateEditorHistory,
+		onEditorNavigate,
+		onEditorPositionChange,
+	};
+	const fileWorkspaceComponent = selectPanelTabComponent(extTabs, FILE_WORKSPACE_SURFACE);
+	const primarySurfaces = SURFACES.filter(
+		surface =>
+			surface.group === "primary" &&
+			surface.availability === "always" &&
+			(surface.id !== FILE_WORKSPACE_SURFACE || fileWorkspaceComponent !== undefined),
+	);
+
 	// ── Split columns (dsh 0.2.0 two-column parity) ────────────────────
 	// One DndContext spans both column strips so a tab drags across
 	// columns; the drag-end routes same-column pairs to reorder and
@@ -960,43 +986,21 @@ export function ContextPanel({
 				{bodyView === "notes" ? (
 					<NotesPane rpc={rpc} cwd={cwd} showPlanRequest={planShowRequest} />
 				) : bodyView === "files" && cwd ? (
-					<FilePane
-						key={bodyTab?.id ?? "files"}
-						rpc={rpc}
-						cwd={cwd}
-						// File instances live in the PANEL strip (tab-primary):
-						// the pane loads whatever file tab is active and
-						// registers tree clicks back into the strip.
-						activeFile={bodyTab?.surface === "files" ? bodyTab.target : null}
-						openRequest={openRequest && bodyTab?.target && filePreviewPathEquals(cwd, openRequest.path, bodyTab.target) ? openRequest : null}
-						// M1.12 target picker: a directory tab browses that
-						// directory. A directory instance is opened through the
-						// add menu (which resolves the picked directory) and
-						// carries a dedupeKey; a file instance, opened by a tree
-						// click, does not. That makes the two distinguishable
-						// without stat-ing on every render.
-						browseRoot={bodyTab?.surface === "files" && bodyTab.dedupeKey !== null ? bodyTab.target : null}
-						onOpenFile={(path, name, options) =>
-							panelTabs.open(
-								{
-									surface: "files",
-									target: path,
-									label: name,
-									preview: !options.pin && !options.newTab,
-								},
-								{ forceNew: options.newTab === true },
-							)
-						}
-						onDirty={onFileDirty}
-						onClosePreview={bodyTab ? () => void closeTabWithGuard(bodyTab.id) : undefined}
-						onNewSession={onNewSession}
-						canNavigateBack={editorHistoryAvailability.back}
-						canNavigateForward={editorHistoryAvailability.forward}
-						onNavigateBack={onEditorHistoryBack}
-						onNavigateForward={onEditorHistoryForward}
-						onEditorNavigate={onEditorNavigate}
-						onEditorPositionChange={onEditorPositionChange}
-					/>
+					fileWorkspaceComponent ? (
+						<SlotComponentMount
+							item={fileWorkspaceComponent}
+							rpc={rpc}
+							sessionId={snap?.sessionId}
+							cwd={cwd}
+							panelTab={bodyTab ?? undefined}
+							fileWorkspace={fileWorkspace}
+						/>
+					) : (
+						<div className="gui-pane-tab-empty">
+							<span className="gui-pane-tab-empty-icon"><Icon name="folder" /></span>
+							<p className="gui-pane-tab-empty-title">{t("tools.bundlePluginDisabled")}</p>
+						</div>
+					)
 				) : bodyView === "artifacts" ? (
 					/* Artifacts panel (设计板 W3): artifact.manifest.json
 					 * sidecars discovered by the daemon, each card opening
@@ -1248,7 +1252,7 @@ export function ContextPanel({
 					open
 					x={addMenu.x}
 					y={addMenu.y}
-					items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(s => ({
+					items={primarySurfaces.map(s => ({
 						label: t(s.label as TranslationKey),
 						icon: s.icon as IconName,
 						onSelect: () => {
@@ -1257,26 +1261,8 @@ export function ContextPanel({
 								void createBrowserTab("about:blank").catch(() => {});
 								return;
 							}
-							if (s.id === "files") {
-								// M1.12 target picker: Files opens a chosen directory
-								// rather than a target-less placeholder — the picker is
-								// what turns "another Files" from a second copy of the
-								// whole tree into a second thing to look at.
-								const column = addMenu.column;
-								void pickDirectory().then(picked => {
-									if (!picked || !cwd) return;
-									const rel = cwdRelative(cwd, picked);
-									// A directory outside the workspace has no workspace-relative
-									// form, and the daemon would scan nothing for it.
-									if (rel === null) return;
-									const name = rel.split("/").filter(Boolean).at(-1) || t("settings.files");
-									panelTabs.open(
-										{ surface: "files", target: rel, label: name, dedupeKey: `dir:${rel}` },
-										{ column },
-									);
-								});
-								return;
-							}
+							// Files uses the in-app workspace tree. Selecting another
+							// file from that tab creates the file's own tab.
 							panelTabs.open({ surface: s.id }, { column: addMenu.column });
 						},
 					}))}
@@ -1478,7 +1464,7 @@ export function ContextPanel({
 									 * parity): the rail's primary surfaces as launchable entries. */
 									<PanelTabsEmptyState
 										heading={t("general.startHere")}
-										items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(
+										items={primarySurfaces.map(
 											s => ({
 												id: s.id,
 												label: t(s.label as TranslationKey),

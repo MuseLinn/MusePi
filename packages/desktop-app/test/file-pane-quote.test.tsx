@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it } from "bun:test";
 import type { DisplayContext } from "@musepi/pi-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { FilePane } from "../src/components/FilePane";
+import { filePreviewBuffers } from "../src/lib/file-workspace";
 import type { RpcClient } from "../src/lib/rpc";
+import { FilePane } from "../src/plugins/file-workspace/FilePane";
 
 // Files above the 2 MiB editing limit retain the DOM selection quote path.
 const source = "first\nconst answer = 42;\nlast\n".padEnd(2 * 1024 * 1024 + 1, " ");
@@ -46,7 +47,14 @@ describe("FilePane quote producer", () => {
 		const root = createRoot(container);
 		mounted.add(root);
 		await act(async () =>
-			root.render(<FilePane rpc={rpc} cwd="/workspace" openRequest={{ path: "src/example.ts", nonce: 1 }} />),
+			root.render(
+					<FilePane
+						rpc={rpc}
+						cwd="/workspace"
+						bufferStore={filePreviewBuffers}
+						openRequest={{ path: "src/example.ts", nonce: 1 }}
+					/>,
+				),
 		);
 		await waitFor(() => container.querySelector(".gui-filepane-preview-text") !== null);
 		const textNode = container.querySelector(".gui-filepane-preview-text")?.firstChild;

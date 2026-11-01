@@ -48,11 +48,13 @@ import { dispatchNotification } from "../lib/notify";
 import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
+import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import {
 	PANEL_TAB_SLOT_PREFIX,
 	SlotComponentMount,
+	selectPanelTabComponent,
 	selectTranscriptNodeComponents,
 	TRANSCRIPT_NODE_SLOT,
 	useExtensionToolViews,
@@ -882,6 +884,9 @@ export function ChatView({
 		nonce: number;
 		pdf?: PdfQuoteAnchor;
 		quote?: string;
+		line?: number;
+		column?: number;
+		pin?: boolean;
 	} | null>(null);
 	// External browser reveal (chat link click → managed browser, proma
 	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
@@ -946,6 +951,7 @@ export function ChatView({
 			// null = "nothing selected"; the empty state owns that, the rail and
 			// the strip never navigate to it.
 			if (!view) return;
+			if (view === FILE_WORKSPACE_SURFACE && !selectPanelTabComponent(extTabsRef.current, view)) return;
 			panelTabs.open({ surface: view, label: tabLabelFor(view) });
 		},
 		[panelTabs.open, tabLabelFor],
@@ -992,14 +998,33 @@ export function ChatView({
 	);
 	useEffect(() => {
 		const onOpenFile = (ev: Event): void => {
-			const detail = (ev as CustomEvent<{ path?: string; pdf?: PdfQuoteAnchor; quote?: string }>).detail;
+			const detail = (
+				ev as CustomEvent<{
+					path?: string;
+					pdf?: PdfQuoteAnchor;
+					quote?: string;
+					line?: number;
+					column?: number;
+					pin?: boolean;
+				}>
+			).detail;
 			const path = detail?.path;
 			if (typeof path !== "string" || !path) return;
+			const line =
+				typeof detail.line === "number" && Number.isInteger(detail.line) && detail.line > 0
+					? detail.line
+					: undefined;
+			const column =
+				typeof detail.column === "number" && Number.isInteger(detail.column) && detail.column > 0
+					? detail.column
+					: undefined;
 			setOpenFileReq(prev => ({
 				path,
 				nonce: (prev?.nonce ?? 0) + 1,
 				...(detail.pdf ? { pdf: detail.pdf } : {}),
 				...(detail.quote ? { quote: detail.quote } : {}),
+				...(line ? { line, ...(column ? { column } : {}) } : {}),
+				...(detail.pin === true ? { pin: true } : {}),
 			}));
 			onOpenFileInPanel?.(path);
 		};

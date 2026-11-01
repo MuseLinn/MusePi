@@ -756,9 +756,10 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
     the pane is only a slot rect, so navigation/session survive panel close.
   - Chat column + sidebar across settings: `display:none` keepers, state restored
     on return (see §1 settings-shell entry).
-  - Editor unsaved text: module-scoped `unsavedBufferCache` in `FilePane`
-    (keyed by absolute path; save / edit-back-to-saved drops the entry) — a prior
-    instance-scoped ref died with the pane and lost buffers on files→other→files.
+  - Editor unsaved text: the host-owned `filePreviewBuffers` store in
+    `lib/file-workspace.ts` (keyed by absolute path; save / edit-back-to-saved
+    drops the entry) survives file-plugin unmounts on files→other→files. The
+    Cordis plugin consumes this store and never creates a second draft owner.
     Monaco owns the editing view, not the file buffer: its own changes update
     `edit.text`, but React must never write a value back into the mounted model.
     This preserves cursor, selection, undo history, and IME composition. A new
