@@ -13,6 +13,7 @@ import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { CredentialService } from "./credential-service";
 import { DesignSystemsService } from "./design-systems-service";
+import { EditorService } from "./editor-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
@@ -87,6 +88,7 @@ function buildRegistry(): HostServices {
 			ensureFileIndex: () => ({ search: () => [] }) as never,
 		}),
 	);
+	services.register(new EditorService());
 	services.register(
 		new TerminalService({
 			nextSeq: () => 0,

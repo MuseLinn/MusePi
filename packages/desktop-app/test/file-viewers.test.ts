@@ -75,14 +75,10 @@ describe("viewer registry", () => {
 			matches: input2 => input2.mime === "application/pdf",
 			render: async () => undefined,
 		});
-		for (const viewer of builtinFileViewers({
-			...noDeps,
-			renderPdfPages: async () => ["data:image/png;base64,AA"],
-		})) {
-			registerFileViewer(viewer);
-		}
+		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
 		const result = await renderWithViewers(input({ ext: "pdf", mime: "application/pdf", bytes: bytes("%PDF") }));
-		expect(result).toEqual({ kind: "pdf", pages: ["data:image/png;base64,AA"] });
+		expect(result?.kind).toBe("pdf");
+		if (result?.kind === "pdf") expect(new Uint8Array(result.bytes)).toEqual(bytes("%PDF"));
 	});
 
 	it("reports no viewer rather than a failure when nothing takes the file", async () => {
@@ -153,26 +149,15 @@ describe("built-in viewers", () => {
 		expect(result).toBeUndefined();
 	});
 
-	it("declines a PDF rather than failing when rendering throws", async () => {
-		for (const viewer of builtinFileViewers({
-			...noDeps,
-			renderPdfPages: async () => {
-				throw new Error("encrypted");
-			},
-		})) {
-			registerFileViewer(viewer);
-		}
-		expect(
-			await renderWithViewers(input({ ext: "pdf", mime: "application/pdf", bytes: bytes("%PDF") })),
-		).toBeUndefined();
-	});
-
-	it("claims a PDF with no renderer configured only as a decline, so nothing else is shadowed", async () => {
+	it("passes PDF bytes to the reader without eagerly parsing the document", async () => {
 		for (const viewer of builtinFileViewers(noDeps)) registerFileViewer(viewer);
-		expect(selectFileViewer(input({ ext: "pdf", mime: "application/pdf" }))?.id).toBe("pdf");
-		expect(
-			await renderWithViewers(input({ ext: "pdf", mime: "application/pdf", bytes: bytes("%PDF") })),
-		).toBeUndefined();
+		const inputBytes = bytes("%PDF-invalid-but-deferred");
+		const result = await renderWithViewers(input({ ext: "pdf", mime: "application/pdf", bytes: inputBytes }));
+		expect(result?.kind).toBe("pdf");
+		if (result?.kind === "pdf") {
+			expect(new Uint8Array(result.bytes)).toEqual(inputBytes);
+			expect(result.bytes).not.toBe(inputBytes.buffer);
+		}
 	});
 
 	it("plays an audio file instead of opening it in the system app", async () => {

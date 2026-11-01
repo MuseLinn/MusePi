@@ -63,7 +63,8 @@ describe("annotation composer contexts", () => {
 		const container = mount(<SessionComposerFixture />);
 		act(() => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
 		expect(container.querySelector("textarea")?.value).toBe("");
-		expect(container.querySelector(".gui-quote-card")).not.toBeNull();
+		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();
+		expect(container.querySelector(".gui-quote-card")).toBeNull();
 	});
 
 	it("attaches a browser annotation without writing its prompt into the welcome textarea", () => {
@@ -71,7 +72,33 @@ describe("annotation composer contexts", () => {
 		const container = mount(<WelcomeComposer onSubmit={() => {}} rpc={rpc} />);
 		act(() => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
 		expect(container.querySelector("textarea")?.value).toBe("");
-		expect(container.querySelector(".gui-quote-card")).not.toBeNull();
+		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();
+		expect(container.querySelector(".gui-quote-card")).toBeNull();
+	});
+
+	it("groups mixed sources into compact chips and keeps details in their popup", () => {
+		const container = mount(
+			<QuoteCards
+				contexts={[
+					{ kind: "file-quote", path: "src/a.ts", quote: "const a = 1", startLine: 1, endLine: 1 },
+					{
+						kind: "file-quote",
+						path: "docs/b.pdf",
+						quote: "PDF text",
+						pdf: { startPage: 1, endPage: 2, startIndex: 2, endIndex: 8, selections: [] },
+					},
+					{ kind: "chat-quote", quote: "chat text" },
+					annotation,
+				]}
+				onRemove={() => {}}
+				onChange={() => {}}
+			/>,
+		);
+		expect(container.querySelectorAll(".gui-quote-chip")).toHaveLength(3);
+		expect(container.querySelector(".gui-quote-card")).toBeNull();
+		act(() => container.querySelector<HTMLButtonElement>('[data-quote-kind="file-quote"]')?.click());
+		expect(document.querySelectorAll(".gui-quote-card")).toHaveLength(2);
+		expect(document.querySelector('[data-quote-kind="file-quote"] .gui-quote-chip-count')?.textContent).toBe("2");
 	});
 
 	it("shows page and target count, previews, and removes the chip", () => {
@@ -85,11 +112,12 @@ describe("annotation composer contexts", () => {
 				onChange={() => {}}
 			/>,
 		);
-		expect(container.querySelector(".gui-quote-context-page")?.textContent).toContain("example.com");
-		expect(container.querySelector(".gui-quote-context-count")?.textContent).toBe("2");
-		act(() => container.querySelector<HTMLButtonElement>(".gui-quote-preview")?.click());
-		expect(container.querySelector<HTMLImageElement>(".gui-quote-context-image")?.src).toContain("data:image/png");
-		act(() => container.querySelector<HTMLButtonElement>(".gui-quote-close")?.click());
+		act(() => container.querySelector<HTMLButtonElement>(".gui-quote-chip")?.click());
+		expect(document.querySelector(".gui-quote-context-page")?.textContent).toContain("example.com");
+		expect(document.querySelector(".gui-quote-context-count")?.textContent).toBe("2");
+		act(() => document.querySelector<HTMLButtonElement>(".gui-quote-preview")?.click());
+		expect(document.querySelector<HTMLImageElement>(".gui-quote-context-image")?.src).toContain("data:image/png");
+		act(() => document.querySelector<HTMLButtonElement>(".gui-quote-close")?.click());
 		expect(removed).toBe(0);
 	});
 });

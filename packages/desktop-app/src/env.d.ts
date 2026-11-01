@@ -20,7 +20,9 @@ interface Window {
 		/** Relocate the app data root; resolves { ok:true, root } | { ok:false, error }. */
 		dataRootApply(picked: string): Promise<{ ok: true; root: string } | { ok: false; error: string }>;
 		copyText(text: string): Promise<void>;
+		readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
 		openWith(app: string, path: string): Promise<boolean>;
+		listOpenInApps(): Promise<{ apps: OpenInApp[] }>;
 		openExternal(url: string): Promise<void>;
 		/** Computer-use overlay glow: ring the displays while the agent
 		 *  drives the desktop (`computer` tool running). */

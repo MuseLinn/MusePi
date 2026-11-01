@@ -447,6 +447,51 @@
 	margin: 2px 6px 6px 22px;
 }
 
+.gui-changes-file-diff:has(.gui-monaco-diff) {
+	overflow: hidden;
+	padding: 4px;
+}
+
+.gui-monaco-diff {
+	min-width: 0;
+	overflow: hidden;
+	border-radius: var(--radius-md);
+	background: var(--color-surface-sunken);
+}
+
+.gui-monaco-diff + .gui-monaco-diff {
+	margin-top: 6px;
+}
+
+.gui-monaco-diff-toolbar {
+	display: flex;
+	height: 28px;
+	align-items: center;
+	gap: 3px;
+	padding: 0 2px 0 5px;
+	border-bottom: 1px solid var(--border);
+	font-family: var(--font-sans);
+}
+
+.gui-changes-diff-kind {
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+}
+
+.gui-monaco-diff-position {
+	margin-left: auto;
+	padding-right: 3px;
+	color: var(--color-text-faint);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-monaco-diff-editor {
+	height: clamp(220px, 38vh, 380px);
+	min-width: 0;
+}
+
 /* Commit box (right-pane diff tool): subject + gitmoji chips + actions. */
 .gui-commit-box {
 	background: var(--color-surface-raised);

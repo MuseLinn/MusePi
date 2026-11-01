@@ -40,6 +40,8 @@ export interface PanelTabDescriptor {
 	 */
 	dedupeKey?: string | null;
 	readOnly?: boolean;
+	/** Replaceable file preview. Any non-preview reopen pins an existing tab. */
+	preview?: boolean;
 }
 
 export interface PanelTab {
@@ -54,6 +56,8 @@ export interface PanelTab {
 	dedupeKey: string | null;
 	/** Unsaved-content marker (file editor). Runtime-only — never serialized. */
 	dirty: boolean;
+	/** A file preview is replaced by the next preview in the same column. */
+	preview: boolean;
 	/** Split-layout column. Invariant: flat `tabs` is grouped by column
 	 * (all column-0 entries first, then column 1). */
 	column: PanelColumn;
@@ -107,6 +111,7 @@ function toTab(descriptor: PanelTabDescriptor, now: number, column: PanelColumn 
 		touchedAt: now,
 		dedupeKey: descriptor.dedupeKey ?? null,
 		dirty: false,
+		preview: descriptor.preview ?? false,
 		column,
 	};
 }
@@ -225,14 +230,11 @@ export function upsertPanelTab(
 	let column = options?.column ?? targetColumnForNewTab(state);
 	let next = toTab(descriptor, now, column);
 
-	// A real instance replaces its surface's placeholder: the rail opens
-	// "Files" with no target to show the empty editor; the first actual file
-	// takes that slot instead of piling up next to it. Exception — "files":
-	// the placeholder IS the tree browser (dsh file-tree parity, user
-	// 2026-09-29), a real instance opens as its OWN tab next to it, so the
-	// tree stays one click away instead of being consumed.
+	// A real instance replaces its surface's placeholder. For Files, the first
+	// file therefore takes over the tree tab; the file page can reveal its own
+	// non-modal tree, and selecting another file there opens a separate tab.
 	const base =
-		next.target !== null && next.dedupeKey === null && next.surface !== "files"
+		next.target !== null && next.dedupeKey === null
 			? state.tabs.filter(tab => !(tab.surface === next.surface && tab.target === null))
 			: state.tabs;
 
@@ -248,7 +250,7 @@ export function upsertPanelTab(
 		if (sourceIndex !== -1) {
 			const source = state.tabs[sourceIndex]!;
 			const candidateId = deriveCopyIdentity(state.tabs, source.id);
-			next = { ...source, id: candidateId, dedupeKey: candidateId, touchedAt: now };
+			next = { ...source, id: candidateId, dedupeKey: candidateId, touchedAt: now, preview: false };
 			column = source.column;
 			// Insert within the column's slice rather than at the end of the flat
 			// array: that array is column-grouped, and appending across the
@@ -260,6 +262,21 @@ export function upsertPanelTab(
 	}
 
 	const existing = base.find(tab => tab.id === next.id);
+	// One replaceable preview per surface and column. Copies are pinned and
+	// never consume the preview slot; a dirty preview is already pinned by
+	// setPanelTabDirty, and the dirty check keeps restored states conservative.
+	const replacedPreview =
+		!existing && next.preview && options?.forceNew !== true
+			? base.findIndex(
+					tab =>
+						tab.surface === next.surface &&
+						tab.target !== null &&
+						tab.dedupeKey === null &&
+						tab.column === column &&
+						tab.preview &&
+						!tab.dirty,
+				)
+			: -1;
 	const added = existing
 		? base.map(tab =>
 				tab.id === next.id
@@ -268,13 +285,16 @@ export function upsertPanelTab(
 							target: next.target ?? tab.target,
 							label: next.label ?? tab.label,
 							readOnly: next.readOnly,
+							preview: tab.preview && next.preview,
 							touchedAt: now,
 						}
 					: tab,
 			)
-		: insertAfter === null
-			? [...base, next]
-			: [...base.slice(0, insertAfter + 1), next, ...base.slice(insertAfter + 1)];
+		: replacedPreview !== -1
+			? base.map((tab, index) => (index === replacedPreview ? next : tab))
+			: insertAfter === null
+				? [...base, next]
+				: [...base.slice(0, insertAfter + 1), next, ...base.slice(insertAfter + 1)];
 
 	const clamped = clampPanelTabs(added, maxPerSurface, reveal ? next.id : state.activeId);
 	const activeId = reveal ? next.id : (state.activeId ?? next.id);
@@ -352,6 +372,7 @@ export function duplicatePanelTab(state: PanelTabState, id: string, now = Date.n
 		touchedAt: now,
 		dedupeKey: candidateId,
 		dirty: false,
+		preview: false,
 		column,
 	};
 
@@ -371,8 +392,11 @@ export function duplicatePanelTab(state: PanelTabState, id: string, now = Date.n
  *  a fresh array here would loop the re-render it reports from. */
 export function setPanelTabDirty(state: PanelTabState, id: string, dirty: boolean): PanelTabState {
 	const tab = state.tabs.find(t => t.id === id);
-	if (!tab || tab.dirty === dirty) return state;
-	return { ...state, tabs: state.tabs.map(t => (t.id === id ? { ...t, dirty } : t)) };
+	if (!tab || (tab.dirty === dirty && (!dirty || !tab.preview))) return state;
+	return {
+		...state,
+		tabs: state.tabs.map(t => (t.id === id ? { ...t, dirty, preview: t.preview && !dirty } : t)),
+	};
 }
 
 /** Focus a tab: global active + its column's display. Reference-stable on
@@ -460,6 +484,8 @@ interface SerializedPanelTab {
 	readOnly: boolean;
 	touchedAt: number;
 	dedupeKey: string | null;
+	/** Optional for v2 layouts written before preview tabs. */
+	preview?: boolean;
 	column: PanelColumn;
 }
 
@@ -482,13 +508,14 @@ export function serializePanelTabs(state: PanelTabState): SerializedPanelTabsV2 
 	return {
 		v: PANEL_TABS_SCHEMA_VERSION,
 		split: state.split,
-		tabs: state.tabs.map(({ surface, target, label, readOnly, touchedAt, dedupeKey, column }) => ({
+		tabs: state.tabs.map(({ surface, target, label, readOnly, touchedAt, dedupeKey, preview, column }) => ({
 			surface,
 			target,
 			label,
 			readOnly,
 			touchedAt,
 			dedupeKey,
+			preview,
 			column,
 		})),
 		activeId: state.activeId,
@@ -528,7 +555,14 @@ export function restorePanelTabs(raw: unknown): PanelTabState {
 			)
 			.map(t =>
 				toTab(
-					{ surface: t.surface, target: t.target, label: t.label, readOnly: t.readOnly, dedupeKey: t.dedupeKey },
+					{
+						surface: t.surface,
+						target: t.target,
+						label: t.label,
+						readOnly: t.readOnly,
+						dedupeKey: t.dedupeKey,
+						preview: t.preview,
+					},
 					t.touchedAt,
 					0,
 				),
@@ -538,15 +572,20 @@ export function restorePanelTabs(raw: unknown): PanelTabState {
 		return { tabs, activeId: resolved, split: false, columnActive: [resolved, null] };
 	}
 	if (r.v !== PANEL_TABS_SCHEMA_VERSION) return { ...EMPTY_PANEL_TAB_STATE };
-	const tabs: PanelTab[] = (Array.isArray(r.tabs) ? r.tabs : [])
-		.filter(validSerializedTab)
-		.map(t =>
-			toTab(
-				{ surface: t.surface, target: t.target, label: t.label, readOnly: t.readOnly, dedupeKey: t.dedupeKey },
-				t.touchedAt,
-				t.column,
-			),
-		);
+	const tabs: PanelTab[] = (Array.isArray(r.tabs) ? r.tabs : []).filter(validSerializedTab).map(t =>
+		toTab(
+			{
+				surface: t.surface,
+				target: t.target,
+				label: t.label,
+				readOnly: t.readOnly,
+				dedupeKey: t.dedupeKey,
+				preview: t.preview,
+			},
+			t.touchedAt,
+			t.column,
+		),
+	);
 	// Re-assert the grouping invariant in case a hand-edited payload interleaved.
 	const grouped = [...tabsInColumn(tabs, 0), ...tabsInColumn(tabs, 1)];
 	const ca = Array.isArray(r.columnActive) ? r.columnActive : [];

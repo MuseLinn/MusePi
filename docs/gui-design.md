@@ -152,7 +152,7 @@ The top of TrajectoryView in the right ContextPanel's "Trajectory" tab = a **fix
 ## 5b. Animation & library choices (evaluated 2026-08-07)
 
 - **Principle: CSS first + hand-rolled hooks**. The entire existing motion system is handwritten CSS/JS (Reveal/HeightMorph/useCollapse, BorderBeam, DotMatrixMark, ThinkingOrbs, the KITT sweep, two-phase float layers, companion frame animation) — desktop GUI motion needs are "refined, restrained UI feedback"; CSS transition/keyframes suffice at zero runtime cost and natively respect `prefers-reduced-motion` (the `gui-motion-off` preference).
-- **Third-party in use**: `cuelume` (sound), `lucide-react`/`lucide` (icons), `morphicons` (composer send/stop icon morph), `beautiful-mermaid` (guest-client Mermaid rendering), `@xterm/xterm` (terminal), `pdfjs-dist` (PDF). **motion (formerly Framer Motion) was a dependency with zero references — removed** (2026-08-07).
+- **Third-party in use**: `cuelume` (sound), `lucide-react`/`lucide` (icons), `morphicons` (composer send/stop icon morph), `beautiful-mermaid` (guest-client Mermaid rendering), `@xterm/xterm` (terminal), `EmbedPDF` (PDF). **motion (formerly Framer Motion) was a dependency with zero references — removed** (2026-08-07).
 - **GSAP evaluation (not adopted)**: GSAP 3 (now entirely free, all plugins included) is the industry standard for imperative timelines/ScrollTrigger/SplitText/MotionPath — but its strengths (marketing-page scroll scenes, per-character text effects, complex multi-step orchestration) aren't on the desktop GUI core path; adopting it would establish a new animation paradigm (timelines/interpolation) running parallel to the existing CSS track. **Kept as a candidate**: re-evaluate if we later do welcome-page brand-text per-character animation (SplitText-class) or complex transition orchestration.
 - **Icon transitions = morphicons, hand-drawn crossfades forbidden (lesson 2026-08-14)**: any "icon A → icon B" transition (theme/accent full-screen masks, button state swaps, status cards) uses **`morphicons`** exclusively (`morphicons/react`'s `MorphIcon`, or in pure-DOM contexts `morphicons/element`'s `<morph-icon>` + `set()`/`morphTo(target, "snappy")`) — **shape morphing via Procrustes optimal rotation + polar interpolation + spring physics**. **Forbidden**: stacking two SVGs and faking a morph with opacity/rotate crossfade (misused on the 2026-08-14 theme mask; the user explicitly demanded the morphicons look; Composer/Transcript/onboarding steps are already all morphicons — the mask must match).
 - **Store change notifications must emit inside the swap callback (lesson 2026-08-14)**: `setThemePreference`/`setAccentPreference` execute the switch delayed (340ms) via `withColorTransition` — **`emit()`/`emitAccent()` must live inside `withColorTransition(fn)`'s `fn`** (after preference/accent have been updated), not after the call: emitting synchronously outside broadcasts the **old value**, so `useSyncExternalStore` subscribers (settings segmented/palette buttons) read the old preference — button state **lags one click** (you clicked light, the theme switched, the button still says "follow system"; the next click displays the previous choice).
@@ -759,6 +759,65 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
   - Editor unsaved text: module-scoped `unsavedBufferCache` in `FilePane`
     (keyed by absolute path; save / edit-back-to-saved drops the entry) — a prior
     instance-scoped ref died with the pane and lost buffers on files→other→files.
+    Monaco owns the editing view, not the file buffer: its own changes update
+    `edit.text`, but React must never write a value back into the mounted model.
+    This preserves cursor, selection, undo history, and IME composition. A new
+    document is created by remounting the editor for a different path. Initial
+    CRLF and final-newline state are preserved. The first file selected from a
+    tree-only tab consumes that tab; a later selection from a file page's
+    expanded, non-modal tree opens a separate tab and preserves the source file.
+    A single click opens a replaceable preview tab; a double click pins it, and
+    cross-file definition navigation opens a pinned tab. Same-file and cross-file
+    definition jumps enter a per-workspace editor-location history. Header buttons
+    and Alt+Left / Alt+Right move backward and forward and restore the exact cursor
+    position. Ordinary cursor movement updates only the current entry; ordinary tab
+    clicks create no entry. A new definition jump after going backward truncates
+    forward history. History is runtime-only and clears when the workspace changes.
+    Alt+F12 or Ctrl/Cmd+Shift+F10 opens an inline definition peek, and Shift+F12
+    opens an inline reference peek, without changing the active file tab or location
+    history. Multiple definitions or references remain navigable in the peek result
+    list. The peek editor is directly editable; Ctrl/Cmd+S saves the focused result
+    through the same file buffer and save path, and edits made while a save is pending
+    remain dirty. Escape closes the peek. F12 retains its navigate-and-record-history
+    behavior. Ctrl/Cmd+F12 navigates to implementations, and Ctrl/Cmd+Alt+F12
+    navigates to type definitions; both record editor-location history. Both peek
+    variants use the shared liquid-glass radius, border, sheen, blur, and shadow in
+    light and dark themes; transparent result and editor surfaces reveal that material
+    without changing Monaco's list geometry. F2 opens Monaco's native rename input
+    and applies symbol edits across files without changing the active file tab. Every
+    affected file retains its own dirty draft and saves independently; no file is
+    written before its own save. Rename edits containing file-create, delete, or move
+    operations are rejected as a whole. Definition peek, reference peek, rename,
+    implementation, and type-definition shortcuts appear in the shortcut registry's
+    fixed Editor group. Draft-cache keys normalize slash direction and Windows
+    drive-letter casing, so renamed edits in unopened files survive later file reads
+    and tab switches. Text is immediately editable, without a preview-to-edit
+    transition. HTML pairs Monaco with a live preview and has a source-only
+    alternative. Markdown opens directly in a single-column visual editor with a top
+    formatting toolbar; the toolbar stays on one row and moves commands that do not
+    fit into an anchored More actions menu. Its source switch replaces the visual
+    surface with full-width Monaco rather than a split preview. Switching modes
+    preserves the current draft, while an unchanged visual document retains its
+    original source. YAML Front Matter shows a notice with an immediate source-code
+    action. Markdown also exports the current buffer as a real `.docx`. A constrained
+    breadcrumb path scrolls horizontally. Clickable segments open an anchored,
+    searchable, non-modal directory menu. The expanded file tree shares the content
+    row with the editor and leaves the path row unchanged; long editor lines scroll
+    horizontally instead of being rewrapped. Clicking the already-open file in that
+    tree does not open another tab. Editor selections feed the full five-action
+    selection toolbar, which flips below the selection when the content area has no
+    room above; it must not cover the file header. Without a selection, the header
+    quote action cites the whole file. Closing a dirty tab requires confirmation, and an accepted close
+    discards its cached draft instead of restoring it later. Escape dismisses only
+    Monaco's own hover, completion, diagnostic, definition peek, or reference peek
+    overlay. PDF opens in an inline reader with thumbnails, page navigation, zoom,
+    rotation, search, and external-app opening. Its toolbar stays on one row and
+    moves the overflowing suffix into More actions. PDF text selections use the same
+    five actions; cross-page quotes retain start and end pages, character indices,
+    and per-page rectangle geometry, then restore the start page and original
+    selection when clicked. The composer collapses file and conversation references
+    into separate counted chips, with complete references available in a popover.
+    Selection highlights remain application state and never modify the PDF.
   - NOT preserved (accepted): file-tree `scrollTop`, trajectory list scroll —
     both reset on remount; session enter tails to latest, jump-to-entry scrolls on
     demand. Do not add scroll caches without a design note.
@@ -822,6 +881,7 @@ The board's list rows are no longer external-browser launchers — clicking a ro
 The right git panel closes the remaining gaps against a full git client, in the same sub-tab shell:
 
 - **Stash tab** (`StashPane`, third `GitPaneTab`): message input + `git.stashPush` (untracked included; a clean tree returns `{ok, empty}` rather than an error), entries from `git.stashList` (`%gd%x1f%gs%x1f%cr%x1f%H` format — ref, subject, relative age, hash), per-row pop (`git.stashPop`, applies + drops; git keeps the stash on conflict and the stderr surfaces) and drop with a **two-step confirm** (× → check icon). Stash rows reuse `gui-changes-row` for visual consistency with the changes tab.
+- **Changes diff**: the existing file tree expands into a read-only `MonacoDiffEditor` without replacing the tree, staging actions, or panel tabs. The editor follows `musepi-gui-chat-difflayout`: inline and side-by-side are fixed modes, while dynamic switches to inline below 720px. Long unchanged regions collapse; the toolbar shows the current change position and provides previous/next navigation. Binary, oversized, or unavailable content keeps the existing patch view.
 - **Sync row** (`GitSyncControls` on the sub-tab bar, reachable from every git tab): fetch / pull / push icon buttons + the upstream `↑n ↓m` pill (re-read from `git.status` after every op; errors truncate inline beside the buttons). Pull is **always rebase** (`git pull --rebase --no-autostash`) — no merge commits, and a dirty tree fails loudly instead of a silent autostash.
 - **Daemon RPCs** (module-level `runGit(cwd, args, timeoutMs)` helper — same spawn-and-cap shape as `runGh`): `git.fetch` (`fetch --all`), `git.pull`, `git.stashList`, `git.stashPush`, `git.stashPop`, `git.stashDrop`; `github.prs` gained a passthrough `state` param (`open|closed|merged|all`). The `legacy-routes.ts` allowlist also picked up the previously missing `git.push` / `git.identity` (drift fix — the list had fallen behind the handlers).
 - **Board state filter**: `PrPane` fetches with the selected state (`PR_STATE_SEGMENTS` adds 已合并/`merged` alongside open/closed/all) — gh supports `merged` natively, no client-side filtering. Detail labels/reviewers became removable chips (`gui-chip-x` × button → `github.prEdit removeLabels/removeReviewers`, open PRs only).

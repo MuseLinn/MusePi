@@ -12,6 +12,21 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const optionalString = (value: unknown): boolean => value === undefined || typeof value === "string";
 const optionalLine = (value: unknown): boolean =>
 	value === undefined || (typeof value === "number" && Number.isInteger(value) && value > 0);
+const nonNegativeInteger = (value: unknown): boolean => typeof value === "number" && Number.isInteger(value) && value >= 0;
+const optionalNumber = (value: unknown): boolean => value === undefined || typeof value === "number";
+
+function isPdfAnchor(value: unknown): boolean {
+	if (!isRecord(value)) return false;
+	return (
+		optionalLine(value.startPage) &&
+		optionalLine(value.endPage) &&
+		nonNegativeInteger(value.startIndex) &&
+		nonNegativeInteger(value.endIndex) &&
+		Array.isArray(value.selections) &&
+		optionalNumber(value.fileSize) &&
+		optionalNumber(value.fileMtime)
+	);
+}
 
 export function isDisplayContext(value: unknown): value is DisplayContext {
 	if (!isRecord(value)) return false;
@@ -33,7 +48,8 @@ export function isDisplayContext(value: unknown): value is DisplayContext {
 			optionalString(value.language) &&
 			optionalString(value.comment) &&
 			optionalLine(value.startLine) &&
-			optionalLine(value.endLine)
+			optionalLine(value.endLine) &&
+			(value.pdf === undefined || isPdfAnchor(value.pdf))
 		);
 	}
 	return false;
@@ -80,6 +96,7 @@ export function createFileQuoteContext({
 	language,
 	startLine,
 	endLine,
+	pdf,
 	comment,
 }: {
 	path: string;
@@ -87,6 +104,7 @@ export function createFileQuoteContext({
 	language?: string;
 	startLine?: number;
 	endLine?: number;
+	pdf?: FileQuoteContext["pdf"];
 	comment?: string;
 }): FileQuoteContext {
 	return {
@@ -95,6 +113,7 @@ export function createFileQuoteContext({
 		quote,
 		...(language ? { language } : {}),
 		...(startLine !== undefined && endLine !== undefined ? { startLine, endLine } : {}),
+		...(pdf ? { pdf } : {}),
 		...(comment !== undefined ? { comment } : {}),
 	};
 }
@@ -115,8 +134,9 @@ function chatQuotePrompt(context: ChatQuoteContext): string {
 }
 
 function fileQuotePrompt(context: FileQuoteContext): string {
-	const location =
-		context.startLine !== undefined && context.endLine !== undefined
+	const location = context.pdf
+		? ` PDF pages ${context.pdf.startPage}-${context.pdf.endPage}`
+		: context.startLine !== undefined && context.endLine !== undefined
 			? ` lines ${context.startLine}-${context.endLine}`
 			: "";
 	const source = context.quote

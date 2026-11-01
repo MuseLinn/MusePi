@@ -1712,6 +1712,12 @@ export const show = Object.assign(
 	},
 );
 
+/** Read one blob without `git show` adding commit formatting. The object name
+ * may be `HEAD:path` for a committed version or `:path` for the index. */
+export async function readBlob(cwd: string, objectName: string, signal?: AbortSignal): Promise<string> {
+	return runText(cwd, ["cat-file", "blob", objectName], { readOnly: true, signal });
+}
+
 /** Read commit message and author metadata for replay/rewrite flows. */
 export async function commitDetails(cwd: string, revision: string, signal?: AbortSignal): Promise<CommitDetails> {
 	const raw = await runText(cwd, ["show", "-s", "--format=%an%x00%ae%x00%aI%x00%B", revision], {

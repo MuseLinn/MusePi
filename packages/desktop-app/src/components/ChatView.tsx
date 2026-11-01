@@ -21,7 +21,7 @@ import {
 	type DisplayContext,
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
-import type { SessionEntry } from "@musepi/pi-wire";
+import type { PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
@@ -877,7 +877,12 @@ export function ChatView({
 	// File-reveal requests from transcript paths / artifact cards: relayed
 	// into the ContextPanel → FilePane preview. nonce re-triggers the same
 	// path (re-click while already open).
-	const [openFileReq, setOpenFileReq] = useState<{ path: string; nonce: number } | null>(null);
+	const [openFileReq, setOpenFileReq] = useState<{
+		path: string;
+		nonce: number;
+		pdf?: PdfQuoteAnchor;
+		quote?: string;
+	} | null>(null);
 	// External browser reveal (chat link click → managed browser, proma
 	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
 	const [openBrowserReq, setOpenBrowserReq] = useState<{ url: string; nonce: number } | null>(null);
@@ -987,10 +992,15 @@ export function ChatView({
 	);
 	useEffect(() => {
 		const onOpenFile = (ev: Event): void => {
-			const detail = (ev as CustomEvent<{ path?: string }>).detail;
+			const detail = (ev as CustomEvent<{ path?: string; pdf?: PdfQuoteAnchor; quote?: string }>).detail;
 			const path = detail?.path;
 			if (typeof path !== "string" || !path) return;
-			setOpenFileReq(prev => ({ path, nonce: (prev?.nonce ?? 0) + 1 }));
+			setOpenFileReq(prev => ({
+				path,
+				nonce: (prev?.nonce ?? 0) + 1,
+				...(detail.pdf ? { pdf: detail.pdf } : {}),
+				...(detail.quote ? { quote: detail.quote } : {}),
+			}));
 			onOpenFileInPanel?.(path);
 		};
 		window.addEventListener("musepi-open-file", onOpenFile);
@@ -3095,6 +3105,7 @@ export function ChatView({
 									agentId={panelAgentId}
 									onAgentSelect={selectAgent}
 									onOpenSession={onOpenSession}
+									onNewSession={text => onSubmitNewSession(text)}
 									agentHost={host}
 									extTabs={extTabs}
 									overviewEntries={overviewEntries}

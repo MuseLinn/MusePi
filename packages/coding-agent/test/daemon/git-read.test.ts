@@ -172,4 +172,51 @@ describe("daemon git read RPCs", () => {
 		const result = await call<{ error?: string }>(repo, "git.numstat", { cwd: os.tmpdir() });
 		expect(result.error).toBeTruthy();
 	});
+
+	test("git.diff returns the exact HEAD, index, and working-tree text for Monaco", async () => {
+		const repo = await tmpRepo();
+		commit(repo, "base", { "a.txt": "one\ntwo\n" });
+		fs.writeFileSync(path.join(repo, "a.txt"), "one\nstaged\n");
+		Bun.spawnSync({ cmd: ["git", "add", "a.txt"], cwd: repo, stdout: "pipe", stderr: "pipe" });
+		fs.writeFileSync(path.join(repo, "a.txt"), "one\nstaged\nworking\n");
+
+		type Content = { original: string; modified: string };
+		const result = await call<{ stagedContent?: Content; unstagedContent?: Content }>(repo, "git.diff", {
+			path: "a.txt",
+			content: true,
+		});
+		expect(result.stagedContent).toEqual({ original: "one\ntwo\n", modified: "one\nstaged\n" });
+		expect(result.unstagedContent).toEqual({ original: "one\nstaged\n", modified: "one\nstaged\nworking\n" });
+	});
+
+	test("git.diff exposes an untracked file as an addition without inventing a patch", async () => {
+		const repo = await tmpRepo();
+		commit(repo, "base", { "a.txt": "one\n" });
+		fs.writeFileSync(path.join(repo, "new.txt"), "new\r\nfile\r\n");
+
+		type Content = { original: string; modified: string };
+		const result = await call<{ unstaged: string; unstagedContent?: Content }>(repo, "git.diff", {
+			path: "new.txt",
+			content: true,
+		});
+		expect(result.unstaged).toBe("");
+		expect(result.unstagedContent).toEqual({ original: "", modified: "new\r\nfile\r\n" });
+	});
+
+	test("git.diff content cannot read a path outside the repository", async () => {
+		const repo = await tmpRepo();
+		commit(repo, "base", { "a.txt": "one\n" });
+		const outside = path.join(path.dirname(repo), "outside.txt");
+		fs.writeFileSync(outside, "not repository content\n");
+		try {
+			const result = await call<{ contentError?: string; unstagedContent?: unknown }>(repo, "git.diff", {
+				path: "../outside.txt",
+				content: true,
+			});
+			expect(result.contentError).toBeTruthy();
+			expect(result.unstagedContent).toBeUndefined();
+		} finally {
+			fs.rmSync(outside, { force: true });
+		}
+	});
 });

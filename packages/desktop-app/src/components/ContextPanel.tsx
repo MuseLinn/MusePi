@@ -17,14 +17,24 @@ import {
 	t,
 	WidgetCard,
 } from "@musepi/client-core";
-import type { AgentSnapshot } from "@musepi/pi-wire";
+import type { AgentSnapshot, PdfQuoteAnchor } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
+import {
+	canMoveEditorHistory,
+	type EditorHistoryDirection,
+	type EditorLocation,
+	EMPTY_EDITOR_HISTORY,
+	moveEditorHistory,
+	pushEditorHistory,
+	updateEditorHistoryCurrent,
+} from "../lib/editor-navigation";
 import { isElectron, openExternalUrl, pickDirectory } from "../lib/electron";
 import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
+import { revealEditorLocation } from "../lib/monaco-lsp";
 import { type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -39,7 +49,7 @@ import { Icon, type IconName } from "../vendor/oc-icons";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ContextMenu } from "./ContextMenu";
 import { FadeScroll } from "./FadeScroll";
-import { FilePane } from "./FilePane";
+import { discardFilePreviewBuffer, FilePane, filePreviewPathEquals, filePreviewWorkspacePath } from "./FilePane";
 import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
@@ -150,6 +160,7 @@ export function ContextPanel({
 	agentId,
 	onAgentSelect,
 	onOpenSession,
+	onNewSession,
 	agentHost,
 	leafId,
 	activePathIds,
@@ -178,7 +189,7 @@ export function ContextPanel({
 	open?: boolean;
 	/** External reveal request (artifact cards / transcript paths):
 	 *  switches to the files tab and previews the path. */
-	openRequest?: { path: string; nonce: number } | null;
+	openRequest?: { path: string; nonce: number; pdf?: PdfQuoteAnchor; quote?: string } | null;
 	/** External browser reveal (chat link click / agent browser.open):
 	 *  switches to the browser tool and navigates the active tab. */
 	browserOpenRequest?: { url: string; nonce: number } | null;
@@ -215,6 +226,8 @@ export function ContextPanel({
 	/** Open a session as the main chat surface (sub-session rows in the
 	 *  agents hub switch the whole view, same as clicking the sidebar row). */
 	onOpenSession?(id: string): void;
+	/** Start a session from file-selection toolbar text. */
+	onNewSession?(text: string): void;
 	/** Drill-down host for the docked detail (a nested task card opens
 	 *  another subagent's transcript in place). */
 	agentHost?: ToolRenderHost;
@@ -241,6 +254,16 @@ export function ContextPanel({
 	planShowRequest?: { directory: string; id: string; title: string; nonce: number } | null;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
+	// Runtime-only editor locations survive file-tab remounts, but never cross
+	// workspaces. Ordinary cursor movement updates the current entry in place.
+	const editorHistoryRef = useRef(EMPTY_EDITOR_HISTORY);
+	const editorLocationRef = useRef<EditorLocation | null>(null);
+	const [editorHistoryAvailability, setEditorHistoryAvailability] = useState({ back: false, forward: false });
+	useEffect(() => {
+		editorHistoryRef.current = EMPTY_EDITOR_HISTORY;
+		editorLocationRef.current = null;
+		setEditorHistoryAvailability({ back: false, forward: false });
+	}, [cwd]);
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
 	// modeId rides on the snapshot too (daemon: `snap.state.modeId = live.modeId`),
 	// so the panel can name the session preset instead of flattening every
@@ -365,7 +388,72 @@ export function ContextPanel({
 		if (!openRequest || openRequest.nonce === revealedNonceRef.current.file) return;
 		revealedNonceRef.current.file = openRequest.nonce;
 		onViewChange("files");
-	}, [openRequest, onViewChange]);
+		const name = openRequest.path.split(/[\\/]/).pop() || openRequest.path;
+		// Register the real file tab here. Tree and file panes no longer both
+		// consume the same request, so an external reveal loads exactly once.
+		panelTabs.open({ surface: "files", target: openRequest.path, label: name, preview: true });
+	}, [openRequest, onViewChange, panelTabs.open]);
+
+	const syncEditorHistoryAvailability = useCallback((): void => {
+		setEditorHistoryAvailability({
+			back: canMoveEditorHistory(editorHistoryRef.current, "back"),
+			forward: canMoveEditorHistory(editorHistoryRef.current, "forward"),
+		});
+	}, []);
+	const onEditorPositionChange = useCallback((location: EditorLocation): void => {
+		editorLocationRef.current = location;
+		editorHistoryRef.current = updateEditorHistoryCurrent(editorHistoryRef.current, location);
+	}, []);
+	const openEditorLocation = useCallback(
+		(location: EditorLocation, newInstance: boolean): void => {
+			const target = filePreviewWorkspacePath(cwd, location.path);
+			const descriptor = {
+				surface: "files" as const,
+				target,
+				label: location.path.split(/[\\/]/).pop() || location.path,
+				preview: false,
+			};
+			const id = panelTabId(descriptor);
+			const windows = /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\");
+			const existing = panelTabs.tabs.find(tab => {
+				if (tab.id === id) return true;
+				if (tab.surface !== "files" || tab.target === null) return false;
+				const tabTarget = filePreviewWorkspacePath(cwd, tab.target);
+				return windows ? tabTarget.toLowerCase() === target.toLowerCase() : tabTarget === target;
+			});
+			// History never pins a preview merely because the user went back to it.
+			if (existing && !newInstance) panelTabs.activate(existing.id);
+			else panelTabs.open(descriptor, { forceNew: newInstance });
+		},
+		[cwd, panelTabs],
+	);
+	const onEditorNavigate = useCallback(
+		(source: EditorLocation, target: EditorLocation): void => {
+			editorHistoryRef.current = pushEditorHistory(editorHistoryRef.current, source, target);
+			editorLocationRef.current = target;
+			syncEditorHistoryAvailability();
+			if (source.path !== target.path) openEditorLocation(target, true);
+			revealEditorLocation(target);
+		},
+		[openEditorLocation, syncEditorHistoryAvailability],
+	);
+	const navigateEditorHistory = useCallback(
+		(direction: EditorHistoryDirection): void => {
+			const current = editorLocationRef.current;
+			if (current) editorHistoryRef.current = updateEditorHistoryCurrent(editorHistoryRef.current, current);
+			const result = moveEditorHistory(editorHistoryRef.current, direction);
+			if (!result) return;
+			editorHistoryRef.current = result.history;
+			editorLocationRef.current = result.location;
+			syncEditorHistoryAvailability();
+			openEditorLocation(result.location, false);
+			revealEditorLocation(result.location);
+		},
+		[openEditorLocation, syncEditorHistoryAvailability],
+	);
+	const onEditorHistoryBack = useCallback(() => navigateEditorHistory("back"), [navigateEditorHistory]);
+	const onEditorHistoryForward = useCallback(() => navigateEditorHistory("forward"), [navigateEditorHistory]);
+
 	// Relay external browser reveals: switch to the browser view (the rail
 	// selects it; ManagedBrowserPane navigates on the nonce).
 	useEffect(() => {
@@ -677,9 +765,10 @@ export function ContextPanel({
 				!(await confirm(t("settings.discardUnsavedChanges"), t("settings.closeAnyway"), { destructive: true }))
 			)
 				return;
+			if (tab?.surface === "files" && tab.target) discardFilePreviewBuffer(cwd, tab.target);
 			panelTabs.close(id);
 		},
-		[panelTabs, confirm],
+		[panelTabs, confirm, cwd],
 	);
 
 	// Mirror the inline editor's dirty state onto the file tab: the dot
@@ -687,8 +776,29 @@ export function ContextPanel({
 	// path the FilePane registered (target is relative to cwd).
 	const onFileDirty = useCallback(
 		(path: string, dirty: boolean): void => {
-			const id = panelTabId({ surface: "settings.files", target: path });
+			const id = panelTabId({ surface: "files", target: path });
 			panelTabs.setDirty(id, dirty);
+		},
+		[panelTabs],
+	);
+
+	// Double-clicking an italic preview tab performs a non-preview reopen.
+	// The upsert rule pins it without changing identity, order, or column.
+	const pinTab = useCallback(
+		(id: string): void => {
+			const tab = panelTabs.tabs.find(t => t.id === id);
+			if (!tab?.preview) return;
+			panelTabs.open(
+				{
+					surface: tab.surface,
+					target: tab.target,
+					label: tab.label,
+					dedupeKey: tab.dedupeKey,
+					readOnly: tab.readOnly,
+					preview: false,
+				},
+				{ column: tab.column },
+			);
 		},
 		[panelTabs],
 	);
@@ -709,9 +819,13 @@ export function ContextPanel({
 				}
 			}
 			const closing = ids.filter(id => !keep.has(id));
+			for (const id of closing) {
+				const tab = panelTabs.tabs.find(t => t.id === id);
+				if (tab?.surface === "files" && tab.target) discardFilePreviewBuffer(cwd, tab.target);
+			}
 			if (closing.length > 0) panelTabs.closeMany(closing);
 		},
-		[panelTabs, confirm],
+		[panelTabs, confirm, cwd],
 	);
 
 	// ── Split columns (dsh 0.2.0 two-column parity) ────────────────────
@@ -847,13 +961,14 @@ export function ContextPanel({
 					<NotesPane rpc={rpc} cwd={cwd} showPlanRequest={planShowRequest} />
 				) : bodyView === "files" && cwd ? (
 					<FilePane
+						key={bodyTab?.id ?? "files"}
 						rpc={rpc}
 						cwd={cwd}
-						openRequest={openRequest}
 						// File instances live in the PANEL strip (tab-primary):
 						// the pane loads whatever file tab is active and
 						// registers tree clicks back into the strip.
 						activeFile={bodyTab?.surface === "files" ? bodyTab.target : null}
+						openRequest={openRequest && bodyTab?.target && filePreviewPathEquals(cwd, openRequest.path, bodyTab.target) ? openRequest : null}
 						// M1.12 target picker: a directory tab browses that
 						// directory. A directory instance is opened through the
 						// add menu (which resolves the picked directory) and
@@ -861,11 +976,26 @@ export function ContextPanel({
 						// click, does not. That makes the two distinguishable
 						// without stat-ing on every render.
 						browseRoot={bodyTab?.surface === "files" && bodyTab.dedupeKey !== null ? bodyTab.target : null}
-						onOpenFile={(path, name) => panelTabs.open({ surface: "settings.files", target: path, label: name })}
+						onOpenFile={(path, name, options) =>
+							panelTabs.open(
+								{
+									surface: "files",
+									target: path,
+									label: name,
+									preview: !options.pin && !options.newTab,
+								},
+								{ forceNew: options.newTab === true },
+							)
+						}
 						onDirty={onFileDirty}
-						// Tree and file previews are sibling tabs:
-						// the preview's back button activates the tree tab.
-						onShowTree={() => panelTabs.open({ surface: "settings.files" })}
+						onClosePreview={bodyTab ? () => void closeTabWithGuard(bodyTab.id) : undefined}
+						onNewSession={onNewSession}
+						canNavigateBack={editorHistoryAvailability.back}
+						canNavigateForward={editorHistoryAvailability.forward}
+						onNavigateBack={onEditorHistoryBack}
+						onNavigateForward={onEditorHistoryForward}
+						onEditorNavigate={onEditorNavigate}
+						onEditorPositionChange={onEditorPositionChange}
 					/>
 				) : bodyView === "artifacts" ? (
 					/* Artifacts panel (设计板 W3): artifact.manifest.json
@@ -1141,7 +1271,7 @@ export function ContextPanel({
 									if (rel === null) return;
 									const name = rel.split("/").filter(Boolean).at(-1) || t("settings.files");
 									panelTabs.open(
-										{ surface: "settings.files", target: rel, label: name, dedupeKey: `dir:${rel}` },
+										{ surface: "files", target: rel, label: name, dedupeKey: `dir:${rel}` },
 										{ column },
 									);
 								});
@@ -1202,11 +1332,13 @@ export function ContextPanel({
 															id: t.id,
 															title: t.label,
 															dirty: t.dirty,
+															preview: t.preview,
 														}))}
 														activeId={colTab?.id ?? null}
 														closeLabel={t("general.closeTab")}
 														onActivate={panelTabs.activate}
 														onClose={closeTabWithGuard}
+														onPin={pinTab}
 														onReorder={panelTabs.reorder}
 														onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
 													/>
@@ -1286,6 +1418,7 @@ export function ContextPanel({
 									{panelTabs.tabs.length > 0 && (
 										<SurfaceTabStripSortable
 											tabs={panelTabs.tabs.map(t => ({
+												preview: t.preview,
 												id: t.id,
 												title: t.label,
 												dirty: t.dirty,
@@ -1294,6 +1427,7 @@ export function ContextPanel({
 											closeLabel={t("general.closeTab")}
 											onActivate={panelTabs.activate}
 											onClose={closeTabWithGuard}
+											onPin={pinTab}
 											onReorder={panelTabs.reorder}
 											onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
 										/>

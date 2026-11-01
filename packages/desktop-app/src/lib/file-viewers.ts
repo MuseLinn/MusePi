@@ -51,7 +51,7 @@ export type ViewerResult =
 	| { readonly kind: "html"; readonly text: string; readonly raw?: string }
 	| { readonly kind: "highlighted"; readonly html: string; readonly raw?: string }
 	| { readonly kind: "image"; readonly blobUrl: string }
-	| { readonly kind: "pdf"; readonly pages: readonly string[] }
+	| { readonly kind: "pdf"; readonly bytes: ArrayBuffer }
 	| { readonly kind: "docx"; readonly bytes: ArrayBuffer }
 	| { readonly kind: "sheets"; readonly sheets: readonly { name: string; html: string; truncated: boolean }[] }
 	/**

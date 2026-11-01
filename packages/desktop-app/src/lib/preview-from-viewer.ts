@@ -7,12 +7,9 @@
  * the mapping — including the two behaviors that were easy to lose — can be
  * tested without mounting the component.
  *
- * The two that are not obvious: HTML and highlighted results do NOT seed the
- * inline editor, while Markdown and plain text do. That asymmetry was in the
- * original branch chain (the HTML and highlight paths returned before the
- * shared editor-seed line), and collapsing them to "everything editable" would
- * mean an `.html` preview opens in source-edit mode unexpectedly, and a
- * highlighted file's buffer would reset on every re-open.
+ * Every textual viewer supplies its bounded raw source to the inline editor.
+ * Large text results omit `raw` and remain read-only. Markdown and HTML keep
+ * their live previews beside the editor instead of using a separate edit mode.
  */
 import type { ViewerResult } from "./file-viewers";
 
@@ -25,7 +22,7 @@ interface PreviewFields {
 	html?: string;
 	htmlLive?: string;
 	imageUrl?: string;
-	pdfPages?: readonly string[];
+	pdfBytes?: ArrayBuffer;
 	docxBytes?: ArrayBuffer;
 	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
 	media?: { kind: "audio" | "video"; url: string };
@@ -53,28 +50,29 @@ export function previewMappingFor(result: ViewerResult): PreviewMapping {
 		case "text":
 			return {
 				fields: { text: result.text, ...(result.raw === undefined ? {} : { raw: result.raw }) },
-				editable: result.text,
+				...(result.raw === undefined ? {} : { editable: result.raw }),
 			};
 		case "markdown":
 			return {
 				fields: { text: result.text, ...(result.raw === undefined ? {} : { raw: result.raw }) },
 				mdRender: true,
-				editable: result.text,
+				...(result.raw === undefined ? {} : { editable: result.raw }),
 			};
 		case "html":
-			// The preview IS the page; the source lives in `raw` only so the
-			// editor can reach it when toggled. No editor seed on open, matching
-			// the chain that returned here before seeding.
 			return {
 				fields: { htmlLive: result.text, ...(result.raw === undefined ? {} : { raw: result.raw }) },
 				htmlLiveMode: "live",
+				...(result.raw === undefined ? {} : { editable: result.raw }),
 			};
 		case "highlighted":
-			return { fields: { html: result.html, ...(result.raw === undefined ? {} : { raw: result.raw }) } };
+			return {
+				fields: { html: result.html, ...(result.raw === undefined ? {} : { raw: result.raw }) },
+				...(result.raw === undefined ? {} : { editable: result.raw }),
+			};
 		case "image":
 			return { fields: { imageUrl: result.blobUrl } };
 		case "pdf":
-			return { fields: { pdfPages: result.pages } };
+			return { fields: { pdfBytes: result.bytes } };
 		case "docx":
 			return { fields: { docxBytes: result.bytes } };
 		case "sheets":

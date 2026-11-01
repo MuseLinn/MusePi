@@ -49,6 +49,8 @@ afterAll(async () => {
 
 describe("QuoteCards in Chromium", () => {
 	it("updates the annotation context and its model prompt when the user edits a comment", async () => {
+		await page.waitForSelector(".gui-quote-chip", { timeout: 3000 });
+		await page.click(".gui-quote-chip");
 		await page.waitForSelector(".gui-quote-comment", { timeout: 3000 }).catch((error: unknown) => {
 			throw new Error(`${pageErrors.join("\n")}\n${error instanceof Error ? error.message : String(error)}`);
 		});

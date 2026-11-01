@@ -4622,20 +4622,70 @@ body.gui-resizing .gui-pane-right {
 
 .gui-quote-contexts {
 	display: flex;
-	flex-direction: column;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
 	min-width: 0;
+	margin: 0 14px 8px;
+}
+
+.gui-quote-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	height: 28px;
+	padding: 0 9px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: var(--glass-bg, var(--color-surface-raised));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi, transparent),
+		inset 0 -1px 0 var(--glass-edge-lo, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition:
+		color 150ms ease-out,
+		background 150ms ease-out,
+		transform 150ms var(--spring-snappy, ease-out);
+}
+
+.gui-quote-chip:hover,
+.gui-quote-chip[aria-expanded="true"] {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-quote-chip:active {
+	transform: scale(0.97);
+}
+
+.gui-quote-chip-count {
+	min-width: 16px;
+	padding: 0 4px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-accent);
+	font-size: 0.6875rem;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.gui-quote-popup {
+	width: min(480px, calc(100vw - 16px));
+	padding: 0;
 }
 
 .gui-quote-card {
 	display: flex;
 	align-items: flex-start;
 	gap: 8px;
-	margin: 0 14px 6px;
-	padding: 7px 10px;
-	border-radius: var(--radius-lg);
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
-	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
+	padding: 10px 12px;
+}
+
+.gui-quote-card + .gui-quote-card {
+	border-top: 1px solid var(--border);
 }
 
 .gui-quote-context-body {
@@ -4649,6 +4699,7 @@ body.gui-resizing .gui-pane-right {
 	gap: 7px;
 	min-width: 0;
 	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
 }
 
 .gui-quote-context-page {
@@ -4665,13 +4716,14 @@ body.gui-resizing .gui-pane-right {
 	background: var(--color-surface-sunken);
 	color: var(--color-text-muted);
 	font-size: 0.75rem;
+	font-weight: 400;
 }
 
 .gui-quote-comment-label {
 	display: flex;
 	align-items: baseline;
 	gap: 7px;
-	margin-top: 5px;
+	margin-top: 7px;
 	color: var(--color-text-faint);
 	font-size: 0.6875rem;
 }
@@ -4694,60 +4746,13 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 }
 
-.gui-quote-preview {
+.gui-quote-entry-actions {
+	display: flex;
 	flex: none;
-	display: grid;
-	place-items: center;
-	width: 20px;
-	height: 20px;
-	margin-top: 1px;
-	border: 0;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: var(--color-text-faint);
-	cursor: pointer;
+	gap: 2px;
 }
 
-.gui-quote-preview:hover,
-.gui-quote-preview[aria-expanded="true"] {
-	background: var(--color-surface-sunken);
-	color: var(--color-text);
-}
-
-.gui-quote-context-preview {
-	margin-top: 7px;
-	max-height: 240px;
-	overflow: auto;
-}
-
-.gui-quote-context-preview pre {
-	margin: 0;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-	font-size: 0.75rem;
-	line-height: 1.5;
-}
-
-.gui-quote-context-image {
-	display: block;
-	max-width: 100%;
-	margin-bottom: 7px;
-	border-radius: var(--radius-md);
-}
-
-.gui-quote-text {
-	flex: 1;
-	min-width: 0;
-	font-size: var(--ui-font-size-sm);
-	line-height: 1.55;
-	color: var(--color-text);
-	white-space: pre-wrap;
-	word-break: break-word;
-	display: -webkit-box;
-	-webkit-line-clamp: 4;
-	-webkit-box-orient: vertical;
-}
-
+.gui-quote-preview,
 .gui-quote-close {
 	flex: none;
 	display: grid;
@@ -4763,17 +4768,55 @@ body.gui-resizing .gui-pane-right {
 	transition: background 120ms ease-out, color 120ms ease-out;
 }
 
+.gui-quote-preview:hover,
+.gui-quote-preview[aria-expanded="true"],
 .gui-quote-close:hover {
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
 }
 
-/* Welcome-scene quote cards: stack above the input, same card style. */
+.gui-quote-context-preview {
+	margin-top: 6px;
+	max-height: 220px;
+	overflow: auto;
+}
+
+.gui-quote-context-preview[data-collapsed="true"] {
+	overflow: hidden;
+}
+
+.gui-quote-context-preview pre {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--color-text-muted);
+	font-size: 0.75rem;
+	line-height: 1.5;
+}
+
+.gui-quote-context-preview[data-collapsed="true"] pre {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+
+.gui-quote-context-image {
+	display: block;
+	max-width: 100%;
+	margin-bottom: 7px;
+	border-radius: var(--radius-md);
+}
+
+/* Welcome-scene reference chips stay outside the text control. */
 .gui-welcome-quotes {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	padding: 8px 12px 0;
+}
+
+.gui-welcome-quotes .gui-quote-contexts {
+	margin: 0;
 }
 
 /* Welcome suggestion chips (openchamber new-session parity). */

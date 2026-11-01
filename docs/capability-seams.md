@@ -5,6 +5,7 @@
 | 域 | 权威锚点 | 声明位置 |
 |---|---|---|
 | daemon L2 服务（RPC 面） | `packages/coding-agent/src/daemon/services/types.ts`（`DaemonService` 接口） | 各服务文件头注释（样板：`schedule-service.ts`） |
+| GUI 编辑器语言智能 | `packages/coding-agent/src/daemon/services/editor-service.ts`（`EditorService`；`editor.sync` / `editor.saved` / `editor.hover` / `editor.completion` / `editor.definition` / `editor.implementation` / `editor.typeDefinition` / `editor.references` / `editor.rename`） | 同文件头部 |
 | 设计体系注册表（M3 §3） | `packages/coding-agent/src/presets/design-systems.ts`（内置预设表 + 扩展注册表） | 同文件头部 |
 | 内置工具 | `packages/coding-agent/src/tools/index.ts`（`BUILTIN_TOOLS` / `HIDDEN_TOOLS` / `isToolAllowed`） | 同文件头部 |
 | 斜杠命令 | `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 同文件头部 |

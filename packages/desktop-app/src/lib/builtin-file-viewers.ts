@@ -126,8 +126,6 @@ export interface BuiltinViewerDeps {
 	readonly highlightToHtml?: (ansi: string) => string;
 	/** Render a spreadsheet to escaped HTML tables. Absent disables the sheets viewer. */
 	readonly buildSheets?: (bytes: Uint8Array) => { name: string; html: string; truncated: boolean }[] | null;
-	/** Render PDF pages to data URLs. Absent disables the pdf viewer. */
-	readonly renderPdfPages?: (bytes: Uint8Array) => Promise<string[]>;
 }
 
 /**
@@ -194,21 +192,15 @@ function imageViewer(): FileViewer {
 	};
 }
 
-function pdfViewer(deps: BuiltinViewerDeps): FileViewer {
+function pdfViewer(): FileViewer {
 	return {
 		id: "pdf",
 		priority: VIEWER_PRIORITY.builtin,
-		matches: input => input.mime === "application/pdf",
-		render: async (input: ViewerInput) => {
-			if (!deps.renderPdfPages) return undefined;
-			// A corrupt or encrypted PDF declines rather than failing: the host's
-			// answer for those is to open it in the system app.
-			try {
-				return { kind: "pdf", pages: await deps.renderPdfPages(input.bytes) };
-			} catch {
-				return undefined;
-			}
-		},
+		matches: input => input.mime === "application/pdf" || input.ext === "pdf",
+		render: async (input: ViewerInput) => ({
+			kind: "pdf",
+			bytes: input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength),
+		}),
 	};
 }
 
@@ -319,7 +311,7 @@ export function builtinFileViewers(deps: BuiltinViewerDeps): FileViewer[] {
 		sheetsViewer(deps),
 		plainTextViewer(deps),
 		imageViewer(),
-		pdfViewer(deps),
+		pdfViewer(),
 		docxViewer(),
 		mediaViewer(),
 		fontViewer(),

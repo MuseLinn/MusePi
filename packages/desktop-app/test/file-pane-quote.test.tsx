@@ -6,7 +6,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { FilePane } from "../src/components/FilePane";
 import type { RpcClient } from "../src/lib/rpc";
 
-const source = "first\nconst answer = 42;\nlast";
+// Files above the 2 MiB editing limit retain the DOM selection quote path.
+const source = "first\nconst answer = 42;\nlast\n".padEnd(2 * 1024 * 1024 + 1, " ");
 const rpc = {
 	request: async (method: string) => {
 		if (method === "workspace.tree") return { entries: [] };

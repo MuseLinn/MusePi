@@ -41,9 +41,10 @@ describe("renderer Content-Security-Policy", () => {
 		expect(scriptSrc!.split(/\s+/)).toContain("blob:");
 	});
 
-	it("still refuses eval (no unsafe-eval in script-src)", () => {
+	it("allows WebAssembly compilation without permitting JavaScript eval", () => {
 		const scriptSrc = directive("script-src");
 		expect(scriptSrc).toBeTruthy();
+		expect(scriptSrc!.split(/\s+/)).toContain("'wasm-unsafe-eval'");
 		expect(scriptSrc!.split(/\s+/)).not.toContain("'unsafe-eval'");
 	});
 });

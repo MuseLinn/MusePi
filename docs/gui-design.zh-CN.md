@@ -146,7 +146,7 @@ lang: zh-CN
 ## 5b. 动画与库选型(2026-08-07 评估)
 
 - **原则:CSS 优先 + 自研 hook**。现有动效体系全部手写 CSS/JS(Reveal/HeightMorph/useCollapse、BorderBeam、DotMatrixMark、ThinkingOrbs、KITT 扫光、两阶段浮层、宠伴帧动画)——桌面 GUI 的动效需求是"精致克制的 UI 反馈",CSS transition/keyframes 足够且零运行时开销、天然尊重 `prefers-reduced-motion`(`gui-motion-off` 偏好)。
-- **已用第三方**:`cuelume`(音效)、`lucide-react`/`lucide`(图标)、`morphicons`(Composer 发送/停止图标 morph)、`beautiful-mermaid`(guest-client Mermaid 渲染)、`@xterm/xterm`(终端)、`pdfjs-dist`(PDF)。**motion(原 Framer Motion)曾依赖但零引用——已移除**(2026-08-07)。
+- **已用第三方**:`cuelume`(音效)、`lucide-react`/`lucide`(图标)、`morphicons`(Composer 发送/停止图标 morph)、`beautiful-mermaid`(guest-client Mermaid 渲染)、`@xterm/xterm`(终端)、`EmbedPDF`(PDF)。**motion(原 Framer Motion)曾依赖但零引用——已移除**(2026-08-07)。
 - **GSAP 评估(不引入)**:GSAP 3(现完全免费,含全部插件)是命令式时间轴/ScrollTrigger/SplitText/MotionPath 的行业标准——但其强项场景(营销页滚动、文字逐字特效、复杂多步编排)不在桌面 GUI 核心路径;引入需建立新动画规范(时间轴/插值)且与现有 CSS 动效双轨并存。**保留为候选**:若后续做欢迎页品牌文字逐字动画(SplitText 类)、复杂转场编排,再评估。
 - **图标切换 = morphicons,禁自绘交叉(2026-08-14 教训)**:任何"图标 A → 图标 B"的过渡(主题/强调色全屏遮罩、按钮态切换、状态卡)一律用 **`morphicons`**(`morphicons/react` 的 `MorphIcon`,或纯 DOM 场景 `morphicons/element` 的 `<morph-icon>` + `set()`/`morphTo(target, "snappy")`)——**Procrustes 最优旋转 + 极坐标插值 + spring 物理的形状变形**。**禁止**用两个 SVG 叠放 + opacity/rotate 交叉淡入淡出伪装 morph(2026-08-14 主题遮罩曾误用,用户明确要求 morphicons 效果;Composer/Transcript/引导步骤已全部是 morphicons,遮罩必须同款)。
 - **store 变更通知必须在 swap 回调内 emit(2026-08-14 教训)**:`setThemePreference`/`setAccentPreference` 经 `withColorTransition` 延时(340ms)执行切换——**`emit()`/`emitAccent()` 必须放在 `withColorTransition(fn)` 的 `fn` 内部**(preference/accent 已更新后),不能放在调用之后:在外部同步 emit 会广播**旧值**,`useSyncExternalStore` 订阅者(设置页 segmented/色板按钮)读到旧 preference——按钮状态**滞后一次点击**(点了浅色、主题已切、按钮还在"跟随系统";下次点击显示的是上一次的选择)。
@@ -646,6 +646,30 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
   - 设置页往返：chat 列 + 侧栏 `display:none` 常驻，回来状态全在（见 §1 settings-shell 条目）。
   - 编辑器未存文本：`FilePane` 模块级 `unsavedBufferCache`（绝对路径键；保存/改回 saved 即删条目）——
     此前的实例级 ref 随 pane 卸载一起死，files→他表面→files 会丢未存文本。
+    Monaco 只拥有编辑视图，不拥有文件缓冲：编辑器修改更新 `edit.text`，但 React 不得把任何值回写到已挂载的 model，
+    从而保留光标、选区、撤销历史和 IME 组合输入。切换到其他路径时通过重挂编辑器创建新文档。
+    初始 CRLF 和末尾换行保持不变。纯文件树标签选中首个文件后直接成为该文件页；文件页展开的非模态树再选其他文件时
+    新开标签，保留原文件。单击打开可替换的预览标签，双击将其固定；跨文件定义跳转打开固定标签。同文件和跨文件定义跳转都会进入
+    按工作区隔离的编辑位置历史。文件头按钮和 Alt+←／Alt+→ 执行后退／前进，并恢复精确光标位置。普通光标移动只更新当前历史项，
+    普通标签点击不新增历史项。后退后发生新定义跳转会截断前进历史。历史仅在运行时保存，切换工作区后清空。
+    Alt+F12 或 Ctrl/Cmd+Shift+F10 在当前位置内嵌打开定义速览，Shift+F12 打开引用速览；两者都不切换当前文件标签，也不写入位置历史。
+    多个定义或引用可在速览结果列表中切换。速览编辑器可直接编辑；Ctrl/Cmd+S 通过同一文件缓冲和保存链路保存当前结果，
+    保存期间继续输入仍保持未保存状态。Escape 关闭速览。F12 保留跳转并记录历史的原有行为。Ctrl/Cmd+F12 跳转到实现，Ctrl/Cmd+Alt+F12 跳转到类型定义；
+    两者都会记录编辑位置历史。两种速览在明暗主题下都使用共享的液态玻璃圆角、描边、光泽、模糊和阴影；结果列表与编辑器表面保持透明，
+    以透出玻璃材质且不改变 Monaco 的列表几何尺寸。F2 打开 Monaco 原生重命名输入框，跨文件应用符号修改且不切换当前文件标签。
+    每个受影响文件分别保留未保存草稿并独立保存；各自执行保存前不写入磁盘。包含文件创建、删除或移动操作的重命名编辑会整次拒绝。
+    定义速览、引用速览、重命名、实现和类型定义快捷键在快捷键注册表的固定「编辑器」组中展示。草稿缓存键统一斜杠方向并忽略 Windows 盘符大小写，
+    因此未打开文件中的重命名修改在后续读取和标签切换后仍然保留。文本直接进入编辑，不再有预览到编辑的切换。HTML 在 Monaco 旁提供实时预览，
+    也可只看源码。Markdown 默认进入带顶部格式工具栏的单栏可视化编辑器；工具栏始终保持一行，放不下的命令收进锚定的「更多操作」菜单。
+    切换源码时以全宽 Monaco 替换可视化界面，不显示左右分栏预览。模式切换保留当前草稿；可视化文档未发生实际修改时保留原始源码。
+    YAML Front Matter 会显示提示和立即查看源码的操作。Markdown 还可把当前缓冲区导出为真正的 `.docx`。空间不足时，路径栏可横向滚动。
+    点击路径层级会打开贴着该层级的可搜索非模态目录菜单。展开的文件树与编辑器共享内容行，不改变路径行；长代码行横向滚动，不重新换行。
+    在文件树中点击当前已打开文件不会再打开标签。编辑器选区接入完整五项选区工具栏；内容区上方空间不足时，工具栏改到选区下方，
+    不得遮挡文件头。没有选区时，头部引用操作引用整文件。关闭未保存标签必须确认；确认关闭会丢弃缓存草稿，后续重开不得恢复。Monaco 中的 Escape 只关闭编辑器自身的
+    悬浮提示、补全、诊断、定义速览或引用速览浮层。PDF 使用内嵌阅读器，支持缩略图、页码跳转、缩放、旋转、搜索和外部应用打开。
+    工具栏始终保持一行，放不下的尾部命令收进「更多操作」。PDF 文字选区接入同一组五项操作；跨页引用保留起止页码、字符索引和每页矩形几何，
+    点击后回到起始页并恢复原选区。输入框将文件引用与会话引用分别折叠为带数量的芯片，点击芯片在弹层中查看完整引用。
+    选区高亮只存在应用层，不修改 PDF 文件。
   - 明确不保留（接受现状）：文件树 `scrollTop`、trajectory 列表滚动——重挂即重置；进会话默认落尾，
     jump-to-entry 按需滚动。加滚动缓存须另立设计说明。
 - **入口不变量（openchamber 对等，只记文档）**：表面只许从 rail、命令面板、内容内链
@@ -708,6 +732,7 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 右栏 git 面板补齐与完整 git 客户端的差距，全部落在现有子页签壳内：
 
 - **储藏页签**（`StashPane`，第三个 `GitPaneTab`）：说明输入框 + `git.stashPush`（含未跟踪；干净工作区返回 `{ok, empty}` 而非报错）、`git.stashList` 列表（`%gd%x1f%gs%x1f%cr%x1f%H` 格式——ref、主题、相对时间、hash）、每行「恢复并移除」（`git.stashPop`，冲突时 git 保留储藏、stderr 透出）和「删除」（**两步确认**：× → 对勾）。储藏行复用 `gui-changes-row`，与改动页视觉一致。
+- **更改差异**：现有文件树展开为只读 `MonacoDiffEditor`，不替换文件树、暂存操作或面板页签。编辑器沿用 `musepi-gui-chat-difflayout`：内联和并排是固定模式，动态模式在宽度低于 720px 时转为内联。长段未修改区域折叠；工具栏显示当前差异位置，并提供上一处／下一处导航。二进制、过大或无法读取的内容保留原有补丁视图。
 - **同步行**（`GitSyncControls`，挂在子页签栏上，三个 git 页签都够得到）：获取/拉取/推送图标钮 + 上游 `↑n ↓m` 计数（每次操作后重读 `git.status`；错误截断显示在按钮旁）。拉取**永远走变基**（`git pull --rebase --no-autostash`）——不产生合并提交，脏树大声报错而不是静默 autostash。
 - **daemon RPC**（模块级 `runGit(cwd, args, timeoutMs)` 助手，与 `runGh` 同构）：`git.fetch`（`fetch --all`）、`git.pull`、`git.stashList`、`git.stashPush`、`git.stashPop`、`git.stashDrop`；`github.prs` 新增透传 `state` 参数（`open|closed|merged|all`）。`legacy-routes.ts` 白名单顺带补了之前漏掉的 `git.push` / `git.identity`（漂移修复——列表落后于处理器）。
 - **看板状态过滤**：`PrPane` 按选中状态拉取（`PR_STATE_SEGMENTS` 在打开/已关闭/全部之外加了 已合并/`merged`）——gh 原生支持 `merged`，无需客户端过滤。详情里的标签/审查者变成可移除芯片（`gui-chip-x` 上的 × → `github.prEdit removeLabels/removeReviewers`，仅限打开的 PR）。

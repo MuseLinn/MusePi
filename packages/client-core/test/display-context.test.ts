@@ -86,6 +86,25 @@ describe("DisplayContext contract", () => {
 		).toBe("Workspace file reference: `docs/guide.md`\n\nreview");
 	});
 
+	it("keeps PDF page and glyph anchors in the model prompt and persisted context", () => {
+		const context = createFileQuoteContext({
+			path: "docs/spec.pdf",
+			quote: "安全边界",
+			pdf: {
+				startPage: 3,
+				endPage: 4,
+				startIndex: 12,
+				endIndex: 7,
+				selections: [],
+			},
+		});
+		expect(isDisplayContext(JSON.parse(JSON.stringify(context)))).toBe(true);
+		expect(composeDisplayContextPrompt([context], "explain")).toBe(
+			"Comment on this fragment of `docs/spec.pdf` PDF pages 3-4:\n> 安全边界\n\nexplain",
+		);
+		expect(isDisplayContext({ ...context, pdf: { ...context.pdf, startPage: 0 } })).toBe(false);
+	});
+
 	it("updates browser comments in both the context and its model prompt", () => {
 		const context = createBrowserAnnotationContext({
 			payload,

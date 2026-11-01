@@ -125,7 +125,12 @@ import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES, VIDEO_PROVIDER_CHOI
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
-import { restore as gitRestore, worktree as gitWorktrees } from "../utils/git";
+import {
+	diff as gitDiff,
+	readBlob as gitReadBlob,
+	restore as gitRestore,
+	worktree as gitWorktrees,
+} from "../utils/git";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
@@ -607,6 +612,7 @@ import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
 import { CredentialService } from "./services/credential-service";
 import { DesignSystemsService } from "./services/design-systems-service";
+import { EditorService } from "./services/editor-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
@@ -843,6 +849,7 @@ export class DaemonServer {
 				ensureFileIndex: () => host.ensureFileIndex(),
 			}),
 		);
+		this.#services.register(new EditorService());
 		// ArchiveService 无宿主依赖：归档落 agent dir 下，随会话隔离走。
 		this.#services.register(new ArchiveService());
 		// 收编第四刀（设计稿 §2 目标形态）：terminal-core builtin 插件单元——
@@ -2946,43 +2953,83 @@ export class DaemonServer {
 				return { commits: hasMore ? commits.slice(0, limit) : commits, hasMore };
 			}
 			case "git.diff": {
-				// Working-tree diff for the right-pane workspace-changes view.
-				// Runs git in the caller's session cwd (params.cwd); returns
-				// status + staged/unstaged unified diffs (default 200 lines
-				// cap per file). An optional `path` narrows to a single file
-				// (changes-tree expand).
-				const p = (params ?? {}) as { maxLines?: number; path?: string; cwd?: unknown };
+				// Working-tree diff for the right-pane workspace-changes view. The
+				// optional content pairs give Monaco the real HEAD/index/worktree
+				// versions; unified patches remain available as a bounded fallback.
+				const p = (params ?? {}) as { maxLines?: number; path?: string; cwd?: unknown; content?: unknown };
 				const maxLines = Math.min(500, Math.max(20, p.maxLines ?? 200));
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
-				const run = async (args: string[]): Promise<string> => {
-					const proc = Bun.spawnSync({
-						cmd: ["git", ...args],
-						cwd,
-						stdout: "pipe",
-						stderr: "pipe",
-						windowsHide: true,
-					});
-					return proc.stdout.toString();
-				};
-				let root = "";
-				try {
-					root = (await run(["rev-parse", "--show-toplevel"])).trim();
-				} catch {
-					return { error: "not a git repository" };
-				}
-				const fileArgs = p.path ? ["--", p.path] : [];
-				const [statusRaw, stagedRaw, unstagedRaw] = await Promise.all([
-					run(["status", "--short"]),
-					run(["diff", "--cached", `--unified=3`, ...fileArgs]),
-					run(["diff", `--unified=3`, ...fileArgs]),
+				const rootResult = await runGitRead(cwd, ["rev-parse", "--show-toplevel"]);
+				if (rootResult.exitCode !== 0) return { error: "not a git repository" };
+				const root = rootResult.stdout.trim();
+				const files = p.path ? [p.path] : undefined;
+				const [statusResult, stagedRaw, unstagedRaw] = await Promise.all([
+					runGitRead(cwd, ["status", "--short"]),
+					gitDiff(cwd, { cached: true, files, allowFailure: true }),
+					gitDiff(cwd, { files, allowFailure: true }),
 				]);
 				const cap = (text: string): string =>
 					text.length > maxLines * 400 ? `${text.slice(0, maxLines * 400)}\n… (truncated)` : text;
-				return {
+				const result = {
 					root,
-					status: statusRaw.trim(),
+					status: statusResult.stdout.trim(),
 					staged: cap(stagedRaw),
 					unstaged: cap(unstagedRaw),
+				};
+				if (p.content !== true) return result;
+				if (!p.path) return { ...result, contentError: "content requires a file path" };
+				const absolute = path.resolve(root, p.path);
+				const relative = path.relative(root, absolute);
+				if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+					return { ...result, contentError: "path is outside the repository" };
+				}
+				const repoPath = relative.split(path.sep).join("/");
+				const readObject = async (objectName: string): Promise<string | null> => {
+					try {
+						return await gitReadBlob(root, objectName);
+					} catch {
+						return null;
+					}
+				};
+				const readWorking = async (): Promise<string | null> => {
+					try {
+						return await fs.promises.readFile(absolute, "utf8");
+					} catch (error) {
+						return (error as { code?: string }).code === "ENOENT" ? "" : null;
+					}
+				};
+				const [head, index, working, untrackedStatus] = await Promise.all([
+					stagedRaw ? readObject(`HEAD:${repoPath}`) : null,
+					stagedRaw || unstagedRaw ? readObject(`:${repoPath}`) : null,
+					unstagedRaw || !stagedRaw ? readWorking() : null,
+					!stagedRaw && !unstagedRaw ? runGitRead(root, ["status", "--short", "--", repoPath]) : null,
+				]);
+				const contentPair = (
+					original: string | null,
+					modified: string | null,
+				): { original: string; modified: string } | null => {
+					if (original === null || modified === null) return null;
+					if (original.includes("\0") || modified.includes("\0")) return null;
+					if (Buffer.byteLength(original) > 2 * 1024 * 1024 || Buffer.byteLength(modified) > 2 * 1024 * 1024) {
+						return null;
+					}
+					return { original, modified };
+				};
+				const stagedContent = stagedRaw
+					? contentPair(
+							head ?? (stagedRaw.includes("new file mode") ? "" : null),
+							index ?? (stagedRaw.includes("deleted file mode") ? "" : null),
+						)
+					: null;
+				const unstagedContent = unstagedRaw
+					? contentPair(index, working)
+					: untrackedStatus?.stdout.startsWith("?? ")
+						? contentPair("", working)
+						: null;
+				return {
+					...result,
+					...(stagedContent ? { stagedContent } : {}),
+					...(unstagedContent ? { unstagedContent } : {}),
 				};
 			}
 			case "git.show": {
@@ -8341,6 +8388,33 @@ export class DaemonServer {
 			}
 			case "workspace.tree": {
 				return this.#services.get<FileService>("files").tree(params ?? {});
+			}
+			case "editor.sync": {
+				return this.#services.get<EditorService>("editor").sync(params ?? {});
+			}
+			case "editor.saved": {
+				return this.#services.get<EditorService>("editor").saved(params ?? {});
+			}
+			case "editor.hover": {
+				return this.#services.get<EditorService>("editor").hover(params ?? {});
+			}
+			case "editor.completion": {
+				return this.#services.get<EditorService>("editor").completion(params ?? {});
+			}
+			case "editor.definition": {
+				return this.#services.get<EditorService>("editor").definition(params ?? {});
+			}
+			case "editor.implementation": {
+				return this.#services.get<EditorService>("editor").implementation(params ?? {});
+			}
+			case "editor.typeDefinition": {
+				return this.#services.get<EditorService>("editor").typeDefinition(params ?? {});
+			}
+			case "editor.references": {
+				return this.#services.get<EditorService>("editor").references(params ?? {});
+			}
+			case "editor.rename": {
+				return this.#services.get<EditorService>("editor").rename(params ?? {});
 			}
 			case "archive.build": {
 				// 委托 ArchiveService（选中文件打 zip；build-then-poll 语义、

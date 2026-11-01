@@ -2,8 +2,8 @@ import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type Segmented
 import { createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import { renderAsync as renderDocx } from "docx-preview";
 import {
-	ArrowLeft,
 	ClipboardCopy,
+	Download,
 	ExternalLink,
 	Eye,
 	EyeOff,
@@ -17,7 +17,7 @@ import {
 	FileType,
 	Folder,
 	FolderPlus,
-	Pencil,
+	PanelLeft,
 	Presentation,
 	Quote,
 	RefreshCw,
@@ -25,13 +25,13 @@ import {
 	ScanEye,
 	Search,
 } from "lucide-react";
-import type * as PdfjsLib from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { owningArtifact, useArtifactIndex } from "../lib/artifact-index";
 // Import order below is alphabetical by module path (biome).
 import { type BuiltinViewerDeps, builtinFileViewers } from "../lib/builtin-file-viewers";
+import type { EditorLocation } from "../lib/editor-navigation";
 import { listFileViewers, orderViewers, renderWithViewerList } from "../lib/file-viewers";
 import {
 	onGitPrefsChanged,
@@ -41,14 +41,23 @@ import {
 	writeShowIgnored,
 } from "../lib/git-prefs";
 import { useChatHighlight } from "../lib/highlight";
+import { downloadMarkdownDocx } from "../lib/markdown-docx";
+import type { MonacoPeekBuffer } from "../lib/monaco-lsp";
 import { previewMappingFor } from "../lib/preview-from-viewer";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { captureSelectionContext } from "../lib/selection-capture";
+import { Icon } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import { FileCodeEditor, type FileEditorSelection } from "./FileCodeEditor";
+import { FileDirectoryMenu } from "./FileDirectoryMenu";
+import { FileMarkdownEditor, hasYamlFrontMatter, type FileMarkdownEditorHandle } from "./FileMarkdownEditor";
+import type { PdfEditorSelection } from "./FilePdfPreview";
+import { FileOpenWith } from "./FileOpenWith";
 import { ImagePreview } from "./FilePaneImagePreview";
 import { useMarkdownFileNavigation } from "./FilePaneMarkdownNav";
 import { FontPreview, MediaPreview, MermaidPreview } from "./FilePanePreviews";
+import { SelectionToolbar } from "./SelectionToolbar";
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
 const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
@@ -62,47 +71,9 @@ const HTML_VIEW_SEGMENTS: SegmentedOption<"live" | "source">[] = [
 	{ value: "source", label: t("settings.sourceCode") },
 ];
 
-/**
- * pdf.js is ~0.9 MB and is reached only once someone opens a PDF, so it
- * loads on demand and is kept for the pane's lifetime (a second preview
- * of the same kind resolves instantly). The type stays a top-level import:
- * only the value is deferred.
- */
-let pdfjsPromise: Promise<typeof PdfjsLib> | null = null;
-function loadPdfjs(): Promise<typeof PdfjsLib> {
-	if (pdfjsPromise) return pdfjsPromise;
-	pdfjsPromise = import("pdfjs-dist").then(mod => {
-		// pdf.js worker: copied next to index.html by the build script
-		// (scripts/build copies node_modules/pdfjs-dist/build/pdf.worker.min.mjs
-		// into dist/); file:// workers load fine from the same origin.
-		mod.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", window.location.href).toString();
-		return mod;
-	});
-	return pdfjsPromise;
-}
-
-/**
- * Inline PDF preview via pdf.js (VS Code-style): render every page to a canvas
- * → data URL. Throws on a corrupt/encrypted PDF; the pdf viewer turns that into
- * a decline, which the pane reads as "open in the system default app".
- */
-async function renderPdfPagesToDataUrls(bytes: Uint8Array): Promise<string[]> {
-	const pdfjs = await loadPdfjs();
-	const doc = await pdfjs.getDocument({ data: bytes }).promise;
-	const pages: string[] = [];
-	for (let i = 1; i <= doc.numPages; i++) {
-		const page = await doc.getPage(i);
-		const viewport = page.getViewport({ scale: 1.5 });
-		const canvas = document.createElement("canvas");
-		canvas.width = Math.ceil(viewport.width);
-		canvas.height = Math.ceil(viewport.height);
-		const pctx = canvas.getContext("2d");
-		if (!pctx) throw new Error("canvas unavailable");
-		await page.render({ canvas, canvasContext: pctx, viewport }).promise;
-		pages.push(canvas.toDataURL("image/png"));
-	}
-	return pages;
-}
+/** The PDFium reader is a real split point: ordinary text and image files do
+ * not pay for its engine or plugin graph. */
+const FilePdfPreview = lazy(() => import("./FilePdfPreview"));
 
 /**
  * Workspace file pane: the daemon's structured workspace.tree scan rendered
@@ -136,9 +107,8 @@ interface PreviewState {
 	htmlLive?: string;
 	/** blob URL for image preview */
 	imageUrl?: string;
-	/** rendered PDF pages as data URLs (inline pdf.js preview). Readonly: the
-	 *  viewer produces them frozen and the pane only maps over them. */
-	pdfPages?: readonly string[];
+	/** Original PDF bytes; the lazy reader renders only visible pages. */
+	pdfBytes?: ArrayBuffer;
 	/** docx bytes for the docx-preview renderer */
 	docxBytes?: ArrayBuffer;
 	/** xlsx/xls/csv sheets rendered to standalone HTML tables. Readonly: the
@@ -160,10 +130,6 @@ interface PreviewState {
 	artifact?: { kind: string; renderer: string; exports?: string[]; errors?: string[] };
 }
 
-/** Files above this size open view-only — a textarea holding megabytes drags
- *  the whole panel down, and saving them through fs.write is not what the
- *  inline editor is for. */
-const EDIT_MAX_BYTES = 2 * 1024 * 1024;
 /** sheet_to_html truncation point per sheet (parse-time sheetRows cap). */
 const OFFICE_SHEET_ROWS = 1000;
 
@@ -171,13 +137,32 @@ const OFFICE_SHEET_ROWS = 1000;
 const ROW_H = 26;
 const ROW_BUFFER = 6;
 
-/** Unsaved inline-editor buffers keyed by absolute path, module-scoped so a
- *  buffer survives the pane unmounting (renderPanelBody mounts only the
- *  active tab's body — switching to another surface unmounts this pane and
- *  would otherwise reset the textarea to disk bytes on return). Saved files
- *  and buffers edited back to `saved` drop their entry; the map holds text
- *  only, never file bytes. */
-const unsavedBufferCache = new Map<string, { text: string; saved: string }>();
+interface FilePreviewBuffer {
+	text: string;
+	saved: string;
+}
+
+/** Monaco and file tabs can spell the same Windows path with different slash
+ * directions and drive-letter casing. Cache identity must not depend on either. */
+function filePreviewBufferKey(path: string): string {
+	const normalized = path.replace(/\\/g, "/");
+	return /^[A-Za-z]:\//.test(normalized) ? `${normalized.charAt(0).toLowerCase()}${normalized.slice(1)}` : normalized;
+}
+
+/** Module scope preserves dirty text while an inactive tab's pane is unmounted.
+ * Only unsaved text is retained; saving or restoring the saved text drops it. */
+const unsavedBuffers = new Map<string, FilePreviewBuffer>();
+const unsavedBufferCache = {
+	get(path: string): FilePreviewBuffer | undefined {
+		return unsavedBuffers.get(filePreviewBufferKey(path));
+	},
+	set(path: string, buffer: FilePreviewBuffer): void {
+		unsavedBuffers.set(filePreviewBufferKey(path), buffer);
+	},
+	delete(path: string): void {
+		unsavedBuffers.delete(filePreviewBufferKey(path));
+	},
+};
 
 interface TreeNode {
 	entry: WorkspaceEntry;
@@ -200,10 +185,18 @@ interface MenuState {
 }
 
 /** Build the tree from the flat scan: dirs first (parents before children —
- *  listWorkspace is depth-first), then files attached to their parent dir. */
-function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
-	const dirs = entries.filter(e => e.isDir);
-	const files = entries.filter(e => !e.isDir);
+ *  listWorkspace is depth-first), then files attached to their parent dir.
+ *  A truncated or filtered scan can omit a parent; its descendants stay hidden
+ *  instead of becoming misleading root entries. */
+export function buildTree(entries: WorkspaceEntry[], browseRoot = ""): TreeNode[] {
+	const seen = new Set<string>();
+	const unique = entries.filter(entry => {
+		if (seen.has(entry.path)) return false;
+		seen.add(entry.path);
+		return true;
+	});
+	const dirs = unique.filter(e => e.isDir);
+	const files = unique.filter(e => !e.isDir);
 	const byPath = new Map<string, TreeNode>();
 	const roots: TreeNode[] = [];
 	for (const e of dirs) {
@@ -215,7 +208,7 @@ function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
 		const parentPath = slash === -1 ? "" : e.path.slice(0, slash);
 		const parent = byPath.get(parentPath);
 		if (parent) parent.children.push(node);
-		else roots.push(node);
+		else if (parentPath === "" || parentPath === browseRoot) roots.push(node);
 	}
 	for (const e of files) {
 		const slash = e.path.lastIndexOf("/");
@@ -223,7 +216,7 @@ function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
 		const node: TreeNode = { entry: e, children: [], label: e.name };
 		const parent = byPath.get(parentPath);
 		if (parent) parent.children.push(node);
-		else roots.push(node);
+		else if (parentPath === "" || parentPath === browseRoot) roots.push(node);
 	}
 	return roots;
 }
@@ -239,7 +232,57 @@ function matchesQuery(entry: WorkspaceEntry, query: string): boolean {
  *  openPreview only needs path/name/isDir to fetch content; the scan-derived
  *  fields are zeroed and never rendered for this path. */
 function syntheticEntry(path: string): WorkspaceEntry {
-	return { path, name: path.split("/").pop() ?? path, isDir: false, size: 0, mtime: 0, depth: 0 };
+	return { path, name: path.split(/[\\/]/).pop() ?? path, isDir: false, size: 0, mtime: 0, depth: 0 };
+}
+
+/** Resolve tree-relative paths without treating Windows or UNC absolute paths
+ *  as workspace children. Preview state and the unsaved cache use this form. */
+export function resolveFilePreviewPath(cwd: string, path: string): string {
+	if (path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)) return path;
+	return `${cwd.replace(/[\\/]+$/, "")}/${path}`;
+}
+
+/** fs.write accepts workspace-relative paths only. Monaco normalizes Windows
+ *  paths to lowercase drive letters and backslashes, so compare Windows roots
+ *  case-insensitively and return slash-separated paths to the daemon. Paths
+ *  outside the workspace stay absolute and are rejected by the file service. */
+export function filePreviewWorkspacePath(cwd: string, path: string): string {
+	const root = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
+	const candidate = path.replace(/\\/g, "/");
+	const prefix = `${root}/`;
+	const windows = /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\");
+	const inside = windows ? candidate.toLowerCase().startsWith(prefix.toLowerCase()) : candidate.startsWith(prefix);
+	return inside ? candidate.slice(prefix.length) : path;
+}
+
+/** Compare canonical workspace-relative paths, including Windows drive case. */
+export function filePreviewPathEquals(cwd: string, left: string, right: string): boolean {
+	const a = filePreviewWorkspacePath(cwd, left);
+	const b = filePreviewWorkspacePath(cwd, right);
+	const windows = /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\");
+	return windows ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+/** Accepted close operations must survive the pane's unmount cleanup, which
+ * otherwise writes the dirty buffer straight back into the cache. */
+const discardedBufferPaths = new Set<string>();
+
+export function discardFilePreviewBuffer(cwd: string, path: string): void {
+	const absolute = resolveFilePreviewPath(cwd, path);
+	unsavedBufferCache.delete(absolute);
+	discardedBufferPaths.add(filePreviewBufferKey(absolute));
+}
+
+/** Stash a dirty buffer for a deactivation, but never for an accepted close. */
+export function stashFilePreviewBuffer(path: string, buffer: FilePreviewBuffer): void {
+	if (buffer.text !== buffer.saved && !discardedBufferPaths.has(filePreviewBufferKey(path)))
+		unsavedBufferCache.set(path, buffer);
+}
+
+/** Restore a deactivated buffer. A deliberate reopen starts a new close cycle. */
+export function restoreFilePreviewBuffer(path: string): FilePreviewBuffer | null {
+	discardedBufferPaths.delete(filePreviewBufferKey(path));
+	return unsavedBufferCache.get(path) ?? null;
 }
 
 /** Flatten visible rows honoring collapse state + search query. In query
@@ -360,13 +403,20 @@ export function FilePane({
 	browseRoot = null,
 	onOpenFile,
 	onDirty,
-	onShowTree,
+	onClosePreview,
+	onNewSession,
+	canNavigateBack = false,
+	canNavigateForward = false,
+	onNavigateBack,
+	onNavigateForward,
+	onEditorNavigate,
+	onEditorPositionChange,
 }: {
 	rpc: RpcClient;
 	cwd: string;
 	/** External reveal (artifact cards / transcript paths): preview this
 	 *  path via the same pipeline as a tree click. */
-	openRequest?: { path: string; nonce: number } | null;
+	openRequest?: { path: string; nonce: number; pdf?: PdfEditorSelection["anchor"]; quote?: string } | null;
 	/** Tab-primary model (docs §3.3.2): file instances live in the PANEL
 	 *  strip. The pane loads whatever file tab the panel activated. */
 	activeFile?: string | null;
@@ -375,16 +425,24 @@ export function FilePane({
 	 *  `activeFile`, which addresses a file to preview — one tab is a directory
 	 *  to browse or a file to preview, never both. */
 	browseRoot?: string | null;
-	/** Tree clicks / previews register back into the panel strip. */
-	onOpenFile?: (path: string, name: string) => void;
+	/** Tree selection registers a preview; a double click pins it. `newTab`
+	 *  preserves the file page whose inline tree initiated the open. */
+	onOpenFile?: (path: string, name: string, options: { pin: boolean; newTab?: boolean }) => void;
 	/** Inline-editor dirty state for the given tree path, mirrored onto the
 	 *  panel tab (dot + close guard). Reported with the same path the pane
 	 *  passed to onOpenFile, so the strip can find its tab. */
 	onDirty?: (path: string, dirty: boolean) => void;
-	/** Panel-level file instances split the tree and the preview into two
-	 *  tabs: the preview's back button shows the tree tab instead of
-	 *  unmounting its own preview (tree/preview tabs). */
-	onShowTree?: () => void;
+	/** Close the owning file tab. The panel retains its dirty-close guard. */
+	onClosePreview?: () => void;
+	/** Start a session from selected file text, using the chat's existing flow. */
+	onNewSession?: (text: string) => void;
+	/** VS Code-style editor-location history, owned by ContextPanel per cwd. */
+	canNavigateBack?: boolean;
+	canNavigateForward?: boolean;
+	onNavigateBack?(): void;
+	onNavigateForward?(): void;
+	onEditorNavigate?(source: EditorLocation, target: EditorLocation): void;
+	onEditorPositionChange?(location: EditorLocation): void;
 }): ReactNode {
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -402,11 +460,19 @@ export function FilePane({
 	const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
 	/** Inline editor buffer: null = view mode; text/saved drive the dirty dot. */
 	const [edit, setEdit] = useState<{ text: string; saved: string } | null>(null);
+	const [fileSelection, setFileSelection] = useState<FileEditorSelection | null>(null);
+	const [pdfSelection, setPdfSelection] = useState<PdfEditorSelection | null>(null);
 	const [saving, setSaving] = useState(false);
+	const [exportingWord, setExportingWord] = useState(false);
 	/** .html preview: "live" (rendered page) or "source" (highlighted text). */
 	const [htmlLiveMode, setHtmlLiveMode] = useState<"live" | "source">("live");
 	/** .md preview: rendered Markdown (default) or raw source. */
 	const [mdRender, setMdRender] = useState(true);
+	/** File pages hide their non-modal project tree until explicitly expanded. */
+	const [treeExpanded, setTreeExpanded] = useState(false);
+	/** Workspace-relative directory and clicked segment for the anchored menu. */
+	const [directoryPath, setDirectoryPath] = useState<string | null>(null);
+	const [directoryAnchor, setDirectoryAnchor] = useState<HTMLElement | null>(null);
 	const [ctx, setCtx] = useState<MenuState | null>(null);
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 	/** List .gitignore'd paths too (shared pref with the Git tab / changes
@@ -424,6 +490,16 @@ export function FilePane({
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const editRef = useRef<HTMLInputElement | null>(null);
+	const markdownEditorRef = useRef<FileMarkdownEditorHandle | null>(null);
+	const updateEditText = (text: string): void =>
+		setEdit(cur => {
+			const next = cur ? { ...cur, text } : null;
+			if (next && preview) {
+				unsavedBufferCache.set(preview.path, next);
+				if (text === next.saved) unsavedBufferCache.delete(preview.path);
+			}
+			return next;
+		});
 	const highlight = useChatHighlight();
 	// Viewers are built once per pane from the component's own services, not
 	// from a process-wide registry: the highlighter is a hook result scoped to
@@ -435,7 +511,6 @@ export function FilePane({
 			highlight: (text, lang) => Promise.resolve(highlight(text, lang)),
 			highlightToHtml: highlightToCodeHtml,
 			buildSheets: buildSheetModels,
-			renderPdfPages: renderPdfPagesToDataUrls,
 		}),
 		[highlight],
 	);
@@ -460,6 +535,8 @@ export function FilePane({
 	 *  editor buffer without depending on `preview` (which would re-arm the
 	 *  cleanup on every preview switch). */
 	const previewPathRef = useRef<string | null>(null);
+	/** Only the latest file load may publish preview state. */
+	const previewRequestRef = useRef(0);
 
 	// File instances live in the PANEL tab strip (tab-primary, docs §3.3.2):
 	// this pane is the body of whichever `files:<path>` tab is active, so it
@@ -515,7 +592,7 @@ export function FilePane({
 		const ro = new ResizeObserver(measure);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [entries, preview]);
+	}, [entries, preview, treeExpanded]);
 
 	// Focus the inline editor when it mounts.
 	useEffect(() => {
@@ -565,9 +642,10 @@ export function FilePane({
 	}, [preview?.path, artifactByDir, cwd]);
 	useEffect(() => {
 		return () => {
+			previewRequestRef.current += 1;
 			const buf = editBufRef.current;
 			const path = previewPathRef.current;
-			if (buf && buf.text !== buf.saved && path) unsavedBufferCache.set(path, buf);
+			if (buf && path) stashFilePreviewBuffer(path, buf);
 		};
 	}, []);
 
@@ -575,8 +653,8 @@ export function FilePane({
 		// Dotfile filter is client-side only: the daemon scan always returns
 		// hidden entries, so the toggle just narrows what the tree builds.
 		const visible = showHidden ? (entries ?? []) : (entries ?? []).filter(e => !e.name.startsWith("."));
-		return compressTree(buildTree(visible));
-	}, [entries, showHidden]);
+		return compressTree(buildTree(visible, browseRoot ?? ""));
+	}, [entries, showHidden, browseRoot]);
 	// Collapsed by default: a fresh Files view is a folder
 	// list, not an expanded dump — the expanded form is what reads as noise.
 	// Seeded once from the first tree that carries directories, so a later
@@ -604,6 +682,8 @@ export function FilePane({
 		if (!buf || buf.text === buf.saved) return true;
 		const ok = await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true });
 		if (ok) {
+			const path = previewPathRef.current;
+			if (path) unsavedBufferCache.delete(path);
 			editBufRef.current = null;
 			setEdit(null);
 		}
@@ -625,45 +705,33 @@ export function FilePane({
 	}, [dirty, onDirty, preview]);
 
 	const openPreview = useCallback(
-		async (entry: WorkspaceEntry, opts?: { enterEdit?: boolean }): Promise<boolean> => {
+		async (entry: WorkspaceEntry): Promise<boolean> => {
 			if (entry.isDir) return false;
 			if (!(await confirmDiscard())) return false;
+			const request = ++previewRequestRef.current;
 			setSelectedPath(entry.path);
 			setEdit(null);
+			setFileSelection(null);
+			setPdfSelection(null);
 			previewRegPathRef.current = entry.path;
-			onOpenFile?.(entry.path, entry.name);
-			// workspace.tree paths are relative to the session cwd; external
-			// reveals (artifact cards) may carry absolute paths — don't join.
-			const absPath = entry.path.startsWith("/") ? entry.path : `${cwd}/${entry.path}`;
-			// A re-open of the same file (tree click on the tab already open)
-			// keeps its unsaved buffer; anything else starts from disk. A
-			// DIRTY cached buffer also re-enters the editor straight away
-			// (pane unmount across a tree↔file tab switch): the user comes
-			// back to their unsaved text, not a silent reset to disk bytes.
-			const buffer = unsavedBufferCache.get(absPath) ?? null;
+			const absPath = resolveFilePreviewPath(cwd, entry.path);
+			// A cached buffer wins over disk after a pane unmount. Every supported
+			// text file opens editable; read-only viewers never seed this state.
+			const buffer = restoreFilePreviewBuffer(absPath);
 			if (!buffer) unsavedBufferCache.delete(absPath);
-			// If the editor opened straight into a freshly created file, a
-			// tree click before any save would otherwise drop its content.
-			const enterEdit = opts?.enterEdit ?? false;
-			const restoreEdit = enterEdit || (buffer !== null && buffer.text !== buffer.saved);
 			try {
 				const res = await rpc.request<{ base64?: string; size?: number; mime?: string; error?: string }>(
 					"fs.readBytes",
-					{ path: absPath },
+					{ path: absPath, maxBytes: 32 * 1024 * 1024 },
 				);
+				if (request !== previewRequestRef.current) return true;
 				if (res.error || !res.base64) {
 					setPreview({ path: absPath, name: entry.name, size: entry.size, error: res.error ?? "read failed" });
 					return true;
 				}
 				const bytes = Uint8Array.from(atob(res.base64), c => c.charCodeAt(0));
-				// Classification, decode, and per-format rendering live in the
-				// viewer registry (lib/file-viewers), ordered by priority; the pane
-				// hands these bytes to the first viewer that takes the file and maps
-				// the result back onto preview state through `previewMappingFor`.
-				// That mapping is pure and unit-tested so the two editor-seed
-				// asymmetries that were in the branch chain this replaced — html and
-				// a highlighted file open read-only, plain text and Markdown seed the
-				// inline editor — stay pinned without mounting the component.
+				// Viewer rendering is asynchronous too, so the same epoch guards
+				// both the byte response and the decoded/rendered result.
 				const ext = extOf(entry.name);
 				const result = await renderWithViewerList(viewers, {
 					name: entry.name,
@@ -673,11 +741,10 @@ export function FilePane({
 					mime: res.mime,
 					ext,
 				});
+				if (request !== previewRequestRef.current) return true;
 				if (result === undefined) {
-					// No viewer took the file (an unknown binary, or a corrupt/encrypted
-					// document that declined to render): open it in the system app, the
-					// same fall-through the chain had.
 					await window.electronAPI?.openWith("", absPath);
+					if (request !== previewRequestRef.current) return true;
 					setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, external: true });
 					return true;
 				}
@@ -685,14 +752,12 @@ export function FilePane({
 				if (mapped.htmlLiveMode === "live") setHtmlLiveMode("live");
 				if (mapped.mdRender === true) setMdRender(true);
 				setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, ...mapped.fields });
-				// The editor seeds only for a format whose preview IS its text
-				// (plain text, Markdown); an html or highlighted view opens
-				// read-only, and a dirty cached buffer re-enters the editor.
-				if (restoreEdit && mapped.editable !== undefined) {
+				if (mapped.editable !== undefined) {
 					setEdit(buffer ?? { text: mapped.editable, saved: mapped.editable });
 				}
 				return true;
 			} catch (err) {
+				if (request !== previewRequestRef.current) return true;
 				setPreview({
 					path: absPath,
 					name: entry.name,
@@ -702,14 +767,28 @@ export function FilePane({
 				return true;
 			}
 		},
-		[rpc, cwd, viewers, onOpenFile, confirmDiscard],
+		[rpc, cwd, viewers, confirmDiscard],
 	);
 
-	// Load whichever file tab the panel strip activated. Skipped when the
-	// preview already shows that path (the tab was opened by this pane, so
-	// openPreview already ran and re-running would reload the same bytes).
-	// A cancelled leave-guard (user keeps their unsaved buffer) rolls the
-	// ref back so the declined tab can still be activated later.
+	/** In panel mode the tree only registers intent. The selected file tab is
+	 *  the sole content loader, which removes the old tree+tab double read. */
+	const openFile = useCallback(
+		(entry: WorkspaceEntry, opts?: { pin?: boolean; newTab?: boolean }): void => {
+			if (entry.isDir) return;
+			if (onOpenFile) {
+				setSelectedPath(entry.path);
+				const absolute = resolveFilePreviewPath(cwd, entry.path);
+				if (opts?.newTab && preview && filePreviewBufferKey(preview.path) === filePreviewBufferKey(absolute)) return;
+				onOpenFile(entry.path, entry.name, { pin: opts?.pin ?? false, newTab: opts?.newTab ?? false });
+				return;
+			}
+			void openPreview(entry);
+		},
+		[cwd, onOpenFile, openPreview, preview],
+	);
+
+	// The active file tab owns content loading. A cancelled leave-guard rolls
+	// the ref back so the declined tab can still be activated later.
 	const lastLoadedRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!activeFile) {
@@ -738,18 +817,16 @@ export function FilePane({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [editing, rows]);
 
-	// External reveal (artifact cards / transcript path clicks): preview
-	// via the same pipeline as a tree click. The path is absolute; the
-	// preview joins cwd + entry.path, so relativize when inside cwd.
+	// Standalone panes consume external reveals directly. Panel mode already
+	// loads the active tab above, so consuming the request again would read twice.
 	useEffect(() => {
-		if (!openRequest) return;
-		const abs = openRequest.path;
-		const prefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
-		const rel = abs.startsWith(prefix) ? abs.slice(prefix.length) : abs;
-		const name = rel.slice(Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\")) + 1);
-		void openPreview({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
+		if (!openRequest || onOpenFile) return;
+		const path = filePreviewWorkspacePath(cwd, openRequest.path);
+		const name = path.split(/[\\/]/).pop() ?? path;
+		void openPreview({ path, name, size: 0, isDir: false, mtime: 0, depth: 0 });
+		// openPreview is stable for the lifetime of one file request.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [openRequest, openPreview, cwd.endsWith, cwd]);
+	}, [openRequest, onOpenFile, cwd]);
 
 	// A markdown FILE preview's relative links open the target here; the
 	// hook takes the previewed file's workspace-relative path so the link
@@ -759,9 +836,9 @@ export function FilePane({
 			const prefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
 			const rel = absoluteTarget.startsWith(prefix) ? absoluteTarget.slice(prefix.length) : absoluteTarget;
 			const name = rel.slice(Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\")) + 1);
-			void openPreview({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
+			openFile({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
 		},
-		[cwd, openPreview],
+		[cwd, openFile],
 	);
 	const mdPreviewPath = useMemo(
 		() =>
@@ -770,7 +847,7 @@ export function FilePane({
 				: null,
 		[preview, cwd],
 	);
-	useMarkdownFileNavigation(mdPreviewRef.current, mdPreviewPath, mdFileNavigation);
+	useMarkdownFileNavigation(bodyRef.current, mdPreviewPath, mdFileNavigation);
 
 	const toggleDir = useCallback((path: string): void => {
 		setCollapsed(prev => {
@@ -830,16 +907,14 @@ export function FilePane({
 		try {
 			if (editing.kind === "new-file") {
 				await rpc.request("fs.write", { cwd, path: rel, content: "" });
-				// A fresh empty file is a dead end in an external app — open it
-				// straight into the inline editor instead.
-				void openPreview({ path: rel, name, isDir: false, size: 0, mtime: 0, depth: 0 }, { enterEdit: true });
+				openFile({ path: rel, name, isDir: false, size: 0, mtime: 0, depth: 0 }, { pin: true });
 			} else if (editing.kind === "new-dir") await rpc.request("fs.mkdir", { cwd, path: rel });
 			else await rpc.request("fs.rename", { cwd, from: target!.path, to: rel });
 			await load();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
-	}, [editing, editValue, rpc, cwd, load, openPreview]);
+	}, [editing, editValue, rpc, cwd, load, openFile]);
 
 	const confirmDelete = useCallback(async (): Promise<void> => {
 		const target = ctx?.entry;
@@ -854,59 +929,139 @@ export function FilePane({
 		}
 	}, [ctx, rpc, cwd, load]);
 
-	/** Enter the inline editor for the file currently being previewed.
-	 *  Files without a text representation (images/PDFs/office binaries) or
-	 *  past the size cap stay view-only. */
-	const startEdit = useCallback(async (): Promise<void> => {
-		if (!preview) return;
-		if (preview.raw !== undefined) {
-			const cached = unsavedBufferCache.get(preview.path);
-			if (cached) {
-				if (edit && edit.text !== edit.saved) {
-					if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true })))
-						return;
-				}
-				setEdit(cached);
-			} else if (!edit) setEdit({ text: preview.raw, saved: preview.raw });
-			else if (edit.text !== edit.saved) {
-				if (!(await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true })))
-					return;
-				setEdit({ text: preview.raw, saved: preview.raw });
+	/** Persist the edited buffer. Monaco supplies its current model text for
+	 *  Ctrl+S so a pending React render cannot omit the last edit. The saved
+	 *  marker uses that same snapshot; newer typing during fs.write stays dirty. */
+	const saveEdit = useCallback(
+		async (modelText?: string): Promise<void> => {
+			if (!edit || !preview || saving) return;
+			const text = modelText ?? edit.text;
+			const rel = filePreviewWorkspacePath(cwd, preview.path);
+			setSaving(true);
+			try {
+				const result = await rpc.request<{ ok: boolean; error?: string }>("fs.write", {
+					cwd,
+					path: rel,
+					content: text,
+				});
+				if (!result.ok) throw new Error(result.error ?? "File save failed");
+				setEdit(cur => (cur ? { ...cur, saved: text } : cur));
+				unsavedBufferCache.delete(preview.path);
+				// Disk save is authoritative. A missing or slow language server must
+				// not turn a successful write into a visible save failure.
+				void rpc
+					.request("editor.saved", { cwd, path: preview.path, content: text }, { timeoutMs: 12_000 })
+					.catch(() => {});
+				await load();
+			} catch (err) {
+				setError(err instanceof Error ? err.message : String(err));
+			} finally {
+				setSaving(false);
 			}
-			editRef.current?.focus();
-		} else if (preview.size > EDIT_MAX_BYTES) {
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("settings.fileTooLargeEdit") }));
-		} else {
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("settings.unsupportedEdit") }));
-		}
-	}, [preview, edit, confirm]);
+		},
+		[edit, preview, cwd, rpc, load, saving],
+	);
 
-	const exitEdit = useCallback(async (): Promise<void> => {
-		if (!edit || edit.text === edit.saved) {
-			setEdit(null);
-			return;
-		}
-		if (await confirm(t("settings.discardUnsavedChanges"), t("general.discard"), { destructive: true }))
-			setEdit(null);
-	}, [edit, confirm]);
+	const loadPeekFile = useCallback(
+		async (path: string): Promise<MonacoPeekBuffer | null> => {
+			const absolute = resolveFilePreviewPath(cwd, filePreviewWorkspacePath(cwd, path));
+			const cached = unsavedBufferCache.get(absolute);
+			if (cached) return { path: absolute, ...cached };
+			try {
+				const result = await rpc.request<{ base64?: string; size?: number; error?: string }>("fs.readBytes", {
+					path: absolute,
+				});
+				if (result.error || result.base64 === undefined || (result.size ?? 0) > 2 * 1024 * 1024) return null;
+				const bytes = Uint8Array.from(atob(result.base64), char => char.charCodeAt(0));
+				const text = new TextDecoder().decode(bytes);
+				return { path: absolute, text, saved: text };
+			} catch {
+				return null;
+			}
+		},
+		[cwd, rpc],
+	);
 
-	/** Persist the edited buffer. fs.write takes cwd-relative paths; the
-	 *  preview joined cwd already, so split the tail back off. */
-	const saveEdit = useCallback(async (): Promise<void> => {
-		if (!edit || !preview || saving) return;
-		const rel = preview.path.startsWith(`${cwd}/`) ? preview.path.slice(cwd.length + 1) : preview.path;
-		setSaving(true);
+	const changePeekBuffer = useCallback(
+		(buffer: MonacoPeekBuffer): void => {
+			const absolute = resolveFilePreviewPath(cwd, filePreviewWorkspacePath(cwd, buffer.path));
+			const next = { text: buffer.text, saved: buffer.saved };
+			if (buffer.text === buffer.saved) unsavedBufferCache.delete(absolute);
+			else unsavedBufferCache.set(absolute, next);
+			if (previewPathRef.current === absolute && editBufRef.current) setEdit(next);
+			onDirty?.(absolute, buffer.text !== buffer.saved);
+		},
+		[cwd, onDirty],
+	);
+
+	const savePeekFile = useCallback(
+		async (path: string, text: string): Promise<boolean> => {
+			const absolute = resolveFilePreviewPath(cwd, filePreviewWorkspacePath(cwd, path));
+			try {
+				const result = await rpc.request<{ ok: boolean; error?: string }>("fs.write", {
+					cwd,
+					path: filePreviewWorkspacePath(cwd, absolute),
+					content: text,
+				});
+				if (!result.ok) throw new Error(result.error ?? "File save failed");
+				if (previewPathRef.current === absolute)
+					setEdit(current => (current ? { ...current, saved: text } : current));
+				void rpc
+					.request("editor.saved", { cwd, path: absolute, content: text }, { timeoutMs: 12_000 })
+					.catch(() => {});
+				await load();
+				return true;
+			} catch (reason) {
+				setError(reason instanceof Error ? reason.message : String(reason));
+				return false;
+			}
+		},
+		[cwd, rpc, load],
+	);
+
+	const exportWord = useCallback(async (): Promise<void> => {
+		if (!preview || exportingWord) return;
+		setExportingWord(true);
+		setError(null);
 		try {
-			await rpc.request("fs.write", { cwd, path: rel, content: edit.text });
-			setEdit(cur => (cur ? { ...cur, saved: cur.text } : cur));
-			unsavedBufferCache.delete(preview.path);
-			await load();
-		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
+			await downloadMarkdownDocx(edit?.text ?? preview.raw ?? preview.text ?? "", preview.name);
+		} catch (reason) {
+			setError(reason instanceof Error ? reason.message : String(reason));
 		} finally {
-			setSaving(false);
+			setExportingWord(false);
 		}
-	}, [edit, preview, cwd, rpc, load, saving]);
+	}, [preview, edit?.text, exportingWord]);
+
+	/** Quote the latest Monaco selection. Read-only previews can still supply a
+	 * DOM selection; with neither, the header action quotes the whole file. */
+	const appendFileQuote = useCallback(
+		(selection: FileEditorSelection | PdfEditorSelection | null): void => {
+			if (!preview) return;
+			const pdfSelection = selection && "anchor" in selection ? selection : null;
+			const codeSelection = selection && !("anchor" in selection) ? selection : null;
+			const dom = selection ? null : captureSelectionContext();
+			const domMatch = dom?.file?.path === preview.path ? dom : null;
+			const quote =
+				selection?.text ?? domMatch?.text ?? edit?.text ?? preview.raw ?? preview.text ?? preview.htmlLive ?? "";
+			const startLine = codeSelection?.startLine ?? domMatch?.file?.startLine;
+			const endLine = codeSelection?.endLine ?? domMatch?.file?.endLine;
+			const displayContext = createFileQuoteContext({
+				path: filePreviewWorkspacePath(cwd, preview.path),
+				quote,
+				language: codeSelection?.language ?? domMatch?.file?.language ?? extOf(preview.name),
+				...(startLine !== undefined && endLine !== undefined ? { startLine, endLine } : {}),
+				...(pdfSelection
+					? { pdf: { ...pdfSelection.anchor, fileSize: preview.size } }
+					: {}),
+			});
+			window.dispatchEvent(
+				new CustomEvent("musepi-gui-quote-append", {
+					detail: { text: selection?.text ?? domMatch?.text ?? "", displayContext },
+				}),
+			);
+		},
+		[preview, edit?.text, cwd],
+	);
 
 	const menuItems = useMemo(() => {
 		if (!ctx) return [];
@@ -931,7 +1086,7 @@ export function FilePane({
 		});
 		items.push({ divider: true });
 		if (!entry.isDir) {
-			items.push({ label: t("general.openPreview"), icon: "eye", onSelect: () => void openPreview(entry) });
+			items.push({ label: t("general.openPreview"), icon: "eye", onSelect: () => openFile(entry) });
 			items.push({
 				label: t("general.openApp"),
 				icon: "external-link",
@@ -952,7 +1107,7 @@ export function FilePane({
 		});
 		items.push({ label: t("settings.refresh"), icon: "refresh", onSelect: () => void load() });
 		return items;
-	}, [ctx, openPreview, copyPath, load, startNewFile, startNewDir, startRename, confirmDelete, cwd]);
+	}, [ctx, openFile, copyPath, load, startNewFile, startNewDir, startRename, confirmDelete, cwd]);
 
 	const renderRow = (row: { node: TreeNode; depth: number }, posInSet?: number, setSize?: number): ReactNode => {
 		const { node, depth } = row;
@@ -1023,7 +1178,8 @@ export function FilePane({
 				<button
 					type="button"
 					className="gui-filepane-file-btn"
-					onClick={() => void openPreview(entry)}
+					onClick={() => openFile(entry, { pin: false, newTab: activeFile !== null })}
+					onDoubleClick={() => openFile(entry, { pin: true, newTab: activeFile !== null })}
 					onContextMenu={ev => {
 						ev.preventDefault();
 						setCtx({ entry, x: ev.clientX, y: ev.clientY });
@@ -1063,6 +1219,27 @@ export function FilePane({
 				spellCheck={false}
 			/>
 		</li>
+	) : null;
+
+	const fileTree = entries ? (
+		<div
+			className={`gui-filepane-list${preview ? " gui-filepane-list--inline" : ""}`}
+			ref={listRef}
+			onScroll={ev => setScrollTop(ev.currentTarget.scrollTop)}
+			role="tree"
+			aria-hidden={preview ? !treeExpanded : undefined}
+			inert={preview ? !treeExpanded : undefined}
+		>
+			<div className="gui-filepane-spacer" style={{ height: total * ROW_H }}>
+				<div style={{ transform: `translateY(${start * ROW_H}px)` }}>
+					{Array.from({ length: end - start }, (_, k) => {
+						const i = start + k;
+						if (editing && i === editIndex) return editingRow;
+						return i < rows.length ? renderRow(rows[i]!, i + 1, rows.length) : null;
+					})}
+				</div>
+			</div>
+		</div>
 	) : null;
 
 	return (
@@ -1144,47 +1321,50 @@ export function FilePane({
 			</div>
 			{error && <p className="gui-error">{error}</p>}
 			{!entries && !error && <p className="gui-filepane-empty">{t("settings.loading2")}</p>}
-			<div className="gui-filepane-body" ref={bodyRef}>
-				{entries && !preview && (
-					<div
-						className="gui-filepane-list"
-						ref={listRef}
-						onScroll={ev => setScrollTop(ev.currentTarget.scrollTop)}
-						role="tree"
-					>
-						<div className="gui-filepane-spacer" style={{ height: total * ROW_H }}>
-							<div style={{ transform: `translateY(${start * ROW_H}px)` }}>
-								{Array.from({ length: end - start }, (_, k) => {
-									const i = start + k;
-									if (editing && i === editIndex) return editingRow;
-									return i < rows.length ? renderRow(rows[i]!, i + 1, rows.length) : null;
-								})}
-							</div>
-						</div>
-					</div>
-				)}
+			<div className="gui-filepane-body">
+				{!preview && fileTree}
 				{preview && (
 					<div className="gui-filepane-preview">
 						<div className="gui-filepane-preview-head">
 							<button
 								type="button"
-								className="gui-btn gui-btn-icon"
-								title={t("settings.backFiles")}
-								onClick={() => {
-									// Panel-level file instances split tree and
-									// preview into two tabs: back
-									// activates the tree tab. Standalone (legacy
-									// sidebar) usage has no tree tab — drop the
-									// preview inside this pane instead.
-									if (onShowTree) onShowTree();
-									else void exitEdit().then(() => setPreview(null));
-								}}
+								className="gui-btn gui-btn-icon gui-filepane-history-back"
+								title={t("settings.editorBack")}
+								aria-label={t("settings.editorBack")}
+								disabled={!canNavigateBack}
+								onClick={() => onNavigateBack?.()}
 							>
-								<ArrowLeft size={12} />
+								<Icon name="arrow-left" />
 							</button>
-							<span className="gui-filepane-preview-name" title={preview.path}>
-								{preview.name}
-							</span>
+							<button
+								type="button"
+								className="gui-btn gui-btn-icon gui-filepane-history-forward"
+								title={t("settings.editorForward")}
+								aria-label={t("settings.editorForward")}
+								disabled={!canNavigateForward}
+								onClick={() => onNavigateForward?.()}
+							>
+								<Icon name="arrow-right" />
+							</button>
+							<button
+								type="button"
+								className={`gui-btn gui-btn-icon gui-filepane-tree-toggle${treeExpanded ? " gui-btn-icon--active" : ""}`}
+								title={t("settings.toggleFileTree")}
+								aria-label={t("settings.toggleFileTree")}
+								aria-expanded={treeExpanded}
+								onClick={() => setTreeExpanded(value => !value)}
+							>
+								<PanelLeft size={12} />
+							</button>
+							<FileBreadcrumb
+								cwd={cwd}
+								path={preview.path}
+								name={preview.name}
+								onOpenDirectory={(directory, anchor) => {
+									setDirectoryPath(directory);
+									setDirectoryAnchor(anchor);
+								}}
+							/>
 							{/* M3-3.4: a file inside an artifact directory previews with its
 							    manifest's identity. An invalid manifest names itself — the
 							    agent's mistake is visible where the person is looking, the
@@ -1210,24 +1390,42 @@ export function FilePane({
 										{preview.artifact.kind} · {preview.artifact.renderer}
 									</span>
 								))}
-							{extOf(preview.name) === "md" && preview.text !== undefined && !edit && (
+							{extOf(preview.name) === "md" && preview.text !== undefined && (
 								<Segmented
 									className="gui-seg--compact"
 									ariaLabel={t("companion.preview")}
 									value={mdRender ? "rendered" : "source"}
 									options={MD_VIEW_SEGMENTS}
-									onChange={v => setMdRender(v === "rendered")}
+									onChange={value => {
+										if (value === "source") {
+											const latest = markdownEditorRef.current?.getMarkdown();
+											if (latest != null) updateEditText(latest);
+										}
+										setMdRender(value === "rendered");
+										setFileSelection(null);
+									}}
+								/>
+							)}
+							{preview.htmlLive !== undefined && (
+								<Segmented
+									className="gui-seg--compact"
+									ariaLabel={t("companion.preview")}
+									value={htmlLiveMode}
+									options={HTML_VIEW_SEGMENTS}
+									onChange={value => setHtmlLiveMode(value === "source" ? "source" : "live")}
 								/>
 							)}
 							<span className="gui-filepane-preview-tools">
-								{preview.raw !== undefined && !edit && (
+								{extOf(preview.name) === "md" && (
 									<button
 										type="button"
-										className="gui-btn gui-btn-icon"
-										title={t("settings.edit")}
-										onClick={() => void startEdit()}
+										className="gui-btn gui-btn-icon gui-filepane-export-word"
+										title={t(exportingWord ? "settings.exportingWord" : "settings.exportWord")}
+										aria-label={t("settings.exportWord")}
+										disabled={exportingWord}
+										onClick={() => void exportWord()}
 									>
-										<Pencil size={12} />
+										<Download size={12} />
 									</button>
 								)}
 								<button
@@ -1246,25 +1444,9 @@ export function FilePane({
 									title={t("general.citeFileComposer")}
 									aria-label={t("general.citeFileComposer")}
 									onMouseDown={event => event.preventDefault()}
-									onClick={() => {
-										const rel = preview.path.startsWith(`${cwd}/`)
-											? preview.path.slice(cwd.length + 1)
-											: preview.path;
-										const selection = captureSelectionContext();
-										const displayContext = createFileQuoteContext({
-											path: rel,
-											quote: selection?.file?.path === preview.path ? selection.text : "",
-											language: selection?.file?.language ?? extOf(preview.name),
-											...(selection?.file?.startLine !== undefined && selection.file.endLine !== undefined
-												? { startLine: selection.file.startLine, endLine: selection.file.endLine }
-												: {}),
-										});
-										window.dispatchEvent(
-											new CustomEvent("musepi-gui-quote-append", {
-												detail: { text: selection?.text ?? "", displayContext },
-											}),
-										);
-									}}
+									onClick={() =>
+										appendFileQuote(pdfSelection ?? (extOf(preview.name) === "md" && mdRender ? null : fileSelection))
+									}
 								>
 									<Quote size={12} />
 								</button>
@@ -1278,29 +1460,33 @@ export function FilePane({
 								>
 									<ExternalLink size={12} />
 								</button>
+								<FileOpenWith path={preview.path} />
 							</span>
 							<button
 								type="button"
 								className="gui-btn gui-btn-icon"
 								title={t("settings.close")}
-								onClick={() => void exitEdit().then(() => setPreview(null))}
+								onClick={() => {
+									if (onClosePreview) onClosePreview();
+									else
+										void confirmDiscard().then(ok => {
+											if (ok) setPreview(null);
+										});
+								}}
 							>
 								✕
 							</button>
 						</div>
-						<div
-							className="gui-filepane-preview-body"
+						<div className={`gui-filepane-preview-main${treeExpanded ? " gui-filepane-preview-main--tree-open" : ""}`}>
+							{fileTree}
+							<div
+								className="gui-filepane-preview-body"
+								ref={bodyRef}
 							data-file-path={preview.path}
 							data-file-language={extOf(preview.name)}
 						>
 							{preview.error && <p className="gui-error">{preview.error}</p>}
-							{preview.htmlLive !== undefined && (
-								<HtmlPreview
-									live={htmlLiveMode === "live"}
-									source={preview.htmlLive}
-									onToggle={setHtmlLiveMode}
-								/>
-							)}
+							{preview.htmlLive !== undefined && !edit && <HtmlPreview source={preview.htmlLive} />}
 							{preview.html !== undefined && !edit && (
 								<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
 							)}
@@ -1311,27 +1497,80 @@ export function FilePane({
 							) : preview.text !== undefined && !edit ? (
 								<pre className="gui-filepane-preview-text">{preview.text}</pre>
 							) : null}
+							{edit && extOf(preview.name) === "md" && mdRender && hasYamlFrontMatter(edit.text) && (
+								<div className="gui-filepane-markdown-warning" role="note">
+									<span>{t("markdownFrontMatterWarning")}</span>
+									<button
+										type="button"
+										className="gui-btn gui-btn-sm"
+										onClick={() => {
+											const latest = markdownEditorRef.current?.getMarkdown();
+											if (latest != null) updateEditText(latest);
+											setMdRender(false);
+											setFileSelection(null);
+										}}
+									>
+										{t("settings.sourceCode")}
+									</button>
+								</div>
+							)}
 							{edit && (
-								<FileEditor
-									value={edit.text}
-									name={preview.name}
-									saving={saving}
-									onChange={text =>
-										setEdit(cur => {
-											const next = cur ? { ...cur, text } : null;
-											if (next && preview) {
-												// Stash so a tab switch (pane unmount) or a
-												// re-open of this file restores the unsaved
-												// buffer instead of re-reading disk.
-												unsavedBufferCache.set(preview.path, next);
-												if (text === next.saved) unsavedBufferCache.delete(preview.path);
+								<div
+									className={`gui-filepane-edit-layout${
+										preview.htmlLive !== undefined && htmlLiveMode === "live"
+											? " gui-filepane-edit-layout--live-preview"
+											: ""
+									}`}
+								>
+									<FileEditor
+										rpc={rpc}
+										cwd={cwd}
+										path={preview.path}
+										value={edit.text}
+										name={preview.name}
+										dirty={dirty}
+										saving={saving}
+										markdownVisual={extOf(preview.name) === "md" && mdRender}
+										markdownEditorRef={markdownEditorRef}
+										onMarkdownError={message => {
+											setError(message);
+											setMdRender(false);
+											setFileSelection(null);
+										}}
+										onNavigate={(source, target) => {
+											if (onEditorNavigate) {
+												onEditorNavigate(source, target);
+												return;
 											}
-											return next;
-										})
-									}
-									onSave={() => void saveEdit()}
-									onExit={() => void exitEdit()}
-								/>
+											if (source.path === target.path) return;
+											openFile(
+												{
+													path: target.path,
+													name: target.path.slice(
+														Math.max(target.path.lastIndexOf("/"), target.path.lastIndexOf("\\")) + 1,
+													),
+													size: 0,
+													isDir: false,
+													mtime: 0,
+													depth: 0,
+												},
+												{ pin: true, newTab: true },
+											);
+										}}
+										onChange={updateEditText}
+										onSave={text => void saveEdit(text)}
+										onPositionChange={location => onEditorPositionChange?.(location)}
+										onHistoryBack={() => onNavigateBack?.()}
+										onHistoryForward={() => onNavigateForward?.()}
+										onLoadFile={loadPeekFile}
+										onSaveFile={savePeekFile}
+										onBufferChange={changePeekBuffer}
+										onSelectionChange={setFileSelection}
+									/>
+									{preview.htmlLive !== undefined && htmlLiveMode === "live" && (
+										<HtmlPreview source={edit.text} />
+									)}
+								</div>
 							)}
 							{preview.docxBytes && <DocxPreview data={preview.docxBytes} path={preview.path} />}
 							{preview.officeSheets && <SheetPreview name={preview.name} sheets={preview.officeSheets} />}
@@ -1347,33 +1586,82 @@ export function FilePane({
 									onOpenLightbox={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
 								/>
 							)}
-							{preview.pdfPages && (
-								<div className="gui-filepane-preview-img-wrap">
-									{preview.pdfPages.map((page, i) => (
-										<img
-											key={i}
-											className="gui-filepane-preview-img gui-filepane-preview-pdf"
-											src={page}
-											alt={`${preview.name} p${i + 1}`}
-										/>
-									))}
-								</div>
+							{preview.pdfBytes && (
+								<Suspense fallback={<div className="gui-pdf-status">{t("settings.pdfLoading")}</div>}>
+									<FilePdfPreview
+										data={preview.pdfBytes}
+										name={preview.name}
+										path={preview.path}
+										onSelection={setPdfSelection}
+										restore={
+											openRequest?.pdf
+												? { anchor: openRequest.pdf, quote: openRequest.quote ?? "", nonce: openRequest.nonce }
+												: undefined
+										}
+									/>
+								</Suspense>
 							)}
 							{preview.external && (
 								<p className="gui-filepane-preview-note">
 									{t("general.openedDefaultApp")} — {preview.size.toLocaleString()} B
 								</p>
 							)}
+							</div>
 						</div>
 					</div>
 				)}
 			</div>
+			<SelectionToolbar
+				containerRef={bodyRef}
+				avoidSelector='.milkdown-toolbar[data-show="true"]'
+				selection={
+					preview?.pdfBytes
+						? pdfSelection
+							? { ...pdfSelection, pdf: pdfSelection.anchor }
+							: null
+						: edit && !(preview && extOf(preview.name) === "md" && mdRender)
+							? fileSelection
+							: undefined
+				}
+				onQuote={(text, pdf) =>
+					appendFileQuote(pdf && pdfSelection ? { ...pdfSelection, text, anchor: pdf } : fileSelection)
+				}
+				onAsk={(text, x, y) => window.dispatchEvent(new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }))}
+				onCopy={text => {
+					const copy = window.electronAPI?.copyText(text);
+					if (copy) void copy.catch(() => {});
+					else void navigator.clipboard?.writeText(text);
+				}}
+				onNewSession={text => onNewSession?.(text)}
+				onAddNote={text => {
+					if (!preview) return;
+					const path = filePreviewWorkspacePath(cwd, preview.path);
+					const location = pdfSelection
+						? `\n\n\`${path}#pages=${pdfSelection.anchor.startPage}-${pdfSelection.anchor.endPage}\``
+						: fileSelection
+							? `\n\n\`${path}:${fileSelection.startLine}-${fileSelection.endLine}\``
+							: "";
+					void rpc
+						.request("notes.create", { cwd, body: `> ${text}${location}` })
+						.then(() => window.dispatchEvent(new CustomEvent("musepi-notes-changed")))
+						.catch(() => {});
+				}}
+			/>
 			<ContextMenu
 				open={ctx !== null}
 				x={ctx?.x ?? 0}
 				y={ctx?.y ?? 0}
 				items={menuItems}
 				onClose={() => setCtx(null)}
+			/>
+			<FileDirectoryMenu
+				rpc={rpc}
+				cwd={cwd}
+				path={directoryPath}
+				anchor={directoryAnchor}
+				open={directoryPath !== null}
+				onClose={() => setDirectoryPath(null)}
+				onOpenFile={(path, name) => openFile({ ...syntheticEntry(path), name }, { pin: false, newTab: true })}
 			/>
 			<ImageLightbox
 				items={lightbox ? [{ src: lightbox.src, alt: lightbox.name }] : []}
@@ -1385,102 +1673,163 @@ export function FilePane({
 	);
 }
 
-/** HTML file preview: live page in a sandboxed iframe with a
- *  preview/source toggle. */
-function HtmlPreview({
-	live,
-	source,
-	onToggle,
+/** Clickable workspace-relative ancestors plus the current file name. Files
+ * outside the workspace keep a plain name because workspace.tree cannot list
+ * their parent directories. */
+function FileBreadcrumb({
+	cwd,
+	path,
+	name,
+	onOpenDirectory,
 }: {
-	live: boolean;
-	source: string;
-	onToggle(mode: "live" | "source"): void;
+	cwd: string;
+	path: string;
+	name: string;
+	onOpenDirectory(path: string, anchor: HTMLElement): void;
 }): ReactNode {
+	const relative = filePreviewWorkspacePath(cwd, path);
+	const outside = path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path);
+	const parts = relative === path && outside ? [name] : relative.split("/").filter(Boolean);
+	const scrollRef = useRef<HTMLElement | null>(null);
+	useEffect(() => {
+		const element = scrollRef.current;
+		if (element) element.scrollLeft = element.scrollWidth;
+	}, [path, cwd]);
+	return (
+		<nav ref={scrollRef} className="gui-filepane-preview-path" aria-label={path}>
+			{parts.length > 1 && (
+				<>
+					<button
+						type="button"
+						className="gui-filepane-path-part"
+						title={cwd}
+						onClick={event => onOpenDirectory("", event.currentTarget)}
+					>
+						<Folder size={11} />
+					</button>
+					{parts.slice(0, -1).map((part, index) => {
+						const directory = parts.slice(0, index + 1).join("/");
+						return (
+							<span className="gui-filepane-path-segment" key={directory}>
+								<span aria-hidden="true">/</span>
+								<button
+									type="button"
+									className="gui-filepane-path-part"
+									title={directory}
+									onClick={event => onOpenDirectory(directory, event.currentTarget)}
+								>
+									{part}
+								</button>
+							</span>
+						);
+					})}
+					<span aria-hidden="true">/</span>
+				</>
+			)}
+			<span className="gui-filepane-preview-name" title={path}>
+				{parts.at(-1) ?? name}
+			</span>
+		</nav>
+	);
+}
+
+/** HTML file preview: a sandboxed live page. The file header owns the
+ * live/source switch so editable and read-only files share one control. */
+function HtmlPreview({ source }: { source: string }): ReactNode {
 	return (
 		<div className="gui-filepane-preview-html">
-			<div className="gui-filepane-preview-html-bar">
-				<Segmented
-					className="gui-seg--compact"
-					ariaLabel={t("companion.preview")}
-					value={live ? "live" : "source"}
-					options={HTML_VIEW_SEGMENTS}
-					onChange={onToggle}
-				/>
-			</div>
-			{live ? (
-				<iframe
-					className="gui-filepane-preview-html-frame"
-					title={t("companion.preview")}
-					sandbox="allow-scripts"
-					srcDoc={source}
-				/>
-			) : (
-				<pre className="gui-filepane-preview-text">{source}</pre>
-			)}
+			<iframe
+				className="gui-filepane-preview-html-frame"
+				title={t("companion.preview")}
+				sandbox="allow-scripts"
+				srcDoc={source}
+			/>
 		</div>
 	);
 }
 
-/** Inline text editor: plain textarea, save-on-Cmd/Ctrl+S, dirty badge,
- *  and a leave guard handled by the parent (onExit asks before discarding).
- *  Deliberately not a code editor — a textarea never breaks on partial
- *  parses and stays fast on megabyte buffers. */
+/** Editable file surface. FilePane owns saving, dirty state, and drafts;
+ * Monaco owns code and Crepe owns single-column visual Markdown. */
 function FileEditor({
+	rpc,
+	cwd,
+	path,
 	value,
 	name,
+	dirty,
 	saving,
+	markdownVisual,
+	markdownEditorRef,
+	onMarkdownError,
 	onChange,
 	onSave,
-	onExit,
+	onNavigate,
+	onPositionChange,
+	onHistoryBack,
+	onHistoryForward,
+	onLoadFile,
+	onSaveFile,
+	onBufferChange,
+	onSelectionChange,
 }: {
+	rpc: RpcClient;
+	cwd: string;
+	path: string;
 	value: string;
 	name: string;
+	dirty: boolean;
 	saving: boolean;
+	markdownVisual: boolean;
+	markdownEditorRef: { current: FileMarkdownEditorHandle | null };
+	onMarkdownError(message: string): void;
 	onChange(text: string): void;
-	onSave(): void;
-	onExit(): void;
+	onSave(text?: string): void;
+	onNavigate(source: EditorLocation, target: EditorLocation): void;
+	onPositionChange(location: EditorLocation): void;
+	onHistoryBack(): void;
+	onHistoryForward(): void;
+	onLoadFile(path: string): Promise<MonacoPeekBuffer | null>;
+	onSaveFile(path: string, text: string): Promise<boolean>;
+	onBufferChange(buffer: MonacoPeekBuffer): void;
+	onSelectionChange(selection: FileEditorSelection | null): void;
 }): ReactNode {
-	const ref = useRef<HTMLTextAreaElement | null>(null);
-	useEffect(() => {
-		ref.current?.focus();
-	}, []);
 	return (
 		<div className="gui-filepane-editor">
-			<div className="gui-filepane-editor-bar">
-				<Pencil size={12} className="gui-filepane-icon" />
-				<span className="gui-filepane-editor-name" title={name}>
-					{name}
-				</span>
-				<button
-					type="button"
-					className="gui-btn gui-btn-icon"
-					title={t("settings.discardChangesCloseEditor")}
-					onClick={onExit}
-				>
-					<ArrowLeft size={12} />
-				</button>
-			</div>
-			<textarea
-				ref={ref}
-				className="gui-filepane-editor-text"
-				value={value}
-				spellCheck={false}
-				onChange={ev => onChange(ev.target.value)}
-				onKeyDown={ev => {
-					if ((ev.metaKey || ev.ctrlKey) && ev.key === "s") {
-						ev.preventDefault();
-						onSave();
-					} else if (ev.key === "Escape") {
-						onExit();
-					}
-				}}
-			/>
+			{markdownVisual ? (
+				<FileMarkdownEditor
+					ref={markdownEditorRef}
+					path={path}
+					name={name}
+					value={value}
+					onChange={onChange}
+					onSave={onSave}
+					onError={onMarkdownError}
+				/>
+			) : (
+				<FileCodeEditor
+					rpc={rpc}
+					cwd={cwd}
+					path={path}
+					value={value}
+					name={name}
+					onChange={onChange}
+					onSave={onSave}
+					onNavigate={onNavigate}
+					onPositionChange={onPositionChange}
+					onHistoryBack={onHistoryBack}
+					onHistoryForward={onHistoryForward}
+					onLoadFile={onLoadFile}
+					onSaveFile={onSaveFile}
+					onBufferChange={onBufferChange}
+					onSelectionChange={onSelectionChange}
+				/>
+			)}
 			<div className="gui-filepane-editor-foot">
 				<button
 					type="button"
 					className="gui-btn gui-btn-sm"
 					disabled={saving}
-					onClick={onSave}
+					onClick={() => onSave()}
 					title={t("general.save")}
 				>
 					<Save size={12} />

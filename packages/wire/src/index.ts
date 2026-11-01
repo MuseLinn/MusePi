@@ -63,6 +63,28 @@ export interface WireUsage {
 // Messages
 // ═══════════════════════════════════════════════════════════════════════════
 
+export interface PdfSelectionRect {
+	origin: { x: number; y: number };
+	size: { width: number; height: number };
+}
+
+export interface PdfFormattedSelection {
+	pageIndex: number;
+	rect: PdfSelectionRect;
+	segmentRects: PdfSelectionRect[];
+}
+
+/** One-based pages for people; zero-based glyph offsets and page indexes for PDFium. */
+export interface PdfQuoteAnchor {
+	startPage: number;
+	endPage: number;
+	startIndex: number;
+	endIndex: number;
+	selections: PdfFormattedSelection[];
+	fileSize?: number;
+	fileMtime?: number;
+}
+
 export type DisplayContext =
 	| {
 			kind: "browser-annotation";
@@ -84,6 +106,7 @@ export type DisplayContext =
 			language?: string;
 			startLine?: number;
 			endLine?: number;
+			pdf?: PdfQuoteAnchor;
 			comment?: string;
 	  };
 

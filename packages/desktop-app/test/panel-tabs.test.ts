@@ -71,13 +71,11 @@ describe("upsertPanelTab", () => {
 		expect(ids(opened)).toEqual(["browser::https://x.dev"]);
 	});
 
-	it("keeps the files placeholder as its own tab when a file opens (dsh tree parity)", () => {
-		// The files placeholder IS the tree browser: a real file instance opens
-		// NEXT to it so the tree stays one click away instead of being consumed.
+	it("turns the files placeholder into the first file instead of leaving an orphan tree tab", () => {
 		const withPlaceholder = upsertPanelTab(state([]), desc("files"));
 		expect(ids(withPlaceholder)).toEqual(["files::"]);
 		const opened = upsertPanelTab(withPlaceholder, desc("files", "/a.md"));
-		expect(ids(opened)).toEqual(["files::", "files::/a.md"]);
+		expect(ids(opened)).toEqual(["files::/a.md"]);
 		expect(opened.activeId).toBe("files::/a.md");
 	});
 
@@ -100,6 +98,60 @@ describe("upsertPanelTab", () => {
 	it("reveal:false still seeds an active tab when none was open", () => {
 		const s = upsertPanelTab(state([]), desc("files", "/a.md"), { reveal: false, now: 1 });
 		expect(s.activeId).toBe("files::/a.md");
+	});
+});
+
+describe("file preview tabs", () => {
+	it("replaces only the same column's preview and preserves pinned tabs", () => {
+		let s = upsertPanelTab(state([]), desc("files"), { now: 1 });
+		s = upsertPanelTab(s, desc("files", "/pinned.md", { label: "pinned.md" }), { now: 2 });
+		s = upsertPanelTab(s, desc("files", "/a.md", { label: "a.md", preview: true }), { now: 3 });
+		s = upsertPanelTab(s, desc("files", "/b.md", { label: "b.md", preview: true }), { now: 4 });
+
+		expect(ids(s)).toEqual(["files::/pinned.md", "files::/b.md"]);
+		expect(s.activeId).toBe("files::/b.md");
+		expect(s.tabs.find(t => t.id === "files::/b.md")?.preview).toBe(true);
+	});
+
+	it("never downgrades a pinned tab and pins a preview on a non-preview open", () => {
+		const pinned = upsertPanelTab(state([]), desc("files", "/a.md"));
+		expect(upsertPanelTab(pinned, desc("files", "/a.md", { preview: true })).tabs[0]?.preview).toBe(false);
+
+		const preview = upsertPanelTab(state([]), desc("files", "/a.md", { preview: true }));
+		const opened = upsertPanelTab(preview, desc("files", "/a.md", { preview: false }));
+		expect(opened.tabs).toHaveLength(1);
+		expect(opened.tabs[0]?.preview).toBe(false);
+	});
+
+	it("pins a dirty preview permanently, including after the buffer becomes clean", () => {
+		const preview = upsertPanelTab(state([]), desc("files", "/a.md", { preview: true }));
+		const dirty = setPanelTabDirty(preview, "files::/a.md", true);
+		expect(dirty.tabs[0]?.preview).toBe(false);
+		expect(setPanelTabDirty(dirty, "files::/a.md", false).tabs[0]?.preview).toBe(false);
+	});
+
+	it("keeps preview replacement isolated between split columns", () => {
+		let s = upsertPanelTab(state([]), desc("files", "/a.md", { preview: true }), { now: 1, column: 0 });
+		s = upsertPanelTab(s, desc("files", "/other.md", { preview: true }), { now: 2, column: 1 });
+		s = { ...s, split: true };
+		s = upsertPanelTab(s, desc("files", "/b.md", { preview: true }), { now: 3, column: 0 });
+
+		expect(ids(s)).toEqual(["files::/b.md", "files::/other.md"]);
+		expect(s.columnActive).toEqual(["files::/b.md", "files::/other.md"]);
+	});
+
+	it("does not replace a preview when forcing an independent copy", () => {
+		const preview = upsertPanelTab(state([]), desc("files", "/a.md", { preview: true }));
+		const copied = upsertPanelTab(preview, desc("files", "/a.md", { preview: true }), { forceNew: true });
+		expect(copied.tabs).toHaveLength(2);
+		expect(copied.tabs[0]?.preview).toBe(true);
+		expect(copied.tabs[1]?.preview).toBe(false);
+	});
+
+	it("round-trips preview state while keeping dirty runtime-only", () => {
+		const preview = upsertPanelTab(state([]), desc("files", "/a.md", { preview: true }));
+		const restored = restorePanelTabs(JSON.parse(JSON.stringify(serializePanelTabs(preview))));
+		expect(restored).toEqual(preview);
 	});
 });
 
@@ -141,6 +193,7 @@ describe("closePanelTab / closePanelTabs", () => {
 			touchedAt: 1,
 			dedupeKey: null,
 			dirty: false,
+			preview: false,
 			column: 0 as PanelColumn,
 		})),
 		"files::/b.md",

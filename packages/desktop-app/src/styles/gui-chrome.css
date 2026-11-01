@@ -818,9 +818,8 @@
 	position: relative;
 }
 
-/* Preview takeover (bitfun/VS Code narrow-sidebar parity): the tree and
- * the preview are mutually exclusive modes of the same body — opening a
- * file replaces the tree full-panel (back button returns). */
+/* A tree-only tab fills the body. A file page keeps its header above the
+ * non-modal tree and editor row, so opening the tree never moves the path. */
 .gui-filepane-body {
 	display: flex;
 	flex-direction: column;
@@ -1026,12 +1025,71 @@
 .gui-filepane-preview-head {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-start;
 	gap: 8px;
 	padding: 4px 8px;
 	border-bottom: 1px solid var(--border);
 	background: var(--color-surface-raised);
 	flex-shrink: 0;
+}
+
+.gui-filepane-preview-head > .gui-btn,
+.gui-filepane-preview-head > .gui-seg {
+	flex-shrink: 0;
+}
+
+/* Unavailable history commands must not leave two empty icon slots. */
+.gui-filepane-history-back:disabled,
+.gui-filepane-history-forward:disabled {
+	display: none;
+}
+
+.gui-filepane-preview-main {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* Keep the tree mounted for both transition directions. Its collapsed width
+ * is zero and inert/aria-hidden remove it from interaction and accessibility. */
+.gui-filepane-preview-main > .gui-filepane-list {
+	box-sizing: border-box;
+	flex: 0 0 0;
+	border-right: 1px solid transparent;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateX(-8px);
+	visibility: hidden;
+	transition:
+		flex-basis var(--gui-motion-height) var(--gui-ease-out),
+		transform var(--gui-motion-height) var(--gui-ease-out),
+		opacity var(--gui-motion-fade-in) ease,
+		border-color var(--gui-motion-fade-in) ease,
+		visibility 0s linear var(--gui-motion-height);
+}
+
+.gui-filepane-preview-main--tree-open > .gui-filepane-list {
+	flex-basis: clamp(160px, 38%, 240px);
+	border-right-color: var(--border);
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateX(0);
+	visibility: visible;
+	transition-delay: 0s;
+}
+
+.gui-motion-off .gui-filepane-preview-main > .gui-filepane-list {
+	transform: none;
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-filepane-preview-main > .gui-filepane-list {
+		transform: none;
+		transition: none;
+	}
 }
 
 /* Flex column (openchamber h-full parity): every child below carries
@@ -1044,15 +1102,304 @@
 	flex-direction: column;
 	overflow: hidden;
 	flex: 1;
+	min-width: 0;
 	min-height: 0;
 }
 
+.gui-pdf-reader {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	outline: none;
+	background: var(--color-bg-subtle);
+}
+
+.gui-pdf-toolbar,
+.gui-pdf-search {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+	min-height: 36px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--glass-bg);
+	backdrop-filter: blur(var(--glass-blur));
+}
+
+.gui-pdf-toolbar {
+	box-sizing: border-box;
+	height: 36px;
+	overflow: hidden;
+	flex-wrap: nowrap;
+	white-space: nowrap;
+}
+
+.gui-pdf-toolbar [hidden] {
+	display: none !important;
+}
+
+.gui-pdf-overflow {
+	min-width: 180px;
+	padding: 6px;
+}
+
+.gui-pdf-toolbar > :not(.gui-pdf-toolbar-spacer),
+.gui-pdf-toolbar-group {
+	flex-shrink: 0;
+}
+
+.gui-pdf-toolbar-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.gui-pdf-toolbar-spacer {
+	flex: 1 0 0;
+}
+
+.gui-pdf-page-input {
+	box-sizing: border-box;
+	width: 34px;
+	height: 24px;
+	padding: 2px 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	outline: none;
+	background: var(--color-bg);
+	color: var(--color-text);
+	text-align: center;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-pdf-page-count,
+.gui-pdf-zoom-value,
+.gui-pdf-search-count {
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	white-space: nowrap;
+}
+
+.gui-pdf-zoom-value {
+	min-width: 40px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.gui-pdf-search input {
+	flex: 1;
+	min-width: 80px;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-pdf-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.gui-pdf-viewport {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+
+.gui-pdf-page {
+	box-sizing: content-box;
+	margin: 12px;
+	border-radius: 2px;
+	background: white;
+	box-shadow: 0 2px 12px rgb(0 0 0 / 16%);
+}
+
+.gui-pdf-page img {
+	-webkit-user-drag: none;
+}
+
+.gui-pdf-thumbnails {
+	box-sizing: border-box;
+	flex: 0 0 132px;
+	overflow: auto;
+	padding: 8px;
+	border-right: 1px solid var(--border);
+	background: var(--glass-bg);
+}
+
+.gui-pdf-thumbnails img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin: 0 auto 8px;
+	background: white;
+	box-shadow: 0 1px 5px rgb(0 0 0 / 14%);
+}
+
+.gui-pdf-status {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 180px;
+	padding: 24px;
+	color: var(--color-text-muted);
+	text-align: center;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-pdf-status--error strong {
+	color: var(--color-text);
+}
+
+.gui-pdf-error-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.gui-filepane-preview-path {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: 1 1 0;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	overscroll-behavior-x: contain;
+	scrollbar-width: none;
+	white-space: nowrap;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-filepane-preview-path::-webkit-scrollbar {
+	display: none;
+}
+
+.gui-filepane-path-segment {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+.gui-filepane-path-part {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	padding: 2px;
+	border: 0;
+	border-radius: var(--radius-xs);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.gui-filepane-path-part:hover {
+	background: var(--color-surface-hover);
+	color: var(--color-text);
+}
+
 .gui-filepane-preview-name {
+	flex-shrink: 0;
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
+	white-space: nowrap;
+}
+
+.gui-menu-popup.gui-filepane-directory-menu {
+	width: min(340px, calc(100vw - 16px));
+	padding: 6px;
+}
+
+.gui-filepane-directory-head {
+	padding: 3px 6px 7px;
+}
+
+.gui-filepane-directory-title {
+	display: block;
+	overflow: hidden;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-filepane-directory-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0 2px 6px;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+}
+
+.gui-filepane-directory-search:focus-within {
+	border-color: var(--color-accent);
+}
+
+.gui-filepane-directory-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-filepane-directory-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: min(320px, 45vh);
+	padding: 2px;
+	overflow-y: auto;
+}
+
+.gui-filepane-directory-entry {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	padding: 7px 8px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-filepane-directory-entry > span {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.gui-filepane-directory-entry:hover,
+.gui-filepane-directory-entry:focus-visible {
+	background: var(--color-surface-hover);
 }
 
 /* M3-3.4 manifest badge: the preview head names the artifact a file belongs
@@ -1088,6 +1435,15 @@
 	gap: 2px;
 	flex-shrink: 0;
 	margin-left: auto;
+}
+
+.gui-filepane-preview-tools > .gui-btn-icon {
+	box-sizing: border-box;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	flex: 0 0 24px;
 }
 
 .gui-filepane-preview-text {
@@ -1168,9 +1524,223 @@
 	filter: brightness(1.04);
 }
 
-/* Inline text editor: the preview body swaps to an editor column — a bar
- * (file name + exit), the textarea, and a save footer. The textarea owns
- * the flex so it scrolls with the pane, not the page. */
+/* Editable files open directly. HTML can keep a live preview beside Monaco;
+ * visual Markdown is a single-column editor rather than a second preview. */
+.gui-filepane-edit-layout {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+
+.gui-filepane-markdown-warning {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 12px;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-warning) 35%, var(--border));
+	background: color-mix(in oklab, var(--color-warning) 8%, var(--color-bg));
+	color: var(--color-text);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.gui-filepane-markdown-warning .gui-btn {
+	flex: 0 0 auto;
+	color: var(--color-accent);
+}
+
+.gui-filepane-edit-layout--live-preview {
+	flex-direction: row;
+}
+
+.gui-filepane-edit-layout--live-preview > .gui-filepane-editor,
+.gui-filepane-edit-layout--live-preview > .gui-filepane-preview-html {
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-filepane-edit-layout--live-preview > .gui-filepane-preview-html {
+	border-left: 1px solid var(--border);
+}
+
+.gui-filepane-markdown-editor {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	background: var(--color-bg);
+}
+
+.gui-filepane-markdown-editor .milkdown {
+	--crepe-color-background: var(--color-bg);
+	--crepe-color-on-background: var(--color-text);
+	--crepe-color-surface: var(--color-surface-raised);
+	--crepe-color-surface-low: var(--color-surface-raised);
+	--crepe-color-on-surface: var(--color-text);
+	--crepe-color-on-surface-variant: var(--color-text-muted);
+	--crepe-color-outline: var(--color-text-muted);
+	--crepe-color-primary: var(--color-accent);
+	--crepe-color-secondary: var(--color-accent-soft);
+	--crepe-color-on-secondary: var(--color-text);
+	--crepe-color-inverse: var(--color-text);
+	--crepe-color-on-inverse: var(--color-bg);
+	--crepe-color-inline-code: var(--color-accent);
+	--crepe-color-hover: var(--color-accent-soft);
+	--crepe-color-selected: var(--color-accent-soft);
+	--crepe-color-inline-area: var(--color-surface-raised);
+	--crepe-font-title: inherit;
+	--crepe-font-default: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--crepe-font-code: var(--font-mono, ui-monospace, monospace);
+	--crepe-shadow-1: var(--glass-shadow);
+	--crepe-shadow-2: var(--glass-shadow);
+	min-height: 100%;
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	height: 42px;
+	min-height: 42px;
+	padding: 3px 8px;
+	flex-wrap: nowrap;
+	overflow: visible;
+	border-bottom: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-inner {
+	height: 36px;
+	flex-wrap: nowrap;
+	overflow: visible;
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar [hidden],
+.gui-filepane-markdown-overflow[hidden] {
+	display: none !important;
+}
+
+.gui-filepane-markdown-more {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 32px;
+	height: 32px;
+	margin: 2px 0 2px 6px;
+	padding: 4px;
+	flex: 0 0 32px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+
+.gui-filepane-markdown-more:hover,
+.gui-filepane-markdown-more[aria-expanded="true"] {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
+.gui-filepane-markdown-more svg {
+	width: 20px;
+	height: 20px;
+	fill: currentColor;
+}
+
+.gui-menu-popup.gui-filepane-markdown-overflow {
+	width: 220px;
+	padding: 6px;
+}
+
+.gui-filepane-markdown-overflow-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-filepane-markdown-overflow-item:hover,
+.gui-filepane-markdown-overflow-item:focus-visible {
+	background: var(--color-surface-hover);
+}
+
+.gui-filepane-markdown-overflow-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	color: var(--color-text-muted);
+}
+
+.gui-filepane-markdown-overflow-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-item,
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-heading-button {
+	border-radius: var(--radius-sm);
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-item:focus-visible,
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-heading-button:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-heading-dropdown,
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar,
+.gui-filepane-markdown-editor .milkdown .milkdown-link-preview,
+.gui-filepane-markdown-editor .milkdown .milkdown-link-edit {
+	border: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+}
+
+.gui-filepane-markdown-editor .ProseMirror {
+	min-height: calc(100% - 42px);
+	padding: 28px clamp(20px, 6%, 72px) 72px;
+	font-size: 14px;
+	line-height: 1.75;
+	outline: none;
+}
+
+.gui-filepane-markdown-editor .ProseMirror > :first-child {
+	margin-top: 0;
+}
+
+.gui-filepane-markdown-editor .ProseMirror img {
+	max-width: 100%;
+}
+
+@media (max-width: 560px) {
+	.gui-filepane-markdown-editor .ProseMirror {
+		padding: 20px 16px 56px;
+	}
+}
+
+/* Monaco owns the editor's available height. The textarea remains the
+ * fallback when Monaco cannot initialize. */
 .gui-filepane-editor {
 	display: flex;
 	flex-direction: column;
@@ -1195,6 +1765,71 @@
 	text-overflow: ellipsis;
 	margin-left: 2px;
 }
+.gui-filepane-editor-monaco {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--color-bg);
+}
+.gui-filepane-editor-monaco .monaco-editor,
+.gui-filepane-editor-monaco .monaco-editor .overflow-guard {
+	width: 100%;
+	height: 100%;
+}
+
+/* Definition and reference peek share the floating glass material. Keep the
+ * Monaco list geometry intact; only its surfaces become transparent. */
+.gui-filepane-editor-monaco .peekview-widget {
+	--vscode-peekViewTitle-background: transparent;
+	border: 1px solid var(--glass-border) !important;
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+	overflow: hidden;
+}
+.gui-filepane-editor-monaco .peekview-widget .head {
+	background: transparent !important;
+}
+.gui-filepane-editor-monaco .peekview-widget > .body {
+	border-color: var(--glass-border) !important;
+}
+.gui-filepane-editor-monaco .reference-zone-widget .ref-tree {
+	--vscode-peekViewResult-background: transparent;
+	background: transparent;
+}
+.gui-filepane-editor-monaco .reference-zone-widget .preview {
+	background: transparent;
+}
+.gui-filepane-editor-monaco .reference-zone-widget .preview .monaco-editor {
+	--vscode-peekViewEditor-background: transparent;
+	--vscode-peekViewEditorGutter-background: transparent;
+}
+
+/* Native F2 rename keeps Monaco's input and keyboard behavior. Override its
+ * inline theme surfaces so the widget uses the same glass material as peek. */
+.gui-filepane-editor-monaco .rename-box {
+	width: auto;
+	height: auto;
+	border: 1px solid var(--glass-border) !important;
+	border-radius: var(--radius-lg);
+	background: var(--glass-sheen), var(--glass-bg-strong) !important;
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow) !important;
+	overflow: hidden;
+}
+.gui-filepane-editor-monaco .rename-box .rename-input-with-button {
+	border-color: var(--glass-border) !important;
+	border-radius: var(--radius-md);
+	background: var(--color-bg-active) !important;
+}
+.gui-filepane-editor-monaco .rename-box .rename-input {
+	color: var(--color-text);
+	background: transparent !important;
+}
+
 .gui-filepane-editor-text {
 	flex: 1;
 	min-height: 0;

@@ -35,6 +35,8 @@ export interface SurfaceTab {
 	title: string;
 	/** Unsaved-changes dot. */
 	dirty?: boolean;
+	/** Replaceable file preview, shown in italics and pinned by double click. */
+	preview?: boolean;
 }
 
 export interface SurfaceTabState {
@@ -192,6 +194,7 @@ export interface SurfaceTabStripProps {
 	activeId: string | null;
 	onActivate(id: string): void;
 	onClose(id: string): void;
+	onPin?(id: string): void;
 	onReorder(fromId: string, toId: string): void;
 	/** Right-click on a tab (viewport coords). The host owns the menu — the
 	 *  strip stays a pure tab widget. */
@@ -212,6 +215,7 @@ export function SurfaceTabStrip({
 	activeId,
 	onActivate,
 	onClose,
+	onPin,
 	onReorder,
 	onTabContextMenu,
 	closeLabel = "close",
@@ -238,6 +242,7 @@ export function SurfaceTabStrip({
 				activeId={activeId}
 				onActivate={onActivate}
 				onClose={onClose}
+				onPin={onPin}
 				onReorder={onReorder}
 				onTabContextMenu={onTabContextMenu}
 				closeLabel={closeLabel}
@@ -255,6 +260,7 @@ export function SurfaceTabStripSortable({
 	activeId,
 	onActivate,
 	onClose,
+	onPin,
 	onReorder,
 	onTabContextMenu,
 	closeLabel = "close",
@@ -297,6 +303,7 @@ export function SurfaceTabStripSortable({
 							closeLabel={closeLabel}
 							onActivate={onActivate}
 							onClose={onClose}
+							onPin={onPin}
 							onTabContextMenu={onTabContextMenu}
 						/>
 					);
@@ -313,6 +320,7 @@ function SurfaceTabButton({
 	closeLabel,
 	onActivate,
 	onClose,
+	onPin,
 	onTabContextMenu,
 }: {
 	tab: SurfaceTab;
@@ -321,6 +329,7 @@ function SurfaceTabButton({
 	closeLabel: string;
 	onActivate(id: string): void;
 	onClose(id: string): void;
+	onPin?(id: string): void;
 	onTabContextMenu?(id: string, x: number, y: number): void;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
@@ -348,10 +357,13 @@ function SurfaceTabButton({
 			role="tab"
 			aria-selected={active}
 			tabIndex={active ? 0 : -1}
-			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}${entering ? " gui-surface-tab--entering" : ""}`}
+			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${tab.preview ? " gui-surface-tab--preview" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}${entering ? " gui-surface-tab--entering" : ""}`}
 			data-motion={entering ? "entering" : undefined}
 			style={{ transform: CSS.Transform.toString(transform), transition }}
 			onClick={() => onActivate(tab.id)}
+			onDoubleClick={() => {
+				if (tab.preview) onPin?.(tab.id);
+			}}
 			onContextMenu={e => {
 				if (!onTabContextMenu) return;
 				e.preventDefault();

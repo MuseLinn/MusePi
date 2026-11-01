@@ -14,6 +14,7 @@ import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
+import { type MonacoDiffContent, MonacoDiffEditor } from "./MonacoDiffEditor";
 import { StateIcon } from "./StateIcon";
 
 /** Structured commit row from the daemon git.log RPC (parsed from
@@ -322,8 +323,15 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	} | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [openPath, setOpenPath] = useState<string | null>(null);
-	const [fileDiff, setFileDiff] = useState<{ staged: string; unstaged: string } | null>(null);
+	const [openGroup, setOpenGroup] = useState<"staged" | "unstaged" | "untracked" | "ignored" | null>(null);
+	const [fileDiff, setFileDiff] = useState<{
+		staged: string;
+		unstaged: string;
+		stagedContent?: MonacoDiffContent;
+		unstagedContent?: MonacoDiffContent;
+	} | null>(null);
 	const [diffLoading, setDiffLoading] = useState(false);
+	const diffRequestRef = useRef(0);
 	const highlight = useChatHighlight();
 	// openchamber GitSettings parity: flat/tree view, show-gitignored and
 	// gitmoji picker — localStorage keys shared with the settings Git tab.
@@ -369,22 +377,29 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			});
 	}, [rpc, showIgnored, cwd]);
 	useEffect(load, [load]);
-	const openFile = (path: string): void => {
-		if (openPath === path) {
+	const openFile = (path: string, group: "staged" | "unstaged" | "untracked" | "ignored"): void => {
+		const request = ++diffRequestRef.current;
+		if (openPath === path && openGroup === group) {
 			setOpenPath(null);
+			setOpenGroup(null);
 			setFileDiff(null);
+			setDiffLoading(false);
 			return;
 		}
 		setOpenPath(path);
+		setOpenGroup(group);
 		setFileDiff(null);
 		setDiffLoading(true);
 		void rpc
-			.request<{ staged: string; unstaged: string }>("git.diff", { path, maxLines: 400, cwd })
+			.request<typeof fileDiff>("git.diff", { path, maxLines: 400, cwd, content: true })
 			.then(res => {
+				if (diffRequestRef.current !== request) return;
 				setFileDiff(res ?? { staged: "", unstaged: "" });
 				setDiffLoading(false);
 			})
-			.catch(() => setDiffLoading(false));
+			.catch(() => {
+				if (diffRequestRef.current === request) setDiffLoading(false);
+			});
 	};
 	const stagePaths = async (paths: string[], stage: boolean): Promise<void> => {
 		if (!rpc) return;
@@ -433,7 +448,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		file: { path: string; status: string };
 		group: "staged" | "unstaged" | "untracked" | "ignored";
 	}): ReactNode => {
-		const open = openPath === file.path;
+		const open = openPath === file.path && openGroup === group;
 		const cls =
 			group === "staged"
 				? "gui-changes-badge--staged"
@@ -447,7 +462,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				<button
 					type="button"
 					className={`gui-changes-row${open ? " gui-changes-row--open" : ""}`}
-					onClick={() => openFile(file.path)}
+					onClick={() => openFile(file.path, group)}
 				>
 					<span className={`gui-changes-badge ${cls}`}>{statusBadge(file.status)}</span>
 					<span className="min-w-0 flex-1 truncate text-left">{file.path}</span>
@@ -491,13 +506,44 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							</div>
 						) : (
 							<CodeHighlightProvider highlight={highlight}>
-								{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
-								{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
-								{!fileDiff?.staged && !fileDiff?.unstaged && (
-									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
-										{t("tools.noChanges")}
-									</div>
-								)}
+								{fileDiff?.stagedContent ? (
+									<MonacoDiffEditor
+										path={file.path}
+										scope="staged"
+										original={fileDiff.stagedContent.original}
+										modified={fileDiff.stagedContent.modified}
+										fallback={<DiffBlock diff={fileDiff.staged} />}
+									/>
+								) : fileDiff?.staged ? (
+									<DiffBlock diff={fileDiff.staged} />
+								) : null}
+								{fileDiff?.unstagedContent ? (
+									<MonacoDiffEditor
+										path={file.path}
+										scope="unstaged"
+										original={fileDiff.unstagedContent.original}
+										modified={fileDiff.unstagedContent.modified}
+										fallback={
+											fileDiff.unstaged ? (
+												<DiffBlock diff={fileDiff.unstaged} />
+											) : (
+												<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
+													{t("settings.diffUnavailable")}
+												</div>
+											)
+										}
+									/>
+								) : fileDiff?.unstaged ? (
+									<DiffBlock diff={fileDiff.unstaged} />
+								) : null}
+								{!fileDiff?.staged &&
+									!fileDiff?.unstaged &&
+									!fileDiff?.stagedContent &&
+									!fileDiff?.unstagedContent && (
+										<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
+											{t("tools.noChanges")}
+										</div>
+									)}
 							</CodeHighlightProvider>
 						)}
 					</div>

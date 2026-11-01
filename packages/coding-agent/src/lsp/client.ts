@@ -98,6 +98,15 @@ const CLIENT_CAPABILITIES = {
 			contentFormat: ["markdown", "plaintext"],
 			dynamicRegistration: false,
 		},
+		completion: {
+			dynamicRegistration: false,
+			contextSupport: true,
+			completionItem: {
+				snippetSupport: false,
+				documentationFormat: ["markdown", "plaintext"],
+				labelDetailsSupport: true,
+			},
+		},
 		definition: {
 			dynamicRegistration: false,
 			linkSupport: true,

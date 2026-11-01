@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
+import type { PdfQuoteAnchor } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tapFeedback } from "../lib/haptic";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
@@ -25,6 +26,8 @@ import { MENU_ANIM_MS } from "./MenuPopup";
  */
 export function SelectionToolbar({
 	containerRef,
+	selection,
+	avoidSelector,
 	onQuote,
 	onAsk,
 	onCopy,
@@ -33,7 +36,12 @@ export function SelectionToolbar({
 }: {
 	/** The transcript scroll container — selections outside it are ignored. */
 	containerRef: React.RefObject<HTMLElement | null>;
-	onQuote(text: string): void;
+	/** Optional editor-owned selection. When supplied, DOM selection capture is
+	 * disabled because Monaco does not expose its selection through window. */
+	selection?: { text: string; x: number; y: number; height: number; pdf?: PdfQuoteAnchor } | null;
+	/** Visible editor floating UI that this toolbar must not cover. */
+	avoidSelector?: string;
+	onQuote(text: string, pdf?: PdfQuoteAnchor): void;
 	/** Open the selection→ask popover for this selection (throws away the
 	 * answer — never recorded to the transcript). */
 	onAsk(text: string, x: number, y: number): void;
@@ -41,7 +49,13 @@ export function SelectionToolbar({
 	onNewSession(text: string): void;
 	onAddNote(text: string): void;
 }): ReactNode {
-	const [pop, setPop] = useState<{ x: number; y: number; text: string } | null>(null);
+	const [pop, setPop] = useState<{
+		x: number;
+		y: number;
+		height: number;
+		text: string;
+		pdf?: PdfQuoteAnchor;
+	} | null>(null);
 	// Exit: keep the toolbar mounted through gui-select-pop-out before
 	// unmounting (Pop parity); the frosted chip also needs the two-phase
 	// enter so its backdrop composites before the fade-in plays.
@@ -70,6 +84,23 @@ export function SelectionToolbar({
 	// (per-button expand shoved its neighbours mid-move and made them
 	// hard to hit).
 	const [expanded, setExpanded] = useState(false);
+
+	useEffect(() => {
+		if (selection === undefined) return;
+		window.clearTimeout(hideTimer.current);
+		if (!selection) {
+			dismiss();
+			return;
+		}
+		setClosing(false);
+		setPop({
+			text: selection.text,
+			x: selection.x,
+			y: selection.y,
+			height: selection.height,
+			...(selection.pdf ? { pdf: selection.pdf } : {}),
+		});
+	}, [selection, dismiss]);
 
 	useEffect(() => {
 		const el = containerRef.current;
@@ -103,6 +134,7 @@ export function SelectionToolbar({
 				setPop({
 					x: Math.round(rect.left + rect.width / 2),
 					y: Math.round(rect.top),
+					height: rect.height,
 					text: text.length > 400 ? `${text.slice(0, 400)}…` : text,
 				});
 			}, 10);
@@ -124,7 +156,7 @@ export function SelectionToolbar({
 			e.preventDefault();
 			dismiss();
 		};
-		el.addEventListener("mouseup", onMouseUp);
+		if (selection === undefined) el.addEventListener("mouseup", onMouseUp);
 		window.addEventListener("mousedown", onDown);
 		el.addEventListener("scroll", onScroll, true);
 		window.addEventListener("keydown", onKey, true);
@@ -135,11 +167,66 @@ export function SelectionToolbar({
 			el.removeEventListener("scroll", onScroll, true);
 			window.removeEventListener("keydown", onKey, true);
 		};
-	}, [containerRef, dismiss]);
+	}, [containerRef, dismiss, selection === undefined]);
+
+	const toolbarRef = useRef<HTMLDivElement | null>(null);
+	const [horizontalShift, setHorizontalShift] = useState(0);
+	useLayoutEffect(() => {
+		const toolbar = toolbarRef.current;
+		if (!toolbar || !pop) return;
+		setHorizontalShift(0);
+		let frame: number | null = null;
+		const clamp = (): void => {
+			frame = null;
+			const rect = toolbar.getBoundingClientRect();
+			const delta =
+				rect.left < 8 ? 8 - rect.left : rect.right > window.innerWidth - 8 ? window.innerWidth - 8 - rect.right : 0;
+			if (Math.abs(delta) > 0.5) setHorizontalShift(current => current + delta);
+		};
+		const schedule = (): void => {
+			if (frame !== null) return;
+			frame = requestAnimationFrame(clamp);
+		};
+		const resize = new ResizeObserver(schedule);
+		resize.observe(toolbar);
+		window.addEventListener("resize", schedule);
+		clamp();
+		return () => {
+			if (frame !== null) cancelAnimationFrame(frame);
+			resize.disconnect();
+			window.removeEventListener("resize", schedule);
+		};
+	}, [pop]);
 
 	if (!pop) return null;
+	const aboveTop = pop.y - 38;
+	const belowTop = pop.y + pop.height + 4;
+	const container = containerRef.current;
+	const containerTop = container?.getBoundingClientRect().top ?? 0;
+	let top = aboveTop < containerTop ? belowTop : aboveTop;
+	if (container && avoidSelector) {
+		// Collapsed geometry: five 26px buttons, four 2px gaps, padding and border.
+		const width = 148;
+		const height = 36;
+		const overlaps = (candidateTop: number): boolean =>
+			Array.from(container.querySelectorAll<HTMLElement>(avoidSelector)).some(element => {
+				const obstacle = element.getBoundingClientRect();
+				return (
+					obstacle.width > 0 &&
+					obstacle.height > 0 &&
+					pop.x - width / 2 < obstacle.right &&
+					pop.x + width / 2 > obstacle.left &&
+					candidateTop < obstacle.bottom &&
+					candidateTop + height > obstacle.top
+				);
+			});
+		if (overlaps(top)) {
+			const alternate = top === aboveTop ? belowTop : aboveTop;
+			if (alternate >= containerTop) top = alternate;
+		}
+	}
 	const actions: Array<{ icon: IconName; label: string; run(): void }> = [
-		{ icon: "chat-1", label: t("settings.quoteChat"), run: () => onQuote(pop.text) },
+		{ icon: "chat-1", label: t("settings.quoteChat"), run: () => onQuote(pop.text, pop.pdf) },
 		{ icon: "sparkling", label: t("settings.askAboutSelection"), run: () => onAsk(pop.text, pop.x, pop.y) },
 		{ icon: "file-copy-2", label: t("settings.copy"), run: () => onCopy(pop.text) },
 		{ icon: "chat-new", label: t("settings.newSessionSelection"), run: () => onNewSession(pop.text) },
@@ -150,11 +237,12 @@ export function SelectionToolbar({
 	// bubbles through it and the buttons' clicks would silently die.
 	return createPortal(
 		<div
+			ref={toolbarRef}
 			className={`gui-select-pop${enteredCls ? " gui-select-pop--entered" : ""}${closing ? " gui-select-pop--closing" : ""}${expanded ? " gui-select-pop--expanded" : ""}`}
 			role="toolbar"
 			style={{
-				left: pop.x,
-				top: pop.y - 38,
+				left: pop.x + horizontalShift,
+				top,
 				transform: "translateX(-50%)",
 			}}
 			onMouseDown={e => e.preventDefault()} // keep the selection
