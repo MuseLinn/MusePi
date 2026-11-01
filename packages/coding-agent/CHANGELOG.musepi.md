@@ -67,6 +67,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The in-composer voice status strip is now more compact and legible. A liquid-glass microphone, explicit phase, real level wave, and live text replace the nested box and empty space; transcription switches to an accent processing ring, Esc uses a compact keycap, and narrow windows preserve the phase and recognized text first.
 
 ### Fixed
+- **官网与桌面、移动端统一应用图标**：导航、页脚和 favicon 直接使用桌面端品牌主图，不再显示旧版简化球体；Android 安装图标继续由同一主图生成。
+  - EN: The website now uses the same app icon as the desktop and mobile apps. Navigation, footer, and favicon use the desktop brand master instead of the older simplified orb; Android launcher assets continue to be generated from the same master.
 - **桌面窄屏导航与键盘操作恢复完整**：≤640px 时侧栏以覆盖式抽屉打开，不再压缩聊天列；关闭抽屉不可交互。会话标签、设置折叠按钮和看板空状态补齐键盘及可访问语义，命令面板打开后正确接管焦点，Tab 不会逃出面板，Escape 后焦点返回触发按钮。
   - EN: Narrow desktop navigation and keyboard operation are restored. At 640px and below, the sidebar opens as an overlay drawer without compressing the chat column, and the closed drawer is not interactive. Session tabs, settings collapse controls, and the board empty state now expose keyboard and accessibility semantics. The command palette captures focus when visible, keeps Tab inside, and restores focus to its opener on Escape.
 - **移动端正文、触控与页面缩放更易用**：正文提供 13／15／17px 三档字号，常用操作与触屏公式、图表和表格控件满足 44px 触控尺寸；用户可缩放页面，输入框仍避免聚焦时自动放大。移动壳补充启动覆盖层、随主题变化的状态栏和打包字体。
