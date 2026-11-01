@@ -737,10 +737,13 @@ try {
 		await bubblesPage.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 		await mainPage.evaluate(`//!world=main
 			window.electronAPI.petActivity({
-				sessions: [window.__petPhase2Card],
+				sessions: [{ ...window.__petPhase2Card, activityKey: "phase2-reduced-motion" }],
 				bubble: { kind: "subtask", text: "减少动态效果完整消息" }
 			});
 		`);
+		// This card was dismissed under its legacy activity key above. Use a new
+		// revision so it participates in the stack alongside the subtask.
+		await bubblesPage.waitForFunction(() => document.querySelectorAll(".pet-bubbles--stacked > .pet-bubble").length === 1, { timeout: 3000 });
 		// Informational subtasks do not displace a higher-priority session card.
 		// Expand the stack before checking this bubble's reduced-motion rendering.
 		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");

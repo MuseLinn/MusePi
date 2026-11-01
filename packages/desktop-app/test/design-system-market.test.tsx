@@ -4,10 +4,10 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { hasDesignSystemContent, MarketplaceCard, setLocale, t } from "@musepi/client-core";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { CapabilityCenterPage } from "../src/components/CapabilityCenterPage";
 import { DesignSystemRail, OPEN_CAPABILITY_EVENT } from "../src/components/composer/design-system-rail";
 import { type DesignSystemEntry, useDesignSystems } from "../src/components/composer/use-design-systems";
 import type { RpcClient } from "../src/lib/rpc";
+import { CapabilityCenterPage } from "../src/plugins/capability-center/page";
 
 /**
  * M3.7d GUI 路契约（docs/review/0.5.0-m3-mode-page-redesign.md §3.2 末段与
@@ -140,9 +140,11 @@ describe("M3.7d 能力中心落地 tab", () => {
 			root.render(
 				createElement(CapabilityCenterPage, {
 					rpc: makeRpc(calls),
-					onBack: () => {},
-					tab: "marketplace",
-					onTabChange: () => {},
+					page: {
+						onBack: () => {},
+						tab: "marketplace",
+						onTabChange: () => {},
+					},
 				}),
 			);
 		});

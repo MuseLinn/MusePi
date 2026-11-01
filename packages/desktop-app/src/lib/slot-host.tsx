@@ -128,6 +128,9 @@ export const hostReactDOMClientBindings = {
  * spread the namespace and add the portal entry.
  */
 function exposeHostReact(): void {
+	// Pure selector tests and server-side imports have no browser global. The
+	// compiled-plugin bridge is installed by the browser mounts below.
+	if (typeof window === "undefined") return;
 	(window as unknown as { MusePiReact: unknown }).MusePiReact = hostReactBindings;
 	(window as unknown as { MusePiReactDOM: unknown }).MusePiReactDOM = hostReactDOMBindings;
 	(window as unknown as { MusePiReactDOMClient: unknown }).MusePiReactDOMClient = hostReactDOMClientBindings;

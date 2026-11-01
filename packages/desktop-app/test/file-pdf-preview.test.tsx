@@ -4,8 +4,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { usePdfLoadTimeout } from "../src/components/FilePdfPreview";
 
-function TimeoutHarness(): React.ReactNode {
-	const loadTimedOut = usePdfLoadTimeout(5);
+function TimeoutHarness({ timeoutMs = 5 }: { timeoutMs?: number }): React.ReactNode {
+	const loadTimedOut = usePdfLoadTimeout(timeoutMs);
 	return <span>{loadTimedOut ? "timed-out" : "pending"}</span>;
 }
 
@@ -31,7 +31,9 @@ describe("PDF load timeout", () => {
 		});
 		expect(container.textContent).toBe("timed-out");
 
-		await act(async () => root.render(<TimeoutHarness key="retry" />));
+		// Keep the retry deadline out of this assertion's scheduling window. A
+		// second 5ms timer can expire before a loaded parallel test worker resumes.
+		await act(async () => root.render(<TimeoutHarness key="retry" timeoutMs={60_000} />));
 		expect(container.textContent).toBe("pending");
 	});
 });
