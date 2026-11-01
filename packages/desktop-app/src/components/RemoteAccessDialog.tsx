@@ -50,7 +50,7 @@ function drawQr(canvas: HTMLCanvasElement, text: string): void {
 }
 
 /**
- * ZCode 移动端远程控制 dialog: scan-to-join a live collab share of the
+ * Mobile remote control dialog: scan to join a live collab share of the
  * current session (daemon collab.* RPC, LAN relay), plus the bot-channel
  * section (live daemon state — channels.list/start/stop).
  */
@@ -217,27 +217,27 @@ export function RemoteAccessDialog({
 	};
 
 	const channelFields: Record<string, { key: string; label: string; secret: boolean; optional?: boolean }[]> = {
-		discord: [{ key: "token", label: "Bot token", secret: true }],
+		discord: [{ key: "token", label: t("Bot token"), secret: true }],
 		// token optional: empty → the channel falls back to QR login (wechat.ts
 		// start(): #fetchQr + waiting_scan). The save button must not lock on it
 		// (issue #28) — the QR itself is rendered from status().config.qrUrl.
-		wechat: [{ key: "token", label: "Token (optional — QR login if empty)", secret: true, optional: true }],
+		wechat: [{ key: "token", label: t("Token (optional — QR login if empty)"), secret: true, optional: true }],
 		"huawei-today": [
-			{ key: "apiKey", label: "PERSONAL-API-KEY", secret: true },
-			{ key: "uid", label: "PERSONAL-UID", secret: false },
+			{ key: "apiKey", label: t("PERSONAL-API-KEY"), secret: true },
+			{ key: "uid", label: t("PERSONAL-UID"), secret: false },
 		],
 		// Missing forms used to leave these rows dead: clicking 启动 expanded
 		// nothing (fields undefined) and the channel could never be started
 		// from the GUI — the adapter-side required config lived only in the
 		// daemon (telegram.ts needs token; feishu.ts needs appId/appSecret).
-		telegram: [{ key: "token", label: "Bot token (from @BotFather)", secret: true }],
+		telegram: [{ key: "token", label: t("Bot token (from @BotFather)"), secret: true }],
 		feishu: [
-			{ key: "appId", label: "App ID", secret: false },
-			{ key: "appSecret", label: "App Secret", secret: true },
+			{ key: "appId", label: t("App ID"), secret: false },
+			{ key: "appSecret", label: t("App Secret"), secret: true },
 		],
 		lark: [
-			{ key: "appId", label: "App ID", secret: false },
-			{ key: "appSecret", label: "App Secret", secret: true },
+			{ key: "appId", label: t("App ID"), secret: false },
+			{ key: "appSecret", label: t("App Secret"), secret: true },
 		],
 	};
 
@@ -392,7 +392,7 @@ export function RemoteAccessDialog({
 				</button>
 			</div>
 			<div className="gui-collab-grid">
-				{/* Left: scan-to-connect (ZCode layout). */}
+				{/* Left: scan-to-connect controls. */}
 				<section className="gui-collab-col">
 					<div className="gui-collab-col-head">
 						<Icon name="smartphone" className="h-4 w-4" />
@@ -597,7 +597,7 @@ export function RemoteAccessDialog({
 									<Reveal open={waitingScan && !!qrUrl}>
 										{qrUrl ? (
 											<div className="gui-collab-channel-qr">
-												<img src={channelQrSrc(qrUrl)} alt="WeChat login QR" />
+												<img src={channelQrSrc(qrUrl)} alt={t("WeChat login QR")} />
 												<span>{c.detail ?? t("settings.scanQrCode")}</span>
 											</div>
 										) : null}

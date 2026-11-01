@@ -73,7 +73,7 @@ export function CapabilityCenterPage({
 	// 插件清单在 mount 时即拉取——切到插件 tab 时列表已就绪（持久化 +
 	// 切换动效的前提：不能等 tab 激活才挂载/才发请求）。
 	// extensions.changed（组件开关/启停/HMR，daemon 统一扇出）即时重拉——
-	// 详情弹层里的组件开关不用重进页面即见（dsh 实时生效 parity）。
+	// 详情弹层里的组件开关不用重进页面即可看到最新状态。
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;

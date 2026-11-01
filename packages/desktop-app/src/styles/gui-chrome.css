@@ -1218,7 +1218,7 @@
 .gui-pdf-page {
 	box-sizing: content-box;
 	margin: 12px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	background: white;
 	box-shadow: 0 2px 12px rgb(0 0 0 / 16%);
 }
@@ -1813,7 +1813,7 @@
 	width: auto;
 	height: auto;
 	border: 1px solid var(--glass-border) !important;
-	border-radius: 8px !important;
+	border-radius: var(--radius-lg);
 	background: var(--glass-sheen), var(--glass-bg-strong) !important;
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));

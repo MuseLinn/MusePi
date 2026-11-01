@@ -42,8 +42,7 @@ export function installMarkdownToolbarOverflow(root: HTMLElement): () => void {
 		menu.classList.remove("gui-menu-popup--entered");
 		more.setAttribute("aria-expanded", "false");
 	};
-	const items = (): HTMLElement[] =>
-		Array.from(inner.querySelectorAll<HTMLElement>(":scope > .top-bar-item"));
+	const items = (): HTMLElement[] => Array.from(inner.querySelectorAll<HTMLElement>(":scope > .top-bar-item"));
 
 	const position = (): void => {
 		const anchor = more.getBoundingClientRect();

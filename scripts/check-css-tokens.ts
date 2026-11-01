@@ -21,7 +21,10 @@ export function definedColorTokens(source: string): Set<string> {
 	return defined;
 }
 
-export function checkCssTokens(files: ReadonlyArray<readonly [string, string]>, tokensSource: string): CssTokenProblem[] {
+export function checkCssTokens(
+	files: ReadonlyArray<readonly [string, string]>,
+	tokensSource: string,
+): CssTokenProblem[] {
 	const defined = definedColorTokens(tokensSource);
 	const problems: CssTokenProblem[] = [];
 	for (const [file, source] of files) {

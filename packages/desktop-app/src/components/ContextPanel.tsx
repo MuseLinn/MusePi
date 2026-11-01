@@ -35,9 +35,9 @@ import { isElectron, openExternalUrl } from "../lib/electron";
 import {
 	discardFilePreviewBuffer,
 	FILE_WORKSPACE_SURFACE,
+	type FileWorkspaceHost,
 	filePreviewBuffers,
 	filePreviewWorkspacePath,
-	type FileWorkspaceHost,
 } from "../lib/file-workspace";
 import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
@@ -997,7 +997,9 @@ export function ContextPanel({
 						/>
 					) : (
 						<div className="gui-pane-tab-empty">
-							<span className="gui-pane-tab-empty-icon"><Icon name="folder" /></span>
+							<span className="gui-pane-tab-empty-icon">
+								<Icon name="folder" />
+							</span>
 							<p className="gui-pane-tab-empty-title">{t("tools.bundlePluginDisabled")}</p>
 						</div>
 					)
@@ -1464,14 +1466,12 @@ export function ContextPanel({
 									 * parity): the rail's primary surfaces as launchable entries. */
 									<PanelTabsEmptyState
 										heading={t("general.startHere")}
-										items={primarySurfaces.map(
-											s => ({
-												id: s.id,
-												label: t(s.label as TranslationKey),
-												icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
-												onSelect: () => onViewChange(s.id),
-											}),
-										)}
+										items={primarySurfaces.map(s => ({
+											id: s.id,
+											label: t(s.label as TranslationKey),
+											icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
+											onSelect: () => onViewChange(s.id),
+										}))}
 									/>
 								) : (
 									renderPanelBody(view, activePanelTab)

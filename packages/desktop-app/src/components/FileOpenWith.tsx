@@ -27,7 +27,13 @@ export function FileOpenWith({ path }: { path: string }): ReactNode {
 			>
 				<ChevronDown size={12} />
 			</button>
-			<MenuPopup open={open} className="gui-openin-menu gui-file-open-with" anchor={anchor.current} align="right" onOpenChange={setOpen}>
+			<MenuPopup
+				open={open}
+				className="gui-openin-menu gui-file-open-with"
+				anchor={anchor.current}
+				align="right"
+				onOpenChange={setOpen}
+			>
 				{apps.map(app => (
 					<button
 						key={app.id}

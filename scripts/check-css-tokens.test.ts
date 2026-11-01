@@ -7,7 +7,9 @@ describe("checkCssTokens", () => {
 			[["bad.css", ".a { color: var(--fg); }\n.b { color: var(--color-border); }"]],
 			":root { --color-text: var(--fg); }",
 		);
-		expect(problems).toEqual([{ file: "bad.css", line: 2, message: "undefined semantic color token --color-border" }]);
+		expect(problems).toEqual([
+			{ file: "bad.css", line: 2, message: "undefined semantic color token --color-border" },
+		]);
 	});
 
 	test("accepts references with fallback values when the token is defined", () => {

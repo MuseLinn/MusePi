@@ -28,15 +28,29 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { ContextMenu, type ContextMenuItem } from "../../components/ContextMenu";
+import { FileCodeEditor, type FileEditorSelection } from "../../components/FileCodeEditor";
+import { FileDirectoryMenu } from "../../components/FileDirectoryMenu";
+import {
+	FileMarkdownEditor,
+	type FileMarkdownEditorHandle,
+	hasYamlFrontMatter,
+} from "../../components/FileMarkdownEditor";
+import { FileOpenWith } from "../../components/FileOpenWith";
+import { ImagePreview } from "../../components/FilePaneImagePreview";
+import { useMarkdownFileNavigation } from "../../components/FilePaneMarkdownNav";
+import { FontPreview, MediaPreview, MermaidPreview } from "../../components/FilePanePreviews";
+import type { PdfEditorSelection } from "../../components/FilePdfPreview";
+import { SelectionToolbar } from "../../components/SelectionToolbar";
 import { dismissActionToastSource, pushActionToast } from "../../lib/action-toast";
 import { owningArtifact, useArtifactIndex } from "../../lib/artifact-index";
 import { type BuiltinViewerDeps, builtinFileViewers } from "../../lib/builtin-file-viewers";
 import type { EditorLocation } from "../../lib/editor-navigation";
 import { listFileViewers, orderViewers, renderWithViewerList } from "../../lib/file-viewers";
 import {
+	type FilePreviewBufferStore,
 	filePreviewPathEquals,
 	filePreviewWorkspacePath,
-	type FilePreviewBufferStore,
 	resolveFilePreviewPath,
 	type WorkspaceEntry,
 } from "../../lib/file-workspace";
@@ -55,23 +69,9 @@ import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { captureSelectionContext } from "../../lib/selection-capture";
 import { Icon } from "../../vendor/oc-icons";
-import { ContextMenu, type ContextMenuItem } from "../../components/ContextMenu";
-import { FileCodeEditor, type FileEditorSelection } from "../../components/FileCodeEditor";
-import { FileDirectoryMenu } from "../../components/FileDirectoryMenu";
-import {
-	FileMarkdownEditor,
-	hasYamlFrontMatter,
-	type FileMarkdownEditorHandle,
-} from "../../components/FileMarkdownEditor";
-import { FileOpenWith } from "../../components/FileOpenWith";
-import { ImagePreview } from "../../components/FilePaneImagePreview";
-import { useMarkdownFileNavigation } from "../../components/FilePaneMarkdownNav";
-import { FontPreview, MediaPreview, MermaidPreview } from "../../components/FilePanePreviews";
-import type { PdfEditorSelection } from "../../components/FilePdfPreview";
-import { SelectionToolbar } from "../../components/SelectionToolbar";
 
-export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath };
 export type { WorkspaceEntry };
+export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath };
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
 const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
@@ -1003,9 +1003,7 @@ export function FilePane({
 				quote,
 				language: codeSelection?.language ?? domMatch?.file?.language ?? extOf(preview.name),
 				...(startLine !== undefined && endLine !== undefined ? { startLine, endLine } : {}),
-				...(pdfSelection
-					? { pdf: { ...pdfSelection.anchor, fileSize: preview.size } }
-					: {}),
+				...(pdfSelection ? { pdf: { ...pdfSelection.anchor, fileSize: preview.size } } : {}),
 			});
 			window.dispatchEvent(
 				new CustomEvent("musepi-gui-quote-append", {
@@ -1398,7 +1396,9 @@ export function FilePane({
 									aria-label={t("general.citeFileComposer")}
 									onMouseDown={event => event.preventDefault()}
 									onClick={() =>
-										appendFileQuote(pdfSelection ?? (extOf(preview.name) === "md" && mdRender ? null : fileSelection))
+										appendFileQuote(
+											pdfSelection ?? (extOf(preview.name) === "md" && mdRender ? null : fileSelection),
+										)
 									}
 								>
 									<Quote size={12} />
@@ -1430,135 +1430,144 @@ export function FilePane({
 								✕
 							</button>
 						</div>
-						<div className={`gui-filepane-preview-main${treeExpanded ? " gui-filepane-preview-main--tree-open" : ""}`}>
+						<div
+							className={`gui-filepane-preview-main${treeExpanded ? " gui-filepane-preview-main--tree-open" : ""}`}
+						>
 							{fileTree}
 							<div
 								className="gui-filepane-preview-body"
 								ref={bodyRef}
-							data-file-path={preview.path}
-							data-file-language={extOf(preview.name)}
-						>
-							{preview.error && <p className="gui-error">{preview.error}</p>}
-							{preview.htmlLive !== undefined && !edit && <HtmlPreview source={preview.htmlLive} />}
-							{preview.html !== undefined && !edit && (
-								<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
-							)}
-							{preview.text !== undefined && extOf(preview.name) === "md" && mdRender && !edit ? (
-								<div className="gui-filepane-preview-md" ref={mdPreviewRef}>
-									<Markdown text={preview.text} basePath={cwd} />
-								</div>
-							) : preview.text !== undefined && !edit ? (
-								<pre className="gui-filepane-preview-text">{preview.text}</pre>
-							) : null}
-							{edit && extOf(preview.name) === "md" && mdRender && hasYamlFrontMatter(edit.text) && (
-								<div className="gui-filepane-markdown-warning" role="note">
-									<span>{t("markdownFrontMatterWarning")}</span>
-									<button
-										type="button"
-										className="gui-btn gui-btn-sm"
-										onClick={() => {
-											const latest = markdownEditorRef.current?.getMarkdown();
-											if (latest != null) updateEditText(latest);
-											setMdRender(false);
-											setFileSelection(null);
-										}}
+								data-file-path={preview.path}
+								data-file-language={extOf(preview.name)}
+							>
+								{preview.error && <p className="gui-error">{preview.error}</p>}
+								{preview.htmlLive !== undefined && !edit && <HtmlPreview source={preview.htmlLive} />}
+								{preview.html !== undefined && !edit && (
+									<pre
+										className="gui-filepane-preview-text"
+										dangerouslySetInnerHTML={{ __html: preview.html }}
+									/>
+								)}
+								{preview.text !== undefined && extOf(preview.name) === "md" && mdRender && !edit ? (
+									<div className="gui-filepane-preview-md" ref={mdPreviewRef}>
+										<Markdown text={preview.text} basePath={cwd} />
+									</div>
+								) : preview.text !== undefined && !edit ? (
+									<pre className="gui-filepane-preview-text">{preview.text}</pre>
+								) : null}
+								{edit && extOf(preview.name) === "md" && mdRender && hasYamlFrontMatter(edit.text) && (
+									<div className="gui-filepane-markdown-warning" role="note">
+										<span>{t("markdownFrontMatterWarning")}</span>
+										<button
+											type="button"
+											className="gui-btn gui-btn-sm"
+											onClick={() => {
+												const latest = markdownEditorRef.current?.getMarkdown();
+												if (latest != null) updateEditText(latest);
+												setMdRender(false);
+												setFileSelection(null);
+											}}
+										>
+											{t("settings.sourceCode")}
+										</button>
+									</div>
+								)}
+								{edit && (
+									<div
+										className={`gui-filepane-edit-layout${
+											preview.htmlLive !== undefined && htmlLiveMode === "live"
+												? " gui-filepane-edit-layout--live-preview"
+												: ""
+										}`}
 									>
-										{t("settings.sourceCode")}
-									</button>
-								</div>
-							)}
-							{edit && (
-								<div
-									className={`gui-filepane-edit-layout${
-										preview.htmlLive !== undefined && htmlLiveMode === "live"
-											? " gui-filepane-edit-layout--live-preview"
-											: ""
-									}`}
-								>
-									<FileEditor
-										rpc={rpc}
-										cwd={cwd}
-										path={preview.path}
-										value={edit.text}
+										<FileEditor
+											rpc={rpc}
+											cwd={cwd}
+											path={preview.path}
+											value={edit.text}
+											name={preview.name}
+											dirty={dirty}
+											saving={saving}
+											markdownVisual={extOf(preview.name) === "md" && mdRender}
+											markdownEditorRef={markdownEditorRef}
+											onMarkdownError={message => {
+												setError(message);
+												setMdRender(false);
+												setFileSelection(null);
+											}}
+											onNavigate={(source, target) => {
+												if (onEditorNavigate) {
+													onEditorNavigate(source, target);
+													return;
+												}
+												if (source.path === target.path) return;
+												openFile(
+													{
+														path: target.path,
+														name: target.path.slice(
+															Math.max(target.path.lastIndexOf("/"), target.path.lastIndexOf("\\")) + 1,
+														),
+														size: 0,
+														isDir: false,
+														mtime: 0,
+														depth: 0,
+													},
+													{ pin: true, newTab: true },
+												);
+											}}
+											onChange={updateEditText}
+											onSave={text => void saveEdit(text)}
+											onPositionChange={location => onEditorPositionChange?.(location)}
+											onHistoryBack={() => onNavigateBack?.()}
+											onHistoryForward={() => onNavigateForward?.()}
+											onLoadFile={loadPeekFile}
+											onSaveFile={savePeekFile}
+											onBufferChange={changePeekBuffer}
+											onSelectionChange={setFileSelection}
+										/>
+										{preview.htmlLive !== undefined && htmlLiveMode === "live" && (
+											<HtmlPreview source={edit.text} />
+										)}
+									</div>
+								)}
+								{preview.docxBytes && <DocxPreview data={preview.docxBytes} path={preview.path} />}
+								{preview.officeSheets && <SheetPreview name={preview.name} sheets={preview.officeSheets} />}
+								{preview.media && (
+									<MediaPreview kind={preview.media.kind} url={preview.media.url} name={preview.name} />
+								)}
+								{preview.fontUrl && <FontPreview url={preview.fontUrl} name={preview.name} />}
+								{preview.mermaidSource !== undefined && <MermaidPreview source={preview.mermaidSource} />}
+								{preview.imageUrl && (
+									<ImagePreview
+										src={preview.imageUrl}
 										name={preview.name}
-										dirty={dirty}
-										saving={saving}
-										markdownVisual={extOf(preview.name) === "md" && mdRender}
-										markdownEditorRef={markdownEditorRef}
-										onMarkdownError={message => {
-											setError(message);
-											setMdRender(false);
-											setFileSelection(null);
-										}}
-										onNavigate={(source, target) => {
-											if (onEditorNavigate) {
-												onEditorNavigate(source, target);
-												return;
+										onOpenLightbox={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
+									/>
+								)}
+								{preview.pdfBytes && (
+									<Suspense fallback={<div className="gui-pdf-status">{t("settings.pdfLoading")}</div>}>
+										<FilePdfPreview
+											data={preview.pdfBytes}
+											name={preview.name}
+											path={preview.path}
+											onSelection={setPdfSelection}
+											restore={
+												openRequest?.pdf
+													? {
+															anchor: openRequest.pdf,
+															quote: openRequest.quote ?? "",
+															nonce: openRequest.nonce,
+														}
+													: undefined
 											}
-											if (source.path === target.path) return;
-											openFile(
-												{
-													path: target.path,
-													name: target.path.slice(
-														Math.max(target.path.lastIndexOf("/"), target.path.lastIndexOf("\\")) + 1,
-													),
-													size: 0,
-													isDir: false,
-													mtime: 0,
-													depth: 0,
-												},
-												{ pin: true, newTab: true },
-											);
-										}}
-										onChange={updateEditText}
-										onSave={text => void saveEdit(text)}
-										onPositionChange={location => onEditorPositionChange?.(location)}
-										onHistoryBack={() => onNavigateBack?.()}
-										onHistoryForward={() => onNavigateForward?.()}
-										onLoadFile={loadPeekFile}
-										onSaveFile={savePeekFile}
-										onBufferChange={changePeekBuffer}
-										onSelectionChange={setFileSelection}
-									/>
-									{preview.htmlLive !== undefined && htmlLiveMode === "live" && (
-										<HtmlPreview source={edit.text} />
-									)}
-								</div>
-							)}
-							{preview.docxBytes && <DocxPreview data={preview.docxBytes} path={preview.path} />}
-							{preview.officeSheets && <SheetPreview name={preview.name} sheets={preview.officeSheets} />}
-							{preview.media && (
-								<MediaPreview kind={preview.media.kind} url={preview.media.url} name={preview.name} />
-							)}
-							{preview.fontUrl && <FontPreview url={preview.fontUrl} name={preview.name} />}
-							{preview.mermaidSource !== undefined && <MermaidPreview source={preview.mermaidSource} />}
-							{preview.imageUrl && (
-								<ImagePreview
-									src={preview.imageUrl}
-									name={preview.name}
-									onOpenLightbox={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
-								/>
-							)}
-							{preview.pdfBytes && (
-								<Suspense fallback={<div className="gui-pdf-status">{t("settings.pdfLoading")}</div>}>
-									<FilePdfPreview
-										data={preview.pdfBytes}
-										name={preview.name}
-										path={preview.path}
-										onSelection={setPdfSelection}
-										restore={
-											openRequest?.pdf
-												? { anchor: openRequest.pdf, quote: openRequest.quote ?? "", nonce: openRequest.nonce }
-												: undefined
-										}
-									/>
-								</Suspense>
-							)}
-							{preview.external && (
-								<p className="gui-filepane-preview-note">
-									{t("general.openedDefaultApp")} — {preview.size.toLocaleString()} B
-								</p>
-							)}
+										/>
+									</Suspense>
+								)}
+								{preview.external && (
+									<p className="gui-filepane-preview-note">
+										{t("general.openedDefaultApp")} — {preview.size.toLocaleString()} B
+									</p>
+								)}
 							</div>
 						</div>
 					</div>

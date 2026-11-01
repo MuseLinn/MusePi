@@ -204,53 +204,53 @@ describe("Monaco LSP conversion", () => {
 	it.each([
 		["registerImplementationProvider", "provideImplementation", "editor.implementation"],
 		["registerTypeDefinitionProvider", "provideTypeDefinition", "editor.typeDefinition"],
-	] as const)("routes %s through the daemon and converts returned locations", async (registration, method, rpcMethod) => {
-		const monaco = await import("monaco-editor");
-		const sourceModel = createFileEditorModel(monaco, "/workspace/navigation-source.ts", "alpha;");
-		models.add(sourceModel);
-		let provider:
-			| Monaco.languages.ImplementationProvider
-			| Monaco.languages.TypeDefinitionProvider
-			| undefined;
-		vi.spyOn(monaco.languages, registration).mockImplementation((_language, candidate) => {
-			provider = candidate;
-			return { dispose: () => {} };
-		});
-		const requests: Array<{ method: string; params: unknown }> = [];
-		const rpc = {
-			request: async (requestMethod: string, params: unknown) => {
-				requests.push({ method: requestMethod, params });
-				return {
-					available: true,
-					result: [
-						{
-							uri: "file:///workspace/navigation-target.ts",
-							range: { start: { line: 2, character: 4 }, end: { line: 2, character: 9 } },
-						},
-					],
-				};
-			},
-		} as unknown as RpcClient;
-		const editor = { getModel: () => sourceModel } as Monaco.editor.IStandaloneCodeEditor;
-		const features = registerMonacoLanguageFeatures(monaco, rpc, "/workspace", editor, () => {});
-		if (!provider) throw new Error(`${registration} was not registered`);
-		const token: Monaco.CancellationToken = {
-			isCancellationRequested: false,
-			onCancellationRequested: () => ({ dispose: () => {} }),
-		};
-		const result = await provider[method](sourceModel, new monaco.Position(3, 5), token);
-		expect(requests.find(request => request.method === rpcMethod)?.params).toMatchObject({
-			path: sourceModel.uri.fsPath,
-			content: "alpha;",
-			line: 2,
-			character: 4,
-		});
-		const locations = Array.isArray(result) ? result : [result];
-		expect(locations[0]).toMatchObject({
-			range: { startLineNumber: 3, startColumn: 5, endLineNumber: 3, endColumn: 10 },
-		});
-		features.dispose();
-	});
+	] as const)(
+		"routes %s through the daemon and converts returned locations",
+		async (registration, method, rpcMethod) => {
+			const monaco = await import("monaco-editor");
+			const sourceModel = createFileEditorModel(monaco, "/workspace/navigation-source.ts", "alpha;");
+			models.add(sourceModel);
+			let provider: Monaco.languages.ImplementationProvider | Monaco.languages.TypeDefinitionProvider | undefined;
+			vi.spyOn(monaco.languages, registration).mockImplementation((_language, candidate) => {
+				provider = candidate;
+				return { dispose: () => {} };
+			});
+			const requests: Array<{ method: string; params: unknown }> = [];
+			const rpc = {
+				request: async (requestMethod: string, params: unknown) => {
+					requests.push({ method: requestMethod, params });
+					return {
+						available: true,
+						result: [
+							{
+								uri: "file:///workspace/navigation-target.ts",
+								range: { start: { line: 2, character: 4 }, end: { line: 2, character: 9 } },
+							},
+						],
+					};
+				},
+			} as unknown as RpcClient;
+			const editor = { getModel: () => sourceModel } as Monaco.editor.IStandaloneCodeEditor;
+			const features = registerMonacoLanguageFeatures(monaco, rpc, "/workspace", editor, () => {});
+			if (!provider) throw new Error(`${registration} was not registered`);
+			const token: Monaco.CancellationToken = {
+				isCancellationRequested: false,
+				onCancellationRequested: () => ({ dispose: () => {} }),
+			};
+			const result = await provider[method](sourceModel, new monaco.Position(3, 5), token);
+			expect(requests.find(request => request.method === rpcMethod)?.params).toMatchObject({
+				path: sourceModel.uri.fsPath,
+				content: "alpha;",
+				line: 2,
+				character: 4,
+			});
+			const locations = Array.isArray(result) ? result : [result];
+			expect(locations[0]).toMatchObject({
+				range: { startLineNumber: 3, startColumn: 5, endLineNumber: 3, endColumn: 10 },
+			});
+			features.dispose();
+		},
+	);
 
 	it("loads an unopened definition and preserves its draft through save and adoption", async () => {
 		const monaco = await import("monaco-editor");
@@ -439,5 +439,4 @@ describe("Monaco LSP conversion", () => {
 		expect(changes.at(-1)).toEqual({ path: targetUri.fsPath, text: "const beta = 2;", saved: "const alpha = 2;" });
 		registration.dispose();
 	});
-
 });

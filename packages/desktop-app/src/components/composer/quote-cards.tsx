@@ -52,7 +52,7 @@ function QuoteEntry({
 							<span className="gui-quote-context-page" title={context.path}>
 								{fileName(context.path)}
 								{context.pdf
-									? ` · PDF ${context.pdf.startPage}-${context.pdf.endPage}`
+									? ` · ${t("pdfPageRange", { start: context.pdf.startPage, end: context.pdf.endPage })}`
 									: context.startLine !== undefined && context.endLine !== undefined
 										? `:${context.startLine}-${context.endLine}`
 										: ""}

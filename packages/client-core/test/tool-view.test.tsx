@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ToolCard } from "../src/components/transcript/ToolCard";
-import { ToolView } from "../src/tool-render/ToolView";
 import { registerExternalToolRenderers } from "../src/tool-render/registry";
+import { ToolView } from "../src/tool-render/ToolView";
 
 describe("ToolView xd:// dispatches", () => {
 	it("renders successful execute-mode xdev writes as the inner generate_image tool", () => {

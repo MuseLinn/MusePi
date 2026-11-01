@@ -39,6 +39,7 @@ import {
 	forgetComposerSlot,
 	recordComposerSlotHeight,
 } from "../lib/composer-tail-inset";
+import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { HISTORY_PAGE_MESSAGES } from "../lib/history-batch";
@@ -49,7 +50,6 @@ import { toolPanelTabDescriptor } from "../lib/panel-tabs";
 import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
-import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import {

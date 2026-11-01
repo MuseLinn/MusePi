@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-01
+
 ### Added
 - **Cordis 组合与生命周期统一**：插件页按同一卡片管理普通包和 profile bundle，不再单设组合页；preset 行在会话中挂载真实 Cordis fiber，支持按服务隔离的 realm，并在切换或销毁时清理工具与 effect。能力中心改为 `app.capability` 插件页面，Android skill 与工具、UI 同属一个插件生命周期。
   - EN: Cordis composition and lifecycles are unified. The Plugins page manages ordinary packages and profile bundles with one card model and no separate Composition tab. Preset rows mount real Cordis fibers in each session with service-isolated realms and clean up tools and effects on switches and disposal. The capability center is now an app.capability plugin page, and the Android skill shares one plugin lifecycle with its tools and UI.

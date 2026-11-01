@@ -509,7 +509,10 @@ function DisplayContextCard({
 						)
 					}
 				>
-					{source}{context.pdf ? ` · PDF ${context.pdf.startPage}-${context.pdf.endPage}` : ""}
+					{source}
+					{context.pdf
+						? ` · ${t("pdfPageRange", { start: context.pdf.startPage, end: context.pdf.endPage })}`
+						: ""}
 				</button>
 			) : (
 				<span className="tr-display-context-source">{source}</span>

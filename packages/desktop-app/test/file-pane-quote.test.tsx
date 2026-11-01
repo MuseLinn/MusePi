@@ -48,13 +48,13 @@ describe("FilePane quote producer", () => {
 		mounted.add(root);
 		await act(async () =>
 			root.render(
-					<FilePane
-						rpc={rpc}
-						cwd="/workspace"
-						bufferStore={filePreviewBuffers}
-						openRequest={{ path: "src/example.ts", nonce: 1 }}
-					/>,
-				),
+				<FilePane
+					rpc={rpc}
+					cwd="/workspace"
+					bufferStore={filePreviewBuffers}
+					openRequest={{ path: "src/example.ts", nonce: 1 }}
+				/>,
+			),
 		);
 		await waitFor(() => container.querySelector(".gui-filepane-preview-text") !== null);
 		const textNode = container.querySelector(".gui-filepane-preview-text")?.firstChild;

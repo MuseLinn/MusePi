@@ -12,7 +12,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const optionalString = (value: unknown): boolean => value === undefined || typeof value === "string";
 const optionalLine = (value: unknown): boolean =>
 	value === undefined || (typeof value === "number" && Number.isInteger(value) && value > 0);
-const nonNegativeInteger = (value: unknown): boolean => typeof value === "number" && Number.isInteger(value) && value >= 0;
+const nonNegativeInteger = (value: unknown): boolean =>
+	typeof value === "number" && Number.isInteger(value) && value >= 0;
 const optionalNumber = (value: unknown): boolean => value === undefined || typeof value === "number";
 
 function isPdfAnchor(value: unknown): boolean {

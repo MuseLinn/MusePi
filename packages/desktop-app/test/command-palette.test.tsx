@@ -52,9 +52,13 @@ describe("CommandPalette keyboard contract", () => {
 		expect(document.activeElement).toBe(input);
 		expect(input.getAttribute("aria-controls")).toBe("gui-palette-listbox");
 		expect(input.getAttribute("aria-activedescendant")).toBe("gui-palette-option-0");
-		expect(document.getElementById(input.getAttribute("aria-activedescendant")!)?.getAttribute("role")).toBe("option");
+		expect(document.getElementById(input.getAttribute("aria-activedescendant")!)?.getAttribute("role")).toBe(
+			"option",
+		);
 
-		act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true })));
+		act(() =>
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true })),
+		);
 		const activeId = input.getAttribute("aria-activedescendant")!;
 		expect(activeId).not.toBe("gui-palette-option-0");
 		expect(document.getElementById(activeId)?.getAttribute("aria-selected")).toBe("true");
@@ -78,7 +82,11 @@ describe("CommandPalette keyboard contract", () => {
 		expect(document.activeElement).toBe(input);
 
 		act(() => input.focus());
-		act(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true, shiftKey: true })));
+		act(() =>
+			input.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true, shiftKey: true }),
+			),
+		);
 		expect(document.activeElement).toBe(last);
 
 		act(() => root.render(<CommandPalette {...props(false)} />));

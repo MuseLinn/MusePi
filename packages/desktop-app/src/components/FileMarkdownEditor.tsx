@@ -1,5 +1,5 @@
-import { t } from "@musepi/client-core";
 import type { Crepe } from "@milkdown/crepe";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "@milkdown/crepe/theme/common/style.css";
@@ -32,20 +32,27 @@ export function hasYamlFrontMatter(markdown: string): boolean {
 	return /^\uFEFF?---[\t ]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[\t ]*(?:\r?\n|$)/.test(markdown);
 }
 
-const TOOLBAR_LABEL_KEYS = [
-	["markdownBold", "markdownItalic", "markdownStrikethrough", "markdownInlineCode"],
-	["markdownBulletList", "markdownOrderedList", "markdownTaskList"],
-	["markdownLink", "markdownImage", "markdownTable"],
-	["markdownCodeBlock", "markdownFormula"],
-	["markdownQuote", "markdownDivider"],
-] as const;
-
 /** Add stable accessible names to Crepe's icon-only controls. Its Vue toolbar
  * owns the DOM, so a MutationObserver reapplies names after state updates. */
 function labelToolbar(root: HTMLElement): () => void {
 	const apply = (): void => {
 		const items = root.querySelectorAll(".milkdown-top-bar .top-bar-inner > .top-bar-item");
-		const labels = TOOLBAR_LABEL_KEYS.flat().map(key => t(key));
+		const labels = [
+			t("markdownBold"),
+			t("markdownItalic"),
+			t("markdownStrikethrough"),
+			t("markdownInlineCode"),
+			t("markdownBulletList"),
+			t("markdownOrderedList"),
+			t("markdownTaskList"),
+			t("markdownLink"),
+			t("markdownImage"),
+			t("markdownTable"),
+			t("markdownCodeBlock"),
+			t("markdownFormula"),
+			t("markdownQuote"),
+			t("markdownDivider"),
+		];
 		items.forEach((item, index) => {
 			const label = labels[index];
 			if (!label) return;
@@ -72,8 +79,8 @@ export interface FileMarkdownEditorHandle {
 	getMarkdown(): string | null;
 }
 
-/** KimiWork-parity single-column WYSIWYG. The parent owns disk state and draft
- * caching; this component owns only Crepe's document view and DOM resources. */
+/** Single-column WYSIWYG. The parent owns disk state and draft caching; this
+ * component owns only Crepe's document view and DOM resources. */
 export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkdownEditorProps>(
 	function FileMarkdownEditor({ path, name, value, onChange, onSave, onError }, ref): ReactNode {
 		const hostRef = useRef<HTMLDivElement | null>(null);
@@ -103,8 +110,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 			setReady(false);
 			const host = hostRef.current;
 			if (!host) return;
-			const rejectUpload = (): Promise<string> =>
-				Promise.reject(new Error(t("markdownImageUploadUnsupported")));
+			const rejectUpload = (): Promise<string> => Promise.reject(new Error(t("markdownImageUploadUnsupported")));
 			void import("@milkdown/crepe")
 				.then(async ({ Crepe: CrepeEditor }) => {
 					if (cancelled) return;

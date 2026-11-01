@@ -23,18 +23,18 @@ import * as React from "react";
 import {
 	Children,
 	Component,
-	Fragment,
-	Profiler,
-	PureComponent,
-	StrictMode,
-	Suspense,
 	cloneElement,
 	createContext,
 	createElement,
 	createRef,
+	Fragment,
 	forwardRef,
 	lazy,
 	memo,
+	Profiler,
+	PureComponent,
+	StrictMode,
+	Suspense,
 	startTransition,
 	use,
 	useActionState,
@@ -56,14 +56,10 @@ import {
 	useSyncExternalStore,
 	useTransition,
 } from "react";
+import { jsx, jsxs } from "react/jsx-runtime";
 import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
-import { jsx, jsxs } from "react/jsx-runtime";
-import {
-	FILE_WORKSPACE_SLOT,
-	FILE_WORKSPACE_SURFACE,
-	type FileWorkspaceHost,
-} from "./file-workspace";
+import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
 import type { RpcClient } from "./rpc";
 
 export const hostReactBindings = {
