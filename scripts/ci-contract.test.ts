@@ -44,13 +44,15 @@ describe("CI runtime and delivery contracts", () => {
 		}
 	});
 
-	it("pins checkout, cache and Java setup actions to releases that run on Node 24", () => {
+	it("pins checkout, cache, Java setup and Pages actions to releases with Node 24 support", () => {
 		const expected = new Map([
 			["actions/checkout", "df4cb1c069e1874edd31b4311f1884172cec0e10"],
 			["actions/cache", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
 			["actions/cache/save", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
 			["actions/cache/restore", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
 			["actions/setup-java", "b843ebf9b913146b38da2eaa7aeddf76074ae1ad"],
+			["actions/configure-pages", "45bfe0192ca1faeb007ade9deae92b16b8254a0d"],
+			["actions/upload-pages-artifact", "fc324d3547104276b827a68afc52ff2a11cc49c9"],
 		]);
 		const files = fs
 			.readdirSync(path.join(repoRoot, ".github"), { recursive: true, withFileTypes: true })
