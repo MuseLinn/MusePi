@@ -11,7 +11,11 @@ import type { ImageContent, TextContent } from "@musepi/pi-ai";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { ExtensionRuntime, loadExtensions } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
+import {
+	discoverAndLoadExtensions,
+	ExtensionRuntime,
+	loadExtensions,
+} from "@musepi/pi-coding-agent/extensibility/extensions/loader";
 import {
 	EXTENSION_HANDLER_TIMEOUT_MS,
 	ExtensionRunner,
@@ -1497,6 +1501,41 @@ describe("ExtensionRunner", () => {
 				event: "session_shutdown",
 				error: "handler timed out after 10ms",
 			});
+		});
+
+		it("executes discovered hook factories through ExtensionRunner and filters their capability ids when disabled", async () => {
+			const hookDir = path.join(getProjectAgentDir(tempDir.path()), "hooks", "pre");
+			fs.mkdirSync(hookDir, { recursive: true });
+			const hookPath = path.join(hookDir, "guard.ts");
+			fs.writeFileSync(
+				hookPath,
+				`
+					export default function(pi) {
+						pi.on("tool_call", async () => ({ block: true, reason: "blocked by discovered hook" }));
+					}
+				`,
+			);
+
+			const loaded = await discoverAndLoadExtensions([], tempDir.path());
+			const hook = loaded.extensions.find(extension => extension.path === hookPath);
+			expect(hook).toBeDefined();
+			const runner = new ExtensionRunner(
+				hook ? [hook] : [],
+				loaded.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			const result = await runner.emitToolCall({
+				type: "tool_call",
+				toolName: "bash",
+				toolCallId: "discovered-hook-call",
+				input: { command: "pwd" },
+			});
+			expect(result).toEqual({ block: true, reason: "blocked by discovered hook" });
+
+			const disabled = await discoverAndLoadExtensions([], tempDir.path(), undefined, ["hook:pre:guard:guard.ts"]);
+			expect(disabled.extensions.find(extension => extension.path === hookPath)).toBeUndefined();
 		});
 
 		it("uses the configured tool_call timeout and fails closed so a hung extension cannot block execution (#3948)", async () => {
@@ -3865,6 +3904,7 @@ describe("ExtensionRunner", () => {
 				rpcs: new Map(),
 				webRoutes: [],
 				skills: [],
+				subagents: new Map(),
 				toolViews: [],
 				notificationChannels: [],
 				services: [],

@@ -1,0 +1,13 @@
+{
+	"name": "musepi-desktop-shell",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "MusePi 桌面壳",
+		"description": "Electron 桌面壳与 daemon 渲染服务之间的兼容连接。",
+		"icon": "🖥️",
+		"extensions": ["./index.ts"]
+	}
+}

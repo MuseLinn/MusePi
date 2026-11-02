@@ -15,12 +15,11 @@
 //   反注册挂 ctx.effect 账本（fiber 拆卸 = 反注册，禁用兜底归因
 //   （设计稿 §3.③）由此获得真实数据源：NO_BACKEND 结构化码 →
 //   「终端后端已停用，原因：插件被禁用」）。
-// - 生命周期：双跑期（external）注册表由工厂急构造、宿主注入
-//   TerminalService 同一实例——fiber dispose 不销毁注册表（回滚后 P1
-//   路径不受影响）；backend 注册的挂/拔已走 cordis effect 账本
-//   （provider 单元 dispose = 反注册）。进程退出随 daemon 消亡。
-// - 启停：随 daemon 进程创建/消亡；无独立启停（builtin 试点期只读
-//   不可禁用，禁用兜底主要保护 user provider 插件场景）。
+// - 生命周期：注册表由工厂急构造，宿主向 TerminalService 与动态运行时发布
+//   同一实例；backend 注册的挂/拔走 cordis effect 账本（provider 组件
+//   dispose = 反注册）。进程退出随 daemon 消亡。
+// - 启停：terminal-core 随宿主进程；两个 provider 组件经能力中心独立启停，
+//   停用即撤销对应 backend，整包卸载即撤销全部 provider。
 // - 冲突：同类型 backend 重复注册 = DUPLICATE_BACKEND（registry 内
 //   结构化错误 → provider 单元 fiber FAILED，层隔离不拖垮 core）。
 // ============================================================

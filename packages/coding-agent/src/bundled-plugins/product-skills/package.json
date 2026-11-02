@@ -1,0 +1,13 @@
+{
+	"name": "musepi-product-skills",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "MusePi 产品技能",
+		"description": "提供看板、界面、插件开发与 MusePi 使用等六项内置技能及其资源。",
+		"icon": "✦",
+		"extensions": ["./index.ts"]
+	}
+}

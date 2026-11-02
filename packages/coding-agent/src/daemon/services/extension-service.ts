@@ -3,11 +3,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import { logger } from "@musepi/pi-utils";
-import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
+import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDecl, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import { invalidateCapabilityCache } from "../../capability";
-import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
-import { legacyModuleEntryIds, pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
+import { isModuleEntryKind, LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
+import { pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult, Extension as RuntimeExtension } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -44,12 +44,11 @@ import type { DaemonService } from "./types";
  *   聚合 tabs/providers/槽位组件/toolViews/状态栏段、shell 配置与「会话
  *   插件」面（显式扩展白名单的预设清单 + 每个 extension-module 的
  *   enabledInPresets）+ builtin 单元的 cordis 运行状态（runtime：fiberState/
- *   effects/operational,宿主注入 builtinRuntime）与启用条件（activation：
- *   镜像设置键）；三个 10s
- *   TTL 缓存（#extensionsCache/#pluginsCache/#pluginPackagesCache）随变更
+ *   effects/operational,宿主注入 builtinRuntime）与声明式启用条件（activation）；
+ *   三个 10s TTL 缓存（#extensionsCache/#pluginsCache/#pluginPackagesCache）随变更
  *   RPC 与宿主 watcher 失效；extensions.changed 广播经注入的 onChanged 扇出
  *   （宿主侧接 EventService，lazy 调用无循环）。另有宿主级扩展运行时加载
- *   缓存（#runtimeLoadCache，10s TTL，与 #extensionsCache 同生命周期清）——
+ *   缓存（#runtimeLoadCache，10s TTL，随运行时组合变更独立失效）——
  *   getExtensionRuntimeLoad 按会话同源 discovery 分支执行扩展入口代码，
  *   供 session-less RPC（design.systems.list 的宿主重放，M3 §3.7d）消费
  *   pending 注册，不经会话引导。
@@ -82,9 +81,6 @@ export interface ExtensionServiceDeps {
 	webPortFile(): string;
 	/** 预设目录（宿主注入 #modesDir；缺省回退 $env/用户目录——测试可隔离）。 */
 	modesDir?(): string;
-	/** builtin 单元的 cordis 运行状态（宿主注入 DaemonHostContext.builtinInspect；
-	 *  缺省回退 {}——user 插件与会话装载面无 fiber,不编造 runtime）。 */
-	builtinRuntime?(): Record<string, { fiberState: string; effects: number }>;
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀：DaemonServer 惰性装配
 	 *  CordisDynamicPluginRuntime；缺省走直接 loadExtensions——会话装载
 	 *  语义不变的 fail-soft 回退）。 */
@@ -157,6 +153,32 @@ export class ExtensionService implements DaemonService {
 		this.#deps = deps;
 	}
 
+	/** Resolve a bundled package by its canonical package name. */
+	async #hostDeclaration(id: string): Promise<
+		| {
+				name: string;
+				host?: Extension["host"];
+				config: ConfigFieldDesc[];
+				components: PluginComponentDecl[];
+		  }
+		| undefined
+	> {
+		const [{ discoverBundledPluginPaths }, { readExtensionPluginMeta }, { getExtensionNameFromPath }] =
+			await Promise.all([
+				import("../../discovery/builtin"),
+				import("../../extensibility/extensions/plugin-manifest"),
+				import("../../discovery/helpers"),
+			]);
+		for (const entryPath of await discoverBundledPluginPaths()) {
+			const name = getExtensionNameFromPath(entryPath);
+			if (name !== id) continue;
+			const meta = await readExtensionPluginMeta(entryPath);
+			if (!meta) return undefined;
+			return { name, host: meta.host, config: meta.fields, components: meta.components ?? [] };
+		}
+		return undefined;
+	}
+
 	async getExtensions(): Promise<Extension[]> {
 		if (!this.#extensionsCache || Date.now() - this.#extensionsCache.at > 10_000) {
 			const { loadAllExtensions } = await import("../../extensibility/extensions-center/state-manager");
@@ -226,7 +248,7 @@ export class ExtensionService implements DaemonService {
 	 * LoadExtensionsResult（含 runtime.pendingDesignSystemRegistrations 等
 	 * 排队注册）。供 session-less RPC（design.systems.list 的宿主重放，
 	 * M3 §3.7d）消费——装包/卸包后经 invalidateExtensionsCache 失效重载。
-	 * 10s TTL，与 #extensionsCache 同生命周期清。
+	 * 10s TTL，并在清单或运行时组合变化时失效。
 	 * 收编第二刀：宿主注入 dynamicRuntime 时经 cordis fiber 装载（每插件一
 	 * fiber，登记 = 效果账本，卸载反向回收）；未注入（测试）回退 loadExtensions。
 	 */
@@ -288,90 +310,14 @@ export class ExtensionService implements DaemonService {
 			mode: shellMode === "extended" || shellMode === "enhanced" ? shellMode : "compatibility",
 			webUrl: this.#deps.webUrl(),
 		};
-		// Builtin registry entries mirrored on a settings key
-		// (style/shell/magic keywords): the setting IS the source of
-		// truth for state — raw === off means disabled, anything else
-		// (unset defaults to enabled) means active.
-		const { BUILTIN_EXTENSIONS, builtinMirrorDisabled } = await import(
-			"../../extensibility/extensions-center/builtin-registry"
-		);
-		for (const def of BUILTIN_EXTENSIONS) {
-			if (!def.settingsMirror) continue;
-			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
-			if (!ext) continue;
-			const disabled = s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false;
-			ext.state = disabled ? "disabled" : "active";
-			ext.disabledReason = disabled ? "item-disabled" : undefined;
-			// 「启用条件」（真实可判定）：镜像设置键为 on 时启用。
-			ext.activation = { kind: "setting", key: def.settingsMirror.key };
-		}
-		// cordis 运行状态（收编第一刀）：builtin 单元的 fiber 真实状态 +
-		// 镜像设置现读的业务运行判定。user 插件会话装载、宿主无 fiber,
-		// 不挂 runtime——管理面如实缺省,不编造。
-		const builtinRuntime = this.#deps.builtinRuntime?.() ?? {};
+		// Settings-backed fields are configuration only. Package state comes from
+		// disabledExtensions and component state from disabledExtensionComponents.
 		for (const ext of extensions) {
-			const rt = builtinRuntime[ext.id];
-			if (!rt) continue;
-			const def = BUILTIN_EXTENSIONS.find(d => `${d.kind}:${d.name}` === ext.id);
-			const disabled = def?.settingsMirror ? (s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false) : false;
-			ext.runtime = {
-				fiberState: rt.fiberState,
-				effects: rt.effects,
-				operational: disabled ? "stopped" : "running",
-			};
-		}
-		// Builtin plugin units declaring config in their manifest (voice STT/TTS):
-		// attach the declared fields plus live settings-backed values — the
-		// field key IS the settings key, so the plugin management form and
-		// the settings page read/write one storage (no divergence).
-		for (const def of BUILTIN_EXTENSIONS) {
-			if (!def.config || def.config.length === 0) continue;
-			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
-			if (!ext) continue;
-			ext.config = [...def.config];
-			if (s) {
+			if (ext.host?.configStorage === "settings" && ext.config?.length && s) {
 				const stored: Record<string, unknown> = {};
-				for (const f of def.config) stored[f.key] = s.getRaw(f.key);
-				ext.configValues = coerceConfigValues([...def.config], stored);
+				for (const field of ext.config) stored[field.key] = s.getRaw(field.key);
+				ext.configValues = coerceConfigValues([...ext.config], stored);
 			}
-		}
-		// 「包含的组件」状态:组件 = 单元声明的可独立启停
-		// 单元,按声明的 deny 通道如实读黑名单 —— tool 通道读 tools.disabled
-		// (tools/index.ts isToolAllowed 同帧消费),stt/tts-engine 通道读
-		// voice.disabledEngines(voice/engine-denylist 全路径过滤),terminal-
-		// backend 通道读 terminal.disabledBackends(terminal-provider 解析
-		// 消费),browser-backend 通道读 browser.disabledBackends(browser 工具
-		// 解析链消费),file-backend 通道读 file.disabledBackends(file-backend
-		// 谓词 + 索引扫描门消费)。组件开关改名单即真实禁用,不是展示层。
-		const toolDenylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
-		const engineDenylist = new Set((s?.get("voice.disabledEngines") ?? []) as string[]);
-		const terminalDenylist = new Set((s?.get("terminal.disabledBackends") ?? []) as string[]);
-		const browserDenylist = new Set((s?.get("browser.disabledBackends") ?? []) as string[]);
-		const fileDenylist = new Set((s?.get("file.disabledBackends") ?? []) as string[]);
-		for (const def of BUILTIN_EXTENSIONS) {
-			if (!def.components || def.components.length === 0) continue;
-			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
-			if (!ext) continue;
-			ext.components = def.components.map(c => {
-				const denied =
-					c.deny === "tool"
-						? toolDenylist.has(c.id)
-						: c.deny === "terminal-backend"
-							? terminalDenylist.has(c.id)
-							: c.deny === "browser-backend"
-								? browserDenylist.has(c.id)
-								: c.deny === "file-backend"
-									? fileDenylist.has(c.id)
-									: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
-				return {
-					id: c.id,
-					name: c.id,
-					description: c.description,
-					enabled: !denied,
-					canToggle: true,
-					...(denied ? { disabledReason: "tools-denied" as const } : {}),
-				} satisfies PluginComponentDesc;
-			});
 		}
 		// user 插件清单组件面（清单声明的组件）：manifest
 		// `musepi.components` 声明的组件下发——entry 组件带宿主 fiber 运行时
@@ -388,6 +334,8 @@ export class ExtensionService implements DaemonService {
 					{
 						version?: string;
 						compatibility?: PluginCompatibility;
+						fiberState?: string;
+						effectLabels: string[];
 						components: Map<string, { fiberState?: string; effectLabels: string[] }>;
 					}
 			  >
@@ -400,6 +348,8 @@ export class ExtensionService implements DaemonService {
 					{
 						...(i.version ? { version: i.version } : {}),
 						...(i.compatibility ? { compatibility: i.compatibility } : {}),
+						fiberState: i.fiberState,
+						effectLabels: i.effectLabels,
 						components: new Map(
 							i.components.map(c => [c.id, { fiberState: c.fiberState, effectLabels: c.effectLabels }]),
 						),
@@ -421,14 +371,14 @@ export class ExtensionService implements DaemonService {
 			if (!meta?.components || meta.components.length === 0) continue;
 			const runtimeComponents = inspectedByName?.get(ext.name)?.components;
 			ext.components = meta.components.map(decl => {
-				const denied = componentDenylist.has(`${ext.name}/${decl.id}`);
+				const denied = Boolean(decl.entry) && componentDenylist.has(`${ext.name}/${decl.id}`);
 				const rt = runtimeComponents?.get(decl.id);
 				return {
 					id: decl.id,
 					name: decl.id,
 					description: decl.description,
 					enabled: !denied,
-					canToggle: !!decl.entry,
+					canToggle: Boolean(decl.entry),
 					...(denied ? { disabledReason: "component-disabled" as const } : {}),
 					...(rt?.fiberState ? { runtime: { fiberState: rt.fiberState, effects: rt.effectLabels.length } } : {}),
 				} satisfies PluginComponentDesc;
@@ -448,6 +398,13 @@ export class ExtensionService implements DaemonService {
 			const inspected = inspectedByName?.get(ext.name);
 			if (!inspected) continue;
 			if (inspected.version) ext.version = inspected.version;
+			if (inspected.fiberState) {
+				ext.runtime = {
+					fiberState: inspected.fiberState,
+					effects: inspected.effectLabels.length,
+					operational: ext.state === "active" ? "running" : "stopped",
+				};
+			}
 			if (!inspected.compatibility) continue;
 			const gate = inspected.compatibility;
 			if (
@@ -594,16 +551,8 @@ export class ExtensionService implements DaemonService {
 		return { raw: text.length > 16 * 1024 ? `${text.slice(0, 16 * 1024)}\n… (truncated)` : text };
 	}
 
-	/** RPC extensions.setEnabled：条目启停（settings.disabledExtensions / 外壳
-	 *  镜像键 / mcp.json denylist 同一裁决，issue #3827）。 */
+	/** Enable or disable an extension using its canonical inventory identity. */
 	async setEnabled(params: unknown) {
-		// Item toggle (TUI /extensions parity): writes
-		// settings.disabledExtensions with the same `kind:name` ids
-		// the dashboard uses. MCP toggles route through the canonical
-		// mcp.json denylist so /mcp list, the MCP runtime and this
-		// center agree (issue #3827). Settings-mirrored builtins
-		// (task-card style, magic keywords) write their mirrored
-		// setting key instead — the setting IS the source of truth.
 		const p = (params ?? {}) as { id: string; enabled: boolean; mode?: string };
 		let settings = this.#deps.settings();
 		if (!settings) {
@@ -611,18 +560,11 @@ export class ExtensionService implements DaemonService {
 			settings = this.#deps.settings();
 		}
 		if (!settings) throw new Error("settings unavailable");
-		const builtinDef = (await import("../../extensibility/extensions-center/builtin-registry")).findBuiltinDef(p.id);
-		if (builtinDef?.readonly) {
+		const hostExtension = await this.#hostDeclaration(p.id);
+		if (hostExtension?.host?.readonly) {
 			throw new Error(`extensions.setEnabled: ${p.id} is read-only and has no enablement control`);
 		}
-		if (p.id === "desktop-shell:shell") {
-			// Desktop shell toggle: enabled -> the GUI shell loads the
-			// runtime-served renderer; disabled -> local bundle. The
-			// setting drives the extension's mirrored state, and the
-			// web.port discovery file is written/deleted so the shell
-			// sees the change without an RPC round-trip. An optional
-			// `mode` param (compatibility/extended/enhanced) switches
-			// the shell mode atomically.
+		if (hostExtension?.name === "desktop-shell") {
 			if (typeof p.mode === "string") {
 				const mode: string = p.mode;
 				if (mode !== "compatibility" && mode !== "extended" && mode !== "enhanced") {
@@ -631,7 +573,6 @@ export class ExtensionService implements DaemonService {
 				settings.set("shell.mode" as Parameters<Settings["set"]>[0], mode as never);
 			}
 			settings.set("shell.enabled" as Parameters<Settings["set"]>[0], p.enabled as never);
-			await settings.flush();
 			const webPortFile = this.#deps.webPortFile();
 			const webUrl = this.#deps.webUrl();
 			if (p.enabled && webUrl) {
@@ -640,35 +581,16 @@ export class ExtensionService implements DaemonService {
 					try {
 						await fs.promises.writeFile(webPortFile, port, "utf8");
 					} catch {
-						// non-fatal
+						// The RPC state remains authoritative if discovery-file writing fails.
 					}
 				}
 			} else {
 				try {
 					await fs.promises.unlink(webPortFile);
 				} catch {
-					// already gone
+					// The discovery file is already absent.
 				}
 			}
-			this.#extensionsCache = null;
-			this.#runtimeLoadCache = null;
-			this.#deps.onChanged();
-			return { ok: true };
-		}
-		// Generic settings-mirror builtins (task-card style, magic
-		// keywords): the mirrored setting IS the source of truth —
-		// write it instead of the disabledExtensions list.
-		const mirrorDef = builtinDef?.settingsMirror;
-		if (mirrorDef) {
-			settings.set(
-				mirrorDef.key as Parameters<Settings["set"]>[0],
-				(p.enabled ? mirrorDef.on : mirrorDef.off) as never,
-			);
-			await settings.flush();
-			this.#extensionsCache = null;
-			this.#runtimeLoadCache = null;
-			this.#deps.onChanged();
-			return { ok: true };
 		}
 		if (p.id.startsWith("mcp:")) {
 			const { setMcpServerEnabled } = await import("../../mcp/config-writer");
@@ -680,9 +602,6 @@ export class ExtensionService implements DaemonService {
 				name: p.id.slice("mcp:".length),
 				enabled: p.enabled,
 			});
-			// Reconcile legacy `mcp:<name>` flags in disabledExtensions
-			// (TUI parity) so a stale entry doesn't keep the server
-			// marked disabled after re-enabling via the UI.
 			const stored = [...((settings.get("disabledExtensions") ?? []) as string[])];
 			const had = stored.indexOf(p.id);
 			if (p.enabled && had !== -1) {
@@ -690,23 +609,31 @@ export class ExtensionService implements DaemonService {
 				settings.set("disabledExtensions", stored);
 				await settings.flush();
 			}
-		} else if (pluginNameOfEntryId(p.id) !== undefined) {
-			// Plugin module row: identity is the plugin NAME (matching the
-			// reference's `PluginEntryId`), so the toggle is stored under that name
-			// and any legacy `kind:name` record for the same plugin is dropped in
-			// the same write. Leaving both would leave two records that can
-			// disagree, and the next read could not tell which one wins.
-			const stored = [...((settings.get("disabledExtensions") ?? []) as string[])];
-			const name = pluginNameOfEntryId(p.id) as string;
-			settings.set("disabledExtensions", setPluginEnabledIn(stored, name, p.enabled));
-			await settings.flush();
 		} else {
-			const disabled = [...((settings.get("disabledExtensions") ?? []) as string[])];
-			const i = disabled.indexOf(p.id);
-			if (p.enabled && i >= 0) disabled.splice(i, 1);
-			if (!p.enabled && i < 0) disabled.push(p.id);
-			settings.set("disabledExtensions", disabled);
-			await settings.flush();
+			const entry = hostExtension
+				? undefined
+				: (await this.getExtensions()).find(extension => extension.id === p.id);
+			if (!hostExtension && !entry) throw new Error(`unknown extension: ${p.id}`);
+			const pluginName = hostExtension?.name ?? pluginNameOfEntryId(p.id);
+			if (pluginName !== undefined) {
+				const stored = (settings.get("disabledExtensions") ?? []) as string[];
+				settings.set("disabledExtensions", setPluginEnabledIn(stored, pluginName, p.enabled));
+				await settings.flush();
+				if (hostExtension || entry?.kind === PLUGIN_MODULE_KIND) {
+					const runtime = await this.#deps.dynamicRuntime?.();
+					if (runtime) {
+						if (p.enabled) await runtime.reloadPlugin(pluginName);
+						else await runtime.unloadPlugin(pluginName);
+					}
+				}
+			} else {
+				const disabled = [...((settings.get("disabledExtensions") ?? []) as string[])];
+				const i = disabled.indexOf(p.id);
+				if (p.enabled && i >= 0) disabled.splice(i, 1);
+				if (!p.enabled && i < 0) disabled.push(p.id);
+				settings.set("disabledExtensions", disabled);
+				await settings.flush();
+			}
 		}
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;
@@ -714,13 +641,7 @@ export class ExtensionService implements DaemonService {
 		return { ok: true };
 	}
 
-	/** RPC extensions.setComponentEnabled：插件「包含的组件」独立开关。
-	 *  组件 = 内置单元声明的可独立启停单元;启停按
-	 *  声明的 deny 通道写对应隐藏黑名单 —— tool 通道写 tools.disabled
-	 *  (isToolAllowed 谓词同帧消费,下个模型请求工具集即变,tool_registry
-	 *  时间线联动),stt/tts-engine 通道写 voice.disabledEngines(模型
-	 *  状态/下载/转写/合成全路径过滤)。未声明组件的条目直接拒绝
-	 *  (不发明语义)。 */
+	/** Enable or disable one declared Cordis entry component. */
 	async setComponentEnabled(params: unknown) {
 		const p = (params ?? {}) as { id?: unknown; component?: unknown; enabled?: unknown };
 		if (typeof p.id !== "string" || typeof p.component !== "string" || typeof p.enabled !== "boolean") {
@@ -732,55 +653,30 @@ export class ExtensionService implements DaemonService {
 			settings = this.#deps.settings();
 		}
 		if (!settings) throw new Error("extensions.setComponentEnabled: settings unavailable");
-		const { componentDenyTarget, findBuiltinDef } = await import(
-			"../../extensibility/extensions-center/builtin-registry"
-		);
-		const def = findBuiltinDef(p.id);
-		const declared = def?.components?.find(c => c.id === p.component);
-		if (!declared) {
-			// user 插件径（extension-module 条目
-			// 清单 `musepi.components` 声明的 entry 组件——先经 fiber 运行时切换
-			// （校验声明 + 真实挂载/拆卸,效果账本随 fiber 回收）,成功才持久化
-			// 黑名单;运行时未装载该插件时先 reconcile 一次再重试,仍失败结构化
-			// 上抛且不落盘。
-			if (p.id.startsWith(`${LEGACY_EXTENSION_MODULE_KIND}:`)) {
-				const pluginName = p.id.slice("extension-module:".length);
-				const component = p.component;
-				const enabled = p.enabled;
-				const runtime = await this.#deps.dynamicRuntime?.();
-				if (!runtime) {
-					throw new Error("extensions.setComponentEnabled: cordis dynamic runtime unavailable");
-				}
-				// Reconcile FIRST, then toggle. The previous shape (toggle, and
-				// on failure reconcile + retry) raced the runtime's own
-				// unload/mount: a retry ran against component references the
-				// reconcile had just replaced, so the second toggle operated on
-				// a fiber handle that was already disposed. Reconciling up front
-				// makes the record the toggle sees the record that exists.
-				await this.getExtensionRuntimeLoad();
-				await runtime.setComponentEnabled(pluginName, component, enabled);
-				const denylist = [...((settings.get("disabledExtensionComponents") ?? []) as string[])];
-				const key = `${pluginName}/${p.component}`;
-				const i = denylist.indexOf(key);
-				if (p.enabled && i >= 0) denylist.splice(i, 1);
-				if (!p.enabled && i < 0) denylist.push(key);
-				settings.set("disabledExtensionComponents" as Parameters<Settings["set"]>[0], denylist as never);
-				await settings.flush();
-				this.#extensionsCache = null;
-				this.#runtimeLoadCache = null;
-				this.#deps.onChanged();
-				return { ok: true, denied: denylist };
-			}
+		const hostExtension = await this.#hostDeclaration(p.id);
+		const entry = hostExtension ? undefined : (await this.getExtensions()).find(extension => extension.id === p.id);
+		const pluginName = hostExtension?.name ?? pluginNameOfEntryId(p.id);
+		const declared = hostExtension
+			? hostExtension.components.some(component => component.id === p.component && Boolean(component.entry))
+			: entry !== undefined &&
+				isModuleEntryKind(entry.kind) &&
+				entry.components?.some(component => component.id === p.component && component.canToggle) === true;
+		if (pluginName === undefined || !declared) {
 			throw new Error(`extensions.setComponentEnabled: "${p.component}" is not a declared component of ${p.id}`);
 		}
-		const target = componentDenyTarget(declared.deny, p.component);
-		const denylist = [...((settings.get(target.key) ?? []) as string[])];
-		const i = denylist.indexOf(target.id);
+		const runtime = await this.#deps.dynamicRuntime?.();
+		if (!runtime) throw new Error("extensions.setComponentEnabled: cordis dynamic runtime unavailable");
+		await this.getExtensionRuntimeLoad();
+		await runtime.setComponentEnabled(pluginName, p.component, p.enabled);
+		const denylist = [...((settings.get("disabledExtensionComponents") ?? []) as string[])];
+		const key = `${pluginName}/${p.component}`;
+		const i = denylist.indexOf(key);
 		if (p.enabled && i >= 0) denylist.splice(i, 1);
-		if (!p.enabled && i < 0) denylist.push(target.id);
-		settings.set(target.key, denylist);
+		if (!p.enabled && i < 0) denylist.push(key);
+		settings.set("disabledExtensionComponents", denylist);
 		await settings.flush();
-		this.#extensionsCache = null;
+		// Component state is applied from settings on every list call. The package
+		// inventory is unchanged; only the runtime composition needs rebuilding.
 		this.#runtimeLoadCache = null;
 		this.#deps.onChanged();
 		return { ok: true, denied: denylist };
@@ -942,37 +838,12 @@ export class ExtensionService implements DaemonService {
 	}
 
 	/**
-	 * 插件级启停的组件联动：包开关 = 该插件的总闸。
+	 * 插件级启停的组件联动：`disabledExtensions` 中的裸包名是包状态事实源。
+	 * 停用时卸载整个 Cordis fiber，并按清单声明更新
+	 * `disabledExtensionComponents`；启用时执行相反的恢复。未声明 components
+	 * 的包只维护包键和 fiber 生命周期。
 	 *
-	 * 停用 = 从 cordis 运行时**卸载整个插件 fiber**（`unload`）：效果账本反
-	 * 向回收，插件注册的一切——组件、槽位、命令、provider、RPC——随 fiber
-	 * 生命周期一起消失。一个包的开关就是这个包的总闸：不存在「包已停用而它的
-	 * settings.tab 还在役」的死入口。
-	 *
-	 * 停用同时把这个插件的声明组件追加进 `disabledExtensionComponents` 黑名
-	 * 单，让「重启 daemon 后不自动回来」也是持久语义（fiber 卸载只影响当前
-	 * 进程）。启用 = 从黑名单摘除条目 + 重新装载该插件（fiber 重挂，槽位随
-	 * 之恢复）。
-	 *
-	 * best-effort 全程：runtime 缺席（未接 cordis fiber 的宿主/测试）或单步
-	 * 失败都只记日志，绝不阻塞插件包自身的启停。
-	 */
-	/**
-	 * 插件级启停的组件联动：包开关 = 该插件的总闸，且它是**唯一权威**。
-	 *
-	 * 一个插件包在此前有两套互不知情的开关：包卡片走本方法（lock 的
-	 * `enabled`），模块行走 `extensions.setEnabled`（settings 的
-	 * `disabledExtensions` 条目 id）。各写一半的状态互相打架——包显示已
-	 * 停用而它的组件还在役，或反之，重进 daemon 后按另一套存储复活。现在
-	 * 本方法同时维护两处：lock 的 enabled（PluginManager 已写）+ 条目 id 的
-	 * 去/留，并卸载/重挂插件 fiber（槽位组件、命令、provider、RPC 随生命周期
-	 * 走）。
-	 *
-	 * 组件黑名单 `disabledExtensionComponents` 只在该插件**确实声明了
-	 * components** 时才动——没有声明的插件（面板直接 registerComponent）没有
-	 * 组件键可写，它的全部取舍由 fiber 卸载与条目 id 承担。
-	 *
-	 * best-effort：任一子步骤失败只记日志，绝不阻塞包自身的启停。
+	 * best-effort：runtime 缺席或单步失败只记日志，不阻塞包自身的启停。
 	 */
 	async #cascadePluginComponents(pluginName: string, enabled: boolean): Promise<void> {
 		const extensionsKey = "disabledExtensions" as Parameters<Settings["set"]>[0];
@@ -988,12 +859,7 @@ export class ExtensionService implements DaemonService {
 			settings = this.#deps.settings();
 		}
 		if (settings) {
-			// 1) The module row's key — the second switch's storage. Keeping it in
-			//    lockstep with the package flag is what makes the package toggle
-			//    authoritative: whichever surface the user flipped, both stores
-			//    agree afterwards. Identity is the plugin NAME (the reference's
-			//    `PluginEntryId`), and the write also clears any legacy `kind:name`
-			//    record for the same plugin so no two records can disagree.
+			// 1) Persist the exact bare package name as the package enablement state.
 			const disabled = setPluginEnabledIn((settings.get(extensionsKey) ?? []) as string[], pluginName, enabled);
 			const before = (settings.get(extensionsKey) ?? []) as string[];
 			if (disabled.length !== before.length || disabled.some((id, i) => id !== before[i])) {
@@ -1065,11 +931,7 @@ export class ExtensionService implements DaemonService {
 			const { readExtensionPluginMeta } = await import("../../extensibility/extensions/plugin-manifest");
 			const { getExtensionNameFromPath } = await import("../../discovery/helpers");
 			const settings = this.#deps.settings();
-			// This plugin's records under BOTH forms (bare name + legacy `kind:name`):
-			// the inspection preview must drop every one of them, or a disabled
-			// plugin would be treated as some other plugin's stale entry and shown.
-			const ownIds = new Set(legacyModuleEntryIds(pluginName));
-			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(id => !ownIds.has(id));
+			const disabledIds = ((settings?.get("disabledExtensions") ?? []) as string[]).filter(id => id !== pluginName);
 			const paths = await discoverExtensionPaths(
 				(settings?.get("extensions") ?? []) as string[],
 				this.#deps.cwd(),
@@ -1196,46 +1058,37 @@ export class ExtensionService implements DaemonService {
 		if (typeof p.id !== "string" || typeof p.key !== "string") {
 			throw new Error("extensions.setConfig: id and key are required strings");
 		}
-		// Builtin plugin units (voice STT/TTS): field keys ARE settings keys —
-		// clamp against the registry declaration and persist via settings so
-		// the plugin form and the settings page never diverge.
-		const { findBuiltinDef } = await import("../../extensibility/extensions-center/builtin-registry");
-		const builtinDef = findBuiltinDef(p.id);
-		if (builtinDef?.config?.length) {
-			const desc = builtinDef.config.find(f => f.key === p.key);
-			if (!desc) {
-				throw new Error(`extensions.setConfig: "${p.key}" is not a declared config field of ${p.id}`);
-			}
-			const coerced = coerceConfigFieldValue(desc, p.value);
-			let s = this.#deps.settings();
-			if (!s) {
-				await this.#deps.ensureRegistry();
-				s = this.#deps.settings();
-			}
-			if (!s) throw new Error("extensions.setConfig: settings unavailable");
-			s.set(desc.key as Parameters<Settings["set"]>[0], coerced as never);
-			await s.flush();
-			this.invalidateExtensionsCache();
-			this.#deps.onChanged();
-			return { ok: true as const, restart: desc.restart ?? ("none" as const), values: undefined };
-		}
-		const extensions = await this.getExtensions();
-		// Accept both the current identity (plugin name) and a legacy `kind:name`
-		// id from an older caller: the row exists under one of them, and refusing
-		// the other would report "not a declared config field" for a field that is
-		// declared on the very plugin the caller named.
+		const host = await this.#hostDeclaration(p.id);
 		const wantedName = pluginNameOfEntryId(p.id) ?? p.id;
-		const ext = extensions.find(e => e.id === p.id) ?? extensions.find(e => e.id === wantedName);
-		const desc = ext?.config?.find(f => f.key === p.key);
-		if (!desc) {
+		const ext =
+			host ?? (await this.getExtensions()).find(extension => extension.id === p.id || extension.id === wantedName);
+		const desc = ext?.config?.find(field => field.key === p.key);
+		if (!ext || !desc) {
 			throw new Error(`extensions.setConfig: "${p.key}" is not a declared config field of ${p.id}`);
 		}
 		const coerced = coerceConfigFieldValue(desc, p.value);
+		if (ext.host?.configStorage === "settings") {
+			let settings = this.#deps.settings();
+			if (!settings) {
+				await this.#deps.ensureRegistry();
+				settings = this.#deps.settings();
+			}
+			if (!settings) throw new Error("extensions.setConfig: settings unavailable");
+			settings.set(desc.key as Parameters<Settings["set"]>[0], coerced as never);
+			await settings.flush();
+			// Settings-backed values do not change package discovery or runtime
+			// composition. Update the cached row instead of rescanning every provider.
+			const cached = this.#extensionsCache?.extensions.find(extension => extension.name === ext.name);
+			if (cached?.config) {
+				const stored: Record<string, unknown> = {};
+				for (const field of cached.config) stored[field.key] = settings.getRaw(field.key);
+				cached.configValues = coerceConfigValues([...cached.config], stored);
+			}
+			this.#deps.onChanged();
+			return { ok: true as const, restart: desc.restart ?? ("none" as const), values: undefined };
+		}
 		const { writePluginConfigValue } = await import("../../extensibility/extensions-center/plugin-config-store");
-		// Store under the plugin's NAME. A caller may still hand us a legacy
-		// `kind:name` id (older GUI builds, saved RPC params); normalizing here
-		// keeps one record per plugin instead of splitting its config in two.
-		const values = await writePluginConfigValue(pluginNameOfEntryId(p.id) ?? p.id, p.key, coerced);
+		const values = await writePluginConfigValue(ext.name, p.key, coerced);
 		this.invalidateExtensionsCache();
 		this.#deps.onChanged();
 		return { ok: true as const, restart: desc.restart ?? ("none" as const), values };

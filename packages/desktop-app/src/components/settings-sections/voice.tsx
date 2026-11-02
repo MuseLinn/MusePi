@@ -1,10 +1,8 @@
 /*
- * Settings → 语音: dedicated voice I/O section. The stt.* / tts.* schema keys
- * render through <SchemaTabSection tabs={["settings.interaction"]}> (the daemon
- * schema is the single source of truth — the same rows used to be
- * hand-duplicated here with hardcoded defaults that never loaded real
- * values, and drifted from the 交互 tab's schema-driven copies), EXCEPT
- * `stt.modelName` and `tts.localModel`, which this file renders as two
+ * Settings → 语音: dedicated voice I/O section. All voice schema keys render
+ * through <SchemaTabSection tabs={["voice"]}>; the daemon schema is the single
+ * source of truth for both desktop and TUI, EXCEPT `stt.modelName` and
+ * `tts.localModel`, which this file renders as two
  * radio-row picker cards (a bare enum dropdown buried in the list made the
  * tiers unreadable; the TTS one matters doubly because zh users otherwise
  * cannot pick the Mandarin tier at all).
@@ -131,9 +129,7 @@ export const TTS_TIER_META: Record<string, TierMeta> = {
 	},
 };
 
-/** 组件 id → 该组件承载的档位键（与 builtin-registry 声明的 voice 单元
- *  组件一一对应；daemon 的 voice.disabledEngines 黑名单按组件 id 记账，
- *  这里把它翻译回选择器可见的档位）。 */
+/** Map each voice entry component to the model tiers it provides. */
 export const STT_COMPONENT_TIERS: Record<string, readonly string[]> = {
 	whisper: ["fast", "balanced", "turbo"],
 	sensevoice: ["sensevoice"],
@@ -144,10 +140,7 @@ export const TTS_COMPONENT_TIERS: Record<string, readonly string[]> = {
 	"melotts-zh": ["melotts-zh"],
 };
 
-/** 组件禁用清单 → 选择器应隐藏的档位集合。组件开关实时生效的 GUI 半：
- *  引擎一关，对应档位立即从模型选择器消失（与 daemon 侧
- *  voice.disabledEngines 关闭转写/合成路径同一份存储，双端零漂移）。
- *  导出：插件详情弹层用同一 helper 过滤内嵌选择器。 */
+/** Hide tiers whose entry component is disabled in the shared registry. */
 export function hiddenTiersFromComponents(
 	components: { id: string; enabled: boolean }[] | undefined,
 	tierMap: Record<string, readonly string[]>,
@@ -741,7 +734,7 @@ function DisabledVoicePluginNote({
 	copyKey,
 }: {
 	rpc: RpcClient | null;
-	unitId: "voice:stt" | "voice:tts";
+	unitId: "stt" | "tts";
 	copyKey: string;
 }): ReactNode {
 	const [busy, setBusy] = useState(false);
@@ -795,18 +788,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const stopRef = useRef<(() => void) | null>(null);
 	const [enrollmentOpen, setEnrollmentOpen] = useState(false);
 	const [hasVoiceProfile, setHasVoiceProfile] = useState(false);
-	// 插件单元状态（页面由插件驱动）：voice:stt / voice:tts 关闭时，
-	// 对应 schema 行、模型选择器与测试入口整体隐藏。数据源是全局 registry
-	// 单例（extensions.changed 即时刷新）——能力中心里拨插件/组件开关，
-	// 这里同帧跟随，不再需要页面重进。registry 尚未取到时 fail-open 按
-	// 启用渲染，拉取失败绝不让整页配置消失。
+	// Package state comes from the shared registry. An unavailable registry
+	// fails open so a transport error cannot hide the controls permanently.
 	const registry = useExtensionRegistry(rpc);
-	const sttItem = useMemo(() => registry?.extensions.find(e => e.id === "voice:stt"), [registry]);
-	const ttsItem = useMemo(() => registry?.extensions.find(e => e.id === "voice:tts"), [registry]);
+	const sttItem = useMemo(() => registry?.extensions.find(e => e.id === "stt"), [registry]);
+	const ttsItem = useMemo(() => registry?.extensions.find(e => e.id === "tts"), [registry]);
 	const sttOn = sttItem ? sttItem.state === "active" : true;
 	const ttsOn = ttsItem ? ttsItem.state === "active" : true;
-	// 组件级（引擎）黑名单 → 选择器隐藏档位：组件开关一拨，档位行立即
-	// 增减，与 daemon 的 voice.disabledEngines 同一份存储。
+	// Entry-component state and the daemon model catalog share the same fiber registry.
 	const sttHiddenTiers = useMemo(() => hiddenTiersFromComponents(sttItem?.components, STT_COMPONENT_TIERS), [sttItem]);
 	const ttsHiddenTiers = useMemo(() => hiddenTiersFromComponents(ttsItem?.components, TTS_COMPONENT_TIERS), [ttsItem]);
 	// Session chrome mirrors the chat surface (same localStorage keys
@@ -893,19 +882,18 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		<>
 			<h2 className="gui-settings-page-title">{tLoose("voice settings")}</h2>
 
-			{/* Schema-driven stt.* / tts.* rows — only the interaction tab's
-			 * "settings.speech" group, NOT the whole tab (the rest of the interaction
-			 * groups live on 交互; duplicating them here was the old bug).
+			{/* All voice schema rows share one tab and group with the TUI.
 			 * stt.modelName and tts.localModel are excluded: the picker cards
 			 * own them (a bare enum dropdown buried in the list made the four
 			 * STT tiers unreadable, and left zh users no way at all to pick
-			 * the Mandarin TTS tier). */}
+			 * the Mandarin TTS tier). Disabled packages hide their dependent
+			 * rows without changing the persisted domain switches. */}
 			<SchemaTabSection
 				rpc={rpc}
-				tabs={["interaction"]}
+				tabs={["voice"]}
 				groups={["Speech"]}
-				excludeKeys={["stt.modelName", "tts.localModel"]}
-				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts."] as const))]}
+				excludeKeys={["stt.modelName", "tts.localModel", ...(ttsOn ? [] : (["providers.tts"] as const))]}
+				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts.", "speech."] as const))]}
 			/>
 			{sttOn && (
 				<div className="gui-settings-section">
@@ -933,12 +921,12 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{sttOn ? (
 				<SttModelPickerCard rpc={rpc} hiddenTiers={sttHiddenTiers} />
 			) : (
-				<DisabledVoicePluginNote rpc={rpc} unitId="voice:stt" copyKey="voice stt plugin disabled" />
+				<DisabledVoicePluginNote rpc={rpc} unitId="stt" copyKey="voice stt plugin disabled" />
 			)}
 			{ttsOn ? (
 				<TtsModelPickerCard rpc={rpc} hiddenTiers={ttsHiddenTiers} />
 			) : (
-				<DisabledVoicePluginNote rpc={rpc} unitId="voice:tts" copyKey="voice tts plugin disabled" />
+				<DisabledVoicePluginNote rpc={rpc} unitId="tts" copyKey="voice tts plugin disabled" />
 			)}
 
 			{/* Live voice I/O test: not expressible in schema. Hosted by the

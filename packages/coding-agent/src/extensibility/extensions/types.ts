@@ -87,7 +87,7 @@ import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
 import type { ReadonlySessionManager, SessionManager } from "../../session/session-manager";
-import type { SubagentDefinition } from "../../task/types";
+import type { AgentDefinition, SubagentDefinition } from "../../task/types";
 import type {
 	BashToolDetails,
 	BashToolInput,
@@ -1391,6 +1391,10 @@ export interface ExtensionAPI {
 
 	/** Register a tool that the LLM can call. */
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void;
+	/** Register a session-scoped local or external agent for the task tool. */
+	registerSubagent(def: SubagentDefinition): { name: string };
+	/** Remove an agent registered by this extension. */
+	unregisterSubagent(name: string): boolean;
 	/**
 	 * Register a fallback writer consulted when a native `write`/`edit` byte-write is
 	 * denied with a permission error (`EPERM`/`EACCES`/`EROFS`). Every other write
@@ -2435,6 +2439,8 @@ export interface Extension {
 	 *  merged into the daemon skills.list / extensions center alongside
 	 *  file-discovered skills. */
 	skills: ExtensionSkillDeclaration[];
+	/** Session-scoped task agents declared through registerSubagent. */
+	subagents: Map<string, AgentDefinition>;
 	/** Renderer-side per-tool views contributed by the extension
 	 *  (registerToolView): compiled to ESM by the daemon and dispatched by
 	 *  tool name in the transcript. */

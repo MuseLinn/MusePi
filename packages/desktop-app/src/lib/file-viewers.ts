@@ -20,6 +20,8 @@
  * @module desktop-app/lib/file-viewers
  */
 
+import type { OfficeDraft } from "./office-documents";
+
 /** The bytes as they came off disk, plus what the host knows about them. */
 export interface ViewerInput {
 	readonly name: string;
@@ -53,6 +55,7 @@ export type ViewerResult =
 	| { readonly kind: "image"; readonly blobUrl: string }
 	| { readonly kind: "pdf"; readonly bytes: ArrayBuffer }
 	| { readonly kind: "docx"; readonly bytes: ArrayBuffer }
+	| { readonly kind: "office"; readonly bytes: Uint8Array<ArrayBuffer>; readonly draft: OfficeDraft }
 	| { readonly kind: "sheets"; readonly sheets: readonly { name: string; html: string; truncated: boolean }[] }
 	/**
 	 * An audio or video file, handed to the browser's own media element.

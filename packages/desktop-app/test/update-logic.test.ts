@@ -111,6 +111,13 @@ describe("isMissingUpdateFeedError", () => {
 });
 
 describe("release channels", () => {
+	test("offers only stable releases newer than the current daemon", () => {
+		expect(isNewerVersion("0.6.4", "0.7.0")).toBe(false);
+		expect(isNewerVersion("0.7.0", "0.6.4")).toBe(true);
+		expect(isNewerVersion("0.7.0", "0.7.0")).toBe(false);
+		expect(isNewerVersion("not-a-version", "0.7.0")).toBe(false);
+	});
+
 	test("orders numbered betas before their stable release", () => {
 		expect(isNewerVersion("0.6.4-beta.2", "0.6.4-beta.1")).toBe(true);
 		expect(isNewerVersion("0.6.4-beta.10", "0.6.4-beta.2")).toBe(true);

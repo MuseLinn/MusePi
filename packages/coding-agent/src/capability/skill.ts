@@ -49,6 +49,8 @@ export interface Skill {
 	 * within this directory; symlinks may target other files inside it.
 	 */
 	containRoot?: string;
+	/** Plugin package that owns this file skill and its enablement lifecycle. */
+	pluginId?: string;
 	/** Source level */
 	level: "user" | "project";
 	/** Source metadata */
@@ -60,7 +62,7 @@ export const skillCapability = defineCapability<Skill>({
 	displayName: "Skills",
 	description: "Specialized knowledge and workflow files that extend agent capabilities",
 	key: skill => skill.name,
-	toExtensionId: skill => `skill:${skill.name}`,
+	toExtensionId: skill => skill.pluginId ?? `skill:${skill.name}`,
 	validate: skill => {
 		if (!skill.name) return "Missing skill name";
 		if (!skill.path) return "Missing skill path";

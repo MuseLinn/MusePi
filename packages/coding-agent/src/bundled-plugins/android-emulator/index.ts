@@ -15,7 +15,6 @@
  */
 import type { ExtensionAPI, ExtensionRpcHandler } from "../../extensibility/extensions/types";
 import { AndroidDeviceService } from "./android-service";
-import androidEmulatorSkill from "./skills/android-emulator/SKILL.md" with { type: "text" };
 import { createAndroidEmulatorTool } from "./tools";
 
 export const name = "musepi-android-emulator";
@@ -104,12 +103,6 @@ export function apply(pi: ExtensionAPI): void {
 		return { device: input.device, logs: await android.logcat(input.device, input) };
 	});
 
-	pi.registerSkill({
-		name: "android-emulator",
-		description:
-			"Use when developing, installing, launching, operating, or visually debugging an Android app with an emulator or ADB device, especially when a blank first frame, UI failure, or runtime error needs verification.",
-		content: androidEmulatorSkill,
-	});
 	pi.registerTool(createAndroidEmulatorTool(pi.arktype, service()));
 	pi.registerToolView("android_emulator", {
 		moduleUrl: "./ui/tool-view.tsx",

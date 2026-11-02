@@ -60,6 +60,37 @@ describe("settings layout", () => {
 		}
 	});
 
+	it("keeps every voice setting in the voice tab without interaction or provider duplicates", () => {
+		const voicePaths = [
+			"stt.enabled",
+			"stt.language",
+			"stt.vadEndMs",
+			"stt.modelName",
+			"stt.speakerMode",
+			"stt.enhanceAudio",
+			"stt.submitTrigger",
+			"live.voice",
+			"providers.tts",
+			"tts.localModel",
+			"tts.localVoice",
+			"tts.autoRead",
+			"tts.rate",
+			"tts.inputMode",
+			"tts.bargeIn",
+			"speech.enabled",
+			"speech.mode",
+			"speech.enhanced",
+			"speech.voice",
+		] as const;
+		for (const path of voicePaths) {
+			expect(SETTINGS_SCHEMA[path].ui).toMatchObject({ tab: "voice", group: "Speech" });
+		}
+
+		const renderedVoicePaths = getSettingsForTab("voice").map(def => def.path);
+		const otherPaths = [...getSettingsForTab("interaction"), ...getSettingsForTab("providers")].map(def => def.path);
+		expect(otherPaths.filter(path => renderedVoicePaths.includes(path))).toEqual([]);
+	});
+
 	it("exposes native terminal progress in the appearance settings menu", () => {
 		const def = getSettingsForTab("appearance").find(def => def.path === "terminal.showProgress");
 

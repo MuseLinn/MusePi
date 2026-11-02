@@ -58,6 +58,47 @@
     "preview.editor.note":
       "Real interface capture — browse the project, switch files and edit code in the same workspace.",
 
+    /* 0.7.0 能力浏览 */
+    "nav.release": "0.7.0 highlights",
+    "release.kicker": "0.7.0 · Workspace highlights",
+    "release.h2": "From doing the work to reviewing and reshaping it together",
+    "release.desc":
+      "The agent moves tasks forward while you retain direct viewing, editing and precise referencing. These four capability groups are in the product now, not on a distant roadmap.",
+    "release.tabs.aria": "Explore 0.7.0 highlights",
+    "release.tab.files": "File workspace",
+    "release.tab.office": "Office editing & quotes",
+    "release.tab.plugins": "Plugins & presets",
+    "release.tab.agents": "External subagents",
+    "release.files.eyebrow": "Read, edit and reveal without leaving the workspace",
+    "release.files.title": "Review code and documents directly",
+    "release.files.body":
+      "The file tree, Monaco, Markdown, PDF and PR reviews share the same file tabs and draft lifecycle. Definition navigation, cross-file rename, diffs and historical reveals all operate on the real workspace.",
+    "release.files.p1": "Monaco editing, LSP navigation and cross-file rename",
+    "release.files.p2": "WYSIWYG Markdown and on-demand PDF rendering",
+    "release.files.p3": "Reveal PR comments in code and quote them to the agent",
+    "release.office.eyebrow": "Quote the content and its precise location",
+    "release.office.title": "Edit Office content and return to the exact spot",
+    "release.office.body":
+      "Safely edit and save Word paragraphs, Excel cells and PowerPoint text shapes. Selections use the existing reference toolbar, and historical quotes restore the paragraph, cell range or slide shape.",
+    "release.office.p1": "Complex structures and formulas stay read-only to prevent unsafe writes",
+    "release.office.p2": "PowerPoint is explicitly a text-layout preview",
+    "release.office.p3": "One lifecycle for drafts, dirty state and close confirmation",
+    "release.office.proof": "Precise quotes",
+    "release.plugins.eyebrow": "Capabilities are more than switches in a list",
+    "release.plugins.title": "Plugins, components and skills share one lifecycle",
+    "release.plugins.body":
+      "First-party and external packages use the same Cordis package names, component keys and real enablement state. File tools, speech, terminal, browser and LSP compose independently, while product skills follow their package.",
+    "release.plugins.p1": "Disabling a package unloads its capabilities and registered entries",
+    "release.plugins.p2": "Presets compose explicit plugin rows without overwriting user edits",
+    "release.plugins.p3": "Existing third-party agent extension configurations remain compatible",
+    "release.agents.eyebrow": "Bring familiar CLIs into one task flow",
+    "release.agents.title": "Five external subagents with unified result tracking",
+    "release.agents.body":
+      "Experimental plugins connect Codex, Claude Code, Kimi Code, CodeBuddy and OpenCode. They reuse MusePi task progress, background jobs, cancellation, timeouts, result cards and complete artifacts.",
+    "release.agents.p1": "Configure each executable, model and product permission separately",
+    "release.agents.p2": "Loading or toggling a plugin never starts an external process",
+    "release.agents.p3": "Install and configure each CLI yourself; permissions are not bypassed by default",
+
     /* 三个核心功能 */
     "feat.kicker": "Why MusePi",
     "feat.h2": "Built for the way you really work",

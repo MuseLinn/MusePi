@@ -23,6 +23,7 @@ import { buildOutputValidator } from "../tools/output-schema-validator";
 import { trackLateCleanup } from "../utils/late-cleanup";
 import { type DiscoveryResult, discoverAgents, getAgent } from "./discovery";
 import { type ExecutorOptions, runSubprocess } from "./executor";
+import { runExternalSubagent } from "./external";
 import {
 	applyEligibleNestedPatches,
 	type IsolationContext,
@@ -304,6 +305,35 @@ export async function resolveEffectiveSubagentPolicy(
 			`Subagent isolated execution requires task.isolation.mode to be set; current mode is "none".`,
 		);
 	}
+	if (agent.external) {
+		if (request.model !== undefined) {
+			throw new StructuredSubagentError(
+				"preflight",
+				`External agent "${agentName}" does not support model overrides; configure its native model in the owning plugin.`,
+			);
+		}
+		if (request.effort !== undefined) {
+			throw new StructuredSubagentError(
+				"preflight",
+				`External agent "${agentName}" does not support effort overrides.`,
+			);
+		}
+		if (planMode) {
+			throw new StructuredSubagentError("preflight", `External agent "${agentName}" is unavailable in plan mode.`);
+		}
+		if (schema.source !== "none") {
+			throw new StructuredSubagentError(
+				"preflight",
+				`External agent "${agentName}" does not support output schemas.`,
+			);
+		}
+		if (isIsolated) {
+			throw new StructuredSubagentError(
+				"preflight",
+				`External agent "${agentName}" does not support isolated worktrees.`,
+			);
+		}
+	}
 	return {
 		discovery,
 		agentName,
@@ -580,19 +610,21 @@ export async function runStructuredSubagent(request: StructuredSubagentRequest):
 				);
 			}
 		}
-		const result = !isolationContext
-			? await runSubprocess(baseOptions)
-			: await runIsolatedSubprocess({
-					baseOptions,
-					context: isolationContext,
-					preferredBackend: parseIsolationMode(request.session.settings.get("task.isolation.mode")),
-					agentId: id,
-					mergeMode: policy.mergeMode,
-					artifactsDir: lease.artifactsDir,
-					description: trimToUndefined(request.identity?.label),
-					buildCommitMessage: makeIsolationCommitMessage(request.session),
-					buildFailureResult: buildFailureResult(request, policy, id, Date.now()),
-				});
+		const result = policy.agent.external
+			? await runExternalSubagent(baseOptions)
+			: !isolationContext
+				? await runSubprocess(baseOptions)
+				: await runIsolatedSubprocess({
+						baseOptions,
+						context: isolationContext,
+						preferredBackend: parseIsolationMode(request.session.settings.get("task.isolation.mode")),
+						agentId: id,
+						mergeMode: policy.mergeMode,
+						artifactsDir: lease.artifactsDir,
+						description: trimToUndefined(request.identity?.label),
+						buildCommitMessage: makeIsolationCommitMessage(request.session),
+						buildFailureResult: buildFailureResult(request, policy, id, Date.now()),
+					});
 		attachStructuredOutputMetadata(result, policy.schema);
 		requiresRecoveryArtifacts =
 			policy.isIsolated &&

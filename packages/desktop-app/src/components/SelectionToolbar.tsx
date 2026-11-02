@@ -1,5 +1,5 @@
 import { t } from "@musepi/client-core";
-import type { PdfQuoteAnchor } from "@musepi/pi-wire";
+import type { OfficeQuoteAnchor, PdfQuoteAnchor } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -38,10 +38,17 @@ export function SelectionToolbar({
 	containerRef: React.RefObject<HTMLElement | null>;
 	/** Optional editor-owned selection. When supplied, DOM selection capture is
 	 * disabled because Monaco does not expose its selection through window. */
-	selection?: { text: string; x: number; y: number; height: number; pdf?: PdfQuoteAnchor } | null;
+	selection?: {
+		text: string;
+		x: number;
+		y: number;
+		height: number;
+		pdf?: PdfQuoteAnchor;
+		office?: OfficeQuoteAnchor;
+	} | null;
 	/** Visible editor floating UI that this toolbar must not cover. */
 	avoidSelector?: string;
-	onQuote(text: string, pdf?: PdfQuoteAnchor): void;
+	onQuote(text: string, pdf?: PdfQuoteAnchor, office?: OfficeQuoteAnchor): void;
 	/** Open the selection→ask popover for this selection (throws away the
 	 * answer — never recorded to the transcript). */
 	onAsk(text: string, x: number, y: number): void;
@@ -55,6 +62,7 @@ export function SelectionToolbar({
 		height: number;
 		text: string;
 		pdf?: PdfQuoteAnchor;
+		office?: OfficeQuoteAnchor;
 	} | null>(null);
 	// Exit: keep the toolbar mounted through gui-select-pop-out before
 	// unmounting (Pop parity); the frosted chip also needs the two-phase
@@ -99,6 +107,7 @@ export function SelectionToolbar({
 			y: selection.y,
 			height: selection.height,
 			...(selection.pdf ? { pdf: selection.pdf } : {}),
+			...(selection.office ? { office: selection.office } : {}),
 		});
 	}, [selection, dismiss]);
 
@@ -226,7 +235,7 @@ export function SelectionToolbar({
 		}
 	}
 	const actions: Array<{ icon: IconName; label: string; run(): void }> = [
-		{ icon: "chat-1", label: t("settings.quoteChat"), run: () => onQuote(pop.text, pop.pdf) },
+		{ icon: "chat-1", label: t("settings.quoteChat"), run: () => onQuote(pop.text, pop.pdf, pop.office) },
 		{ icon: "sparkling", label: t("settings.askAboutSelection"), run: () => onAsk(pop.text, pop.x, pop.y) },
 		{ icon: "file-copy-2", label: t("settings.copy"), run: () => onCopy(pop.text) },
 		{ icon: "chat-new", label: t("settings.newSessionSelection"), run: () => onNewSession(pop.text) },

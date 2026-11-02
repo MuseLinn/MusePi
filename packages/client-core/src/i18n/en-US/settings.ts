@@ -1362,6 +1362,10 @@ export const settings = {
 	"settings.fileTooLargeEdit": "File too large to edit in-app",
 	"settings.unsupportedEdit": "This format has no in-app editor — use Open with default app",
 	"settings.onlyFirstRowsShownWithN": "Only the first {n} rows are shown",
+	"settings.officePresentationPreview": "Text layout preview. Use the external app for media and animations.",
+	"settings.officeWorkbookComplex":
+		"Charts, drawings, comments, links, or macros require the external app for editing.",
+	"settings.officeWorkbookLarge": "Sheets over 1000 rows are read-only in the inline editor.",
 	"settings.discoverNewVersion": "New version available",
 	"settings.cost": "Cost",
 	"settings.created": "Created",
@@ -3359,6 +3363,7 @@ export const settings = {
 	"Image URL SSH Target": "Image URL SSH Target",
 	"Image Upload Command": "Image Upload Command",
 	Interaction: "Interaction",
+	Voice: "Voice",
 	"Interactive sessions": "Interactive sessions",
 	Jina: "Jina",
 	Kimi: "Kimi",

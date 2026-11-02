@@ -645,7 +645,7 @@ import {
 	tailSnapshot,
 } from "./session-host";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
-import { createTerminalCorePlugin, createTerminalProviderPlugin } from "./terminal-core-plugin";
+import { createTerminalCorePlugin } from "./terminal-core-plugin";
 import type { WebRouteRegistry } from "./web-routes";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
 
@@ -721,6 +721,9 @@ export class DaemonServer {
 	 *  根 Context（provide + 检视 + 可回滚拆卸），路由分发权威仍在注册表；
 	 *  双跑期挂载不代调 start/stop（P1 代码是生命周期权威）。 */
 	readonly #hostContext = new DaemonHostContext();
+	/** 终端注册表在宿主构造时创建；动态运行时发布同一实例，能力中心可先于
+	 *  terminal.open 装配 provider 组件。 */
+	readonly #terminalCore = createTerminalCorePlugin();
 	/** P2：L2 服务在 cordis 宿主 Context 上的挂载落定 promise（构造器发起，
 	 *  startDaemon 在开监听前 await）。见 settleHostServices。 */
 	readonly #hostServicesMounted: Promise<unknown>;
@@ -799,9 +802,11 @@ export class DaemonServer {
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性装配：首个
 	 *  session-less 装载请求到达时才动态 import 并挂到宿主根 Context。 */
 	#getDynamicPlugins(): Promise<CordisDynamicPluginRuntime> {
-		this.#dynamicPlugins ??= import("./cordis-dynamic-plugins").then(
-			module => new module.CordisDynamicPluginRuntime(this.#hostContext),
-		);
+		this.#dynamicPlugins ??= import("./cordis-dynamic-plugins").then(module => {
+			const runtime = new module.CordisDynamicPluginRuntime(this.#hostContext);
+			runtime.provideHostService("terminal:backends", this.#terminalCore.registry);
+			return runtime;
+		});
 		return this.#dynamicPlugins;
 	}
 	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
@@ -861,14 +866,16 @@ export class DaemonServer {
 		// 归因（§3.③）的真实数据源）。宿主只保留 RPC 薄层 + terminal:deps
 		// 宿主能力（envelope seq / 连接 emit / settings——与 DaemonServer
 		// 共享编号空间是既有契约，不随插件迁移）。RPC 名与 pty 语义不变。
-		const { definition: terminalCoreDefinition, registry: terminalRegistry } = createTerminalCorePlugin();
-		this.#hostContext.plugin(terminalCoreDefinition);
-		this.#hostContext.plugin(createTerminalProviderPlugin("bun-pty"));
-		this.#hostContext.plugin(createTerminalProviderPlugin("node-pty"));
+		const terminalRegistry = this.#terminalCore.registry;
+		this.#hostContext.plugin(this.#terminalCore.definition);
 		const terminalDeps: TerminalServiceDeps = {
 			nextSeq: () => ++this.#eventSeq,
 			emit: (conn, envelope) => this.#host.emitEvent(conn as DaemonConnection, envelope),
 			settings: () => this.#settingsForRpc().catch(() => null),
+			prepare: async () => {
+				await this.#getDynamicPlugins();
+				await this.#services.get<ExtensionService>("extensions").getExtensionRuntimeLoad();
+			},
 		};
 		this.#hostContext.plugin({
 			name: "terminal-host-wiring",
@@ -905,7 +912,6 @@ export class DaemonServer {
 				webRoutes: () => this.#webRoutes ?? undefined,
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
-				builtinRuntime: () => this.#hostContext.builtinInspect(),
 				dynamicRuntime: () => this.#getDynamicPlugins(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
@@ -1001,12 +1007,6 @@ export class DaemonServer {
 		});
 		// 无人 settle 时（测试直构）不得变成 unhandledRejection；真 await 见 settleHostServices。
 		void this.#hostServicesMounted.catch(() => {});
-		// 收编第一刀：builtin 注册表单元挂为 cordis builtin 插件组
-		// （运行状态/fiberPhase 的真实数据源;与 user 动态插件同语法
-		// 不同信任级,设计稿 §1 第 3 步）。装载失败不拖垮宿主（层隔离）。
-		void this.#hostContext.mountBuiltinPlugins().catch(err => {
-			logger.error("daemon: builtin plugin group mount failed", { err });
-		});
 		this.#startExtensionWatcher();
 		// Bot/notification channels (CollabDialog "use bot channel" + task
 		// completion pushes). Persisted config lives in the daemon dir.
@@ -2273,14 +2273,12 @@ export class DaemonServer {
 			case "index.scan": {
 				// Fire-and-forget background scan of the workspace dir
 				// (cwd fallback: this daemon's launch directory). The
-				// musepi:file plugin's `index` component denylist stops the
-				// scan (explicit intent — distinct from the index master
-				// switch, which governs querying the existing FTS data).
+				// An unloaded file-tools/index component stops the scan. The
+				// separate index setting governs queries against existing FTS data.
 				const p = (params ?? {}) as { cwd?: string };
 				const index = this.#host.ensureFileIndex();
 				const dir = p.cwd ? path.resolve(p.cwd) : this.#host.cwd();
-				const settings = this.#host.settings();
-				if (!settings || isFileIndexBackendEnabled(settings)) {
+				if (isFileIndexBackendEnabled()) {
 					// Don't await — the GUI polls index.status for progress.
 					void index.scan(dir).catch(err => console.error("[file-index] scan failed:", err));
 				}
@@ -5408,10 +5406,7 @@ export class DaemonServer {
 				let defaultKey: string;
 				try {
 					const { settings: sttSettings } = await import("../config/settings");
-					defaultKey = resolveEnabledSttModel(
-						sttSettings.get("stt.modelName") as string | undefined,
-						sttSettings,
-					).key;
+					defaultKey = resolveEnabledSttModel(sttSettings.get("stt.modelName") as string | undefined).key;
 				} catch {
 					defaultKey = resolveEnabledSttModel(undefined).key;
 				}
@@ -5512,8 +5507,8 @@ export class DaemonServer {
 				// first enabled tier (resolveEnabledSttModel), never a denied one.
 				const { settings: appSettings } = await import("../config/settings");
 				const modelKey = p.modelKey
-					? resolveEnabledSttModel(p.modelKey, appSettings).key
-					: resolveEnabledSttModel(appSettings.get("stt.modelName") as string | undefined, appSettings).key;
+					? resolveEnabledSttModel(p.modelKey).key
+					: resolveEnabledSttModel(appSettings.get("stt.modelName") as string | undefined).key;
 				const text = await sttClient.transcribe(modelKey, Float32Array.from(p.audio), {
 					...(p.language ? { language: p.language } : {}),
 				});
@@ -5533,7 +5528,7 @@ export class DaemonServer {
 				// Engine components disabled from the plugin page fall back to
 				// the first enabled tier (resolveEnabledTtsModel) — same
 				// resolution the modelStatus route reports as defaultKey.
-				const modelKey = resolveEnabledTtsModel(p.modelKey ?? configured, appSettings).key;
+				const modelKey = resolveEnabledTtsModel(p.modelKey ?? configured).key;
 				// A failure resolves `audio: null` — without the worker's error
 				// text the GUI cannot tell "模型未下载" from "合成失败", so the
 				// client's onError hook captures it and the response carries it.
@@ -5580,10 +5575,7 @@ export class DaemonServer {
 				let defaultKey: string;
 				try {
 					const { settings: ttsSettings } = await import("../config/settings");
-					defaultKey = resolveEnabledTtsModel(
-						ttsSettings.get("tts.localModel") as string | undefined,
-						ttsSettings,
-					).key;
+					defaultKey = resolveEnabledTtsModel(ttsSettings.get("tts.localModel") as string | undefined).key;
 				} catch {
 					defaultKey = resolveEnabledTtsModel(undefined).key;
 				}

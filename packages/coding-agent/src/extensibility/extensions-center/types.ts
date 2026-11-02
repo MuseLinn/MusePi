@@ -10,6 +10,7 @@ import type {
 	PluginResources,
 } from "@musepi/pi-wire";
 import type { SourceMeta } from "../../capability/types";
+import type { ExtensionHostBinding } from "../extensions/plugin-manifest";
 
 /**
  * Extension kinds matching capability types.
@@ -99,6 +100,8 @@ export interface Extension {
 	configErrors?: ConfigFieldError[];
 	/** 插件声明的资源占用(disk/memory/setup/models,详情页资源卡)。 */
 	resources?: PluginResources;
+	/** 第一方子系统的声明式宿主绑定；运行仍由原有子系统执行。 */
+	host?: ExtensionHostBinding;
 	/** 已落盘的插件配置值(经字段声明钳制;表单初始值)。 */
 	configValues?: PluginConfigValues;
 	/** dsh 式「包含的组件」状态(内置单元声明了组件才有;GUI 详情弹层渲染开关行)。 */
@@ -109,7 +112,7 @@ export interface Extension {
 	enabledInPresets?: string[];
 	/** cordis 运行时真实状态（仅接入 cordis fiber 的条目才有——builtin
 	 * 单元随 daemon 挂载;user 插件会话装载,宿主面无 fiber,不编造）。
-	 * fiberState = cordis fiber 状态机名;operational = 镜像设置现读的
+	 * fiberState = cordis fiber 状态机名;operational = 领域设置现读的
 	 * 业务运行判定（比 fiberPhase 更贴我方架构：stt.enabled=false 时
 	 * 语音确实没在跑,而 fiber 仍 ACTIVE——两层如实分开）。 */
 	runtime?: {
@@ -117,7 +120,7 @@ export interface Extension {
 		effects: number;
 		operational: "running" | "stopped";
 	};
-	/** dsh 式「启用条件」（真实可判定语义,非表达式字符串）：镜像设置键
+	/** dsh 式「启用条件」（真实可判定语义,非表达式字符串）：声明式设置条件
 	 * （该键为 on 时单元启用）。预设提供的 user 插件走 enabledInPresets。 */
 	activation?: { kind: "setting"; key: string };
 	/** 清单版本（extension-module 从宿主 fiber 检视面透出;豁免键输入）。 */

@@ -1,0 +1,22 @@
+{
+	"name": "musepi-file-tools",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "文件工具与索引",
+		"description": "工作区读取、写入、搜索工具族与后台内容索引。",
+		"icon": "📁",
+		"extensions": ["./index.ts"],
+		"components": [
+			{ "id": "read", "entry": "./read.ts", "description": "文件读取工具族。" },
+			{ "id": "write", "entry": "./write.ts", "description": "文件写入与编辑工具族。" },
+			{ "id": "search", "entry": "./search.ts", "description": "文件搜索工具族。" },
+			{ "id": "index", "entry": "./index-backend.ts", "description": "后台内容索引。" }
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}

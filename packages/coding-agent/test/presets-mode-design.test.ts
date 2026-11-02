@@ -18,6 +18,7 @@ import {
 	BUILTIN_MODE_TEMPLATES,
 	BUILTIN_TEMPLATE_REVISION,
 	ensureModeTemplates,
+	LEGACY_TEMPLATES,
 	type ModeDefinition,
 	modeFilePath,
 	resolveMode,
@@ -154,6 +155,29 @@ describe("ensureModeTemplates upgrade path", () => {
 		// New-content marker from the creation-prompts absorption: every design
 		// judgment must be verifiable (evidence / scale / revision condition).
 		expect(JSON.stringify(upgraded)).toContain("可验证");
+	});
+
+	it("upgrades untouched v7 compositions and preserves edited rows", () => {
+		for (const id of ["design", "creator"] as const) {
+			const legacy = LEGACY_TEMPLATES[7]?.[id];
+			expect(legacy).toBeDefined();
+			writeFileSync(
+				modeFilePath(dir, id),
+				`${JSON.stringify({ ...legacy, builtinRevision: 7 }, null, 2)}\n`,
+				"utf8",
+			);
+		}
+		ensureModeTemplates(dir);
+		for (const id of ["design", "creator"] as const) {
+			expect(readJson(id).builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
+			expect(readJson(id).plugins).toEqual([{ name: "musepi-product-skills" }]);
+		}
+
+		const edited = { ...LEGACY_TEMPLATES[7]?.creator, builtinRevision: 7, plugins: [{ name: "custom-plugin" }] };
+		writeFileSync(modeFilePath(dir, "creator"), `${JSON.stringify(edited, null, 2)}\n`, "utf8");
+		ensureModeTemplates(dir);
+		expect(readJson("creator").plugins).toEqual([{ name: "custom-plugin" }]);
+		expect(readJson("creator").builtinRevision).toBe(7);
 	});
 
 	it("leaves a user-edited preset alone", () => {

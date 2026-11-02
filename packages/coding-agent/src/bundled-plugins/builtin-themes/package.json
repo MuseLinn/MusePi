@@ -1,0 +1,17 @@
+{
+	"name": "musepi-builtin-themes",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "内置主题包",
+		"description": "CLI 随附的深色、浅色与默认终端主题集合。",
+		"icon": "🎨",
+		"extensions": ["./index.ts"],
+		"host": {
+			"readonly": true,
+			"raw": { "source": "builtin-themes" }
+		}
+	}
+}

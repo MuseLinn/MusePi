@@ -22,6 +22,7 @@
 
 import * as path from "node:path";
 import { spawn } from "@musepi/pi-utils/nodespawn";
+import type { IPty } from "bun-pty";
 import type { Settings } from "../config/settings.ts";
 import {
 	defaultTerminalRegistry,
@@ -71,10 +72,16 @@ async function spawnBunPty(
 			cmd: string,
 			args: string[],
 			opts: { cols: number; rows: number; cwd: string; env: Record<string, string> },
-		): TerminalHandle;
+		): IPty;
 	};
 	const proc = spawn(shell, shellArgs, { cols, rows, cwd, env });
-	return proc;
+	return {
+		write: data => proc.write(data),
+		resize: (columns, lines) => proc.resize(columns, lines),
+		dispose: () => proc.kill(),
+		onData: callback => proc.onData(callback),
+		onExit: callback => proc.onExit(event => callback(event.exitCode)),
+	};
 }
 
 // ------------------------------------------------------------
@@ -82,10 +89,10 @@ async function spawnBunPty(
 // ------------------------------------------------------------
 
 async function spawnNodePtyBridge(
-	_cwd: string,
+	cwd: string,
 	cols: number,
 	rows: number,
-	_shell: string,
+	shell: string,
 	_shellArgs: string[],
 	_env: Record<string, string>,
 ): Promise<TerminalHandle> {
@@ -95,6 +102,9 @@ async function spawnNodePtyBridge(
 	const nodeBin = await resolveNodeBinary();
 	const child = spawn(nodeBin, [bridgePath], {
 		stdio: ["pipe", "pipe", "inherit"],
+		// The bridge sanitizes shell-only variables before spawning the PTY.
+		// Keep the original launcher environment here so Node wrappers retain
+		// any IPC channel they need to start.
 		env: { ...process.env, COLUMNS: String(cols), LINES: String(rows) },
 	}) as unknown as {
 		stdin: NodeJS.WritableStream;
@@ -102,86 +112,108 @@ async function spawnNodePtyBridge(
 		kill(): void;
 		on(event: "exit", cb: (code: number | null) => void): void;
 		once(event: "error", cb: (err: Error) => void): void;
-		off(event: "exit", cb: () => void): void;
 	};
 
 	const lines = createInterface({ input: child.stdout, crlfDelay: Infinity }) as unknown as {
 		on(event: "line", cb: (line: string) => void): void;
-		once(event: "line", cb: (line: string) => void): void;
 		close(): void;
 	};
+	const { promise, resolve, reject } = Promise.withResolvers<TerminalHandle>();
+	let open = false;
+	let disposed = false;
+	let exitSent = false;
+	let exitCode: number | null = null;
+	let dataCallback: ((data: string) => void) | undefined;
+	let exitCallback: ((code: number | null) => void) | undefined;
 
-	return new Promise<TerminalHandle>((resolve, reject) => {
-		let open = false;
-		let exitSent = false;
-		lines.on("line", (line: string) => {
-			let msg: { kind?: string; id?: string; data?: string; code?: number; message?: string } | null = null;
-			try {
-				msg = JSON.parse(line);
-			} catch {
-				/* skip */
-			}
-			if (!msg) return;
-			if (msg.kind === "open") {
+	const send = (method: string, params: Record<string, unknown>): void => {
+		if (child.stdin.writable) child.stdin.write(`${JSON.stringify({ id: 1, method, params })}\n`);
+	};
+	const reportExit = (code: number | null): void => {
+		if (exitSent) return;
+		exitSent = true;
+		exitCode = code;
+		exitCallback?.(code);
+	};
+	const handle: TerminalHandle = {
+		write: data => send("input", { data }),
+		resize: (columns, lines) => send("resize", { cols: columns, rows: lines }),
+		dispose: () => {
+			if (disposed) return;
+			disposed = true;
+			lines.close();
+			child.kill();
+		},
+		onData: callback => {
+			dataCallback = callback;
+		},
+		onExit: callback => {
+			exitCallback = callback;
+			if (exitSent) callback(exitCode);
+		},
+	};
+	const fail = (error: Error): void => {
+		if (open) return;
+		clearTimeout(timeout);
+		lines.close();
+		child.kill();
+		reject(error);
+	};
+	const timeout = setTimeout(
+		() => fail(new Error(`terminal bridge spawn timeout (node: ${nodeBin}, bridge: ${bridgePath})`)),
+		8000,
+	);
+	timeout.unref?.();
+
+	lines.on("line", (line: string) => {
+		let msg: { kind?: string; data?: string; code?: number; message?: string };
+		try {
+			msg = JSON.parse(line) as typeof msg;
+		} catch {
+			return;
+		}
+		switch (msg.kind) {
+			case "ready":
+				send("open", { cwd, cols, rows, shell });
+				break;
+			case "open":
 				open = true;
-			} else if (msg.kind === "exit" && !exitSent) {
-				exitSent = true;
-				child.off("exit", () => {});
-				resolve({
-					write(d: string) {
-						if (child.stdin.writable) child.stdin.write(`${JSON.stringify({ method: "input", data: d })}\n`);
-					},
-					resize(c: number, r: number) {
-						child.stdin.write(`${JSON.stringify({ method: "resize", cols: c, rows: r })}\n`);
-					},
-					dispose() {
-						lines.close();
-						child.kill();
-					},
-					onExit(cb) {
-						child.on("exit", cb);
-					},
-					onData(cb) {
-						lines.on("line", (l: string) => {
-							try {
-								const m = JSON.parse(l);
-								if (m.kind === "data") cb(m.data ?? "");
-							} catch {}
-						});
-					},
-				});
-			} else if (msg.kind === "error") {
-				reject(new Error(msg.message ?? "terminal bridge error"));
-			}
-		});
-		child.once("error", (err: Error) => {
-			if (!open) reject(err);
-		});
-		// Timeout fallback: if bridge doesn't open within 8s, fail.
-		setTimeout(() => {
-			if (!open && !exitSent) reject(new Error("terminal bridge spawn timeout"));
-		}, 8000).unref?.();
+				clearTimeout(timeout);
+				resolve(handle);
+				break;
+			case "data":
+				dataCallback?.(msg.data ?? "");
+				break;
+			case "exit":
+				reportExit(msg.code ?? 0);
+				break;
+			case "error":
+				fail(new Error(msg.message ?? "terminal bridge error"));
+				break;
+		}
 	});
+	child.once("error", (err: Error) => fail(err));
+	child.on("exit", code => reportExit(code));
+	return promise;
 }
 
 async function resolveNodeBinary(): Promise<string> {
 	const { existsSync } = await import("node:fs");
 	const candidates = [
 		process.env.NODE_BINARY,
-		"/opt/homebrew/bin/node",
-		"/usr/local/bin/node",
-		"/opt/local/bin/node",
-		"/usr/bin/node",
-		"/usr/bin/env node",
+		...(process.platform === "win32"
+			? []
+			: ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/opt/local/bin/node", "/usr/bin/node"]),
 	].filter((c): c is string => typeof c === "string");
 	for (const c of candidates) {
-		if (c === "/usr/bin/env node") return c;
 		try {
 			if (existsSync(c)) return c;
 		} catch {
 			/* ignore */
 		}
 	}
+	// Let the platform process launcher resolve Node from PATH. A string such
+	// as "/usr/bin/env node" is not an executable path and also breaks Windows.
 	return "node";
 }
 
@@ -233,19 +265,12 @@ export function resolveTerminalProvider(
 	return "auto";
 }
 
-/** 解析 provider 工厂。显式 provider 的 open 直查注册表——backend
- *  缺席给结构化 NO_BACKEND（manifest 显式声明的严格语义：不静默回退）；
- *  auto 只在在册 backend 间按 bun-pty → node-pty 顺序回退，
- *  全缺席 = 结构化 NO_BACKEND。
- *
- *  组件黑名单（terminal.disabledBackends，插件「包含的组件」开关写入，
- *  voice/engine-denylist 同哲学）：被禁后端从 auto 回退顺序剔除；显式
- *  选中（manifest 或 settings）被禁后端时 open 给结构化 DISABLED_BACKEND
- *  ——禁用是用户显式意图，不静默回退到 auto。 */
+/** Resolve providers exclusively from the Cordis-owned backend registry.
+ * Explicit selections never fall back silently; auto tries registered backends
+ * in bun-pty → node-pty order and reports NO_BACKEND when none remain. */
 export function getTerminalProvider(
 	name: TerminalProvider,
 	registry: TerminalRegistry = defaultTerminalRegistry,
-	disabled: ReadonlySet<string> = new Set(),
 ): TerminalProviderFactory {
 	if (name === "auto") {
 		return {
@@ -257,12 +282,10 @@ export function getTerminalProvider(
 				const order: readonly TerminalBackendType[] = ["bun-pty", "node-pty"];
 				let lastErr: unknown;
 				for (const type of order) {
-					if (!registry.hasBackend(type) || disabled.has(type)) continue;
+					if (!registry.hasBackend(type)) continue;
 					try {
 						return await registry.getBackend(type).open(cwd, cols, rows, shell, shellArgs, env);
 					} catch (err) {
-						// Log but continue — auto is intended to degrade, but only
-						// among registered backends (disabled plugins are skipped).
 						lastErr = err;
 						console.warn(`[terminal] ${type} failed (${String(err)}), trying next backend`);
 					}
@@ -281,29 +304,9 @@ export function getTerminalProvider(
 			return name;
 		},
 		async open(cwd, cols, rows, shell, shellArgs, env) {
-			if (disabled.has(name)) {
-				throw new TerminalRegistryError(
-					"DISABLED_BACKEND",
-					`terminal backend "${name}" is disabled (plugin component toggle)`,
-				);
-			}
 			return registry.getBackend(name).open(cwd, cols, rows, shell, shellArgs, env);
 		},
 	};
-}
-
-/** 读终端后端组件黑名单（fail-soft：坏值/非数组 = 空集）。组件开关
- *  （extensions.setComponentEnabled 经 extension-service）写
- *  `terminal.disabledBackends`，本 helper 是唯一读取方。 */
-export function readDisabledTerminalBackends(source: { get(key: string): unknown }): Set<string> {
-	let raw: unknown;
-	try {
-		raw = source.get("terminal.disabledBackends");
-	} catch {
-		return new Set();
-	}
-	if (!Array.isArray(raw)) return new Set();
-	return new Set(raw.filter((item): item is string => typeof item === "string"));
 }
 
 const PROVIDER_NAMES: readonly TerminalProvider[] = ["bun-pty", "node-pty", "auto"];

@@ -2,6 +2,7 @@ import type { DisplayContext } from "@musepi/client-core/src/messages/display-co
 import {
 	browserAnnotationTargetCount,
 	displayContextQuote,
+	officeQuoteLocation,
 	withDisplayContextComment,
 } from "@musepi/client-core/src/messages/display-context";
 import { Eye, FileText, Globe2, MessageSquareQuote, X } from "lucide-react";
@@ -53,9 +54,11 @@ function QuoteEntry({
 								{fileName(context.path)}
 								{context.pdf
 									? ` · ${t("pdfPageRange", { start: context.pdf.startPage, end: context.pdf.endPage })}`
-									: context.startLine !== undefined && context.endLine !== undefined
-										? `:${context.startLine}-${context.endLine}`
-										: ""}
+									: context.office
+										? ` · ${officeQuoteLocation(context.office)}`
+										: context.startLine !== undefined && context.endLine !== undefined
+											? `:${context.startLine}-${context.endLine}`
+											: ""}
 							</span>
 							{context.language ? <span className="gui-quote-context-count">{context.language}</span> : null}
 						</>

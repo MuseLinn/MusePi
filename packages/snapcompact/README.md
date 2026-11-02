@@ -32,7 +32,7 @@ Bitmap shapes keep their provider-tuned geometry and draw missing glyphs through
 bun add @musepi/snapcompact
 ```
 
-Ships TypeScript source directly (no build step); requires Bun ≥ 1.3.14.
+Ships TypeScript source directly (no build step); requires Bun ≥ 1.4.4.
 
 ## Usage
 

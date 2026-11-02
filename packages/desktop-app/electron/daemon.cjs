@@ -68,6 +68,15 @@ function guiVersion() {
 	}
 }
 
+/** First-party plugin trees staged beside the unpacked desktop daemon. */
+function packagedPluginRoots() {
+	if (!process.resourcesPath) return [];
+	const daemonRoot = path.join(process.resourcesPath, "app.asar.unpacked", "vendor", "daemon");
+	return [path.join(daemonRoot, "bundled-plugins"), path.join(daemonRoot, "desktop-plugins")].filter(root =>
+		fs.existsSync(root),
+	);
+}
+
 /** Discover a running daemon's WebSocket port from the ws.port file. */
 function probe() {
 	try {
@@ -207,6 +216,9 @@ async function startInternal(port, env = {}) {
 	const { program, args } = daemonCommand(port);
 	console.error("[daemon] start", program, args.join(" "));
 	let daemonStderr = "";
+	const pluginRoots = packagedPluginRoots();
+	const daemonEnv = { ...process.env, MUSEPI_VERSION: guiVersion(), ...env };
+	if (pluginRoots.length > 0) daemonEnv.MUSEPI_BUNDLED_PLUGIN_ROOTS = pluginRoots.join(path.delimiter);
 	const child = spawn(program, args, {
 		detached: true,
 		stdio: ["ignore", "ignore", "pipe"],
@@ -217,7 +229,7 @@ async function startInternal(port, env = {}) {
 		// Brand the spawned daemon with the GUI's own version: the daemon
 		// runs from src/cli.ts (not musepi.ts), so without this system.meta
 		// reports the OMP engine version as the MusePi version.
-		env: { ...process.env, MUSEPI_VERSION: guiVersion(), ...env },
+		env: daemonEnv,
 	});
 	child.stderr.on("data", chunk => {
 		daemonStderr = `${daemonStderr}${chunk.toString()}`.slice(-4000);
@@ -935,6 +947,7 @@ module.exports = {
 	clearDaemonOwnership,
 	portOpen,
 	daemonCommand,
+	packagedPluginRoots,
 	// Managed-daemon registry (orphan reaping; see the block above).
 	registerManagedDaemon,
 	unregisterManagedDaemon,

@@ -1,4 +1,4 @@
-import type { PdfQuoteAnchor } from "@musepi/pi-wire";
+import type { OfficeQuoteAnchor, PdfQuoteAnchor } from "@musepi/pi-wire";
 import type { EditorHistoryDirection, EditorLocation } from "./editor-navigation";
 
 /** The file surface keeps its persisted id while its renderer is plugin-owned. */
@@ -18,6 +18,7 @@ export interface FilePreviewOpenRequest {
 	path: string;
 	nonce: number;
 	pdf?: PdfQuoteAnchor;
+	office?: OfficeQuoteAnchor;
 	quote?: string;
 	line?: number;
 	column?: number;

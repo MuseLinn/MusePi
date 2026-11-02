@@ -3624,6 +3624,12 @@ ipcMain.handle("open-with", async (_event, payload) => {
 	const app = typeof data.app === "string" ? data.app : "";
 	const dirPath = typeof data.path === "string" ? data.path : "";
 	if (!dirPath) return false;
+	// Isolated Electron verification: exercise the real preload and IPC route
+	// without launching an external application. Unset in normal builds.
+	if (process.env.MUSEPI_TEST_OPEN_WITH_CAPTURE) {
+		fs.appendFileSync(process.env.MUSEPI_TEST_OPEN_WITH_CAPTURE, `${JSON.stringify({ app, path: dirPath })}\n`);
+		return true;
+	}
 	const { execFile } = require("node:child_process");
 	try {
 		await new Promise((resolve, reject) => {
@@ -3702,6 +3708,9 @@ const OPEN_IN_APP_LINUX_BINS = [
 ];
 
 ipcMain.handle("open-in-apps", async () => {
+	if (process.env.MUSEPI_TEST_OPEN_WITH_CAPTURE) {
+		return { apps: [{ id: "test-editor", label: "Test Editor", appName: "Test Editor", iconDataUrl: "" }] };
+	}
 	const home = os.homedir();
 	const found = [];
 	if (process.platform === "darwin") {

@@ -107,7 +107,7 @@ bun run setup && bun run musepi
 
 ### 开发模式
 
-需要 **Bun ≥ 1.3.14**（macOS 为主要开发平台；Rust 工具链用于 natives 构建）。
+需要 **Bun ≥ 1.4.4**（macOS 为主要开发平台；Rust 工具链用于 natives 构建）。
 
 ```sh
 # 安装依赖 + 构建 natives + 链接 CLI

@@ -1,0 +1,21 @@
+{
+	"name": "musepi-lsp",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "语言服务（LSP）",
+		"description": "通过语言服务器提供定义、引用、诊断与重命名。",
+		"icon": "🔎",
+		"extensions": ["./index.ts"],
+		"components": [{ "id": "lsp", "entry": "./lsp-tool.ts", "description": "语言服务工具。" }],
+		"config": [
+			{ "key": "lsp.lazy", "type": "boolean", "default": true, "restart": "session", "label": "按需启动", "description": "首次调用语言功能时再启动语言服务器。" },
+			{ "key": "lsp.shared", "type": "boolean", "default": true, "restart": "daemon", "label": "共享实例", "description": "在会话之间复用兼容的语言服务器实例。" }
+		],
+		"host": {
+			"configStorage": "settings"
+		}
+	}
+}

@@ -1,0 +1,19 @@
+{
+	"name": "musepi-subagent-opencode",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Experimental OpenCode subagent for MusePi.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "O",
+		"description": "实验性：通过现有 task 工具调用原生 OpenCode CLI，不自动放宽权限。",
+		"extensions": ["./index.ts"],
+		"config": [
+			{ "key": "executable", "type": "path", "label": "OpenCode 可执行文件", "description": "留空时从 PATH 查找 opencode。", "default": "" },
+			{ "key": "model", "type": "string", "label": "原生模型", "description": "可选的 provider/model 标识。", "default": "" },
+			{ "key": "env", "type": "string", "label": "环境变量 JSON", "description": "可选的字符串键值 JSON 对象。", "default": "" },
+			{ "key": "disposeGraceMs", "type": "number", "label": "退出宽限（毫秒）", "default": 3000 }
+		]
+	}
+}

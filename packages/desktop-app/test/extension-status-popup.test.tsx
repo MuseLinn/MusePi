@@ -37,14 +37,13 @@ afterEach(() => {
 /**
  * The registry hook polls `extensions.list` and subscribes to `extensions.changed`
  * through `rpc.addEventListener`. A stub client supplies exactly that surface
- * with three active `extension-module:*` entries — the shape the component
- * filters and counts.
+ * with three active package-name entries — the shape the component filters and counts.
  */
 function stubRpc(): RpcClient {
 	const extensions = [
-		{ id: "extension-module:alpha", name: "alpha", state: "active" },
-		{ id: "extension-module:beta", name: "beta", state: "active" },
-		{ id: "extension-module:gamma", name: "gamma", state: "active" },
+		{ id: "alpha", kind: "plugin-module", name: "alpha", state: "active" },
+		{ id: "beta", kind: "plugin-module", name: "beta", state: "active" },
+		{ id: "gamma", kind: "extension-module", name: "gamma", state: "active" },
 	];
 	return {
 		request: async () => ({

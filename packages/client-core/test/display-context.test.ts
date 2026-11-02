@@ -9,6 +9,7 @@ import {
 	createFileQuoteContext,
 	isDisplayContext,
 	messageDisplayContext,
+	officeQuoteLocation,
 	textWithoutDisplayContext,
 	withDisplayContextComment,
 } from "../src/messages/display-context";
@@ -103,6 +104,24 @@ describe("DisplayContext contract", () => {
 			"Comment on this fragment of `docs/spec.pdf` PDF pages 3-4:\n> 安全边界\n\nexplain",
 		);
 		expect(isDisplayContext({ ...context, pdf: { ...context.pdf, startPage: 0 } })).toBe(false);
+	});
+
+	it("keeps Office source coordinates in the prompt and compact quote label", () => {
+		const word = createFileQuoteContext({
+			path: "docs/report.docx",
+			quote: "Result",
+			office: { kind: "word", paragraphId: 2 },
+		});
+		const sheet = createFileQuoteContext({
+			path: "docs/data.xlsx",
+			quote: "42",
+			office: { kind: "workbook", sheet: "Data", startCell: "B2", endCell: "B3" },
+		});
+		expect(isDisplayContext(JSON.parse(JSON.stringify(word)))).toBe(true);
+		expect(composeDisplayContextPrompt([word], "explain")).toContain("Word paragraph 3");
+		expect(composeDisplayContextPrompt([sheet], "explain")).toContain("sheet Data, cells B2:B3");
+		expect(officeQuoteLocation(word.office!)).toBe("P3");
+		expect(officeQuoteLocation(sheet.office!)).toBe("Data · B2:B3");
 	});
 
 	it("updates browser comments in both the context and its model prompt", () => {

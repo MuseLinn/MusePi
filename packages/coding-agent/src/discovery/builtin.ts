@@ -628,18 +628,29 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 /**
  * Extension entry paths from the bundled plugin packages.
  *
- * Dev resolves `src/bundled-plugins` next to this module; the bundled CLI
- * resolves `./bundled-plugins` next to its entrypoint (bundle-dist copies the
- * tree there). A directory with no readable `musepi.extensions` manifest is
- * skipped — it is not a package, and reporting it would make every stray
- * directory in the tree a plugin.
+ * `MUSEPI_BUNDLED_PLUGIN_ROOTS` supplies the absolute distribution roots.
+ * Without it, development resolves the two source trees and `./bundled-plugins`
+ * beside its entrypoint. A directory with no readable `musepi.extensions`
+ * manifest is skipped — it is not a package, and reporting it would make
+ * every stray directory in the tree a plugin.
  */
 export async function discoverBundledPluginPaths(): Promise<string[]> {
-	const roots = [
-		path.resolve(import.meta.dir, "..", "bundled-plugins"),
-		path.resolve(import.meta.dir, "../../../desktop-app/src/plugins"),
-		path.resolve(process.cwd(), "bundled-plugins"),
-	];
+	// Packaged desktop builds cannot discover source trees relative to the
+	// compiled module. The Electron shell stages both trees beside the daemon
+	// and passes their absolute paths explicitly; development keeps the source
+	// and cwd fallbacks below.
+	const packagedRoots = (Bun.env.MUSEPI_BUNDLED_PLUGIN_ROOTS ?? "")
+		.split(path.delimiter)
+		.filter(root => root.length > 0)
+		.map(root => path.resolve(root));
+	const roots =
+		packagedRoots.length > 0
+			? packagedRoots
+			: [
+					path.resolve(import.meta.dir, "..", "bundled-plugins"),
+					path.resolve(import.meta.dir, "../../../desktop-app/src/plugins"),
+					path.resolve(process.cwd(), "bundled-plugins"),
+				];
 	const seen = new Set<string>();
 	const out: string[] = [];
 	for (const root of roots) {

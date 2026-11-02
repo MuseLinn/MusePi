@@ -1,0 +1,26 @@
+{
+	"name": "musepi-terminal",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "终端",
+		"description": "为 TUI 与图形界面终端提供 bun-pty、node-pty 后端及自动回退。",
+		"icon": "⌨️",
+		"extensions": ["./index.ts"],
+		"components": [
+			{ "id": "bun-pty", "entry": "./bun-pty.ts", "description": "Bun PTY 终端后端。" },
+			{ "id": "node-pty", "entry": "./node-pty.ts", "description": "Node PTY 终端后端。" }
+		],
+		"config": [
+			{ "key": "terminal.provider", "type": "select", "options": ["auto", "bun-pty", "node-pty"], "default": "auto", "restart": "daemon", "label": "终端后端", "description": "自动选择或固定使用一个终端后端。" },
+			{ "key": "terminal.showImages", "type": "boolean", "default": true, "restart": "none", "label": "显示图片", "description": "在支持的终端中显示图片。" },
+			{ "key": "terminal.showProgress", "type": "boolean", "default": true, "restart": "none", "label": "显示进度", "description": "在终端中显示任务进度。" }
+		],
+		"host": {
+			"readonly": true,
+			"configStorage": "settings"
+		}
+	}
+}

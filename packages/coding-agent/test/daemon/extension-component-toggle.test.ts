@@ -91,7 +91,7 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 	}, 30_000);
 
 	it("首次开关（运行时尚未 reconcile）：先装载再切换,黑名单持久化且 fiber 真实停用", async () => {
-		await extService.setComponentEnabled({ id: `extension-module:${PLUGIN}`, component: "alpha", enabled: false });
+		await extService.setComponentEnabled({ id: PLUGIN, component: "alpha", enabled: false });
 
 		// 黑名单落盘（复合键 <plugin>/<component>）。
 		const denylist = settings.get("disabledExtensionComponents") as string[];
@@ -118,7 +118,7 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 	});
 
 	it("重新启用：黑名单移除、组件 fiber 重挂、命令面恢复", async () => {
-		await extService.setComponentEnabled({ id: `extension-module:${PLUGIN}`, component: "alpha", enabled: true });
+		await extService.setComponentEnabled({ id: PLUGIN, component: "alpha", enabled: true });
 		expect(settings.get("disabledExtensionComponents") as string[]).not.toContain(`${PLUGIN}/alpha`);
 		expect(
 			dynamic
@@ -131,7 +131,7 @@ describe("extensions.setComponentEnabled user 插件径（组件对齐刀接线�
 	it("未声明组件：结构化拒绝且黑名单不落盘", async () => {
 		const before = [...(settings.get("disabledExtensionComponents") as string[])];
 		const error = await extService
-			.setComponentEnabled({ id: `extension-module:${PLUGIN}`, component: "nope", enabled: false })
+			.setComponentEnabled({ id: PLUGIN, component: "nope", enabled: false })
 			.catch(err => err);
 		expect(error).toBeInstanceOf(Error);
 		expect((error as Error).message).toContain("nope");

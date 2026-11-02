@@ -17,5 +17,7 @@
 | Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
 | Cordis 能力中心 | `packages/desktop-app/src/plugins/capability-center/index.ts`（`app.capability`） | 同文件头部 |
 | Cordis 文件工作区 | `packages/desktop-app/src/plugins/file-workspace/index.ts`（`panel.tab.files`） | 同文件头部 |
+| 第一方子系统插件与 entry 组件 | `packages/coding-agent/src/bundled-plugins/*/package.json`、`packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts`（`musepi.host` / `musepi.components` / `CordisDynamicPluginRuntime`） | 各包入口与运行时文件头部 |
+| 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`） | 同文件 `ExternalSubagentUpdate` 前六字段声明 |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。

@@ -56,4 +56,27 @@ describe("plugin-owned bundled skill migration", () => {
 			}
 		}
 	});
+
+	it("migrates a product skill together with its resources", async () => {
+		const sourceDir = path.resolve(import.meta.dir, "../src/bundled-plugins/product-skills/skills/ui-ux-pro-max");
+		const source = path.join(sourceDir, "SKILL.md");
+		const content = await Bun.file(source).text();
+		const script = await Bun.file(path.join(sourceDir, "scripts/search.py")).text();
+		for (const name of ["untouched", "edited"]) {
+			const skillsDir = path.join(agentDir, name);
+			const dir = path.join(skillsDir, "ui-ux-pro-max");
+			fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+			fs.writeFileSync(path.join(dir, "SKILL.md"), name === "edited" ? `${content}\nUser note.\n` : content);
+			fs.writeFileSync(path.join(dir, "scripts/search.py"), script);
+			fs.writeFileSync(
+				path.join(skillsDir, ".bundled-manifest.json"),
+				JSON.stringify({ "ui-ux-pro-max": hash(content) }),
+			);
+			const manifest = { "ui-ux-pro-max": hash(content) };
+			migratePluginOwnedBundledSkills(skillsDir, manifest);
+			expect(fs.existsSync(dir)).toBe(name === "edited");
+			if (name === "edited") expect(manifest["ui-ux-pro-max"]).toBe(hash(content));
+			else expect(manifest["ui-ux-pro-max"]).toBeUndefined();
+		}
+	});
 });

@@ -524,6 +524,7 @@ describe("createAgentSession credential_disabled subscription", () => {
 				rpcs: new Map(),
 				webRoutes: [],
 				skills: [],
+				subagents: new Map(),
 				toolViews: [],
 				notificationChannels: [],
 				services: [],

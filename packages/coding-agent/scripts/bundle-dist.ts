@@ -116,12 +116,6 @@ async function main(): Promise<void> {
 		}
 		await ensureShebang();
 		await Bun.write(path.join(outDir, "docs-index.generated.txt"), docsPayload.payload);
-		// Multi-file bundled skills (ui-ux-pro-max: data/scripts/references)
-		// are read from disk at install time — ship the tree next to the
-		// entrypoint so the bundled CLI can seed them into agentDir/skills.
-		await fs.cp(path.join(packageDir, "src/bundled-skills"), path.join(outDir, "bundled-skills"), {
-			recursive: true,
-		});
 		// Bundled plugin packages ship the same way: the bundled CLI discovers
 		// them from disk (src/bundled-plugins in dev, ./bundled-plugins in the
 		// bundled CLI), and each subdirectory is one loadable package.

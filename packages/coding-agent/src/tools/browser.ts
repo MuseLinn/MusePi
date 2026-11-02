@@ -2,6 +2,7 @@ import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { prompt, untilAborted } from "@musepi/pi-utils";
+import { isCapabilityActive } from "../extensibility/capability-activation";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
 import { enforceInlineByteCap } from "../session/streaming-output";
@@ -105,22 +106,11 @@ function browserBackendComponent(kind: BrowserKind): BrowserBackendComponent {
 	return kind.kind === "headless" ? "launch" : "attach";
 }
 
-/** 读浏览器后端组件黑名单（fail-soft：坏值/非数组 = 空集）。组件开关
- *  （extensions.setComponentEnabled 经 extension-service）写
- *  `browser.disabledBackends`，resolveBrowserKind 是唯一消费方。 */
-export function readDisabledBrowserBackends(source: { get(key: string): unknown }): Set<string> {
-	let raw: unknown;
-	try {
-		raw = source.get("browser.disabledBackends");
-	} catch {
-		return new Set();
-	}
-	if (!Array.isArray(raw)) return new Set();
-	return new Set(raw.filter((item): item is string => typeof item === "string"));
-}
-
 export function resolveBrowserKind(params: BrowserParams, session: ToolSession): BrowserKind {
-	const disabled = readDisabledBrowserBackends(session.settings);
+	const disabled = new Set<BrowserBackendComponent>();
+	for (const backend of ["launch", "attach", "gui"] as const) {
+		if (!isCapabilityActive("browser", backend)) disabled.add(backend);
+	}
 	/** 显式 app 参数指向被禁后端 = 用户/agent 显式意图，给结构化
 	 *  DISABLED_BACKEND，不静默回退（terminal-provider 同哲学）。 */
 	const denyExplicit = (kind: BrowserKind): BrowserKind => {

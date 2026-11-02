@@ -30,13 +30,7 @@ import { readDisabledServers, readEnabledServers } from "../../mcp/config-writer
 import { enablementAllowsPath } from "../enablement-manifest";
 import type { ExtensionPluginMeta } from "../extensions/plugin-manifest";
 import { readExtensionPluginMeta } from "../extensions/plugin-manifest";
-import {
-	annotateBuiltinExtensions,
-	builtinExtensionEntries,
-	builtinMirrorDisabled,
-	componentDenyTarget,
-	findBuiltinDef,
-} from "./builtin-registry";
+import { annotateBuiltinExtensions } from "./builtin-registry";
 import { readPluginConfigStore } from "./plugin-config-store";
 import type {
 	DashboardState,
@@ -63,12 +57,23 @@ export interface ExtensionSettingsManager {
  */
 function spreadPluginMeta(
 	meta: ExtensionPluginMeta | null | undefined,
-): Pick<Extension, "config" | "configErrors" | "resources"> {
+): Pick<Extension, "config" | "configErrors" | "resources" | "host" | "readonly" | "components"> {
 	if (!meta) return {};
-	const out: Pick<Extension, "config" | "configErrors" | "resources"> = {};
+	const out: Pick<Extension, "config" | "configErrors" | "resources" | "host" | "readonly" | "components"> = {};
 	if (meta.fields.length > 0) out.config = meta.fields;
 	if (meta.configErrors.length > 0) out.configErrors = meta.configErrors;
 	if (meta.resources) out.resources = meta.resources;
+	if (meta.host) out.host = meta.host;
+	if (meta.host?.readonly) out.readonly = true;
+	if (meta.components?.length) {
+		out.components = meta.components.map(component => ({
+			id: component.id,
+			name: component.id,
+			description: component.description,
+			enabled: true,
+			canToggle: Boolean(component.entry),
+		}));
+	}
 	return out;
 }
 
@@ -102,11 +107,7 @@ export async function loadAllExtensions(
 			 * absent from the identity, so changing it cannot orphan a toggle.
 			 */
 			entryIdOf?: (item: T) => string;
-			/**
-			 * Per-item disabled check. Module rows funnel through
-			 * `isPluginDisabled` so a toggle stored under a legacy `kind:name`
-			 * key still applies after the identity change.
-			 */
+			/** Per-item disabled check. Module rows match the exact bare package name. */
 			isDisabledOf?: (item: T) => boolean;
 			getDescription?: (item: T) => string | undefined;
 			getTrigger?: (item: T) => string | undefined;
@@ -117,14 +118,10 @@ export async function loadAllExtensions(
 	): void {
 		for (const item of items) {
 			const itemKind = opts?.kindOf?.(item) ?? kind;
-			// Module rows identify by plugin name (`plugin-identity.ts`), other
-			// capabilities keep the `kind:name` composite — their ids are not
-			// migrated and carry no track ambiguity.
+			// Module rows identify by bare package name; other capabilities keep
+			// their `kind:name` composite because they are not plugin packages.
 			const id = opts?.entryIdOf?.(item) ?? makeExtensionId(itemKind, item.name);
-			// A module's toggle may still live under a legacy `kind:name` key (data
-			// written before the identity model matched). Read through the
-			// plugin-name helper so those toggles keep working; every other kind
-			// keeps the plain composite lookup.
+			// Each lookup uses the exact identity displayed by its row.
 			const isDisabled = opts?.isDisabledOf?.(item) ?? disabledExtensions.has(id);
 			const isShadowed = (item as { _shadowed?: boolean })._shadowed;
 			const providerEnabled = isProviderEnabled(item._source.provider);
@@ -146,21 +143,22 @@ export async function loadAllExtensions(
 				state = "active";
 			}
 
+			const pluginMeta = opts?.getPluginMeta?.(item);
 			extensions.push({
 				id,
 				kind: itemKind,
 				name: item.name,
-				displayName: item.name,
-				description: opts?.getDescription?.(item),
+				displayName: pluginMeta?.label ?? item.name,
+				description: pluginMeta?.description ?? opts?.getDescription?.(item),
 				trigger: opts?.getTrigger?.(item),
 				path: item.path,
 				source: sourceFromMeta(item._source),
 				state,
 				disabledReason,
 				shadowedBy: opts?.getShadowedBy?.(item),
-				...(opts?.getPluginMeta ? spreadPluginMeta(opts.getPluginMeta(item)) : {}),
+				...spreadPluginMeta(pluginMeta),
 				...(opts?.getPluginConfigValues ? { configValues: opts.getPluginConfigValues(item) } : {}),
-				raw: item,
+				raw: pluginMeta?.host?.raw ?? item,
 			});
 		}
 	}
@@ -245,10 +243,8 @@ export async function loadAllExtensions(
 		);
 		const configStore = await readPluginConfigStore();
 		addItems(loadableModules, "extension-module", {
-			// The kind reports the LOADER (plugin-module = cordis track,
-			// extension-module = legacy track) so the list can tell the two
-			// systems apart; the enable/config key stays on the shared legacy
-			// prefix for both — that is the persisted key space.
+			// The kind reports the loader for display. Enablement and config use
+			// the same bare package name on both tracks.
 			kindOf: item => item.track,
 			entryIdOf: item => moduleEntryId(item.name),
 			isDisabledOf: item => isPluginDisabled(disabledExtensions, item.name),
@@ -504,12 +500,9 @@ export async function loadAllExtensions(
 		logger.warn("Failed to load gui-motion capability", { error: String(error) });
 	}
 
-	// 内置扩展注册表(builtins):inline 部署物,只读不可改删,可禁用。
-	// 新增内置扩展 = builtin-registry.ts 的 BUILTIN_EXTENSIONS 加一行;
-	// annotate 定义先给扫描行打 builtin 标注(bundled skills 等),再生成
-	// 注册表自身的条目(不产生重复行)。
+	// Distribution scope is an annotation. Every subsystem has its own discovered
+	// plugin package, so this registry never creates a second inventory row.
 	annotateBuiltinExtensions(extensions);
-	extensions.push(...builtinExtensionEntries(disabledExtensions));
 
 	return extensions;
 }
@@ -634,6 +627,7 @@ export function applyFilter(extensions: Extension[], query: string): Extension[]
  */
 function getKindDisplayName(kind: ExtensionKind): string {
 	switch (kind) {
+		case "plugin-module":
 		case "extension-module":
 			return "Extension Modules";
 		case "skill":
@@ -784,59 +778,30 @@ export function applyDisabledExtensionsToState(state: DashboardState, disabledId
 	};
 }
 
-/**
- * Apply settings-mirrored builtin state (style/shell/magic keywords) plus
- * 「包含的组件」状态标注 to an existing dashboard state. The TUI dashboard
- * owns a Settings instance, so it re-resolves both in-process; the daemon
- * does the equivalent rewrite in extensions.list. Mirror wins over the
- * disabledExtensions-derived state. Components are annotated from the same
- * hidden denylists the daemon's extensions.list reads (voice.disabledEngines
- * etc.) — TUI standalone has no daemon to annotate them. Unresolvable deny
- * list values are treated as "not denied" (fail-open, same as daemon).
- */
-export function applyBuiltinMirrorState(state: DashboardState, getRaw: (key: string) => unknown): DashboardState {
+/** Re-read component enablement and settings-backed plugin configuration. */
+export function applyPluginState(state: DashboardState, getRaw: (key: string) => unknown): DashboardState {
+	const disabledValue = getRaw("disabledExtensionComponents");
+	const disabledComponents = new Set(
+		Array.isArray(disabledValue) ? disabledValue.filter(id => typeof id === "string") : [],
+	);
 	const updateExtension = (ext: Extension): Extension => {
-		const def = findBuiltinDef(ext.id);
-		if (!def) return ext;
 		let out = ext;
-		if (def.settingsMirror) {
-			const disabled = builtinMirrorDisabled(def, getRaw);
-			if (disabled) {
-				if (!(out.state === "disabled" && out.disabledReason === "item-disabled")) {
-					out = { ...out, state: "disabled", disabledReason: "item-disabled" as const };
-				}
-			} else if (out.state !== "active") {
-				const enabled: Extension = { ...out, state: "active" };
-				delete enabled.disabledReason;
-				out = enabled;
-			}
+		if (ext.components?.length) {
+			out = {
+				...out,
+				components: ext.components.map(component => ({
+					...component,
+					enabled: !disabledComponents.has(`${ext.name}/${component.id}`),
+				})),
+			};
 		}
-		if (def.components && def.components.length > 0) {
-			const components = def.components.map(c => {
-				const target = componentDenyTarget(c.deny, c.id);
-				const list = getRaw(target.key);
-				const denied = Array.isArray(list) && (list as unknown[]).includes(target.id);
-				return {
-					id: c.id,
-					name: c.id,
-					description: c.description,
-					enabled: !denied,
-					canToggle: true,
-					...(denied ? { disabledReason: "tools-denied" as const } : {}),
-				};
-			});
-			out = { ...out, components };
-		}
-		// 配置面(插件 config 表单):字段键即设置键,TUI 独立进程从
-		// 设置直读当前值——编辑入口是 /settings 的同一批键(不重复造表单,
-		// 两处实现同一功能是 bug),此处让检视面如实呈现配置现状。
-		if (def.config && def.config.length > 0) {
+		if (ext.host?.configStorage === "settings" && ext.config?.length) {
 			const stored: Record<string, unknown> = {};
-			for (const field of def.config) {
+			for (const field of ext.config) {
 				const raw = getRaw(field.key);
 				if (raw !== undefined) stored[field.key] = raw;
 			}
-			out = { ...out, configValues: coerceConfigValues([...def.config], stored) };
+			out = { ...out, configValues: coerceConfigValues([...ext.config], stored) };
 		}
 		return out;
 	};

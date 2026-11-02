@@ -298,10 +298,10 @@ describe("语音测试共用模拟会话视图", () => {
 });
 
 describe("voice settings schema", () => {
-	test("keeps the existing Speech group visible beside model management", async () => {
+	test("reads the shared voice Speech group beside model management", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("settings.schema", {
-			interaction: [
+			voice: [
 				{ key: "stt.enabled", type: "boolean", default: true, ui: { group: "Speech", label: "Speech-to-Text" } },
 			],
 		});
@@ -317,6 +317,54 @@ describe("voice settings schema", () => {
 			await new Promise(resolve => setTimeout(resolve, 20));
 		});
 		expect(host.textContent).toContain("语音转文字");
+		const schemaCalls = fake.calls("settings.schema") as { tabs?: string[] }[];
+		expect(schemaCalls.length).toBeGreaterThan(0);
+		expect(schemaCalls.every(call => call.tabs?.includes("voice"))).toBe(true);
+		act(() => root.unmount());
+		host.remove();
+	});
+
+	test("disabled voice packages hide dependent rows and retain their enable actions", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("settings.schema", {
+			voice: [
+				{ key: "stt.enabled", type: "boolean", default: true, ui: { group: "Speech", label: "Speech-to-Text" } },
+				{ key: "providers.tts", type: "enum", default: "auto", ui: { group: "Speech", label: "TTS Provider" } },
+				{ key: "speech.enabled", type: "boolean", default: false, ui: { group: "Speech", label: "Vocalization" } },
+				{ key: "live.voice", type: "enum", default: "alloy", ui: { group: "Speech", label: "Live Voice" } },
+			],
+		});
+		fake.responses.set("settings.get", {});
+		fake.responses.set("voice.speakerStatus", { hasProfile: false });
+		fake.responses.set("extensions.list", {
+			extensions: [
+				{ id: "stt", state: "disabled", components: [] },
+				{ id: "tts", state: "disabled", components: [] },
+			],
+			tabs: [],
+			providers: [],
+			components: [],
+			toolViews: [],
+			statusBarSegments: [],
+			slots: { exact: [], prefixes: [] },
+		});
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		act(() => root.render(createElement(VoiceSection, { rpc: asRpc(fake) })));
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 20));
+		});
+		expect(host.textContent).toContain("实时语音");
+		expect(host.textContent).not.toContain("TTS Provider");
+		expect(host.textContent).not.toContain("Vocalization");
+		expect(host.textContent).not.toContain("语音转文字");
+		const enableButtons = [...host.querySelectorAll<HTMLButtonElement>("button")].filter(button =>
+			button.textContent?.includes("启用插件"),
+		);
+		expect(enableButtons).toHaveLength(2);
+		act(() => enableButtons[0]?.click());
+		expect(fake.calls("extensions.setEnabled")).toEqual([{ id: "stt", enabled: true }]);
 		act(() => root.unmount());
 		host.remove();
 	});

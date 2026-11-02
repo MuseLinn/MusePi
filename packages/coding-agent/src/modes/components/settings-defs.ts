@@ -25,8 +25,16 @@ import {
 	type SubmenuOption,
 	TAB_GROUPS,
 } from "../../config/settings-schema";
-import { readSubsystemEnabled, subsystemVisible } from "../../extensibility/enablement";
 import { t } from "../../i18n/index.js";
+
+function pluginSettingsVisible(packageName: string): boolean {
+	try {
+		const disabled = Settings.instance.get("disabledExtensions") ?? [];
+		return !disabled.includes(packageName);
+	} catch {
+		return true;
+	}
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UI Definition Types
@@ -153,19 +161,11 @@ const CONDITIONS: Record<string, () => boolean> = {
 		} catch {
 			return false;
 		}
-	}, // 插件归属设置随插件停用隐藏(GUI 语音设置页 parity:插件关了,对应
-	// 配置就不该出现)。读的是 settingsMirror 键 —— 与 /extensions 仪表盘
-	// 拨开关写的是同一份存储,双端零漂移。fail-open:读不到按启用渲染,
-	// 拉取失败绝不让整组配置消失。总开关本身(stt.enabled / speech.enabled)
-	// 不带条件,停用后仍可见可重新启用。
-	//
-	// 与插件装载侧的 gate 共用 readSubsystemEnabled,但失败方向相反:
-	// 那边读不到按未启用(挡住插件),这边读不到按启用(保住开关)。
-	sttPluginEnabled: () => subsystemVisible("stt.enabled"),
-	ttsPluginEnabled: () => subsystemVisible("speech.enabled"),
-	browserPluginEnabled: () => subsystemVisible("browser.enabled"),
-	// computer.enabled 默认开启，读取失败仍按未启用处理，避免失效配置意外开放桌面控制。
-	computerPluginEnabled: () => readSubsystemEnabled("computer.enabled") === true,
+	},
+	sttPluginEnabled: () => pluginSettingsVisible("stt"),
+	ttsPluginEnabled: () => pluginSettingsVisible("tts"),
+	browserPluginEnabled: () => pluginSettingsVisible("browser"),
+	computerPluginEnabled: () => pluginSettingsVisible("computer"),
 	summarizeActive: () => {
 		try {
 			return Settings.instance.get("read.summarize.enabled") === true;

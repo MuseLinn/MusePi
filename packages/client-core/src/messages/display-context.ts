@@ -29,6 +29,15 @@ function isPdfAnchor(value: unknown): boolean {
 	);
 }
 
+function isOfficeAnchor(value: unknown): boolean {
+	if (!isRecord(value)) return false;
+	if (value.kind === "word") return nonNegativeInteger(value.paragraphId);
+	if (value.kind === "workbook") {
+		return optionalString(value.sheet) && optionalString(value.startCell) && optionalString(value.endCell);
+	}
+	return value.kind === "presentation" && optionalLine(value.slide) && optionalString(value.shapeId);
+}
+
 export function isDisplayContext(value: unknown): value is DisplayContext {
 	if (!isRecord(value)) return false;
 	if (value.kind === "browser-annotation") {
@@ -50,7 +59,8 @@ export function isDisplayContext(value: unknown): value is DisplayContext {
 			optionalString(value.comment) &&
 			optionalLine(value.startLine) &&
 			optionalLine(value.endLine) &&
-			(value.pdf === undefined || isPdfAnchor(value.pdf))
+			(value.pdf === undefined || isPdfAnchor(value.pdf)) &&
+			(value.office === undefined || isOfficeAnchor(value.office))
 		);
 	}
 	return false;
@@ -98,6 +108,7 @@ export function createFileQuoteContext({
 	startLine,
 	endLine,
 	pdf,
+	office,
 	comment,
 }: {
 	path: string;
@@ -106,6 +117,7 @@ export function createFileQuoteContext({
 	startLine?: number;
 	endLine?: number;
 	pdf?: FileQuoteContext["pdf"];
+	office?: FileQuoteContext["office"];
 	comment?: string;
 }): FileQuoteContext {
 	return {
@@ -115,6 +127,7 @@ export function createFileQuoteContext({
 		...(language ? { language } : {}),
 		...(startLine !== undefined && endLine !== undefined ? { startLine, endLine } : {}),
 		...(pdf ? { pdf } : {}),
+		...(office ? { office } : {}),
 		...(comment !== undefined ? { comment } : {}),
 	};
 }
@@ -137,9 +150,15 @@ function chatQuotePrompt(context: ChatQuoteContext): string {
 function fileQuotePrompt(context: FileQuoteContext): string {
 	const location = context.pdf
 		? ` PDF pages ${context.pdf.startPage}-${context.pdf.endPage}`
-		: context.startLine !== undefined && context.endLine !== undefined
-			? ` lines ${context.startLine}-${context.endLine}`
-			: "";
+		: context.office?.kind === "word"
+			? ` Word paragraph ${context.office.paragraphId + 1}`
+			: context.office?.kind === "workbook"
+				? ` sheet ${context.office.sheet}, cells ${context.office.startCell}:${context.office.endCell}`
+				: context.office?.kind === "presentation"
+					? ` slide ${context.office.slide}, shape ${context.office.shapeId}`
+					: context.startLine !== undefined && context.endLine !== undefined
+						? ` lines ${context.startLine}-${context.endLine}`
+						: "";
 	const source = context.quote
 		? `Comment on this fragment of \`${context.path}\`${location}:\n> ${context.quote.split("\n").join("\n> ")}`
 		: `Workspace file reference: \`${context.path}\``;
@@ -186,6 +205,13 @@ export function browserAnnotationTargetCount(context: BrowserAnnotationContext):
 
 export function displayContextQuote(context: DisplayContext): string {
 	return context.kind === "browser-annotation" ? context.prompt : context.quote;
+}
+
+/** Compact, locale-neutral source coordinates for quote cards and transcripts. */
+export function officeQuoteLocation(anchor: NonNullable<FileQuoteContext["office"]>): string {
+	if (anchor.kind === "word") return `P${anchor.paragraphId + 1}`;
+	if (anchor.kind === "workbook") return `${anchor.sheet} · ${anchor.startCell}:${anchor.endCell}`;
+	return `S${anchor.slide} · #${anchor.shapeId}`;
 }
 
 export function textWithoutDisplayContext(text: string, value: MessageDisplayContext | undefined): string {

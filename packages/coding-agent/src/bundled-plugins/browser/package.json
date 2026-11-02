@@ -1,0 +1,25 @@
+{
+	"name": "musepi-browser",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "浏览器",
+		"description": "脚本化 Chromium 自动化与应用内浏览器桥接。",
+		"icon": "🌐",
+		"extensions": ["./index.ts"],
+		"components": [
+			{ "id": "launch", "entry": "./launch.ts", "description": "启动托管浏览器。" },
+			{ "id": "attach", "entry": "./attach.ts", "description": "连接已有浏览器。" },
+			{ "id": "gui", "entry": "./gui.ts", "description": "应用内浏览器界面。" }
+		],
+		"config": [
+			{ "key": "browser.headless", "type": "boolean", "default": true, "restart": "none", "label": "无界面模式", "description": "后台运行自动化浏览器。" },
+			{ "key": "browser.cdpUrl", "type": "string", "default": "", "restart": "none", "label": "CDP 地址", "description": "连接已有 Chromium 调试端点；留空时使用默认启动方式。" }
+		],
+		"host": {
+			"configStorage": "settings"
+		}
+	}
+}

@@ -21,7 +21,7 @@ import {
 	type DisplayContext,
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
-import type { PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
+import type { OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
@@ -1032,6 +1032,7 @@ export function ChatView({
 				ev as CustomEvent<{
 					path?: string;
 					pdf?: PdfQuoteAnchor;
+					office?: OfficeQuoteAnchor;
 					quote?: string;
 					line?: number;
 					column?: number;
@@ -1052,6 +1053,7 @@ export function ChatView({
 				path,
 				nonce: (prev?.nonce ?? 0) + 1,
 				...(detail.pdf ? { pdf: detail.pdf } : {}),
+				...(detail.office ? { office: detail.office } : {}),
 				...(detail.quote ? { quote: detail.quote } : {}),
 				...(line ? { line, ...(column ? { column } : {}) } : {}),
 				...(detail.pin === true ? { pin: true } : {}),

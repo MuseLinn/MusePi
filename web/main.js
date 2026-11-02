@@ -230,6 +230,34 @@
       .catch(function () {});
   }
 
+  /* ---------- 0.7.0 能力浏览：鼠标与方向键共用同一激活路径 ---------- */
+  var releaseTabs = Array.prototype.slice.call(document.querySelectorAll(".mp-release-tab"));
+  function activateReleaseTab(tab, moveFocus) {
+    if (!tab) return;
+    releaseTabs.forEach(function (candidate) {
+      var active = candidate === tab;
+      candidate.classList.toggle("is-active", active);
+      candidate.setAttribute("aria-selected", active ? "true" : "false");
+      candidate.tabIndex = active ? 0 : -1;
+      var panel = document.getElementById(candidate.getAttribute("aria-controls"));
+      if (panel) panel.hidden = !active;
+    });
+    if (moveFocus) tab.focus();
+  }
+  releaseTabs.forEach(function (tab, index) {
+    tab.addEventListener("click", function () { activateReleaseTab(tab, false); });
+    tab.addEventListener("keydown", function (event) {
+      var next = index;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % releaseTabs.length;
+      else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + releaseTabs.length) % releaseTabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = releaseTabs.length - 1;
+      else return;
+      event.preventDefault();
+      activateReleaseTab(releaseTabs[next], true);
+    });
+  });
+
   /* ---------- 滚动定位高亮（scroll-spy） ---------- */
   var navLinks = Array.prototype.slice.call(document.querySelectorAll(".mp-nav-link"));
   var linkById = {};
@@ -237,7 +265,7 @@
     var id = a.getAttribute("href").slice(1);
     linkById[id] = a;
   });
-  var spySections = ["preview", "features", "momentum", "pricing", "faq"]
+  var spySections = ["preview", "release", "momentum", "pricing", "faq"]
     .map(function (id) { return document.getElementById(id); })
     .filter(Boolean);
 

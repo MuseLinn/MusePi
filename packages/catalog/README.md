@@ -35,7 +35,7 @@ To change an entry, fix the source: resolver overrides in `provider-models/opena
 bun add @musepi/pi-catalog
 ```
 
-Ships TypeScript source directly (no build step); requires Bun ≥ 1.3.14.
+Ships TypeScript source directly (no build step); requires Bun ≥ 1.4.4.
 
 ## References
 

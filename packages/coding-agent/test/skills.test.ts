@@ -487,9 +487,13 @@ description: Skill loaded from a tilde-expanded custom directory.
 		}
 	});
 
-	it("only returns native managed skills when third-party sources are disabled and no custom dirs exist", async () => {
+	it("only returns first-party managed and plugin skills when third-party sources are disabled", async () => {
 		const { skills } = await loadSkills({ ...DISABLE_ALL_BUILTIN_SKILLS });
-		expect(skills.every(skill => skill.source.startsWith("musepi-managed:"))).toBe(true);
+		expect(
+			skills.every(
+				skill => skill.source.startsWith("musepi-managed:") || skill.source.startsWith("musepi-plugins:"),
+			),
+		).toBe(true);
 	});
 
 	it("should filter skills with includeSkills glob patterns", async () => {

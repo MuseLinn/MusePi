@@ -201,6 +201,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 		rpcs: new Map(),
 		webRoutes: [],
 		skills: [],
+		subagents: new Map(),
 		toolViews: [],
 		notificationChannels: [],
 		services: [],

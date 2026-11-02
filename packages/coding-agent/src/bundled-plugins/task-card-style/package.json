@@ -1,0 +1,13 @@
+{
+	"name": "musepi-task-card-style",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Swarm 任务卡片",
+		"description": "多代理任务卡片的成员网格、头像、进度条与可展开输出。",
+		"icon": "🐝",
+		"extensions": ["./index.ts"]
+	}
+}

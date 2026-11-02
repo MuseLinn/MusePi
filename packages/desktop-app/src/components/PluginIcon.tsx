@@ -29,8 +29,6 @@ const GLYPH_BY_KIND: Record<string, string> = {
 	shell: "🖥",
 	terminal: "🐚",
 	voice: "🎙",
-	"voice:stt": "🎙",
-	"voice:tts": "🔊",
 	browser: "🌐",
 	file: "📁",
 	computer: "💻",

@@ -10,7 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { ModeDefinition } from "../src/presets/resolve";
-import { resolveMode, validateMode } from "../src/presets/resolve";
+import { BUILTIN_MODE_TEMPLATES, BUILTIN_TEMPLATE_REVISION, resolveMode, validateMode } from "../src/presets/resolve";
 
 /** Validate one definition with no inheritance involved. */
 function problemsOf(def: ModeDefinition): string[] {
@@ -122,5 +122,14 @@ describe("plugin rows", () => {
 		// A disabled row stays in the composition: it is how a child preset turns
 		// off one of its parent's plugins, and the UI must still show it.
 		expect(problemsOf({ id: "p", plugins: [{ name: "a", enabled: false }] })).toEqual([]);
+	});
+});
+
+describe("built-in preset plugin composition", () => {
+	test("design and creator explicitly own product skills while chat stays minimal", () => {
+		expect(BUILTIN_MODE_TEMPLATES.design?.plugins).toEqual([{ name: "musepi-product-skills" }]);
+		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toEqual([{ name: "musepi-product-skills" }]);
+		expect(BUILTIN_MODE_TEMPLATES.chat?.plugins ?? []).toEqual([]);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(8);
 	});
 });

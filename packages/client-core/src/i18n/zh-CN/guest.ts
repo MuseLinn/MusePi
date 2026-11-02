@@ -45,6 +45,7 @@ export const guest = {
 	"guest.selectFilePreview": "选择文件以查看预览",
 	"guest.previewTruncatedWithSize": "预览已截断（仅显示前 {size} 字节）",
 	"guest.cannotPreviewFile": "无法预览该文件",
+	"guest.officeSlides": "幻灯片",
 	"guest.fileDeleted": "文件已删除",
 	"guest.deleteFileWithName.info": "删除文件 {name}？",
 	"guest.newFileName": "新文件名",

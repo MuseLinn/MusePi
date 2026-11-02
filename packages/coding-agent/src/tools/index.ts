@@ -10,6 +10,7 @@ import { EditTool } from "../edit";
 import { checkJuliaKernelAvailability } from "../eval/jl/kernel";
 import { checkPythonKernelAvailability } from "../eval/py/kernel";
 import { checkRubyKernelAvailability } from "../eval/rb/kernel";
+import { isCapabilityActive } from "../extensibility/capability-activation";
 import type { ToolPathWithSource } from "../extensibility/custom-tools";
 import type { Skill } from "../extensibility/skills";
 import type { GoalModeState, GoalRuntime } from "../goals";
@@ -609,10 +610,8 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		// enabled gate or force-inclusion paths below.
 		const denylist = session.settings.get("tools.disabled");
 		if (Array.isArray(denylist) && (denylist as string[]).includes(name)) return false;
-		// File-backend component denylist (musepi:file plugin components): a
-		// tool whose backend family (read/write/search) is disabled never
-		// enters the slate — same explicit-intent contract as tools.disabled.
-		if (!isFileBackendToolAllowed(name, session.settings)) return false;
+		// An unloaded file-tools component removes its tool family from the slate.
+		if (!isFileBackendToolAllowed(name)) return false;
 		// Never in the default set. Explicitly activatable while goal.enabled and
 		// no goal record exists yet — /guided-goal enables it so the agent can
 		// finish the interview with `goal create`, which turns goal mode on. Once
@@ -623,7 +622,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			const goalState = session.getGoalModeState?.();
 			return goalState === undefined || goalState.enabled === true || goalState.goal.status === "dropped";
 		}
-		if (name === "lsp") return enableLsp && session.settings.get("lsp.enabled");
+		if (name === "lsp") return isCapabilityActive("tool", "lsp") && enableLsp && session.settings.get("lsp.enabled");
 		if (name === "bash") return session.settings.get("bash.enabled");
 		if (name === "eval") return allowEval;
 		if (name === "debug") return session.settings.get("debug.enabled");
@@ -648,7 +647,8 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "think") return externalThinkingActive;
 		if (name === "ask") return session.settings.get("ask.enabled");
 		if (name === "browser") return session.settings.get("browser.enabled");
-		if (name === "computer") return session.settings.get("computer.enabled");
+		if (name === "computer")
+			return isCapabilityActive("tool", "computer") && session.settings.get("computer.enabled");
 		if (name === "checkpoint" || name === "rewind")
 			return (
 				session.settings.get("checkpoint.enabled") &&

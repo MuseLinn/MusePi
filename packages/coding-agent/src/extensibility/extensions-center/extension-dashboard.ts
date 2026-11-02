@@ -32,13 +32,12 @@ import { bottomBorder, divider, row, topBorder } from "../../modes/components/ov
 import { getTabBarTheme } from "../../modes/shared";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
-import { componentDenyTarget, findBuiltinDef } from "./builtin-registry";
 import { ExtensionList } from "./extension-list";
 import { InspectorPanel } from "./inspector-panel";
 import {
-	applyBuiltinMirrorState,
 	applyDisabledExtensionsToState,
 	applyFilter,
+	applyPluginState,
 	createInitialState,
 	filterByProvider,
 	refreshState,
@@ -107,7 +106,7 @@ export class ExtensionDashboard implements Component {
 		const sm = this.settings ?? (await Settings.init());
 		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		this.#state = await createInitialState(this.cwd, disabledIds);
-		this.#state = this.#applyMirrorState(this.#state);
+		this.#state = this.#applyPluginState(this.#state);
 
 		const initialMaxVisible = Math.max(3, this.terminalHeight - 9);
 		this.#mainList = new ExtensionList(
@@ -266,22 +265,17 @@ export class ExtensionDashboard implements Component {
 		this.onRequestRender?.();
 	}
 
-	/** 组件开关(dsh 插件详情段 parity):写对应隐藏黑名单设置键,与 daemon
-	 *  extensions.setComponentEnabled 同一映射(componentDenyTarget),下个
-	 *  会话/工具集装配即消费。写完原地重解析镜像+组件状态,不整表重载。 */
 	#handleComponentToggle(extensionId: string, componentId: string, enabled: boolean): void {
 		const sm = this.settings ?? Settings.instance;
-		const def = findBuiltinDef(extensionId);
-		const declared = def?.components?.find(c => c.id === componentId);
-		if (!sm || !declared) return;
-		const target = componentDenyTarget(declared.deny, componentId);
-		const denylist = [...((sm.get(target.key) as string[] | undefined) ?? [])];
-		const i = denylist.indexOf(target.id);
+		if (!sm) return;
+		const key = `${extensionId}/${componentId}`;
+		const denylist = [...((sm.get("disabledExtensionComponents") as string[] | undefined) ?? [])];
+		const i = denylist.indexOf(key);
 		if (enabled && i >= 0) denylist.splice(i, 1);
-		if (!enabled && i < 0) denylist.push(target.id);
-		sm.set(target.key as Parameters<Settings["set"]>[0], denylist as never);
+		if (!enabled && i < 0) denylist.push(key);
+		sm.set("disabledExtensionComponents", denylist);
 		void sm.flush();
-		this.#state = this.#applyMirrorState(this.#state);
+		this.#state = this.#applyPluginState(this.#state);
 		this.#mainList.setExtensions(this.#state.searchFiltered);
 		if (this.#state.selected) this.#inspector.setExtension(this.#state.selected);
 		this.onRequestRender?.();
@@ -296,24 +290,7 @@ export class ExtensionDashboard implements Component {
 		const sm = this.settings ?? Settings.instance;
 		if (!sm) return;
 
-		// Settings-mirrored builtins (style/shell/magic keywords): the setting
-		// IS the source of truth — toggle writes the mirrored key instead of
-		// the disabledExtensions list (daemon extensions.setEnabled parity).
-		const mirrorDef = findBuiltinDef(extensionId)?.settingsMirror;
-		if (mirrorDef) {
-			sm.set(mirrorDef.key as Parameters<Settings["set"]>[0], (enabled ? mirrorDef.on : mirrorDef.off) as never);
-			void sm.flush();
-			// Immediate feedback: re-resolve mirror state in place (no full reload).
-			this.#state = this.#applyMirrorState(this.#state);
-			this.#mainList.setExtensions(this.#state.searchFiltered);
-			if (this.#state.selected) this.#inspector.setExtension(this.#state.selected);
-			this.onRequestRender?.();
-			return;
-		}
-
-		// MCP toggles route through the canonical denylist in
-		// `~/.musepi/agent/mcp.json` so `/mcp list`, the MCP runtime, and this
-		// dashboard agree on every server's enabled state (issue #3827).
+		// MCP enablement belongs to mcp.json, not the package list.
 		if (extensionId.startsWith("mcp:")) {
 			void this.#toggleMcpExtension(extensionId, enabled, sm);
 			return;
@@ -337,11 +314,10 @@ export class ExtensionDashboard implements Component {
 		void this.#refreshFromState();
 	}
 
-	/** Re-resolve settings-mirrored builtin state from the Settings instance. */
-	#applyMirrorState(state: DashboardState): DashboardState {
+	#applyPluginState(state: DashboardState): DashboardState {
 		const sm = this.settings ?? Settings.instance;
 		if (!sm) return state;
-		return applyBuiltinMirrorState(state, key => sm.getRaw(key));
+		return applyPluginState(state, key => sm.getRaw(key));
 	}
 
 	async #toggleMcpExtension(extensionId: string, enabled: boolean, sm: Settings): Promise<void> {
@@ -389,7 +365,7 @@ export class ExtensionDashboard implements Component {
 		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		const nextState = await refreshState(this.#state, this.cwd, disabledIds);
 		if (refreshToken !== this.#refreshToken) return;
-		this.#state = this.#applyMirrorState(nextState);
+		this.#state = this.#applyPluginState(nextState);
 
 		// Re-anchor on the same tab id in the (re-sorted) list.
 		if (currentTabId) {

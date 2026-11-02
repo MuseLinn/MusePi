@@ -560,6 +560,12 @@ export class CordisDynamicPluginRuntime {
 		this.#host = host;
 	}
 
+	/** Publish a host-owned service to plugin components. Unlike a plugin-provided
+	 * service, this object survives plugin unload; component registrations on it do not. */
+	provideHostService(name: string, service: unknown): void {
+		this.#providedServices.set(name, { owner: "host", service });
+	}
+
 	/**
 	 * The `inject` resolution surface for mounts in progress.
 	 *
@@ -810,7 +816,7 @@ export class CordisDynamicPluginRuntime {
 					readConfig: async entryPath => {
 						const meta = await readExtensionPluginMeta(entryPath);
 						const store = await readPluginConfigStore();
-						const id = `extension-module:${getExtensionNameFromPath(entryPath)}`;
+						const id = getExtensionNameFromPath(entryPath);
 						return {
 							fields: meta?.fields ?? [],
 							values: coerceConfigValues(meta?.fields ?? [], store[id]),
@@ -921,6 +927,7 @@ export class CordisDynamicPluginRuntime {
 					eventBus: this.#eventBus,
 					runtime: await this.#sharedRuntime(),
 					fresh,
+					serviceRegistry: this.#serviceRegistry(),
 					wrapApi: (api, extension) => this.#ledgerApi(owner, api, extension, cctx),
 					readConfig: async entryPath => {
 						const { readPluginConfigStore } = await import(
@@ -930,7 +937,7 @@ export class CordisDynamicPluginRuntime {
 						const { readExtensionPluginMeta } = await import("../extensibility/extensions/plugin-manifest");
 						const meta = await readExtensionPluginMeta(entryPath);
 						const store = await readPluginConfigStore();
-						const id = `extension-module:${getExtensionNameFromPath(entryPath)}`;
+						const id = getExtensionNameFromPath(entryPath);
 						const fields = meta?.fields ?? [];
 						return { fields, values: coerceConfigValues(fields, store[id]) };
 					},
@@ -992,6 +999,10 @@ export class CordisDynamicPluginRuntime {
 		if (component.status !== "active") return;
 		if (component.fiber) {
 			await component.fiber.dispose().catch(() => {});
+		}
+		if (component.extension) {
+			const { disposePluginPrimitives } = await import("../extensibility/plugins/runtime/cordis-primitives");
+			await disposePluginPrimitives(component.extension);
 		}
 		component.status = "disabled";
 		component.fiber = undefined;

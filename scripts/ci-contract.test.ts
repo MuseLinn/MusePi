@@ -44,6 +44,23 @@ describe("CI runtime and delivery contracts", () => {
 		}
 	});
 
+	it("keys Bun dependency caches by the resolved runtime and lockfile", () => {
+		const files = fs
+			.readdirSync(path.join(repoRoot, ".github"), { recursive: true, withFileTypes: true })
+			.filter(entry => entry.isFile() && entry.name.endsWith(".yml"))
+			.map(entry => path.relative(repoRoot, path.join(entry.parentPath, entry.name)).replaceAll(path.sep, "/"));
+		const cacheSteps = files.flatMap(file =>
+			allSteps(readYaml(file))
+				.filter(step => typeof step.with?.key === "string" && step.with.key.startsWith("bun-"))
+				.map(step => ({ file, key: step.with?.key as string })),
+		);
+		expect(cacheSteps.length).toBeGreaterThan(0);
+		for (const { file, key } of cacheSteps) {
+			expect(key, file).toContain("steps.bun.outputs.bun-version");
+			expect(key, file).toContain("hashFiles('**/bun.lock')");
+		}
+	});
+
 	it("includes the desktop suite in the Linux CI workspace bucket", () => {
 		const result = Bun.spawnSync(["bun", "scripts/ci-test-ts.ts", "workspace", "--dry-run"], {
 			cwd: repoRoot,

@@ -33,6 +33,8 @@ export interface TerminalServiceDeps {
 	): void;
 	/** 解析设置（宿主 #settingsForRpc；解析失败返回 null，原语义）。 */
 	settings(): Promise<Settings | null>;
+	/** Load provider component fibers before resolving a backend. */
+	prepare?(): Promise<void>;
 }
 
 /** 构造选项（收编第三刀）：backend 注册表注入点——宿主把
@@ -75,6 +77,7 @@ export class TerminalService implements DaemonService {
 	 *  node pty-bridge 子进程。shell/env 处理对齐 opencode：$SHELL →
 	 *  平台默认，bash/zsh/sh/dash/ksh 登录 shell，TERM/COLORTERM 强制。 */
 	async open(params: { cwd?: string; cols?: number; rows?: number }, conn: unknown): Promise<{ id: string }> {
+		await this.#deps.prepare?.();
 		const p = params ?? {};
 		const path = await import("node:path");
 		const fs = await import("node:fs");
@@ -128,9 +131,7 @@ export class TerminalService implements DaemonService {
 		}
 
 		// Resolve provider from manifest seam > settings.raw > default "auto".
-		const { getTerminalProvider, readDisabledTerminalBackends, resolveTerminalProvider } = await import(
-			"../terminal-provider.ts"
-		);
+		const { getTerminalProvider, resolveTerminalProvider } = await import("../terminal-provider.ts");
 		const settings = await this.#deps.settings().catch(() => null);
 		const manifestProvider = await (async () => {
 			try {
@@ -140,13 +141,9 @@ export class TerminalService implements DaemonService {
 				return null;
 			}
 		})();
-		const disabledBackends = settings
-			? readDisabledTerminalBackends({ get: (key: string) => settings.getRaw(key) })
-			: new Set<string>();
 		const provider = getTerminalProvider(
 			resolveTerminalProvider(settings ?? ({ getRaw: () => undefined } as never), manifestProvider),
 			this.#registry,
-			disabledBackends,
 		);
 
 		// Wrap the provider handle to emit daemon events.

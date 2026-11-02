@@ -2707,6 +2707,7 @@ export const settings = {
 		"Instruct upstream providers to completely omit thinking summaries from responses (where supported)",
 	"Intent Tracing": "意图追踪",
 	Interaction: "交互",
+	Voice: "语音",
 	"Interface Language": "界面语言",
 	"Interrupt Mode": "中断模式",
 	"Interrupt on prose and tool streams": "在文本和工具流上中断",

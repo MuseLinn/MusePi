@@ -168,7 +168,7 @@ async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extens
 	return extension;
 }
 
-async function compileComponentModule(componentPath: string): Promise<{ code: string; css?: string }> {
+export async function compileComponentModule(componentPath: string): Promise<{ code: string; css?: string }> {
 	let mtimeMs: number | undefined;
 	try {
 		mtimeMs = (await Bun.file(componentPath).stat()).mtimeMs;
@@ -215,6 +215,12 @@ async function compileComponentModule(componentPath: string): Promise<{ code: st
 	if (cssOutput) {
 		const text = await cssOutput.text();
 		if (text.trim().length > 0) css = text;
+	}
+	// Release-staged components are already bundled JavaScript. Their extracted
+	// companion stylesheet must survive the second, no-op compilation pass.
+	if (!css && componentPath.endsWith(".js")) {
+		const companion = componentPath.replace(/\.js$/, ".css");
+		if (await Bun.file(companion).exists()) css = await Bun.file(companion).text();
 	}
 	if (mtimeMs !== undefined) compileCache.set(componentPath, { mtimeMs, code, css });
 	return { code, css };

@@ -164,7 +164,7 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 		// Managed skills (auto-learn) are OMP-native and discovered unconditionally
 		// — third-party CLI toggles must never silently hide them (cf. #2401). The
 		// master `enabled` flag above still gates them.
-		if (provider === MANAGED_SKILLS_PROVIDER_ID) return true;
+		if (provider === MANAGED_SKILLS_PROVIDER_ID || provider === "musepi-plugins") return true;
 		if (provider === "codex" && level === "user") return enableCodexUser;
 		if (provider === "claude" && level === "user") return enableClaudeUser;
 		if (provider === "claude" && level === "project") return enableClaudeProject;

@@ -8,6 +8,8 @@
  */
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+// @ts-expect-error — shared untyped Electron updater logic.
+import { isNewerVersion } from "../../electron/update-logic.cjs";
 import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
@@ -170,7 +172,7 @@ export function InstanceButton({
 						<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">{daemonUrl}</div>
 					</div>
 					<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
-					{latestVersion && daemonVersion && latestVersion !== daemonVersion && (
+					{latestVersion && daemonVersion && isNewerVersion(latestVersion, daemonVersion) && (
 						<span
 							className="gui-update-badge"
 							title={t("general.updateAvailable", {

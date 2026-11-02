@@ -3,7 +3,7 @@
 //
 // Registers the `display.taskCardStyle` setting via registerSetting so it
 // appears in the settings panel ONLY while this extension is loaded
-// (extension center: style:task-card-swarm). The setting gates:
+// (extension center: task-card-style). The setting gates:
 //   - TUI: a Kimi-style braille member grid painted above the editor while
 //     a `task` call runs — per-agent braille progress bars, phase symbols
 //     and a segmented status line. Ported from the pi-muselinn-harness

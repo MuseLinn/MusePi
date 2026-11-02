@@ -152,6 +152,7 @@ export type SettingTab =
 	| "appearance"
 	| "model"
 	| "interaction"
+	| "voice"
 	| "context"
 	| "memory"
 	| "files"
@@ -169,6 +170,7 @@ export const SETTING_TABS: SettingTab[] = [
 	"appearance",
 	"model",
 	"interaction",
+	"voice",
 	"context",
 	"memory",
 	"files",
@@ -184,6 +186,7 @@ export const TAB_METADATA: Record<SettingTab, { label: string; icon: `tab.${stri
 	appearance: { label: "Appearance", icon: "tab.appearance" },
 	model: { label: "Model", icon: "tab.model" },
 	interaction: { label: "Interaction", icon: "tab.interaction" },
+	voice: { label: "Voice", icon: "tab.voice" },
 	context: { label: "Context", icon: "tab.context" },
 	memory: { label: "Memory", icon: "tab.memory" },
 	files: { label: "Files", icon: "tab.files" },
@@ -206,7 +209,6 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Input",
 		"Approvals",
 		"Notifications",
-		"Speech",
 		"Collab",
 		"Magic Keywords",
 		"Startup & Updates",
@@ -214,6 +216,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Language",
 		"Git",
 	],
+	voice: ["Speech"],
 	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
 	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
@@ -691,45 +694,13 @@ export const SETTINGS_SCHEMA = {
 	 *  一个私有源不会因为公网镜像更快而跳过——私有包名不能发给公有索引。 */
 	pluginRegistryFallbacks: { type: "array", default: EMPTY_STRING_ARRAY },
 
-	/** 工具级黑名单（插件「包含的组件」开关写入此处）：名单内的工具
-	 *  无论自身 enabled 门如何都不进 agent 工具集。与单元总开关正交——
-	 *  dsh 组件级禁用的我方落地（browser/computer/lsp 等子系统的组件
-	 *  开关即写这个名单）。隐藏设置键：由插件管理页消费，不直接展示。 */
+	/** Individual tools excluded from the agent tool set. This tool-level
+	 *  filter is separate from Cordis package/component lifecycle. */
 	"tools.disabled": { type: "array", default: EMPTY_STRING_ARRAY },
 
-	/** 语音引擎级黑名单（插件「包含的组件」开关写入此处）：名单内的
-	 *  STT/TTS 引擎从模型状态列表、下载入口与实际合成/转写路径中消失。
-	 *  组件 id 形如 "stt:whisper" / "tts:kokoro"。隐藏设置键。 */
-	"voice.disabledEngines": { type: "array", default: EMPTY_STRING_ARRAY },
-
-	/** 终端后端级黑名单（插件「包含的组件」开关写入此处）：名单内的
-	 *  provider（bun-pty / node-pty）从 auto 回退顺序与显式解析中移除——
-	 *  auto 跳过后备，显式选中被禁后端给结构化 DISABLED_BACKEND。
-	 *  terminal-provider.ts 是唯一读取方。隐藏设置键。 */
-	"terminal.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
-
-	/** 浏览器后端级黑名单（插件「包含的组件」开关写入此处）：名单内的
-	 *  后端组件（launch = 脚本启动 / attach = 接管已有浏览器（CDP/relay/
-	 *  cmux/spawn）/ gui = 托管面板桥）从 browser 工具解析链剔除——设置
-	 *  链回退跳过被禁环节，显式 app 参数指向被禁后端给结构化
-	 *  DISABLED_BACKEND，全禁 = NO_BACKEND。tools/browser.ts 是读取方。
-	 *  隐藏设置键。 */
-	"browser.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
-
-	/** 文件后端级黑名单（插件「包含的组件」开关写入此处）：名单内的后端
-	 *  组件（read = 读取工具族 / write = 写入编辑工具族 / search = 检索工
-	 *  具族 / index = 工作区内容索引扫描）——read/write/search 被禁后对应
-	 *  工具不再进入会话工具集（tools/file-backend.ts 谓词消费），index
-	 *  被禁后 daemon 停止后台扫描（server.ts index.scan 门消费；已有 FTS
-	 *  数据的查询面仍由 index.setEnabled 总开关治理）。隐藏设置键。 */
-	"file.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
-
-	/** user 插件清单组件黑名单（dsh `- insert:` 子插件 parity）：复合键
-	 *  `<plugin>/<component>`（extensions.setComponentEnabled 写入），宿主
-	 *  级 fiber 装载 reconcile 时跳过命中组件——entry 组件停用 = 不挂
-	 *  组件子 fiber（启用 = 独立子 fiber,独立效果账本/检视/热重载）。
-	 *  隐藏设置键。无点号命名：点号键会被 Settings 当嵌套路径，与既有
-	 *  的 dotless `extensions` 数组键（line 609）冲突后宿主扩展装载即崩。 */
+	/** Cordis component enablement for bundled and external plugins. Each
+	 *  entry is `<package>/<component>`; the runtime unloads matching entry
+	 *  fibers and their effects. The dotless key avoids Settings path nesting. */
 	disabledExtensionComponents: { type: "array", default: EMPTY_STRING_ARRAY },
 
 	modelRoleStorage: {
@@ -2619,7 +2590,7 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speech-to-Text",
 			description: "Enable speech-to-text input via microphone",
@@ -2634,7 +2605,7 @@ export const SETTINGS_SCHEMA = {
 		// (stt-controller: `language || undefined`; GUI trims and passes).
 		default: "",
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speech Language Hint",
 			description:
@@ -2646,7 +2617,7 @@ export const SETTINGS_SCHEMA = {
 		type: "number",
 		default: 700,
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Silence threshold (ms)",
 			description: "How long of a pause counts as the end of dictation.",
@@ -2659,7 +2630,7 @@ export const SETTINGS_SCHEMA = {
 		values: STT_MODEL_VALUES,
 		default: DEFAULT_STT_MODEL_KEY,
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speech Model",
 			description:
@@ -2673,7 +2644,7 @@ export const SETTINGS_SCHEMA = {
 		values: ["off", "prefer", "strict"],
 		default: "off",
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speaker Verification",
 			description:
@@ -2694,7 +2665,7 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speech Enhancement",
 			description: "Apply local DPDFNet noise suppression before speaker verification and transcription.",
@@ -2706,7 +2677,7 @@ export const SETTINGS_SCHEMA = {
 		values: STT_SUBMIT_TRIGGER_VALUES,
 		default: "never",
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speech-to-Text Submit Trigger",
 			description:
@@ -5793,8 +5764,8 @@ export const SETTINGS_SCHEMA = {
 		values: LIVE_VOICE_VALUES,
 		default: DEFAULT_LIVE_VOICE,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Live Voice",
 			description: "Voice used by Codex-backed realtime voice sessions",
 			options: LIVE_VOICE_OPTIONS,
@@ -5805,8 +5776,8 @@ export const SETTINGS_SCHEMA = {
 		values: ["auto", "local", "xai"] as const,
 		default: "auto",
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Text-to-Speech Provider",
 			description: "Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice",
 			options: [
@@ -5833,8 +5804,8 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_MODEL_VALUES,
 		default: DEFAULT_TTS_LOCAL_MODEL_KEY,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Local TTS Model",
 			description:
 				"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend",
@@ -5847,8 +5818,8 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_VOICE_VALUES,
 		default: DEFAULT_TTS_VOICE,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Local TTS Voice",
 			description:
 				"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)",
@@ -5860,7 +5831,7 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Auto-read new replies",
 			description: "Automatically read aloud new assistant replies via the local TTS engine",
@@ -5871,7 +5842,7 @@ export const SETTINGS_SCHEMA = {
 		type: "number",
 		default: 1,
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Speech rate (0.5–2)",
 			description: "Playback rate for local TTS — 0.8× is common for reading aloud.",
@@ -5883,7 +5854,7 @@ export const SETTINGS_SCHEMA = {
 		values: ["raw", "sanitize", "summarize"],
 		default: "sanitize",
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Read content",
 			description:
@@ -5896,7 +5867,7 @@ export const SETTINGS_SCHEMA = {
 		values: ["duck", "pause"],
 		default: "duck",
 		ui: {
-			tab: "interaction",
+			tab: "voice",
 			group: "Speech",
 			label: "Dictation barge-in",
 			description: "What happens to playback when dictation starts: duck (drop volume) or pause.",
@@ -5909,8 +5880,8 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Speech Vocalization",
 			description: "Speak the assistant's output aloud through the speakers as it streams",
 		},
@@ -5920,8 +5891,8 @@ export const SETTINGS_SCHEMA = {
 		values: ["all", "assistant", "yield"] as const,
 		default: "assistant",
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Speech Vocalization Mode",
 			description:
 				"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end",
@@ -5937,8 +5908,8 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Enhanced Speech Rewriting",
 			description:
 				"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
@@ -5950,8 +5921,8 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_VOICE_VALUES,
 		default: DEFAULT_TTS_VOICE,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech",
 			label: "Speech Vocalization Voice",
 			description: "Kokoro voice used when speaking the assistant's output aloud",
 			options: TTS_LOCAL_VOICE_OPTIONS,

@@ -12,6 +12,7 @@
  * @module desktop-app/lib/builtin-file-viewers
  */
 import { type FileViewer, VIEWER_PRIORITY, type ViewerInput, type ViewerResult } from "./file-viewers";
+import { readPresentationDraft, readWordDraft, readWorkbookDraft } from "./office-documents";
 
 /**
  * Files whose bytes are decoded as text when the mime does not say so.
@@ -204,15 +205,24 @@ function pdfViewer(): FileViewer {
 	};
 }
 
-function docxViewer(): FileViewer {
+function officeViewer(): FileViewer {
 	return {
-		id: "docx",
+		id: "office",
 		priority: VIEWER_PRIORITY.builtin,
-		matches: input => input.ext === "docx",
-		render: async (input: ViewerInput) => ({
-			kind: "docx",
-			bytes: input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength),
-		}),
+		matches: input => input.ext === "docx" || input.ext === "xlsx" || input.ext === "pptx",
+		render: async (input: ViewerInput) => {
+			try {
+				const draft =
+					input.ext === "docx"
+						? readWordDraft(input.bytes)
+						: input.ext === "xlsx"
+							? readWorkbookDraft(input.bytes)
+							: readPresentationDraft(input.bytes);
+				return { kind: "office", bytes: input.bytes, draft };
+			} catch {
+				return undefined;
+			}
+		},
 	};
 }
 
@@ -220,7 +230,7 @@ function sheetsViewer(deps: BuiltinViewerDeps): FileViewer {
 	return {
 		id: "sheets",
 		priority: VIEWER_PRIORITY.builtin,
-		matches: input => input.ext === "xlsx" || input.ext === "xls" || input.ext === "csv" || input.ext === "tsv",
+		matches: input => input.ext === "xls" || input.ext === "csv" || input.ext === "tsv",
 		render: async (input: ViewerInput) => {
 			if (!deps.buildSheets) return undefined;
 			const sheets = deps.buildSheets(input.bytes);
@@ -308,11 +318,11 @@ function mermaidViewer(): FileViewer {
 export function builtinFileViewers(deps: BuiltinViewerDeps): FileViewer[] {
 	return [
 		mermaidViewer(),
+		officeViewer(),
 		sheetsViewer(deps),
 		plainTextViewer(deps),
 		imageViewer(),
 		pdfViewer(),
-		docxViewer(),
 		mediaViewer(),
 		fontViewer(),
 	];

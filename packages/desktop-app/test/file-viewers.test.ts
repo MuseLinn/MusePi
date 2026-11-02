@@ -1,3 +1,5 @@
+import "./happy-dom-shim"; // MUST be first: Office modules define HTMLElement subclasses at evaluation time.
+
 /**
  * The viewer registry, and the built-in viewers that moved into it.
  *

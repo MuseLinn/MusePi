@@ -45,7 +45,6 @@ import type { Surface } from "./assembly/types.ts";
 import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
-import { BUNDLED_SKILLS } from "./bundled-skills/index.ts";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
 import { bucketRules } from "./capability/rule-buckets";
@@ -71,7 +70,6 @@ import { buildServiceTierByFamily } from "./config/service-tier";
 import { Settings, type SkillsSettings } from "./config/settings";
 import { CursorExecHandlers, type CursorMcpResourceAdapter } from "./cursor";
 import { createBridgeEditTool, createBridgeGrepFactory } from "./cursor-bridge-tools";
-import { createTaskCardStyleExtension } from "./musepi/swarm/task-card-style";
 import { type CollabToolHandle, collabTool } from "./tools/collab";
 import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-task";
 import "./discovery";
@@ -904,8 +902,8 @@ export async function discoverSkills(
 	_agentDir?: string,
 	settings?: SkillsSettings,
 ): Promise<{ skills: Skill[]; warnings: SkillWarning[] }> {
-	// MusePi-internal bundled skills live in <agentDir>/skills, scanned by
-	// the native provider (builtin.ts) — a private dir other CLIs never read.
+	// First-party file skills remain inside their Cordis packages; only user-authored
+	// skills are scanned from <agentDir>/skills by the native provider.
 	return await loadSkillsInternal({
 		...settings,
 		cwd: cwd ?? getProjectDir(),
@@ -1370,35 +1368,11 @@ export function createAutoLearnCaptureRunner(
  * });
  * ```
  */
-/**
- * Bundled product skills installed once into the user-level
- * `~/.musepi/agent/skills` (native provider — enabled by default, surfaced in
- * the settings → skills tab). Idempotent: an existing SKILL.md of the same
- * name is left untouched so user edits survive. `dir` (optional) copies a
- * multi-file skill package (data/scripts/references/…) from
- * src/bundled-skills/<dir> alongside the SKILL.md — missing files only, so
- * user-added files survive re-install. The manifest itself (names + content)
- * lives in `bundled-skills/index.ts`.
- */
+/** One-shot migration from the retired user-directory skill installer. */
 let bundledSkillsEnsured = false;
 
-/**
- * Directory for MusePi-internal bundled skills. Kept inside the MusePi
- * agentDir (NOT ~/.agents — the shared OMP ecosystem dir other CLIs scan),
- * so product-internal knowledge is only ever exposed to MusePi agents.
- */
 export function bundledSkillsDir(agentDir = getAgentDir()): string {
 	return path.join(agentDir, "skills");
-}
-
-/** Installed bundled skills (names present on disk). */
-export function installedBundledSkillNames(): string[] {
-	const dir = bundledSkillsDir();
-	try {
-		return fs.readdirSync(dir).filter(n => fs.existsSync(path.join(dir, n, "SKILL.md")));
-	} catch {
-		return [];
-	}
 }
 
 const BUNDLED_MANIFEST = ".bundled-manifest.json";
@@ -1412,7 +1386,15 @@ function hashSkillContent(content: string): string {
 	return String(h >>> 0);
 }
 
-const PLUGIN_OWNED_BUNDLED_SKILLS = ["android-emulator"] as const;
+const PLUGIN_OWNED_BUNDLED_SKILLS = [
+	"android-emulator",
+	"widget-design",
+	"musepi-help",
+	"musepi-extension-dev",
+	"ui-ux-pro-max",
+	"board-design",
+	"musepi-contributing",
+] as const;
 
 /** Remove only unedited legacy copies whose skill now belongs to a Cordis plugin. */
 export function migratePluginOwnedBundledSkills(skillsDir: string, manifest: Record<string, string>): boolean {
@@ -1447,46 +1429,7 @@ function writeBundledManifest(skillsDir: string, manifest: Record<string, string
 	try {
 		fs.writeFileSync(path.join(skillsDir, BUNDLED_MANIFEST), JSON.stringify(manifest, null, "\t"));
 	} catch {
-		// Manifest is best-effort; a failed write only degrades future
-		// update detection, never the installed skill files.
-	}
-}
-
-/** Recursively copy missing files of a bundled multi-file skill package. */
-function ensureBundledSkillFiles(skillsDir: string, dirName: string, skillName: string): void {
-	// Dev: src/bundled-skills/<dir> (sdk.ts sits in src/); bundled CLI:
-	// dist/bundled-skills/<dir> (bundle-dist copies the tree next to the
-	// entrypoint, so import.meta.dir = dist there).
-	const sourceRoot = path.resolve(import.meta.dir, "bundled-skills");
-	const source = path.join(sourceRoot, dirName);
-	if (!fs.existsSync(source)) return;
-	const target = path.join(skillsDir, skillName);
-	const stack: Array<{ from: string; to: string }> = [{ from: source, to: target }];
-	while (stack.length > 0) {
-		const { from, to } = stack.pop()!;
-		let entries: string[];
-		try {
-			entries = fs.readdirSync(from);
-		} catch {
-			continue;
-		}
-		for (const entry of entries) {
-			const fromPath = path.join(from, entry);
-			const toPath = path.join(to, entry);
-			let stat: fs.Stats;
-			try {
-				stat = fs.statSync(fromPath);
-			} catch {
-				continue;
-			}
-			if (stat.isDirectory()) {
-				fs.mkdirSync(toPath, { recursive: true });
-				stack.push({ from: fromPath, to: toPath });
-			} else if (!fs.existsSync(toPath)) {
-				fs.mkdirSync(path.dirname(toPath), { recursive: true });
-				fs.copyFileSync(fromPath, toPath);
-			}
-		}
+		// A failed manifest write only means migration will be retried next start.
 	}
 }
 
@@ -1495,59 +1438,7 @@ export function ensureBundledSkills(agentDir = getAgentDir()): void {
 	bundledSkillsEnsured = true;
 	const skillsDir = bundledSkillsDir(agentDir);
 	const manifest = readBundledManifest(skillsDir);
-	let manifestDirty = migratePluginOwnedBundledSkills(skillsDir, manifest);
-	for (const skill of BUNDLED_SKILLS) {
-		const dir = path.join(skillsDir, skill.name);
-		const target = path.join(dir, "SKILL.md");
-		const bundledHash = hashSkillContent(skill.content);
-		// Multi-file packages (ui-ux-pro-max: data/scripts/references): copy
-		// missing files from the bundled source next to the SKILL.md. Runs
-		// BEFORE the SKILL.md branch so first-install `continue` can't skip
-		// it. Missing files only — user-added files survive re-install.
-		const dirName = "dir" in skill ? skill.dir : undefined;
-		if (dirName) {
-			try {
-				ensureBundledSkillFiles(skillsDir, dirName, skill.name);
-			} catch (error) {
-				console.error(`[sdk] failed to install bundled skill files for ${skill.name}:`, error);
-			}
-		}
-		try {
-			if (!fs.existsSync(target)) {
-				fs.mkdirSync(dir, { recursive: true });
-				fs.writeFileSync(target, skill.content);
-				manifest[skill.name] = bundledHash;
-				manifestDirty = true;
-				continue;
-			}
-			const disk = fs.readFileSync(target, "utf8");
-			if (disk === skill.content) {
-				// Already the current bundled version (or the user restored it).
-				if (manifest[skill.name] !== bundledHash) {
-					manifest[skill.name] = bundledHash;
-					manifestDirty = true;
-				}
-				continue;
-			}
-			if (String(manifest[skill.name]) === String(hashSkillContent(disk))) {
-				// Disk holds the previously-seeded bundled version and was not
-				// edited since — roll it forward to the new bundled content.
-				fs.writeFileSync(target, skill.content);
-				manifest[skill.name] = bundledHash;
-				manifestDirty = true;
-				continue;
-			} // Disk differs from both the current and the previously-seeded
-			// bundled content: treat it as a user edit and keep it. Record the
-			// current bundled hash so a later bundled change doesn't retry.
-			if (manifest[skill.name] !== bundledHash) {
-				manifest[skill.name] = bundledHash;
-				manifestDirty = true;
-			}
-		} catch (error) {
-			console.error(`[sdk] failed to install bundled skill ${skill.name}:`, error);
-		}
-	}
-	if (manifestDirty) writeBundledManifest(skillsDir, manifest);
+	if (migratePluginOwnedBundledSkills(skillsDir, manifest)) writeBundledManifest(skillsDir, manifest);
 }
 
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
@@ -2408,10 +2299,6 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 
 			inlineExtensions.push(...(options.extensions ?? []));
 			inlineExtensions.push(createAutoresearchExtension);
-			// Swarm card style extension: registers display.taskCardStyle so
-			// the settings panel shows it only while loaded (extension center
-			// style:task-card-swarm maps to the same setting).
-			inlineExtensions.push(createTaskCardStyleExtension({ enabled: true }));
 			if (customTools.length > 0) {
 				inlineExtensions.push(createCustomToolsExtension(customTools));
 			}

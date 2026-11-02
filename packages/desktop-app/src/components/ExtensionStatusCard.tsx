@@ -22,7 +22,10 @@ export function ExtensionStatusCard({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [open, setOpen] = useState(false);
 	const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-	const items = useMemo(() => (data?.extensions ?? []).filter(e => e.id.startsWith("extension-module:")), [data]);
+	const items = useMemo(
+		() => (data?.extensions ?? []).filter(e => e.kind === "plugin-module" || e.kind === "extension-module"),
+		[data],
+	);
 	const running = items.filter(e => e.state === "active").length;
 
 	// Declared before the early return below: hook order must not depend on
@@ -53,7 +56,7 @@ export function ExtensionStatusCard({ rpc }: { rpc: RpcClient | null }): ReactNo
 			{renderMenu(
 				<div role="menu" aria-orientation="vertical">
 					{items.map(ext => {
-						const name = (ext.displayName || ext.name || ext.id).replace(/^extension-module:/, "");
+						const name = ext.displayName || ext.name || ext.id;
 						return (
 							<div
 								key={ext.id}

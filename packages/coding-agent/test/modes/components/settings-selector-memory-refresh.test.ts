@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
+import { SETTING_TABS } from "@musepi/pi-coding-agent/config/settings-schema";
 import { loadHindsightConfig } from "@musepi/pi-coding-agent/hindsight/config";
 import { SettingsSelectorComponent } from "@musepi/pi-coding-agent/modes/components/settings-selector";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
@@ -56,9 +57,9 @@ function createSelector(onCancel: () => void = () => {}): SettingsSelectorCompon
 	);
 }
 
-/** Switch the selector to the memory tab. SETTING_TABS puts memory at index 4 (after appearance/model/interaction/context). */
+/** Switch the selector to the memory tab without coupling navigation to unrelated tab insertions. */
 function focusMemoryTab(comp: SettingsSelectorComponent): void {
-	for (let i = 0; i < 4; i++) {
+	for (let i = 0; i < SETTING_TABS.indexOf("memory"); i++) {
 		comp.handleInput("\x1b[C");
 	}
 }

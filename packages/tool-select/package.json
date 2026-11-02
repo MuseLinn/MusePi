@@ -25,7 +25,7 @@
 		"fmt": "biome format --write ."
 	},
 	"engines": {
-		"bun": ">=1.3.14"
+		"bun": ">=1.4.4"
 	},
 	"files": [
 		"src",
@@ -43,6 +43,6 @@
 		}
 	},
 	"devDependencies": {
-		"@types/bun": "^1.3.14"
+		"@types/bun": "^1.4.4"
 	}
 }

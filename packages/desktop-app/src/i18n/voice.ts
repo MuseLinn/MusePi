@@ -36,7 +36,7 @@ const zhVoice = {
 	"voice test preview": "语音测试",
 	"Test dictation and read-aloud in the simulated conversation below: press the mic in the input and speak — the transcript lands as a user message; press the read-aloud button on the reply to hear voice output.":
 		"在下方模拟会话中测试：点击输入框上的麦克风说话，转写结果会作为用户消息出现在预览里；点击回复旁的朗读按钮试听语音输出。",
-	// ── 插件详情弹层（voice:stt / voice:tts 单元）字段与组件文案：键即
+	// ── 插件详情弹层（stt / tts 包）字段与组件文案：键即
 	//    builtin-registry 声明的英文原文/label,ConfigFormRenderer 与组件
 	//    段经 t() 解析,与设置页语音分区同一套译文。──
 	"Recognition model": "识别模型",

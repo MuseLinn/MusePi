@@ -22,7 +22,7 @@ import type { MemoryRuntimeContext } from "../../memory-backend";
 import { setExtensionThemeTokens, type Theme, theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
-import type { AgentDefinition, SubagentDefinition } from "../../task/types";
+import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { loadExtensions } from "./loader";
@@ -1605,44 +1605,28 @@ export class ExtensionRunner {
 		return this.#urlSchemes.releaseAll();
 	}
 
-	/**
-	 * Agent types registered through extension contexts on this runner.
-	 * Session-scoped like everything else here: registration is last-wins by
-	 * name (hot reload re-runs factories), and the map dies with the runner.
-	 * Resolution consults these before filesystem discovery (explicit code
-	 * beats discovered files).
-	 */
+	/** Direct registrations from an initialized extension context. */
 	readonly #subagents = new Map<string, AgentDefinition>();
 
-	/**
-	 * Register a subagent type for this session's task tool. Returns the
-	 * effective name. Re-registering a name replaces it.
-	 */
+	/** Register a subagent type for this session's task tool. */
 	registerSubagent(def: SubagentDefinition): { name: string } {
-		const name = typeof def?.name === "string" ? def.name.trim() : "";
-		if (name === "") throw new Error("registerSubagent requires a non-empty name");
-		if (typeof def.description !== "string" || def.description.trim() === "") {
-			throw new Error(`registerSubagent "${name}" requires a non-empty description`);
-		}
-		if (typeof def.systemPrompt !== "string" || def.systemPrompt.trim() === "") {
-			throw new Error(`registerSubagent "${name}" requires a non-empty systemPrompt`);
-		}
-		for (const key of ["tools", "model", "spawns"] as const) {
-			const value = def[key];
-			if (value !== undefined && !Array.isArray(value) && !(key === "spawns" && value === "*")) {
-				throw new Error(`registerSubagent "${name}" field "${key}" must be an array`);
-			}
-		}
-		this.#subagents.set(name, { ...def, name, source: "extension" });
-		return { name };
+		const agent = normalizeSubagentDefinition(def);
+		this.#subagents.set(agent.name, agent);
+		return { name: agent.name };
 	}
 
 	unregisterSubagent(name: string): boolean {
 		return this.#subagents.delete(name);
 	}
 
+	/** Read loader-owned registrations live so adopt, reload, and removal need no shadow registry. */
 	listRegisteredSubagents(): AgentDefinition[] {
-		return [...this.#subagents.values()].map(def => ({ ...def }));
+		const agents = new Map<string, AgentDefinition>();
+		for (const extension of this.extensions) {
+			for (const [name, definition] of extension.subagents) agents.set(name, definition);
+		}
+		for (const [name, definition] of this.#subagents) agents.set(name, definition);
+		return [...agents.values()].map(def => ({ ...def }));
 	}
 
 	/**

@@ -1,0 +1,19 @@
+{
+	"name": "musepi-subagent-kimi-code",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Experimental Kimi Code subagent for MusePi.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "K",
+		"description": "实验性：通过现有 task 工具调用原生 Kimi Code CLI。",
+		"extensions": ["./index.ts"],
+		"config": [
+			{ "key": "executable", "type": "path", "label": "Kimi Code 可执行文件", "description": "留空时从 PATH 查找 kimi。", "default": "" },
+			{ "key": "model", "type": "string", "label": "原生模型", "description": "可选的 Kimi Code 原生模型标识。", "default": "" },
+			{ "key": "env", "type": "string", "label": "环境变量 JSON", "description": "可选的字符串键值 JSON 对象。", "default": "" },
+			{ "key": "disposeGraceMs", "type": "number", "label": "退出宽限（毫秒）", "default": 3000 }
+		]
+	}
+}

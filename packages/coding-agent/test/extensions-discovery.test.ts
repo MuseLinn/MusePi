@@ -697,7 +697,7 @@ describe("extensions discovery", () => {
 		expect(loadedHook?.handlers.has("tool_call")).toBe(true);
 	});
 
-	it("keeps discovered hooks separate from disabled extension-module ids", async () => {
+	it("keeps discovered hooks separate from disabled extension package names", async () => {
 		const extensionPath = path.join(extensionsDir, "guard.ts");
 		fs.writeFileSync(extensionPath, extensionCode);
 
@@ -716,7 +716,7 @@ describe("extensions discovery", () => {
 		const settings = await Settings.init({
 			inMemory: true,
 			cwd: tempDir.path(),
-			overrides: { disabledExtensions: ["extension-module:guard"] },
+			overrides: { disabledExtensions: ["guard"] },
 		});
 		initializeWithSettings(settings);
 

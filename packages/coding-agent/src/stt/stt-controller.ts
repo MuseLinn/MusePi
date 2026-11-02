@@ -99,7 +99,7 @@ export class STTController {
 		// Engine components disabled from the plugin page fall back to the
 		// first enabled tier — the dictation path never loads a denied engine
 		// even if the setting still points at one.
-		const modelKey = resolveEnabledSttModel(settings.get("stt.modelName") as string | undefined, settings).key;
+		const modelKey = resolveEnabledSttModel(settings.get("stt.modelName") as string | undefined).key;
 		// Keyed on the model rather than a one-shot flag: switching stt.modelName
 		// mid-session must re-run preflight so an uncached new tier downloads here
 		// (with progress) instead of blocking silently at stop.
@@ -174,7 +174,7 @@ export class STTController {
 		// Engine components disabled from the plugin page fall back to the
 		// first enabled tier — the dictation path never loads a denied engine
 		// even if the setting still points at one.
-		const modelKey = resolveEnabledSttModel(settings.get("stt.modelName") as string | undefined, settings).key;
+		const modelKey = resolveEnabledSttModel(settings.get("stt.modelName") as string | undefined).key;
 		const language = settings.get("stt.language") as string | undefined;
 		this.#streamEditor = editor;
 		this.#streamCommitted = false;

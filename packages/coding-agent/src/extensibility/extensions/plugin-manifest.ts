@@ -26,6 +26,14 @@ const MAX_MANIFEST_DEPTH = 4;
 /**
  * 一个扩展插件声明的、已通过校验的配置与资源元数据。
  */
+/** Host presentation and configuration owned by a plugin package. Cordis owns
+ * package and component identity, enablement, and lifecycle for every plugin. */
+export interface ExtensionHostBinding {
+	configStorage?: "settings";
+	readonly?: boolean;
+	raw?: unknown;
+}
+
 export interface ExtensionPluginMeta {
 	/** 通过校验的配置字段表(空数组 = 未声明任何字段)。 */
 	fields: ConfigFieldDesc[];
@@ -35,6 +43,20 @@ export interface ExtensionPluginMeta {
 	resources?: PluginResources;
 	/** 声明的「包含的组件」(dsh 子插件 parity;entry 组件 = 独立装载单元)。 */
 	components?: PluginComponentDecl[];
+	label?: string;
+	description?: string;
+	host?: ExtensionHostBinding;
+}
+
+function parseHostBinding(raw: unknown): ExtensionHostBinding | undefined {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+	const value = raw as Record<string, unknown>;
+	const binding: ExtensionHostBinding = {
+		...(value.configStorage === "settings" ? { configStorage: "settings" } : {}),
+		...(value.readonly === true ? { readonly: true } : {}),
+		...("raw" in value ? { raw: value.raw } : {}),
+	};
+	return binding.configStorage || binding.readonly || "raw" in binding ? binding : undefined;
 }
 
 /**
@@ -48,7 +70,19 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 	const { fields, errors } = parseConfigFields(raw.config);
 	const resources = parsePluginResources(raw.resources);
 	const { components } = parsePluginComponents(raw.components);
-	if (fields.length === 0 && errors.length === 0 && !resources && components.length === 0) {
+	const host = parseHostBinding(raw.host);
+	const label = typeof raw.label === "string" && raw.label.trim() ? raw.label.trim() : undefined;
+	const description =
+		typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
+	if (
+		fields.length === 0 &&
+		errors.length === 0 &&
+		!resources &&
+		components.length === 0 &&
+		!host &&
+		!label &&
+		!description
+	) {
 		return null;
 	}
 	return {
@@ -56,26 +90,50 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		configErrors: errors,
 		...(resources ? { resources } : {}),
 		...(components.length > 0 ? { components } : {}),
+		...(label ? { label } : {}),
+		...(description ? { description } : {}),
+		...(host ? { host } : {}),
 	};
 }
 
-async function readManifestBlock(
-	entryPath: string,
-): Promise<{ config?: unknown; resources?: unknown; components?: unknown } | null> {
+interface ManifestBlock {
+	config?: unknown;
+	resources?: unknown;
+	components?: unknown;
+	label?: unknown;
+	description?: unknown;
+	host?: unknown;
+}
+
+interface PackageManifest {
+	name?: unknown;
+	musepi?: ManifestBlock;
+	omp?: ManifestBlock;
+	pi?: ManifestBlock;
+}
+
+export interface ExtensionPluginPackage {
+	name: string;
+	root: string;
+}
+
+/** Resolve the package identity that owns an entrypoint and its bundled resources. */
+export async function readExtensionPluginPackage(entryPath: string): Promise<ExtensionPluginPackage | null> {
+	const manifest = await readPackageManifestNear(entryPath);
+	return manifest && typeof manifest.pkg.name === "string" && manifest.pkg.name.length > 0
+		? { name: manifest.pkg.name, root: manifest.root }
+		: null;
+}
+
+async function readPackageManifestNear(entryPath: string): Promise<{ pkg: PackageManifest; root: string } | null> {
 	let dir = path.dirname(entryPath);
 	for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth++) {
 		const packageJsonPath = path.join(dir, "package.json");
 		try {
-			const pkg = (await Bun.file(packageJsonPath).json()) as {
-				musepi?: { config?: unknown; resources?: unknown; components?: unknown };
-				omp?: { config?: unknown; resources?: unknown; components?: unknown };
-				pi?: { config?: unknown; resources?: unknown; components?: unknown };
-			};
+			const pkg = (await Bun.file(packageJsonPath).json()) as PackageManifest;
 			// musepi 为权威字段；omp/pi 是旧上游兼容遗留（继续可读）。
 			const block = pkg.musepi ?? pkg.omp ?? pkg.pi;
-			if (block && typeof block === "object") {
-				return block;
-			}
+			if (block && typeof block === "object") return { pkg, root: dir };
 		} catch (error) {
 			if (!isEnoent(error) && !isEacces(error)) {
 				// 损坏的 JSON 按"无插件声明"处理,不阻断扩展登记。
@@ -87,4 +145,10 @@ async function readManifestBlock(
 		dir = parent;
 	}
 	return null;
+}
+
+async function readManifestBlock(entryPath: string): Promise<ManifestBlock | null> {
+	const manifest = await readPackageManifestNear(entryPath);
+	if (!manifest) return null;
+	return manifest.pkg.musepi ?? manifest.pkg.omp ?? manifest.pkg.pi ?? null;
 }

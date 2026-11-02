@@ -12,6 +12,7 @@
  * their live previews beside the editor instead of using a separate edit mode.
  */
 import type { ViewerResult } from "./file-viewers";
+import { type OfficeDraft, serializeOfficeDraft } from "./office-documents";
 
 /** The content fields of the file pane's preview state. Not exported: it is
  *  reached through {@link PreviewMapping}'s `fields` and nothing imports it by
@@ -24,6 +25,7 @@ interface PreviewFields {
 	imageUrl?: string;
 	pdfBytes?: ArrayBuffer;
 	docxBytes?: ArrayBuffer;
+	office?: { bytes: Uint8Array<ArrayBuffer>; draft: OfficeDraft };
 	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
 	media?: { kind: "audio" | "video"; url: string };
 	fontUrl?: string;
@@ -75,6 +77,11 @@ export function previewMappingFor(result: ViewerResult): PreviewMapping {
 			return { fields: { pdfBytes: result.bytes } };
 		case "docx":
 			return { fields: { docxBytes: result.bytes } };
+		case "office":
+			return {
+				fields: { office: { bytes: result.bytes, draft: result.draft } },
+				editable: serializeOfficeDraft(result.draft),
+			};
 		case "sheets":
 			return { fields: { officeSheets: result.sheets } };
 		case "media":

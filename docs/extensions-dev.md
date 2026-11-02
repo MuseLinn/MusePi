@@ -28,7 +28,7 @@ musepi-omp 是 oh-my-pi 的 fork,扩展运行时同源,但 musepi 在**加载、
 | **入口形态** | 一个 TS/JS 模块,默认导出 factory `(pi: ExtensionAPI) => void` | 同左;可选携带 `package.json`(名称/描述/触发词)供 GUI 展示 |
 | **加载路径** | `src/extensibility/extensions/loader.ts`(Bun import) | 同左;另加 `discoverAndLoadExtensions` 合并 discovery provider 结果(native 优先) |
 | 发现/安装 | 无插件管理器(手动放 node_modules) | `musepi plugin install|link|uninstall|list|enable|disable`(`PluginManager` + `MarketplaceManager`),`musepi-plugins.lock.json` 记录 |
-| **GUI 集成** | 无 | 设置「扩展」tab + 侧栏入口(`ExtensionsCenter.tsx`),daemon `extensions.list` RPC,TTL 10s 缓存,启停写 `settings.disabledExtensions`(`kind:name` id;`mcp:` 前缀走 mcp.json denylist) |
+| **GUI 集成** | 无 | 设置「扩展」tab + 侧栏入口(`ExtensionsCenter.tsx`),daemon `extensions.list` RPC,TTL 10s 缓存。Cordis 包启停写 `settings.disabledExtensions` 的裸包名,组件状态写 `disabledExtensionComponents` 的 `<package>/<component>`;其他发现项保留自身 ID,`mcp:` 前缀走 mcp.json |
 | **运行时管理** | 无 | daemon 统一扫描(`extensions.list` → 树:provider → kind → item)、`extensions.setEnabled` |
 
 **结论**:能力上 **OMP Plugin ⊂ MusePi Plugin**。新扩展一律按 MusePi Plugin 写(免费获得 GUI 管理);只在纯 OMP 环境跑才按上游最小形态写。
@@ -50,12 +50,17 @@ An ordinary plugin package declares its entries, configuration, and resources in
 
 The Plugins view manages packages and profile bundles at one card granularity. Ordinary package switches use the runtime lock; bundle switches update `musepi.profile.bundles`, and selected-but-unreadable bundles stay visible. Detailed layer and row composition remains available through `bundles.composition` without a separate Composition tab. Preset rows mount as real Cordis fibers in each session: `isolate` creates service-specific child realms, and switching modes disposes the old preset fibers before mounting the new composition. Plugin-owned skills are declared with `registerSkill` beside the plugin's other resources and disappear with that plugin; the Android emulator uses this lifecycle.
 
+Desktop releases must stage self-contained first-party plugin bundles with the daemon. Run `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>` after compiling it. The script compiles and validates `bundled-plugins` and `desktop-plugins` under `packages/desktop-app/vendor/daemon`, including every entry declared by `musepi.extensions` and `musepi.components`; component styles remain beside the compiled component. Direct and transitive JavaScript dependencies are bundled, while the terminal PTY bridge and its native runtime packages are copied into the staged layout. Electron unpacks this directory and passes both absolute roots to the daemon through the platform-delimited `MUSEPI_BUNDLED_PLUGIN_ROOTS` variable. Development discovery retains its source-tree fallbacks; a release must not depend on source trees or development dependencies.
+
+Discovered JavaScript and TypeScript hooks use the production extension chain: `discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`. The legacy `HookRunner` exports remain for public API compatibility and their direct consumers; they are not a second production execution path. TUI settings and plugin entries read the same schema, discovery results, and Cordis enablement state as the desktop client. The TUI does not introduce a separate installer or plugin-state store.
+
 ## 2. 扩展能做什么(能力面)
 
 一个扩展模块可以组合:
 
 - 事件处理:`pi.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
 - LLM 工具:`pi.registerTool({ name, description, parameters, execute })`(进入工具注册表,权限链照常生效)
+- 子智能体:`pi.registerSubagent({ name, description, systemPrompt, external })`;本地 Agent 必须提供非空 `systemPrompt`,外部 Agent 改为提供一次性 `external(context)` 执行器,并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物
 - 斜杠命令:`pi.registerCommand(...)`(TUI `/cmd` + GUI 命令面板)
 - 快捷键/flags、自定义消息渲染、会话/消息注入(`sendMessage` / `sendUserMessage` / `appendEntry`)
 - **工具执行拦截**:每个工具执行都被扩展拦截层包裹(`tool_call` / `tool_result` 事件可介入)
@@ -117,12 +122,14 @@ export default function myExtension(pi: ExtensionAPI) {
 ## 4. 内置扩展 vs 第三方
 
 - **native/内置配置**(`discovery/builtin.ts`):`~/.musepi/agent` 与 `.musepi/` 配置文件扫描项,`extensions.list` 里 provider = native。native provider 自 0.5.0(M2.1)起在 TUI/GUI 的 provider tab 可见(不再 skip-native),无 provider 级开关(daemon 拒绝禁用 native)。
-- **内置注册表**(`extensibility/extensions-center/builtin-registry.ts` 的 `BUILTIN_EXTENSIONS`):随代码分发的部署物,以 `musepi-extensions` provider 的 builtin 项呈现(provider=native 语义不扩大),path 恒为空(只读,不可改删/rollback),带"内置"徽章。三类语义:
-  - `settingsMirror`(样式/桌面壳/magic keywords):设置键即事实源,`extensions.setEnabled` 写镜像键,daemon 与 TUI 仪表盘按 `builtinMirrorDisabled` 读回;
-  - 通用项:走 `settings.disabledExtensions`,可禁用;
-  - `readonly: true`(主题包/渲染器包):只读展示,无禁用语义,UI 不渲染开关,daemon 的 `extensions.setEnabled` 也拒绝启停请求——登记仅为可见性,不写入无效标记。
-  - `annotate: true`(bundled skills):不产生独立条目,只给扫描出的同 id 行打 `builtin` 标记(bundled skill 的安装行已由 native 扫描呈现,重复登记会出现两行)。
-  - 0.5.0 M2.1 登记清单:bundled skills ×7(清单源 `src/bundled-skills/index.ts`)、magic keywords ×3(镜像 `magicKeywords.<kw>`)、modes 主题包 ×1(raw.themes = `getBuiltinThemes()`)、tool-render 卡片工具包 ×1(raw.tools = client-core `tool-render/card-tools.ts` 权威清单的快照,契约测试守交集)。**内置 hooks 不存在**:hook 全部是文件/插件态,经 native 扫描自然可见,登记数为 0。
+- **第一方 Cordis 包**(`src/bundled-plugins/*/package.json` + `extensibility/extensions-center/builtin-registry.ts`):语音、终端、浏览器、文件、computer、LSP、桌面壳、任务卡片、主题与工具卡片均由真实插件包发现。第一方包与外部 MusePi 包使用相同身份和生命周期。包名是管理 ID,`disabledExtensions` 中的裸包名是包启停的唯一事实源;`voice:stt` 等 MusePi 早期独立 ID、`settingsMirror` 和旧 deny-list 不再参与解析或兼容读取。
+  - `musepi.components[].entry` 定义独立子 fiber。`disabledExtensionComponents` 中的 `<package>/<component>` 是组件启停的唯一事实源;关闭组件只反注册该组件的服务或效果,同包其他 entry 不受影响。`tools.disabled` 只负责独立的工具过滤,不充当组件状态存储。
+  - `configStorage: "settings"` 的字段与设置页共用存储。`stt.enabled`、`speech.enabled`、`browser.enabled`、`computer.enabled` 和 `lsp.enabled` 等领域配置继续控制各自功能,但不决定包状态。`terminal`、`browser`、`computer` 等 provider/service 由包或 entry 组件注册,宿主通过服务名消费;卸载 effect 负责反注册。
+  - `readonly: true` 的主题和工具卡片是只读集合/组合包。它们没有独立 entry 组件,不宣称包内每个主题或渲染器都能分别启停;daemon 与 UI 都拒绝无效包开关。
+  - `desktop-shell` 是宿主组合入口。包开关还维护 `shell.enabled` 与 `web.port` 连接副作用;`task-card-style` 已接入真实会话注册。
+  - `annotate: true` 仍只给 bundled skills 的既有扫描行打内置标记,不生成重复条目。内置 hooks 仍全部由文件或插件扫描发现。
+  - `musepi-subagent-codex`、`musepi-subagent-claude-code`、`musepi-subagent-kimi-code`、`musepi-subagent-codebuddy` 与 `musepi-subagent-opencode` 是实验性一次性子智能体包。Codex 使用官方 app-server JSON-RPC,其余产品使用各自流式 JSONL CLI;包只持有可执行文件、原生模型、产品权限与环境配置,不在加载时启动进程。外部 Agent 拒绝显式 model/effort override、plan mode、结构化输出 schema 和隔离 worktree;进程终止、输出上限、错误和产物仍由共享 task 执行器处理。
+- **第三方生态发现**:Pi、OMP、Codex 与 Claude 的扩展、技能、Commands 和 MCP 继续由各自独立 provider 适配,不使用 MusePi 已退休的第一方 ID。`kimi-code` provider 读取 `$KIMI_CODE_HOME`(默认 `~/.kimi-code`)与项目 `.kimi-code/`,支持用户和项目 Skills、MCP,以及 `plugins/installed.json` 中启用插件的 Skills、Commands 和 MCP;插件 MCP 使用官方 `plugin-<pluginId>:<serverName>` 命名。当前不接入 Kimi 的 hooks、agents、systemPrompt 或 sessionStart。
 - **插件安装**(`~/.musepi/plugins/`):provider = user,可启停。
 - 测试/示例扩展(如 `harmony-leak` 夹具)是测试资产,不算产品扩展。
 
@@ -323,9 +330,9 @@ pi.registerComponent({
 
 ## 11. 桌面壳与 Shell 模式(desktop-shell, dsh-desktop parity, 2026-08-28)
 
-Electron 壳本身是**一等扩展**(`kind: "desktop-shell"`, id `desktop-shell:shell`, 内置注册表 `builtin-registry.ts`):
-- `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳启用状态(`shell.enabled` 设置键)、DSH 三模式、daemon serve 的渲染器 origin。
-- `extensions.setEnabled("desktop-shell:shell", { enabled, mode? })` 切换壳开关与模式(写 `shell.enabled`/`shell.mode`, 管理 `web.port` 发现文件 —— 壳进程据此决定 loadURL 运行时渲染器 or 本地 bundle)。
+Electron 壳由第一方 Cordis 包 `desktop-shell` 提供,与其他 MusePi 包使用同一生命周期:
+- `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳连接状态(`shell.enabled` 设置键)、DSH 三模式、daemon serve 的渲染器 origin。
+- `extensions.setEnabled("desktop-shell", { enabled, mode? })` 切换包状态与模式(写包名到 `disabledExtensions`,并维护 `shell.enabled`/`shell.mode` 与 `web.port` 发现文件 —— 壳进程据此决定 loadURL 运行时渲染器 or 本地 bundle)。
 - daemon `--web-port` serve 渲染器(`guest-client/dist`) + `/__daemon.json`(wsUrl/token); 壳 `probeWeb()` 读 `web.port` 自动发现。
 
 **Shell 三模式**(DSH compatibility/extended/enhanced):

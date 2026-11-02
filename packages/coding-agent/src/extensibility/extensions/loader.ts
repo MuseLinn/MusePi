@@ -34,6 +34,7 @@ import * as PiCodingAgent from "../../index";
 import type { StoredPluginCredential } from "../../plugin-credentials";
 import { getPluginCredentialManager } from "../../plugin-credentials";
 import type { CustomMessagePayload } from "../../session/messages";
+import { normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import { EventBus } from "../../utils/event-bus";
 import { enablementAllowsPath } from "../enablement-manifest";
@@ -492,6 +493,16 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.extension.skills.push(skill);
 	}
 
+	registerSubagent(def: SubagentDefinition): { name: string } {
+		const agent = normalizeSubagentDefinition(def);
+		this.extension.subagents.set(agent.name, agent);
+		return { name: agent.name };
+	}
+
+	unregisterSubagent(name: string): boolean {
+		return this.extension.subagents.delete(name);
+	}
+
 	registerMagicKeyword(keyword: ExtensionMagicKeyword): void {
 		if (!keyword || typeof keyword.name !== "string" || keyword.name.length === 0) {
 			throw new TypeError("registerMagicKeyword: keyword.name is required");
@@ -754,6 +765,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		rpcs: new Map(),
 		webRoutes: [],
 		skills: [],
+		subagents: new Map(),
 		toolViews: [],
 		notificationChannels: [],
 		services: [],
@@ -1196,9 +1208,7 @@ export async function discoverExtensionPaths(
 	const disabled = new Set(disabledExtensionIds ?? []);
 	const loadOptions = disabledExtensionIds ? { cwd, disabledExtensions: disabledExtensionIds } : { cwd };
 
-	// Accepts the current identity (plugin name) and both historical `kind:name`
-	// forms: a toggle saved before the identity change must still apply, or the
-	// user's disabled extension silently starts loading again.
+	// MusePi package enablement uses only the exact bare package name.
 	const isDisabledName = (name: string): boolean => isPluginDisabled(disabled, name);
 
 	const addPath = (extPath: string): void => {

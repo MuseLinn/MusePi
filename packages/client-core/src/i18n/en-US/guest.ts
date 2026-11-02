@@ -47,6 +47,7 @@ export const guest = {
 	"guest.selectFilePreview": "Select a file to preview",
 	"guest.previewTruncatedWithSize": "Preview truncated (showing the first {size} bytes)",
 	"guest.cannotPreviewFile": "Cannot preview this file",
+	"guest.officeSlides": "Slides",
 	"guest.fileDeleted": "File deleted",
 	"guest.deleteFileWithName.info": "Delete file {name}?",
 	"guest.newFileName": "New file name",

@@ -101,6 +101,7 @@ export class ChildProcess<In extends InMask = InMask> {
 	#stderrChunks?: Uint8Array[];
 	#exitReason?: Exception;
 	#exitReasonPending?: Exception;
+	#termination?: Promise<void>;
 	#stderrDone: Promise<void>;
 	#exited: Promise<number>;
 	#stderrStream?: ReadableStream<Uint8Array>;
@@ -219,10 +220,22 @@ export class ChildProcess<In extends InMask = InMask> {
 
 	kill(reason?: Exception, gracefulMs?: number) {
 		if (reason && !this.#exitReasonPending) this.#exitReasonPending = reason;
-		if (!this.proc.killed)
-			void processFromPid(this.proc.pid)
+		if (!this.proc.killed) {
+			this.#termination ??= processFromPid(this.proc.pid)
 				?.terminate(gracefulMs === undefined ? undefined : { gracefulMs })
-				?.catch(e => void e);
+				.then(() => undefined)
+				.catch(() => undefined);
+		}
+	}
+
+	/** Terminate the managed process range and wait for process and stderr quiescence. */
+	async terminate(reason?: Exception, gracefulMs?: number): Promise<void> {
+		this.kill(reason, gracefulMs);
+		await this.#termination;
+		try {
+			await this.#exited;
+		} catch {}
+		await this.#stderrDone;
 	}
 
 	// ── Output helpers ───────────────────────────────────────────────────

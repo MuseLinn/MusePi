@@ -57,9 +57,12 @@ function makeService(settings: Settings, cwd: string, agentDir: string): Extensi
 }
 
 async function makeSkillDir(root: string): Promise<string> {
-	const dir = path.join(root, ".omp", "skills", "commit-helper");
+	const dir = path.join(root, ".musepi", "skills", "commit-helper");
 	await fs.mkdir(path.join(dir, "scripts"), { recursive: true });
-	await Bun.write(path.join(dir, "SKILL.md"), "---\nname: commit-helper\n---\n# commit helper\n");
+	await Bun.write(
+		path.join(dir, "SKILL.md"),
+		"---\nname: commit-helper\ndescription: Commit helper\n---\n# commit helper\n",
+	);
 	await Bun.write(path.join(dir, "scripts", "run.sh"), "echo hi\n");
 	return dir;
 }
@@ -98,11 +101,10 @@ describe("extension toggle — disabledExtensions 覆盖层（M2-2.3）", () => 
 	});
 
 	test("已有其他禁用项时，diff 仍只含目标 id 的增/删", async () => {
-		// 预置值必须经 set() 进 global 层——isolated(overrides) 落在 overrides
-		// 顶层，会在 merge 里盖住后续 set()（该层语义是"最高优先覆盖"）。
 		const settings = Settings.isolated();
 		settings.set("disabledExtensions", ["rule:other"]);
 		const service = makeService(settings, tmpCwd, agentDir);
+		await makeSkillDir(tmpCwd);
 
 		await service.setEnabled({ id: "skill:commit-helper", enabled: false });
 		expect(settings.get("disabledExtensions")).toEqual(["rule:other", "skill:commit-helper"]);
@@ -111,17 +113,38 @@ describe("extension toggle — disabledExtensions 覆盖层（M2-2.3）", () => 
 		expect(settings.get("disabledExtensions")).toEqual(["rule:other"]);
 	});
 
-	test("镜像设置内置项 toggle 写设置键，不污染 disabledExtensions", async () => {
+	test("第一方包 toggle 只写包名，不改领域配置", async () => {
 		const settings = Settings.isolated();
+		settings.set("display.taskCardStyle" as never, "swarm" as never);
 		const service = makeService(settings, tmpCwd, agentDir);
 
-		await service.setEnabled({ id: "style:task-card-swarm", enabled: false });
-		expect(settings.getRaw("display.taskCardStyle")).toBe("classic");
-		expect(settings.get("disabledExtensions")).toEqual([]);
+		await service.setEnabled({ id: "task-card-style", enabled: false });
+		expect(settings.getRaw("display.taskCardStyle")).toBe("swarm");
+		expect(settings.get("disabledExtensions")).toEqual(["task-card-style"]);
 
-		await service.setEnabled({ id: "style:task-card-swarm", enabled: true });
+		await service.setEnabled({ id: "task-card-style", enabled: true });
 		expect(settings.getRaw("display.taskCardStyle")).toBe("swarm");
 		expect(settings.get("disabledExtensions")).toEqual([]);
+	});
+
+	test("桌面壳组合入口同时维护连接设置、端口文件与包身份", async () => {
+		const settings = Settings.isolated();
+		const service = new ExtensionService({
+			settings: () => settings,
+			ensureRegistry: async () => {},
+			cwd: () => tmpCwd,
+			webUrl: () => "http://127.0.0.1:43117",
+			webPortFile: () => path.join(agentDir, "web.port"),
+			onChanged: () => {},
+		});
+		await service.setEnabled({ id: "desktop-shell", enabled: true, mode: "extended" });
+		expect(settings.getRaw("shell.mode")).toBe("extended");
+		expect(await Bun.file(path.join(agentDir, "web.port")).text()).toBe("43117");
+
+		await service.setEnabled({ id: "desktop-shell", enabled: false });
+		expect(settings.getRaw("shell.enabled")).toBe(false);
+		expect(settings.get("disabledExtensions")).toEqual(["desktop-shell"]);
+		expect(await Bun.file(path.join(agentDir, "web.port")).exists()).toBe(false);
 	});
 
 	test("只读内置项拒绝直接 RPC 启停且不写覆盖层", async () => {
@@ -129,9 +152,34 @@ describe("extension toggle — disabledExtensions 覆盖层（M2-2.3）", () => 
 		settings.set("disabledExtensions", ["rule:other"]);
 		const service = makeService(settings, tmpCwd, agentDir);
 
-		await expect(service.setEnabled({ id: "theme:builtin-themes", enabled: false })).rejects.toThrow(/read-only/);
+		await expect(service.setEnabled({ id: "builtin-themes", enabled: false })).rejects.toThrow(/read-only/);
 		expect(settings.get("disabledExtensions")).toEqual(["rule:other"]);
 	});
+
+	test("退休的第一方复合 ID 全部拒绝且不写设置", async () => {
+		const retired = [
+			"style:task-card-swarm",
+			"desktop-shell:shell",
+			"theme:builtin-themes",
+			"tool-render:builtin-cards",
+			"voice:stt",
+			"voice:tts",
+			"terminal:terminal",
+			"browser:browser",
+			"computer:computer",
+			"lsp:lsp",
+			"file:file",
+			"extension-module:stt",
+			"plugin-module:stt",
+		];
+		for (const id of retired) {
+			const settings = Settings.isolated();
+			settings.set("disabledExtensions", ["rule:other"]);
+			const service = makeService(settings, tmpCwd, agentDir);
+			await expect(service.setEnabled({ id, enabled: false })).rejects.toThrow(/unknown extension/);
+			expect(settings.get("disabledExtensions")).toEqual(["rule:other"]);
+		}
+	}, 120_000);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -28,13 +28,11 @@ import {
  * 插件详情液态玻璃弹层（dsh 插件详情页 parity，交互形态按小袁总决策
  * 从「跳转页面」改为「弹出浮层」，浮层本身日后可插件化）：
  * 标题（图标 + 显示名 + kind/来源标签 + 状态点）、ID + 描述、
- * 触发词 / 来源 / 路径、dsh「包含的组件」段——每组件一行独立开关
- * （tool 通道写 tools.disabled 工具黑名单，stt/tts-engine 通道写
- * voice.disabledEngines 引擎黑名单——都是真实禁用，禁用后工具集/
- * 模型目录/转写合成路径同步关闭）、清单配置表单与资源卡
- * （PluginManifestSections 单一权威复用）。
+ * 触发词 / 来源 / 路径、dsh「包含的组件」段——每个 entry 组件有独立
+ * fiber，开关写入 disabledExtensionComponents，禁用后对应注册随 fiber 回收、
+ * 清单配置表单与资源卡（PluginManifestSections 单一权威复用）。
  *
- * 语音单元（voice:stt / voice:tts）的模型/音色字段不用裸下拉渲染，
+ * 语音包（stt / tts）的模型/音色字段不用裸下拉渲染，
  * 内嵌与设置页完全相同的 SpeechModelPicker 卡片（同一组件、同一
  * 下载通道、同一存储——双入口零漂移），其余字段才进通用表单。
  *
@@ -43,15 +41,15 @@ import {
 
 /** 语音单元内由模型选择器卡片承载、不再进通用配置表单的设置键。 */
 const VOICE_PICKER_KEYS: Record<string, readonly string[]> = {
-	"voice:stt": ["stt.modelName"],
-	"voice:tts": ["tts.localModel", "tts.localVoice"],
+	stt: ["stt.modelName"],
+	tts: ["tts.localModel", "tts.localVoice"],
 };
 
 function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient | null }): ReactNode {
 	// 组件开关实时过滤：引擎组件停用 → 对应档位立即从选择器消失（与设置页
 	// 同一 helper / 同一存储；item 来自全局 registry 单例，拨开关后经
 	// extensions.changed 重拉，弹层内选择器同帧跟随）。
-	if (item.id === "voice:stt") {
+	if (item.id === "stt") {
 		return (
 			<div className="gui-ext-detail-section">
 				<SpeechModelPicker
@@ -69,7 +67,7 @@ function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient |
 			</div>
 		);
 	}
-	if (item.id === "voice:tts") {
+	if (item.id === "tts") {
 		return (
 			<div className="gui-ext-detail-section">
 				<SpeechModelPicker

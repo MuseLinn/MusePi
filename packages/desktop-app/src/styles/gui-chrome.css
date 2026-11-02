@@ -1883,6 +1883,67 @@
 	overflow: hidden;
 }
 
+.gui-filepane-office {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+}
+.gui-filepane-docx-host {
+	min-height: 0;
+	padding: 12px;
+	overflow: auto;
+}
+.gui-filepane-docx-host p[contenteditable="plaintext-only"] {
+	outline: 1px solid transparent;
+}
+.gui-filepane-docx-host p[contenteditable="plaintext-only"]:hover,
+.gui-filepane-docx-host p[contenteditable="plaintext-only"]:focus {
+	outline-color: var(--color-accent);
+}
+.gui-filepane-presentation {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	padding: 12px;
+	overflow: auto;
+}
+.gui-filepane-slide {
+	position: relative;
+	width: min(100%, 960px);
+	margin-inline: auto;
+	overflow: hidden;
+	background: #fff;
+	color: #111;
+	box-shadow: var(--glass-shadow);
+}
+.gui-filepane-slide-shape {
+	position: absolute;
+	padding: 4px;
+	overflow: hidden;
+	white-space: pre-wrap;
+	outline: 1px solid transparent;
+}
+.gui-filepane-slide-shape[contenteditable="plaintext-only"]:hover,
+.gui-filepane-slide-shape[contenteditable="plaintext-only"]:focus {
+	outline-color: var(--color-accent);
+}
+.gui-filepane-sheet-table--editable td {
+	min-width: 72px;
+	max-width: 360px;
+	white-space: pre-wrap;
+	outline: 1px solid transparent;
+	outline-offset: -1px;
+}
+.gui-filepane-sheet-table--editable td[contenteditable="plaintext-only"]:hover,
+.gui-filepane-sheet-table--editable td[contenteditable="plaintext-only"]:focus {
+	outline-color: var(--color-accent);
+}
+
 /* Spreadsheet preview: sheets switch via the seg buttons (md-modes parity);
  *  the table scrolls in both axes with sticky headers. */
 .gui-filepane-sheets {

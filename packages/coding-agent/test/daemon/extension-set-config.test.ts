@@ -16,8 +16,8 @@ import { ExtensionService } from "../../src/daemon/services/extension-service";
 import { resetPluginConfigStoreCache } from "../../src/extensibility/extensions-center/plugin-config-store";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
-const EXT_ID = "extension-module:voice-input";
-/** The plugin name — the identity rows report (legacy id still accepted on input). */
+const EXT_ID = "voice-input";
+/** Cordis package identity is shared by RPC input and inventory rows. */
 const NAME = "voice-input";
 
 async function writeFixtureExtension(agentDir: string): Promise<void> {
@@ -28,7 +28,7 @@ async function writeFixtureExtension(agentDir: string): Promise<void> {
 		path.join(dir, "package.json"),
 		JSON.stringify({
 			name: "voice-input",
-			omp: {
+			musepi: {
 				extensions: ["index.ts"],
 				config: [
 					{ key: "enabled", type: "boolean", default: true },
@@ -84,8 +84,7 @@ describe("extensions.setConfig 写入链路", () => {
 		expect(changedCount).toBe(1);
 
 		const listed = await service.getExtensions();
-		// The row's identity is the plugin NAME now (the reference's PluginEntryId);
-		// the call above still passes a legacy id on purpose — old callers must work.
+		// The RPC and inventory row use the same Cordis package identity.
 		const ext = listed.find(e => e.id === NAME);
 		expect(ext?.config?.map(f => f.key)).toEqual(["enabled", "threshold", "model"]);
 		expect(ext?.configValues).toMatchObject({ enabled: true, threshold: 0.5, model: "large" });
@@ -108,7 +107,7 @@ describe("extensions.setConfig 写入链路", () => {
 	});
 
 	test("未知扩展 id 同样被拒绝", async () => {
-		await expect(service.setConfig({ id: "extension-module:ghost", key: "enabled", value: true })).rejects.toThrow(
+		await expect(service.setConfig({ id: "ghost", key: "enabled", value: true })).rejects.toThrow(
 			/not a declared config field/,
 		);
 	});

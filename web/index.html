@@ -41,7 +41,7 @@
 
       <nav class="mp-nav" id="mp-nav" aria-label="主导航" data-i18n-aria="nav.aria">
         <a href="#preview" class="mp-nav-link" data-i18n="nav.preview">界面预览</a>
-        <a href="#features" class="mp-nav-link" data-i18n="nav.features">核心功能</a>
+        <a href="#release" class="mp-nav-link" data-i18n="nav.release">0.7.0 新能力</a>
         <a href="#momentum" class="mp-nav-link" data-i18n="nav.momentum">迭代进行时</a>
         <a href="#pricing" class="mp-nav-link" data-i18n="nav.pricing">价格</a>
         <a href="#faq" class="mp-nav-link" data-i18n="nav.faq">常见问题</a>
@@ -162,8 +162,88 @@
       </div>
     </section>
 
+    <!-- ===== 0.7.0 能力浏览 ===== -->
+    <section class="mp-section mp-section--tint" id="release">
+      <div class="mp-container">
+        <header class="mp-release-head">
+          <div>
+            <p class="mp-kicker" data-i18n="release.kicker">0.7.0 · 工作台新能力</p>
+            <h2 class="mp-h2" data-i18n="release.h2">从会做事，到也能一起审阅和改造</h2>
+          </div>
+          <p class="mp-section-desc" data-i18n="release.desc">Agent 负责推进任务，你保留直接查看、修改和精确引用的能力。四组新能力都已经进入产品，而不是远期路线图。</p>
+        </header>
+
+        <div class="mp-release-layout mp-reveal">
+          <div class="mp-release-tabs" role="tablist" aria-label="浏览 0.7.0 新能力" data-i18n-aria="release.tabs.aria">
+            <button class="mp-release-tab is-active" type="button" role="tab" id="release-tab-files" aria-selected="true" aria-controls="release-panel-files" tabindex="0">
+              <span class="mp-release-tab-index">01</span><span data-i18n="release.tab.files">文件工作区</span>
+            </button>
+            <button class="mp-release-tab" type="button" role="tab" id="release-tab-office" aria-selected="false" aria-controls="release-panel-office" tabindex="-1">
+              <span class="mp-release-tab-index">02</span><span data-i18n="release.tab.office">Office 编辑与引用</span>
+            </button>
+            <button class="mp-release-tab" type="button" role="tab" id="release-tab-plugins" aria-selected="false" aria-controls="release-panel-plugins" tabindex="-1">
+              <span class="mp-release-tab-index">03</span><span data-i18n="release.tab.plugins">插件与预设</span>
+            </button>
+            <button class="mp-release-tab" type="button" role="tab" id="release-tab-agents" aria-selected="false" aria-controls="release-panel-agents" tabindex="-1">
+              <span class="mp-release-tab-index">04</span><span data-i18n="release.tab.agents">外部子智能体</span>
+            </button>
+          </div>
+
+          <div class="mp-release-stage">
+            <article class="mp-release-panel" role="tabpanel" id="release-panel-files" aria-labelledby="release-tab-files" tabindex="0">
+              <p class="mp-release-eyebrow" data-i18n="release.files.eyebrow">阅读、修改、定位，不离开工作台</p>
+              <h3 data-i18n="release.files.title">代码和文档，都能直接审阅</h3>
+              <p class="mp-release-body" data-i18n="release.files.body">文件树、Monaco、Markdown、PDF 与 PR 评审共用同一套文件标签和草稿生命周期。定义跳转、跨文件重命名、差异对比与历史定位都围绕真实工作区展开。</p>
+              <ul class="mp-release-points">
+                <li data-i18n="release.files.p1">Monaco 编辑、LSP 导航与跨文件重命名</li>
+                <li data-i18n="release.files.p2">Markdown 所见即所得，PDF 按需渲染</li>
+                <li data-i18n="release.files.p3">PR 评论定位代码，并引用给 Agent</li>
+              </ul>
+              <p class="mp-release-proof"><span>Monaco</span><span>Markdown</span><span>PDF</span><span>GitHub PR</span></p>
+            </article>
+
+            <article class="mp-release-panel" role="tabpanel" id="release-panel-office" aria-labelledby="release-tab-office" tabindex="0" hidden>
+              <p class="mp-release-eyebrow" data-i18n="release.office.eyebrow">引用的不只是文本，还有准确位置</p>
+              <h3 data-i18n="release.office.title">Office 内容可编辑，也可回到原处</h3>
+              <p class="mp-release-body" data-i18n="release.office.body">Word 段落、Excel 单元格和 PowerPoint 文本形状支持安全编辑与保存。选区沿用现有引用工具栏，历史引用可恢复到对应段落、单元格范围或幻灯片形状。</p>
+              <ul class="mp-release-points">
+                <li data-i18n="release.office.p1">复杂结构与公式保持只读，避免危险写回</li>
+                <li data-i18n="release.office.p2">PowerPoint 明确提供文本版式预览</li>
+                <li data-i18n="release.office.p3">草稿、未保存标记与关闭确认统一接管</li>
+              </ul>
+              <p class="mp-release-proof"><span>DOCX</span><span>XLSX</span><span>PPTX</span><span data-i18n="release.office.proof">精确引用</span></p>
+            </article>
+
+            <article class="mp-release-panel" role="tabpanel" id="release-panel-plugins" aria-labelledby="release-tab-plugins" tabindex="0" hidden>
+              <p class="mp-release-eyebrow" data-i18n="release.plugins.eyebrow">能力不再只是列表里的开关</p>
+              <h3 data-i18n="release.plugins.title">插件、组件与技能，共用生命周期</h3>
+              <p class="mp-release-body" data-i18n="release.plugins.body">官方与外部包使用同一套 Cordis 包名、组件键和真实启停状态。文件工具、语音、终端、浏览器与 LSP 都可独立组合，产品技能也随插件包发现和启停。</p>
+              <ul class="mp-release-points">
+                <li data-i18n="release.plugins.p1">关闭包会卸载对应能力与注册入口</li>
+                <li data-i18n="release.plugins.p2">预设显式组合插件行，保留用户修改</li>
+                <li data-i18n="release.plugins.p3">继续兼容多类第三方 Agent 扩展配置</li>
+              </ul>
+              <p class="mp-release-proof"><span>Cordis</span><span>Presets</span><span>Skills</span><span>MCP</span></p>
+            </article>
+
+            <article class="mp-release-panel" role="tabpanel" id="release-panel-agents" aria-labelledby="release-tab-agents" tabindex="0" hidden>
+              <p class="mp-release-eyebrow" data-i18n="release.agents.eyebrow">把熟悉的 CLI 纳入同一个任务流</p>
+              <h3 data-i18n="release.agents.title">五种外部子智能体，统一跟踪结果</h3>
+              <p class="mp-release-body" data-i18n="release.agents.body">实验性插件可接入 Codex、Claude Code、Kimi Code、CodeBuddy 和 OpenCode。它们复用 MusePi 的任务进度、后台作业、取消、超时、结果卡片与完整产物。</p>
+              <ul class="mp-release-points">
+                <li data-i18n="release.agents.p1">分别配置可执行文件、模型与产品权限</li>
+                <li data-i18n="release.agents.p2">加载或启停插件不会自动启动外部进程</li>
+                <li data-i18n="release.agents.p3">需自行安装并配置对应 CLI，默认不绕过权限</li>
+              </ul>
+              <p class="mp-release-proof"><span>Codex</span><span>Claude Code</span><span>Kimi Code</span><span>CodeBuddy</span><span>OpenCode</span></p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ===== 三个核心功能 ===== -->
-    <section class="mp-section mp-section--tint" id="features">
+    <section class="mp-section" id="features">
       <div class="mp-container">
         <header class="mp-section-head">
           <p class="mp-kicker" data-i18n="feat.kicker">为什么选 MusePi</p>

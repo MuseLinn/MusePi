@@ -7,7 +7,7 @@ MusePi 以 macOS 为主开发平台，但 CLI、daemon 与 Electron GUI 均可�
 
 | 依赖 | 版本 | 用途 |
 |---|---|---|
-| [Bun](https://bun.sh) | ≥ 1.3.14 | 运行时 + 包管理 + 构建 |
+| [Bun](https://bun.sh) | ≥ 1.4.4 | 运行时 + 包管理 + 构建 |
 | [Rust](https://rustup.rs) | stable（nightly 亦可） | `packages/natives` 原生绑定（Bazel） |
 | [Git](https://git-scm.com) | ≥ 2.30 | 拉取 / 参考 checkout |
 | Node.js（可选） | ≥ 22 | 仅部分独立项目（pi / pi-muselinn-harness）用 npm |

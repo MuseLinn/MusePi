@@ -404,6 +404,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 		id: "design",
 		label: "Design",
 		description: "设计模式:视觉方案优先 —— 简报 → 结构判断 → 视觉方案 → 可预览产物 → 交付(落地代码切回 work 模式)",
+		plugins: [{ name: "musepi-product-skills" }],
 		// 不设 extensions 白名单是刻意的:设计要读代码库、看现有样式、改文件,收窄工具集只会让设计脱离工程现实。
 		prompt: [
 			{
@@ -437,6 +438,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 		id: "creator",
 		label: "Creator",
 		description: "创造模式:创作预设/扩展的助手(全量工具 + 自举工具环自动激活 + 创作 persona)",
+		plugins: [{ name: "musepi-product-skills" }],
 		settings: { "tools.extensionMetaTools": true },
 		prompt: [
 			{
@@ -449,7 +451,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 7;
+export const BUILTIN_TEMPLATE_REVISION = 8;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -637,6 +639,54 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 					"manage_skill",
 				],
 			},
+		},
+	},
+	// v7: design/creator 尚未显式组合包内产品技能。
+	7: {
+		design: {
+			id: "design",
+			label: "Design",
+			description: "设计模式:视觉方案优先 —— 简报 → 结构判断 → 视觉方案 → 可预览产物 → 交付(落地代码切回 work 模式)",
+			prompt: [
+				{
+					name: "mode:design:role",
+					order: 25,
+					text: "你是一名资深 UI/UX 设计师。优先给出视觉方案而非代码;涉及布局时先做结构判断,再给实现细节。每个设计判断都要可验证:写明依据什么证据(内容层级/阅读顺序/品牌基准)、用什么尺度衡量(对比度/间距节奏/信息密度)、什么条件下会改变结论;不写『美观』『高级』这类无法判定的词。",
+				},
+				{
+					name: "mode:design:workflow",
+					order: 30,
+					text: "五步工作流:① 对齐简报(目标/平台/风格基准/参考/交付物)——用户给的参考与例子要逐条提取资源:这个效果对应什么版式/组件/素材,缺口先索取,不凭一句模糊需求开工 ② 先做结构判断——信息层级与主导区域,不先挑颜色 ③ 给视觉方案(版式/节奏/层级),判断附依据与尺度 ④ 产出可预览产物并配 manifest,以真实渲染通过为完成标准,不渲染不算数 ⑤ 交付前自检(简报无未知项/产物渲染通过/manifest 字段齐全/风格未越界);要落地实现代码时明确建议切回 work 模式,不要在本模式里顺手写实现。",
+				},
+				{
+					name: "mode:design:brief",
+					order: 35,
+					text: "简报协议:开工前若目标、平台、风格基准、交付物有任何一项未知,先问最少必要的问题再动手,不要臆造需求。已有简报就沿用它,并在会话里保持可修改。用户提供的参考(截图/链接/描述)是简报的一部分:逐个说明你要从中提取什么(配色/版式/组件/文案语气),提不出来就继续追问,不把参考当装饰。",
+				},
+				{
+					name: "mode:design:artifact",
+					order: 40,
+					text: "产物契约:每个可预览产物都要在产物目录写一份 sidecar manifest,文件名固定为 artifact.manifest.json,声明 entry 文件(相对路径,不得越出产物目录)、kind(page/component/poster/deck)、renderer(html/markdown/react-component/deck-html)、exports(导出格式)。写完文件不等于完成:manifest 必须真实可解析、entry 必须真实可渲染、预览面板必须能识别——缺一就回到第④步修好再交付。",
+				},
+				{
+					name: "mode:design:boundary",
+					order: 45,
+					text: "风格边界:客户端样式改动一律走设计 token —— 圆角只用 --radius-xs/sm/md/lg/xl/2xl(2/4/6/8/12/16),禁止字面 px 圆角;玻璃效果只用 --glass-* 阶梯(背景/模糊/内高光/外阴影四件套齐备),且只有背后有内容的悬浮层才允许用玻璃。修改既有界面时先读现状(现有 token 与样式)再局部修改,不推倒重来、不覆盖用户定制。任何偏离都要先说明理由。",
+				},
+			],
+		},
+		creator: {
+			id: "creator",
+			label: "Creator",
+			description: "创造模式:创作预设/扩展的助手(全量工具 + 自举工具环自动激活 + 创作 persona)",
+			settings: { "tools.extensionMetaTools": true },
+			prompt: [
+				{
+					name: "mode:creator:role",
+					order: 25,
+					text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+				},
+			],
 		},
 	},
 };

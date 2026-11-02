@@ -6,7 +6,6 @@ import type {
 	ExtensionComponent,
 	ExtensionContext,
 	ExtensionRpcHandler,
-	ExtensionSkillDeclaration,
 	ToolDefinition,
 } from "../../extensibility/extensions/types";
 import { AndroidDeviceService, type AndroidProcessRunner, type AndroidRunResult } from "./android-service";
@@ -78,7 +77,6 @@ describe("Cordis plugin registration", () => {
 		const rpcs = new Map<string, ExtensionRpcHandler>();
 		const tools: ToolDefinition[] = [];
 		const components: ExtensionComponent[] = [];
-		const skills: ExtensionSkillDeclaration[] = [];
 		const toolViews: Array<{ tool: string; moduleUrl: string; label?: string }> = [];
 		const effects: Array<() => void> = [];
 		let service: AndroidDeviceService | undefined;
@@ -93,9 +91,6 @@ describe("Cordis plugin registration", () => {
 			},
 			registerComponent(component: ExtensionComponent) {
 				components.push(component);
-			},
-			registerSkill(skill: ExtensionSkillDeclaration) {
-				skills.push(skill);
 			},
 			registerToolView(tool: string, options: { moduleUrl: string; label?: string }) {
 				toolViews.push({ tool, ...options });
@@ -127,9 +122,6 @@ describe("Cordis plugin registration", () => {
 			moduleUrl: "./ui/tool-view.tsx",
 			label: "Android 模拟器",
 		});
-		expect(skills).toHaveLength(1);
-		expect(skills[0]).toMatchObject({ name: "android-emulator" });
-		expect(skills[0]?.content).toContain("`android_emulator`");
 		const handler = rpcs.get("frame");
 		expect(handler).toBeDefined();
 		const response = await handler!({ device: "emulator-5554" }, { cwd: process.cwd() });

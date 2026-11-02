@@ -23,6 +23,7 @@ import {
 	type DisplayContext,
 	displayContextQuote,
 	normalizeDisplayContexts,
+	officeQuoteLocation,
 	textWithoutDisplayContext,
 } from "../../messages/display-context";
 import type { ToolRenderHost } from "../../tool-render";
@@ -504,7 +505,7 @@ function DisplayContextCard({
 					onClick={() =>
 						window.dispatchEvent(
 							new CustomEvent("musepi-open-file", {
-								detail: { path: context.path, pdf: context.pdf, quote: context.quote },
+								detail: { path: context.path, pdf: context.pdf, office: context.office, quote: context.quote },
 							}),
 						)
 					}
@@ -512,7 +513,9 @@ function DisplayContextCard({
 					{source}
 					{context.pdf
 						? ` · ${t("pdfPageRange", { start: context.pdf.startPage, end: context.pdf.endPage })}`
-						: ""}
+						: context.office
+							? ` · ${officeQuoteLocation(context.office)}`
+							: ""}
 				</button>
 			) : (
 				<span className="tr-display-context-source">{source}</span>

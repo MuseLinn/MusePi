@@ -296,6 +296,7 @@ export class ExtensionList implements Component {
 
 	#getKindIcon(kind: ExtensionKind): string {
 		switch (kind) {
+			case "plugin-module":
 			case "extension-module":
 				return theme.icon.extensionTool;
 			case "skill":
@@ -410,6 +411,7 @@ export class ExtensionList implements Component {
 		}
 
 		const kindOrder: ExtensionKind[] = [
+			"plugin-module",
 			"extension-module",
 			"skill",
 			"tool",
@@ -454,6 +456,7 @@ export class ExtensionList implements Component {
 
 	#getKindLabel(kind: ExtensionKind): string {
 		switch (kind) {
+			case "plugin-module":
 			case "extension-module":
 				return t("settings.extensionModules");
 			case "skill":

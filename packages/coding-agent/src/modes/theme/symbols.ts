@@ -235,6 +235,7 @@ export type SymbolKey =
 	| "tab.appearance"
 	| "tab.model"
 	| "tab.interaction"
+	| "tab.voice"
 	| "tab.context"
 	| "tab.files"
 	| "tab.shell"
@@ -576,6 +577,7 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"tab.appearance": "🎨",
 	"tab.model": "🤖",
 	"tab.interaction": "⌨",
+	"tab.voice": "🔊",
 	"tab.context": "📋",
 	"tab.files": "📁",
 	"tab.shell": "💻",
@@ -988,6 +990,7 @@ const NERD_SYMBOLS: SymbolMap = {
 	"tab.appearance": "󰃣",
 	"tab.model": "󰚩",
 	"tab.interaction": "󰌌",
+	"tab.voice": "󰍬",
 	"tab.context": "󰘸",
 	"tab.files": "󰈔",
 	"tab.shell": "󰆍",
@@ -1248,6 +1251,7 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"tab.appearance": "[A]",
 	"tab.model": "[M]",
 	"tab.interaction": "[I]",
+	"tab.voice": "[V]",
 	"tab.context": "[X]",
 	"tab.files": "[F]",
 	"tab.shell": "[S]",

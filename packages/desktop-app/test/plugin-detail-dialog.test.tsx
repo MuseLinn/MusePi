@@ -7,7 +7,7 @@ import type { ExtensionItem } from "../src/lib/slot-host";
 
 function item(state: ExtensionItem["state"]): ExtensionItem {
 	return {
-		id: "computer:computer",
+		id: "computer",
 		kind: "computer",
 		name: "computer",
 		displayName: "Computer Use",

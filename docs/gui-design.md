@@ -381,7 +381,7 @@ Round driven by three user reports: zh dictation output Traditional Chinese, tra
 - **Real audio drives the visual state**: microphone RMS scales the bars and layered rings directly; there is no autonomous waveform loop. The waveform disappears during transcription so it cannot imply that recording continues. Live ASR text takes priority in the flexible preview, while an empty preview explains the current phase. Narrow composers hide the auxiliary wave first, then the cancel label. Reduced-motion mode retains static state, progress, and all text while stopping wave transitions and the processing ring.
 - **Preview and committed text are different channels** (`use-dictation.ts`): `partial` updates only the volatile preview, while `segment` inserts finalized text. Any `uncertain` segment keeps the utterance as a draft and disables auto-submit; `reject` produces no transcript. Cancellation invalidates late events. The recording/transcribing phase still starts as soon as the user stops.
 - **Enrollment uses one fixed, vertically centered `DialogFrame`**: four prompts plus independent verification, visible progress, and a single primary action. The liquid-glass orb distinguishes idle, preparing, recording, processing, accepted, error, and complete. Recording responds to actual RMS; processing rotates; acceptance and completion use short settled feedback. An error retains the current clip and exposes Retry, while completion restores a Done action. Reduced motion retains static progress, status text, and errors. Raw clips are released after embedding, and only the local voiceprint vectors are stored.
-- **Voice settings remain complete and manageable**: the schema filter uses the authoritative `Speech` group so existing recognition, playback, and trigger rows stay visible. Cached STT/TTS models can be deleted after confirmation; the corresponding worker stops before cache removal, and the current view does not immediately download the deleted tier again.
+- **Voice settings remain complete and manageable**: the authoritative `voice` tab and `Speech` group keep speech input, read-aloud, speech-provider, and Live Voice controls together instead of splitting them across Providers and Interaction. Disabling the STT or TTS package hides only its dependent controls, model picker, and test actions; persisted domain settings remain intact and reappear when the package is re-enabled. Cached STT/TTS models can be deleted after confirmation; the corresponding worker stops before cache removal, and the current view does not immediately download the deleted tier again.
 
 ## 5o. State axis wording & imported SVGs as full companions (2026-09-20 evening)
 
@@ -825,6 +825,16 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
     selection when clicked. The composer collapses file and conversation references
     into separate counted chips, with complete references available in a popover.
     Selection highlights remain application state and never modify the PDF.
+    Word, Excel, and PowerPoint files open inline and expose the same five-action
+    selection toolbar. Word paragraphs, workbook cells, and presentation text
+    shapes are directly editable only when their package structure is safe for a
+    targeted text write; formulas and complex or oversized workbooks stay
+    read-only. PowerPoint is labeled as a text-layout preview, not a full visual
+    renderer. Office drafts use the host's existing dirty indicator, tab-close
+    confirmation, cross-tab buffer, header save action, and Ctrl/Cmd+S. Quotes
+    retain their Word paragraph, workbook sheet/cell range, or PowerPoint
+    slide/shape location; activating one restores the target surface and text
+    selection, and the composer's grouped reference cards show that location.
   - NOT preserved (accepted): file-tree `scrollTop`, trajectory list scroll —
     both reset on remount; session enter tails to latest, jump-to-entry scrolls on
     demand. Do not add scroll caches without a design note.

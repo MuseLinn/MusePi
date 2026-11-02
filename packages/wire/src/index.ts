@@ -85,6 +85,11 @@ export interface PdfQuoteAnchor {
 	fileMtime?: number;
 }
 
+export type OfficeQuoteAnchor =
+	| { kind: "word"; paragraphId: number }
+	| { kind: "workbook"; sheet: string; startCell: string; endCell: string }
+	| { kind: "presentation"; slide: number; shapeId: string };
+
 export type DisplayContext =
 	| {
 			kind: "browser-annotation";
@@ -107,6 +112,7 @@ export type DisplayContext =
 			startLine?: number;
 			endLine?: number;
 			pdf?: PdfQuoteAnchor;
+			office?: OfficeQuoteAnchor;
 			comment?: string;
 	  };
 

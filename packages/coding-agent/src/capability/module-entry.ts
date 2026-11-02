@@ -26,19 +26,12 @@ export const PLUGIN_MODULE_KIND = "plugin-module";
 /** kind 值：legacy 兼容轨（Track B）。与既有清单行完全同值，零迁移。 */
 export const LEGACY_EXTENSION_MODULE_KIND = "extension-module";
 
-/**
- * 一个模块条目的身份键 = 插件名本身。
- *
- * 历史包袱：存量 `disabledExtensions` 用 `extension-module:<name>` 拼接串记录，
- * 于是「分类」被焊进了「身份」——改分类就会让用户的启停状态失配。身份不该含
- * 轨道信息，这里改为裸名。存量两种前缀仍被读取（`plugin-identity.ts` 的
- * `legacyModuleEntryIds`），写入只写裸名，老数据在用户下一次切换时自然迁移。
- */
+/** Return a module's package-name identity, independent of its loader track. */
 export function moduleEntryId(name: string): string {
 	return pluginEntryId(name);
 }
 
-/** 从一个模块条目 id 里取模块名（裸名与两种历史前缀都认）。 */
+/** Return the package name from a canonical module entry ID. */
 export function moduleEntryName(id: string): string {
 	return pluginNameOfEntryId(id) ?? id;
 }

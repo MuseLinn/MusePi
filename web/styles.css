@@ -503,7 +503,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-dl-item.is-rec .mp-dl-item-arch { color: var(--accent); }
 
 /* ===== 区块通用 ===== */
-.mp-section { position: relative; z-index: 1; padding: clamp(64px, 9vw, 108px) 0; }
+.mp-section { position: relative; z-index: 1; padding: clamp(64px, 9vw, 108px) 0; scroll-margin-top: calc(var(--bar-h) + 20px); }
 .mp-section--tint { background: var(--bg-1); border-block: 1px solid var(--line); }
 .mp-section-head { max-width: 720px; margin-bottom: clamp(36px, 5vw, 56px); }
 .mp-kicker {
@@ -539,6 +539,67 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 }
 .mp-shot img { width: 100%; height: auto; display: block; }
 .mp-shot-note { margin-top: 14px; padding: 0 16px 2px; text-align: center; font-size: 12.5px; color: var(--text-faint); }
+
+/* ===== 0.7.0 能力浏览：单详情表面 + 可键盘切换的索引 ===== */
+.mp-release-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  align-items: end;
+  gap: clamp(28px, 6vw, 80px);
+  margin-bottom: clamp(36px, 5vw, 56px);
+}
+.mp-release-head .mp-section-desc { margin: 0 0 3px; }
+.mp-release-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.62fr) minmax(0, 1.65fr);
+  overflow: hidden;
+  background: rgba(18, 18, 21, 0.78);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 var(--line-inner), 0 30px 70px -46px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+.mp-release-tabs { padding: 12px; border-right: 1px solid var(--line); }
+.mp-release-tab {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  transition: color 160ms var(--ease), background 180ms var(--ease);
+}
+.mp-release-tab:last-child { border-bottom: 0; }
+.mp-release-tab:hover { color: var(--text); background: var(--bg-raised); }
+.mp-release-tab.is-active { color: var(--text); background: var(--accent-soft); border-radius: var(--radius-sm); }
+.mp-release-tab-index { font-family: var(--mono); font-size: 12px; color: var(--text-faint); }
+.mp-release-tab.is-active .mp-release-tab-index { color: var(--accent); }
+.mp-release-stage { min-width: 0; }
+.mp-release-panel {
+  min-height: 390px;
+  padding: clamp(28px, 5vw, 56px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  animation: mp-release-in 180ms var(--spring);
+}
+@keyframes mp-release-in { from { opacity: 0.4; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.mp-release-eyebrow { margin-bottom: 14px; font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.04em; }
+.mp-release-panel h3 { max-width: 20ch; font-size: clamp(1.65rem, 3.2vw, 2.55rem); line-height: 1.12; letter-spacing: -0.02em; text-wrap: balance; }
+.mp-release-body { max-width: 62ch; margin-top: 18px; color: var(--text-muted); font-size: 15.5px; line-height: 1.75; }
+.mp-release-points { list-style: none; margin: 30px 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.mp-release-points li { padding-top: 14px; border-top: 1px solid var(--line); color: var(--text-muted); font-size: 13.5px; line-height: 1.6; }
+.mp-release-proof { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); letter-spacing: 0.04em; }
+.mp-release-proof span + span::before { content: "·"; margin-right: 18px; color: var(--accent); }
 
 /* ===== 语言切换 ===== */
 .mp-lang { display: inline-flex; align-items: center; padding: 3px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 999px; }
@@ -791,6 +852,9 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   .mp-plan--current { order: -1; }
   .mp-stats { grid-template-columns: repeat(2, 1fr); }
   .mp-footer-top { grid-template-columns: 1fr; gap: 34px; }
+  .mp-release-head { grid-template-columns: 1fr; align-items: start; gap: 18px; }
+  .mp-release-head .mp-section-desc { margin: 0; }
+  .mp-release-points { grid-template-columns: 1fr; gap: 12px; }
 }
 
 @media (max-width: 680px) {
@@ -798,6 +862,12 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   .mp-cta-band-inner { flex-direction: column; align-items: flex-start; }
   .mp-log-item { flex-direction: column; gap: 10px; align-items: flex-start; }
   .mp-footer-bottom { flex-direction: column; gap: 6px; }
+  .mp-release-layout { grid-template-columns: 1fr; }
+  .mp-release-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .mp-release-tab { min-height: 64px; grid-template-columns: 26px minmax(0, 1fr); padding: 12px 10px; border-bottom: 0; font-size: 13px; }
+  .mp-release-panel { min-height: 0; }
+  .mp-release-panel h3 { max-width: none; }
+  .mp-release-proof { row-gap: 10px; }
 
   /* The topbar carried four controls (language, GitHub, CTA, menu) and
      overflowed the viewport by 22px at 390px wide. The repository link is

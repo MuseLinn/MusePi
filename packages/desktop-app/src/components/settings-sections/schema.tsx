@@ -18,12 +18,12 @@ export function SchemaTabSection({
 	rpc: RpcClient | null;
 	tabs: string[];
 	/** Optional ui.group filter: when set, only items in these groups
-	 * render (e.g. the voice page shows the interaction tab's "Speech"
-	 * group without duplicating the whole tab). */
+	 * render (e.g. the voice page selects the "Speech" group within its
+	 * dedicated voice tab). */
 	groups?: readonly string[];
 	/** Optional ui.group exclude: items in these groups are skipped even
-	 * when no `groups` include filter is set (e.g. interaction tab
-	 * excludes "Speech" so it only lives on the voice tab). */
+	 * when no `groups` include filter is set, so a page can suppress a
+	 * group owned by another settings surface. */
 	excludeGroups?: readonly string[];
 	/** Optional key exclude: individual settings keys are skipped even when
 	 * their group renders (e.g. the tools tab excludes `computer.glow` —

@@ -36,6 +36,7 @@ import {
 	type FileMarkdownEditorHandle,
 	hasYamlFrontMatter,
 } from "../../components/FileMarkdownEditor";
+import { FileOfficePreview, type OfficeEditorSelection } from "../../components/FileOfficePreview";
 import { FileOpenWith } from "../../components/FileOpenWith";
 import { ImagePreview } from "../../components/FilePaneImagePreview";
 import { useMarkdownFileNavigation } from "../../components/FilePaneMarkdownNav";
@@ -64,6 +65,7 @@ import {
 import { useChatHighlight } from "../../lib/highlight";
 import { downloadMarkdownDocx } from "../../lib/markdown-docx";
 import { type MonacoPeekBuffer, revealEditorLocation } from "../../lib/monaco-lsp";
+import { type OfficeDraft, parseOfficeDraft, serializeOfficeDraft, writeOfficeDraft } from "../../lib/office-documents";
 import { previewMappingFor } from "../../lib/preview-from-viewer";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
@@ -100,6 +102,7 @@ interface PreviewState {
 	imageUrl?: string;
 	pdfBytes?: ArrayBuffer;
 	docxBytes?: ArrayBuffer;
+	office?: { bytes: Uint8Array<ArrayBuffer>; draft: OfficeDraft };
 	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
 	media?: { kind: "audio" | "video"; url: string };
 	fontUrl?: string;
@@ -310,6 +313,7 @@ export function FilePane({
 		path: string;
 		nonce: number;
 		pdf?: PdfEditorSelection["anchor"];
+		office?: OfficeEditorSelection["anchor"];
 		quote?: string;
 		line?: number;
 		column?: number;
@@ -364,6 +368,7 @@ export function FilePane({
 	const [edit, setEdit] = useState<{ text: string; saved: string } | null>(null);
 	const [fileSelection, setFileSelection] = useState<FileEditorSelection | null>(null);
 	const [pdfSelection, setPdfSelection] = useState<PdfEditorSelection | null>(null);
+	const [officeSelection, setOfficeSelection] = useState<OfficeEditorSelection | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [exportingWord, setExportingWord] = useState(false);
 	/** .html preview: "live" (rendered page) or "source" (highlighted text). */
@@ -890,20 +895,37 @@ export function FilePane({
 			const rel = filePreviewWorkspacePath(cwd, preview.path);
 			setSaving(true);
 			try {
+				let content = text;
+				let encoding: "base64" | undefined;
+				if (preview.office) {
+					const draft = parseOfficeDraft(text);
+					if (!draft) throw new Error("Invalid Office draft");
+					const bytes = writeOfficeDraft(preview.office.bytes, draft);
+					let binary = "";
+					for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+						binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+					}
+					content = btoa(binary);
+					encoding = "base64";
+				}
 				const result = await rpc.request<{ ok: boolean; error?: string }>("fs.write", {
 					cwd,
 					path: rel,
-					content: text,
+					content,
+					...(encoding ? { encoding } : {}),
 				});
 				if (!result.ok) throw new Error(result.error ?? "File save failed");
 				setEdit(cur => (cur ? { ...cur, saved: text } : cur));
 				unsavedBufferCache.delete(preview.path);
 				clearSaveError(preview.path);
 				// Disk save is authoritative. A missing or slow language server must
-				// not turn a successful write into a visible save failure.
-				void rpc
-					.request("editor.saved", { cwd, path: preview.path, content: text }, { timeoutMs: 12_000 })
-					.catch(() => {});
+				// not turn a successful write into a visible save failure. Office
+				// packages have no text document to synchronize with the LSP.
+				if (!preview.office) {
+					void rpc
+						.request("editor.saved", { cwd, path: preview.path, content: text }, { timeoutMs: 12_000 })
+						.catch(() => {});
+				}
 				await load();
 			} catch (err) {
 				reportSaveError(preview.path, err);
@@ -988,14 +1010,28 @@ export function FilePane({
 	/** Quote the latest Monaco selection. Read-only previews can still supply a
 	 * DOM selection; with neither, the header action quotes the whole file. */
 	const appendFileQuote = useCallback(
-		(selection: FileEditorSelection | PdfEditorSelection | null): void => {
+		(selection: FileEditorSelection | PdfEditorSelection | OfficeEditorSelection | null): void => {
 			if (!preview) return;
-			const pdfSelection = selection && "anchor" in selection ? selection : null;
-			const codeSelection = selection && !("anchor" in selection) ? selection : null;
+			const pdfSelection: PdfEditorSelection | null =
+				selection && "anchor" in selection && "startPage" in selection.anchor
+					? (selection as PdfEditorSelection)
+					: null;
+			const officeSelection: OfficeEditorSelection | null =
+				selection && "anchor" in selection && "kind" in selection.anchor
+					? (selection as OfficeEditorSelection)
+					: null;
+			const codeSelection: FileEditorSelection | null = selection && !("anchor" in selection) ? selection : null;
 			const dom = selection ? null : captureSelectionContext();
 			const domMatch = dom?.file?.path === preview.path ? dom : null;
-			const quote =
-				selection?.text ?? domMatch?.text ?? edit?.text ?? preview.raw ?? preview.text ?? preview.htmlLive ?? "";
+			const quote = preview.office
+				? (selection?.text ?? domMatch?.text ?? "")
+				: (selection?.text ??
+					domMatch?.text ??
+					edit?.text ??
+					preview.raw ??
+					preview.text ??
+					preview.htmlLive ??
+					"");
 			const startLine = codeSelection?.startLine ?? domMatch?.file?.startLine;
 			const endLine = codeSelection?.endLine ?? domMatch?.file?.endLine;
 			const displayContext = createFileQuoteContext({
@@ -1004,6 +1040,7 @@ export function FilePane({
 				language: codeSelection?.language ?? domMatch?.file?.language ?? extOf(preview.name),
 				...(startLine !== undefined && endLine !== undefined ? { startLine, endLine } : {}),
 				...(pdfSelection ? { pdf: { ...pdfSelection.anchor, fileSize: preview.size } } : {}),
+				...(officeSelection ? { office: officeSelection.anchor } : {}),
 			});
 			window.dispatchEvent(
 				new CustomEvent("musepi-gui-quote-append", {
@@ -1367,6 +1404,18 @@ export function FilePane({
 								/>
 							)}
 							<span className="gui-filepane-preview-tools">
+								{preview.office && (
+									<button
+										type="button"
+										className="gui-btn gui-btn-icon"
+										title={t("general.save")}
+										aria-label={t("general.save")}
+										disabled={saving || !dirty}
+										onClick={() => void saveEdit()}
+									>
+										<Save size={12} />
+									</button>
+								)}
 								{extOf(preview.name) === "md" && (
 									<button
 										type="button"
@@ -1397,7 +1446,9 @@ export function FilePane({
 									onMouseDown={event => event.preventDefault()}
 									onClick={() =>
 										appendFileQuote(
-											pdfSelection ?? (extOf(preview.name) === "md" && mdRender ? null : fileSelection),
+											pdfSelection ??
+												officeSelection ??
+												(extOf(preview.name) === "md" && mdRender ? null : fileSelection),
 										)
 									}
 								>
@@ -1531,6 +1582,24 @@ export function FilePane({
 									</div>
 								)}
 								{preview.docxBytes && <DocxPreview data={preview.docxBytes} path={preview.path} />}
+								{preview.office && edit && (
+									<FileOfficePreview
+										bytes={preview.office.bytes}
+										draft={parseOfficeDraft(edit.text) ?? preview.office.draft}
+										restore={
+											openRequest?.office
+												? {
+														anchor: openRequest.office,
+														quote: openRequest.quote ?? "",
+														nonce: openRequest.nonce,
+													}
+												: undefined
+										}
+										onChange={draft => updateEditText(serializeOfficeDraft(draft))}
+										onSave={() => void saveEdit()}
+										onSelection={setOfficeSelection}
+									/>
+								)}
 								{preview.officeSheets && <SheetPreview name={preview.name} sheets={preview.officeSheets} />}
 								{preview.media && (
 									<MediaPreview kind={preview.media.kind} url={preview.media.url} name={preview.name} />
@@ -1581,12 +1650,22 @@ export function FilePane({
 						? pdfSelection
 							? { ...pdfSelection, pdf: pdfSelection.anchor }
 							: null
-						: edit && !(preview && extOf(preview.name) === "md" && mdRender)
-							? fileSelection
-							: undefined
+						: preview?.office
+							? officeSelection
+								? { ...officeSelection, office: officeSelection.anchor }
+								: null
+							: edit && !(preview && extOf(preview.name) === "md" && mdRender)
+								? fileSelection
+								: undefined
 				}
-				onQuote={(text, pdf) =>
-					appendFileQuote(pdf && pdfSelection ? { ...pdfSelection, text, anchor: pdf } : fileSelection)
+				onQuote={(text, pdf, office) =>
+					appendFileQuote(
+						pdf && pdfSelection
+							? { ...pdfSelection, text, anchor: pdf }
+							: office && officeSelection
+								? { ...officeSelection, text, anchor: office }
+								: fileSelection,
+					)
 				}
 				onAsk={(text, x, y) => window.dispatchEvent(new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }))}
 				onCopy={text => {
@@ -1600,9 +1679,15 @@ export function FilePane({
 					const path = filePreviewWorkspacePath(cwd, preview.path);
 					const location = pdfSelection
 						? `\n\n\`${path}#pages=${pdfSelection.anchor.startPage}-${pdfSelection.anchor.endPage}\``
-						: fileSelection
-							? `\n\n\`${path}:${fileSelection.startLine}-${fileSelection.endLine}\``
-							: "";
+						: officeSelection?.anchor.kind === "word"
+							? `\n\n\`${path}#paragraph=${officeSelection.anchor.paragraphId + 1}\``
+							: officeSelection?.anchor.kind === "workbook"
+								? `\n\n\`${path}#sheet=${officeSelection.anchor.sheet}&range=${officeSelection.anchor.startCell}:${officeSelection.anchor.endCell}\``
+								: officeSelection?.anchor.kind === "presentation"
+									? `\n\n\`${path}#slide=${officeSelection.anchor.slide}&shape=${officeSelection.anchor.shapeId}\``
+									: fileSelection
+										? `\n\n\`${path}:${fileSelection.startLine}-${fileSelection.endLine}\``
+										: "";
 					void rpc
 						.request("notes.create", { cwd, body: `> ${text}${location}` })
 						.then(() => window.dispatchEvent(new CustomEvent("musepi-notes-changed")))

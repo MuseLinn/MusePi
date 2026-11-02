@@ -607,8 +607,11 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		const disabledAgents = this.session.settings.get("task.disabledAgents") as string[];
 		const planMode = this.session.getPlanModeState?.()?.enabled === true;
 		const isolationMode = this.session.settings.get("task.isolation.mode");
+		const discovered = discoverySnapshots.get(path.resolve(this.session.cwd)) ?? this.#discoveredAgents;
+		const registered = this.session.extensionRunner?.listRegisteredSubagents() ?? [];
+		const registeredNames = new Set(registered.map(agent => agent.name));
 		return renderDescription({
-			agents: discoverySnapshots.get(path.resolve(this.session.cwd)) ?? this.#discoveredAgents,
+			agents: [...registered, ...discovered.filter(agent => !registeredNames.has(agent.name))],
 			isolationEnabled: !planMode && isolationMode !== "none",
 			applyIsolatedChanges: this.session.settings.get("task.isolation.apply"),
 			disabledAgents,

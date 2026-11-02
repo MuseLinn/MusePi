@@ -3,6 +3,7 @@ import type { Usage } from "@musepi/pi-ai";
 import { $env } from "@musepi/pi-utils";
 import type { AgentSessionEvent } from "../session/agent-session";
 import type { ConfiguredThinkingLevel, TaskEffort } from "../thinking";
+import type { ExecutorOptions } from "./executor";
 import type { NestedRepoPatch } from "./worktree";
 
 /** Source of an agent definition */
@@ -373,6 +374,47 @@ export interface ReviewData {
 	summary?: ReviewSummary;
 }
 
+/**
+ * Capability seam: external subagent execution.
+ * - Name+ns: `task.external-subagent` through `AgentDefinition.external`.
+ * - Inputs: plugin-owned executor plus ExecutorOptions, cancellation, and progress reporting.
+ * - Outputs: normalized process result, existing task progress/cards, and the full Markdown artifact.
+ * - Lifecycle: one process invocation per task; settlement or cancellation terminates and reaps it.
+ * - Enable/disable: the owning Cordis package controls registration; no always-on product process exists.
+ * - Conflicts: external agents reject local-only model/effort, plan, schema, and worktree controls.
+ * - Inspection: the live TaskTool description, task progress/result cards, and run artifacts.
+ */
+
+/** Live presentation updates supplied by an external product adapter. */
+export interface ExternalSubagentUpdate {
+	/** Complete answer text observed so far. */
+	output?: string;
+	currentTool?: string;
+	currentToolArgs?: string;
+	resolvedModel?: string;
+}
+
+/** Product-specific execution outcome normalized by the shared task executor. */
+export interface ExternalSubagentResult {
+	output: string;
+	stderr?: string;
+	exitCode?: number;
+	error?: string;
+	aborted?: boolean;
+	abortReason?: string;
+	resolvedModel?: string;
+}
+
+/** Inputs and cancellation scope for one external product invocation. */
+export interface ExternalSubagentContext {
+	options: ExecutorOptions;
+	signal: AbortSignal;
+	report: (update: ExternalSubagentUpdate) => void;
+}
+
+/** A one-shot external product invocation contributed by an extension. */
+export type ExternalSubagentExecutor = (context: ExternalSubagentContext) => Promise<ExternalSubagentResult>;
+
 /** Agent definition (bundled or discovered) */
 export interface AgentDefinition {
 	name: string;
@@ -391,6 +433,8 @@ export interface AgentDefinition {
 	prewalk?: boolean | string;
 	/** Advisor for spawned sessions of this agent: `true` = advise with the default advisor-role model, string = advise with that model pattern (optional `:level` suffix). Absent/`false` = no advisor. */
 	advisor?: boolean | string;
+	/** External product execution. Local-only prompt, schema, isolation, and model controls do not apply. */
+	external?: ExternalSubagentExecutor;
 	source: AgentSource;
 	filePath?: string;
 }
@@ -398,11 +442,12 @@ export interface AgentDefinition {
 /**
  * Agent type contributed at runtime via `ctx.registerSubagent` — everything
  * in {@link AgentDefinition} except provenance, which is always "extension".
+ * External agents omit `systemPrompt`; local agents still require it.
  */
 export interface SubagentDefinition {
 	name: string;
 	description: string;
-	systemPrompt: string;
+	systemPrompt?: string;
 	tools?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
@@ -413,6 +458,29 @@ export interface SubagentDefinition {
 	readSummarize?: boolean;
 	prewalk?: boolean | string;
 	advisor?: boolean | string;
+	external?: ExternalSubagentExecutor;
+}
+
+/** Validate and normalize a plugin-owned subagent registration. */
+export function normalizeSubagentDefinition(def: SubagentDefinition): AgentDefinition {
+	const name = typeof def?.name === "string" ? def.name.trim() : "";
+	if (name === "") throw new Error("registerSubagent requires a non-empty name");
+	if (typeof def.description !== "string" || def.description.trim() === "") {
+		throw new Error(`registerSubagent "${name}" requires a non-empty description`);
+	}
+	if (def.external !== undefined && typeof def.external !== "function") {
+		throw new Error(`registerSubagent "${name}" field "external" must be a function`);
+	}
+	if (!def.external && (typeof def.systemPrompt !== "string" || def.systemPrompt.trim() === "")) {
+		throw new Error(`registerSubagent "${name}" requires a non-empty systemPrompt`);
+	}
+	for (const key of ["tools", "model", "spawns"] as const) {
+		const value = def[key];
+		if (value !== undefined && !Array.isArray(value) && !(key === "spawns" && value === "*")) {
+			throw new Error(`registerSubagent "${name}" field "${key}" must be an array`);
+		}
+	}
+	return { ...def, name, systemPrompt: def.systemPrompt ?? "", source: "extension" };
 }
 
 /** Details extracted from a subagent `yield` tool call for final-result assembly and task rendering. */

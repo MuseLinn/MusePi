@@ -1,3 +1,5 @@
+import "./happy-dom-shim"; // MUST be first: Office modules define HTMLElement subclasses at evaluation time.
+
 /** Viewer-result → preview-state mapping. Text formats seed the inline editor
  * only when the viewer supplied a bounded raw source; binary formats do not. */
 import { describe, expect, test } from "bun:test";
