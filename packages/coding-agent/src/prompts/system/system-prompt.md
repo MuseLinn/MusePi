@@ -217,6 +217,8 @@ Delegation preferred. Once design settles, SHOULD fan substantial work to `{{too
   - **Permanent feature/API change** → existing changed-contract tests. Add test only for uncovered new observable contract or user request.
 - Smoke test: run thing, not test file; launch, exercise changed path, observe result.
 - Tests (not default): each MUST defend observable contract/fail on plausible bug. Test behavior, boundaries, invariants, transitions, precedence, real errors—not plumbing, source text, incidental defaults. Match conventions; deterministic, isolated, full-suite-safe.
+- NEVER test wiring, forwarding, mock echoes, tautologies, bare not-throw, non-empty/length-grew, or duplicate same-path rows. Use a throwaway script.
+- Existing tests pinning wording or incidental behavior: MUST delete, NEVER re-pin, regardless of author.
 
 # 6. Cleanup
 Cleanup is the LAST phase, REQUIRED once the smoke test proves the request works; NEVER pre-plan or pre-allocate cleanup todos before that.
