@@ -1,24 +1,12 @@
 import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import type { QueuedMessageItem, QueueGroup, QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 
-/** Live pending-message queue snapshot (session.queued wire shape). */
-export interface QueueSnapshot {
-	count: number;
-	steering: string[];
-	followUp: string[];
-}
-
-type Group = "steering" | "followUp";
-
-/** Pending-message queue (TUI /queue parity): editable list above the
- *  input — 取回 pops the newest queued message back into the editor,
- *  立即发出 pulls one out as an immediate steer. Rows drag to reorder
- *  within their own group (openchamber QueuedMessageChips parity, @dnd-kit).
- *  Rendered inside the composer's portaled queue menu. */
+/** Pending-message queue with durable ids, pause control and in-group reordering. */
 export function QueuePanel({
 	queued,
 	onSend,
@@ -27,88 +15,58 @@ export function QueuePanel({
 	onDelete,
 	onClear,
 	onReorder,
+	onTogglePause,
 }: {
 	queued: QueueSnapshot;
-	onSend(group: Group, text: string, index: number): void;
-	onPop(group?: Group, text?: string): void;
-	/** Per-row ✎: same daemon path as 取回 (pop into the editor) — the user
-	 *  lands in the textarea able to amend before re-sending. */
-	onEdit(group: Group, text: string): void;
-	/** Per-row 🗑: drop just this message (pop + discard, never re-queued). */
-	onDelete(group: Group, text: string): void;
+	onSend(group: QueueGroup, id: string): void;
+	onPop(group?: QueueGroup, id?: string): void;
+	onEdit(group: QueueGroup, id: string): void;
+	onDelete(group: QueueGroup, id: string): void;
 	onClear(): void;
-	onReorder(group: Group, from: string, to: string): void;
+	onReorder(group: QueueGroup, fromId: string, toId: string): void;
+	onTogglePause(): void;
 }): ReactNode {
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 	const handleDragEnd =
-		(group: Group) =>
-		(e: DragEndEvent): void => {
-			const from = idToText(String(e.active.id));
-			const over = e.over;
-			if (!over || from === undefined) return;
-			const to = idToText(String(over.id));
-			if (to === undefined || from === to) return;
-			onReorder(group, from, to);
+		(group: QueueGroup) =>
+		(event: DragEndEvent): void => {
+			const over = event.over;
+			if (!over || event.active.id === over.id) return;
+			onReorder(group, String(event.active.id), String(over.id));
 		};
+	const renderGroup = (group: QueueGroup, items: readonly QueuedMessageItem[]): ReactNode => {
+		if (items.length === 0) return null;
+		return (
+			<>
+				<div className="gui-queue-group">
+					{t(group === "steering" ? "general.steering" : "general.afterYield")} · {items.length}
+				</div>
+				<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd(group)}>
+					<SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>
+						{items.map(item => (
+							<SortableQueueItem
+								key={item.id}
+								item={item}
+								onPop={() => onPop(group, item.id)}
+								onEdit={() => onEdit(group, item.id)}
+								onDelete={() => onDelete(group, item.id)}
+								onSend={() => onSend(group, item.id)}
+							/>
+						))}
+					</SortableContext>
+				</DndContext>
+			</>
+		);
+	};
 	return (
 		<div className="gui-queue-panel" role="region" aria-label={t("general.queuedMessages")}>
-			{queued.steering.length > 0 && (
-				<>
-					<div className="gui-queue-group">
-						{t("general.steering")} · {queued.steering.length}
-					</div>
-					{/* Steering (引导) messages are the immediate queue: they are
-					 * delivered in order while the agent runs. "Send now" still
-					 * has meaning here — it pulls THAT message out of the queue
-					 * (agent.sendQueuedMessage removes it) and delivers it as a
-					 * steer immediately, skipping whatever is queued ahead of
-					 * it. Mirrors the After-yield item actions below. */}
-					<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd("steering")}>
-						<SortableContext
-							items={queued.steering.map(msg => textToId("steering", msg))}
-							strategy={verticalListSortingStrategy}
-						>
-							{queued.steering.map((msg, i) => (
-								<SortableQueueItem
-									key={`s-${i}-${msg.slice(0, 12)}`}
-									id={textToId("steering", msg)}
-									msg={msg}
-									onPop={() => onPop("steering", msg)}
-									onEdit={() => onEdit("steering", msg)}
-									onDelete={() => onDelete("steering", msg)}
-									onSend={() => onSend("steering", msg, i)}
-								/>
-							))}
-						</SortableContext>
-					</DndContext>
-				</>
-			)}
-			{queued.followUp.length > 0 && (
-				<>
-					<div className="gui-queue-group">
-						{t("general.afterYield")} · {queued.followUp.length}
-					</div>
-					<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd("followUp")}>
-						<SortableContext
-							items={queued.followUp.map(msg => textToId("followUp", msg))}
-							strategy={verticalListSortingStrategy}
-						>
-							{queued.followUp.map((msg, i) => (
-								<SortableQueueItem
-									key={`f-${i}-${msg.slice(0, 12)}`}
-									id={textToId("followUp", msg)}
-									msg={msg}
-									onPop={() => onPop("followUp", msg)}
-									onEdit={() => onEdit("followUp", msg)}
-									onDelete={() => onDelete("followUp", msg)}
-									onSend={() => onSend("followUp", msg, i)}
-								/>
-							))}
-						</SortableContext>
-					</DndContext>
-				</>
-			)}
+			{renderGroup("steering", queued.steering)}
+			{renderGroup("followUp", queued.followUp)}
 			<div className="gui-queue-panel-actions">
+				<button type="button" className="gui-pane-action !w-auto px-2" onClick={onTogglePause}>
+					<Icon name={queued.paused ? "play" : "pause"} className="h-3 w-3" />
+					<span>{t(queued.paused ? "general.resumeQueue" : "general.pauseQueue")}</span>
+				</button>
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => void onPop()}>
 					<Icon name="arrow-go-back" className="h-3 w-3" />
 					<span>{t("general.takeBackNewest")}</span>
@@ -122,32 +80,21 @@ export function QueuePanel({
 	);
 }
 
-/** Stable sortable id encodes group + text (the daemon text-matches the same
- *  way — first match wins, so duplicate texts collide identically on both
- *  sides). */
-const textToId = (group: Group, text: string): string => `${group === "steering" ? "s" : "f"}:${text}`;
-const idToText = (id: string): string | undefined => {
-	const sep = id.indexOf(":");
-	return sep === -1 ? undefined : id.slice(sep + 1);
-};
-
 function SortableQueueItem({
-	id,
-	msg,
+	item,
 	onPop,
 	onEdit,
 	onDelete,
 	onSend,
 }: {
-	id: string;
-	msg: string;
+	item: QueuedMessageItem;
 	onPop(): void;
 	onEdit(): void;
 	onDelete(): void;
 	onSend(): void;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
-		id,
+		id: item.id,
 	});
 	return (
 		<div
@@ -166,9 +113,18 @@ function SortableQueueItem({
 			>
 				<Icon name="draggable" className="h-3 w-3" />
 			</button>
-			<span className="gui-queue-item-text" title={msg}>
-				{msg}
+			<span className="gui-queue-item-text" title={item.text}>
+				{item.text}
 			</span>
+			{item.imageCount > 0 && (
+				<span
+					className="gui-queue-item-attachments"
+					title={t("general.queuedAttachmentCount", { count: item.imageCount })}
+				>
+					<Icon name="attachment-2" className="h-3 w-3" />
+					{item.imageCount}
+				</span>
+			)}
 			<button
 				type="button"
 				className="gui-queue-send"

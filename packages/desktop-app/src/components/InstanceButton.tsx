@@ -8,12 +8,13 @@
  */
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-// @ts-expect-error — shared untyped Electron updater logic.
-import { isNewerVersion } from "../../electron/update-logic.cjs";
+import { projectRuntimeVersions } from "../lib/daemon-version";
+import { checkAppUpdates, getShellVersion } from "../lib/electron";
 import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
+import { InstanceManagerDialog } from "./InstanceManagerDialog";
 import { MenuPopup } from "./MenuPopup";
 
 export function InstanceButton({
@@ -26,6 +27,8 @@ export function InstanceButton({
 	onRemoveHost,
 	onOpenSettings,
 	onReconnect,
+	onDisconnect,
+	onOpenWorkspace,
 }: {
 	rpc: RpcClient | null;
 	connected: boolean;
@@ -36,24 +39,34 @@ export function InstanceButton({
 	onRemoveHost(id: string): void;
 	onOpenSettings(): void;
 	onReconnect(): void;
+	onDisconnect(): void;
+	onOpenWorkspace(cwd: string): void;
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
+	const [managerOpen, setManagerOpen] = useState(false);
 	const browserHost = useSyncExternalStore(subscribeHost, getHostState, getHostState);
 
-	// Real version + round-trip latency from system.meta, refreshed whenever
-	// the menu opens or the refresh button is hit.
-	const [daemonVersion, setDaemonVersion] = useState<string | null>(null);
+	// Shell and daemon facts remain separate; only the shell drives app updates.
+	const [displayVersion, setDisplayVersion] = useState<string | null>(null);
+	const [latestVersion, setLatestVersion] = useState<string | null>(null);
+	const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
 	const [daemonLatency, setDaemonLatency] = useState<number | null>(null);
 	const [metaLoading, setMetaLoading] = useState(false);
 	const refreshMeta = useCallback((): void => {
 		if (!rpc) return;
 		setMetaLoading(true);
 		const t0 = performance.now();
-		void rpc
-			.request<{ version?: string }>("system.meta")
-			.then(meta => {
-				setDaemonVersion(meta?.version ?? null);
+		void Promise.all([
+			rpc.request<{ version?: string; musepiVersion?: string | null }>("system.meta"),
+			getShellVersion(),
+			checkAppUpdates().catch(() => null),
+		])
+			.then(([meta, appVersion, update]) => {
+				const projected = projectRuntimeVersions({ appVersion, meta, update });
+				setDisplayVersion(projected.displayVersion);
+				setLatestVersion(projected.latestVersion);
+				setAppUpdateAvailable(projected.appUpdateAvailable);
 				setDaemonLatency(Math.max(0, Math.round(performance.now() - t0)));
 			})
 			.catch(() => {
@@ -64,22 +77,6 @@ export function InstanceButton({
 	useEffect(() => {
 		if (open) refreshMeta();
 	}, [open, refreshMeta]);
-
-	// Remote-update badge: daemon version vs the latest GitHub release.
-	const [latestVersion, setLatestVersion] = useState<string | null>(null);
-	useEffect(() => {
-		if (!open) return;
-		let cancelled = false;
-		void fetch("https://api.github.com/repos/MuseLinn/MusePi/releases/latest")
-			.then(r => (r.ok ? (r.json() as Promise<{ tag_name?: string }>) : null))
-			.then(rel => {
-				if (!cancelled && rel?.tag_name) setLatestVersion(rel.tag_name.replace(/^v/, ""));
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [open]);
 
 	// Reachability dots for saved remote hosts (probe on open).
 	const [hostReach, setHostReach] = useState<Record<string, boolean>>({});
@@ -98,9 +95,6 @@ export function InstanceButton({
 			cancelled = true;
 		};
 	}, [open, hosts, daemonUrl]);
-
-	const [addHostOpen, setAddHostOpen] = useState(false);
-	const [hostDraft, setHostDraft] = useState({ label: "", url: "", token: "" });
 
 	return (
 		<div className="gui-instance">
@@ -171,8 +165,8 @@ export function InstanceButton({
 						<div className="truncate text-[12.5px]">{t("general.local")}</div>
 						<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">{daemonUrl}</div>
 					</div>
-					<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
-					{latestVersion && daemonVersion && isNewerVersion(latestVersion, daemonVersion) && (
+					<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{displayVersion ?? "—"}</span>
+					{appUpdateAvailable && latestVersion && (
 						<span
 							className="gui-update-badge"
 							title={t("general.updateAvailable", {
@@ -269,55 +263,17 @@ export function InstanceButton({
 					</>
 				)}
 				<div className="my-1 border-t border-[var(--border)]" />
-				{addHostOpen ? (
-					<div className="mx-2 mb-1 flex flex-col gap-1.5 rounded-lg bg-[var(--color-surface-sunken)] p-2">
-						<input
-							className="gui-input w-full"
-							placeholder={t("settings.instanceLabel")}
-							value={hostDraft.label}
-							onChange={e => setHostDraft(d => ({ ...d, label: e.target.value }))}
-						/>
-						<input
-							className="gui-input w-full font-mono"
-							placeholder={t("settings.hostUrlPlaceholder")}
-							value={hostDraft.url}
-							onChange={e => setHostDraft(d => ({ ...d, url: e.target.value }))}
-						/>
-						<input
-							className="gui-input w-full font-mono"
-							placeholder={t("settings.remoteToken")}
-							type="password"
-							value={hostDraft.token}
-							onChange={e => setHostDraft(d => ({ ...d, token: e.target.value }))}
-						/>
-						<div className="flex gap-1.5">
-							<button
-								type="button"
-								className="gui-btn gui-btn-primary gui-btn-sm flex-1"
-								disabled={!hostDraft.label.trim() || !hostDraft.url.trim()}
-								onClick={() => {
-									onAddHost({
-										label: hostDraft.label.trim(),
-										url: hostDraft.url.trim(),
-										token: hostDraft.token.trim() || undefined,
-									});
-									setHostDraft({ label: "", url: "", token: "" });
-									setAddHostOpen(false);
-								}}
-							>
-								{t("settings.add")}
-							</button>
-							<button type="button" className="gui-btn gui-btn-sm" onClick={() => setAddHostOpen(false)}>
-								{t("settings.cancel")}
-							</button>
-						</div>
-					</div>
-				) : (
-					<button type="button" className="gui-view-opt" onClick={() => setAddHostOpen(true)}>
-						<Icon name="add-circle" className="h-3.5 w-3.5" />
-						<span>{t("settings.addInstance")}</span>
-					</button>
-				)}
+				<button
+					type="button"
+					className="gui-view-opt"
+					onClick={() => {
+						setOpen(false);
+						setManagerOpen(true);
+					}}
+				>
+					<Icon name="settings-3" className="h-3.5 w-3.5" />
+					<span>{t("settings.instanceManager")}</span>
+				</button>
 				<div className="my-1 border-t border-[var(--border)]" />
 				<button
 					type="button"
@@ -355,6 +311,22 @@ export function InstanceButton({
 					<span>{t("general.quitApp")}</span>
 				</button>
 			</MenuPopup>
+			<InstanceManagerDialog
+				open={managerOpen}
+				onClose={() => setManagerOpen(false)}
+				rpc={rpc}
+				connected={connected}
+				daemonUrl={daemonUrl}
+				hosts={hosts}
+				onSwitchHost={onSwitchHost}
+				onAddHost={onAddHost}
+				onRemoveHost={onRemoveHost}
+				onDisconnect={onDisconnect}
+				onOpenWorkspace={cwd => {
+					setManagerOpen(false);
+					onOpenWorkspace(cwd);
+				}}
+			/>
 		</div>
 	);
 }

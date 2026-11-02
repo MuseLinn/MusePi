@@ -13,6 +13,7 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -327,6 +328,12 @@ import {
 import { ModelControls, type ModelControlsHost } from "./model-controls";
 import { isPrewalkPlanNudge, PrewalkCoordinator, type PrewalkCoordinatorHost } from "./prewalk";
 import {
+	MESSAGE_QUEUE_STATE_TYPE,
+	type PersistedMessageQueueState,
+	type QueuedMessageSnapshot,
+	readPersistedMessageQueue,
+} from "./queued-message-store";
+import {
 	isAdvisorCard,
 	isDisplayableQueuedMessage,
 	isHiddenUserCompanion,
@@ -534,6 +541,9 @@ export class AgentSession {
 
 	// Event subscription state
 	#unsubscribeAgent?: () => void;
+	#unsubscribeQueueChanges?: () => void;
+	#queuedMessageIds = new WeakMap<AgentMessage, string>();
+	#restoringMessageQueue = false;
 	#cancelExitRecorder?: () => void;
 	#cancelFatalRecoveryHint?: () => void;
 	#exitRecorded = false;
@@ -1766,6 +1776,8 @@ export class AgentSession {
 		// Always subscribe to agent events for internal handling
 		// (session persistence, hooks, auto-compaction, retry logic)
 		this.#unsubscribeAgent = this.agent.subscribe(this.#handleAgentEvent);
+		this.#unsubscribeQueueChanges = this.agent.subscribeQueueChanges(() => this.#persistMessageQueue());
+		this.#restoreMessageQueue();
 		// Re-evaluate append-only context mode when the setting changes at runtime.
 		this.#unsubscribeAppendOnly = onAppendOnlyModeChanged(_value => this.#syncAppendOnlyContext(this.model));
 		this.#unsubscribeModelRoles = onModelRolesChanged(() => this.#advisors.onModelRolesChanged());
@@ -4247,6 +4259,8 @@ export class AgentSession {
 		this.setHindsightSessionState(undefined);
 		hindsightState?.dispose();
 		this.#disconnectFromAgent();
+		this.#unsubscribeQueueChanges?.();
+		this.#unsubscribeQueueChanges = undefined;
 		if (this.#unsubscribeAppendOnly) {
 			this.#unsubscribeAppendOnly();
 			this.#unsubscribeAppendOnly = undefined;
@@ -6609,6 +6623,7 @@ export class AgentSession {
 	 * Gate for idle-path queued-message auto-continue. See `#scheduleIdleQueueDrain` for rationale.
 	 */
 	#canAutoContinueForFollowUp(): boolean {
+		if (this.queuedMessagesPaused) return false;
 		if (this.isStreaming) return false;
 		if (this.isRetrying) return false;
 		// A queued steer resumes from ANY tail: Agent.continue() runs #runLoop(undefined),
@@ -6629,7 +6644,8 @@ export class AgentSession {
 		// the first model call invalid, so leave the follow-up queued for the next explicit resume.
 		const messages = this.agent.state.messages;
 		const last = messages[messages.length - 1];
-		return last?.role === "assistant" || last?.role === "toolResult";
+		// Agent.continue() can open a new transcript directly from a restored queue.
+		return messages.length === 0 || last?.role === "assistant" || last?.role === "toolResult";
 	}
 
 	queueDeferredMessage(message: CustomMessage): void {
@@ -6973,9 +6989,9 @@ export class AgentSession {
 	 * 消息；该条随之离开队列（面板里本组的行消失）。按文本匹配 user 消息（重复文本取
 	 * 第一条）；图片消息按其原内容重发。找不到返回 false。
 	 */
-	async sendQueuedMessage(group: "steering" | "followUp", text: string): Promise<boolean> {
+	async sendQueuedMessage(group: "steering" | "followUp", textOrId: string): Promise<boolean> {
 		const queue = group === "steering" ? this.agent.peekSteeringQueue() : this.agent.peekFollowUpQueue();
-		const index = queue.findIndex(m => isUserQueuedMessage(m) && queueChipText(m) === text);
+		const index = this.#queuedMessageIndex(queue, textOrId);
 		if (index < 0) return false;
 		const rest = queue.filter((_, i) => i !== index);
 		if (group === "steering") this.agent.replaceQueues(rest, [...this.agent.peekFollowUpQueue()]);
@@ -7031,6 +7047,88 @@ export class AgentSession {
 		};
 	}
 
+	get queuedMessagesPaused(): boolean {
+		return this.agent.queuedMessagesPaused;
+	}
+
+	setQueuedMessagesPaused(paused: boolean): void {
+		this.agent.setQueuedMessagesPaused(paused);
+		if (!paused) this.#scheduleIdleQueueDrain();
+	}
+
+	getQueuedMessageSnapshot(): QueuedMessageSnapshot {
+		const items = (queue: readonly AgentMessage[]) =>
+			queue.filter(isUserQueuedMessage).map(message => {
+				const restored = toRestoredQueuedMessage(message);
+				return {
+					id: this.#queuedMessageId(message),
+					text: restored.text,
+					imageCount: restored.images?.length ?? 0,
+				};
+			});
+		return {
+			paused: this.queuedMessagesPaused,
+			steering: items(this.agent.peekSteeringQueue()),
+			followUp: items(this.agent.peekFollowUpQueue()),
+		};
+	}
+
+	#queuedMessageId(message: AgentMessage): string {
+		let id = this.#queuedMessageIds.get(message);
+		if (!id) {
+			id = randomUUID();
+			this.#queuedMessageIds.set(message, id);
+		}
+		return id;
+	}
+
+	#queuedMessageIndex(queue: readonly AgentMessage[], textOrId: string): number {
+		const byId = queue.findIndex(
+			message => isUserQueuedMessage(message) && this.#queuedMessageIds.get(message) === textOrId,
+		);
+		if (byId >= 0) return byId;
+		return queue.findIndex(message => isUserQueuedMessage(message) && queueChipText(message) === textOrId);
+	}
+
+	#restoreMessageQueue(state?: PersistedMessageQueueState): void {
+		const restored = state ?? readPersistedMessageQueue(this.sessionManager.getBranch());
+		this.#restoringMessageQueue = true;
+		this.#queuedMessageIds = new WeakMap<AgentMessage, string>();
+		try {
+			const messages = (items: PersistedMessageQueueState["steering"]): AgentMessage[] =>
+				items.map(item => {
+					this.#queuedMessageIds.set(item.message, item.id);
+					return item.message;
+				});
+			this.agent.replaceQueues(
+				restored ? messages(restored.steering) : [],
+				restored ? messages(restored.followUp) : [],
+			);
+			this.agent.setQueuedMessagesPaused(restored?.paused ?? false);
+		} finally {
+			this.#restoringMessageQueue = false;
+		}
+	}
+
+	#persistMessageQueue(): void {
+		if (this.#restoringMessageQueue) return;
+		// Queued user input is durable intent even before the first assistant reply.
+		if (this.agent.hasQueuedMessages()) {
+			void this.sessionManager.ensureOnDisk().catch(error => {
+				logger.warn("Failed to materialize queued-message session", { error: String(error) });
+			});
+		}
+		const items = (queue: readonly AgentMessage[]) =>
+			queue.map(message => ({ id: this.#queuedMessageId(message), message }));
+		const state: PersistedMessageQueueState = {
+			version: 1,
+			paused: this.queuedMessagesPaused,
+			steering: items(this.agent.peekSteeringQueue()),
+			followUp: items(this.agent.peekFollowUpQueue()),
+		};
+		this.sessionManager.appendCustomEntry(MESSAGE_QUEUE_STATE_TYPE, state);
+	}
+
 	/**
 	 * Pop the last queued message (steering first, then follow-up).
 	 * Used by dequeue keybinding to restore messages to editor one at a time.
@@ -7083,17 +7181,11 @@ export class AgentSession {
 	 * `RestoredQueuedMessage`), while 删除 discards it outright. The queue
 	 * surgery is identical, so there is one path to keep correct.
 	 */
-	popQueuedMessage(group: "steering" | "followUp", text: string): RestoredQueuedMessage | undefined {
+	popQueuedMessage(group: "steering" | "followUp", textOrId: string): RestoredQueuedMessage | undefined {
 		const steering = this.agent.peekSteeringQueue();
 		const followUp = this.agent.peekFollowUpQueue();
 		const queue = group === "steering" ? steering : followUp;
-		let index = -1;
-		for (let i = 0; i < queue.length; i++) {
-			if (isUserQueuedMessage(queue[i]) && queueChipText(queue[i]) === text) {
-				index = i;
-				break;
-			}
-		}
+		const index = this.#queuedMessageIndex(queue, textOrId);
 		if (index < 0) return undefined;
 		// Same companion rule as popLastQueuedMessage: notices/companions
 		// queue immediately before their user message.
@@ -7116,36 +7208,22 @@ export class AgentSession {
 	 * delivery-timing change, not a sort. Returns false when either text
 	 * is unmatched or the move is a no-op.
 	 */
-	reorderQueuedMessage(group: "steering" | "followUp", fromText: string, toText: string): boolean {
+	reorderQueuedMessage(group: "steering" | "followUp", fromTextOrId: string, toTextOrId: string): boolean {
 		const steering = this.agent.peekSteeringQueue();
 		const followUp = this.agent.peekFollowUpQueue();
 		const queue = group === "steering" ? steering : followUp;
-		const userIndex = (text: string): number => {
-			for (let i = 0; i < queue.length; i++) {
-				if (isUserQueuedMessage(queue[i]) && queueChipText(queue[i]) === text) return i;
-			}
-			return -1;
-		};
-		const from = userIndex(fromText);
-		if (from < 0 || fromText === toText) return false;
-		const to = userIndex(toText);
+		const from = this.#queuedMessageIndex(queue, fromTextOrId);
+		if (from < 0 || fromTextOrId === toTextOrId) return false;
+		const to = this.#queuedMessageIndex(queue, toTextOrId);
 		if (to < 0) return false;
-		// Dragged block: the user message plus its contiguous hidden
-		// companions (same rule as the pop paths).
+		const targetMessage = queue[to];
+		// Dragged block: the user message plus its contiguous hidden companions.
 		let start = from;
 		while (start > 0 && isHiddenUserCompanion(queue[start - 1])) start--;
 		const block = queue.slice(start, from + 1);
 		const rest = queue.slice();
 		rest.splice(start, block.length);
-		// Target index in the array WITHOUT the dragged block; insert before
-		// it so a downward move lands above the target.
-		let target = -1;
-		for (let i = 0; i < rest.length; i++) {
-			if (isUserQueuedMessage(rest[i]) && queueChipText(rest[i]) === toText) {
-				target = i;
-				break;
-			}
-		}
+		const target = rest.indexOf(targetMessage);
 		if (target < 0) return false;
 		const next = rest.slice();
 		next.splice(target, 0, ...block);
@@ -8541,6 +8619,7 @@ export class AgentSession {
 		const previousAgentMessages = [...this.agent.state.messages];
 		const previousSteeringMessages = [...this.agent.peekSteeringQueue()];
 		const previousFollowUpMessages = [...this.agent.peekFollowUpQueue()];
+		const previousQueuedMessagesPaused = this.queuedMessagesPaused;
 		const previousPendingNextTurnMessages = [...this.#pendingNextTurnMessages];
 		const previousScheduledHiddenNextTurnGeneration = this.#scheduledHiddenNextTurnGeneration;
 		const previousQueuedMessageDrainBlocked = this.#queuedMessageDrainBlocked;
@@ -8567,6 +8646,7 @@ export class AgentSession {
 		const previousLastCompletedRewind = this.#lastCompletedRewind;
 		const previousRewoundToolResultIds = new Set(this.#rewoundToolResultIds);
 
+		this.#restoringMessageQueue = true;
 		this.agent.clearAllQueues();
 		this.#pendingNextTurnMessages = [];
 		this.#scheduledHiddenNextTurnGeneration = undefined;
@@ -8695,6 +8775,7 @@ export class AgentSession {
 			if (switchingToDifferentSession || didReloadConversationChange) {
 				this.#clearSessionScopedToolState();
 			}
+			this.#restoreMessageQueue();
 			this.#reconnectToAgent();
 			try {
 				await this.#sessionSwitchReconciler?.();
@@ -8739,6 +8820,8 @@ export class AgentSession {
 			this.agent.setSystemPrompt(previousSystemPrompt);
 			this.agent.replaceMessages(previousAgentMessages);
 			this.agent.replaceQueues(previousSteeringMessages, previousFollowUpMessages);
+			this.agent.setQueuedMessagesPaused(previousQueuedMessagesPaused);
+			this.#restoringMessageQueue = false;
 			this.#pendingNextTurnMessages = previousPendingNextTurnMessages;
 			this.#scheduledHiddenNextTurnGeneration = previousScheduledHiddenNextTurnGeneration;
 			this.#queuedMessageDrainBlocked = previousQueuedMessageDrainBlocked;

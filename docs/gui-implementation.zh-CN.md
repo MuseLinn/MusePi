@@ -625,6 +625,14 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **TUI 任务 widget 与发起它的那次 `task` 调用绑定**:`tool_execution_*` 事件带 `toolCallId`,异号 `update`/`end` **必须忽略** —— `task-swarm` 这个 widget key 是全局的,否则另一次调用会覆盖在跑的这份成员表,面板在两个成员列表之间闪烁(`0/3` ⇄ `0/4`)。网格的 id 列取**最长成员 id 的可见宽度**并补齐,而不是 `String(count).length`:按数量算会把格子排得过窄,每行都超出终端宽度。
 - **「立即发送」是跳队 —— 插到队首,绝不重排到队尾**(`session.queuedSend` → `AgentSession.sendQueuedMessage`):引导队列每个注入边界只取**队首**一条,而 RPC 此前把点击的消息取出后又追加到队尾 —— 它要等前面已排队的消息逐个投递完,面板上该行一直不消失(按钮读起来像没反应)。现取出的条目重新注入 steer 队列**队首**,下一个注入边界即发;面板点击后立刻按 daemon 权威快照重读,不等 3s 轮询。测试陷阱:由此触发的队列 drain 是 0 延迟 post-prompt 任务,fake timers **拦不住**它 —— 应 mock `agent.continue` 并在注入边界上断言投递顺序(steer-idle-drain 套件);continue 若 mock 成 no-op,队列不空、drain 会无限重新武装。
 
+## 25a. 持久化消息队列、运行时版本与实例管理
+
+- **队列通信契约**：`session.queued` 返回 `{count, paused, steering, followUp}`；每行是 `{id,text,imageCount}`，`count` 表示可展示的待处理工作，不一定等于用户消息行数。修改操作使用稳定行 ID，文本只作为滚动升级期间的回退。`client-core/src/lib/message-queue.ts` 同时归一化新对象和旧字符串数组响应，供桌面、compact／移动端及协作客户端共用。
+- **持久化与恢复**：`AgentSession` 把最新完整队列写入活动会话分支的 `message_queue_state` custom entry，保留完整消息、附件、展示上下文、稳定 ID 和暂停状态；恢复过程不会重复写入。JSONL／历史快照从最新状态推导 `queuedMessageCount`，不计隐藏辅助消息。恢复暂停的空闲队列后会调度续跑；空对话也是合法入口，因为 `Agent.continue()` 会把首条排队消息作为开场消息投递。
+- **客户端与访客行为**：桌面 `QueuePanel` 和 compact／移动端 `MessageQueueSheet` 在每次操作后重读权威快照，因此取回编辑后再发送会使用新的队列 ID。图片取回会创建新的待发送附件和 object URL。协作队列 RPC 固定操作宿主当前会话，忽略访客传入的会话 ID；只读访客的所有修改请求都会被拒绝。
+- **版本投影**：`projectRuntimeVersions()` 是设置、新功能弹窗和实例界面的共同数据源。桌面壳与 daemon 版本分别保留；不一致只设置 `daemonRefreshNeeded`，`appUpdateAvailable` 仅来自应用更新检查。启动新功能内容必须匹配壳版本，避免旧 daemon 提供误导性的更新说明。
+- **实例归属**：`InstanceManagerDialog` 统一负责本地／远程 daemon 选择，并在远程工作区页签中复用现有 SSH `ConnectDialog`。`normalizeRemoteHostUrl()` 先规范化地址，再建立 WebSocket 并调用 `system.meta` 探测；失败或六秒超时不会保存主机。「断开」保留在该管理面内，不再作为侧栏的第二个入口。
+
 ## 26. 用户消息展开/收起的高度动效(2026-09-13)
 
 - **clamp 预览是「落定态」,绝不是折叠切换过程中的实时形状**(guest-client `transcript-content.tsx` 的 `UserText`):长用户消息(设置 → 聊天 → 折叠较长的用户消息,`musepi-gui-chat-collapseuser`)此前点击时直接翻转 `-webkit-line-clamp: 2` ⇄ `display: block` —— 硬切、无动效,违反 §3 的高度 morph 标准。现改走共享的 `useCollapseHeight`(`lib/use-collapse.ts`,扩展出 `closedHeight`/`onSettled`),在预览高度与全文高度之间按 transcript 的 220ms spring 过渡(与 `tr-think`/`tr-advisor` 折叠体同一语言)。**时序契约**:`--clamped` 类在展开开始时摘除、收起落定后才套回(`onSettled`)—— morph 期间套着 clamp 会让内容中途突然截成 2 行;预览高度必须在 clamp 挂着时缓存(渲染副作用里快照 `clientHeight`),因为 hook 测量时 DOM 已经切到另一侧;收起落定**不可**写 `--h: auto` —— 此时 body 还没套回 clamp,会闪出一帧全文高度(clamp 的 CSS 规则自带 `height: auto`,无视 `--h` 里残留的 px)。

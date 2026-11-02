@@ -80,3 +80,42 @@ export function missingDaemonMethods(answered: Iterable<string>): string[] {
 export function shouldRestartForMissingMethods(answered: Iterable<string>): boolean {
 	return missingDaemonMethods(answered).length > 0;
 }
+
+export interface RuntimeVersionProjection {
+	/** Version presented as the running application: shell first, daemon on web. */
+	displayVersion: string | null;
+	daemonVersion: string | null;
+	/** The shell and service differ; this is not an application update. */
+	daemonRefreshNeeded: boolean;
+	appUpdateAvailable: boolean;
+	latestVersion: string | null;
+}
+
+/** One version projection for Settings, the instance manager and announcements. */
+export function projectRuntimeVersions({
+	appVersion,
+	meta,
+	update,
+}: {
+	appVersion: string | null;
+	meta: { version?: string; musepiVersion?: string | null } | null;
+	update?: { newer?: boolean; latest?: string } | null;
+}): RuntimeVersionProjection {
+	const daemonVersion = meta?.musepiVersion ?? meta?.version ?? null;
+	return {
+		displayVersion: appVersion ?? daemonVersion,
+		daemonVersion,
+		daemonRefreshNeeded: Boolean(appVersion && daemonVersion && appVersion !== daemonVersion),
+		appUpdateAvailable: update?.newer === true,
+		latestVersion: update?.latest ?? null,
+	};
+}
+
+/** Prevent an old daemon's bundled notes from masquerading as this shell's notes. */
+export function changelogMatchesAppVersion(
+	changelog: { latestVersion?: string } | null,
+	appVersion: string | null,
+): boolean {
+	if (!appVersion || !changelog?.latestVersion) return true;
+	return changelog.latestVersion === appVersion;
+}

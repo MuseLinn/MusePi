@@ -3883,6 +3883,7 @@ function AppInner(): ReactNode {
 							onNewSession={startNewTask}
 							onDisconnect={disconnect}
 							onOpenConnect={() => setConnectOpen(true)}
+							onOpenWorkspace={handleOpenRemoteWorkspace}
 							onOpenBoard={() => viewSwapRef.current("board")}
 							boardActive={boardOpen}
 							onOpenPrBoard={() => viewSwapRef.current("prboard")}

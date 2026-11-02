@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import {
+	changelogMatchesAppVersion,
 	daemonMethodProbeParams,
 	isMissingDaemonMethodError,
 	missingDaemonMethods,
+	projectRuntimeVersions,
 	REQUIRED_DAEMON_METHODS,
 	shouldRestartDaemon,
 	shouldRestartForMissingMethods,
@@ -71,4 +73,39 @@ test("only an explicit unknown-method error proves a capability is absent", () =
 	expect(isMissingDaemonMethodError(new Error("Method not found"))).toBe(true);
 	expect(isMissingDaemonMethodError(new Error("sessionId required"))).toBe(false);
 	expect(isMissingDaemonMethodError(new Error("request timeout: skills.marketplace.query"))).toBe(false);
+});
+
+test("a current shell with an old daemon needs a service refresh, not an app update", () => {
+	expect(
+		projectRuntimeVersions({
+			appVersion: "0.7.0",
+			meta: { version: "0.6.4", musepiVersion: "0.6.4" },
+			update: { current: "0.7.0", latest: "0.7.0", newer: false },
+		}),
+	).toEqual({
+		displayVersion: "0.7.0",
+		daemonVersion: "0.6.4",
+		daemonRefreshNeeded: true,
+		appUpdateAvailable: false,
+		latestVersion: "0.7.0",
+	});
+});
+
+test("an old shell keeps the app update state independent from the daemon", () => {
+	const state = projectRuntimeVersions({
+		appVersion: "0.6.4",
+		meta: { version: "0.7.0", musepiVersion: "0.7.0" },
+		update: { current: "0.6.4", latest: "0.7.0", newer: true },
+	});
+	expect(state.displayVersion).toBe("0.6.4");
+	expect(state.daemonRefreshNeeded).toBe(true);
+	expect(state.appUpdateAvailable).toBe(true);
+	expect(state.latestVersion).toBe("0.7.0");
+});
+
+test("old daemon release notes are not presented as the current shell's new features", () => {
+	expect(changelogMatchesAppVersion({ latestVersion: "0.6.4" }, "0.7.0")).toBe(false);
+	expect(changelogMatchesAppVersion({ latestVersion: "0.7.0" }, "0.7.0")).toBe(true);
+	expect(changelogMatchesAppVersion({ latestVersion: undefined }, "0.7.0")).toBe(true);
+	expect(changelogMatchesAppVersion({ latestVersion: "0.7.0" }, null)).toBe(true);
 });

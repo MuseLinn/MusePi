@@ -21,7 +21,7 @@ import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
-import { processImageFile, revokePreviews, toImageContent } from "../../lib/image";
+import { processImageFile, restoreImageAttachment, revokePreviews, toImageContent } from "../../lib/image";
 import { type NativeRecognition, nativeVoiceSupport, startNativeRecognition } from "../../lib/native-voice";
 import { useShellLayout } from "../../lib/responsive-shell";
 import { useMorphTarget } from "../../lib/scene-morph";
@@ -34,6 +34,7 @@ import { startVoiceCapture, transcribeAudio } from "../../lib/voice";
 import { shouldShowChatLoading } from "../transcript/render-units";
 import { ContextRing } from "./ContextRing";
 import { MatrixLoader } from "./MatrixLoader";
+import { MessageQueueSheet, useMessageQueue } from "./MessageQueueSheet";
 import { SuggestionChips } from "./SuggestionChips";
 
 /** Thinking ladder, display order (TUI `--thinking` parity; labels reuse the
@@ -834,7 +835,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const askPending = useGuestSelector(client, s => s.uiRequest !== null);
 	const compacting = useGuestSelector(client, s => s.compacting);
 	const showWorking = shouldShowChatLoading({ working: busy, approvalPending, askPending, compacting });
-	const queued = useGuestSelector(client, s => s.state?.queuedMessageCount ?? 0);
+	const queue = useMessageQueue(client);
+	const [queueOpen, setQueueOpen] = useState(false);
 	// Empty-state draft suggestions: show only while the
 	// session is live, editable and has nothing to show yet.
 	const empty = useGuestSelector(client, s => s.entries.length === 0 && s.stream === null && !s.working);
@@ -1169,10 +1171,19 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						</div>
 					)}
 					<ContextRing client={client} />
-					{busy && queued > 0 && (
-						<span className="sh-queued">
-							<span className="sh-queued-label">{t("settings.queued")} </span>×{queued}
-						</span>
+					{queue.snapshot && queue.snapshot.count > 0 && (
+						<button
+							type="button"
+							className="sh-queued"
+							onClick={() => {
+								setQueueOpen(true);
+								haptic(8);
+							}}
+							title={t("general.queuedMessages")}
+							aria-label={t("general.queuedMessages")}
+						>
+							<span className="sh-queued-label">{t("settings.queued")} </span>×{queue.snapshot.count}
+						</button>
 					)}
 				</div>
 				<div className="sh-composer-end">
@@ -1265,6 +1276,24 @@ export function Composer({ client }: ComposerProps): ReactNode {
 				onClose={() => setAttachOpen(false)}
 				onCamera={() => cameraRef.current?.click()}
 				onLibrary={() => galleryRef.current?.click()}
+			/>
+			<MessageQueueSheet
+				open={queueOpen}
+				readOnly={readOnly}
+				queue={queue}
+				onClose={() => setQueueOpen(false)}
+				onRestore={restored => {
+					if (restored.text) {
+						setText(previous => (previous.trim() ? `${previous.trim()}\n${restored.text}` : restored.text));
+					}
+					if (restored.images?.length) {
+						const attachments = restored.images.map((image, index) =>
+							restoreImageAttachment(image, `queue-image-${Date.now()}-${index + 1}`),
+						);
+						setPending(previous => [...previous, ...attachments]);
+					}
+					requestAnimationFrame(() => taRef.current?.focus());
+				}}
 			/>
 			<ModelThinkingSheet client={client} open={modelSheetOpen} onClose={() => setModelSheetOpen(false)} />
 		</div>

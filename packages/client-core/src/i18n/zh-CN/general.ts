@@ -594,6 +594,10 @@ export const general = {
 	"general.takeBackNewest": "取回最新一条",
 	"general.takeBackNewestQueued": "把最新一条排队消息取回输入框",
 	"general.clearQueue": "清空队列",
+	"general.pauseQueue": "暂停排队",
+	"general.resumeQueue": "继续发送",
+	"general.queuePausedHint": "排队已暂停，消息会保留到继续发送",
+	"general.queuedAttachmentCount": "{count} 个附件",
 	"general.dragReorderQueuedMessage": "拖拽以重新排序排队消息",
 	"general.takeBack": "取回",
 	// Session-control round: terminate confirm + revert history.

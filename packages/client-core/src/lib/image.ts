@@ -90,6 +90,18 @@ export async function processImageFile(file: File): Promise<PendingAttachment> {
 	}
 }
 
+/** Restores a queued image as a normal editable composer attachment. */
+export function restoreImageAttachment(image: ImageContent, name: string): PendingAttachment {
+	const bytes = Uint8Array.from(atob(image.data), character => character.charCodeAt(0));
+	return {
+		id: `att-${Date.now()}-${seq++}`,
+		data: image.data,
+		mimeType: image.mimeType,
+		previewUrl: URL.createObjectURL(new Blob([bytes], { type: image.mimeType })),
+		name,
+	};
+}
+
 /** Extracts the wire payload from pending attachments. */
 export function toImageContent(pending: readonly PendingAttachment[]): ImageContent[] {
 	return pending.map(({ data, mimeType }) => ({ type: "image", data, mimeType }));

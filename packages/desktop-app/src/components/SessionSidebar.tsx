@@ -58,6 +58,7 @@ export function SessionSidebar({
 	onNewSession,
 	onDisconnect,
 	onOpenConnect,
+	onOpenWorkspace,
 	onOpenBoard,
 	boardActive,
 	onOpenPrBoard,
@@ -117,6 +118,7 @@ export function SessionSidebar({
 	onNewSession(): void;
 	onDisconnect(): void;
 	onOpenConnect(): void;
+	onOpenWorkspace(cwd: string): void;
 	onOpenBoard?(): void;
 	onOpenScheduled?(): void;
 	scheduledActive?: boolean;
@@ -1455,6 +1457,8 @@ export function SessionSidebar({
 						onRemoveHost={onRemoveHost}
 						onOpenSettings={onOpenSettings}
 						onReconnect={onReconnect}
+						onDisconnect={onDisconnect}
+						onOpenWorkspace={onOpenWorkspace}
 					/>
 					<div className="flex items-center gap-1.5">
 						<button
@@ -1483,15 +1487,6 @@ export function SessionSidebar({
 							aria-label={t("settings.mobileRemoteControl")}
 						>
 							<Icon name="smartphone" className="h-4 w-4" />
-						</button>
-						<button
-							type="button"
-							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-							onClick={onDisconnect}
-							title={t("settings.disconnect")}
-							aria-label={t("settings.disconnect")}
-						>
-							<Icon name="close" className="h-4 w-4" />
 						</button>
 					</div>
 				</div>

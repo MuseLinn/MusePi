@@ -1,4 +1,5 @@
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
+import { normalizeQueueSnapshot, type QueueGroup, type QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
 import {
 	composeDisplayContextPrompt,
 	type DisplayContext,
@@ -867,10 +868,8 @@ export function Composer({
 			.finally(() => setRetryBusy(false));
 	}, [rpc, sessionId]);
 
-	// ── Pending-message queue (TUI /queue parity): while the agent works,
-	// sent messages land in the follow-up queue — poll the live count so
-	// the composer can show the "queue N" chip. Idle → nothing to show.
-	const [queued, setQueued] = useState<{ count: number; steering: string[]; followUp: string[] } | null>(null);
+	// Durable pending input remains visible even when the session is idle.
+	const [queued, setQueued] = useState<QueueSnapshot | null>(null);
 	const [queueOpen, setQueueOpen] = useState(false);
 	// Busy-state plain-Enter behavior (settings.busyEnter):
 	// "steer" (TUI default — insert into the running turn now) or "queue"
@@ -970,18 +969,24 @@ export function Composer({
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
 	}, [rpc]);
-	// 取回: pop a queued message back into the editor (TUI Alt+Up parity)
-	// so the user can edit before re-sending. With group+text it pops THAT
-	// item (queue panel per-item 撤回/编辑); without, the newest one.
+	// One normalizer serves both current daemons and older text-only snapshots.
+	const refreshQueued = useCallback((): Promise<void> => {
+		if (!rpc || !sessionId) return Promise.resolve();
+		return rpc
+			.request<unknown>("session.queued", { sessionId })
+			.then(res => setQueued(normalizeQueueSnapshot(res)))
+			.catch(() => {});
+	}, [rpc, sessionId]);
+	// 取回/编辑 restores text, images and quote context before the next send.
 	const popQueued = useCallback(
-		(group?: "steering" | "followUp", text?: string): Promise<void> => {
+		(group?: QueueGroup, id?: string): Promise<void> => {
 			if (!rpc || !sessionId) return Promise.resolve();
 			return rpc
 				.request<{
 					text: string;
 					images?: { type: string; data: string; mimeType: string }[];
 					displayContext?: MessageDisplayContext;
-				} | null>("session.queuedPop", { sessionId, group, text })
+				} | null>("session.queuedPop", { sessionId, group, id })
 				.then(res => {
 					if (res?.text) {
 						setText(prev => {
@@ -991,34 +996,28 @@ export function Composer({
 						});
 						taRef.current?.focus();
 					}
-					// 取回 must bring the ATTACHMENTS back too, not just the
-					// text: the daemon returns the queued images with the
-					// popped message and dropping them forced the user to
-					// re-attach before every re-send.
 					const restored = attachmentsFromWireImages(res?.images);
 					if (restored.length > 0) setAttachments(prev => [...prev, ...restored]);
 					if (res?.displayContext) {
 						const restoredContexts = normalizeDisplayContexts(res.displayContext);
 						onQuotesChange([...quotesRef.current, ...restoredContexts]);
 					}
-					// Optimistic removal — the next poll confirms.
-					if (group && text) {
+					if (group && id) {
 						setQueued(prev =>
 							prev
 								? {
 										...prev,
 										count: Math.max(0, prev.count - 1),
-										[group]: prev[group].filter(m => m !== text),
+										[group]: prev[group].filter(item => item.id !== id),
 									}
 								: prev,
 						);
-					} else {
-						setQueued(prev => (prev && prev.count > 0 ? { ...prev, count: prev.count - 1 } : prev));
 					}
+					void refreshQueued();
 				})
 				.catch(() => {});
 		},
-		[rpc, sessionId, onQuotesChange],
+		[rpc, sessionId, onQuotesChange, refreshQueued],
 	);
 	const clearQueued = useCallback((): Promise<void> => {
 		if (!rpc || !sessionId) return Promise.resolve();
@@ -1030,30 +1029,31 @@ export function Composer({
 			})
 			.catch(() => {});
 	}, [rpc, sessionId]);
-	// 队列行 ✎编辑:同一个 daemon 出口(queuedPop),只是把载荷送进输入框
-	// 而不是丢弃 —— 用户落地即可改字、改附件,再发一次。附件同样要回来,
-	// 否则"编辑"会变成"编辑并丢图"。
+	const toggleQueuePaused = useCallback((): void => {
+		if (!rpc || !sessionId || !queued) return;
+		void rpc
+			.request("session.queuedPause", { sessionId, paused: !queued.paused })
+			.then(() => refreshQueued())
+			.catch(() => {});
+	}, [rpc, sessionId, queued, refreshQueued]);
 	const editQueued = useCallback(
-		(group: "steering" | "followUp", text: string): void => {
-			void popQueued(group, text);
+		(group: QueueGroup, id: string): void => {
+			void popQueued(group, id);
 		},
 		[popQueued],
 	);
-	// 队列行 🗑删除:仍然走 queuedPop(队列表没有独立的 remove RPC),但把
-	// 弹出的载荷直接丢掉 —— 文本不回输入框、附件不回芯片。乐观移除 + 下一
-	// 次轮询确认。
 	const deleteQueued = useCallback(
-		(group: "steering" | "followUp", text: string): void => {
+		(group: QueueGroup, id: string): void => {
 			if (!rpc || !sessionId) return;
 			void rpc
-				.request("session.queuedPop", { sessionId, group, text })
+				.request("session.queuedPop", { sessionId, group, id })
 				.then(() => {
 					setQueued(prev =>
 						prev
 							? {
 									...prev,
 									count: Math.max(0, prev.count - 1),
-									[group]: prev[group].filter(m => m !== text),
+									[group]: prev[group].filter(item => item.id !== id),
 								}
 							: prev,
 					);
@@ -1062,104 +1062,59 @@ export function Composer({
 		},
 		[rpc, sessionId],
 	);
-	// Immediate snapshot refresh — called right after a busy-time send so an
-	// enqueued message shows in the chip/panel NOW instead of on the next
-	// 3s poll tick.
-	const refreshQueued = useCallback((): void => {
-		if (!rpc || !sessionId) return;
-		void rpc
-			.request<{ count: number; steering: string[]; followUp: string[] }>("session.queued", { sessionId })
-			.then(res => {
-				setQueued(prev =>
-					prev &&
-					prev.count === res?.count &&
-					prev.steering.length === res?.steering.length &&
-					prev.followUp.length === res?.followUp.length
-						? prev
-						: (res ?? prev),
-				);
-			})
-			.catch(() => {});
-	}, [rpc, sessionId]);
-	// 立即发出: pull one queued message out and inject it as an immediate
-	// steer (TUI 引导消息回车即发 parity). Drop the row from this group
-	// locally, then re-read the authoritative snapshot — the daemon placed
-	// the item at the head of the steer queue, so the panel shows where it
-	// actually sits until the agent takes it at the next injection boundary.
-	// Without the refresh the panel kept the optimistic guess until the 3s
-	// poll and the click read as inert.
+	// Sending creates a new queue id. Always refresh instead of reusing the old row id.
 	const sendQueued = useCallback(
-		(group: "steering" | "followUp", text: string, index: number): Promise<void> => {
+		(group: QueueGroup, id: string): Promise<void> => {
 			if (!rpc || !sessionId) return Promise.resolve();
 			return rpc
-				.request("session.queuedSend", { sessionId, group, text })
-				.then(() => {
-					setQueued(prev =>
-						prev
-							? {
-									...prev,
-									count: Math.max(0, prev.count - 1),
-									[group]: prev[group].filter((_, i) => i !== index),
-								}
-							: prev,
-					);
-					refreshQueued();
-				})
+				.request("session.queuedSend", { sessionId, group, id })
+				.then(() => refreshQueued())
 				.catch(() => {});
 		},
 		[rpc, sessionId, refreshQueued],
 	);
 	const reorderQueued = useCallback(
-		(group: "steering" | "followUp", from: string, to: string): Promise<void> => {
-			if (!rpc || !sessionId || from === to) return Promise.resolve();
-			// Optimistic local reorder so the row follows the cursor; the
-			// daemon is authoritative and the next poll confirms.
+		(group: QueueGroup, fromId: string, toId: string): Promise<void> => {
+			if (!rpc || !sessionId || fromId === toId) return Promise.resolve();
 			setQueued(prev =>
 				prev
 					? {
 							...prev,
 							[group]: (() => {
 								const next = [...prev[group]];
-								const fi = next.indexOf(from);
-								const ti = next.indexOf(to);
-								if (fi === -1 || ti === -1) return next;
-								const [moved] = next.splice(fi, 1);
-								next.splice(ti, 0, moved);
+								const from = next.findIndex(item => item.id === fromId);
+								const to = next.findIndex(item => item.id === toId);
+								if (from === -1 || to === -1) return next;
+								const [moved] = next.splice(from, 1);
+								next.splice(to, 0, moved);
 								return next;
 							})(),
 						}
 					: prev,
 			);
 			return rpc
-				.request("session.queuedReorder", { sessionId, group, from, to })
+				.request("session.queuedReorder", { sessionId, group, fromId, toId })
 				.then(() => refreshQueued())
 				.catch(() => refreshQueued());
 		},
 		[rpc, sessionId, refreshQueued],
 	);
+	useEffect(() => setQueued(null), [sessionId]);
 	useEffect(() => {
-		if (!rpc || !sessionId || !working) return;
+		if (!rpc || !sessionId) return;
 		let disposed = false;
 		const tick = (): void => {
 			void rpc
-				.request<{ count: number; steering: string[]; followUp: string[] }>("session.queued", { sessionId })
+				.request<unknown>("session.queued", { sessionId })
 				.then(res => {
-					if (disposed) return;
-					setQueued(prev =>
-						prev &&
-						prev.count === res?.count &&
-						prev.steering.length === res?.steering.length &&
-						prev.followUp.length === res?.followUp.length
-							? prev
-							: res,
-					);
+					if (!disposed) setQueued(normalizeQueueSnapshot(res));
 				})
 				.catch(() => {});
 		};
 		tick();
-		// Event-driven freshness: poll only while the agent WORKS; the
-		// `working` flip re-runs this effect (idle = zero polling).
-		if (!working) return;
+		// An idle session can hold a persisted paused queue. Keep it live enough
+		// to resume or edit; a truly empty idle session performs only the initial read.
+		if (!working && !queued?.count) return;
 		let id = setInterval(tick, 3000);
 		const onVis = (): void => {
 			clearInterval(id);
@@ -1173,9 +1128,8 @@ export function Composer({
 			disposed = true;
 			clearInterval(id);
 			document.removeEventListener("visibilitychange", onVis);
-			setQueued(null);
 		};
-	}, [rpc, sessionId, working]);
+	}, [rpc, sessionId, working, queued?.count]);
 
 	const composingRef = useRef(false);
 	// Select-all + delete clears text AND attachments together (the flag
@@ -2045,7 +1999,7 @@ export function Composer({
 				// not inside the framed box).
 				aboveRow={
 					<div className="gui-composer-above">
-						{(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
+						{(modes && (todoTotal > 0 || (queued != null && queued.count > 0))) ||
 						connectorServers.length > 0 ||
 						activeTask ? (
 							<div className="gui-composer-dock">
@@ -2084,8 +2038,7 @@ export function Composer({
 								{/* composer.plan 座位槽:
 								 * 计划模式旁的扩展控件。 */}
 								<SlotComponentHost rpc={rpc} slot={COMPOSER_PLAN_SLOT} sessionId={sessionId} cwd={cwd} />
-								{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
-									activeTask) && (
+								{((modes && (todoTotal > 0 || (queued != null && queued.count > 0))) || activeTask) && (
 									<div className="gui-mode-row gui-mode-row--status">
 										{activeTask && (
 											<SwarmChip
@@ -2130,7 +2083,7 @@ export function Composer({
 										{/* Pending-message queue (TUI /queue parity): editable list
 										 * above the input — 取回 pops the newest queued message
 										 * back into the editor. */}
-										{working && queued && queued.count > 0 && (
+										{queued && queued.count > 0 && (
 											<>
 												<QueueToggleChip
 													open={queueOpen}
@@ -2147,6 +2100,7 @@ export function Composer({
 														onDelete={deleteQueued}
 														onClear={clearQueued}
 														onReorder={reorderQueued}
+														onTogglePause={toggleQueuePaused}
 													/>,
 												)}
 											</>

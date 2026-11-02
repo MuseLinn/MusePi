@@ -609,6 +609,10 @@ export const general = {
 	"general.takeBackNewest": "Take back the newest",
 	"general.takeBackNewestQueued": "Bring the newest queued message back into the input box",
 	"general.clearQueue": "Clear queue",
+	"general.pauseQueue": "Pause queue",
+	"general.resumeQueue": "Resume queue",
+	"general.queuePausedHint": "Queue paused; messages stay here until you resume",
+	"general.queuedAttachmentCount": "{count} attachments",
 	"general.dragReorderQueuedMessage": "Drag to reorder queued message",
 	"general.takeBack": "Take back",
 	// Session-control round: terminate confirm + revert history.

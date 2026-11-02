@@ -187,6 +187,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"session.plan",
 	"session.queued",
 	"session.queuedClear",
+	"session.queuedPause",
 	"session.queuedPop",
 	"session.queuedReorder",
 	"session.queuedSend",

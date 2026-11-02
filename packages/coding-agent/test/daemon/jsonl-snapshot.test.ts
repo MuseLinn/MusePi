@@ -237,6 +237,39 @@ describe("snapshotFromJsonl", () => {
 		expect(header.cwd).toBe("C:\\proj");
 	});
 
+	test("restores displayable queued work from the latest persisted queue state", async () => {
+		const queueEntry = (id: string, data: unknown) =>
+			JSON.stringify({
+				type: "custom",
+				id,
+				parentId: null,
+				timestamp: "2026-11-02T10:00:00.000Z",
+				customType: "message_queue_state",
+				data,
+			});
+		const message = (role: string) => ({ role, content: "queued", timestamp: 1 });
+		const lines = [
+			JSON.stringify({ type: "session", id: "sess-1", timestamp: "2026-11-02T09:00:00.000Z", cwd: "C:\\proj" }),
+			queueEntry("old-queue", {
+				version: 1,
+				paused: true,
+				steering: [{ id: "old", message: message("user") }],
+				followUp: [],
+			}),
+			queueEntry("latest-queue", {
+				version: 1,
+				paused: true,
+				steering: [
+					{ id: "visible", message: message("user") },
+					{ id: "hidden", message: { ...message("custom"), display: false } },
+				],
+				followUp: [{ id: "later", message: message("user") }],
+			}),
+		];
+		const snap = await snapshotFromJsonl(writeTranscript(lines), "sess-1", 0);
+		expect((snap.state as { queuedMessageCount?: number }).queuedMessageCount).toBe(2);
+	});
+
 	test("unknown future record types pass through untouched", async () => {
 		const lines = fullFamilyTranscript();
 		lines.splice(

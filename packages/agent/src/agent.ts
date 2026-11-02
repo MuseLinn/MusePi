@@ -388,6 +388,8 @@ export class Agent {
 	#steeringQueue: AgentMessage[] = [];
 	#followUpQueue: AgentMessage[] = [];
 	#steeringWaiters = new Set<() => void>();
+	#queuedMessagesPaused = false;
+	#queueChangeListeners = new Set<() => void>();
 
 	#steeringMode: "all" | "one-at-a-time";
 	#followUpMode: "all" | "one-at-a-time";
@@ -855,15 +857,15 @@ export class Agent {
 	}
 
 	async #dequeueSteeringMessagesAfterHooks(signal?: AbortSignal): Promise<AgentMessage[]> {
-		if (signal?.aborted || this.#steeringQueue.length === 0) return [];
+		if (signal?.aborted || this.#queuedMessagesPaused || this.#steeringQueue.length === 0) return [];
 		await this.#runBeforeQueuedMessageDequeueHooks(signal);
-		return signal?.aborted ? [] : this.#dequeueSteeringMessages();
+		return signal?.aborted || this.#queuedMessagesPaused ? [] : this.#dequeueSteeringMessages();
 	}
 
 	async #dequeueFollowUpMessagesAfterHooks(signal?: AbortSignal): Promise<AgentMessage[]> {
-		if (signal?.aborted || this.#followUpQueue.length === 0) return [];
+		if (signal?.aborted || this.#queuedMessagesPaused || this.#followUpQueue.length === 0) return [];
 		await this.#runBeforeQueuedMessageDequeueHooks(signal);
-		return signal?.aborted ? [] : this.#dequeueFollowUpMessages();
+		return signal?.aborted || this.#queuedMessagesPaused ? [] : this.#dequeueFollowUpMessages();
 	}
 
 	setProviderResponseInterceptor(fn: SimpleStreamOptions["onResponse"] | undefined): void {
@@ -1014,6 +1016,29 @@ export class Agent {
 		this.#steeringQueue = steering.slice();
 		this.#followUpQueue = followUp.slice();
 		this.#notifySteeringWaiters();
+		this.#emitQueueChange();
+	}
+
+	/** Observe every queue mutation, including automatic loop consumption. */
+	subscribeQueueChanges(listener: () => void): () => void {
+		this.#queueChangeListeners.add(listener);
+		return () => this.#queueChangeListeners.delete(listener);
+	}
+
+	get queuedMessagesPaused(): boolean {
+		return this.#queuedMessagesPaused;
+	}
+
+	/** Pause delivery only; an in-flight model or tool turn continues normally. */
+	setQueuedMessagesPaused(paused: boolean): void {
+		if (this.#queuedMessagesPaused === paused) return;
+		this.#queuedMessagesPaused = paused;
+		if (!paused) this.#notifySteeringWaiters();
+		this.#emitQueueChange();
+	}
+
+	#emitQueueChange(): void {
+		for (const listener of [...this.#queueChangeListeners]) listener();
 	}
 
 	appendMessage(m: AgentMessage) {
@@ -1035,6 +1060,7 @@ export class Agent {
 	steer(m: AgentMessage) {
 		this.#steeringQueue.push(m);
 		this.#notifySteeringWaiters();
+		this.#emitQueueChange();
 	}
 
 	/**
@@ -1043,15 +1069,18 @@ export class Agent {
 	 */
 	followUp(m: AgentMessage) {
 		this.#followUpQueue.push(m);
+		this.#emitQueueChange();
 	}
 
 	clearSteeringQueue() {
 		this.#steeringQueue = [];
 		this.#notifySteeringWaiters();
+		this.#emitQueueChange();
 	}
 
 	clearFollowUpQueue() {
 		this.#followUpQueue = [];
+		this.#emitQueueChange();
 	}
 
 	/**
@@ -1067,6 +1096,7 @@ export class Agent {
 		this.#steeringQueue = [];
 		this.#followUpQueue = [];
 		this.#notifySteeringWaiters();
+		this.#emitQueueChange();
 		this.clearDeferredToolDirectives();
 	}
 
@@ -1093,30 +1123,30 @@ export class Agent {
 	}
 
 	#dequeueSteeringMessages(): AgentMessage[] {
+		let steering: AgentMessage[];
 		if (this.#steeringMode === "one-at-a-time") {
-			if (this.#steeringQueue.length > 0) {
-				const first = this.#steeringQueue[0];
-				this.#steeringQueue = this.#steeringQueue.slice(1);
-				return [first];
-			}
-			return [];
+			if (this.#steeringQueue.length === 0) return [];
+			steering = [this.#steeringQueue[0]];
+			this.#steeringQueue = this.#steeringQueue.slice(1);
+		} else {
+			steering = this.#steeringQueue.slice();
+			this.#steeringQueue = [];
 		}
-		const steering = this.#steeringQueue.slice();
-		this.#steeringQueue = [];
+		this.#emitQueueChange();
 		return steering;
 	}
 
 	#dequeueFollowUpMessages(): AgentMessage[] {
+		let followUp: AgentMessage[];
 		if (this.#followUpMode === "one-at-a-time") {
-			if (this.#followUpQueue.length > 0) {
-				const first = this.#followUpQueue[0];
-				this.#followUpQueue = this.#followUpQueue.slice(1);
-				return [first];
-			}
-			return [];
+			if (this.#followUpQueue.length === 0) return [];
+			followUp = [this.#followUpQueue[0]];
+			this.#followUpQueue = this.#followUpQueue.slice(1);
+		} else {
+			followUp = this.#followUpQueue.slice();
+			this.#followUpQueue = [];
 		}
-		const followUp = this.#followUpQueue.slice();
-		this.#followUpQueue = [];
+		this.#emitQueueChange();
 		return followUp;
 	}
 
@@ -1125,7 +1155,9 @@ export class Agent {
 	 * Used by dequeue keybinding.
 	 */
 	popLastSteer(): AgentMessage | undefined {
-		return this.#steeringQueue.pop();
+		const removed = this.#steeringQueue.pop();
+		if (removed) this.#emitQueueChange();
+		return removed;
 	}
 
 	/**
@@ -1133,7 +1165,9 @@ export class Agent {
 	 * Used by dequeue keybinding.
 	 */
 	popLastFollowUp(): AgentMessage | undefined {
-		return this.#followUpQueue.pop();
+		const removed = this.#followUpQueue.pop();
+		if (removed) this.#emitQueueChange();
+		return removed;
 	}
 
 	clearMessages() {
@@ -1155,7 +1189,7 @@ export class Agent {
 	 * tool watcher never survives the tool batch that owns it.
 	 */
 	#waitForSteeringMessages(signal?: AbortSignal): Promise<void> {
-		if (this.#steeringQueue.length > 0 || signal?.aborted) return Promise.resolve();
+		if ((!this.#queuedMessagesPaused && this.#steeringQueue.length > 0) || signal?.aborted) return Promise.resolve();
 		const { promise, resolve } = Promise.withResolvers<void>();
 		const onAbort = (): void => resolve();
 		this.#steeringWaiters.add(resolve);
@@ -1179,7 +1213,9 @@ export class Agent {
 		this.#state.error = undefined;
 		this.#steeringQueue = [];
 		this.#followUpQueue = [];
+		this.#queuedMessagesPaused = false;
 		this.#notifySteeringWaiters();
+		this.#emitQueueChange();
 		this.clearDeferredToolDirectives();
 	}
 
@@ -1552,7 +1588,7 @@ export class Agent {
 				return this.#dequeueSteeringMessagesAfterHooks(signal);
 			},
 			hasSteeringMessages: () => {
-				if (this.#steeringQueue.length === 0) {
+				if (this.#queuedMessagesPaused || this.#steeringQueue.length === 0) {
 					return { queued: false };
 				}
 				const messageCount = this.#steeringMode === "one-at-a-time" ? 1 : this.#steeringQueue.length;

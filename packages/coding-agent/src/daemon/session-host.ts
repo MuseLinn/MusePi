@@ -278,6 +278,7 @@ function extractSnapshotText(content: unknown): string {
  * Canonical implementation lives in ./jsonl-snapshot (P0-5: full record
  * families preserved + view-key rekeying — one copy, two call sites).
  */
+import { readPersistedMessageQueueCount } from "../session/queued-message-store";
 import { readSdkNewestTimestamp, rekeyEntriesToViewSpace, snapshotFromJsonl } from "./jsonl-snapshot";
 
 export { snapshotFromJsonl };
@@ -1663,7 +1664,12 @@ export class DaemonSessionHost {
 			view =
 				MaterializedView.fromSnapshot(sessionId, cwd, {
 					entries: viewEntries,
-					state: { isStreaming: false, queuedMessageCount: 0, cwd, participants: [] },
+					state: {
+						isStreaming: false,
+						queuedMessageCount: agentSession.queuedMessageCount,
+						cwd,
+						participants: [],
+					},
 					// Single seq authority: the view cursor must live in the
 					// journal numbering (it becomes the client's watermark and
 					// the compaction checkpoint seq), not in the SDK entry
@@ -2489,6 +2495,7 @@ export class DaemonSessionHost {
 					modeId?: string;
 					paused?: boolean;
 					pausedAt?: number | null;
+					queuedMessageCount?: number;
 				};
 			};
 			// Live mode state rides along on the snapshot so the GUI badges
@@ -2505,6 +2512,7 @@ export class DaemonSessionHost {
 			// without a separate round-trip.
 			snap.state.paused = live.pauseGate.paused;
 			snap.state.pausedAt = live.pauseGate.pausedAt ?? null;
+			snap.state.queuedMessageCount = live.agentSession.queuedMessageCount;
 			// The view's isStreaming flag is event-driven and can go stale
 			// (abort paths never emit turn_end) — the agent's live getter is
 			// authoritative for what the GUI should show as working.
@@ -2537,7 +2545,7 @@ export class DaemonSessionHost {
 			const snap = view.snapshot();
 			snap.cursor = tail;
 			snap.state.isStreaming = false;
-			snap.state.queuedMessageCount = 0;
+			snap.state.queuedMessageCount = readPersistedMessageQueueCount(snap.entries);
 			// Paused state survives the archive via the sidecar: the GUI/TUI
 			// keep showing the paused badge on archived sessions.
 			snap.state.paused = archivedPause.paused;

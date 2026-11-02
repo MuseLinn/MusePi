@@ -1759,8 +1759,11 @@ export class DaemonServer {
 				const { parseChangelog, resolveStartupChangelogForDisplay, selectStartupChangelog } = await import(
 					"../utils/changelog"
 				);
-				const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
-				const p0 = (params as { force?: boolean; locale?: string } | undefined) ?? {};
+				const p0 = (params as { force?: boolean; locale?: string; currentVersion?: string } | undefined) ?? {};
+				const currentVersion =
+					typeof p0.currentVersion === "string" && p0.currentVersion.trim()
+						? p0.currentVersion.trim()
+						: (process.env.MUSEPI_VERSION ?? VERSION);
 				const force = p0.force === true;
 				const locale = p0.locale === "en-US" ? "en-US" : "zh-CN";
 				if (force) {
@@ -7787,54 +7790,32 @@ export class DaemonServer {
 				return out;
 			}
 			case "session.queued": {
-				// Pending-message queue (TUI /queue parity): the agent's live
-				// steering + follow-up queues, so the GUI can render the
-				// "queue N" chip and preview while the agent is working.
+				// Stable row ids keep duplicate text unambiguous. `count` also
+				// includes displayable non-user work; it is not just the row total.
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const agent = live.agentSession as unknown as {
-					queuedMessageCount: number;
-					getQueuedMessages(): { steering: readonly string[]; followUp: readonly string[] };
-				};
-				const queued = agent.getQueuedMessages();
 				return {
-					count: agent.queuedMessageCount,
-					steering: [...queued.steering],
-					followUp: [...queued.followUp],
+					count: live.agentSession.queuedMessageCount,
+					...live.agentSession.getQueuedMessageSnapshot(),
 				};
 			}
 			case "session.queuedPop": {
-				// Pull a queued user message back into the editor (TUI Alt+Up
-				// dequeue parity): the GUI "取回" action. With group+text it
-				// pops THAT message (per-item 取回 in the queue panel);
-				// without, the newest one (legacy single-action behavior).
-				const p = (params ?? {}) as { sessionId: string; group?: "steering" | "followUp"; text?: string };
+				// New clients address a row by id. Text remains a wire fallback for
+				// older clients during a rolling desktop/daemon upgrade.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					group?: "steering" | "followUp";
+					id?: string;
+					text?: string;
+				};
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const agent = live.agentSession as unknown as {
-					popLastQueuedMessage():
-						| {
-								text: string;
-								images?: { type: string; data: string; mimeType: string }[];
-								displayContext?: MessageDisplayContext;
-						  }
-						| undefined;
-					popQueuedMessage(
-						group: "steering" | "followUp",
-						text: string,
-					):
-						| {
-								text: string;
-								images?: { type: string; data: string; mimeType: string }[];
-								displayContext?: MessageDisplayContext;
-						  }
-						| undefined;
-				};
+				const target = p.id ?? p.text;
 				const popped =
-					p.group && typeof p.text === "string"
-						? agent.popQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.text)
-						: agent.popLastQueuedMessage();
+					p.group && typeof target === "string"
+						? live.agentSession.popQueuedMessage(p.group, target)
+						: live.agentSession.popLastQueuedMessage();
 				return popped
 					? {
 							text: popped.text,
@@ -7843,60 +7824,64 @@ export class DaemonServer {
 						}
 					: null;
 			}
+			case "session.queuedPause": {
+				const p = (params ?? {}) as { sessionId: string; paused?: boolean };
+				if (typeof p.paused !== "boolean") throw new Error("sessionId and paused required");
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				live.agentSession.setQueuedMessagesPaused(p.paused);
+				return { paused: live.agentSession.queuedMessagesPaused };
+			}
 			case "session.queuedClear": {
-				// Drop every queued user message (TUI clearQueue parity).
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const agent = live.agentSession as unknown as {
-					clearQueue(options?: { forInterrupt?: boolean }): unknown;
-				};
-				agent.clearQueue();
+				live.agentSession.clearQueue();
 				return { ok: true };
 			}
 			case "session.queuedSend": {
-				// 立即发出指定排队消息 (TUI 引导消息回车即发 parity): the GUI's
-				// per-item "send now" button pulls the matched message out of the
-				// steering/follow-up queue and re-injects it as an immediate steer.
-				const p = (params ?? {}) as { sessionId: string; group?: "steering" | "followUp"; text?: string };
-				if (typeof p.sessionId !== "string" || typeof p.text !== "string" || !p.text) {
-					throw new Error("sessionId and text required");
+				const p = (params ?? {}) as {
+					sessionId: string;
+					group?: "steering" | "followUp";
+					id?: string;
+					text?: string;
+				};
+				const target = p.id ?? p.text;
+				if (typeof p.sessionId !== "string" || typeof target !== "string" || !target) {
+					throw new Error("sessionId and id or text required");
 				}
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const agent = live.agentSession as unknown as {
-					sendQueuedMessage(group: "steering" | "followUp", text: string): Promise<boolean>;
-				};
-				const sent = await agent.sendQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.text);
+				const sent = await live.agentSession.sendQueuedMessage(
+					p.group === "followUp" ? "followUp" : "steering",
+					target,
+				);
 				if (!sent) throw new Error("Queued message not found");
 				return { sent: true };
 			}
 			case "session.queuedReorder": {
-				// Drag-reorder a queued message within one group in the
-				// GUI queue panel.
-				// Same-group only — steering↔follow-up is a timing change,
-				// not a sort. Returns the moved flag; unmatched/no-op → false.
+				// Same-group only: steering↔follow-up changes delivery timing,
+				// not order. Both id-based and legacy text-based requests work.
 				const p = (params ?? {}) as {
 					sessionId: string;
 					group?: "steering" | "followUp";
+					fromId?: string;
+					toId?: string;
 					from?: string;
 					to?: string;
 				};
-				if (
-					typeof p.sessionId !== "string" ||
-					typeof p.from !== "string" ||
-					!p.from ||
-					typeof p.to !== "string" ||
-					!p.to
-				) {
+				const from = p.fromId ?? p.from;
+				const to = p.toId ?? p.to;
+				if (typeof p.sessionId !== "string" || !from || !to) {
 					throw new Error("sessionId, from and to required");
 				}
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const agent = live.agentSession as unknown as {
-					reorderQueuedMessage(group: "steering" | "followUp", from: string, to: string): boolean;
-				};
-				const moved = agent.reorderQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.from, p.to);
+				const moved = live.agentSession.reorderQueuedMessage(
+					p.group === "followUp" ? "followUp" : "steering",
+					from,
+					to,
+				);
 				return { moved };
 			}
 			case "notes.list": {

@@ -1249,12 +1249,125 @@
 }
 
 .sh-queued {
-	padding: 1px 6px;
+	padding: 3px 7px;
 	font: 400 11px / 1.5 var(--font-mono);
 	color: var(--accent);
 	background: var(--accent-muted);
+	border: none;
 	border-radius: var(--radius-sm);
 	white-space: nowrap;
+	cursor: pointer;
+}
+
+.sh-queue-card {
+	display: flex;
+	flex-direction: column;
+	max-height: min(76dvh, 620px);
+}
+
+.sh-queue-list {
+	min-height: 0;
+	padding: 0 10px 10px;
+}
+
+.sh-queue-group h3 {
+	margin: 8px 8px 4px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--accent);
+}
+
+.sh-queue-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px;
+	border-radius: var(--radius-lg);
+	background: var(--bg-inset);
+}
+
+.sh-queue-row + .sh-queue-row {
+	margin-top: 4px;
+}
+
+.sh-queue-copy {
+	min-width: 0;
+	flex: 1;
+}
+
+.sh-queue-text {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+.sh-queue-attachments {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 4px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.sh-queue-row-actions,
+.sh-queue-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.sh-queue-row-actions button,
+.sh-queue-actions button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-width: 40px;
+	min-height: 40px;
+	padding: 0 8px;
+	border: none;
+	border-radius: var(--radius);
+	color: var(--fg-muted);
+	background: transparent;
+	cursor: pointer;
+}
+
+.sh-queue-row-actions button:hover,
+.sh-queue-actions button:hover {
+	color: var(--accent);
+	background: var(--accent-muted);
+}
+
+.sh-queue-actions {
+	justify-content: space-between;
+	padding: 8px 14px 12px;
+	border-top: 1px solid var(--border);
+}
+
+.sh-queue-actions button {
+	font-size: var(--ui-font-size-sm);
+}
+
+.sh-queue-actions button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.sh-queue-paused,
+.sh-queue-error {
+	margin: 0;
+	padding: 0 18px 8px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.sh-queue-error {
+	color: var(--danger);
 }
 
 /* ---- banners ---- */

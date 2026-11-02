@@ -932,6 +932,11 @@ export class CollabHost {
 		"session.delete": true,
 		"session.rename": true,
 		"session.abort": true,
+		"session.queuedClear": true,
+		"session.queuedPause": true,
+		"session.queuedPop": true,
+		"session.queuedReorder": true,
+		"session.queuedSend": true,
 	};
 
 	/**
@@ -1096,6 +1101,59 @@ export class CollabHost {
 				if (!sessionId) throw new Error("session.abort: sessionId required");
 				await this.#ctx.workspace.abortWorkspaceSession(sessionId);
 				return { ok: true };
+			}
+			// Queue RPCs always target the host's currently focused session. A
+			// guest-provided sessionId is deliberately ignored.
+			case "session.queued":
+				return {
+					count: this.#ctx.session.queuedMessageCount,
+					...this.#ctx.session.getQueuedMessageSnapshot(),
+				};
+			case "session.queuedPause": {
+				if (typeof p.paused !== "boolean") throw new Error("session.queuedPause: paused required");
+				this.#ctx.session.setQueuedMessagesPaused(p.paused);
+				return { paused: this.#ctx.session.queuedMessagesPaused };
+			}
+			case "session.queuedClear":
+				this.#ctx.session.clearQueue();
+				return { ok: true };
+			case "session.queuedPop": {
+				const target = typeof p.id === "string" ? p.id : p.text;
+				const popped =
+					(p.group === "steering" || p.group === "followUp") && typeof target === "string"
+						? this.#ctx.session.popQueuedMessage(p.group, target)
+						: this.#ctx.session.popLastQueuedMessage();
+				return popped
+					? {
+							text: popped.text,
+							images: popped.images ?? null,
+							...(popped.displayContext ? { displayContext: popped.displayContext } : {}),
+						}
+					: null;
+			}
+			case "session.queuedSend": {
+				const target = typeof p.id === "string" ? p.id : p.text;
+				if (typeof target !== "string" || !target) throw new Error("session.queuedSend: id or text required");
+				const sent = await this.#ctx.session.sendQueuedMessage(
+					p.group === "followUp" ? "followUp" : "steering",
+					target,
+				);
+				if (!sent) throw new Error("Queued message not found");
+				return { sent: true };
+			}
+			case "session.queuedReorder": {
+				const from = typeof p.fromId === "string" ? p.fromId : p.from;
+				const to = typeof p.toId === "string" ? p.toId : p.to;
+				if (typeof from !== "string" || typeof to !== "string" || !from || !to) {
+					throw new Error("session.queuedReorder: from and to required");
+				}
+				return {
+					moved: this.#ctx.session.reorderQueuedMessage(
+						p.group === "followUp" ? "followUp" : "steering",
+						from,
+						to,
+					),
+				};
 			}
 			default:
 				throw new Error(`unknown rpc method "${method}"`);

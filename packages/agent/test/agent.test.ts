@@ -18,6 +18,36 @@ describe("Agent", () => {
 		expect(agent.state.messages).not.toContainEqual(message);
 	});
 
+	it("pauses queued delivery without freezing the current turn", async () => {
+		const mock = createMockModel({
+			responses: [{ content: ["current turn"] }, { content: ["after steering"] }, { content: ["after follow-up"] }],
+		});
+		const agent = new Agent({ streamFn: mock.stream, steeringMode: "one-at-a-time" });
+		agent.setQueuedMessagesPaused(true);
+		agent.steer({ role: "user", content: "steer later", timestamp: 1 });
+		agent.followUp({ role: "user", content: "follow later", timestamp: 2 });
+
+		await agent.prompt("current prompt");
+
+		const userTexts = () =>
+			agent.state.messages
+				.filter(message => message.role === "user")
+				.map(message =>
+					typeof message.content === "string"
+						? message.content
+						: message.content.map(part => (part.type === "text" ? part.text : "[image]")).join(""),
+				);
+		expect(userTexts()).toEqual(["current prompt"]);
+		expect(agent.peekSteeringQueue()).toHaveLength(1);
+		expect(agent.peekFollowUpQueue()).toHaveLength(1);
+
+		agent.setQueuedMessagesPaused(false);
+		await agent.continue();
+
+		expect(userTexts()).toEqual(["current prompt", "steer later", "follow later"]);
+		expect(agent.hasQueuedMessages()).toBe(false);
+	});
+
 	it("classifies agent-authored steering as a parent steering message", async () => {
 		const toolSchema = type({ value: type("string") });
 		const executed: string[] = [];
@@ -1467,11 +1497,13 @@ describe("Agent — F3 in-place state mutation", () => {
 		expect(agent.state.messages.length).toBe(0);
 
 		agent.appendMessage({ role: "user", content: "y", timestamp: 2 });
+		agent.setQueuedMessagesPaused(true);
 		agent.reset();
 		expect(agent.state.messages).toBe(msgs);
 		expect(agent.state.pendingToolCalls).toBe(pending);
 		expect(agent.state.messages.length).toBe(0);
 		expect(agent.state.pendingToolCalls.size).toBe(0);
+		expect(agent.queuedMessagesPaused).toBe(false);
 	});
 
 	it("replaceMessages still snapshots the input (callers may keep mutating their array)", () => {

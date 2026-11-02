@@ -29,7 +29,12 @@ function makeHostContext(): InteractiveModeContext {
 		},
 		session: {
 			isStreaming: false,
-			queuedMessageCount: 0,
+			queuedMessageCount: 1,
+			getQueuedMessageSnapshot: () => ({
+				paused: true,
+				steering: [],
+				followUp: [{ id: "queue-1", text: "kept", imageCount: 1 }],
+			}),
 			sessionName: "test",
 			model: undefined,
 			thinkingLevel: undefined,
@@ -242,6 +247,25 @@ describe("collab guest rpc", () => {
 		guestCleanups.push(() => guest.close());
 		const res = await guest.rpc("fs.read", { path: "." });
 		expect(res.ok).toBe(false);
+	});
+
+	it("serves the focused host queue and rejects queue mutation on view links", async () => {
+		const writer = await joinAsGuest(host.link, "rpc-test");
+		guestCleanups.push(() => writer.close());
+		const snapshot = await writer.rpc("session.queued", { sessionId: "another-session" });
+		expect(snapshot.ok).toBe(true);
+		expect(snapshot.data).toEqual({
+			count: 1,
+			paused: true,
+			steering: [],
+			followUp: [{ id: "queue-1", text: "kept", imageCount: 1 }],
+		});
+
+		const viewer = await joinAsGuest(host.viewLink, "rpc-viewer");
+		guestCleanups.push(() => viewer.close());
+		const paused = await viewer.rpc("session.queuedPause", { sessionId: "another-session", paused: false });
+		expect(paused.ok).toBe(false);
+		expect(String(paused.error)).toMatch(/read-only/i);
 	});
 
 	it("unknown method returns ok:false", async () => {

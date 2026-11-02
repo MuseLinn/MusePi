@@ -8,7 +8,8 @@ import {
 import { ChevronDown, ChevronRight, ExternalLink, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { openExternalUrl } from "../lib/electron";
+import { changelogMatchesAppVersion } from "../lib/daemon-version";
+import { checkAppUpdates, getShellVersion, openExternalUrl } from "../lib/electron";
 import { onboardingPending } from "../lib/onboarding";
 import { activePet } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
@@ -228,20 +229,23 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		const openRef = { current: false };
 		void (async () => {
 			try {
+				const appVersion = await getShellVersion();
 				const [changelog, updates] = await Promise.all([
 					rpc.request<StartupChangelog | null>("changelog.startup", {
 						locale: getLocaleSnapshot(),
+						currentVersion: appVersion ?? undefined,
 					}),
-					withTimeout(rpc.request<{ latest?: string } | null>("updates.check", {}), UPDATE_CHECK_TIMEOUT_MS),
+					withTimeout(checkAppUpdates(), UPDATE_CHECK_TIMEOUT_MS),
 				]);
 				if (cancelled) return;
-				const md = changelog?.markdown ?? null;
-				const rw = changelog?.reward ?? null;
+				const matchesShell = changelogMatchesAppVersion(changelog, appVersion);
+				const md = matchesShell ? (changelog?.markdown ?? null) : null;
+				const rw = matchesShell ? (changelog?.reward ?? null) : null;
 				markdownRef.current = md ?? "";
 				rewardRef.current = rw;
 				setMarkdown(md);
 				setReward(rw);
-				setLatest(updates?.latest ?? null);
+				setLatest(updates?.newer ? (updates.latest ?? null) : null);
 				// The primer owns the first-run experience — defer to it.
 				if ((md || rw) && !onboardingPending()) {
 					openRef.current = true;
@@ -274,12 +278,18 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	useEffect(() => {
 		if (!rpc) return;
 		const onOpen = (): void => {
-			void rpc
-				.request<StartupChangelog | null>("changelog.startup", {
-					force: true,
-					locale: getLocaleSnapshot(),
-				})
-				.then(changelog => {
+			void getShellVersion()
+				.then(appVersion =>
+					rpc
+						.request<StartupChangelog | null>("changelog.startup", {
+							force: true,
+							locale: getLocaleSnapshot(),
+							currentVersion: appVersion ?? undefined,
+						})
+						.then(changelog => ({ changelog, appVersion })),
+				)
+				.then(({ changelog, appVersion }) => {
+					if (!changelogMatchesAppVersion(changelog, appVersion)) return;
 					if (!changelog?.markdown && !changelog?.reward) return;
 					setMarkdown(changelog.markdown ?? null);
 					setReward(changelog.reward ?? null);

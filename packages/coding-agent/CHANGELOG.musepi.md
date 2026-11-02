@@ -7,6 +7,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Changed
+- **消息队列支持暂停、双端管理与跨重启恢复**：桌面和手机均可暂停或恢复投递、取回、删除、立即发送和清空队列，桌面另支持编辑与同组拖拽排序。消息、附件、顺序和暂停状态会随会话保存，重开应用后仍可继续处理；历史会话正确显示待发送数量，空对话中的首条排队消息也能在恢复后正常发出。
+  - EN: Message queues now support pause, dual-client management, and restoration across restarts. Desktop and mobile clients can pause or resume delivery, restore, delete, send immediately, and clear queued messages; desktop also supports editing and same-group drag ordering. Messages, attachments, order, and pause state persist with the session for later handling after reopening the app. History shows the correct pending count, and the first queued message in an empty transcript sends correctly after resumption.
+- **实例连接与版本状态统一管理**：桌面实例管理集中处理本地／远程 daemon 和 SSH 工作区，新增连接通过探测后才保存，侧栏不再单独显示「断开」。设置、新功能弹窗和实例管理统一区分桌面壳与 daemon 版本，版本不一致时提示重启应用，不再误报为应用更新。
+  - EN: Instance connections and version status are now managed consistently. Desktop instance management covers local and remote daemons plus SSH workspaces, saves new connections only after a successful probe, and removes the separate sidebar Disconnect control. Settings, announcements, and instance UI distinguish shell and daemon versions, prompting for an application restart on mismatch instead of incorrectly reporting an application update.
 - **会话页支持插件化管理和自定义问候**：欢迎页、消息流、输入区及关联面板由 `chat-view` Cordis 插件统一提供；宿主继续管理会话与工作区状态，停用插件不会留下第二套会话页。设置「常规」可自定义欢迎问候语并实时预览，留空恢复分时段问候。
   - EN: The chat surface is now plugin-managed and supports custom greetings. The chat-view Cordis plugin provides the welcome page, transcript, composer, and related panels while the host retains session and workspace state; disabling it leaves no second chat implementation. Settings → General offers a custom welcome greeting with immediate preview, and blank input restores the time-aware greeting.
 

@@ -42,11 +42,14 @@ export function ConnectDialog({
 	onClose,
 	rpc,
 	onOpenWorkspace,
+	framed = true,
 }: {
 	open: boolean;
 	onClose(): void;
 	rpc: RpcClient | null;
 	onOpenWorkspace(cwd: string): void;
+	/** Embed the same wizard in the instance manager without a nested modal. */
+	framed?: boolean;
 }): ReactNode {
 	const [step, setStep] = useState(0);
 	const [method, setMethod] = useState<"ssh" | "docker" | null>(null);
@@ -207,14 +210,16 @@ export function ConnectDialog({
 					: selectedHost !== null
 				: true;
 
-	return (
-		<DialogFrame open={open} onClose={onClose} label={t("settings.remoteConnection")}>
-			<div className="gui-dialog-head">
-				<span className="text-[14px] font-semibold">{t("settings.remoteConnection")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
-					<Icon name="close" className="h-4 w-4" />
-				</button>
-			</div>
+	const content = (
+		<>
+			{framed && (
+				<div className="gui-dialog-head">
+					<span className="text-[14px] font-semibold">{t("settings.remoteConnection")}</span>
+					<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
+						<Icon name="close" className="h-4 w-4" />
+					</button>
+				</div>
+			)}
 			<div className="flex min-h-0 flex-1">
 				{/* Step rail. */}
 				<div className="w-36 flex-shrink-0 border-r border-[var(--border)] p-3">
@@ -606,6 +611,12 @@ export function ConnectDialog({
 					</div>
 				</div>
 			</div>
+		</>
+	);
+	if (!framed) return <div className="gui-connect-embedded">{content}</div>;
+	return (
+		<DialogFrame open={open} onClose={onClose} label={t("settings.remoteConnection")}>
+			{content}
 		</DialogFrame>
 	);
 }

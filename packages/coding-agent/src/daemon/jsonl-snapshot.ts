@@ -43,6 +43,7 @@
 import * as fs from "node:fs/promises";
 import type { SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
 import { messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
+import { readPersistedMessageQueueCount } from "../session/queued-message-store";
 
 /** Session file title-slot line (SESSION_TITLE_SLOT_ENTRY_TYPE) — header
  *  metadata, not a transcript entry. */
@@ -182,7 +183,7 @@ export async function snapshotFromJsonl(
 	const cwd = header && typeof header.cwd === "string" ? header.cwd : "";
 	const state: SessionState = {
 		isStreaming: false,
-		queuedMessageCount: 0,
+		queuedMessageCount: readPersistedMessageQueueCount(entries),
 		cwd,
 		participants: [],
 	};

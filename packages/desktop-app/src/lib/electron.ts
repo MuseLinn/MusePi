@@ -27,6 +27,8 @@ export interface ElectronAPI {
 	readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
 	/** Full-screen capture (composer 截屏); { dataUrl } or { error }. */
 	captureScreen(): Promise<{ dataUrl?: string; error?: string }>;
+	/** Version of the running Electron shell, independent of the daemon. */
+	getAppVersion(): Promise<string>;
 	/** OTA check (electron-updater); null result = disabled. */
 	checkUpdates(): Promise<UpdateCheckResult | null>;
 	/** Current updater state (idle/checking/preparing/downloading/downloaded/error). */
@@ -252,6 +254,17 @@ export async function openExternalUrl(url: string): Promise<boolean> {
 	window.open(url, "_blank", "noopener");
 	return true;
 }
+/** Running shell version; null in the browser or when the bridge is unavailable. */
+export async function getShellVersion(): Promise<string | null> {
+	if (!isElectron()) return null;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		return (await electronAPI.getAppVersion()) || null;
+	} catch {
+		return null;
+	}
+}
+
 /** Manual check from settings (GeneralSection 检查更新). */
 export function checkAppUpdates(): Promise<UpdateCheckResult | null> {
 	if (!isElectron()) return Promise.resolve(null);

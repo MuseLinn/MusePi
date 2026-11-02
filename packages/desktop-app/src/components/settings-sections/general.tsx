@@ -3,11 +3,13 @@ import { ToolView } from "@musepi/client-core/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/client-core/src/tool-render/tools/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { projectRuntimeVersions } from "../../lib/daemon-version";
 import {
 	checkAppUpdates,
 	downloadInstaller,
 	downloadUpdate,
 	getCloseToTray,
+	getShellVersion,
 	isElectron,
 	openExternalUrl,
 	setCloseToTray,
@@ -222,6 +224,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		configDir?: string;
 		runtime?: string;
 	} | null>(null);
+	const [shellVersion, setShellVersion] = useState<string | null>(null);
 	const [metaErr, setMetaErr] = useState<string | null>(null);
 	const [pickedRoot, setPickedRoot] = useState<string | null>(null);
 	const [rootBusy, setRootBusy] = useState(false);
@@ -343,6 +346,15 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		};
 	}, []);
 	useEffect(() => {
+		let alive = true;
+		void getShellVersion().then(version => {
+			if (alive) setShellVersion(version);
+		});
+		return () => {
+			alive = false;
+		};
+	}, []);
+	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
 		const load = (): void => {
@@ -380,6 +392,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			return "ws://127.0.0.1:8300";
 		}
 	})();
+	const versions = projectRuntimeVersions({ appVersion: shellVersion, meta: info, update: updateResult });
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.general2")}</h2>
@@ -602,11 +615,20 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="gui-settings-row">
 						<div>
 							<div className="gui-settings-row-label">{t("tools.version")}</div>
-							{/* MusePi brand version first; the daemon reports the OMP
-							 * engine version when it was spawned unbranded. */}
 							<div className="text-[13px] text-[var(--color-text-muted)]">
-								MusePi {info.musepiVersion ?? info.version}
+								MusePi {versions.displayVersion ?? "—"}
 							</div>
+						</div>
+					</div>
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("settings.daemonVersion")}</div>
+							<div className="text-[13px] text-[var(--color-text-muted)]">{versions.daemonVersion ?? "—"}</div>
+							{versions.daemonRefreshNeeded && (
+								<div className="gui-settings-row-desc text-[var(--color-warning)]">
+									{t("settings.daemonRefreshNeeded")}
+								</div>
+							)}
 						</div>
 					</div>
 					{info.engineVersion && (
