@@ -33,7 +33,7 @@ runs:
       # Off-infra (GitHub-hosted): stock actions/cache for the bun store.
       - name: Cache bun store (GitHub cache)
         if: steps.env.outputs.cache == 'gha'
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
            path: ~/.bun/install/cache
            key: bun-${{ runner.os }}-${{ steps.bun.outputs.bun-version }}-${{ hashFiles('**/bun.lock') }}

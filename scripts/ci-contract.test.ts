@@ -44,6 +44,27 @@ describe("CI runtime and delivery contracts", () => {
 		}
 	});
 
+	it("pins cache and Java setup actions to releases that run on Node 24", () => {
+		const expected = new Map([
+			["actions/cache", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
+			["actions/setup-java", "b843ebf9b913146b38da2eaa7aeddf76074ae1ad"],
+		]);
+		const files = fs
+			.readdirSync(path.join(repoRoot, ".github"), { recursive: true, withFileTypes: true })
+			.filter(entry => entry.isFile() && entry.name.endsWith(".yml"))
+			.map(entry => path.relative(repoRoot, path.join(entry.parentPath, entry.name)).replaceAll(path.sep, "/"));
+		const steps = files.flatMap(file =>
+			allSteps(readYaml(file))
+				.filter(step => [...expected.keys()].some(action => step.uses?.startsWith(`${action}@`)))
+				.map(step => ({ file, step })),
+		);
+		expect(steps.length).toBeGreaterThan(2);
+		for (const { file, step } of steps) {
+			const action = [...expected.keys()].find(name => step.uses?.startsWith(`${name}@`))!;
+			expect(step.uses, file).toBe(`${action}@${expected.get(action)}`);
+		}
+	});
+
 	it("keys Bun dependency caches by the resolved runtime and lockfile", () => {
 		const files = fs
 			.readdirSync(path.join(repoRoot, ".github"), { recursive: true, withFileTypes: true })
