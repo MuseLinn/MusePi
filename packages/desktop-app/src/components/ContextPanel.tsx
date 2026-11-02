@@ -559,7 +559,7 @@ export function ContextPanel({
 			// FLIP target then captures a mid-animation rect and the morph
 			// animates to the wrong geometry (verified 2026-09-22: restore
 			// pinned width 1244 and never came back to the docked 395).
-			el.style.transition = "settings.none2";
+			el.style.transition = "none";
 			flushSync(() => setMaximized(toMaximized));
 			if (!el.isConnected) {
 				el.style.removeProperty("transition");

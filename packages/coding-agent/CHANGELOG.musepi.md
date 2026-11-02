@@ -6,6 +6,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+- **右侧面板最大化后可正确还原分栏**：还原时先停用旧宽度过渡，再测量分栏目标，避免把最大化宽度保留下来；浏览器标签的损坏图标也会正确隐藏。
+  - EN: Restoring a maximized right panel now returns to the docked split layout. The previous width transition is disabled before measuring the restore target, so the maximized width cannot persist. Broken browser-tab favicons are also hidden correctly.
+
 ## [0.7.0] - 2026-11-01
 
 ### Added

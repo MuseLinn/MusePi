@@ -1121,7 +1121,7 @@ export function ManagedBrowserPane({
 											alt=""
 											className="h-3.5 w-3.5 shrink-0 rounded-[3px]"
 											onError={e => {
-												e.currentTarget.style.display = "settings.none2";
+												e.currentTarget.style.display = "none";
 											}}
 										/>
 									) : (
