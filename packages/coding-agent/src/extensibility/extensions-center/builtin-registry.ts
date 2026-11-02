@@ -36,6 +36,14 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 	},
 	{
 		kind: "plugin-module",
+		name: "chat-view",
+		displayName: "MusePi Chat View",
+		description: "Welcome, transcript, composer, and session-bound panels in one Cordis-owned surface.",
+		annotate: true,
+		raw: { name: "chat-view", kind: "plugin-module" },
+	},
+	{
+		kind: "plugin-module",
 		name: "file-workspace",
 		displayName: "MusePi File Workspace",
 		description:

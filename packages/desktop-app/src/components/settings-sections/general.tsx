@@ -26,6 +26,7 @@ import {
 } from "../../lib/pet-decor";
 import type { RpcClient } from "../../lib/rpc";
 import { UPDATE_ERROR_BODY_KEYS } from "../../lib/update-ux";
+import { readWelcomeGreeting, writeWelcomeGreeting } from "../../lib/welcome-greeting";
 import { Icon } from "../../vendor/oc-icons";
 import {
 	AVATAR_PRESETS,
@@ -269,6 +270,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 	};
 	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("musepi-gui-dotmatrix") !== "0");
+	const [welcomeGreeting, setWelcomeGreeting] = useState(readWelcomeGreeting);
 	const [autostartEnabled, setAutostartEnabled] = useState(false);
 	const [autostartSupported, setAutostartSupported] = useState(false);
 	const [autostartBusy, setAutostartBusy] = useState(false);
@@ -527,6 +529,23 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					</button>
 				</div>
 			)}
+			<div className="gui-settings-row">
+				<div className="w-full">
+					<div className="gui-settings-row-label">{t("settings.welcomeGreeting")}</div>
+					<div className="gui-settings-row-desc">{t("settings.welcomeGreetingDescription")}</div>
+					<input
+						className="gui-input mt-2 w-full max-w-[320px]"
+						value={welcomeGreeting}
+						maxLength={80}
+						placeholder={t("settings.welcomeGreetingPlaceholder")}
+						aria-label={t("settings.welcomeGreeting")}
+						onChange={event => {
+							setWelcomeGreeting(event.target.value);
+							writeWelcomeGreeting(event.target.value);
+						}}
+					/>
+				</div>
+			</div>
 			<div className="gui-settings-row">
 				<div>
 					<div className="gui-settings-row-label">{t("settings.dotMatrixBackground")}</div>

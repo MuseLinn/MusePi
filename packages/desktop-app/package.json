@@ -133,7 +133,7 @@
 			"include": "release/installer-branding.nsh",
 			"uninstallDisplayName": "MusePi ${version}",
 			"deleteAppDataOnUninstall": false,
-			"installerLanguages": ["zh_CN", "en_US"],
+			"installerLanguages": ["zh_CN", "zh_TW", "en_US"],
 			"language": "2052"
 		},
 		"linux": {

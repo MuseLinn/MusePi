@@ -1,0 +1,12 @@
+{
+	"name": "musepi-chat-view",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned chat and welcome surface.",
+	"type": "module",
+	"musepi": {
+		"icon": "π",
+		"description": "Host the session transcript, composer, and welcome page through one chat slot.",
+		"extensions": ["./index.ts"]
+	}
+}

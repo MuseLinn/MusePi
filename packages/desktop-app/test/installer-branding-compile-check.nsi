@@ -55,6 +55,7 @@ RequestExecutionLevel user
 
 ; ── then languages (mirrors !insertmacro addLangs) ───────────────────────
 !insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "TradChinese"
 !insertmacro MUI_LANGUAGE "English"
 
 ; ── then customHeader, where our LangStrings live ────────────────────────

@@ -8,13 +8,10 @@
 ; NSIS 原生控件无法表达（详见 docs/review/1.0-openbitfun-installer-absorption.md）。
 ;
 ; ── 关键时序约束 ──────────────────────────────────────────────────────
-; 1. electron-builder 在 .onInit 中、创建页面前调用 customInit。宿主在这里
-;    完成全部提问；确认后 SetSilent silent 让 NSIS 在后台安装并退出。
-; 2. OTA 更新是 `--updated /S`（静默），必须完全跳过 UI，否则更新会卡在
-;    一个没人点的窗口上。用 ${isUpdated} / ${Silent} 双重判断。
-; 3. 宿主 exe 及其 DLL 必须在安装包里，先 InitPluginsDir 再解压到
-;    $PLUGINSDIR 运行——WebView2 会往 exe 旁边写用户数据，直接放 $INSTDIR
-;    （可能不可写）会启动失败。
+; 1. customInit 中的 WebView2 宿主只负责提问和写 answers.ini。宿主退出后，
+;    NSIS 显示真实的文件释放进度与完成页；不再播放模拟进度或隐藏后台安装。
+; 2. OTA 更新是 `--updated /S`（静默），必须完全跳过 UI。
+; 3. 宿主 exe 及其 DLL 先解压到可写的 $PLUGINSDIR，再从那里运行。
 ;
 ; ── 注入时序 ──────────────────────────────────────────────────────────
 ; electron-builder 把本文件**前置**拼接在模板 installer.nsi 之前
@@ -23,33 +20,22 @@
 
 !include "${PROJECT_DIR}\release\ensure-shortcuts.nsh"
 
-; ── 宿主安装包在安装器内的路径 ────────────────────────────────────────
-; build-installer-host.mjs 把宿主与 UI 产出到 installer/dist/，
-; electron-builder 通过 extraResources 把整个目录塞进安装器。
 !define HOST_RELATIVE_PATH "installer-host"
 
-; ── 测试骨架的自包含 ─────────────────────────────────────────────────
-; 只依赖 NSIS 自带头文件：StrContains.nsh 属于 electron-builder 的模板目录，
-; 不在标准 include 路径里，用它会让本文件无法独立编译（CI 编译门禁会红）。
-;   LogicLib.nsh   ${If}/${Do} 等控制流
-;   TextFunc.nsh   ${TrimNewLines}（FileFunc 里没有这个）
 !include "LogicLib.nsh"
 !include "TextFunc.nsh"
 
-; ── 调色板（与客户端 tokens.css 同源）────────────────────────────────
 !define MUSE_BG   "17151A"
 !define MUSE_TEXT "EDEAE4"
-
 !define MUI_BGCOLOR   "${MUSE_BG}"
 !define MUI_TEXTCOLOR "${MUSE_TEXT}"
 !define MUI_INSTFILESPAGE_COLORS "${MUSE_TEXT} ${MUSE_BG}"
 !define MUI_INSTFILESPAGE_PROGRESSBAR colored
 
-; 卸载器构建会跳过安装欢迎页；不要保留未被引用的安装变量和函数（/WX 会失败）。
 !ifndef BUILD_UNINSTALLER
+; 路径已经由自绘宿主收集，原生目录页直接跳过；文件进度和完成页仍可见。
+!define MUI_PAGE_CUSTOMFUNCTION_PRE MuseSkipNativeDirectory
 
-; electron-builder 在创建任何页面前调用 customInit。自绘宿主在这里完成
-; 全部提问；确认后把 NSIS 切为静默模式，后续原生页面不会创建。
 !macro customInit
   ${IfNot} ${Silent}
     Call MuseRunInstallerHost
@@ -62,7 +48,6 @@
       Quit
     ${EndIf}
     Call MuseApplyHostAnswers
-    SetSilent silent
   ${EndIf}
 !macroend
 
@@ -80,6 +65,10 @@ Var MuseAnswersFile
 ; 宿主及其 DLL 来自安装器的 extraResources；解压到 $PLUGINSDIR 后运行，
 ; 因为 WebView2 会在 exe 旁边建用户数据目录，$PLUGINSDIR 一定可写。
 ; ──────────────────────────────────────────────────────────────────────
+Function MuseSkipNativeDirectory
+  Abort
+FunctionEnd
+
 Function MuseRunInstallerHost
   StrCpy $MuseHostExit 0
   ; customInit 早于模板自己的插件目录初始化，提取宿主前必须显式创建。
@@ -180,6 +169,15 @@ Function MuseApplyHostAnswers
   ${If} $MuseInstallPath != ""
     StrCpy $INSTDIR $MuseInstallPath
   ${EndIf}
+  ; Windows LCIDs are stable and available before MUI_LANGUAGE registers its
+  ; compile-time LANG_* constants: English 1033, zh-CN 2052, zh-TW 1028.
+  ${If} $MuseLanguage == "en-US"
+    StrCpy $LANGUAGE 1033
+  ${ElseIf} $MuseLanguage == "zh-CN"
+    StrCpy $LANGUAGE 2052
+  ${ElseIf} $MuseLanguage == "zh-TW"
+    StrCpy $LANGUAGE 1028
+  ${EndIf}
 FunctionEnd
 
 !endif
@@ -215,6 +213,12 @@ FunctionEnd
     LangString MUSEPI_UNWELCOME_TITLE ${LANG_SIMPCHINESE} "卸载 ${PRODUCT_NAME}"
     LangString MUSEPI_UNWELCOME_TEXT  ${LANG_SIMPCHINESE} "这将从本机移除 ${PRODUCT_NAME}。$\r$\n$\r$\n你的配置、会话记录与登录凭据会保留，重新安装后仍然可用。$\r$\n若想彻底清除，请在卸载后手动删除 ~\.musepi 目录。"
     LangString MUSEPI_HOST_FAILED ${LANG_SIMPCHINESE} "安装向导启动失败。请确认系统已安装 Microsoft Edge WebView2 运行时后重试。"
+  !endif
+
+  !ifdef LANG_TRADCHINESE
+    LangString MUSEPI_UNWELCOME_TITLE ${LANG_TRADCHINESE} "解除安裝 ${PRODUCT_NAME}"
+    LangString MUSEPI_UNWELCOME_TEXT  ${LANG_TRADCHINESE} "這會從本機移除 ${PRODUCT_NAME}。$\r$\n$\r$\n你的設定、工作階段記錄與登入憑證會保留，重新安裝後仍可使用。$\r$\n若要完全清除，請在解除安裝後手動刪除 ~\.musepi 目錄。"
+    LangString MUSEPI_HOST_FAILED ${LANG_TRADCHINESE} "安裝精靈啟動失敗。請確認系統已安裝 Microsoft Edge WebView2 執行階段，然後重試。"
   !endif
 
   !ifdef LANG_ENGLISH

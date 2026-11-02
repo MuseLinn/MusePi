@@ -909,6 +909,9 @@ export const settings = {
 	"settings.language": "语言",
 	"settings.daemon": "守护进程",
 	"settings.general2": "常规",
+	"settings.welcomeGreeting": "欢迎问候语",
+	"settings.welcomeGreetingDescription": "留空则按时间显示问候",
+	"settings.welcomeGreetingPlaceholder": "输入欢迎页显示的问候语",
 	"settings.dotMatrixBackground": "点阵品牌背景",
 	"settings.agentAvatarStyle": "Agent 头像样式",
 	"settings.agentAvatarStyleDescription":

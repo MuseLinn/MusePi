@@ -14,7 +14,6 @@ import { ActionToastStack } from "./components/ActionToast";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
-import { ChatView } from "./components/ChatView";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import type { CreationMessage } from "./components/CreationModeRow";
@@ -92,6 +91,7 @@ import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import {
 	CAPABILITY_CENTER_SLOT,
+	CHAT_VIEW_SLOT,
 	hostReactBindings,
 	hostReactDOMBindings,
 	hostReactDOMClientBindings,
@@ -3744,63 +3744,64 @@ function AppInner(): ReactNode {
 					<span className="gui-mini-title">{miniTitle}</span>
 				</div>
 				<div className="gui-mini-chat relative flex min-h-0 min-w-0 flex-1 flex-col">
-					<ChatView
-						store={store}
+					<SlotComponentHost
+						slot={CHAT_VIEW_SLOT}
 						rpc={rpc}
-						readOnly={selectedIsAdvisor}
-						onAddProvider={() => openSettings("providers")}
-						onOpenSettings={openSettings}
-						onSend={(text, images, deliverAs, displayContext) =>
-							void sendPrompt(text, images, undefined, deliverAs, displayContext)
-						}
-						onStop={stop}
-						onDecideApproval={decideApproval}
-						onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
-						onForkSession={async forkId => {
-							await refreshSessions(rpc);
-							await openSession(forkId);
+						chatView={{
+							store,
+							rpc,
+							readOnly: selectedIsAdvisor,
+							onAddProvider: () => openSettings("providers"),
+							onOpenSettings: openSettings,
+							onSend: (text, images, deliverAs, displayContext) =>
+								void sendPrompt(text, images, undefined, deliverAs, displayContext),
+							onStop: stop,
+							onDecideApproval: decideApproval,
+							onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
+							onForkSession: async forkId => {
+								await refreshSessions(rpc);
+								await openSession(forkId);
+							},
+							presetModelId,
+							modes: welcomeModes,
+							modeId: welcomeModeId,
+							onModeChange: setWelcomeModeId,
+							onDesignSubmit: submitCreationSession,
+							defaultModelId,
+							presetThinkingLevel,
+							busy: status === "connecting",
+							paused: pauseInfo.sessionId === selectedId && pauseInfo.paused,
+							pausedAt: pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null,
+							onResume: () => void togglePause(),
+							project,
+							onProject: action => {
+								if (action === "remote") {
+									setConnectOpen(true);
+								} else if (action === "new") {
+									setNewProjectOpen(true);
+								} else if (action === "folder") {
+									pickProjectFolder();
+								} else if (action === "none") {
+									setProject(null);
+									localStorage.removeItem("musepi-gui-project");
+								} else {
+									setProject(action);
+									localStorage.setItem("musepi-gui-project", action);
+								}
+							},
+							onSubmitNewSession: (text, opts) => void submitNewSession(text, opts),
+							rightPanelOpen: false,
+							terminalOpen: false,
+							focusMode,
+							onToggleFocus: () => setFocusMode(v => !v),
+							reminders,
+							onSelectReminder: id => void openSession(id),
+							onMarkAllRead: markAllRead,
+							sessionLoading,
+							waitSeconds,
+							ask: activeAsk,
+							onAskAnswer: answerAsk,
 						}}
-						presetModelId={presetModelId}
-						modes={welcomeModes}
-						modeId={welcomeModeId}
-						onModeChange={setWelcomeModeId}
-						onDesignSubmit={submitCreationSession}
-						defaultModelId={defaultModelId}
-						presetThinkingLevel={presetThinkingLevel}
-						busy={status === "connecting"}
-						paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-						pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-						onResume={() => void togglePause()}
-						project={project}
-						onProject={action => {
-							if (action === "remote") {
-								setConnectOpen(true);
-							} else if (action === "new") {
-								setNewProjectOpen(true);
-							} else if (action === "folder") {
-								pickProjectFolder();
-							} else if (action === "none") {
-								// "不在项目中": clear the workspace chip — never open the picker.
-								setProject(null);
-								localStorage.removeItem("musepi-gui-project");
-							} else {
-								// A saved workspace picked from the list — switch to it.
-								setProject(action);
-								localStorage.setItem("musepi-gui-project", action);
-							}
-						}}
-						onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
-						rightPanelOpen={false}
-						terminalOpen={false}
-						focusMode={focusMode}
-						onToggleFocus={() => setFocusMode(v => !v)}
-						reminders={reminders}
-						onSelectReminder={id => void openSession(id)}
-						onMarkAllRead={markAllRead}
-						sessionLoading={sessionLoading}
-						waitSeconds={waitSeconds}
-						ask={activeAsk}
-						onAskAnswer={answerAsk}
 					/>
 				</div>
 				<ConnectDialog
@@ -4006,86 +4007,81 @@ function AppInner(): ReactNode {
 							<div className="gui-surface-area relative flex min-h-0 flex-1 flex-col">
 								{(() => {
 									const chatSurface = (
-										<ChatView
-											store={store}
+										<SlotComponentHost
+											slot={CHAT_VIEW_SLOT}
 											rpc={rpc}
-											readOnly={selectedIsAdvisor}
-											parentSession={activeParentSession}
-											onOpenParentSession={id => void openSession(id)}
-											onOpenSession={id => void openSession(id)}
-											onSend={(text, images, deliverAs, displayContext) =>
-												void sendPrompt(text, images, undefined, deliverAs, displayContext)
-											}
-											onStop={stop}
-											onDecideApproval={decideApproval}
-											onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
-											onForkSession={async forkId => {
-												await refreshSessions(rpc);
-												await openSession(forkId);
+											chatView={{
+												store,
+												rpc,
+												readOnly: selectedIsAdvisor,
+												parentSession: activeParentSession,
+												onOpenParentSession: id => void openSession(id),
+												onOpenSession: id => void openSession(id),
+												onSend: (text, images, deliverAs, displayContext) =>
+													void sendPrompt(text, images, undefined, deliverAs, displayContext),
+												onStop: stop,
+												onDecideApproval: decideApproval,
+												onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
+												onForkSession: async forkId => {
+													await refreshSessions(rpc);
+													await openSession(forkId);
+												},
+												presetModelId,
+												modes: welcomeModes,
+												modeId: welcomeModeId,
+												onModeChange: id => setWelcomeModeId(id),
+												onDesignSubmit: submitCreationSession,
+												defaultModelId,
+												presetThinkingLevel,
+												busy: status === "connecting",
+												paused: pauseInfo.sessionId === selectedId && pauseInfo.paused,
+												pausedAt: pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null,
+												onResume: () => void togglePause(),
+												project,
+												onProject: action => {
+													if (action === "remote") {
+														setConnectOpen(true);
+													} else if (action === "new") {
+														setNewProjectOpen(true);
+													} else if (action === "none") {
+														setProject(null);
+														localStorage.removeItem("musepi-gui-project");
+													} else if (action === "folder") {
+														pickProjectFolder();
+													} else {
+														setProject(action);
+														localStorage.setItem("musepi-gui-project", action);
+													}
+												},
+												onSubmitNewSession: (text, opts) => void submitNewSession(text, opts),
+												rightPanelOpen: !rightCollapsed,
+												onOpenFileInPanel: () => setRightCollapsed(false),
+												onAddProvider: () => openSettings("providers"),
+												onOpenSettings: openSettings,
+												onToggleRightPanel: () => {
+													setRightCollapsed(v => {
+														localStorage.setItem("musepi-gui-right", v ? "1" : "0");
+														return !v;
+													});
+												},
+												onExpandRightPanel: () => {
+													setRightCollapsed(false);
+													localStorage.setItem("musepi-gui-right", "0");
+												},
+												panelSelectRequest: panelSelect,
+												terminalOpen: bottomTerminal,
+												onCloseTerminal: closeTerminalDock,
+												onToggleTerminal: toggleTerminalDock,
+												focusMode,
+												onToggleFocus: () => setFocusMode(v => !v),
+												reminders,
+												onSelectReminder: id => void openSession(id),
+												onMarkAllRead: markAllRead,
+												sessionLoading,
+												waitSeconds,
+												ask: activeAsk,
+												onAskAnswer: answerAsk,
 											}}
-											presetModelId={presetModelId}
-											modes={welcomeModes}
-											modeId={welcomeModeId}
-											onModeChange={id => {
-												setWelcomeModeId(id);
-												// M3.7a(v2 修订):选中 design 预设不弹任何浮层——
-												// 类型 chip 排由欢迎页 composer 内联渲染。
-											}}
-											onDesignSubmit={submitCreationSession}
-											defaultModelId={defaultModelId}
-											presetThinkingLevel={presetThinkingLevel}
-											busy={status === "connecting"}
-											paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-											pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-											onResume={() => void togglePause()}
-											project={project}
-											onProject={action => {
-												if (action === "remote") {
-													setConnectOpen(true);
-												} else if (action === "new") {
-													setNewProjectOpen(true);
-												} else if (action === "none") {
-													// "不在项目中": clear the workspace chip — never open the picker.
-													setProject(null);
-													localStorage.removeItem("musepi-gui-project");
-												} else if (action === "folder") {
-													pickProjectFolder();
-												} else {
-													// A saved workspace picked from the list — switch to it.
-													setProject(action);
-													localStorage.setItem("musepi-gui-project", action);
-												}
-											}}
-											onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
-											rightPanelOpen={!rightCollapsed}
-											onOpenFileInPanel={() => {
-												setRightCollapsed(false);
-											}}
-											onAddProvider={() => openSettings("providers")}
-											onOpenSettings={openSettings}
-											onToggleRightPanel={() => {
-												setRightCollapsed(v => {
-													localStorage.setItem("musepi-gui-right", v ? "1" : "0");
-													return !v;
-												});
-											}}
-											onExpandRightPanel={() => {
-												setRightCollapsed(false);
-												localStorage.setItem("musepi-gui-right", "0");
-											}}
-											panelSelectRequest={panelSelect}
-											terminalOpen={bottomTerminal}
-											onCloseTerminal={closeTerminalDock}
-											onToggleTerminal={toggleTerminalDock}
-											focusMode={focusMode}
-											onToggleFocus={() => setFocusMode(v => !v)}
-											reminders={reminders}
-											onSelectReminder={id => void openSession(id)}
-											onMarkAllRead={markAllRead}
-											sessionLoading={sessionLoading}
-											waitSeconds={waitSeconds}
-											ask={activeAsk}
-											onAskAnswer={answerAsk}
 										/>
 									);
 									// Chat 常驻挂载:看板/任务/能力中心打开时 chat 仅

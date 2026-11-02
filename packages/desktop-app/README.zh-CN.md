@@ -8,10 +8,15 @@ MusePi 桌面 GUI —— 包裹在 React SPA 外的 Electron 壳，SPA 通过 mu
 
 ```
 packages/desktop-app/
-  electron/        Electron 主进程（main.cjs、preload、tray、updater…）
-  *.html + *-main.tsx   渲染端入口——每种窗口类型一个 SPA
-  src/styles/      Tailwind CSS 源（build:tailwind 产出 tailwind.out.css）
+  electron/          Electron 主进程（main.cjs、preload、tray、updater…）
+  *.html + *-main.tsx 渲染端入口——每种窗口类型一个 SPA
+  src/plugins/       官方 Cordis GUI 模块与共享生命周期接线
+  src/styles/        Tailwind CSS 源（build:tailwind 产出 tailwind.out.css）
+  installer/         Windows WebView2 向导与原生宿主
+  release/           NSIS 集成与平台打包钩子
 ```
+
+Windows 向导负责语言、安装位置、快捷方式选项和运行中客户端检查。写入答案后，NSIS 负责显示真实的文件释放进度与完成页；向导不模拟安装进度。
 
 ### 渲染端入口
 

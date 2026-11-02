@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <code>musepi</code> CLI · Electron desktop GUI · always-on desktop pet · daemon service
+  <code>musepi</code> CLI · Electron desktop GUI · Cordis plugins · daemon service
 </p>
 
 <p align="center">
@@ -15,9 +15,8 @@
   <a href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md"><img src="https://img.shields.io/badge/changelog-keep-E05735?style=flat&colorA=222222" alt="Changelog"></a>
   <a href="https://github.com/MuseLinn/MusePi/actions"><img src="https://img.shields.io/github/actions/workflow/status/MuseLinn/MusePi/ci.yml?style=flat&colorA=222222&colorB=3FB950" alt="CI"></a>
   <a href="https://github.com/MuseLinn/MusePi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MuseLinn/MusePi?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
-  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
-  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-DEA584?style=flat&colorA=222222&logo=rust&logoColor=white" alt="Rust"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
+</p>
 
 <p align="center">
   <em>English | <a href="README.zh-CN.md">中文</a></em>
@@ -25,230 +24,135 @@
 
 ---
 
-MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It shares an agent-engine lineage and keeps its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) wired into the GUI. **MusePi is its own upstream** — oh-my-pi / Pi / DSH / opencode etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
+MusePi combines a coding agent, an Electron workbench, a terminal UI, and remote clients. The desktop app includes an editable file workspace, review tools, a managed browser, a desktop pet, and a capability center for first-party and third-party Cordis plugins. MusePi is independently versioned; reference projects and upstream lineage are recorded in [UPSTREAM.md](UPSTREAM.md).
 
-Releases are independent of upstream versioning — see the [releases page](https://github.com/MuseLinn/MusePi/releases) for the current version.
+## Install
 
-## Install (one command)
+### Desktop, Android, and terminal downloads
+
+Download version-matched desktop installers and Android packages from the [releases page](https://github.com/MuseLinn/MusePi/releases). The [MusePi website](https://muselinn.github.io/MusePi/) provides bilingual download guides.
+
+- **Desktop:** macOS `.dmg`, Windows per-user `setup.exe`, Linux `.AppImage` / `.deb`.
+- **Android:** install `app-debug.apk` and pair with a host on the local network.
+- **Terminal:** install `musepi` with a script or from source.
+
+macOS, Linux, and WSL:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 ```
 
-Clones to `~/.musepi/repo` and runs `bun run setup` (workspace install + natives + link), then run:
-
-```sh
-cd ~/.musepi/repo && bun run musepi
-```
-
-macOS / Linux / WSL use the curl line above. Windows — PowerShell:
+Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex
 ```
 
-Or install from source on any platform (manual):
-
+From source:
 
 ```sh
-git clone https://github.com/MuseLinn/MusePi.git && cd MusePi
-bun run setup && bun run musepi
+git clone https://github.com/MuseLinn/MusePi.git
+cd MusePi
+bun run setup
+bun run musepi
 ```
 
-Options:
+The install scripts accept `--ref <tag|commit|branch>` to select a checkout and `--source` to build instead of downloading a prebuilt binary.
 
-- `--ref <tag|commit|branch>` — pin an exact checkout
-- `--source` — install from source (clone + build; the default is the prebuilt release binary)
+## What is included
 
-## Download (three surfaces)
+### Desktop workbench
 
-| Surface | Get it |
-|---|---|
-| 🖥️ **Desktop client** (Electron GUI, auto-update) | [macOS arm64 `.dmg`](https://github.com/MuseLinn/MusePi/releases/latest) · [Windows `setup.exe`](https://github.com/MuseLinn/MusePi/releases/latest) · [Linux `.AppImage`/`.deb`](https://github.com/MuseLinn/MusePi/releases/latest) — grab the version-matched assets on the [releases page](https://github.com/MuseLinn/MusePi/releases) |
-| 📱 **Android companion** (Capacitor, LAN pairing) | `app-debug.apk` on the [releases page](https://github.com/MuseLinn/MusePi/releases) (`adb install -r app-debug.apk`) |
-| ⌨️ **Terminal TUI** | `musepi` via the curl installer above (macOS/Linux/WSL) — or `bun run setup && bun run musepi` from source (Windows/all platforms) |
+- **Agent workspace:** session history and branching, provider-qualified model selection, slash commands, shell commands, file and session references, approvals, context compaction, and task tracking.
+- **Editable files:** tabs, a non-modal file tree, Monaco-based editing, Markdown editing, document and media viewers, selection references, Git changes, issues, and pull requests.
+- **Customizable shell:** theme, accent, density, liquid-glass surfaces, command palette, configurable shortcuts, right-side surfaces, terminal tabs, and a managed in-app browser.
+- **Desktop companion:** animated pet, status bubbles, tray controls, and cross-window activity updates.
+- **Capability center:** manage skills, plugins, and marketplace packages. Official modules and external packages use the Cordis lifecycle and shared component availability rather than separate package switches.
+- **Remote access:** collaborate through encrypted links, connect remote daemon instances, and use mobile clients to manage sessions.
 
-Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for all three surfaces).
+### Agent engine
 
-## Screenshots
+- Multiple model providers and routing controls; LSP and DAP integration; parallel subagents; session memory; ACP; and local or remote collaboration.
+- File, search, shell, code-intelligence, browser, desktop, GitHub, image, speech, memory, and skill tools. Optional tools remain controlled by settings and extension scope.
+- Presets combine extension selection, prompt sections, and settings. Session presets lock after the first turn.
 
-A real capture, not an illustration that goes stale — the [website's interface preview](https://muselinn.github.io/MusePi/#preview) shows the actual client, regenerated from the running renderer for each release.
-
-## Features
-
-### Desktop GUI
-
-- **Electron desktop app** (`packages/desktop-app`): independent-card workspace (session sidebar, chat column, side pane and terminal dock are separate rounded surfaces on the glass base — no shared card with divider lines), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window with liquid-glass dialogs and chrome (specular rims, fluid spring motion).
-- **Always-on desktop pet**: animated companion (petdex frame-animation packs, drag positioning, click-through, hover interactions, cross-window activity bridge); task progress surfaces as pet bubbles.
-- **Daemon architecture**: the GUI talks JSON-RPC to the daemon (`musepi serve`). Sessions persist via journal + materialized view; idle 30-min sessions become history snapshots and reactivate on demand. The daemon survives GUI exit; reconnecting resumes. Internally the daemon is layered (0.5.0, strangler-fig in progress): a HostServices registry owns the RPC route table as L2 host services (usage / events / views / boards / files / terminal / approvals / browser / remote / … — `packages/coding-agent/src/daemon/services/`), so capability seams, settings wiring, and a future cordis composition layer all have a stable place to land.
-- **Managed browser** (`browser.gui`): Electron `WebContentsView` + CDP bridge — drive an embedded browser page in the GUI with projected layout and pixel-sampled verification.
-- **Integrated terminal**: xterm + bun-pty with tabs (middle-click close), hardened env (strips `ELECTRON_RUN_AS_NODE` etc.).
-- **Full command surface (TUI parity)**: `/` slash commands (headless ACP executor), `!cmd`/`!!cmd` shell, `@` file mentions (the panel opens after CJK body text and punctuation too — `请看@文件` works, `foo@bar` does not), `#` session references.
-- **Approvals with a reason**: the inline approval card carries a multiline note field (⌘/Ctrl+Enter approves, >5 lines scroll internally). A noted **denial** reaches the agent as the rejection reason, so it learns *why* instead of just "denied by user" (TUI ask-dialog `✎ note` parity).
-- **Context management**: context donut (`session.contextUsage`), `/compact`-parity manual compaction, snapcompact savings estimate.
-- **Settings panel**: all 336 TUI settings merged into the desktop settings (schema-driven via `settings.schema`), 10+ tabs; sidebar search matches actual setting rows.
-- **Rich interactions**: image attachments & lightbox, voice input (dictation / read-aloud / `tts.autoRead`, speech model cards with accuracy/speed tiers, microphone picker), per-session draft persistence, idle recap, reminders panel, ⌘K command palette, Board kanban (auto-scaling canvas, ChromaGrid-style group glow), widget system (custom HTML widgets with theme hot-swap).
-- **Branching (TUI parity)**: 撤回 (jump back) = `branchAt` tree navigation — **rewind targets the node *before* the message** so the message itself leaves the active path, retry re-answers the same node, and edit-and-resend backfills the composer; old replies stay reachable as sibling branches with an animated undo dock; `/btw` questions can be promoted into a new branched session; plan approval offers an "approve and compact context" path.
-- **Instance switcher**: connect remote daemons from the top bar (bearer-token gated, openchamber parity).
-- **Presets (modes)**: named presets = extension whitelist + prompt sections + settings overrides (`~/.musepi/modes/<id>.json`); managed in Settings → 智能体 → 预设.
-- **Session lifecycle status**: sidebar rows carry colored status squares (complete / interrupted / aborted / error / pending) with manual tag overrides.
-- **Swarm task visualizer**: frosted member chip above the composer while a `task` tool runs — floating avatar/progress grid with agent trajectory drill-down.
-- **Compaction status line**: agent status line swaps to a braille spinner + stop button while context compacts.
-- **Model picker**: provider-qualified (`provider/id`) so two providers serving the same bare id never cross-light; session-scoped like the TUI `/switch`.
-- **Dialogs & keyboard priority**: every confirm dialog plays enter/exit animations; modals own the keyboard while open (Escape closes, Enter confirms).
-- **Relaunch experience**: differentiated splash hold, main-window bounds restore, last-session reopen on boot.
-- **Right panel — one tab strip, every surface** (openchamber ContextPanel parity): a single panel-level tab strip hosts each open view — multi-instance **file tabs** (file tree with PDF/image/text previews), notes, project todos & plan files, Git changes & commits (gitmoji, GitHub device-flow auth), PR list, embedded browser, board and extension `panel.tab.*` slots — while the rail becomes a launcher that opens or focuses a tab. Zero tabs shows a start-here page instead of a default view; closing a tab activates its neighbour, tabs drag-reorder, and a layout restore keeps labels only (content re-materialises from its surface).
-- **Subagent operations**: stop / revive / chat from the AgentsPanel (`agents.kill` / `agents.revive` / `agents.chat`).
-- **Task center (scheduled tasks)**: cron-style scheduling with full IANA-timezone support (wall-clock times, idle windows and cron expressions evaluated in the task's timezone, DST-safe), per-task run history with failure reasons, next-run previews computed by the daemon's own parser, per-task model & thinking-level selection, board-view pause/resume — calendar week start follows the settings page.
-- **Windows tray (Win32 convention)**: left-click / double-click restore the main window; right-click toggles the quick menu.
-- **Skill install (daemon RPC)**: land a skill from a GitHub `owner/repo` slug or an https git URL straight into your user skills dir (`skills.install` — SKILL.md auto-located, frontmatter-named, overwrite-gated); listing / reading / deletion stay in the GUI, agent-side authoring via `manage_skill`.
-
-### Core agent engine
-
-- **60+ LLM providers**, 32 built-in tools, `xd://` device extensions.
-- **LSP** wired into every write (renames, references, code actions); **DAP** debugger driving.
-- **task subagents** (parallel fan-out, IRC coordination, worktree isolation), **hashline** content-hash edits, **hindsight** session memory, **ACP** editor-driven mode, **collab** sharing (self-hosted LAN/tunnel relays, plaintext guest mode).
-- **snapcompact** compaction, **magic keywords** (ultrathink / orchestrate / workflowz), **TTSR** stream rules.
-- **`musepi sessions` CLI**: headless session listing (newest first, `--cwd`/`--limit`/`--json`) for scripts and tooling.
-
-### Tools
-
-32 tools live in the same namespace as `read` and `bash`. Pin the active set with `--tools read,edit,bash,…`; rarely used discoverable tools stay behind `xd://` devices (`read xd://` lists them).
-
-**Files & search** — `read` (files, dirs, archives, SQLite, PDFs, notebooks, URLs, `ssh://`, internal `://` schemes) · `write` · `edit` (hashline patches) · `ast_edit` · `ast_grep` · `grep` · `glob`.
-
-**Runtime** — `bash` (workspace shell, 46 in-process coreutils, optional PTY) · `eval` (persistent Python/JS cells).
-
-**Code intelligence** — `lsp` (diagnostics, navigation, symbols, renames, code actions) · `debug` (DAP session) · `security_scan`.
-
-**Coordination** — `task` (parallel subagent fan-out) · `hub` (agent messaging, job wait/cancel, process supervision) · `todo` · `ask`.
-
-**Desktop & web** — `browser` (Puppeteer tabs over headless Chromium or your own Chrome via relay) · `computer` (host desktop: windows, screenshots, native input, AX tree) · `web_search` · `github` · `generate_image` · `inspect_image` · `tts`.
-
-**Memory & skills** — `checkpoint` · `rewind` · `retain` · `recall` · `reflect` · `memory_edit` · `learn` · `manage_skill`.
-
-Setting-gated, off by default: `github`, `security_scan`, `generate_image`, `tts`, `checkpoint`, `rewind`, and the memory tools (`retain`/`recall`/`reflect`/`memory_edit`, per `memory.backend`).
-
-### Prompt & session controls
-
-Three standalone lowercase words opt a turn into specialized behavior: **`ultrathink`** (careful multi-step reasoning), **`orchestrate`** (parallel subagents, verified phases), **`workflowz`** (deterministic multi-subagent workflow). See [Magic keywords](docs/magic-keywords.md).
-
-Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`, `/fresh`, `/preset`, `/changelog`, …).
-
-**Presets (modes)** stamp model role + extension scope + prompt blocks onto a session at creation: `work` (default), `chat` (minimal), **`design`** (design mode — brief → structure → visual → previewable artifact, with the radius/glass token rules wired into the agent's behaviour), `creator` (authoring extensions and presets). Pick one on the welcome screen, pass `--preset <id>`, or hot-switch with `/preset` / the `/design` shortcut. Previewable products follow the artifact manifest contract (`artifact.manifest.json` sidecar; schema in `packages/coding-agent/src/presets/artifact-manifest.ts`). See [`docs/gui-design.md`](docs/gui-design.md) for the design system the `design` preset enforces.
-### Mobile shells
-
-- **Capacitor Android app** (`packages/mobile` + `guest-client` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions, three-in-one send control with dot-matrix bloom, braille dot-matrix working indicator, session archiving.
-- **HarmonyOS WebView shell** (`packages/harmony`): ArkTS `Web` component loading the same bundle from rawfile — native insets (`getWindowAvoidArea`), badge, `musepi://` deep links, keyboard insets. No compat layer: immersion/camera/permissions are native.
-- **PWA**: offline connect shell via service worker (`packages/guest-client/public/sw.js`) — cached shell opens without a network; static assets cache-first.
-- **Remote session management**: guests can create / delete / rename sessions and stop a running turn (`session.abort`) — dsh-mobile-remote parity.
-- **Instance switcher**: top-bar menu connects to remote daemons (`serve --remote-token <token>` gates with bearer auth; hosts persist in localStorage).
-- **Agent-initiated sharing**: the `collab` tool starts LAN/tunnel shares (tunnel requires explicit approval).
-- **Bot channels**: the desktop remote-control dialog wires Discord / Telegram / Feishu (Lark) / WeChat / Huawei-Today push, and each one is adapted to what its protocol actually offers — native typing indicators (WeChat iLink sendtyping, Telegram `sendChatAction`, Discord REST typing), Telegram HTML rendering (plain-text fallback if the parser objects), Feishu replies that quote the message being answered and carry on as a single thread, and Chinese replies on Chinese-market channels. Long answers are chunked, never truncated; an aborted or failed turn still sends a receipt instead of going quiet. WeChat supports **tokenless QR login** — while the channel waits for the scan, the login QR renders inline in the dialog (surfaced from the channel's `status().config.qrUrl`).
-- **Pairing surface**: host shares via `/collab` (TUI slash: view / workspace / lan / tunnel / status / stop) or `collab.start` RPC; guests join with the collab link in any browser, the Android app, or `musepi join "<link>"` from the CLI. E2E-encrypted; workspace mode shares the whole session directory.
-- Design spec: [`mobile-design.md`](docs/mobile-design.md).
-
-## Providers
-
-60+ providers, a thousand models, one `/model` away. Frontier APIs, coding plans, custom OpenAI-compatible providers, and four routing knobs (priority / cost / rate / fallback). Search providers (23 backends), specialised handlers, and security databases. Full provider & routing reference in `docs/`.
+Detailed behavior belongs to the living documents under `docs/`, not to a feature inventory in this README.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph DESKTOP["Electron desktop — packages/desktop-app"]
-        direction TB
-        MW["Main window<br/>sidebar · chat column · side pane · terminal dock"]
-        GC["guest-client rendering core<br/>transcript · tool cards · widgets · i18n"]
-        PW["satellite windows<br/>pet · bubbles · pinned"]
-        MW --- GC
-        MW -.-> PW
+    subgraph CLIENTS["Clients"]
+        DESKTOP["desktop-app<br/>Electron workbench and satellite windows"]
+        WEB["client-core<br/>shared React rendering and collab web UI"]
+        MOBILE["mobile / harmony<br/>Android and HarmonyOS shells"]
     end
 
-    subgraph REMOTE["Remote & mobile — guest-client bundle"]
-        direction TB
-        WEB["collab web UI"]
-        AND["Android (Capacitor)"]
-        HAR["HarmonyOS (WebView)"]
+    subgraph HOST["coding-agent"]
+        RPC["daemon services<br/>JSON-RPC and event streams"]
+        CORDIS["Cordis runtime<br/>first-party and external plugins"]
+        SESSION["AgentSession<br/>journal and materialized view"]
     end
 
-    subgraph DAEMON["musepi serve (daemon) — packages/coding-agent"]
-        HOST["AgentSession host<br/>journal + materialized view<br/>idle 30 min → history snapshot, reactivates on demand"]
+    subgraph ENGINE["Agent engine"]
+        CORE["agent · ai · catalog · wire · sdk"]
+        TOOLS["tools · TUI · LSP/DAP · collab"]
+        NATIVE["natives and Rust crates"]
     end
 
-    subgraph ENGINE["agent engine"]
-        direction TB
-        CORE["agent · ai · tui · catalog · wire · utils"]
-        NAT["natives (Rust N-API)"]
-        CORE --- NAT
-    end
-
-    DESKTOP <-- "JSON-RPC over WS (collab-proto)<br/>event stream: journal / view" --> DAEMON
-    REMOTE <-- "collab link / WS" --> DAEMON
-    DAEMON --> ENGINE
+    DESKTOP <-- "JSON-RPC / WebSocket" --> RPC
+    WEB <-- "collab link / WebSocket" --> RPC
+    MOBILE --> WEB
+    RPC --> CORDIS --> SESSION --> CORE
+    CORE --> TOOLS --> NATIVE
 ```
 
-| Package | Role |
-|---|---|
-| `desktop-app` | Electron desktop app (main window + pet/bubble/pinned windows, xterm, pdf.js, managed-browser bridge) |
-| `guest-client` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI (desktop + mobile entry) |
-| `mobile` | Capacitor Android shell: InsetsPlugin (edge-to-edge), native chrome wiring, APK build |
-| `harmony` | HarmonyOS NEXT WebView shell: ArkTS Web + `harmonyNative` bridge, deep links, DevEco project |
-| `coding-agent` | CLI entry (`musepi`), daemon server, slash/bash commands, tool implementations |
-| `collab-proto` | GUI ↔ daemon transport (WS frames, crypto, links) |
-| `agent` / `ai` / `tui` / `catalog` / `wire` / `utils` / `hashline` / `snapcompact` / `mnemopi` / `stats` | Agent engine / provider registry / TUI / model catalog / wire types / utils |
-| `sdk` | Client SDK (MaterializedView, session-stream event contract) |
-| `natives` | Rust N-API bindings (Bazel/cargo builds, macOS LINKEDIT alignment post-processing) |
-| `swarm-core` / `swarm-extension` / `tool-select` / `browser-relay` / `metaharness` | Subagent orchestration / tool selection / browser relay / harness tooling |
+| Area | Responsibility |
+| --- | --- |
+| `packages/desktop-app` | Electron shell, desktop renderer, official GUI plugins, installer and updater |
+| `packages/client-core` | Shared React components, transcript, widgets, i18n, and collab web UI |
+| `packages/coding-agent` | CLI, daemon, sessions, tools, bundled Cordis plugins, and extension runtime |
+| `packages/mobile`, `packages/harmony` | Android and HarmonyOS shells |
+| `packages/collab-proto`, `packages/wire`, `packages/sdk` | Transport, persisted contracts, and client SDK |
+| `packages/agent`, `packages/ai`, `packages/catalog` | Agent loop, provider client, and model catalog |
+| `packages/tui` | Terminal UI |
+| `packages/utils`, `packages/natives`, `crates/` | Shared utilities and native implementations |
+| Other packages | Hashline edits, compaction, memory, tool selection, statistics, and test harnesses |
 
-Key contract docs: [`gui-design.md`](docs/gui-design.md) · [`gui-implementation.md`](docs/gui-implementation.md) · [`widget-design-system.md`](docs/archive/widget-design-system.md) · [`mobile-design.md`](docs/mobile-design.md) · [`collab.md`](docs/collab.md) · [`UPSTREAM.md`](UPSTREAM.md).
-
-## Entry points
-
-- **Interactive (TUI/CLI)**: `musepi` — the agent asks when in doubt, streams output, runs tools.
-- **SDK — embed in Node**: `@musepi/pi-coding-agent` for programmatic sessions, streams, and tool hooks.
-- **ACP / RPC**: editor-driven mode and JSON-RPC daemon for hosts / GUI / collab.
+Contracts and extension boundaries: [`docs/capability-seams.md`](docs/capability-seams.md), [`docs/extensions-dev.md`](docs/extensions-dev.md), [`docs/gui-design.md`](docs/gui-design.md), and [`docs/gui-implementation.md`](docs/gui-implementation.md).
 
 ## Development
 
-```sh
-bun run setup            # install + natives build + link
-bun run build            # workspace build (incl. GUI dist)
-bun run check            # parallel check:ts (tsgo) + check:rs (cargo)
-bun run test             # bun scripts/ci-test-ts.ts local
-bun run lint / fmt       # biome + rustfmt
-```
-
-`bun setup` installs Bun workspaces and builds `@musepi/pi-natives`. Re-run `bun run build:native` after changing Rust crates or `packages/natives`. Nix users: `nix develop` → `bun setup` → `bun dev`.
-
-## Packaging & Releases
-
-### Desktop app (macOS)
+Use **Bun 1.4.4 or newer within the project compatibility policy**. Package scripts are the command source of truth.
 
 ```sh
-bun run --cwd=packages/desktop-app pack          # build + electron-builder + codesign
+bun run setup            # install dependencies, build natives, link the CLI
+bun run build            # build workspaces that define a build script
+bun run check            # TypeScript/tooling and Rust checks
+bun run test             # repository test runner
+bun run lint             # Biome and Rust lint
 ```
 
-Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bundle so it runs locally. **Distribution builds** need a Developer ID Application certificate + notarization — macOS 26 refuses unsigned/non-notarized apps for several entitlements. See [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).
+Useful entry points:
 
-### Desktop app (Windows / Linux)
+```sh
+bun run musepi
+bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
+bun run --cwd=packages/desktop-app desktop
+```
 
-`gui-release.yml` builds the Electron app per platform on tag pushes: macOS arm64 (`dmg` + `zip`), Windows x64 (NSIS assisted installer, per-user no-admin default), Linux x64/arm64 (`AppImage` + `deb`). Releasing a `v*` tag publishes all platform artifacts plus OTA manifests (`latest*.yml`, beta channel when the tag contains `-beta`) and an `update-manifest.json` for the in-app update check.
+Do not edit `packages/catalog/src/models.json` directly; update its generator and regenerate. Tests and smoke runs must use isolated configuration and daemon directories. See `AGENTS.md` and `.agents/rules/` for engineering and verification rules.
 
-### Mobile (Android)
+## Packaging and releases
 
-`package_mobile` in the same workflow builds the Capacitor app: guest-client bundle → `cap sync` → Gradle `assembleDebug`. The debug APK lands on the release page; install with `adb install -r app-debug.apk`. HarmonyOS shell (`packages/harmony`) builds in DevEco Studio.
+`gui-release.yml` builds desktop artifacts and the Android package for version tags. Desktop releases include OTA manifests. macOS distribution requires the signing and notarization process in [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).
 
-### CLI
+The Windows installer collects language and install options in its WebView2 wizard, checks for a running MusePi client, and then shows the real NSIS extraction progress and completion page. It does not hide a background installation behind simulated progress.
 
-`musepi update` self-updates the installed CLI; the release pipeline is on GitHub Actions (`ci.yml`, `gui-release.yml`).
+Run the release workflow only for an explicit release request. Version and changelog rules live in `.agents/rules/release.md`.
 
-## Documentation
+## Documentation and lineage
 
-- `docs/`: 100+ documents, bilingual zh-CN/en-US (GUI, providers, tools, hooks/extensions/skills, LSP/DAP, collab, compaction, ACP, settings, i18n, …)
-- [`docs/gui-design.md`](docs/gui-design.md) / [`docs/gui-implementation.md`](docs/gui-implementation.md): GUI living docs (keep in sync with code changes)
-- [`UPSTREAM.md`](UPSTREAM.md): archived oh-my-pi sync notes (reference-absorption history)
-
-## Lineage & references
-
-- [Upstream sync notes](UPSTREAM.md) · [Changelog](packages/coding-agent/CHANGELOG.musepi.md) · [npm](https://www.npmjs.com/package/@musepi/pi-coding-agent)
+- [`docs/`](docs/): product and implementation documentation, with bilingual pairs where required.
+- [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md): release notes.
+- [`UPSTREAM.md`](UPSTREAM.md): upstream lineage and reference-absorption history.

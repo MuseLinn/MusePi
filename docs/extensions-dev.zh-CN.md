@@ -149,7 +149,7 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**（编译时强制）：
 - 默认导出 React 组件；
 - JSX 使用 `window.MusePiReact.createElement`。`react`、`react-dom`、`react-dom/client` 和 `react/jsx-runtime` 的普通或 type-only import 都由 daemon 映射到宿主 React，不会打包第二份 React；不得绕过这条映射，自行打包或从其他地址加载 React；
-- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly/dedupeKey`，分栏时也对应本列。保留的 `panel.tab.files` 挂载还会收到 `fileWorkspace`，即宿主拥有的文件标签、草稿、定位请求和编辑历史契约。整页槽位通过 `page` 注入导航；`app.capability` 具体接收 `page: { tab, onTabChange, onBack }`，不是顶层导航 props。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
+- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly/dedupeKey`，分栏时也对应本列。保留的 `panel.tab.files` 挂载还会收到 `fileWorkspace`，即宿主拥有的文件标签、草稿、定位请求和编辑历史契约。single `app.chat` 挂载接收 `chatView`，即宿主拥有的会话、工作区、右栏和终端契约；插件不得复制这些状态。整页槽位通过 `page` 注入导航；`app.capability` 具体接收 `page: { tab, onTabChange, onBack }`，不是顶层导航 props。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
 - **样式**：组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`（组件卸载即移除）——不要依赖全局样式文件；
 - **失败可见**：编译失败/加载失败在宿主处以红色错误块显示（不再静默消失）；运行时错误有 `gui-slot-error` 样式。
 

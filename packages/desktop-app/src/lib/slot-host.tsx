@@ -59,6 +59,7 @@ import {
 import { jsx, jsxs } from "react/jsx-runtime";
 import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
+import type { ChatViewProps } from "../components/ChatView";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
 import type { RpcClient } from "./rpc";
 
@@ -186,6 +187,8 @@ function slot(name: string): string {
 
 /** First slot id — the settings page's extension-contributed section. */
 export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
+/** Full welcome and session surface slot. */
+export const CHAT_VIEW_SLOT = slot("app.chat");
 /** Full capability-center page slot. */
 export const CAPABILITY_CENTER_SLOT = slot("app.capability");
 /** Right-side workspace panel slot. */
@@ -544,6 +547,8 @@ export interface SlotComponentProps {
 	extensionId?: string;
 	/** Navigation contract for the full-page app.capability mount. */
 	page?: CapabilityCenterPageNavigation;
+	/** Host-owned welcome and session surface contract for app.chat. */
+	chatView?: ChatViewProps;
 	/** Current right-panel tab instance; present only for panel.tab.* mounts. */
 	panelTab?: {
 		id: string;
@@ -745,12 +750,14 @@ export function SlotComponentHost({
 	sessionId,
 	cwd,
 	page,
+	chatView,
 }: {
 	rpc: RpcClient | null;
 	slot: string;
 	sessionId?: string | null;
 	cwd?: string;
 	page?: SlotComponentProps["page"];
+	chatView?: SlotComponentProps["chatView"];
 }): ReactNode {
 	const items = useSlotComponents(rpc, slot);
 	return (
@@ -763,6 +770,7 @@ export function SlotComponentHost({
 					sessionId={sessionId}
 					cwd={cwd}
 					page={page}
+					chatView={chatView}
 				/>
 			))}
 		</>
@@ -778,6 +786,7 @@ export function SlotComponentMount({
 	sessionId,
 	cwd,
 	page,
+	chatView,
 	settingsScope,
 	panelTab,
 	fileWorkspace,
@@ -790,6 +799,8 @@ export function SlotComponentMount({
 	sessionId?: string | null;
 	cwd?: string;
 	page?: SlotComponentProps["page"];
+	/** Host-owned welcome and session surface contract (app.chat only). */
+	chatView?: SlotComponentProps["chatView"];
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
 	settingsScope?: SlotComponentProps["settingsScope"];
 	/** Current right-panel tab instance (panel.tab.* only). */
@@ -927,6 +938,7 @@ export function SlotComponentMount({
 		sessionId,
 		cwd,
 		page,
+		chatView,
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,

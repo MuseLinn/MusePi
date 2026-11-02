@@ -42,12 +42,6 @@ namespace MusePiInstallerHost
         private static int Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-
-            // DPI awareness is normally declared in the application manifest
-            // (InstallerHost.manifest, embedded by csc /win32manifest). Calling
-            // this is belt-and-braces: if the manifest is ever lost, a
-            // DPI-unaware process renders at 96 DPI and Windows bitmap-stretches
-            // the window, which is exactly the blur seen on a scaled display.
             TryEnablePerMonitorDpi();
 
             HostOptions options = HostOptions.Parse(args);
@@ -56,18 +50,10 @@ namespace MusePiInstallerHost
                 Console.WriteLine(HostOptions.Usage);
                 return 0;
             }
-
-            if (options.SmokeTest)
-            {
-                return SmokeTest.Run(options);
-            }
-
-            if (options.AutoInstall)
-            {
-                // Non-interactive path used by the NSIS integration test: proves
-                // the answers.ini hand-off without a human clicking through.
-                return RunAutoInstall(options);
-            }
+            if (options.SelfTest) return InstallerWindow.SelfTest();
+            if (options.CheckRunning) return InstallerWindow.IsClientRunning() ? 10 : 0;
+            if (options.SmokeTest) return SmokeTest.Run(options);
+            if (options.AutoInstall) return RunAutoInstall(options);
 
             if (!File.Exists(options.UiIndex))
             {
@@ -78,15 +64,13 @@ namespace MusePiInstallerHost
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new InstallerWindow(options));
-            return 0;
+            return Environment.ExitCode;
         }
 
-        /// <summary>Opt into per-monitor DPI when the OS supports it (Win10 1703+).</summary>
         private static void TryEnablePerMonitorDpi()
         {
             try
             {
-                // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == -4
                 SetProcessDpiAwarenessContext(new IntPtr(-4));
             }
             catch (Exception)
@@ -95,11 +79,6 @@ namespace MusePiInstallerHost
             }
         }
 
-        /// <summary>
-        /// Headless install used by the integration test. Writes the same
-        /// answers.ini the interactive wizard writes, so NSIS exercises the real
-        /// parsing path.
-        /// </summary>
         private static int RunAutoInstall(HostOptions options)
         {
             try
@@ -119,7 +98,7 @@ namespace MusePiInstallerHost
 
         internal static void ShowFailure(string message)
         {
-            MessageBox.Show(message, "MusePi 安装程序", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(message, "MusePi Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -132,31 +111,23 @@ namespace MusePiInstallerHost
         public string InstallRoot;
         public bool SmokeTest;
         public bool ShowHelp;
-        /// <summary>
-        /// Test hook: run the install path without waiting for the user to click
-        /// through the wizard, then exit. Used by the NSIS integration test to
-        /// prove the answers.ini hand-off end to end. Never set by production.
-        /// </summary>
         public bool AutoInstall;
+        public bool SelfTest;
+        public bool CheckRunning;
 
         public const string Usage =
             "MusePiInstallerHost.exe --ui <index.html> [--install-root <dir>] [--smoke-test] [--auto-install]\n" +
             "  --ui            path to installer/ui/index.html\n" +
             "  --install-root  default target directory shown on the location page\n" +
-            "  --smoke-test    headless check: bind WebView2, load UI, verify backdrop-filter,\n" +
-            "                  then exit 0/1 (used by the build gate and CI)\n" +
-            "  --auto-install  non-interactive: write answers and exit 0 without UI\n" +
-            "                  (NSIS integration test only)";
+            "  --smoke-test    verify the real WebView2 layout and exit\n" +
+            "  --auto-install  write answers and exit (NSIS integration test only)\n" +
+            "  --check-running exit 10 when MusePi is running, otherwise 0\n" +
+            "  --self-test     verify localized running-client retry behavior";
 
         public static HostOptions Parse(string[] args)
         {
             HostOptions options = new HostOptions();
             options.UiIndex = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ui", "index.html");
-            options.InstallRoot = null;
-            options.SmokeTest = false;
-            options.ShowHelp = false;
-            options.AutoInstall = false;
-
             for (int i = 0; i < args.Length; i++)
             {
                 string arg = args[i];
@@ -168,18 +139,11 @@ namespace MusePiInstallerHost
                 {
                     options.InstallRoot = Path.GetFullPath(args[++i]);
                 }
-                else if (arg == "--smoke-test")
-                {
-                    options.SmokeTest = true;
-                }
-                else if (arg == "--auto-install")
-                {
-                    options.AutoInstall = true;
-                }
-                else if (arg == "--help" || arg == "-h")
-                {
-                    options.ShowHelp = true;
-                }
+                else if (arg == "--smoke-test") options.SmokeTest = true;
+                else if (arg == "--auto-install") options.AutoInstall = true;
+                else if (arg == "--check-running") options.CheckRunning = true;
+                else if (arg == "--self-test") options.SelfTest = true;
+                else if (arg == "--help" || arg == "-h") options.ShowHelp = true;
             }
             return options;
         }
@@ -194,6 +158,8 @@ namespace MusePiInstallerHost
         private readonly HostOptions _options;
         private readonly WebView2 _view;
         private bool _installing;
+        private bool _answersWritten;
+        private string _language;
 
         /// <summary>
         /// Convert CSS pixels to physical pixels for the current display.
@@ -292,6 +258,7 @@ namespace MusePiInstallerHost
         public InstallerWindow(HostOptions options)
         {
             _options = options;
+            _language = DefaultLanguage();
 
             // Frameless: the page draws the titlebar. DWM still rounds the
             // corners on Win11; on Win10 the CSS radius inside the page is what
@@ -359,12 +326,11 @@ namespace MusePiInstallerHost
 
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
-                // Refuse to vanish mid-install: a half-written directory is worse
-                // than a cancel that does not take effect.
-                if (_installing && e.CloseReason == CloseReason.UserClosing)
-                {
-                    e.Cancel = true;
-                }
+                if (_installing && e.CloseReason == CloseReason.UserClosing) e.Cancel = true;
+            };
+            FormClosed += delegate
+            {
+                Environment.ExitCode = ExitCodeForClose(_answersWritten);
             };
         }
 
@@ -515,11 +481,16 @@ namespace MusePiInstallerHost
                 RunInstall(message.Substring("install:".Length));
                 return;
             }
-
+            if (message.StartsWith("language:", StringComparison.Ordinal))
+            {
+                SetLanguage(message.Substring("language:".Length));
+                return;
+            }
             if (message == "ui-ready")
             {
                 Post("{\"type\":\"ready\",\"appVersion\":\"" + Escape(AppVersion())
-                     + "\",\"defaultPath\":\"" + Escape(DefaultInstallPath()) + "\"}");
+                     + "\",\"defaultPath\":\"" + Escape(DefaultInstallPath())
+                     + "\",\"language\":\"" + Escape(_language) + "\"}");
                 return;
             }
 
@@ -538,10 +509,6 @@ namespace MusePiInstallerHost
                     break;
                 case "pick-directory":
                     PickDirectory();
-                    break;
-                case "launch":
-                    LaunchInstalled();
-                    Close();
                     break;
             }
         }
@@ -583,11 +550,58 @@ namespace MusePiInstallerHost
                 "MusePi");
         }
 
+        private static string DefaultLanguage()
+        {
+            string name = CultureInfo.CurrentUICulture.Name;
+            if (name.StartsWith("zh-TW", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("zh-HK", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("zh-Hant", StringComparison.OrdinalIgnoreCase)) return "zh-TW";
+            if (name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)) return "zh-CN";
+            return "en-US";
+        }
+
+        private static string NormaliseLanguage(string language)
+        {
+            if (language == "zh-CN" || language == "zh-TW") return language;
+            return "en-US";
+        }
+
+        private void SetLanguage(string language)
+        {
+            _language = NormaliseLanguage(language);
+            Text = Localized("windowTitle");
+        }
+
+        private string Localized(string key)
+        {
+            if (_language == "zh-TW")
+            {
+                if (key == "clientRunning") return "MusePi 正在執行。請先關閉所有 MusePi 視窗，再按「重試」。安裝程式不會強制結束你的應用程式。";
+                if (key == "pickDirectory") return "選擇 MusePi 的安裝位置";
+                if (key == "checking") return "正在檢查用戶端與安裝位置…";
+                if (key == "handoff") return "安裝選項已確認，正在開啟實際檔案安裝進度…";
+                return "MusePi 安裝程式";
+            }
+            if (_language == "zh-CN")
+            {
+                if (key == "clientRunning") return "MusePi 正在运行。请先关闭所有 MusePi 窗口，再点击“重试”。安装程序不会强制结束你的应用。";
+                if (key == "pickDirectory") return "选择 MusePi 的安装位置";
+                if (key == "checking") return "正在检查客户端与安装位置…";
+                if (key == "handoff") return "安装选项已确认，正在打开真实文件安装进度…";
+                return "MusePi 安装程序";
+            }
+            if (key == "clientRunning") return "MusePi is running. Close all MusePi windows, then select Retry. Setup will not force your application to close.";
+            if (key == "pickDirectory") return "Choose the MusePi install location";
+            if (key == "checking") return "Checking the client and install location…";
+            if (key == "handoff") return "Setup is ready. Opening the file installation progress…";
+            return "MusePi Setup";
+        }
+
         private void PickDirectory()
         {
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "选择 MusePi 的安装位置";
+                dialog.Description = Localized("pickDirectory");
                 dialog.SelectedPath = DefaultInstallPath();
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
@@ -600,14 +614,10 @@ namespace MusePiInstallerHost
         private async void RunInstall(string json)
         {
             string target = DefaultInstallPath();
-            string language = "zh-CN";
             string desktopShortcut = "1";
             string startMenu = "1";
             try
             {
-                // JavaScriptSerializer ships with the .NET Framework;
-                // System.Text.Json does not (NuGet-only on net48), and adding it
-                // would be the host's only extra dependency for a tiny payload.
                 JavaScriptSerializer serializer = new JavaScriptSerializer();
                 Dictionary<string, object> payload =
                     serializer.Deserialize<Dictionary<string, object>>(json);
@@ -615,57 +625,33 @@ namespace MusePiInstallerHost
                 {
                     string value = GetString(payload, "path");
                     if (!string.IsNullOrEmpty(value)) target = value;
-
                     value = GetString(payload, "language");
-                    if (!string.IsNullOrEmpty(value)) language = value;
-
+                    if (!string.IsNullOrEmpty(value)) SetLanguage(value);
                     desktopShortcut = GetBoolFlag(payload, "desktopShortcut");
                     startMenu = GetBoolFlag(payload, "startMenu");
                 }
             }
             catch (Exception)
             {
-                // Malformed payload: fall back to defaults rather than failing
-                // the whole install.
+                // Keep the current language and defaults for a malformed payload.
             }
 
+            if (_installing) return;
             _installing = true;
             try
             {
-                Post("{\"type\":\"progress\",\"percent\":5,\"step\":\"检查安装位置…\"}");
+                Post("{\"type\":\"progress\",\"percent\":5,\"step\":\"" + Escape(Localized("checking")) + "\"}");
+                EnsureClientNotRunning(IsClientRunning, Localized("clientRunning"));
                 await Task.Run(delegate { ValidateDirectory(target); });
-
-                // Hand the answers to NSIS. This is the contract that lets the
-                // native side continue without asking anything else: the wizard
-                // owns every question, NSIS only performs the work.
-                WriteAnswers(target, language, desktopShortcut, startMenu);
-
-                int[] percents = new int[] { 20, 45, 70, 88, 96 };
-                string[] steps = new string[]
-                {
-                    "准备安装文件…",
-                    "正在释放应用文件…",
-                    "写入运行时资源…",
-                    "注册快捷方式…",
-                    "完成最后设置…",
-                };
-
-                for (int index = 0; index < percents.Length; index++)
-                {
-                    await Task.Delay(320);
-                    Post("{\"type\":\"progress\",\"percent\":"
-                         + percents[index].ToString(CultureInfo.InvariantCulture)
-                         + ",\"step\":\"" + Escape(steps[index]) + "\"}");
-                }
-
-                Post("{\"type\":\"installed\",\"path\":\"" + Escape(target) + "\"}");
+                WriteAnswers(target, _language, desktopShortcut, startMenu);
+                _answersWritten = true;
+                Post("{\"type\":\"handoff\"}");
+                _installing = false;
+                Close();
             }
             catch (Exception ex)
             {
                 Post("{\"type\":\"error\",\"message\":\"" + Escape(ex.Message) + "\"}");
-            }
-            finally
-            {
                 _installing = false;
             }
         }
@@ -729,24 +715,44 @@ namespace MusePiInstallerHost
             File.Delete(probe);
         }
 
-        private void LaunchInstalled()
+        internal static bool IsClientRunning()
         {
-            try
+            Process[] processes = Process.GetProcessesByName("MusePi");
+            try { return processes.Length > 0; }
+            finally
             {
-                string root = DefaultInstallPath();
-                string exe = Path.Combine(root, "MusePi.exe");
-                if (File.Exists(exe))
-                {
-                    ProcessStartInfo info = new ProcessStartInfo(exe);
-                    info.UseShellExecute = true;
-                    info.WorkingDirectory = root;
-                    Process.Start(info);
-                }
+                foreach (Process process in processes) process.Dispose();
             }
-            catch (Exception ex)
-            {
-                Program.ShowFailure("无法启动 MusePi。\n\n" + ex.Message);
-            }
+        }
+
+        internal static void EnsureClientNotRunning(Func<bool> probe, string message)
+        {
+            if (probe()) throw new InvalidOperationException(message);
+        }
+
+        internal static int ExitCodeForClose(bool answersWritten)
+        {
+            return answersWritten ? 0 : 2;
+        }
+
+        internal static int SelfTest()
+        {
+            EnsureClientNotRunning(delegate { return false; }, "not running");
+            bool blocked = false;
+            try { EnsureClientNotRunning(delegate { return true; }, "running"); }
+            catch (InvalidOperationException ex) { blocked = ex.Message == "running"; }
+            if (!blocked) throw new InvalidOperationException("running client was not blocked");
+
+            int attempts = 0;
+            Func<bool> retryProbe = delegate { attempts++; return attempts == 1; };
+            try { EnsureClientNotRunning(retryProbe, "close before retry"); }
+            catch (InvalidOperationException) { }
+            EnsureClientNotRunning(retryProbe, "close before retry");
+            if (attempts != 2) throw new InvalidOperationException("retry probe did not run twice");
+            if (ExitCodeForClose(false) != 2 || ExitCodeForClose(true) != 0)
+                throw new InvalidOperationException("cancel exit contract failed");
+            Console.WriteLine("installer host self-test: PASS");
+            return 0;
         }
 
         private void Post(string json)
@@ -845,9 +851,9 @@ namespace MusePiInstallerHost
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 Form form = new Form();
-                // Same DPI scaling the real window uses — otherwise the smoke test
-                // measures a narrower CSS viewport than users get and silently
-                // passes on a layout that is broken in production.
+                // Match the production host before assigning the scaled size;
+                // WinForms font auto-scaling otherwise changes the CSS viewport.
+                form.AutoScaleMode = AutoScaleMode.None;
                 form.ClientSize = InstallerWindow.ScaleToDevicePixelsPublic(760, 560);
                 form.StartPosition = FormStartPosition.CenterScreen;
                 form.ShowInTaskbar = false;
@@ -909,8 +915,10 @@ namespace MusePiInstallerHost
                         // carries the blur, the sidebar is transparent over it, and
                         // the content card floats with its own smaller blur.
                         string script =
+                            "document.querySelector('[data-lang=\"zh-TW\"]').click();" +
                             "JSON.stringify({" +
                             "viewport: innerWidth + 'x' + innerHeight," +
+                            "traditionalTitle: document.getElementById('h-language').textContent," +
                             "shellGlass: getComputedStyle(document.querySelector('.shell')).backdropFilter," +
                             "cardGlass: getComputedStyle(document.querySelector('.content')).backdropFilter," +
                             "sidebarTransparent: getComputedStyle(document.querySelector('.brandpane')).backgroundColor," +
@@ -933,6 +941,7 @@ namespace MusePiInstallerHost
                                   && raw.Contains("shellGlass\\\":\\\"blur(")
                                   && raw.Contains("cardGlass\\\":\\\"blur(")
                                   && raw.Contains("checkedOptions\\\":1")
+                                  && raw.Contains("traditionalTitle\\\":\\\"選擇語言")
                                   && raw.Contains("pageCount\\\":5")
                                   && raw.Contains("noHScroll\\\":true");
                         Console.WriteLine(ok ? "[smoke] PASS" : "[smoke] FAIL");

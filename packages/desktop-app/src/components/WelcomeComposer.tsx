@@ -33,6 +33,12 @@ import {
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import type { SttSubmitTrigger } from "../lib/voice";
+import {
+	readWelcomeGreeting,
+	resolveWelcomeGreeting,
+	WELCOME_GREETING_CHANGED_EVENT,
+	WELCOME_GREETING_STORAGE_KEY,
+} from "../lib/welcome-greeting";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import {
@@ -743,6 +749,19 @@ export function WelcomeComposer({
 		return () => {
 			window.removeEventListener("musepi-dotmatrix-changed", on);
 			window.removeEventListener("storage", on);
+		};
+	}, []);
+	const [welcomeGreeting, setWelcomeGreeting] = useState(readWelcomeGreeting);
+	useEffect(() => {
+		const onChanged = (event: Event): void => {
+			if (event.type === "storage" && (event as StorageEvent).key !== WELCOME_GREETING_STORAGE_KEY) return;
+			setWelcomeGreeting(readWelcomeGreeting());
+		};
+		window.addEventListener(WELCOME_GREETING_CHANGED_EVENT, onChanged);
+		window.addEventListener("storage", onChanged);
+		return () => {
+			window.removeEventListener(WELCOME_GREETING_CHANGED_EVENT, onChanged);
+			window.removeEventListener("storage", onChanged);
 		};
 	}, []);
 	// / @ # completion (composer parity): slash commands, workspace files,
@@ -1494,7 +1513,7 @@ export function WelcomeComposer({
 						<BlurText text={t("settings.musepi")} className="text-[22px] font-bold" />
 					</div>
 					<p className="gui-welcome-greet pointer-events-none mb-4">
-						<BlurText text={greeting(hour)} stepMs={38} />
+						<BlurText text={resolveWelcomeGreeting(welcomeGreeting, greeting(hour))} stepMs={38} />
 					</p>
 					{/* 恢复引导卡（就绪态 P0）：模型未配置时在输入框上方提示，
 					 * 一键跳引导的服务商配置步（musepi-open-onboarding detail.step，

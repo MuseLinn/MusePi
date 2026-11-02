@@ -3316,3 +3316,6 @@ export function ChatView({
 		</main>
 	);
 }
+
+/** Host-owned session surface contract injected through the app.chat slot. */
+export type ChatViewProps = Parameters<typeof ChatView>[0];

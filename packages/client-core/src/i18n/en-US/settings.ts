@@ -966,6 +966,9 @@ export const settings = {
 	"settings.language": "Language",
 	"settings.daemon": "Daemon",
 	"settings.general2": "General",
+	"settings.welcomeGreeting": "Welcome greeting",
+	"settings.welcomeGreetingDescription": "Leave blank for a time-aware greeting",
+	"settings.welcomeGreetingPlaceholder": "Enter a greeting for the welcome page",
 	"settings.dotMatrixBackground": "Dot matrix brand background",
 	"settings.agentAvatarStyle": "Agent avatar style",
 	"settings.agentAvatarStyleDescription":

@@ -1,19 +1,21 @@
 <p align="center">
+  <img src="banner.png" width="1280" alt="MusePi — 桌面优先的 AI 编程助手">
+</p>
+
+<p align="center">
   <strong>MusePi</strong> — 桌面优先的 AI 编程助手
 </p>
 
 <p align="center">
-  <code>musepi</code> CLI · Electron 桌面 GUI · 常驻桌宠 · daemon 服务
+  <code>musepi</code> CLI · Electron 桌面 GUI · Cordis 插件 · daemon 服务
 </p>
 
 <p align="center">
-  <a href="#-特性"><strong>特性</strong></a> ·
-  <a href="#-截图"><strong>截图</strong></a> ·
-  <a href="#-快速开始"><strong>快速开始</strong></a> ·
-  <a href="#-架构"><strong>架构</strong></a> ·
-  <a href="#-开发"><strong>开发</strong></a> ·
-  <a href="#-打包与发布"><strong>打包与发布</strong></a> ·
-  <a href="#-文档"><strong>文档</strong></a>
+  <a href="https://www.npmjs.com/package/@musepi/pi-coding-agent"><img src="https://img.shields.io/npm/v/@musepi/pi-coding-agent?style=flat&colorA=222222&colorB=CB3837" alt="npm 版本"></a>
+  <a href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md"><img src="https://img.shields.io/badge/changelog-keep-E05735?style=flat&colorA=222222" alt="更新日志"></a>
+  <a href="https://github.com/MuseLinn/MusePi/actions"><img src="https://img.shields.io/github/actions/workflow/status/MuseLinn/MusePi/ci.yml?style=flat&colorA=222222&colorB=3FB950" alt="CI"></a>
+  <a href="https://github.com/MuseLinn/MusePi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MuseLinn/MusePi?style=flat&colorA=222222&colorB=58A6FF" alt="许可证"></a>
+  <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
 </p>
 
 <p align="center">
@@ -22,223 +24,135 @@
 
 ---
 
-MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（60+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
+MusePi 集编程智能体、Electron 工作台、终端界面和远程客户端于一体。桌面端提供可编辑文件工作区、代码审阅工具、受管浏览器、桌宠，以及管理第一方和第三方 Cordis 插件的能力中心。MusePi 独立发版；参考项目与上游沿革记录在 [UPSTREAM.md](UPSTREAM.md)。
 
-发版独立于上游版本号——当前版本见 [Releases 页](https://github.com/MuseLinn/MusePi/releases)。
+## 安装
 
-## ✨ 特性
+### 桌面、Android 与终端下载
 
-### 桌面 GUI
+从 [Releases 页面](https://github.com/MuseLinn/MusePi/releases)下载与版本匹配的桌面安装包和 Android 软件包。[MusePi 官网](https://muselinn.github.io/MusePi/)提供双语下载指引。
 
-- **Electron 桌面应用**（`packages/desktop-app`）：独立卡片式工作区（会话侧栏、聊天列、Side Pane、终端 dock 是浮在玻璃基底上的各自圆角面板，不再共用一张卡片 + 竖线分割）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口，对话框与界面浮层已升级为液态玻璃（镜面描边、液态弹簧动效）。
-- **常驻桌宠**（pet）：窗口角落的动画伙伴（petdex 帧动画包、拖拽定位、click-through、hover 交互、跨窗口活动桥），执行任务时有 pet 气泡反馈。
-- **daemon 架构**：GUI 经 JSON-RPC 连 daemon（`musepi serve`），会话持久化（journal + materialized view）、空闲 30min 转历史快照、按需重激活；Electron 退出后 daemon 存活，GUI 重连即续。daemon 内部已分层（0.5.0，strangler-fig 进行中）：HostServices 注册表以 L2 宿主服务持有 RPC 路由表（usage / events / views / boards / files / terminal / approvals / browser / remote / …… —— `packages/coding-agent/src/daemon/services/`），能力接缝、设置接线与未来的 cordis 组合层都有稳定落点。
-- **受管浏览器**（`browser.gui` 工具）：Electron WebContentsView + CDP 桥——agent 可直接驱动 GUI 内嵌浏览器页（投影布局 + 像素采样验证）。
-- **终端面板**：xterm + bun-pty 集成终端（tab、中键关闭、环境加固——剥离 `ELECTRON_RUN_AS_NODE` 等，注入 `APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP`）。
-- **完整命令面（TUI parity）**：
-  - `/` 斜杠命令：daemon 复用 ACP headless 执行器（同一 builtin registry），`//` 转义为纯文本；欢迎页创建会话后同样执行（结果走桌宠气泡 + 桌面通知）。
-  - `!cmd` / `!!cmd`：shell 命令执行（结果进模型上下文；`!!` 排除上下文），转录内渲染终端风格 bash 卡片（exit 徽章、输出折叠展开）。
-  - `@` 文件引用：workspace 树补全，daemon 侧 `extractFileMentions` 注入文件内容；**中文正文或标点紧邻 @ 也能唤起面板**（「请看@文件」可用，`foo@bar` 邮箱形态不触发）。
-- **带理由的审批**：审批卡内嵌多行备注框（⌘/Ctrl+Enter 直接批准，超 5 行内部滚动）。**带备注的拒绝**会把理由作为拒绝原因传给 agent —— 它知道「为什么被拒」而不只是「denied by user」（TUI ask 对话框 `✎ note` parity）。
-  - `#` 会话引用：会话列表补全，插入 `history://<id>`（read 工具可解析的 internal URL）。
-- **上下文管理**：上下文圆环（`session.contextUsage` 实时使用率）、`/compact` parity 手动压缩、snapcompact 节省量估算（与 TUI `/context` 同一 planner）。
-- **设置面板**：TUI 全部 336 项配置并入桌面设置（schema 驱动 `settings.schema` RPC，与 TUI 同源），10+ tab；控件复用（开关/分段/选择/凭据掩码）。
-- **丰富交互**：图片附件前置缩放（`images.autoResize` 双端生效）、图片预览灯箱（多图堆叠、缩放平移）、附件键盘删除、语音输入（听写/朗读/`tts.autoRead`，语音模型卡带准确度/速度分档与麦克风选择）、会话草稿持久化、空闲 recap（`recap.enabled`）、提醒面板（`session.list` working/live 实时状态）、⌘K 命令面板、Board 看板、widget 系统（自定义 HTML widget 主题热切换）。
-- **右侧面板：一条 tab 条承载全部视图**（openchamber ContextPanel parity）：面板顶部一条 tab 条承载所有已打开的视图 —— 多实例**文件 tab**（文件树 + PDF/图片/文本预览）、项目笔记、待办与计划文件、Git 变更/提交（gitmoji、身份注入、GitHub device-flow 认证）、PR 列表、内嵌浏览器、看板、扩展 `panel.tab.*` 槽 —— rail 降级为启动器（打开或聚焦对应 tab）。零 tab 时显示「从这里开始」空态导航页而非默认视图；关闭 tab 激活邻居、tab 可拖拽排序、布局恢复只存标签（内容由所属 surface 重新物化）。
-- **子智能体操作**（Agent Hub parity）：右栏 AgentsPanel 停止/复活/对话（`agents.kill/revive/chat` RPC）。
-- **任务中心（定时任务）**：cron 式调度，完整 IANA 时区支持（墙上时间、闲时窗口、cron 表达式都按任务时区求值，DST 安全）、按任务运行历史与失败原因、daemon 自身解析器计算的 next-run 预览、按任务选模型与思考等级、看板视图暂停/恢复；日历周起始与设置页一致。
-- **Windows 托盘（Win32 惯例）**：左键/双击唤出主窗口，右键弹出快捷菜单。
-- **技能安装（daemon RPC）**：GitHub `owner/repo` 或 https git URL 一键落入用户技能目录（`skills.install`——SKILL.md 自动定位、frontmatter 命名、覆盖需显式确认）；列表/读取/删除在 GUI 内完成，agent 侧创作经 `manage_skill`。
+- **桌面端：** macOS `.dmg`、Windows 逐用户 `setup.exe`、Linux `.AppImage` / `.deb`。
+- **Android：** 安装 `app-debug.apk`，再与局域网内的主机配对。
+- **终端：** 通过脚本或源码安装 `musepi`。
 
-### 核心引擎
-
-- **60+ LLM provider**、32 内置工具、`xd://` 设备扩展、prompt 工程持续调优。
-- **LSP** 接线每个写操作（重命名/引用/代码动作）、**DAP** 调试器驱动。
-- **task 子智能体**（并行扇出、IRC 协调、worktree 隔离、schema 验证输出）、**hashline** 内容哈希编辑、**hindsight** 会话记忆、**ACP** 编辑器驱动、**collab** 协作（含 musepi 定制：LAN/隧道/Tailscale serve 自持 relay、明文访客模式）。
-- **snapcompact** 压缩策略（对话渲染为位图帧给视觉模型）、**magic keywords**（ultrathink/orchestrate/workflowz）、**TTSR** 流式规则注入。
-- **`musepi sessions` CLI**：headless 会话列表（新→旧，`--cwd`/`--limit`/`--json`），供脚本与工具枚举会话。
-
-## 📸 截图
-
-放的是真截图，不是会过期的示意图——[官网界面预览](https://muselinn.github.io/MusePi/#preview)直接展示真实客户端界面，并随每个版本由脚本自动重新生成。
-
-## 🚀 快速开始
-
-### 一键安装
+macOS、Linux 和 WSL：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 ```
 
-克隆到 `~/.musepi/repo` 并运行 `bun run setup`（workspace 安装 + natives + 链接），然后：
-
-```sh
-cd ~/.musepi/repo && bun run musepi
-```
-
-macOS / Linux / WSL 用上方 curl。Windows —— PowerShell：
+Windows PowerShell：
 
 ```powershell
 irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex
 ```
 
-或任意平台从源码安装（手动）：
-
-
-```sh
-git clone https://github.com/MuseLinn/MusePi.git && cd MusePi
-bun run setup && bun run musepi
-```
-
-选项：
-
-- `--ref <tag|commit|branch>` — 固定某个 checkout
-- `--source` — 从源码安装（克隆 + 构建；默认行为是下载预编译二进制）
-
-## 下载（三种形态）
-
-| 形态 | 获取方式 |
-|---|---|
-| 🖥️ **桌面客户端**（Electron GUI，应用内自动更新） | [macOS arm64 `.dmg`](https://github.com/MuseLinn/MusePi/releases/latest) · [Windows `setup.exe`](https://github.com/MuseLinn/MusePi/releases/latest) · [Linux `.AppImage`/`.deb`](https://github.com/MuseLinn/MusePi/releases/latest) — 到 [Release 页](https://github.com/MuseLinn/MusePi/releases) 取对应版本资产 |
-| 📱 **Android 移动伴侣**（Capacitor，局域网配对） | [Release 页](https://github.com/MuseLinn/MusePi/releases) 的 `app-debug.apk`（`adb install -r app-debug.apk`） |
-| ⌨️ **终端 TUI** | 上方 curl 安装脚本（macOS/Linux/WSL）装 `musepi` —— 或 `bun run setup && bun run musepi` 从源码（Windows/全平台） |
-
-官网：<https://muselinn.github.io/MusePi/>（双语，含三种形态的下载指引）。
-
-### 开发模式
-
-需要 **Bun ≥ 1.4.4**（macOS 为主要开发平台；Rust 工具链用于 natives 构建）。
+从源码安装：
 
 ```sh
-# 安装依赖 + 构建 natives + 链接 CLI
+git clone https://github.com/MuseLinn/MusePi.git
+cd MusePi
 bun run setup
-
-# 终端 TUI（上游 CLI 面）
-bun run musepi          # 或 bun run dev
-
-# daemon 服务（GUI 后端；GUI 启动时也会自动拉起）
-bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
-
-# 桌面 GUI（构建 + 启动 Electron）
-bun run --cwd=packages/desktop-app desktop
+bun run musepi
 ```
 
-`musepi` 子命令：`launch`（默认对话）、`serve`（daemon）、`acp`、`agents`、`commit`、`config`、`join`、`models`、`plugin`、`say`、`share`、`setup`、`shell`、`stats`、`update`、`completions` 等。
+安装脚本支持 `--ref <tag|commit|branch>` 选择指定版本，支持 `--source` 从源码构建而非下载预编译二进制。
 
-配置目录为 `~/.musepi/`（品牌化差异；`PI_CONFIG_DIR` 可覆盖）。
+## 主要能力
 
-## 🏗 架构
+### 桌面工作台
+
+- **智能体工作区：** 会话历史与分支、使用 `provider/id` 的模型选择、斜杠命令、Shell 命令、文件与会话引用、审批、上下文压缩和任务跟踪。
+- **可编辑文件：** 标签页、非模态文件树、Monaco 编辑、Markdown 编辑、文档与媒体查看、选区引用、Git 变更、问题和拉取请求。
+- **可定制界面：** 主题、强调色、密度、液态玻璃表面、命令面板、可配置快捷键、右侧面板、终端标签页和受管内置浏览器。
+- **桌面伙伴：** 动画桌宠、状态气泡、托盘控制和跨窗口活动更新。
+- **能力中心：** 管理技能、插件和市场软件包。官方模块与外部软件包共用 Cordis 生命周期和组件可用性，不维护第二套软件包开关。
+- **远程访问：** 通过加密链接协作、连接远程 daemon 实例，并使用移动客户端管理会话。
+
+### 智能体引擎
+
+- 支持多家模型供应商与路由控制，集成 LSP、DAP、并行子智能体、会话记忆、ACP，以及本地或远程协作。
+- 提供文件、搜索、Shell、代码智能、浏览器、桌面、GitHub、图像、语音、记忆和技能工具。可选工具由设置与扩展范围控制。
+- 预设组合扩展选择、提示词段落和设置。会话预设会在首轮后锁定。
+
+具体行为由 `docs/` 下的活文档说明，本 README 不重复维护完整功能清单。
+
+## 架构
 
 ```mermaid
 flowchart LR
-    subgraph DESKTOP["Electron 桌面端 — packages/desktop-app"]
-        direction TB
-        MW["主窗口<br/>会话侧栏 · 对话列 · 侧面板 · 终端坞"]
-        GC["guest-client 渲染核心<br/>transcript · 工具卡 · widget · i18n"]
-        PW["独立小窗<br/>桌宠 · 气泡 · 置顶"]
-        MW --- GC
-        MW -.-> PW
+    subgraph CLIENTS["客户端"]
+        DESKTOP["desktop-app<br/>Electron 工作台与独立小窗"]
+        WEB["client-core<br/>共享 React 渲染与协作 Web UI"]
+        MOBILE["mobile / harmony<br/>Android 与 HarmonyOS 壳"]
     end
 
-    subgraph REMOTE["远程与移动端 — guest-client 包"]
-        direction TB
-        WEB["协作 Web UI"]
-        AND["Android（Capacitor）"]
-        HAR["HarmonyOS（WebView）"]
+    subgraph HOST["coding-agent"]
+        RPC["daemon 服务<br/>JSON-RPC 与事件流"]
+        CORDIS["Cordis 运行时<br/>第一方与外部插件"]
+        SESSION["AgentSession<br/>journal 与 materialized view"]
     end
 
-    subgraph DAEMON["musepi serve（daemon）— packages/coding-agent"]
-        HOST["AgentSession 宿主<br/>journal + materialized view<br/>空闲 30min → 历史快照，按需重激活"]
+    subgraph ENGINE["智能体引擎"]
+        CORE["agent · ai · catalog · wire · sdk"]
+        TOOLS["工具 · TUI · LSP/DAP · collab"]
+        NATIVE["natives 与 Rust crates"]
     end
 
-    subgraph ENGINE["agent 引擎"]
-        direction TB
-        CORE["agent · ai · tui · catalog · wire · utils"]
-        NAT["natives（Rust N-API）"]
-        CORE --- NAT
-    end
-
-    DESKTOP <-- "JSON-RPC over WS（collab-proto）<br/>事件流：journal / view" --> DAEMON
-    REMOTE <-- "collab 链接 / WS" --> DAEMON
-    DAEMON --> ENGINE
+    DESKTOP <-- "JSON-RPC / WebSocket" --> RPC
+    WEB <-- "协作链接 / WebSocket" --> RPC
+    MOBILE --> WEB
+    RPC --> CORDIS --> SESSION --> CORE
+    CORE --> TOOLS --> NATIVE
 ```
 
-| 包 | 说明 |
-|---|---|
-| `desktop-app` | Electron 桌面应用（主界面 + 桌宠/气泡/置顶多窗口、xterm、pdf.js、受管浏览器桥） |
-| `guest-client` | GUI 渲染核心（transcript、工具卡、widget 系统、i18n）兼协作 Web UI |
-| `coding-agent` | CLI 入口（`musepi`）、daemon 服务端、slash/bash 命令、工具实现 |
-| `collab-proto` | GUI ↔ daemon 传输协议（WS 帧、加密、链接） |
-| `agent` / `ai` / `tui` / `catalog` / `wire` / `utils` / `hashline` / `snapcompact` / `mnemopi` / `stats` | 上游派生的 agent 引擎 / provider 注册表 / TUI / 模型目录 / wire 类型 / 工具库 |
-| `sdk` | 客户端 SDK（MaterializedView、会话流事件契约） |
-| `natives` | Rust N-API 绑定（Bazel/cargo 构建，macOS LINKEDIT 对齐后处理） |
-| `swarm-core` / `swarm-extension` / `tool-select` / `browser-relay` / `metaharness` | 子智能体编排 / 工具选择 / 浏览器中继 / harness 工具 |
+| 区域 | 职责 |
+| --- | --- |
+| `packages/desktop-app` | Electron 壳、桌面渲染端、官方 GUI 插件、安装器与更新器 |
+| `packages/client-core` | 共享 React 组件、转录、widget、i18n 和协作 Web UI |
+| `packages/coding-agent` | CLI、daemon、会话、工具、内置 Cordis 插件和扩展运行时 |
+| `packages/mobile`、`packages/harmony` | Android 与 HarmonyOS 壳 |
+| `packages/collab-proto`、`packages/wire`、`packages/sdk` | 传输、持久化契约和客户端 SDK |
+| `packages/agent`、`packages/ai`、`packages/catalog` | 智能体循环、供应商客户端和模型目录 |
+| `packages/tui` | 终端界面 |
+| `packages/utils`、`packages/natives`、`crates/` | 共享工具与原生实现 |
+| 其他包 | Hashline 编辑、压缩、记忆、工具选择、统计和测试工具 |
 
-关键契约文档：
+契约与扩展边界见 [`docs/capability-seams.md`](docs/capability-seams.md)、[`docs/extensions-dev.md`](docs/extensions-dev.md)、[`docs/gui-design.md`](docs/gui-design.md) 和 [`docs/gui-implementation.md`](docs/gui-implementation.md)。
 
-- **GUI 设计规范**：`docs/gui-design.md`（布局/token/动效/组件模式/桌宠视觉风格）
-- **设计模式（preset `design`）**：agent 先对齐简报（目标/平台/风格基准/参考/交付物）、先判断结构再谈配色，产出带 manifest 的可预览设计稿而非实现代码（可预览产物遵循 artifact manifest 契约：`artifact.manifest.json` sidecar，schema 见 `packages/coding-agent/src/presets/artifact-manifest.ts`）；圆角只用 `--radius-*`、玻璃只用 `--glass-*` 四件套。三种入口：欢迎页选 Design、`--preset design`、会话内 `/design`。
-- **GUI 实现笔记**：`docs/gui-implementation.md`（daemon RPC 形状、IPC、踩坑、验证工作流）
-- **widget 设计系统**：`docs/archive/widget-design-system.md`
-- **协作**：`docs/collab.md`（含 musepi LAN/隧道定制）
-- **上游同步**：`UPSTREAM.md`（同步基线 v17.2.12、PURE/THREE_WAY/NEW/MANUAL 分类、验证记录）
+## 开发
 
-## 🛠 开发
+使用 **Bun 1.4.4 或项目兼容策略允许的新版本**。各包的 `package.json` scripts 是命令依据。
 
 ```sh
-bun run setup            # 安装 + natives 构建 + 链接
-bun run build            # workspace 构建（含 GUI dist）
-bun run check            # 并行 check:ts（tsgo）+ check:rs（cargo）
-bun run test             # bun scripts/ci-test-ts.ts local
-bun run lint / fmt       # biome + rustfmt
+bun run setup            # 安装依赖、构建 natives、链接 CLI
+bun run build            # 构建定义了 build script 的工作区
+bun run check            # TypeScript／工具链与 Rust 检查
+bun run test             # 仓库测试运行器
+bun run lint             # Biome 与 Rust lint
 ```
 
-测试注意（记录在 UPSTREAM.md 验证节）：
-
-- 全量测试建议 `MUSEPI_TEST_CONCURRENCY=4`（默认并发 8 在本机内存吃紧）。
-- Rust bucket 需要 `cargo-nextest`，且在 `~/.cargo/bin` 前置的 PATH 下跑。
-- 改 `guest-client` 后必须重建 GUI（`bun run --cwd=packages/desktop-app build`）再验证——浏览器会缓存旧 bundle。
-- GUI/daemon E2E 隔离：`PI_CONFIG_DIR=musepi-test` 起测试 daemon（:8310）；测试 GUI 用 `--user-data-dir=/tmp/...` + `MUSEPI_MANAGED_BROWSER_PORT=9231` + `--remote-debugging-port=9223`，puppeteer 只连 **9223**（CDP 端点）。
-
-提交习惯：`git commit --no-verify`（husky/biome 基线问题）；natives 变更后需重建（`bun run build:native`，macOS LINKEDIT 对齐自动）。
-
-## 📱 移动端壳
-
-- **Capacitor Android 应用**（`packages/mobile` + `guest-client` 移动入口）：沉浸式 edge-to-edge（自定义 InsetsPlugin）、QR 扫码配对（jsQR，无 GMS 依赖）、时间感知问候 + 轮换提示、建议 chips、44px 触控目标、Android 返回键逐层展开、旋转过渡、三合一发送控件（点阵 bloom 反馈）、盲文点阵工作指示器、会话归档（localStorage 桌面 GUI parity）。
-- **HarmonyOS WebView 壳**（`packages/harmony`）：ArkTS `Web` 组件加载同一 bundle（native insets、badge、`musepi://` 深链、键盘 inset）。
-- **PWA**：service worker 离线连接壳。
-- **远程会话管理**（dsh-mobile-remote parity）：guest 可创建/删除/重命名会话、停止远端正在运行的 turn（`session.abort`）；agent 可主动发起分享（collab tool，分级审批）。
-- **机器人渠道**：桌面「移动端远程控制」弹窗支持 Discord / Telegram / 飞书（Lark）/ WeChat / 华为今天推送，各渠道按协议原生能力适配——原生输入状态（微信 iLink sendtyping、Telegram `sendChatAction`、Discord REST typing）、Telegram HTML 富文本（解析器拒绝时回落纯文本）、飞书首个分片以「引用回复」落到被回复的那条消息下并续成一条线程、中文渠道用中文回复；飞书 bot 没有输入态开放接口，故不伪造。长回复分片发送而非截断；回合被中止或失败也会给一条回执，不再静默。WeChat 支持**免 Token 扫码登录**——等待扫码时登录二维码直接内联渲染在弹窗里（来自渠道 `status().config.qrUrl`）。
-
-## 📦 打包与发布
-
-### 桌面应用（macOS）
+常用入口：
 
 ```sh
-bun run --cwd=packages/desktop-app pack          # 构建 + electron-builder + 签名
-bun run --cwd=packages/desktop-app pack:dir      # electron-builder dir 构建 + 签名（不重新构建）
+bun run musepi
+bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
+bun run --cwd=packages/desktop-app desktop
 ```
 
-产物：`release/mac-arm64/MusePi.app`。`pack` 脚本做 **ad-hoc 签名**（本机可运行）。**正式分发**需要 Developer ID Application 证书 + Apple 公证——macOS 26 对未签名/未公证应用的多项能力（通知等）直接拒绝。CLI 二进制的签名/公证流程见 `docs/macos-signing-notarization.md`（hardened runtime + `notarytool`）；与裸 Mach-O 不同，`.app` bundle 还可以 **staple**（公证票据内嵌，离线也能通过 Gatekeeper 校验）。
+不要直接编辑 `packages/catalog/src/models.json`；应修改生成器并重新生成。测试与冒烟运行必须使用隔离的配置和 daemon 目录。工程与验证规则见 `AGENTS.md` 和 `.agents/rules/`。
 
-### 桌面应用（Windows / Linux）
+## 打包与发布
 
-`gui-release.yml` 在 tag 推送时按平台构建 Electron 应用：macOS arm64（`dmg` + `zip`）、Windows x64（NSIS 安装器，逐用户免管理员默认路径）、Linux x64/arm64（`AppImage` + `deb`）。发布 `v*` tag 自动上传所有平台工件 + OTA 清单（`latest*.yml`，tag 含 `-beta` 时走 beta 通道）+ `update-manifest.json`（应用内更新检查）。
+`gui-release.yml` 在版本标签上构建桌面工件和 Android 软件包，桌面发布包含 OTA 清单。macOS 分发需要遵循 [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md) 中的签名与公证流程。
 
-### 移动端（Android）
+Windows 安装器先在 WebView2 向导中收集语言与安装选项，检查 MusePi 客户端是否正在运行，再显示真实的 NSIS 文件释放进度和完成页，不会用模拟进度掩盖后台安装。
 
-同一 workflow 的 `package_mobile` job 构建 Capacitor 应用：guest-client 编译 → `cap sync` → Gradle `assembleDebug`。Debug APK 附在 Release 页；`adb install -r app-debug.apk` 安装。HarmonyOS 壳（`packages/harmony`）在 DevEco Studio 中构建。
+只有明确要求发布时才运行发布流程。版本与更新日志规则见 `.agents/rules/release.md`。
 
-### CLI
+## 文档与沿革
 
-npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi update` 自更新已安装的 CLI。
-
-## 📚 文档
-
-- `docs/`：100+ 篇，中英双语（GUI、provider、工具、hook/扩展/技能、LSP/DAP、collab、compaction、ACP、设置、i18n 等）
-- `docs/gui-design.md` / `docs/gui-implementation.md`：GUI 活文档（改实现时同步）
-- `UPSTREAM.md`：上游同步备忘（版本涟漪、手动解决、踩坑）
-
-## 上游同步
-
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，发版独立于上游）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+- [`docs/`](docs/)：产品与实现文档，按要求维护中英双语配对。
+- [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md)：发布说明。
+- [`UPSTREAM.md`](UPSTREAM.md)：上游沿革与参考吸收历史。

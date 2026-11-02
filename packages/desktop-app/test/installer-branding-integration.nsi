@@ -48,6 +48,7 @@ ShowInstDetails show
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "TradChinese"
 !insertmacro MUI_LANGUAGE "English"
 
 !ifmacrodef customHeader

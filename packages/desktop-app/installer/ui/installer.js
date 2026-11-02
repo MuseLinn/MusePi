@@ -1,17 +1,14 @@
 /**
  * MusePi installer UI controller.
  *
- * Runs inside WebView2 (hosted by InstallerHost.exe) but must also work when the
- * page is opened directly in a browser for design review — that dual mode is
- * what makes the UI iterable without rebuilding the host. When
- * `window.chrome.webview` is absent, messages are logged to the console and
- * installation steps are simulated, so every page can still be walked.
- *
- * The host is the single source of truth for install progress: the UI never
- * fakes it. `host:progress` drives the bar.
+ * The native host owns validation and writes the wizard answers. After the
+ * Install command succeeds, the host closes and NSIS shows the real extraction
+ * progress and completion page. This controller never simulates file progress.
+ * Browser preview mode only demonstrates navigation.
  */
 
 const host = window.chrome?.webview ?? null;
+const i18n = window.MusePiInstallerI18n;
 
 /** Post a command to the native host. No-op (logged) in browser preview. */
 function send(command, payload) {
@@ -30,8 +27,6 @@ const pages = {
 };
 
 function showPage(name) {
-	// A page swap resets scroll; the wizard is short enough that keeping the
-	// previous scroll offset would show a half-scrolled next step.
 	const content = document.getElementById("content");
 	if (content) content.scrollTop = 0;
 	for (const [key, node] of Object.entries(pages)) {
@@ -42,13 +37,16 @@ function showPage(name) {
 
 // ── Language radio group ───────────────────────────────────────────────
 const langOptions = [...document.querySelectorAll('.langs [role="radio"]')];
-let selectedLanguage = "zh-CN";
+let selectedLanguage = "en-US";
+let locale = i18n.apply(selectedLanguage, document);
 
-function selectLanguage(option) {
-	selectedLanguage = option.dataset.lang;
+function selectLanguage(option, notifyHost = true) {
+	selectedLanguage = i18n.normalise(option.dataset.lang);
+	locale = i18n.apply(selectedLanguage, document);
 	for (const item of langOptions) {
 		item.setAttribute("aria-checked", String(item === option));
 	}
+	if (notifyHost) send(`language:${selectedLanguage}`);
 }
 
 for (const option of langOptions) {
@@ -81,9 +79,6 @@ for (const button of document.querySelectorAll("[data-back]")) {
 document.getElementById("btn-min").addEventListener("click", () => send("minimize"));
 document.getElementById("btn-close").addEventListener("click", () => send("close"));
 
-// Frameless drag: hand off to the host, which runs the native caption drag.
-// Doing it here (rather than CSS -webkit-app-region) keeps the same code path
-// in the WebView2 host and in browser preview.
 const titlebar = document.querySelector(".titlebar");
 titlebar.addEventListener("mousedown", event => {
 	if (event.button === 0 && !event.target.closest(".wincontrols")) send("drag");
@@ -94,15 +89,24 @@ const pathInput = document.getElementById("path");
 const desktopCheckbox = document.getElementById("chk-desktop");
 const startMenuCheckbox = document.getElementById("chk-startmenu");
 const launchCheckbox = document.getElementById("chk-launch");
+let installing = false;
 
 function beginInstall() {
+	if (installing) return;
+	installing = true;
 	showPage("progress");
+	setProgress(0, locale.preparing);
 	send("install", {
 		path: pathInput.value,
 		desktopShortcut: desktopCheckbox.checked,
 		startMenu: startMenuCheckbox.checked,
 		language: selectedLanguage,
 	});
+	if (!host) {
+		// Explicit preview-only feedback. Production waits for the native host.
+		installing = false;
+		showPage("location");
+	}
 }
 
 document.getElementById("btn-install").addEventListener("click", beginInstall);
@@ -138,7 +142,6 @@ function onHostMessage(event) {
 		try {
 			message = JSON.parse(message);
 		} catch {
-			// Some hosts post bare commands; treat them as errors with the text.
 			showError(String(event.data));
 			return;
 		}
@@ -150,22 +153,25 @@ function handleHostMessage(message) {
 	if (!message || typeof message !== "object") return;
 
 	switch (message.type) {
-		case "ready":
+		case "ready": {
+			const language = i18n.normalise(message.language || selectedLanguage);
+			const option = langOptions.find(item => item.dataset.lang === language) || langOptions[0];
+			selectLanguage(option, false);
 			if (message.appVersion) {
-				document.getElementById("app-version").textContent = `版本 ${message.appVersion}`;
+				document.getElementById("app-version").textContent = locale.version.replace("{version}", message.appVersion);
 			}
 			if (message.defaultPath) pathInput.value = message.defaultPath;
 			break;
+		}
 		case "progress":
-			showPage("progress");
 			setProgress(message.percent, message.step);
 			break;
-		case "installed":
-			setProgress(100, "安装完成");
-			showPage("done");
+		case "handoff":
+			setProgress(100, locale.handingOff);
 			break;
 		case "error":
-			showError(message.message || "未知错误");
+			installing = false;
+			showError(message.message || locale.unknownError);
 			break;
 		case "directory-picked":
 			if (message.path) pathInput.value = message.path;
@@ -182,14 +188,10 @@ function showError(text) {
 
 if (host) {
 	host.addEventListener("message", onHostMessage);
-	// Tell the host the UI is live so it can push version/path defaults.
 	send("ui-ready");
 } else {
-	// Browser preview: populate placeholder metadata so the design can be
-	// reviewed without the native host.
-	handleHostMessage({ type: "ready", appVersion: "0.5.6", defaultPath: "%LOCALAPPDATA%\\Programs\\MusePi" });
-	pathInput.value = "%LOCALAPPDATA%\\Programs\\MusePi";
-	console.info("[preview] no chrome.webview — pages are walkable, install is simulated");
+	handleHostMessage({ type: "ready", language: "zh-CN", appVersion: "0.7.0", defaultPath: "%LOCALAPPDATA%\\Programs\\MusePi" });
+	console.info("[preview] no chrome.webview — navigation only; no installation is performed");
 }
 
 // Keyboard: Enter advances on non-progress pages, Escape closes.

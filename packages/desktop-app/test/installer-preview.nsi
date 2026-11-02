@@ -69,6 +69,7 @@ FunctionEnd
 
 ; ── 语言（模板里由 addLangs 宏插入，这里等价展开）────────────────────────
 !insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "TradChinese"
 !insertmacro MUI_LANGUAGE "English"
 
 ; customHeader 必须在 MUI_LANGUAGE 之后——LangString 此时才能注册

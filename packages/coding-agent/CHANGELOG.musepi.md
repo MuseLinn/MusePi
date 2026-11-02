@@ -6,9 +6,15 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Changed
+- **会话页支持插件化管理和自定义问候**：欢迎页、消息流、输入区及关联面板由 `chat-view` Cordis 插件统一提供；宿主继续管理会话与工作区状态，停用插件不会留下第二套会话页。设置「常规」可自定义欢迎问候语并实时预览，留空恢复分时段问候。
+  - EN: The chat surface is now plugin-managed and supports custom greetings. The chat-view Cordis plugin provides the welcome page, transcript, composer, and related panels while the host retains session and workspace state; disabling it leaves no second chat implementation. Settings → General offers a custom welcome greeting with immediate preview, and blank input restores the time-aware greeting.
+
 ### Fixed
 - **右侧面板最大化后可正确还原分栏**：还原时先停用旧宽度过渡，再测量分栏目标，避免把最大化宽度保留下来；浏览器标签的损坏图标也会正确隐藏。
   - EN: Restoring a maximized right panel now returns to the docked split layout. The previous width transition is disabled before measuring the restore target, so the maximized width cannot persist. Broken browser-tab favicons are also hidden correctly.
+- **Windows 安装器遵循所选语言并处理运行实例**：简体中文、繁体中文和英文界面不再统一显示为简体中文；安装、升级或卸载前会提示并关闭仍在运行的 MusePi，用户取消时保留现有安装。
+  - EN: The Windows installer now follows the selected language and handles running instances. Simplified Chinese, Traditional Chinese, and English no longer collapse to Simplified Chinese. Install, upgrade, and uninstall prompt to close a running MusePi, while cancellation preserves the existing installation.
 
 ## [0.7.0] - 2026-11-01
 

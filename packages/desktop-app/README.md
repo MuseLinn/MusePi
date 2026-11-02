@@ -9,10 +9,15 @@ MusePi chat/board experience you see on desktop.
 
 ```
 packages/desktop-app/
-  electron/        Electron main process (main.cjs, preload, tray, updater, …)
-  *.html + *-main.tsx   Renderer entries — one SPA per window type
-  src/styles/      Tailwind CSS source (build:tailwind emits tailwind.out.css)
+  electron/          Electron main process (main.cjs, preload, tray, updater, …)
+  *.html + *-main.tsx Renderer entries — one SPA per window type
+  src/plugins/       Official Cordis GUI modules and shared lifecycle wiring
+  src/styles/        Tailwind CSS source (build:tailwind emits tailwind.out.css)
+  installer/         Windows WebView2 wizard and native host
+  release/           NSIS integration and platform packaging hooks
 ```
+
+On Windows, the wizard owns language, install-location, shortcut choices and the running-client check. After it writes the answers, NSIS owns the visible extraction progress and completion page; the wizard does not simulate installation progress.
 
 ### Renderer entries
 
