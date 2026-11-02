@@ -139,7 +139,7 @@ describe("external product adapters", () => {
 		setTimeout(() => controller.abort("test cancellation"), 100);
 		const result = await pending;
 		expect(result).toMatchObject({ exitCode: 1, aborted: true });
-		expect(child?.exitCode).not.toBeNull();
+		expect(child?.exitCode ?? child?.proc.signalCode).not.toBeNull();
 	});
 
 	it("answers Codex server approvals without waiting for a human", async () => {
