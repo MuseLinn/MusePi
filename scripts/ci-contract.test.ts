@@ -44,9 +44,12 @@ describe("CI runtime and delivery contracts", () => {
 		}
 	});
 
-	it("pins cache and Java setup actions to releases that run on Node 24", () => {
+	it("pins checkout, cache and Java setup actions to releases that run on Node 24", () => {
 		const expected = new Map([
+			["actions/checkout", "df4cb1c069e1874edd31b4311f1884172cec0e10"],
 			["actions/cache", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
+			["actions/cache/save", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
+			["actions/cache/restore", "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"],
 			["actions/setup-java", "b843ebf9b913146b38da2eaa7aeddf76074ae1ad"],
 		]);
 		const files = fs
