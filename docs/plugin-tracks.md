@@ -90,18 +90,19 @@ src/extensibility/
 
 ```
 文件变更 → chokidar watcher（500ms 防抖 + 120ms settle）
-  ├─ Track A  host-level reconcile → PluginGraphIdentities.stale()
-  │             → runtime.reloadPlugin(name)
-  │                 → #unloadRecord()：fiber.dispose()，效果账本反向回收全部登记
-  │                 → #mount(..., fresh=true)：重新 import + apply
+  ├─ Track A  host-level reconcile → ProfileModuleGraph.plan()
+  │             → accepted/declined 沿 importer 反向传播
+  │             → #reloadRecords()：预导入受影响组合行
+  │                 → 逆序 dispose 旧 fiber，再按行重新 apply
+  │                 → 任一 apply 失败则恢复整批旧实例
   └─ Track B  每个活跃会话 → agent-session
                 → runner.reloadExtension(path)      ← 同样 fresh: true
 ```
 
 ### 变更判定的唯一实现：`PluginGraphIdentities`
 
-两条轨道都用它决定「哪个入口要重载」，规则集中在
-`extensibility/plugins/plugin-graph-identities.ts`：
+两条轨道都用它决定「哪些源码发生变化」，规则集中在
+`extensibility/plugins/hmr/plugin-graph-identities.ts`：
 
 - **记录的是整张源码图**（入口 + 它 import 到的每个模块），不是入口一个文件。
   改子模块必须能重载插件——`quota.ts` 改了而入口没改，仍是这个插件的改动。
@@ -115,9 +116,10 @@ src/extensibility/
   排除掉、记录变成空集——症状是「改了没反应」，而不是报错。
 
 **图从哪来**：`legacy-pi-compat.ts` 的 `collectExtensionModules` 走图，
-`extensionGraphFiles(entry)` 把同一次 walk 的结果交给记录方，避免二次遍历与两处
-对「图是什么」的判断分叉。Track A 的 `mount.ts` 必须**静态** import 该模块：
-动态 import 曾解析到第二个实例，loader 写一份、runtime 读另一份，记录永远是空。
+`extensionGraphFiles(entry)` 与 `extensionProfileGraph(entry)` 把同一次 walk 的结果
+交给记录方，避免二次遍历与两处对「图是什么」的判断分叉。Track A 的 `mount.ts`
+必须**静态** import 该模块：动态 import 曾解析到第二个实例，loader 写一份、
+runtime 读另一份，记录永远是空。
 
 ### watcher 用 chokidar，不用 `fs.watch({ recursive: true })`
 
@@ -130,11 +132,14 @@ Windows 下 `fs.watch` 的 recursive 形式对**嵌套较深的文件**不投递
 `ext.call`（面板）与活跃会话因此看到同一份插件状态。reload 时才附加
 `?mtime=` 重新求值（Bun 无法只失效单个模块，见 `plugins/legacy-pi-compat.ts` 文档）。
 
-**范围差异（与 dsh 的 `boot/hmr` 比）**：dsh 跟踪整个 profile 的模块依赖图并做
-accepted/declined 反向传播（externals 不重载）。这里以**插件自己的图**为重载单元，
-不做全局反向传播——因为重载动作是「重新求值入口」，入口重载会把整张图带上；
-依赖（`node_modules/` 内的、以及宿主经 shim 解析到的模块）不计入记录，它们靠重装
-或宿主升级变化，重载插件也改变不了。
+**Track A 的组合级传播与事务**：`ProfileModuleGraph` 合并当前在役组合行的
+源码图。变更进入 accepted 集合并沿 importer 反向传播；未接受的模块进入 declined。
+共享依赖会影响所有引用它的组合行。生产链保留每行的 `rowId`、`config` 和附加
+`inject`，所以同一 entry 的多个组合行仍拥有独立配置和运行记录。宿主模块与裸包
+位于 externals；它们的变更只记录 pending 并要求重启宿主，不触发模块替换。
+
+重载先导入全部替代入口和组件，再销毁旧 fiber。任何导入或 apply 失败都会使用
+保留的旧模块命名空间恢复整批实例；只有全部成功后才刷新图源快照。
 
 ---
 

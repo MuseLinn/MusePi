@@ -24,7 +24,6 @@ import { FloatingScrollbar } from "./components/FloatingScrollbar";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
-import { ManagedBrowserHost } from "./components/ManagedBrowserHost";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
 import type { ReminderRow } from "./components/RemindersPanel";
@@ -44,9 +43,12 @@ import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import {
 	daemonMethodProbeParams,
+	isMissingDaemonExtensionError,
 	isMissingDaemonMethodError,
+	REQUIRED_DAEMON_EXTENSIONS,
 	REQUIRED_DAEMON_METHODS,
 	shouldRestartDaemon,
+	shouldRestartForMissingExtensions,
 	shouldRestartForMissingMethods,
 } from "./lib/daemon-version";
 import { openMiniChat, pickDirectory } from "./lib/electron";
@@ -55,6 +57,7 @@ import { applyGlass, applyGlassMaterial } from "./lib/glass";
 import { ensureLiquidGlass } from "./lib/liquid-glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
 import { dispatchNotification } from "./lib/notify";
+import { installPanelMaximizeController } from "./lib/panel-maximize";
 import type { PetSessionCard } from "./lib/pet";
 import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
@@ -90,6 +93,7 @@ import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import {
+	BROWSER_HOST_SLOT,
 	CAPABILITY_CENTER_SLOT,
 	CHAT_VIEW_SLOT,
 	hostReactBindings,
@@ -466,6 +470,7 @@ function AppInner(): ReactNode {
 	// before any early return — the booting splash early-returns and React
 	// hook order must not shift between renders (see 2026-08-12 crash note).
 	useMotionExtensions(rpc);
+	useEffect(() => installPanelMaximizeController(), []);
 	// Error banner sound (effects prefs → error): play once per error.
 	const prevError = useRef<string | null>(null);
 	useEffect(() => {
@@ -1660,6 +1665,17 @@ function AppInner(): ReactNode {
 								if (ok) answered.push(method);
 							}
 							stale = shouldRestartForMissingMethods(answered);
+							if (!stale) {
+								const answeredExtensions: string[] = [];
+								for (const id of REQUIRED_DAEMON_EXTENSIONS) {
+									const ok = await rpc
+										.request("extensions.raw", { id })
+										.then(() => true)
+										.catch(err => !isMissingDaemonExtensionError(err));
+									if (ok) answeredExtensions.push(id);
+								}
+								stale = shouldRestartForMissingExtensions(answeredExtensions);
+							}
 						}
 						// 所有权接管门:probe→connect 启动路径从不跑 reaper
 						// (reaper 只在 daemon-start),于是「上一个 GUI 崩溃/被
@@ -2655,17 +2671,15 @@ function AppInner(): ReactNode {
 		[createSession, sendPrompt, project],
 	);
 
-	/** Settings → 智能体 → 预设 新建输入框:send the natural-language
-	 *  preset description to a Creator session that designs & saves the
-	 *  preset (modes-plan structure → modes.save). Closes the settings pane
-	 *  first so the new chat isn't buried behind it. */
+	/** Settings → 智能体 → 预设 新建输入框:send only the natural-language
+	 *  requirement. The Creator preset owns the design/save workflow in its
+	 *  system prompt, so operational instructions never become user text. */
 	const onPresetCreate = useCallback(
 		(text: string): void => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
 			closeSettings();
-			const prompt = `${trimmed}。请设计并保存这个预设：遵循 docs/archive/modes-plan.md 契约（extends 继承、promptComplete、settings 覆盖），完成后用 modes.validate 自检，再用 modes.save 保存到模式目录。`;
-			void createAndSend(prompt, "creator");
+			void createAndSend(trimmed, "creator");
 		},
 		[createAndSend, closeSettings],
 	);
@@ -4386,7 +4400,7 @@ function AppInner(): ReactNode {
 			{/* Managed browser guests (right-pane tool): the <webview> elements live
 			 * here so they survive panel close/switch — the pane only positions
 			 * itself over them, and the agent keeps driving the same pages. */}
-			<ManagedBrowserHost />
+			<SlotComponentHost rpc={rpc} slot={BROWSER_HOST_SLOT} />
 			{/* Bottom-right corner stack: the auto-checked update notice
 			 * (main.cjs pushes update-available ~12s after boot) and the
 			 * undo-action toasts share one anchored column, so they stack

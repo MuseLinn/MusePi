@@ -4,14 +4,17 @@
  *
  * Rules (applied in order):
  *  0. Looks like a filesystem path (`.`, `..`, `./…`, `..\…`, `/…`, `~/…`,
- *     `C:\…`, `\\unc`) -> local. Routed through `PluginManager.link()` so the
- *     `musepi plugin install <path>` and `musepi plugin link <path>` flows agree.
+ *     `C:\…`, `\\unc`) -> local directory, except tarballs, which stay on the
+ *     package-manager install path. Directories route through `PluginManager.link()`
+ *     so `musepi plugin install <path>` and `musepi plugin link <path>` agree.
  *  1. Starts with `@` (scoped npm) -> always npm.
  *  2. Contains `@` after the first character -> split on the LAST `@`.
  *     If the right-hand side is a known marketplace name, it's a marketplace ref.
  *     Otherwise it's an npm spec (e.g. `pkg@1.2.3`).
  *  3. No `@` -> npm.
  */
+import { parseInstallSpec } from "../extensibility/plugins/management/spec-classifier";
+
 // Common npm dist-tags that should never be interpreted as marketplace names
 const NPM_DIST_TAGS = new Set([
 	"latest",
@@ -53,8 +56,15 @@ export type ClassifiedInstallTarget =
 	| { type: "npm"; spec: string };
 
 export function classifyInstallTarget(spec: string, knownMarketplaces: Set<string>): ClassifiedInstallTarget {
-	// Rule 0: filesystem path — bypass npm/marketplace validation entirely.
-	if (isLocalPathSpec(spec)) return { type: "local", path: spec };
+	// Rule 0: filesystem path — an archive is package-manager input, not a directory to link.
+	if (isLocalPathSpec(spec)) {
+		try {
+			if (parseInstallSpec(spec).kind === "tarball") return { type: "npm", spec };
+		} catch {
+			// Relative directory spellings are link inputs; the link path owns their diagnostics.
+		}
+		return { type: "local", path: spec };
+	}
 	// Rule 1: scoped npm package — @ at position 0 is never a marketplace separator.
 	if (spec.startsWith("@")) return { type: "npm", spec };
 	// Rule 2: @ somewhere after the first character.

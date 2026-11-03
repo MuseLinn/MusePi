@@ -97,7 +97,7 @@ import {
 	hasCopilotVisionInput,
 	resolveGitHubCopilotBaseUrl,
 } from "./github-copilot-headers";
-import { getOpenAIPromptCacheKey } from "./openai-shared";
+import { applyOpenCodeSessionHeader, getOpenAIPromptCacheKey, getOpenCodeSessionAffinity } from "./openai-shared";
 import { transformMessages } from "./transform-messages";
 import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
@@ -1141,6 +1141,7 @@ export type AnthropicClientOptionsArgs = {
 	fetch?: FetchImpl;
 	maxRetryDelayMs?: number;
 	claudeCodeSessionId?: string;
+	openCodeSessionAffinity?: string;
 };
 
 export type AnthropicClientOptionsResult = {
@@ -1957,6 +1958,7 @@ const streamAnthropicOnce = (
 					fetch: options?.fetch,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
 					claudeCodeSessionId: options?.sessionId ?? extractClaudeMetadataSessionId(options?.metadata?.user_id),
+					openCodeSessionAffinity: getOpenCodeSessionAffinity(options),
 					disableStrictTools,
 				});
 				client = created.client;
@@ -2970,6 +2972,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		claudeCodeSessionId,
 		coworkBetas: oauthToken ? buildCoworkBetas(hasTools || thinkingEnabled, thinkingEnabled, disableStrictTools) : [],
 	});
+	applyOpenCodeSessionHeader(defaultHeaders, model.provider, args.openCodeSessionAffinity);
 
 	if (model.provider === "cloudflare-ai-gateway") {
 		return {

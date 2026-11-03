@@ -217,6 +217,12 @@ describe("TurnMapCanvas SSR 冒烟", () => {
 		expect(html).toContain(t("settings.trajectoryEmpty").split("'")[0]!);
 	});
 
+	it("导航框与缩放控件避让浮动输入区", () => {
+		const html = renderToStaticMarkup(<TurnMapCanvas entries={entries} composerInset={120} />);
+		expect(html).toContain("bottom:136px");
+		expect(html).toContain("bottom:134px");
+	});
+
 	it("右键菜单动作的可达性契约:两类导航动作不共用一个文案", () => {
 		// 回归(自 SessionTreeCanvas contracts 迁移):两个不同动作共用一个
 		// 标签会让屏幕阅读器播报错误的动作。地图右键 = 跳转(纯导航)与

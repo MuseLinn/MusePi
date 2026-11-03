@@ -913,6 +913,7 @@ export class DaemonServer {
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
 				dynamicRuntime: () => this.#getDynamicPlugins(),
+				runtimeTargets: () => this.#services.get<BundleService>("bundles").runtimeTargets(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
 		);

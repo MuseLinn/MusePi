@@ -23,6 +23,7 @@ import {
 	pluginStateLabel,
 	sourceLevelLabel,
 } from "./UnifiedPluginsView";
+import { VoiceInputDevicePicker } from "./VoiceInputDevicePicker";
 
 /**
  * 插件详情液态玻璃弹层（dsh 插件详情页 parity，交互形态按小袁总决策
@@ -45,7 +46,15 @@ const VOICE_PICKER_KEYS: Record<string, readonly string[]> = {
 	tts: ["tts.localModel", "tts.localVoice"],
 };
 
-function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient | null }): ReactNode {
+function VoiceModelPicker({
+	item,
+	rpc,
+	open,
+}: {
+	item: ExtensionItem;
+	rpc: RpcClient | null;
+	open: boolean;
+}): ReactNode {
 	// 组件开关实时过滤：引擎组件停用 → 对应档位立即从选择器消失（与设置页
 	// 同一 helper / 同一存储；item 来自全局 registry 单例，拨开关后经
 	// extensions.changed 重拉，弹层内选择器同帧跟随）。
@@ -64,6 +73,13 @@ function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient |
 					autoFetchOnSelect
 					hiddenTiers={hiddenTiersFromComponents(item.components, STT_COMPONENT_TIERS)}
 				/>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.voiceInputDevice")}</div>
+						<div className="gui-settings-row-desc">{t("settings.voiceInputDeviceHint")}</div>
+					</div>
+					<VoiceInputDevicePicker active={open} />
+				</div>
 			</div>
 		);
 	}
@@ -216,7 +232,6 @@ function ComponentsSection({
 			<div className="gui-ext-detail-label">
 				{t("tools.extPluginComponents")} · {item.components.length}
 			</div>
-			<div className="gui-plugin-config-desc">{t("tools.extPluginComponentsDesc")}</div>
 			<div className="gui-plugin-components">
 				{item.components.map(c => {
 					// 组件名/描述同 builtin 覆盖模式：daemon 英文原文,GUI 按
@@ -317,6 +332,11 @@ export function PluginDetailDialog({
 						/>
 						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{builtinDisplayName(item)}</span>
 						<span className="gui-ext-item-tag">{item.id}</span>
+						{item.experimental && (
+							<span className="gui-ext-item-tag gui-ext-item-tag--experimental">
+								{t("tools.extExperimental")}
+							</span>
+						)}
 						{/* 整体启停：与插件包详情、能力清单行同一个开关语义
 						 *  （extensions.setEnabled）。头部收一个总闸，避免它在
 						 *  状态行与组件段之间重复出现。 */}
@@ -431,7 +451,7 @@ export function PluginDetailDialog({
 							<div className="gui-ext-detail-path">{item.path}</div>
 						</div>
 						<ComponentsSection item={item} rpc={rpc} onError={onError} />
-						<VoiceModelPicker item={item} rpc={rpc} />
+						<VoiceModelPicker item={item} rpc={rpc} open={open} />
 						{(filteredItem.config?.length || item.configErrors?.length || item.resources) && (
 							<PluginManifestSections item={filteredItem} rpc={rpc} />
 						)}

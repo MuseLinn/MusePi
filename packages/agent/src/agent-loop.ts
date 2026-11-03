@@ -1465,6 +1465,26 @@ async function runLoopBody(
 				});
 				turnOpen = false;
 
+				if (signal?.aborted && hasMoreToolCalls) {
+					// Preserve the interrupted transcript without starting another provider
+					// request just to discover the already-aborted signal. The completed
+					// tool results above stay committed; queued input remains untouched.
+					stream.push({ type: "turn_start" });
+					const abortedMessage = emitAbortedAssistantMessage(
+						null,
+						false,
+						new Set(),
+						currentContext,
+						config,
+						stream,
+						signal,
+					);
+					newMessages.push(abortedMessage);
+					await emitTurnEnd(stream, currentContext, abortedMessage, [], config, signal, { willContinue: false });
+					endAgentStream(stream, newMessages, telemetry, stepCounter.count);
+					return;
+				}
+
 				if (isDeadlineExceeded(config.deadline)) {
 					endAgentStream(stream, newMessages, telemetry, stepCounter.count);
 					return;

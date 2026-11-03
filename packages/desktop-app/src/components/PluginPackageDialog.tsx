@@ -90,6 +90,11 @@ export function PluginPackageDialog({
 						<PluginIcon name={pkg.name} icon={pkg.icon} size={34} status={pkg.enabled ? "active" : "off"} />
 						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{pkg.name}</span>
 						<span className="gui-ext-item-tag">{`v${pkg.version}`}</span>
+						{pkg.experimental && (
+							<span className="gui-ext-item-tag gui-ext-item-tag--experimental">
+								{t("tools.extExperimental")}
+							</span>
+						)}
 						<button
 							type="button"
 							className="gui-tool-btn"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { parseConfigFields, parsePluginResources } from "../src/plugin-config";
+import { parseConfigFields, parsePluginExperimental, parsePluginResources } from "../src/plugin-config";
 
 /**
  * 声明式配置契约校验(设计稿 §1/§4):manifest 是用户可写 JSON,校验必须逐
@@ -64,6 +64,15 @@ describe("parseConfigFields", () => {
 		const r = parseConfigFields([{ key: "k", type: "string", restart: "whenever" }]);
 		expect(r.errors).toEqual([]);
 		expect(r.fields[0]?.restart).toBeUndefined();
+	});
+});
+
+describe("parsePluginExperimental", () => {
+	it("accepts only the literal boolean true", () => {
+		expect(parsePluginExperimental(true)).toBe(true);
+		for (const value of [false, "true", 1, {}, [], null, undefined]) {
+			expect(parsePluginExperimental(value)).toBeUndefined();
+		}
 	});
 });
 

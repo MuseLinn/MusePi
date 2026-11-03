@@ -1,4 +1,5 @@
 import { getActiveProfile } from "@musepi/pi-utils";
+import { parsePluginExperimental } from "@musepi/pi-wire";
 import { getAllPlugins } from "../runtime/loader";
 import { listInstalledBundles, profileDirFor, readProfileComposition } from "./profile-composition";
 
@@ -9,6 +10,7 @@ export interface PluginManagementPackage {
 	scope: "user" | "project";
 	enabled: boolean;
 	description: string | null;
+	experimental?: boolean;
 	icon: string | null;
 	tools: number;
 	commands: number;
@@ -38,6 +40,7 @@ export async function listPluginManagementPackages(
 			scope: plugin.scope,
 			enabled: plugin.enabled,
 			description: plugin.manifest.description ?? null,
+			...(parsePluginExperimental(plugin.manifest.experimental) ? { experimental: true } : {}),
 			icon: plugin.manifest.icon ?? null,
 			tools: plugin.manifest.tools ? 1 : 0,
 			commands: Array.isArray(plugin.manifest.commands)
@@ -69,6 +72,7 @@ export async function listPluginManagementPackages(
 			scope: existing?.scope ?? "user",
 			enabled: bundle.selected,
 			description: bundle.description ?? existing?.description ?? null,
+			...(bundle.experimental || existing?.experimental ? { experimental: true } : {}),
 			icon: existing?.icon ?? null,
 			tools: existing?.tools ?? 0,
 			commands: existing?.commands ?? 0,

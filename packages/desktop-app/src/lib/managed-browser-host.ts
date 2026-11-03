@@ -467,6 +467,9 @@ export function setPaneRect(rect: HostRect | null): void {
 		return;
 	}
 	set({ rect, paneVisible: true });
+	// The first blank tab is usually created before the slot reports a visible
+	// rect. Re-report selection now so main can navigate that initial tab.
+	if (state.activeId) reportActive(state.activeId);
 	void window.electronAPI?.managedBrowserVisibility(true).catch(() => {});
 }
 
@@ -632,9 +635,9 @@ let wired = false;
 /** Bind main-process pushes once (idempotent; called by the host component). */
 export function wireHost(): void {
 	if (wired) return;
-	wired = true;
 	const api = window.electronAPI;
 	if (!api) return;
+	wired = true;
 	api.onManagedBrowserState(push => {
 		set({
 			port: push.port ?? null,
@@ -657,6 +660,7 @@ export function wireHost(): void {
 	// Long-lived sets can exceed the cap without any new tab (restored tabs
 	// all arrive at once); re-check periodically rather than only on create.
 	window.setInterval(enforceResidency, 30_000);
+	void api.managedBrowserHostReady().catch(() => {});
 }
 
 /**

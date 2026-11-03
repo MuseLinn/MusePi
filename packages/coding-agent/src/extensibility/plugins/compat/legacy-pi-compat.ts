@@ -1886,6 +1886,12 @@ const extensionGraphCacheBustResolvedImportModules = new Map<string, Set<string>
 // timestamp resolution, file-clock observation. This module keeps the graph
 // WALK (which files the entry reached), which is the part only it knows.
 const extensionGraphFilesByEntry = new Map<string, string[]>();
+export interface ExtensionProfileGraphSnapshot {
+	readonly entry: string;
+	readonly dependencies: ReadonlyMap<string, ReadonlySet<string>>;
+	readonly externals: ReadonlyMap<string, ReadonlySet<string>>;
+}
+const extensionProfileGraphsByEntry = new Map<string, ExtensionProfileGraphSnapshot>();
 const extensionGraphIdentities = new PluginGraphIdentities();
 
 /** Sync realpath with the async path's cache, for the watcher-facing probe. */
@@ -1935,6 +1941,12 @@ function extensionGraphChanged(entryRealPath: string): boolean {
  */
 export function extensionGraphFiles(entryPath: string): string[] | undefined {
 	return extensionGraphFilesByEntry.get(realpathSyncOrSelf(path.resolve(entryPath)));
+}
+
+/** The importer edges and external boundaries from the same walk as
+ *  {@link extensionGraphFiles}; no second parser or resolver is involved. */
+export function extensionProfileGraph(entryPath: string): ExtensionProfileGraphSnapshot | undefined {
+	return extensionProfileGraphsByEntry.get(realpathSyncOrSelf(path.resolve(entryPath)));
 }
 
 /**
@@ -2100,6 +2112,8 @@ async function realpathOrSelfUncached(p: string): Promise<string> {
 
 interface ExtensionModuleGraph {
 	readonly modules: Map<string, string>;
+	readonly dependencies: Map<string, Set<string>>;
+	readonly externals: Map<string, Set<string>>;
 	readonly cacheBustResolvedImportModules: Set<string>;
 	readonly commonJsPaths: Set<string>;
 	readonly synchronousSourcePaths: Set<string>;
@@ -2117,6 +2131,8 @@ interface ExtensionModuleGraph {
  */
 async function collectExtensionModules(entryRealPath: string): Promise<ExtensionModuleGraph> {
 	const modules = new Map<string, string>();
+	const dependencies = new Map<string, Set<string>>();
+	const externals = new Map<string, Set<string>>();
 	const commonJsPaths = new Set<string>();
 	const synchronousSourcePaths = new Set<string>();
 	const queuedCacheBustResolvedImports = new Map<string, boolean>([[entryRealPath, true]]);
@@ -2147,6 +2163,7 @@ async function collectExtensionModules(entryRealPath: string): Promise<Extension
 			continue;
 		}
 		modules.set(file, source);
+		dependencies.set(file, new Set());
 		const ast = parseExtensionSource(source, file);
 		const sourceIsCommonJs = await isGraphOwnedCommonJsModule(
 			file,
@@ -2161,6 +2178,20 @@ async function collectExtensionModules(entryRealPath: string): Promise<Extension
 		const references = collectExtensionSpecifierReferences(source, file, ast);
 		for (const reference of references) {
 			const specifier = reference.specifier;
+			if (
+				isBuiltin(specifier) ||
+				specifier.startsWith("bun:") ||
+				remapLegacyPiSpecifier(specifier) ||
+				specifier === "typebox" ||
+				specifier === "@sinclair/typebox"
+			) {
+				let boundaries = externals.get(file);
+				if (!boundaries) {
+					boundaries = new Set();
+					externals.set(file, boundaries);
+				}
+				boundaries.add(specifier);
+			}
 			try {
 				let resolved: string | null = null;
 				let nextCacheBustResolvedImports = cacheBustResolvedImports;
@@ -2271,6 +2302,16 @@ async function collectExtensionModules(entryRealPath: string): Promise<Extension
 					synchronousSourcePaths.add(resolved);
 				}
 				if (resolved) {
+					if (isBareExtensionDependencySpecifier(specifier)) {
+						let boundaries = externals.get(file);
+						if (!boundaries) {
+							boundaries = new Set();
+							externals.set(file, boundaries);
+						}
+						boundaries.add(resolved);
+					} else {
+						dependencies.get(file)?.add(resolved);
+					}
 					const queuedCacheBust = queuedCacheBustResolvedImports.get(resolved) ?? false;
 					const mergedCacheBust = queuedCacheBust || nextCacheBustResolvedImports;
 					queuedCacheBustResolvedImports.set(resolved, mergedCacheBust);
@@ -2315,6 +2356,8 @@ async function collectExtensionModules(entryRealPath: string): Promise<Extension
 	}
 	return {
 		modules,
+		dependencies,
+		externals,
 		commonJsPaths,
 		synchronousSourcePaths,
 		cacheBustResolvedImportModules: new Set(
@@ -2606,6 +2649,8 @@ async function installExtensionGraphHook(
 async function ensureExtensionGraphHook(entryRealPath: string): Promise<{ clear(): void } | undefined> {
 	const {
 		modules: currentModules,
+		dependencies,
+		externals,
 		commonJsPaths,
 		cacheBustResolvedImportModules: discoveredCacheBustModules,
 		synchronousSourcePaths,
@@ -2614,6 +2659,7 @@ async function ensureExtensionGraphHook(entryRealPath: string): Promise<{ clear(
 	// this load is about to serve, so it is the baseline the next watcher tick
 	// compares against — including on loads that install no new hooks.
 	recordExtensionGraphMtimes(entryRealPath, currentModules.keys());
+	extensionProfileGraphsByEntry.set(entryRealPath, { entry: entryRealPath, dependencies, externals });
 	let cacheBustResolvedImportModules = extensionGraphCacheBustResolvedImportModules.get(entryRealPath);
 	if (!cacheBustResolvedImportModules) {
 		cacheBustResolvedImportModules = new Set<string>();

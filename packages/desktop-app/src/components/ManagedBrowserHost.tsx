@@ -10,6 +10,7 @@ import {
 	subscribeHost,
 	wireHost,
 } from "../lib/managed-browser-host";
+import { managedTabIsBlank } from "../lib/managed-browser-visibility";
 
 /** Guest partition — every managed tab shares it, so logins persist here. */
 export const MANAGED_BROWSER_PARTITION = "persist:musepi-managed-browser";
@@ -48,7 +49,7 @@ export function ManagedBrowserHost(): ReactNode {
 	// Blank (about:blank) tab: the pane layers its React start page over the
 	// slot, and the host sits at the root stacking level — so it must step aside,
 	// exactly like the native view used to when the tab was blank.
-	const activeBlank = state.tabs.find(tab => tab.id === state.activeId)?.blank ?? true;
+	const activeBlank = managedTabIsBlank(state.tabs.find(tab => tab.id === state.activeId) ?? null);
 	const visible = state.paneVisible && state.rect !== null && !activeBlank;
 	// Hidden: keep a real, on-screen box (the guest needs a composited surface).
 	const rect = state.rect ?? { x: 0, y: 0, width: 720, height: 480 };

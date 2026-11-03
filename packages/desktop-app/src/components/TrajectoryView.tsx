@@ -100,13 +100,16 @@ function EventRow({
 							)}
 						</>
 					) : ev.kind === "system" ? (
-						<div className="traj-text">
-							{ev.title === "model_change"
-								? t("settings.modelChanged")
-								: ev.title === "tool_registry"
-									? t("general.toolsUpdated")
-									: t("settings.thinkingLevelChanged")}
-						</div>
+						<>
+							<div className="traj-text">
+								{ev.title === "model_change"
+									? t("settings.modelChanged")
+									: ev.title === "tool_registry"
+										? t("general.toolsUpdated")
+										: t("settings.thinkingLevelChanged")}
+							</div>
+							{ev.body && <pre className="traj-args">{ev.body}</pre>}
+						</>
 					) : (
 						<div className="traj-text">{ev.body ?? ev.title}</div>
 					)}
@@ -162,7 +165,7 @@ function InspectorCard({
 				? new Date(ev.timestamp).toLocaleString()
 				: "—";
 	const input = ev.kind === "user" ? ev.title : ev.kind === "tool" ? ev.body : "";
-	const output = ev.kind === "tool" ? ev.result : ev.kind === "assistant" ? ev.body : "";
+	const output = ev.kind === "tool" ? ev.result : ev.kind === "assistant" || ev.kind === "system" ? ev.body : "";
 	// settled 回合的模型请求统计(wire AssistantMessage.usage/duration/ttft)。
 	const rateText =
 		ev.usage && ev.durationMs !== undefined && ev.durationMs > 100 && ev.usage.output > 0

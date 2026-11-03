@@ -2,12 +2,14 @@
 	"name": "musepi-subagent-codex",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Experimental Codex app-server subagent for MusePi.",
+	"description": "Codex app-server subagent for MusePi.",
 	"license": "MIT",
 	"type": "module",
 	"musepi": {
 		"icon": "X",
-		"description": "实验性：通过现有 task 工具和官方 app-server 协议调用 Codex。",
+		"label": "Codex Subagent",
+		"description": "Run Codex through the existing task tool and the official app-server protocol.",
+		"experimental": true,
 		"extensions": ["./index.ts"],
 		"config": [
 			{ "key": "executable", "type": "path", "label": "Codex 可执行文件", "description": "留空时从 PATH 查找 codex。", "default": "" },

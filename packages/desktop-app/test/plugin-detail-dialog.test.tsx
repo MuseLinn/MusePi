@@ -18,7 +18,10 @@ function item(state: ExtensionItem["state"]): ExtensionItem {
 	};
 }
 
-async function renderDialog(state: ExtensionItem["state"]): Promise<{ cleanup(): Promise<void> }> {
+async function renderDialog(
+	state: ExtensionItem["state"],
+	overrides: Partial<ExtensionItem> = {},
+): Promise<{ cleanup(): Promise<void> }> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root: Root = createRoot(host);
@@ -27,7 +30,7 @@ async function renderDialog(state: ExtensionItem["state"]): Promise<{ cleanup():
 			createElement(PluginDetailDialog, {
 				open: true,
 				onClose: () => {},
-				item: item(state),
+				item: { ...item(state), ...overrides },
 				rpc: { request: () => Promise.resolve({ ok: true }) } as never,
 				onError: () => {},
 			}),
@@ -59,6 +62,17 @@ describe("PluginDetailDialog component effective state", () => {
 
 		expect(toggle?.getAttribute("aria-checked")).toBe("true");
 		expect(toggle?.hasAttribute("disabled")).toBe(false);
+		await cleanup();
+	});
+
+	it("keeps the component list and switches without the redundant description", async () => {
+		const { cleanup } = await renderDialog("active", { experimental: true });
+		expect(document.querySelector(".gui-plugin-components")).not.toBeNull();
+		expect(document.querySelector(".gui-plugin-component-row [role='switch']")).not.toBeNull();
+		expect(document.querySelector(".gui-plugin-config-desc")).toBeNull();
+		expect(document.querySelector(".gui-dialog-head .gui-ext-item-tag--experimental")?.textContent).toBe(
+			"Experimental",
+		);
 		await cleanup();
 	});
 });

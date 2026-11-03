@@ -46,7 +46,7 @@ describe("chat preset tool narrowing", () => {
 		expect(rev6).toBeDefined();
 		expect(rev6?.settings?.["tools.disabled"]).not.toContain("knowledge");
 		// And the current template stamps the new revision.
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(8);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(9);
 	});
 
 	it("createTools honours the denylist the template writes", async () => {

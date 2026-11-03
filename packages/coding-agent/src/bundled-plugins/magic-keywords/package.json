@@ -7,6 +7,7 @@
 	"type": "module",
 	"musepi": {
 		"icon": "✨",
+		"label": "Magic Keywords",
 		"description": "First-party magic keywords: composer trigger words that append a hidden notice to the model.",
 		"extensions": ["./index.ts"]
 	}

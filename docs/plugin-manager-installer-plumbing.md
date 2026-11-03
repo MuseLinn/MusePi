@@ -9,7 +9,7 @@ There are two plugin-management implementations in the codebase:
 1. **Active path used by CLI commands**: `PluginManager` (`src/extensibility/plugins/manager.ts`)
 2. **Legacy helper module**: installer functions (`src/extensibility/plugins/installer.ts`)
 
-`musepi plugin` npm/git/link actions go through `PluginManager`; marketplace actions go through `MarketplaceManager`. `install` classifies each target (`classifyInstallTarget` in `cli/classify-install-target.ts`): `name@marketplace` routes to the marketplace manager, local paths route to `PluginManager.link()`, git and npm specs to `PluginManager.install()`.
+`musepi plugin` npm/git/link actions go through `PluginManager`; marketplace actions go through `MarketplaceManager`. `install` classifies each target (`classifyInstallTarget` in `cli/classify-install-target.ts`): `name@marketplace` routes to the marketplace manager, an existing local directory routes to `PluginManager.link()`, and archive paths, git specs, and npm specs route to `PluginManager.install()`. In particular, an absolute `.tgz` path is an install target, not a directory link.
 
 `installer.ts` still documents important safety checks and filesystem behavior, but it is not the path used by `src/commands/plugin.ts` + `src/cli/plugin-cli.ts`.
 
@@ -37,6 +37,7 @@ musepi plugin install name@marketplace / musepi install name@marketplace
 - `src/commands/plugin.ts` defines command/flags and forwards to `runPluginCommand`.
 - `src/cli/plugin-cli.ts` maps npm/link subcommands to `PluginManager` methods:
   - `install`, `uninstall`, `list`, `link`, `doctor`, `features`, `config`, `enable`, `disable`
+- `pack` calls `packPlugin` in `src/cli/plugin-pack.ts` and produces a local tarball without publishing.
 - `discover`, `upgrade`, and `marketplace ...` subcommands use `MarketplaceManager`.
 - No explicit npm-plugin `update` action exists; update is done by re-running `install` with a new package/version spec.
 
@@ -111,8 +112,12 @@ Malformed `package.json` JSON is a hard failure at read time; malformed manifest
    - `[a,b]`: validates each feature exists in manifest features map
    - `[]`: empty feature list
    - bare spec: `null` (use defaults policy later in loader)
-7. Validate declared extension entries (`#validateInstalledExtensions`): each manifest `extensions` entry must resolve on disk, import to a factory function, and initialize successfully against a throwaway registration surface. On failure, roll back the install — restore the previous `plugins/package.json`, remove the freshly installed package, and restore any prior version from a backup taken before `bun install` — then abort.
+7. Validate declared extension entries (`#validateInstalledExtensions`): each manifest `extensions` entry must resolve on disk and mount successfully through the production `mountPlugin` chain. This accepts both pure Cordis entries and legacy default-export factories. Validation uses an isolated runtime/event bus and disposes plugin primitives after a successful mount. On failure, roll back the install — restore the previous `plugins/package.json`, remove the freshly installed package, and restore any prior version from a backup taken before `bun install` — then abort.
 8. Upsert lockfile runtime state: `{ version, enabledFeatures, enabled: true }`.
+
+### Pack and share flow (`musepi plugin pack`)
+
+`packPlugin` in `src/cli/plugin-pack.ts` validates the package name, version, manifest block, and declared extension paths, then runs `bun pm pack` without contacting a registry or publishing. The resulting `.tgz` can be shared directly. Recipients install its absolute path through `PluginManager.install`; the CLI and GUI do not route archive files through `PluginManager.link`.
 
 ### Update semantics
 

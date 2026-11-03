@@ -1,0 +1,12 @@
+{
+	"name": "musepi-browser-ui",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned managed browser pane and persistent webview host.",
+	"type": "module",
+	"musepi": {
+		"icon": "🌐",
+		"description": "应用内浏览器页面与常驻网页宿主，共享标签、登录状态和 Agent 控制。",
+		"extensions": ["./index.ts"]
+	}
+}

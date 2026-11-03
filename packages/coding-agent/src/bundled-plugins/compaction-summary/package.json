@@ -7,6 +7,7 @@
 	"type": "module",
 	"musepi": {
 		"icon": "▤",
+		"label": "Compaction Summary",
 		"description": "Open compaction summaries with before/after token counts in the right panel.",
 		"extensions": ["./index.ts"]
 	}

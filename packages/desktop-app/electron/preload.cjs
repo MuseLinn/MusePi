@@ -340,6 +340,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserSetLifecycle: (input) => ipcRenderer.invoke("managed-browser:set-lifecycle", input),
 	/** Renderer answer to a risky-navigation consent request. */
 	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
+	/** Renderer listeners are registered; main may send create-tab now. */
+	managedBrowserHostReady: () => ipcRenderer.invoke("managed-browser:host-ready"),
 	/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId(id)`. */
 	managedBrowserGuestReady: (input) => ipcRenderer.invoke("managed-browser:guest-ready", input),
 	managedBrowserGuestGone: (tabId) => ipcRenderer.invoke("managed-browser:guest-gone", tabId),

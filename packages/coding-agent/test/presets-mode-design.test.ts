@@ -68,6 +68,16 @@ describe("built-in design preset", () => {
 	});
 });
 
+describe("built-in creator preset", () => {
+	it("owns the design, validate, and save workflow in its system prompt", () => {
+		const prompt = JSON.stringify(BUILTIN_MODE_TEMPLATES.creator?.prompt ?? []);
+		expect(prompt).toContain("用户消息只包含创作需求");
+		expect(prompt).toContain("modes.validate");
+		expect(prompt).toContain("modes.save");
+		expect(prompt).not.toContain("docs/archive/modes-plan.md");
+	});
+});
+
 describe("ensureModeTemplates upgrade path", () => {
 	it("stamps new files with the current revision", () => {
 		ensureModeTemplates(dir);
@@ -178,6 +188,25 @@ describe("ensureModeTemplates upgrade path", () => {
 		ensureModeTemplates(dir);
 		expect(readJson("creator").plugins).toEqual([{ name: "custom-plugin" }]);
 		expect(readJson("creator").builtinRevision).toBe(7);
+	});
+
+	it("upgrades an untouched v8 creator and preserves an edited creator", () => {
+		const legacy = LEGACY_TEMPLATES[8]?.creator;
+		expect(legacy).toBeDefined();
+		writeFileSync(
+			modeFilePath(dir, "creator"),
+			`${JSON.stringify({ ...legacy, builtinRevision: 8 }, null, 2)}\n`,
+			"utf8",
+		);
+		ensureModeTemplates(dir);
+		expect(readJson("creator").builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
+		expect(JSON.stringify(readJson("creator"))).toContain("modes.save");
+
+		const edited = { ...legacy, builtinRevision: 8, label: "My creator" };
+		writeFileSync(modeFilePath(dir, "creator"), `${JSON.stringify(edited, null, 2)}\n`, "utf8");
+		ensureModeTemplates(dir);
+		expect(readJson("creator").label).toBe("My creator");
+		expect(readJson("creator").builtinRevision).toBe(8);
 	});
 
 	it("leaves a user-edited preset alone", () => {

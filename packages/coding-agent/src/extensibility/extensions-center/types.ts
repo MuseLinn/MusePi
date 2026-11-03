@@ -71,6 +71,8 @@ export interface Extension {
 	displayName: string;
 	/** Description if available */
 	description?: string;
+	/** Manifest-declared experimental status. */
+	experimental?: boolean;
 	/** Trigger pattern (slash command, glob, regex) */
 	trigger?: string;
 	/** Absolute path to source file */

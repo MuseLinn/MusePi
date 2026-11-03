@@ -16,6 +16,7 @@ import {
 	MarketplaceManager,
 } from "../extensibility/plugins/marketplace/index.js";
 import { theme } from "../modes/theme/theme";
+import { packPlugin } from "./plugin-pack";
 
 // =============================================================================
 // Types
@@ -26,6 +27,7 @@ export type PluginAction =
 	| "uninstall"
 	| "list"
 	| "link"
+	| "pack"
 	| "doctor"
 	| "features"
 	| "config"
@@ -48,6 +50,7 @@ export interface PluginCommandArgs {
 		disable?: string;
 		set?: string;
 		scope?: "user" | "project";
+		output?: string;
 	};
 }
 
@@ -60,6 +63,7 @@ const VALID_ACTIONS: PluginAction[] = [
 	"uninstall",
 	"list",
 	"link",
+	"pack",
 	"doctor",
 	"features",
 	"config",
@@ -115,6 +119,8 @@ export function parsePluginArgs(args: string[]): PluginCommandArgs | undefined {
 			result.flags.disable = args[++i];
 		} else if (arg === "--set" && i + 1 < args.length) {
 			result.flags.set = args[++i];
+		} else if ((arg === "--output" || arg === "-o") && i + 1 < args.length) {
+			result.flags.output = args[++i];
 		} else if (arg === "--scope" && i + 1 < args.length && !args[i + 1].startsWith("-")) {
 			const s = args[++i];
 			if (s === "user" || s === "project") {
@@ -161,6 +167,9 @@ export async function runPluginCommand(cmd: PluginCommandArgs): Promise<void> {
 			break;
 		case "link":
 			await handleLink(manager, cmd.args, cmd.flags);
+			break;
+		case "pack":
+			await handlePack(cmd.args, cmd.flags);
 			break;
 		case "doctor":
 			await handleDoctor(manager, cmd.flags);
@@ -606,6 +615,25 @@ async function handleLink(manager: PluginManager, paths: string[], flags: { json
 	}
 }
 
+async function handlePack(paths: string[], flags: { json?: boolean; output?: string }): Promise<void> {
+	if (paths.length > 1) {
+		console.error(chalk.red(`Usage: ${APP_NAME} plugin pack [path] [--output <dir>] [--json]`));
+		process.exit(1);
+	}
+	try {
+		const result = await packPlugin(paths[0] ?? ".", flags.output);
+		if (flags.json) {
+			console.log(JSON.stringify(result, null, 2));
+		} else {
+			console.log(chalk.green(`${theme.status.success} Packed ${result.name}@${result.version}: ${result.path}`));
+			console.log(chalk.dim(`Install with: ${APP_NAME} plugin install ${JSON.stringify(result.path)}`));
+		}
+	} catch (err) {
+		console.error(chalk.red(`Failed to pack plugin: ${err}`));
+		process.exit(1);
+	}
+}
+
 async function handleDoctor(manager: PluginManager, flags: { json?: boolean; fix?: boolean }): Promise<void> {
 	const checks = await manager.doctor({ fix: flags.fix });
 
@@ -976,6 +1004,7 @@ ${chalk.bold("Commands:")}
   uninstall <pkg>                Remove plugins
   list                           Show installed plugins
   link <path>                    Link local plugin for development
+  pack [path]                    Create an installable plugin tarball
   doctor                         Check plugin health
   features <pkg>                 View/modify enabled features
   config <cmd> <pkg> [key] [val] Manage plugin settings
@@ -1011,9 +1040,11 @@ ${chalk.bold("Options:")}
   --scope <scope>  Install scope: user (default) or project (install name@marketplace)
   --dry-run        Preview changes without applying (install)
   -l, --local      Use project-local overrides
+  -o, --output     Tarball destination directory (pack)
 
 ${chalk.bold("Examples:")}
   ${APP_NAME} plugin install @musepi/exa[search]
+  ${APP_NAME} plugin pack . --output ./dist --json
   ${APP_NAME} plugin list --json
   ${APP_NAME} plugin features my-plugin --enable search,web
   ${APP_NAME} plugin config set my-plugin apiKey sk-xxx

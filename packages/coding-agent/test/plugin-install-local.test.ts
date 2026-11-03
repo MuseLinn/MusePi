@@ -110,6 +110,21 @@ describe("runPluginCommand({ action: 'install', args: [<local>] })", () => {
 		}
 	});
 
+	test("absolute tarball dispatches to install() instead of linking it as a directory", async () => {
+		const tarball = path.join(tmpRoot, "cordis-distribution-1.2.3.tgz");
+		const linkSpy = spyOn(PluginManager.prototype, "link").mockResolvedValue(FAKE_INSTALLED);
+		const installSpy = spyOn(PluginManager.prototype, "install").mockResolvedValue(FAKE_INSTALLED);
+		try {
+			await runPluginCommand({ action: "install", args: [tarball], flags: { json: true } });
+			expect(installSpy).toHaveBeenCalledTimes(1);
+			expect(installSpy.mock.calls[0]?.[0]).toBe(tarball);
+			expect(linkSpy).not.toHaveBeenCalled();
+		} finally {
+			linkSpy.mockRestore();
+			installSpy.mockRestore();
+		}
+	});
+
 	test("--dry-run on a local path neither links nor installs", async () => {
 		const linkSpy = spyOn(PluginManager.prototype, "link").mockResolvedValue(FAKE_INSTALLED);
 		const installSpy = spyOn(PluginManager.prototype, "install").mockResolvedValue(FAKE_INSTALLED);

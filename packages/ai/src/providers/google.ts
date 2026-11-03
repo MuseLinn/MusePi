@@ -8,6 +8,7 @@ import {
 	type GoogleSharedStreamOptions,
 	streamGoogleGenAI,
 } from "./google-shared";
+import { applyOpenCodeSessionHeader, getOpenCodeSessionAffinity } from "./openai-shared";
 
 export type GoogleOptions = GoogleSharedStreamOptions;
 
@@ -41,6 +42,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 				...(model.headers ?? {}),
 				...(options?.headers ?? {}),
 			};
+			applyOpenCodeSessionHeader(headers, model.provider, getOpenCodeSessionAffinity(options));
 			return { params, url, headers, fetch: options?.fetch };
 		},
 	});

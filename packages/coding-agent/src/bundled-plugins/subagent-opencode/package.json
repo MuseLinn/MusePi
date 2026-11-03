@@ -2,12 +2,14 @@
 	"name": "musepi-subagent-opencode",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Experimental OpenCode subagent for MusePi.",
+	"description": "OpenCode subagent for MusePi.",
 	"license": "MIT",
 	"type": "module",
 	"musepi": {
 		"icon": "O",
-		"description": "实验性：通过现有 task 工具调用原生 OpenCode CLI，不自动放宽权限。",
+		"label": "OpenCode Subagent",
+		"description": "Run the native OpenCode CLI through the existing task tool without relaxing permissions.",
+		"experimental": true,
 		"extensions": ["./index.ts"],
 		"config": [
 			{ "key": "executable", "type": "path", "label": "OpenCode 可执行文件", "description": "留空时从 PATH 查找 opencode。", "default": "" },

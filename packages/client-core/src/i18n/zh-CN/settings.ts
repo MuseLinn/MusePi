@@ -1095,6 +1095,9 @@ export const settings = {
 	"settings.clickFocusBrowserTab": "点击切换到此标签页",
 	"settings.widgetPreviewEmpty": "暂无组件预览——对话中渲染的可视化组件会常驻显示在这里",
 	"settings.pagePreview": "页面预览",
+	"settings.filePreview": "文件预览",
+	"settings.htmlBuildPreviewNotice":
+		"此页面引用需要构建的 TypeScript／JSX 模块，静态预览可能为空。完整页面请通过开发服务器查看。",
 	"settings.sourceCode": "源码",
 	"settings.renderedView": "渲染",
 	"settings.exportWord": "导出 Word",

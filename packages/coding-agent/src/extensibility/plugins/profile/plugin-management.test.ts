@@ -24,11 +24,11 @@ function write(file: string, content: string): void {
 	fs.writeFileSync(file, content, "utf8");
 }
 
-function packageJson(name: string, bundle = false): string {
+function packageJson(name: string, bundle = false, experimental?: unknown): string {
 	return JSON.stringify({
 		name,
 		version: "1.0.0",
-		musepi: { extensions: ["./index.ts"] },
+		musepi: { extensions: ["./index.ts"], ...(experimental !== undefined ? { experimental } : {}) },
 		...(bundle ? { dsh: { bundle: { patch: "./cordis.patch.yml" } } } : {}),
 	});
 }
@@ -57,6 +57,52 @@ describe("plugin management inventory", () => {
 			["@demo/selected", "bundle", true, true],
 			["@demo/missing", "bundle", true, false],
 			["@demo/optional", "bundle", false, true],
+		]);
+	});
+
+	it("propagates only literal experimental true for packages and bundles", async () => {
+		const pluginsRoot = path.join(home, ".musepi", "plugins");
+		const lock: Record<string, { version: string; enabled: boolean; enabledFeatures: null }> = {};
+		for (const [suffix, experimental] of [
+			["package-true", true],
+			["package-false", false],
+			["package-string", "true"],
+		] as const) {
+			const name = `@demo/${suffix}`;
+			write(
+				path.join(pluginsRoot, "node_modules", "@demo", suffix, "package.json"),
+				packageJson(name, false, experimental),
+			);
+			lock[name] = { version: "1.0.0", enabled: true, enabledFeatures: null };
+		}
+		write(path.join(pluginsRoot, "musepi-plugins.lock.json"), JSON.stringify({ plugins: lock }));
+		for (const [suffix, experimental] of [
+			["bundle-true", true],
+			["bundle-false", false],
+			["bundle-string", "true"],
+		] as const) {
+			const name = `@demo/${suffix}`;
+			write(
+				path.join(profileDir, "node_modules", "@demo", suffix, "package.json"),
+				packageJson(name, true, experimental),
+			);
+			write(path.join(profileDir, "node_modules", "@demo", suffix, "cordis.patch.yml"), "[]\n");
+		}
+		write(
+			path.join(profileDir, "package.json"),
+			JSON.stringify({
+				musepi: { profile: { bundles: ["@demo/bundle-true", "@demo/bundle-false", "@demo/bundle-string"] } },
+			}),
+		);
+
+		const rows = await listPluginManagementPackages(cwd, home, "desktop");
+		expect(rows.map(row => [row.name, row.experimental])).toEqual([
+			["@demo/package-true", true],
+			["@demo/package-false", undefined],
+			["@demo/package-string", undefined],
+			["@demo/bundle-true", true],
+			["@demo/bundle-false", undefined],
+			["@demo/bundle-string", undefined],
 		]);
 	});
 });

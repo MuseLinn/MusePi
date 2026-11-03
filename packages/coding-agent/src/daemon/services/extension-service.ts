@@ -17,6 +17,7 @@ import {
 	setVersionExemption,
 } from "../../extensibility/plugins/compat/compatibility-store";
 import type { PluginManagementPackage } from "../../extensibility/plugins/profile/plugin-management";
+import type { PluginRuntimeTarget } from "../../extensibility/plugins/runtime/mount";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { WebRouteRegistry } from "../web-routes";
@@ -85,6 +86,8 @@ export interface ExtensionServiceDeps {
 	 *  CordisDynamicPluginRuntime；缺省走直接 loadExtensions——会话装载
 	 *  语义不变的 fail-soft 回退）。 */
 	dynamicRuntime?(): Promise<CordisDynamicPluginRuntime | undefined>;
+	/** Active profile rows to mount alongside ordinary discovered extensions. */
+	runtimeTargets?(): Promise<readonly PluginRuntimeTarget[]>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
 	/**
@@ -267,13 +270,18 @@ export class ExtensionService implements DaemonService {
 			// 收编第二刀：宿主级装载切 cordis fiber（生命周期/效果账本/检视），
 			// 与 loadExtensions 同结果形状；宿主未注入运行时（测试）回退直接装载。
 			const dynamic = await this.#deps.dynamicRuntime?.();
+			const runtimeTargets = dynamic ? ((await this.#deps.runtimeTargets?.()) ?? []) : [];
+			// A composed row replaces the same entry's package-level discovery mount.
+			// Otherwise every row would coexist with an extra unconfigured instance.
+			const composedEntries = new Set(runtimeTargets.map(target => path.resolve(target.path)));
+			const discoveredPaths = paths.filter(entry => !composedEntries.has(path.resolve(entry)));
 			// 清单组件禁用面：disabledExtensionComponents 复合键
 			// `<plugin>/<component>` 黑名单,reconcile 装载时跳过命中组件。
 			const disabledComponents = new Set((settings?.get("disabledExtensionComponents") ?? []) as string[]);
 			this.#runtimeLoadCache = {
 				at: Date.now(),
 				result: dynamic
-					? await dynamic.loadAll(paths, cwd, disabledComponents)
+					? await dynamic.loadAll([...discoveredPaths, ...runtimeTargets], cwd, disabledComponents)
 					: await (await import("../../extensibility/extensions/loader")).loadExtensions(paths, cwd),
 			};
 			// Routes belong to the RUNTIME load, not to the list rows: `webRoutes`

@@ -139,6 +139,7 @@ export function PetBubbles(): ReactNode {
 	// render the new view locked to that size, then transition (spring).
 	const [stackMorph, setStackMorph] = useState<{ from: { width: number; height: number } } | null>(null);
 	const stackRef = useRef<HTMLDivElement | null>(null);
+	const reportContentSizeRef = useRef<(() => void) | null>(null);
 	// Dismissals and notifications are scoped to an activity revision. A poll
 	// with the same snapshot cannot undo the user's action; a new turn can.
 	const hiddenSessionsRef = useRef<Map<string, string>>(new Map());
@@ -379,9 +380,9 @@ export function PetBubbles(): ReactNode {
 		return () => window.clearInterval(timer);
 	}, [bubbles]);
 
-	// Report the content union — the bubbles window is sized to exactly
 	// Measure only the stack. The pet-side control lives in another window.
 	// Layout boxes avoid feeding entrance transforms back into window size.
+	// The morph effect reuses this report every frame and after unlocking.
 	useEffect(() => {
 		if (!bridge?.setBubblesContentSize) return;
 		const MEASURED = ".pet-bubbles";
@@ -401,6 +402,7 @@ export function PetBubbles(): ReactNode {
 			}
 			void bridge.setBubblesContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
 		};
+		reportContentSizeRef.current = report;
 		const ro = new ResizeObserver(report);
 		for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) ro.observe(el);
 		report();
@@ -409,6 +411,7 @@ export function PetBubbles(): ReactNode {
 		const root = document.getElementById("root");
 		if (root) mo.observe(root, { childList: true, subtree: true, characterData: true });
 		return () => {
+			if (reportContentSizeRef.current === report) reportContentSizeRef.current = null;
 			ro.disconnect();
 			mo.disconnect();
 			window.clearTimeout(timer);
@@ -517,15 +520,29 @@ export function PetBubbles(): ReactNode {
 		el.style.transition = `width 320ms ${liquid}, height 320ms ${liquid}`;
 		el.style.width = `${toW}px`;
 		el.style.height = `${toH}px`;
+		let frame = 0;
+		let finished = false;
+		const reportFrame = (): void => {
+			if (finished) return;
+			reportContentSizeRef.current?.();
+			frame = window.requestAnimationFrame(reportFrame);
+		};
 		const done = (): void => {
+			if (finished) return;
+			finished = true;
+			window.cancelAnimationFrame(frame);
 			el.style.transition = "";
 			el.style.width = "";
 			el.style.height = "";
+			reportContentSizeRef.current?.();
 			setStackMorph(null);
 		};
 		el.addEventListener("transitionend", done, { once: true });
 		const fallback = window.setTimeout(done, 420);
+		frame = window.requestAnimationFrame(reportFrame);
 		return () => {
+			finished = true;
+			window.cancelAnimationFrame(frame);
 			window.clearTimeout(fallback);
 			el.removeEventListener("transitionend", done);
 		};

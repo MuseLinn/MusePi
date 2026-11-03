@@ -32,6 +32,7 @@ import {
 	applyDshProfile,
 	type DshApplication,
 	mountableEntryPaths,
+	mountableEntryTargets,
 	mountableRows,
 } from "../../extensibility/plugins/dsh/dsh-apply";
 import {
@@ -44,6 +45,7 @@ import {
 	writeProfileBundles,
 } from "../../extensibility/plugins/profile/profile-composition";
 import { writeRowEnabled } from "../../extensibility/plugins/profile/profile-patch-edit";
+import type { PluginRuntimeTarget } from "../../extensibility/plugins/runtime/mount";
 import type { DaemonService } from "./types";
 
 /** TTL window for the composition read — matches the plugin inventory's. */
@@ -306,6 +308,14 @@ export class BundleService implements DaemonService {
 		if (view.declared !== "ok" || !this.#application) return { paths: [], resolvedAt: Date.now() };
 		const paths = await mountableEntryPaths(this.#application, this.#deps.cwd(), this.#deps.home());
 		return { paths, resolvedAt: Date.now() };
+	}
+
+	/** Structured targets for the host runtime. Unlike the path-only RPC, this
+	 * preserves each composed row's identity, config and injected services. */
+	async runtimeTargets(): Promise<readonly PluginRuntimeTarget[]> {
+		const view = await this.composition();
+		if (view.declared !== "ok" || !this.#application) return [];
+		return mountableEntryTargets(this.#application, this.#deps.cwd(), this.#deps.home());
 	}
 
 	/** What the active profile declares about its composition. */

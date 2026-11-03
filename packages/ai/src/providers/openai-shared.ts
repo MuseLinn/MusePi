@@ -173,6 +173,8 @@ export interface OpenAIRequestSetupOptions {
 	};
 	openAISessionId?: string;
 	promptCacheSessionId?: string;
+	/** OpenCode gateway routing affinity, independent of prompt-cache retention. */
+	openCodeSessionAffinity?: string;
 }
 
 export interface OpenAIRequestSetup {
@@ -211,6 +213,25 @@ function setHeaderIfAbsent(headers: Record<string, string>, name: string, value:
 		if (existingName.toLowerCase() === normalizedName) return;
 	}
 	headers[name] = value;
+}
+
+const OPENCODE_PROVIDERS: ReadonlySet<string> = new Set(["opencode-go", "opencode-zen"]);
+
+/**
+ * Attach the OpenCode gateway routing session. Both providers require the header
+ * and route on the same affinity identity as `prompt_cache_key`, regardless of
+ * whether prompt caching is enabled, so callers pass the normalized affinity
+ * rather than a transport-level child session id. Without any session key the
+ * stable install id keeps request routing working. An explicitly supplied
+ * header always wins.
+ */
+export function applyOpenCodeSessionHeader(
+	headers: Record<string, string>,
+	provider: string,
+	affinity: string | undefined,
+): void {
+	if (!OPENCODE_PROVIDERS.has(provider)) return;
+	setHeaderIfAbsent(headers, "x-opencode-session", affinity?.trim() || getInstallId());
 }
 
 export function resolveOpenAIRequestSetup(
@@ -314,13 +335,13 @@ export function resolveOpenAIRequestSetup(
 	// OpenCode Go / Zen (opencode.ai/zen/go) has required `x-opencode-session`
 	// on every request since 2026-09-06 — without it the gateway answers 400
 	// "Request is missing x-opencode-session and cannot be routed efficiently"
-	// (MusePi issue #4). Prefer the conversation session id when the caller
-	// supplied one (per-conversation routing), else fall back to the stable
-	// install id exactly like the usage poll does (upstream parity).
+	// (MusePi issue #4). The gateway routes on the same affinity identity as
+	// `prompt_cache_key`, which keeps a parent conversation on one route while
+	// subagents keep their own `sessionId` for auth and telemetry.
 	if (model.provider === "opencode-go" || model.provider === "opencode-zen") {
 		setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
-		setHeaderIfAbsent(headers, "x-opencode-session", options.openAISessionId?.trim() || getInstallId());
 	}
+	applyOpenCodeSessionHeader(headers, model.provider, options.openCodeSessionAffinity);
 	if (options.promptCacheSessionId && model.compat?.promptCacheSessionHeader) {
 		setHeaderIfAbsent(headers, model.compat.promptCacheSessionHeader, options.promptCacheSessionId);
 	}
@@ -474,6 +495,17 @@ export function normalizeOpenRouterResponsesSessionId(sessionId: string | undefi
 /** Resolve a prompt-cache identity, falling back to the provider session unless caching is disabled. */
 export function getOpenAIPromptCacheKey(options: OpenAICacheOptions | undefined): string | undefined {
 	if (resolveCacheRetention(options?.cacheRetention) === "none") return undefined;
+	return normalizeOpenAIPromptCacheKey(options?.promptCacheKey ?? options?.sessionId);
+}
+
+/**
+ * Resolve OpenCode's routing affinity. Disabling prompt caching removes
+ * `prompt_cache_key` from the request body but must not move the conversation
+ * to a different gateway route, so this ignores `cacheRetention`.
+ */
+export function getOpenCodeSessionAffinity(
+	options: Pick<OpenAICacheOptions, "promptCacheKey" | "sessionId"> | undefined,
+): string | undefined {
 	return normalizeOpenAIPromptCacheKey(options?.promptCacheKey ?? options?.sessionId);
 }
 

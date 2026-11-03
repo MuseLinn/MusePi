@@ -8,6 +8,7 @@ import {
 	resetRegisteredArtifactDirsForTests,
 } from "@musepi/pi-coding-agent/internal-urls/registry-helpers";
 import * as planHandoff from "@musepi/pi-coding-agent/plan-mode/plan-handoff";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
 import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
 import * as executorModule from "@musepi/pi-coding-agent/task/executor";
 import * as isolationRunner from "@musepi/pi-coding-agent/task/isolation-runner";
@@ -579,6 +580,105 @@ describe("structured subagent primitive", () => {
 		expect(settled.mergeSummary).toContain("/recovery/Worker.patch");
 		expect(artifactsDirsFromRegistry()).toContain(settled.artifactsDir);
 		expect(await fs.stat(artifactsDir ?? "")).toBeDefined();
+		await fs.rm(settled.artifactsDir, { recursive: true, force: true });
+	});
+});
+
+describe("subagent prompt-cache affinity", () => {
+	function parentToolSession(
+		id: string,
+		agent: { promptCacheKey?: string; sessionId: string },
+		registry?: AgentRegistry,
+	): { session: ToolSession; registry: AgentRegistry } {
+		const sharedRegistry = registry ?? new AgentRegistry();
+		const parent = session();
+		parent.agentRegistry = sharedRegistry;
+		parent.getAgentId = () => id;
+		parent.getSessionId = () => `${id}-local`;
+		sharedRegistry.register({
+			id,
+			displayName: id,
+			kind: "sub",
+			session: { agent } as unknown as Parameters<typeof sharedRegistry.register>[0]["session"],
+		});
+		return { session: parent, registry: sharedRegistry };
+	}
+
+	it("passes the parent's effective affinity to the child executor", async () => {
+		mockDiscovery();
+		const { session: parent } = parentToolSession("Parent", {
+			promptCacheKey: "root-affinity",
+			sessionId: "parent-provider-session",
+		});
+		const dispatched: executorModule.ExecutorOptions[] = [];
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			dispatched.push(options);
+			return result();
+		});
+
+		const settled = await runStructuredSubagent(request({ session: parent, retainArtifacts: true }));
+
+		expect(dispatched[0]?.parentPromptCacheKey).toBe("root-affinity");
+		expect(dispatched[0]?.parentPromptCacheKey).not.toBe("parent-provider-session");
+		await fs.rm(settled.artifactsDir, { recursive: true, force: true });
+	});
+
+	it("falls back to the parent's provider session id when it has no pinned cache key", async () => {
+		mockDiscovery();
+		const { session: parent } = parentToolSession("Parent", { sessionId: "parent-provider-session" });
+		const dispatched: executorModule.ExecutorOptions[] = [];
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			dispatched.push(options);
+			return result();
+		});
+
+		const settled = await runStructuredSubagent(request({ session: parent, retainArtifacts: true }));
+
+		expect(dispatched[0]?.parentPromptCacheKey).toBe("parent-provider-session");
+		await fs.rm(settled.artifactsDir, { recursive: true, force: true });
+	});
+
+	it("keeps the same root affinity for a nested subagent", async () => {
+		mockDiscovery();
+		const { session: root, registry } = parentToolSession("Root", {
+			promptCacheKey: "root-affinity",
+			sessionId: "root-provider-session",
+		});
+		const dispatched: executorModule.ExecutorOptions[] = [];
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			dispatched.push(options);
+			return result();
+		});
+
+		const first = await runStructuredSubagent(request({ session: root, retainArtifacts: true }));
+		const inherited = dispatched[0]?.parentPromptCacheKey;
+		const { session: child } = parentToolSession(
+			"Child",
+			{ promptCacheKey: inherited, sessionId: "child-provider-session" },
+			registry,
+		);
+		const second = await runStructuredSubagent(request({ session: child, retainArtifacts: true }));
+
+		expect(inherited).toBe("root-affinity");
+		expect(dispatched[1]?.parentPromptCacheKey).toBe("root-affinity");
+		expect(dispatched[1]?.parentPromptCacheKey).not.toBe("child-provider-session");
+		await fs.rm(first.artifactsDir, { recursive: true, force: true });
+		await fs.rm(second.artifactsDir, { recursive: true, force: true });
+	});
+
+	it("uses the session's own key when no registered parent session is available", async () => {
+		mockDiscovery();
+		const parent = session();
+		parent.getSessionId = () => "unregistered-parent-session";
+		const dispatched: executorModule.ExecutorOptions[] = [];
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			dispatched.push(options);
+			return result();
+		});
+
+		const settled = await runStructuredSubagent(request({ session: parent, retainArtifacts: true }));
+
+		expect(dispatched[0]?.parentPromptCacheKey).toBe("unregistered-parent-session");
 		await fs.rm(settled.artifactsDir, { recursive: true, force: true });
 	});
 });

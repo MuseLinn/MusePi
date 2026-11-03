@@ -2,12 +2,14 @@
 	"name": "musepi-subagent-claude-code",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Experimental Claude Code subagent for MusePi.",
+	"description": "Claude Code subagent for MusePi.",
 	"license": "MIT",
 	"type": "module",
 	"musepi": {
 		"icon": "C",
-		"description": "实验性：通过现有 task 工具调用原生 Claude Code CLI。",
+		"label": "Claude Code Subagent",
+		"description": "Run the native Claude Code CLI through the existing task tool.",
+		"experimental": true,
 		"extensions": ["./index.ts"],
 		"config": [
 			{ "key": "executable", "type": "path", "label": "Claude 可执行文件", "description": "留空时从 PATH 查找 claude。", "default": "" },

@@ -143,6 +143,9 @@ export interface TrajectoryRunState {
 	/** toolCallId → 最近的 TOOL 事件(结果回填)。跨增量片段共享同一引用。 */
 	toolIndex: Map<string, TrajectoryEvent>;
 	branchIds: ReadonlySet<string> | undefined;
+	/** Last model and thinking level, retained across incremental derivation. */
+	model?: string;
+	thinkingLevel?: string | null;
 }
 
 export interface BuildTrajectoryHooks {
@@ -224,6 +227,8 @@ export function buildTrajectory(
 	/** toolCallId → 最近的 TOOL 事件(结果回填)。 */
 	const toolIndex = init?.toolIndex ?? new Map<string, TrajectoryEvent>();
 	let branchIds = init?.branchIds;
+	let lastModel = init?.model;
+	let lastThinkingLevel = init?.thinkingLevel;
 
 	// ── 树深度索引:默认对本批次构建;增量复用方注入全量索引(见
 	//  indexTrajectoryBatch 的边界说明)。
@@ -574,10 +579,31 @@ export function buildTrajectory(
 			});
 		} else if (type === "model_change" || type === "thinking_level_change") {
 			// system 事件:title 用原始类型名,组件层映射 i18n(保持纯逻辑无 i18n 依赖)。
+			let body: string;
+			if (type === "model_change") {
+				const model = (raw as { model?: unknown }).model;
+				const role = (raw as { role?: unknown }).role;
+				const nextModel = typeof model === "string" ? model : "unknown";
+				const transition =
+					lastModel !== undefined && lastModel !== nextModel ? `${lastModel} → ${nextModel}` : nextModel;
+				body = `model: ${transition}`;
+				if (typeof role === "string" && role) body += `\nrole: ${role}`;
+				lastModel = nextModel;
+			} else {
+				const level = (raw as { thinkingLevel?: unknown }).thinkingLevel;
+				const nextLevel = typeof level === "string" && level ? level : "auto";
+				const transition =
+					lastThinkingLevel !== undefined && lastThinkingLevel !== nextLevel
+						? `${lastThinkingLevel ?? "auto"} → ${nextLevel}`
+						: nextLevel;
+				body = `thinkingLevel: ${transition}`;
+				lastThinkingLevel = nextLevel;
+			}
 			events.push({
 				id: `${type}:${entryId ?? ts}`,
 				kind: "system",
 				title: type,
+				body,
 				turn,
 				pathTurn: entryId !== undefined ? depthOf(entryId) : undefined,
 				parentTurnId: currentTurnParentId,
@@ -598,6 +624,8 @@ export function buildTrajectory(
 		eventCount: baseEventCount + events.length,
 		toolIndex,
 		branchIds,
+		model: lastModel,
+		thinkingLevel: lastThinkingLevel,
 	};
 	return {
 		events,

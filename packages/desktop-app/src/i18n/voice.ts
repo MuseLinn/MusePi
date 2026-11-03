@@ -117,6 +117,7 @@ const zhVoice = {
 	"Microphone ready": "麦克风可用，权限已确认。",
 	"Microphone permission denied": "麦克风权限被拒绝，请在系统设置中允许后重试。",
 	"No microphone available": "未检测到可用麦克风，请检查设备连接。",
+	"Microphone level": "麦克风实时电平",
 	Recheck: "重新检查",
 	Recommended: "推荐",
 	"Recommended for Chinese interface": "中文界面推荐：优化普通话、粤语和中英混合语音。",
@@ -253,6 +254,7 @@ registerTranslations("en-US", {
 	"Microphone ready": "Microphone ready; permission confirmed.",
 	"Microphone permission denied": "Microphone permission denied. Allow access in system settings, then retry.",
 	"No microphone available": "No microphone available. Check the device connection.",
+	"Microphone level": "Microphone level",
 	Recheck: "Recheck",
 	Recommended: "Recommended",
 	"Recommended for Chinese interface":

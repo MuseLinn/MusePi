@@ -18,7 +18,12 @@
 import * as path from "node:path";
 import { isEacces, isEnoent } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, ConfigFieldError, PluginComponentDecl, PluginResources } from "@musepi/pi-wire";
-import { parseConfigFields, parsePluginComponents, parsePluginResources } from "@musepi/pi-wire";
+import {
+	parseConfigFields,
+	parsePluginComponents,
+	parsePluginExperimental,
+	parsePluginResources,
+} from "@musepi/pi-wire";
 
 /** 从入口文件向上查找 package.json 的最大目录层级。 */
 const MAX_MANIFEST_DEPTH = 4;
@@ -45,6 +50,7 @@ export interface ExtensionPluginMeta {
 	components?: PluginComponentDecl[];
 	label?: string;
 	description?: string;
+	experimental?: boolean;
 	host?: ExtensionHostBinding;
 }
 
@@ -70,6 +76,7 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 	const { fields, errors } = parseConfigFields(raw.config);
 	const resources = parsePluginResources(raw.resources);
 	const { components } = parsePluginComponents(raw.components);
+	const experimental = parsePluginExperimental(raw.experimental);
 	const host = parseHostBinding(raw.host);
 	const label = typeof raw.label === "string" && raw.label.trim() ? raw.label.trim() : undefined;
 	const description =
@@ -81,7 +88,8 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		components.length === 0 &&
 		!host &&
 		!label &&
-		!description
+		!description &&
+		!experimental
 	) {
 		return null;
 	}
@@ -92,6 +100,7 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		...(components.length > 0 ? { components } : {}),
 		...(label ? { label } : {}),
 		...(description ? { description } : {}),
+		...(experimental ? { experimental } : {}),
 		...(host ? { host } : {}),
 	};
 }
@@ -102,6 +111,7 @@ interface ManifestBlock {
 	components?: unknown;
 	label?: unknown;
 	description?: unknown;
+	experimental?: unknown;
 	host?: unknown;
 }
 

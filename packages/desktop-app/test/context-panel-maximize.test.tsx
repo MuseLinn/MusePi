@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ContextPanel } from "../src/components/ContextPanel";
+import { installPanelMaximizeController, setPanelMaximized } from "../src/lib/panel-maximize";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
 import type { UsePanelTabsResult } from "../src/lib/use-panel-tabs";
@@ -58,7 +59,7 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
 	return { x: left, y: top, left, top, width, height, right: left + width, bottom: top + height } as DOMRect;
 }
 
-function mountPanel(): { panel: HTMLElement; dockedWidth: number; transitions: string[] } {
+function mountPanel(): { panel: HTMLElement; dockedWidth: number; transitions: string[]; measures: DOMRect[] } {
 	const surface = document.createElement("div");
 	surface.className = "gui-chat-surface";
 	const column = document.createElement("div");
@@ -128,6 +129,7 @@ function mountPanel(): { panel: HTMLElement; dockedWidth: number; transitions: s
 		},
 	} as CSSStyleDeclaration;
 	Object.defineProperty(panel, "style", { value: style });
+	const measures: DOMRect[] = [];
 	let previousMaximized = false;
 	panel.getBoundingClientRect = () => {
 		const maximized = panel.classList.contains("gui-pane-right--maximized");
@@ -149,9 +151,11 @@ function mountPanel(): { panel: HTMLElement; dockedWidth: number; transitions: s
 				? Number.parseFloat(panel.style.top)
 				: base.top + Number.parseFloat(panel.style.top)
 			: base.top;
-		return rect(left, top, width, height);
+		const measured = rect(left, top, width, height);
+		measures.push(measured);
+		return measured;
 	};
-	return { panel, dockedWidth, transitions };
+	return { panel, dockedWidth, transitions, measures };
 }
 
 function click(label: "maximize" | "restore"): void {
@@ -169,8 +173,11 @@ function finishFlip(panel: HTMLElement): void {
 }
 
 const OriginalResizeObserver = globalThis.ResizeObserver;
+let stopMaximizeListener: () => void;
 
 beforeEach(() => {
+	setPanelMaximized(false);
+	stopMaximizeListener = installPanelMaximizeController();
 	vi.spyOn(window, "matchMedia").mockReturnValue({
 		matches: false,
 		addEventListener: () => {},
@@ -184,6 +191,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	stopMaximizeListener();
 	while (roots.length) act(() => roots.pop()?.unmount());
 	while (hosts.length) hosts.pop()?.remove();
 	globalThis.ResizeObserver = OriginalResizeObserver;
@@ -192,9 +200,14 @@ afterEach(() => {
 
 describe("ContextPanel maximize/restore", () => {
 	it("restores the docked split geometry and can maximize again", () => {
-		const { panel, dockedWidth, transitions } = mountPanel();
+		const { panel, dockedWidth, transitions, measures } = mountPanel();
 		for (let cycle = 0; cycle < 2; cycle++) {
+			const measureStart = measures.length;
 			click("maximize");
+			expect(measures[measureStart]?.left).toBe(900);
+			expect(measures[measureStart]?.width).toBe(dockedWidth);
+			expect(measures[measureStart + 1]?.left).toBe(272);
+			expect(measures[measureStart + 1]?.width).toBe(1244);
 			expect(transitions.at(-2)).toBe("none");
 			expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
 			finishFlip(panel);
@@ -212,5 +225,21 @@ describe("ContextPanel maximize/restore", () => {
 			expect(panel.style.transition).toBe("");
 			expect(panel.getBoundingClientRect().width).toBe(dockedWidth);
 		}
+	});
+
+	it("keeps maximize pointer events away from tab-drag ancestors", () => {
+		const { panel } = mountPanel();
+		const surface = document.querySelector<HTMLElement>(".gui-chat-surface")!;
+		let captured = 0;
+		surface.addEventListener("pointerdown", () => captured++);
+		const button = ["最大化面板", "Maximize panel"]
+			.map(text => document.querySelector<HTMLButtonElement>(`.gui-pane-tool[aria-label="${text}"]`))
+			.find(candidate => candidate !== null)!;
+		act(() => button.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+		expect(captured).toBe(0);
+		// dnd ancestors can cancel the bubble phase; the native button handler must still run.
+		surface.addEventListener("click", event => event.stopPropagation());
+		act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
 	});
 });

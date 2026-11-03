@@ -64,6 +64,8 @@ Cordis 插件化不代表每个内置条目都可停用。声明 `readonly: true
 
 preset 组合使用 `CordisPresetRuntime`，不以 legacy 扩展装载器作为生命周期所有者。每行通过 `scope.plugin()` 挂载，`isolate` 映射为 `Context.isolate(name)`；provider 与消费者只有位于同一默认 Context 或隔离 group 中才能看到同一个服务对象。`Extension` 只是工具/UI 桥消费的注册记录。切换 preset 会移除旧工具并销毁旧 fiber，会话销毁也遵循同一顺序。
 
+会话顾问由 `session/advisor-lifecycle-plugin.ts` 中的会话级 Cordis 插件持有。插件在首轮可能结束之前同步构造 `SessionAdvisors` 并订阅主回合完成事件。fiber effect 负责取消订阅、停止全部顾问运行时并等待记录器关闭。`SessionAdvisors` 继续作为模型、上下文、transcript、投递、配置和统计策略的 helper，这些策略不在生命周期插件中复制。用户中断会暂停主循环和在途顾问工作，并等待双方收敛。顾问触发的修正回合结束本次审查周期，不会再次回喂顾问形成循环。
+
 插件自有 skill 放在插件目录内，并在 `apply` 中通过 `registerSkill` 声明，不再走独立的 bundled-skill 安装器。禁用插件会同时移除它的 skill、工具、组件和 effect；用户独立安装的文件 skill 不受影响。
 
 ## 迁移检查

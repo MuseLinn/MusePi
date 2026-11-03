@@ -6,6 +6,7 @@
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import creatorPrompt from "../prompts/presets/creator.md" with { type: "text" };
 
 /** 提示词区块(prompt 数组元素的对象形态)。 */
 export interface PromptSection {
@@ -444,14 +445,14 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 			{
 				name: "mode:creator:role",
 				order: 25,
-				text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+				text: creatorPrompt,
 			},
 		],
 	},
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 8;
+export const BUILTIN_TEMPLATE_REVISION = 9;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -679,6 +680,23 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 			id: "creator",
 			label: "Creator",
 			description: "创造模式:创作预设/扩展的助手(全量工具 + 自举工具环自动激活 + 创作 persona)",
+			settings: { "tools.extensionMetaTools": true },
+			prompt: [
+				{
+					name: "mode:creator:role",
+					order: 25,
+					text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+				},
+			],
+		},
+	},
+	// v8: creator 已组合产品技能，但快捷创建 workflow 仍依赖宿主拼接用户消息。
+	8: {
+		creator: {
+			id: "creator",
+			label: "Creator",
+			description: "创造模式:创作预设/扩展的助手(全量工具 + 自举工具环自动激活 + 创作 persona)",
+			plugins: [{ name: "musepi-product-skills" }],
 			settings: { "tools.extensionMetaTools": true },
 			prompt: [
 				{

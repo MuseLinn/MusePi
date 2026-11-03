@@ -17,12 +17,14 @@
  *     (which converts to `developer`) would send an invalid provider tail, so the
  *     follow-up stays queued for the next explicit resume rather than auto-running.
  */
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { type } from "@musepi/musepi-type";
 import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
 import type { ToolCall } from "@musepi/pi-ai";
-import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";
+import { createMockModel, type MockHandler, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";
 import { getBundledModel } from "@musepi/pi-catalog/models";
+import { AdvisorRuntime } from "@musepi/pi-coding-agent/advisor/runtime";
+import { AdvisorTranscriptRecorder } from "@musepi/pi-coding-agent/advisor/transcript-recorder";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { IrcMessage } from "@musepi/pi-coding-agent/irc/bus";
@@ -173,16 +175,17 @@ describe("AgentSession advisor auto-resume suppression", () => {
 	async function createCompletedAdvisorSession(
 		severity: "concern" | "blocker" = "concern",
 		extensionRunner?: AdvisorTestExtensionRunner,
+		script: { primaryResponses?: MockHandler[]; advisorResponses?: MockHandler[] } = {},
 	): Promise<CompletedAdvisorHarness> {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
 		const mock = createMockModel({
-			responses: [
+			responses: script.primaryResponses ?? [
 				{ content: ["EXACT VERDICT"], stopReason: "stop" },
 				{ content: ["CHANGED VERDICT"], stopReason: "stop" },
 			],
 		});
 		const advisorMock = createMockModel({
-			responses: [
+			responses: script.advisorResponses ?? [
 				{
 					content: [
 						{
@@ -362,6 +365,121 @@ describe("AgentSession advisor auto-resume suppression", () => {
 		await session.waitForIdle();
 
 		expect(mock.calls.length).toBe(2);
+	});
+
+	it("does not send an advisor-triggered correction back to the advisor", async () => {
+		const correctionStarted = Promise.withResolvers<void>();
+		const { session, mock, advisorMock } = await createCompletedAdvisorSession("blocker", undefined, {
+			primaryResponses: [
+				{ content: ["initial answer"], stopReason: "stop" },
+				() => {
+					correctionStarted.resolve();
+					return { content: ["corrected answer"], stopReason: "stop" };
+				},
+				{ content: ["unexpected advisor feedback loop"], stopReason: "stop" },
+			],
+			advisorResponses: [
+				{
+					content: [
+						{ type: "toolCall", name: "advise", arguments: { note: "first blocker", severity: "blocker" } },
+					],
+				},
+				{ content: [], stopReason: "stop" },
+				{
+					content: [
+						{ type: "toolCall", name: "advise", arguments: { note: "rephrased blocker", severity: "blocker" } },
+					],
+				},
+				{ content: [], stopReason: "stop" },
+			],
+		});
+		expect(session.setAdvisorEnabled(true)).toBe(true);
+		const advisor = session.getAdvisorAgent();
+		if (!advisor) throw new Error("Expected advisor agent to be live");
+
+		await session.prompt("answer with exactly one line");
+		await correctionStarted.promise;
+		await session.waitForIdle();
+		await advisor.waitForIdle();
+
+		expect(mock.calls).toHaveLength(2);
+		expect(advisorMock.calls).toHaveLength(2);
+	});
+
+	it("aborts an in-flight advisor review on a user interrupt", async () => {
+		const advisorStarted = Promise.withResolvers<void>();
+		const { session } = await createCompletedAdvisorSession("concern", undefined, {
+			primaryResponses: [{ content: ["final answer"], stopReason: "stop" }],
+			advisorResponses: [
+				() => {
+					advisorStarted.resolve();
+					return { content: ["reviewing"], delayMs: 60_000 };
+				},
+			],
+		});
+		expect(session.setAdvisorEnabled(true)).toBe(true);
+		const advisor = session.getAdvisorAgent();
+		if (!advisor) throw new Error("Expected advisor agent to be live");
+
+		const running = session.prompt("answer with exactly one line");
+		await advisorStarted.promise;
+		expect(advisor.state.isStreaming).toBe(true);
+
+		await session.abort({ reason: USER_INTERRUPT_LABEL });
+		await running.catch(() => {});
+
+		expect(advisor.state.isStreaming).toBe(false);
+	});
+
+	it("waits for real recorder close after runtime disposal during session dispose", async () => {
+		const { session } = await createCompletedAdvisorSession("concern", undefined, {
+			primaryResponses: [{ content: ["final answer"], stopReason: "stop" }],
+			advisorResponses: [{ content: [], stopReason: "stop" }],
+		});
+		const events: string[] = [];
+		const closeStarted = Promise.withResolvers<void>();
+		const allowRecorderClose = Promise.withResolvers<void>();
+		const originalRuntimeDispose = AdvisorRuntime.prototype.dispose;
+		const originalRecorderClose = AdvisorTranscriptRecorder.prototype.close;
+		const runtimeDispose = spyOn(AdvisorRuntime.prototype, "dispose").mockImplementation(function (
+			this: AdvisorRuntime,
+		) {
+			events.push("runtime-dispose");
+			originalRuntimeDispose.call(this);
+		});
+		const recorderClose = spyOn(AdvisorTranscriptRecorder.prototype, "close").mockImplementation(function (
+			this: AdvisorTranscriptRecorder,
+		) {
+			events.push("recorder-close-start");
+			closeStarted.resolve();
+			return Promise.all([originalRecorderClose.call(this), allowRecorderClose.promise]).then(() => {
+				events.push("recorder-closed");
+			});
+		});
+
+		try {
+			expect(session.setAdvisorEnabled(true)).toBe(true);
+			const advisor = session.getAdvisorAgent();
+			if (!advisor) throw new Error("Expected advisor agent to be live");
+			await session.prompt("answer with exactly one line");
+			await advisor.waitForIdle();
+
+			let disposed = false;
+			const disposing = session.dispose().then(() => {
+				disposed = true;
+			});
+			await closeStarted.promise;
+			expect(events).toEqual(["runtime-dispose", "recorder-close-start"]);
+			expect(disposed).toBe(false);
+
+			allowRecorderClose.resolve();
+			await disposing;
+			expect(events).toEqual(["runtime-dispose", "recorder-close-start", "recorder-closed"]);
+		} finally {
+			allowRecorderClose.resolve();
+			runtimeDispose.mockRestore();
+			recorderClose.mockRestore();
+		}
 	});
 
 	it("preserves another late advisor concern after an existing advisor card", async () => {

@@ -112,6 +112,7 @@ public static class PetSmokeNative {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 '@
@@ -122,7 +123,9 @@ $rows = @()
     $text = New-Object System.Text.StringBuilder 512
     [void][PetSmokeNative]::GetWindowText($hwnd, $text, $text.Capacity)
     $title = $text.ToString()
-    if ($title -eq "MusePi Pet" -or $title -eq "MusePi Pet Bubbles") {
+    $windowPid = 0
+    [void][PetSmokeNative]::GetWindowThreadProcessId($hwnd, [ref]$windowPid)
+    if (($title -eq "MusePi Pet" -or $title -eq "MusePi Pet Bubbles") -and $windowPid -eq ${child.pid}) {
       $rect = New-Object PetSmokeNative+RECT
       [void][PetSmokeNative]::GetWindowRect($hwnd, [ref]$rect)
       $script:rows += [PSCustomObject]@{ Title=$title; Left=$rect.Left; Top=$rect.Top; Right=$rect.Right; Bottom=$rect.Bottom }
@@ -139,6 +142,131 @@ $rows | ConvertTo-Json -Compress
 	return Object.fromEntries(
 		rows.map(row => [row.Title, { left: row.Left, top: row.Top, right: row.Right, bottom: row.Bottom }]),
 	);
+}
+
+async function createNativeWindowProbe(ownerPid) {
+	const script = String.raw`
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class PetMorphNative {
+  public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+}
+'@
+[Console]::Out.WriteLine("READY")
+while (($command = [Console]::In.ReadLine()) -ne "quit") {
+  if ($command -ne "query") { continue }
+  $rows = @()
+  [void][PetMorphNative]::EnumWindows({
+    param($hwnd, $lParam)
+    if ([PetMorphNative]::IsWindowVisible($hwnd)) {
+      $text = New-Object System.Text.StringBuilder 512
+      [void][PetMorphNative]::GetWindowText($hwnd, $text, $text.Capacity)
+      $title = $text.ToString()
+      $windowPid = 0
+      [void][PetMorphNative]::GetWindowThreadProcessId($hwnd, [ref]$windowPid)
+      if (($title -eq "MusePi Pet" -or $title -eq "MusePi Pet Bubbles") -and $windowPid -eq ${ownerPid}) {
+        $rect = New-Object PetMorphNative+RECT
+        [void][PetMorphNative]::GetWindowRect($hwnd, [ref]$rect)
+        $script:rows += [PSCustomObject]@{ Title=$title; Left=$rect.Left; Top=$rect.Top; Right=$rect.Right; Bottom=$rect.Bottom }
+      }
+    }
+    return $true
+  }, [IntPtr]::Zero)
+  [Console]::Out.WriteLine((ConvertTo-Json -InputObject @($rows) -Compress))
+}
+`;
+	const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	const lines = [];
+	const readers = [];
+	let buffered = "";
+	let stderr = "";
+	child.stderr.on("data", chunk => {
+		stderr += chunk.toString();
+	});
+	child.stdout.on("data", chunk => {
+		buffered += chunk.toString();
+		const parts = buffered.split(/\r?\n/);
+		buffered = parts.pop() ?? "";
+		for (const line of parts) {
+			if (readers.length > 0) readers.shift()(line);
+			else lines.push(line);
+		}
+	});
+	const nextLine = () => {
+		if (lines.length > 0) return Promise.resolve(lines.shift());
+		return new Promise(resolve => readers.push(resolve));
+	};
+	if ((await nextLine()) !== "READY") throw new Error(`Native probe failed to start: ${stderr}`);
+	return {
+		async bounds() {
+			child.stdin.write("query\n");
+			const parsed = JSON.parse(await nextLine());
+			return Object.fromEntries(
+				parsed.map(row => [row.Title, { left: row.Left, top: row.Top, right: row.Right, bottom: row.Bottom }]),
+			);
+		},
+		async close() {
+			const exited = new Promise(resolve => child.once("exit", resolve));
+			child.stdin.write("quit\n");
+			await Promise.race([exited, sleep(2000)]);
+			if (child.exitCode === null) child.kill();
+		},
+	};
+}
+
+async function traceNativeBubbleMorph(petPage, bubblesPage, action) {
+	if (process.platform !== "win32") return [];
+	const probe = await createNativeWindowProbe(child.pid);
+	const samples = [];
+	const startedAt = Date.now();
+	const pendingAction = action();
+	try {
+		do {
+			const [nativeWindows, spriteTop, stack] = await Promise.all([
+				probe.bounds(),
+				petPage.evaluate(() => document.querySelector(".pet-window__pet")?.getBoundingClientRect().top ?? 0),
+				bubblesPage.evaluate(() => {
+					const element = document.querySelector(".pet-bubbles");
+					return {
+						morphing: Boolean(document.querySelector(".pet-bubbles--morphing")),
+						mode: document.querySelector(".pet-bubbles--expanded") ? "expanded" : "stacked",
+						stackHeight: element?.offsetHeight ?? 0,
+						viewportHeight: innerHeight,
+						animations: element?.getAnimations().map(animation => animation.playState) ?? [],
+					};
+				}),
+			]);
+			const bubble = nativeWindows["MusePi Pet Bubbles"];
+			const pet = nativeWindows["MusePi Pet"];
+			if (bubble && pet) {
+				samples.push({
+					at: Date.now() - startedAt,
+					gap: pet.top + spriteTop - bubble.bottom,
+					width: bubble.right - bubble.left,
+					height: bubble.bottom - bubble.top,
+					bubble,
+					pet,
+					spriteTop,
+					...stack,
+				});
+			}
+			await sleep(16);
+		} while (Date.now() - startedAt < 700);
+		await pendingAction;
+		return samples;
+	} finally {
+		await probe.close();
+	}
 }
 
 function positionNativeCursor(dipX, dipY, dpr, button = null) {
@@ -188,7 +316,7 @@ try {
 		// The first-run overlay proves that the full React tree and its event
 		// listener are mounted; the splash can outlive the daemon connection.
 		try {
-			await mainPage.waitForFunction(() => Boolean(document.querySelector(".gui-onboarding-backdrop")), { timeout: 30000 });
+			await mainPage.waitForFunction(() => Boolean(document.querySelector('.gui-onboarding-backdrop, [role="dialog"][aria-modal="true"]')), { timeout: 30000 });
 		} catch (error) {
 			const state = await mainPage.evaluate(() => ({
 				url: location.href,
@@ -529,8 +657,19 @@ try {
 				}
 			}).observe(stack, { attributes: true, attributeFilter: ["class", "style"] });
 		});
-		await bubblesPage.click(".pet-bubbles--stacked > .pet-bubble");
-		await sleep(700);
+		const expandedMorphSamples = await traceNativeBubbleMorph(petPage, bubblesPage, () =>
+			bubblesPage.click(".pet-bubbles--stacked > .pet-bubble"),
+		);
+		check(
+			"real native bubble geometry tracks the renderer throughout expansion",
+			process.platform !== "win32" ||
+				(expandedMorphSamples.some(sample => sample.morphing) &&
+					expandedMorphSamples.every(sample => Math.abs(sample.gap - 8) <= 1) &&
+					expandedMorphSamples.every(sample => Math.abs(sample.width - expandedMorphSamples[0].width) <= 1) &&
+					new Set(expandedMorphSamples.map(sample => sample.height)).size >= 3 &&
+					Math.abs(expandedMorphSamples.at(-1).viewportHeight - expandedMorphSamples.at(-1).stackHeight - 24) <= 2),
+			expandedMorphSamples,
+		);
 		check("real stacked card expands from its body", await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--expanded"))));
 		const morph = await bubblesPage.evaluate(() => window.__petPhase2MorphTransitions);
 		const normalizeCss = value => value.replaceAll(" ", "").replace(/(^|[(,])0\./g, "$1.");
@@ -567,8 +706,19 @@ try {
 		check("real expanded bubble controls stay inside the window", expandedGeometry.ok, expandedGeometry);
 		check(
 			"real expanded mode removes the duplicate fab and exposes unread actions",
-			!expandedGeometry.fabPresent && Math.abs(expandedGeometry.unreadActionsWidth - 30) < 0.01,
+			!expandedGeometry.fabPresent && Math.abs(expandedGeometry.unreadActionsWidth - 80) < 0.01,
 			expandedGeometry,
+		);
+		const horizontalActionSamples = await traceNativeBubbleMorph(petPage, bubblesPage, () =>
+			bubblesPage.hover(".pet-bubble--working"),
+		);
+		check(
+			"real horizontal actions do not jitter native bubble width or pet gap",
+			process.platform !== "win32" ||
+				(horizontalActionSamples.length > 0 &&
+					horizontalActionSamples.every(sample => Math.abs(sample.gap - 8) <= 1) &&
+					horizontalActionSamples.every(sample => Math.abs(sample.width - horizontalActionSamples[0].width) <= 1)),
+			horizontalActionSamples,
 		);
 		await bubblesPage.hover(".pet-bubble--session");
 		await bubblesPage.waitForFunction(
@@ -612,7 +762,19 @@ try {
 			opened.length === 1 && opened[0] === "phase2-session" && await bubblesPage.evaluate(() => Boolean(document.querySelector(".pet-bubbles--expanded"))),
 			opened,
 		);
-		await petPage.click(".pet-window__badge");
+		const collapsedMorphSamples = await traceNativeBubbleMorph(petPage, bubblesPage, () =>
+			petPage.evaluate(() => document.querySelector(".pet-window__badge")?.click()),
+		);
+		check(
+			"real native bubble geometry tracks the renderer throughout collapse",
+			process.platform !== "win32" ||
+				(collapsedMorphSamples.some(sample => sample.morphing) &&
+					collapsedMorphSamples.every(sample => Math.abs(sample.gap - 8) <= 1) &&
+					collapsedMorphSamples.every(sample => Math.abs(sample.width - collapsedMorphSamples[0].width) <= 1) &&
+					new Set(collapsedMorphSamples.map(sample => sample.height)).size >= 3 &&
+					Math.abs(collapsedMorphSamples.at(-1).viewportHeight - collapsedMorphSamples.at(-1).stackHeight - 24) <= 2),
+			collapsedMorphSamples,
+		);
 		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubbles--stacked")), { timeout: 3000 });
 		const opensAfterCollapse = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.opens`);
 		check("real pet control collapses expanded to stacked without opening again", opensAfterCollapse.length === 1, opensAfterCollapse);
@@ -786,7 +948,7 @@ try {
 		check("real reduced motion expands without a residual size morph", reducedMorph.expanded && !reducedMorph.morphing && !reducedMorph.transition, reducedMorph);
 
 		await mainPage.goto(pathToFileURL(path.join(desktopDir, "dist", "index.html")).href);
-		await mainPage.waitForFunction(() => Boolean(document.querySelector(".gui-onboarding-backdrop")), { timeout: 30000 });
+		await mainPage.waitForFunction(() => Boolean(document.querySelector('.gui-onboarding-backdrop, [role="dialog"][aria-modal="true"]')), { timeout: 30000 });
 		await mainPage.bringToFront();
 		await mainPage.evaluate(`//!world=main
 			const lastStep = document.querySelectorAll(".gui-onboarding-dot").length - 1;

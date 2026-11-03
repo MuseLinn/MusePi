@@ -52,6 +52,16 @@ import {
 } from "./cordis-entry";
 import { registerEffect, stateDelete, stateGet, stateHas, stateKeys, stateSet } from "./cordis-primitives";
 
+/** One runtime mount request. A composition row keeps its own identity and
+ * config even when another row resolves to the same entry file. Plain string
+ * inputs remain the package-level form with no row overrides. */
+export interface PluginRuntimeTarget {
+	readonly path: string;
+	readonly rowId?: string;
+	readonly config?: Record<string, unknown>;
+	readonly additionalInject?: readonly string[];
+}
+
 /** A mount that could not proceed, with the reason and a stable code. */
 export interface MountFailure {
 	ok: false;
@@ -70,6 +80,9 @@ export interface MountFailure {
 export interface MountedPlugin {
 	ok: true;
 	extension: Extension;
+	/** The evaluated namespace, retained so a failed profile batch can remount
+	 *  the previous instance without importing mutated disk sources again. */
+	module: unknown;
 	/** The entry as the plugin exported it, in either shape (null when it used the
 	 *  bare legacy factory form). A class entry is the class itself. */
 	entry: CordisPluginEntry | PluginEntryFactory | null;
@@ -114,6 +127,8 @@ export interface MountContext {
 	wrapApi?: (api: ExtensionAPI, extension: Extension) => ExtensionAPI;
 	/** Re-evaluate the module instead of reusing the process-wide instance. */
 	fresh?: boolean;
+	/** A namespace already imported by a profile transaction preflight. */
+	module?: unknown;
 }
 
 /**
@@ -227,6 +242,19 @@ function resolveFactory(module: unknown): PluginEntryFactory | null {
 	return toFactory(entry);
 }
 
+/** Import an entry without binding it. Profile reloads run this phase for the
+ *  whole affected batch before disposing any active fiber. */
+export async function importPluginEntry(entryPath: string, fresh: boolean): Promise<unknown> {
+	// The graph snapshot rewrites `@(scope)/pi-*` shims in the entry's own
+	// source. An entry compiled as part of the host already resolves those,
+	// and snapshotting it reads the host's whole graph (~55s measured for the
+	// bundled keyword package), so it is skipped when it cannot help.
+	return loadLegacyPiModule(entryPath, {
+		fresh,
+		snapshot: await entryNeedsGraphSnapshot(entryPath),
+	});
+}
+
 /**
  * Import one plugin entry and bind it.
  *
@@ -238,14 +266,7 @@ function resolveFactory(module: unknown): PluginEntryFactory | null {
 export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 	let module: unknown;
 	try {
-		// The graph snapshot rewrites `@(scope)/pi-*` shims in the entry's own
-		// source. An entry compiled as part of the host already resolves those,
-		// and snapshotting it reads the host's whole graph (~55s measured for the
-		// bundled keyword package), so it is skipped when it cannot help.
-		module = await loadLegacyPiModule(ctx.entryPath, {
-			fresh: ctx.fresh === true,
-			snapshot: await entryNeedsGraphSnapshot(ctx.entryPath),
-		});
+		module = ctx.module !== undefined ? ctx.module : await importPluginEntry(ctx.entryPath, ctx.fresh === true);
 	} catch (err) {
 		return {
 			ok: false,
@@ -329,7 +350,7 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 			typeof returned === "object" && returned !== null && !Array.isArray(returned)
 				? (returned as Record<string, unknown>)
 				: undefined;
-		return { ok: true, extension, entry, config: values, published };
+		return { ok: true, extension, module, entry, config: values, published };
 	} catch (err) {
 		// A structured error thrown from inside the ledger (a command-name
 		// collision, a manifest rejection) already carries the right code.

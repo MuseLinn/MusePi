@@ -8,9 +8,18 @@ const TEST_CONFIG: CliConfig = {
 	commands: new Map(),
 };
 
-describe("Plugin command scope parsing", () => {
+describe("Plugin command parsing", () => {
 	it("rejects invalid scope values", async () => {
 		const command = new Plugin(["install", "--scope", "porject"], TEST_CONFIG);
 		await expect(command.parse(Plugin)).rejects.toThrow(/Expected --scope to be one of: user, project/);
+	});
+
+	it("accepts pack with a machine-readable output destination", async () => {
+		const command = new Plugin(["pack", ".", "--output", "dist", "--json"], TEST_CONFIG);
+		const { args, flags } = await command.parse(Plugin);
+		expect(args.action).toBe("pack");
+		expect(args.targets).toEqual(["."]);
+		expect(flags.output).toBe("dist");
+		expect(flags.json).toBe(true);
 	});
 });

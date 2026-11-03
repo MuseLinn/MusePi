@@ -2,12 +2,14 @@
 	"name": "musepi-subagent-kimi-code",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Experimental Kimi Code subagent for MusePi.",
+	"description": "Kimi Code subagent for MusePi.",
 	"license": "MIT",
 	"type": "module",
 	"musepi": {
 		"icon": "K",
-		"description": "实验性：通过现有 task 工具调用原生 Kimi Code CLI。",
+		"label": "Kimi Code Subagent",
+		"description": "Run the native Kimi Code CLI through the existing task tool.",
+		"experimental": true,
 		"extensions": ["./index.ts"],
 		"config": [
 			{ "key": "executable", "type": "path", "label": "Kimi Code 可执行文件", "description": "留空时从 PATH 查找 kimi。", "default": "" },

@@ -146,6 +146,18 @@ function shellEnabled() {
 	return false;
 }
 
+function bunExecutable() {
+	const win = process.platform === "win32";
+	if (process.env.BUN_EXECUTABLE && fs.existsSync(process.env.BUN_EXECUTABLE)) return process.env.BUN_EXECUTABLE;
+	for (const pathDir of (process.env.PATH ?? "").split(win ? ";" : ":")) {
+		if (pathDir.trim().length === 0) continue;
+		const candidate = path.resolve(pathDir, win ? "bun.exe" : "bun");
+		if (fs.existsSync(candidate)) return candidate;
+	}
+	// Preserve the existing failure surface when PATH has no Bun at all.
+	return win ? "bun.exe" : "bun";
+}
+
 function daemonCommand(port) {
 	const win = process.platform === "win32";
 	// --web-port only when the desktop-shell extension is enabled (see
@@ -187,7 +199,7 @@ function daemonCommand(port) {
 	for (const candidate of candidates) {
 		if (typeof candidate === "object") {
 			// Dev checkout — the cli.ts existence was already verified in the scan.
-			return { program: "bun", args: [candidate.bunCli, "serve", "--port", String(port), ...webArgs] };
+			return { program: bunExecutable(), args: [candidate.bunCli, "serve", "--port", String(port), ...webArgs] };
 		}
 		if (candidate.length === 0 || !fs.existsSync(candidate)) continue;
 		// A bun package shim on Windows is a tiny launcher .exe paired with a
@@ -215,13 +227,14 @@ async function startInternal(port, env = {}) {
 	}
 	const { program, args } = daemonCommand(port);
 	console.error("[daemon] start", program, args.join(" "));
+	let daemonStdout = "";
 	let daemonStderr = "";
 	const pluginRoots = packagedPluginRoots();
 	const daemonEnv = { ...process.env, MUSEPI_VERSION: guiVersion(), ...env };
 	if (pluginRoots.length > 0) daemonEnv.MUSEPI_BUNDLED_PLUGIN_ROOTS = pluginRoots.join(path.delimiter);
 	const child = spawn(program, args, {
 		detached: true,
-		stdio: ["ignore", "ignore", "pipe"],
+		stdio: ["ignore", "pipe", "pipe"],
 		// Windows: without this the spawned daemon opens a visible console
 		// window every GUI launch (same fix proma/opencode/kimi apply to
 		// every child spawn from Electron main).
@@ -231,7 +244,10 @@ async function startInternal(port, env = {}) {
 		// reports the OMP engine version as the MusePi version.
 		env: daemonEnv,
 	});
-	child.stderr.on("data", chunk => {
+	child.stdout?.on("data", chunk => {
+		daemonStdout = `${daemonStdout}${chunk.toString()}`.slice(-4000);
+	});
+	child.stderr?.on("data", chunk => {
 		daemonStderr = `${daemonStderr}${chunk.toString()}`.slice(-4000);
 	});
 	child.unref();
@@ -276,7 +292,8 @@ async function startInternal(port, env = {}) {
 		// with nothing to act on (ARM Windows report: 找不到可执行程序).
 		if (child.exitCode !== null || child.signalCode !== null) {
 			console.error("[daemon] child exited", child.exitCode, child.signalCode, "program:", program);
-			throw new Error(`daemon exited during startup (${program})${daemonStderr.trim() ? `: ${daemonStderr.trim()}` : ""}`);
+			const detail = [daemonStdout.trim(), daemonStderr.trim()].filter(Boolean).join("\n");
+			throw new Error(`daemon exited during startup (${program}, code ${child.exitCode ?? child.signalCode})${detail ? `: ${detail}` : ""}`);
 		}
 		await new Promise(r => setTimeout(r, 100));
 	}
@@ -298,27 +315,55 @@ async function start(port, env = {}) {
 }
 
 /** Resolve the pid of the process listening on 127.0.0.1:port.
- *  Windows: `netstat -ano` (lsof does not exist there — the old code's
- *  spawn("lsof") errored, so listenerPid always resolved null and kill()
- *  silently did nothing: daemon-restart/daemon-start spawned a fresh daemon
- *  while the old one still held the port → EADDRINUSE crash at startup).
+ *  Windows: try `netstat -ano`, then fall back to Get-NetTCPConnection.
+ *  Netstat can omit Bun listeners; returning null then makes kill() a no-op,
+ *  so daemon-restart silently adopts the old listener instead of replacing it.
  *  macOS/Linux: lsof, with `-iTCP:<port>` kept as ONE argument (splitting
  *  it makes lsof treat the port as a file name and fail). */
 function listenerPid(port) {
 	return new Promise(resolve => {
 		if (process.platform === "win32") {
+			let completed = false;
+			let fallbackStarted = false;
+			const done = pid => {
+				if (completed) return;
+				completed = true;
+				resolve(pid);
+			};
+			const powerShellFallback = () => {
+				if (completed || fallbackStarted) return;
+				fallbackStarted = true;
+				const command =
+					`Get-NetTCPConnection -LocalPort ${Number(port)} -ErrorAction SilentlyContinue | ` +
+					"Where-Object { $_.OwningProcess -gt 0 -and $_.RemotePort -eq 0 } | " +
+					"Select-Object -First 1 -ExpandProperty OwningProcess";
+				const ps = spawn("powershell", ["-NoProfile", "-Command", command], {
+					stdio: ["ignore", "pipe", "ignore"],
+					windowsHide: true,
+				});
+				let out = "";
+				ps.stdout.on("data", chunk => {
+					out += chunk;
+				});
+				ps.on("error", () => done(null));
+				ps.on("close", () => {
+					const pid = Number.parseInt(out.trim(), 10);
+					done(Number.isInteger(pid) && pid > 0 ? pid : null);
+				});
+			};
 			const netstat = spawn("netstat", ["-ano"], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
 			let out = "";
 			netstat.stdout.on("data", chunk => {
 				out += chunk;
 			});
-			netstat.on("error", () => resolve(null));
+			netstat.on("error", powerShellFallback);
 			netstat.on("close", () => {
 				const line = out
 					.split(/\r?\n/)
 					.find(l => l.includes(`:${port}`) && l.includes("LISTENING"));
 				const pid = Number.parseInt((line ?? "").trim().split(/\s+/).pop() ?? "", 10);
-				resolve(Number.isInteger(pid) && pid > 0 ? pid : null);
+				if (Number.isInteger(pid) && pid > 0) done(pid);
+				else powerShellFallback();
 			});
 			return;
 		}

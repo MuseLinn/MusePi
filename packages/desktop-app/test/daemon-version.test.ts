@@ -2,11 +2,15 @@ import { expect, test } from "bun:test";
 import {
 	changelogMatchesAppVersion,
 	daemonMethodProbeParams,
+	isMissingDaemonExtensionError,
 	isMissingDaemonMethodError,
+	missingDaemonExtensions,
 	missingDaemonMethods,
 	projectRuntimeVersions,
+	REQUIRED_DAEMON_EXTENSIONS,
 	REQUIRED_DAEMON_METHODS,
 	shouldRestartDaemon,
+	shouldRestartForMissingExtensions,
 	shouldRestartForMissingMethods,
 } from "../src/lib/daemon-version";
 
@@ -73,6 +77,23 @@ test("only an explicit unknown-method error proves a capability is absent", () =
 	expect(isMissingDaemonMethodError(new Error("Method not found"))).toBe(true);
 	expect(isMissingDaemonMethodError(new Error("sessionId required"))).toBe(false);
 	expect(isMissingDaemonMethodError(new Error("request timeout: skills.marketplace.query"))).toBe(false);
+});
+
+test("restarts a same-version daemon that cannot answer for the chat view extension", () => {
+	expect(shouldRestartDaemon({ version: "0.4.33", musepiVersion: "0.4.33" }, "0.4.33")).toBe(false);
+	expect(missingDaemonExtensions([])).toEqual([...REQUIRED_DAEMON_EXTENSIONS]);
+	expect(shouldRestartForMissingExtensions([])).toBe(true);
+});
+
+test("does not restart when every required extension answers", () => {
+	expect(missingDaemonExtensions(REQUIRED_DAEMON_EXTENSIONS)).toEqual([]);
+	expect(shouldRestartForMissingExtensions(REQUIRED_DAEMON_EXTENSIONS)).toBe(false);
+});
+
+test("only an explicit unknown-extension error proves an extension is absent", () => {
+	expect(isMissingDaemonExtensionError(new Error("unknown extension: chat-view"))).toBe(true);
+	expect(isMissingDaemonExtensionError(new Error("request timeout: extensions.raw"))).toBe(false);
+	expect(isMissingDaemonExtensionError(new Error("permission denied"))).toBe(false);
 });
 
 test("a current shell with an old daemon needs a service refresh, not an app update", () => {

@@ -4,7 +4,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { collectSlotComponents, collectToolViews } from "../../coding-agent/src/daemon/extension-artifact-compiler";
+import {
+	collectSlotComponents,
+	collectToolViews,
+	compileComponentModule,
+} from "../../coding-agent/src/daemon/extension-artifact-compiler";
 import { hostReactBindings } from "../src/lib/slot-host";
 
 describe("extension React host bindings", () => {
@@ -53,6 +57,25 @@ describe("extension React host bindings", () => {
 			expect(renderToStaticMarkup(module.default.Icon())).toContain("svg");
 		} finally {
 			window.MusePiReact = previous;
+		}
+	}, 60_000);
+
+	it("shares the managed browser store with the compiled chat surface", async () => {
+		const { code } = await compileComponentModule(path.resolve("src/plugins/chat-view/page.tsx"));
+		expect(code).toContain("window.MusePiManagedBrowserHost");
+		expect(code).not.toContain("musepi-gui-managed-browser-tabs");
+		expect(code).not.toContain("Invalid guestInstanceId");
+	}, 60_000);
+
+	it("compiles independent panel and browser surfaces on the shared host store", async () => {
+		for (const entry of [
+			"src/plugins/panel/page.tsx",
+			"src/plugins/browser-ui/page.tsx",
+			"src/plugins/browser-ui/host.tsx",
+		]) {
+			const { code } = await compileComponentModule(path.resolve(entry));
+			expect(code).toContain("window.MusePiManagedBrowserHost");
+			expect(code).not.toContain("musepi-gui-managed-browser-tabs");
 		}
 	}, 60_000);
 });

@@ -73,6 +73,10 @@ providers:
 
 If `authHeader: true` is set on a custom provider, the resolved key is injected as an `Authorization: Bearer <key>` header on every request to that provider.
 
+### OpenCode session affinity
+
+Inference requests to `opencode-zen` and `opencode-go` send `x-opencode-session` on Chat Completions, Responses, Anthropic Messages, and Google Generative AI. The value is the conversation's normalized prompt-cache affinity (`promptCacheKey ?? sessionId`): forks, task and Vibe subagents, and advisors share their parent conversation's affinity while retaining independent session IDs for credentials and telemetry. Disabling prompt-cache retention does not change this routing identity, and an explicitly configured `x-opencode-session` header takes precedence. If no conversation key exists, MusePi falls back to the persistent per-install ID. Model discovery and usage polling also use that install ID because they are not conversation requests.
+
 ## Environment variables and `.env` files
 
 Each provider has one or more environment variables that supply a key when no stored credential exists. The table below is the verified provider → variable map; the full catalog is large, so it is split into core and additional providers. OAuth-backed providers can also accept a token variable in addition to (or instead of) an API key.

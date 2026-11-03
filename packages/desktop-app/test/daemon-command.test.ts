@@ -43,7 +43,7 @@ async function tempDir(): Promise<string> {
 /** The executable path daemonCommand would spawn (program + first arg). */
 function resolved(): string {
 	const cmd = daemonCommand(8300);
-	return cmd.program === "bun" ? String(cmd.args[0]) : String(cmd.program);
+	return /(?:^|[\\/])bun(?:\.exe)?$/i.test(cmd.program) ? String(cmd.args[0]) : String(cmd.program);
 }
 
 function setWindowsPlatform(): void {
@@ -106,6 +106,19 @@ describe("daemon.cjs daemonCommand — resolution precedence", () => {
 		setWindowsPlatform();
 
 		expect(resolved()).not.toBe(bundled);
+	});
+
+	it("resolves the dev Bun launcher to an absolute executable on PATH", async () => {
+		const pathDir = await tempDir();
+		const bun = path.join(pathDir, "bun.exe");
+		await fs.writeFile(bun, Buffer.alloc(REAL_BINARY_BYTES));
+		process.env.PATH = pathDir;
+		delete electronProcess.resourcesPath;
+		setWindowsPlatform();
+
+		const cmd = daemonCommand(8300);
+		expect(cmd.program).toBe(bun);
+		expect(String(cmd.args[0]).endsWith(path.join("coding-agent", "src", "cli.ts"))).toBe(true);
 	});
 
 	it("never throws and always yields a spawnable target", async () => {

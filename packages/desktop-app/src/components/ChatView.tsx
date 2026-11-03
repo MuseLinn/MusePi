@@ -53,7 +53,9 @@ import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import {
+	PANEL_SHELL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
+	SlotComponentHost,
 	SlotComponentMount,
 	selectPanelTabComponent,
 	selectTranscriptNodeComponents,
@@ -79,7 +81,6 @@ import { BrowserGuiHint } from "./BrowserGuiHint";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer } from "./Composer";
-import { ContextPanel } from "./ContextPanel";
 import type { CreationMessage } from "./CreationModeRow";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
@@ -2276,6 +2277,7 @@ export function ChatView({
 	 * onto this column: a custom property on the column inherits into every
 	 * virtualized row and restyles all of them. See composer-inset-readers.
 	 */
+	const [composerInset, setComposerInset] = useState(0);
 	useEffect(() => {
 		if (!showChat) return;
 		const body = chatBodyRef.current;
@@ -2283,6 +2285,7 @@ export function ChatView({
 		if (!body || !wrap || typeof ResizeObserver === "undefined") return;
 		const publish = (): void => {
 			const height = Math.round(wrap.getBoundingClientRect().height);
+			setComposerInset(height);
 			const { tailInset } = recordComposerSlotHeight(body, height);
 			publishComposerInsets(body, { inset: height, tailInset });
 		};
@@ -2625,6 +2628,7 @@ export function ChatView({
 													onSwitchToBranch={handleCanvasSwitchToBranch}
 													onBranchTo={handleCanvasBranchTo}
 													onForkAt={handleCanvasForkAt}
+													composerInset={composerInset}
 												/>
 											) : (
 												<>
@@ -2648,6 +2652,7 @@ export function ChatView({
 														)}
 														<CodeHighlightProvider highlight={chatHighlight}>
 															<Transcript
+																key={store?.sessionId ?? ""}
 																entries={visibleEntries}
 																sessionKey={store?.sessionId ?? ""}
 																registerComposerInsetReader={registerComposerInsetReader}
@@ -3153,49 +3158,49 @@ export function ChatView({
 								</div>
 								{/* Right panel stays mounted so the width collapse animates;
 								 * `open` folds it to a 0px sliver instead of unmounting. */}
-								<ContextPanel
-									snap={snap}
+								<SlotComponentHost
+									slot={PANEL_SHELL_SLOT}
 									rpc={rpc}
-									open={rightPanelOpen && !focusMode}
-									openRequest={openFileReq}
-									browserOpenRequest={openBrowserReq}
-									onBrowserTakeover={onStop}
-									onViewChange={setActiveView}
-									panelTabs={panelTabs}
-									onExpandPanel={onExpandRightPanel}
-									agentId={panelAgentId}
-									onAgentSelect={selectAgent}
-									onOpenSession={onOpenSession}
-									onNewSession={text => onSubmitNewSession(text)}
-									agentHost={host}
-									extTabs={extTabs}
-									overviewEntries={overviewEntries}
-									overviewLoading={snap?.historyLoading === true}
-									overviewError={store?.historyBlocked ?? false}
-									onLoadOlderHistory={onLoadOlderStable}
-									onJumpToEntry={entryId => requestJump({ entryId })}
-									leafId={effectiveLeaf}
-									activePathIds={trustedPathIds}
-									pathEntries={pathEntriesOrNull}
-									modeCatalog={modes}
-									planShowRequest={planShowRequest}
-									onBranchTo={id => {
-										// Pin the clicked canvas node (see the trajectory
-										// handler: branchAt maps user messages to parents).
-										void branchTo(id, id).then(res => {
-											if (res?.editorText) setPendingEdit(res.editorText);
-										});
-									}}
-									onSwitchTo={id => {
-										// 纯切换:非 user 锚 leaf 直接落节点,关草稿回填并清
-										// 遗留草稿(与地图「切换到此分支」同一语义)。
-										setPendingEdit(null);
-										void switchToNode(id, { backfillDraft: false });
-									}}
-									onForkAt={id => {
-										const entry = snap?.entries.find(e => e.id === id);
-										const isUser = entry?.type === "message" && entry.message.role === "user";
-										void forkFromMessage(id, undefined, !isUser);
+									panelShell={{
+										snap,
+										rpc,
+										open: rightPanelOpen && !focusMode,
+										openRequest: openFileReq,
+										browserOpenRequest: openBrowserReq,
+										onBrowserTakeover: onStop,
+										onViewChange: setActiveView,
+										panelTabs,
+										onExpandPanel: onExpandRightPanel,
+										agentId: panelAgentId,
+										onAgentSelect: selectAgent,
+										onOpenSession,
+										onNewSession: text => onSubmitNewSession(text),
+										agentHost: host,
+										extTabs,
+										overviewEntries,
+										overviewLoading: snap?.historyLoading === true,
+										overviewError: store?.historyBlocked ?? false,
+										onLoadOlderHistory: onLoadOlderStable,
+										onJumpToEntry: entryId => requestJump({ entryId }),
+										leafId: effectiveLeaf,
+										activePathIds: trustedPathIds,
+										pathEntries: pathEntriesOrNull,
+										modeCatalog: modes,
+										planShowRequest,
+										onBranchTo: id => {
+											void branchTo(id, id).then(res => {
+												if (res?.editorText) setPendingEdit(res.editorText);
+											});
+										},
+										onSwitchTo: id => {
+											setPendingEdit(null);
+											void switchToNode(id, { backfillDraft: false });
+										},
+										onForkAt: id => {
+											const entry = snap?.entries.find(e => e.id === id);
+											const isUser = entry?.type === "message" && entry.message.role === "user";
+											void forkFromMessage(id, undefined, !isUser);
+										},
 									}}
 								/>
 								{/* Right-edge 44px icon rail: tool icons + panel fold toggle + extension

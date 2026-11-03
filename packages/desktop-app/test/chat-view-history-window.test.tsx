@@ -95,4 +95,56 @@ describe("ChatView history window", () => {
 		expect(historyCalls[0]).toMatchObject({ beforeId: "latest" });
 		expect(host.textContent).toContain("older map entry");
 	});
+
+	it("returns from an advisor record to the main session's latest turn", async () => {
+		const rpc = {
+			request: async (method: string) =>
+				method.startsWith("models.list") ? [] : method === "session.turns" ? { turns: [] } : {},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+		const main = new GuiSessionStore(
+			"main-session",
+			{
+				entries: [message("u1", null, "first main turn", 1), message("u2", "u1", "latest main turn", 2)],
+				cursor: 0,
+			},
+			"C:/workspace",
+		);
+		const advisor = new GuiSessionStore(
+			"advisor-session",
+			{ entries: [message("a1", null, "advisor-only record", 3)], cursor: 0 },
+			"C:/workspace",
+		);
+		stores.add(main);
+		stores.add(advisor);
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		roots.add(root);
+		const view = (store: GuiSessionStore, readOnly = false) => (
+			<ChatView
+				store={store}
+				rpc={rpc}
+				readOnly={readOnly}
+				onSend={() => {}}
+				onStop={() => {}}
+				onDecideApproval={() => {}}
+				busy={false}
+				project="C:/workspace"
+				onProject={() => {}}
+				onSubmitNewSession={() => {}}
+				rightPanelOpen={false}
+				terminalOpen={false}
+				focusMode={false}
+				onToggleFocus={() => {}}
+			/>
+		);
+		await act(async () => root.render(view(main)));
+		expect(host.textContent).toContain("latest main turn");
+		await act(async () => root.render(view(advisor, true)));
+		expect(host.textContent).toContain("advisor-only record");
+		await act(async () => root.render(view(main)));
+		expect(host.textContent).toContain("latest main turn");
+		expect(host.textContent).not.toContain("advisor-only record");
+	});
 });

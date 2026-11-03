@@ -101,6 +101,22 @@ describe("readExtensionPluginMeta", () => {
 		expect(meta!.configErrors.map(e => e.code)).toContain("field-not-an-object");
 	});
 
+	test("keeps a literal experimental true as standalone manifest metadata", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ musepi: { experimental: true } }),
+		});
+		expect(await readExtensionPluginMeta(entry)).toEqual({ fields: [], configErrors: [], experimental: true });
+	});
+
+	test("ignores non-boolean and false experimental values", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ musepi: { experimental: "true" } }),
+		});
+		expect(await readExtensionPluginMeta(entry)).toBeNull();
+	});
+
 	test("treats a corrupt package.json as no plugin declaration instead of throwing", async () => {
 		const entry = await writeExtension({
 			"index.ts": "export default {}",

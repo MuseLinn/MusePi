@@ -31,6 +31,8 @@ export interface PluginManifest {
 	version: string;
 	/** Human-readable description */
 	description?: string;
+	/** Experimental plugins are marked only by the literal boolean true. */
+	experimental?: boolean;
 	/** Icon shown in the plugins list: emoji, text glyph, or http(s)/file URI.
 	 *  Absent → the UI derives a deterministic mark from the package name. */
 	icon?: string;

@@ -81,6 +81,26 @@ export function shouldRestartForMissingMethods(answered: Iterable<string>): bool
 	return missingDaemonMethods(answered).length > 0;
 }
 
+/** Extensions whose manifest entries are required by the desktop shell. */
+export const REQUIRED_DAEMON_EXTENSIONS: readonly string[] = ["chat-view"];
+
+/** Whether an RPC failure explicitly reports an unregistered extension. */
+export function isMissingDaemonExtensionError(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : String(error);
+	return /unknown extension/i.test(message);
+}
+
+/** Return required extension manifest entries that the daemon did not answer for. */
+export function missingDaemonExtensions(answered: Iterable<string>): string[] {
+	const have = new Set(answered);
+	return REQUIRED_DAEMON_EXTENSIONS.filter(id => !have.has(id));
+}
+
+/** True when an extension manifest probe says the daemon needs a restart. */
+export function shouldRestartForMissingExtensions(answered: Iterable<string>): boolean {
+	return missingDaemonExtensions(answered).length > 0;
+}
+
 export interface RuntimeVersionProjection {
 	/** Version presented as the running application: shell first, daemon on web. */
 	displayVersion: string | null;

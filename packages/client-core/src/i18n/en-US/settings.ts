@@ -1157,6 +1157,9 @@ export const settings = {
 	"settings.clickFocusBrowserTab": "Click to switch to this tab",
 	"settings.widgetPreviewEmpty": "No widget preview yet — visual widgets rendered in chat will stay here",
 	"settings.pagePreview": "Page preview",
+	"settings.filePreview": "File preview",
+	"settings.htmlBuildPreviewNotice":
+		"This page imports TypeScript or JSX modules that require a build. Static preview may be blank; use the development server for the full page.",
 	"settings.sourceCode": "Source code",
 	"settings.renderedView": "Rendered",
 	"settings.exportWord": "Export Word",

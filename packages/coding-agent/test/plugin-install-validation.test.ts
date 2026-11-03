@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getExtensionNameFromPath } from "@musepi/pi-coding-agent/discovery/helpers";
+import { resetPluginConfigStoreCache } from "@musepi/pi-coding-agent/extensibility/extensions-center/plugin-config-store";
 import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
 import * as piUtils from "@musepi/pi-utils";
 import { removeWithRetries } from "@musepi/pi-utils";
@@ -39,6 +41,7 @@ interface PluginFixture {
 	readonly source: string;
 	readonly dependencyVersion?: string;
 	readonly peerDependencies?: Record<string, string>;
+	readonly config?: Record<string, unknown>;
 }
 
 async function writePluginPackage(pluginsNodeModules: string, name: string, fixture: PluginFixture): Promise<string> {
@@ -51,7 +54,7 @@ async function writePluginPackage(pluginsNodeModules: string, name: string, fixt
 				name,
 				version: fixture.version,
 				...(fixture.peerDependencies ? { peerDependencies: fixture.peerDependencies } : {}),
-				omp: { extensions: ["./dist/extension.ts"] },
+				omp: { extensions: ["./dist/extension.ts"], ...(fixture.config ? { config: fixture.config } : {}) },
 			},
 			null,
 			2,
@@ -74,6 +77,8 @@ describe("PluginManager.install load validation", () => {
 		pluginsPkgJson = path.join(pluginsDir, "package.json");
 		await fs.mkdir(pluginsNodeModules, { recursive: true });
 
+		resetPluginConfigStoreCache();
+		vi.spyOn(piUtils, "getAgentDir").mockReturnValue(tmpRoot);
 		vi.spyOn(piUtils, "getPluginsDir").mockReturnValue(pluginsDir);
 		vi.spyOn(piUtils, "getPluginsNodeModules").mockReturnValue(pluginsNodeModules);
 		vi.spyOn(piUtils, "getPluginsPackageJson").mockReturnValue(pluginsPkgJson);
@@ -84,6 +89,7 @@ describe("PluginManager.install load validation", () => {
 
 	afterEach(async () => {
 		vi.restoreAllMocks();
+		resetPluginConfigStoreCache();
 		await removeWithRetries(tmpRoot);
 	});
 
@@ -124,6 +130,93 @@ describe("PluginManager.install load validation", () => {
 		expect(result.name).toBe("pi-figma-remote-auth");
 		expect(result.version).toBe("1.2.3");
 		expect(result.path).toBe(path.join(pluginsNodeModules, "pi-figma-remote-auth"));
+	});
+
+	test("installs a pure Cordis entry through the production mount pipeline", async () => {
+		const entryPath = path.join(pluginsNodeModules, "cordis-only-plugin", "dist", "extension.ts");
+		const configId = `extension-module:${getExtensionNameFromPath(entryPath)}`;
+		await Bun.write(
+			path.join(tmpRoot, "extensions", "plugin-config.json"),
+			JSON.stringify({ [configId]: { retries: 99, unknown: "discard me" } }),
+		);
+
+		vi.spyOn(Bun, "spawn").mockImplementation(((cmd: string[]) => {
+			expect(cmd).toEqual(["bun", "install", "cordis-only-plugin"]);
+
+			const prepare = (async () => {
+				await Bun.write(
+					pluginsPkgJson,
+					JSON.stringify(
+						{ name: "omp-plugins", private: true, dependencies: { "cordis-only-plugin": "1.0.0" } },
+						null,
+						2,
+					),
+				);
+				await writePluginPackage(pluginsNodeModules, "cordis-only-plugin", {
+					version: "1.0.0",
+					config: { retries: { key: "retries", type: "number", default: 3, min: 0, max: 5 } },
+					source: [
+						'export const name = "cordis-only";',
+						'export const inject = ["commands"];',
+						"export const Config = true;",
+						"export function apply(pi, config) {",
+						'\tif (config.retries !== 5 || "unknown" in config) throw new Error("config was not coerced");',
+						'\tpi.registerCommand("cordis-only", { handler: async () => {} });',
+						"}",
+					].join("\n"),
+				});
+			})();
+
+			return {
+				pid: 1,
+				stdout: emptyStream(),
+				stderr: emptyStream(),
+				exited: prepare.then(() => 0),
+			} as Subprocess;
+		}) as typeof Bun.spawn);
+
+		const result = await new PluginManager(tmpRoot).install("cordis-only-plugin");
+
+		expect(result.name).toBe("cordis-only-plugin");
+		expect(result.version).toBe("1.0.0");
+	});
+
+	test("rejects and rolls back a Cordis entry with an unsatisfied service dependency", async () => {
+		vi.spyOn(Bun, "spawn").mockImplementation(((cmd: string[]) => {
+			expect(cmd).toEqual(["bun", "install", "missing-service-plugin"]);
+			const prepare = (async () => {
+				await Bun.write(
+					pluginsPkgJson,
+					JSON.stringify({
+						name: "omp-plugins",
+						private: true,
+						dependencies: { "missing-service-plugin": "1.0.0" },
+					}),
+				);
+				await writePluginPackage(pluginsNodeModules, "missing-service-plugin", {
+					version: "1.0.0",
+					source: [
+						'export const name = "missing-service";',
+						'export const inject = ["not-a-host-service"];',
+						"export function apply() {}",
+					].join("\n"),
+				});
+			})();
+			return {
+				pid: 1,
+				stdout: emptyStream(),
+				stderr: emptyStream(),
+				exited: prepare.then(() => 0),
+			} as Subprocess;
+		}) as typeof Bun.spawn);
+
+		await expect(new PluginManager(tmpRoot).install("missing-service-plugin")).rejects.toThrow(
+			/service-missing: plugin requires service\(s\).*not-a-host-service/,
+		);
+		expect((await Bun.file(pluginsPkgJson).json()).dependencies ?? {}).toEqual({});
+		expect(await Bun.file(path.join(pluginsNodeModules, "missing-service-plugin", "package.json")).exists()).toBe(
+			false,
+		);
 	});
 
 	test("rejects and rolls back an install when the extension factory throws", async () => {

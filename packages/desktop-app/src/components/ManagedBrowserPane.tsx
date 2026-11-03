@@ -47,6 +47,7 @@ import {
 	subscribeHost,
 	takeoverAgentOp,
 } from "../lib/managed-browser-host";
+import { managedTabIsBlank } from "../lib/managed-browser-visibility";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -295,7 +296,7 @@ export function ManagedBrowserPane({
 
 	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
 	const activeUrl = activeTab?.url ?? EMPTY_URL;
-	const isBlank = !activeTab || activeTab.blank || activeUrl === EMPTY_URL || activeUrl === "";
+	const isBlank = managedTabIsBlank(activeTab);
 
 	// ── Zoom controls (§3.2.1, zcode parity): per-tab factor persisted in
 	// localStorage; applied through main (WebContents zoom — independent of
@@ -1315,15 +1316,18 @@ function BrowserStartPage({
 				</div>
 				<div className="gui-browser-quick-grid">
 					{QUICK_LINKS.map(link => (
-						<button
+						<a
 							key={link.url}
-							type="button"
+							href={link.url}
 							className="gui-browser-quick-card"
-							onClick={() => onNavigate(link.url)}
+							onClick={event => {
+								event.preventDefault();
+								onNavigate(link.url);
+							}}
 						>
 							<Icon name={link.icon} className="h-4 w-4" />
 							<span>{link.label}</span>
-						</button>
+						</a>
 					))}
 				</div>
 			</div>
@@ -1344,12 +1348,15 @@ function BrowserStartPage({
 				) : (
 					<div className="gui-browser-recent-list">
 						{recent.map(entry => (
-							<button
+							<a
 								key={entry.url}
-								type="button"
+								href={entry.url}
 								className="gui-browser-recent-item"
 								title={entry.url}
-								onClick={() => onNavigate(entry.url)}
+								onClick={event => {
+									event.preventDefault();
+									onNavigate(entry.url);
+								}}
 							>
 								<span className="gui-browser-recent-icon">
 									<Icon name="history" className="h-3.5 w-3.5" />
@@ -1359,7 +1366,7 @@ function BrowserStartPage({
 									<small>{hostnameFromUrl(entry.url)}</small>
 								</span>
 								<span className="gui-browser-recent-open">{t("tools.browserOpen")}</span>
-							</button>
+							</a>
 						))}
 					</div>
 				)}

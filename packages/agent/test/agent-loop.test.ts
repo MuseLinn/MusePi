@@ -4587,7 +4587,7 @@ describe("agentLoopContinue with AgentMessage", () => {
 		release.resolve();
 		await consuming;
 
-		expect(mock.calls).toHaveLength(2);
+		expect(mock.calls).toHaveLength(1);
 		const aborted = events.find(
 			event =>
 				event.type === "message_end" &&

@@ -115,13 +115,14 @@ describe("AgentSession advisor provider-options parity", () => {
 		// Anthropic fast-mode fallbacks consistent across the two agents.
 		expect(advisor.providerSessionState).toBe(session.providerSessionState);
 
-		// The advisor's session identity is its own provider-facing UUIDv7
-		// (issue #5040), distinct from the parent's. Without a pinned parent
-		// `promptCacheKey` the advisor caches on that same UUID so consecutive
-		// advisor turns stay on one OpenAI Responses shard.
+		// The advisor's auth/telemetry identity is its own provider-facing UUIDv7
+		// (issue #5040), distinct from the parent's. Cache affinity follows the
+		// official sub-conversation rule: without a pinned parent key the advisor
+		// joins the host's provider session id, not its own UUID.
 		expect(advisor.sessionId).toMatch(UUID_V7_PATTERN);
 		expect(advisor.sessionId).not.toBe(mainAgent.sessionId);
-		expect(advisor.promptCacheKey).toBe(advisor.sessionId);
+		expect(advisor.promptCacheKey).toBe(mainAgent.sessionId);
+		expect(advisor.promptCacheKey).not.toBe(advisor.sessionId);
 	});
 
 	it("captures the SDK-provided onPayload, onResponse, onSseEvent, and transformProviderContext on the advisor's stream call", async () => {
@@ -177,11 +178,11 @@ describe("AgentSession advisor provider-options parity", () => {
 		// call unchanged — proof the SDK-provided hook was installed.
 		expect(opts.onPayload).toBe(onPayload);
 
-		// Cache routing identity threaded through into the actual stream call.
-		// Without a parent `providerPromptCacheKey`, the advisor's effective key
-		// is its own provider-facing UUIDv7 session id (issue #5040).
+		// Request lineage stays advisor-scoped, while cache affinity joins the
+		// host's provider session id when the parent has no pinned key.
 		expect(opts.sessionId).toBe(advisor.sessionId);
-		expect(opts.promptCacheKey).toBe(advisor.sessionId);
+		expect(opts.promptCacheKey).toBe(mainAgent.sessionId);
+		expect(opts.promptCacheKey).not.toBe(advisor.sessionId);
 		expect(opts.providerSessionState).toBe(session.providerSessionState);
 		expect(opts.preferWebsockets).toBe(true);
 	});
@@ -258,6 +259,37 @@ describe("AgentSession advisor provider-options parity", () => {
 		expect(advisor.sessionId).not.toBe(advisor.promptCacheKey);
 	});
 
+	it("keeps the root affinity when the host is itself a nested subagent", () => {
+		// A subagent-hosted advisor must join the conversation root inherited by
+		// its host, not the host's own provider session id and not the advisor's.
+		const rootAffinity = "root-conversation-affinity";
+		const hostProviderSessionId = "child-provider-session";
+		const mainAgent = new Agent({
+			initialState: { model, systemPrompt: ["Test"], tools: [], messages: [] },
+			promptCacheKey: rootAffinity,
+		});
+		session = new AgentSession({
+			agent: mainAgent,
+			providerSessionId: hostProviderSessionId,
+			sessionManager,
+			settings: settings(),
+			modelRegistry,
+			advisorTools: [],
+		});
+		session.settings.setModelRole("advisor", "anthropic/claude-sonnet-4-5");
+		expect(session.setAdvisorEnabled(true)).toBe(true);
+
+		const advisor = session.getAdvisorAgent();
+		if (!advisor) throw new Error("Expected advisor agent to be live");
+
+		expect(mainAgent.sessionId).toBe(hostProviderSessionId);
+		expect(mainAgent.promptCacheKey).toBe(rootAffinity);
+		expect(advisor.promptCacheKey).toBe(rootAffinity);
+		expect(advisor.promptCacheKey).not.toBe(mainAgent.sessionId);
+		expect(advisor.sessionId).toMatch(UUID_V7_PATTERN);
+		expect(advisor.sessionId).not.toBe(rootAffinity);
+	});
+
 	it("propagates the advisor's own provider session id via metadata.user_id, distinct from the main agent", async () => {
 		// Regression for #6625: the separately constructed advisor Agent had no
 		// metadata resolver, so its outbound Anthropic request omitted the
@@ -331,7 +363,10 @@ describe("AgentSession advisor provider-options parity", () => {
 		expect(advisor.sessionId).toMatch(UUID_V7_PATTERN);
 		expect(advisor.sessionId).not.toBe(previousAdvisorSessionId);
 		expect(advisor.sessionId).not.toBe(mainAgent.sessionId);
-		expect(advisor.promptCacheKey).toBe(advisor.sessionId);
+		// A new session moves the host's provider session id, so the advisor's
+		// affinity must follow it instead of staying on the previous root.
+		expect(advisor.promptCacheKey).toBe(mainAgent.sessionId);
+		expect(advisor.promptCacheKey).not.toBe(advisor.sessionId);
 
 		await advisor.prompt("ping").catch(() => {});
 

@@ -7,6 +7,7 @@
 	"type": "module",
 	"musepi": {
 		"icon": "📊",
+		"label": "Usage and Performance Stats",
 		"description": "Per-turn performance and usage readout above the composer: token totals, spend and cache-hit rate.",
 		"extensions": ["./index.ts"]
 	}

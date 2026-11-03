@@ -19,7 +19,7 @@ import {
 } from "@musepi/client-core";
 import type { AgentSnapshot, PdfQuoteAnchor } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import {
@@ -41,6 +41,7 @@ import {
 } from "../lib/file-workspace";
 import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
+import { getPanelMaximized, setPanelMaximized, subscribePanelMaximize } from "../lib/panel-maximize";
 import { type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -56,7 +57,6 @@ import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ContextMenu } from "./ContextMenu";
 import { FadeScroll } from "./FadeScroll";
 import { GitPanel } from "./git-panel";
-import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
 import { StateIcon } from "./StateIcon";
@@ -514,7 +514,8 @@ export function ContextPanel({
 	// Maximize (openchamber fullscreen-surface / proma quick-window parity):
 	// the panel floats over the chat column at near-full width/height; toggling
 	// off returns to the persisted width. Width-drag is disabled while maximized.
-	const [maximized, setMaximized] = useState(false);
+	const maximized = useSyncExternalStore(subscribePanelMaximize, getPanelMaximized, getPanelMaximized);
+	const setMaximized = setPanelMaximized;
 	maximizedRef.current = maximized;
 	// Active surface at drag end (the drag callbacks close over the render
 	// that started the gesture, so a ref carries the current surface).
@@ -535,13 +536,29 @@ export function ContextPanel({
 	// Mid-animation clicks are ignored; .gui-motion-off / reduced motion
 	// falls back to the plain instant toggle.
 	const flipAnimatingRef = useRef(false);
-	const toggleMaximized = (): void => {
+	const lastMaximizeEventRef = useRef<globalThis.MouseEvent | null>(null);
+	const toggleMaximized = (event?: globalThis.MouseEvent | { nativeEvent: globalThis.MouseEvent }): void => {
+		const nativeEvent = event && "nativeEvent" in event ? event.nativeEvent : event;
+		if (nativeEvent && lastMaximizeEventRef.current === nativeEvent) return;
+		lastMaximizeEventRef.current = nativeEvent ?? null;
 		const el = panelRef.current;
+		const toMaximized = el ? !el.classList.contains("gui-pane-right--maximized") : !maximized;
 		const motionOff =
 			(document.body.closest(".gui-motion-off") ?? document.querySelector(".gui-motion-off")) !== null ||
 			window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		if (!el || motionOff) {
-			setMaximized(v => !v);
+			setMaximized(toMaximized);
+			if (el) {
+				el.classList.toggle("gui-pane-right--maximized", toMaximized);
+				const column = el.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
+				const rect = column?.getBoundingClientRect();
+				if (rect) {
+					el.style.setProperty("--pane-max-left", `${rect.left}px`);
+					el.style.setProperty("--pane-max-top", `${rect.top}px`);
+					el.style.setProperty("--pane-max-width", `${rect.width}px`);
+					el.style.setProperty("--pane-max-height", `${rect.height}px`);
+				}
+			}
 			return;
 		}
 		if (flipAnimatingRef.current) return;
@@ -561,6 +578,19 @@ export function ContextPanel({
 			// pinned width 1244 and never came back to the docked 395).
 			el.style.transition = "none";
 			flushSync(() => setMaximized(toMaximized));
+			// Commit the visual contract with the FLIP transaction itself. A compiled
+			// surface must not leave the click successful only inside React state.
+			el.classList.toggle("gui-pane-right--maximized", toMaximized);
+			if (toMaximized) {
+				const column = el.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
+				const rect = column?.getBoundingClientRect();
+				if (rect) {
+					el.style.setProperty("--pane-max-left", `${rect.left}px`);
+					el.style.setProperty("--pane-max-top", `${rect.top}px`);
+					el.style.setProperty("--pane-max-width", `${rect.width}px`);
+					el.style.setProperty("--pane-max-height", `${rect.height}px`);
+				}
+			}
 			if (!el.isConnected) {
 				el.style.removeProperty("transition");
 				return;
@@ -611,7 +641,7 @@ export function ContextPanel({
 				if (flipAnimatingRef.current) finish(toMaximized ? null : last.width);
 			}, 450);
 		};
-		runFlip(!maximized);
+		runFlip(toMaximized);
 	};
 	// Width drag runs on the normalised pointer-drag primitive (capture +
 	// preventDefault + pointerId filtering) rather than window listeners: the
@@ -847,6 +877,7 @@ export function ContextPanel({
 		onEditorPositionChange,
 	};
 	const fileWorkspaceComponent = selectPanelTabComponent(extTabs, FILE_WORKSPACE_SURFACE);
+	const browserComponent = selectPanelTabComponent(extTabs, "browser");
 	const primarySurfaces = SURFACES.filter(
 		surface =>
 			surface.group === "primary" &&
@@ -946,17 +977,25 @@ export function ContextPanel({
 					<p className="gui-pane-tab-empty-title">{t("settings.browserShownOtherColumn")}</p>
 					<p className="gui-pane-tab-empty-hint">{t("settings.clickFocusBrowserTab")}</p>
 				</button>
-			) : (
-				/* Browser pane renders OUTSIDE the feather-scroll container:
-				 * the page is a DOM <webview> owned by the always-mounted
-				 * ManagedBrowserHost, which mirrors THIS pane's slot rect
-				 * (fixed overlay). The slot must sit in a plain flex column —
-				 * a padded/scrollable wrapper breaks the height chain the
-				 * ResizeObserver measures. See docs/review/0.5.0-sidepanel-
-				 * browser-rendering.md §1.2 (A1: the old "native WebContentsView
-				 * projection" motive is gone; the host stays for the maximized
-				 * layering and blank start-page glass stacking). */
-				<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} onTakeover={onBrowserTakeover} />
+			) : /* Browser pane renders OUTSIDE the feather-scroll container:
+			 * the page is a DOM <webview> owned by the always-mounted
+			 * ManagedBrowserHost, which mirrors THIS pane's slot rect
+			 * (fixed overlay). The slot must sit in a plain flex column —
+			 * a padded/scrollable wrapper breaks the height chain the
+			 * ResizeObserver measures. See docs/review/0.5.0-sidepanel-
+			 * browser-rendering.md §1.2 (A1: the old "native WebContentsView
+			 * projection" motive is gone; the host stays for the maximized
+			 * layering and blank start-page glass stacking). */
+			browserComponent ? (
+				<SlotComponentMount
+					item={browserComponent}
+					rpc={rpc}
+					sessionId={snap?.sessionId}
+					cwd={cwd}
+					browser={{ open, openRequest: browserOpenRequest, onTakeover: onBrowserTakeover }}
+				/>
+			) : isElectron() ? null : (
+				<LegacyBrowserPane rpc={rpc} />
 			)
 		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
 			<GitPanel rpc={rpc} cwd={cwd} />
@@ -1361,6 +1400,7 @@ export function ContextPanel({
 																	maximized ? t("settings.restorePanel") : t("settings.maximizePanel")
 																}
 																className="gui-pane-tool"
+																onPointerDown={event => event.stopPropagation()}
 																onClick={toggleMaximized}
 															>
 																<StateIcon
@@ -1450,6 +1490,7 @@ export function ContextPanel({
 										title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
 										aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
 										className="gui-pane-tool"
+										onPointerDown={event => event.stopPropagation()}
 										onClick={toggleMaximized}
 									>
 										<StateIcon
@@ -1836,29 +1877,6 @@ const BROWSER_VIEWPORTS = [
 	{ labelKey: "transcript.viewportTablet", width: 768 },
 	{ labelKey: "transcript.viewportDesktop", width: 1440 },
 ] as const;
-
-/**
- * Browser tool pane: the managed in-app browser (Electron WebContentsView +
- * local CDP bridge) when the shell exposes it — the SAME browser the agent
- * drives with `browser.gui`. Plain-browser builds fall back to the legacy
- * webview/iframe pane.
- */
-function BrowserPane({
-	open,
-	rpc,
-	browserOpenRequest = null,
-	onTakeover,
-}: {
-	open: boolean;
-	rpc: RpcClient;
-	browserOpenRequest?: { url: string; nonce: number } | null;
-	onTakeover?(): void;
-}): ReactNode {
-	// Electron shell → the managed browser (shared with the agent's browser tool);
-	// plain-browser builds keep the iframe fallback.
-	if (isElectron()) return <ManagedBrowserPane open={open} openRequest={browserOpenRequest} onTakeover={onTakeover} />;
-	return <LegacyBrowserPane rpc={rpc} />;
-}
 
 /** Legacy embedded browser: Electron <webview> (real Chromium, cross-origin
  *  executeJavaScript for the element picker) with an iframe fallback for the

@@ -44,8 +44,8 @@
 	 * Every notification used to render identically apart from `error`
 	 * getting a red border — a finished task, a failure, a question that
 	 * BLOCKS the agent until you answer, and a background subtask note all
-	 * looked the same. The kind is now carried by a left rule + a tinted
-	 * kind label, so severity reads at a glance without repainting the
+	 * looked the same. The kind is now carried by a tinted kind label,
+	 * so severity reads at a glance without repainting the
 	 * card (a full color wash on four kinds would turn the stack into a
 	 * traffic-light wall and wreck text contrast on the frosted surface).
 	 *
@@ -388,7 +388,7 @@
 	grid-row: 1 / span 3;
 	align-self: center;
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
 	align-items: center;
 	justify-content: center;
 	gap: 4px;
@@ -403,7 +403,7 @@
 
 .pet-bubble:hover .pet-bubble__actions,
 .pet-bubble:focus-within .pet-bubble__actions {
-	width: 30px;
+	width: max-content;
 	opacity: 1;
 	pointer-events: auto;
 }
@@ -547,27 +547,8 @@
 	max-height: 88px;
 }
 
-/* ── Kind accents ───────────────────────────────────────────────────────
- * `error` is the only kind that used to be styled (a red border), which
- * left completed / question / subtask visually identical. Each kind now
- * carries a 2.5px left rule in its accent, plus a short tag. The rule is an
- * inset ::before rather than a border-left so it can round with the card
- * and not shift the text box between kinds. */
-.pet-bubble::before {
-	content: "";
-	position: absolute;
-	top: 9px;
-	bottom: 9px;
-	left: 0;
-	width: 2.5px;
-	border-radius: 999px;
-	/* background-color, not the `background` shorthand: with a var() whose
-	 * value is a color-mix() result, the shorthand is dropped at parse time
-	 * in Chromium and the rule paints nothing (measured: the pseudo-element
-	 * kept its 2.5px x 48px box but resolved background-image: none). */
-	background-color: var(--pet-kind, transparent);
-}
-
+/* Kind accents tint the short tag. Error and question cards also retain
+ * their semantic border colors. */
 .pet-bubble--completed {
 	--pet-kind: var(--pet-kind-completed);
 }
@@ -601,12 +582,6 @@
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	opacity: 0.9;
-}
-
-/* Padded past the left rule so the tag never sits under it. */
-.pet-bubble__kind,
-.pet-bubble .pet-bubble__text {
-	padding-left: 4px;
 }
 
 .pet-bubble__text {
@@ -741,7 +716,6 @@ html.bubbles-root .pet-bubbles {
 /* Two-line card body — the title carries the session identity (the kind
  * tag row is for notification bubbles only). */
 .pet-bubble__body {
-	padding-left: 4px;
 	min-width: 0;
 }
 
@@ -789,18 +763,12 @@ html.bubbles-root .pet-bubbles {
 	color: var(--color-danger);
 }
 
-/* Phase accents for session cards — the working card gets the accent
- * left rule (it wants attention), finished cards stay neutral. */
-.pet-bubble--working {
-	--pet-kind: var(--color-accent);
-}
-
 /* Unread acknowledge 常驻 (kimi parity): done/error cards show their
  * ✓/❗ actions WITHOUT a hover — the user must spot the pending-confirm
  * target at a glance. Working cards stay hover-only (their row shows
  * 回复/停止 on intent, not as a nag). */
 .pet-bubble--unread .pet-bubble__actions {
-	width: 30px;
+	width: max-content;
 	opacity: 1;
 	transform: none;
 	pointer-events: auto;

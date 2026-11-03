@@ -63,8 +63,10 @@ export interface MicDevice {
 }
 export async function enumerateMicDevices(): Promise<MicDevice[]> {
 	try {
-		// 触发一次权限，否则 label 为空
-		await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+		// 触发一次权限，否则 label 为空。权限流只用于解锁设备名，
+		// 枚举前必须停止，不能留下一条无人持有的麦克风轨道。
+		const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+		permissionStream?.getTracks().forEach(track => track.stop());
 		const d = await navigator.mediaDevices.enumerateDevices();
 		return d
 			.filter(x => x.kind === "audioinput")

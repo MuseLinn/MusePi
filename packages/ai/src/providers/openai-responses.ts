@@ -92,6 +92,7 @@ import {
 	getOpenAIPromptCacheKey,
 	getOpenAIResponsesRoutingSessionId,
 	getOpenAIStrictToolsScope,
+	getOpenCodeSessionAffinity,
 	getOpenRouterResponsesSessionId,
 	isCompiledGrammarTooLargeStrictError,
 	isOpenAIResponsesProgressEvent,
@@ -465,6 +466,7 @@ const streamOpenAIResponsesOnce = (
 				messages: context.messages,
 				openAISessionId: routingSessionId,
 				promptCacheSessionId,
+				openCodeSessionAffinity: getOpenCodeSessionAffinity(options),
 			});
 			const premiumRequestsTotal = copilotPremiumRequests;
 			const providerSessionState = getOpenAIResponsesProviderSessionState(model, options?.providerSessionState);

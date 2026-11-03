@@ -307,6 +307,42 @@ describe("BundleService.setRowEnabled (control surface)", () => {
 	});
 });
 
+describe("BundleService.runtimeTargets", () => {
+	it("keeps duplicate rows and their own config when they resolve to one entry", async () => {
+		profileWith([
+			"- insert:",
+			"    - id: alpha",
+			"      name: '@demo/plugin'",
+			"      config:",
+			"        label: A",
+			"      inject: [settings]",
+			"    - id: beta",
+			"      name: '@demo/plugin'",
+			"      config:",
+			"        label: B",
+		]);
+		const pluginsRoot = path.join(home, ".musepi", "plugins");
+		write(path.join(pluginsRoot, "package.json"), JSON.stringify({ dependencies: { "@demo/plugin": "0.0.0" } }));
+		write(
+			path.join(pluginsRoot, "musepi-plugins.lock.json"),
+			JSON.stringify({ plugins: { "@demo/plugin": { version: "0.0.0", enabled: true } } }),
+		);
+		const pluginDir = path.join(pluginsRoot, "node_modules", "@demo", "plugin");
+		write(
+			path.join(pluginDir, "package.json"),
+			JSON.stringify({ name: "@demo/plugin", musepi: { extensions: ["./index.ts"] } }),
+		);
+		write(path.join(pluginDir, "index.ts"), "export default function () {}\n");
+
+		const targets = await service().runtimeTargets();
+
+		expect(targets.map(target => target.rowId)).toEqual(["alpha", "beta"]);
+		expect(targets.map(target => target.config)).toEqual([{ label: "A" }, { label: "B" }]);
+		expect(targets.map(target => target.additionalInject)).toEqual([["settings"], []]);
+		expect(new Set(targets.map(target => path.resolve(target.path))).size).toBe(1);
+	});
+});
+
 describe("BundleService.setBundleEnabled", () => {
 	it("selects an installed bundle once and refreshes only for a real change", async () => {
 		profileWith(["- insert:", "    - id: alpha", "      name: '@demo/plugin-alpha'"]);

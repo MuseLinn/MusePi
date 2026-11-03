@@ -1486,6 +1486,7 @@
 
 .gui-filepane-preview-html-frame {
 	width: 100%;
+	height: 100%;
 	flex: 1;
 	min-height: 0;
 	border: none;
@@ -1524,8 +1525,8 @@
 	filter: brightness(1.04);
 }
 
-/* Editable files open directly. HTML can keep a live preview beside Monaco;
- * visual Markdown is a single-column editor rather than a second preview. */
+/* Editable files open directly. HTML switches between a full-width live page
+ * and full-width Monaco; visual Markdown also keeps a single-column editor. */
 .gui-filepane-edit-layout {
 	display: flex;
 	flex: 1;
@@ -1551,20 +1552,6 @@
 .gui-filepane-markdown-warning .gui-btn {
 	flex: 0 0 auto;
 	color: var(--color-accent);
-}
-
-.gui-filepane-edit-layout--live-preview {
-	flex-direction: row;
-}
-
-.gui-filepane-edit-layout--live-preview > .gui-filepane-editor,
-.gui-filepane-edit-layout--live-preview > .gui-filepane-preview-html {
-	flex: 1;
-	min-width: 0;
-}
-
-.gui-filepane-edit-layout--live-preview > .gui-filepane-preview-html {
-	border-left: 1px solid var(--border);
 }
 
 .gui-filepane-markdown-editor {
@@ -1604,9 +1591,9 @@
 	position: sticky;
 	top: 0;
 	z-index: 20;
-	height: 42px;
-	min-height: 42px;
-	padding: 3px 8px;
+	height: 36px;
+	min-height: 36px;
+	padding: 2px 8px;
 	flex-wrap: nowrap;
 	overflow: visible;
 	border-bottom: 1px solid var(--glass-border);
@@ -1700,6 +1687,23 @@
 	border-radius: var(--radius-sm);
 }
 
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-item {
+	width: 28px;
+	height: 28px;
+	margin: 2px;
+	padding: 3px;
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-item svg {
+	width: 18px;
+	height: 18px;
+}
+
+.gui-filepane-markdown-editor .milkdown-top-bar .top-bar-heading-button {
+	height: 28px;
+	padding: 3px 4px 3px 8px;
+}
+
 .gui-filepane-markdown-editor .milkdown-top-bar .top-bar-item:focus-visible,
 .gui-filepane-markdown-editor .milkdown-top-bar .top-bar-heading-button:focus-visible {
 	outline: 2px solid var(--color-accent);
@@ -1719,7 +1723,7 @@
 
 .gui-filepane-markdown-editor .ProseMirror {
 	min-height: calc(100% - 42px);
-	padding: 28px clamp(20px, 6%, 72px) 72px;
+	padding: 20px clamp(12px, 2.5%, 32px) 56px;
 	font-size: 14px;
 	line-height: 1.75;
 	outline: none;

@@ -147,17 +147,28 @@ export class PluginGraphIdentities {
 	 *        dependencies (see {@link isDependencyOf}). Defaults to the entry's
 	 *        directory, which is right for a single-file plugin.
 	 */
-	observe(entry: string, files: Iterable<string>, pluginDir = dirname(entry)): void {
+	observe(
+		entry: string,
+		files: Iterable<string>,
+		pluginDir = dirname(entry),
+		include?: (file: string) => boolean,
+	): void {
 		const at = this.now();
-		this.observeAt(entry, files, at, pluginDir);
+		this.observeAt(entry, files, at, pluginDir, include);
 	}
 
 	/** {@link observe} with an explicit observation time, for a caller that
 	 *  loaded several plugins under one clock reading. */
-	observeAt(entry: string, files: Iterable<string>, at: number, pluginDir = dirname(entry)): void {
+	observeAt(
+		entry: string,
+		files: Iterable<string>,
+		at: number,
+		pluginDir = dirname(entry),
+		include: (file: string) => boolean = file => !isDependencyOf(file, pluginDir),
+	): void {
 		const identities = new Map<string, string | undefined>();
 		for (const file of files) {
-			if (isDependencyOf(file, pluginDir)) continue;
+			if (!include(file)) continue;
 			const identity = identityOf(file);
 			// Rule 6: a file written after the observation counts as changed from
 			// the start — `undefined` is the "no usable record" marker.
@@ -173,13 +184,38 @@ export class PluginGraphIdentities {
 	 * Called after a reload: without it the plugin stays stale forever and
 	 * reloads on every comparison — the classic "plugin restarts constantly" bug.
 	 */
-	refresh(entry: string, files: Iterable<string>, pluginDir = dirname(entry)): void {
+	refresh(
+		entry: string,
+		files: Iterable<string>,
+		pluginDir = dirname(entry),
+		include: (file: string) => boolean = file => !isDependencyOf(file, pluginDir),
+	): void {
 		const identities = new Map<string, string | undefined>();
 		for (const file of files) {
-			if (isDependencyOf(file, pluginDir)) continue;
+			if (!include(file)) continue;
 			identities.set(file, identityOf(file)?.key);
 		}
 		this.#records.set(entry, identities);
+	}
+
+	/** Every changed file in the recorded graphs, without stopping at the first
+	 *  change per entry. Profile propagation needs the complete accepted seed. */
+	changedFiles(entries: Iterable<string>): Map<string, { reason: "changed" | "missing" | "unrecorded" }> {
+		const out = new Map<string, { reason: "changed" | "missing" | "unrecorded" }>();
+		for (const entry of entries) {
+			const recorded = this.#records.get(entry);
+			if (recorded === undefined) {
+				out.set(entry, { reason: "unrecorded" });
+				continue;
+			}
+			for (const [file, recordedKey] of recorded) {
+				const identity = identityOf(file);
+				if (identity === undefined) out.set(file, { reason: "missing" });
+				else if (recordedKey === undefined) out.set(file, { reason: "unrecorded" });
+				else if (identity.key !== recordedKey) out.set(file, { reason: "changed" });
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -193,26 +229,8 @@ export class PluginGraphIdentities {
 	stale(entries: Iterable<string>): Map<string, { file: string; reason: "changed" | "missing" | "unrecorded" }> {
 		const out = new Map<string, { file: string; reason: "changed" | "missing" | "unrecorded" }>();
 		for (const entry of entries) {
-			const recorded = this.#records.get(entry);
-			if (recorded === undefined) {
-				out.set(entry, { file: entry, reason: "unrecorded" });
-				continue;
-			}
-			for (const [file, recordedKey] of recorded) {
-				const identity = identityOf(file);
-				if (identity === undefined) {
-					out.set(entry, { file, reason: "missing" });
-					break;
-				}
-				if (recordedKey === undefined) {
-					out.set(entry, { file, reason: "unrecorded" });
-					break;
-				}
-				if (identity.key !== recordedKey) {
-					out.set(entry, { file, reason: "changed" });
-					break;
-				}
-			}
+			const first = this.changedFiles([entry]).entries().next();
+			if (!first.done) out.set(entry, { file: first.value[0], reason: first.value[1].reason });
 		}
 		return out;
 	}

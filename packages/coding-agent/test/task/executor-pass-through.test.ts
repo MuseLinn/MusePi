@@ -151,6 +151,29 @@ describe("runSubprocess parent-discovery pass-through (issue #2190)", () => {
 		expect(spy.mock.calls[0]?.[0]?.getApiKey).toBe(getApiKey);
 	});
 
+	it("routes the child's prompt cache to the parent affinity while keeping its own session id", async () => {
+		const session = yieldEmittingSession();
+		const spy = vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue(createSessionResult(session));
+
+		const result = await runSubprocess({ ...baseOptions, parentPromptCacheKey: "root-affinity" });
+
+		expect(result.exitCode).toBe(0);
+		const forwarded = spy.mock.calls[0]?.[0];
+		expect(forwarded?.providerPromptCacheKey).toBe("root-affinity");
+		// Auth and telemetry stay scoped to the child's freshly minted session.
+		expect(forwarded?.providerSessionId).toBeUndefined();
+	});
+
+	it("leaves the provider prompt cache key unset without a parent affinity", async () => {
+		const session = yieldEmittingSession();
+		const spy = vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue(createSessionResult(session));
+
+		const result = await runSubprocess({ ...baseOptions });
+
+		expect(result.exitCode).toBe(0);
+		expect(spy.mock.calls[0]?.[0]?.providerPromptCacheKey).toBeUndefined();
+	});
+
 	it("forwards undefined when the parent has not pre-discovered state", async () => {
 		const session = yieldEmittingSession();
 		const spy = vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue(createSessionResult(session));

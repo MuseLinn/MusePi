@@ -28,7 +28,9 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getConfigDirName, getPluginsDir, logger } from "@musepi/pi-utils";
+import { parsePluginExperimental } from "@musepi/pi-wire";
 import { describeDshBundle } from "../dsh/dsh-bundle";
+import { readPluginBlock } from "./manifest-block";
 
 /** One profile's composition inputs, as declared. */
 export interface ProfileComposition {
@@ -147,6 +149,7 @@ export interface BundlePackageView {
 	readonly selected: boolean;
 	readonly readable: boolean;
 	readonly description?: string;
+	readonly experimental?: boolean;
 }
 
 type ProfileManifestBlock = Record<string, unknown> & { profile?: Record<string, unknown> };
@@ -225,6 +228,7 @@ export async function listInstalledBundles(profileDir: string, home: string): Pr
 						selected: selected.has(pkg.name),
 						readable: inventory.isBundle && inventory.unreadable.length === 0,
 						...(typeof pkg.description === "string" ? { description: pkg.description } : {}),
+						...(parsePluginExperimental(readPluginBlock(pkg)?.experimental) ? { experimental: true } : {}),
 					});
 				} catch (error) {
 					logger.debug("profile bundle inventory: package unreadable", { path: manifestPath, err: error });

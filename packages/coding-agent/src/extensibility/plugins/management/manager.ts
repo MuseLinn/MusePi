@@ -11,14 +11,18 @@ import {
 	isEnoent,
 	logger,
 } from "@musepi/pi-utils";
-import { loadExtensions } from "../../extensions/loader";
+import { EventBus } from "../../../utils/event-bus";
+import { ExtensionRuntime } from "../../extensions/loader";
 import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "../marketplace/registry";
 import { parsePluginId } from "../marketplace/types";
 import { readPluginBlock } from "../profile/manifest-block";
 import { resolveRegistryConfig } from "../profile/registry-config";
 import { attributeFailure, registryArgument, registryPlan } from "../profile/registry-fallback";
 import { normalizePluginRuntimeConfig } from "../profile/runtime-config";
+import { disposePluginPrimitives } from "../runtime/cordis-primitives";
 import { resolvePluginManifestEntries } from "../runtime/loader";
+import { mountPlugin } from "../runtime/mount";
+import { defaultSessionConfigReader } from "../runtime/session-loader";
 import type {
 	DoctorCheck,
 	DoctorOptions,
@@ -593,9 +597,24 @@ export class PluginManager {
 		}
 
 		if (loadable.length > 0) {
-			const result = await loadExtensions(loadable, this.#cwd);
-			for (const failure of result.errors) {
-				errors.push(`${failure.path}: ${failure.error}`);
+			const runtime = new ExtensionRuntime();
+			const eventBus = new EventBus();
+			const readConfig = await defaultSessionConfigReader();
+			for (const entryPath of loadable) {
+				const mounted = await mountPlugin({
+					entryPath,
+					cwd: this.#cwd,
+					eventBus,
+					runtime,
+					readConfig,
+					fresh: true,
+				});
+				if (!mounted.ok) {
+					errors.push(`${entryPath}: ${mounted.code}: ${mounted.message}`);
+					continue;
+				}
+				// Validation mounts the real entry but does not keep its resources alive.
+				await disposePluginPrimitives(mounted.extension);
 			}
 		}
 

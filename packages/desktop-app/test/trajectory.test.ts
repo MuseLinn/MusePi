@@ -227,6 +227,56 @@ describe("buildTrajectory", () => {
 		expect(stats.turns).toBe(0);
 		expect(stats.durationSec).toBe(0);
 	});
+
+	it("模型与思考级别事件保留前后参数，并跨增量派生延续", () => {
+		const first = buildTrajectory([
+			{
+				type: "model_change",
+				id: "m1",
+				parentId: null,
+				timestamp: "2026-11-03T00:00:00.000Z",
+				model: "openai/gpt-5",
+				role: "default",
+			},
+		]);
+		const second = buildTrajectory(
+			[
+				{
+					type: "model_change",
+					id: "m2",
+					parentId: "m1",
+					timestamp: "2026-11-03T00:00:01.000Z",
+					model: "anthropic/claude-sonnet-4-5",
+					role: "advisor",
+				},
+				{
+					type: "thinking_level_change",
+					id: "t1",
+					parentId: "m2",
+					timestamp: "2026-11-03T00:00:02.000Z",
+					thinkingLevel: "high",
+				},
+			],
+			undefined,
+			{ init: first.finalState },
+		);
+		expect(second.events[0]?.body).toBe("model: openai/gpt-5 → anthropic/claude-sonnet-4-5\nrole: advisor");
+		expect(second.events[1]?.body).toBe("thinkingLevel: high");
+		const third = buildTrajectory(
+			[
+				{
+					type: "thinking_level_change",
+					id: "t2",
+					parentId: "t1",
+					timestamp: "2026-11-03T00:00:03.000Z",
+					thinkingLevel: null,
+				},
+			],
+			undefined,
+			{ init: second.finalState },
+		);
+		expect(third.events[0]?.body).toBe("thinkingLevel: high → auto");
+	});
 });
 
 describe("顾问卡(地图节点契约,实机回归 2026-09-27)", () => {

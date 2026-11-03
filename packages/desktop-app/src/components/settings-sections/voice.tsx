@@ -31,18 +31,11 @@ import "../../i18n/voice";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
-import { useFloatingMenu } from "../../lib/use-floating-menu";
-import {
-	enumerateMicDevices,
-	getVoiceInputDevice,
-	setVoiceInputDevice,
-	speak,
-	startDictation,
-	type VoiceActivity,
-} from "../../lib/voice";
+import { speak, startDictation, type VoiceActivity } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
 import { SpeakerEnrollment } from "../composer/speaker-enrollment";
 import { MockComposer, MockConversationPreview, MockUserRow } from "../MockConversationPreview";
+import { VoiceInputDevicePicker } from "../VoiceInputDevicePicker";
 import { SchemaTabSection } from "./schema";
 
 /* ── Speech-model download state (stt/tts .modelStatus / .modelDownload) ──
@@ -651,78 +644,6 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 	);
 }
 
-/** Liquid-glass input-device picker: replaces the native <select> (which
- *  broke the settings surface's visual language) with a floating menu in the
- *  composer AttachMenu style. The value stays machine-local (localStorage
- *  via setVoiceInputDevice) and is picked up by every dictation entry point. */
-function InputDeviceMenu({
-	devices,
-	deviceId,
-	onChange,
-}: {
-	devices: { deviceId: string; label: string }[];
-	deviceId: string | null;
-	onChange(deviceId: string | null): void;
-}): ReactNode {
-	const [open, setOpen] = useState(false);
-	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
-	const current = devices.find(d => d.deviceId === deviceId);
-	return (
-		<div className="gui-voice-device" ref={anchorRef}>
-			<button
-				type="button"
-				className="gui-btn"
-				disabled={devices.length === 0}
-				aria-label={t("settings.voiceInputDevice")}
-				aria-expanded={open}
-				aria-haspopup="menu"
-				onClick={() => setOpen(v => !v)}
-			>
-				<Icon name="mic" className="h-3.5 w-3.5" />
-				<span className="gui-voice-device-label">{current?.label ?? t("settings.systemDefault")}</span>
-				<Icon name="arrow-down-s" className="h-3.5 w-3.5" />
-			</button>
-			{renderMenu(
-				<div className="gui-attach-menu" role="menu" aria-label={t("settings.voiceInputDevice")}>
-					<button
-						type="button"
-						className="gui-attach-opt"
-						role="menuitemradio"
-						aria-checked={deviceId === null}
-						onClick={() => {
-							onChange(null);
-							setOpen(false);
-						}}
-					>
-						<span className="min-w-0 flex-1">
-							<span className="gui-attach-opt-title">{t("settings.systemDefault")}</span>
-						</span>
-						{deviceId === null && <Icon name="check" className="h-4 w-4" />}
-					</button>
-					{devices.map(d => (
-						<button
-							key={d.deviceId}
-							type="button"
-							className="gui-attach-opt"
-							role="menuitemradio"
-							aria-checked={deviceId === d.deviceId}
-							onClick={() => {
-								onChange(d.deviceId);
-								setOpen(false);
-							}}
-						>
-							<span className="min-w-0 flex-1">
-								<span className="gui-attach-opt-title">{d.label}</span>
-							</span>
-							{deviceId === d.deviceId && <Icon name="check" className="h-4 w-4" />}
-						</button>
-					))}
-				</div>,
-			)}
-		</div>
-	);
-}
-
 /** 插件单元停用时的占位卡：说明归属 + 一键启用（等价能力中心的开关，
  *  走同一 extensions.setEnabled RPC）。stt/tts 的 schema 行、模型选择器
  *  与测试入口都由插件状态驱动——插件关了，对应配置就不该出现。启用后
@@ -766,12 +687,8 @@ function DisabledVoicePluginNote({
 export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// Schema keys render via SchemaTabSection below — minus stt.modelName and
 	// tts.localModel, which the two picker cards render as radio rows (bare
-	// enum dropdowns made the tiers unreadable). Local state covers only the
-	// live mic test (device enumeration + dictation round-trip).
-	const [devices, setDevices] = useState<{ deviceId: string; label: string }[]>([]);
-	// Selected microphone (deviceId, null = system default). Seeded from the
-	// same machine-local key the dictation entry points read.
-	const [deviceId, setDeviceId] = useState<string | null>(() => getVoiceInputDevice());
+	// enum dropdowns made the tiers unreadable). The shared device picker owns
+	// enumeration and preview capture; local state covers only dictation.
 	// Dictation test state machine: idle → recording (live level meter) →
 	// transcribing → result / error. Phase drives the status copy, the
 	// dictating-capsule mic button and the meter.
@@ -819,9 +736,6 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	}, [rpc]);
 
 	useEffect(() => {
-		void enumerateMicDevices()
-			.then(setDevices)
-			.catch(() => setDevices([]));
 		void refreshSpeaker();
 		return () => stopRef.current?.();
 	}, [refreshSpeaker]);
@@ -942,21 +856,9 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("settings.voiceInputDevice")}</div>
-						<div className="gui-settings-row-desc">
-							{devices.length > 0 ? t("settings.voiceInputDeviceHint") : t("settings.voiceInputTestDescription")}
-						</div>
+						<div className="gui-settings-row-desc">{t("settings.voiceInputDeviceHint")}</div>
 					</div>
-					{/* A floating-menu picker, not a native <select>: the value is
-					 * stored under a machine-local key and is picked up by every
-					 * dictation entry point. */}
-					<InputDeviceMenu
-						devices={devices}
-						deviceId={deviceId}
-						onChange={next => {
-							setDeviceId(next);
-							setVoiceInputDevice(next);
-						}}
-					/>
+					<VoiceInputDevicePicker active={sttOn && !dictating} />
 				</div>
 				<MockConversationPreview
 					showAvatars={showAvatars}

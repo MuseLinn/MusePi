@@ -63,6 +63,8 @@ A component declared in `musepi.components` has its own fiber when it has an ent
 
 Preset compositions use `CordisPresetRuntime`, not the legacy extension loader as their lifecycle owner. Each row mounts through `scope.plugin()`. `isolate` maps to `Context.isolate(name)`, so a provider and its consumers must share a default context or an isolated group to see the same service object. `Extension` is only the registration record consumed by the tool/UI bridge. Switching a preset removes old tools and disposes old fibers; session teardown does the same.
 
+Session advisors are owned by the session-scoped Cordis plugin in `session/advisor-lifecycle-plugin.ts`. The plugin constructs `SessionAdvisors` and subscribes to primary-turn completion synchronously, before the first turn can finish. Its fiber effect removes that subscription, stops every advisor runtime, and waits for recorder shutdown. `SessionAdvisors` remains the policy helper for models, context, transcripts, delivery, configuration, and statistics; those policies are not duplicated in the lifecycle plugin. A user interrupt pauses both the primary loop and active advisor work and waits for both to settle. An advisor-triggered correction completes that review cycle and is not fed back to the advisor for another review.
+
 Plugin-owned skills live beside the plugin and are declared during `apply` with `registerSkill`. They do not use the standalone bundled-skill installer. Disabling the plugin removes its skill, tools, components, and effects together; standalone file skills installed by a user remain independent.
 
 ## Migration checklist

@@ -50,6 +50,8 @@ An ordinary plugin package declares its entries, configuration, and resources in
 
 The Plugins view manages packages and profile bundles at one card granularity. Ordinary package switches use the runtime lock; bundle switches update `musepi.profile.bundles`, and selected-but-unreadable bundles stay visible. Detailed layer and row composition remains available through `bundles.composition` without a separate Composition tab. Preset rows mount as real Cordis fibers in each session: `isolate` creates service-specific child realms, and switching modes disposes the old preset fibers before mounting the new composition. Plugin-owned skills are declared with `registerSkill` beside the plugin's other resources and disappear with that plugin; the Android emulator uses this lifecycle.
 
+Creator quick-create sends only the user's natural-language requirement. Its preset prompt owns the operational workflow: call `modes.save` with the complete new definition, then call `modes.validate` with the persisted id. `modes.save` performs structural, inheritance, and extension-existence checks before writing; `modes.validate` performs the mount check. A failed check must be repaired and repeated before completion is reported. Host UI instructions must not be appended to the user message.
+
 Desktop releases must stage self-contained first-party plugin bundles with the daemon. Run `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>` after compiling it. The script compiles and validates `bundled-plugins` and `desktop-plugins` under `packages/desktop-app/vendor/daemon`, including every entry declared by `musepi.extensions` and `musepi.components`; component styles remain beside the compiled component. Direct and transitive JavaScript dependencies are bundled, while the terminal PTY bridge and its native runtime packages are copied into the staged layout. Electron unpacks this directory and passes both absolute roots to the daemon through the platform-delimited `MUSEPI_BUNDLED_PLUGIN_ROOTS` variable. Development discovery retains its source-tree fallbacks; a release must not depend on source trees or development dependencies.
 
 Discovered JavaScript and TypeScript hooks use the production extension chain: `discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`. The legacy `HookRunner` exports remain for public API compatibility and their direct consumers; they are not a second production execution path. TUI settings and plugin entries read the same schema, discovery results, and Cordis enablement state as the desktop client. The TUI does not introduce a separate installer or plugin-state store.
@@ -161,12 +163,14 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**(编译时强制):
 - 默认导出 React 组件;
 - JSX 使用 `window.MusePiReact.createElement`。`react`、`react-dom`、`react-dom/client` 和 `react/jsx-runtime` 的普通或 type-only import 都由 daemon 映射到宿主 React，不会打包第二份 React；不得绕过这条映射，自行打包或从其他地址加载 React。
-- **Injected props (all optional)**: `{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, formatTokens }`. `rpc` is the daemon bridge; `sessionId`/`cwd` identify the active session; `slot`/`extensionId` identify the contribution. `panelTab` is present for `panel.tab.*` and carries the current instance's `id/surface/target/label/readOnly/dedupeKey`, including in split columns. The reserved `panel.tab.files` mount also receives `fileWorkspace`, the host-owned file-tab, draft, reveal-request, and editor-history contract. The single `app.chat` mount receives `chatView`, the host-owned session, workspace, right-panel, and terminal contract; it must not copy that state. Full-page slots receive navigation under `page`; `app.capability` specifically receives `page: { tab, onTabChange, onBack }`, not top-level navigation props. `formatTokens` keeps numeric readouts consistent with the host transcript. Components must remain usable when any prop is absent.
+- **Injected props (all optional)**: `{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, panelShell, browser, formatTokens }`. `rpc` is the daemon bridge; `sessionId`/`cwd` identify the active session; `slot`/`extensionId` identify the contribution. `panelTab` is present for `panel.tab.*` and carries the current instance's `id/surface/target/label/readOnly/dedupeKey`, including in split columns. The reserved `panel.tab.files` mount also receives `fileWorkspace`, the host-owned file-tab, draft, reveal-request, and editor-history contract. The single `app.chat` mount receives `chatView`, the host-owned session, workspace, right-panel, and terminal contract; it must not copy that state. The `panel.shell` mount receives the full right-panel contract through `panelShell`; `panel.tab.browser` receives `{ open, openRequest, onTakeover }` through `browser`. Full-page slots receive navigation under `page`; `app.capability` specifically receives `page: { tab, onTabChange, onBack }`, not top-level navigation props. `formatTokens` keeps numeric readouts consistent with the host transcript. Components must remain usable when any prop is absent.
 - **样式**:组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`(组件卸载即移除)——不要依赖全局样式文件;
 - **失败可见**:编译失败/加载失败在宿主处以红色错误块显示(不再静默消失);运行时错误有 `gui-slot-error` 样式。
 
 **槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错;单一权威见 `packages/collab-proto/src/extension-slots.ts`):
 - `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
+- `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `app.chat` does not bundle it.
+- `browser.host` — persistent managed-browser guest host (single), mounted at the app root independently of `panel.tab.browser`. Both artifacts bind the same `window.MusePiManagedBrowserHost` store instead of bundling separate copies.
 - `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
@@ -193,6 +197,8 @@ export default function (pi: ExtensionAPI): void {
 **设置卡片(settings.item + settingsScope)**:注册 `slot: "settings.item.<extId>"`(extId = 扩展目录名)的组件,会在**扩展中心**(设置 → 扩展)底部按扩展获得一张卡片(扩展未启用则不显示)。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名,建议用 `扩展名.xxx` 前缀**(与 registerSetting 的 `display.taskCardStyle` 同约定)避免与其他扩展冲突;写入只放行 registerSetting 注册过的键,未注册键写会抛 read-only。**写时校验(registerSetting 的 `validate` 字段)**:扩展可为注册的设置键提供 `validate(value)` 回调——返回错误字符串即拒写(daemon `settings.set` RPC 抛错,GUI 显示原因),返回 `void` 放行。schema 无法表达的约束(端点可达性、跨键一致性、枚举外值)由此在**写入时**拒绝,而非用到时才炸。无任何扩展注册该槽位时分区显示空态文案。
 
 **热插拔(v2,HMR 全量)**:扩展源码/配置变更 → daemon watcher(500ms debounce)① 清缓存并广播 `extensions.changed`(需先 `events.subscribe`)→ GUI 插槽即时重载(~1s),`ExtensionsCenter`/`PluginsSection` 监听同事件即时刷新;② 对每个活跃会话比对**运行时源码图的 mtime 快照**后执行 `reloadExtension`(不依赖 fs.watch 的 filename —— Windows 递归 watch 的 filename 不可靠),完成后发会话内事件 `extensions.reloaded`。会话内工具/命令/handlers 下次调用生效。
+
+**Cordis 宿主级组合 HMR**:`ProfileModuleGraph` 合并所有在役组合行的源码图，accepted 变更沿 importer 反向传播，未接受模块记为 declined。生产装载链保留每行的 `rowId`、`config` 和附加 `inject`，同一 entry 的多行独立重载。受影响行作为一个事务先预导入全部替代模块，再逆序销毁旧 fiber 并逐行 apply；导入或 apply 失败会恢复旧实例，成功后才刷新图快照。externals 只记录 pending 并要求重启宿主。Track B 的会话级重载继续使用下述语义，不把 Cordis 的组合事务误套到 legacy runner。
 
 **v2 契约(子模块边界、忙门控、MCP)**:
 - **子模块改动同样热生效,无需 touch 入口**:装载时对入口的**运行时源码图**做一次走查(`collectExtensionModules`,含静态 `import`、CJS `require` 与动态 `import()`;type-only import/export 被编译擦除,不进入该图),快照逐文件 mtime;daemon 的变更判定按这个快照逐文件比对(`extensionEntriesNeedingReload`),任一图内文件变了就重载它的入口。重载本身一直是好的 —— cache-bust tag 单调递增(`nextLegacyPiLoadTag`),`onLoad` 钩子把它盖到每个相对 import 上,整图重新读盘 —— 坏的是**没人通知有东西该重载**。
@@ -378,6 +384,7 @@ pi.unregisterDesignSystem("my-brand");
   "name": "voice-input",
   "musepi": {
     "extensions": ["index.ts"],
+    "experimental": true,
     "config": [
       { "key": "enabled", "type": "boolean", "default": true, "description": "启用语音输入" },
       { "key": "threshold", "type": "number", "default": 0.5, "min": 0, "max": 1, "step": 0.05 },
@@ -390,6 +397,7 @@ pi.unregisterDesignSystem("my-brand");
 }
 ```
 
+- `experimental` 只接受字面值 `true`，会沿 daemon 条目传到普通包和模块卡片并显示本地化「实验性」标签；缺省和其他值不标记。
 - 字段类型:`boolean | number | string | select | path`;number 可带 `min/max/step`,select 必须给 `options`。
 - `restart` 生效域:`none`(默认,立即) / `session`(新会话) / `daemon`(重启 daemon)。
 - fail-soft:manifest 是用户可写 JSON,坏字段逐个被丢弃进结构化 errors(详情页有可见警告),好字段照常生效,绝不拖垮扩展登记。
@@ -441,6 +449,12 @@ export default async function (pi: ExtensionAPI) {
 - 本地路径必须绝对:GUI 输入框没有工作目录可依,相对路径会被解析到插件目录内。
 - 三段式 http(s) URL 仅在 host 属已知 forge(github/gitlab/bitbucket/codeberg/sr.ht/gitee/gitcode)时读作仓库;其它 host 需带 `.git` 后缀自证。否则一个网页链接会启动必然失败的克隆。
 - 取消与失败是两回事:取消后插件目录已还原、不带失败分类,GUI 文案与动作都不同。
+
+### 入口校验、打包与分享
+
+安装校验使用生产 `mountPlugin` 链解析每个 `extensions` 入口，因此纯 Cordis 的 `name` / `inject` / `Config` / `apply` 与 legacy 默认导出 factory 都按各自真实语义检查。校验在独立 runtime 和 event bus 上执行，成功后立即调用 `disposePluginPrimitives` 释放资源；入口缺失或挂载失败会拒绝安装并触发既有回滚，不会留下半安装状态。
+
+`musepi plugin pack [path] [-o dir] [--json]` 在本地生成可分发的 `.tgz`。它要求包具有 `name`、`version` 和 `musepi` / `omp` / `pi` 清单，检查声明的入口存在后调用 `bun pm pack`，不访问 registry，也不执行 publish。将生成的文件发给接收方后，可在插件页拖入，或执行 `musepi plugin install <tarball 绝对路径>`。绝对 `.tgz` 路径按归档安装，不会误入目录 link 分支。需要公开发布时，仍使用包 registry 的发布流程；`plugin pack` 本身不发布。
 
 ### 拖入安装
 

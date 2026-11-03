@@ -263,6 +263,7 @@ export function Composer({
 	// dock = 输入卡下方的整行(读数类内容,居中);left/right = 底部工具栏两端。
 	// list 语义 —— 扩展声明 composer.dock/left/right 槽位即注入组件。
 	const composerDockItems = useSlotComponents(rpc, COMPOSER_DOCK_SLOT);
+	const composerLeftItems = useSlotComponents(rpc, COMPOSER_LEFT_SLOT);
 	const [text, setText] = useState("");
 	// Element picker (browser tool) inserts picked-page text into the draft.
 	useEffect(() => {
@@ -2001,6 +2002,7 @@ export function Composer({
 					<div className="gui-composer-above">
 						{(modes && (todoTotal > 0 || (queued != null && queued.count > 0))) ||
 						connectorServers.length > 0 ||
+						composerLeftItems.length > 0 ||
 						activeTask ? (
 							<div className="gui-composer-dock">
 								{/* Connector picker (M4 P1): which MCP servers this session
@@ -2032,6 +2034,8 @@ export function Composer({
 										)}
 									/>
 								)}
+								{/* composer.left chips share the status row with connectors. */}
+								<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
 								{/* composer.activity 座位槽:
 								 * 进行中的活动(子代理、后台任务)的扩展视图。 */}
 								<SlotComponentHost rpc={rpc} slot={COMPOSER_ACTIVITY_SLOT} sessionId={sessionId} cwd={cwd} />
@@ -2113,9 +2117,6 @@ export function Composer({
 				}
 				footerLeft={
 					<>
-						{/* composer.left 座位槽:
-						 * 扩展声明 composer.left 槽位即注入工具栏左端。 */}
-						<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
 						{/* composer.attachments 座位槽:
 						 * 附件区——待发附件的清单、扫描、批量操作。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_ATTACHMENTS_SLOT} sessionId={sessionId} cwd={cwd} />

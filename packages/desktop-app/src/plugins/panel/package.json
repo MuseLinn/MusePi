@@ -1,0 +1,12 @@
+{
+	"name": "musepi-panel",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned right-panel shell, tabs, split layout, and maximize behavior.",
+	"type": "module",
+	"musepi": {
+		"icon": "▥",
+		"description": "右侧面板壳、标签、分栏与最大化，独立于会话和浏览器页面。",
+		"extensions": ["./index.ts"]
+	}
+}

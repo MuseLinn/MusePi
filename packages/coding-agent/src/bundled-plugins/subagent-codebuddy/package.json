@@ -2,12 +2,14 @@
 	"name": "musepi-subagent-codebuddy",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Experimental CodeBuddy subagent for MusePi.",
+	"description": "CodeBuddy subagent for MusePi.",
 	"license": "MIT",
 	"type": "module",
 	"musepi": {
 		"icon": "B",
-		"description": "实验性：通过现有 task 工具调用原生 CodeBuddy CLI。",
+		"label": "CodeBuddy Subagent",
+		"description": "Run the native CodeBuddy CLI through the existing task tool.",
+		"experimental": true,
 		"extensions": ["./index.ts"],
 		"config": [
 			{ "key": "executable", "type": "path", "label": "CodeBuddy 可执行文件", "description": "留空时从 PATH 查找 codebuddy。", "default": "" },

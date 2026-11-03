@@ -2438,6 +2438,12 @@
 	color: var(--color-accent, #7c8cf8);
 	font-weight: 600;
 }
+.gui-ext-item-tag--experimental {
+	border-color: color-mix(in oklab, var(--color-warning, #d99428) 45%, transparent);
+	background: color-mix(in oklab, var(--color-warning, #d99428) 12%, transparent);
+	color: var(--color-warning, #d99428);
+	font-weight: 600;
+}
 .gui-ext-dot--error {
 	background: var(--color-danger);
 	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-danger) 22%, transparent);

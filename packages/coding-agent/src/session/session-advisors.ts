@@ -312,6 +312,7 @@ export class SessionAdvisors {
 	#preserveAdvisorAdvice = false;
 	#advisorPrimaryTurnsCompleted = 0;
 	#advisorInterruptImmuneTurnStart: number | undefined;
+	#skipAdvisorReviewForNextTurn = false;
 	#pendingAdvisorCardEvents = new Set<Promise<void>>();
 	#advisorYieldQueueUnsubscribe: (() => void) | undefined;
 
@@ -341,6 +342,12 @@ export class SessionAdvisors {
 		signal?: AbortSignal,
 	): Promise<void> {
 		this.#advisorPrimaryTurnsCompleted++;
+		// An advisor-triggered correction is the end of that review cycle. Feeding
+		// the correction back would let a rephrased note start another cycle forever.
+		if (this.#skipAdvisorReviewForNextTurn) {
+			this.#skipAdvisorReviewForNextTurn = false;
+			return;
+		}
 		for (const advisor of this.#advisors) {
 			if (advisor.runtime.disposed) continue;
 			try {
@@ -367,9 +374,15 @@ export class SessionAdvisors {
 		return this.#buildAdvisorRuntime(seedToCurrent);
 	}
 
-	/** Stops every advisor runtime and starts recorder shutdown. */
-	stopRuntime(): void {
-		this.#stopAdvisorRuntime();
+	/** Stops every advisor runtime and resolves after recorder shutdown. */
+	stopRuntime(): Promise<void> {
+		return this.#stopAdvisorRuntime();
+	}
+
+	/** Abort active advisor work and settle it before the user-stop call returns. */
+	async pauseForUserInterrupt(): Promise<void> {
+		this.autoResumeSuppressed = true;
+		await Promise.all(this.#advisors.map(advisor => advisor.runtime.pauseForSessionTransition()));
 	}
 
 	/**
@@ -403,6 +416,7 @@ export class SessionAdvisors {
 
 	/** Re-primes advisor transcript views across a conversation boundary. */
 	resetSessionState(options: { preserveCost?: boolean } = {}): void {
+		this.#skipAdvisorReviewForNextTurn = false;
 		this.#resetAdvisorSessionState(options.preserveCost === true);
 	}
 
@@ -453,7 +467,17 @@ export class SessionAdvisors {
 	}
 
 	set autoResumeSuppressed(value: boolean) {
+		if (this.#advisorAutoResumeSuppressed === value) return;
 		this.#advisorAutoResumeSuppressed = value;
+		for (const advisor of this.#advisors) {
+			if (value) {
+				// A user stop owns both loops. Keep the runtime for a later explicit
+				// resume, but abort its active provider request now.
+				void advisor.runtime.pauseForSessionTransition();
+			} else {
+				advisor.runtime.resumeAfterSessionTransition();
+			}
+		}
 	}
 
 	/** Tracks persistence of a visible advisor card emitted outside the primary loop. */
@@ -490,6 +514,16 @@ export class SessionAdvisors {
 		this.#advisorInterruptImmuneTurnStart = this.#advisorPrimaryTurnsCompleted + 1;
 	}
 
+	/**
+	 * Provider affinity the advisor's requests must join: the host's pinned
+	 * prompt-cache key, else the host's provider session id (the conversation
+	 * root). The advisor's own provider session id stays its auth/telemetry
+	 * identity and is only a fallback for hosts without any provider session.
+	 */
+	#advisorAffinity(advisorProviderSessionId: string | undefined): string | undefined {
+		return this.#host.agent.promptCacheKey ?? this.#host.agent.sessionId ?? advisorProviderSessionId;
+	}
+
 	/** Rebind one advisor to the active primary conversation's provider identity. */
 	#refreshAdvisorProviderIdentity(advisor: ActiveAdvisor): void {
 		const primaryProviderSessionId = this.#host.sessionId();
@@ -500,7 +534,7 @@ export class SessionAdvisors {
 		);
 		advisor.providerSessionId = providerSessionId;
 		advisor.agent.sessionId = providerSessionId;
-		advisor.agent.promptCacheKey = this.#host.agent.promptCacheKey ?? providerSessionId;
+		advisor.agent.promptCacheKey = this.#advisorAffinity(providerSessionId);
 		advisor.agent.getApiKey = requestModel => this.#host.modelRegistry.resolver(requestModel, providerSessionId);
 		advisor.agent.setMetadataResolver(
 			providerSessionId
@@ -752,12 +786,11 @@ export class SessionAdvisors {
 			// Mirror the SDK's provider-shaping options (streamFn/onPayload/...,
 			// providerSessionState, promptCacheKey, transformProviderContext) so each
 			// advisor's requests cache, route, and obfuscate like the main turn.
-			// `promptCacheKey` preserves an explicitly pinned provider cache key
-			// unchanged so tan/shared-session advisor calls read the exact shard the
-			// parent turn populated. Otherwise the advisor uses its provider UUIDv7 so
-			// Codex request identity remains UUID-shaped while local labels keep the
-			// `-advisor` suffix.
-			const advisorPromptCacheKey = this.#host.agent.promptCacheKey ?? advisorProviderSessionId;
+			// `promptCacheKey` joins the host's effective affinity, so un-pinned
+			// sessions share the host's provider session id and pinned/forked hosts
+			// share their root key. The advisor's own provider UUIDv7 stays its
+			// request lineage and telemetry identity.
+			const advisorPromptCacheKey = this.#advisorAffinity(advisorProviderSessionId);
 			// On the Cursor provider every tool runs server-side and is dispatched
 			// back through `cursorExecHandlers`; without this bridge the advisor's
 			// own tools (including the MCP `advise` tool) return `toolNotFound` and
@@ -1074,6 +1107,7 @@ export class SessionAdvisors {
 		// arming earlier would downgrade the next `advisor.immuneTurns` worth of
 		// real concerns/blockers to skip-idle-flush asides (#5628 review).
 		this.#recordAdvisorInterruptDelivered();
+		this.#skipAdvisorReviewForNextTurn = true;
 		void this.#host
 			.sendCustomMessage(
 				{ customType: "advisor", content, display: true, attribution: "agent", details },
@@ -1087,7 +1121,8 @@ export class SessionAdvisors {
 		for (const a of this.#advisors) a.runtime.reset(reason);
 	}
 
-	#stopAdvisorRuntime(): void {
+	#stopAdvisorRuntime(): Promise<void> {
+		this.#skipAdvisorReviewForNextTurn = false;
 		// Detach each recorder feed BEFORE aborting its advisor agent: dispose() aborts
 		// the loop, and an abort emits a final `message_end` we must not enqueue against
 		// a closing recorder (it would reopen and resurrect an already-released file).
@@ -1105,6 +1140,7 @@ export class SessionAdvisors {
 		this.#advisors = [];
 		this.#advisorYieldQueueUnsubscribe?.();
 		this.#advisorYieldQueueUnsubscribe = undefined;
+		return this.#advisorRecorderClosed;
 	}
 
 	#recordAdvisorCost(advisor: ActiveAdvisor, message: AssistantMessage): void {
@@ -1472,7 +1508,7 @@ export class SessionAdvisors {
 						telemetry,
 						tools: agent.state.tools,
 						sessionId: advisorProviderSessionId,
-						promptCacheKey: advisorProviderSessionId,
+						promptCacheKey: this.#advisorAffinity(advisorProviderSessionId),
 						metadata: advisorMetadata,
 						providerSessionState: this.#host.providerSessionState,
 						preferWebsockets: this.#host.preferWebsockets,

@@ -229,6 +229,7 @@ import { resumeCommand } from "../utils/resume-command";
 import { generateSessionTitle } from "../utils/title-generator";
 import { buildNamedToolChoice, isToolChoiceActive } from "../utils/tool-choice";
 import type { VibeModeState } from "../vibe/state";
+import { type AdvisorPrimaryTurnEndListener, CordisAdvisorLifecycle } from "./advisor-lifecycle-plugin";
 import type { AgentSessionEvent, AgentSessionEventListener } from "./agent-session-events";
 import type {
 	AgentSessionConfig,
@@ -342,7 +343,7 @@ import {
 	toRestoredQueuedMessage,
 } from "./queued-messages";
 import type { ServingModel } from "./retry-fallback-chains";
-import { type AdvisorStats, SessionAdvisors, type SessionAdvisorsHost } from "./session-advisors";
+import type { AdvisorStats, SessionAdvisors, SessionAdvisorsHost } from "./session-advisors";
 import type { BuildSessionContextOptions, SessionContext } from "./session-context";
 import { getRestorableSessionModels } from "./session-context";
 import { formatSessionDumpText } from "./session-dump-format";
@@ -570,6 +571,9 @@ export class AgentSession {
 	#goalModeState: GoalModeState | undefined;
 	#goalRuntime: GoalRuntime;
 	readonly #advisors: SessionAdvisors;
+	readonly #advisorLifecycle: CordisAdvisorLifecycle;
+	readonly #advisorTurnEndListeners = new Set<AdvisorPrimaryTurnEndListener>();
+	#advisorDispose: Promise<void> | undefined;
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
@@ -1357,7 +1361,9 @@ export class AgentSession {
 			}
 			this.#loopGuards.recordTurn(messages, context);
 			await this.#prewalk.advanceAtTurnEnd(messages, context);
-			await this.#advisors.onPrimaryTurnEnd(messages, context?.willContinue, signal);
+			for (const listener of [...this.#advisorTurnEndListeners]) {
+				await listener(messages, context?.willContinue, signal);
+			}
 			await this.#maintenance.maintainContextMidRun(messages, signal, context);
 		});
 		this.yieldQueue = new YieldQueue({
@@ -1639,22 +1645,32 @@ export class AgentSession {
 			createCodexCompactionContext: createMaintenanceCodexCompactionContext,
 			sessionId: () => this.sessionId,
 		};
-		this.#advisors = new SessionAdvisors(advisorsHost, {
-			enabled: this.settings.get("advisor.enabled"),
-			tools: config.advisorTools,
-			pauseGate: config.pauseGate,
-			createGrepTool: config.advisorCreateGrepTool,
-			createEditTool: config.advisorCreateEditTool,
-			getToolContext: config.advisorGetToolContext,
-			mcpResources: config.advisorMcpResources,
-			watchdogPrompt: config.advisorWatchdogPrompt,
-			sharedInstructions: config.advisorSharedInstructions,
-			contextPrompt: config.advisorContextPrompt,
-			configs: config.advisorConfigs,
-			streamFn: config.advisorStreamFn,
-			transformProviderContext: config.transformProviderContext,
-			initialCosts: config.initialAdvisorCosts,
+		this.#advisorLifecycle = new CordisAdvisorLifecycle({
+			host: advisorsHost,
+			advisorOptions: {
+				enabled: this.settings.get("advisor.enabled"),
+				tools: config.advisorTools,
+				pauseGate: config.pauseGate,
+				createGrepTool: config.advisorCreateGrepTool,
+				createEditTool: config.advisorCreateEditTool,
+				getToolContext: config.advisorGetToolContext,
+				mcpResources: config.advisorMcpResources,
+				watchdogPrompt: config.advisorWatchdogPrompt,
+				sharedInstructions: config.advisorSharedInstructions,
+				contextPrompt: config.advisorContextPrompt,
+				configs: config.advisorConfigs,
+				streamFn: config.advisorStreamFn,
+				transformProviderContext: config.transformProviderContext,
+				initialCosts: config.initialAdvisorCosts,
+			},
+			subscribeTurnEnd: listener => {
+				this.#advisorTurnEndListeners.add(listener);
+				return () => {
+					this.#advisorTurnEndListeners.delete(listener);
+				};
+			},
 		});
+		this.#advisors = this.#advisorLifecycle.advisors;
 
 		const maintenanceHost: SessionMaintenanceHost = {
 			agent: this.agent,
@@ -4090,7 +4106,7 @@ export class AgentSession {
 		this.yieldQueue.clear();
 		this.agent.setAsideMessageProvider(undefined);
 		this.agent.hasIrcInterrupts = undefined;
-		this.#advisors.stopRuntime();
+		this.#advisorDispose ??= this.#advisorLifecycle.dispose();
 		this.#eval.beginDispose();
 	}
 
@@ -4229,10 +4245,10 @@ export class AgentSession {
 		}
 		await this.#drainAutolearnCapture();
 		await this.#memory.transition;
+		await this.#advisorDispose;
 
 		const hindsightState = this.getHindsightSessionState();
 		const mnemopiState = setMnemopiSessionState(this, undefined);
-		const advisorRecorderClosed = this.#advisors.recorderClosed();
 		const results = await Promise.allSettled([
 			this.#disposeOwnedAsyncJobs(),
 			this.#eval.disposeKernels(),
@@ -4240,7 +4256,6 @@ export class AgentSession {
 			this.#releaseOwnedComputerSessions(this.#eval.getKernelOwnerId()),
 			shutdownTinyTitleClient(),
 			this.#disconnectOwnedMcp(),
-			advisorRecorderClosed,
 			hindsightState?.flushRetainQueue() ?? Promise.resolve(),
 			this.#disposeMnemopi(mnemopiState, options.mnemopiConsolidateTimeoutMs),
 		]);
@@ -7381,7 +7396,7 @@ export class AgentSession {
 	}): Promise<void> {
 		const userInterrupt = options?.reason === USER_INTERRUPT_LABEL;
 		this.#pendingAbortErrorId = userInterrupt ? AIError.create(AIError.Flag.UserInterrupt) : undefined;
-		if (userInterrupt) this.#advisors.autoResumeSuppressed = true;
+		const advisorPause = userInterrupt ? this.#advisors.pauseForUserInterrupt() : undefined;
 		// Pull advisor concerns out of the steer/follow-up queues before any await so
 		// the post-abort stranded-message drain can't auto-resume the run on them.
 		// They are re-recorded as visible advice once the agent settles (below).
@@ -7416,6 +7431,7 @@ export class AgentSession {
 			this.agent.abort(options?.reason);
 			await postPromptDrain;
 			await this.agent.waitForIdle();
+			await advisorPause;
 			await this.#drainAutolearnCapture();
 			await this.#goalRuntime.onTaskAborted({ reason: options?.goalReason ?? "interrupted" });
 			// Clear prompt-in-flight state: waitForIdle resolves when the agent loop's finally
@@ -9043,7 +9059,6 @@ export class AgentSession {
 
 		this.#pendingNextTurnMessages = [];
 		this.#scheduledHiddenNextTurnGeneration = undefined;
-		this.agent.replaceQueues([], []);
 		this.#queuedMessageDrainBlocked = false;
 		this.#usagePreflightReadyForNextModelCall = false;
 		await this.#bash.flushPending();
@@ -9061,6 +9076,17 @@ export class AgentSession {
 			try {
 				if (this.sessionManager.getSessionId() !== sessionId || this.sessionManager.getLeafId() !== leafId) {
 					throw new Error("Cannot branch /btw: session changed since /btw started");
+				}
+				// The old transcript must remain byte-identical. Clear only the live
+				// queues, without appending their empty state to either branch.
+				if (this.agent.hasQueuedMessages()) {
+					const restoringMessageQueue = this.#restoringMessageQueue;
+					this.#restoringMessageQueue = true;
+					try {
+						this.agent.replaceQueues([], []);
+					} finally {
+						this.#restoringMessageQueue = restoringMessageQueue;
+					}
 				}
 				this.sessionManager.createBranchedSession(leafId);
 				this.#bash.markSessionTransition(bashTransition);

@@ -460,6 +460,14 @@ export interface ExecutorOptions {
 	 * inherit falls back to the subagent's configured `tier.*` settings.
 	 */
 	parentServiceTier?: ServiceTierByFamily | null;
+	/**
+	 * Parent conversation's effective provider affinity
+	 * (`agent.promptCacheKey ?? agent.sessionId`). The child sends it as
+	 * `providerPromptCacheKey` so its requests join the parent's provider cache
+	 * shard, while its own `providerSessionId` stays session-scoped for auth and
+	 * telemetry.
+	 */
+	parentPromptCacheKey?: string;
 	/** Override local:// protocol options so subagent shares parent's local:// root */
 	localProtocolOptions?: LocalProtocolOptions;
 	/**
@@ -499,6 +507,26 @@ export interface ExecutorOptions {
 	onCleanupDeferred?: (completion: Promise<void>) => void;
 	/** Internal cleanup grace override for deterministic lifecycle tests. */
 	cleanupGraceMs?: number;
+}
+
+/**
+ * Provider affinity a spawned child must join. Providers route on
+ * `promptCacheKey ?? sessionId`, so an explicitly pinned key wins over the
+ * parent's provider session id; a session without a live registry entry (for
+ * example a programmatic cleanse/CLI session) keeps its own key. Nested
+ * subagents read the already-inherited key from their own registry entry and
+ * therefore keep the same conversation root.
+ *
+ * Lives beside {@link ExecutorOptions} because both frontends that build them
+ * (structured task/eval and vibe) import this module; keeping it here avoids a
+ * frontend-to-frontend dependency.
+ */
+export function resolveParentPromptCacheKey(session: ToolSession): string | undefined {
+	const parentAgentId = session.getAgentId?.();
+	const parentSession = parentAgentId ? session.agentRegistry?.get(parentAgentId)?.session : undefined;
+	return (
+		parentSession?.agent.promptCacheKey ?? parentSession?.agent.sessionId ?? session.getSessionId?.() ?? undefined
+	);
 }
 
 function parseStringifiedJson(value: unknown): unknown {
@@ -3095,6 +3123,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				// Subagents are short-lived: a paid warm request would never be
 				// amortized over the parent's next turn.
 				cacheWarming: false,
+				// Join the parent's cache shard without replacing the child's own
+				// provider session id.
+				providerPromptCacheKey: options.parentPromptCacheKey,
 				contextFiles: options.contextFiles,
 				skills: options.skills,
 				promptTemplates: options.promptTemplates,

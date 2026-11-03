@@ -73,6 +73,10 @@ providers:
 
 如果自定义 provider 设置了 `authHeader: true`，解析出的 key 会作为 `Authorization: Bearer <key>` 头注入对该 provider 的每个请求。
 
+### OpenCode 会话亲和性
+
+发往 `opencode-zen` 和 `opencode-go` 的推理请求在 Chat Completions、Responses、Anthropic Messages 和 Google Generative AI 上都携带 `x-opencode-session`。其值是会话规范化后的提示缓存亲和键（`promptCacheKey ?? sessionId`）：fork、task 和 Vibe 子代理以及 advisor 共享父会话的亲和键，同时保留各自独立的会话 ID 用于凭据和遥测。关闭提示缓存保留策略不会改变这个路由标识，显式配置的 `x-opencode-session` 请求头优先。没有会话键时，MusePi 回退到持久化的安装实例 ID。模型发现和用量查询不属于会话请求，同样使用该安装实例 ID。
+
 ## 环境变量与 `.env` 文件
 
 每个 provider 都有一个或多个环境变量，在没有存储凭据时提供 key。下表是经过验证的 provider → 变量映射；完整目录很大，因此拆分为核心 provider 和其他 provider。OAuth 支撑的 provider 除了 API key 之外（或代替之）也可接受一个 token 变量。

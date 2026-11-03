@@ -380,7 +380,10 @@ class ManagedTab {
 	 */
 	bindGuest(wc) {
 		if (!wc || wc.isDestroyed()) return false;
-		if (wc.session !== electronSession.fromPartition(PARTITION)) return false;
+		const managedSession = electronSession.fromPartition(PARTITION);
+		// Electron may return a different JS wrapper for the same partition.
+		// Compare its canonical storage path, not wrapper identity.
+		if (wc.session.getStoragePath() !== managedSession.getStoragePath()) return false;
 		if (this.wc && this.wc !== wc) this.detachDebugger();
 		this.wc = wc;
 		wc.setWindowOpenHandler(({ url: targetUrl }) => {
@@ -545,7 +548,9 @@ class ManagedTab {
 		this.wc = null;
 		if (wc && !wc.isDestroyed()) {
 			try {
-				wc.close();
+				// The renderer element is already unmounted here. close() can leave a
+				// guest alive indefinitely; destroy() completes the CDP close cycle.
+				wc.destroy();
 			} catch {
 				// already closing
 			}
@@ -579,6 +584,9 @@ class ManagedBrowserController {
 		/** Closes waiting for the renderer's element-unmount report before the
 		 *  guest is disposed (id → {tab, timer}) — see disposeAfterUnmount. */
 		this.guestGoneWaiters = new Map();
+		/** Renderer listener registration barrier. CDP starts before React, so a
+		 *  create notification sent before this resolves can be lost. */
+		this.hostReady = deferred();
 	}
 
 	// ── lifecycle ────────────────────────────────────────────────────────
@@ -595,6 +603,7 @@ class ManagedBrowserController {
 		if (this.owner === ownerWindow) return;
 		this.releaseTabs();
 		this.owner = ownerWindow;
+		this.hostReady = deferred();
 		this.owner.on("closed", () => {
 			this.releaseTabs();
 			this.closeServer();
@@ -669,12 +678,30 @@ class ManagedBrowserController {
 
 	// ── tabs ─────────────────────────────────────────────────────────────
 
+	/** Wait for the renderer's listener registration without blocking forever
+	 *  when the host failed to mount. A later call may retry after a timeout. */
+	async waitForHostReady() {
+		let timer;
+		const timeout = new Promise(resolve => {
+			timer = setTimeout(() => resolve(false), GUEST_READY_TIMEOUT_MS);
+		});
+		const ready = await Promise.race([this.hostReady.promise, timeout]);
+		clearTimeout(timer);
+		return ready;
+	}
+
+	handleHostReady() {
+		this.hostReady.resolve(true);
+		return { ok: true };
+	}
+
 	/** Create a tab: mint the record, ask the renderer to mount the guest,
 	 *  then wait for its `guest-ready` report. Resolves to null when the tab
 	 *  could not be created (no owner, guest never attached) — callers turn
 	 *  that into a CDP error rather than a silent no-op. */
 	async createTab(url = "about:blank", openedByAgent = false) {
 		if (!this.owner || this.owner.isDestroyed()) return null;
+		if (!(await this.waitForHostReady())) return null;
 		const tab = new ManagedTab(this, url, openedByAgent);
 		const id = String(tab.id);
 		this.tabs.set(id, tab);
@@ -685,7 +712,8 @@ class ManagedBrowserController {
 		// (and pushes agentActivity so the closed pane re-opens).
 		if (openedByAgent) this.selectTab(id, { agentActivity: true });
 		else this.emitState({});
-		if (!(await tab.waitForGuest())) {
+		const guestReady = await tab.waitForGuest();
+		if (!guestReady) {
 			// No guest ever attached: drop the record so `/json/list` and
 			// Target.* never advertise a target that cannot be driven.
 			tab.dispose();
@@ -769,6 +797,16 @@ class ManagedBrowserController {
 		if (this.activeTabId === id) {
 			const next = [...this.tabs.values()][0];
 			this.activeTabId = next ? String(next.id) : null;
+		}
+		for (const conn of this.conns.values()) {
+			for (const [sessionId, ref] of conn.sessions) {
+				if (String(ref.tabId) !== id) continue;
+				this.emit(conn, "Target.detachedFromTarget", {
+					sessionId,
+					targetId: ref.kind === "tab" ? tabTargetId(id) : pageTargetId(id),
+				});
+				this.releaseSession(conn, sessionId);
+			}
 		}
 		this.announceTabDestroyed(tab);
 		this.emitState({});
@@ -1453,6 +1491,13 @@ class ManagedBrowserController {
 			this.reply(conn, msg, {});
 			return;
 		}
+		if (msg.method === "Page.close" || msg.method === "Target.closeTarget") {
+			// Do not detach the debugger before acknowledging the close. Route it
+			// through the same unmount → dispose chain as the browser-level method.
+			this.closeTab(String(tab.id));
+			this.reply(conn, msg, msg.method === "Page.close" ? {} : { success: true });
+			return;
+		}
 		// Session-control commands MUST NOT reach the real webContents
 		// debugger: Electron's single-session debugger has no child targets,
 		// and a forwarded `Target.setAutoAttach` with waitForDebuggerOnStart
@@ -1854,6 +1899,7 @@ class ManagedBrowserController {
 		});
 		// Guest lifecycle: the renderer owns the elements, so it is the only
 		// source of truth for which webContents belongs to which tab.
+		ipcMain.handle("managed-browser:host-ready", () => this.handleHostReady());
 		ipcMain.handle("managed-browser:guest-ready", (_e, input) => this.handleGuestReady(input));
 		ipcMain.handle("managed-browser:guest-gone", (_e, tabId) => this.handleGuestGone(tabId));
 		ipcMain.handle("managed-browser:active-tab", (_e, tabId) => {

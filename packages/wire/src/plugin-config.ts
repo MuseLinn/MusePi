@@ -221,6 +221,11 @@ export function parsePluginComponents(raw: unknown): { components: PluginCompone
 	return { components, errors };
 }
 
+/** 实验性标记只接受清单中的布尔值 true；其他值均视为未声明。 */
+export function parsePluginExperimental(raw: unknown): boolean | undefined {
+	return raw === true ? true : undefined;
+}
+
 /** 资源需求卡校验(更宽松:逐字段取可用者,全坏 = undefined)。 */
 export function parsePluginResources(raw: unknown): PluginResources | undefined {
 	if (!isRecord(raw)) return undefined;

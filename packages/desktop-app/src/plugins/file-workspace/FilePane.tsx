@@ -63,6 +63,7 @@ import {
 	writeShowIgnored,
 } from "../../lib/git-prefs";
 import { useChatHighlight } from "../../lib/highlight";
+import { htmlPreviewRequiresBuild, inlineHtmlPreviewStyles, withHtmlPreviewBase } from "../../lib/html-preview";
 import { downloadMarkdownDocx } from "../../lib/markdown-docx";
 import { type MonacoPeekBuffer, revealEditorLocation } from "../../lib/monaco-lsp";
 import { type OfficeDraft, parseOfficeDraft, serializeOfficeDraft, writeOfficeDraft } from "../../lib/office-documents";
@@ -1354,10 +1355,10 @@ export function FilePane({
 								}}
 							/>
 							{/* M3-3.4: a file inside an artifact directory previews with its
-							    manifest's identity. An invalid manifest names itself — the
-							    agent's mistake is visible where the person is looking, the
-							    same rule the artifacts panel follows by listing broken
-							    manifests instead of dropping them. */}
+							   manifest's identity. An invalid manifest names itself — the
+							   agent's mistake is visible where the person is looking, the
+							   same rule the artifacts panel follows by listing broken
+							   manifests instead of dropping them. */}
 							{preview.artifact &&
 								(preview.artifact.errors && preview.artifact.errors.length > 0 ? (
 									<span
@@ -1381,7 +1382,7 @@ export function FilePane({
 							{extOf(preview.name) === "md" && preview.text !== undefined && (
 								<Segmented
 									className="gui-seg--compact"
-									ariaLabel={t("companion.preview")}
+									ariaLabel={t("settings.filePreview")}
 									value={mdRender ? "rendered" : "source"}
 									options={MD_VIEW_SEGMENTS}
 									onChange={value => {
@@ -1397,7 +1398,7 @@ export function FilePane({
 							{preview.htmlLive !== undefined && (
 								<Segmented
 									className="gui-seg--compact"
-									ariaLabel={t("companion.preview")}
+									ariaLabel={t("settings.filePreview")}
 									value={htmlLiveMode}
 									options={HTML_VIEW_SEGMENTS}
 									onChange={value => setHtmlLiveMode(value === "source" ? "source" : "live")}
@@ -1492,7 +1493,9 @@ export function FilePane({
 								data-file-language={extOf(preview.name)}
 							>
 								{preview.error && <p className="gui-error">{preview.error}</p>}
-								{preview.htmlLive !== undefined && !edit && <HtmlPreview source={preview.htmlLive} />}
+								{preview.htmlLive !== undefined && !edit && (
+									<HtmlPreview rpc={rpc} source={preview.htmlLive} documentPath={preview.path} />
+								)}
 								{preview.html !== undefined && !edit && (
 									<pre
 										className="gui-filepane-preview-text"
@@ -1524,13 +1527,7 @@ export function FilePane({
 									</div>
 								)}
 								{edit && (
-									<div
-										className={`gui-filepane-edit-layout${
-											preview.htmlLive !== undefined && htmlLiveMode === "live"
-												? " gui-filepane-edit-layout--live-preview"
-												: ""
-										}`}
-									>
+									<div className="gui-filepane-edit-layout">
 										<FileEditor
 											rpc={rpc}
 											cwd={cwd}
@@ -1539,6 +1536,7 @@ export function FilePane({
 											name={preview.name}
 											dirty={dirty}
 											saving={saving}
+											hidden={preview.htmlLive !== undefined && htmlLiveMode === "live"}
 											markdownVisual={extOf(preview.name) === "md" && mdRender}
 											markdownEditorRef={markdownEditorRef}
 											onMarkdownError={message => {
@@ -1577,7 +1575,7 @@ export function FilePane({
 											onSelectionChange={setFileSelection}
 										/>
 										{preview.htmlLive !== undefined && htmlLiveMode === "live" && (
-											<HtmlPreview source={edit.text} />
+											<HtmlPreview rpc={rpc} source={edit.text} documentPath={preview.path} />
 										)}
 									</div>
 								)}
@@ -1782,14 +1780,41 @@ function FileBreadcrumb({
 
 /** HTML file preview: a sandboxed live page. The file header owns the
  * live/source switch so editable and read-only files share one control. */
-function HtmlPreview({ source }: { source: string }): ReactNode {
+function HtmlPreview({
+	rpc,
+	source,
+	documentPath,
+}: {
+	rpc: RpcClient;
+	source: string;
+	documentPath: string;
+}): ReactNode {
+	const [previewDoc, setPreviewDoc] = useState(() => withHtmlPreviewBase(source, documentPath));
+	useEffect(() => {
+		let alive = true;
+		setPreviewDoc(withHtmlPreviewBase(source, documentPath));
+		void inlineHtmlPreviewStyles(source, documentPath, async path => {
+			const result = await rpc.request<{ content: string | null }>("fs.read", { path });
+			return result.content;
+		}).then(document => {
+			if (alive) setPreviewDoc(document);
+		});
+		return () => {
+			alive = false;
+		};
+	}, [rpc, source, documentPath]);
 	return (
 		<div className="gui-filepane-preview-html">
+			{htmlPreviewRequiresBuild(source) && (
+				<div className="gui-filepane-preview-html-bar" role="note">
+					{t("settings.htmlBuildPreviewNotice")}
+				</div>
+			)}
 			<iframe
 				className="gui-filepane-preview-html-frame"
-				title={t("companion.preview")}
+				title={t("settings.pagePreview")}
 				sandbox="allow-scripts"
-				srcDoc={source}
+				srcDoc={previewDoc}
 			/>
 		</div>
 	);
@@ -1805,6 +1830,7 @@ function FileEditor({
 	name,
 	dirty,
 	saving,
+	hidden,
 	markdownVisual,
 	markdownEditorRef,
 	onMarkdownError,
@@ -1826,6 +1852,7 @@ function FileEditor({
 	name: string;
 	dirty: boolean;
 	saving: boolean;
+	hidden?: boolean;
 	markdownVisual: boolean;
 	markdownEditorRef: { current: FileMarkdownEditorHandle | null };
 	onMarkdownError(message: string): void;
@@ -1841,7 +1868,7 @@ function FileEditor({
 	onSelectionChange(selection: FileEditorSelection | null): void;
 }): ReactNode {
 	return (
-		<div className="gui-filepane-editor">
+		<div className="gui-filepane-editor" hidden={hidden}>
 			{markdownVisual ? (
 				<FileMarkdownEditor
 					ref={markdownEditorRef}

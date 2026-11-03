@@ -22,7 +22,7 @@ import { isIrcEnabled } from "../tools/hub";
 import { buildOutputValidator } from "../tools/output-schema-validator";
 import { trackLateCleanup } from "../utils/late-cleanup";
 import { type DiscoveryResult, discoverAgents, getAgent } from "./discovery";
-import { type ExecutorOptions, runSubprocess } from "./executor";
+import { type ExecutorOptions, resolveParentPromptCacheKey, runSubprocess } from "./executor";
 import { runExternalSubagent } from "./external";
 import {
 	applyEligibleNestedPatches,
@@ -481,6 +481,7 @@ function buildExecutorOptions(
 		parentEvalSessionId: request.shareEvalSession === false ? undefined : (session.getEvalSessionId?.() ?? undefined),
 		parentAgentId: session.getAgentId?.() ?? MAIN_AGENT_ID,
 		parentServiceTier: session.getServiceTierByFamily ? (session.getServiceTierByFamily() ?? null) : undefined,
+		parentPromptCacheKey: resolveParentPromptCacheKey(session),
 	};
 }
 

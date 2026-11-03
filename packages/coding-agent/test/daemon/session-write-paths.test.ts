@@ -117,6 +117,8 @@ describe("AgentSession displayContext write paths", () => {
 
 	it("returns context on queuedPop and retains it on queuedSend", async () => {
 		const { session } = await createSession([]);
+		// Manual queue operations must not race the idle auto-drain they do not own.
+		session.setQueuedMessagesPaused(true);
 		await session.sendUserMessage("queued text", { deliverAs: "followUp", displayContext: quote });
 		const restored = session.popQueuedMessage("followUp", "queued text");
 		expect(restored).toEqual({ text: "queued text", images: undefined, displayContext: quote });

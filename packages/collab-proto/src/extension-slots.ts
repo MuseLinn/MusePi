@@ -57,6 +57,8 @@ export const EXTENSION_SLOT_DECLARATION = {
 	exact: {
 		"app.chat": { kind: "single" },
 		"app.capability": { kind: "single" },
+		"panel.shell": { kind: "single" },
+		"browser.host": { kind: "single" },
 		"panel.right": { kind: "list" },
 		"rail.right": { kind: "list" },
 		"settings.extensions": { kind: "list" },

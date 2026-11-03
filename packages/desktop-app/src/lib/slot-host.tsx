@@ -18,7 +18,7 @@ import type {
 	PluginResources,
 	SessionEntry,
 } from "@musepi/pi-wire";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentProps, ComponentType, ReactNode } from "react";
 import * as React from "react";
 import {
 	Children,
@@ -60,7 +60,9 @@ import { jsx, jsxs } from "react/jsx-runtime";
 import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
 import type { ChatViewProps } from "../components/ChatView";
+import type { ContextPanel } from "../components/ContextPanel";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
+import * as managedBrowserHostBindings from "./managed-browser-host";
 import type { RpcClient } from "./rpc";
 
 export const hostReactBindings = {
@@ -135,6 +137,7 @@ function exposeHostReact(): void {
 	(window as unknown as { MusePiReact: unknown }).MusePiReact = hostReactBindings;
 	(window as unknown as { MusePiReactDOM: unknown }).MusePiReactDOM = hostReactDOMBindings;
 	(window as unknown as { MusePiReactDOMClient: unknown }).MusePiReactDOMClient = hostReactDOMClientBindings;
+	(window as unknown as { MusePiManagedBrowserHost: unknown }).MusePiManagedBrowserHost = managedBrowserHostBindings;
 	// The plugin's other platform surface: its own translation namespace.
 	//
 	// A compiled plugin module cannot import from client-core, so the namespace
@@ -191,6 +194,10 @@ export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
 export const CHAT_VIEW_SLOT = slot("app.chat");
 /** Full capability-center page slot. */
 export const CAPABILITY_CENTER_SLOT = slot("app.capability");
+/** Full right-panel shell, independently replaceable from app.chat. */
+export const PANEL_SHELL_SLOT = slot("panel.shell");
+/** Always-mounted managed browser guest host. */
+export const BROWSER_HOST_SLOT = slot("browser.host");
 /** Right-side workspace panel slot. */
 export const RIGHT_PANEL_SLOT = slot("panel.right");
 /** Right-edge 44px icon rail slot. */
@@ -317,6 +324,8 @@ export interface ExtensionItem {
 	name: string;
 	displayName: string;
 	description?: string;
+	/** Manifest-declared experimental status. */
+	experimental?: boolean;
 	trigger?: string;
 	path: string;
 	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
@@ -519,7 +528,7 @@ export function ConfigFormSlotMount({
  * - Both are per-load: a recompiled module gets a fresh ctx, and the previous
  *   one's disposers have already run.
  */
-interface PluginClientContext {
+export interface PluginClientContext {
 	/** Register a teardown for a contribution this module installed. */
 	effect(dispose: () => void, label?: string): void;
 	/** Aborted when this module load is superseded or unmounted. */
@@ -549,6 +558,14 @@ export interface SlotComponentProps {
 	page?: CapabilityCenterPageNavigation;
 	/** Host-owned welcome and session surface contract for app.chat. */
 	chatView?: ChatViewProps;
+	/** Full right-panel shell contract for panel.shell. */
+	panelShell?: ComponentProps<typeof ContextPanel>;
+	/** Managed browser pane contract for panel.tab.browser. */
+	browser?: {
+		open: boolean;
+		openRequest?: { url: string; nonce: number } | null;
+		onTakeover?(): void;
+	};
 	/** Current right-panel tab instance; present only for panel.tab.* mounts. */
 	panelTab?: {
 		id: string;
@@ -733,7 +750,10 @@ export function selectTranscriptNodeComponents(components: readonly SlotComponen
 export function selectPanelTabComponent(components: readonly SlotComponent[], view: string): SlotComponent | undefined {
 	return components.find(component => {
 		if (component.slot === FILE_WORKSPACE_SLOT) return view === FILE_WORKSPACE_SURFACE;
-		return view !== FILE_WORKSPACE_SURFACE && `ext:${component.slot}` === view;
+		if (view === FILE_WORKSPACE_SURFACE) return false;
+		// Built-in surfaces keep their stable ids (browser); extension surfaces
+		// use the ext:slot form. Both resolve through the same panel.tab registry.
+		return component.slot === `panel.tab.${view}` || `ext:${component.slot}` === view;
 	});
 }
 
@@ -751,6 +771,8 @@ export function SlotComponentHost({
 	cwd,
 	page,
 	chatView,
+	panelShell,
+	browser,
 }: {
 	rpc: RpcClient | null;
 	slot: string;
@@ -758,6 +780,8 @@ export function SlotComponentHost({
 	cwd?: string;
 	page?: SlotComponentProps["page"];
 	chatView?: SlotComponentProps["chatView"];
+	panelShell?: SlotComponentProps["panelShell"];
+	browser?: SlotComponentProps["browser"];
 }): ReactNode {
 	const items = useSlotComponents(rpc, slot);
 	return (
@@ -771,6 +795,8 @@ export function SlotComponentHost({
 					cwd={cwd}
 					page={page}
 					chatView={chatView}
+					panelShell={panelShell}
+					browser={browser}
 				/>
 			))}
 		</>
@@ -787,6 +813,8 @@ export function SlotComponentMount({
 	cwd,
 	page,
 	chatView,
+	panelShell,
+	browser,
 	settingsScope,
 	panelTab,
 	fileWorkspace,
@@ -801,6 +829,8 @@ export function SlotComponentMount({
 	page?: SlotComponentProps["page"];
 	/** Host-owned welcome and session surface contract (app.chat only). */
 	chatView?: SlotComponentProps["chatView"];
+	panelShell?: SlotComponentProps["panelShell"];
+	browser?: SlotComponentProps["browser"];
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
 	settingsScope?: SlotComponentProps["settingsScope"];
 	/** Current right-panel tab instance (panel.tab.* only). */
@@ -939,6 +969,8 @@ export function SlotComponentMount({
 		cwd,
 		page,
 		chatView,
+		panelShell,
+		browser,
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,

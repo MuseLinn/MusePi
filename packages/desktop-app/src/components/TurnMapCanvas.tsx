@@ -385,6 +385,7 @@ export function TurnMapCanvas({
 	onSwitchToBranch,
 	onBranchTo,
 	onForkAt,
+	composerInset = 0,
 }: {
 	entries: readonly unknown[];
 	/** daemon agent_end 冻结的整轮用时(Map 或持久化 [ms,ms][] 形态)。 */
@@ -412,6 +413,8 @@ export function TurnMapCanvas({
 	onBranchTo?: (entryId: string) => void;
 	/** 从该轮分叉新会话。 */
 	onForkAt?: (entryId: string) => void;
+	/** Bottom occlusion from the floating composer, in CSS pixels. */
+	composerInset?: number;
 }): ReactNode {
 	const wrapRef = useRef<HTMLDivElement | null>(null);
 	const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -479,12 +482,14 @@ export function TurnMapCanvas({
 	}, [searchQuery, nodes]);
 
 	// ── 视口:fit-all(全部可见)或大树智能适配(可读缩放 + 当前轮居中) ──
+	// The composer floats over the bottom of the map. All fit, focus and
+	// visibility math uses the remaining rectangle rather than that covered area.
 	const needsFitRef = useRef(true);
 	const fitView = useCallback((): void => {
 		const wrap = wrapRef.current;
 		if (!wrap || width === 0 || height === 0) return;
 		const cw = wrap.clientWidth;
-		const ch = wrap.clientHeight;
+		const ch = Math.max(0, wrap.clientHeight - composerInset);
 		if (cw < 80 || ch < 80) return;
 		needsFitRef.current = false;
 		const fullScale = Math.min((cw - FIT_PADDING * 2) / width, (ch - FIT_PADDING * 2) / height, 1);
@@ -506,7 +511,7 @@ export function TurnMapCanvas({
 		const axisFit = horizontal ? (ch - FIT_PADDING * 2) / height : (cw - FIT_PADDING * 2) / width;
 		const scale = Math.min(1, Math.max(MIN_FIT_SCALE, axisFit));
 		setView({ scale, x: cw / 2 - fx * scale, y: ch / 2 - fy * scale });
-	}, [width, height, nodes, currentTurn, main, horizontal]);
+	}, [width, height, nodes, currentTurn, main, horizontal, composerInset]);
 	// 容器尺寸(state 化):视口裁剪与 fit 几何都依赖它,放 state 里保证
 	// 变化触发重算(RO 回调里同步 set,首帧 0 → mount 后即刻修正)。
 	const [wrapSize, setWrapSize] = useState({ w: 0, h: 0 });
@@ -533,10 +538,10 @@ export function TurnMapCanvas({
 			left: -view.x / view.scale,
 			top: -view.y / view.scale,
 			right: (w - view.x) / view.scale,
-			bottom: (h - view.y) / view.scale,
+			bottom: (Math.max(0, h - composerInset) - view.y) / view.scale,
 		};
 		return visibleTurnMapNodes(nodes, vp);
-	}, [nodes, view, wrapSize]);
+	}, [nodes, view, wrapSize, composerInset]);
 	const visibleTurns = useMemo(() => new Set(visibleNodes.map(n => n.group.turn)), [visibleNodes]);
 	// 历史补全和流式新轮保留用户视口;只有显式重置或方向切换才重新 fit。
 	const fittedDirectionRef = useRef(direction);
@@ -552,18 +557,19 @@ export function TurnMapCanvas({
 			const wrap = wrapRef.current;
 			const n = nodes.find(m => m.group.turn === turn);
 			if (!wrap || !n) return;
+			const availableHeight = Math.max(0, wrap.clientHeight - composerInset);
 			// v:以卡宽+车道距估可读缩放;h:以卡高+行距估。
 			const readable = horizontal
-				? wrap.clientHeight / (TURN_NODE_H + TURN_LANE_GAP * 2)
+				? availableHeight / (TURN_NODE_H + TURN_LANE_GAP * 2)
 				: wrap.clientWidth / (TURN_NODE_W + TURN_LANE_GAP * 2);
 			const scale = targetScale ?? Math.max(0.7, Math.min(1.2, readable));
 			setView({
 				scale,
 				x: wrap.clientWidth / 2 - (n.x + TURN_NODE_W / 2) * scale,
-				y: wrap.clientHeight / 2 - (n.y + n.h / 2) * scale,
+				y: availableHeight / 2 - (n.y + n.h / 2) * scale,
 			});
 		},
-		[nodes, horizontal],
+		[nodes, horizontal, composerInset],
 	);
 
 	// 滚轮缩放(原生 non-passive,preventDefault 阻止背后页面滚动;
@@ -784,10 +790,12 @@ export function TurnMapCanvas({
 	// v = 左侧竖条(条目高 = band);h = 底部横条(条目宽 = band)。
 	const navGeo = useMemo(() => {
 		const wrap = wrapRef.current;
-		const railSize = horizontal ? (wrap?.clientWidth ?? 600) - 32 : (wrap?.clientHeight ?? 600) - 32;
+		const railSize = horizontal
+			? (wrap?.clientWidth ?? 600) - 32
+			: Math.max(0, (wrap?.clientHeight ?? 600) - composerInset) - 32;
 		const band = Math.max(2, Math.min(6, railSize / Math.max(nodes.length, 1)));
 		return { railSize, band };
-	}, [nodes.length, horizontal]);
+	}, [nodes.length, horizontal, composerInset, wrapSize]);
 	const viewportBand = useMemo(() => {
 		const wrap = wrapRef.current;
 		if (!wrap || nodes.length === 0) return null;
@@ -826,11 +834,11 @@ export function TurnMapCanvas({
 			return { start: Math.max(0, x1), size: Math.min(railSize, Math.max(10, x2 - x1)) };
 		}
 		const worldTop = -view.y / view.scale;
-		const worldBottom = (wrap.clientHeight - view.y) / view.scale;
+		const worldBottom = (Math.max(0, wrap.clientHeight - composerInset) - view.y) / view.scale;
 		const y1 = worldToRail(worldTop);
 		const y2 = worldToRail(worldBottom);
 		return { start: Math.max(0, y1), size: Math.min(railSize, Math.max(10, y2 - y1)) };
-	}, [view, navGeo, width, height, nodes, horizontal]);
+	}, [view, navGeo, width, height, nodes, horizontal, composerInset]);
 
 	return (
 		<div
@@ -904,6 +912,7 @@ export function TurnMapCanvas({
 					<div
 						className="tm-nav"
 						data-orient={direction}
+						style={{ bottom: (horizontal ? 10 : 16) + composerInset }}
 						onPointerDown={e => e.stopPropagation()}
 						onClick={e => {
 							const rect = e.currentTarget.getBoundingClientRect();
@@ -1077,7 +1086,7 @@ export function TurnMapCanvas({
 				</div>
 			)}
 			{/* 右下缩放控件。 */}
-			<div className="tm-zoom" onPointerDown={e => e.stopPropagation()}>
+			<div className="tm-zoom" style={{ bottom: 14 + composerInset }} onPointerDown={e => e.stopPropagation()}>
 				<button
 					type="button"
 					className="tm-zoom-btn"

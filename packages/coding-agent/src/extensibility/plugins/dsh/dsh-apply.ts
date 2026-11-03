@@ -28,6 +28,7 @@
 
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import type { PluginRuntimeTarget } from "../runtime/mount";
 import { hostExprContext } from "./dsh-expr";
 import {
 	type ComposedRow,
@@ -308,42 +309,56 @@ export function mountableRows(application: DshApplication): Array<ComposedRow & 
 }
 
 /**
- * The extension entry files the mountable rows contribute, for the host's
- * extension loader.
- *
- * A composed row names a PACKAGE; the loader takes MODULE PATHS. This is the
- * step between them: for each row, read that package's own manifest
- * (`musepi.extensions`) and collect its entry files, exactly the way an
- * installed plugin's entries are resolved when no composition is involved.
- *
- * Two consequences worth stating plainly:
- *
- * - A package with no loadable entry contributes nothing here and is not
- *   silently counted as mounted — the row stays visible in the composition
- *   with its plugin marked present, so the person can see that its plugin ships
- *   no loadable module rather than wondering why nothing appeared.
- * - The same package mounted by two rows yields its entries once (the loader
- *   de-duplicates by resolved path anyway; doing it here keeps the count honest).
+ * Resolve every mountable row to runtime targets without discarding row identity.
+ * Two rows may intentionally mount the same entry with different config, so this
+ * list is keyed by neither package nor path. The legacy path-only RPC remains a
+ * de-duplicated projection of these targets.
  */
-export async function mountableEntryPaths(application: DshApplication, cwd: string, home?: string): Promise<string[]> {
+export async function mountableEntryTargets(
+	application: DshApplication,
+	cwd: string,
+	home?: string,
+): Promise<PluginRuntimeTarget[]> {
 	const rows = mountableRows(application);
 	if (rows.length === 0) return [];
 	const { getAllPlugins, resolvePluginExtensionPaths } = await import("../runtime/loader");
-	// cwd selects which plugin root applies (project vs user), so it comes from
-	// the caller rather than the process directory.
 	const installed = await getAllPlugins(cwd, home ? { home } : {});
 	const byName = new Map(installed.map(plugin => [plugin.name, plugin]));
-	const seen = new Set<string>();
-	const out: string[] = [];
+	const out: PluginRuntimeTarget[] = [];
 	for (const row of rows) {
 		const plugin = byName.get(row.name);
 		if (!plugin) continue;
+		const config =
+			row.config !== null &&
+			typeof row.config === "object" &&
+			!Array.isArray(row.config) &&
+			!("kind" in row.config && row.config.kind === "js-expr")
+				? (row.config as Record<string, unknown>)
+				: undefined;
 		for (const entry of resolvePluginExtensionPaths(plugin)) {
-			const resolved = path.resolve(entry);
-			if (seen.has(resolved)) continue;
-			seen.add(resolved);
-			out.push(entry);
+			out.push({
+				path: entry,
+				rowId: row.id,
+				...(config ? { config } : {}),
+				additionalInject: row.inject,
+			});
 		}
+	}
+	return out;
+}
+
+/** The extension entry files the mountable rows contribute, for the host's
+ * path-only inspection RPC. Runtime loading uses {@link mountableEntryTargets}
+ * so duplicate rows do not collapse here. */
+export async function mountableEntryPaths(application: DshApplication, cwd: string, home?: string): Promise<string[]> {
+	const targets = await mountableEntryTargets(application, cwd, home);
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const target of targets) {
+		const resolved = path.resolve(target.path);
+		if (seen.has(resolved)) continue;
+		seen.add(resolved);
+		out.push(target.path);
 	}
 	return out;
 }

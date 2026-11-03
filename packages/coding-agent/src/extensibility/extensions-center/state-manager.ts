@@ -57,9 +57,13 @@ export interface ExtensionSettingsManager {
  */
 function spreadPluginMeta(
 	meta: ExtensionPluginMeta | null | undefined,
-): Pick<Extension, "config" | "configErrors" | "resources" | "host" | "readonly" | "components"> {
+): Pick<Extension, "config" | "configErrors" | "resources" | "host" | "readonly" | "components" | "experimental"> {
 	if (!meta) return {};
-	const out: Pick<Extension, "config" | "configErrors" | "resources" | "host" | "readonly" | "components"> = {};
+	const out: Pick<
+		Extension,
+		"config" | "configErrors" | "resources" | "host" | "readonly" | "components" | "experimental"
+	> = {};
+	if (meta.experimental) out.experimental = true;
 	if (meta.fields.length > 0) out.config = meta.fields;
 	if (meta.configErrors.length > 0) out.configErrors = meta.configErrors;
 	if (meta.resources) out.resources = meta.resources;

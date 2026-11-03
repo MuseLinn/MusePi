@@ -130,6 +130,6 @@ describe("built-in preset plugin composition", () => {
 		expect(BUILTIN_MODE_TEMPLATES.design?.plugins).toEqual([{ name: "musepi-product-skills" }]);
 		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toEqual([{ name: "musepi-product-skills" }]);
 		expect(BUILTIN_MODE_TEMPLATES.chat?.plugins ?? []).toEqual([]);
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(8);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(9);
 	});
 });

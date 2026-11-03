@@ -124,6 +124,7 @@ const HOST_REACT_MODULE = `module.exports = window.MusePiReact;`;
 const HOST_REACT_DOM_MODULE = `module.exports = window.MusePiReactDOM;`;
 const HOST_REACT_DOM_CLIENT_MODULE = `module.exports = window.MusePiReactDOMClient;`;
 const HOST_JSX_MODULE = `module.exports = window.MusePiReact;`;
+const HOST_MANAGED_BROWSER_MODULE = `module.exports = window.MusePiManagedBrowserHost;`;
 
 function hostReactPlugin(): BunPlugin {
 	return {
@@ -143,6 +144,18 @@ function hostReactPlugin(): BunPlugin {
 							: HOST_REACT_MODULE;
 				return { contents, loader: "js" };
 			});
+			// The app.chat artifact includes ManagedBrowserPane, while the main app
+			// owns ManagedBrowserHost. Bundling their store twice leaves the root
+			// host empty and makes every navigation miss the active tab. Bind the
+			// pane to the same host-owned module instance as the root host.
+			build.onResolve({ filter: /managed-browser-host(?:\.ts)?$/ }, args => ({
+				path: args.path,
+				namespace: "musepi-host-managed-browser",
+			}));
+			build.onLoad({ filter: /.*/, namespace: "musepi-host-managed-browser" }, () => ({
+				contents: HOST_MANAGED_BROWSER_MODULE,
+				loader: "js",
+			}));
 		},
 	};
 }

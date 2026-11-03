@@ -64,6 +64,8 @@ interface Window {
 			state: "frozen" | "active";
 		}): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserConfirmResult(input: { requestId: string; allow: boolean }): Promise<{ ok: boolean }>;
+		/** Renderer listeners are registered; main may send create-tab now. */
+		managedBrowserHostReady(): Promise<unknown>;
 		/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId`. */
 		managedBrowserGuestReady(input: { tabId: string; webContentsId: number }): Promise<unknown>;
 		managedBrowserGuestGone(tabId: string): Promise<unknown>;
