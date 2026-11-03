@@ -711,6 +711,8 @@ const hostModules = {
 
 `satisfies` makes a contract entry without a bound instance a type error, and a key without a contract entry a compile error. `exposeHostModules()` publishes the table as `window.MusePiHostModules` before any compiled component mounts. The older `window.MusePiPromptDialog` and `window.MusePiManagedBrowserHost` globals remain aliases of the same namespace objects, so already-compiled bundles keep reading host state.
 
+`slot-host` is the one entry that registers itself rather than being imported by `host-modules.ts`: `slot-host.tsx` already imports `exposeHostModules` to install the browser bridge, so importing it back from the table would create a cycle. It registers its namespace when the module loads, and the app imports it before any compiled component mounts.
+
 ### Current entries
 
 | Key | App module | Identity that must be shared |
@@ -722,6 +724,7 @@ const hostModules = {
 | `floating-menu` | `lib/use-floating-menu.tsx` | Module-level menu mutex |
 | `update-ux` | `lib/update-ux.ts` | Update-toast/dialog shared flags and subscriber set |
 | `tooltips` | `lib/tooltips.ts` | Tooltip element, timers, and hover/focus state |
+| `slot-host` | `lib/slot-host.tsx` | Slot registry store, mount helpers, and slot contract constants |
 | `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
 | `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
 
@@ -744,7 +747,9 @@ Add an entry only when **identity must be shared**. A helper without cross-modul
 
 Every entry is host ABI: removing or renaming a key breaks already-compiled bundles, which throw at import rather than falling back to a copy.
 
-**Anchors**: `packages/collab-proto/test/extension-host-modules.test.ts`, `packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`, `packages/desktop-app/test/host-modules.test.ts`.
+`packages/desktop-app/test/host-module-state-guard.test.ts` enforces completeness: every `src/lib` module with a `createContext(...)` call must have a contract path, and each known state-bearing module must have a path and a published instance. A new React context module fails the suite until it is registered.
+
+**Anchors**: `packages/collab-proto/test/extension-host-modules.test.ts`, `packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`, `packages/desktop-app/test/host-modules.test.ts`, `packages/desktop-app/test/host-module-state-guard.test.ts`.
 
 ## 20. Prompt sections: registry, composer, source lifecycle (2026-11-03)
 

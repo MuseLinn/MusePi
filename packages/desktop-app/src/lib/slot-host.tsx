@@ -62,7 +62,7 @@ import * as ReactDOMClient from "react-dom/client";
 import type { ChatViewProps } from "../components/ChatView";
 import type { ContextPanel } from "../components/ContextPanel";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
-import { exposeHostModules } from "./host-modules";
+import { exposeHostModules, registerHostModule } from "./host-modules";
 import type { RpcClient } from "./rpc";
 
 export const hostReactBindings = {
@@ -137,6 +137,7 @@ function exposeHostReact(): void {
 	(window as unknown as { MusePiReact: unknown }).MusePiReact = hostReactBindings;
 	(window as unknown as { MusePiReactDOM: unknown }).MusePiReactDOM = hostReactDOMBindings;
 	(window as unknown as { MusePiReactDOMClient: unknown }).MusePiReactDOMClient = hostReactDOMClientBindings;
+	registerHostModule("slot-host", slotHostBindings);
 	exposeHostModules();
 	// The plugin's other platform surface: its own translation namespace.
 	//
@@ -156,8 +157,6 @@ function exposeHostReact(): void {
 		subscribe: subscribeLocale,
 	};
 }
-
-exposeHostReact();
 
 /**
  * Renderer-side component slots: extensions
@@ -1054,3 +1053,55 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 		};
 	}, [toolViews]);
 }
+
+/**
+ * The slot surface a compiled plugin binds to.
+ *
+ * Every seat constant, selector and mount component a plugin may import lives
+ * here: the compiler replaces the import with this object, so the plugin
+ * mounts through the host's registry instead of owning a second one that polls
+ * `extensions.list` by itself. The React bindings stay out — compiled modules
+ * receive React through `window.MusePiReact`.
+ */
+const slotHostBindings = {
+	SETTINGS_EXTENSION_SLOT,
+	CHAT_VIEW_SLOT,
+	CAPABILITY_CENTER_SLOT,
+	PANEL_SHELL_SLOT,
+	BROWSER_HOST_SLOT,
+	RIGHT_PANEL_SLOT,
+	RIGHT_RAIL_SLOT,
+	PANEL_TAB_SLOT_PREFIX,
+	SETTINGS_TAB_SLOT_PREFIX,
+	RAIL_SLOT_PREFIX,
+	SETTINGS_ITEM_SLOT_PREFIX,
+	SETTINGS_ACTION_SLOT_PREFIX,
+	COMPOSER_DOCK_SLOT,
+	COMPOSER_LEFT_SLOT,
+	COMPOSER_RIGHT_SLOT,
+	COMPOSER_MODEL_SLOT,
+	COMPOSER_ATTACHMENTS_SLOT,
+	COMPOSER_PERMISSION_SLOT,
+	COMPOSER_PLAN_SLOT,
+	COMPOSER_ACTIVITY_SLOT,
+	COMPOSER_OVERLAY_SLOT,
+	COMPOSER_REQUEST_DRAFT_SLOT,
+	COMPOSER_FOR_SLOT,
+	TRANSCRIPT_NODE_SLOT,
+	GUI_SLOT_HOSTS,
+	ConfigFormSlotMount,
+	SlotComponentHost,
+	SlotComponentMount,
+	selectLaunchablePanelTabs,
+	selectPanelTabComponent,
+	selectTranscriptNodeComponents,
+	useExtensionRegistry,
+	useExtensionToolViews,
+	useSlotComponents,
+	useSlotComponentsByPrefix,
+	useUnhostedSlots,
+};
+
+// The bindings must exist before the table is published, so the module-level
+// exposure runs after every declaration above.
+exposeHostReact();

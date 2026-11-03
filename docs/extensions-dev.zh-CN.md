@@ -696,6 +696,8 @@ const hostModules = {
 
 `satisfies` 让「契约有条目但渲染端没绑定实例」和「渲染端多出契约没有的 key」都变成类型错误。`exposeHostModules()` 在编译组件挂载前把表发布为 `window.MusePiHostModules`。旧的 `window.MusePiPromptDialog` 与 `window.MusePiManagedBrowserHost` 保留为同一批命名空间对象的别名，已编译的 bundle 继续读到宿主状态。
 
+`slot-host` 是唯一自注册的条目，而不是由 `host-modules.ts` 反向 import：`slot-host.tsx` 已经 import `exposeHostModules` 来安装浏览器桥，若表再 import 它就会形成循环。它在模块加载时登记自己的命名空间，应用在任何编译组件挂载前 import 它。
+
 ### 当前条目
 
 | Key | 应用模块 | 必须共享的身份 |
@@ -707,6 +709,7 @@ const hostModules = {
 | `floating-menu` | `lib/use-floating-menu.tsx` | 模块级菜单 mutex |
 | `update-ux` | `lib/update-ux.ts` | 更新提示/对话框共享的标志位与订阅者集合 |
 | `tooltips` | `lib/tooltips.ts` | 提示气泡元素、计时器与 hover/focus 状态 |
+| `slot-host` | `lib/slot-host.tsx` | slot 注册表 store、挂载函数与 slot 契约常量 |
 | `client-core` | `@musepi/client-core`（裸包） | 整个 client-core 命名空间：其中的 React context 与模块级状态 |
 | `i18n` | `@musepi/client-core/src/i18n`（裸包） | `t` / `setLocale` 共用的 locale 注册表 |
 
@@ -729,7 +732,9 @@ client-core 包内以 `../i18n/index.js` 等相对形式引用 i18n 时，同样
 
 每个条目都是宿主 ABI：删除或改名会让已编译的 bundle 在导入时抛错，而不是退回副本。
 
-**回归锚点**：`packages/collab-proto/test/extension-host-modules.test.ts`、`packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`、`packages/desktop-app/test/host-modules.test.ts`。
+`packages/desktop-app/test/host-module-state-guard.test.ts` 负责完整性：`src/lib` 下任何包含 `createContext(...)` 调用的模块都必须有契约路径，已知状态模块还必须同时有路径与已发布实例。新增 React context 模块在登记前会让该测试失败。
+
+**回归锚点**：`packages/collab-proto/test/extension-host-modules.test.ts`、`packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`、`packages/desktop-app/test/host-modules.test.ts`、`packages/desktop-app/test/host-module-state-guard.test.ts`。
 
 ## 20. 提示词区块：注册表、composer 与来源生命周期（2026-11-03）
 

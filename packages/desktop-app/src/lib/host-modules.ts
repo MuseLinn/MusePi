@@ -18,8 +18,12 @@ import * as useFloatingMenu from "./use-floating-menu";
  *
  * `i18n` is the same module instance `client-core` re-exports, so a plugin's
  * `setLocale` reaches the host's `t` — the shared locale state, not a copy.
+ *
+ * `slot-host` is absent here on purpose: it publishes this table, so importing
+ * it would close a module cycle back through itself. It binds itself through
+ * {@link registerHostModule} while its module evaluates.
  */
-const hostModules = {
+const hostModules: Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host"> = {
 	"prompt-dialog": promptDialog,
 	"managed-browser-host": managedBrowserHost,
 	"action-toast": actionToast,
@@ -29,7 +33,17 @@ const hostModules = {
 	tooltips: tooltips,
 	"client-core": clientCore,
 	i18n: clientCoreI18n,
-} satisfies Record<ExtensionHostModuleKey, unknown>;
+};
+
+/**
+ * Bind one instance into the published table.
+ *
+ * The compiler throws for a key with no instance, so a module whose import
+ * would be circular registers itself instead of appearing in the literal.
+ */
+export function registerHostModule(key: ExtensionHostModuleKey, value: unknown): void {
+	(hostModules as Record<ExtensionHostModuleKey, unknown>)[key] = value;
+}
 
 /**
  * Publish the table for compiled plugins. The two pre-table globals stay
@@ -43,7 +57,9 @@ export function exposeHostModules(): void {
 		MusePiPromptDialog: unknown;
 		MusePiManagedBrowserHost: unknown;
 	};
-	target.MusePiHostModules = hostModules;
+	// Every key is bound by the time this runs: the shell imports `slot-host`,
+	// which registers itself before calling this.
+	target.MusePiHostModules = hostModules as Record<ExtensionHostModuleKey, unknown>;
 	target.MusePiPromptDialog = hostModules["prompt-dialog"];
 	target.MusePiManagedBrowserHost = hostModules["managed-browser-host"];
 }

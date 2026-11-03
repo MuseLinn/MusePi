@@ -35,6 +35,7 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "floating-menu", path: "lib/use-floating-menu" },
 	{ key: "update-ux", path: "lib/update-ux" },
 	{ key: "tooltips", path: "lib/tooltips" },
+	{ key: "slot-host", path: "lib/slot-host" },
 	{ key: "client-core", specifier: "@musepi/client-core" },
 	{ key: "i18n", specifier: "@musepi/client-core/src/i18n" },
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];

@@ -1,8 +1,11 @@
 import "./happy-dom-shim";
 import { beforeEach, describe, expect, it } from "bun:test";
+import * as path from "node:path";
 import { t as clientCoreT } from "@musepi/client-core";
 import { EXTENSION_HOST_MODULES } from "@musepi/collab-proto/extension-host-modules";
+import { compileComponentModule } from "../../coding-agent/src/daemon/extension-artifact-compiler";
 import { exposeHostModules } from "../src/lib/host-modules";
+import { SlotComponentHost } from "../src/lib/slot-host";
 
 type HostWindow = {
 	MusePiHostModules?: Record<string, unknown>;
@@ -33,6 +36,11 @@ describe("host module table", () => {
 		for (const { key } of EXTENSION_HOST_MODULES) {
 			expect(hostModule(key)).toBeDefined();
 		}
+	});
+
+	it("registers slot-host's own plugin surface", () => {
+		expect(typeof hostModule("slot-host")?.SlotComponentHost).toBe("function");
+		expect(hostModule("slot-host")?.SlotComponentHost).toBe(SlotComponentHost);
 	});
 
 	it("exposes the plugin-facing hooks and stores", () => {
@@ -71,4 +79,10 @@ describe("host module table", () => {
 		}
 		expect(translate("settings.cancel")).toBe("Cancel");
 	});
+
+	it("compiles the chat page against slot-host instead of bundling it", async () => {
+		const { code } = await compileComponentModule(path.resolve("src/plugins/chat-view/page.tsx"));
+		expect(code).toContain('missing "slot-host"');
+		expect(code).not.toContain("ConfirmContext");
+	}, 60_000);
 });
