@@ -57,6 +57,12 @@ describe("host module table", () => {
 		expect(typeof hostModule("tooltips")?.initTooltips).toBe("function");
 	});
 
+	it("shares the Monaco runtime and LSP state", () => {
+		expect(typeof hostModule("monaco-runtime")?.loadMonaco).toBe("function");
+		expect(typeof hostModule("monaco-runtime")?.observeMonacoTheme).toBe("function");
+		expect(typeof hostModule("monaco-lsp")?.revealEditorLocation).toBe("function");
+	});
+
 	it("keeps the pre-table globals as aliases of the same objects", () => {
 		expect(hostWindow().MusePiPromptDialog).toBe(hostModule("prompt-dialog"));
 		expect(hostWindow().MusePiManagedBrowserHost).toBe(hostModule("managed-browser-host"));
@@ -84,5 +90,11 @@ describe("host module table", () => {
 		const { code } = await compileComponentModule(path.resolve("src/plugins/chat-view/page.tsx"));
 		expect(code).toContain('missing "slot-host"');
 		expect(code).not.toContain("ConfirmContext");
+	}, 60_000);
+
+	it("compiles the file workspace page against the shared Monaco runtime and LSP state", async () => {
+		const { code } = await compileComponentModule(path.resolve("src/plugins/file-workspace/page.tsx"));
+		expect(code).toContain('missing "monaco-runtime"');
+		expect(code).toContain('missing "monaco-lsp"');
 	}, 60_000);
 });

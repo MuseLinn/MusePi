@@ -710,8 +710,12 @@ const hostModules = {
 | `update-ux` | `lib/update-ux.ts` | 更新提示/对话框共享的标志位与订阅者集合 |
 | `tooltips` | `lib/tooltips.ts` | 提示气泡元素、计时器与 hover/focus 状态 |
 | `slot-host` | `lib/slot-host.tsx` | slot 注册表 store、挂载函数与 slot 契约常量 |
+| `monaco-runtime` | `lib/monaco-runtime.ts` | `monacoPromise`、全局 `MonacoEnvironment` 与 worker 工厂：所有编辑面共用一份 Monaco 实例与一套 worker |
+| `monaco-lsp` | `lib/monaco-lsp.ts` | LSP `documents`、provider 注册、peek model 与编辑器 opener：宿主与所有插件共用一套 LSP 运行时与 provider 集合 |
 | `client-core` | `@musepi/client-core`（裸包） | 整个 client-core 命名空间：其中的 React context 与模块级状态 |
 | `i18n` | `@musepi/client-core/src/i18n`（裸包） | `t` / `setLocale` 共用的 locale 注册表 |
+
+复制一份 `monaco-runtime` 会各自设置 `MonacoEnvironment` 与 worker 工厂，不同 bundle 的编辑器因此加载出多份 Monaco。复制一份 `monaco-lsp` 会各自持有 document 表、provider 注册与 peek model，诊断、跳转和 peek 窗口会落在不同的文档状态上。两者都必须经表解析，插件编辑器才能与宿主共用同一套运行时。
 
 ### 身份与纯 helper 的界限
 
@@ -774,6 +778,6 @@ import { resolvePromptOrder } from "@musepi/pi-coding-agent/prompts/orders";
 
 每次提示词重建都会重新求值函数文本、重新解析变量，并重新运行宿主区块 resolver，再调用 `compose(base)`（`promptComplete` 预设走 `composeComplete`）。`AgentSession.setDesignSystemId` 是仅提示词的实时路径：写入 metadata 键并调用 `refreshBaseSystemPrompt()`，不改变活动工具集，新简报在下一次模型调用生效。扩展 load/reload 会立即重挂 composer 来源，然后调用 `refreshBaseSystemPrompt()`，因此仅提示词扩展（没有工具）无需等待下一次重建即可进入活动会话；忙会话在延迟的 load/reload 排空时执行同样的刷新。composer revision 已计入重建签名，工具集不变时仅区块变化也不会被跳过。同一次 load/reload 产生的工具变更仍走常规工具注册表路径，两条路径都不需要重启会话。
 
-这是组合，不是迁移。核心 Handlebars 模板和易变 context 仍留在 `buildSystemPrompt`：日期、仓库/工作区树、AGENTS 等 context 文件、skills/rules、工具清单、MCP 服务器说明、记忆以及 persona/预设数据都不是注册表变量。注册表也不拥有缓存策略或 diff 式运行时消息。
+这是组合，不是迁移。核心 Handlebars 模板和易变 context 仍留在 `buildSystemPrompt`：日期、cwd、仓库/工作区树、AGENTS 等 context 文件、skills/rules、工具清单、MCP 服务器说明、记忆以及 persona/预设数据都不是注册表变量，日期与 cwd 也未插件化。plan/goal/vibe 运行时上下文同样由宿主 `AgentSession` 在提示词装配时重建；若最近一次已投递的副本内容相同则跳过，因此流式进入模式时经 steer 持久化的上下文不会在下一轮产生第二份。注册表也不拥有缓存策略或 diff 式运行时消息。
 
 **回归锚点**：`packages/coding-agent/test/prompts-registry.test.ts`、`packages/coding-agent/test/prompts-composer.test.ts`、`packages/coding-agent/src/prompts/{orders,registry,composer}.ts`。

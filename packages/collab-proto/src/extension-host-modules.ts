@@ -36,6 +36,8 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "update-ux", path: "lib/update-ux" },
 	{ key: "tooltips", path: "lib/tooltips" },
 	{ key: "slot-host", path: "lib/slot-host" },
+	{ key: "monaco-runtime", path: "lib/monaco-runtime" },
+	{ key: "monaco-lsp", path: "lib/monaco-lsp" },
 	{ key: "client-core", specifier: "@musepi/client-core" },
 	{ key: "i18n", specifier: "@musepi/client-core/src/i18n" },
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];

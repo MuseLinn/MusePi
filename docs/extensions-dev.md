@@ -725,8 +725,12 @@ const hostModules = {
 | `update-ux` | `lib/update-ux.ts` | Update-toast/dialog shared flags and subscriber set |
 | `tooltips` | `lib/tooltips.ts` | Tooltip element, timers, and hover/focus state |
 | `slot-host` | `lib/slot-host.tsx` | Slot registry store, mount helpers, and slot contract constants |
+| `monaco-runtime` | `lib/monaco-runtime.ts` | `monacoPromise`, the global `MonacoEnvironment`, and the worker factory: one Monaco instance and one worker set for every editor surface |
+| `monaco-lsp` | `lib/monaco-lsp.ts` | LSP `documents`, provider registrations, peek models, and the editor opener: one LSP runtime and one provider set across the shell and every plugin |
 | `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
 | `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
+
+A copied `monaco-runtime` assigns its own `MonacoEnvironment` and worker factory, so editors from different bundles load separate Monaco instances. A copied `monaco-lsp` keeps its own document map, provider registrations, and peek models, so diagnostics, navigation, and peek windows target different document state. Both must resolve through the table for a plugin editor to share the host's runtime.
 
 ### Identity versus helpers
 
@@ -789,6 +793,6 @@ Extension load and reload re-sync the extension's source: the old generation is 
 
 Every prompt rebuild re-evaluates function text, re-resolves variables, and re-runs the host-owned section resolvers before `compose(base)` (or `composeComplete` for a `promptComplete` preset). `AgentSession.setDesignSystemId` is the live prompt-only path: it writes the metadata key and calls `refreshBaseSystemPrompt()`, leaving the active tool set unchanged, so the new brief is used on the next model call. Extension load and reload re-sync the composer source and then call `refreshBaseSystemPrompt()` immediately, so a prompt-only extension (no tools) reaches a live session without waiting for another rebuild. A busy session performs the same refresh when its deferred load/reload drains. The composer revision is part of the rebuild signature, so a section-only change is not skipped when the tool set is unchanged. Tool changes from the same load/reload still follow the normal tool-registry path, and neither path requires a session restart.
 
-This is composition, not migration. The core Handlebars templates and volatile context stay in `buildSystemPrompt`: date, repository/workspace tree, AGENTS and other context files, skills/rules, tool inventory, MCP server instructions, memory, and persona/preset data are not registry variables. The registry also does not own cache policy or diff-style runtime messages.
+This is composition, not migration. The core Handlebars templates and volatile context stay in `buildSystemPrompt`: date, cwd, repository/workspace tree, AGENTS and other context files, skills/rules, tool inventory, MCP server instructions, memory, and persona/preset data are not registry variables, and date/cwd are not pluginized. Plan, goal, and vibe runtime context also stay host-owned: `AgentSession` rebuilds them during prompt assembly and skips a rebuild whose latest delivered copy has identical content, so a streaming mode-entry steer does not produce a second copy on the next turn. The registry also does not own cache policy or diff-style runtime messages.
 
 **Anchors**: `packages/coding-agent/test/prompts-registry.test.ts`, `packages/coding-agent/test/prompts-composer.test.ts`, `packages/coding-agent/src/prompts/{orders,registry,composer}.ts`.

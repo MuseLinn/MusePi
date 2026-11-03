@@ -20,6 +20,8 @@ const HOST_STATE_MODULES = [
 	"prompt-dialog",
 	"managed-browser-host",
 	"slot-host",
+	"monaco-runtime",
+	"monaco-lsp",
 ] as const;
 
 /** Call form only: an import or re-export of `createContext` is not a context. */

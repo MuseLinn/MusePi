@@ -4,6 +4,8 @@ import type { ExtensionHostModuleKey } from "@musepi/collab-proto/extension-host
 import * as actionToast from "./action-toast";
 import * as fileWorkspace from "./file-workspace";
 import * as managedBrowserHost from "./managed-browser-host";
+import * as monacoLsp from "./monaco-lsp";
+import * as monacoRuntime from "./monaco-runtime";
 import * as promptDialog from "./prompt-dialog";
 import * as tooltips from "./tooltips";
 import * as updateUx from "./update-ux";
@@ -23,7 +25,7 @@ import * as useFloatingMenu from "./use-floating-menu";
  * it would close a module cycle back through itself. It binds itself through
  * {@link registerHostModule} while its module evaluates.
  */
-const hostModules: Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host"> = {
+const hostModules = {
 	"prompt-dialog": promptDialog,
 	"managed-browser-host": managedBrowserHost,
 	"action-toast": actionToast,
@@ -31,9 +33,11 @@ const hostModules: Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host"> = 
 	"floating-menu": useFloatingMenu,
 	"update-ux": updateUx,
 	tooltips: tooltips,
+	"monaco-runtime": monacoRuntime,
+	"monaco-lsp": monacoLsp,
 	"client-core": clientCore,
 	i18n: clientCoreI18n,
-};
+} satisfies Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host">;
 
 /**
  * Bind one instance into the published table.
