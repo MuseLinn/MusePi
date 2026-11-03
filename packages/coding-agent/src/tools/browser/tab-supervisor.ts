@@ -727,20 +727,26 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 	// Connected and relay browsers are user-driven. When no target is requested,
 	// adopt the visible tab and avoid raising it before screenshots. An explicit
 	// target may be backgrounded, so retain activation for target-correct pixels.
+	// Managed GUI guests stay composited in the app host even while another tab
+	// is foregrounded, so a screenshot never needs to steal the user's focus.
 	const userDriven = browser.kind.kind === "connected" || browser.kind.kind === "relay";
-	const activateForScreenshot = !userDriven || !shouldPreserveConnectedBrowserFocus(opts.target);
-	// The GUI managed browser never adopts the user's browsing tab: the bridge
-	// keeps a DEDICATED agent tab (created on first open, badged in the panel)
-	// and returns its page target id on request. User tabs stay untouched.
-	const targetId =
-		browser.kind.kind === "connected" && browser.kind.gui === true
-			? await requestAgentTabTargetId(browser)
-			: await targetIdForPage(
-					await pickElectronTarget(browser.browser, {
-						matcher: opts.target,
-						preferVisible: !activateForScreenshot,
-					}),
-				);
+	const isManagedGui = browser.kind.kind === "connected" && browser.kind.gui === true;
+	const activateForScreenshot = isManagedGui
+		? false
+		: !userDriven || !shouldPreserveConnectedBrowserFocus(opts.target);
+	// The GUI managed browser keeps a DEDICATED agent tab (created on first
+	// open, badged in the panel) unless the caller names a target. An explicit
+	// `app.target` adopts the matching OPEN tab by url/title substring — the
+	// lookup never selects it — and a miss fails instead of falling back to a
+	// fresh agent tab that would silently ignore the requested page.
+	const targetId = isManagedGui
+		? await requestManagedBrowserTarget(browser, opts.target)
+		: await targetIdForPage(
+				await pickElectronTarget(browser.browser, {
+					matcher: opts.target,
+					preferVisible: !activateForScreenshot,
+				}),
+			);
 	return {
 		mode: "attach",
 		browserWSEndpoint,
@@ -755,19 +761,29 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 }
 
 /**
- * Ask the managed browser bridge (browser.gui) for the agent tab's page
- * target id, creating the tab on first use. Uses the browser-level CDP
- * session so no page needs to exist yet; the bridge answers a private
- * method the same way the relay answers `MusePi.claimTarget`.
+ * Ask the managed browser bridge (browser.gui) for the page target id to drive.
+ * Without a target, the bridge creates or reuses the DEDICATED agent tab;
+ * with one, it resolves an already-open tab by url/title substring and never
+ * creates or selects anything. Uses the browser-level CDP session so no page
+ * needs to exist yet; the bridge answers a private method the same way the
+ * relay answers `MusePi.claimTarget`.
  */
-async function requestAgentTabTargetId(browser: PuppeteerBrowserHandle): Promise<string> {
+export async function requestManagedBrowserTarget(browser: PuppeteerBrowserHandle, target?: string): Promise<string> {
 	const session = await browser.browser.target().createCDPSession();
 	try {
 		const raw = session as unknown as {
-			send(method: string, params?: Record<string, unknown>): Promise<{ targetId?: string }>;
+			send(method: string, params?: Record<string, unknown>): Promise<{ targetId?: string | null }>;
 		};
-		const result = await raw.send("ManagedBrowser.ensureAgentTab", {});
-		if (!result.targetId) throw new ToolError("The managed browser did not provide an agent tab target");
+		const result = target
+			? await raw.send("ManagedBrowser.findTabTarget", { target })
+			: await raw.send("ManagedBrowser.ensureAgentTab", {});
+		if (!result.targetId) {
+			throw new ToolError(
+				target
+					? `No open managed-browser tab matches app.target ${JSON.stringify(target)}`
+					: "The managed browser did not provide an agent tab target",
+			);
+		}
 		return result.targetId;
 	} finally {
 		await session.detach().catch(() => undefined);

@@ -33,6 +33,8 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "action-toast", path: "lib/action-toast" },
 	{ key: "file-workspace", path: "lib/file-workspace" },
 	{ key: "floating-menu", path: "lib/use-floating-menu" },
+	{ key: "client-core", specifier: "@musepi/client-core" },
+	{ key: "i18n", specifier: "@musepi/client-core/src/i18n" },
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];
 
 /** One table key. */
@@ -42,7 +44,11 @@ const MODULE_EXTENSION = /\.(?:tsx?|m?js|cjs)$/;
 
 function normalize(request: string): string {
 	const path = request.split(/[?#]/)[0] ?? request;
-	return path.replace(/\\/g, "/").replace(MODULE_EXTENSION, "").replace(/\/+$/, "");
+	return path
+		.replace(/\\/g, "/")
+		.replace(MODULE_EXTENSION, "")
+		.replace(/\/index$/, "")
+		.replace(/\/+$/, "");
 }
 
 /**

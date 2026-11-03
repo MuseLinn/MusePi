@@ -670,6 +670,8 @@ document 里直到窗口关闭。症状是「改一次 UI 就多一份样式」�
 export const EXTENSION_HOST_MODULES = [
   { key: "prompt-dialog", path: "lib/prompt-dialog" },
   { key: "action-toast", path: "lib/action-toast" },
+  { key: "client-core", specifier: "@musepi/client-core" },
+  { key: "i18n", specifier: "@musepi/client-core/src/i18n" },
   …
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];
 ```
@@ -703,6 +705,14 @@ const hostModules = {
 | `action-toast` | `lib/action-toast.ts` | toast 列表与订阅者 |
 | `file-workspace` | `lib/file-workspace.ts` | 文件预览缓冲区 |
 | `floating-menu` | `lib/use-floating-menu.tsx` | 模块级菜单 mutex |
+| `client-core` | `@musepi/client-core`（裸包） | 整个 client-core 命名空间：其中的 React context 与模块级状态 |
+| `i18n` | `@musepi/client-core/src/i18n`（裸包） | `t` / `setLocale` 共用的 locale 注册表 |
+
+### 身份与纯 helper 的界限
+
+`client-core` 与 `i18n` 是裸包条目而非路径条目。模块身份——React context、模块级状态、`client-core` 命名空间本身——经 `MusePiHostModules` 共享；翻译则走宿主 locale 服务：`@musepi/client-core/src/i18n` 与 `@musepi/client-core` 指向同一个模块实例，因此插件里 `setLocale("zh-CN")` 会改变宿主 `t` 的返回值。
+
+不要给深层 helper 加条目：`@musepi/client-core/src/lib/<helper>` 这类子路径不承载身份，继续打包。裸包按精确匹配，import 必须与表中写的一致——`@musepi/client-core/src/i18n/index.js` 是另一条请求，不会命中，并会打包出第二份 locale 注册表。
 
 ### 新增共享模块
 

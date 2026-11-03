@@ -685,6 +685,8 @@ A compiled component is a standalone ESM bundle. Every app import it does not ex
 export const EXTENSION_HOST_MODULES = [
   { key: "prompt-dialog", path: "lib/prompt-dialog" },
   { key: "action-toast", path: "lib/action-toast" },
+  { key: "client-core", specifier: "@musepi/client-core" },
+  { key: "i18n", specifier: "@musepi/client-core/src/i18n" },
   …
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];
 ```
@@ -718,6 +720,14 @@ const hostModules = {
 | `action-toast` | `lib/action-toast.ts` | Toast list and subscribers |
 | `file-workspace` | `lib/file-workspace.ts` | File preview buffers |
 | `floating-menu` | `lib/use-floating-menu.tsx` | Module-level menu mutex |
+| `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
+| `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
+
+### Identity versus helpers
+
+`client-core` and `i18n` are bare-specifier entries, not paths. Module identity — React context, module-level state, and the `client-core` namespace itself — is shared through `MusePiHostModules`; translations ride the host's locale service because `@musepi/client-core/src/i18n` and `@musepi/client-core` resolve to the same module instance, so a plugin's `setLocale("zh-CN")` changes what the host's `t` returns.
+
+Do not add entries for deep helpers: a subpath such as `@musepi/client-core/src/lib/<helper>` carries no identity and stays bundled. Bare matching is exact, so import the specifier exactly as listed — `@musepi/client-core/src/i18n/index.js` is a different request, matches nothing, and bundles a second locale registry.
 
 ### Adding a shared module
 

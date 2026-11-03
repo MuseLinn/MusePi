@@ -36,6 +36,20 @@ describe("extension host module table", () => {
 		expect(matchExtensionHostModule("../lib/prompt-dialogues")).toBeUndefined();
 	});
 
+	it("matches bare specifiers exactly", () => {
+		expect(matchExtensionHostModule("@musepi/client-core")).toBe("client-core");
+		expect(matchExtensionHostModule("@musepi/client-core/index.js")).toBe("client-core");
+		expect(matchExtensionHostModule("@musepi/client-core/src/i18n")).toBe("i18n");
+		expect(matchExtensionHostModule("@musepi/client-core/src/i18n/index")).toBe("i18n");
+		expect(matchExtensionHostModule("@musepi/client-core/src/i18n/index.js")).toBe("i18n");
+	});
+
+	it("does not match a bare specifier by suffix or prefix", () => {
+		expect(matchExtensionHostModule("@musepi/client-core/src/i18n/extra")).toBeUndefined();
+		expect(matchExtensionHostModule("@musepi/client-core-extra")).toBeUndefined();
+		expect(matchExtensionHostModule("@musepi/client-core/src/other")).toBeUndefined();
+	});
+
 	it("leaves pure helpers in the plugin bundle", () => {
 		expect(matchExtensionHostModule("../lib/leaf-walk")).toBeUndefined();
 		expect(matchExtensionHostModule("react")).toBeUndefined();

@@ -11,6 +11,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Plugin packages can now be packed, shared, and installed directly. `musepi plugin pack [path] [-o dir] [--json]` validates the manifest and entries before producing a .tgz file, which recipients can install through the Plugins view or `musepi plugin install <absolute-path>`. Pure Cordis and legacy entries both validate through the production mount chain and release validation resources afterward; packing never publishes the package.
 
 ### Changed
+- **插件与宿主共享 client-core 与语言状态**：`@musepi/client-core` 及 `@musepi/client-core/src/i18n` 也纳入冻结宿主模块表，插件不再复制 UI 原语与 locale 注册表，语言切换对宿主和插件同时生效。
+  - EN: Compiled plugins now share the host's client-core namespace and locale state. @musepi/client-core and @musepi/client-core/src/i18n join the frozen host module table, so UI primitives and the locale registry are no longer duplicated, and language switches apply to host and plugins alike.
+- **内置浏览器支持显式接管用户标签页**：`app.target` 可按 URL/标题子串命中已打开的用户标签页并直接在原地操作，不新建 agent 标签、不抢焦点，未命中时明确报错；无参数仍使用专用 agent 标签页。
+  - EN: The built-in browser now supports explicit adoption of a user's open tab. app.target selects a tab by URL/title substring and operates on it in place, without creating an agent tab or stealing focus, and a miss is an explicit error. Without it, the dedicated agent tab is used.
 - **编译插件共享宿主模块实例**：`prompt-dialog`、`managed-browser-host`、`action-toast`、`file-workspace`、`floating-menu` 的匹配 import 不再打包进编译产物，而是读取 `window.MusePiHostModules` 暴露的宿主实例；宿主未发布该表时导入即报错，不再静默退回副本。确认弹窗、toast、文件草稿和浮层互斥量因此在宿主与插件间保持同一份状态。
   - EN: Compiled plugins now share host module instances. Imports of prompt-dialog, managed-browser-host, action-toast, file-workspace, and floating-menu resolve to the instances exposed on window.MusePiHostModules instead of being bundled, and a host that does not publish the table fails at import rather than silently falling back to a copy. Confirmation dialogs, toasts, file drafts, and the floating-menu mutex therefore keep one state across the host and every plugin.
 - **插件管理界面与语音设备检测统一**：普通包和模块使用相同的横向卡片，补齐中英文名称、说明与结构化「实验性」标签；详情页移除无关组件说明。语音详情和设置共用设备选择、热插拔刷新与实时音量检测，关闭界面即停止采集。

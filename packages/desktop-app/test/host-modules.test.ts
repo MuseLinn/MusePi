@@ -1,5 +1,6 @@
 import "./happy-dom-shim";
 import { beforeEach, describe, expect, it } from "bun:test";
+import { t as clientCoreT } from "@musepi/client-core";
 import { EXTENSION_HOST_MODULES } from "@musepi/collab-proto/extension-host-modules";
 import { exposeHostModules } from "../src/lib/host-modules";
 
@@ -44,5 +45,23 @@ describe("host module table", () => {
 	it("keeps the pre-table globals as aliases of the same objects", () => {
 		expect(hostWindow().MusePiPromptDialog).toBe(hostModule("prompt-dialog"));
 		expect(hostWindow().MusePiManagedBrowserHost).toBe(hostModule("managed-browser-host"));
+	});
+
+	it("shares the client-core namespace and its locale state", () => {
+		const clientCore = hostModule("client-core");
+		const i18n = hostModule("i18n");
+		expect(clientCore?.t).toBe(clientCoreT);
+		expect(i18n?.t).toBe(clientCoreT);
+		expect(typeof i18n?.setLocale).toBe("function");
+
+		const setLocale = i18n?.setLocale as (locale: string) => void;
+		const translate = clientCore?.t as (key: "settings.cancel") => string;
+		try {
+			setLocale("zh-CN");
+			expect(translate("settings.cancel")).toBe("取消");
+		} finally {
+			setLocale("en-US");
+		}
+		expect(translate("settings.cancel")).toBe("Cancel");
 	});
 });

@@ -70,6 +70,26 @@ describe("extension artifact compiler host modules", () => {
 		expect(code).toContain("bundled-leaf-walk-copy");
 	});
 
+	it("shares the client-core namespace and its i18n module", async () => {
+		const root = await fixture({
+			"ext/component.ts": [
+				'import { t } from "@musepi/client-core";',
+				'import { t as deepT } from "@musepi/client-core/src/i18n";',
+				"",
+				"export const labels = [t, deepT];",
+			].join("\n"),
+		});
+
+		const { code } = await compileComponentModule(path.join(root, "ext", "component.ts"));
+
+		expect(code).toContain("MusePiHostModules");
+		expect(code).toContain('MusePiHostModules is missing "client-core"');
+		expect(code).toContain('MusePiHostModules is missing "i18n"');
+		// The i18n source owns the locale registry; its presence would mean the
+		// import fell back to a bundled copy with its own locale state.
+		expect(code).not.toContain("omp.collab.locale");
+	});
+
 	it("throws a keyed error when the host table lacks the entry", async () => {
 		const root = await fixture({
 			"lib/file-workspace.ts": [

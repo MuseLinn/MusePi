@@ -223,6 +223,23 @@ function parseTargetId(targetId) {
 	return { kind: match[1] === "TAB" ? "tab" : "page", tabId: match[2] };
 }
 
+/**
+ * Case-insensitive url/title substring match over the open tabs, in map
+ * order. The empty query matches nothing so an absent `app.target` can never
+ * be mistaken for "the first tab".
+ */
+function findTabByQuery(tabs, query) {
+	const needle = typeof query === "string" ? query.trim().toLowerCase() : "";
+	if (!needle) return null;
+	for (const tab of tabs.values()) {
+		const url = String(tab.url);
+		if (INELIGIBLE_URL.test(url)) continue;
+		if (url.toLowerCase().includes(needle)) return tab;
+		if (String(tab.title).toLowerCase().includes(needle)) return tab;
+	}
+	return null;
+}
+
 /** Strip credentials from a URL for display/state (never leak user:pass). */
 function redactUrl(url) {
 	try {
@@ -1434,15 +1451,25 @@ class ManagedBrowserController {
 				this.reply(conn, msg, {});
 				return;
 			case "ManagedBrowser.ensureAgentTab": {
-				// Daemon-side contract (tab-supervisor requestAgentTabTargetId):
-				// return the DEDICATED agent tab's page target id, creating it
-				// on first use so the agent never adopts the user's tab.
+				// Daemon-side contract (tab-supervisor requestManagedBrowserTarget
+				// without app.target): return the DEDICATED agent tab's page target
+				// id, creating it on first use so the agent never adopts the user's
+				// tab.
 				const tab = await this.ensureAgentTab();
 				if (!tab) {
 					this.replyError(conn, msg, "The managed browser did not provide an agent tab");
 					return;
 				}
 				this.reply(conn, msg, { targetId: pageTargetId(tab.id) });
+				return;
+			}
+			case "ManagedBrowser.findTabTarget": {
+				// Daemon-side contract (tab-supervisor requestManagedBrowserTarget
+				// with an explicit app.target): resolve an OPEN tab by url/title
+				// substring. Lookup only — no selection, focus change or tab
+				// creation — and a miss replies null so the caller reports it.
+				const tab = findTabByQuery(this.tabs, msg.params?.target);
+				this.reply(conn, msg, { targetId: tab ? pageTargetId(tab.id) : null });
 				return;
 			}
 			default:
