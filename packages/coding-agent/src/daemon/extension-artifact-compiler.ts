@@ -125,6 +125,7 @@ const HOST_REACT_DOM_MODULE = `module.exports = window.MusePiReactDOM;`;
 const HOST_REACT_DOM_CLIENT_MODULE = `module.exports = window.MusePiReactDOMClient;`;
 const HOST_JSX_MODULE = `module.exports = window.MusePiReact;`;
 const HOST_MANAGED_BROWSER_MODULE = `module.exports = window.MusePiManagedBrowserHost;`;
+const HOST_PROMPT_DIALOG_MODULE = `module.exports = window.MusePiPromptDialog;`;
 
 function hostReactPlugin(): BunPlugin {
 	return {
@@ -154,6 +155,18 @@ function hostReactPlugin(): BunPlugin {
 			}));
 			build.onLoad({ filter: /.*/, namespace: "musepi-host-managed-browser" }, () => ({
 				contents: HOST_MANAGED_BROWSER_MODULE,
+				loader: "js",
+			}));
+			// Prompt/confirm dialogs are React context. A bundled copy of the
+			// host's prompt-dialog module reads that copy's default context
+			// (`async () => false`), so a plugin's stop button silently did
+			// nothing. Bind the import to the host provider's hooks.
+			build.onResolve({ filter: /(^|[\\/])lib[\\/]prompt-dialog(?:\.tsx?)?$/ }, args => ({
+				path: args.path,
+				namespace: "musepi-host-prompt-dialog",
+			}));
+			build.onLoad({ filter: /.*/, namespace: "musepi-host-prompt-dialog" }, () => ({
+				contents: HOST_PROMPT_DIALOG_MODULE,
 				loader: "js",
 			}));
 		},

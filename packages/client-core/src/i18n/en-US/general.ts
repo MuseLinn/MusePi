@@ -615,18 +615,14 @@ export const general = {
 	"general.queuedAttachmentCount": "{count} attachments",
 	"general.dragReorderQueuedMessage": "Drag to reorder queued message",
 	"general.takeBack": "Take back",
-	// Session-control round: terminate confirm + revert history.
+	// Session-control round: tree-op confirm + revert history.
 	"general.agentRunning": "The agent is running",
 	"general.treeOpInterruptsWork": "This operation interrupts the current work and re-anchors the branch. Continue?",
 	"general.interruptContinue": "Interrupt and continue",
-	"general.terminateCurrentTurn": "Terminate the current turn?",
-	"general.agentWillStop.desc":
-		"The agent will stop current work; queued messages are kept and run when you send your next message (Esc in the TUI interrupts the same way)",
 	"general.messageTree": "Message tree",
 	"general.messageTreeFilter": "Message tree filter",
 	"general.searchMessages2": "Search messages…",
 	"general.toolCalls": "Tool calls",
-	"general.terminate": "Terminate",
 	"general.restoreInput": "Restore to input",
 	"general.resend": "Resend",
 	"general.discard": "Discard",

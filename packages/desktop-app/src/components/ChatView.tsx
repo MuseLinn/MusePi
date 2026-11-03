@@ -2213,16 +2213,12 @@ export function ChatView({
 		fetchThinkingInfo();
 	}, [fetchThinkingInfo]);
 
-	// Terminate confirmation: the stop button asks
-	// before aborting — the dialog explains what abort means (same
-	// semantics as TUI Esc: current turn stops, queued messages stay).
-	const handleStop = useCallback(async (): Promise<void> => {
-		const ok = await confirm(
-			`${t("general.terminateCurrentTurn")}\n\n${t("general.agentWillStop.desc")}`,
-			t("general.terminate"),
-		);
-		if (ok) onStop();
-	}, [confirm, onStop]);
+	// Stop is immediate, matching bare Escape: the daemon keeps queued
+	// messages. A blocking confirm made the button a no-op whenever its
+	// context was unavailable, so the click always reaches `onStop`.
+	const handleStop = useCallback((): void => {
+		onStop();
+	}, [onStop]);
 	// Session composer focus morph: same WAAPI height animation as the
 	// welcome form — current → parent height (open) or content height
 	// (closed); the inline height is set to the target immediately and the

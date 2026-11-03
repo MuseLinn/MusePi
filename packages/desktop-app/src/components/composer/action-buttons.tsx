@@ -261,10 +261,10 @@ function MatrixLoader({ className }: { className?: string }): ReactNode {
 	);
 }
 
-/** 三合一 send control (user direction, opendesign parity): idle renders the
+/** 三合一 send control: idle renders the
  *  plain send button; while the agent works the SAME button becomes the live
  *  state display — a capsule with the dot-matrix bloom + a morphing label
- *  ("工作中" at rest, "停止" on hover/focus). Click aborts the turn.
+ *  ("工作中" at rest, "停止" on hover/focus). Click aborts the turn at once.
  *
  *  While the agent works AND the draft has content, a SECOND button appears
  *  beside it: queueing the message for after the turn instead of steering the

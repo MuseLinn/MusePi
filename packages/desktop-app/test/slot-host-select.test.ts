@@ -1,4 +1,4 @@
-import "./dom-shim";
+import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
 import {
 	type SlotComponent,
@@ -97,5 +97,13 @@ describe("selectLaunchablePanelTabs", () => {
 		const tool = comp({ slot: "panel.tab.tool", extensionId: "tool", code: "c" });
 		expect(selectLaunchablePanelTabs([files, tool])).toEqual([tool]);
 		expect(selectPanelTabComponent([files, tool], "files")).toBe(files);
+	});
+});
+
+describe("compiled plugin host bridges", () => {
+	it("exposes the host prompt/confirm hooks so plugin context is not duplicated", () => {
+		const bridge = (window as unknown as { MusePiPromptDialog?: Record<string, unknown> }).MusePiPromptDialog;
+		expect(typeof bridge?.useConfirm).toBe("function");
+		expect(typeof bridge?.usePrompt).toBe("function");
 	});
 });

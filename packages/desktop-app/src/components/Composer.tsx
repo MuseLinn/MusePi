@@ -2272,10 +2272,10 @@ export function Composer({
 							disabled={!sttEnabled}
 							onToggle={() => void voiceSetup.onToggle()}
 						/>
-						{/* 三合一 send control (user direction, opendesign parity):
+						{/* 三合一 send control:
 						 * idle → send; working → the button itself displays the
 						 * live agent state (braille + accent shimmer), hover
-						 * reveals the stop glyph and click aborts the turn. */}
+						 * reveals the stop glyph and click aborts at once. */}
 						{!working && <RetryButton busy={retryBusy} none={retryNone} onPress={retryLastTurn} />}
 						<SendOrStopButton
 							canSend={canSend}

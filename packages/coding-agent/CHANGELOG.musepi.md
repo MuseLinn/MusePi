@@ -25,6 +25,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The chat surface is now plugin-managed and supports custom greetings. The chat-view Cordis plugin provides the welcome page, transcript, composer, and related panels while the host retains session and workspace state; disabling it leaves no second chat implementation. Settings → General offers a custom welcome greeting with immediate preview, and blank input restores the time-aware greeting.
 
 ### Fixed
+- **停止按钮恢复可用并立即中断**：Cordis 编译的 `chat-view` 插件不再自带一份确认上下文，停止按钮点击直接发送中断，不再被静默的确认默认值吞掉；与 Esc 的即时中断语义一致。树操作等仍需确认的入口继续使用宿主弹窗。
+  - EN: The stop button now interrupts immediately. Compiled chat-view plugins reuse the host's prompt/confirm hooks instead of a bundled copy whose silent default swallowed the click, matching the existing Escape behavior. Confirmed actions such as tree operations still use the host dialog.
 - **关闭动态效果时欢迎语立即完整显示**：`gui-motion-off` 下品牌字与问候语不再逐字计时显现，符合设置中「关闭动态效果」的承诺，低动效环境也不会残留定时更新。
   - EN: Welcome branding and greetings now appear in full immediately when motion is off. The stepped reveal no longer starts under gui-motion-off, matching the setting's promise and leaving no pending timer updates in low-motion environments.
 - **开发客户端启动 daemon 时正确解析 Bun**：开发环境会从 `BUN_EXECUTABLE` 或 PATH 解析 Bun 的绝对路径，避免 Windows 首轮启动因子进程找不到裸 `bun` 命令而失败；启动错误同时包含退出码和子进程输出，便于定位连接失败。

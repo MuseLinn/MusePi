@@ -600,18 +600,14 @@ export const general = {
 	"general.queuedAttachmentCount": "{count} 个附件",
 	"general.dragReorderQueuedMessage": "拖拽以重新排序排队消息",
 	"general.takeBack": "取回",
-	// Session-control round: terminate confirm + revert history.
+	// Session-control round: tree-op confirm + revert history.
 	"general.agentRunning": "Agent 正在运行",
 	"general.treeOpInterruptsWork": "该操作会中断当前工作并改变分支锚点，是否继续？",
 	"general.interruptContinue": "中断并继续",
-	"general.terminateCurrentTurn": "终止当前回合?",
-	"general.agentWillStop.desc":
-		"agent 将停止当前工作;已排队的消息会保留,并在你发送下一条消息时执行(TUI 中 Esc 中断的语义相同)",
 	"general.messageTree": "消息树",
 	"general.messageTreeFilter": "消息树过滤",
 	"general.searchMessages2": "搜索消息…",
 	"general.toolCalls": "工具调用",
-	"general.terminate": "终止",
 	"general.restoreInput": "恢复到输入框",
 	"general.resend": "重新发送",
 	"general.discard": "丢弃",
