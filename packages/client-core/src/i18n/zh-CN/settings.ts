@@ -1081,11 +1081,6 @@ export const settings = {
 	"settings.copyImage2": "复制为图片",
 	"settings.widgetSource": "组件源码",
 	"settings.maximizePanel": "最大化面板",
-	"settings.watchAgentSBrowser": "实时查看 agent 的浏览器操作",
-	"settings.managedBrowserPages.info":
-		"启用受管浏览器后，agent 打开的页面会直接显示在右侧面板里，并与面板共享登录状态。",
-	"settings.enableWatch": "启用并查看",
-	"settings.donTAskAgain": "不再提示",
 	"settings.restorePanel": "还原面板",
 	"settings.splitPanel": "分栏",
 	"settings.mergePanel": "合并分栏",

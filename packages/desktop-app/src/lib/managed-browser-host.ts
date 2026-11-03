@@ -631,6 +631,8 @@ export async function refreshThemeColor(tabId: string): Promise<void> {
 }
 
 let wired = false;
+let wireDisposers: Array<() => void> = [];
+let residencyTimer: number | null = null;
 
 /** Bind main-process pushes once (idempotent; called by the host component). */
 export function wireHost(): void {
@@ -638,29 +640,53 @@ export function wireHost(): void {
 	const api = window.electronAPI;
 	if (!api) return;
 	wired = true;
-	api.onManagedBrowserState(push => {
-		set({
-			port: push.port ?? null,
-			activity: push.activity ?? null,
-			busyTabIds: push.busyTabIds,
-			agentActivity: push.agentActivity === true,
-		});
-	});
-	api.onManagedBrowserConfirm(input => set({ confirm: input }));
-	api.onManagedBrowserCreateTab(input => {
-		void createTab(input.url, { tabId: input.tabId, agent: true }).catch(() => {
-			void api.managedBrowserGuestGone(input.tabId).catch(() => {});
-		});
-	});
-	api.onManagedBrowserSelectTab(input => selectTab(input.tabId));
-	api.onManagedBrowserCloseTab(input => closeTab(input.tabId));
+	wireDisposers = [
+		api.onManagedBrowserState(push => {
+			set({
+				port: push.port ?? null,
+				activity: push.activity ?? null,
+				busyTabIds: push.busyTabIds,
+				agentActivity: push.agentActivity === true,
+			});
+		}),
+		api.onManagedBrowserConfirm(input => set({ confirm: input })),
+		api.onManagedBrowserCreateTab(input => {
+			void createTab(input.url, { tabId: input.tabId, agent: true }).catch(() => {
+				void api.managedBrowserGuestGone(input.tabId).catch(() => {});
+			});
+		}),
+		api.onManagedBrowserSelectTab(input => selectTab(input.tabId)),
+		api.onManagedBrowserCloseTab(input => closeTab(input.tabId)),
+	];
 	void api.managedBrowserGetState().then(snapshot => {
+		// The host may have unmounted while the snapshot was in flight.
+		if (!wired) return;
 		set({ port: snapshot.port ?? null, activity: snapshot.activity ?? null, busyTabIds: snapshot.busyTabIds });
 	});
 	// Long-lived sets can exceed the cap without any new tab (restored tabs
 	// all arrive at once); re-check periodically rather than only on create.
-	window.setInterval(enforceResidency, 30_000);
+	residencyTimer = window.setInterval(enforceResidency, 30_000);
 	void api.managedBrowserHostReady().catch(() => {});
+}
+
+/**
+ * Release the renderer-side wiring when the host unmounts.
+ *
+ * The bridge stays up in main (the CDP server outlives the panel), but the
+ * advertised port must go: a bridge nobody renders into would send the agent
+ * to a browser with no UI. Dropping it makes the daemon fall back to headless
+ * until a host re-wires and publishes the port again.
+ */
+export function unwireHost(): void {
+	if (!wired) return;
+	wired = false;
+	for (const dispose of wireDisposers) dispose();
+	wireDisposers = [];
+	if (residencyTimer !== null) {
+		window.clearInterval(residencyTimer);
+		residencyTimer = null;
+	}
+	set({ port: null });
 }
 
 /**

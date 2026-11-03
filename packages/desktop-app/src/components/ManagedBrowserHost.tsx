@@ -8,6 +8,7 @@ import {
 	persistTabs,
 	restoreTabs,
 	subscribeHost,
+	unwireHost,
 	wireHost,
 } from "../lib/managed-browser-host";
 import { managedTabIsBlank } from "../lib/managed-browser-visibility";
@@ -40,6 +41,7 @@ export function ManagedBrowserHost(): ReactNode {
 	useEffect(() => {
 		wireHost();
 		restoreTabs();
+		return unwireHost;
 	}, []);
 
 	useEffect(() => {

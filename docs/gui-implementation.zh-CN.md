@@ -790,7 +790,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **`settings.get` 回传实际生效值**:桥活着且没存过值时,`browser.gui` 回答 `true`,设置开关显示的是 agent 真正会用的通道,而不是在活通道上显示关闭。点关会写入显式 `false`,解析随即尊重它。
 - **提示词按通道注入**:`browser.md` 新增 "Managed browser channel" 条目(页面在面板里可见、`computer` 看不到它们),`computer.md` 新增「内嵌页面在这里不可见」规则,两者都在 `{{#if managedBrowser}}` 之后——CLI/TUI 场景永远看不到这段应用内浏览器文案。`BrowserTool.description` 与 `ComputerTool.description` 经 `prompt.render` 传入该标志。
 - **GUI 侧**:`lib/managed-browser-bridge.ts` 订阅托管浏览器宿主 store(主进程经 `wireHost` 推送 `port`),按 (rpc, port) 去重后推给 daemon——宿主状态每秒变好几次。在 `app.tsx` 与其它 rpc effect 并列接一次。`browser.managedBridge` 已加入 `REQUIRED_DAEMON_METHODS`,让「同版本号但代码陈旧」的 daemon(dev/工作区场景)重启,而不是静默缺了这条接管链路。
-- **设置 → 浏览器**在运行状态下拆成两条通道:「托管浏览器桥」(实际绑定端口 + agent 标签页是否存在,直读渲染端宿主 store,与右栏面板同源)与「共享无头浏览器」(原 `browser.endpoint` 行);新增可编辑的 `browser.guiUrl` 与通道优先级说明。`BrowserGuiHint` 改为首次打开浏览器面板即触发(不必等 agent 先跑一次无头调用),文案改为与通道无关的中性表述。
+- **设置 → 浏览器**在运行状态下拆成两条通道:「托管浏览器桥」(实际绑定端口 + agent 标签页是否存在,直读渲染端宿主 store,与右栏面板同源)与「共享无头浏览器」(原 `browser.endpoint` 行);新增可编辑的 `browser.guiUrl` 与通道优先级说明。旧的 `BrowserGuiHint` 引导 toast 已移除:桥活着时 `settings.get` 本就回传生效的 `browser.gui`,桌面默认不需要再提示;要显式关闭仍走设置开关。
 ## 45. 查找栏 / 撤销 toast / 面板增量（2026-10-02，openchamber v2.1.0 parity）
 
 设计侧：`gui-design.md` §5x。三件低风险吸收，未触碰布局模型。本节末尾的工具链陷阱

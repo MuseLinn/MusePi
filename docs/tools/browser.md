@@ -1,6 +1,6 @@
 # browser
 
-> Open, reuse, close, and script browser tabs against headless Chromium, CDP-attached apps, or cmux surfaces.
+> Open, reuse, close, and script browser tabs in the desktop app's built-in browser (the default when a desktop app is attached), or against a headless Chromium, CDP-attached apps, relay tabs, or cmux surfaces.
 
 ## Source
 - Entry: `packages/coding-agent/src/tools/browser.ts`
@@ -10,6 +10,7 @@
   - `packages/coding-agent/src/tools/browser/tab-worker.ts` — executes `run` code; implements the `tab` helper API.
   - `packages/coding-agent/src/tools/browser/tab-worker-entry.ts` — worker-thread transport bootstrap.
   - `packages/coding-agent/src/tools/browser/registry.ts` — browser-handle registry keyed by browser kind.
+  - `packages/coding-agent/src/tools/browser/managed-bridge.ts` — in-process registry of the desktop app's managed browser bridge (`browser.managedBridge` RPC); decides whether an unconfigured `browser.gui` defaults to the in-app browser.
   - `packages/coding-agent/src/tools/browser/launch.ts` — Puppeteer loading, Chromium resolution/download, headless launch, stealth injection.
   - `packages/coding-agent/src/tools/browser/shared-daemon.ts` — project-shared broker-owned Chromium (ensure/attach over the daemon broker).
   - `packages/coding-agent/src/tools/browser/attach.ts` — CDP attach/reuse, target picking, spawned-app process handling.
@@ -56,7 +57,7 @@
 | `viewport` | `{ width: number; height: number; scale?: number }` | No | Requested viewport. For headless launch this becomes the initial viewport; for a page it is applied with `page.setViewport()`. `scale` maps to Puppeteer `deviceScaleFactor`. |
 | `wait_until` | `"load" \| "domcontentloaded" \| "networkidle0" \| "networkidle2"` | No | Navigation wait condition. Defaults to `"load"` where omitted, including `open` navigation and later `tab.goto(...)`. |
 | `dialogs` | `"accept" \| "dismiss"` | No | Installs a page `dialog` handler that auto-accepts or auto-dismisses dialogs. Omitted means no handler. |
-| `app` | `{ path?: string; cdp_url?: string; args?: string[]; target?: string }` | No | Selects browser kind. With no `app`, a configured `browser.cdpUrl` setting attaches to that endpoint; otherwise the cmux backend is used when a cmux socket is available (`CMUX_SOCKET_PATH`, gated by the `browser.cmux` setting / `PI_BROWSER_CMUX` override); otherwise the session `browser.headless` setting applies. `app.path` is resolved against the session cwd and used as the executable path for spawn/attach reuse. `app.cdp_url` connects to an existing CDP endpoint. `args` are appended only when spawning `app.path`. `target` is only used for attached/spawned-app page selection. |
+| `app` | `{ path?: string; cdp_url?: string; args?: string[]; target?: string }` | No | Selects browser kind. Resolution order: explicit `app.cdp_url` → explicit `app.path` → explicit `app.relay`/`browser.relay` → configured `browser.cdpUrl` → cmux (when `CMUX_SOCKET_PATH` is set and enabled by the `browser.cmux` setting / `PI_BROWSER_CMUX` override) → the desktop app's built-in browser (bridge live and `browser.gui` not explicitly `false`) → headless Chromium. `app.path` is resolved against the session cwd and used as the executable path for spawn/attach reuse. `app.cdp_url` connects to an existing CDP endpoint. `args` are appended only when spawning `app.path`. `target` is only used for attached/spawned-app page selection. |
 
 ### `action: "close"`
 
@@ -90,12 +91,15 @@ The tool returns one result per call; no streaming partial output is emitted fro
 
 ## Flow
 1. `BrowserTool.execute()` (`packages/coding-agent/src/tools/browser.ts`) abort-checks, clamps `timeout` via `clampTimeout("browser", ...)`, defaults `name` to `"main"`, and dispatches on `action`.
-2. `open` resolves browser kind with `resolveBrowserKind()`:
+2. `open` resolves browser kind with `resolveBrowserKind()`. Components disabled by the `browser` plugin toggle (`launch`, `attach`, `gui`) are skipped in the settings chain and the next candidate applies:
    - `app.cdp_url` → `{ kind: "connected" }` after trimming trailing slashes.
    - `app.path` → `{ kind: "spawned" }` after resolving against session cwd.
+   - `app.relay` / `browser.relay` → `{ kind: "relay" }` when the relay daemon is reachable and `PI_BROWSER_RELAY` does not disable it; an explicit `app.relay: false` suppresses the setting.
    - otherwise, a non-empty `browser.cdpUrl` setting → `{ kind: "connected" }` after trimming whitespace and trailing slashes.
    - otherwise, `resolveCmuxKind()` → `{ kind: "cmux", socketPath, password?, surface? }` when `CMUX_SOCKET_PATH` is set and cmux is enabled (`browser.cmux` setting, overridable by `PI_BROWSER_CMUX`).
+   - otherwise, the desktop app's built-in browser → `{ kind: "connected", cdpUrl: <bridge url>, gui: true }` while the desktop bridge is registered and `browser.gui` is unset or `true`; the `gui` marker is what makes the supervisor request the dedicated agent tab.
    - otherwise → `{ kind: "headless", headless: session.settings.get("browser.headless") }`.
+   An explicit `app` option that names a disabled backend fails with a structured `DISABLED_BACKEND` error instead of silently falling back; when every backend is disabled the call fails with `NO_BACKEND`.
 3. `open` rejects reusing the same tab name across different browser kinds (`sameBrowserKind()`); callers must close first.
 4. `open` acquires a browser handle through `acquireBrowser()` (`packages/coding-agent/src/tools/browser/registry.ts`):
    - existing connected handle is reused by browser-kind key;
@@ -158,12 +162,17 @@ The tool returns one result per call; no streaming partial output is emitted fro
 21. `close` releases one tab or all tabs via `releaseTab()` / `releaseAllTabs()`. Each tab aborts pending runs, asks the worker to close, waits up to `750` ms for a `closed` ack, terminates the worker, decrements browser refcount, and disposes the browser handle when refcount reaches zero.
 
 ## Modes / Variants
+- **Backend components (`browser` plugin)**
+  - `launch` covers headless/spawned Chromium, `attach` covers connected/relay/cmux, and `gui` covers the desktop built-in browser; the mapping lives in `browserBackendComponent()` (`packages/coding-agent/src/tools/browser.ts`).
+  - Disabling a component in the plugin UI (`isCapabilityActive`) removes that backend from the settings chain, so the next candidate is used.
+  - The right-pane browser itself (pane plus persistent guest host) belongs to the `browser-ui` Cordis plugin (`packages/desktop-app/src/plugins/browser-ui`), not to the tool. The tool only attaches to the loopback CDP bridge that the desktop host advertises.
 - **Action dispatch**
   - `open` — acquire/reuse browser + tab.
   - `close` — release one tab or all tabs.
   - `run` — execute JS inside the tab worker.
 - **Browser kind**
-  - **Headless**: attaches to one project-shared Chromium supervised by the daemon broker (`omp.browser.headless` / `omp.browser.headed` in `hub ps`), applies stealth patches, and creates a fresh page per tab. The daemon stops with the last musepi client in the project. Non-CLI hosts launch a private local Chromium instead.
+  - **Managed in-app browser (`browser.gui`, desktop default)**: resolves to `{ kind: "connected", cdpUrl, gui: true }` against the loopback CDP bridge of the desktop app's right-pane browser (`ManagedBrowser` in `packages/desktop-app/electron/managed-browser.cjs`; renderer host in `packages/desktop-app/src/lib/managed-browser-host.ts`). The agent never adopts the user's tab: `requestAgentTabTargetId()` asks the bridge for `ManagedBrowser.ensureAgentTab`, which creates or reuses the dedicated agent tab and selects it in the panel. The user and the agent share one Electron partition, so login state is shared, and the user can watch, interact with, or take over that tab at any time.
+  - **Headless** (fallback when no other backend applies): attaches to one project-shared Chromium supervised by the daemon broker (`omp.browser.headless` / `omp.browser.headed` in `hub ps`), applies stealth patches, and creates a fresh page per tab. The daemon stops with the last musepi client in the project. Non-CLI hosts launch a private local Chromium instead.
   - **Spawned app (`app.path`)**: reuses an existing CDP-enabled process for that executable when possible; otherwise kills same-path processes, spawns the executable with remote debugging enabled, then attaches. No stealth patches are injected.
   - **Connected browser (`app.cdp_url`, or the `browser.cdpUrl` setting when the call carries no `app`)**: attaches to an already-running CDP endpoint. No process ownership; close only disconnects.
   - **Cmux surface (`browser.cmux`)**: with no `app` and a cmux socket available (`CMUX_SOCKET_PATH`, enabled by the `browser.cmux` setting / `PI_BROWSER_CMUX` override), drives a cmux WKWebView surface over a unix-socket JSON-RPC client instead of Puppeteer. No Bun worker and no stealth patches; `open` opens a split (owning that surface), `run` executes via `runCmuxCode()`, and `close` issues `surface.close` for surfaces it owns (leaving the workspace's last surface open).

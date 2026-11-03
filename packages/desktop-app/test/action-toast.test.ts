@@ -1,10 +1,9 @@
-/** Action-toast store/view contracts and BrowserGuiHint corner placement. */
+/** Action-toast store/view contracts. */
 import { afterAll, afterEach, beforeAll, describe, expect, setSystemTime, test, vi } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ActionToastStack as ActionToastStackComponent } from "../src/components/ActionToast";
-import type { BrowserGuiHint as BrowserGuiHintComponent } from "../src/components/BrowserGuiHint";
 import {
 	ACTION_TOAST_TTL_MS,
 	dismissActionToast,
@@ -15,12 +14,10 @@ import {
 	resumeActionToast,
 	subscribeActionToasts,
 } from "../src/lib/action-toast";
-import type { RpcClient } from "../src/lib/rpc";
 import { defineGlobal } from "./define-global";
 
 const roots: Root[] = [];
 let ActionToastStack: typeof ActionToastStackComponent;
-let BrowserGuiHint: typeof BrowserGuiHintComponent;
 let ownsDomRegistration = false;
 
 beforeAll(async () => {
@@ -36,7 +33,6 @@ beforeAll(async () => {
 	ownsDomRegistration = !wasRegistered || !hasRealDom;
 	(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 	({ ActionToastStack } = await import("../src/components/ActionToast"));
-	({ BrowserGuiHint } = await import("../src/components/BrowserGuiHint"));
 });
 
 afterAll(async () => {
@@ -322,31 +318,5 @@ describe("ActionToastStack", () => {
 
 		advance(ACTION_TOAST_TTL_MS);
 		expect(getToasts()).toHaveLength(0);
-	});
-});
-
-describe("BrowserGuiHint placement", () => {
-	test("the browser hint joins the unified notification corner", async () => {
-		const corner = document.createElement("div");
-		corner.className = "gui-toast-corner";
-		document.body.appendChild(corner);
-		const rpc = {
-			request: async () => ({ "browser.gui": false }),
-		} as unknown as RpcClient;
-		const host = mount(
-			createElement(BrowserGuiHint, {
-				activeTools: undefined,
-				browserPanelOpen: true,
-				rpc,
-				onView: () => {},
-			}),
-		);
-		await act(async () => {
-			await Promise.resolve();
-		});
-
-		const hint = corner.querySelector<HTMLElement>('[data-testid="browser-gui-hint"]');
-		expect(hint).not.toBeNull();
-		expect(host.contains(hint)).toBe(false);
 	});
 });

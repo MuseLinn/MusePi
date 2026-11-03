@@ -1143,11 +1143,6 @@ export const settings = {
 	"settings.copyImage2": "Copy as image",
 	"settings.widgetSource": "Widget source",
 	"settings.maximizePanel": "Maximize panel",
-	"settings.watchAgentSBrowser": "Watch the agent\u2019s browser live",
-	"settings.managedBrowserPages.info":
-		"With the managed browser on, pages the agent opens show up in the side panel and share its login state.",
-	"settings.enableWatch": "Enable & watch",
-	"settings.donTAskAgain": "Don\u2019t ask again",
 	"settings.restorePanel": "Restore panel",
 	"settings.splitPanel": "Split panel",
 	"settings.mergePanel": "Merge panel",

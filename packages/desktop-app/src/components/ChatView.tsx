@@ -77,7 +77,6 @@ import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
 import { PunkAvatar } from "./avatar-presets";
-import { BrowserGuiHint } from "./BrowserGuiHint";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer } from "./Composer";
@@ -3230,16 +3229,6 @@ export function ChatView({
 										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 									}}
 									onToggleRightPanel={onToggleRightPanel}
-								/>
-								{/* 受管浏览器引导:不等 agent 先跑一次浏览器 ——
-								 * 用户一打开浏览器面板就提示(那时 agent 的页面
-								 * 还可能在隐藏的无头浏览器里)。 */}
-								<BrowserGuiHint
-									activeTools={snap?.activeTools}
-									browserPanelOpen={activeView === "browser"}
-									rpc={rpc}
-									onView={() => setActiveView("browser")}
-									onExpandPanel={onExpandRightPanel}
 								/>
 							</div>
 						</div>

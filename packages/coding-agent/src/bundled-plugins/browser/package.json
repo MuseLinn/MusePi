@@ -15,7 +15,7 @@
 			{ "id": "gui", "entry": "./gui.ts", "description": "应用内浏览器界面。" }
 		],
 		"config": [
-			{ "key": "browser.headless", "type": "boolean", "default": true, "restart": "none", "label": "无界面模式", "description": "后台运行自动化浏览器。" },
+			{ "key": "browser.headless", "type": "boolean", "default": true, "restart": "none", "label": "无头兜底", "description": "无桌面内置浏览器时以无头 Chromium 兜底。" },
 			{ "key": "browser.cdpUrl", "type": "string", "default": "", "restart": "none", "label": "CDP 地址", "description": "连接已有 Chromium 调试端点；留空时使用默认启动方式。" }
 		],
 		"host": {

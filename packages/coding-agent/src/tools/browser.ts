@@ -218,7 +218,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	};
 	readonly label = "Browser";
 	readonly loadMode = "discoverable";
-	readonly summary = "Control a headless browser to navigate and interact with web pages";
+	readonly summary = "Control the app's built-in browser, or a headless Chromium when no desktop app is attached";
 	readonly parameters = browserSchema;
 	readonly strict = true;
 
