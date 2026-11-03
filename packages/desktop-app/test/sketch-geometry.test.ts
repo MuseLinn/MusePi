@@ -378,7 +378,12 @@ describe("textAutoBox / textFontSize", () => {
 	it("falls back to the estimate without canvas, and never throws", () => {
 		// `measureTextWidth` is canvas-backed, so without a usable 2D context it
 		// must degrade rather than crash — the board is also imported by unit tests.
-		const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+		// This suite does not install the DOM shim, so the canvas surface is either
+		// absent or stubbed null by a neighbouring suite; both are the no-context path.
+		const getContext =
+			typeof HTMLCanvasElement === "undefined"
+				? undefined
+				: vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 		try {
 			const w = measureTextWidth("哈哈哈哈哈哈", 24);
 			expect(Number.isFinite(w)).toBe(true);
@@ -386,7 +391,7 @@ describe("textAutoBox / textFontSize", () => {
 			// The estimate stays the ASCII-correct 0.62 factor.
 			expect(measureTextWidth("hello", 16)).toBeCloseTo(5 * 16 * 0.62, 5);
 		} finally {
-			getContext.mockRestore();
+			getContext?.mockRestore();
 		}
 	});
 });

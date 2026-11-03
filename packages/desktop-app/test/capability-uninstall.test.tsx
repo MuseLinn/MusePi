@@ -93,7 +93,7 @@ function callsOf(requestSpy: ReturnType<typeof spyOn>, method: string): unknown[
 	return requestSpy.mock.calls.filter((c: unknown[]) => c[0] === method).map((c: unknown[]) => c[1]);
 }
 
-async function renderCenter(rpc: RpcClient): Promise<{ host: HTMLElement; unmount(): void }> {
+async function renderCenter(rpc: RpcClient): Promise<{ host: HTMLElement; unmount(): Promise<void> }> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
@@ -103,8 +103,10 @@ async function renderCenter(rpc: RpcClient): Promise<{ host: HTMLElement; unmoun
 	await flush();
 	return {
 		host,
-		unmount() {
-			root.unmount();
+		async unmount() {
+			await act(async () => {
+				root.unmount();
+			});
 			host.remove();
 		},
 	};
@@ -144,7 +146,7 @@ describe("能力中心卸载确认弹窗 — 层级与类名契约", () => {
 		expect(dialog!.classList.contains("gui-dialog--confirm")).toBe(true);
 		expect(dialog!.classList.contains("gui-dialog--prompt")).toBe(false);
 
-		unmount();
+		await unmount();
 		backdrop!.remove();
 	});
 
@@ -168,7 +170,7 @@ describe("能力中心卸载确认弹窗 — 层级与类名契约", () => {
 		expect(callsOf(requestSpy, "skills.delete")).toHaveLength(0);
 		expect(document.querySelector(".gui-cap-drawer-root")).not.toBeNull();
 
-		unmount();
+		await unmount();
 		document.querySelector(".gui-dialog-backdrop")?.remove();
 	});
 
@@ -189,7 +191,7 @@ describe("能力中心卸载确认弹窗 — 层级与类名契约", () => {
 
 		expect(document.querySelector(".gui-dialog-backdrop")).toBeNull();
 		expect(document.querySelector(".gui-cap-drawer-root")).not.toBeNull();
-		unmount();
+		await unmount();
 	});
 });
 
@@ -220,7 +222,7 @@ describe("能力中心卸载 — 确认回调真实触发卸载 RPC 并刷新列
 		// 抽屉随卸载成功关闭。
 		expect(document.querySelector(".gui-cap-drawer-root")).toBeNull();
 
-		unmount();
+		await unmount();
 	});
 });
 
@@ -274,7 +276,9 @@ describe("prompt-dialog — prompt 与 confirm 的样式分化契约", () => {
 		await sleep(250);
 		expect(result).toBeNull();
 
-		root.unmount();
+		await act(async () => {
+			root.unmount();
+		});
 		host.remove();
 		document.querySelector(".gui-dialog-backdrop")?.remove();
 	});

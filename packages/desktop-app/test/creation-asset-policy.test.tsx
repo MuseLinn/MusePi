@@ -88,11 +88,11 @@ function makeRpc(mediaProviders?: unknown): RpcClient {
 	} as unknown as RpcClient;
 }
 
-function renderWelcome(rpc: RpcClient): ReturnType<typeof createRoot> {
+async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRoot>> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
-	act(() => {
+	await act(async () => {
 		root.render(
 			createElement(WelcomeComposer, {
 				rpc,
@@ -121,6 +121,14 @@ async function settle(): Promise<void> {
 	});
 }
 
+/** 卸载也要进 act:卸载触发的清理/状态更新在 act 之外会告警。 */
+async function unmount(root: ReturnType<typeof createRoot>): Promise<void> {
+	await act(async () => {
+		root.unmount();
+	});
+	document.body.innerHTML = "";
+}
+
 function chipButton(label: string): HTMLButtonElement {
 	const btn = [...document.body.querySelectorAll<HTMLButtonElement>(".gui-creation-chip")].find(
 		b => b.textContent === label,
@@ -136,9 +144,9 @@ function advancedToggle(): HTMLButtonElement {
 }
 
 /** sessionDraft 跨用例复用（有意）:展开态不预设,按需点开。 */
-function ensureAdvancedOpen(): void {
+async function ensureAdvancedOpen(): Promise<void> {
 	if (advancedToggle().getAttribute("aria-expanded") !== "true") {
-		act(() => {
+		await act(async () => {
 			advancedToggle().click();
 		});
 	}
@@ -156,12 +164,12 @@ async function typeAndSend(text: string): Promise<void> {
 	const propsKey = Object.keys(textarea!).find(k => k.startsWith("__reactProps$"))!;
 	const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
 	(textarea as HTMLTextAreaElement).value = text;
-	act(() => {
+	await act(async () => {
 		props.onChange({ target: textarea, currentTarget: textarea });
 	});
 	const sendBtn = document.body.querySelector<HTMLButtonElement>(".gui-send-btn");
 	expect(sendBtn).not.toBeNull();
-	act(() => {
+	await act(async () => {
 		sendBtn!.click();
 	});
 	await act(async () => {
@@ -172,7 +180,7 @@ async function typeAndSend(text: string): Promise<void> {
 describe("M3.7c 素材策略行 + 高级折叠", () => {
 	test("素材策略默认 ai-image,默认也落 metadata.assetPolicy;行在 composer 下方、设计体系 rail 之下", async () => {
 		captured.length = 0;
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		// 行存在,默认选中 AI 生图（radio 契约）。
 		const row = document.body.querySelector("[data-testid='gui-creation-assetrow']")!;
@@ -191,29 +199,27 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		expect(captured).toHaveLength(1);
 		// 默认也落键——契约明确（daemon 值域校验以键存在为前提）。
 		expect(captured[0]!.metadata.assetPolicy).toBe("ai-image");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 
 	test("切色块占位 → metadata.assetPolicy='placeholder'", async () => {
 		captured.length = 0;
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
-		act(() => {
+		await act(async () => {
 			document.body.querySelector<HTMLButtonElement>("[data-asset-policy='placeholder']")!.click();
 		});
 		await typeAndSend("画一个落地页");
 		expect(captured).toHaveLength(1);
 		expect(captured[0]!.metadata.assetPolicy).toBe("placeholder");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 
 	test("「高级 ▸」展开态切 chip 不丢（草稿缓存）", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		expect(advancedToggle().getAttribute("aria-expanded")).toBe("false");
-		act(() => {
+		await act(async () => {
 			advancedToggle().click();
 		});
 		expect(advancedToggle().getAttribute("aria-expanded")).toBe("true");
@@ -223,25 +229,24 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 			t("creation.creationTabDeck"),
 			t("creation.creationTabPrototype"),
 		]) {
-			act(() => {
+			await act(async () => {
 				chipButton(label).click();
 			});
 			expect(advancedToggle().getAttribute("aria-expanded")).toBe("true");
 		}
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 
 	test("deck 演讲者备注 / prototype 平台多选:高级字段编辑随发送落 metadata", async () => {
 		captured.length = 0;
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		// deck:打开高级,点演讲者备注 toggle。
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabDeck")).click();
 		});
-		ensureAdvancedOpen();
-		act(() => {
+		await ensureAdvancedOpen();
+		await act(async () => {
 			chipButton(t("creation.creationSpeakerNotes")).click();
 		});
 		await typeAndSend("做一份演示稿");
@@ -249,37 +254,35 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		expect(captured[0]!.metadata.kind).toBe("deck");
 		expect(captured[0]!.metadata.speakerNotes).toBe(true);
 		expect(captured[0]!.metadata.assetPolicy).toBe("placeholder"); // 上一用例的缓存态,随键走
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 
 		captured.length = 0;
-		const root2 = renderWelcome(makeRpc());
+		const root2 = await renderWelcome(makeRpc());
 		await settle();
 		// prototype:平台多选加 iOS（默认 responsive 之上追加）。草稿缓存的
 		// 选中 chip 是上一段的 deck——先点回 prototype,平台字段才出现。
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
-		ensureAdvancedOpen();
-		act(() => {
+		await ensureAdvancedOpen();
+		await act(async () => {
 			chipButton(t("creation.creationPlatformMobileIos")).click();
 		});
 		await typeAndSend("画一个落地页");
 		expect(captured).toHaveLength(1);
 		expect(captured[0]!.metadata.platforms).toEqual(["responsive", "mobile-ios"]);
-		root2.unmount();
-		document.body.innerHTML = "";
+		await unmount(root2);
 	});
 
 	test("视频 chip 内联 provider 卡:选 agnes → metadata.media.provider/model 端到端落 metadata", async () => {
 		captured.length = 0;
-		const root = renderWelcome(makeRpc(VIDEO_PROVIDERS));
+		const root = await renderWelcome(makeRpc(VIDEO_PROVIDERS));
 		await settle();
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationMediaVideo")).click();
 		});
 		await settle(); // media.providers 回填 + 已配置优先自动选中
-		ensureAdvancedOpen();
+		await ensureAdvancedOpen();
 		const agnes = document.body.querySelector<HTMLButtonElement>("[data-media-provider='agnes']");
 		const agnesGlobal = document.body.querySelector<HTMLButtonElement>("[data-media-provider='agnes-global']");
 		expect(agnes).not.toBeNull();
@@ -287,7 +290,7 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		// 未配置 provider 禁用（M3.2 同款置灰语义）。
 		expect(agnesGlobal!.disabled).toBe(true);
 		expect(agnes!.disabled).toBe(false);
-		act(() => {
+		await act(async () => {
 			agnes!.click();
 		});
 		await typeAndSend("拍一支产品宣传片");
@@ -299,24 +302,22 @@ describe("M3.7c 素材策略行 + 高级折叠", () => {
 		expect(media.kind).toBe("video");
 		expect(media.provider).toBe("agnes");
 		expect(media.model).toBe("agnes-video-v2.0");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 
 	test("template chip 的内容区是模板 rail,素材策略行不渲染", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
 		expect(document.body.querySelector("[data-testid='gui-creation-assetrow']")).toBeNull();
 		// 切回非 template chip,行恢复（portal 随 chip 派生）。
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
 		expect(document.body.querySelector("[data-testid='gui-creation-assetrow']")).not.toBeNull();
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 });

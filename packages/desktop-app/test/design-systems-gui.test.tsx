@@ -89,11 +89,11 @@ function makeRpc(calls: RpcCall[], listMode: "ok" | "fail" = "ok"): RpcClient {
 	} as unknown as RpcClient;
 }
 
-function renderWelcome(rpc: RpcClient): ReturnType<typeof createRoot> {
+async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRoot>> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
-	act(() => {
+	await act(async () => {
 		root.render(
 			createElement(WelcomeComposer, {
 				rpc,
@@ -169,7 +169,7 @@ async function typeAndSend(text: string): Promise<void> {
 describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 	test("rail 渲染色卡+名称+来源徽章，数据源自 design.systems.list", async () => {
 		const calls: RpcCall[] = [];
-		const root = renderWelcome(makeRpc(calls));
+		const root = await renderWelcome(makeRpc(calls));
 		await settle();
 		expect(document.body.querySelector("[data-testid='gui-design-system-rail']")).not.toBeNull();
 		expect(calls.some(c => c.method === "design.systems.list")).toBe(true);
@@ -184,12 +184,12 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		// 色卡条：前 4 色拼接。
 		const bars = railCard("minimal").querySelectorAll(".gui-ds-swatchbar--rail > span");
 		expect(bars).toHaveLength(4);
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
 	test("rail 卡选中 = accent 描边 + 勾选角标，且与风格胶囊同源；再点取消", async () => {
-		const root = renderWelcome(makeRpc([]));
+		const root = await renderWelcome(makeRpc([]));
 		await settle();
 		act(() => {
 			railCard("minimal").click();
@@ -206,13 +206,13 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		});
 		expect(railCard("minimal").classList.contains("gui-ds-card--on")).toBe(false);
 		expect(document.body.querySelector(".gui-ds-card--on")).toBeNull();
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
 	test("选中体系落盘 projectMetadata.designSystemId；未选中保持 null 占位", async () => {
 		captured.length = 0;
-		const root = renderWelcome(makeRpc([]));
+		const root = await renderWelcome(makeRpc([]));
 		await settle();
 		// sessionDraft 跨文件共享：归位 prototype，kind 断言与执行顺序无关。
 		act(() => {
@@ -239,12 +239,12 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		await typeAndSend("再做一个");
 		expect(captured).toHaveLength(1);
 		expect(captured[0]!.metadata.designSystemId).toBeNull();
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
 	test("design.systems.list 不可用时回退内置五套（离线可用）", async () => {
-		const root = renderWelcome(makeRpc([], "fail"));
+		const root = await renderWelcome(makeRpc([], "fail"));
 		await settle();
 		const cards = railCards();
 		expect(cards.map(c => c.dataset.designSystem)).toEqual([
@@ -255,12 +255,12 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 			"darkneon",
 		]);
 		expect(cards.every(c => c.textContent?.includes(t("composer.designSystemBuiltin")))).toBe(true);
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
 	test("hover rail 卡浮出预览卡（description 全文），移出后消失", async () => {
-		const root = renderWelcome(makeRpc([]));
+		const root = await renderWelcome(makeRpc([]));
 		await settle();
 		act(() => {
 			railCard("acme-brand").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
@@ -278,14 +278,14 @@ describe("M3.7b 预览 rail（欢迎页 design armed）", () => {
 		});
 		await settle(180);
 		expect(document.body.querySelector(".gui-ds-hover")).toBeNull();
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 });
 
 describe("M3.7b 风格胶囊菜单", () => {
 	test("菜单行 hover 浮出预览卡；Escape 归宿主浮动菜单关闭", async () => {
-		const root = renderWelcome(makeRpc([]));
+		const root = await renderWelcome(makeRpc([]));
 		await settle();
 		const pill = document.body.querySelector<HTMLButtonElement>(".gui-style-select-btn")!;
 		act(() => {
@@ -315,12 +315,12 @@ describe("M3.7b 风格胶囊菜单", () => {
 		});
 		await settle(160);
 		expect(document.body.querySelector(".gui-style-select-menu")).toBeNull();
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
 	test("菜单点选写选中态（与 rail 同源），跟随既有清除", async () => {
-		const root = renderWelcome(makeRpc([]));
+		const root = await renderWelcome(makeRpc([]));
 		await settle();
 		const pill = document.body.querySelector<HTMLButtonElement>(".gui-style-select-btn")!;
 		act(() => {
@@ -343,7 +343,7 @@ describe("M3.7b 风格胶囊菜单", () => {
 			menu2.querySelector<HTMLButtonElement>(".gui-attach-opt")!.click();
 		});
 		expect(document.body.querySelector(".gui-ds-card--on")).toBeNull();
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 });
@@ -360,11 +360,11 @@ describe("M3.7b 会话内接线（useSessionDesignSystem）", () => {
 		);
 	}
 
-	function renderHarness(rpc: RpcClient | null, sessionId = "s1"): ReturnType<typeof createRoot> {
+	async function renderHarness(rpc: RpcClient | null, sessionId = "s1"): Promise<ReturnType<typeof createRoot>> {
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		const root = createRoot(host);
-		act(() => {
+		await act(async () => {
 			root.render(createElement(Harness, { rpc, sessionId }));
 		});
 		return root;
@@ -381,7 +381,7 @@ describe("M3.7b 会话内接线（useSessionDesignSystem）", () => {
 			if (method === "creation.metadata.get") return Promise.resolve({ metadata: { designSystemId: "glass" } });
 			return Promise.resolve({});
 		}) as RpcClient["request"];
-		const root = renderHarness(rpc, "sess-a");
+		const root = await renderHarness(rpc, "sess-a");
 		await settle();
 		const read = calls.find(c => c.method === "creation.metadata.get");
 		expect(read?.params).toEqual({ sessionId: "sess-a" });
@@ -391,13 +391,13 @@ describe("M3.7b 会话内接线（useSessionDesignSystem）", () => {
 			document.body.querySelector<HTMLButtonElement>("[data-testid='pick']")!.click();
 		});
 		expect(styleText()).toBe("minimal");
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
 	test("pick 发 session.setDesignSystem（选中即写，null = 清除）", async () => {
 		const calls: RpcCall[] = [];
-		const root = renderHarness(makeRpc(calls), "sess-b");
+		const root = await renderHarness(makeRpc(calls), "sess-b");
 		await settle();
 		act(() => {
 			document.body.querySelector<HTMLButtonElement>("[data-testid='pick']")!.click();
@@ -413,7 +413,7 @@ describe("M3.7b 会话内接线（useSessionDesignSystem）", () => {
 		expect(writes).toHaveLength(2);
 		expect(writes[1]!.params).toEqual({ sessionId: "sess-b", designSystemId: null });
 		expect(styleText()).toBe("none");
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 	});
 
@@ -425,20 +425,20 @@ describe("M3.7b 会话内接线（useSessionDesignSystem）", () => {
 			if (method === "creation.metadata.get") return Promise.reject(new Error("no header"));
 			return Promise.resolve({});
 		}) as RpcClient["request"];
-		const root = renderHarness(failing, "sess-c");
+		const root = await renderHarness(failing, "sess-c");
 		await settle();
 		expect(styleText()).toBe("none");
-		root.unmount();
+		await act(async () => root.unmount());
 		document.body.innerHTML = "";
 		// rpc = null：pick 静默（组件内不发 RPC 也不抛）。
-		const root2 = renderHarness(null);
+		const root2 = await renderHarness(null);
 		await settle();
 		act(() => {
 			document.body.querySelector<HTMLButtonElement>("[data-testid='pick']")!.click();
 		});
 		expect(styleText()).toBe("minimal");
 		expect(calls.filter(c => c.method === "session.setDesignSystem")).toHaveLength(0);
-		root2.unmount();
+		await act(async () => root2.unmount());
 		document.body.innerHTML = "";
 	});
 });

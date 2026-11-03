@@ -1,5 +1,5 @@
 import "./happy-dom-shim";
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import type { DisplayContext } from "@musepi/pi-wire";
 import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -27,12 +27,23 @@ const rpc = {
 
 const mounted = new Set<Root>();
 
-function mount(element: ReactNode): HTMLElement {
+// WelcomeComposer's BlurText reveal is a timer-driven mount animation; these
+// assertions do not depend on it, so run the file with motion disabled and
+// keep the timer out of unrelated act boundaries.
+beforeAll(() => {
+	document.documentElement.classList.add("gui-motion-off");
+});
+
+afterAll(() => {
+	document.documentElement.classList.remove("gui-motion-off");
+});
+
+async function mount(element: ReactNode): Promise<HTMLElement> {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
 	const root = createRoot(container);
 	mounted.add(root);
-	act(() => root.render(element));
+	await act(async () => root.render(element));
 	return container;
 }
 
@@ -59,25 +70,25 @@ function SessionComposerFixture(): ReactNode {
 }
 
 describe("annotation composer contexts", () => {
-	it("attaches a browser annotation without writing its prompt into the session textarea", () => {
-		const container = mount(<SessionComposerFixture />);
-		act(() => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
+	it("attaches a browser annotation without writing its prompt into the session textarea", async () => {
+		const container = await mount(<SessionComposerFixture />);
+		await act(async () => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
 		expect(container.querySelector("textarea")?.value).toBe("");
 		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();
 		expect(container.querySelector(".gui-quote-card")).toBeNull();
 	});
 
-	it("attaches a browser annotation without writing its prompt into the welcome textarea", () => {
+	it("attaches a browser annotation without writing its prompt into the welcome textarea", async () => {
 		window.localStorage.setItem("musepi-gui-dotmatrix", "0");
-		const container = mount(<WelcomeComposer onSubmit={() => {}} rpc={rpc} />);
-		act(() => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
+		const container = await mount(<WelcomeComposer onSubmit={() => {}} rpc={rpc} />);
+		await act(async () => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
 		expect(container.querySelector("textarea")?.value).toBe("");
 		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();
 		expect(container.querySelector(".gui-quote-card")).toBeNull();
 	});
 
-	it("groups mixed sources into compact chips and keeps details in their popup", () => {
-		const container = mount(
+	it("groups mixed sources into compact chips and keeps details in their popup", async () => {
+		const container = await mount(
 			<QuoteCards
 				contexts={[
 					{ kind: "file-quote", path: "src/a.ts", quote: "const a = 1", startLine: 1, endLine: 1 },
@@ -96,14 +107,14 @@ describe("annotation composer contexts", () => {
 		);
 		expect(container.querySelectorAll(".gui-quote-chip")).toHaveLength(3);
 		expect(container.querySelector(".gui-quote-card")).toBeNull();
-		act(() => container.querySelector<HTMLButtonElement>('[data-quote-kind="file-quote"]')?.click());
+		await act(async () => container.querySelector<HTMLButtonElement>('[data-quote-kind="file-quote"]')?.click());
 		expect(document.querySelectorAll(".gui-quote-card")).toHaveLength(2);
 		expect(document.querySelector('[data-quote-kind="file-quote"] .gui-quote-chip-count')?.textContent).toBe("2");
 	});
 
-	it("shows page and target count, previews, and removes the chip", () => {
+	it("shows page and target count, previews, and removes the chip", async () => {
 		let removed = -1;
-		const container = mount(
+		const container = await mount(
 			<QuoteCards
 				contexts={[annotation]}
 				onRemove={index => {
@@ -112,18 +123,18 @@ describe("annotation composer contexts", () => {
 				onChange={() => {}}
 			/>,
 		);
-		act(() => container.querySelector<HTMLButtonElement>(".gui-quote-chip")?.click());
+		await act(async () => container.querySelector<HTMLButtonElement>(".gui-quote-chip")?.click());
 		expect(document.querySelector(".gui-quote-context-page")?.textContent).toContain("example.com");
 		expect(document.querySelector(".gui-quote-context-count")?.textContent).toBe("2");
-		act(() => document.querySelector<HTMLButtonElement>(".gui-quote-preview")?.click());
+		await act(async () => document.querySelector<HTMLButtonElement>(".gui-quote-preview")?.click());
 		expect(document.querySelector<HTMLImageElement>(".gui-quote-context-image")?.src).toContain("data:image/png");
-		act(() => document.querySelector<HTMLButtonElement>(".gui-quote-close")?.click());
+		await act(async () => document.querySelector<HTMLButtonElement>(".gui-quote-close")?.click());
 		expect(removed).toBe(0);
 	});
 });
 
 describe("transcript display contexts", () => {
-	it("renders the dedicated quote card with source, clamp, comment, expansion, and source jump", () => {
+	it("renders the dedicated quote card with source, clamp, comment, expansion, and source jump", async () => {
 		let jump = "";
 		const context: DisplayContext = {
 			kind: "chat-quote",
@@ -131,7 +142,7 @@ describe("transcript display contexts", () => {
 			quote: "a long quote\nwith several lines\nof source text",
 			comment: "please fix this",
 		};
-		const container = mount(
+		const container = await mount(
 			<UserMsgContent
 				content="> a long quote\n> with several lines\n> of source text\n\nplease fix this"
 				displayContext={context}
@@ -146,14 +157,14 @@ describe("transcript display contexts", () => {
 		expect(container.querySelector(".tr-display-context-source")?.textContent).not.toBe("");
 		expect(container.querySelector(".tr-display-context-quote--clamped")).not.toBeNull();
 		expect(container.querySelector(".tr-display-context-comment")?.textContent).toBe("please fix this");
-		act(() => container.querySelector<HTMLButtonElement>(".tr-display-context-toggle")?.click());
+		await act(async () => container.querySelector<HTMLButtonElement>(".tr-display-context-toggle")?.click());
 		expect(container.querySelector(".tr-display-context-quote--clamped")).toBeNull();
-		act(() => container.querySelector<HTMLButtonElement>(".tr-display-context-source")?.click());
+		await act(async () => container.querySelector<HTMLButtonElement>(".tr-display-context-source")?.click());
 		expect(jump).toBe("assistant-1");
 	});
 
-	it("does not mistake an ordinary markdown blockquote for a display context", () => {
-		const container = mount(<UserMsgContent content="> ordinary quote" plain={false} collapse={false} />);
+	it("does not mistake an ordinary markdown blockquote for a display context", async () => {
+		const container = await mount(<UserMsgContent content="> ordinary quote" plain={false} collapse={false} />);
 		expect(container.querySelector("blockquote")).not.toBeNull();
 		expect(container.querySelector(".tr-display-context")).toBeNull();
 	});

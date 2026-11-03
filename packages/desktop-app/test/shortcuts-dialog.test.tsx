@@ -37,6 +37,16 @@ beforeEach(() => {
  *  sibling of the host, so dropping the host leaves the previous test's dialog
  *  answering the next test's queries — which reads as every count doubling. */
 const mounted: { host: HTMLElement; root: ReturnType<typeof createRoot> }[] = [];
+
+/** DialogFrame leaves its enter phase on two animation frames, with an 80ms
+ *  timer fallback. Letting that timer fire inside act keeps the phase update
+ *  from landing in the next test. */
+async function settle(): Promise<void> {
+	await act(async () => {
+		await Bun.sleep(100);
+	});
+}
+
 async function render(): Promise<HTMLElement> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
@@ -45,15 +55,13 @@ async function render(): Promise<HTMLElement> {
 	await act(async () => {
 		root.render(createElement(ShortcutsDialog, { open: true, onClose: () => {} }));
 	});
-	await act(async () => {
-		await Promise.resolve();
-	});
+	await settle();
 	return document.body;
 }
 
-afterEach(() => {
+afterEach(async () => {
 	for (const { host, root } of mounted.splice(0)) {
-		act(() => {
+		await act(async () => {
 			root.unmount();
 		});
 		host.remove();

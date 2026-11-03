@@ -61,11 +61,11 @@ function makeRpc(templates: unknown[] = []): RpcClient {
 	} as unknown as RpcClient;
 }
 
-function renderWelcome(rpc: RpcClient): ReturnType<typeof createRoot> {
+async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRoot>> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
-	act(() => {
+	await act(async () => {
 		root.render(
 			createElement(WelcomeComposer, {
 				rpc,
@@ -96,6 +96,14 @@ async function settle(): Promise<void> {
 	});
 }
 
+/** React 19 的 unmount 本身就是 root 上的状态更新,必须在 act 内落地。 */
+async function unmountRoot(root: ReturnType<typeof createRoot>): Promise<void> {
+	await act(async () => {
+		root.unmount();
+	});
+	document.body.innerHTML = "";
+}
+
 function chipButton(label: string): HTMLButtonElement {
 	const btn = [...document.body.querySelectorAll<HTMLButtonElement>(".gui-creation-chip")].find(
 		b => b.textContent === label,
@@ -120,33 +128,31 @@ async function typeAndSend(text: string): Promise<void> {
 	const propsKey = Object.keys(textarea!).find(k => k.startsWith("__reactProps$"))!;
 	const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
 	(textarea as HTMLTextAreaElement).value = text;
-	act(() => {
+	await act(async () => {
 		props.onChange({ target: textarea, currentTarget: textarea });
 	});
 	const sendBtn = document.body.querySelector<HTMLButtonElement>(".gui-send-btn");
 	expect(sendBtn).not.toBeNull();
-	act(() => {
+	await act(async () => {
 		sendBtn!.click();
 	});
-	await act(async () => {
-		await Promise.resolve();
-	});
+	await settle();
 }
 
 describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 	test("默认选中 prototype,placeholder 随 chip 变化", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		expect(onChip(chipButton(t("creation.creationTabPrototype")))).toBe(true);
 		expect(onChip(chipButton(t("creation.creationTabOther")))).toBe(false);
 		const textarea = document.body.querySelector("textarea")!;
 		expect(textarea.placeholder).toBe(t("creation.creationPlaceholderPrototype"));
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationMediaVideo")).click();
 		});
+		await settle();
 		expect(textarea.placeholder).toBe(t("creation.creationPlaceholderVideo"));
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
 	});
 
 	test("六类 chip 均可建会话,metadata 与 M3.2 编译管线逐字段一致", async () => {
@@ -161,9 +167,9 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		];
 		for (const { chip, label } of cases) {
 			captured.length = 0;
-			const root = renderWelcome(makeRpc());
+			const root = await renderWelcome(makeRpc());
 			await settle();
-			act(() => {
+			await act(async () => {
 				chipButton(t(label)).click();
 			});
 			await typeAndSend(`用 ${chip} 做一件事`);
@@ -185,8 +191,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 			} else {
 				expect(metadata.kind).toBe(chip);
 			}
-			root.unmount();
-			document.body.innerHTML = "";
+			await unmountRoot(root);
 		}
 	});
 
@@ -200,9 +205,9 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 			updatedAt: "2026-09-27T00:00:00Z",
 		};
 		captured.length = 0;
-		const root = renderWelcome(makeRpc([tpl]));
+		const root = await renderWelcome(makeRpc([tpl]));
 		await settle();
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle(); // 等模板列表 RPC 回填并渲染 rail
@@ -221,31 +226,30 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		expect(row!.textContent).toContain("我的演示稿");
 		await act(async () => {
 			row!.click();
-			await Promise.resolve();
 		});
+		await settle();
 		expect(captured).toHaveLength(1);
 		expect(captured[0]!.metadata.templateId).toBe("tpl-1");
 		expect(captured[0]!.metadata.kind).toBe("deck");
 		// 共享 sessionDraft 归位,不影响其他用例/文件的 chip 起点。
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
 	});
 
 	test("切换 chip composer 不卸载、草稿存活", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		const textarea = document.body.querySelector("textarea")!;
 		const propsKey = Object.keys(textarea).find(k => k.startsWith("__reactProps$"))!;
 		const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
 		(textarea as HTMLTextAreaElement).value = "写了一半的需求";
-		act(() => {
+		await act(async () => {
 			props.onChange({ target: textarea, currentTarget: textarea });
 		});
 		const before = document.body.querySelector("textarea")!;
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
@@ -253,17 +257,16 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		// 同一节点（未卸载重挂），值不丢——先写需求再点模板的场景成立。
 		expect(after).toBe(before);
 		expect(after.value).toBe("写了一半的需求");
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
 	});
 
 	test("模板空态：来源指引 + 空白起步路径（聚焦 composer）", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
@@ -273,51 +276,49 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		// 空白起步等价路径：点击聚焦 composer，直接输入发送即可建会话。
 		const blank = rail.querySelector<HTMLButtonElement>(".gui-creation-template-blank");
 		expect(blank).not.toBeNull();
-		act(() => {
+		await act(async () => {
 			blank!.click();
 		});
 		expect(document.activeElement).toBe(document.body.querySelector("textarea"));
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
 	});
 });
 
 describe("M3.7a 模式页骨架契约", () => {
 	test("Escape 收起 chip 排(mode chip 复位 work)", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		await act(async () => {
 			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 			await Promise.resolve();
 		});
+		await settle();
 		expect(modeChanges).toContain("work");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
 	});
 
 	test("chip 选择跨再入保留(草稿模块级缓存)", async () => {
 		// 模块级 sessionDraft 已被前面的用例写过 —— 本次显式切到 deck 再卸载,
 		// 重挂即验证回填而不是默认值。
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
-		act(() => {
+		await act(async () => {
 			chipButton(t("creation.creationTabDeck")).click();
 		});
-		expect(onChip(chipButton(t("creation.creationTabDeck")))).toBe(true);
-		root.unmount();
-		document.body.innerHTML = "";
-		const root2 = renderWelcome(makeRpc());
 		await settle();
 		expect(onChip(chipButton(t("creation.creationTabDeck")))).toBe(true);
-		root2.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
+		const root2 = await renderWelcome(makeRpc());
+		await settle();
+		expect(onChip(chipButton(t("creation.creationTabDeck")))).toBe(true);
+		await unmountRoot(root2);
 	});
 
 	test("「项目名」「工作目录」字段随底栏退役;无弹层无第二输入框", async () => {
-		const root = renderWelcome(makeRpc());
+		const root = await renderWelcome(makeRpc());
 		await settle();
 		// DOM 侧:无底栏、无项目名输入框(复活即红)。
 		expect(document.body.querySelector(".gui-creation-foot")).toBeNull();
@@ -330,7 +331,6 @@ describe("M3.7a 模式页骨架契约", () => {
 		// 词表侧:creation 域不再持有这两个字段的键。
 		expect("creation project name" in creationZh).toBe(false);
 		expect("creation workspace" in creationZh).toBe(false);
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmountRoot(root);
 	});
 });

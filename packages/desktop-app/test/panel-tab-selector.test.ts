@@ -1,3 +1,4 @@
+import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
 import { selectPanelTabComponent } from "../src/lib/slot-host";
 

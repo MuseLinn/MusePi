@@ -52,7 +52,9 @@ describe("BtwFloatingCard 定位与渲染契约", () => {
 		expect(card!.style.right).toBe("24px");
 		// 高度上限：超出内部滚动，不会顶到屏幕上半部。
 		expect(card!.style.maxHeight).toContain("100dvh");
-		root.unmount();
+		await act(async () => {
+			root.unmount();
+		});
 		host.remove();
 	});
 
@@ -80,7 +82,9 @@ describe("BtwFloatingCard 定位与渲染契约", () => {
 		expect(card.textContent).toContain(ANSWER);
 		const q = card.querySelector(".gui-btw-q")!;
 		expect(card.textContent!.indexOf(ANSWER)).toBeGreaterThan(card.textContent!.indexOf(q.textContent ?? ""));
-		root2.unmount();
+		await act(async () => {
+			root2.unmount();
+		});
 		host2.remove();
 	});
 });

@@ -124,6 +124,9 @@ describe("provider setup actions", () => {
 		);
 		expect(login).toBeDefined();
 		await act(async () => login?.click());
+		// Selecting an action closes the menu; its exit animation timer updates
+		// MenuPopup after CLOSE_MS, so let it land inside act before leaving.
+		await flush(30);
 		expect(logins).toEqual(["zai-coding-plan"]);
 	});
 
@@ -133,7 +136,9 @@ describe("provider setup actions", () => {
 			button.textContent?.includes(t("general.importApiKey")),
 		);
 		await act(async () => importAction?.click());
-		await flush();
+		// Same exit-animation window as the login action above: the menu closes
+		// while the import dialog opens.
+		await flush(30);
 		const input = document.body.querySelector<HTMLInputElement>(".gui-provider-flow-dialog input");
 		expect(input).not.toBeNull();
 		await act(async () => {

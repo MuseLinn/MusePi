@@ -386,6 +386,9 @@ describe("FilePane panel tab opening", () => {
 		expect(document.querySelector(".gui-dialog-backdrop")).toBeNull();
 		expect(document.querySelector(".gui-filepane-directory-menu input[type='search']")).not.toBeNull();
 		await act(async () => document.querySelector<HTMLButtonElement>(".gui-filepane-directory-entry")?.click());
+		// Opening a file dismisses the menu; its exit animation unmounts it
+		// CLOSE_MS later, which must land inside act before the test ends.
+		await waitFor(() => document.querySelector(".gui-filepane-directory-menu") === null);
 		expect(opens).toEqual([{ path: "docs/b.txt", pin: false, newTab: true }]);
 	});
 

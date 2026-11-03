@@ -134,7 +134,7 @@ for (const c of cases) {
 			expect(host.textContent).toContain(c.expectDesc);
 			// 描述只渲染一处：detail 与 entry 同文时不得叠两段。
 			expect(descParagraphCount(host, c.expectDesc)).toBe(1);
-			root.unmount();
+			await act(async () => root.unmount());
 			host.remove();
 		});
 	});

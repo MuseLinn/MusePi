@@ -447,9 +447,9 @@ describe("FloatingScrollbar 热路径", () => {
 		const vBefore = verticalThumb(before);
 
 		localStorage.setItem("musepi-gui-scrollbar-style", "builtin-pacman");
-		window.dispatchEvent(new Event("omp-scrollbar-style-changed"));
+		// 派发会让 FloatingScrollbar 的样式监听器 setState，必须在 act 内。
 		await act(async () => {
-			await Promise.resolve();
+			window.dispatchEvent(new Event("omp-scrollbar-style-changed"));
 		});
 		await flushFrames();
 
@@ -477,9 +477,8 @@ describe("FloatingScrollbar 热路径", () => {
 
 	test("吃豆人：豆子条常驻满轨，pac 随进度移动，已吃段与 pac 同步（用户：pac 卡在顶部）", async () => {
 		localStorage.setItem("musepi-gui-scrollbar-style", "builtin-pacman");
-		window.dispatchEvent(new Event("omp-scrollbar-style-changed"));
 		await act(async () => {
-			await Promise.resolve();
+			window.dispatchEvent(new Event("omp-scrollbar-style-changed"));
 		});
 		await flushFrames();
 

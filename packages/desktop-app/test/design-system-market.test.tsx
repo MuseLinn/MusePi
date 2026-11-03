@@ -53,11 +53,11 @@ const SYSTEMS: DesignSystemEntry[] = [
 	},
 ];
 
-function renderRail(): ReturnType<typeof createRoot> {
+async function renderRail(): Promise<ReturnType<typeof createRoot>> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
-	act(() => {
+	await act(async () => {
 		root.render(createElement(DesignSystemRail, { systems: SYSTEMS, selected: null, onPick: () => {} }));
 	});
 	return root;
@@ -69,6 +69,13 @@ async function settle(ms = 30): Promise<void> {
 	});
 }
 
+async function unmount(root: ReturnType<typeof createRoot>): Promise<void> {
+	await act(async () => {
+		root.unmount();
+	});
+	document.body.innerHTML = "";
+}
+
 function marketCard(): HTMLButtonElement {
 	const card = document.body.querySelector<HTMLButtonElement>("[data-testid='gui-ds-market-card']");
 	expect(card).not.toBeNull();
@@ -76,8 +83,8 @@ function marketCard(): HTMLButtonElement {
 }
 
 describe("M3.7d ＋市场卡（rail 排尾 + 跳能力中心市场 tab）", () => {
-	test("市场卡在 rail 行内 DOM 顺序恒为最后，且不进 radiogroup", () => {
-		const root = renderRail();
+	test("市场卡在 rail 行内 DOM 顺序恒为最后，且不进 radiogroup", async () => {
+		const root = await renderRail();
 		const row = document.body.querySelector<HTMLElement>(".gui-ds-rail-row")!;
 		expect(row).not.toBeNull();
 		// 行内最后子元素 = ＋市场卡（在体系卡组之后）。
@@ -93,19 +100,18 @@ describe("M3.7d ＋市场卡（rail 排尾 + 跳能力中心市场 tab）", () =
 		// 文案 + aria。
 		expect(marketCard().textContent).toContain(t("composer.designSystemMarketCta"));
 		expect(marketCard().getAttribute("aria-label")).toBe(t("composer.designSystemMarketAria"));
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 
-	test("点击 dispatch musepi-open-capability 事件（detail.tab = marketplace）", () => {
-		const root = renderRail();
+	test("点击 dispatch musepi-open-capability 事件（detail.tab = marketplace）", async () => {
+		const root = await renderRail();
 		const events: Event[] = [];
 		const onEvent = (e: Event): void => {
 			events.push(e);
 		};
 		window.addEventListener(OPEN_CAPABILITY_EVENT, onEvent);
 		try {
-			act(() => {
+			await act(async () => {
 				marketCard().click();
 			});
 		} finally {
@@ -113,8 +119,7 @@ describe("M3.7d ＋市场卡（rail 排尾 + 跳能力中心市场 tab）", () =
 		}
 		expect(events).toHaveLength(1);
 		expect((events[0] as CustomEvent<{ tab?: string }>).detail?.tab).toBe("marketplace");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 });
 
@@ -136,7 +141,7 @@ describe("M3.7d 能力中心落地 tab", () => {
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		const root = createRoot(host);
-		act(() => {
+		await act(async () => {
 			root.render(
 				createElement(CapabilityCenterPage, {
 					rpc: makeRpc(calls),
@@ -154,8 +159,7 @@ describe("M3.7d 能力中心落地 tab", () => {
 		expect(marketTab.getAttribute("aria-selected")).toBe("true");
 		// 市场网格挂载 = 数据源走 marketplace.list（发现面即能力中心的安装通路）。
 		expect(calls).toContain("marketplace.list");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 });
 
@@ -175,13 +179,13 @@ describe("M3.7d 设计体系内容标识（能力中心市场卡徽章）", () =
 		expect(hasDesignSystemContent({ category: "productivity", tags: ["theme", "ui"] })).toBe(false);
 	});
 
-	test("市场卡：设计体系包渲染徽章，普通包不渲染", () => {
+	test("市场卡：设计体系包渲染徽章，普通包不渲染", async () => {
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		const root = createRoot(host);
 		const dsEntry = { name: "acme-ds-pack", marketplace: "default", tags: ["design-system"] };
 		const plainEntry = { name: "pdf-toolkit", marketplace: "default", category: "productivity" };
-		act(() => {
+		await act(async () => {
 			root.render(
 				createElement("div", null, [
 					createElement(MarketplaceCard, { key: "ds", entry: dsEntry }),
@@ -195,8 +199,7 @@ describe("M3.7d 设计体系内容标识（能力中心市场卡徽章）", () =
 		expect(dsBadge).not.toBeNull();
 		expect(dsBadge!.textContent).toContain(t("guest.mpBadgeDesignSystem"));
 		expect(cards[1]!.querySelector(".mp-card-badge--ds")).toBeNull();
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 });
 
@@ -257,8 +260,7 @@ describe("M3.7d 即见：装包后 extensions.changed 驱动 rail 数据源重�
 		await settle();
 		expect(calls.filter(m => m === "design.systems.list")).toHaveLength(2);
 		expect(countText()).toBe("2");
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 
 	test("无关事件不重拉（只认 extensions.changed 类型）", async () => {
@@ -272,7 +274,6 @@ describe("M3.7d 即见：装包后 extensions.changed 驱动 rail 数据源重�
 		});
 		await settle();
 		expect(calls.filter(m => m === "design.systems.list")).toHaveLength(1);
-		root.unmount();
-		document.body.innerHTML = "";
+		await unmount(root);
 	});
 });

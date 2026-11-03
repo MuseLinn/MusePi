@@ -43,12 +43,12 @@ function Probe({ onSettle }: { onSettle(result: Result): void }): ReactNode {
 	);
 }
 
-function mountProbe(results: Result[], extra?: ReactNode): Root {
+async function mountProbe(results: Result[], extra?: ReactNode): Promise<Root> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	roots.push(root);
-	act(() =>
+	await act(async () =>
 		root.render(
 			<PromptProvider>
 				{extra}
@@ -59,14 +59,16 @@ function mountProbe(results: Result[], extra?: ReactNode): Root {
 	return root;
 }
 
-function openDialog(kind: "normal" | "destructive" | "prompt"): void {
+async function openDialog(kind: "normal" | "destructive" | "prompt"): Promise<void> {
 	const trigger = document.querySelector<HTMLElement>(`.probe-${kind}`);
 	if (!trigger) throw new Error(`${kind} trigger did not render`);
-	act(() => trigger.click());
+	await act(async () => trigger.click());
+	// The provider advances its enter phase on a rAF pair plus an 80ms timer.
+	await act(async () => Bun.sleep(90));
 }
 
-function press(key: "Enter" | "Escape"): void {
-	act(() => {
+async function press(key: "Enter" | "Escape"): Promise<void> {
+	await act(async () => {
 		document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
 	});
 }
@@ -81,17 +83,17 @@ function dialog(): HTMLElement {
 	return element;
 }
 
-function clickDialogButton(kind: "cancel" | "confirm"): void {
+async function clickDialogButton(kind: "cancel" | "confirm"): Promise<void> {
 	const selector = kind === "cancel" ? ".gui-btn:not(.gui-btn-primary)" : ".gui-btn-primary";
 	const button = dialog().querySelector<HTMLElement>(selector);
 	if (!button) throw new Error(`${kind} button did not render`);
-	act(() => button.click());
+	await act(async () => button.click());
 }
 
-afterEach(() => {
+afterEach(async () => {
 	while (roots.length > 0) {
 		const root = roots.pop();
-		if (root) act(() => root.unmount());
+		if (root) await act(async () => root.unmount());
 	}
 	document.body.innerHTML = "";
 });
@@ -99,10 +101,10 @@ afterEach(() => {
 describe("Promise prompt and confirm", () => {
 	test("a normal confirm handles Enter and resolves only after the 180ms exit", async () => {
 		const results: Result[] = [];
-		mountProbe(results);
-		openDialog("normal");
+		await mountProbe(results);
+		await openDialog("normal");
 
-		press("Enter");
+		await press("Enter");
 		expect(results).toEqual([]);
 		await act(async () => Bun.sleep(140));
 		expect(results).toEqual([]);
@@ -112,16 +114,16 @@ describe("Promise prompt and confirm", () => {
 		expect(document.querySelector(".gui-dialog")).toBeNull();
 	});
 
-	test("a confirm exposes its message as the accessible dialog name", () => {
-		mountProbe([]);
-		openDialog("normal");
+	test("a confirm exposes its message as the accessible dialog name", async () => {
+		await mountProbe([]);
+		await openDialog("normal");
 
 		expect(dialog().getAttribute("aria-label")).toBe("Normal action");
 	});
 
 	test("a destructive confirm focuses Cancel initially", async () => {
-		mountProbe([]);
-		openDialog("destructive");
+		await mountProbe([]);
+		await openDialog("destructive");
 		await act(async () => Bun.sleep(30));
 		const cancel = dialog().querySelector<HTMLElement>(".gui-btn:not(.gui-btn-primary)");
 
@@ -134,16 +136,16 @@ describe("Promise prompt and confirm", () => {
 		{ from: "normal", to: "destructive", expected: "cancel" },
 		{ from: "destructive", to: "normal", expected: "cancel" },
 	] as const) {
-		test(`replacing ${from} with ${to} focuses the new request's ${expected} control`, () => {
-			mountProbe([]);
-			openDialog(from);
+		test(`replacing ${from} with ${to} focuses the new request's ${expected} control`, async () => {
+			await mountProbe([]);
+			await openDialog(from);
 			if (from !== "prompt") {
 				const primary = dialog().querySelector<HTMLElement>(".gui-btn-primary");
 				if (!primary) throw new Error("primary button did not render");
 				primary.focus();
 			}
 
-			openDialog(to);
+			await openDialog(to);
 
 			const selector = expected === "input" ? "input" : ".gui-btn:not(.gui-btn-primary)";
 			const target = dialog().querySelector<HTMLElement>(selector);
@@ -154,15 +156,15 @@ describe("Promise prompt and confirm", () => {
 
 	test("a destructive confirm ignores Enter but still settles on Cancel", async () => {
 		const results: Result[] = [];
-		mountProbe(results);
-		openDialog("destructive");
+		await mountProbe(results);
+		await openDialog("destructive");
 
-		press("Enter");
+		await press("Enter");
 		await settleExit();
 
 		expect(results).toEqual([]);
 		expect(document.querySelector(".gui-dialog")).not.toBeNull();
-		clickDialogButton("cancel");
+		await clickDialogButton("cancel");
 		await settleExit();
 		expect(results).toEqual(["destructive:false"]);
 	});
@@ -170,16 +172,16 @@ describe("Promise prompt and confirm", () => {
 	for (const cancelPath of ["escape", "cancel-button", "backdrop"] as const) {
 		test(`${cancelPath} cancellation settles exactly once`, async () => {
 			const results: Result[] = [];
-			mountProbe(results);
-			openDialog("normal");
+			await mountProbe(results);
+			await openDialog("normal");
 
-			const cancel = (): void => {
-				if (cancelPath === "escape") press("Escape");
-				else if (cancelPath === "cancel-button") clickDialogButton("cancel");
-				else act(() => dialog().parentElement?.click());
+			const cancel = async (): Promise<void> => {
+				if (cancelPath === "escape") await press("Escape");
+				else if (cancelPath === "cancel-button") await clickDialogButton("cancel");
+				else await act(async () => dialog().parentElement?.click());
 			};
-			cancel();
-			cancel();
+			await cancel();
+			await cancel();
 			await settleExit();
 
 			expect(results).toEqual(["normal:false"]);
@@ -188,11 +190,11 @@ describe("Promise prompt and confirm", () => {
 
 	test("a repeated request cancels the previous promise and keeps the new request independent", async () => {
 		const results: Result[] = [];
-		mountProbe(results);
-		openDialog("normal");
-		openDialog("normal");
+		await mountProbe(results);
+		await openDialog("normal");
+		await openDialog("normal");
 		await settleExit();
-		press("Enter");
+		await press("Enter");
 		await settleExit();
 
 		expect(results).toEqual(["normal:false", "normal:true"]);
@@ -200,10 +202,10 @@ describe("Promise prompt and confirm", () => {
 
 	test("unmount settles a pending confirm as cancelled", async () => {
 		const results: Result[] = [];
-		const root = mountProbe(results);
-		openDialog("normal");
+		const root = await mountProbe(results);
+		await openDialog("normal");
 
-		act(() => root.unmount());
+		await act(async () => root.unmount());
 		await settleExit();
 
 		expect(results).toEqual(["normal:false"]);
@@ -211,10 +213,10 @@ describe("Promise prompt and confirm", () => {
 
 	test("unmount settles a pending prompt as cancelled", async () => {
 		const results: Result[] = [];
-		const root = mountProbe(results);
-		openDialog("prompt");
+		const root = await mountProbe(results);
+		await openDialog("prompt");
 
-		act(() => root.unmount());
+		await act(async () => root.unmount());
 		await settleExit();
 
 		expect(results).toEqual(["prompt:null"]);
@@ -223,20 +225,20 @@ describe("Promise prompt and confirm", () => {
 	test("Escape settles only the top confirm, not the dialog beneath it", async () => {
 		const results: Result[] = [];
 		let baseCloseCount = 0;
-		mountProbe(
+		await mountProbe(
 			results,
 			<DialogFrame open onClose={() => baseCloseCount++} label="Base dialog">
 				<button type="button">Base action</button>
 			</DialogFrame>,
 		);
-		openDialog("normal");
+		await openDialog("normal");
 
-		press("Escape");
+		await press("Escape");
 		await settleExit();
 
 		expect(results).toEqual(["normal:false"]);
 		expect(baseCloseCount).toBe(0);
-		press("Escape");
+		await press("Escape");
 		expect(baseCloseCount).toBe(1);
 	});
 });
