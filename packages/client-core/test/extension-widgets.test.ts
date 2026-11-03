@@ -31,6 +31,7 @@ describe("loadExtensionWidgets", () => {
 		expect(def?.description).toBe("one line");
 		expect(def?.tone).toBe("dark");
 		expect(typeof def?.Component).toBe("function");
+		expect(def?.code).toBe(CARD);
 		expect(def?.fields.map(field => field.key)).toEqual(["value"]);
 	});
 

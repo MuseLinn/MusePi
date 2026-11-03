@@ -73,6 +73,21 @@ async function activeToolNames(settings: Settings): Promise<string[]> {
 	return session.getActiveToolNames();
 }
 
+async function sessionWith(extension: Extension, settings: Settings) {
+	const { session } = await createAgentSession({
+		cwd: dir,
+		agentDir: dir,
+		modelRegistry,
+		sessionManager: SessionManager.inMemory(),
+		settings,
+		model: getBundledModel("openai", "gpt-4o-mini"),
+		disableExtensionDiscovery: true,
+		preloadedExtensions: preloaded(extension),
+	});
+	sessions.push(session);
+	return session;
+}
+
 describe("registered tool gate in session assembly", () => {
 	afterEach(async () => {
 		for (const session of sessions.splice(0)) await session.dispose().catch(() => {});
@@ -104,5 +119,32 @@ describe("registered tool gate in session assembly", () => {
 		const names = await activeToolNames(Settings.isolated({ "tools.disabled": ["always_probe"] }));
 		expect(names).not.toContain("always_probe");
 		expect(names).not.toContain("gated_probe");
+	});
+
+	it("drops a mounted tool when its gate flips off mid-session", async () => {
+		let enabled = true;
+		const extension = await loadExtensionFromFactory(
+			pi => {
+				pi.registerTool({
+					name: "toggle_probe",
+					label: "toggle_probe",
+					description: "toggle_probe",
+					parameters: type({}),
+					loadMode: "essential",
+					enabled: () => enabled,
+					execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+				});
+			},
+			dir,
+			new EventBus(),
+			new ExtensionRuntime(),
+			"toggle-probe.ts",
+		);
+		const session = await sessionWith(extension, Settings.isolated());
+		expect(session.getEnabledToolNames()).toContain("toggle_probe");
+		enabled = false;
+		const removed = await session.syncRegisteredToolGates();
+		expect(removed).toEqual(["toggle_probe"]);
+		expect(session.getEnabledToolNames()).not.toContain("toggle_probe");
 	});
 });

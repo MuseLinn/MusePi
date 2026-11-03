@@ -27,3 +27,4 @@ Builtin example boards are protected: a full-list overwrite never drops them (mi
 ## Output
 - Text summary of the affected boards, or the schema table for `schema`.
 - Widget data is validated before write; invalid boards are rejected with the failing field.
+- Validation accepts plugin card types registered through `registerWidget`: the tool merges the session's registry, and `board.save` / `widget.schema` pre-load the session-less extension assembly before reading the daemon process index.

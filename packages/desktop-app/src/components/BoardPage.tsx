@@ -1048,7 +1048,28 @@ export function BoardPage({
 				.electronAPI;
 			// Pass the card's board-space size so the pinned window opens at
 			// the same aspect (main scales it down to desktop-card bounds).
-			void api?.pinWidget?.({ title: w.title, type: w.type, data: w.data, w: w.pos.w, h: w.pos.h });
+			// A plugin card must carry its compiled module: the pin window is a
+			// separate renderer process and never runs extensions.list itself.
+			const def = widgetDef(w.type);
+			const widget = def?.code
+				? {
+						type: def.type,
+						label: def.label ?? def.type,
+						...(def.description ? { description: def.description } : {}),
+						fields: def.fields,
+						defaults: def.defaults(),
+						...(def.tone ? { tone: def.tone } : {}),
+						code: def.code,
+					}
+				: undefined;
+			void api?.pinWidget?.({
+				title: w.title,
+				type: w.type,
+				data: w.data,
+				w: w.pos.w,
+				h: w.pos.h,
+				...(widget ? { widget } : {}),
+			});
 		} catch {
 			// plain browser — no desktop bridge
 		}

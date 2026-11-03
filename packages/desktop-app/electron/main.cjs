@@ -2307,6 +2307,17 @@ function createPinWindow(payload) {
 	const w = Math.max(220, Math.round(pw * scale));
 	const h = Math.max(180, Math.round(ph * scale));
 	const data = payload && typeof payload.data === "object" && payload.data !== null ? JSON.stringify(payload.data) : "";
+	// A plugin card carries its compiled renderer: the pin window is its own
+	// renderer process and cannot read extensions.list. Persisted with the
+	// record so restored windows render the same type.
+	const widget =
+		payload &&
+		typeof payload.widget === "object" &&
+		payload.widget !== null &&
+		typeof payload.widget.code === "string" &&
+		payload.widget.code.length > 0
+			? JSON.stringify(payload.widget)
+			: "";
 	const win = new BrowserWindow({
 		width: w,
 		height: h,
@@ -2361,7 +2372,7 @@ function createPinWindow(payload) {
 	// parse back the encoded string and JSON.parse would throw, silently
 	// falling back to widget defaults). Pass the raw JSON.
 	win.loadFile(path.join(DIST_DIR, "pin.html"), {
-		query: { type, title, data },
+		query: { type, title, data, ...(widget ? { widget } : {}) },
 	});
 	return win;
 }
@@ -2385,6 +2396,13 @@ ipcMain.handle("widget-pin", (_event, payload) => {
 		data: payload && typeof payload.data === "object" && payload.data !== null ? payload.data : {},
 		w: Number(payload && payload.w) || 300,
 		h: Number(payload && payload.h) || 240,
+		...(payload &&
+		typeof payload.widget === "object" &&
+		payload.widget !== null &&
+		typeof payload.widget.code === "string" &&
+		payload.widget.code.length > 0
+			? { widget: payload.widget }
+			: {}),
 	};
 	createPinWindow(record);
 	writePinStore([...readPinStore(), record]);

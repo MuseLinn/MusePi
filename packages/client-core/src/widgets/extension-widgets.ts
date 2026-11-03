@@ -53,6 +53,7 @@ export async function loadExtensionWidgets(items: readonly ExtensionWidgetArtifa
 				fields: item.fields,
 				defaults: () => ({ ...item.defaults }),
 				...(item.tone ? { tone: item.tone } : {}),
+				code: item.code,
 				Component: Component as WidgetDef["Component"],
 			});
 		} catch (error) {

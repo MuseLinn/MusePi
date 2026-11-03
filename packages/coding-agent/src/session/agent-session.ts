@@ -154,7 +154,7 @@ import {
 	type ScheduleRecord,
 	type ScheduleUpdate,
 } from "../extensibility/extensions/schedule";
-import type { CompactOptions, ContextUsage } from "../extensibility/extensions/types";
+import type { CompactOptions, ContextUsage, ToolEnablementContext } from "../extensibility/extensions/types";
 import type { HookCommandContext } from "../extensibility/hooks/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
@@ -4906,6 +4906,40 @@ export class AgentSession {
 		const runner = this.#extensionRunner;
 		if (!runner) return [];
 		return runner.getAllRegisteredTools().map(t => t.definition.name);
+	}
+
+	/** Registered extension tools with their session enablement gates. The
+	 *  daemon calls this after a settings write to drop a presentation tool
+	 *  whose switch was just turned off; re-enabling still needs a new
+	 *  session, because the tool was never mounted in this one. */
+	listRegisteredToolGates(): Array<{ name: string; enabled?: (ctx: ToolEnablementContext) => boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return [];
+		return runner.getAllRegisteredTools().map(tool => ({
+			name: tool.definition.name,
+			...(tool.definition.enabled ? { enabled: tool.definition.enabled } : {}),
+		}));
+	}
+
+	/** Drop mounted registered tools whose switch was just turned off (or whose
+	 *  name entered `tools.disabled`). Returns the removed names. Re-enabling a
+	 *  previously absent tool still requires a new session. */
+	async syncRegisteredToolGates(): Promise<string[]> {
+		const raw = this.settings.get("tools.disabled");
+		const disabled = new Set<string>(Array.isArray(raw) ? (raw as string[]) : []);
+		const gates = this.listRegisteredToolGates();
+		const active = this.getEnabledToolNames();
+		const shouldDrop = (name: string): boolean => {
+			if (disabled.has(name)) return true;
+			const gate = gates.find(entry => entry.name === name)?.enabled;
+			return gate ? gate({ settings: this.settings }) === false : false;
+		};
+		const removed = active.filter(shouldDrop);
+		if (removed.length > 0) {
+			const removedSet = new Set(removed);
+			await this.setActiveToolsByName(active.filter(name => !removedSet.has(name)));
+		}
+		return removed;
 	}
 
 	/**

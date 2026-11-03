@@ -70,6 +70,10 @@ export interface WidgetDef {
 	descKey?: string;
 	label?: string;
 	description?: string;
+	/** Compiled renderer module for a plugin type (set by the extension loader).
+	 *  Pin windows live in a separate renderer process, so they need the code
+	 *  to register the type locally. Absent for built-in types. */
+	code?: string;
 	fields: WidgetField[];
 	/** Card shell treatment (kimi hello-world boards mix dark/light/blue
 	 *  cards, not one uniform theme surface). */

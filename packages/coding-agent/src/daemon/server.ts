@@ -7617,6 +7617,18 @@ export class DaemonServer {
 				}
 				return out;
 			}
+			case "session.toolGates": {
+				// Settings → Tools toggles must take effect without a restart.
+				// Drop a mounted registered tool whose switch was just turned off
+				// (or whose name entered the denylist). Re-enabling still needs a
+				// new session: the tool was never created in this one.
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const g = live.agentSession;
+				const removed = await g.syncRegisteredToolGates();
+				return { removed, active: g.getEnabledToolNames() };
+			}
 			case "settings.set": {
 				// Write one global setting (GUI settings panel scope).
 				const p = (params ?? {}) as { key: string; value: unknown };

@@ -474,6 +474,17 @@ export function ChatView({
 	// Widget types contributed by plugins (registerWidget): compile the card
 	// renderer and register it beside the built-in widget types.
 	useExtensionWidgets(rpc);
+	// Presentation switches (widget/board) must apply without a restart: after
+	// any settings write, ask the daemon to drop tools that are now disabled.
+	useEffect(() => {
+		const sessionId = store?.sessionId;
+		if (!rpc || !sessionId) return;
+		const sync = (): void => {
+			void rpc.request("session.toolGates", { sessionId }).catch(() => {});
+		};
+		window.addEventListener("omp-settings-changed", sync);
+		return () => window.removeEventListener("omp-settings-changed", sync);
+	}, [rpc, store?.sessionId]);
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);

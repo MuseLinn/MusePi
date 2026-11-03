@@ -55,6 +55,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The desktop client now uses its built-in browser by default. When the desktop app is attached, the browser tool opens pages in the right-side panel, where the user and the agent share one browser instance and login state; the agent gets its own visible tab that the user can watch, interact with, or take over. A headless Chromium is only the fallback in the CLI, without a desktop host, or when `browser.gui` is explicitly off, and the tool summary, prompt, setting copy, and docs no longer describe it as the default.
 
 ### Fixed
+- **置顶小窗支持插件卡片**：`pin.html` 随 pin 记录携带编译后的渲染模块与元数据，启动后先注册再渲染；重启恢复的钉子也能显示插件卡片，i18n 与 React 共用宿主实例。
+  - EN: Pinned widget windows now support plugin cards. pin.html carries the compiled renderer and metadata in the pin record, registers them before rendering, and restored pins keep working after a restart; i18n and React come from the host instance.
+- **设置里关闭展示工具立即生效**：会话新增 `session.toolGates`，写设置后按 `widget.enabled` / `board.enabled` / `tools.disabled` 移除已挂载的注册型工具，无需重启；重新开启仍需新会话（该工具从未在本会话创建）。
+  - EN: Turning a presentation tool off in settings now takes effect immediately. The new session.toolGates route removes mounted registered tools denied by widget.enabled, board.enabled, or tools.disabled without a restart; re-enabling still needs a new session because the tool was never created in this one.
+- **看板首次保存前会先加载扩展类型**：`board.save` / `widget.schema` 在读取进程索引前先执行一次会话无关的扩展装配，GUI 启动后立刻保存插件卡片不再被误判为未知类型。
+  - EN: A board save now loads extension types first. board.save and widget.schema run a session-less extension assembly before reading the process index, so a plugin card saved immediately after GUI launch is no longer rejected as an unknown type.
 - **插件卡片类型进入运行时校验表**：`widget` 与 `board` 在调用时合并会话里已加载扩展声明的类型，`board.save` / `widget.schema` 读取 daemon 进程索引，第三方 `registerWidget` 类型不再被判为未知；lookup 失败仍回退内建表。
   - EN: Plugin card types now reach runtime validation. The widget and board tools merge types declared by loaded extensions when called, while board.save and widget.schema read the daemon process index, so a third-party registerWidget type is no longer rejected as unknown; a miss still falls back to the built-in table.
 - **注册型工具的会话闸门不再被迟到注册绕过**：`tools.disabled` 或工具自己的 `enabled` 判定为否的工具，在扩展注册监听器或构造竞态补录时也会再次过滤；新增走真实会话装配的回归用例，防止「初始快照过滤、随后又被加回」。

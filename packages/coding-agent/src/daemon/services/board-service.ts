@@ -22,6 +22,7 @@ import type { DaemonService } from "./types";
  */
 export class BoardService implements DaemonService {
 	readonly key = "boards";
+	constructor(private readonly deps: { extensionRuntimeLoad?: () => Promise<unknown> } = {}) {}
 	readonly routes = {
 		"board.list": "list",
 		"board.save": "save",
@@ -42,6 +43,11 @@ export class BoardService implements DaemonService {
 	 *  （与原 case 一致）。 */
 	async save(params: { boards?: unknown }): Promise<{ ok: true; boards: unknown[] }> {
 		const { boards } = params ?? {};
+		// Evaluate the extension entries once so a plugin that registered a
+		// widget type is in the process index even when this RPC is the first
+		// thing the GUI calls after launch. Best-effort: a broken plugin must
+		// not block saving built-in cards.
+		await this.deps.extensionRuntimeLoad?.().catch(() => undefined);
 		const { readBoards, validateBoards, writeBoards } = await import("../../bundled-plugins/board/store");
 		const { widgetTypesWith } = await import("../../bundled-plugins/visuals/tool");
 		const { getRegisteredWidgets } = await import("../registered-widgets");
@@ -63,6 +69,7 @@ export class BoardService implements DaemonService {
 	/** RPC widget.schema：agent 侧 widget schema（widget 工具 parity）——
 	 *  types、fields、defaults 与卡片 tones，agent 写看板挂件无需硬编码形状。 */
 	async schema(): Promise<{ types: unknown; tones: unknown }> {
+		await this.deps.extensionRuntimeLoad?.().catch(() => undefined);
 		const { widgetTonesWith, widgetTypesWith } = await import("../../bundled-plugins/visuals/tool");
 		const { getRegisteredWidgets } = await import("../registered-widgets");
 		const widgets = getRegisteredWidgets();
