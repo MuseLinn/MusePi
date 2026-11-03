@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useSyncExternalStore } from "react";
 import { CalcCard } from "./calc";
 import { calcDefaults } from "./calc-defaults";
 import { ClockCard } from "./clock";
@@ -18,8 +19,6 @@ import { galleryDefaults } from "./gallery-defaults";
 import { gaugeDefaults } from "./gauge-defaults";
 import { HistoryCard, historyDefaults } from "./history";
 import { HtmlCard, htmlDefaults } from "./html";
-import { MetricCard } from "./metric";
-import { metricDefaults } from "./metric-defaults";
 import { MusicCard, musicDefaults } from "./music";
 import { PomodoroCard } from "./pomodoro";
 import { pomodoroDefaults } from "./pomodoro-defaults";
@@ -55,9 +54,9 @@ export interface BoardWidget {
 
 export interface WidgetField {
 	key: string;
-	label: string;
+	label?: string;
 	type: "number" | "string" | "boolean" | "select";
-	options?: string[];
+	options?: readonly string[];
 	min?: number;
 	max?: number;
 	step?: number;
@@ -67,9 +66,12 @@ export type WidgetTone = "default" | "dark" | "light" | "blue";
 
 export interface WidgetDef {
 	type: string;
-	/** i18n keys for the add-widget picker. */
-	nameKey: string;
-	descKey: string;
+	/** i18n keys for the built-in add-widget picker. Plugin-contributed types
+	 *  carry a plain `label`/`description` instead (they ship no host i18n key). */
+	nameKey?: string;
+	descKey?: string;
+	label?: string;
+	description?: string;
 	fields: WidgetField[];
 	/** Card shell treatment (kimi hello-world boards mix dark/light/blue
 	 *  cards, not one uniform theme surface). */
@@ -139,19 +141,6 @@ export const WIDGET_REGISTRY: readonly WidgetDef[] = [
 		],
 		defaults: tickerDefaults,
 		Component: TickerCard,
-	},
-	{
-		type: "metric",
-		tone: "default",
-		nameKey: "widget metric",
-		descKey: "widget metric desc",
-		fields: [
-			{ key: "label", label: "label", type: "string" },
-			{ key: "value", label: "value", type: "number" },
-			{ key: "delta", label: "delta", type: "number" },
-		],
-		defaults: metricDefaults,
-		Component: MetricCard,
 	},
 	{
 		type: "todo",
@@ -293,6 +282,50 @@ export const WIDGET_REGISTRY: readonly WidgetDef[] = [
 	},
 ];
 
+/**
+ * Widget types contributed by extensions (registerWidget), loaded at runtime
+ * after `extensions.list` compiles their renderer modules.
+ *
+ * They live beside the built-ins rather than replacing the array: plugin types
+ * are discovered asynchronously, while seeds, board lookup and the transcript
+ * may ask for a type at any time. External entries win a type collision so a
+ * plugin can override a built-in without forking the registry.
+ */
+let externalWidgets: WidgetDef[] = [];
+let widgetVersion = 0;
+const widgetListeners = new Set<() => void>();
+
+/** Replace the external widget set (empty array clears it). */
+export function registerExternalWidgets(defs: readonly WidgetDef[]): void {
+	externalWidgets = [...defs];
+	widgetVersion += 1;
+	for (const listener of widgetListeners) listener();
+}
+
+/** Subscribe to registry changes (React's useSyncExternalStore contract). */
+export function subscribeWidgets(listener: () => void): () => void {
+	widgetListeners.add(listener);
+	return () => widgetListeners.delete(listener);
+}
+
+/** Version snapshot; components subscribe to it so a late plugin load
+ *  re-renders the picker and any inline card waiting for its type. */
+export function useWidgetRegistryVersion(): number {
+	return useSyncExternalStore(
+		subscribeWidgets,
+		() => widgetVersion,
+		() => 0,
+	);
+}
+
+/** Built-ins plus plugin-contributed types, external entries last-wins. */
+export function widgetDefs(): WidgetDef[] {
+	if (externalWidgets.length === 0) return [...WIDGET_REGISTRY];
+	const byType = new Map<string, WidgetDef>(WIDGET_REGISTRY.map(def => [def.type, def]));
+	for (const def of externalWidgets) byType.set(def.type, def);
+	return [...byType.values()];
+}
+
 export function widgetDef(type: string): WidgetDef | undefined {
-	return WIDGET_REGISTRY.find(w => w.type === type);
+	return externalWidgets.find(w => w.type === type) ?? WIDGET_REGISTRY.find(w => w.type === type);
 }

@@ -1003,7 +1003,7 @@ export const settings = {
 	"settings.board": "看板",
 	"settings.workbench": "工作台",
 	"settings.boardTitle": "看板标题",
-	"settings.boardHelloTitle": "一块活的看板",
+	"settings.boardHelloTitle": "工作台",
 	"settings.boardFinanceTitle": "每日财经",
 	"settings.boardAddWidget": "添加组件…",
 	"settings.boardEdit": "编辑",

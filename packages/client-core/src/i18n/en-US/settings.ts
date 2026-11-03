@@ -1064,7 +1064,7 @@ export const settings = {
 	"settings.board": "Board",
 	"settings.workbench": "Workbench",
 	"settings.boardTitle": "Board title",
-	"settings.boardHelloTitle": "A living board",
+	"settings.boardHelloTitle": "Workbench",
 	"settings.boardFinanceTitle": "Daily finance",
 	"settings.boardAddWidget": "Add widget…",
 	"settings.boardEdit": "Edit",

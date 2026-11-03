@@ -509,7 +509,7 @@ export class ExtensionService implements DaemonService {
 		// Renderer-side slot components (ui-slots analogue): compiled
 		// from active extension-module entries, cached 10s with the
 		// extension scan. The GUI mounts them by slot id.
-		const { collectSlotComponents, collectToolViews, collectStatusBarSegments } = await import(
+		const { collectSlotComponents, collectToolViews, collectStatusBarSegments, collectWidgetViews } = await import(
 			"../extension-artifact-compiler"
 		);
 		const components = await collectSlotComponents(
@@ -519,6 +519,13 @@ export class ExtensionService implements DaemonService {
 		// Renderer-side per-tool views (registerToolView): the
 		// transcript dispatches by tool name, replacing the built-in renderer.
 		const toolViews = await collectToolViews(
+			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+			this.#deps.cwd(),
+		);
+		// Widget types (registerWidget): daemon metadata + compiled renderer
+		// module. The GUI registers them into the widget registry; the board
+		// picker and inline renderer read the same entries.
+		const widgets = await collectWidgetViews(
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
@@ -534,6 +541,7 @@ export class ExtensionService implements DaemonService {
 			providers,
 			components,
 			toolViews,
+			widgets,
 			statusBarSegments,
 			// Desktop-shell config: enabled/mode/
 			// webUrl read by the compat page + GUI shell.

@@ -41,7 +41,6 @@ import { AskTool } from "./ask";
 import { AstEditTool } from "./ast-edit";
 import { AstGrepTool } from "./ast-grep";
 import { BashTool } from "./bash";
-import { BoardTool } from "./board";
 import { BrowserTool } from "./browser";
 import { type BuiltinToolName, type HiddenToolName, normalizeToolNames } from "./builtin-names";
 import { type CheckpointState, CheckpointTool, type CompletedRewindState, RewindTool } from "./checkpoint";
@@ -450,7 +449,6 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	todo: s => new TodoTool(s),
 	knowledge: s => new KnowledgeTool(s),
 	web_search: s => new WebSearchTool(s),
-	board: () => new BoardTool(),
 	write: s => new WriteTool(s),
 	memory_edit: MemoryEditTool.createIf,
 	retain: MemoryRetainTool.createIf,
@@ -629,11 +627,8 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		// Project knowledge (notes / todos / plans). The panel's three sections
 		// share this store, so the tool is gated like any other data tool.
 		if (name === "knowledge") return session.settings.get("knowledge.enabled");
-		// Presentation tool (`board` writes the desktop board). It used to be
-		// registered unconditionally — there was no way to turn it off.
-		// (`widget` moved to the bundled `musepi-visuals` plugin; its switch is
-		// the `enabled` gate on that tool definition.)
-		if (name === "board") return session.settings.get("board.enabled");
+		// Presentation tools (`widget`, `board`) moved to bundled Cordis
+		// plugins; their switches are the `enabled` gates on those definitions.
 		if (name === "glob") return session.settings.get("glob.enabled");
 		if (name === "grep") return session.settings.get("grep.enabled");
 		if (name === "github") return session.settings.get("github.enabled");

@@ -61,6 +61,7 @@ import {
 	selectTranscriptNodeComponents,
 	TRANSCRIPT_NODE_SLOT,
 	useExtensionToolViews,
+	useExtensionWidgets,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
@@ -470,6 +471,9 @@ export function ChatView({
 	// 扩展 per-tool 渲染器(registerToolView):
 	// 注册进 guest-client tool-render 外部表,transcript 按工具名分派。
 	useExtensionToolViews(rpc);
+	// Widget types contributed by plugins (registerWidget): compile the card
+	// renderer and register it beside the built-in widget types.
+	useExtensionWidgets(rpc);
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);

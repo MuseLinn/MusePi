@@ -1,9 +1,11 @@
 import "./transcript-dom-shim";
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BoardPanel, BoardWidgetCard } from "../src/components/panels/BoardPanel";
 import type { SessionClient } from "../src/lib/client";
-import type { BoardWidget } from "../src/widgets/registry";
+import { type BoardWidget, registerExternalWidgets } from "../src/widgets/registry";
+
+afterEach(() => registerExternalWidgets([]));
 
 /** Board panel (guest view): widgets render through the shared registry —
  *  the "desktop calls the board correctly" contract. BoardWidgetCard is a
@@ -11,6 +13,18 @@ import type { BoardWidget } from "../src/widgets/registry";
  *  gates on the async board.list (loading/error/empty states). */
 describe("BoardPanel (board.list -> shared widget registry)", () => {
 	it("renders a known widget type through the registry", () => {
+		// `metric` leaves the built-in registry with the visuals plugin; the
+		// panel receives it through the external registry, which is what the
+		// desktop loader populates from extensions.list.
+		registerExternalWidgets([
+			{
+				type: "metric",
+				label: "指标",
+				fields: [],
+				defaults: () => ({}),
+				Component: ({ data }) => <div className="gui-widget-metric">{String(data.label ?? "")}</div>,
+			},
+		]);
 		const widget: BoardWidget = {
 			id: "w1",
 			type: "metric",
@@ -20,7 +34,7 @@ describe("BoardPanel (board.list -> shared widget registry)", () => {
 		};
 		const html = renderToStaticMarkup(<BoardWidgetCard widget={widget} update={() => {}} />);
 		expect(html).toContain("温度");
-		// Renders through the shared registry (metric card body) + the
+		// Renders through the shared registry (external metric card) + the
 		// board chrome (widget head/tone).
 		expect(html).toContain("gui-widget-metric");
 		expect(html).toContain("data-tone");

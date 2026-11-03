@@ -482,6 +482,13 @@ function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension,
 				if (index >= 0) extension.toolViews.splice(index, 1);
 			};
 		}
+		case "registerWidget": {
+			const [widget] = args as [{ type: string }];
+			return () => {
+				const index = extension.widgets.findIndex(entry => entry.type === widget.type);
+				if (index >= 0) extension.widgets.splice(index, 1);
+			};
+		}
 		case "registerPrompt": {
 			const [section] = args as [unknown];
 			return () => {

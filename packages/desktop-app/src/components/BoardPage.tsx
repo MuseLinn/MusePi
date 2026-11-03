@@ -1,7 +1,7 @@
 import { isTopModal, SpotlightCard, t, useModalFocus } from "@musepi/client-core";
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
-import { type BoardWidget, widgetDef } from "@musepi/client-core/src/widgets/registry";
+import { type BoardWidget, useWidgetRegistryVersion, widgetDef } from "@musepi/client-core/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/client-core/src/widgets/task";
 import {
 	executeWidgetTask,
@@ -374,6 +374,7 @@ export function BoardPage({
 	/** Session cwd for in-board AI generation (agent's working directory). */
 	cwd?: string;
 }): ReactNode {
+	useWidgetRegistryVersion();
 	const [boards, setBoards] = useState<BoardData[]>(() => loadBoards());
 	// Daemon persistence: boards live at ~/.musepi/boards/boards.json (the
 	// GUI, the agent and other windows share one store). localStorage is

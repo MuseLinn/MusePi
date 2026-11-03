@@ -15,6 +15,7 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musep
 import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import widgetDescription from "./prompt.md" with { type: "text" };
+import { METRIC_WIDGET } from "./widgets/metric";
 
 // The widget registry lives in guest-client (shared with the GUI board);
 // the daemon keeps the type/field table in sync here for schema-driven
@@ -31,7 +32,6 @@ export const WIDGET_TONES: Record<string, "default" | "dark" | "light" | "blue">
 	slider: "light",
 	calc: "light",
 	ticker: "dark",
-	metric: "default",
 	todo: "default",
 	pomodoro: "blue",
 	video: "dark",
@@ -256,6 +256,23 @@ export const WIDGET_TYPES: Record<
 	},
 };
 
+/**
+ * Plugin-contributed widget types fold into the daemon-facing table.
+ *
+ * `registerWidget` owns the GUI renderer + metadata; this table stays the one
+ * `widget` validates payloads against and `board` validates card types
+ * against — including session-less board RPCs, which run before any renderer
+ * module is compiled. The plugin and this table share `METRIC_WIDGET`, so the
+ * fields/defaults cannot drift.
+ */
+for (const widget of [METRIC_WIDGET]) {
+	WIDGET_TYPES[widget.type] = {
+		fields: widget.fields.map(field => ({ key: field.key, type: field.type })),
+		defaults: widget.defaults(),
+	};
+	WIDGET_TONES[widget.type] = widget.tone ?? "default";
+}
+
 // Upper bound for widget data (agents sometimes pass verbose payloads);
 // oversized data is rejected instead of bloating the transcript.
 const MAX_DATA_JSON = 12_000;
@@ -344,6 +361,9 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 	readonly label = "Widget";
 	readonly strict = true;
 	readonly approval = "read" as const;
+	/** A presentation tool belongs in the top-level schema; extension tools
+	 *  otherwise default to discoverable. */
+	readonly loadMode = "essential" as const;
 	/** Session gate: the presentation switch must keep working now that the
 	 *  tool ships as a builtin plugin — extension tools are otherwise always
 	 *  in the slate. */

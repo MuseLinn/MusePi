@@ -21,7 +21,7 @@ import { t } from "../../i18n/index.js";
 import { downloadBlob } from "../../lib/download";
 import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
-import { widgetDef } from "../../widgets/registry";
+import { useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 import { type WidgetSource, widgetSource } from "../../widgets/source";
 
 /** localStorage key for the standalone widget display. */
@@ -316,9 +316,10 @@ export function WidgetCard({
 	const [fullscreen, setFullscreen] = useState(false);
 	const [showCode, setShowCode] = useState(false);
 	const cardRef = useRef<HTMLDivElement | null>(null);
+	useWidgetRegistryVersion();
 	const def = widgetDef(payload.type);
 	if (!def) return null;
-	const title = payload.title ?? t(def.nameKey as never);
+	const title = payload.title ?? def.label ?? t((def.nameKey ?? "widget unknown") as never);
 	const source = widgetSource(payload);
 	// "下载为图片"/"复制为图片" ride host capabilities, so those items are
 	// absent in hosts that have no rasterizer (plain browser, HTML export)

@@ -33,7 +33,7 @@ export class BoardService implements DaemonService {
 	 *  GUI、agent 与其他窗口共享一个存储（localStorage 只是离线 GUI 的
 	 *  兜底）。 */
 	async list(): Promise<{ boards: unknown[] }> {
-		const { readBoards } = await import("../boards");
+		const { readBoards } = await import("../../bundled-plugins/board/store");
 		return { boards: readBoards() };
 	}
 
@@ -42,7 +42,7 @@ export class BoardService implements DaemonService {
 	 *  （与原 case 一致）。 */
 	async save(params: { boards?: unknown }): Promise<{ ok: true; boards: unknown[] }> {
 		const { boards } = params ?? {};
-		const { readBoards, validateBoards, writeBoards } = await import("../boards");
+		const { readBoards, validateBoards, writeBoards } = await import("../../bundled-plugins/board/store");
 		const { WIDGET_TYPES } = await import("../../bundled-plugins/visuals/tool");
 		const check = validateBoards(boards, WIDGET_TYPES);
 		if (!check.ok) throw new Error(`board.save: ${check.error}`);

@@ -1574,6 +1574,14 @@ export interface ExtensionAPI {
 	 *  name in the shared card chrome; `Icon` adds a glyph beside it. */
 	registerToolView(tool: string, options: { moduleUrl: string; label?: string }): void;
 
+	/**
+	 * Contribute a widget type: daemon-side metadata (payload validation, the
+	 * agent-facing schema, the board editor) plus a renderer module the GUI
+	 * compiles and registers under the same type key. `moduleUrl`'s default
+	 * export receives `{ data, update, sendPrompt?, preview?, annotateCapture? }`.
+	 */
+	registerWidget(widget: ExtensionWidget): void;
+
 	/** Contribute a named, ordered prompt section. Sections compose into every session prompt the extension
 	 *  participates in, ordered by `order` against the core template, mode and
 	 *  user sections. Dropped and re-added on extension reload (modes v2 §5.5). */
@@ -2467,6 +2475,10 @@ export interface Extension {
 	 *  (registerToolView): compiled to ESM by the daemon and dispatched by
 	 *  tool name in the transcript. */
 	toolViews: ExtensionToolView[];
+	/** Widget types contributed by the extension (registerWidget): the
+	 *  daemon-side metadata validates payloads and drives the agent schema;
+	 *  `moduleUrl` is compiled for the GUI renderer registry. */
+	widgets: ExtensionWidget[];
 	/** Notification channels registered by the extension
 	 *  (registerNotificationChannel): the runner routes every `send` call
 	 *  through its `onNotification` sink, and drops the whole list on unload. */
@@ -2658,6 +2670,43 @@ export interface ExtensionToolView {
 	moduleUrl: string;
 	/** Display label (load errors, diagnostics). */
 	label?: string;
+}
+
+/**
+ * One widget type contributed by an extension (registerWidget).
+ *
+ * The metadata is daemon-side on purpose: `widget` validates payloads against
+ * it and `board` validates card types even in a session-less RPC, before any
+ * renderer module has been compiled. `moduleUrl` names the renderer the GUI
+ * compiles and registers; the module default-exports a React component with
+ * the same props as a built-in `WidgetDef.Component`.
+ */
+export interface ExtensionWidget {
+	/** Registry key (`widget.type` / `board` card type). */
+	type: string;
+	/** Display name shown in the picker and card header (plugin-owned, so it
+	 *  is plain text rather than a host i18n key). */
+	label: string;
+	/** Optional one-line description for the picker. */
+	description?: string;
+	fields: ExtensionWidgetField[];
+	/** Fresh default data; called per registration so no shared object leaks. */
+	defaults(): Record<string, unknown>;
+	/** Card shell treatment; defaults to "default". */
+	tone?: "default" | "dark" | "light" | "blue";
+	/** Extension-relative renderer module (e.g. "./ui/metric.tsx"). */
+	moduleUrl: string;
+}
+
+/** Field declaration shared by the board editor and the agent schema. */
+export interface ExtensionWidgetField {
+	key: string;
+	type: "number" | "string" | "boolean" | "select";
+	label?: string;
+	options?: readonly string[];
+	min?: number;
+	max?: number;
+	step?: number;
 }
 
 /** Result of loading extensions. */

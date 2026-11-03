@@ -1,5 +1,5 @@
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
-import { WIDGET_REGISTRY, type WidgetDef } from "@musepi/client-core/src/widgets/registry";
+import { type WidgetDef, widgetDef } from "@musepi/client-core/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -33,7 +33,7 @@ function PinApp(): ReactNode {
 	} catch {
 		// malformed data → defaults
 	}
-	const def: WidgetDef | undefined = WIDGET_REGISTRY.find(w => w.type === type);
+	const def: WidgetDef | undefined = widgetDef(type);
 	const Comp = def?.Component;
 	const [pinned, setPinned] = useState(true);
 	return (

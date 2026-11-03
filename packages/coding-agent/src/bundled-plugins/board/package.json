@@ -1,0 +1,14 @@
+{
+	"name": "musepi-board",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Desktop board cards that agents can read, edit and validate.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "▦",
+		"label": "Board",
+		"description": "Read and write the desktop board's card wall: list boards, edit cards, and query the widget schema.",
+		"extensions": ["./index.ts"]
+	}
+}

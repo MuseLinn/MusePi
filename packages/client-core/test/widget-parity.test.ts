@@ -7,13 +7,22 @@ import { describe, expect, test } from "bun:test";
 // Test-only cross-package import: WIDGET_TYPES lives in the daemon tool.
 // eslint-disable-next-line import/no-relative-parent-imports
 import { WIDGET_TONES, WIDGET_TYPES } from "../../coding-agent/src/bundled-plugins/visuals/tool";
+import { METRIC_WIDGET } from "../../coding-agent/src/bundled-plugins/visuals/widgets/metric";
 import { WIDGET_REGISTRY } from "../src/widgets/registry";
 
 describe("widget registry ↔ WIDGET_TYPES parity", () => {
 	test("every registry type exists in the daemon table", () => {
-		const registryTypes = WIDGET_REGISTRY.map(w => w.type).sort();
-		const daemonTypes = Object.keys(WIDGET_TYPES).sort();
-		expect(daemonTypes).toEqual(registryTypes);
+		// The daemon table may also hold plugin-contributed types (registerWidget)
+		// such as `metric`, which no longer live in the static client registry.
+		const daemonTypes = new Set(Object.keys(WIDGET_TYPES));
+		for (const def of WIDGET_REGISTRY) expect(daemonTypes.has(def.type), def.type).toBe(true);
+	});
+
+	test("plugin-contributed metadata agrees with the daemon table", () => {
+		expect(WIDGET_TYPES.metric).toBeDefined();
+		expect(WIDGET_TYPES.metric.fields.map(f => f.key)).toEqual(METRIC_WIDGET.fields.map(f => f.key));
+		expect(WIDGET_TYPES.metric.defaults).toEqual(METRIC_WIDGET.defaults());
+		expect(WIDGET_TONES.metric).toBe(METRIC_WIDGET.tone ?? "default");
 	});
 
 	test("defaults agree per type", () => {

@@ -67,6 +67,7 @@ import type {
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
 	ExtensionRuntime as IExtensionRuntime,
+	ExtensionWidget,
 	LoadExtensionsResult,
 	MediaProviderConfig,
 	MessageRenderer,
@@ -531,6 +532,33 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		});
 	}
 
+	registerWidget(widget: ExtensionWidget): void {
+		if (!widget || typeof widget.type !== "string" || widget.type.length === 0) {
+			throw new TypeError("registerWidget: widget.type is required");
+		}
+		if (typeof widget.label !== "string" || widget.label.trim().length === 0) {
+			throw new TypeError(`registerWidget: label required for "${widget.type}"`);
+		}
+		if (typeof widget.moduleUrl !== "string" || widget.moduleUrl.length === 0) {
+			throw new TypeError(`registerWidget: moduleUrl required for "${widget.type}"`);
+		}
+		if (typeof widget.defaults !== "function") {
+			throw new TypeError(`registerWidget: defaults() required for "${widget.type}"`);
+		}
+		if (!Array.isArray(widget.fields)) {
+			throw new TypeError(`registerWidget: fields must be an array for "${widget.type}"`);
+		}
+		this.extension.widgets.push({
+			type: widget.type,
+			label: widget.label,
+			...(widget.description ? { description: widget.description } : {}),
+			fields: widget.fields,
+			defaults: widget.defaults,
+			...(widget.tone ? { tone: widget.tone } : {}),
+			moduleUrl: widget.moduleUrl,
+		});
+	}
+
 	registerPrompt(section: ExtensionPromptSection): void {
 		this.extension.promptSections.push(section);
 	}
@@ -767,6 +795,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		skills: [],
 		subagents: new Map(),
 		toolViews: [],
+		widgets: [],
 		notificationChannels: [],
 		services: [],
 		themeTokens: [],

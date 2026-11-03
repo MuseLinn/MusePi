@@ -309,6 +309,27 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 
 **参考实现**:`packages/client-core/src/tool-render/registry.ts`(`registerExternalToolRenderers`)、`packages/desktop-app/src/lib/slot-host.tsx`(`useExtensionToolViews`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectToolViews`)。
 
+## 9.1 扩展 widget 类型（registerWidget）
+
+扩展可以同时声明一种卡片类型的元数据与渲染器：
+
+```ts
+pi.registerWidget({
+	type: "metric",
+	label: "指标",
+	fields: [{ key: "value", type: "number", label: "数值" }],
+	defaults: () => ({ value: 42 }),
+	tone: "default",
+	moduleUrl: "./ui/metric.tsx",
+});
+```
+
+- **元数据在 daemon 侧**：`widget` 用它校验 payload、生成 agent schema；`board` 用它校验卡片类型（会话无关的 board RPC 也能校验，不依赖渲染器是否编译过）。
+- **渲染器走与 registerComponent 相同的编译管线**：模块默认导出 React 组件，收到 `{ data, update, sendPrompt?, preview?, annotateCapture? }`；不要 `import react`，用编译器注入的 `React`（`window.MusePiReact`），否则会多一份 React 实例。
+- **分派**：daemon 编译 → `extensions.list.widgets` → GUI `useExtensionWidgets`（ChatView 挂载）注册进 `client-core` 的 widget registry（`registerExternalWidgets`）；同名覆盖内置类型，picker、内联卡与看板共用同一份。
+- **与 registerToolView 的区别**：后者按工具名替换整条工具渲染；本项按卡片类型新增/替换一个 widget 渲染器。
+- **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` 试点）。
+
 ## 10. 扩展 transcript 节点渲染(transcript.node seat, DSH 粒度, 2026-08-27)
 
 扩展为**指定节点 kind** 贡献 transcript 渲染器。对应 DSH `conversation.chat.node` 的单一"聊天节点 seat"槽：按节点 kind(entryKey) 分发，命中即"拥有"该条目的渲染，未命中回退到内建渲染(fallback)。

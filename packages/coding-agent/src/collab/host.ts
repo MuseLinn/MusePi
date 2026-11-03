@@ -23,8 +23,8 @@ import type {
 	ToolApprovalRequest,
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
+import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../bundled-plugins/board/store.js";
 import { WIDGET_TYPES } from "../bundled-plugins/visuals/tool.js";
-import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
 import {
 	computeNextRun,
 	loadCronRuns,

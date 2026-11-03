@@ -7,19 +7,23 @@
  * (otherwise a presentation surface becomes impossible to turn off).
  */
 import { describe, expect, test } from "bun:test";
-import type { ExtensionAPI, ToolDefinition } from "../../extensibility/extensions/types";
+import type { ExtensionAPI, ExtensionWidget, ToolDefinition } from "../../extensibility/extensions/types";
 import { apply } from "./index";
 
-function fakePi(): { pi: ExtensionAPI; tools: ToolDefinition[] } {
+function fakePi(): { pi: ExtensionAPI; tools: ToolDefinition[]; widgets: ExtensionWidget[] } {
 	const tools: ToolDefinition[] = [];
+	const widgets: ExtensionWidget[] = [];
 	const pi = {
 		setLabel() {},
 		registerTool(tool: ToolDefinition) {
 			tools.push(tool);
 		},
+		registerWidget(widget: ExtensionWidget) {
+			widgets.push(widget);
+		},
 		logger: { info() {}, warn() {}, error() {} },
 	} as unknown as ExtensionAPI;
-	return { pi, tools };
+	return { pi, tools, widgets };
 }
 
 describe("musepi-visuals plugin", () => {
@@ -27,6 +31,14 @@ describe("musepi-visuals plugin", () => {
 		const { pi, tools } = fakePi();
 		apply(pi);
 		expect(tools.map(tool => tool.name)).toEqual(["widget"]);
+	});
+
+	test("registers the metric widget type through the seam", () => {
+		const { pi, widgets } = fakePi();
+		apply(pi);
+		expect(widgets.map(widget => widget.type)).toEqual(["metric"]);
+		expect(widgets[0]?.moduleUrl).toBe("./ui/metric.tsx");
+		expect(widgets[0]?.defaults()).toMatchObject({ value: 4200 });
 	});
 
 	test("honours widget.enabled through the definition gate", () => {

@@ -65,6 +65,32 @@ export interface ToolViewItem {
 	css?: string;
 }
 
+/**
+ * One widget type contributed by an active extension (registerWidget), for
+ * extensions.list `widgets`. The metadata is serialized here — defaults is
+ * invoked once — because the GUI registry needs plain data plus a module.
+ */
+export interface WidgetViewItem {
+	type: string;
+	extensionId: string;
+	label: string;
+	description?: string;
+	fields: Array<{
+		key: string;
+		type: "number" | "string" | "boolean" | "select";
+		label?: string;
+		options?: readonly string[];
+		min?: number;
+		max?: number;
+		step?: number;
+	}>;
+	defaults: Record<string, unknown>;
+	tone?: string;
+	code: string;
+	error?: string;
+	css?: string;
+}
+
 /** One virtual skill declared by an active extension (registerSkill),
  *  merged into the daemon skills.list / extension center. */
 export interface ExtensionSkillItem {
@@ -605,6 +631,63 @@ export async function collectToolViews(
 					code: "",
 					error: String(error),
 				});
+			}
+		}
+	}
+	return out;
+}
+
+/**
+ * Collect widget types declared by active extension-module entries
+ * (registerWidget), for extensions.list `widgets`.
+ *
+ * Metadata and renderer travel together so the GUI can register a working
+ * type from one item. A broken module still ships the metadata with `error`
+ * set — the type stays valid for agents and the board, and the renderer shows
+ * the standard unavailable card instead of the type vanishing.
+ */
+export async function collectWidgetViews(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<WidgetViewItem[]> {
+	const out: WidgetViewItem[] = [];
+	for (const entry of extensions) {
+		if (
+			(entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND) ||
+			entry.state !== "active"
+		)
+			continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const widget of extension.widgets ?? []) {
+			const absPath = path.resolve(extension.resolvedPath, "..", widget.moduleUrl);
+			let defaults: Record<string, unknown> = {};
+			try {
+				const value = widget.defaults();
+				if (value && typeof value === "object" && !Array.isArray(value)) {
+					defaults = value as Record<string, unknown>;
+				}
+			} catch {
+				defaults = {};
+			}
+			const meta = {
+				type: widget.type,
+				extensionId: extension.path,
+				label: widget.label,
+				...(widget.description ? { description: widget.description } : {}),
+				fields: widget.fields,
+				defaults,
+				...(widget.tone ? { tone: widget.tone } : {}),
+			};
+			try {
+				const compiled = await compileComponentModule(absPath);
+				out.push({
+					...meta,
+					code: compiled.code,
+					...(compiled.css ? { css: compiled.css } : {}),
+				});
+			} catch (error) {
+				out.push({ ...meta, code: "", error: String(error) });
 			}
 		}
 	}

@@ -3906,6 +3906,7 @@ describe("ExtensionRunner", () => {
 				skills: [],
 				subagents: new Map(),
 				toolViews: [],
+				widgets: [],
 				notificationChannels: [],
 				services: [],
 				themeTokens: [],

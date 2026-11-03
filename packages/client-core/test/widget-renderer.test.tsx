@@ -9,6 +9,7 @@
 import { describe, expect, it } from "bun:test";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import type { ReactNode } from "react";
+import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { collectWidgetPayloads, latestWidgetFromEntries } from "../src/components/transcript/widget-standalone";
 import { widgetDataEq, widgetRenderer } from "../src/tool-render/tools/widget";
@@ -20,7 +21,8 @@ import { createAnswerGate, readFaceTokens, readWidgetFaceMessage, widgetHostThem
 // marks Body optional (other renderers may omit it) and ComponentType is a
 // class|function union TS refuses to invoke directly — alias to a plain
 // function shape for direct calls in these SSR tests.
-const renderBody = widgetRenderer.Body as (props: ToolRenderProps) => ReactNode;
+const bodyElement = (props: ToolRenderProps): ReactNode =>
+	React.createElement(widgetRenderer.Body as never, props as never);
 
 /** Wire-shaped widget tool result: content + details, isError when failed. */
 function widgetResult(type: string, data: Record<string, unknown>, title?: string): ToolRenderProps["result"] {
@@ -33,7 +35,7 @@ function widgetResult(type: string, data: Record<string, unknown>, title?: strin
 describe("inline widget renderer", () => {
 	it("renders a calc widget from result.details with merged data", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "calc", data: { amount: 2000 } },
 				result: widgetResult("calc", { mode: "post", amount: 2000 }),
 			} as never),
@@ -45,7 +47,7 @@ describe("inline widget renderer", () => {
 
 	it("falls back to the unknown-type note when the type is stale", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "nope" },
 				result: widgetResult("nope", {}),
 			} as never),
@@ -56,7 +58,7 @@ describe("inline widget renderer", () => {
 
 	it("uses the type's i18n name as the default title", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "pomodoro" },
 				result: widgetResult("pomodoro", {}),
 			} as never),
@@ -66,7 +68,7 @@ describe("inline widget renderer", () => {
 
 	it("passes details data through to the shared component untouched", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "ticker", data: { label: "USD / CNY" } },
 				result: widgetResult("ticker", { label: "USD / CNY", value: "6.7634" }),
 			} as never),
@@ -77,7 +79,7 @@ describe("inline widget renderer", () => {
 
 	it("renders the custom HTML face with the injected html in the sandbox srcdoc", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "html" },
 				result: widgetResult("html", { html: '<div class="plot">档案潜行</div>', data: { plot: "起" } }),
 			} as never),
@@ -88,7 +90,7 @@ describe("inline widget renderer", () => {
 
 	it("injects the host theme into the sandbox srcdoc (theme adaptation)", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "html" },
 				result: widgetResult("html", { html: '<div class="plot">x</div>', data: {} }),
 			} as never),
@@ -104,7 +106,7 @@ describe("inline widget renderer", () => {
 
 	it("surfaces the error text instead of a blank card when the call failed", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "html" },
 				result: {
 					content: [
@@ -340,7 +342,7 @@ describe("sandbox face answer channel", () => {
 
 	it("refuses an oversized face rather than rendering half a document", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "html" },
 				result: widgetResult("html", { html: `<p>${"y".repeat(MAX_WIDGET_HTML + 1)}</p>`, data: {} }),
 			} as never),
@@ -351,7 +353,7 @@ describe("sandbox face answer channel", () => {
 
 	it("exposes the submit helper to the face inside the sandbox", () => {
 		const html = renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "html" },
 				result: widgetResult("html", { html: '<div class="plot">x</div>', data: {} }),
 			} as never),
@@ -390,7 +392,7 @@ describe("one card answers at most once", () => {
 describe("faces get a ready-made option card and a settled state", () => {
 	function srcdoc(): string {
 		return renderToStaticMarkup(
-			renderBody({
+			bodyElement({
 				args: { type: "html" },
 				result: widgetResult("html", { html: '<div class="musepi-options">x</div>', data: {} }),
 			} as never),

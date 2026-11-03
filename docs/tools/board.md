@@ -3,12 +3,13 @@
 > Reads and edits the desktop kanban boards — the same store the GUI renders (`~/.musepi/boards/boards.json`). Agents design board cards: list boards, read one board, save an edited board, or query the widget schema before authoring widgets.
 
 ## Source
-- Entry: `packages/coding-agent/src/tools/board.ts`
-- Model-facing prompt: `packages/coding-agent/src/prompts/tools/board.md`
+- Entry: `packages/coding-agent/src/bundled-plugins/board/index.ts` (built-in Cordis plugin `musepi-board`)
+- Tool implementation: `packages/coding-agent/src/bundled-plugins/board/tool.ts`
+- Model-facing prompt: `packages/coding-agent/src/bundled-plugins/board/prompt.md`
 - Key collaborators:
-  - `packages/coding-agent/src/daemon/boards.ts` — board persistence (`readBoards`/`writeBoards`) and validation (known widget types, integer positions, id/title strings).
-  - `packages/coding-agent/src/tools/widget.ts` — the widget schema (`WIDGET_TYPES`/`WIDGET_TONES`) this tool exposes via the `schema` action.
-  - `packages/client-core/src/widgets/registry.ts` — the GUI-side widget registry the daemon table mirrors.
+  - `packages/coding-agent/src/bundled-plugins/board/store.ts` — board persistence (`readBoards`/`writeBoards`) and validation (known widget types, integer positions, id/title strings).
+  - `packages/coding-agent/src/bundled-plugins/visuals/tool.ts` — the widget schema (`WIDGET_TYPES`/`WIDGET_TONES`) this tool exposes via the `schema` action.
+  - `packages/client-core/src/widgets/registry.ts` — the GUI-side widget registry the daemon table mirrors (built-ins + `registerWidget` types).
 
 ## Inputs
 

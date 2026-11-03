@@ -3,11 +3,13 @@ import {
 	fmtTokens,
 	getLocaleSnapshot,
 	registerExternalToolRenderers,
+	registerExternalWidgets,
 	registerTranslationNamespace,
 	subscribeLocale,
 	type ToolRenderer,
 	unregisterTranslationNamespace,
 } from "@musepi/client-core";
+import type { WidgetDef, WidgetField } from "@musepi/client-core/src/widgets/registry";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
 import type {
 	ConfigFieldDesc,
@@ -298,6 +300,21 @@ export interface ToolViewItem {
 	/** Component-scoped CSS extracted at compile time. */
 	css?: string;
 }
+
+/** One compiled widget type from extensions.list (registerWidget). */
+interface WidgetViewItem {
+	type: string;
+	extensionId: string;
+	label: string;
+	description?: string;
+	fields: WidgetField[];
+	defaults: Record<string, unknown>;
+	tone?: WidgetDef["tone"];
+	/** Self-contained ESM JavaScript exporting the card component. */
+	code: string;
+	error?: string;
+	css?: string;
+}
 /** One status-bar segment from extensions.list (registerStatusBarSegment —
  *  static label rendered after the built-in model/mode/context segments,
  *  ordered by `order`). */
@@ -385,6 +402,9 @@ export interface ExtensionRegistryData {
 	 *  analogue): compiled modules dispatched by tool name in the
 	 *  transcript. */
 	toolViews: ToolViewItem[];
+	/** Widget types contributed by active extensions (registerWidget):
+	 *  daemon metadata plus the compiled renderer module. */
+	widgets: WidgetViewItem[];
 	/** Status-bar segments contributed by active extensions
 	 *  (registerStatusBarSegment), rendered after the built-ins by `order`. */
 	statusBarSegments: StatusBarSegmentItem[];
@@ -1055,6 +1075,67 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 }
 
 /**
+ * Widget types from extensions.list (registerWidget): compile each renderer
+ * module and register the metadata + component into client-core's widget
+ * registry. Empty data clears the external set, so disabling the plugin (or a
+ * daemon without the field) leaves only the built-ins.
+ */
+export function useExtensionWidgets(rpc: RpcClient | null): void {
+	const data = useExtensionRegistry(rpc);
+	const widgets = data?.widgets ?? [];
+	useEffect(() => {
+		if (widgets.length === 0) {
+			registerExternalWidgets([]);
+			return;
+		}
+		let alive = true;
+		const urls: string[] = [];
+		void (async () => {
+			const defs: WidgetDef[] = [];
+			for (const item of widgets) {
+				if (item.error || !item.code) continue;
+				try {
+					exposeHostReact();
+					const url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
+					urls.push(url);
+					const mod = (await import(url)) as { default?: unknown };
+					if (!alive) return;
+					const exported = mod.default;
+					const Component =
+						typeof exported === "function"
+							? exported
+							: exported &&
+									typeof exported === "object" &&
+									typeof (exported as { Component?: unknown }).Component === "function"
+								? (exported as { Component: unknown }).Component
+								: null;
+					if (Component === null) {
+						console.warn(`widget "${item.type}" missing default component export`);
+						continue;
+					}
+					defs.push({
+						type: item.type,
+						label: item.label,
+						...(item.description ? { description: item.description } : {}),
+						fields: item.fields,
+						defaults: () => ({ ...item.defaults }),
+						...(item.tone ? { tone: item.tone } : {}),
+						Component: Component as WidgetDef["Component"],
+					});
+				} catch (e) {
+					console.warn(`widget "${item.type}" load failed`, e);
+				}
+			}
+			if (alive) registerExternalWidgets(defs);
+			for (const url of urls) URL.revokeObjectURL(url);
+		})();
+		return () => {
+			alive = false;
+		};
+	}, [widgets]);
+}
+
+/**
  * The slot surface a compiled plugin binds to.
  *
  * Every seat constant, selector and mount component a plugin may import lives
@@ -1097,6 +1178,7 @@ const slotHostBindings = {
 	selectTranscriptNodeComponents,
 	useExtensionRegistry,
 	useExtensionToolViews,
+	useExtensionWidgets,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 	useUnhostedSlots,

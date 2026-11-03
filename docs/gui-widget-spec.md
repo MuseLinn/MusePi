@@ -57,7 +57,9 @@
 3. `tone` 逐 type 相等
 4. `fields` 逐 type 相等
 
-**只在 `registry.ts` 加条目而不改 daemon 表，parity 测试会失败** —— 这是故意的。新增 widget 的正确顺序是：插件包 `WIDGET_TYPES` 与 defaults → registry 条目 → i18n 词表 → parity 测试转绿。
+**只在 `registry.ts` 加条目而不改 daemon 表，parity 测试会失败** —— 这是故意的。新增内置 widget 的正确顺序是：插件包 `WIDGET_TYPES` 与 defaults → registry 条目 → i18n 词表 → parity 测试转绿。
+
+插件类型走 `registerWidget`（见 `docs/extensions-dev.md` §9.1）：daemon 表与 GUI 注册表由同一份元数据生成，所以不在静态 `WIDGET_REGISTRY` 里的类型也可以合法存在；parity 测试断言的是「注册表里的每个类型都在 daemon 表里」，daemon 表可以更大。
 
 ---
 

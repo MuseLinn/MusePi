@@ -23,7 +23,6 @@ export const BUILTIN_TOOL_NAMES = [
 	"knowledge",
 	"web_search",
 	"write",
-	"board",
 	"memory_edit",
 	"retain",
 	"recall",
@@ -42,7 +41,7 @@ export type BuiltinToolName = (typeof BUILTIN_TOOL_NAMES)[number];
  * `widget` moved to the `musepi-visuals` plugin (registered and gated there);
  * it is deliberately NOT a key of `BUILTIN_TOOLS`.
  */
-export const PLUGIN_TOOL_NAMES = ["widget"] as const;
+export const PLUGIN_TOOL_NAMES = ["widget", "board"] as const;
 
 /** Every tool name a user may name in `--tools`, an advisor config or a preset. */
 export const KNOWN_BUILTIN_TOOL_NAMES = [...BUILTIN_TOOL_NAMES, ...PLUGIN_TOOL_NAMES] as const;

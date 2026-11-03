@@ -4255,13 +4255,18 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			return activation;
 		};
 		if (!restrictToolNames) {
-			const unsubscribeToolRegistrations = extensionRunner.onToolRegistered(scheduleToolRegistration);
+			// A late registration must pass the same session gate as the initial
+			// snapshot; otherwise a tool dropped by `enabled`/`tools.disabled`
+			// comes straight back through the listener.
+			const unsubscribeToolRegistrations = extensionRunner.onToolRegistered(registered =>
+				isRegisteredToolEnabled(registered, settings) ? scheduleToolRegistration(registered) : undefined,
+			);
 			disposeCallbacks.add(unsubscribeToolRegistrations);
 
 			// Close the construction race: a background registration can land after
 			// the initial snapshot but before the live listener above is attached.
 			for (const registered of extensionRunner.getAllRegisteredTools()) {
-				if (!initialRegisteredTools.has(registered)) {
+				if (!initialRegisteredTools.has(registered) && isRegisteredToolEnabled(registered, settings)) {
 					await scheduleToolRegistration(registered);
 				}
 			}

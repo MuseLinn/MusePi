@@ -54,7 +54,7 @@ export function makeWidget(type: string, title?: string, w = DEF_W, h = DEF_H): 
 	return {
 		id: nextId("w"),
 		type,
-		title: title ?? t((def?.nameKey ?? "widget unknown") as never),
+		title: title ?? def?.label ?? t((def?.nameKey ?? "widget unknown") as never),
 		data: def ? def.defaults() : {},
 		pos: { x: 0, y: 0, w, h },
 	};
@@ -104,9 +104,10 @@ function at(
 	y: number,
 	w: number,
 	h: number,
+	data: Record<string, unknown> = {},
 ): BoardWidget {
 	const wgt = makeWidget(type, title, w, h);
-	return { ...wgt, pos: { x, y, w, h } };
+	return { ...wgt, data: { ...wgt.data, ...data }, pos: { x, y, w, h } };
 }
 
 /** Derive a ticker card data patch from a normalized widget.data FX rate
@@ -129,64 +130,123 @@ export function tickerFxPatch(data: Record<string, unknown>, cnyPerEur: number):
 	return { value: value.toFixed(4), delta: Number(delta.toFixed(4)), spark };
 }
 
-/** Seed boards (first run): 每日财经 + Hello World collections. */
+/** Seed boards (first run): 每日财经 + 工作台. Every card ships real,
+ *  readable data instead of a tour of defaults — the examples are meant to be
+ *  used, not clicked through and deleted. */
 export function seedBoards(): BoardData[] {
-	// 每日财经：左侧时钟 + 市场温度竖排，右侧全高超级图表，
-	// 底行热力墙 + 指数磁带并排。
+	// 每日财经：三张盯盘卡并排，中间一张主图 + 市场温度，底部热力墙 + 指数。
 	const f: BoardWidget[] = [];
-	f.push(at(f, "clock", t("settings.widgetClock"), 0, 0, 356, 296));
-	f.push(at(f, "kline", t("settings.widgetKline"), 368, 0, 724, 604));
-	f.push(at(f, "gauge", t("settings.widgetGauge"), 0, 308, 356, 296));
-	f.push(at(f, "heatwall", t("settings.widgetHeatwall"), 0, 616, 540, 428));
-	f.push(at(f, "indextape", t("settings.widgetIndextape"), 552, 616, 540, 428));
-	// Hello World：fx/盯盘并排，全宽黑胶播放器，视频 + 历史并排，
-	// todo/pomodoro/clock 竖排列，底部工具行。
-	const h: BoardWidget[] = [];
-	h.push(at(h, "fx", t("settings.widgetFx"), 0, 0, 540, 340));
-	h.push(at(h, "stocks", t("settings.widgetStocks"), 552, 0, 540, 340));
-	h.push(at(h, "music", t("settings.widgetMusic"), 0, 352, 1092, 604));
-	h.push(at(h, "video", t("settings.widgetVideo"), 0, 968, 632, 560));
-	h.push(at(h, "history", t("settings.widgetHistory"), 644, 968, 436, 560));
-	h.push(at(h, "todo", t("settings.widgetTodo"), 0, 1540, 356, 516));
-	h.push(at(h, "pomodoro", t("settings.widgetPomodoro"), 368, 1540, 356, 516));
-	h.push(at(h, "clock", t("settings.widgetClock"), 736, 1540, 356, 516));
-	h.push(at(h, "slider", t("settings.widgetSlider"), 0, 2068, 540, 252));
-	h.push(at(h, "calc", t("settings.widgetCalc"), 552, 2068, 540, 252));
-	h.push(at(h, "metric", t("settings.widgetMetric"), 0, 2332, 356, 252));
-	h.push(at(h, "ticker", t("settings.widgetTicker"), 368, 2332, 356, 252));
-	h.push(at(h, "gallery", t("settings.widgetGallery"), 736, 2332, 356, 252));
-	// 汇率卡带一个可运行任务（运行按钮 + 查看任务弹窗）。
-	const tk = h.find(w => w.type === "ticker");
-	if (tk) {
-		tk.data.task = {
-			enabled: true,
-			name: "Onboarding · 汇率抓取",
-			desc: "抓取最新汇率行情条目。",
-			schedule: "hourly",
-			runs: [],
-		};
-	}
-	// 指标卡任务含一条失败记录（展示失败态）；任务须描述卡片展示的
-	// 内容，禁止挂无关作业。
-	const mt = h.find(w => w.type === "metric");
-	if (mt) {
-		mt.data.task = {
-			enabled: true,
-			name: "指标快照更新",
-			desc: "刷新本卡展示的指标快照数据。",
-			schedule: "daily",
-			runs: [
-				{ time: "07/22 19:17", success: true },
-				{ time: "07/22 11:02", success: false },
+	f.push(at(f, "clock", "市场时钟", 0, 0, 356, 296, { market: "cn" }));
+	f.push(
+		at(f, "fx", "人民币汇率", 368, 0, 356, 296, {
+			chip: "FX · CNY",
+			title: "人民币汇率",
+			pairs: [
+				{ code: "USD", unit: 1, note: "1 美元" },
+				{ code: "EUR", unit: 1, note: "1 欧元" },
+				{ code: "JPY", unit: 100, note: "100 日元" },
+				{ code: "GBP", unit: 1, note: "1 英镑" },
 			],
-		};
-	}
-	// 视频卡默认封面，agent 填 url/bvid 前展示。
-	const vd = h.find(w => w.type === "video");
-	if (vd) {
-		vd.data.title = "凡人修仙传";
-		vd.data.subtitle = "BILIBILI · 年番";
-	}
+			refresh: 60,
+		}),
+	);
+	f.push(
+		at(f, "stocks", "A股盯盘", 736, 0, 356, 296, {
+			chip: "A-SHARES",
+			title: "A股盯盘",
+			rows: [
+				{ code: "sh600519", label: "600519", badge: "沪", name: "贵州茅台" },
+				{ code: "sz300750", label: "300750", badge: "深", name: "宁德时代" },
+				{ code: "sz002594", label: "002594", badge: "深", name: "比亚迪" },
+				{ code: "sh688981", label: "688981", badge: "沪", name: "中芯国际" },
+			],
+		}),
+	);
+	f.push(
+		at(f, "kline", "沪深300", 0, 308, 724, 604, {
+			symbol: "沪深300",
+			price: 3940.84,
+			delta: 1.02,
+			candles: [],
+			stocks: ["沪深300", "上证指数", "创业板指"],
+		}),
+	);
+	f.push(
+		at(f, "gauge", "市场温度", 736, 308, 356, 296, { label: "A股市场温度", value: 68, status: "偏暖 · 沪强深弱" }),
+	);
+	f.push(
+		at(f, "metric", "组合日收益", 736, 616, 356, 296, {
+			label: "组合日收益",
+			value: 1.82,
+			delta: 0.018,
+			history: [0.4, 0.9, 0.6, 1.2, 1.0, 1.5, 1.3, 1.7, 1.82],
+		}),
+	);
+	f.push(
+		at(f, "heatwall", "涨跌热力", 0, 924, 540, 428, {
+			tiles: [
+				{ name: "贵州茅台", delta: 0.05 },
+				{ name: "宁德时代", delta: 2.14 },
+				{ name: "比亚迪", delta: 0.66 },
+				{ name: "中芯国际", delta: 3.5 },
+				{ name: "招商银行", delta: -0.44 },
+				{ name: "中国平安", delta: -0.22 },
+				{ name: "紫金矿业", delta: 1.88 },
+				{ name: "长江电力", delta: 0 },
+			],
+		}),
+	);
+	f.push(
+		at(f, "indextape", "指数磁带", 552, 924, 540, 428, {
+			indices: ["上证", "深证", "创业板"],
+			value: 3940.84,
+			delta: 1.02,
+			series: [3800, 3850, 3830, 3900, 3920, 3880, 3940, 3930, 3955, 3940],
+		}),
+	);
+
+	// 工作台：今天做什么、专注多久、临时算一笔、看一段。
+	const h: BoardWidget[] = [];
+	h.push(
+		at(h, "todo", "今天", 0, 0, 540, 516, {
+			items: [
+				{ id: "t1", text: "梳理本周发布范围", done: true },
+				{ id: "t2", text: "跑通一次桌面端冒烟", done: false },
+				{ id: "t3", text: "把看板示例换成真实数据", done: false },
+				{ id: "t4", text: "整理插件能力缝文档", done: false },
+			],
+		}),
+	);
+	h.push(at(h, "pomodoro", "专注", 552, 0, 264, 252, { mode: "focus", rounds: 0, minutes: 0, day: "" }));
+	h.push(at(h, "clock", "市场时钟", 828, 0, 264, 252, { market: "cn" }));
+	h.push(at(h, "calc", "劳务费个税", 552, 264, 264, 252, { mode: "post", amount: 1760 }));
+	h.push(
+		at(h, "metric", "本周专注", 828, 264, 264, 252, {
+			label: "本周专注",
+			value: 760,
+			delta: 0.08,
+			history: [420, 480, 510, 600, 640, 700, 760],
+		}),
+	);
+	h.push(
+		at(h, "video", "凡人修仙传", 0, 528, 540, 560, {
+			title: "凡人修仙传",
+			subtitle: "BILIBILI · 年番",
+			bvid: "BV1vT411d7QE",
+		}),
+	);
+	h.push(
+		at(h, "history", "历史上的今天", 552, 528, 540, 560, {
+			header: "HISTORY",
+			date: "历史上的今天",
+			events: [
+				{ year: "2008", text: "北京奥运会闭幕，中国以 51 枚金牌居金牌榜首位。" },
+				{ year: "1887", text: "李享亭出生，中国消化病学奠基人之一。" },
+				{ year: "1980", text: "罗杰·费德勒出生，瑞士男子职业网球运动员。" },
+			],
+		}),
+	);
+	h.push(at(h, "music", "黑胶唱片", 0, 1100, 1092, 604));
 	return [
 		{ id: "finance", title: t("settings.boardFinanceTitle"), widgets: f, builtin: true },
 		{ id: "hello", title: t("settings.boardHelloTitle"), widgets: h, builtin: true },

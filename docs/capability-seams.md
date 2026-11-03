@@ -16,6 +16,7 @@
 | 编译插件的宿主模块表 | `packages/collab-proto/src/extension-host-modules.ts`（`EXTENSION_HOST_MODULES` / `matchExtensionHostModule`） | 同文件头部；渲染端实例表见 `packages/desktop-app/src/lib/host-modules.ts` |
 | Android 模拟器插件 | `packages/coding-agent/src/bundled-plugins/android-emulator/index.ts`（扩展隔离的 RPC / `android_emulator`） | 同文件头部 |
 | 可视化插件（卡片 + 内联页面） | `packages/coding-agent/src/bundled-plugins/visuals/index.ts`（`widget` 工具 / 类型表） | 同文件头部 |
+| 看板插件 | `packages/coding-agent/src/bundled-plugins/board/index.ts`（`board` 工具 / 看板存储） | 同文件头部 |
 | Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
 | Cordis 会话页 | `packages/desktop-app/src/plugins/chat-view/index.ts`（`app.chat`） | 同文件头部 |
 | Cordis 能力中心 | `packages/desktop-app/src/plugins/capability-center/index.ts`（`app.capability`） | 同文件头部 |

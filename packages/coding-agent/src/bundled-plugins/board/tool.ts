@@ -7,11 +7,11 @@
  * before authoring widgets.
  */
 import { type } from "@musepi/musepi-type";
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
-import { WIDGET_TONES, WIDGET_TYPES } from "../bundled-plugins/visuals/tool";
-import { readBoards, validateBoards, writeBoards } from "../daemon/boards";
-import boardDescription from "../prompts/tools/board.md" with { type: "text" };
+import { WIDGET_TONES, WIDGET_TYPES } from "../visuals/tool";
+import boardDescription from "./prompt.md" with { type: "text" };
+import { readBoards, validateBoards, writeBoards } from "./store";
 
 const boardSchema = type({
 	action: type("string").describe("list | get | save | schema"),
@@ -24,6 +24,13 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 	readonly label = "Board";
 	readonly strict = true;
 	readonly approval = "read" as const;
+	/** Keep the board in the top-level schema (extension tools default to
+	 *  discoverable otherwise). */
+	readonly loadMode = "essential" as const;
+	/** Session gate: the board presentation switch must keep working now that
+	 *  the tool ships as a builtin plugin. */
+	readonly enabled = ({ settings }: { settings: { get(key: string): unknown } }): boolean =>
+		settings.get("board.enabled") !== false;
 	readonly description = boardDescription;
 	readonly parameters = boardSchema;
 	readonly examples: readonly ToolExample<typeof boardSchema.infer>[] = [
@@ -50,7 +57,7 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 		params: typeof boardSchema.infer,
 		_signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<unknown>,
-		_context?: AgentToolContext,
+		_context?: unknown,
 	): Promise<AgentToolResult<unknown>> {
 		const action = typeof params.action === "string" ? params.action : "";
 		// Provider serializers send only `content` to the model — everything

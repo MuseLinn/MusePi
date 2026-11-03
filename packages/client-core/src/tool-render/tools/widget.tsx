@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
-import { widgetDef } from "../../widgets/registry";
+import { widgetDef, useWidgetRegistryVersion } from "../../widgets/registry";
 import type { WidgetSource } from "../../widgets/source";
 import { ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
@@ -53,6 +53,8 @@ export function InlineWidget({
 	codeView?: WidgetSource | null;
 }): ReactNode {
 	const [local, setLocal] = useState<Record<string, unknown>>(data);
+	// Re-render when a plugin contributes this type after the session loaded.
+	useWidgetRegistryVersion();
 	// The card mounts while the tool is still running — the result (and
 	// its data) has not arrived yet, so `data` is the empty placeholder.
 	// Adopt the real payload when it lands; user edits via `update` only
@@ -118,6 +120,7 @@ export const widgetRenderer: ToolRenderer = {
 		return `${t("settings.widget")}${type ? ` · ${type}` : ""}`;
 	},
 	Body: ({ args, result, host }: ToolRenderProps): ReactNode => {
+		useWidgetRegistryVersion();
 		const details = detailsRecord(result);
 		const type = str(details?.type) ?? str((isRecord(args) ? args : null)?.type) ?? "";
 		const def = widgetDef(type);
@@ -130,7 +133,7 @@ export const widgetRenderer: ToolRenderer = {
 			return <ResultText result={result} maxLines={8} />;
 		}
 		const data = isRecord(details?.data) ? (details.data as Record<string, unknown>) : {};
-		const title = str(details?.title) ?? t(def.nameKey as never);
+		const title = str(details?.title) ?? def.label ?? t((def.nameKey ?? "widget unknown") as never);
 		return (
 			<InlineWidget
 				type={type}

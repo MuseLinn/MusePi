@@ -15,6 +15,7 @@
  */
 import type { ExtensionAPI } from "../../extensibility/extensions/types";
 import { WidgetTool } from "./tool";
+import { METRIC_WIDGET } from "./widgets/metric";
 
 export const name = "musepi-visuals";
 export const inject = [] as const;
@@ -23,6 +24,8 @@ export const provide = [] as const;
 export function apply(pi: ExtensionAPI): void {
 	pi.setLabel("MusePi 可视化");
 	pi.registerTool(new WidgetTool());
+	// The seam pilot: metadata + renderer travel as one widget type.
+	pi.registerWidget(METRIC_WIDGET);
 }
 
 export default apply;

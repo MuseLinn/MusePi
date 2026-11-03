@@ -1,5 +1,10 @@
 import { t } from "@musepi/client-core/src/i18n/index.js";
-import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/client-core/src/widgets/registry";
+import {
+	useWidgetRegistryVersion,
+	type WidgetField,
+	widgetDef,
+	widgetDefs,
+} from "@musepi/client-core/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
@@ -47,6 +52,7 @@ export function WidgetEditor({
 	}, [onClose]);
 	const active = boards.find(b => b.id === activeId);
 	const widget = active?.widgets.find(w => w.id === selectedId) ?? null;
+	useWidgetRegistryVersion();
 	const def = widget ? widgetDef(widget.type) : undefined;
 	return (
 		<div
@@ -115,14 +121,14 @@ export function WidgetEditor({
 			<div className="gui-widget-editor-add">
 				<span className="gui-widget-editor-label">{t("settings.boardAddWidget")}</span>
 				<div className="gui-widget-editor-add-list">
-					{WIDGET_REGISTRY.map(w => (
+					{widgetDefs().map(w => (
 						<button
 							type="button"
 							key={w.type}
 							className="gui-widget-editor-add-btn"
 							onClick={() => onAdd(w.type)}
 						>
-							{t(w.nameKey as never)}
+							{w.label ?? t((w.nameKey ?? "widget unknown") as never)}
 						</button>
 					))}
 				</div>
@@ -141,7 +147,7 @@ function FieldInput({
 	onChange(v: unknown): void;
 }): ReactNode {
 	const [num, setNum] = useState(typeof value === "number" ? String(value) : "");
-	const label = field.label;
+	const label = field.label ?? field.key;
 	if (field.type === "select") {
 		return (
 			<div className="gui-widget-editor-field">
