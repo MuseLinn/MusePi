@@ -1,6 +1,6 @@
 import * as clientCore from "@musepi/client-core";
 import * as clientCoreI18n from "@musepi/client-core/src/i18n";
-import type { ExtensionHostModuleKey } from "@musepi/collab-proto/extension-host-modules";
+import { EXTENSION_HOST_MODULES, type ExtensionHostModuleKey } from "@musepi/collab-proto/extension-host-modules";
 import * as actionToast from "./action-toast";
 import * as fileWorkspace from "./file-workspace";
 import * as managedBrowserHost from "./managed-browser-host";
@@ -62,7 +62,12 @@ export function exposeHostModules(): void {
 		MusePiManagedBrowserHost: unknown;
 	};
 	// Every key is bound by the time this runs: the shell imports `slot-host`,
-	// which registers itself before calling this.
+	// which registers itself before calling this. Missing entries are a broken
+	// supplier contract and must fail at publish, not at a later plugin import.
+	const missing = EXTENSION_HOST_MODULES.filter(({ key }) => !(key in hostModules)).map(({ key }) => key);
+	if (missing.length > 0) {
+		throw new Error(`MusePiHostModules is missing ${missing.map(key => `"${key}"`).join(", ")}`);
+	}
 	target.MusePiHostModules = hostModules as Record<ExtensionHostModuleKey, unknown>;
 	target.MusePiPromptDialog = hostModules["prompt-dialog"];
 	target.MusePiManagedBrowserHost = hostModules["managed-browser-host"];
