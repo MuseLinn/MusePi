@@ -20,6 +20,13 @@ export function BlurText({
 	const [revealed, setRevealed] = useState(0);
 
 	useEffect(() => {
+		// The `gui-motion-off` switch is documented to disable the effect
+		// wholesale; the CSS already zeroes the transition, so settle every
+		// character instead of stepping them with an interval.
+		if (typeof document !== "undefined" && document.documentElement.classList.contains("gui-motion-off")) {
+			setRevealed(text.length);
+			return;
+		}
 		let i = 0;
 		setRevealed(0);
 		const id = window.setInterval(() => {

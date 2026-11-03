@@ -25,6 +25,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The chat surface is now plugin-managed and supports custom greetings. The chat-view Cordis plugin provides the welcome page, transcript, composer, and related panels while the host retains session and workspace state; disabling it leaves no second chat implementation. Settings → General offers a custom welcome greeting with immediate preview, and blank input restores the time-aware greeting.
 
 ### Fixed
+- **关闭动态效果时欢迎语立即完整显示**：`gui-motion-off` 下品牌字与问候语不再逐字计时显现，符合设置中「关闭动态效果」的承诺，低动效环境也不会残留定时更新。
+  - EN: Welcome branding and greetings now appear in full immediately when motion is off. The stepped reveal no longer starts under gui-motion-off, matching the setting's promise and leaving no pending timer updates in low-motion environments.
 - **开发客户端启动 daemon 时正确解析 Bun**：开发环境会从 `BUN_EXECUTABLE` 或 PATH 解析 Bun 的绝对路径，避免 Windows 首轮启动因子进程找不到裸 `bun` 命令而失败；启动错误同时包含退出码和子进程输出，便于定位连接失败。
   - EN: Development clients now resolve Bun correctly when starting the daemon. The launcher resolves an absolute Bun path from BUN_EXECUTABLE or PATH, preventing the first Windows launch from failing because the bare bun command cannot be spawned. Startup errors also include the exit code and child-process output to make connection failures diagnosable.
 - **OpenCode 推理请求按会话血缘正确路由**：OpenCode 与 OpenCode Go 的 Completions、Responses、Anthropic Messages 和 Google Generative AI 统一发送会话亲和键，fork、task/Vibe 子代理和 advisor 与父会话共享路由，不再让不同对话默认共用安装实例 ID。独立会话 ID 仍用于凭据和遥测；关闭提示缓存不会改变路由，显式请求头保持优先。

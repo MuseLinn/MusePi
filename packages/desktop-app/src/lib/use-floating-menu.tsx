@@ -234,8 +234,14 @@ export function useFloatingMenu(
 	// the frosted backdrop is ready before it becomes visible.
 	useLayoutEffect(() => {
 		if (!open || !pos) return;
-		const id = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
-		return () => cancelAnimationFrame(id);
+		let inner = 0;
+		const outer = requestAnimationFrame(() => {
+			inner = requestAnimationFrame(() => setEntered(true));
+		});
+		return () => {
+			cancelAnimationFrame(outer);
+			if (inner !== 0) cancelAnimationFrame(inner);
+		};
 	}, [open, pos]);
 
 	// Animated exit: when open flips false, mark closing, unmount after the
