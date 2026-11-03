@@ -22,6 +22,9 @@ const HOST_STATE_MODULES = [
 	"slot-host",
 	"monaco-runtime",
 	"monaco-lsp",
+	"voice",
+	"panel-maximize",
+	"suggestions",
 ] as const;
 
 /** Call form only: an import or re-export of `createContext` is not a context. */

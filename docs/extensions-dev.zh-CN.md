@@ -733,6 +733,9 @@ const hostModules = {
 | `slot-host` | `lib/slot-host.tsx` | slot 注册表 store、挂载函数与 slot 契约常量 |
 | `monaco-runtime` | `lib/monaco-runtime.ts` | `monacoPromise`、全局 `MonacoEnvironment` 与 worker 工厂：所有编辑面共用一份 Monaco 实例与一套 worker |
 | `monaco-lsp` | `lib/monaco-lsp.ts` | LSP `documents`、provider 注册、peek model 与编辑器 opener：宿主与所有插件共用一套 LSP 运行时与 provider 集合 |
+| `voice` | `lib/voice.ts` | 活跃 TTS/听写会话、播放上下文与停止/恢复句柄：音频状态与取消操作不能跨 bundle 分叉 |
+| `panel-maximize` | `lib/panel-maximize.ts` | 最大化标志、订阅者与动画注册表：宿主和每个插件观察同一个面板最大化状态 |
+| `suggestions` | `lib/suggestions.ts` | 建议贡献者、存储与订阅：用户维护的建议在宿主和插件之间保持同一份 |
 | `client-core` | `@musepi/client-core`（裸包） | 整个 client-core 命名空间：其中的 React context 与模块级状态 |
 | `i18n` | `@musepi/client-core/src/i18n`（裸包） | `t` / `setLocale` 共用的 locale 注册表 |
 

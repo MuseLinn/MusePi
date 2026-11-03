@@ -63,6 +63,12 @@ describe("host module table", () => {
 		expect(typeof hostModule("monaco-lsp")?.revealEditorLocation).toBe("function");
 	});
 
+	it("shares voice, panel maximize state, and suggestion contributors", () => {
+		expect(typeof hostModule("voice")?.speak).toBe("function");
+		expect(typeof hostModule("panel-maximize")?.getPanelMaximized).toBe("function");
+		expect(typeof hostModule("suggestions")?.loadSuggestions).toBe("function");
+	});
+
 	it("keeps the pre-table globals as aliases of the same objects", () => {
 		expect(hostWindow().MusePiPromptDialog).toBe(hostModule("prompt-dialog"));
 		expect(hostWindow().MusePiManagedBrowserHost).toBe(hostModule("managed-browser-host"));
@@ -89,7 +95,14 @@ describe("host module table", () => {
 	it("compiles the chat page against slot-host instead of bundling it", async () => {
 		const { code } = await compileComponentModule(path.resolve("src/plugins/chat-view/page.tsx"));
 		expect(code).toContain('missing "slot-host"');
+		expect(code).toContain('missing "voice"');
+		expect(code).toContain('missing "suggestions"');
 		expect(code).not.toContain("ConfirmContext");
+	}, 60_000);
+
+	it("compiles the panel against shared maximize state", async () => {
+		const { code } = await compileComponentModule(path.resolve("src/plugins/panel/page.tsx"));
+		expect(code).toContain('missing "panel-maximize"');
 	}, 60_000);
 
 	it("compiles the file workspace page against the shared Monaco runtime and LSP state", async () => {

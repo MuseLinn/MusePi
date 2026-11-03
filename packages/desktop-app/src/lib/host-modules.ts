@@ -6,10 +6,13 @@ import * as fileWorkspace from "./file-workspace";
 import * as managedBrowserHost from "./managed-browser-host";
 import * as monacoLsp from "./monaco-lsp";
 import * as monacoRuntime from "./monaco-runtime";
+import * as panelMaximize from "./panel-maximize";
 import * as promptDialog from "./prompt-dialog";
+import * as suggestions from "./suggestions";
 import * as tooltips from "./tooltips";
 import * as updateUx from "./update-ux";
 import * as useFloatingMenu from "./use-floating-menu";
+import * as voice from "./voice";
 
 /**
  * Instances a compiled plugin binds to through `window.MusePiHostModules`.
@@ -35,6 +38,9 @@ const hostModules = {
 	tooltips: tooltips,
 	"monaco-runtime": monacoRuntime,
 	"monaco-lsp": monacoLsp,
+	voice: voice,
+	"panel-maximize": panelMaximize,
+	suggestions: suggestions,
 	"client-core": clientCore,
 	i18n: clientCoreI18n,
 } satisfies Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host">;
