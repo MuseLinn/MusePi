@@ -14,6 +14,7 @@ import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { MobileSettings } from "./components/shell/MobileSettings";
+import { PullToRefresh } from "./components/shell/PullToRefresh";
 import { Toasts } from "./components/shell/Toasts";
 import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
@@ -608,6 +609,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [activePanel, setActivePanel] = useState<GuestPanel | null>(null);
 	const autoOpenedRef = useRef(false);
+	const refreshTranscript = useCallback(() => onRejoin(), [onRejoin]);
 
 	// Low-frequency fields only. The shell never subscribes to the message
 	// plane (entries/stream/activeTools) — those live in TranscriptPane.
@@ -791,7 +793,9 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				) : (
 					<section className="sh-content" data-rail={railOpen ? "true" : "false"}>
 						<div className="sh-transcript">
-							<TranscriptPane client={client} host={toolHost} />
+							<PullToRefresh onRefresh={refreshTranscript}>
+								<TranscriptPane client={client} host={toolHost} />
+							</PullToRefresh>
 						</div>
 					</section>
 				)}

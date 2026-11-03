@@ -252,6 +252,45 @@
 	min-height: 0;
 }
 
+/* Pull-to-refresh wrapper: the transcript keeps its own scrolling; the
+   wrapper only moves while the finger is pulling, then springs back. */
+.sh-pull {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	will-change: transform;
+	transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sh-pull[data-busy="true"] {
+	transition: none;
+}
+
+.sh-pull-indicator {
+	position: absolute;
+	top: -34px;
+	left: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	margin-left: -16px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	background: var(--bg-raised);
+	color: var(--fg-muted);
+	pointer-events: none;
+	transition: opacity 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sh-pull {
+		transition: none;
+	}
+}
+
 .sh-rail {
 	width: 320px;
 	flex: none;
@@ -3789,6 +3828,57 @@
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
 	padding: 4px 8px 12px;
+}
+
+/* Session search: a 44px target that keeps the sheet's frosted surface and
+   uses 16px text so mobile browsers do not zoom on focus. */
+.ss-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+	margin: 0 10px 8px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	background: var(--bg-inset);
+	color: var(--fg-muted);
+}
+
+.ss-search-input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	background: none;
+	color: var(--fg);
+	font: inherit;
+	font-size: 16px;
+	line-height: 1.4;
+	padding: 10px 0;
+	outline: none;
+}
+
+.ss-search-input::placeholder {
+	color: var(--fg-muted);
+}
+
+.ss-search-clear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	margin-right: -4px;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--fg-muted);
+	cursor: pointer;
+}
+
+.ss-search-clear:hover {
+	color: var(--fg);
+	background: var(--bg-raised);
 }
 
 .ss-empty {

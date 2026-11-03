@@ -1,7 +1,7 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
-import { Check, Loader2, Pencil, Server, Settings, SquarePen, Trash2, X } from "lucide-react";
+import { Check, Loader2, Pencil, Search, Server, Settings, SquarePen, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
@@ -24,6 +24,18 @@ import { isTopModal, useModalFocus } from "../../lib/modal-focus";
  */
 
 const DRAG_DISMISS_PX = 120; // downward drag past this dismisses the sheet
+
+/** Filter sessions by title or cwd (case-insensitive, trimmed query). */
+export function filterSessions(
+	sessions: readonly WorkspaceSessionInfo[],
+	query: string,
+): readonly WorkspaceSessionInfo[] {
+	const q = query.trim().toLowerCase();
+	if (q.length === 0) return sessions;
+	return sessions.filter(
+		session => (session.title ?? "").toLowerCase().includes(q) || (session.cwd ?? "").toLowerCase().includes(q),
+	);
+}
 
 export function SessionsSheet({
 	client,
@@ -49,6 +61,8 @@ export function SessionsSheet({
 	const [dragY, setDragY] = useState(0);
 	const dragging = useRef(false);
 	const startY = useRef(0);
+	const [query, setQuery] = useState("");
+	const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
 	// Only one row may sit open at a time (iOS list convention) — the sheet
 	// owns the swiped id so opening row B snaps row A shut.
 	const [swipedId, setSwipedId] = useState<string | null>(null);
@@ -58,16 +72,35 @@ export function SessionsSheet({
 		const onKey = (event: KeyboardEvent): void => {
 			const sheet = sheetRef.current;
 			if (event.key !== "Escape" || !sheet || !isTopModal(sheet)) return;
+			// Escape clears an active filter first; a second press closes.
+			if (query.trim().length > 0) {
+				event.preventDefault();
+				event.stopPropagation();
+				setQuery("");
+				return;
+			}
 			event.preventDefault();
 			event.stopPropagation();
 			onClose();
 		};
 		document.addEventListener("keydown", onKey, true);
 		return () => document.removeEventListener("keydown", onKey, true);
-	}, [open, onClose]);
-	// Reset drag when the sheet (re)opens.
+	}, [open, onClose, query]);
+	// Reset drag when the sheet (re)opens; a fresh search every time too.
 	useEffect(() => {
-		if (open) setDragY(0);
+		if (open) {
+			setDragY(0);
+			setQuery("");
+		}
+	}, [open]);
+	// The active session may sit far down a long list; bring it into view once
+	// the sheet has risen, without yanking the user's own scroll afterwards.
+	useEffect(() => {
+		if (!open) return;
+		const timer = setTimeout(() => {
+			sheetRef.current?.querySelector<HTMLElement>(".ss-item--active")?.scrollIntoView({ block: "nearest" });
+		}, 80);
+		return () => clearTimeout(timer);
 	}, [open]);
 
 	const prefersReduced = usePrefersReducedMotion();
@@ -162,9 +195,37 @@ export function SessionsSheet({
 						</button>
 					</div>
 				</div>
+				{sessions.length > 0 && (
+					<div className="ss-search">
+						<Search size={15} aria-hidden />
+						<input
+							type="search"
+							className="ss-search-input"
+							value={query}
+							placeholder={t("settings.searchSessions")}
+							aria-label={t("settings.searchSessions")}
+							enterKeyHint="search"
+							onChange={e => setQuery(e.target.value)}
+						/>
+						{query.length > 0 && (
+							<button
+								type="button"
+								className="ss-search-clear"
+								aria-label={t("settings.clear")}
+								onClick={() => setQuery("")}
+							>
+								<X size={13} />
+							</button>
+						)}
+					</div>
+				)}
 				<div className="ss-list">
-					{sessions.length === 0 && <p className="ss-empty">{t("transcript.noSessionsYet")}</p>}
-					{sessions.map(session => {
+					{filtered.length === 0 && (
+						<p className="ss-empty">
+							{query.trim().length > 0 ? t("general.noResults") : t("transcript.noSessionsYet")}
+						</p>
+					)}
+					{filtered.map(session => {
 						const active = session.id === currentId;
 						return (
 							<SwipeableRow

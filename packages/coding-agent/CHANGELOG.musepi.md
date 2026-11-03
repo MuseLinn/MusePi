@@ -7,6 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ## [Unreleased]
 
 ### Added
+- **移动端会话搜索与下拉刷新**：SessionsSheet 新增按标题或 cwd 的即时搜索（大小写不敏感，Escape 先清空再关闭），打开时当前会话自动滚入可视区；transcript 顶部下拉可重连/重取快照，桌面与鼠标环境不启用，Rejoin 按钮仍是显式等价入口。
+  - EN: Mobile sessions now have search and pull-to-refresh. The SessionsSheet filters by title or cwd as you type (case-insensitive; Escape clears the filter before closing) and scrolls the current session into view when opened. Pulling down from the top of the transcript reconnects and re-fetches the snapshot; desktop and pointer devices are unaffected, and the Rejoin button remains the explicit equivalent.
 - **扩展可以贡献自己的卡片类型**：新增 `registerWidget` 能力缝——插件声明类型、字段、默认值、色调与渲染器模块，daemon 侧用同一份元数据校验 `widget` payload、生成 agent schema 与看板校验，GUI 编译模块后注册进共享 widget 注册表。内置 `metric` 与 `clock` 已迁为试点，同名类型可覆盖内置渲染器；桌面聊天与 guest/移动端看板共用同一份扩展加载器（`extensions.list.widgets` → blob import），插件卡片不再只在桌面可见；渲染器加载失败的卡片显示类型占位，不再留下空位。
   - EN: Extensions can now contribute their own card types through the new registerWidget seam. A plugin declares the type, fields, defaults, tone, and a renderer module; the daemon uses the same metadata for widget payload validation, the agent schema, and board validation, while the GUI compiles the module into the shared widget registry. The built-in metric and clock cards are the first migrated types, and a plugin type may override a built-in renderer. The desktop chat and the guest/mobile board share one extension loader (extensions.list.widgets to blob import), so plugin cards are no longer desktop-only; a card whose renderer fails to load shows a labelled placeholder instead of a blank slot.
 - **示例看板换成可直接使用的数据**：每日财经与工作台两张内建看板改为真实卡片内容（A股盯盘、汇率、K线、市场温度、今日待办、专注、劳务费个税等），移除纯演示卡与假任务记录；工作台不再叫「一块活的看板」。
