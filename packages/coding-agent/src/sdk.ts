@@ -245,6 +245,7 @@ import { isIrcEnabled } from "./tools/hub";
 import { getImageGenTools } from "./tools/image-gen";
 import { registerExtensionMediaProvider } from "./tools/image-providers";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
+import { isRegisteredToolEnabled } from "./tools/registered-tool-gate";
 import { isAutoQaEnabled } from "./tools/report-tool-issue";
 import { queueResolveHandler } from "./tools/resolve";
 import { USER_TODO_EDIT_CUSTOM_TYPE } from "./tools/todo";
@@ -3057,7 +3058,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// stay unwrapped. The extension runner exposes it to re-registered tools via createContext.
 		const nativeToolsByName = new Map<string, Tool>(toolSession.xdev?.tools ?? undefined);
 
-		const registeredTools = restrictToolNames ? [] : extensionRunner.getAllRegisteredTools();
+		const registeredTools = restrictToolNames
+			? []
+			: extensionRunner.getAllRegisteredTools().filter(tool => isRegisteredToolEnabled(tool, settings));
 		const initialRegisteredTools = new WeakSet(registeredTools);
 		const sdkCustomTools =
 			restrictToolNames && options.allowRestrictedCustomTools !== true

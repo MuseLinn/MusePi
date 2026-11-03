@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { WidgetTool } from "../src/tools/widget";
+import { WidgetTool } from "../src/bundled-plugins/visuals/tool";
 
 const tool = new WidgetTool();
 

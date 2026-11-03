@@ -37,7 +37,7 @@
 
 | 字段                  | 必填 | 契约                                                                                       |
 | --------------------- | ---- | ------------------------------------------------------------------------------------------ |
-| `type`                | ✅   | 稳定标识。daemon 侧 `WIDGET_TYPES` 与它一一对应                                            |
+| `type`                | ✅   | 稳定标识。daemon 侧 `WIDGET_TYPES`（插件包 `bundled-plugins/visuals/tool.ts`）与它一一对应 |
 | `nameKey` / `descKey` | ✅   | i18n key，**不是字面文案**。加 widget 必须同步 en-US 域文件                                |
 | `fields`              | ✅   | 数据字段声明。形状必须与 daemon 侧一致                                                     |
 | `defaults()`          | ✅   | 返回 `Record<string, unknown>`。**必须是函数**，不能是常量 —— 调用方不应拿到可变的共享对象 |
@@ -57,7 +57,7 @@
 3. `tone` 逐 type 相等
 4. `fields` 逐 type 相等
 
-**只在 `registry.ts` 加条目而不改 daemon 表，parity 测试会失败** —— 这是故意的。新增 widget 的正确顺序是：daemon `WIDGET_TYPES` 与 defaults → registry 条目 → i18n 词表 → parity 测试转绿。
+**只在 `registry.ts` 加条目而不改 daemon 表，parity 测试会失败** —— 这是故意的。新增 widget 的正确顺序是：插件包 `WIDGET_TYPES` 与 defaults → registry 条目 → i18n 词表 → parity 测试转绿。
 
 ---
 
@@ -141,6 +141,22 @@ background: color-mix(in srgb, var(--color-danger) 12%, transparent);
 ### 4.9 无外部依赖
 
 registry 组件只能用本项目的 token 与组件：**不 fetch、不引 CDN、不引 npm 包**。卡片在离线的看板快照里也要能渲染。
+
+### 4.10 沙箱页面的成品类（page kit）
+
+`widget` 的 `page` 面不是 registry 组件，而是模型写的自包含 HTML。宿主在沙箱里注入
+`packages/client-core/src/widgets/page-kit.ts` 的样式表与解析后的主题变量；模型应先用
+成品类，不要每次重写边框、表头和焦点环：
+
+- `.musepi-table`（宽表横向滚动）、`.musepi-num`、`.musepi-badge[data-tone]`、
+  `.musepi-dot`、`.musepi-bar`（`--value`/`--color`）、`.musepi-steps`
+- 表单：`.musepi-form` / `.musepi-field` / `.musepi-input` / `.musepi-switch` /
+  `.musepi-segmented`
+- 选择：`.musepi-options` / `.musepi-option` / `.musepi-button`
+
+字号用 rem/em：沙箱根字号取自对话正文（`--page-rem`），跟随界面字号设置；
+`html`/`body` 不要用 `100vh`/`height:100%`，宿主按内容撑高。类名清单与样式表
+同文件（`PAGE_KIT_CLASSES` / `PAGE_KIT_CSS`），改一处必须改另一处。
 
 ---
 

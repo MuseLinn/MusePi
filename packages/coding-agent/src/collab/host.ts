@@ -23,6 +23,7 @@ import type {
 	ToolApprovalRequest,
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
+import { WIDGET_TYPES } from "../bundled-plugins/visuals/tool.js";
 import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
 import {
 	computeNextRun,
@@ -48,7 +49,6 @@ import { stripImagesFromMessage, USER_INTERRUPT_LABEL } from "../session/message
 import type { SessionEntry as StoredSessionEntry } from "../session/session-entries";
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
 import { parseConfiguredThinkingLevel } from "../thinking.js";
-import { WIDGET_TYPES } from "../tools/widget.js";
 import { generateRoomKey, generateWriteToken, importRoomKey } from "./crypto";
 import { collabDisplayName } from "./display-name";
 import {

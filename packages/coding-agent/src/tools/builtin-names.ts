@@ -24,7 +24,6 @@ export const BUILTIN_TOOL_NAMES = [
 	"web_search",
 	"write",
 	"board",
-	"widget",
 	"memory_edit",
 	"retain",
 	"recall",
@@ -34,6 +33,19 @@ export const BUILTIN_TOOL_NAMES = [
 ] as const;
 
 export type BuiltinToolName = (typeof BUILTIN_TOOL_NAMES)[number];
+
+/**
+ * First-party tools that ship in bundled plugins rather than the built-in
+ * factory table, but stay part of the built-in vocabulary: shell completion,
+ * advisor config validation and docs coverage must still know their names.
+ *
+ * `widget` moved to the `musepi-visuals` plugin (registered and gated there);
+ * it is deliberately NOT a key of `BUILTIN_TOOLS`.
+ */
+export const PLUGIN_TOOL_NAMES = ["widget"] as const;
+
+/** Every tool name a user may name in `--tools`, an advisor config or a preset. */
+export const KNOWN_BUILTIN_TOOL_NAMES = [...BUILTIN_TOOL_NAMES, ...PLUGIN_TOOL_NAMES] as const;
 
 export const HIDDEN_TOOL_NAMES = ["yield", "goal", "think"] as const;
 

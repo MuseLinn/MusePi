@@ -9,9 +9,9 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
+import { WIDGET_TONES, WIDGET_TYPES } from "../bundled-plugins/visuals/tool";
 import { readBoards, validateBoards, writeBoards } from "../daemon/boards";
 import boardDescription from "../prompts/tools/board.md" with { type: "text" };
-import { WIDGET_TONES, WIDGET_TYPES } from "./widget";
 
 const boardSchema = type({
 	action: type("string").describe("list | get | save | schema"),

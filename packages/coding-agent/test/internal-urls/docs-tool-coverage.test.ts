@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { BUILTIN_TOOL_NAMES } from "@musepi/pi-coding-agent/tools/builtin-names";
+import { KNOWN_BUILTIN_TOOL_NAMES } from "@musepi/pi-coding-agent/tools/builtin-names";
 
 // Every shipped built-in tool that is exposed to the model in normal sessions
 // must have a docs/tools/<name>.md root doc served by `omp://`. File names use
@@ -20,7 +20,7 @@ const expectedDocPaths = (name: string): string[] => [
 const CUSTOM_TOOL_NAMES = ["generate_image", "tts"] as const;
 
 describe("omp:// root docs coverage", () => {
-	it.each([...BUILTIN_TOOL_NAMES])("documents builtin tool %s", name => {
+	it.each([...KNOWN_BUILTIN_TOOL_NAMES])("documents builtin tool %s", name => {
 		const candidates = expectedDocPaths(name);
 		const present = candidates.find(candidate => fs.existsSync(candidate));
 		expect(

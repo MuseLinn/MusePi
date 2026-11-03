@@ -1,0 +1,14 @@
+{
+	"name": "musepi-visuals",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Inline interactive cards and self-contained pages in the transcript.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "▤",
+		"label": "Visual Cards and Pages",
+		"description": "Draw live cards (calculator, quotes, metrics, charts) and self-contained HTML pages with the app's own look; pages can hand a choice back to the conversation.",
+		"extensions": ["./index.ts"]
+	}
+}

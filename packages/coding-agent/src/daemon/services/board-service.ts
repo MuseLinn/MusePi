@@ -43,7 +43,7 @@ export class BoardService implements DaemonService {
 	async save(params: { boards?: unknown }): Promise<{ ok: true; boards: unknown[] }> {
 		const { boards } = params ?? {};
 		const { readBoards, validateBoards, writeBoards } = await import("../boards");
-		const { WIDGET_TYPES } = await import("../../tools/widget");
+		const { WIDGET_TYPES } = await import("../../bundled-plugins/visuals/tool");
 		const check = validateBoards(boards, WIDGET_TYPES);
 		if (!check.ok) throw new Error(`board.save: ${check.error}`);
 		const list = boards as Array<{ id?: string; builtin?: boolean }>;
@@ -60,8 +60,8 @@ export class BoardService implements DaemonService {
 	/** RPC widget.schema：agent 侧 widget schema（widget 工具 parity）——
 	 *  types、fields、defaults 与卡片 tones，agent 写看板挂件无需硬编码形状。 */
 	async schema(): Promise<{ types: unknown; tones: unknown }> {
-		const { WIDGET_TYPES } = await import("../../tools/widget");
-		const { WIDGET_TONES } = await import("../../tools/widget");
+		const { WIDGET_TYPES } = await import("../../bundled-plugins/visuals/tool");
+		const { WIDGET_TONES } = await import("../../bundled-plugins/visuals/tool");
 		return { types: WIDGET_TYPES, tones: WIDGET_TONES };
 	}
 

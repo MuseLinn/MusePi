@@ -15,7 +15,7 @@
  * knob and is keyed by flag name so it stays stable as flags are added.
  */
 import type { ArgDescriptor, CliConfig, CommandMetadata, FlagDescriptor } from "@musepi/pi-utils/cli";
-import { BUILTIN_TOOL_NAMES } from "../tools/builtin-names";
+import { KNOWN_BUILTIN_TOOL_NAMES } from "../tools/builtin-names";
 
 export type Shell = "bash" | "zsh" | "fish";
 
@@ -77,7 +77,7 @@ function flagValue(name: string, desc: FlagDescriptor): ValueSource {
 	if (MODEL_FLAGS[name]) return { kind: "models", multiple: false };
 	if (name === "models") return { kind: "models", multiple: true };
 	if (SESSION_FLAGS[name]) return { kind: "sessions" };
-	if (name === "tools") return { kind: "list", values: BUILTIN_TOOL_NAMES };
+	if (name === "tools") return { kind: "list", values: KNOWN_BUILTIN_TOOL_NAMES };
 	if (DIR_FLAGS[name]) return { kind: "dir" };
 	if (desc.kind === "integer") return { kind: "value" };
 	return { kind: "file" };

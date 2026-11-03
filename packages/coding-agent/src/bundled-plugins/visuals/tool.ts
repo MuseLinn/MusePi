@@ -5,12 +5,16 @@
  * into `data`, and returns a details payload the GUI's tool-render
  * pipeline renders as a living card. Text stays in the response; the
  * visual goes in the widget.
+ *
+ * Owned by the `musepi-visuals` built-in plugin. `WIDGET_TYPES` / `WIDGET_TONES`
+ * are the one type table the board validator and the `widget.schema` RPC read;
+ * the prompt and the HTML-page kit live beside this file in the plugin package.
  */
 import { type } from "@musepi/musepi-type";
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
-import widgetDescription from "../prompts/tools/widget.md" with { type: "text" };
+import widgetDescription from "./prompt.md" with { type: "text" };
 
 // The widget registry lives in guest-client (shared with the GUI board);
 // the daemon keeps the type/field table in sync here for schema-driven
@@ -317,7 +321,9 @@ const widgetSchema = type({
 	"type?": type("string").describe(`Widget type (action=card): ${Object.keys(WIDGET_TYPES).join(" / ")}`),
 	"data?": type("object").describe("Widget data fields per type (defaults fill the rest)"),
 	"title?": type("string").describe("Optional card title (defaults to the widget name)"),
-	"html?": type("string").describe("The page's HTML, complete document with inline CSS (action=page)"),
+	"html?": type("string").describe(
+		'The page\'s HTML, complete document with inline CSS (action=page). Ready classes in the app\'s look: .musepi-box, .musepi-muted, .musepi-table (around a <table>; scrolls sideways), .musepi-num, .musepi-badge[data-tone="success|warning|danger|info"], .musepi-dot, .musepi-bar (style="--value:62%;--color:var(--chart-2)"), .musepi-steps (an <ol>), .musepi-form/.musepi-field/.musepi-input/.musepi-switch/.musepi-segmented, .musepi-options/.musepi-option/.musepi-button (data-variant="outline"|"danger"). Theme vars: --bg, --bg-raised, --fg, --fg-muted, --border, --accent, --accent-fg, --color-success/warning/danger/info, --chart-1..5, --radius-*, --font-sans/mono. Size text in rem/em; never 100vh or height:100% on html/body; give a wide table .musepi-table and charts a fixed pixel height',
+	),
 });
 
 export interface WidgetToolDetails {
@@ -338,6 +344,11 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 	readonly label = "Widget";
 	readonly strict = true;
 	readonly approval = "read" as const;
+	/** Session gate: the presentation switch must keep working now that the
+	 *  tool ships as a builtin plugin — extension tools are otherwise always
+	 *  in the slate. */
+	readonly enabled = ({ settings }: { settings: { get(key: string): unknown } }): boolean =>
+		settings.get("widget.enabled") !== false;
 	readonly description = widgetDescription;
 	readonly parameters = widgetSchema;
 	readonly examples: readonly ToolExample<typeof widgetSchema.infer>[] = [
@@ -364,7 +375,7 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 		params: typeof widgetSchema.infer,
 		_signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<WidgetToolDetails>,
-		_context?: AgentToolContext,
+		_context?: unknown,
 	): Promise<AgentToolResult<WidgetToolDetails>> {
 		const action = params.action === "page" ? "page" : "card";
 

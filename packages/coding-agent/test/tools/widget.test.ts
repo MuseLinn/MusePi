@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
-import { WidgetTool } from "../../src/tools/widget";
+import { WidgetTool } from "../../src/bundled-plugins/visuals/tool";
 
 describe("widget tool", () => {
 	test("renders a calc widget with merged defaults", async () => {

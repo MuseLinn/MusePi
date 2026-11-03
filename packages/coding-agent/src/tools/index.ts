@@ -68,7 +68,6 @@ import type { PlanProposalHandler } from "./resolve";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
 import { type TodoPhase, TodoTool } from "./todo";
-import { WidgetTool } from "./widget";
 import { WriteTool } from "./write";
 import { isMountableUnderXdev, type XdevState } from "./xdev";
 import { YieldTool } from "./yield";
@@ -452,7 +451,6 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	knowledge: s => new KnowledgeTool(s),
 	web_search: s => new WebSearchTool(s),
 	board: () => new BoardTool(),
-	widget: () => new WidgetTool(),
 	write: s => new WriteTool(s),
 	memory_edit: MemoryEditTool.createIf,
 	retain: MemoryRetainTool.createIf,
@@ -631,10 +629,10 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		// Project knowledge (notes / todos / plans). The panel's three sections
 		// share this store, so the tool is gated like any other data tool.
 		if (name === "knowledge") return session.settings.get("knowledge.enabled");
-		// Presentation tools (`widget` draws a live card in the transcript,
-		// `board` writes the desktop board). Both used to be registered
-		// unconditionally — there was no way to turn them off.
-		if (name === "widget") return session.settings.get("widget.enabled");
+		// Presentation tool (`board` writes the desktop board). It used to be
+		// registered unconditionally — there was no way to turn it off.
+		// (`widget` moved to the bundled `musepi-visuals` plugin; its switch is
+		// the `enabled` gate on that tool definition.)
 		if (name === "board") return session.settings.get("board.enabled");
 		if (name === "glob") return session.settings.get("glob.enabled");
 		if (name === "grep") return session.settings.get("grep.enabled");
@@ -746,7 +744,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	// `write` to xd://resolve/reject, so retain write whenever one can stage.
 	// xd:// mounting itself never registers write: sessions without a granted
 	// write tool skip mounting entirely (see xdevEnabled above).
-	const xdevMounted = (session.xdev?.mountedNames.size ?? 0) > 0;
+	const xdevMounted = xdevEnabled && (session.xdev?.mountedNames.size ?? 0) > 0;
 	if (
 		!restrictToolNames &&
 		tools.some(tool => tool.deferrable === true) &&

@@ -690,6 +690,21 @@ export interface ToolSessionEvent {
 }
 
 /**
+ * Settings surface a registered tool may consult.
+ *
+ * Deliberately narrow: a tool decides whether it belongs in a session, not how
+ * settings work. The real `Settings` object satisfies it structurally.
+ */
+export interface ToolEnablementSettings {
+	get(key: string): unknown;
+}
+
+/** What a tool's {@link ToolDefinition.enabled} gate receives. */
+export interface ToolEnablementContext {
+	settings: ToolEnablementSettings;
+}
+
+/**
  * Tool definition for registerTool().
  */
 export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = unknown> {
@@ -710,6 +725,13 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	loadMode?: ToolLoadMode;
 	/** If true, tool may stage deferred changes that require explicit resolve/discard. */
 	deferrable?: boolean;
+	/**
+	 * Session gate, consulted where a session assembles its registered tools.
+	 * Return `false` to leave this tool out of that session's slate entirely —
+	 * a plugin that ships an on/off switch keeps honouring it now that its tool
+	 * is an extension registration rather than a built-in factory.
+	 */
+	enabled?(context: ToolEnablementContext): boolean;
 	/** Tool approval tier. Defaults to `"exec"` when omitted.
 	 *  `"read"`: read-only operations. `"write"`: mutations. `"exec"`: code execution. */
 	approval?: ToolApproval;

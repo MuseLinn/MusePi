@@ -89,9 +89,29 @@ blueprint 组件一样可用的要点：
 
 配色用宿主注入的变量，不要自己挑颜色：`var(--bg)`、`var(--bg-raised)`、
 `var(--fg)`、`var(--fg-muted)`、`var(--fg-faint)`、`var(--border)`、
-`var(--border-strong)`、`var(--accent)`、`var(--radius-sm|md|lg)`。
+`var(--border-strong)`、`var(--accent)`、`var(--accent-fg)`、
+`var(--color-success|warning|danger|info)`、`var(--chart-1|…|5)`、
+`var(--radius-sm|md|lg)`。
 沙箱是 null origin，读不到应用的 CSS 变量，这些值是宿主解析后注入的，
 深浅主题各一套、会跟着宿主实时切换。
+
+### 成品类（先用，别自己重写）
+
+- `.musepi-box` — 面板；嵌套一层自动降一个色调
+- `.musepi-muted` — 次要文字
+- `.musepi-table` — 包住 `<table>` 的 div；宽了横向滚动
+- `.musepi-num` — 数字等宽、右对齐（表格里的金额/数量）
+- `.musepi-badge` — 状态胶囊，`data-tone="success|warning|danger|info"`
+- `.musepi-dot` — 图例圆点，颜色取 `--color`
+- `.musepi-bar` — 横条，长度取 `--value`（百分比），颜色取 `--color`
+- `.musepi-steps` — 包 `<ol>`，自动编号步骤
+- `.musepi-form` / `.musepi-field` / `.musepi-input` / `.musepi-switch` /
+  `.musepi-segmented`（分段选择/标签页，选中的按钮 `aria-pressed="true"`）
+- `.musepi-options` / `.musepi-option` / `.musepi-option-sub` — 选项卡网格
+- `.musepi-button` — 主操作；`data-variant="outline|danger"` 变次要/危险
+
+图表用内联 SVG，系列色取 `--chart-1`…`--chart-5`。字号用 rem/em（根字号
+跟随界面字号设置）；`html`/`body` 不要用 `100vh`/`height:100%`。
 
 ```
 <div class="musepi-options" data-columns="2">

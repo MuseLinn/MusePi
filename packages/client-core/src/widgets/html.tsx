@@ -15,6 +15,7 @@ import {
 	resolveAnnotationOverlayTheme,
 } from "../annotation/index.js";
 import { t } from "../i18n/index.js";
+import { PAGE_KIT_CSS } from "./page-kit.js";
 
 /**
  * Custom HTML widget face (kimi blueprint-widget parity) — the agent
@@ -40,12 +41,13 @@ import { t } from "../i18n/index.js";
  *   light/dark toggle (widget.md's 铁律: faces must adapt, never ship a
  *   single fixed palette that loses contrast on the other scheme).
  *
- * - **Injected component kit**: `.musepi-options` / `.musepi-option` /
- *   `.musepi-button` plus the host's own `--bg` / `--fg` / `--accent` /
- *   `--border` / `--radius-*` values, so a "pick one" face does not have
- *   to hand-write a component or invent a palette. The sandbox is a null
- *   origin, so these are resolved host-side and shipped in; a face that
- *   uses `var(--bg)` without them gets nothing.
+ * - **Injected page kit**: the shared `.musepi-*` stylesheet in `page-kit.ts`
+ *   (boxes, tables, badges, bars, steps, form controls, option cards and
+ *   buttons) plus the host's own `--bg` / `--fg` / `--accent` / `--border` /
+ *   `--radius-*` / `--chart-*` values, so a face does not have to hand-write a
+ *   component or invent a palette. The sandbox is a null origin, so these are
+ *   resolved host-side and shipped in; a face that uses `var(--bg)` without
+ *   them gets nothing.
  * - **Answer channel**: the face hands a choice back to the conversation
  *   with `musepiSubmit(text, data)` - the host turns it into a user
  *   prompt, the same path every other interactive widget uses.
@@ -113,8 +115,15 @@ const FACE_TOKENS = [
 	"--border",
 	"--border-strong",
 	"--accent",
+	"--accent-fg",
+	"--accent-hover",
+	"--accent-bd",
 	"--color-success",
+	"--color-warning",
+	"--color-info",
 	"--color-danger",
+	"--font-sans",
+	"--font-mono",
 	"--radius-sm",
 	"--radius-md",
 	"--radius-lg",
@@ -153,6 +162,11 @@ export function readFaceTokens(): Record<string, string> {
 		const value = computed.getPropertyValue(name).trim();
 		if (value) resolved[name] = value;
 	}
+	// The sandbox root font size is the chat's body text size, so a page sized
+	// in rem/em follows the user's interface size setting instead of freezing
+	// at whatever px the model wrote.
+	const bodyFont = getComputedStyle(document.body).fontSize;
+	if (bodyFont) resolved["--page-rem"] = bodyFont;
 	// The face's own canvas is what text is read against; `--bg-raised` is the
 	// surface a face typically paints a panel on.
 	const surface = resolved["--bg-raised"] ?? resolved["--bg"] ?? "";
@@ -370,36 +384,13 @@ export function HtmlCard({
 			// Native form controls / scrollbars follow the injected scheme.
 			`html.musepi-theme-dark,html.omp-theme-dark{color-scheme:dark}` +
 			`html.musepi-theme-light,html.omp-theme-light{color-scheme:light}` +
-			// Readability floor for faces that don't set their own type —
-			// 14px base + relaxed line-height + a theme-matching text color
-			// (the #1 cause of "字体看不清" is model HTML with no color:
-			// the iframe default black vanishes on the dark scheme).
+			// Readability floor for faces that don't set their own type — a
+			// theme-matching text color (the #1 cause of "字体看不清" is model HTML
+			// with no color: the iframe default black vanishes on the dark scheme).
 			`html.musepi-theme-dark body,html.omp-theme-dark body{color:#e8e8ea}` +
 			`html.musepi-theme-light body,html.omp-theme-light body{color:#1f2328}` +
-			`html.musepi-theme-dark body,html.musepi-theme-light body{font-size:14px;line-height:1.6}` +
-			// Option cards and a primary button, so a "pick one" face does not have
-			// to hand-write a whole component. Values come from the injected
-			// --bg/--fg/--accent vars, which the host resolves for this scheme.
-			`.musepi-options{display:grid;gap:10px;grid-template-columns:1fr}` +
-			`@media (min-width:560px){.musepi-options[data-columns="2"]{grid-template-columns:1fr 1fr}}` +
-			`.musepi-option{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;` +
-			`padding:11px 13px;border-radius:calc(var(--radius-lg,10px) * 1.2);cursor:pointer;` +
-			`font:inherit;color:inherit;` +
-			`background:var(--bg-raised);border:1px solid var(--border);}` +
-			`.musepi-option:hover{border-color:var(--border-strong)}` +
-			`.musepi-option[aria-pressed="true"]{border-color:var(--accent);` +
-			`box-shadow:inset 0 0 0 1px var(--accent)}` +
-			`.musepi-option-sub{color:var(--fg-muted);font-size:12.5px;line-height:1.5}` +
-			`.musepi-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;` +
-			`padding:7px 14px;border-radius:var(--radius-md,6px);cursor:pointer;font:inherit;` +
-			`background:var(--accent);border:0}` +
-			// Answered: the host sent musepi-widget-answered, so this card already
-			// reached the conversation. Dim and stop taking clicks even if the face
-			// ignores the event — a second answer would be a duplicate user message.
-			`html[data-musepi-answered] .musepi-option,` +
-			`html[data-musepi-answered] .musepi-button,` +
-			`html[data-musepi-answered] button,` +
-			`html[data-musepi-answered] [role="button"]{opacity:.5;pointer-events:none;cursor:default}` +
+			// The shared kit: base type, ready classes, readable controls.
+			PAGE_KIT_CSS +
 			`</style>`;
 		const tokens = readFaceTokens();
 		const boot = bootScript(canvasId ?? "", mountId ?? "", theme, tokens);

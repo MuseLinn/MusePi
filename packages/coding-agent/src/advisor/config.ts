@@ -4,7 +4,7 @@ import { type } from "@musepi/musepi-type";
 import { isEnoent, logger } from "@musepi/pi-utils";
 import { YAML } from "bun";
 import { expandAtImports } from "../discovery/at-imports";
-import { BUILTIN_TOOL_NAMES, normalizeToolNames } from "../tools/builtin-names";
+import { KNOWN_BUILTIN_TOOL_NAMES, normalizeToolNames } from "../tools/builtin-names";
 import { collectConfigCandidates } from "./watchdog";
 
 /**
@@ -105,7 +105,7 @@ export function getOrCreateAdvisorProviderSessionId(
 }
 
 /** Built tool names, for validating an advisor's `tools` list. */
-const KNOWN_TOOL_NAMES = new Set<string>(BUILTIN_TOOL_NAMES);
+const KNOWN_TOOL_NAMES = new Set<string>(KNOWN_BUILTIN_TOOL_NAMES);
 
 /**
  * Keep only valid tool names from an advisor's `tools` list, dropping unknowns
