@@ -1,5 +1,5 @@
 import "./happy-dom-shim";
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import type { DisplayContext } from "@musepi/pi-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -33,6 +33,10 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 	throw new Error("condition did not become true");
 }
+
+beforeEach(() => {
+	Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+});
 
 afterEach(async () => {
 	for (const root of mounted) await act(async () => root.unmount());

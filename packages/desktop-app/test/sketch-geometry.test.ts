@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import {
 	acceptsShapeDrag,
 	caretWrapWidth,
@@ -375,15 +375,19 @@ describe("textAutoBox / textFontSize", () => {
 		expect(viaFallback.w).toBe(viaStub.w);
 	});
 
-	it("falls back to the estimate without a DOM, and never throws", () => {
-		// `measureTextWidth` is canvas-backed, so under a test runner (no
-		// `document`) it must degrade rather than crash — the board is also
-		// imported by unit tests.
-		const w = measureTextWidth("哈哈哈哈哈哈", 24);
-		expect(Number.isFinite(w)).toBe(true);
-		expect(w).toBeGreaterThan(0);
-		// The estimate stays the ASCII-correct 0.62 factor.
-		expect(measureTextWidth("hello", 16)).toBeCloseTo(5 * 16 * 0.62, 5);
+	it("falls back to the estimate without canvas, and never throws", () => {
+		// `measureTextWidth` is canvas-backed, so without a usable 2D context it
+		// must degrade rather than crash — the board is also imported by unit tests.
+		const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+		try {
+			const w = measureTextWidth("哈哈哈哈哈哈", 24);
+			expect(Number.isFinite(w)).toBe(true);
+			expect(w).toBeGreaterThan(0);
+			// The estimate stays the ASCII-correct 0.62 factor.
+			expect(measureTextWidth("hello", 16)).toBeCloseTo(5 * 16 * 0.62, 5);
+		} finally {
+			getContext.mockRestore();
+		}
 	});
 });
 

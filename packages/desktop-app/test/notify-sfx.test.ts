@@ -1,5 +1,6 @@
 import "./dom-shim";
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { defineGlobal } from "./define-global";
 
 // dom-shim has no localStorage — provide a minimal Map-backed one so the
@@ -9,6 +10,12 @@ defineGlobal("localStorage", {
 	getItem: (k: string) => store.get(k) ?? null,
 	setItem: (k: string, v: string) => void store.set(k, v),
 	removeItem: (k: string) => void store.delete(k),
+	clear: () => store.clear(),
+});
+
+afterAll(async () => {
+	if (GlobalRegistrator.isRegistered) await GlobalRegistrator.unregister();
+	await GlobalRegistrator.register();
 });
 
 import {

@@ -6,7 +6,7 @@ const originalElectronAPI = window.electronAPI;
 
 afterEach(() => {
 	for (const tab of getHostState().tabs) closeTab(tab.id, { notifyMain: false });
-	Object.defineProperty(window, "electronAPI", { configurable: true, value: originalElectronAPI });
+	Object.defineProperty(window, "electronAPI", { configurable: true, writable: true, value: originalElectronAPI });
 	vi.restoreAllMocks();
 });
 
@@ -28,6 +28,7 @@ describe("managed browser tab state", () => {
 		const gone = vi.fn().mockResolvedValue(undefined);
 		Object.defineProperty(window, "electronAPI", {
 			configurable: true,
+			writable: true,
 			value: { managedBrowserGuestGone: gone, managedBrowserGuestReady: vi.fn().mockResolvedValue(undefined) },
 		});
 		open("browser-last");

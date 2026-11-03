@@ -9,7 +9,11 @@
  * contract this file holds).
  */
 import "./happy-dom-shim"; // MUST be first: installs the DOM globals.
-import { describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
+
+beforeEach(() => {
+	Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+});
 
 function headingSlug(text: string): string {
 	return text

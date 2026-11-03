@@ -5,7 +5,7 @@
  * 被钉死的契约:页内取消不截图;半合法 payload 被丢弃并拆 overlay;捕获
  * 失败/为空时标注本身必须幸存(截图降级为 null,绝不丢标注)。
  */
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, vi } from "bun:test";
 import type { AnnotationOverlayLabels, AnnotationOverlayTheme } from "@musepi/client-core/src/annotation/overlay";
 import {
 	type AnnotationHost,
@@ -116,15 +116,23 @@ describe("annotation session", () => {
 		expect(calls.some(call => call.code.includes("data-musepi-annotation"))).toBe(true);
 	});
 
-	test("合法 payload 全字段往返(截图在无 DOM 环境降级为 null)", async () => {
-		const { host } = createHost({ overlayResult: validPayload });
-		const result = await runAnnotationSession({ host, theme, labels });
-		expect(result?.payload.id).toBe("annotation-1");
-		expect(result?.payload.comment).toBe("收紧这里");
-		expect(result?.payload.elements).toHaveLength(1);
-		expect(result?.payload.regions).toHaveLength(1);
-		expect(result?.payload.strokes).toHaveLength(1);
-		expect(result?.screenshot).toBeNull();
+	test("合法 payload 全字段往返(截图在无 Canvas 环境降级为 null)", async () => {
+		const getContext =
+			typeof HTMLCanvasElement === "undefined"
+				? null
+				: vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+		try {
+			const { host } = createHost({ overlayResult: validPayload });
+			const result = await runAnnotationSession({ host, theme, labels });
+			expect(result?.payload.id).toBe("annotation-1");
+			expect(result?.payload.comment).toBe("收紧这里");
+			expect(result?.payload.elements).toHaveLength(1);
+			expect(result?.payload.regions).toHaveLength(1);
+			expect(result?.payload.strokes).toHaveLength(1);
+			expect(result?.screenshot).toBeNull();
+		} finally {
+			getContext?.mockRestore();
+		}
 	});
 
 	test("捕获抛错时标注幸存,截图为 null", async () => {

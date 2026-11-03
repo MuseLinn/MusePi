@@ -1,5 +1,5 @@
 import "./happy-dom-shim";
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type TranslationKey, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -13,6 +13,10 @@ async function flush(frames = 5): Promise<void> {
 		for (let index = 0; index < frames; index++) await Bun.sleep(5);
 	});
 }
+
+beforeEach(() => {
+	Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+});
 
 afterEach(async () => {
 	for (const root of mounted) await act(async () => root.unmount());
