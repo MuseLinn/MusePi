@@ -705,6 +705,8 @@ const hostModules = {
 | `action-toast` | `lib/action-toast.ts` | toast 列表与订阅者 |
 | `file-workspace` | `lib/file-workspace.ts` | 文件预览缓冲区 |
 | `floating-menu` | `lib/use-floating-menu.tsx` | 模块级菜单 mutex |
+| `update-ux` | `lib/update-ux.ts` | 更新提示/对话框共享的标志位与订阅者集合 |
+| `tooltips` | `lib/tooltips.ts` | 提示气泡元素、计时器与 hover/focus 状态 |
 | `client-core` | `@musepi/client-core`（裸包） | 整个 client-core 命名空间：其中的 React context 与模块级状态 |
 | `i18n` | `@musepi/client-core/src/i18n`（裸包） | `t` / `setLocale` 共用的 locale 注册表 |
 
@@ -713,6 +715,8 @@ const hostModules = {
 `client-core` 与 `i18n` 是裸包条目而非路径条目。模块身份——React context、模块级状态、`client-core` 命名空间本身——经 `MusePiHostModules` 共享；翻译则走宿主 locale 服务：`@musepi/client-core/src/i18n` 与 `@musepi/client-core` 指向同一个模块实例，因此插件里 `setLocale("zh-CN")` 会改变宿主 `t` 的返回值。
 
 不要给深层 helper 加条目：`@musepi/client-core/src/lib/<helper>` 这类子路径不承载身份，继续打包。裸包按精确匹配，import 必须与表中写的一致——`@musepi/client-core/src/i18n/index.js` 是另一条请求，不会命中，并会打包出第二份 locale 注册表。
+
+client-core 包内以 `../i18n/index.js` 等相对形式引用 i18n 时，同样归到同一个宿主 `i18n` 服务，因为这里的身份由 importer 的位置决定；非 client-core 的 importer 不受影响，其 `../i18n` 仍是自己的副本。
 
 ### 新增共享模块
 
@@ -726,3 +730,45 @@ const hostModules = {
 每个条目都是宿主 ABI：删除或改名会让已编译的 bundle 在导入时抛错，而不是退回副本。
 
 **回归锚点**：`packages/collab-proto/test/extension-host-modules.test.ts`、`packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`、`packages/desktop-app/test/host-modules.test.ts`。
+
+## 20. 提示词区块：注册表、composer 与来源生命周期（2026-11-03）
+
+`PromptComposer` 现在委托给具名注册表。既有调用方继续使用 `add`、`removeBySource`、`clear`、`size` 与 `compose`；新代码可直接使用注册表：
+
+```ts
+import { PromptComposer, PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/composer";
+import { PromptRegistry, PromptRegistryError } from "@musepi/pi-coding-agent/prompts/registry";
+import { resolvePromptOrder } from "@musepi/pi-coding-agent/prompts/orders";
+```
+
+扩展继续使用 `pi.registerPrompt({ name, order, text })`。composer 为每份贡献记录来源：`registerPrompt` 为 `ext:<扩展 id>`，预设的 `prompt` 为 `mode:<预设 id>`，设置 `prompt.sections` 为 `user`，会话每次重建时解析的宿主区块为 `design-system`、`asset-policy` 与 `ext:inventory`。
+
+### 函数文本
+
+`text` 在 `registry.registerSection` 与兼容入口 `composer.add` / `pi.registerPrompt` 中接受 `string | ((context) => string | null | undefined)`。函数在组装时求值，而不是注册时求值，因此每次重建都能读到当前闭包状态。返回 `null` 或 `undefined` 会在本次组装中省略该区块；空字符串仍作为真实区块输出。函数收到组装上下文与 `variable(name)`。会话当前以不带额外键的 `compose(base)` 与 `composeComplete()` 调用，扩展函数文本应读取闭包状态或已注册变量，不要假定宿主字段可用。
+
+### 严格变量需显式 opt-in
+
+先用 `registry.registerVariable(name, resolver)` 注册变量，再在区块文本里写 `{{name}}`。名称匹配 `[A-Za-z0-9_.-]`；每个变量在单次组装中最多解析一次，值会转成字符串。后注册的 resolver 遮蔽先注册者，dispose 后者后恢复前者。在参与插值的区块上，未知占位符或 resolver 返回 `null`/`undefined` 都会抛 `PromptRegistryError`（`unknown prompt variable` / `unresolved prompt variable`），绝不会渲染成空文本。区块文本可调用 `context.variable(name)` 走同一套严格查找。组装上下文的键不会隐式成为变量：未注册的 `{{settingsKey}}` 仍是未知变量。变量不按 source 归属——`removeBySource` 只移除区块；请使用变量自己的 disposer 或 `clear()`。
+
+### 旧有字符串区块
+
+既有字符串区块不是 Handlebars 模板，也不会用会话 context 渲染，仍是字面量文本。旧入口（`composer.add` 与 `pi.registerPrompt`）不做任何插值：即使注册了同名变量，`{{name}}` 也逐字保留。严格 `{{name}}` 插值只适用于通过 `registry.registerSection` 显式注册的区块，或注册表函数文本中的显式查找；在那些路径里，正文若含 `{{...}}` 就必须注册对应名称，否则组装抛错。`composer.add` 不返回 disposer，并沿用旧 Map 语义：同名后一次 `add` 直接替换较早的层，因此移除替换者的 source 不会恢复旧区块。需要遮蔽堆叠、恢复旧层或显式释放的新代码应调用 `registry.registerSection`。
+
+### 顺序、遮蔽与 complete
+
+中央锚点为 `core: 0`、`injection: 25`、`safety: 100`、`project: 200`、`repoContext: 300`；数字 order 继续有效，`resolvePromptOrder` 拒绝未知名称和非有限数字。区块按解析后的 order、再按 name 排序。通过注册表同名后注册者遮蔽先注册者；dispose 后注册者会恢复前一份。最多一个可见区块可设 `complete: true`，它替换整个提示词（`compose` 与 `composeComplete` 都只返回它）。第二个可见 complete 在注册时被拒绝；之后才出现的冲突（例如 dispose 遮蔽层）会被原子拒绝：disposer 或 `removeBySource` 抛错，所有层保持不变，`revision` 不递增。被拒绝的 disposer 不会被消耗，冲突解除后可重试。
+
+### 来源卸载与生命周期
+
+`registerSection` 与 `registerVariable` 返回幂等 disposer。`removeBySource(source)` 删除所有 source 匹配的区块层，只有确实删除时才递增 `revision`；其他 source 的层保持原位。`clear()` 清空全部区块与变量。`revision` 是结构变更的单调计数，`assemble` 期间不变，调用方可在显式刷新前后比较。`size` 统计区块名称而非遮蔽层。空注册表组装为 `{ revision: 0, sections: [], complete: null }`，`compose(base)` 原样返回 `base`——这是兼容性锚点。
+
+扩展 load/reload 按来源重新同步：先移除旧一代，再加入替换实例的区块，提示词不会混合两代内容。忙会话把 reload 推迟到下一个空闲 `agent_end`。mode 热切换使用同一条按来源卸载路径，`design-system` / `asset-policy` 区块每次重建都会重新解析。
+
+### 仅提示词刷新
+
+每次提示词重建都会重新求值函数文本、重新解析变量，并重新运行宿主区块 resolver，再调用 `compose(base)`（`promptComplete` 预设走 `composeComplete`）。`AgentSession.setDesignSystemId` 是仅提示词的实时路径：写入 metadata 键并调用 `refreshBaseSystemPrompt()`，不改变活动工具集，新简报在下一次模型调用生效。扩展 load/reload 会立即重挂 composer 来源，然后调用 `refreshBaseSystemPrompt()`，因此仅提示词扩展（没有工具）无需等待下一次重建即可进入活动会话；忙会话在延迟的 load/reload 排空时执行同样的刷新。composer revision 已计入重建签名，工具集不变时仅区块变化也不会被跳过。同一次 load/reload 产生的工具变更仍走常规工具注册表路径，两条路径都不需要重启会话。
+
+这是组合，不是迁移。核心 Handlebars 模板和易变 context 仍留在 `buildSystemPrompt`：日期、仓库/工作区树、AGENTS 等 context 文件、skills/rules、工具清单、MCP 服务器说明、记忆以及 persona/预设数据都不是注册表变量。注册表也不拥有缓存策略或 diff 式运行时消息。
+
+**回归锚点**：`packages/coding-agent/test/prompts-registry.test.ts`、`packages/coding-agent/test/prompts-composer.test.ts`、`packages/coding-agent/src/prompts/{orders,registry,composer}.ts`。

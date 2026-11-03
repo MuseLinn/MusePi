@@ -42,6 +42,13 @@ describe("host module table", () => {
 		expect(typeof hostModule("file-workspace")?.filePreviewBuffers).toBe("object");
 	});
 
+	it("shares the update UX store and tooltip runtime", () => {
+		expect(hostWindow().MusePiHostModules).toHaveProperty("update-ux");
+		expect(hostWindow().MusePiHostModules).toHaveProperty("tooltips");
+		expect(typeof hostModule("update-ux")?.subscribeUpdateUx).toBe("function");
+		expect(typeof hostModule("tooltips")?.initTooltips).toBe("function");
+	});
+
 	it("keeps the pre-table globals as aliases of the same objects", () => {
 		expect(hostWindow().MusePiPromptDialog).toBe(hostModule("prompt-dialog"));
 		expect(hostWindow().MusePiManagedBrowserHost).toBe(hostModule("managed-browser-host"));

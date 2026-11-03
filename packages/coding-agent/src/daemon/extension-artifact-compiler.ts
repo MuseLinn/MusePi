@@ -146,12 +146,19 @@ function alternation(parts: readonly string[]): string {
 const HOST_MODULE_RELATIVE_FILTER = new RegExp(
 	// The basename check keeps decoys like `notlib/x` out; the callback then
 	// resolves the full identity, including sibling imports inside `lib`
-	// (`./x`), through the importer-aware matcher.
+	// (`./x`) and client-core's own relative `../i18n`, through the
+	// importer-aware matcher. Specifier basenames participate so a bare entry
+	// (`@musepi/client-core/src/i18n`) also lets its relative spelling
+	// (`../i18n/index.js`) reach the callback.
 	`(?:^|[\\\\/])(?:${alternation(
-		HOST_MODULE_DECLARATIONS.flatMap(entry =>
-			entry.path ? [escapeRegExp(entry.path.split("/").at(-1) ?? entry.path)] : [],
-		),
-	)})(?:\\.(?:tsx?|mjs|cjs|js))?$`,
+		HOST_MODULE_DECLARATIONS.flatMap(entry => {
+			const candidates = [
+				entry.path ? (entry.path.split("/").at(-1) ?? entry.path) : undefined,
+				entry.specifier ? (entry.specifier.split("/").at(-1) ?? entry.specifier) : undefined,
+			];
+			return candidates.filter((candidate): candidate is string => candidate !== undefined).map(escapeRegExp);
+		}),
+	)})(?:/index)?(?:\\.(?:tsx?|mjs|cjs|js))?$`,
 );
 const HOST_MODULE_BARE_FILTER = new RegExp(
 	`^(?:${alternation(

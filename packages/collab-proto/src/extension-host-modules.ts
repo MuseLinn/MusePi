@@ -33,6 +33,8 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "action-toast", path: "lib/action-toast" },
 	{ key: "file-workspace", path: "lib/file-workspace" },
 	{ key: "floating-menu", path: "lib/use-floating-menu" },
+	{ key: "update-ux", path: "lib/update-ux" },
+	{ key: "tooltips", path: "lib/tooltips" },
 	{ key: "client-core", specifier: "@musepi/client-core" },
 	{ key: "i18n", specifier: "@musepi/client-core/src/i18n" },
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];
@@ -41,6 +43,12 @@ export const EXTENSION_HOST_MODULES = [
 export type ExtensionHostModuleKey = (typeof EXTENSION_HOST_MODULES)[number]["key"];
 
 const MODULE_EXTENSION = /\.(?:tsx?|m?js|cjs)$/;
+
+/** client-core sources reach their own i18n through relative imports, so the
+ *  importer's location is what establishes identity. */
+const CLIENT_CORE_I18N_KEY = "i18n";
+const CLIENT_CORE_I18N_SUFFIX = "/i18n";
+const CLIENT_CORE_SRC_SEGMENT = "/client-core/src/";
 
 function normalize(request: string): string {
 	const path = request.split(/[?#]/)[0] ?? request;
@@ -62,6 +70,16 @@ function normalize(request: string): string {
  */
 export function matchExtensionHostModule(request: string, importer?: string): ExtensionHostModuleKey | undefined {
 	const normalized = normalize(request);
+	// A relative `../i18n` is only the shared module when the importer lives
+	// inside client-core: another package's `../i18n` is a different module
+	// and must keep its own copy.
+	if (
+		normalized.endsWith(CLIENT_CORE_I18N_SUFFIX) &&
+		importer !== undefined &&
+		normalize(importer).includes(CLIENT_CORE_SRC_SEGMENT)
+	) {
+		return CLIENT_CORE_I18N_KEY;
+	}
 	const candidates = [normalized];
 	if (normalized.startsWith("./") && importer !== undefined && normalize(importer).includes("/lib/")) {
 		candidates.push(`lib/${normalized.slice(2)}`);

@@ -720,6 +720,8 @@ const hostModules = {
 | `action-toast` | `lib/action-toast.ts` | Toast list and subscribers |
 | `file-workspace` | `lib/file-workspace.ts` | File preview buffers |
 | `floating-menu` | `lib/use-floating-menu.tsx` | Module-level menu mutex |
+| `update-ux` | `lib/update-ux.ts` | Update-toast/dialog shared flags and subscriber set |
+| `tooltips` | `lib/tooltips.ts` | Tooltip element, timers, and hover/focus state |
 | `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
 | `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
 
@@ -728,6 +730,8 @@ const hostModules = {
 `client-core` and `i18n` are bare-specifier entries, not paths. Module identity — React context, module-level state, and the `client-core` namespace itself — is shared through `MusePiHostModules`; translations ride the host's locale service because `@musepi/client-core/src/i18n` and `@musepi/client-core` resolve to the same module instance, so a plugin's `setLocale("zh-CN")` changes what the host's `t` returns.
 
 Do not add entries for deep helpers: a subpath such as `@musepi/client-core/src/lib/<helper>` carries no identity and stays bundled. Bare matching is exact, so import the specifier exactly as listed — `@musepi/client-core/src/i18n/index.js` is a different request, matches nothing, and bundles a second locale registry.
+
+Relative references to i18n from inside the client-core package (`../i18n/index.js` and the like) also resolve to the same host `i18n` service, because identity there is decided by the importer's location; a `../i18n` import from any non-client-core importer is unaffected and keeps its own copy.
 
 ### Adding a shared module
 
@@ -741,3 +745,45 @@ Add an entry only when **identity must be shared**. A helper without cross-modul
 Every entry is host ABI: removing or renaming a key breaks already-compiled bundles, which throw at import rather than falling back to a copy.
 
 **Anchors**: `packages/collab-proto/test/extension-host-modules.test.ts`, `packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`, `packages/desktop-app/test/host-modules.test.ts`.
+
+## 20. Prompt sections: registry, composer, source lifecycle (2026-11-03)
+
+`PromptComposer` now delegates to a named registry. Existing callers keep using `add`, `removeBySource`, `clear`, `size`, and `compose`; new code can use the registry directly:
+
+```ts
+import { PromptComposer, PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/composer";
+import { PromptRegistry, PromptRegistryError } from "@musepi/pi-coding-agent/prompts/registry";
+import { resolvePromptOrder } from "@musepi/pi-coding-agent/prompts/orders";
+```
+
+Extensions keep using `pi.registerPrompt({ name, order, text })`. The composer assigns each contribution a source: `ext:<extension id>` for `registerPrompt`, `mode:<mode id>` for a preset's `prompt`, `user` for settings `prompt.sections`, and the host-owned `design-system`, `asset-policy`, and `ext:inventory` for sections the session resolves on every rebuild.
+
+### Function text
+
+`text` accepts `string | ((context) => string | null | undefined)` in both `registry.registerSection` and the compatibility entries `composer.add` / `pi.registerPrompt`. A function runs at assembly time, not when it is registered, so every rebuild sees current closure state. Returning `null` or `undefined` omits the section for that build; an empty string is still emitted as a real section. The function receives the assembly context plus `variable(name)`. The session currently calls `compose(base)` and `composeComplete()` without extra keys, so extension function text should read closure state or registered variables rather than assume host fields.
+
+### Strict variables are opt-in
+
+Register a variable with `registry.registerVariable(name, resolver)`, then reference it as `{{name}}`. Names match `[A-Za-z0-9_.-]`; each variable resolves at most once per assembly and its value is stringified. A later registration shadows an earlier resolver, and the earlier one returns when the later registration is disposed. On an interpolating section, an unknown placeholder or a resolver returning `null`/`undefined` throws `PromptRegistryError` (`unknown prompt variable` / `unresolved prompt variable`); it never renders as empty text. Section text can call `context.variable(name)` for the same strict lookup. Assembly context keys are not implicit variables: `{{settingsKey}}` is unknown unless something registered that name. Variables are not source-scoped — `removeBySource` only removes sections; use the variable's disposer or `clear()`.
+
+### Legacy string sections
+
+Existing string sections are not Handlebars templates and are not rendered against session context; they remain literal prose. Legacy entries (`composer.add` and `pi.registerPrompt`) never interpolate: `{{name}}` stays byte-for-byte literal even when a registry variable has that name. Strict `{{name}}` interpolation applies only to sections registered explicitly through `registry.registerSection` or used from registry function text; there, prose containing `{{...}}` must register the name or assembly throws. `composer.add` returns no disposer and follows the old Map semantics: a same-name later `add` replaces the earlier layer outright, so removing the replacement's source never restores the old section. New code that needs stacking, shadow restoration, or explicit disposal should call `registry.registerSection`.
+
+### Order, shadowing, and complete
+
+The central anchors are `core: 0`, `injection: 25`, `safety: 100`, `project: 200`, `repoContext: 300`; numeric orders remain valid, and `resolvePromptOrder` rejects unknown names and non-finite numbers. Sections sort by resolved order, then name. Registering an existing name through the registry shadows the earlier registration; disposing the later registration restores the earlier one. At most one visible section may set `complete: true`; it replaces the whole prompt (`compose` and `composeComplete` return only it). A second visible complete section is rejected at registration. A conflict introduced later, for example by disposing a shadow, is rejected atomically: the disposer or `removeBySource` call throws, leaves every layer unchanged, and does not bump `revision`. The rejected disposer stays unspent and can be retried after the conflicting section is removed.
+
+### Source unload and lifecycle
+
+`registerSection` and `registerVariable` return idempotent disposers. `removeBySource(source)` drops every section layer whose source matches and increments `revision` only when it removed something; layers from other sources stay in place. `clear()` drops all sections and variables. `revision` is a monotonic count of structural mutations and never changes during `assemble`, so a caller can compare it before and after an explicit refresh. `size` counts section names, not shadow layers. An empty registry assembles `{ revision: 0, sections: [], complete: null }`, and `compose(base)` returns `base` unchanged — the compatibility anchor.
+
+Extension load and reload re-sync the extension's source: the old generation is removed before the replacement's sections are added, so a prompt never mixes generations. A busy session defers reload to the next idle `agent_end`. Mode switches use the same source-scoped path, and the `design-system` / `asset-policy` sections are re-resolved on every rebuild.
+
+### Prompt-only refresh
+
+Every prompt rebuild re-evaluates function text, re-resolves variables, and re-runs the host-owned section resolvers before `compose(base)` (or `composeComplete` for a `promptComplete` preset). `AgentSession.setDesignSystemId` is the live prompt-only path: it writes the metadata key and calls `refreshBaseSystemPrompt()`, leaving the active tool set unchanged, so the new brief is used on the next model call. Extension load and reload re-sync the composer source and then call `refreshBaseSystemPrompt()` immediately, so a prompt-only extension (no tools) reaches a live session without waiting for another rebuild. A busy session performs the same refresh when its deferred load/reload drains. The composer revision is part of the rebuild signature, so a section-only change is not skipped when the tool set is unchanged. Tool changes from the same load/reload still follow the normal tool-registry path, and neither path requires a session restart.
+
+This is composition, not migration. The core Handlebars templates and volatile context stay in `buildSystemPrompt`: date, repository/workspace tree, AGENTS and other context files, skills/rules, tool inventory, MCP server instructions, memory, and persona/preset data are not registry variables. The registry also does not own cache policy or diff-style runtime messages.
+
+**Anchors**: `packages/coding-agent/test/prompts-registry.test.ts`, `packages/coding-agent/test/prompts-composer.test.ts`, `packages/coding-agent/src/prompts/{orders,registry,composer}.ts`.

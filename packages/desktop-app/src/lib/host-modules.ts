@@ -5,6 +5,8 @@ import * as actionToast from "./action-toast";
 import * as fileWorkspace from "./file-workspace";
 import * as managedBrowserHost from "./managed-browser-host";
 import * as promptDialog from "./prompt-dialog";
+import * as tooltips from "./tooltips";
+import * as updateUx from "./update-ux";
 import * as useFloatingMenu from "./use-floating-menu";
 
 /**
@@ -23,6 +25,8 @@ const hostModules = {
 	"action-toast": actionToast,
 	"file-workspace": fileWorkspace,
 	"floating-menu": useFloatingMenu,
+	"update-ux": updateUx,
+	tooltips: tooltips,
 	"client-core": clientCore,
 	i18n: clientCoreI18n,
 } satisfies Record<ExtensionHostModuleKey, unknown>;

@@ -44,6 +44,26 @@ describe("extension host module table", () => {
 		expect(matchExtensionHostModule("@musepi/client-core/src/i18n/index.js")).toBe("i18n");
 	});
 
+	it("matches client-core's own relative i18n imports", () => {
+		const importer = "D:/app/packages/client-core/src/components/demo.tsx";
+		expect(matchExtensionHostModule("../i18n/index.js", importer)).toBe("i18n");
+		expect(matchExtensionHostModule("../i18n", importer)).toBe("i18n");
+		expect(matchExtensionHostModule("../i18n/index.ts", importer)).toBe("i18n");
+	});
+
+	it("keeps relative i18n imports outside client-core in the bundle", () => {
+		expect(
+			matchExtensionHostModule("../i18n/index.js", "D:/app/packages/other/src/components/demo.tsx"),
+		).toBeUndefined();
+		expect(matchExtensionHostModule("../i18n/index.js", "D:/app/src/components/demo.tsx")).toBeUndefined();
+		expect(
+			matchExtensionHostModule("../i18n-extra", "D:/app/packages/client-core/src/components/demo.tsx"),
+		).toBeUndefined();
+		expect(
+			matchExtensionHostModule("../theme", "D:/app/packages/client-core/src/components/demo.tsx"),
+		).toBeUndefined();
+	});
+
 	it("does not match a bare specifier by suffix or prefix", () => {
 		expect(matchExtensionHostModule("@musepi/client-core/src/i18n/extra")).toBeUndefined();
 		expect(matchExtensionHostModule("@musepi/client-core-extra")).toBeUndefined();

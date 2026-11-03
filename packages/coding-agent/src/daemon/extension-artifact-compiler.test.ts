@@ -90,6 +90,45 @@ describe("extension artifact compiler host modules", () => {
 		expect(code).not.toContain("omp.collab.locale");
 	});
 
+	it("externalizes client-core's own relative i18n import and bundles another package's", async () => {
+		const root = await fixture({
+			"client-core/src/i18n/index.ts": [
+				'export const I18N_MARKER = "bundled-client-core-i18n-copy";',
+				"export function t(key: string): string {",
+				"	return `${I18N_MARKER}:${key}`;",
+				"}",
+			].join("\n"),
+			"client-core/src/components/demo.tsx": [
+				'import { t } from "../i18n/index.js";',
+				"",
+				"export default function Demo() {",
+				'	return <span>{t("hello")}</span>;',
+				"}",
+			].join("\n"),
+			"other/src/i18n/index.ts": [
+				'export const I18N_MARKER = "bundled-other-i18n-copy";',
+				"export function t(key: string): string {",
+				"	return `${I18N_MARKER}:${key}`;",
+				"}",
+			].join("\n"),
+			"other/src/components/demo.tsx": [
+				'import { t } from "../i18n/index.js";',
+				"",
+				"export default function Demo() {",
+				'	return <span>{t("hello")}</span>;',
+				"}",
+			].join("\n"),
+		});
+
+		const shared = await compileComponentModule(path.join(root, "client-core", "src", "components", "demo.tsx"));
+		expect(shared.code).toContain('MusePiHostModules is missing "i18n"');
+		expect(shared.code).not.toContain("bundled-client-core-i18n-copy");
+
+		const bundled = await compileComponentModule(path.join(root, "other", "src", "components", "demo.tsx"));
+		expect(bundled.code).not.toContain('MusePiHostModules is missing "i18n"');
+		expect(bundled.code).toContain("bundled-other-i18n-copy");
+	});
+
 	it("throws a keyed error when the host table lacks the entry", async () => {
 		const root = await fixture({
 			"lib/file-workspace.ts": [
