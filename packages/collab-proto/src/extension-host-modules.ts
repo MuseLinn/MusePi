@@ -49,11 +49,17 @@ function normalize(request: string): string {
  * Resolve an import request to a host module key.
  *
  * Relative requests match by path suffix because a plugin may sit at any
- * directory depth (`../lib/x`, `../../lib/x`); bare requests match exactly.
- * Returns undefined when the import should stay in the plugin bundle.
+ * directory depth (`../lib/x`, `../../lib/x`). A sibling import from another
+ * module inside `lib` (`./x`) is the same module identity, so it resolves to
+ * the `lib/x` entry when the importer lives under a `lib` directory. Bare
+ * requests match exactly. Returns undefined when the import stays bundled.
  */
-export function matchExtensionHostModule(request: string): ExtensionHostModuleKey | undefined {
+export function matchExtensionHostModule(request: string, importer?: string): ExtensionHostModuleKey | undefined {
 	const normalized = normalize(request);
+	const candidates = [normalized];
+	if (normalized.startsWith("./") && importer !== undefined && normalize(importer).includes("/lib/")) {
+		candidates.push(`lib/${normalized.slice(2)}`);
+	}
 	for (const entry of EXTENSION_HOST_MODULES) {
 		if ("specifier" in entry && entry.specifier !== undefined) {
 			if (normalized === entry.specifier) return entry.key;
@@ -61,7 +67,7 @@ export function matchExtensionHostModule(request: string): ExtensionHostModuleKe
 		}
 		const path = (entry as { path?: string }).path;
 		if (path === undefined) continue;
-		if (normalized === path || normalized.endsWith(`/${path}`)) return entry.key;
+		if (candidates.some(candidate => candidate === path || candidate.endsWith(`/${path}`))) return entry.key;
 	}
 	return undefined;
 }

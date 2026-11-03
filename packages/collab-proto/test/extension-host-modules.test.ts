@@ -9,7 +9,10 @@ describe("extension host module table", () => {
 
 	it("declares exactly one match rule per entry", () => {
 		for (const entry of EXTENSION_HOST_MODULES) {
-			const rules = [entry.path, entry.specifier].filter(value => value !== undefined);
+			const rules = [
+				"path" in entry ? entry.path : undefined,
+				"specifier" in entry ? entry.specifier : undefined,
+			].filter(value => value !== undefined);
 			expect(rules).toHaveLength(1);
 		}
 	});
@@ -19,6 +22,13 @@ describe("extension host module table", () => {
 		expect(matchExtensionHostModule("../../lib/action-toast.ts")).toBe("action-toast");
 		expect(matchExtensionHostModule("../lib/use-floating-menu.tsx")).toBe("floating-menu");
 		expect(matchExtensionHostModule("..\\lib\\file-workspace")).toBe("file-workspace");
+	});
+
+	it("matches sibling imports inside lib to the same module identity", () => {
+		expect(matchExtensionHostModule("./managed-browser-host", "D:/app/src/lib/managed-browser-bridge.ts")).toBe(
+			"managed-browser-host",
+		);
+		expect(matchExtensionHostModule("./managed-browser-host", "D:/app/src/components/other.tsx")).toBeUndefined();
 	});
 
 	it("does not match a longer sibling module name", () => {

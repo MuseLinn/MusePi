@@ -13,6 +13,7 @@
 | channels（IM 通道） | `packages/coding-agent/src/channels/types.ts`（`ChannelAdapter`） | 同文件头部 |
 | 扩展 API（register* 面） | `packages/coding-agent/src/extensibility/extensions/types.ts`（`ExtensionAPI`） | 同文件头部 + `docs/extensions-dev.md` |
 | GUI 渲染侧（widget/插槽/节点 kind） | `packages/client-core/src/widgets/registry.ts`、`packages/collab-proto/src/extension-slots.ts` | 各文件头部 |
+| 编译插件的宿主模块表 | `packages/collab-proto/src/extension-host-modules.ts`（`EXTENSION_HOST_MODULES` / `matchExtensionHostModule`） | 同文件头部；渲染端实例表见 `packages/desktop-app/src/lib/host-modules.ts` |
 | Android 模拟器插件 | `packages/coding-agent/src/bundled-plugins/android-emulator/index.ts`（扩展隔离的 RPC / `android_emulator`） | 同文件头部 |
 | Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
 | Cordis 会话页 | `packages/desktop-app/src/plugins/chat-view/index.ts`（`app.chat`） | 同文件头部 |

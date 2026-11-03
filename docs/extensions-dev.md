@@ -188,6 +188,8 @@ export default function (pi: ExtensionAPI): void {
 
 **数据流**:daemon `bun.build` 把模块编译为自包含 ESM(react 绑定宿主实例)→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob: 动态 import 挂载。**信任模型**:扩展本就在 daemon 进程执行任意代码,渲染其组件不构成新提权。
 
+**Host modules**: a compiled component shares app modules that carry React context or module-level state (`prompt-dialog`, `action-toast`, `floating-menu`, …) through `window.MusePiHostModules` instead of bundling a second copy. The contract, the current entries, and the steps for adding one are in §19.
+
 **Panel instance example**: the bundled `compaction-summary` Cordis plugin registers `panel.tab.compaction`; its UI reads `panelTab.target` and calls `session.compaction { sessionId, entryId }`. Session-bound content must use a validated daemon RPC like this, not the bare `registerRpc` runtime, which does not provide session actions. Restored tabs persist only the entry id; stale async responses must be ignored after the target changes or the component unmounts.
 
 **File-workspace example**: the bundled `file-workspace` Cordis plugin registers the reserved `panel.tab.files` slot. It reads `panelTab.dedupeKey` to distinguish tree roots from file pages and receives the host-owned `fileWorkspace` contract for drafts, dirty state, reveal requests, and history. Disabling the plugin removes the file renderer and launch entries; it does not transfer tab or draft ownership into the plugin.
@@ -670,3 +672,62 @@ closes. The symptoms are "every UI edit leaves another stylesheet behind" and
 `<style>` count in the document, the abort the module observed, and the disposer
 order. Do **not** write a test that replays the host's steps — it would pass
 while the host is broken.
+
+## 19. Frozen host module table for compiled plugins (2026-11-03)
+
+A compiled component is a standalone ESM bundle. Every app import it does not externalize is copied into that bundle — including modules that hold **React context or module-level state**. The copies then diverge: a bundled `prompt-dialog` reads its own default context, so `confirm` resolves `false` without showing a dialog; a bundled toast store never reaches the host's toaster; a bundled floating-menu module owns a second mutex, so two menus can be open at once. Copying a pure helper is harmless; copying an identity-bearing module is a silent behavioral bug.
+
+### Single authority
+
+`packages/collab-proto/src/extension-host-modules.ts` owns the table:
+
+```ts
+export const EXTENSION_HOST_MODULES = [
+  { key: "prompt-dialog", path: "lib/prompt-dialog" },
+  { key: "action-toast", path: "lib/action-toast" },
+  …
+] as const satisfies readonly ExtensionHostModuleDeclaration[];
+```
+
+`path` matches a relative app import by normalized suffix at any depth (`../lib/x`, `../../lib/x`, with or without extension, either slash); `specifier` matches an exact bare package import. Every entry declares exactly one rule. `ExtensionHostModuleKey` is the union of keys, and `matchExtensionHostModule(request)` resolves one import to one key; `undefined` means "keep it in the plugin bundle".
+
+### Compiler
+
+The daemon artifact compiler (`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`) consults this table for every resolved import. A match becomes a shim that reads `window.MusePiHostModules[key]`; **no source of the host module enters the bundle**. The shim throws when the table or the key is missing, so a host that does not publish the contract fails at import instead of running against a stale copy. Non-matching imports, including pure helpers such as `lib/leaf-walk`, are still bundled normally. React and React DOM keep their separate mapping to `window.MusePiReact*`.
+
+### Renderer
+
+`packages/desktop-app/src/lib/host-modules.ts` is the one place that binds keys to instances:
+
+```ts
+const hostModules = {
+  "prompt-dialog": promptDialog,
+  "action-toast": actionToast,
+  …
+} satisfies Record<ExtensionHostModuleKey, unknown>;
+```
+
+`satisfies` makes a contract entry without a bound instance a type error, and a key without a contract entry a compile error. `exposeHostModules()` publishes the table as `window.MusePiHostModules` before any compiled component mounts. The older `window.MusePiPromptDialog` and `window.MusePiManagedBrowserHost` globals remain aliases of the same namespace objects, so already-compiled bundles keep reading host state.
+
+### Current entries
+
+| Key | App module | Identity that must be shared |
+|---|---|---|
+| `prompt-dialog` | `lib/prompt-dialog.tsx` | Prompt/confirm React context |
+| `managed-browser-host` | `lib/managed-browser-host.ts` | Managed-browser host store |
+| `action-toast` | `lib/action-toast.ts` | Toast list and subscribers |
+| `file-workspace` | `lib/file-workspace.ts` | File preview buffers |
+| `floating-menu` | `lib/use-floating-menu.tsx` | Module-level menu mutex |
+
+### Adding a shared module
+
+Add an entry only when **identity must be shared**. A helper without cross-module state stays bundled.
+
+1. Add `{ key, path }` or `{ key, specifier }` to `EXTENSION_HOST_MODULES`.
+2. Import the module in `packages/desktop-app/src/lib/host-modules.ts` and map it under the same key; the `satisfies` constraint fails until both sides agree.
+3. Extend the compiler test to prove the import resolves to `window.MusePiHostModules[key]` and the bundled marker is absent, and the runtime test to prove the key is published with a bound instance.
+4. Update this document and the changelog.
+
+Every entry is host ABI: removing or renaming a key breaks already-compiled bundles, which throw at import rather than falling back to a copy.
+
+**Anchors**: `packages/collab-proto/test/extension-host-modules.test.ts`, `packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`, `packages/desktop-app/test/host-modules.test.ts`.

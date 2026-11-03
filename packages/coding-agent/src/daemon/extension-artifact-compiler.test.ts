@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import { compileComponentModule } from "./extension-artifact-compiler";
 
 /**
- * The artifact compiler bundles every import except its host bridges. A module
- * that carries React context must be bridged: a bundled copy would read its
- * own default context instead of the host provider.
+ * Every table entry in `EXTENSION_HOST_MODULES` is an identity the host shares
+ * with compiled plugins: the import must become `window.MusePiHostModules[key]`
+ * instead of a second bundled copy. Everything else stays in the bundle.
  */
-describe("extension artifact compiler host bridges", () => {
+describe("extension artifact compiler host modules", () => {
 	let dir: string | undefined;
 
 	afterEach(async () => {
@@ -17,33 +18,85 @@ describe("extension artifact compiler host bridges", () => {
 		dir = undefined;
 	});
 
-	it("binds prompt-dialog imports to the host provider hooks", async () => {
+	async function fixture(files: Record<string, string>): Promise<string> {
 		dir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-artifact-"));
-		await fs.mkdir(path.join(dir, "lib"));
-		await fs.writeFile(
-			path.join(dir, "lib", "prompt-dialog.ts"),
-			[
-				'export const LOCAL_ONLY_MARKER = "bundled-prompt-copy";',
-				"export function useConfirm(): { confirm(message: string): Promise<boolean> } {",
-				"	return { confirm: async () => LOCAL_ONLY_MARKER.length > 0 };",
+		for (const [relative, contents] of Object.entries(files)) {
+			const target = path.join(dir, relative);
+			await fs.mkdir(path.dirname(target), { recursive: true });
+			await fs.writeFile(target, contents);
+		}
+		return dir;
+	}
+
+	it("resolves table entries to MusePiHostModules and bundles other imports", async () => {
+		const root = await fixture({
+			"lib/action-toast.ts": [
+				'export const ACTION_TOAST_MARKER = "bundled-action-toast-copy";',
+				"export function showActionToast(message: string): string {",
+				"	return `${ACTION_TOAST_MARKER}:${message}`;",
 				"}",
 			].join("\n"),
-		);
-		const entry = path.join(dir, "component.tsx");
-		await fs.writeFile(
-			entry,
-			[
-				'import { useConfirm } from "./lib/prompt-dialog";',
+			"lib/prompt-dialog.ts": [
+				'export const PROMPT_DIALOG_MARKER = "bundled-prompt-dialog-copy";',
+				"export function useConfirm(): { confirm(message: string): Promise<boolean> } {",
+				"	return { confirm: async () => PROMPT_DIALOG_MARKER.length > 0 };",
+				"}",
+			].join("\n"),
+			"lib/bridge.ts": 'export { showActionToast } from "./action-toast";',
+			"lib/leaf-walk.ts": [
+				'export const LEAF_WALK_MARKER = "bundled-leaf-walk-copy";',
+				"export function leafWalk(): string {",
+				"	return LEAF_WALK_MARKER;",
+				"}",
+			].join("\n"),
+			"ext/component.tsx": [
+				'import { showActionToast } from "../lib/bridge";',
+				'import { useConfirm } from "../lib/prompt-dialog";',
+				'import { leafWalk } from "../lib/leaf-walk";',
+				"",
 				"export default function Component() {",
 				"	const { confirm } = useConfirm();",
-				'	return <button onClick={() => void confirm("stop?")} />;',
+				"	return <button onClick={() => void confirm(showActionToast(leafWalk()))} />;",
 				"}",
 			].join("\n"),
-		);
+		});
 
-		const { code } = await compileComponentModule(entry);
+		const { code } = await compileComponentModule(path.join(root, "ext", "component.tsx"));
 
-		expect(code).toContain("MusePiPromptDialog");
-		expect(code).not.toContain("LOCAL_ONLY_MARKER");
+		expect(code).toContain("MusePiHostModules");
+		expect(code).toContain("MusePiReact.createElement");
+		expect(code).not.toContain("bundled-action-toast-copy");
+		expect(code).not.toContain("bundled-prompt-dialog-copy");
+		expect(code).toContain("bundled-leaf-walk-copy");
+	});
+
+	it("throws a keyed error when the host table lacks the entry", async () => {
+		const root = await fixture({
+			"lib/file-workspace.ts": [
+				'export const FILE_WORKSPACE_MARKER = "bundled-file-workspace-copy";',
+				"export function useFileWorkspace(): string {",
+				"	return FILE_WORKSPACE_MARKER;",
+				"}",
+			].join("\n"),
+			"ext/component.ts": [
+				'import { useFileWorkspace } from "../lib/file-workspace";',
+				"",
+				"export const workspace = useFileWorkspace();",
+			].join("\n"),
+		});
+		const { code } = await compileComponentModule(path.join(root, "ext", "component.ts"));
+		const bundle = path.join(root, "bundle.mjs");
+		await fs.writeFile(bundle, code);
+
+		const host = globalThis as unknown as { window?: unknown };
+		const previous = host.window;
+		host.window = { MusePiHostModules: {} };
+		try {
+			await expect(import(pathToFileURL(bundle).href)).rejects.toThrow(
+				'MusePiHostModules is missing "file-workspace"',
+			);
+		} finally {
+			host.window = previous;
+		}
 	});
 });

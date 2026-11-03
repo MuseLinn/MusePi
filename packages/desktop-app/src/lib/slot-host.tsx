@@ -62,8 +62,7 @@ import * as ReactDOMClient from "react-dom/client";
 import type { ChatViewProps } from "../components/ChatView";
 import type { ContextPanel } from "../components/ContextPanel";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
-import * as managedBrowserHostBindings from "./managed-browser-host";
-import * as promptDialogBindings from "./prompt-dialog";
+import { exposeHostModules } from "./host-modules";
 import type { RpcClient } from "./rpc";
 
 export const hostReactBindings = {
@@ -138,11 +137,7 @@ function exposeHostReact(): void {
 	(window as unknown as { MusePiReact: unknown }).MusePiReact = hostReactBindings;
 	(window as unknown as { MusePiReactDOM: unknown }).MusePiReactDOM = hostReactDOMBindings;
 	(window as unknown as { MusePiReactDOMClient: unknown }).MusePiReactDOMClient = hostReactDOMClientBindings;
-	(window as unknown as { MusePiManagedBrowserHost: unknown }).MusePiManagedBrowserHost = managedBrowserHostBindings;
-	// Promise dialogs are React context, so a plugin's bundled copy of this
-	// module would read the default (silent `false`) context instead of the
-	// host provider. The compiler externalizes this path to the host hooks.
-	(window as unknown as { MusePiPromptDialog: unknown }).MusePiPromptDialog = promptDialogBindings;
+	exposeHostModules();
 	// The plugin's other platform surface: its own translation namespace.
 	//
 	// A compiled plugin module cannot import from client-core, so the namespace

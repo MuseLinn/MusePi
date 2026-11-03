@@ -62,7 +62,8 @@ describe("extension React host bindings", () => {
 
 	it("shares the managed browser store with the compiled chat surface", async () => {
 		const { code } = await compileComponentModule(path.resolve("src/plugins/chat-view/page.tsx"));
-		expect(code).toContain("window.MusePiManagedBrowserHost");
+		expect(code).toContain("window.MusePiHostModules");
+		expect(code).toContain('missing "managed-browser-host"');
 		expect(code).not.toContain("musepi-gui-managed-browser-tabs");
 		expect(code).not.toContain("Invalid guestInstanceId");
 	}, 60_000);
@@ -74,7 +75,8 @@ describe("extension React host bindings", () => {
 			"src/plugins/browser-ui/host.tsx",
 		]) {
 			const { code } = await compileComponentModule(path.resolve(entry));
-			expect(code).toContain("window.MusePiManagedBrowserHost");
+			expect(code).toContain("window.MusePiHostModules");
+			expect(code).toContain('missing "managed-browser-host"');
 			expect(code).not.toContain("musepi-gui-managed-browser-tabs");
 		}
 	}, 60_000);

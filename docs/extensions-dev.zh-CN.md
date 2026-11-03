@@ -176,6 +176,8 @@ musepi-auth-hub）设置界面的落点。
 
 **数据流**：daemon `bun.build` 把模块编译为自包含 ESM（react 绑定宿主实例）→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob：动态 import 挂载。**信任模型**：扩展本就在 daemon 进程执行任意代码，渲染其组件不构成新提权。
 
+**宿主模块**：编译组件通过 `window.MusePiHostModules` 共享承载 React context 或模块级状态的应用模块（`prompt-dialog`、`action-toast`、`floating-menu` 等），不打包第二份副本；契约、当前条目与新增步骤见 §19。
+
 **面板实例示例**：bundled `compaction-summary` Cordis 插件注册 `panel.tab.compaction`，UI 读取 `panelTab.target` 并调用 `session.compaction { sessionId, entryId }`。会话绑定内容必须走这种受校验的 daemon RPC，不能使用不提供会话 actions 的 `registerRpc` 裸 runtime。恢复的标签只保存 entry id；target 改变或组件卸载后，必须丢弃未完成的旧响应。
 
 **文件工作区示例**：内置 `file-workspace` Cordis 插件注册保留的 `panel.tab.files` 槽位。它读取 `panelTab.dedupeKey` 区分树根与文件页，并通过宿主注入的 `fileWorkspace` 契约操作草稿、dirty 状态、定位请求和历史。停用插件会移除文件渲染与启动入口，但标签和草稿所有权不会转移到插件。
@@ -655,3 +657,62 @@ document 里直到窗口关闭。症状是「改一次 UI 就多一份样式」�
 `SlotComponentMount`(blob 导入真实代码 → 挂载 → 卸载),断言 document 里的
 `<style>` 数量、模块收到的 abort、以及 disposer 顺序。**不要**写「复现宿主步骤」
 的测试——那会在宿主坏掉时照样通过。
+
+## 19. 编译插件的冻结宿主模块表(2026-11-03)
+
+编译后的组件是独立 ESM bundle：没有被 external 的应用 import 都会复制进 bundle，其中也包括承载 **React context 或模块级状态** 的模块。副本一旦分叉，行为就静默走偏：打包的 `prompt-dialog` 读自己那份默认 context，`confirm` 不弹窗直接返回 `false`；打包的 toast store 到不了宿主的提示层；打包的 floating-menu 自带第二个 mutex，两个菜单可以同时打开。纯 helper 被复制无害，承载身份的模块被复制就是行为缺陷。
+
+### 单一权威
+
+`packages/collab-proto/src/extension-host-modules.ts` 拥有这张表：
+
+```ts
+export const EXTENSION_HOST_MODULES = [
+  { key: "prompt-dialog", path: "lib/prompt-dialog" },
+  { key: "action-toast", path: "lib/action-toast" },
+  …
+] as const satisfies readonly ExtensionHostModuleDeclaration[];
+```
+
+`path` 按归一化后缀匹配任意深度的相对 import（`../lib/x`、`../../lib/x`，带不带扩展名、正反斜杠均可）；`specifier` 精确匹配裸包 import。每个条目只声明一条规则。`ExtensionHostModuleKey` 是全部 key 的联合，`matchExtensionHostModule(request)` 把一条 import 解析成一个 key；返回 `undefined` 表示「留在插件 bundle 里」。
+
+### 编译器
+
+daemon 侧 artifact compiler（`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`）对每条解析后的 import 查这张表。命中即替换为读取 `window.MusePiHostModules[key]` 的 shim，**宿主模块源码不进入 bundle**。表或 key 缺失时 shim 在导入阶段抛错，宿主没有发布契约就立即失败，而不是拿着旧副本继续跑。未命中的 import 照常打包，包括 `lib/leaf-walk` 这类纯 helper。React 与 React DOM 仍走各自到 `window.MusePiReact*` 的映射。
+
+### 渲染端
+
+`packages/desktop-app/src/lib/host-modules.ts` 是 key 到实例的唯一绑定处：
+
+```ts
+const hostModules = {
+  "prompt-dialog": promptDialog,
+  "action-toast": actionToast,
+  …
+} satisfies Record<ExtensionHostModuleKey, unknown>;
+```
+
+`satisfies` 让「契约有条目但渲染端没绑定实例」和「渲染端多出契约没有的 key」都变成类型错误。`exposeHostModules()` 在编译组件挂载前把表发布为 `window.MusePiHostModules`。旧的 `window.MusePiPromptDialog` 与 `window.MusePiManagedBrowserHost` 保留为同一批命名空间对象的别名，已编译的 bundle 继续读到宿主状态。
+
+### 当前条目
+
+| Key | 应用模块 | 必须共享的身份 |
+|---|---|---|
+| `prompt-dialog` | `lib/prompt-dialog.tsx` | prompt/confirm 的 React context |
+| `managed-browser-host` | `lib/managed-browser-host.ts` | 受管浏览器宿主 store |
+| `action-toast` | `lib/action-toast.ts` | toast 列表与订阅者 |
+| `file-workspace` | `lib/file-workspace.ts` | 文件预览缓冲区 |
+| `floating-menu` | `lib/use-floating-menu.tsx` | 模块级菜单 mutex |
+
+### 新增共享模块
+
+只有 **身份必须共享** 时才加条目；没有跨模块状态的 helper 继续打包。
+
+1. 在 `EXTENSION_HOST_MODULES` 加 `{ key, path }` 或 `{ key, specifier }`。
+2. 在 `packages/desktop-app/src/lib/host-modules.ts` 引入该模块，并按同一 key 映射；两边不一致时 `satisfies` 约束会报类型错误。
+3. 扩充编译器测试，证明该 import 解析到 `window.MusePiHostModules[key]` 且 bundle 内没有本地标记；扩充运行时测试，证明该 key 已发布且绑定了实例。
+4. 更新本文档与 changelog。
+
+每个条目都是宿主 ABI：删除或改名会让已编译的 bundle 在导入时抛错，而不是退回副本。
+
+**回归锚点**：`packages/collab-proto/test/extension-host-modules.test.ts`、`packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`、`packages/desktop-app/test/host-modules.test.ts`。

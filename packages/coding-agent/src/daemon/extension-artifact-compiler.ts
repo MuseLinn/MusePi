@@ -1,4 +1,9 @@
 import * as path from "node:path";
+import {
+	EXTENSION_HOST_MODULES,
+	type ExtensionHostModuleDeclaration,
+	matchExtensionHostModule,
+} from "@musepi/collab-proto/extension-host-modules";
 import { logger } from "@musepi/pi-utils";
 import type { BunPlugin } from "bun";
 import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../capability/extension-module";
@@ -119,18 +124,73 @@ const compileCache = new Map<string, { mtimeMs: number; code: string; css?: stri
 
 // CommonJS is intentional here. Bun's virtual-ESM interop can emit an empty
 // exports object for these host-only modules; a direct export preserves both
-// default and named imports without bundling a second React runtime.
+// default and named imports without bundling a second copy.
 const HOST_REACT_MODULE = `module.exports = window.MusePiReact;`;
 const HOST_REACT_DOM_MODULE = `module.exports = window.MusePiReactDOM;`;
 const HOST_REACT_DOM_CLIENT_MODULE = `module.exports = window.MusePiReactDOMClient;`;
 const HOST_JSX_MODULE = `module.exports = window.MusePiReact;`;
-const HOST_MANAGED_BROWSER_MODULE = `module.exports = window.MusePiManagedBrowserHost;`;
-const HOST_PROMPT_DIALOG_MODULE = `module.exports = window.MusePiPromptDialog;`;
 
-function hostReactPlugin(): BunPlugin {
+/** Namespace for imports resolved through {@link EXTENSION_HOST_MODULES}. */
+const HOST_MODULE_NAMESPACE = "musepi-host-module";
+
+const HOST_MODULE_DECLARATIONS: readonly ExtensionHostModuleDeclaration[] = EXTENSION_HOST_MODULES;
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function alternation(parts: readonly string[]): string {
+	return parts.length > 0 ? parts.join("|") : "(?!)";
+}
+
+const HOST_MODULE_RELATIVE_FILTER = new RegExp(
+	// The basename check keeps decoys like `notlib/x` out; the callback then
+	// resolves the full identity, including sibling imports inside `lib`
+	// (`./x`), through the importer-aware matcher.
+	`(?:^|[\\\\/])(?:${alternation(
+		HOST_MODULE_DECLARATIONS.flatMap(entry =>
+			entry.path ? [escapeRegExp(entry.path.split("/").at(-1) ?? entry.path)] : [],
+		),
+	)})(?:\\.(?:tsx?|mjs|cjs|js))?$`,
+);
+const HOST_MODULE_BARE_FILTER = new RegExp(
+	`^(?:${alternation(
+		HOST_MODULE_DECLARATIONS.flatMap(entry => (entry.specifier ? [escapeRegExp(entry.specifier)] : [])),
+	)})$`,
+);
+
+/**
+ * The table entry may be absent when the renderer predates a newly declared
+ * module; failing with the key names the missing contract instead of surfacing
+ * a property access on undefined.
+ */
+function hostModuleContents(key: string): string {
+	const keyLiteral = JSON.stringify(key);
+	const message = JSON.stringify(`MusePiHostModules is missing "${key}"`);
+	return [
+		`if (!window.MusePiHostModules?.[${keyLiteral}]) {`,
+		`\tthrow new Error(${message});`,
+		"}",
+		`module.exports = window.MusePiHostModules[${keyLiteral}];`,
+	].join("\n");
+}
+
+function hostModulesPlugin(): BunPlugin {
 	return {
-		name: "musepi-host-react",
+		name: "musepi-host-modules",
 		setup(build) {
+			build.onResolve({ filter: HOST_MODULE_RELATIVE_FILTER }, args => {
+				const key = matchExtensionHostModule(args.path, args.importer);
+				return key === undefined ? undefined : { path: key, namespace: HOST_MODULE_NAMESPACE };
+			});
+			build.onResolve({ filter: HOST_MODULE_BARE_FILTER }, args => {
+				const key = matchExtensionHostModule(args.path, args.importer);
+				return key === undefined ? undefined : { path: key, namespace: HOST_MODULE_NAMESPACE };
+			});
+			build.onLoad({ filter: /.*/, namespace: HOST_MODULE_NAMESPACE }, args => ({
+				contents: hostModuleContents(args.path),
+				loader: "js",
+			}));
 			build.onResolve({ filter: /^react(?:-dom)?(?:\/.*)?$/ }, args => ({
 				path: args.path,
 				namespace: "musepi-host-react",
@@ -145,30 +205,6 @@ function hostReactPlugin(): BunPlugin {
 							: HOST_REACT_MODULE;
 				return { contents, loader: "js" };
 			});
-			// The app.chat artifact includes ManagedBrowserPane, while the main app
-			// owns ManagedBrowserHost. Bundling their store twice leaves the root
-			// host empty and makes every navigation miss the active tab. Bind the
-			// pane to the same host-owned module instance as the root host.
-			build.onResolve({ filter: /managed-browser-host(?:\.ts)?$/ }, args => ({
-				path: args.path,
-				namespace: "musepi-host-managed-browser",
-			}));
-			build.onLoad({ filter: /.*/, namespace: "musepi-host-managed-browser" }, () => ({
-				contents: HOST_MANAGED_BROWSER_MODULE,
-				loader: "js",
-			}));
-			// Prompt/confirm dialogs are React context. A bundled copy of the
-			// host's prompt-dialog module reads that copy's default context
-			// (`async () => false`), so a plugin's stop button silently did
-			// nothing. Bind the import to the host provider's hooks.
-			build.onResolve({ filter: /(^|[\\/])lib[\\/]prompt-dialog(?:\.tsx?)?$/ }, args => ({
-				path: args.path,
-				namespace: "musepi-host-prompt-dialog",
-			}));
-			build.onLoad({ filter: /.*/, namespace: "musepi-host-prompt-dialog" }, () => ({
-				contents: HOST_PROMPT_DIALOG_MODULE,
-				loader: "js",
-			}));
 		},
 	};
 }
@@ -212,7 +248,7 @@ export async function compileComponentModule(componentPath: string): Promise<{ c
 		target: "browser",
 		minify: true,
 		sourcemap: "none",
-		plugins: [hostReactPlugin()],
+		plugins: [hostModulesPlugin()],
 		// Components reference React through the `React` identifier (never
 		// bare-import it): the renderer injects window.MusePiReact before
 		// mounting, so the compiled module uses the HOST's react instance —
