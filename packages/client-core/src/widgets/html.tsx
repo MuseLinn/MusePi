@@ -166,7 +166,7 @@ export function readFaceTokens(): Record<string, string> {
 	// in rem/em follows the user's interface size setting instead of freezing
 	// at whatever px the model wrote.
 	const bodyFont = getComputedStyle(document.body).fontSize;
-	if (bodyFont) resolved["--page-rem"] = bodyFont;
+	if (bodyFont) resolved["--page-rem"] = String(bodyFont);
 	// The face's own canvas is what text is read against; `--bg-raised` is the
 	// surface a face typically paints a panel on.
 	const surface = resolved["--bg-raised"] ?? resolved["--bg"] ?? "";
