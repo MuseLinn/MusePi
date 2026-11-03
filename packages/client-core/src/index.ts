@@ -152,6 +152,7 @@ export {
 export * from "./lib/tooltips";
 export * from "./tool-render";
 export { DiffBlock, type DiffLayout } from "./tool-render/parts";
+export { type ExtensionWidgetArtifact, loadExtensionWidgets } from "./widgets/extension-widgets";
 export type { BoardWidget, WidgetDef, WidgetField, WidgetTone } from "./widgets/registry";
 export {
 	registerExternalWidgets,

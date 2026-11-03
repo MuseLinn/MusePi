@@ -40,7 +40,7 @@ describe("BoardPanel (board.list -> shared widget registry)", () => {
 		expect(html).toContain("data-tone");
 	});
 
-	it("renders nothing for an unknown widget type (registry fallback, no crash)", () => {
+	it("labels an unknown widget type instead of leaving a blank slot", () => {
 		const widget: BoardWidget = {
 			id: "x",
 			type: "no-such-widget",
@@ -48,7 +48,10 @@ describe("BoardPanel (board.list -> shared widget registry)", () => {
 			pos: { x: 0, y: 0, w: 172, h: 88 },
 			data: {},
 		};
-		expect(renderToStaticMarkup(<BoardWidgetCard widget={widget} update={() => {}} />)).toBe("");
+		const html = renderToStaticMarkup(<BoardWidgetCard widget={widget} update={() => {}} />);
+		expect(html).toContain("ghost");
+		expect(html).toContain("no-such-widget");
+		expect(html).toContain("sh-board-widget--missing");
 	});
 
 	it("shows the loading state before board.list resolves (async gate)", () => {

@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 // Test-only cross-package import: WIDGET_TYPES lives in the daemon tool.
 // eslint-disable-next-line import/no-relative-parent-imports
 import { WIDGET_TONES, WIDGET_TYPES } from "../../coding-agent/src/bundled-plugins/visuals/tool";
+import { CLOCK_WIDGET } from "../../coding-agent/src/bundled-plugins/visuals/widgets/clock";
 import { METRIC_WIDGET } from "../../coding-agent/src/bundled-plugins/visuals/widgets/metric";
 import { WIDGET_REGISTRY } from "../src/widgets/registry";
 
@@ -19,10 +20,12 @@ describe("widget registry ↔ WIDGET_TYPES parity", () => {
 	});
 
 	test("plugin-contributed metadata agrees with the daemon table", () => {
-		expect(WIDGET_TYPES.metric).toBeDefined();
-		expect(WIDGET_TYPES.metric.fields.map(f => f.key)).toEqual(METRIC_WIDGET.fields.map(f => f.key));
-		expect(WIDGET_TYPES.metric.defaults).toEqual(METRIC_WIDGET.defaults());
-		expect(WIDGET_TONES.metric).toBe(METRIC_WIDGET.tone ?? "default");
+		for (const widget of [METRIC_WIDGET, CLOCK_WIDGET]) {
+			expect(WIDGET_TYPES[widget.type], widget.type).toBeDefined();
+			expect(WIDGET_TYPES[widget.type].fields.map(f => f.key)).toEqual(widget.fields.map(f => f.key));
+			expect(WIDGET_TYPES[widget.type].defaults).toEqual(widget.defaults());
+			expect(WIDGET_TONES[widget.type]).toBe(widget.tone ?? "default");
+		}
 	});
 
 	test("defaults agree per type", () => {

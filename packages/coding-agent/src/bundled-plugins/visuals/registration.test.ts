@@ -33,12 +33,12 @@ describe("musepi-visuals plugin", () => {
 		expect(tools.map(tool => tool.name)).toEqual(["widget"]);
 	});
 
-	test("registers the metric widget type through the seam", () => {
+	test("registers both plugin widget types through the seam", () => {
 		const { pi, widgets } = fakePi();
 		apply(pi);
-		expect(widgets.map(widget => widget.type)).toEqual(["metric"]);
-		expect(widgets[0]?.moduleUrl).toBe("./ui/metric.tsx");
-		expect(widgets[0]?.defaults()).toMatchObject({ value: 4200 });
+		expect(widgets.map(widget => widget.type)).toEqual(["metric", "clock"]);
+		expect(widgets.find(widget => widget.type === "metric")?.moduleUrl).toBe("./ui/metric.tsx");
+		expect(widgets.find(widget => widget.type === "clock")?.defaults()).toEqual({ market: "cn" });
 	});
 
 	test("honours widget.enabled through the definition gate", () => {

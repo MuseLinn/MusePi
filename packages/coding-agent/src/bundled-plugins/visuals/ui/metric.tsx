@@ -8,6 +8,7 @@
  * delta and a sparkline. Text comes from the host's shared i18n table.
  */
 import type { ReactNode } from "react";
+import { hostT } from "./host";
 
 declare const React: {
 	createElement: (type: unknown, props?: Record<string, unknown> | null, ...children: unknown[]) => ReactNode;
@@ -20,14 +21,11 @@ declare const React: {
 declare function requestAnimationFrame(callback: (time: number) => void): number;
 declare function cancelAnimationFrame(handle: number): void;
 declare const performance: { now(): number };
-declare const window: {
-	MusePiHostModules?: { i18n?: { t(key: string): string } };
-};
 
 const { useState, useEffect, useRef } = React;
 
 function refreshLabel(): string {
-	return window.MusePiHostModules?.i18n?.t("settings.widgetRefresh") ?? "Refresh";
+	return hostT("settings.widgetRefresh", "Refresh");
 }
 
 /** Number-roll counter, inlined so the plugin owns no second dependency. */

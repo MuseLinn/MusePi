@@ -2,6 +2,7 @@ import {
 	bindTranslationNamespace,
 	fmtTokens,
 	getLocaleSnapshot,
+	loadExtensionWidgets,
 	registerExternalToolRenderers,
 	registerExternalWidgets,
 	registerTranslationNamespace,
@@ -9,7 +10,7 @@ import {
 	type ToolRenderer,
 	unregisterTranslationNamespace,
 } from "@musepi/client-core";
-import type { WidgetDef, WidgetField } from "@musepi/client-core/src/widgets/registry";
+import type { ExtensionWidgetArtifact } from "@musepi/client-core/src/widgets/extension-widgets";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
 import type {
 	ConfigFieldDesc,
@@ -302,19 +303,7 @@ export interface ToolViewItem {
 }
 
 /** One compiled widget type from extensions.list (registerWidget). */
-interface WidgetViewItem {
-	type: string;
-	extensionId: string;
-	label: string;
-	description?: string;
-	fields: WidgetField[];
-	defaults: Record<string, unknown>;
-	tone?: WidgetDef["tone"];
-	/** Self-contained ESM JavaScript exporting the card component. */
-	code: string;
-	error?: string;
-	css?: string;
-}
+type WidgetViewItem = ExtensionWidgetArtifact;
 /** One status-bar segment from extensions.list (registerStatusBarSegment —
  *  static label rendered after the built-in model/mode/context segments,
  *  ordered by `order`). */
@@ -1089,45 +1078,10 @@ export function useExtensionWidgets(rpc: RpcClient | null): void {
 			return;
 		}
 		let alive = true;
-		const urls: string[] = [];
 		void (async () => {
-			const defs: WidgetDef[] = [];
-			for (const item of widgets) {
-				if (item.error || !item.code) continue;
-				try {
-					exposeHostReact();
-					const url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
-					urls.push(url);
-					const mod = (await import(url)) as { default?: unknown };
-					if (!alive) return;
-					const exported = mod.default;
-					const Component =
-						typeof exported === "function"
-							? exported
-							: exported &&
-									typeof exported === "object" &&
-									typeof (exported as { Component?: unknown }).Component === "function"
-								? (exported as { Component: unknown }).Component
-								: null;
-					if (Component === null) {
-						console.warn(`widget "${item.type}" missing default component export`);
-						continue;
-					}
-					defs.push({
-						type: item.type,
-						label: item.label,
-						...(item.description ? { description: item.description } : {}),
-						fields: item.fields,
-						defaults: () => ({ ...item.defaults }),
-						...(item.tone ? { tone: item.tone } : {}),
-						Component: Component as WidgetDef["Component"],
-					});
-				} catch (e) {
-					console.warn(`widget "${item.type}" load failed`, e);
-				}
-			}
+			exposeHostReact();
+			const defs = await loadExtensionWidgets(widgets);
 			if (alive) registerExternalWidgets(defs);
-			for (const url of urls) URL.revokeObjectURL(url);
 		})();
 		return () => {
 			alive = false;

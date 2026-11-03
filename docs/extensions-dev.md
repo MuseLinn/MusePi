@@ -326,9 +326,9 @@ pi.registerWidget({
 
 - **元数据在 daemon 侧**：`widget` 用它校验 payload、生成 agent schema；`board` 用它校验卡片类型（会话无关的 board RPC 也能校验，不依赖渲染器是否编译过）。
 - **渲染器走与 registerComponent 相同的编译管线**：模块默认导出 React 组件，收到 `{ data, update, sendPrompt?, preview?, annotateCapture? }`；不要 `import react`，用编译器注入的 `React`（`window.MusePiReact`），否则会多一份 React 实例。
-- **分派**：daemon 编译 → `extensions.list.widgets` → GUI `useExtensionWidgets`（ChatView 挂载）注册进 `client-core` 的 widget registry（`registerExternalWidgets`）；同名覆盖内置类型，picker、内联卡与看板共用同一份。
+- **分派**：daemon 编译 → `extensions.list.widgets` → 宿主用 `loadExtensionWidgets`（`client-core`）blob-import 并 `registerExternalWidgets`；桌面 `useExtensionWidgets`（ChatView）与 guest/移动端 `BoardPanel` 共用同一份加载器。同名覆盖内置类型，picker、内联卡与看板共用同一份。
 - **与 registerToolView 的区别**：后者按工具名替换整条工具渲染；本项按卡片类型新增/替换一个 widget 渲染器。
-- **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` 试点）。
+- **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` / `clock` 试点，`widget-compile.test.ts` 端到端校验编译产物）。
 
 ## 10. 扩展 transcript 节点渲染(transcript.node seat, DSH 粒度, 2026-08-27)
 
@@ -748,6 +748,9 @@ const hostModules = {
 | `slot-host` | `lib/slot-host.tsx` | Slot registry store, mount helpers, and slot contract constants |
 | `monaco-runtime` | `lib/monaco-runtime.ts` | `monacoPromise`, the global `MonacoEnvironment`, and the worker factory: one Monaco instance and one worker set for every editor surface |
 | `monaco-lsp` | `lib/monaco-lsp.ts` | LSP `documents`, provider registrations, peek models, and the editor opener: one LSP runtime and one provider set across the shell and every plugin |
+| `voice` | `lib/voice.ts` | Active TTS/dictation sessions, playback context, and stop/resume handles: audio state and cancellation must not diverge across bundles |
+| `panel-maximize` | `lib/panel-maximize.ts` | Maximized flag, subscribers, and animation registry: the host and every plugin observe one panel-maximize state |
+| `suggestions` | `lib/suggestions.ts` | Suggestion contributors, storage, and subscriptions: user-curated suggestions stay the same across the host and plugins |
 | `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
 | `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
 

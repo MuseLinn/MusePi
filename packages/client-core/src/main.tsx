@@ -6,7 +6,7 @@ import { initTooltips } from "./lib/tooltips";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/overlay-fallback.css";
-import "./i18n";
+import * as i18n from "./i18n";
 
 // Desktop web entry (index.html). The Capacitor shell redirects to mobile.html
 // (see the inline script in index.html), so this bundle never touches
@@ -21,6 +21,15 @@ import "./i18n";
 // The react namespace carries no createPortal (react-dom does); add it so a
 // plugin that portals its popover stops crashing on open.
 (window as unknown as { MusePiReact?: unknown }).MusePiReact = { ...React, createPortal };
+
+// Compiled widget renderers (registerWidget) read the shared locale through
+// `window.MusePiHostModules.i18n`; publish it here so guest/mobile boards show
+// the plugin cards' text in the user's language instead of the fallback.
+const hostModules = (window as unknown as { MusePiHostModules?: Record<string, unknown> }).MusePiHostModules ?? {};
+(window as unknown as { MusePiHostModules: Record<string, unknown> }).MusePiHostModules = {
+	...hostModules,
+	i18n,
+};
 
 // The compat slot-host registry (dsh-desktop plugin parity): the injected
 // serve script calls register() for each compiled extension component; the

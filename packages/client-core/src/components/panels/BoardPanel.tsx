@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
-import { widgetDef } from "../../widgets/registry";
+import { type ExtensionWidgetArtifact, loadExtensionWidgets } from "../../widgets/extension-widgets";
+import { registerExternalWidgets, useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 
 /**
  * Guest board panel: read-only view of the host's widget boards
@@ -18,11 +19,21 @@ interface BoardPanelProps {
 }
 
 export function BoardPanel({ client }: BoardPanelProps): ReactNode {
+	useWidgetRegistryVersion();
 	const [boards, setBoards] = useState<BoardData[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	const load = useCallback(async (): Promise<void> => {
 		try {
+			// Plugin cards (`registerWidget`) are not in the static registry;
+			// load their compiled modules before drawing the boards. A daemon
+			// that cannot answer extensions.list still shows the built-ins.
+			try {
+				const ext = await client.rpc<{ widgets?: ExtensionWidgetArtifact[] }>("extensions.list");
+				if (ext?.widgets?.length) registerExternalWidgets(await loadExtensionWidgets(ext.widgets));
+			} catch {
+				// no extensions surface / no permission — built-ins only
+			}
 			const res = await client.rpc<{ boards: BoardData[] }>("board.list");
 			setBoards(res.boards);
 			setError(null);
@@ -84,7 +95,24 @@ export function BoardWidgetCard({
 	update(patch: Record<string, unknown>): void;
 }): ReactNode {
 	const def = widgetDef(widget.type);
-	if (!def) return null;
+	if (!def) {
+		// A plugin card whose renderer failed to load still occupies its slot;
+		// a blank hole reads as a board bug, a labelled shell does not.
+		return (
+			<div
+				className="sh-board-widget sh-board-widget--missing"
+				data-tone="default"
+				style={{ minHeight: `${Math.max(150, Math.min(320, widget.pos.h))}px` }}
+			>
+				<div className="sh-board-widget-head">
+					<span className="sh-board-widget-title">{widget.title}</span>
+				</div>
+				<div className="sh-board-widget-body sh-panel-muted">
+					{t("settings.widgetUnknown")} · {widget.type}
+				</div>
+			</div>
+		);
+	}
 	return (
 		<div
 			className="sh-board-widget"

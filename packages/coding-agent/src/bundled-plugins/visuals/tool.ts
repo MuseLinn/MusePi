@@ -15,6 +15,7 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musep
 import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import widgetDescription from "./prompt.md" with { type: "text" };
+import { CLOCK_WIDGET } from "./widgets/clock";
 import { METRIC_WIDGET } from "./widgets/metric";
 
 // The widget registry lives in guest-client (shared with the GUI board);
@@ -265,7 +266,7 @@ export const WIDGET_TYPES: Record<
  * module is compiled. The plugin and this table share `METRIC_WIDGET`, so the
  * fields/defaults cannot drift.
  */
-for (const widget of [METRIC_WIDGET]) {
+for (const widget of [METRIC_WIDGET, CLOCK_WIDGET]) {
 	WIDGET_TYPES[widget.type] = {
 		fields: widget.fields.map(field => ({ key: field.key, type: field.type })),
 		defaults: widget.defaults(),

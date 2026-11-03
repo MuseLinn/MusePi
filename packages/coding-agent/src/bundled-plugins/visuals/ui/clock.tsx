@@ -1,12 +1,26 @@
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { t } from "../i18n/index.js";
-
 /**
- * Clock widget — market-style digital clock with three market states
- * (US open / EU open / CN open), kimi MARKET PULSE parity. Pure local
- * time rendering; 1s tick.
+ * Clock card renderer (plugin-contributed widget).
+ *
+ * A market-style digital clock with CN/US/EU session states. Pure local time;
+ * one second tick. React comes from `window.MusePiReact` (the compiler's
+ * `React` define), text from the host's shared i18n table.
  */
+import type { ReactNode } from "react";
+import { hostT } from "./host";
+
+declare const React: {
+	createElement: (type: unknown, props?: Record<string, unknown> | null, ...children: unknown[]) => ReactNode;
+	Fragment: unknown;
+	useState: <T>(initial: T | (() => T)) => [T, (v: T | ((prev: T) => T)) => void];
+	useEffect: (fn: () => void | (() => void), deps?: readonly unknown[]) => void;
+};
+declare const window: {
+	setInterval(handler: () => void, timeout: number): number;
+	clearInterval(id: number): void;
+};
+
+const { useState, useEffect } = React;
+
 function marketState(market: string): { label: string; open: boolean } {
 	const now = new Date();
 	const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
@@ -27,7 +41,7 @@ function marketState(market: string): { label: string; open: boolean } {
 	}
 }
 
-export function ClockCard({
+export default function ClockCard({
 	data,
 	update,
 }: {
@@ -41,7 +55,6 @@ export function ClockCard({
 	}, []);
 
 	const market = typeof data.market === "string" ? data.market : "cn";
-	const m = marketState(market);
 	const hh = String(now.getHours()).padStart(2, "0");
 	const mm = String(now.getMinutes()).padStart(2, "0");
 	const ss = String(now.getSeconds()).padStart(2, "0");
@@ -56,11 +69,7 @@ export function ClockCard({
 				{ss}
 			</div>
 			<div className="gui-widget-clock-row">
-				{[
-					["cn", "CN"],
-					["us", "US"],
-					["eu", "EU"],
-				].map(([id, label]) => {
+				{["cn", "us", "eu"].map(id => {
 					const st = marketState(id);
 					return (
 						<button
@@ -70,9 +79,9 @@ export function ClockCard({
 							onClick={() => update({ market: id })}
 						>
 							<span className={`gui-widget-dot${st.open ? " gui-widget-dot--open" : ""}`} />
-							{label}
+							{st.label}
 							<span className="gui-widget-clock-state">
-								{st.open ? t("settings.open") : t("settings.closed")}
+								{st.open ? hostT("settings.open", "OPEN") : hostT("settings.closed", "CLOSED")}
 							</span>
 						</button>
 					);

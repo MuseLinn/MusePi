@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import { CalcCard } from "./calc";
 import { calcDefaults } from "./calc-defaults";
-import { ClockCard } from "./clock";
-import { clockDefaults } from "./clock-defaults";
 import {
 	GaugeCard,
 	HeatwallCard,
@@ -94,15 +92,6 @@ export interface WidgetDef {
 }
 
 export const WIDGET_REGISTRY: readonly WidgetDef[] = [
-	{
-		type: "clock",
-		tone: "dark",
-		nameKey: "widget clock",
-		descKey: "widget clock desc",
-		fields: [{ key: "market", label: "market", type: "select", options: ["cn", "us", "eu"] }],
-		defaults: clockDefaults,
-		Component: ClockCard,
-	},
 	{
 		type: "slider",
 		tone: "light",

@@ -80,6 +80,7 @@ export function WidgetEditor({
 						<span className="gui-widget-editor-label">
 							{t("settings.widgetType")} · {widget.type}
 						</span>
+						{def.description && <span className="gui-widget-editor-hint">{def.description}</span>}
 						<div className="gui-widget-editor-meta">
 							<span>
 								{widget.pos.w} × {widget.pos.h}px
@@ -126,6 +127,7 @@ export function WidgetEditor({
 							type="button"
 							key={w.type}
 							className="gui-widget-editor-add-btn"
+							title={w.description}
 							onClick={() => onAdd(w.type)}
 						>
 							{w.label ?? t((w.nameKey ?? "widget unknown") as never)}
