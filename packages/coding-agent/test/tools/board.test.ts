@@ -141,4 +141,50 @@ describe("board tool", () => {
 		const res = await tool.execute("c1", { action: "nope" });
 		expect(res.isError).toBe(true);
 	});
+
+	test("saves a card type contributed by a loaded extension", async () => {
+		await withTempBoard(async () => {
+			const tool = new BoardTool();
+			const res = await tool.execute(
+				"c1",
+				{
+					action: "save",
+					id: "b1",
+					board: {
+						id: "b1",
+						title: "测试板",
+						widgets: [
+							{ id: "w2", type: "probe", title: "P", data: { value: 3 }, pos: { x: 0, y: 0, w: 200, h: 150 } },
+						],
+					},
+				},
+				undefined,
+				undefined,
+				{
+					getRegisteredWidgets: () => [
+						{ type: "probe", label: "P", fields: [], defaults: () => ({ value: 1 }), moduleUrl: "./p.tsx" },
+					],
+				} as never,
+			);
+			expect(res.isError).not.toBe(true);
+		});
+	});
+
+	test("lists extension widget types in the schema action", async () => {
+		const tool = new BoardTool();
+		const res = await tool.execute("c1", { action: "schema" }, undefined, undefined, {
+			getRegisteredWidgets: () => [
+				{
+					type: "probe",
+					label: "P",
+					fields: [{ key: "value", type: "number" }],
+					defaults: () => ({ value: 1 }),
+					moduleUrl: "./p.tsx",
+				},
+			],
+		} as never);
+		expect(res.isError).not.toBe(true);
+		const text = res.content[0].type === "text" ? res.content[0].text : "";
+		expect(text).toContain("probe: fields=[value:number]");
+	});
 });

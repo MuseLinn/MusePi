@@ -14,6 +14,7 @@ import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
+import type { ExtensionWidget } from "../../extensibility/extensions/types";
 import widgetDescription from "./prompt.md" with { type: "text" };
 import { CLOCK_WIDGET } from "./widgets/clock";
 import { METRIC_WIDGET } from "./widgets/metric";
@@ -274,6 +275,34 @@ for (const widget of [METRIC_WIDGET, CLOCK_WIDGET]) {
 	WIDGET_TONES[widget.type] = widget.tone ?? "default";
 }
 
+/**
+ * The type table a call validates against: the static first-party table plus
+ * any types loaded extensions declared at runtime. A plugin type never enters
+ * `WIDGET_TYPES` itself (the plugin runs from its own copied tree), so the
+ * caller passes `ctx.getRegisteredWidgets()` and gets one merged view.
+ */
+export function widgetTypesWith(
+	extra: readonly ExtensionWidget[],
+): Record<string, { fields: Array<{ key: string; type: string }>; defaults: Record<string, unknown> }> {
+	if (extra.length === 0) return WIDGET_TYPES;
+	const merged = { ...WIDGET_TYPES };
+	for (const widget of extra) {
+		merged[widget.type] = {
+			fields: widget.fields.map(field => ({ key: field.key, type: field.type })),
+			defaults: widget.defaults(),
+		};
+	}
+	return merged;
+}
+
+/** Tones for the same merged view (board schema + editor). */
+export function widgetTonesWith(extra: readonly ExtensionWidget[]): Record<string, string> {
+	if (extra.length === 0) return WIDGET_TONES;
+	const merged: Record<string, string> = { ...WIDGET_TONES };
+	for (const widget of extra) merged[widget.type] = widget.tone ?? "default";
+	return merged;
+}
+
 // Upper bound for widget data (agents sometimes pass verbose payloads);
 // oversized data is rejected instead of bloating the transcript.
 const MAX_DATA_JSON = 12_000;
@@ -356,6 +385,11 @@ export interface WidgetToolDetails {
 	 *  (a sandboxed page cannot read the filesystem itself). */
 	images?: string[];
 }
+
+/** What the tool reads from the session context: plugin widget types. */
+type WidgetToolContext = {
+	getRegisteredWidgets?(): readonly ExtensionWidget[];
+};
 
 export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDetails> {
 	readonly name = "widget";
@@ -454,13 +488,14 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 		}
 
 		const typeName = typeof params.type === "string" ? params.type : "";
-		const spec = WIDGET_TYPES[typeName];
+		const types = widgetTypesWith((_context as WidgetToolContext | undefined)?.getRegisteredWidgets?.() ?? []);
+		const spec = types[typeName];
 		if (!spec) {
 			return {
 				content: [
 					{
 						type: "text",
-						text: `widget: unknown type "${typeName}" — available: ${Object.keys(WIDGET_TYPES).join(", ")}`,
+						text: `widget: unknown type "${typeName}" — available: ${Object.keys(types).join(", ")}`,
 					},
 				],
 				isError: true,

@@ -9,7 +9,8 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
-import { WIDGET_TONES, WIDGET_TYPES } from "../visuals/tool";
+import type { ExtensionWidget } from "../../extensibility/extensions/types";
+import { widgetTonesWith, widgetTypesWith } from "../visuals/tool";
 import boardDescription from "./prompt.md" with { type: "text" };
 import { readBoards, validateBoards, writeBoards } from "./store";
 
@@ -18,6 +19,11 @@ const boardSchema = type({
 	"id?": type("string").describe("Board id (get/save targets)"),
 	"board?": type("object").describe("Full board object {id,title,widgets} for save"),
 });
+
+/** What the board validator reads from the session context: plugin types. */
+type BoardToolContext = {
+	getRegisteredWidgets?(): readonly ExtensionWidget[];
+};
 
 export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 	readonly name = "board";
@@ -60,6 +66,12 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 		_context?: unknown,
 	): Promise<AgentToolResult<unknown>> {
 		const action = typeof params.action === "string" ? params.action : "";
+		// Plugin-contributed card types never enter the static table (their
+		// plugin runs from its own copied tree); merge the session's registry
+		// so agents can save and inspect cards they registered.
+		const runtimeWidgets = (_context as BoardToolContext | undefined)?.getRegisteredWidgets?.() ?? [];
+		const types = widgetTypesWith(runtimeWidgets);
+		const tones = widgetTonesWith(runtimeWidgets);
 		// Provider serializers send only `content` to the model — everything
 		// the agent needs to author boards (existing cards, field schemas)
 		// must live in text, with `details` as the GUI's render payload.
@@ -126,13 +138,13 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				};
 			}
 			case "schema": {
-				const lines = Object.entries(WIDGET_TYPES).map(
+				const lines = Object.entries(types).map(
 					([type, spec]) =>
-						`${type}: fields=[${spec.fields.map(f => `${f.key}:${f.type}`).join(", ")}] defaults=${compact(spec.defaults, 160)} tone=${WIDGET_TONES[type] ?? "default"}`,
+						`${type}: fields=[${spec.fields.map(f => `${f.key}:${f.type}`).join(", ")}] defaults=${compact(spec.defaults, 160)} tone=${tones[type] ?? "default"}`,
 				);
 				return {
 					content: [{ type: "text", text: `widget schema:\n${lines.join("\n")}` }],
-					details: { types: WIDGET_TYPES, tones: WIDGET_TONES },
+					details: { types, tones },
 				};
 			}
 			case "save": {
@@ -142,7 +154,7 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				// tool itself refuses to modify it later).
 				const { builtin: _strip, ...clean } = (params.board as { builtin?: unknown }) ?? {};
 				const board = clean as unknown;
-				const check = validateBoards([board], WIDGET_TYPES);
+				const check = validateBoards([board], types);
 				if (!check.ok) {
 					return { content: [{ type: "text", text: `board: invalid — ${check.error}` }], isError: true };
 				}

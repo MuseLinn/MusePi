@@ -55,6 +55,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The desktop client now uses its built-in browser by default. When the desktop app is attached, the browser tool opens pages in the right-side panel, where the user and the agent share one browser instance and login state; the agent gets its own visible tab that the user can watch, interact with, or take over. A headless Chromium is only the fallback in the CLI, without a desktop host, or when `browser.gui` is explicitly off, and the tool summary, prompt, setting copy, and docs no longer describe it as the default.
 
 ### Fixed
+- **插件卡片类型进入运行时校验表**：`widget` 与 `board` 在调用时合并会话里已加载扩展声明的类型，`board.save` / `widget.schema` 读取 daemon 进程索引，第三方 `registerWidget` 类型不再被判为未知；lookup 失败仍回退内建表。
+  - EN: Plugin card types now reach runtime validation. The widget and board tools merge types declared by loaded extensions when called, while board.save and widget.schema read the daemon process index, so a third-party registerWidget type is no longer rejected as unknown; a miss still falls back to the built-in table.
 - **注册型工具的会话闸门不再被迟到注册绕过**：`tools.disabled` 或工具自己的 `enabled` 判定为否的工具，在扩展注册监听器或构造竞态补录时也会再次过滤；新增走真实会话装配的回归用例，防止「初始快照过滤、随后又被加回」。
   - EN: The session gate for registered tools is no longer bypassed by late registration. A tool denied by tools.disabled or its own enabled predicate is filtered again when an extension registration listener or the construction-race catch-up runs. A new regression test goes through real session assembly so the initial snapshot cannot be undone afterwards.
 - **模式上下文不再重复注入，日期与星期始终一致**：plan/goal/vibe 在流式进入时已通过 steer 持久化的上下文，下一轮提示词只在内容变化时重新投递，相同内容不再产生第二份；日期与星期改为从同一时刻派生，跨午夜也不会错配。日期、cwd、仓库树、context 文件、skills/rules、工具清单、MCP 说明、记忆和 persona/预设仍由宿主 `buildSystemPrompt` 装配，未迁移到插件或提示词注册表。

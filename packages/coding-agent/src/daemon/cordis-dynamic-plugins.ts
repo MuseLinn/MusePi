@@ -82,6 +82,7 @@ import {
 import type { PluginRuntimeTarget } from "../extensibility/plugins/runtime/mount";
 import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
+import { forgetRegisteredWidget } from "./registered-widgets";
 
 export { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-extension-error";
 
@@ -487,6 +488,7 @@ function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension,
 			return () => {
 				const index = extension.widgets.findIndex(entry => entry.type === widget.type);
 				if (index >= 0) extension.widgets.splice(index, 1);
+				forgetRegisteredWidget(widget.type);
 			};
 		}
 		case "registerPrompt": {

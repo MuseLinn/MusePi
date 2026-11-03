@@ -327,6 +327,7 @@ pi.registerWidget({
 - **元数据在 daemon 侧**：`widget` 用它校验 payload、生成 agent schema；`board` 用它校验卡片类型（会话无关的 board RPC 也能校验，不依赖渲染器是否编译过）。
 - **渲染器走与 registerComponent 相同的编译管线**：模块默认导出 React 组件，收到 `{ data, update, sendPrompt?, preview?, annotateCapture? }`；不要 `import react`，用编译器注入的 `React`（`window.MusePiReact`），否则会多一份 React 实例。
 - **分派**：daemon 编译 → `extensions.list.widgets` → 宿主用 `loadExtensionWidgets`（`client-core`）blob-import 并 `registerExternalWidgets`；桌面 `useExtensionWidgets`（ChatView）与 guest/移动端 `BoardPanel` 共用同一份加载器。同名覆盖内置类型，picker、内联卡与看板共用同一份。
+- **运行时校验**：`widget` / `board` 调用时把 `ctx.getRegisteredWidgets()` 合并进类型表；`board.save` / `widget.schema` 这类无工具上下文的 RPC 读 daemon 进程索引（`registerWidget` 写入）。插件类型因此能真正通过校验，而不只是出现在扩展清单里。
 - **与 registerToolView 的区别**：后者按工具名替换整条工具渲染；本项按卡片类型新增/替换一个 widget 渲染器。
 - **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` / `clock` 试点，`widget-compile.test.ts` 端到端校验编译产物）。
 

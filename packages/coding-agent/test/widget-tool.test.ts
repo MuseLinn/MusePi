@@ -34,4 +34,25 @@ describe("widget tool validation", () => {
 		const r = await tool.execute("c4", { type: "clock", title: "我的时钟" } as never);
 		expect(r.details).toMatchObject({ title: "我的时钟" });
 	});
+
+	test("accepts a type contributed by a loaded extension", async () => {
+		const r = await tool.execute("c5", { type: "probe", data: { value: 7 } } as never, undefined, undefined, {
+			getRegisteredWidgets: () => [
+				{
+					type: "probe",
+					label: "Probe",
+					fields: [{ key: "value", type: "number" }],
+					defaults: () => ({ value: 1 }),
+					moduleUrl: "./probe.tsx",
+				},
+			],
+		} as never);
+		expect(r.isError).not.toBe(true);
+		expect(r.details).toMatchObject({ type: "probe", data: { value: 7 } });
+	});
+
+	test("rejects the same type when no extension contributes it", async () => {
+		const r = await tool.execute("c6", { type: "probe" } as never);
+		expect(r.isError).toBe(true);
+	});
 });

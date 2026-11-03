@@ -530,6 +530,9 @@ export interface ExtensionContext {
 	abort(): void;
 	/** Whether there are queued messages waiting */
 	hasPendingMessages(): boolean;
+	/** Widget types contributed by loaded extensions (registerWidget). Tools
+	 *  that validate card types merge these over the built-in table. */
+	getRegisteredWidgets?(): ExtensionWidget[];
 	/** Gracefully shutdown and exit. */
 	shutdown(): void;
 	/** Get the current effective system prompt. */

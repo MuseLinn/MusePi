@@ -24,6 +24,7 @@ import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
 import { type Hook, hookCapability } from "../../capability/hook";
 import { isPluginDisabled } from "../../capability/plugin-identity";
+import { rememberRegisteredWidget } from "../../daemon/registered-widgets";
 import { isServiceTierFamily, isServiceTierForFamily } from "../../config/service-tier";
 import { loadCapability } from "../../discovery";
 import { getExtensionNameFromPath } from "../../discovery/helpers";
@@ -557,6 +558,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			...(widget.tone ? { tone: widget.tone } : {}),
 			moduleUrl: widget.moduleUrl,
 		});
+		rememberRegisteredWidget(widget);
 	}
 
 	registerPrompt(section: ExtensionPromptSection): void {

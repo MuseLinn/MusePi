@@ -3034,6 +3034,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			model: agent.state.model,
 			isIdle: () => !session.isStreaming,
 			hasQueuedMessages: () => session.queuedMessageCount > 0,
+			getRegisteredWidgets: () => extensionRunner.getAllRegisteredWidgets(),
 			abort: () => {
 				session.abort({ reason: USER_INTERRUPT_LABEL });
 			},

@@ -70,6 +70,7 @@ import type {
 	ExtensionStatusBarSegment,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
+	ExtensionWidget,
 	InputEvent,
 	InputEventResult,
 	McpNotificationEvent,
@@ -1074,6 +1075,17 @@ export class ExtensionRunner {
 			}
 		}
 		return tools;
+	}
+
+	/** Widget types declared by loaded extensions (registerWidget), in load
+	 *  order. Tools merge these over the built-in table at call time so a
+	 *  card type works even though its metadata never enters the static table. */
+	getAllRegisteredWidgets(): ExtensionWidget[] {
+		const widgets: ExtensionWidget[] = [];
+		for (const ext of this.extensions) {
+			for (const widget of ext.widgets) widgets.push(widget);
+		}
+		return widgets;
 	}
 
 	/** Get the effective registered tool for a name using normal last-extension-wins precedence. */

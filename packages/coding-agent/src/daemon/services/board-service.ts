@@ -43,8 +43,11 @@ export class BoardService implements DaemonService {
 	async save(params: { boards?: unknown }): Promise<{ ok: true; boards: unknown[] }> {
 		const { boards } = params ?? {};
 		const { readBoards, validateBoards, writeBoards } = await import("../../bundled-plugins/board/store");
-		const { WIDGET_TYPES } = await import("../../bundled-plugins/visuals/tool");
-		const check = validateBoards(boards, WIDGET_TYPES);
+		const { widgetTypesWith } = await import("../../bundled-plugins/visuals/tool");
+		const { getRegisteredWidgets } = await import("../registered-widgets");
+		// Plugin-declared types are process-registered by the loader; a
+		// session-less RPC has no tool context, so merge the process index.
+		const check = validateBoards(boards, widgetTypesWith(getRegisteredWidgets()));
 		if (!check.ok) throw new Error(`board.save: ${check.error}`);
 		const list = boards as Array<{ id?: string; builtin?: boolean }>;
 		// Builtin examples are protected: a full-list overwrite from
@@ -60,9 +63,10 @@ export class BoardService implements DaemonService {
 	/** RPC widget.schema：agent 侧 widget schema（widget 工具 parity）——
 	 *  types、fields、defaults 与卡片 tones，agent 写看板挂件无需硬编码形状。 */
 	async schema(): Promise<{ types: unknown; tones: unknown }> {
-		const { WIDGET_TYPES } = await import("../../bundled-plugins/visuals/tool");
-		const { WIDGET_TONES } = await import("../../bundled-plugins/visuals/tool");
-		return { types: WIDGET_TYPES, tones: WIDGET_TONES };
+		const { widgetTonesWith, widgetTypesWith } = await import("../../bundled-plugins/visuals/tool");
+		const { getRegisteredWidgets } = await import("../registered-widgets");
+		const widgets = getRegisteredWidgets();
+		return { types: widgetTypesWith(widgets), tones: widgetTonesWith(widgets) };
 	}
 
 	/** RPC widget.data：daemon 侧数据源代理（docs/archive/board-dashboard.md
