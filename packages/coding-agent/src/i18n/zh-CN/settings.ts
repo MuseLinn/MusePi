@@ -2002,6 +2002,26 @@ export const settings = {
 	"Full-width horizontal rules above and below, status line at bottom": "上下整宽横线，状态线在底部",
 	"GUI Managed Browser": "GUI 托管浏览器",
 	"GUI Managed Browser URL": "GUI 托管浏览器地址",
+	"Agent Control": "Agent 控制",
+	"Allow the agent to drive the built-in browser. When off, the agent's browser tool refuses immediately; panel browsing keeps working.":
+		"允许 Agent 操控内置浏览器。关闭后 Agent 的 browser 工具会被直接拒绝；面板浏览不受影响。",
+	"Default Search Engine": "默认搜索引擎",
+	"Search engine for the built-in browser's address bar: google, bing, duckduckgo or baidu.":
+		"内置浏览器地址栏使用的搜索引擎：google、bing、duckduckgo 或 baidu。",
+	"Default Zoom": "默认缩放",
+	"Default zoom level applied to open and new browser tabs (0.25-3).":
+		"应用到已打开和新建标签页的默认缩放比例（0.25-3）。",
+	"User Agent": "用户代理",
+	"Custom user agent for managed browser tabs. Empty uses the default browser user agent.":
+		"托管浏览器标签页的自定义 User Agent；留空使用浏览器默认值。",
+	"Ask Where to Save": "下载前询问保存位置",
+	"Ask for a save location before every browser download.": "每次浏览器下载前询问保存位置。",
+	"Download Directory": "下载目录",
+	"Download folder for the built-in browser. Empty uses the system Downloads folder; agent downloads default here.":
+		"内置浏览器的下载目录；留空使用系统“下载”目录，Agent 下载默认保存在这里。",
+	"Agent Download Limit": "Agent 下载大小上限",
+	"Maximum size in bytes for an agent-initiated browser download; larger downloads are cancelled and deleted. Default 5 GB.":
+		"Agent 发起的浏览器下载的最大字节数；超过上限会被取消并删除。默认 5 GB。",
 	"Host the blob server binds to; loopback for tunnels, 0.0.0.0 for direct serving":
 		"blob 服务器绑定主机；走隧道用 loopback，直连服务用 0.0.0.0",
 	Idle: "空闲",

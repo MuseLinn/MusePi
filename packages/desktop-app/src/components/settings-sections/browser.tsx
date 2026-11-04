@@ -395,11 +395,11 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						onChange={v => setValue("browser.download.agentMaxBytes", Number(v))}
 						ariaLabel={t("settings.browserDownloadLimit")}
 						options={[
-							{ value: "536870912", label: "512 MB" },
-							{ value: "1073741824", label: "1 GB" },
-							{ value: "2147483648", label: "2 GB" },
-							{ value: "5368709120", label: "5 GB" },
-							{ value: "10737418240", label: "10 GB" },
+							{ value: "536870912", label: `512 ${t("settings.browserSizeMb")}` },
+							{ value: "1073741824", label: `1 ${t("settings.browserSizeGb")}` },
+							{ value: "2147483648", label: `2 ${t("settings.browserSizeGb")}` },
+							{ value: "5368709120", label: `5 ${t("settings.browserSizeGb")}` },
+							{ value: "10737418240", label: `10 ${t("settings.browserSizeGb")}` },
 						]}
 					/>
 				</div>

@@ -563,6 +563,8 @@ export const settings = {
 		"Leave empty to use the system Downloads folder. Agent downloads are saved here by default.",
 	"settings.browserDownloadDirPlaceholder": "System Downloads folder",
 	"settings.browserDownloadDirChoose": "Choose…",
+	"settings.browserSizeMb": "MB",
+	"settings.browserSizeGb": "GB",
 	"settings.browserDownloadLimit": "Agent download size limit",
 	"settings.browserDownloadLimitDescription": "Larger agent downloads are cancelled and deleted.",
 	"settings.browserDefaultZoom": "Default zoom",
