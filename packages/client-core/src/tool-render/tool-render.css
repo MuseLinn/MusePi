@@ -249,6 +249,24 @@
 	white-space: nowrap;
 }
 
+.tv-browser-operation-thumb {
+	flex: none;
+	width: 44px;
+	height: 28px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	object-fit: cover;
+	background: var(--tv-bg);
+}
+
+.tv-browser-operation-coords {
+	flex: none;
+	color: var(--tv-faint);
+	font-family: var(--tv-mono);
+	font-size: 10px;
+	white-space: nowrap;
+}
+
 .tv-browser-operation[data-status="running"] small {
 	color: var(--tv-accent);
 }

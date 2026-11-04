@@ -64,6 +64,18 @@ interface Window {
 			state: "frozen" | "active";
 		}): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserConfirmResult(input: { requestId: string; allow: boolean }): Promise<{ ok: boolean }>;
+		/** In-app upload card: open the OS picker with the page's accept filters. */
+		managedBrowserPickUploadFiles(input: {
+			accept?: string[];
+			multiple?: boolean;
+		}): Promise<{ paths: string[]; error?: string }>;
+		/** In-app upload card decision (accept + picked paths / cancel). */
+		managedBrowserUploadResult(input: {
+			requestId: string;
+			accepted: boolean;
+			paths?: string[];
+			reason?: string;
+		}): Promise<{ ok: boolean }>;
 		/** Renderer listeners are registered; main may send create-tab now. */
 		managedBrowserHostReady(): Promise<unknown>;
 		/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId`. */
@@ -77,6 +89,10 @@ interface Window {
 		}): Promise<{ mime: string; base64: string; width: number; height: number } | null>;
 		onManagedBrowserState(cb: (state: ManagedBrowserState) => void): () => void;
 		onManagedBrowserConfirm(cb: (input: ManagedBrowserConfirmRequest) => void): () => void;
+		/** Site opened a picker, or the agent called tab.uploadFile. */
+		onManagedBrowserUploadRequest(cb: (input: ManagedBrowserUploadRequest) => void): () => void;
+		/** The shell's 60s decision window elapsed; close the card. */
+		onManagedBrowserUploadDismiss(cb: (input: { requestId: string }) => void): () => void;
 		/** Agent-created tab (CDP `Target.createTarget`): mount a `<webview>`. */
 		onManagedBrowserCreateTab(cb: (input: { tabId: string; url: string }) => void): () => void;
 		onManagedBrowserSelectTab(cb: (input: { tabId: string }) => void): () => void;
@@ -91,6 +107,17 @@ interface Window {
 interface ManagedBrowserConfirmRequest {
 	requestId: string;
 	url: string;
+}
+
+/** One in-app upload confirmation request from main. */
+interface ManagedBrowserUploadRequest {
+	requestId: string;
+	mode: "site" | "agent";
+	site: { host: string; url: string; title?: string };
+	accept: string[];
+	multiple: boolean;
+	/** File names (agent mode) — the card never receives full paths. */
+	names: string[];
 }
 
 interface ManagedBrowserActivity {

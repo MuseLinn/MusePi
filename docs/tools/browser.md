@@ -88,6 +88,19 @@ The tool returns one result per call; no streaming partial output is emitted fro
   - primitive `display(value)` (string/number/...) and `console.*` flow to the text channel, which the worker forwards as debug logs rather than tool content; `undefined` is ignored.
 - `tab.screenshot()` returns its saved path and appends text plus an image unless `silent: true`; `details.screenshots` records `{ dest, mimeType, bytes, width, height }`.
 - `run` `details` includes `action`, `name`, current `browser`/`url` when the tab exists, optional `screenshots`, and `details.result` containing only the concatenated text outputs. Combined run text is capped at the inline byte limit via `enforceInlineByteCap()`; over-cap text is saved as a session artifact (`saveBrowserOutputArtifact()`) and the capped text replaces it in content and `details.result`.
+- `details.operations` is the UI-facing action feed: each entry carries `action`, `status`, `target`, optional `elementCount`, and — for selector actions — the target's viewport box (`x`/`y`/`width`/`height`) plus `pageTitle`. In the managed GUI browser, completed click/fill/type/press/select/scroll/drag/hover/goto/upload steps also carry a small JPEG `thumbnail` data URL (capped at 24 per run). These fields are metadata for the transcript renderer; they are not added to the model-facing content.
+- `browser.agentControl=false` rejects the tool before any backend is resolved (`AGENT_CONTROL_DISABLED`); the pane itself is unaffected.
+
+## Settings
+Browser runtime preferences live in the daemon settings and are pushed to the desktop shell by the pane:
+
+- `browser.agentControl` — allow the agent to drive the built-in browser at all.
+- `browser.searchEngine` — `google` | `bing` | `duckduckgo` | `baidu`, used when address-bar input is not a URL.
+- `browser.zoom` — default page zoom for tabs without an explicit per-tab override.
+- `browser.userAgent` — empty uses Chromium's UA; a value applies to managed tabs.
+- `browser.download.askWhereToSave` — ask the user before a user-tab download.
+- `browser.download.dir` — agent download folder (empty = system Downloads).
+- `browser.download.agentMaxBytes` — agent download cap; larger transfers are cancelled and deleted.
 
 ## Flow
 1. `BrowserTool.execute()` (`packages/coding-agent/src/tools/browser.ts`) abort-checks, clamps `timeout` via `clampTimeout("browser", ...)`, defaults `name` to `"main"`, and dispatches on `action`.
@@ -196,7 +209,10 @@ The tool returns one result per call; no streaming partial output is emitted fro
   - `loadPuppeteer()` writes `{}` to `<puppeteer-safe-dir>/package.json` before importing `puppeteer-core`.
   - First headless launch may download Chromium into the Puppeteer cache directory returned by `getPuppeteerDir()`.
   - `tab.screenshot()` creates parent directories and writes image files.
-  - `tab.uploadFile()` resolves supplied paths against the session cwd.
+  - `tab.uploadFile()` resolves supplied paths against the session cwd and rejects paths that are not existing regular files.
+- Managed browser (`browser.gui`)
+  - The worker intercepts the page's file chooser (`Page.setInterceptFileChooserDialog` + `Page.fileChooserOpened`) and asks the desktop shell over loopback `POST /musepi/upload-request`; Chromium never opens a native dialog. The shell shows one in-app card (site, accept, Cancel / Choose files…), and files reach the input (`DOM.setFileInputFiles`) only after the user picks them.
+  - `tab.uploadFile()` and enriched handles (`tab.id(...).uploadFile`) use the same card with the file names listed; cancel, timeout (60s in the shell, 65s worker guard) or a failed bridge rejects with a `ToolError` and sends nothing. Headless/CDP/relay backends keep their existing picker behavior.
 - Network
   - CDP attach paths poll `http://127.0.0.1:<port>/json/version` or the supplied `cdp_url` `/json/version`.
   - Headless/browser-attach sessions create CDP websocket connections.

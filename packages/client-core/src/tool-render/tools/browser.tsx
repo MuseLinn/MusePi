@@ -124,7 +124,15 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 							>
 								{browserActionLabel(operation.action)}
 							</Badge>
+							{operation.thumbnail && (
+								<img className="tv-browser-operation-thumb" src={operation.thumbnail} alt="" loading="lazy" />
+							)}
 							{operation.target && <span className="tv-browser-operation-target">{operation.target}</span>}
+							{operation.x !== undefined && operation.y !== undefined && (
+								<span className="tv-browser-operation-coords" title={operation.pageTitle}>
+									({operation.x}, {operation.y})
+								</span>
+							)}
 							{operation.elementCount !== undefined && (
 								<span
 									aria-label={t("tools.browserElementsWithCount", { count: String(operation.elementCount) })}

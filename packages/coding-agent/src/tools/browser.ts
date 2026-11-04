@@ -298,6 +298,12 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	): Promise<AgentToolResult<BrowserToolDetails>> {
 		try {
 			throwIfAborted(signal);
+			if (this.session.settings.get("browser.agentControl") === false) {
+				throw new ToolError(
+					'Browser agent control is disabled. Turn on "Allow Agent Control" in Settings → Browser (设置 → 浏览器).',
+					{ code: "AGENT_CONTROL_DISABLED" },
+				);
+			}
 			const timeoutSeconds = clampTimeout("browser", params.timeout, this.session.settings.get("tools.maxTimeout"));
 			const timeoutMs = timeoutSeconds * 1000;
 			const name = params.name ?? DEFAULT_TAB_NAME;

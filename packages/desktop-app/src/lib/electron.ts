@@ -53,6 +53,40 @@ export interface ElectronAPI {
 	 *  and stops the owned daemon (default). 设置 → 常规「关闭窗口时最小化到托盘」。 */
 	getCloseToTray?(): Promise<boolean>;
 	setCloseToTray?(value: boolean): Promise<boolean>;
+	/** Runtime managed-browser preferences: applied to open tabs and to tabs
+	 *  created later (default zoom, UA, search engine, download policy). */
+	managedBrowserSetPreferences?(input: ManagedBrowserPreferences): Promise<{ ok: boolean }>;
+	/** In-app upload card: OS picker filtered by the page's accept list. */
+	managedBrowserPickUploadFiles?(input: {
+		accept?: string[];
+		multiple?: boolean;
+	}): Promise<{ paths: string[]; error?: string }>;
+	/** In-app upload card decision (accept + picked paths / cancel). */
+	managedBrowserUploadResult?(input: {
+		requestId: string;
+		accepted: boolean;
+		paths?: string[];
+		reason?: string;
+	}): Promise<{ ok: boolean }>;
+}
+
+/** Managed-browser runtime preferences (设置 → 浏览器). Every field is
+ *  optional: main keeps its previous value for an omitted field. */
+export interface ManagedBrowserPreferences {
+	/** Default page zoom (0.25–3) for tabs without a per-tab override. */
+	zoom?: number;
+	/** Custom user agent; "" restores the engine default. */
+	userAgent?: string;
+	/** Address-bar search engine: google, bing, duckduckgo or baidu. */
+	searchEngine?: string;
+	download?: {
+		/** Prompt for a destination on user downloads. */
+		askWhereToSave?: boolean;
+		/** Download folder; "" uses the system Downloads folder. */
+		dir?: string;
+		/** Agent download size cap in bytes (agent tabs only). */
+		maxBytes?: number;
+	};
 }
 
 /** Classified updater failure (main process update-logic.cjs → renderer).
@@ -168,6 +202,18 @@ export async function setCloseToTray(value: boolean): Promise<void> {
 	}
 }
 
+/** Push managed-browser runtime preferences to main (see
+ *  ManagedBrowserPreferences). No-op outside Electron or on an older shell. */
+export async function setManagedBrowserPreferences(preferences: ManagedBrowserPreferences): Promise<void> {
+	if (!isElectron()) return;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		await electronAPI.managedBrowserSetPreferences?.(preferences);
+	} catch {
+		// Best-effort — the pane keeps working with main's defaults.
+	}
+}
+
 /** Native folder picker; null when canceled or running in a browser. */
 export async function pickDirectory(): Promise<string | null> {
 	if (!isElectron()) return null;
@@ -176,6 +222,38 @@ export async function pickDirectory(): Promise<string | null> {
 		return await electronAPI.openDirectory();
 	} catch {
 		return null;
+	}
+}
+
+/**
+ * Native file picker for the in-app upload card. `accept` comes from the
+ * page's input so the OS dialog filters the same types; the returned paths are
+ * absolute (empty when canceled or running in a browser).
+ */
+export async function pickUploadFiles(input: { accept?: string[]; multiple?: boolean }): Promise<string[]> {
+	if (!isElectron()) return [];
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		const result = await electronAPI.managedBrowserPickUploadFiles?.(input);
+		return result?.paths ?? [];
+	} catch {
+		return [];
+	}
+}
+
+/** Answer a waiting upload card; no-op outside Electron or on an older shell. */
+export async function answerUploadRequest(input: {
+	requestId: string;
+	accepted: boolean;
+	paths?: string[];
+	reason?: string;
+}): Promise<void> {
+	if (!isElectron()) return;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		await electronAPI.managedBrowserUploadResult?.(input);
+	} catch {
+		// Best-effort — main times the request out on its own.
 	}
 }
 

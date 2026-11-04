@@ -4902,6 +4902,79 @@ export const SETTINGS_SCHEMA = {
 				"Directory to save screenshots. If unset, screenshots go to a temp file. Supports ~. Examples: ~/Downloads, ~/Desktop, /sdcard/Download (Android)",
 		},
 	},
+	"browser.agentControl": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Agent Control",
+			description:
+				"Allow the agent to drive the built-in browser. When off, the agent's browser tool refuses immediately; panel browsing keeps working.",
+		},
+	},
+	"browser.searchEngine": {
+		type: "string",
+		default: "google",
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Default Search Engine",
+			description: "Search engine for the built-in browser's address bar: google, bing, duckduckgo or baidu.",
+		},
+	},
+	"browser.zoom": {
+		type: "number",
+		default: 1,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Default Zoom",
+			description: "Default zoom level applied to open and new browser tabs (0.25-3).",
+		},
+	},
+	"browser.userAgent": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "User Agent",
+			description: "Custom user agent for managed browser tabs. Empty uses the default browser user agent.",
+		},
+	},
+	"browser.download.askWhereToSave": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Ask Where to Save",
+			description: "Ask for a save location before every browser download.",
+		},
+	},
+	"browser.download.dir": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Download Directory",
+			description:
+				"Download folder for the built-in browser. Empty uses the system Downloads folder; agent downloads default here.",
+		},
+	},
+	"browser.download.agentMaxBytes": {
+		type: "number",
+		default: 5368709120,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Agent Download Limit",
+			description:
+				"Maximum size in bytes for an agent-initiated browser download; larger downloads are cancelled and deleted. Default 5 GB.",
+		},
+	},
 
 	// Tool execution
 	"tools.intentTracing": {

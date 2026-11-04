@@ -102,6 +102,8 @@ export interface ManagedBrowserHostState {
 	busyTabIds: readonly string[];
 	agentActivity: boolean;
 	confirm: ManagedBrowserConfirmRequest | null;
+	/** In-app upload confirmation (site picker or agent tab.uploadFile). */
+	upload: ManagedBrowserUploadRequest | null;
 	error: string | null;
 }
 
@@ -115,6 +117,7 @@ let state: ManagedBrowserHostState = {
 	busyTabIds: [],
 	agentActivity: false,
 	confirm: null,
+	upload: null,
 	error: null,
 };
 
@@ -187,6 +190,47 @@ function isBlankUrl(url: string): boolean {
 
 /** Guest ids already reported to main (one report per tab; elements never remount). */
 const reportedGuests = new Set<string>();
+
+// ── Address-bar submission (search fallback) ─────────────────────────
+
+/** Per-engine query templates for the settings' default search engine. */
+const SEARCH_ENGINE_TEMPLATES: Record<string, string> = {
+	google: "https://www.google.com/search?q=",
+	bing: "https://www.bing.com/search?q=",
+	duckduckgo: "https://duckduckgo.com/?q=",
+	baidu: "https://www.baidu.com/s?wd=",
+};
+
+/** Search URL for raw address-bar text; unknown engines fall back to Google. */
+function searchUrl(engine: string | undefined, query: string): string {
+	const key = String(engine ?? "")
+		.trim()
+		.toLowerCase();
+	const template = SEARCH_ENGINE_TEMPLATES[key] ?? SEARCH_ENGINE_TEMPLATES.google;
+	return `${template}${encodeURIComponent(query.trim())}`;
+}
+
+/** Does the typed text address a host rather than ask a question? Mirrors
+ *  main's `normalizeAddressBarUrl` accept set (scheme, localhost, dotted
+ *  host), so anything accepted here keeps the existing URL path. */
+function looksLikeAddress(input: string): boolean {
+	const value = input.trim();
+	if (!value || /\s/.test(value)) return false;
+	if (value.startsWith("//")) return false;
+	if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value)) return true;
+	if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i.test(value)) return true;
+	const [host = ""] = value.split(/[/?#]/);
+	const name = /^([^\s/:]+)(?::\d{1,5})?$/.exec(host)?.[1] ?? "";
+	return name.includes(".") && !name.startsWith(".") && !name.endsWith(".");
+}
+
+/** Address-bar Enter: URLs keep main's normalization; anything else becomes
+ *  a web search through the configured engine. */
+export function resolveAddressBarInput(value: string, engine: string | undefined): string {
+	const input = value.trim();
+	if (!input) return "";
+	return looksLikeAddress(input) ? input : searchUrl(engine, input);
+}
 
 /** Element lifecycle: registered by the host renderer, reported to main. */
 export function attachElement(tabId: string, el: HostWebview | null): void {
@@ -612,6 +656,32 @@ export async function answerConfirm(requestId: string, allow: boolean): Promise<
 	await window.electronAPI?.managedBrowserConfirmResult({ requestId, allow });
 }
 
+/** Cancel the upload card; main cancels the intercepted chooser. */
+export async function cancelUpload(requestId: string): Promise<void> {
+	set({ upload: null });
+	await window.electronAPI?.managedBrowserUploadResult({ requestId, accepted: false, reason: "canceled" });
+}
+
+/** Open the OS picker for the card, then accept with the chosen paths. The
+ *  card stays open when the picker is canceled so the user can retry. */
+export async function chooseUploadFiles(request: ManagedBrowserUploadRequest): Promise<void> {
+	const api = window.electronAPI;
+	if (!api?.managedBrowserPickUploadFiles) return;
+	const picked = await api
+		.managedBrowserPickUploadFiles({ accept: request.accept, multiple: request.multiple })
+		.catch(() => ({ paths: [] as string[] }));
+	if (!picked.paths || picked.paths.length === 0) return;
+	set({ upload: null });
+	await api.managedBrowserUploadResult({ requestId: request.requestId, accepted: true, paths: picked.paths });
+}
+
+/** Agent-initiated card: files are already chosen by the agent; accept sends
+ *  the decision, main reuses the worker's validated paths. */
+export async function allowAgentUpload(requestId: string): Promise<void> {
+	set({ upload: null });
+	await window.electronAPI?.managedBrowserUploadResult({ requestId, accepted: true });
+}
+
 /**
  * Live tab styling hint: `<meta name="theme-color">` has no webview event, so it
  * is read from the guest on navigation (best-effort, ignore failures).
@@ -650,6 +720,10 @@ export function wireHost(): void {
 			});
 		}),
 		api.onManagedBrowserConfirm(input => set({ confirm: input })),
+		api.onManagedBrowserUploadRequest?.(input => set({ upload: input })) ?? (() => {}),
+		api.onManagedBrowserUploadDismiss?.(({ requestId }) => {
+			if (state.upload?.requestId === requestId) set({ upload: null });
+		}) ?? (() => {}),
 		api.onManagedBrowserCreateTab(input => {
 			void createTab(input.url, { tabId: input.tabId, agent: true }).catch(() => {
 				void api.managedBrowserGuestGone(input.tabId).catch(() => {});
@@ -686,7 +760,7 @@ export function unwireHost(): void {
 		window.clearInterval(residencyTimer);
 		residencyTimer = null;
 	}
-	set({ port: null });
+	set({ port: null, upload: null });
 }
 
 /**

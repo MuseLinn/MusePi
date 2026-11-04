@@ -153,6 +153,10 @@ interface OpenDialogInfo {
  */
 const QUICK_OP_TIMEOUT_MS = 20_000;
 const ACTION_OP_TIMEOUT_MS = 8_000;
+/** Managed-browser upload confirmation: the shell lets the user decide for up to
+ *  60s, so the worker waits slightly longer instead of failing the op first. The
+ *  cell budget still wins — see `uploadFile` in `#createTabApi`. */
+const UPLOAD_CONFIRM_TIMEOUT_MS = 65_000;
 /** Maximum wait for a renderer acknowledgement after a wheel event is queued. */
 const SCROLL_ACK_TIMEOUT_MS = 2_000;
 /** Headroom subtracted from the cell budget so a per-op deadline fires before it. */
@@ -320,6 +324,21 @@ function asElementHandle(handle: unknown): ElementHandle | null {
 /** ElementHandle enriched with the `fill()` the tool docs promise on handles from `tab.id()`/`tab.ref()`/`tab.waitFor()`. */
 export type ActionableHandle = ElementHandle & { fill(value: string): Promise<void> };
 
+/** Native `ElementHandle.uploadFile` per enriched handle. The enrichment
+ *  replaces the method with the managed-browser confirmation gate, so the gate
+ *  itself must call the ORIGINAL — otherwise it would re-enter itself. */
+const nativeUploadFiles = new WeakMap<ElementHandle, (...paths: string[]) => Promise<void>>();
+
+/** Hand files to an input without re-entering the confirmation gate. */
+export async function uploadFilesOnHandle(handle: ElementHandle, files: string[]): Promise<void> {
+	const native = nativeUploadFiles.get(handle);
+	if (native) {
+		await native(...files);
+		return;
+	}
+	await (handle as unknown as { uploadFile: (...paths: string[]) => Promise<void> }).uploadFile(...files);
+}
+
 /**
  * Attach `fill()` to a puppeteer ElementHandle before handing it to user code.
  * Puppeteer handles expose `type()` but no `fill()`; the semantics mirror the
@@ -327,7 +346,14 @@ export type ActionableHandle = ElementHandle & { fill(value: string): Promise<vo
  */
 export function toActionableHandle(
 	handle: ElementHandle,
-	activity?: { tracker: BrowserOperationTracker; target: string; signal?: AbortSignal },
+	activity?: {
+		tracker: BrowserOperationTracker;
+		target: string;
+		signal?: AbortSignal;
+		/** Managed-browser gate: an enriched handle's uploadFile must ask the
+		 *  user too, not just `tab.uploadFile`. */
+		upload?: (handle: ActionableHandle, files: string[]) => Promise<unknown>;
+	},
 ): ActionableHandle {
 	const enriched = handle as ActionableHandle;
 	if (activity) {
@@ -339,6 +365,19 @@ export function toActionableHandle(
 		activity
 			? trackHandleOperation(activity, "fill", async () => await fillViaHandle(enriched, value))
 			: fillViaHandle(enriched, value);
+	// Fake/detached handles in tests may not carry Puppeteer's method; only
+	// enrich it when the original exists.
+	const originalUpload = typeof enriched.uploadFile === "function" ? enriched.uploadFile.bind(enriched) : undefined;
+	if (originalUpload) {
+		nativeUploadFiles.set(enriched, originalUpload);
+		enriched.uploadFile = async (...files) => {
+			if (activity?.upload) {
+				await activity.upload(enriched, files);
+				return;
+			}
+			await originalUpload(...files);
+		};
+	}
 	return enriched;
 }
 
@@ -758,6 +797,142 @@ export function describeInflight(inflight: Map<number, InflightOp>): string {
 		.join(", ");
 }
 
+// ── in-app upload confirmation (managed browser) ──────────────────────
+//
+// The managed browser must never let Chromium open a native file dialog:
+// the page's chooser is intercepted over CDP and the decision moves to the
+// desktop shell's in-app card, which is also where the user picks the files.
+// Both entry points (the site opening a picker, and the agent calling
+// `tab.uploadFile`) share one confirmation protocol with the shell; see
+// `managed-browser.cjs` (`POST /musepi/upload-request`).
+
+/** One upload confirmation request as the shell receives it. */
+export interface UploadBridgeRequest {
+	mode: "site" | "agent";
+	site: { host: string; url: string; title?: string };
+	/** The input's `accept` attribute, split into entries. */
+	accept: string[];
+	multiple: boolean;
+	/** Absolute paths the agent wants to upload (agent mode only). */
+	paths?: string[];
+}
+
+/** The shell's decision. `paths` are absolute and only present when accepted. */
+export interface UploadBridgeResult {
+	accepted: boolean;
+	paths?: string[];
+	reason?: "canceled" | "timeout" | "busy" | "unsupported" | "invalid" | string;
+}
+
+export const UPLOAD_UNSUPPORTED_MESSAGE =
+	"This browser backend does not support in-app uploads; call tab.uploadFile(selector, path) with an absolute file path instead";
+
+/** The CDP `Page.fileChooserOpened` payload (only the fields we use). */
+export interface UploadChooserEvent {
+	frameId?: string;
+	mode?: "selectSingle" | "selectMultiple";
+	backendNodeId?: number;
+}
+
+/** `accept` attribute → entries (comma separated, lowercased, deduped). */
+export function normalizeAcceptList(raw: string | undefined | null): string[] {
+	if (!raw) return [];
+	const seen = new Set<string>();
+	for (const part of String(raw).split(",")) {
+		const value = part.trim().toLowerCase();
+		if (value) seen.add(value.slice(0, 80));
+	}
+	return [...seen].slice(0, 20);
+}
+
+/** Flat CDP attribute list (`[name, value, name, value, …]`) → accept entries. */
+export function acceptFromAttributes(attributes: readonly string[] | undefined): string[] {
+	if (!attributes) return [];
+	for (let index = 0; index + 1 < attributes.length; index += 2) {
+		if (attributes[index]?.toLowerCase() === "accept") return normalizeAcceptList(attributes[index + 1]);
+	}
+	return [];
+}
+
+/** Local regular file check for agent-supplied upload paths. */
+function isRegularFile(filePath: string): boolean {
+	try {
+		return fs.statSync(filePath).isFile();
+	} catch {
+		return false;
+	}
+}
+
+/** One-line accept summary for the operation ledger. */
+export function summarizeAccept(accept: readonly string[]): string {
+	return accept.length ? accept.join(", ").slice(0, 120) : "*/*";
+}
+
+/** Operation target: page host + input accept (+ file names for agent uploads). */
+export function uploadTargetLabel(host: string, accept: readonly string[], files: readonly string[] = []): string {
+	const names = files.map(filePath => path.basename(filePath)).join(", ");
+	const suffix = names ? ` · ${names}` : "";
+	return `${host || "about:blank"} · accept=${summarizeAccept(accept)}${suffix}`.slice(0, 240);
+}
+
+/** `http://127.0.0.1:<port>` (the managed browser bridge origin) → its upload endpoint. */
+export function uploadBridgeEndpoint(bridge: string): string {
+	return `${bridge.replace(/\/+$/, "")}/musepi/upload-request`;
+}
+
+/** Cancel/timeout/unsupported decision → the error the agent sees. */
+export function uploadCanceledError(reason: string | undefined, host: string): ToolError {
+	const site = host || "this site";
+	switch (reason) {
+		case "timeout":
+			return new ToolError(`Upload confirmation timed out; nothing was sent to ${site}`);
+		case "unsupported":
+			return new ToolError(UPLOAD_UNSUPPORTED_MESSAGE);
+		case "busy":
+			return new ToolError("Another upload confirmation is already open; nothing was sent");
+		default:
+			return new ToolError(`Upload canceled by the user; nothing was sent to ${site}`);
+	}
+}
+
+/** Site-triggered chooser: ask the shell, then set (or cancel) the intercepted
+ *  input. Split out so the decision logic is testable without a real page. */
+export async function completeInterceptedUpload(
+	deps: {
+		request(request: UploadBridgeRequest): Promise<UploadBridgeResult>;
+		setFiles(files: string[], backendNodeId: number): Promise<void>;
+		cancel(): Promise<void>;
+	},
+	request: UploadBridgeRequest,
+	backendNodeId: number,
+): Promise<{ accepted: true } | { accepted: false; reason: string }> {
+	const result = await deps.request(request);
+	const files = result.accepted ? (result.paths ?? []).filter(item => typeof item === "string" && item) : [];
+	if (!result.accepted || files.length === 0) {
+		await deps.cancel();
+		return { accepted: false, reason: result.reason ?? "canceled" };
+	}
+	await deps.setFiles(files, backendNodeId);
+	return { accepted: true };
+}
+
+/** Agent-triggered upload: the same confirmation gate, then hand the files to
+ *  the input. Throws a `ToolError` when the user does not allow the upload. */
+export async function completeAgentUpload(
+	deps: {
+		request(request: UploadBridgeRequest): Promise<UploadBridgeResult>;
+		upload(files: string[]): Promise<void>;
+	},
+	request: UploadBridgeRequest,
+	fallbackPaths: readonly string[],
+): Promise<void> {
+	const result = await deps.request(request);
+	if (!result.accepted) throw uploadCanceledError(result.reason, request.site.host);
+	const files = result.paths?.length ? result.paths : fallbackPaths;
+	if (files.length === 0) throw new ToolError("Upload canceled by the user; nothing was sent");
+	await deps.upload([...files]);
+}
+
 function browserOperationForLabel(
 	label: string,
 	selector?: string,
@@ -788,11 +963,13 @@ function browserOperationForLabel(
 												? "hover"
 												: method === "screenshot"
 													? "screenshot"
-													: method === "evaluate"
-														? "evaluate"
-														: method.startsWith("wait")
-															? "wait"
-															: null;
+													: method === "uploadFile"
+														? "upload"
+														: method === "evaluate"
+															? "evaluate"
+															: method.startsWith("wait")
+																? "wait"
+																: null;
 	if (!action) return null;
 	const argument = /^[^(]+\(("(?:\\.|[^"\\])*")/.exec(label)?.[1];
 	let parsed: string | undefined;
@@ -804,6 +981,20 @@ function browserOperationForLabel(
 	const target = selector ?? parsed;
 	return { action, target: action === "goto" && target ? redactBrowserUrl(target) : target };
 }
+
+/** Actions whose operation row benefits from a post-action page snapshot. */
+const THUMBNAIL_ACTIONS: ReadonlySet<BrowserOperationAction> = new Set([
+	"goto",
+	"click",
+	"fill",
+	"type",
+	"press",
+	"select",
+	"scroll",
+	"drag",
+	"hover",
+	"upload",
+]);
 
 export class WorkerCore {
 	#transport: Transport;
@@ -822,6 +1013,15 @@ export class WorkerCore {
 	#dialogPolicy?: DialogPolicy;
 	#dialogHandler?: (dialog: Dialog) => void;
 	#openDialog?: OpenDialogInfo;
+	/** Managed-browser bridge origin; set only for the desktop GUI backend. */
+	#uploadBridge?: string;
+	/** CDP session carrying the file-chooser interception. */
+	#uploadSession?: CDPSession;
+	/** One pending application dialog at a time; a second chooser is canceled. */
+	#uploadPending = false;
+	/** Managed GUI without a bridge: intercept, cancel, and explain (never a
+	 *  native dialog). */
+	#managedGui = false;
 
 	constructor(transport: Transport, isolated: boolean) {
 		this.#transport = transport;
@@ -954,6 +1154,12 @@ export class WorkerCore {
 				this.#page = page;
 				await this.#claimRelayTarget(page);
 				this.#observeDialogs();
+				// The managed browser takes over file pickers BEFORE the first
+				// navigation below, so even an init-time goto cannot raise a
+				// native dialog.
+				if (payload.managedGui || payload.uploadBridge) {
+					await this.#installUploadInterception(payload.uploadBridge);
+				}
 				if (payload.dialogs) this.#applyDialogPolicy(payload.dialogs);
 				if (payload.url) {
 					await this.#page.goto(payload.url, {
@@ -1036,6 +1242,174 @@ export class WorkerCore {
 		page.on("framenavigated", frame => {
 			if (frame === page.mainFrame()) this.#openDialog = undefined;
 		});
+	}
+
+	/**
+	 * Managed browser: take over the page's file chooser so Chromium never shows
+	 * a native dialog. The CDP session survives navigations, so this is armed
+	 * once at attach time; every later `Page.fileChooserOpened` asks the shell.
+	 */
+	async #installUploadInterception(bridge?: string): Promise<void> {
+		this.#managedGui = true;
+		this.#uploadBridge = bridge ? bridge.replace(/\/+$/, "") : undefined;
+		let session: CDPSession | undefined;
+		try {
+			session = await this.#requirePage().createCDPSession();
+			await session.send("Page.enable");
+			await session.send("DOM.enable");
+			await session.send("Page.setInterceptFileChooserDialog", { enabled: true });
+		} catch (error) {
+			this.#log("warn", "File-chooser interception unavailable", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			await session?.detach().catch(() => undefined);
+			return;
+		}
+		this.#uploadSession = session;
+		const raw = session as unknown as {
+			on(event: string, handler: (params: unknown) => void): void;
+		};
+		raw.on("Page.fileChooserOpened", params => {
+			void this.#handleFileChooserOpened(params as UploadChooserEvent).catch(error => {
+				this.#log("warn", "File-chooser handling failed", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+		});
+	}
+
+	/** `Page.fileChooserOpened`: decide, then set files or cancel the chooser. */
+	async #handleFileChooserOpened(event: UploadChooserEvent): Promise<void> {
+		const session = this.#uploadSession;
+		if (!session) return;
+		const backendNodeId =
+			typeof event?.backendNodeId === "number" && event.backendNodeId > 0 ? event.backendNodeId : null;
+		if (backendNodeId === null) {
+			await this.#cancelInterceptedChooser();
+			return;
+		}
+		if (this.#uploadPending) {
+			// A second picker while the user is deciding: cancel it rather than
+			// stacking cards (one decision, one chooser).
+			await this.#cancelInterceptedChooser();
+			return;
+		}
+		this.#uploadPending = true;
+		const active = this.#active;
+		const tracker = active?.operations ?? null;
+		const accept = await this.#readNodeAccept(backendNodeId);
+		const site = await this.#uploadSiteInfo();
+		const activityId = tracker?.start("upload", { target: uploadTargetLabel(site.host, accept) }) ?? null;
+		try {
+			if (!this.#uploadBridge) {
+				throw new ToolError(UPLOAD_UNSUPPORTED_MESSAGE);
+			}
+			const outcome = await completeInterceptedUpload(
+				{
+					request: request => this.#requestUploadBridge(request),
+					setFiles: (files, node) => this.#setInterceptedFiles(node, files),
+					cancel: () => this.#cancelInterceptedChooser(),
+				},
+				{
+					mode: "site",
+					site,
+					accept,
+					multiple: event?.mode === "selectMultiple",
+				},
+				backendNodeId,
+			);
+			if (activityId) {
+				if (outcome.accepted) tracker?.complete(activityId, { target: uploadTargetLabel(site.host, accept) });
+				else if (outcome.reason === "timeout")
+					tracker?.fail(activityId, new ToolError("Upload confirmation timed out"));
+				else tracker?.cancel(activityId);
+			}
+		} catch (error) {
+			if (activityId) tracker?.fail(activityId, error);
+			// The page stays usable: nothing was attached to the input.
+			this.#log("warn", error instanceof Error ? error.message : String(error), { host: site.host });
+			await this.#cancelInterceptedChooser().catch(() => undefined);
+		} finally {
+			this.#uploadPending = false;
+		}
+	}
+
+	/** `accept` attribute of the input behind a chooser event (best effort). */
+	async #readNodeAccept(backendNodeId: number): Promise<string[]> {
+		const session = this.#uploadSession;
+		if (!session) return [];
+		try {
+			const described = (await session.send("DOM.describeNode", { backendNodeId, depth: 0 })) as {
+				node?: { attributes?: string[] };
+			};
+			return acceptFromAttributes(described.node?.attributes);
+		} catch {
+			return [];
+		}
+	}
+
+	/** Page identity shown on the confirmation card. */
+	async #uploadSiteInfo(): Promise<UploadBridgeRequest["site"]> {
+		const page = this.#requirePage();
+		const raw = page.url();
+		let host = "";
+		try {
+			host = new URL(raw).host;
+		} catch {
+			host = "";
+		}
+		const title = await page
+			.title()
+			.then(value => value.trim().slice(0, 120))
+			.catch(() => "");
+		return { host, url: redactBrowserUrl(raw), title: title || undefined };
+	}
+
+	/** POST the decision request to the desktop shell (loopback only). */
+	async #requestUploadBridge(request: UploadBridgeRequest, signal?: AbortSignal): Promise<UploadBridgeResult> {
+		const bridge = this.#uploadBridge;
+		if (!bridge) return { accepted: false, reason: "unsupported" };
+		const timeout = AbortSignal.timeout(UPLOAD_CONFIRM_TIMEOUT_MS);
+		const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+		try {
+			const response = await fetch(uploadBridgeEndpoint(bridge), {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(request),
+				signal: combined,
+			});
+			if (!response.ok) return { accepted: false, reason: `http-${response.status}` };
+			const payload = (await response.json()) as Partial<UploadBridgeResult> | null;
+			if (!payload || typeof payload.accepted !== "boolean") return { accepted: false, reason: "invalid" };
+			if (!payload.accepted) {
+				return { accepted: false, reason: typeof payload.reason === "string" ? payload.reason : "canceled" };
+			}
+			const paths = Array.isArray(payload.paths)
+				? payload.paths.filter((item): item is string => typeof item === "string" && item.length > 0)
+				: [];
+			return paths.length ? { accepted: true, paths } : { accepted: false, reason: "invalid" };
+		} catch (error) {
+			throwIfAborted(signal);
+			if (timeout.aborted) return { accepted: false, reason: "timeout" };
+			this.#log("warn", "Upload confirmation request failed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return { accepted: false, reason: "unsupported" };
+		}
+	}
+
+	/** Hand the chosen files to the intercepted input (fires the page's change). */
+	async #setInterceptedFiles(backendNodeId: number, files: string[]): Promise<void> {
+		const session = this.#uploadSession;
+		if (!session) throw new ToolError(UPLOAD_UNSUPPORTED_MESSAGE);
+		await session.send("DOM.setFileInputFiles", { files, backendNodeId });
+	}
+
+	/** Cancel the intercepted chooser and let the page see the cancellation. */
+	async #cancelInterceptedChooser(): Promise<void> {
+		const session = this.#uploadSession;
+		if (!session) return;
+		await session.send("Page.setInterceptFileChooserDialog", { enabled: true, cancel: true }).catch(() => undefined);
 	}
 
 	async #currentReadyInfo(): Promise<ReadyInfo> {
@@ -1300,6 +1674,53 @@ export class WorkerCore {
 	 * `zeroMatchAfterMs` is set — a watchdog aborts the op early once the selector has
 	 * matched nothing for that long.
 	 */
+	/** Best-effort page title + element box for the operation feed. Both
+	 *  probes are capped and fire-and-forget: they must never delay or fail the
+	 *  action the agent is waiting on. */
+	async #describeOperation(active: ActiveRun, id: string, selector: string | null): Promise<void> {
+		try {
+			const page = this.#requirePage();
+			const title = await Promise.race([page.title().catch(() => ""), Bun.sleep(250).then(() => "")]);
+			let rect: { x: number; y: number; width: number; height: number } | null = null;
+			if (selector && parseAriaRefSelector(selector) === null) {
+				const handle = await Promise.race([
+					page.$(normalizeSelector(selector)).catch(() => null),
+					Bun.sleep(300).then(() => null),
+				]);
+				if (handle) {
+					const box = await Promise.race([
+						handle.boundingBox().catch(() => null),
+						Bun.sleep(300).then(() => null),
+					]);
+					await handle.dispose().catch(() => undefined);
+					if (box) rect = { x: box.x, y: box.y, width: box.width, height: box.height };
+				}
+			}
+			if (rect || title) active.operations.position(id, rect, title || undefined);
+		} catch {
+			// Feed metadata only — the action's own result stands.
+		}
+	}
+
+	/** Small post-action snapshot for the managed pane's operation feed. The
+	 *  tracker caps a run at 24 thumbnails; non-GUI backends skip entirely. */
+	async #captureOperationThumbnail(active: ActiveRun, id: string): Promise<void> {
+		if (!this.#managedGui || !active.operations.canAttachThumbnail()) return;
+		try {
+			const page = this.#requirePage();
+			const shot = await Promise.race([
+				page
+					.screenshot({ type: "jpeg", quality: 45, optimizeForSpeed: true, captureBeyondViewport: false })
+					.catch(() => null),
+				Bun.sleep(1_500).then(() => null),
+			]);
+			if (!shot) return;
+			active.operations.setThumbnail(id, `data:image/jpeg;base64,${Buffer.from(shot).toString("base64")}`);
+		} catch {
+			// Cosmetic only.
+		}
+	}
+
 	async #runOp<T>(
 		active: ActiveRun,
 		label: string,
@@ -1311,6 +1732,7 @@ export class WorkerCore {
 		const opId = active.opCounter++;
 		const activity = browserOperationForLabel(label, opts?.selector);
 		const activityId = activity ? active.operations.start(activity.action, { target: activity.target }) : null;
+		if (activityId) void this.#describeOperation(active, activityId, opts?.selector ?? null);
 		active.inflight.set(opId, { label, startedAt: Date.now() });
 		const capped = Number.isFinite(perOpTimeoutMs) && perOpTimeoutMs > 0;
 		const opTimeout = capped ? AbortSignal.timeout(perOpTimeoutMs) : undefined;
@@ -1335,7 +1757,12 @@ export class WorkerCore {
 						),
 					])
 				: await fn(opSignal);
-			if (activityId) active.operations.complete(activityId, operationResultDetails(result));
+			if (activityId) {
+				active.operations.complete(activityId, operationResultDetails(result));
+				if (activity && THUMBNAIL_ACTIONS.has(activity.action)) {
+					void this.#captureOperationThumbnail(active, activityId);
+				}
+			}
 			return result;
 		} catch (err) {
 			if (activityId) {
@@ -1430,7 +1857,25 @@ export class WorkerCore {
 		const page = this.#requirePage();
 		const { budgetBound, quickOpMs, actionOpMs } = resolveOpTimeouts(timeoutMs);
 		const waitMs = (explicit?: number): number => resolveWaitTimeout(timeoutMs, explicit);
+		// Upload confirmation waits for a human decision, so it gets the shell's
+		// 60s window (+ margin) instead of the 8s action ceiling — still capped
+		// by the cell budget.
+		const uploadOpMs = Math.min(budgetBound, UPLOAD_CONFIRM_TIMEOUT_MS);
 		const INF = Number.POSITIVE_INFINITY;
+		/** Enriched-handle uploads (`tab.id(...).uploadFile`) go through the same
+		 *  confirmation gate and operation ledger as `tab.uploadFile`. */
+		const uploadHandle = async (handle: ActionableHandle, files: string[]): Promise<void> => {
+			const opId = active.operations.start("upload", { target: "file input" });
+			const opSignal = AbortSignal.any([signal, AbortSignal.timeout(uploadOpMs)]);
+			try {
+				const result = await this.#uploadHandleFiles(handle, files, opSignal, session);
+				active.operations.complete(opId, { target: result.operationTarget });
+			} catch (error) {
+				if (signal.aborted) active.operations.cancel(opId);
+				else active.operations.fail(opId, error);
+				throw error;
+			}
+		};
 		const op = <T>(
 			label: string,
 			perOpMs: number,
@@ -1596,6 +2041,7 @@ export class WorkerCore {
 							tracker: active.operations,
 							signal,
 							target: selector,
+							upload: uploadHandle,
 						}),
 					{ selector, zeroMatchAfterMs: opts?.timeout === undefined ? ZERO_MATCH_FAIL_FAST_MS : undefined },
 				);
@@ -1611,6 +2057,7 @@ export class WorkerCore {
 								tracker: active.operations,
 								signal,
 								target: selector,
+								upload: uploadHandle,
 							});
 						const handle = (await untilAborted(sig, () =>
 							page.waitForSelector(normalizeSelector(selector), {
@@ -1621,7 +2068,12 @@ export class WorkerCore {
 							}),
 						)) as ElementHandle | null;
 						return handle
-							? toActionableHandle(handle, { tracker: active.operations, signal, target: selector })
+							? toActionableHandle(handle, {
+									tracker: active.operations,
+									signal,
+									target: selector,
+									upload: uploadHandle,
+								})
 							: null;
 					},
 					{
@@ -1678,13 +2130,16 @@ export class WorkerCore {
 					sig => this.#select(selector, values, actionOpMs, sig),
 					{ selector, zeroMatchAfterMs: ZERO_MATCH_FAIL_FAST_MS },
 				),
-			uploadFile: (selector, ...filePaths) =>
-				op(
+			uploadFile: async (selector, ...filePaths) => {
+				// The op deadline covers the human decision (uploadOpMs); element
+				// resolution keeps the normal action ceiling.
+				await op(
 					`tab.uploadFile(${JSON.stringify(selector)})`,
-					actionOpMs,
+					uploadOpMs,
 					sig => this.#uploadFile(selector, filePaths, actionOpMs, sig, session),
 					{ selector, zeroMatchAfterMs: ZERO_MATCH_FAIL_FAST_MS },
-				),
+				);
+			},
 			waitForUrl: (pattern, opts) => {
 				const w = waitMs(opts?.timeout);
 				return op("tab.waitForUrl()", w, sig => this.#waitForUrl(pattern, w, sig));
@@ -1698,12 +2153,14 @@ export class WorkerCore {
 					tracker: active.operations,
 					signal,
 					target: String(id),
+					upload: uploadHandle,
 				}),
 			ref: async id =>
 				toActionableHandle(await this.#resolveAriaRef(id), {
 					tracker: active.operations,
 					signal,
 					target: id,
+					upload: uploadHandle,
 				}),
 		};
 	}
@@ -1940,23 +2397,67 @@ export class WorkerCore {
 		timeoutMs: number,
 		signal: AbortSignal,
 		session: SessionSnapshot,
-	): Promise<void> {
+	): Promise<{ operationTarget: string }> {
 		if (!filePaths.length) throw new ToolError("tab.uploadFile() requires at least one file path");
 		const handle = await this.#resolveActionHandle(selector, timeoutMs, signal);
 		try {
-			const absolute = filePaths.map(filePath => resolveToCwd(filePath, session.cwd));
-			const upload = handle as unknown as { uploadFile: (...paths: string[]) => Promise<void> };
-			const tagName = (await untilAborted(signal, () =>
-				handle.evaluate(el => (el as unknown as { tagName: string }).tagName),
-			)) as string;
-			if (tagName !== "INPUT")
-				throw new ToolError(
-					`tab.uploadFile() requires an <input type="file"> element (got <${tagName.toLowerCase()}>)`,
-				);
-			await untilAborted(signal, () => upload.uploadFile(...absolute));
+			return await this.#uploadHandleFiles(handle as ActionableHandle, filePaths, signal, session);
 		} finally {
 			await handle.dispose().catch(() => undefined);
 		}
+	}
+
+	/** Validate + confirm + set files on one input handle. Shared by
+	 *  `tab.uploadFile` and the enriched handle's own `uploadFile`, so neither
+	 *  path can bypass the user's decision. */
+	async #uploadHandleFiles(
+		handle: ActionableHandle,
+		filePaths: string[],
+		signal: AbortSignal,
+		session: SessionSnapshot,
+	): Promise<{ operationTarget: string }> {
+		if (!filePaths.length) throw new ToolError("tab.uploadFile() requires at least one file path");
+		const absolute = filePaths.map(filePath => resolveToCwd(filePath, session.cwd));
+		const missing = absolute.filter(filePath => !isRegularFile(filePath));
+		if (missing.length) {
+			throw new ToolError(
+				`tab.uploadFile() cannot find file(s): ${missing.map(filePath => path.basename(filePath)).join(", ")}`,
+			);
+		}
+		const meta = (await untilAborted(signal, () =>
+			handle.evaluate(el => {
+				const input = el as unknown as { tagName: string; type?: string; accept?: string };
+				return {
+					tagName: input.tagName,
+					type: input.type ?? "",
+					accept: input.accept ?? "",
+				};
+			}),
+		)) as { tagName: string; type: string; accept: string };
+		if (meta.tagName !== "INPUT")
+			throw new ToolError(
+				`tab.uploadFile() requires an <input type="file"> element (got <${meta.tagName.toLowerCase()}>)`,
+			);
+		if (meta.type && meta.type.toLowerCase() !== "file")
+			throw new ToolError(`tab.uploadFile() requires an <input type="file"> element (got type="${meta.type}")`);
+		const accept = normalizeAcceptList(meta.accept);
+		const site = await this.#uploadSiteInfo();
+		if (this.#managedGui && !this.#uploadBridge) throw new ToolError(UPLOAD_UNSUPPORTED_MESSAGE);
+		if (this.#uploadBridge) {
+			// The shell shows the same card the site path uses (file names +
+			// site); a refusal is a ToolError and nothing reaches the page.
+			await completeAgentUpload(
+				{
+					request: request => this.#requestUploadBridge(request, signal),
+					upload: files => untilAborted(signal, () => uploadFilesOnHandle(handle, files)),
+				},
+				{ mode: "agent", site, accept, multiple: absolute.length > 1, paths: absolute },
+				absolute,
+			);
+		} else {
+			await untilAborted(signal, () => uploadFilesOnHandle(handle, absolute));
+		}
+		return { operationTarget: uploadTargetLabel(site.host, accept, absolute) };
 	}
 
 	async #waitForUrl(pattern: string | RegExp, timeout: number, signal: AbortSignal): Promise<string> {
@@ -2065,6 +2566,11 @@ export class WorkerCore {
 		this.#uninstallRejectionGuard();
 		this.#clearElementCache();
 		const page = this.#page;
+		if (this.#uploadSession) {
+			await this.#cancelInterceptedChooser().catch(() => undefined);
+			await this.#uploadSession.detach().catch(() => undefined);
+			this.#uploadSession = undefined;
+		}
 		if (this.#dialogHandler && page && !page.isClosed()) page.off("dialog", this.#dialogHandler);
 		if (this.#mode === "headless" && page && !page.isClosed()) await page.close().catch(() => undefined);
 		if (this.#browser?.connected) this.#browser.disconnect();

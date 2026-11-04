@@ -1,8 +1,10 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { pickDirectory } from "../../lib/electron";
 import { getHostState, subscribeHost } from "../../lib/managed-browser-host";
 import type { RpcClient } from "../../lib/rpc";
+import { GuiSelect } from "../GuiSelect";
 
 interface BrowserTabInfo {
 	targetId: string;
@@ -24,6 +26,13 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [relay, setRelay] = useState<boolean | null>(null);
 	const [gui, setGui] = useState<boolean | null>(null);
 	const [restrictToPublic, setRestrictToPublic] = useState<boolean | null>(null);
+	const [agentControl, setAgentControl] = useState<boolean | null>(null);
+	const [searchEngine, setSearchEngine] = useState("google");
+	const [zoom, setZoom] = useState("1");
+	const [userAgent, setUserAgent] = useState("");
+	const [askWhereToSave, setAskWhereToSave] = useState<boolean | null>(null);
+	const [downloadDir, setDownloadDir] = useState("");
+	const [agentMaxBytes, setAgentMaxBytes] = useState("5368709120");
 	const [endpoint, setEndpoint] = useState<string | null>(null);
 	const [profileDir, setProfileDir] = useState<string | null>(null);
 	const [tabCount, setTabCount] = useState<number | null>(null);
@@ -56,6 +65,13 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					"browser.gui",
 					"browser.guiUrl",
 					"browser.policy.restrictToPublic",
+					"browser.agentControl",
+					"browser.searchEngine",
+					"browser.zoom",
+					"browser.userAgent",
+					"browser.download.askWhereToSave",
+					"browser.download.dir",
+					"browser.download.agentMaxBytes",
 					"computer.glow",
 				],
 			})
@@ -65,6 +81,15 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				setGui(res["browser.gui"] === true);
 				if (typeof res["browser.guiUrl"] === "string") setGuiUrl(res["browser.guiUrl"]);
 				setRestrictToPublic(res["browser.policy.restrictToPublic"] === true);
+				setAgentControl(res["browser.agentControl"] !== false);
+				if (typeof res["browser.searchEngine"] === "string") setSearchEngine(res["browser.searchEngine"]);
+				if (typeof res["browser.zoom"] === "number") setZoom(String(res["browser.zoom"]));
+				if (typeof res["browser.userAgent"] === "string") setUserAgent(res["browser.userAgent"]);
+				setAskWhereToSave(res["browser.download.askWhereToSave"] !== false);
+				if (typeof res["browser.download.dir"] === "string") setDownloadDir(res["browser.download.dir"]);
+				if (typeof res["browser.download.agentMaxBytes"] === "number") {
+					setAgentMaxBytes(String(res["browser.download.agentMaxBytes"]));
+				}
 				setGlow(res["computer.glow"] !== false);
 			})
 			.catch(() => {});
@@ -100,13 +125,28 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	}, [refresh]);
 
 	const setBool = (
-		key: "browser.headless" | "browser.relay" | "browser.gui" | "browser.policy.restrictToPublic" | "computer.glow",
+		key:
+			| "browser.headless"
+			| "browser.relay"
+			| "browser.gui"
+			| "browser.policy.restrictToPublic"
+			| "browser.agentControl"
+			| "browser.download.askWhereToSave"
+			| "computer.glow",
 		next: boolean,
 	): void => {
 		void rpc?.request("settings.set", { key, value: next }).then(() => {
 			refresh();
 			// The app's glow latch caches this setting — poke it to re-read.
 			if (key === "computer.glow") window.dispatchEvent(new Event("omp-glow-setting"));
+			else window.dispatchEvent(new Event("musepi-browser-settings-changed"));
+		});
+	};
+
+	const setValue = (key: string, value: string | number): void => {
+		void rpc?.request("settings.set", { key, value }).then(() => {
+			refresh();
+			window.dispatchEvent(new Event("musepi-browser-settings-changed"));
 		});
 	};
 
@@ -198,7 +238,10 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								if (guiUrl === null) return;
 								void rpc
 									?.request("settings.set", { key: "browser.guiUrl", value: guiUrl.trim() })
-									.then(() => refresh())
+									.then(() => {
+										refresh();
+										window.dispatchEvent(new Event("musepi-browser-settings-changed"));
+									})
 									.catch(() => {});
 							}}
 						/>
@@ -257,6 +300,143 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							{installing ? "…" : t("tools.install")}
 						</button>
 					)}
+				</div>
+			</div>
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("settings.browserAgentSettings")}</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.browserAgentControl")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserAgentControlDescription")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={agentControl === true}
+						className={`gui-toggle${agentControl === true ? " gui-toggle--on" : ""}`}
+						onClick={() => setBool("browser.agentControl", !(agentControl === true))}
+						aria-label={t("settings.browserAgentControl")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.browserSearchEngine")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserSearchEngineDescription")}</div>
+					</div>
+					<GuiSelect
+						className="gui-input max-w-[200px]"
+						value={searchEngine}
+						onChange={v => setValue("browser.searchEngine", v)}
+						ariaLabel={t("settings.browserSearchEngine")}
+						options={[
+							{ value: "google", label: t("settings.browserSearchGoogle") },
+							{ value: "bing", label: t("settings.browserSearchBing") },
+							{ value: "duckduckgo", label: t("settings.browserSearchDuckDuckGo") },
+							{ value: "baidu", label: t("settings.browserSearchBaidu") },
+						]}
+					/>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.browserAskWhereToSave")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserAskWhereToSaveDescription")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={askWhereToSave === true}
+						className={`gui-toggle${askWhereToSave === true ? " gui-toggle--on" : ""}`}
+						onClick={() => setBool("browser.download.askWhereToSave", !(askWhereToSave === true))}
+						aria-label={t("settings.browserAskWhereToSave")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+				<div className="gui-settings-row">
+					<div className="min-w-0 flex-1">
+						<div className="gui-settings-row-label">{t("settings.browserDownloadDir")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserDownloadDirDescription")}</div>
+						<div className="mt-1.5 flex gap-1.5">
+							<input
+								className="gui-input min-w-0 flex-1"
+								value={downloadDir}
+								spellCheck={false}
+								placeholder={t("settings.browserDownloadDirPlaceholder")}
+								aria-label={t("settings.browserDownloadDir")}
+								onChange={e => setDownloadDir(e.target.value)}
+								onBlur={() => setValue("browser.download.dir", downloadDir.trim())}
+							/>
+							<button
+								type="button"
+								className="gui-btn gui-btn--small"
+								onClick={() => {
+									void pickDirectory().then(dir => {
+										if (!dir) return;
+										setDownloadDir(dir);
+										setValue("browser.download.dir", dir);
+									});
+								}}
+							>
+								{t("settings.browserDownloadDirChoose")}
+							</button>
+						</div>
+					</div>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.browserDownloadLimit")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserDownloadLimitDescription")}</div>
+					</div>
+					<GuiSelect
+						className="gui-input max-w-[200px]"
+						value={agentMaxBytes}
+						onChange={v => setValue("browser.download.agentMaxBytes", Number(v))}
+						ariaLabel={t("settings.browserDownloadLimit")}
+						options={[
+							{ value: "536870912", label: "512 MB" },
+							{ value: "1073741824", label: "1 GB" },
+							{ value: "2147483648", label: "2 GB" },
+							{ value: "5368709120", label: "5 GB" },
+							{ value: "10737418240", label: "10 GB" },
+						]}
+					/>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("settings.browserDefaultZoom")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserDefaultZoomDescription")}</div>
+					</div>
+					<GuiSelect
+						className="gui-input max-w-[200px]"
+						value={zoom}
+						onChange={v => setValue("browser.zoom", Number(v))}
+						ariaLabel={t("settings.browserDefaultZoom")}
+						options={[
+							{ value: "0.75", label: "75%" },
+							{ value: "0.9", label: "90%" },
+							{ value: "1", label: "100%" },
+							{ value: "1.1", label: "110%" },
+							{ value: "1.25", label: "125%" },
+							{ value: "1.5", label: "150%" },
+						]}
+					/>
+				</div>
+				<div className="gui-settings-row">
+					<div className="min-w-0 flex-1">
+						<div className="gui-settings-row-label">{t("settings.browserUserAgent")}</div>
+						<div className="gui-settings-row-desc">{t("settings.browserUserAgentDescription")}</div>
+						<input
+							className="gui-input mt-1.5"
+							value={userAgent}
+							spellCheck={false}
+							placeholder={t("settings.browserUserAgentPlaceholder")}
+							aria-label={t("settings.browserUserAgent")}
+							onChange={e => setUserAgent(e.target.value)}
+							onBlur={() => setValue("browser.userAgent", userAgent.trim())}
+						/>
+					</div>
 				</div>
 			</div>
 			{/* Computer-use screen glow: full-screen edge + target highlight

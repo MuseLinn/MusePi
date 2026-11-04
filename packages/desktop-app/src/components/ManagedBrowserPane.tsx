@@ -29,9 +29,13 @@ import {
 	viewportClip,
 	viewportOverflow,
 } from "../lib/browser-viewport";
-import { openExternalUrl } from "../lib/electron";
+import type { ManagedBrowserPreferences } from "../lib/electron";
+import { openExternalUrl, setManagedBrowserPreferences } from "../lib/electron";
 import {
+	allowAgentUpload,
 	answerConfirm,
+	cancelUpload,
+	chooseUploadFiles,
 	clearData as clearBrowserDataInStore,
 	closeTab,
 	createTab,
@@ -41,6 +45,7 @@ import {
 	hostElement,
 	navigate as navigateInStore,
 	reload,
+	resolveAddressBarInput,
 	selectTab,
 	setPaneRect,
 	stopAgentOp,
@@ -48,6 +53,7 @@ import {
 	takeoverAgentOp,
 } from "../lib/managed-browser-host";
 import { managedTabIsBlank } from "../lib/managed-browser-visibility";
+import type { RpcClient } from "../lib/rpc";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -60,6 +66,7 @@ import {
 	type BrowserPageBackground,
 	type BrowserViewportPreset,
 } from "./browser-device-toolbar";
+import { BrowserUploadDialog } from "./browser-upload-dialog";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { StateIcon } from "./StateIcon";
 
@@ -69,6 +76,46 @@ const EMPTY_URL = "about:blank";
 const HISTORY_KEY = "musepi-gui-managed-browser-history";
 const HISTORY_LIMIT = 80;
 const HISTORY_SUGGESTION_LIMIT = 20;
+
+// ── runtime preferences (设置 → 浏览器) ───────────────────────────────
+// Main applies these to every open tab and to tabs created later; the pane
+// reads them through the daemon and re-pushes on the settings page's save
+// event, so a running browser never needs a restart.
+const BROWSER_SETTINGS_KEYS = [
+	"browser.zoom",
+	"browser.userAgent",
+	"browser.searchEngine",
+	"browser.download.askWhereToSave",
+	"browser.download.dir",
+	"browser.download.agentMaxBytes",
+];
+const BROWSER_SETTINGS_CHANGED_EVENT = "musepi-browser-settings-changed";
+const DEFAULT_BROWSER_PREFERENCES: ManagedBrowserPreferences = {
+	zoom: 1,
+	userAgent: "",
+	searchEngine: "google",
+	download: { askWhereToSave: true, dir: "", maxBytes: 5 * 1024 * 1024 * 1024 },
+};
+
+function preferencesFromSettings(values: Record<string, unknown> | null): ManagedBrowserPreferences {
+	const zoom = Number(values?.["browser.zoom"]);
+	const userAgent = values?.["browser.userAgent"];
+	const engine = values?.["browser.searchEngine"];
+	const askWhereToSave = values?.["browser.download.askWhereToSave"];
+	const dir = values?.["browser.download.dir"];
+	const maxBytes = Number(values?.["browser.download.agentMaxBytes"]);
+	return {
+		zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : DEFAULT_BROWSER_PREFERENCES.zoom,
+		userAgent: typeof userAgent === "string" ? userAgent : DEFAULT_BROWSER_PREFERENCES.userAgent,
+		searchEngine: typeof engine === "string" && engine ? engine : DEFAULT_BROWSER_PREFERENCES.searchEngine,
+		download: {
+			askWhereToSave: askWhereToSave !== false,
+			dir: typeof dir === "string" ? dir : DEFAULT_BROWSER_PREFERENCES.download?.dir,
+			maxBytes:
+				Number.isFinite(maxBytes) && maxBytes >= 0 ? maxBytes : DEFAULT_BROWSER_PREFERENCES.download?.maxBytes,
+		},
+	};
+}
 
 interface BrowserHistoryEntry {
 	title: string;
@@ -218,6 +265,7 @@ export function ManagedBrowserPane({
 	open = true,
 	openRequest = null,
 	onTakeover,
+	rpc = null,
 }: {
 	/** External reveal (chat link click / agent browser open): navigate the
 	 *  active tab to this URL when the nonce advances (proma
@@ -228,6 +276,9 @@ export function ManagedBrowserPane({
 	open?: boolean;
 	/** Stop the current session turn without closing the managed page. */
 	onTakeover?(): void;
+	/** Daemon RPC bridge (settings.get): reads the browser preferences main
+	 *  applies to the guests. */
+	rpc?: RpcClient | null;
 } = {}): ReactNode {
 	// 页面状态在宿主 store 里(`<webview>` 元素由常驻的 ManagedBrowserHost 持有);
 	// 本组件只渲染 chrome,并把内容槽位的 rect 报给宿主定位。
@@ -242,6 +293,33 @@ export function ManagedBrowserPane({
 	const [suggestionIndex, setSuggestionIndex] = useState(-1);
 	const [history, setHistory] = useState<BrowserHistoryEntry[]>(() => loadHistory());
 	const [menuOpen, setMenuOpen] = useState(false);
+	// Settings → 浏览器: read on mount and re-read when the settings page
+	// commits (it dispatches `musepi-browser-settings-changed`), then push the
+	// result to main so open tabs and tabs created later share one policy.
+	const [preferences, setPreferences] = useState<ManagedBrowserPreferences>(DEFAULT_BROWSER_PREFERENCES);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		const load = (): void => {
+			void rpc
+				.request<Record<string, unknown>>("settings.get", { keys: BROWSER_SETTINGS_KEYS })
+				.then(values => {
+					if (!alive) return;
+					const next = preferencesFromSettings(values);
+					setPreferences(next);
+					void setManagedBrowserPreferences(next);
+				})
+				.catch(() => {});
+		};
+		load();
+		const onChange = (): void => load();
+		window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, onChange);
+		return () => {
+			alive = false;
+			window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, onChange);
+		};
+	}, [rpc]);
+	const defaultZoom = preferences.zoom ?? 1;
 	// Preset KEY, not its width: the key also carries the device identity the
 	// page is served under (see the device-preset effect below), while the
 	// width drives the fit-scaling.
@@ -304,7 +382,7 @@ export function ManagedBrowserPane({
 	const ZOOM_MIN = 0.5;
 	const ZOOM_MAX = 2;
 	const [zoomByTab, setZoomByTab] = useState<Record<string, number>>(() => loadZooms());
-	const activeZoom = (host.activeId ? zoomByTab[host.activeId] : undefined) ?? 1;
+	const activeZoom = (host.activeId ? zoomByTab[host.activeId] : undefined) ?? defaultZoom;
 	const setActiveZoom = (next: number): void => {
 		const id = host.activeId;
 		if (!id) return;
@@ -315,12 +393,15 @@ export function ManagedBrowserPane({
 		const timer = window.setTimeout(() => saveZooms(zoomByTab), 200);
 		return () => window.clearTimeout(timer);
 	}, [zoomByTab]);
-	// Tab switch or factor change: re-apply so each tab keeps its own zoom.
+	// Only an EXPLICIT per-tab factor is pushed; tabs without one stay on the
+	// settings default, which main applies at bind and on preference changes.
 	useEffect(() => {
 		const api = window.electronAPI;
-		if (!api?.managedBrowserSetZoom || !host.activeId || isBlank) return;
-		void api.managedBrowserSetZoom({ tabId: host.activeId, zoom: activeZoom }).catch(() => {});
-	}, [host.activeId, activeZoom, isBlank]);
+		const tabId = host.activeId;
+		const override = tabId ? zoomByTab[tabId] : undefined;
+		if (!api?.managedBrowserSetZoom || !tabId || isBlank || override === undefined) return;
+		void api.managedBrowserSetZoom({ tabId, zoom: override }).catch(() => {});
+	}, [host.activeId, zoomByTab, isBlank]);
 
 	// Custom emulated size while a preset is active (§3.2.2): the dashed
 	// viewport frame's right/bottom handles drag the preset away from the
@@ -681,7 +762,9 @@ export function ManagedBrowserPane({
 
 	const handleAddressSubmit = (e: React.FormEvent): void => {
 		e.preventDefault();
-		void navigateTo(addressValue);
+		// URLs keep the existing completion path; anything else is a search
+		// through the configured engine (设置 → 浏览器).
+		void navigateTo(resolveAddressBarInput(addressValue, preferences.searchEngine));
 	};
 
 	// External reveal: chat link clicks (and agent browser.open) navigate the
@@ -1279,6 +1362,14 @@ export function ManagedBrowserPane({
 					</div>
 				</div>
 			)}
+			{/* In-app upload confirmation: the site's file picker and the agent's
+			 * tab.uploadFile both land here, never in a native dialog. */}
+			<BrowserUploadDialog
+				request={host.upload}
+				onCancel={() => void cancelUpload(host.upload?.requestId ?? "")}
+				onChoose={request => void chooseUploadFiles(request)}
+				onAllowAgent={requestId => void allowAgentUpload(requestId)}
+			/>
 			<ContextMenu
 				open={tabMenu !== null}
 				x={tabMenu?.x ?? 0}

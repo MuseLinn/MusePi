@@ -31,7 +31,8 @@
  */
 "use strict";
 
-const { ipcMain, net, protocol, session: electronSession, webContents } = require("electron");
+const { app, dialog, ipcMain, net, protocol, session: electronSession, webContents } = require("electron");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -44,6 +45,18 @@ const PARTITION = "persist:musepi-managed-browser";
 const MAX_ACTIVITY_ITEMS = 12;
 const CDP_ERROR_METHOD_NOT_FOUND = -32601;
 const CDP_ERROR_SERVER = -32000;
+/** Renderer-pushed runtime preferences (设置 → 浏览器). Defaults mirror the
+ *  daemon schema so a pane that never pushes still gets the documented
+ *  behavior (default zoom, system downloads, 5 GB agent limit). */
+const DEFAULT_PREFERENCES = {
+	zoom: 1,
+	userAgent: "",
+	searchEngine: "google",
+	download: { askWhereToSave: true, dir: "", maxBytes: 5 * 1024 * 1024 * 1024 },
+};
+/** Same page-zoom range the renderer's per-tab override uses. */
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 3;
 /** URLs the tool must never see as targets (mirrors the relay's ineligible set). */
 const INELIGIBLE_URL = /^(chrome|devtools|edge|view-source|chrome-extension|chrome-untrusted|chrome-search):/i;
 /** Sanctioned local-preview scheme: `omp-file://<urlencoded absolute path>`
@@ -51,6 +64,13 @@ const INELIGIBLE_URL = /^(chrome|devtools|edge|view-source|chrome-extension|chro
 const LOCAL_PREVIEW_SCHEME = "omp-file";
 /** Timeout for the renderer's risky-navigation consent dialog (auto-deny). */
 const CONFIRM_TIMEOUT_MS = 30_000;
+/** Upload confirmation window: the card (and the OS file picker it opens) may
+ *  legitimately take a minute; after that the chooser is canceled. */
+const UPLOAD_CONFIRM_TIMEOUT_MS = 60_000;
+/** Upload request body cap (site metadata + an agent's absolute paths). */
+const UPLOAD_REQUEST_MAX_BYTES = 64 * 1024;
+/** One confirmation can carry at most this many files. */
+const UPLOAD_MAX_FILES = 20;
 /** Renderer guest-attach deadline for a main-initiated tab (10s renderer-side
  *  attach timeout + margin); a miss fails the CDP call instead of hanging. */
 const GUEST_READY_TIMEOUT_MS = 15_000;
@@ -295,6 +315,156 @@ function deferred() {
 	return { promise, resolve };
 }
 
+/** Server-supplied download name → one local path segment. */
+function downloadFileName(raw) {
+	const base = path
+		.basename(String(raw || ""))
+		.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+		.trim();
+	return base && base !== "." && base !== ".." ? base : "download";
+}
+
+/** Never clobber an existing file in the download folder. */
+function uniqueDownloadPath(target) {
+	if (!fs.existsSync(target)) return target;
+	const ext = path.extname(target);
+	const stem = target.slice(0, target.length - ext.length);
+	for (let i = 1; i < 1000; i++) {
+		const candidate = `${stem} (${i})${ext}`;
+		if (!fs.existsSync(candidate)) return candidate;
+	}
+	return target;
+}
+
+// ── in-app upload confirmation ─────────────────────────────────────────
+//
+// The managed browser never lets Chromium show a native file dialog: the
+// daemon's browser worker intercepts the chooser over CDP and POSTs the
+// decision here (loopback only). The renderer draws the card, optionally
+// opens the OS picker from the card, and answers with `upload-result`.
+
+/** MIME / wildcard accept entries → file extensions for the OS picker. */
+const MIME_UPLOAD_EXTENSIONS = {
+	"image/*": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "heic"],
+	"video/*": ["mp4", "webm", "mov", "mkv", "avi"],
+	"audio/*": ["mp3", "wav", "ogg", "m4a", "flac"],
+	"text/*": ["txt", "csv", "md", "html", "css", "js", "json", "xml"],
+	"application/pdf": ["pdf"],
+	"application/zip": ["zip"],
+	"application/json": ["json"],
+	"application/xml": ["xml"],
+	"text/plain": ["txt"],
+	"text/csv": ["csv"],
+	"text/html": ["html", "htm"],
+	"image/png": ["png"],
+	"image/jpeg": ["jpg", "jpeg"],
+	"image/gif": ["gif"],
+	"image/webp": ["webp"],
+	"image/svg+xml": ["svg"],
+};
+
+/** One-line accept summary for the renderer's card. */
+function uploadAcceptList(raw) {
+	const values = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
+	const seen = new Set();
+	for (const value of values) {
+		const text = String(value || "")
+			.trim()
+			.toLowerCase()
+			.slice(0, 80);
+		if (text) seen.add(text);
+	}
+	return [...seen].slice(0, 20);
+}
+
+/** Electron `dialog.showOpenDialog` filters for a page's accept list. */
+function uploadFilters(accept) {
+	const extensions = new Set();
+	let wildcard = false;
+	for (const value of uploadAcceptList(accept)) {
+		if (value === "*/*" || value === "*") {
+			wildcard = true;
+			continue;
+		}
+		if (value.startsWith(".")) {
+			const ext = value.slice(1).replace(/[^a-z0-9+_-]/g, "").slice(0, 20);
+			if (ext) extensions.add(ext);
+			continue;
+		}
+		for (const ext of MIME_UPLOAD_EXTENSIONS[value] || []) extensions.add(ext);
+	}
+	const filters = [];
+	if (!wildcard && extensions.size > 0) {
+		const list = [...extensions].slice(0, 24);
+		filters.push({
+			name: `Supported files (${list
+				.slice(0, 6)
+				.map((ext) => `*.${ext}`)
+				.join(", ")})`,
+			extensions: list,
+		});
+	}
+	filters.push({ name: "All files", extensions: ["*"] });
+	return filters;
+}
+
+/** Absolute, existing, regular files only — the renderer is not trusted with
+ *  an arbitrary path just because it answered a card. */
+function validateUploadPaths(raw) {
+	if (!Array.isArray(raw) || raw.length === 0 || raw.length > UPLOAD_MAX_FILES) return null;
+	const paths = [];
+	for (const value of raw) {
+		if (typeof value !== "string" || !value || !path.isAbsolute(value)) return null;
+		try {
+			if (!fs.statSync(value).isFile()) return null;
+		} catch {
+			return null;
+		}
+		paths.push(value);
+	}
+	return paths;
+}
+
+/** Mail-shaped site metadata → safe card fields (control chars stripped). */
+function sanitizeUploadSite(raw) {
+	const site = raw && typeof raw === "object" ? raw : {};
+	const clean = (value, max) =>
+		String(value || "")
+			.replace(/[\u0000-\u001f\u007f]/g, "")
+			.trim()
+			.slice(0, max);
+	return {
+		host: clean(site.host, 200),
+		url: redactUrl(clean(site.url, 2048)),
+		...(clean(site.title, 120) ? { title: clean(site.title, 120) } : {}),
+	};
+}
+
+/**
+ * Validate one upload request from the browser worker. Returns null when the
+ * shape or a path is unusable; the HTTP endpoint then answers `invalid`.
+ */
+function sanitizeUploadRequest(input) {
+	if (!input || typeof input !== "object") return null;
+	const mode = input.mode === "agent" ? "agent" : "site";
+	const site = sanitizeUploadSite(input.site);
+	const accept = uploadAcceptList(input.accept);
+	const multiple = input.multiple === true;
+	if (mode === "agent") {
+		const paths = validateUploadPaths(input.paths);
+		if (!paths) return null;
+		return { mode, site, accept, multiple, paths };
+	}
+	return { mode, site, accept, multiple };
+}
+
+/** Upload names shown on the card (basenames only, never full paths). */
+function uploadNames(paths) {
+	return (Array.isArray(paths) ? paths : [])
+		.slice(0, UPLOAD_MAX_FILES)
+		.map((filePath) => path.basename(String(filePath)).slice(0, 160));
+}
+
 /**
  * Device identity for the pane's viewport presets.
  *
@@ -384,6 +554,9 @@ class ManagedTab {
 		this.cdpOk = false;
 		/** Device preset currently applied to the guest (null = engine default). */
 		this.devicePreset = null;
+		/** Renderer set an explicit per-tab zoom; the default zoom must not
+		 *  overwrite it when preferences change. */
+		this.zoomOverride = false;
 		/** Page frozen via CDP `Page.setWebLifecycleState` (residency management). */
 		this.frozen = false;
 		/** Pending agent-highlight auto-hide. */
@@ -451,6 +624,9 @@ class ManagedTab {
 		// finished loading — attach now instead of waiting for an event that
 		// will never fire again.
 		if (!wc.isLoading()) this.ensureDebugger();
+		// Preferences must be in place before the first navigation resolves:
+		// UA is read by the document, zoom by the compositor.
+		this.controller.applyPreferences(this);
 		this.refreshState();
 		this.guestReady.resolve(this);
 		return true;
@@ -598,12 +774,19 @@ class ManagedBrowserController {
 		/** In-flight risky-navigation consent request ({requestId, timer, resolve}). */
 		this.pendingConfirm = null;
 		this.confirmSeq = 0;
+		/** In-flight in-app upload confirmation ({requestId, timer, resolve, paths}). */
+		this.pendingUpload = null;
+		this.uploadSeq = 0;
 		/** Closes waiting for the renderer's element-unmount report before the
 		 *  guest is disposed (id → {tab, timer}) — see disposeAfterUnmount. */
 		this.guestGoneWaiters = new Map();
 		/** Renderer listener registration barrier. CDP starts before React, so a
 		 *  create notification sent before this resolves can be lost. */
 		this.hostReady = deferred();
+		/** Runtime preferences pushed by the renderer (setPreferences). */
+		this.preferences = { ...DEFAULT_PREFERENCES, download: { ...DEFAULT_PREFERENCES.download } };
+		/** `will-download` listener armed once on the managed session. */
+		this.downloadsGuarded = false;
 	}
 
 	// ── lifecycle ────────────────────────────────────────────────────────
@@ -637,6 +820,7 @@ class ManagedBrowserController {
 	/** Drop every tab record without renderer pushes — the owner window (and
 	 *  with it every guest) is gone, so there is nobody left to notify. */
 	releaseTabs() {
+		this.cancelPendingUpload();
 		for (const waiter of this.guestGoneWaiters.values()) {
 			clearTimeout(waiter.timer);
 			waiter.tab.dispose();
@@ -691,6 +875,116 @@ class ManagedBrowserController {
 		} catch {
 			// session unavailable (tests / headless) — best effort
 		}
+		this.guardDownloads();
+	}
+
+	/** Downloads for the managed partition: one `will-download` listener
+	 *  applies the renderer's save policy (agent tabs → download folder,
+	 *  user tabs → ask or download folder) and the agent size cap. */
+	guardDownloads() {
+		if (this.downloadsGuarded) return;
+		this.downloadsGuarded = true;
+		try {
+			electronSession.fromPartition(PARTITION).on("will-download", (_event, item, wc) => {
+				this.handleWillDownload(item, wc);
+			});
+		} catch (error) {
+			console.warn(
+				"[managed-browser] will-download registration failed:",
+				error instanceof Error ? error.message : error,
+			);
+		}
+	}
+
+	/** Choose the destination synchronously: Electron only honors
+	 *  `setSavePath` inside this callback, and an async dialog would let
+	 *  the transfer start (or open Chromium's own prompt) first. */
+	handleWillDownload(item, wc) {
+		try {
+			const tab = wc ? [...this.tabs.values()].find((candidate) => candidate.wc === wc) : null;
+			const agent = Boolean(
+				tab && (tab.openedByAgent || (this.agentTabId !== null && String(tab.id) === this.agentTabId)),
+			);
+			const prefs = this.preferences.download;
+			const dir = prefs.dir || app.getPath("downloads");
+			const fileName = downloadFileName(item.getFilename());
+			let savePath;
+			if (agent || !prefs.askWhereToSave) {
+				fs.mkdirSync(dir, { recursive: true });
+				savePath = uniqueDownloadPath(path.join(dir, fileName));
+			} else {
+				const options = { defaultPath: path.join(dir, fileName) };
+				const owner = this.owner && !this.owner.isDestroyed() ? this.owner : null;
+				const picked = owner ? dialog.showSaveDialogSync(owner, options) : dialog.showSaveDialogSync(options);
+				if (!picked) {
+					item.cancel();
+					return;
+				}
+				fs.mkdirSync(path.dirname(picked), { recursive: true });
+				savePath = picked;
+			}
+			item.setSavePath(savePath);
+			// The cap is an agent guardrail: a user-started download is theirs.
+			if (agent) this.guardDownloadSize(item, prefs.maxBytes);
+		} catch (error) {
+			console.warn("[managed-browser] download setup failed:", error instanceof Error ? error.message : error);
+		}
+	}
+
+	/** Cancel an agent download that exceeds `maxBytes` (known total up
+	 *  front, or the running byte count once unknown totals arrive). */
+	guardDownloadSize(item, maxBytes) {
+		const limit = Number(maxBytes);
+		if (!Number.isFinite(limit) || limit <= 0) return;
+		let blocked = false;
+		const stop = () => {
+			if (blocked) return;
+			blocked = true;
+			try {
+				item.cancel();
+			} catch {
+				// already finished
+			}
+			this.discardDownload(item);
+		};
+		if (item.getTotalBytes() > limit) {
+			stop();
+			return;
+		}
+		item.on("updated", (_event, state) => {
+			if (blocked || state !== "progressing") return;
+			if (item.getReceivedBytes() > limit) stop();
+		});
+	}
+
+	/** Remove the partial file a capped agent download left behind; Windows
+	 *  may keep the handle briefly, so retry on `done` and once after. */
+	discardDownload(item) {
+		const remove = () => {
+			let filePath = "";
+			try {
+				filePath = item.getSavePath();
+			} catch {
+				return;
+			}
+			if (!filePath) return;
+			try {
+				fs.rmSync(filePath, { force: true });
+			} catch (error) {
+				console.warn(
+					"[managed-browser] partial download cleanup failed:",
+					error instanceof Error ? error.message : error,
+				);
+			}
+		};
+		remove();
+		try {
+			item.once("done", remove);
+		} catch {
+			// item already settled
+		}
+		const timer = setTimeout(remove, 1000);
+		if (typeof timer.unref === "function") timer.unref();
 	}
 
 	// ── tabs ─────────────────────────────────────────────────────────────
@@ -1001,6 +1295,152 @@ class ManagedBrowserController {
 		});
 	}
 
+	// ── in-app upload confirmation ───────────────────────────────────────
+
+	/**
+	 * Ask the renderer to decide on an upload. One card at a time; a second
+	 * request answers `busy` instead of stacking dialogs. Resolves with the
+	 * accepted absolute paths (site mode: picked by the user; agent mode: the
+	 * worker's already-validated list).
+	 */
+	requestUploadConsent(input) {
+		if (this.pendingUpload) return Promise.resolve({ accepted: false, reason: "busy" });
+		if (!this.owner || this.owner.isDestroyed()) return Promise.resolve({ accepted: false, reason: "unsupported" });
+		return new Promise((resolve) => {
+			const requestId = `u${++this.uploadSeq}`;
+			const timer = setTimeout(() => {
+				if (this.pendingUpload && this.pendingUpload.requestId === requestId) {
+					this.pendingUpload = null;
+				}
+				if (this.owner && !this.owner.isDestroyed()) {
+					this.owner.webContents.send("managed-browser:upload-dismiss", { requestId });
+				}
+				resolve({ accepted: false, reason: "timeout" });
+			}, UPLOAD_CONFIRM_TIMEOUT_MS);
+			timer.unref?.();
+			this.pendingUpload = { requestId, timer, resolve, agentPaths: input.paths ?? null };
+			this.owner.webContents.send("managed-browser:upload-request", {
+				requestId,
+				mode: input.mode,
+				site: input.site,
+				accept: input.accept,
+				multiple: input.multiple === true,
+				names: uploadNames(input.paths),
+			});
+		});
+	}
+
+	/** Renderer answer to a card: validate the decision, then settle the wait. */
+	resolveUploadResult(input) {
+		const pending = this.pendingUpload;
+		if (!pending || !input || pending.requestId !== input.requestId) return { ok: false };
+		clearTimeout(pending.timer);
+		this.pendingUpload = null;
+		if (input.accepted !== true) {
+			pending.resolve({
+				accepted: false,
+				reason: typeof input.reason === "string" ? input.reason : "canceled",
+			});
+			return { ok: true };
+		}
+		// Agent mode keeps the worker's validated list; site mode trusts the
+		// picker's return value only after the same absolute/regular-file check.
+		const paths = pending.agentPaths ?? validateUploadPaths(input.paths);
+		if (!paths) {
+			pending.resolve({ accepted: false, reason: "invalid" });
+			return { ok: false };
+		}
+		pending.resolve({ accepted: true, paths });
+		return { ok: true };
+	}
+
+	/** Owner window going away: unblock the worker now instead of after 60s. */
+	cancelPendingUpload() {
+		const pending = this.pendingUpload;
+		if (!pending) return;
+		clearTimeout(pending.timer);
+		this.pendingUpload = null;
+		pending.resolve({ accepted: false, reason: "canceled" });
+	}
+
+	/**
+	 * Native picker for the card's 选择文件 button. Returns absolute paths
+	 * (empty when canceled). Only while a card is waiting — a renderer cannot
+	 * pop the file dialog arbitrarily.
+	 */
+	async pickUploadFiles(input) {
+		if (!this.pendingUpload) return { paths: [] };
+		try {
+			const multiple = input?.multiple === true;
+			const options = {
+				properties: multiple ? ["openFile", "multiSelections"] : ["openFile"],
+				filters: uploadFilters(input?.accept),
+			};
+			const owner = this.owner && !this.owner.isDestroyed() ? this.owner : null;
+			const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+			if (!result || result.canceled) return { paths: [] };
+			return { paths: (result.filePaths || []).filter((filePath) => path.isAbsolute(filePath)) };
+		} catch (error) {
+			return { paths: [], error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	/**
+	 * Loopback HTTP endpoint for the daemon's browser worker
+	 * (`POST /musepi/upload-request`). No CORS, no credentials, JSON only: a
+	 * web page must never be able to ask for a file upload on its own.
+	 */
+	handleUploadRequestHttp(req, res) {
+		if (req.headers.origin) {
+			res.writeHead(403);
+			res.end("forbidden");
+			return;
+		}
+		if (!/^application\/json\b/i.test(String(req.headers["content-type"] || ""))) {
+			res.writeHead(415);
+			res.end("unsupported media type");
+			return;
+		}
+		const chunks = [];
+		let size = 0;
+		let overflow = false;
+		req.on("data", (chunk) => {
+			size += chunk.length;
+			if (size > UPLOAD_REQUEST_MAX_BYTES) {
+				overflow = true;
+				if (!res.headersSent) {
+					res.writeHead(413);
+					res.end("too large");
+				}
+				req.destroy();
+				return;
+			}
+			chunks.push(chunk);
+		});
+		req.on("error", () => {
+			if (!res.headersSent) {
+				res.writeHead(400);
+				res.end("bad request");
+			}
+		});
+		req.on("end", () => {
+			if (overflow) return;
+			let parsed;
+			try {
+				parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+			} catch {
+				this.writeJson(res, { accepted: false, reason: "invalid" });
+				return;
+			}
+			const request = sanitizeUploadRequest(parsed);
+			if (!request) {
+				this.writeJson(res, { accepted: false, reason: "invalid" });
+				return;
+			}
+			void this.requestUploadConsent(request).then((result) => this.writeJson(res, result));
+		});
+	}
+
 	// ── operation status + stop (executionSource 停止按钮) ───────────────
 
 	markOpStatus(key, status) {
@@ -1153,6 +1593,14 @@ class ManagedBrowserController {
 							webSocketDebuggerUrl: `ws://127.0.0.1:${candidate}/devtools/page/${pageTargetId(tab.id)}`,
 						}));
 					this.writeJson(res, pages);
+					return;
+				}
+				// In-app upload confirmation for the daemon's browser worker.
+				if (
+					req.method === "POST" &&
+					(req.url === "/musepi/upload-request" || req.url === "/musepi/upload-request/")
+				) {
+					this.handleUploadRequestHttp(req, res);
 					return;
 				}
 				res.writeHead(404);
@@ -1674,10 +2122,62 @@ class ManagedBrowserController {
 		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
 		const zoom = Number(input?.zoom);
 		try {
-			wc.setZoomFactor(Math.min(3, Math.max(0.25, Number.isFinite(zoom) && zoom > 0 ? zoom : 1)));
+			wc.setZoomFactor(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number.isFinite(zoom) && zoom > 0 ? zoom : 1)));
+			tab.zoomOverride = true;
 			return { ok: true };
 		} catch (error) {
 			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	/**
+	 * Runtime preferences from the pane's settings read (设置 → 浏览器):
+	 * default page zoom, custom user agent, address-bar search engine and the
+	 * download policy. Applied to every open tab and to tabs created later.
+	 */
+	setPreferences(input) {
+		const current = this.preferences;
+		const zoom = Number(input?.zoom);
+		const download = input?.download ?? {};
+		const maxBytes = Number(download.maxBytes);
+		this.preferences = {
+			zoom: Number.isFinite(zoom) && zoom > 0 ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom)) : current.zoom,
+			// "" is meaningful: it clears the override and restores the engine
+			// default user agent.
+			userAgent: typeof input?.userAgent === "string" ? input.userAgent.trim() : current.userAgent,
+			searchEngine:
+				typeof input?.searchEngine === "string" && input.searchEngine.trim()
+					? input.searchEngine.trim().toLowerCase()
+					: current.searchEngine,
+			download: {
+				askWhereToSave:
+					typeof download.askWhereToSave === "boolean" ? download.askWhereToSave : current.download.askWhereToSave,
+				dir: typeof download.dir === "string" ? download.dir.trim() : current.download.dir,
+				maxBytes: Number.isFinite(maxBytes) && maxBytes >= 0 ? maxBytes : current.download.maxBytes,
+			},
+		};
+		for (const tab of this.tabs.values()) this.applyPreferences(tab);
+		return { ok: true };
+	}
+
+	/** Apply the stored preferences to one bound guest (best effort). */
+	applyPreferences(tab) {
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) return;
+		try {
+			// Empty setting = engine default; keep the guest's original UA once
+			// (getUserAgent would return our override after the first apply).
+			tab.baseUserAgent ??= wc.getUserAgent();
+			wc.setUserAgent(this.preferences.userAgent || tab.baseUserAgent);
+		} catch {
+			// guest is tearing down
+		}
+		// A per-tab override wins over the default (per-tab zoom parity).
+		if (tab.zoomOverride) return;
+		try {
+			wc.setZoomFactor(this.preferences.zoom);
+		} catch {
+			// guest is tearing down
 		}
 	}
 
@@ -1912,6 +2412,8 @@ class ManagedBrowserController {
 			this.applyDevicePreset(input?.tabId, input?.preset, input?.reload === true, input?.viewport ?? null),
 		);
 		ipcMain.handle("managed-browser:set-zoom", (_e, input) => this.setZoom(input));
+		// Settings → 浏览器: default zoom / UA / search engine / download policy.
+		ipcMain.handle("managed-browser:set-preferences", (_e, input) => this.setPreferences(input));
 		// Page freeze/thaw for tab residency (CDP `Page.setWebLifecycleState`).
 		ipcMain.handle("managed-browser:set-lifecycle", (_e, input) => this.setTabLifecycle(input));
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
@@ -1924,6 +2426,9 @@ class ManagedBrowserController {
 			pending.resolve(Boolean(input.allow));
 			return { ok: true };
 		});
+		// In-app upload card: the OS picker and the renderer's decision.
+		ipcMain.handle("managed-browser:pick-upload-files", (_e, input) => this.pickUploadFiles(input));
+		ipcMain.handle("managed-browser:upload-result", (_e, input) => this.resolveUploadResult(input));
 		// Guest lifecycle: the renderer owns the elements, so it is the only
 		// source of truth for which webContents belongs to which tab.
 		ipcMain.handle("managed-browser:host-ready", () => this.handleHostReady());
@@ -1972,4 +2477,12 @@ class ManagedBrowserController {
 	}
 }
 
-module.exports = { ManagedBrowserController, DEFAULT_PORT };
+module.exports = {
+	ManagedBrowserController,
+	DEFAULT_PORT,
+	// Pure helpers the upload request/response tests exercise without Electron.
+	sanitizeUploadRequest,
+	validateUploadPaths,
+	uploadFilters,
+	uploadAcceptList,
+};

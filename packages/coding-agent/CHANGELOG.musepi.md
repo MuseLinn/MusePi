@@ -6,6 +6,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **浏览器设置补齐 Agent 开关、下载策略、缩放与 UA**：设置 → 浏览器新增「允许 Agent 操控内置浏览器」开关、默认搜索引擎、每次下载前询问保存位置、Agent 下载位置与大小上限、默认缩放、自定义 User Agent。Agent 下载直接写入指定目录并在超过上限时取消并删除；用户下载按开关询问；缩放与 UA 应用到已打开和新建标签页，地址栏非 URL 输入走所选搜索引擎。
+  - EN: Browser settings now cover agent control, downloads, zoom, and UA. Settings → Browser adds an Allow Agent Control switch, default search engine, ask-before-download, agent download folder and size cap, default zoom, and a custom User Agent. Agent downloads save straight to the chosen folder and are cancelled and deleted past the cap; user downloads ask when the switch is on; zoom and UA apply to open and new tabs, and non-URL address-bar input searches through the selected engine.
+- **浏览器操作记录显示坐标、页面标题与缩略图**：托管浏览器里每次点击/填写/导航等操作在转录中显示目标元素坐标、当时页面标题，以及一张操作后的页面缩略图（每次运行最多 24 张），长流程不用回看截图也能定位动作落点。
+  - EN: Browser operation rows now show coordinates, page title, and a thumbnail. In the managed browser, each click, fill, navigation, and similar step in the transcript shows the target's coordinates, the page title at that moment, and a small post-action page thumbnail (up to 24 per run), so a long flow stays readable without opening screenshots.
+- **浏览器上传文件改为应用内确认**：托管浏览器里点击 `<input type="file">` 不再弹出系统对话框，而是显示「网站请求上传文件」卡片（站点、接受类型、取消 / 选择文件…），选定后才把文件交给页面；Agent 调用 `tab.uploadFile` 同样先经过这张卡片并列出文件名，取消或 60 秒超时不会向网站传送任何文件。上传动作写入浏览器操作明细（host、accept 与文件名），非托管后端保持原有行为。
+  - EN: Uploads in the managed browser now ask in-app. Clicking an input type=file no longer opens a native dialog; the pane shows a "Website wants to upload files" card with the site, accepted types, and Cancel / Choose files…, and files reach the page only after you pick them. tab.uploadFile goes through the same card with the file names listed, and a cancel or 60-second timeout sends nothing to the site. Uploads appear in the browser operation details (host, accept, and file names), and other browser backends keep their existing picker behavior.
+
 - **引用工具栏跟随选区末端并换成液态玻璃**：长文本选中时工具栏出现在松开鼠标的位置（键盘选择回退到选区最后一行），不再固定在整个选区顶部；面板改用共享的玻璃光泽、描边与液态弹簧入场。
   - EN: The quote toolbar now follows the end of the selection and uses the shared liquid glass. After a long selection it appears at the release point (keyboard selections fall back to the last line) instead of the top of the whole selection, and the chip uses the shared sheen, rim, and liquid-spring entrance.
 

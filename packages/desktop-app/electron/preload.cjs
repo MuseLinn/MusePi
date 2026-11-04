@@ -335,11 +335,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserSetDevice: (input) => ipcRenderer.invoke("managed-browser:set-device", input),
 	/** Per-tab page zoom factor (0.25–3), independent of device presets. */
 	managedBrowserSetZoom: (input) => ipcRenderer.invoke("managed-browser:set-zoom", input),
+	/** Runtime preferences (default zoom, user agent, search engine, download
+	 *  policy). Main applies them to open tabs and to tabs created later. */
+	managedBrowserSetPreferences: (input) => ipcRenderer.invoke("managed-browser:set-preferences", input),
 	/** Page freeze/thaw for tab residency: "frozen" pauses the page via CDP
 	 *  (no reload cost on thaw), "active" resumes it. */
 	managedBrowserSetLifecycle: (input) => ipcRenderer.invoke("managed-browser:set-lifecycle", input),
 	/** Renderer answer to a risky-navigation consent request. */
 	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
+	/** In-app upload card: open the OS picker with the page's accept filters
+	 *  (absolute paths; empty when canceled). */
+	managedBrowserPickUploadFiles: (input) => ipcRenderer.invoke("managed-browser:pick-upload-files", input),
+	/** In-app upload card decision (accept + picked paths / cancel). */
+	managedBrowserUploadResult: (input) => ipcRenderer.invoke("managed-browser:upload-result", input),
 	/** Renderer listeners are registered; main may send create-tab now. */
 	managedBrowserHostReady: () => ipcRenderer.invoke("managed-browser:host-ready"),
 	/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId(id)`. */
@@ -360,6 +368,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const listener = (_e, payload) => cb(payload);
 		ipcRenderer.on("managed-browser:confirm", listener);
 		return () => ipcRenderer.removeListener("managed-browser:confirm", listener);
+	},
+	/** In-app upload confirmation request (site opened a file picker, or the
+	 *  agent called tab.uploadFile). */
+	onManagedBrowserUploadRequest: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("managed-browser:upload-request", listener);
+		return () => ipcRenderer.removeListener("managed-browser:upload-request", listener);
+	},
+	/** The shell gave up waiting for a decision (60s); drop the card. */
+	onManagedBrowserUploadDismiss: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("managed-browser:upload-dismiss", listener);
+		return () => ipcRenderer.removeListener("managed-browser:upload-dismiss", listener);
 	},
 	/** Agent-created tab (CDP Target.createTarget / popup): mount a <webview>. */
 	onManagedBrowserCreateTab: (cb) => {

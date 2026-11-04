@@ -757,7 +757,15 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 		waitUntil: opts.waitUntil,
 		timeoutMs: opts.timeoutMs,
 		activateForScreenshot,
+		...(isManagedGui ? { managedGui: true, uploadBridge: uploadBridgeOrigin(browser) } : {}),
 	};
+}
+
+/** Managed-browser bridge origin for the in-app upload card; only the desktop
+ *  GUI backend has one (relay/plain CDP keep their own picker behavior). */
+function uploadBridgeOrigin(browser: PuppeteerBrowserHandle): string | undefined {
+	if (browser.kind.kind !== "connected" || browser.kind.gui !== true) return undefined;
+	return browser.kind.cdpUrl.replace(/\/+$/, "");
 }
 
 /**
@@ -895,6 +903,9 @@ async function recycleTimedOutWorkerTab(tab: WorkerTabSession, timeoutMs: number
 		recover: true,
 		timeoutMs,
 		activateForScreenshot: tab.activateForScreenshot,
+		...(tab.browser.kind.kind === "connected" && tab.browser.kind.gui === true
+			? { managedGui: true, uploadBridge: uploadBridgeOrigin(tab.browser) }
+			: {}),
 	};
 	let worker = await spawnTabWorker();
 	try {

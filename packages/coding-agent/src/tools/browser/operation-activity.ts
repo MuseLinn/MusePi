@@ -7,12 +7,34 @@ interface OperationStartDetails {
 interface OperationResultDetails {
 	elementCount?: number;
 	truncated?: boolean;
+	/** Richer target discovered while the op ran (e.g. the upload host + accept). */
+	target?: string;
 }
 
+/** Viewport geometry of the element an action targeted (CSS px). */
+export interface OperationRect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** One thumbnail per operation is enough for the feed; the cap bounds a run's
+ *  IPC payload when a script drives a long form. */
+const MAX_OPERATION_THUMBNAILS = 24;
+
 export function operationResultDetails(value: unknown): OperationResultDetails {
-	if (typeof value !== "object" || value === null || !("elements" in value)) return {};
-	const elements = value.elements;
-	return Array.isArray(elements) ? { elementCount: elements.length } : {};
+	if (typeof value !== "object" || value === null) return {};
+	const result: OperationResultDetails = {};
+	const operationTarget =
+		"operationTarget" in value && typeof (value as { operationTarget?: unknown }).operationTarget === "string"
+			? (value as { operationTarget: string }).operationTarget
+			: undefined;
+	if (operationTarget) result.target = operationTarget.slice(0, 240);
+	if (!("elements" in value)) return result;
+	const elements = (value as { elements?: unknown }).elements;
+	if (Array.isArray(elements)) result.elementCount = elements.length;
+	return result;
 }
 
 export function redactBrowserUrl(url: string): string {
@@ -54,6 +76,34 @@ export class BrowserOperationTracker {
 
 	complete(id: string, details: OperationResultDetails = {}): void {
 		this.#settle(id, "completed", details);
+	}
+
+	/** Attach the element box and page title observed while the action ran. */
+	position(id: string, rect: OperationRect | null, pageTitle?: string): void {
+		const operation = this.#operations.find(item => item.id === id);
+		if (!operation) return;
+		if (rect) {
+			operation.x = Math.round(rect.x);
+			operation.y = Math.round(rect.y);
+			operation.width = Math.round(rect.width);
+			operation.height = Math.round(rect.height);
+		}
+		if (pageTitle) operation.pageTitle = pageTitle.slice(0, 120);
+		this.#emit();
+	}
+
+	/** True while this run may still attach action screenshots. */
+	canAttachThumbnail(): boolean {
+		let count = 0;
+		for (const operation of this.#operations) if (operation.thumbnail) count += 1;
+		return count < MAX_OPERATION_THUMBNAILS;
+	}
+
+	setThumbnail(id: string, dataUrl: string): void {
+		const operation = this.#operations.find(item => item.id === id);
+		if (!operation) return;
+		operation.thumbnail = dataUrl;
+		this.#emit();
 	}
 
 	fail(id: string, error: unknown): void {

@@ -1,0 +1,199 @@
+/*
+ * In-app upload confirmation (components/browser-upload-dialog.tsx).
+ *
+ * A liquid-glass card over the managed page: the page stays visible but
+ * inert behind the scrim, and the decision reads as one small sheet instead
+ * of a full-screen form. Shared tokens only; every interactive box is at
+ * least --control-height-touch tall.
+ */
+
+.gui-upload-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	background: color-mix(in oklab, #000 42%, transparent);
+	animation: gui-upload-fade-in var(--gui-motion-fade-in) ease;
+}
+
+.gui-upload-card {
+	width: min(420px, 100%);
+	max-height: calc(100% - 24px);
+	overflow: auto;
+	padding: 16px;
+	border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
+	backdrop-filter: blur(26px) saturate(165%);
+	-webkit-backdrop-filter: blur(26px) saturate(165%);
+	box-shadow:
+		0 1px 0 color-mix(in oklab, #fff 30%, transparent) inset,
+		0 18px 48px -18px rgb(0 0 0 / 55%);
+	color: var(--color-text);
+	animation: gui-upload-rise var(--gui-motion-fade-in) ease;
+}
+
+.gui-upload-heading {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	min-width: 0;
+}
+
+.gui-upload-icon {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+	border-radius: var(--radius-md);
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+}
+
+.gui-upload-titles {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.gui-upload-title {
+	font-size: 12.5px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.gui-upload-site {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	margin-top: 2px;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.gui-upload-host {
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 60%;
+}
+
+.gui-upload-page-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.gui-upload-description {
+	margin: 10px 0 0;
+	font-size: 11.5px;
+	line-height: 1.55;
+	color: var(--color-text-muted);
+}
+
+.gui-upload-files {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 10px 0 0;
+	padding: 8px;
+	max-height: 132px;
+	overflow: auto;
+	list-style: none;
+	border-radius: var(--radius-md);
+	border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+	background: color-mix(in oklab, var(--color-surface-sunken) 60%, transparent);
+}
+
+.gui-upload-file {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 11px;
+}
+
+.gui-upload-accept,
+.gui-upload-hint {
+	margin-top: 8px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-upload-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.gui-upload-action {
+	min-height: var(--control-height-touch, 44px);
+	min-width: 84px;
+	padding: 0 16px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+	color: var(--color-text);
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background var(--gui-motion-fast, 120ms) ease,
+		transform var(--gui-motion-fast, 120ms) ease;
+}
+
+.gui-upload-action:hover {
+	background: color-mix(in oklab, var(--color-surface-sunken) 78%, transparent);
+}
+
+.gui-upload-action:active {
+	transform: scale(0.985);
+}
+
+.gui-upload-action-primary {
+	border-color: transparent;
+	background: var(--color-accent);
+	color: var(--color-on-accent);
+}
+
+.gui-upload-action-primary:hover {
+	background: color-mix(in oklab, var(--color-accent) 88%, #000);
+}
+
+@keyframes gui-upload-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes gui-upload-rise {
+	from {
+		opacity: 0;
+		translate: 0 6px;
+	}
+	to {
+		opacity: 1;
+		translate: 0 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-upload-overlay,
+	.gui-upload-card {
+		animation: none;
+	}
+}

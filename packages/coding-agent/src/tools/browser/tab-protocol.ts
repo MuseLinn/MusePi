@@ -48,6 +48,7 @@ export type BrowserOperationAction =
 	| "hover"
 	| "screenshot"
 	| "evaluate"
+	| "upload"
 	| "wait";
 
 export interface BrowserOperation {
@@ -60,6 +61,15 @@ export interface BrowserOperation {
 	elementCount?: number;
 	truncated?: boolean;
 	error?: string;
+	/** Element box at the moment the action started (CSS px, viewport space). */
+	x?: number;
+	y?: number;
+	width?: number;
+	height?: number;
+	/** Page title when the action ran, so a step reads as site context. */
+	pageTitle?: string;
+	/** Small JPEG data URL of the page right after the action (managed GUI only). */
+	thumbnail?: string;
 }
 
 export interface SessionSnapshot {
@@ -100,6 +110,19 @@ export type WorkerInitPayload =
 			 * behaves as `true`; the supervisor clears it for browsers we did not launch.
 			 */
 			activateForScreenshot?: boolean;
+			/**
+			 * Managed-browser bridge origin (`http://127.0.0.1:<port>`). When set, the
+			 * worker intercepts the page's file chooser and asks the desktop shell for
+			 * an in-app decision instead of letting a native dialog appear. Absent for
+			 * every other backend: they keep their own file-picker behavior.
+			 */
+			uploadBridge?: string;
+			/**
+			 * Attached browser is the desktop app's managed browser. With no
+			 * `uploadBridge` (older shell), intercepted site pickers still cancel
+			 * instead of falling back to a native dialog.
+			 */
+			managedGui?: boolean;
 	  };
 
 export type ToolReply = { ok: true; value: unknown } | { ok: false; error: RunErrorPayload };

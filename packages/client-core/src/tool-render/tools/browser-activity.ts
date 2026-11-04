@@ -13,6 +13,7 @@ export type BrowserOperationAction =
 	| "hover"
 	| "screenshot"
 	| "evaluate"
+	| "upload"
 	| "wait";
 
 export interface BrowserOperation {
@@ -25,6 +26,12 @@ export interface BrowserOperation {
 	elementCount?: number;
 	truncated?: boolean;
 	error?: string;
+	x?: number;
+	y?: number;
+	width?: number;
+	height?: number;
+	pageTitle?: string;
+	thumbnail?: string;
 }
 
 export interface BrowserActivityCall {
@@ -62,6 +69,7 @@ const ACTIONS = new Set<BrowserOperationAction>([
 	"hover",
 	"screenshot",
 	"evaluate",
+	"upload",
 	"wait",
 ]);
 
@@ -100,6 +108,16 @@ export function browserOperationsOf(details: unknown): BrowserOperation[] {
 					: {}),
 				...(typeof value.truncated === "boolean" ? { truncated: value.truncated } : {}),
 				...(stringOrUndefined(value.error) !== undefined ? { error: stringOrUndefined(value.error) } : {}),
+				...(numberOrUndefined(value.x) !== undefined ? { x: numberOrUndefined(value.x) } : {}),
+				...(numberOrUndefined(value.y) !== undefined ? { y: numberOrUndefined(value.y) } : {}),
+				...(numberOrUndefined(value.width) !== undefined ? { width: numberOrUndefined(value.width) } : {}),
+				...(numberOrUndefined(value.height) !== undefined ? { height: numberOrUndefined(value.height) } : {}),
+				...(stringOrUndefined(value.pageTitle) !== undefined
+					? { pageTitle: stringOrUndefined(value.pageTitle) }
+					: {}),
+				...(typeof value.thumbnail === "string" && value.thumbnail.startsWith("data:image/")
+					? { thumbnail: value.thumbnail }
+					: {}),
 			},
 		];
 	});
@@ -131,6 +149,8 @@ export function browserActionLabel(action: BrowserOperationAction): string {
 			return t("tools.browserActionScreenshot");
 		case "evaluate":
 			return t("tools.browserActionEvaluate");
+		case "upload":
+			return t("tools.browserActionUpload");
 		case "wait":
 			return t("tools.browserActionWait");
 	}
