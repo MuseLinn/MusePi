@@ -2030,7 +2030,14 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	color: var(--color-text);
 	cursor: pointer;
 	text-align: left;
+	box-sizing: border-box;
+	font: inherit;
 	transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.gui-board-home-card:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
 }
 
 .gui-board-home-card:hover {
@@ -2061,6 +2068,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	justify-content: center;
 	width: 20px;
 	height: 20px;
+	padding: 0;
 	border-radius: var(--radius-md);
 	border: 1px solid var(--border);
 	background: var(--color-surface-sunken);

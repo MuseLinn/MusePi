@@ -83,7 +83,7 @@ describe("private desktop overlays", () => {
 				{
 					id: "board-1",
 					title: "Board",
-					widgets: [{ id: "widget-1", type: "metric", title: "", data: {}, pos: { x: 0, y: 0, w: 340, h: 200 } }],
+					widgets: [{ id: "widget-1", type: "todo", title: "", data: {}, pos: { x: 0, y: 0, w: 340, h: 200 } }],
 				},
 			]),
 		);

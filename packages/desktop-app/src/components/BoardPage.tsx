@@ -195,21 +195,30 @@ function BoardHome({
 			/>
 			<div className="gui-board-home-grid">
 				{boards.map((b, bi) => (
-					<button
+					// A card previews live widget components, which contain their
+					// own buttons — a <button> wrapper would nest them illegally.
+					<div
 						key={b.id}
-						type="button"
+						role="button"
+						tabIndex={0}
 						className={`gui-board-home-card${removing.has(b.id) ? " gui-board-home-card--removing" : ""}`}
 						style={{ animationDelay: `${bi * 60}ms` }}
 						onClick={() => onOpen(b.id)}
+						onKeyDown={e => {
+							if (e.target !== e.currentTarget) return;
+							if (e.key !== "Enter" && e.key !== " ") return;
+							e.preventDefault();
+							onOpen(b.id);
+						}}
 						onContextMenu={e => {
 							e.preventDefault();
 							setMenu({ x: e.clientX, y: e.clientY, board: b });
 						}}
 					>
 						{!b.builtin && (
-							<span
+							<button
+								type="button"
 								className="gui-board-home-card-x"
-								role="button"
 								aria-label={t("settings.delete")}
 								title={t("settings.delete")}
 								onClick={e => {
@@ -218,11 +227,11 @@ function BoardHome({
 								}}
 							>
 								<Icon name="close" className="h-3 w-3" />
-							</span>
+							</button>
 						)}
 						{/* Static 2×2 preview of the first four widgets; live work
 						 * starts only when the real board mounts. */}
-						<div className="gui-board-home-preview">
+						<div className="gui-board-home-preview" inert aria-hidden="true">
 							{b.widgets.slice(0, 4).map((w, wi) => {
 								const def = widgetDef(w.type);
 								if (!def) return null;
@@ -251,7 +260,7 @@ function BoardHome({
 								{b.widgets.length} {t("settings.widgetsCount")}
 							</span>
 						</div>
-					</button>
+					</div>
 				))}
 				<button
 					type="button"
