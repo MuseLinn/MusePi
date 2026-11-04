@@ -60,6 +60,14 @@ const sdkCustomTool = {
 	},
 } satisfies CustomTool;
 
+/** A timed-out registration's rollback runs after the abort settles; the
+ *  registry must not keep the tool. Poll briefly so a loaded runner cannot
+ *  fail the contract on scheduling order alone. */
+async function waitForToolAbsent(session: { getToolByName(name: string): unknown }, name: string): Promise<void> {
+	const deadline = Date.now() + 2_000;
+	while (session.getToolByName(name) && Date.now() < deadline) await Bun.sleep(10);
+}
+
 describe("createAgentSession defaultInactive tool activation", () => {
 	const tempDirs: string[] = [];
 
@@ -1288,6 +1296,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			unsubscribe();
 
 			expect(errors).toContain("handler timed out after 10ms");
+			await waitForToolAbsent(session, "stalled_registration_tool");
 			expect(session.getToolByName("stalled_registration_tool")).toBeUndefined();
 			expect(session.getToolByName("recovered_registration_tool")?.label).toBe("recovered_registration_tool");
 			expect(session.getEnabledToolNames()).toContain("recovered_registration_tool");
@@ -1503,6 +1512,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 
 			expect(failure.event).toBe("tool_registration");
 			expect(failure.error).toContain("timed out");
+			await waitForToolAbsent(session, "stalled_detached_tool");
 			expect(session.getToolByName("stalled_detached_tool")).toBeUndefined();
 			expect(session.getToolByName("recovered_detached_tool")?.label).toBe("Recovered Detached Tool");
 		} finally {
