@@ -225,7 +225,10 @@ while (($command = [Console]::In.ReadLine()) -ne "quit") {
 }
 
 async function traceNativeBubbleMorph(petPage, bubblesPage, action) {
-	if (process.platform !== "win32") return [];
+	if (process.platform !== "win32") {
+		await action();
+		return [];
+	}
 	const probe = await createNativeWindowProbe(child.pid);
 	const samples = [];
 	const startedAt = Date.now();
