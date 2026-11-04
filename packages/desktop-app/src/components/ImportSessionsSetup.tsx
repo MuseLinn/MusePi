@@ -1,4 +1,5 @@
 import { t } from "@musepi/client-core";
+import { formatWhen } from "@musepi/client-core/src/lib/format";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { projectLabels } from "../lib/project-label";
@@ -19,6 +20,8 @@ interface ForeignSessionRow {
 	modified: string;
 	messageCount: number;
 	firstMessage: string;
+	/** New MusePi session id when this foreign session was already copied. */
+	importedSessionId?: string | null;
 }
 
 interface ImportSource {
@@ -55,8 +58,11 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 	/** null = picker phase (not scanned yet); [] = scanned, nothing found. */
 	const [scanned, setScanned] = useState<ImportSource[] | null>(null);
 	const [selected, setSelected] = useState<Record<string, Set<string>>>({});
+	const [filter, setFilter] = useState("");
 	const [busy, setBusy] = useState(false);
-	const [done, setDone] = useState<{ ok: number; failed: number; grouped?: number } | null>(null);
+	const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+	const [failedItems, setFailedItems] = useState<Array<{ source: string; title: string }>>([]);
+	const [done, setDone] = useState<{ ok: number; skipped: number; failed: number; grouped?: number } | null>(null);
 
 	// Agent list only — deliberately cheap, no session store scan.
 	useEffect(() => {
@@ -91,6 +97,9 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setScanned(null);
 		setSelected({});
 		setDone(null);
+		setFilter("");
+		setProgress(null);
+		setFailedItems([]);
 		try {
 			const list = await rpc.request<ImportSource[]>("import.sources", { sources: [...picked] });
 			setScanned(list ?? []);
@@ -106,14 +115,21 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setSelected({});
 		setScanError(null);
 		setDone(null);
+		setFilter("");
+		setProgress(null);
+		setFailedItems([]);
 	};
 
 	/** Per-source sessions grouped by workspace; empty cwd last. */
 	const groupsBySource = useMemo(() => {
 		const out: Record<string, WorkspaceGroup[]> = {};
+		const q = filter.trim().toLowerCase();
 		for (const src of scanned ?? []) {
 			const byCwd = new Map<string, ForeignSessionRow[]>();
 			for (const s of src.sessions) {
+				if (q.length > 0 && !`${s.title} ${s.firstMessage} ${s.cwd} ${s.id}`.toLowerCase().includes(q)) {
+					continue;
+				}
 				const arr = byCwd.get(s.cwd) ?? [];
 				arr.push(s);
 				byCwd.set(s.cwd, arr);
@@ -127,14 +143,15 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 				});
 		}
 		return out;
-	}, [scanned]);
+	}, [scanned, filter]);
 
-	const toggleSession = (source: string, cwd: string, id: string): void => {
+	const toggleSession = (source: string, cwd: string, session: ForeignSessionRow): void => {
+		if (session.importedSessionId) return;
 		setSelected(prev => {
 			const key = selKey(source, cwd);
 			const next = new Set(prev[key] ?? []);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
+			if (next.has(session.id)) next.delete(session.id);
+			else next.add(session.id);
 			return { ...prev, [key]: next };
 		});
 	};
@@ -143,10 +160,10 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setSelected(prev => {
 			const key = selKey(source, group.cwd);
 			const cur = prev[key] ?? new Set();
-			const all = group.sessions.map(s => s.id);
-			const allChecked = all.every(id => cur.has(id));
+			const selectable = group.sessions.filter(s => !s.importedSessionId).map(s => s.id);
+			const allChecked = selectable.length > 0 && selectable.every(id => cur.has(id));
 			const next = new Set(cur);
-			for (const id of all) {
+			for (const id of selectable) {
 				if (allChecked) next.delete(id);
 				else next.add(id);
 			}
@@ -160,30 +177,55 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (!rpc || totalSelected === 0 || busy) return;
 		setBusy(true);
 		setDone(null);
+		setFailedItems([]);
 		let ok = 0;
+		let skipped = 0;
 		let failed = 0;
+		const failures: Array<{ source: string; title: string }> = [];
 		// Imported session ids per workspace — the 引导归纳 below folds them
 		// into editable custom groups (one per workspace) after the copy loop.
 		const byCwd = new Map<string, string[]>();
+		const rows = new Map<string, ForeignSessionRow>();
+		for (const src of scanned ?? []) for (const row of src.sessions) rows.set(`${src.source}\u0000${row.id}`, row);
+		const work: Array<{ source: string; cwd: string; id: string }> = [];
 		for (const [key, ids] of Object.entries(selected)) {
 			const source = key.split("\u0000")[0] ?? "";
 			const cwd = key.split("\u0000")[1] ?? "";
-			for (const id of ids) {
-				try {
-					// No cwd param: the daemon keeps the session's original
-					// workspace directory (fallbackCwd = daemon cwd).
-					const res = await rpc.request<{ sessionId?: string }>("import.session", { source, id });
+			for (const id of ids) work.push({ source, cwd, id });
+		}
+		setProgress({ done: 0, total: work.length });
+		for (const [index, item] of work.entries()) {
+			const { source, cwd, id } = item;
+			const row = rows.get(`${source}\u0000${id}`);
+			if (row?.importedSessionId) {
+				skipped += 1;
+				setProgress({ done: index + 1, total: work.length });
+				continue;
+			}
+			try {
+				// No cwd param: the daemon keeps the session's original
+				// workspace directory (fallbackCwd = daemon cwd).
+				const res = await rpc.request<{ sessionId?: string; skipped?: boolean }>("import.session", {
+					source,
+					id,
+				});
+				if (res?.skipped) {
+					skipped += 1;
+				} else {
 					ok += 1;
 					if (res?.sessionId) {
 						const list = byCwd.get(cwd) ?? [];
 						list.push(res.sessionId);
 						byCwd.set(cwd, list);
 					}
-				} catch {
-					failed += 1;
 				}
+			} catch {
+				failed += 1;
+				failures.push({ source, title: row?.title || row?.firstMessage || id });
 			}
+			setProgress({ done: index + 1, total: work.length });
 		}
+		setFailedItems(failures);
 		// Auto-group the imports (引导归纳): one custom group per workspace,
 		// folder-basename named, merged into the sidebar's persisted group
 		// store — a plain editable group the user can rename/recolor/drag,
@@ -219,13 +261,15 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 			}
 		}
 		setBusy(false);
-		setDone({ ok, failed, grouped });
+		setProgress(null);
+		setDone({ ok, skipped, failed, grouped });
 		setSelected({});
 	};
 
 	return (
 		<div className="flex flex-col gap-2">
 			<p className="text-[12px] text-[var(--color-text-faint)]">{t("settings.importSessionsHint")}</p>
+			<p className="text-[11px] text-[var(--color-text-faint)]">{t("settings.importSafety")}</p>
 			{agents === null ? (
 				<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 			) : scanned === null ? (
@@ -262,72 +306,112 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 							{t("settings.noSessionsFoundSelected")}
 						</div>
 					)}
+					{scanned.length > 0 && (
+						<input
+							type="search"
+							className="gui-task-input"
+							value={filter}
+							placeholder={t("settings.searchSessions")}
+							aria-label={t("settings.searchSessions")}
+							onChange={e => setFilter(e.target.value)}
+						/>
+					)}
+					{filter.trim().length > 0 && !scanned.some(src => (groupsBySource[src.source] ?? []).length > 0) && (
+						<div className="text-[12px] text-[var(--color-text-faint)]">{t("general.noResults")}</div>
+					)}
 					<FadeScroll className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-						{scanned.map(src => (
-							<div key={src.source} className="rounded-lg border border-[var(--border)] p-2">
-								<div className="flex items-center justify-between">
-									<span className="text-[13px] font-semibold">{src.name}</span>
-									<span className="text-[11px] text-[var(--color-text-faint)]">
-										{t("settings.sessionCountLabel", { count: src.count })}
-									</span>
-								</div>
-								<div className="mt-1 flex flex-col gap-1.5">
-									{(groupsBySource[src.source] ?? []).map(group => {
-										const key = selKey(src.source, group.cwd);
-										const cur = selected[key] ?? new Set();
-										const allChecked = group.sessions.every(s => cur.has(s.id));
-										const someChecked = group.sessions.some(s => cur.has(s.id));
-										return (
-											<div key={group.cwd || "no-workspace"}>
-												<label className="flex cursor-pointer items-center gap-2">
-													<input
-														type="checkbox"
-														checked={allChecked}
-														ref={el => {
-															if (el) el.indeterminate = someChecked && !allChecked;
-														}}
-														onChange={() => toggleWorkspace(src.source, group)}
-													/>
-													<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-														{group.cwd || t("settings.noWorkspace")}
-													</span>
-													<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
-														{group.sessions.length}
-													</span>
-												</label>
-												<div className="ml-5 flex flex-col gap-0.5">
-													{group.sessions.map(s => {
-														const checked = cur.has(s.id);
-														return (
-															<label key={s.id} className="flex cursor-pointer items-center gap-2">
-																<input
-																	type="checkbox"
-																	checked={checked}
-																	onChange={() => toggleSession(src.source, group.cwd, s.id)}
-																/>
-																<span className="min-w-0 flex-1 truncate text-[12px]">
-																	{s.title || s.firstMessage || s.id}
-																</span>
-																<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
-																	{s.messageCount > 0 ? `${s.messageCount} msgs` : ""}
-																</span>
-															</label>
-														);
-													})}
+						{scanned.map(src => {
+							const importedCount = src.sessions.filter(s => s.importedSessionId).length;
+							return (
+								<div key={src.source} className="rounded-lg border border-[var(--border)] p-2">
+									<div className="flex items-center justify-between gap-2">
+										<span className="text-[13px] font-semibold">{src.name}</span>
+										<span className="text-[11px] text-[var(--color-text-faint)]">
+											{t("settings.sessionCountLabel", { count: src.count })}
+											{importedCount > 0 ? ` · ${t("settings.importAlreadyImported")} ${importedCount}` : ""}
+										</span>
+									</div>
+									<div className="mt-1 flex flex-col gap-1.5">
+										{(groupsBySource[src.source] ?? []).map(group => {
+											const key = selKey(src.source, group.cwd);
+											const cur = selected[key] ?? new Set();
+											const selectable = group.sessions.filter(s => !s.importedSessionId);
+											const allChecked = selectable.length > 0 && selectable.every(s => cur.has(s.id));
+											const someChecked = selectable.some(s => cur.has(s.id));
+											return (
+												<div key={group.cwd || "no-workspace"}>
+													<label className="flex cursor-pointer items-center gap-2">
+														<input
+															type="checkbox"
+															checked={allChecked}
+															ref={el => {
+																if (el) el.indeterminate = someChecked && !allChecked;
+															}}
+															onChange={() => toggleWorkspace(src.source, group)}
+														/>
+														<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+															{group.cwd || t("settings.noWorkspace")}
+														</span>
+														<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
+															{group.sessions.length}
+														</span>
+													</label>
+													<div className="ml-5 flex flex-col gap-0.5">
+														{group.sessions.map(s => {
+															const imported = Boolean(s.importedSessionId);
+															const checked = imported || cur.has(s.id);
+															return (
+																<label
+																	key={s.id}
+																	className={`flex items-center gap-2${imported ? " opacity-70" : " cursor-pointer"}`}
+																	title={s.cwd}
+																>
+																	<input
+																		type="checkbox"
+																		checked={checked}
+																		disabled={imported}
+																		onChange={() => toggleSession(src.source, group.cwd, s)}
+																	/>
+																	<span className="min-w-0 flex-1 truncate text-[12px]">
+																		{s.title || s.firstMessage || s.id}
+																	</span>
+																	{imported && (
+																		<span className="flex-none rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-faint)]">
+																			{t("settings.importAlreadyImported")}
+																		</span>
+																	)}
+																	<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
+																		{formatWhen(new Date(s.modified).getTime())}
+																		{s.messageCount > 0 ? ` · ${s.messageCount} msgs` : ""}
+																	</span>
+																</label>
+															);
+														})}
+													</div>
 												</div>
-											</div>
-										);
-									})}
+											);
+										})}
+									</div>
 								</div>
-							</div>
-						))}
+							);
+						})}
 					</FadeScroll>
 					{scanError && <div className="text-[12px] text-[var(--color-danger)]">{scanError}</div>}
 					{done && (
 						<div className="text-[12px] text-[var(--color-text-faint)]">
 							{t("settings.importDone", { count: done.ok })}
+							{done.skipped > 0 ? ` · ${t("settings.importSkipped", { count: done.skipped })}` : ""}
 							{done.failed > 0 ? ` · ${t("settings.importFailed", { count: done.failed })}` : ""}
 							{done.grouped ? ` · ${t("settings.importGrouped", { count: done.grouped })}` : ""}
+						</div>
+					)}
+					{failedItems.length > 0 && (
+						<div className="flex flex-col gap-0.5 text-[11px] text-[var(--color-danger)]">
+							{failedItems.slice(0, 5).map(item => (
+								<span key={`${item.source}:${item.title}`} className="truncate">
+									{item.source}: {item.title}
+								</span>
+							))}
 						</div>
 					)}
 					<div className="flex items-center justify-between">
@@ -345,7 +429,14 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 							disabled={busy || totalSelected === 0}
 							onClick={() => void importSelected()}
 						>
-							{busy ? t("settings.importing") : t("settings.importSelected", { count: totalSelected })}
+							{busy
+								? progress
+									? t("settings.importProgress", {
+											done: String(progress.done),
+											total: String(progress.total),
+										})
+									: t("settings.importing")
+								: t("settings.importSelected", { count: totalSelected })}
 						</button>
 					</div>
 				</>

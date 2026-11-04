@@ -57,6 +57,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The desktop client now uses its built-in browser by default. When the desktop app is attached, the browser tool opens pages in the right-side panel, where the user and the agent share one browser instance and login state; the agent gets its own visible tab that the user can watch, interact with, or take over. A headless Chromium is only the fallback in the CLI, without a desktop host, or when `browser.gui` is explicitly off, and the tool summary, prompt, setting copy, and docs no longer describe it as the default.
 
 ### Fixed
+- **会话导入改为幂等复制并补上安全提示**：同一来源会话再次导入会跳过并复用已导入副本（`imported-sessions.json` 台账；副本被删则允许重新导入），来源文件保持只读不变；选择界面新增搜索、已导入标记、逐条进度与失败列表，并明确「只读复制，不修改/删除来源」。
+  - EN: Session import is now idempotent and states its safety contract. Re-importing the same foreign session is skipped and reuses the existing copy via an imported-sessions ledger (a deleted copy may be imported again), while source files stay read-only. The picker adds search, imported markers, per-item progress and a failure list, and states that import is a read-only copy that never modifies or deletes the source.
 - **置顶小窗支持插件卡片**：`pin.html` 随 pin 记录携带编译后的渲染模块与元数据，启动后先注册再渲染；重启恢复的钉子也能显示插件卡片，i18n 与 React 共用宿主实例。
   - EN: Pinned widget windows now support plugin cards. pin.html carries the compiled renderer and metadata in the pin record, registers them before rendering, and restored pins keep working after a restart; i18n and React come from the host instance.
 - **设置里关闭展示工具立即生效**：会话新增 `session.toolGates`，写设置后按 `widget.enabled` / `board.enabled` / `tools.disabled` 移除已挂载的注册型工具，无需重启；重新开启仍需新会话（该工具从未在本会话创建）。

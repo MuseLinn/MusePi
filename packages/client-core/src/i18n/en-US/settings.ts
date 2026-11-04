@@ -429,6 +429,11 @@ export const settings = {
 	"settings.importDone": "Imported {count} session(s)",
 	"settings.importGrouped": "Grouped into {count} group(s) by workspace",
 	"settings.importFailed": "{count} failed",
+	"settings.importSafety":
+		"Import is a read-only copy: source sessions are never modified or deleted, and already-imported sessions are skipped.",
+	"settings.importAlreadyImported": "Imported",
+	"settings.importProgress": "Importing {done}/{total}",
+	"settings.importSkipped": "Skipped {count} already-imported session(s)",
 	"settings.noAgents": "No importable agents found",
 	"settings.noSessionsFoundSelected": "No sessions found in the selected agents",
 	"settings.noWorkspace": "No workspace",

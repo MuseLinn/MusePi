@@ -112,6 +112,7 @@ import {
 	persistForeignSession,
 } from "../session/foreign-session-import";
 import type { ForeignSessionInfo, ForeignSessionSource } from "../session/foreign-session-store";
+import { importedRecord, loadImportLedger, recordImportedSession } from "../session/import-ledger";
 import { SKILL_PROMPT_MESSAGE_TYPE } from "../session/messages";
 import { executeAcpBuiltinSlashCommand } from "../slash-commands/acp-builtins";
 import { lookupBuiltinSlashCommand } from "../slash-commands/builtin-registry";
@@ -5001,6 +5002,9 @@ export class DaemonServer {
 						} catch {
 							sessions = [];
 						}
+						// One ledger read per source; a recorded copy whose file was
+						// deleted is treated as not imported, so it can be restored.
+						const ledger = await loadImportLedger();
 						return {
 							source,
 							name: foreignSessionSourceName(source),
@@ -5013,6 +5017,7 @@ export class DaemonServer {
 								modified: s.modified.toISOString(),
 								messageCount: s.messageCount ?? 0,
 								firstMessage: s.firstMessage ?? "",
+								importedSessionId: importedRecord(ledger, source, s.id)?.sessionId ?? null,
 							})),
 						};
 					}),
@@ -5027,6 +5032,21 @@ export class DaemonServer {
 				const sessions = await store.list();
 				const match = sessions.find(s => s.id === p.id) ?? sessions.find(s => s.path === p.id);
 				if (!match) throw new Error(`session not found in ${source}: ${p.id}`);
+				// Idempotent: a second import of the same foreign session returns
+				// the existing copy instead of duplicating it. A copy whose file
+				// was deleted is not treated as imported.
+				const ledger = await loadImportLedger();
+				const already = importedRecord(ledger, source, match.id);
+				if (already) {
+					return {
+						ok: true,
+						skipped: true,
+						sessionId: already.sessionId,
+						sessionFile: already.sessionFile,
+						source,
+						sourceId: match.id,
+					};
+				}
 				const imported = await persistForeignSession(store, match, {
 					fallbackCwd: p.cwd ?? this.#host.cwd() ?? undefined,
 					suppressBreadcrumb: true,
@@ -5035,9 +5055,16 @@ export class DaemonServer {
 				const sessionId = imported.getSessionId();
 				await imported.close();
 				if (!sessionFile) throw new Error("failed to persist imported session");
+				await recordImportedSession({
+					source,
+					sourceId: match.id,
+					sessionId,
+					sessionFile,
+					importedAt: Date.now(),
+				});
 				// sessionId: the GUI's import dialog groups imported sessions by
 				// workspace into editable custom groups — it needs the NEW id.
-				return { ok: true, sessionId, sessionFile, source, sourceId: match.id };
+				return { ok: true, skipped: false, sessionId, sessionFile, source, sourceId: match.id };
 			}
 			case "migrate.dirs": {
 				// Data-migration tab: surface the directories a backup must cover.
