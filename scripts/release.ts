@@ -416,6 +416,17 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		console.log(`  versionName "${version}", versionCode ${nextGradleCode}\n`);
 	}
 
+	// 4. Sync the web landing's static version fallback. The page prefers the
+	// GitHub API at runtime, but the placeholder is what visitors see when that
+	// call is blocked; release checks fail if it lags the app version.
+	const webIndexPath = "web/index.html";
+	const webIndex = await Bun.file(webIndexPath).text();
+	const webNext = webIndex.replace(/(data-release-version[^>]*>)v\d+\.\d+\.\d+/g, `$1v${version}`);
+	if (webNext !== webIndex) {
+		await Bun.write(webIndexPath, webNext);
+		console.log(`  web/index.html release placeholder -> v${version}\n`);
+	}
+
 	// 4. Regenerate lockfiles
 	console.log("Regenerating lockfiles...");
 	// 不删 bun.lock：bun 对全新 lockfile 写 lockfileVersion 2，而 bun2nix
