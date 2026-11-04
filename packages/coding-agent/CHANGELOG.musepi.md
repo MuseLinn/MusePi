@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-04
+
 ### Added
 - **移动端会话搜索与下拉刷新**：SessionsSheet 新增按标题或 cwd 的即时搜索（大小写不敏感，Escape 先清空再关闭），打开时当前会话自动滚入可视区；transcript 顶部下拉可重连/重取快照，桌面与鼠标环境不启用，Rejoin 按钮仍是显式等价入口。
   - EN: Mobile sessions now have search and pull-to-refresh. The SessionsSheet filters by title or cwd as you type (case-insensitive; Escape clears the filter before closing) and scrolls the current session into view when opened. Pulling down from the top of the transcript reconnects and re-fetches the snapshot; desktop and pointer devices are unaffected, and the Rejoin button remains the explicit equivalent.
