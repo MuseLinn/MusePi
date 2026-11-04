@@ -68,6 +68,8 @@ export interface BrowserOperation {
 	height?: number;
 	/** Page title when the action ran, so a step reads as site context. */
 	pageTitle?: string;
+	/** Page URL after the action (grouping + jump target), credentials redacted. */
+	pageUrl?: string;
 	/** Small JPEG data URL of the page right after the action (managed GUI only). */
 	thumbnail?: string;
 }

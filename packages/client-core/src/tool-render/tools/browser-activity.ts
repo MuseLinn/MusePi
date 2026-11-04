@@ -31,6 +31,7 @@ export interface BrowserOperation {
 	width?: number;
 	height?: number;
 	pageTitle?: string;
+	pageUrl?: string;
 	thumbnail?: string;
 }
 
@@ -121,6 +122,70 @@ export function browserOperationsOf(details: unknown): BrowserOperation[] {
 			},
 		];
 	});
+}
+
+/** One browser call's headline numbers (card summary + tests). */
+export interface BrowserCallStats {
+	pages: number;
+	clicks: number;
+	screenshots: number;
+	failures: number;
+	durationMs: number;
+}
+
+export function browserCallStats(operations: readonly BrowserOperation[], now = Date.now()): BrowserCallStats {
+	const pages = new Set<string>();
+	let clicks = 0;
+	let screenshots = 0;
+	let failures = 0;
+	let started = Number.POSITIVE_INFINITY;
+	let ended = 0;
+	for (const operation of operations) {
+		if (operation.pageUrl) pages.add(operation.pageUrl);
+		if (operation.status === "completed" && operation.action === "click") clicks += 1;
+		if (operation.action === "screenshot") screenshots += 1;
+		if (operation.status === "failed") failures += 1;
+		if (Number.isFinite(operation.startedAt)) started = Math.min(started, operation.startedAt);
+		const end = operation.endedAt ?? (operation.status === "running" ? now : operation.startedAt);
+		if (typeof end === "number") ended = Math.max(ended, end);
+	}
+	const durationMs = Number.isFinite(started) && ended > started ? ended - started : 0;
+	return { pages: pages.size, clicks, screenshots, failures, durationMs };
+}
+
+export interface BrowserOperationGroup {
+	url: string;
+	title: string;
+	operations: BrowserOperation[];
+	durationMs: number;
+	thumbnail?: string;
+}
+
+/** Group a call's steps by the page they ran on, preserving run order. */
+export function browserOperationGroups(
+	operations: readonly BrowserOperation[],
+	fallbackUrl?: string | null,
+): BrowserOperationGroup[] {
+	const groups = new Map<string, BrowserOperationGroup>();
+	for (const operation of operations) {
+		const url = operation.pageUrl ?? fallbackUrl ?? "";
+		let group = groups.get(url);
+		if (!group) {
+			group = { url, title: "", operations: [], durationMs: 0 };
+			groups.set(url, group);
+		}
+		group.operations.push(operation);
+		if (!group.title && operation.pageTitle) group.title = operation.pageTitle;
+		if (!group.thumbnail && operation.thumbnail) group.thumbnail = operation.thumbnail;
+	}
+	for (const group of groups.values()) {
+		const starts = group.operations.map(operation => operation.startedAt).filter(Number.isFinite);
+		const ends = group.operations.map(operation => operation.endedAt ?? operation.startedAt).filter(Number.isFinite);
+		const start = starts.length > 0 ? Math.min(...starts) : 0;
+		const end = ends.length > 0 ? Math.max(...ends) : 0;
+		group.durationMs = end > start ? end - start : 0;
+	}
+	return [...groups.values()];
 }
 
 export function browserActionLabel(action: BrowserOperationAction): string {

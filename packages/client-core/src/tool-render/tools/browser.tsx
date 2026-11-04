@@ -1,10 +1,33 @@
 /** `browser` — drive a Chromium tab: open/close named tabs, run puppeteer scripts. */
+import {
+	ArrowDown,
+	Camera,
+	ChevronRight,
+	Clock,
+	Code as CodeIcon,
+	Eye,
+	Globe,
+	Hand,
+	Keyboard,
+	ListChecks,
+	type LucideIcon,
+	MousePointerClick,
+	Type,
+	Upload,
+} from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, CodeBlock, ResultImages, ResultText, type Tone } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, homePath, isRecord, num, str, truncate } from "../util";
-import { type BrowserOperation, browserActionLabel, browserOperationsOf } from "./browser-activity";
+import {
+	type BrowserOperation,
+	browserActionLabel,
+	browserCallStats,
+	browserOperationGroups,
+	browserOperationsOf,
+} from "./browser-activity";
 
 interface BrowserDetails {
 	action: string | null;
@@ -63,6 +86,50 @@ function operationStatus(operation: BrowserOperation): string {
 	return t("tools.completed");
 }
 
+const STEP_ICONS: Record<BrowserOperation["action"], LucideIcon> = {
+	goto: Globe,
+	observe: Eye,
+	click: MousePointerClick,
+	fill: Type,
+	type: Type,
+	press: Keyboard,
+	select: ListChecks,
+	scroll: ArrowDown,
+	drag: Hand,
+	hover: MousePointerClick,
+	screenshot: Camera,
+	evaluate: CodeIcon,
+	upload: Upload,
+	wait: Clock,
+};
+
+function formatDuration(ms: number): string {
+	if (!Number.isFinite(ms) || ms <= 0) return "";
+	const seconds = Math.max(1, Math.round(ms / 1000));
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	const rest = seconds % 60;
+	return rest > 0 ? `${minutes}m${rest}s` : `${minutes}m`;
+}
+
+function pageLabel(url: string, title: string): string {
+	if (title) return title;
+	if (url) return homePath(url);
+	return t("transcript.browserPageFallback");
+}
+
+/** Jump to the managed browser's agent tab (ChatView opens the panel). */
+function openBrowser(url: string | undefined): void {
+	if (!url || typeof window === "undefined") return;
+	window.dispatchEvent(new CustomEvent("musepi-open-url", { detail: { url } }));
+	// After the panel mounts, point it at the agent tab these steps ran in.
+	const focusAgent = (): void => {
+		window.dispatchEvent(new Event("musepi-browser-focus-agent"));
+	};
+	if (typeof requestAnimationFrame === "function") requestAnimationFrame(focusAgent);
+	else window.setTimeout(focusAgent, 50);
+}
+
 function Summary({ args, result }: ToolRenderProps): ReactNode {
 	const details = detailsOf(result);
 	const action = str(args.action) ?? details.action ?? "?";
@@ -70,6 +137,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	const tab = details.name ?? str(args.name) ?? "main";
 	const url = details.url ?? str(args.url);
 	const current = details.operations.findLast(operation => operation.status === "running");
+	const failures = details.operations.filter(operation => operation.status === "failed").length;
 	return (
 		<>
 			<Badge tone={actionTone(action)}>{action}</Badge>
@@ -82,6 +150,9 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 					{t("tools.browserStepsWithCount", { count: String(details.operations.length) })}
 				</span>
 			) : null}
+			{failures > 0 && (
+				<span className="tv-err">{t("transcript.browserRunFailures", { count: String(failures) })}</span>
+			)}
 			{url && <span className="tv-faint">{truncate(homePath(url), 72)}</span>}
 		</>
 	);
@@ -99,6 +170,23 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const vpHeight = viewport ? num(viewport.height) : null;
 	const vpScale = viewport ? num(viewport.scale) : null;
 	const code = str(args.code);
+	const detailRecord = detailsRecord(result);
+	const directScreenshots =
+		detailRecord && Array.isArray(detailRecord.screenshots) ? detailRecord.screenshots.length : 0;
+	const stats = browserCallStats(details.operations);
+	const screenshots = Math.max(stats.screenshots, directScreenshots);
+	const duration = formatDuration(stats.durationMs);
+	const groups = browserOperationGroups(details.operations, url);
+	const jumpUrl = url ?? groups.find(group => group.url)?.url;
+	const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set());
+	const toggle = (id: string): void => {
+		setOpenIds(current => {
+			const next = new Set(current);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
 	return (
 		<>
 			<span className="tv-badges">
@@ -116,35 +204,140 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				)}
 			</span>
 			{details.operations.length > 0 && (
-				<div className="tv-browser-operations">
-					{details.operations.map(operation => (
-						<div className="tv-browser-operation" data-status={operation.status} key={operation.id}>
-							<Badge
-								tone={operation.status === "failed" ? "err" : operation.status === "running" ? "accent" : "ok"}
-							>
-								{browserActionLabel(operation.action)}
-							</Badge>
-							{operation.thumbnail && (
-								<img className="tv-browser-operation-thumb" src={operation.thumbnail} alt="" loading="lazy" />
+				<>
+					<div className="tv-browser-run-summary">
+						<span className="tv-browser-run-stats">
+							{stats.pages > 0 && <span>{t("transcript.browserRunPages", { count: String(stats.pages) })}</span>}
+							{stats.clicks > 0 && (
+								<span>{t("transcript.browserRunClicks", { count: String(stats.clicks) })}</span>
 							)}
-							{operation.target && <span className="tv-browser-operation-target">{operation.target}</span>}
-							{operation.x !== undefined && operation.y !== undefined && (
-								<span className="tv-browser-operation-coords" title={operation.pageTitle}>
-									({operation.x}, {operation.y})
+							{screenshots > 0 && (
+								<span>{t("transcript.browserRunScreenshots", { count: String(screenshots) })}</span>
+							)}
+							{stats.failures > 0 && (
+								<span className="tv-browser-run-fail">
+									{t("transcript.browserRunFailures", { count: String(stats.failures) })}
 								</span>
 							)}
-							{operation.elementCount !== undefined && (
-								<span
-									aria-label={t("tools.browserElementsWithCount", { count: String(operation.elementCount) })}
-								>
-									{operation.elementCount}
-								</span>
-							)}
-							<small>{operationStatus(operation)}</small>
-							{operation.error && <div className="tv-browser-operation-error">{operation.error}</div>}
-						</div>
-					))}
-				</div>
+							{duration && <span className="tv-browser-run-time">{duration}</span>}
+						</span>
+						{jumpUrl && (
+							<button type="button" className="tv-browser-open" onClick={() => openBrowser(jumpUrl)}>
+								{t("transcript.browserOpen")}
+							</button>
+						)}
+					</div>
+					<div className="tv-browser-pages">
+						{groups.map(group => (
+							<section className="tv-browser-page" key={group.url || "current"}>
+								<div className="tv-browser-page-head">
+									<Globe size={11} className="tv-browser-page-icon" aria-hidden="true" />
+									<button
+										type="button"
+										className="tv-browser-page-title"
+										onClick={() => openBrowser(group.url || jumpUrl)}
+										disabled={!group.url && !jumpUrl}
+										title={group.url || undefined}
+									>
+										{pageLabel(group.url, group.title)}
+									</button>
+									<span className="tv-browser-page-meta">
+										{t("transcript.browserStepCount", { count: String(group.operations.length) })}
+										{group.durationMs > 0 ? ` · ${formatDuration(group.durationMs)}` : ""}
+									</span>
+									{group.thumbnail && (
+										<img
+											className="tv-browser-page-thumb"
+											src={group.thumbnail}
+											alt=""
+											loading="lazy"
+											onClick={() => openBrowser(group.url || jumpUrl)}
+										/>
+									)}
+								</div>
+								{group.operations.map(operation => {
+									const StepIcon = STEP_ICONS[operation.action] ?? Globe;
+									const open = openIds.has(operation.id);
+									const elapsed = formatDuration(
+										operation.endedAt !== undefined ? operation.endedAt - operation.startedAt : 0,
+									);
+									const targetUrl = operation.pageUrl ?? group.url ?? jumpUrl;
+									return (
+										<div className="tv-browser-step" data-status={operation.status} key={operation.id}>
+											<button
+												type="button"
+												className="tv-browser-step-head"
+												aria-expanded={open}
+												onClick={() => toggle(operation.id)}
+											>
+												<StepIcon size={12} className="tv-browser-step-icon" aria-hidden="true" />
+												<span className="tv-browser-step-label">
+													{browserActionLabel(operation.action)}
+												</span>
+												{operation.thumbnail && (
+													<img
+														className="tv-browser-step-thumb"
+														src={operation.thumbnail}
+														alt=""
+														loading="lazy"
+														onClick={event => {
+															event.stopPropagation();
+															openBrowser(targetUrl);
+														}}
+													/>
+												)}
+												{operation.target && (
+													<span className="tv-browser-step-target" title={operation.target}>
+														{operation.target}
+													</span>
+												)}
+												{operation.x !== undefined && operation.y !== undefined && (
+													<span className="tv-browser-step-coords">
+														({operation.x}, {operation.y})
+													</span>
+												)}
+												{operation.elementCount !== undefined && (
+													<span className="tv-browser-step-elements">
+														{t("tools.browserElementsWithCount", {
+															count: String(operation.elementCount),
+														})}
+													</span>
+												)}
+												{operation.status === "failed" && (
+													<span className="tv-browser-step-fail">{t("tools.failed")}</span>
+												)}
+												{elapsed && <span className="tv-browser-step-time">{elapsed}</span>}
+												<ChevronRight
+													size={12}
+													className={`tv-browser-step-chev${open ? " is-open" : ""}`}
+													aria-hidden="true"
+												/>
+											</button>
+											{open && (
+												<div className="tv-browser-step-detail">
+													<span>{operationStatus(operation)}</span>
+													{operation.pageTitle && <span>{operation.pageTitle}</span>}
+													{operation.pageUrl && (
+														<button
+															type="button"
+															className="tv-browser-step-url"
+															onClick={() => openBrowser(operation.pageUrl)}
+														>
+															{homePath(operation.pageUrl)}
+														</button>
+													)}
+													{operation.error && (
+														<div className="tv-browser-step-error">{operation.error}</div>
+													)}
+												</div>
+											)}
+										</div>
+									);
+								})}
+							</section>
+						))}
+					</div>
+				</>
 			)}
 			{action === "run" && code !== null && <CodeBlock code={code.replace(/\s+$/, "")} lang="javascript" />}
 			<ResultImages result={result} />

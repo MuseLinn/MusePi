@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **浏览器工具调用变成可回看的操作时间线**：卡片头直接显示浏览页面数、点击/截图次数、失败数与总耗时，并提供「查看」跳到 Agent 浏览器标签；步骤按页面分组，带动作图标、目标/坐标、单步耗时和展开详情，缩略图可点击跳转。操作事件补充 `pageUrl`，导航后的步骤归到新页面；页面标题与元素数量继续保留。
+  - EN: Browser tool calls now read as a reviewable operation timeline. The card header shows page count, clicks, screenshots, failures and total duration, plus a View button that jumps to the agent's browser tab. Steps group by page with action icons, target/coordinates, per-step duration, expandable details, and clickable thumbnails. Operation events carry pageUrl so steps after a navigation belong to the new page; page titles and element counts remain.
+
 - **插件入口按粒度拆分，桌宠气泡状态跟随会话轮询**：能力中心的插件列表只显示内置的真实插件与用户安装/自建插件，完整的内置插件单元留在 设置 → 扩展与插件；设置里的清单保留整块表面，能力中心改用无外框紧凑行。桌宠气泡卡片在 `session.list` 轮询把会话从「工作中」更新后立即重推，不再停留在旧的「正在工作」。
   - EN: Plugin entrances now differ by scope, and pet cards follow the session poll. The capability center lists only built-in real plugins plus user-installed or self-built ones, while the full built-in unit inventory stays in Settings → Extensions & plugins; the settings list keeps its boxed surface and the capability center uses frameless compact rows. Pet bubble cards re-push as soon as the session.list poll flips a session out of working, so they no longer keep a stale "working" state.
 

@@ -1680,6 +1680,7 @@ export class WorkerCore {
 	async #describeOperation(active: ActiveRun, id: string, selector: string | null): Promise<void> {
 		try {
 			const page = this.#requirePage();
+			const pageUrl = redactBrowserUrl(page.url());
 			const title = await Promise.race([page.title().catch(() => ""), Bun.sleep(250).then(() => "")]);
 			let rect: { x: number; y: number; width: number; height: number } | null = null;
 			if (selector && parseAriaRefSelector(selector) === null) {
@@ -1696,9 +1697,22 @@ export class WorkerCore {
 					if (box) rect = { x: box.x, y: box.y, width: box.width, height: box.height };
 				}
 			}
-			if (rect || title) active.operations.position(id, rect, title || undefined);
+			if (rect || title || pageUrl) active.operations.position(id, rect, title || undefined, pageUrl);
 		} catch {
 			// Feed metadata only — the action's own result stands.
+		}
+	}
+
+	/** Post-action page identity: a click may navigate, and the step belongs to
+	 *  the page the user ends up on (also the jump target). */
+	async #captureOperationPage(active: ActiveRun, id: string): Promise<void> {
+		try {
+			const page = this.#requirePage();
+			const url = redactBrowserUrl(page.url());
+			const title = await Promise.race([page.title().catch(() => ""), Bun.sleep(200).then(() => "")]);
+			if (url) active.operations.page(id, url, title || undefined);
+		} catch {
+			// Feed metadata only.
 		}
 	}
 
@@ -1759,6 +1773,7 @@ export class WorkerCore {
 				: await fn(opSignal);
 			if (activityId) {
 				active.operations.complete(activityId, operationResultDetails(result));
+				void this.#captureOperationPage(active, activityId);
 				if (activity && THUMBNAIL_ACTIONS.has(activity.action)) {
 					void this.#captureOperationThumbnail(active, activityId);
 				}

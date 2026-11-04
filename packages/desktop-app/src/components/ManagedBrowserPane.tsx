@@ -270,7 +270,7 @@ export function ManagedBrowserPane({
 	/** External reveal (chat link click / agent browser open): navigate the
 	 *  active tab to this URL when the nonce advances (proma
 	 *  AgentBrowserLinkProvider parity). */
-	openRequest?: { url: string; nonce: number } | null;
+	openRequest?: { url: string; nonce: number; preferAgentTab?: boolean } | null;
 	/** Panel fold state. A closed panel keeps this pane mounted at width 0, so
 	 *  the pane cannot infer visibility from its own geometry. */
 	open?: boolean;
@@ -767,12 +767,29 @@ export function ManagedBrowserPane({
 		void navigateTo(resolveAddressBarInput(addressValue, preferences.searchEngine));
 	};
 
+	// Transcript step/thumbnail jump asks for the agent's dedicated tab; the
+	// tool dispatches this after musepi-open-url has opened the panel.
+	useEffect(() => {
+		const focusAgentTab = (): void => {
+			const agentTab = getHostState().tabs.find(tab => tab.agent);
+			if (agentTab) selectTab(agentTab.id);
+		};
+		window.addEventListener("musepi-browser-focus-agent", focusAgentTab);
+		return () => window.removeEventListener("musepi-browser-focus-agent", focusAgentTab);
+	}, []);
+
 	// External reveal: chat link clicks (and agent browser.open) navigate the
 	// active tab. The nonce makes repeated clicks on the same URL re-trigger.
 	const lastReveal = useRef(0);
 	useEffect(() => {
 		if (!openRequest || openRequest.nonce === lastReveal.current) return;
 		lastReveal.current = openRequest.nonce;
+		// Transcript "View"/thumbnail jumps target the agent's dedicated tab;
+		// a user tab stays put when the request came from a chat link.
+		if (openRequest.preferAgentTab) {
+			const agentTab = getHostState().tabs.find(tab => tab.agent);
+			if (agentTab) selectTab(agentTab.id);
+		}
 		void navigateTo(openRequest.url);
 	}, [openRequest, navigateTo]);
 

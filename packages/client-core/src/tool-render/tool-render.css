@@ -219,47 +219,172 @@
 	flex-wrap: wrap;
 }
 
-.tv-browser-operations {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-}
-
-.tv-browser-operation {
+.tv-browser-run-summary {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	min-width: 0;
+	gap: 8px;
+	padding: 2px 0 4px;
 	font-size: 11px;
 	color: var(--tv-muted);
 }
 
-.tv-browser-operation-target {
+.tv-browser-run-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tv-browser-run-stats > span + span::before {
+	content: "·";
+	margin-right: 6px;
+	color: var(--tv-faint);
+}
+
+.tv-browser-run-fail {
+	color: var(--tv-err);
+}
+
+.tv-browser-run-time {
+	color: var(--tv-faint);
+	font-family: var(--tv-mono);
+}
+
+.tv-browser-open {
+	margin-left: auto;
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--tv-fg);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.tv-browser-open:hover {
+	background: color-mix(in oklch, var(--tv-fg) 6%, transparent);
+}
+
+.tv-browser-pages {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.tv-browser-page {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.tv-browser-page-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tv-browser-page-icon {
+	flex: none;
+	color: var(--tv-faint);
+}
+
+.tv-browser-page-title {
 	min-width: 0;
 	overflow: hidden;
+	padding: 0;
+	border: 0;
+	background: none;
 	color: var(--tv-fg);
+	font: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tv-browser-page-title:disabled {
+	color: var(--tv-muted);
+	cursor: default;
+}
+
+.tv-browser-page-meta {
+	flex: none;
+	color: var(--tv-faint);
+	font-size: 10px;
+	white-space: nowrap;
+}
+
+.tv-browser-page-thumb {
+	flex: none;
+	width: 44px;
+	height: 28px;
+	margin-left: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	object-fit: cover;
+	cursor: pointer;
+}
+
+.tv-browser-step {
+	margin-left: 5px;
+	padding-left: 7px;
+	border-left: 1px solid color-mix(in oklch, var(--tv-fg) 12%, transparent);
+}
+
+.tv-browser-step-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	min-width: 0;
+	padding: 2px 0;
+	border: 0;
+	background: none;
+	color: var(--tv-muted);
+	font: inherit;
+	font-size: 11px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tv-browser-step-head:hover {
+	color: var(--tv-fg);
+}
+
+.tv-browser-step-icon {
+	flex: none;
+	color: var(--tv-faint);
+}
+
+.tv-browser-step-label {
+	flex: none;
+	color: var(--tv-fg);
+}
+
+.tv-browser-step-thumb {
+	flex: none;
+	width: 36px;
+	height: 24px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xs);
+	object-fit: cover;
+}
+
+.tv-browser-step-target {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--tv-muted);
 	font-family: var(--tv-mono);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.tv-browser-operation small {
-	margin-left: auto;
-	color: var(--tv-faint);
-	white-space: nowrap;
-}
-
-.tv-browser-operation-thumb {
-	flex: none;
-	width: 44px;
-	height: 28px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-sm);
-	object-fit: cover;
-	background: var(--tv-bg);
-}
-
-.tv-browser-operation-coords {
+.tv-browser-step-coords,
+.tv-browser-step-elements {
 	flex: none;
 	color: var(--tv-faint);
 	font-family: var(--tv-mono);
@@ -267,17 +392,50 @@
 	white-space: nowrap;
 }
 
-.tv-browser-operation[data-status="running"] small {
-	color: var(--tv-accent);
-}
-
-.tv-browser-operation[data-status="failed"] small,
-.tv-browser-operation-error {
+.tv-browser-step-fail {
+	flex: none;
 	color: var(--tv-err);
 }
 
-.tv-browser-operation-error {
+.tv-browser-step-time {
+	flex: none;
+	margin-left: auto;
+	color: var(--tv-faint);
+	font-family: var(--tv-mono);
+	font-size: 10px;
+}
+
+.tv-browser-step-chev {
+	flex: none;
+	color: var(--tv-faint);
+	transition: transform 120ms ease;
+}
+
+.tv-browser-step-chev.is-open {
+	transform: rotate(90deg);
+}
+
+.tv-browser-step-detail {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 2px 0 4px 18px;
+	color: var(--tv-faint);
+	font-size: 10.5px;
+}
+
+.tv-browser-step-url {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--tv-accent);
+	font: inherit;
+	cursor: pointer;
+}
+
+.tv-browser-step-error {
 	flex-basis: 100%;
+	color: var(--tv-err);
 	overflow-wrap: anywhere;
 }
 

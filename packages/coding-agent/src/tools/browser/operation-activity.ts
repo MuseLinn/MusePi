@@ -79,7 +79,7 @@ export class BrowserOperationTracker {
 	}
 
 	/** Attach the element box and page title observed while the action ran. */
-	position(id: string, rect: OperationRect | null, pageTitle?: string): void {
+	position(id: string, rect: OperationRect | null, pageTitle?: string, pageUrl?: string): void {
 		const operation = this.#operations.find(item => item.id === id);
 		if (!operation) return;
 		if (rect) {
@@ -88,6 +88,16 @@ export class BrowserOperationTracker {
 			operation.width = Math.round(rect.width);
 			operation.height = Math.round(rect.height);
 		}
+		if (pageTitle) operation.pageTitle = pageTitle.slice(0, 120);
+		if (pageUrl) operation.pageUrl = pageUrl;
+		this.#emit();
+	}
+
+	/** Post-action page identity (navigation may have changed it). */
+	page(id: string, pageUrl: string, pageTitle?: string): void {
+		const operation = this.#operations.find(item => item.id === id);
+		if (!operation) return;
+		operation.pageUrl = pageUrl;
 		if (pageTitle) operation.pageTitle = pageTitle.slice(0, 120);
 		this.#emit();
 	}
