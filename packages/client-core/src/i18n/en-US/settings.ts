@@ -3237,7 +3237,7 @@ export const settings = {
 	"settings.modesViewTruncated": "Chain exceeds {max} layers and was truncated; the result below is a partial merge.",
 	"settings.modesViewMissing": 'Preset "{id}" not found (dangling reference) — skipped.',
 	"settings.modesViewNone": "(none)",
-	"settings.extensionsRunning": "{count} extensions running",
+	"settings.extensionsRunning": "{count} plugins running",
 	"settings.extensionsStateRunning": "Running",
 	"settings.trajectory": "Trajectory",
 	"settings.trajectoryEmpty": "No trajectory yet: send a message to see the agent's tool calls and events.",

@@ -7,8 +7,8 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 
 /**
- * 会话扩展状态卡(DSH Cordis Plugin 卡片参考吸收):composer 顶部操作行左侧
- * 显示运行中的 MusePi 扩展(extension-module)数量,点击浮窗列出各扩展状态。
+ * 会话插件状态卡(DSH Cordis Plugin 卡片参考吸收):composer 输入框上方的连接器行
+ * 显示运行中的 MusePi 插件(extension-module)数量,点击浮窗列出各扩展状态。
  * 数据源共享单例 useExtensionRegistry(10s 轮询 + extensions.changed 即时刷新)。
  *
  * 浮窗走 useFloatingMenu(全局唯一浮层实现):此前是组件内 `absolute bottom-full`
@@ -49,7 +49,7 @@ export function ExtensionStatusCard({ rpc }: { rpc: RpcClient | null }): ReactNo
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="plug" className="h-3 w-3" />
-				<span className="max-w-[120px] truncate">
+				<span className="max-w-[168px] truncate">
 					{t("settings.extensionsRunning", { count: String(running) })}
 				</span>
 			</button>

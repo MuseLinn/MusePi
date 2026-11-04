@@ -168,20 +168,19 @@ const WORKING_RAYS = Array.from({ length: 8 }, (_, i) => {
 	);
 });
 
-/** Indent guides for one flat node: one vertical line per ancestor level
- *  (sakura-branch styling lives in CSS). Replaces the old whitespace-only
- *  prefix — width per level is still 1em so title alignment is unchanged.
- *  The deepest guide (--branch) carries the blossom dot, i.e. the flower
- *  sits on the branch the row hangs off. */
+/** Indent guides for one flat node: one vertical line per ancestor level,
+ *  drawn in the disclosure gutter so the row title keeps the parent's left
+ *  edge (the old in-flow 1em guides pushed every child title right). The
+ *  deepest guide (--branch) carries the blossom dot. */
 function treeGuides(indent: number): ReactNode {
 	if (indent <= 0) return null;
-	return (
-		<span className="gui-tree-prefix" aria-hidden="true">
-			{Array.from({ length: indent }, (_, i) => (
-				<span key={i} className={`gui-tree-guide${i === indent - 1 ? " gui-tree-guide--branch" : ""}`} />
-			))}
-		</span>
-	);
+	return Array.from({ length: indent }, (_, i) => (
+		<span
+			key={i}
+			className={`gui-tree-guide${i === indent - 1 ? " gui-tree-guide--branch" : ""}`}
+			style={{ left: `${21 + i * 8}px` }}
+		/>
+	));
 }
 
 /** 折叠态持久化(openchamber 文件夹层级 parity):父行 chevron 收起后整棵
@@ -701,11 +700,15 @@ function SessionListComponent({
 				// Manual status tag wins over the derived one — same precedence
 				// as `statusFill`, so the chip's tooltip always matches its color.
 				const status = manualTags?.get(node.entry.id) ?? statuses?.get(node.entry.id);
+				const rawLabel = node.entry.label ?? "";
+				// Advisor transcripts are created without a title; showing the
+				// untitled placeholder hides what the row actually is.
+				const advisorUntitled = node.entry.advisor === true && !rawLabel.trim();
 				return (
 					<SessionRow
 						key={node.entry.id}
 						id={node.entry.id}
-						label={node.entry.label ?? t("transcript.untitledSession")}
+						label={advisorUntitled ? t("general.advisorSession") : rawLabel || t("transcript.untitledSession")}
 						parentLabel={parent ? (parent.entry.label ?? t("transcript.untitledSession")) : null}
 						timestamp={node.entry.timestamp}
 						updatedAt={node.entry.updatedAt}
@@ -714,7 +717,7 @@ function SessionListComponent({
 						paused={pausedIds?.has(node.entry.id) ?? false}
 						working={workingIds?.has(node.entry.id) ?? false}
 						status={status}
-						untitled={!(node.entry.label ?? "").trim()}
+						untitled={!advisorUntitled && !rawLabel.trim()}
 						indent={indent}
 						searchQuery={searchQuery}
 						subagent={node.entry.subagent === true}

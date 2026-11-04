@@ -33,6 +33,7 @@ import {
 	COMPOSER_REQUEST_DRAFT_SLOT,
 	COMPOSER_RIGHT_SLOT,
 	SlotComponentHost,
+	useExtensionRegistry,
 	useSlotComponents,
 } from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
@@ -1182,6 +1183,12 @@ export function Composer({
 		setSelection: setConnectorSelection,
 	} = useConnectors(rpc, sessionId, cwd);
 	const connectorServers = connectorSnapshot?.servers ?? [];
+	// Same registry singleton ExtensionStatusCard renders from: the dock needs
+	// to know whether the chip will have anything to show.
+	const extensionRegistry = useExtensionRegistry(rpc);
+	const runningPlugins = (extensionRegistry?.extensions ?? []).filter(
+		entry => (entry.kind === "plugin-module" || entry.kind === "extension-module") && entry.state === "active",
+	).length;
 	const connectorChosen = connectorSnapshot
 		? connectorServers.filter(s => connectorSnapshot.selected === null || connectorSnapshot.selected.includes(s.name))
 				.length
@@ -2000,6 +2007,7 @@ export function Composer({
 					<div className="gui-composer-above">
 						{(modes && (todoTotal > 0 || (queued != null && queued.count > 0))) ||
 						connectorServers.length > 0 ||
+						runningPlugins > 0 ||
 						composerLeftItems.length > 0 ||
 						activeTask ? (
 							<div className="gui-composer-dock">
@@ -2032,6 +2040,9 @@ export function Composer({
 										)}
 									/>
 								)}
+								{/* Running Cordis plugins sit on the same row as the
+								 * connector picker, above the input card. */}
+								{runningPlugins > 0 && !welcome && <ExtensionStatusCard rpc={rpc} />}
 								{/* composer.left chips share the status row with connectors. */}
 								<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
 								{/* composer.activity 座位槽:
@@ -2159,9 +2170,6 @@ export function Composer({
 								onHashInput(next);
 							}}
 						/>
-						{/* 会话扩展状态卡: 运行中扩展数 +
-						 * 浮窗状态列表。 */}
-						{!welcome && <ExtensionStatusCard rpc={rpc} />}
 						{/* (The interactive 队列 toggle chip lives in the status dock
 						 * above — the old informational toolbar chip was a duplicate
 						 * badge and is gone.) */}

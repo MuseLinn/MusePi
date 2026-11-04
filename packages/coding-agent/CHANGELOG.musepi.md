@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **会话列表与输入区细节对齐**：子会话的引导线与折叠按钮同列，子会话标题与父会话左对齐；顾问会话没有标题时显示「顾问会话」而不是未命名占位。窄视图下「思考」标签不再逐字竖排；运行中插件数移到输入框上方、与连接器同一行，并统一称为插件。设置里的插件列表改成管理清单（单列、分隔行、状态与开关），与能力中心的市场卡片（图标磁贴、分类、安装动作）形成明确区分。
+  - EN: Session-list and composer details now line up. Child-session thread lines sit in the disclosure gutter so child titles share the parent's left edge, and an untitled advisor transcript shows "Advisor session" instead of the untitled placeholder. The thinking label no longer stacks vertically in narrow views; the running-plugin count moves above the input onto the connector row and uses plugin terminology. The settings plugin list is now a management list (single column, divider rows, status and toggle), clearly distinct from the marketplace's discovery cards (icon tiles, categories, install actions).
+
 - **浏览器设置补齐 Agent 开关、下载策略、缩放与 UA**：设置 → 浏览器新增「允许 Agent 操控内置浏览器」开关、默认搜索引擎、每次下载前询问保存位置、Agent 下载位置与大小上限、默认缩放、自定义 User Agent。Agent 下载直接写入指定目录并在超过上限时取消并删除；用户下载按开关询问；缩放与 UA 应用到已打开和新建标签页，地址栏非 URL 输入走所选搜索引擎。
   - EN: Browser settings now cover agent control, downloads, zoom, and UA. Settings → Browser adds an Allow Agent Control switch, default search engine, ask-before-download, agent download folder and size cap, default zoom, and a custom User Agent. Agent downloads save straight to the chosen folder and are cancelled and deleted past the cap; user downloads ask when the switch is on; zoom and UA apply to open and new tabs, and non-URL address-bar input searches through the selected engine.
 - **浏览器操作记录显示坐标、页面标题与缩略图**：托管浏览器里每次点击/填写/导航等操作在转录中显示目标元素坐标、当时页面标题，以及一张操作后的页面缩略图（每次运行最多 24 张），长流程不用回看截图也能定位动作落点。

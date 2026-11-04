@@ -6,9 +6,9 @@
 	display: grid;
 	flex: none;
 	place-items: center;
-	width: 28px;
-	height: 28px;
-	border-radius: var(--radius);
+	width: 36px;
+	height: 36px;
+	border-radius: var(--radius-lg);
 	background: var(--bg-inset);
 	color: var(--fg-muted);
 	transition:

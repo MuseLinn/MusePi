@@ -701,6 +701,7 @@ button.tr-display-context-source:hover {
 
 .tr-think-head {
 	display: inline-flex;
+	min-width: 0;
 	align-items: center;
 	gap: 4px;
 	padding: 0;
@@ -719,6 +720,8 @@ button.tr-display-context-source:hover {
 
 /* aicss thinking-state shimmer — agent actively thinking (not redacted). */
 .tr-think-label {
+	flex: 0 0 auto;
+	white-space: nowrap;
 	font-size: 13.5px;
 	font-weight: 500;
 	font-style: italic;
@@ -745,6 +748,8 @@ button.tr-display-context-source:hover {
 /* Settled first-line preview: the collapsed row names WHAT was reasoned
  *  about. */
 .tr-think-preview {
+	flex: 1 1 auto;
+	min-width: 0;
 	font-size: 12.5px;
 	font-style: normal;
 	font-weight: 400;

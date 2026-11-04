@@ -3073,7 +3073,7 @@ export const settings = {
 	"settings.modesViewTruncated": "继承链超过 {max} 层,已截断显示;下方结果为部分合并。",
 	"settings.modesViewMissing": "未找到预设「{id}」(悬空引用),已跳过。",
 	"settings.modesViewNone": "(无)",
-	"settings.extensionsRunning": "{count} 个扩展运行中",
+	"settings.extensionsRunning": "{count} 个插件运行中",
 	"settings.extensionsStateRunning": "运行中",
 	"settings.trajectory": "轨迹",
 	"settings.trajectoryEmpty": "暂无轨迹:发送消息后这里会显示 agent 的工具调用与事件时间线。",
