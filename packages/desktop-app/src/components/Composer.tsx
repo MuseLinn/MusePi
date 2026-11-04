@@ -16,6 +16,7 @@ import { type ContextBreakdownView, isContextCommand } from "../lib/context-comm
 import { tapFeedback } from "../lib/haptic";
 import type { PetMood, PetState } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
+import { onSettingsChanged } from "../lib/settings-events";
 import { sfxFor } from "../lib/sfx";
 import { eventMatches } from "../lib/shortcut-registry";
 import type { SketchScene } from "../lib/sketch-scene";
@@ -898,8 +899,7 @@ export function Composer({
 		load();
 		// Re-read when 设置 writes it, so an open composer follows the new
 		// behavior without remounting.
-		window.addEventListener("omp-settings-changed", load);
-		return () => window.removeEventListener("omp-settings-changed", load);
+		return onSettingsChanged(load);
 	}, [rpc]);
 	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity):
 	// whether finishing a dictation auto-sends the transcript instead of
@@ -922,8 +922,7 @@ export function Composer({
 				.catch(() => {});
 		};
 		load();
-		window.addEventListener("omp-settings-changed", load);
-		return () => window.removeEventListener("omp-settings-changed", load);
+		return onSettingsChanged(load);
 	}, [rpc]);
 	// Voice dictation (extracted: composer/use-dictation): one phase state owns
 	// recording → transcribing → insert/error. The transcription wait now keeps
@@ -967,8 +966,7 @@ export function Composer({
 				.catch(() => {});
 		};
 		load();
-		window.addEventListener("omp-settings-changed", load);
-		return () => window.removeEventListener("omp-settings-changed", load);
+		return onSettingsChanged(load);
 	}, [rpc]);
 	// One normalizer serves both current daemons and older text-only snapshots.
 	const refreshQueued = useCallback((): Promise<void> => {

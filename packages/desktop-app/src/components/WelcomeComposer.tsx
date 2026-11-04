@@ -19,6 +19,7 @@ import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../
 import { type ModeLabelEntry, resolveModeDescription, resolveModeLabel } from "../lib/mode-label";
 import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
+import { onSettingsChanged } from "../lib/settings-events";
 import { sfxFor } from "../lib/sfx";
 import { modLabel } from "../lib/shortcuts";
 import type { SketchScene } from "../lib/sketch-scene";
@@ -436,8 +437,7 @@ export function WelcomeComposer({
 				.catch(() => {});
 		};
 		load();
-		window.addEventListener("omp-settings-changed", load);
-		return () => window.removeEventListener("omp-settings-changed", load);
+		return onSettingsChanged(load);
 	}, [rpc]);
 	const dictation = useDictation({
 		rpc,
@@ -476,13 +476,13 @@ export function WelcomeComposer({
 		const reload = (): void => load();
 		window.addEventListener("musepi-gui-providers-changed", reload);
 		window.addEventListener("musepi-onboarding-finished", reload);
-		window.addEventListener("omp-settings-changed", reload);
+		const offSettings = onSettingsChanged(reload);
 		window.addEventListener("focus", reload);
 		return () => {
 			cancelled = true;
 			window.removeEventListener("musepi-gui-providers-changed", reload);
 			window.removeEventListener("musepi-onboarding-finished", reload);
-			window.removeEventListener("omp-settings-changed", reload);
+			offSettings();
 			window.removeEventListener("focus", reload);
 		};
 	}, [rpc]);

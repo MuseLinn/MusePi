@@ -27,6 +27,7 @@ import {
 	setPetDecorFlag,
 } from "../../lib/pet-decor";
 import type { RpcClient } from "../../lib/rpc";
+import { dispatchSettingsChanged } from "../../lib/settings-events";
 import { UPDATE_ERROR_BODY_KEYS } from "../../lib/update-ux";
 import { readWelcomeGreeting, writeWelcomeGreeting } from "../../lib/welcome-greeting";
 import { Icon } from "../../vendor/oc-icons";
@@ -325,7 +326,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		setBusyEnterState(next);
 		void rpc
 			?.request("settings.set", { key: "busyEnter", value: next })
-			.then(() => window.dispatchEvent(new CustomEvent("omp-settings-changed", { detail: { key: "busyEnter" } })))
+			.then(() => dispatchSettingsChanged("busyEnter"))
 			.catch(() => {});
 	};
 	const [dotMatrixText, setDotMatrixText] = useState(

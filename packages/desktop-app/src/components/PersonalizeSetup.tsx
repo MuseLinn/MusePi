@@ -12,6 +12,7 @@ import {
 	setPetDecorFlag,
 } from "../lib/pet-decor";
 import type { RpcClient } from "../lib/rpc";
+import { dispatchSettingsChanged } from "../lib/settings-events";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
 import { PetSprite } from "./PetSprite";
 import { StateIcon } from "./StateIcon";
@@ -62,11 +63,7 @@ export function PersonalizeSetup({
 			const next = !v;
 			void rpc
 				?.request("settings.set", { key: "display.smoothStreaming", value: next })
-				.then(() =>
-					window.dispatchEvent(
-						new CustomEvent("omp-settings-changed", { detail: { key: "display.smoothStreaming" } }),
-					),
-				)
+				.then(() => dispatchSettingsChanged("display.smoothStreaming"))
 				.catch(() => {});
 			return next;
 		});

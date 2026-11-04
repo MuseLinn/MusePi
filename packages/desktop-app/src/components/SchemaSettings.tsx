@@ -1,6 +1,7 @@
 import { setLocale, type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useState } from "react";
 import { moveOrderedOption, sortOrderedOptions } from "../lib/ordered-options";
+import { dispatchSettingsChanged } from "../lib/settings-events";
 import { GuiSelect } from "./GuiSelect";
 import { Reveal } from "./Reveal";
 
@@ -248,7 +249,7 @@ export function SchemaSettings({
 		onChange(key, value);
 		// Live consumers (ChatView transcript prefs, recap, …) re-read the
 		// daemon settings on this event instead of polling.
-		window.dispatchEvent(new CustomEvent("omp-settings-changed", { detail: { key } }));
+		dispatchSettingsChanged(key);
 	};
 
 	const shown = (item: SchemaItem): boolean => {

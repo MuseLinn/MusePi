@@ -52,6 +52,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
+import { onSettingsChanged } from "../lib/settings-events";
 import {
 	PANEL_SHELL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
@@ -482,8 +483,7 @@ export function ChatView({
 		const sync = (): void => {
 			void rpc.request("session.toolGates", { sessionId }).catch(() => {});
 		};
-		window.addEventListener("omp-settings-changed", sync);
-		return () => window.removeEventListener("omp-settings-changed", sync);
+		return onSettingsChanged(sync);
 	}, [rpc, store?.sessionId]);
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
@@ -545,8 +545,8 @@ export function ChatView({
 	// TUI display-settings parity: the transcript honors these daemon
 	// settings (colorBlindMode, display.smoothStreaming / hideToolActivity
 	// / showTokenUsage / collapseCompacted). Read once on mount and on
-	// settings-panel commits (SchemaSettings dispatches
-	// omp-settings-changed). settings.get returns schema defaults, so
+	// settings-panel commits (SchemaSettings dispatches the settings-changed
+	// event). settings.get returns schema defaults, so
 	// unconfigured keys resolve to the same values the TUI uses.
 	const [displaySettings, setDisplaySettings] = useState<Record<string, unknown>>({});
 	useEffect(() => {
@@ -573,10 +573,10 @@ export function ChatView({
 				.catch(() => {});
 		};
 		load();
-		window.addEventListener("omp-settings-changed", load);
+		const off = onSettingsChanged(load);
 		return () => {
 			alive = false;
-			window.removeEventListener("omp-settings-changed", load);
+			off();
 		};
 	}, [rpc]);
 	// display.smoothStreaming controls the reveal via the html class —
