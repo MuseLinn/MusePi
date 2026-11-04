@@ -76,6 +76,9 @@ function relaySelection(host: HTMLElement): () => void {
 	if (!pane) return () => {};
 	let frame: number | null = null;
 	let pointerDown = false;
+	let pointerAt = 0;
+	let pointerX = 0;
+	let pointerY = 0;
 	let lastText = "";
 	const relay = (): void => {
 		frame = null;
@@ -91,7 +94,17 @@ function relaySelection(host: HTMLElement): () => void {
 		const text = inside && selection && !selection.isCollapsed ? selection.toString() : "";
 		if (text === lastText) return;
 		lastText = text;
-		pane.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+		// Carry the release point so the toolbar can sit at the end of a long
+		// selection instead of above its first line. A keyboard selection has
+		// no fresh pointer, so it falls back to the range's last line.
+		const fresh = performance.now() - pointerAt < 1000;
+		pane.dispatchEvent(
+			new MouseEvent("mouseup", {
+				bubbles: true,
+				clientX: fresh ? pointerX : 0,
+				clientY: fresh ? pointerY : 0,
+			}),
+		);
 	};
 	const schedule = (): void => {
 		if (frame === null) frame = requestAnimationFrame(relay);
@@ -104,8 +117,11 @@ function relaySelection(host: HTMLElement): () => void {
 	const onPointerDown = (event: PointerEvent): void => {
 		if (event.isPrimary) pointerDown = true;
 	};
-	const onPointerUp = (): void => {
+	const onPointerUp = (event: PointerEvent): void => {
 		pointerDown = false;
+		pointerAt = performance.now();
+		pointerX = event.clientX;
+		pointerY = event.clientY;
 		schedule();
 	};
 	document.addEventListener("selectionchange", onSelectionChange);

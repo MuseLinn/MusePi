@@ -110,12 +110,11 @@
 	gap: 2px;
 	padding: 4px;
 	border-radius: var(--radius-lg);
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
-	box-shadow:
-		0 6px 20px rgba(0, 0, 0, 0.18),
-		0 0 0 1px rgba(0, 0, 0, 0.04);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	box-shadow: var(--glass-shadow);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	pointer-events: auto;
 	/* Two-phase enter (useTwoPhaseEnter): pending at opacity 0 so the
 	 * frosted chip composites before the fade-in; --closing plays the
@@ -125,7 +124,7 @@
 
 .gui-select-pop--entered {
 	opacity: 1;
-	animation: gui-select-pop-in 130ms var(--spring);
+	animation: gui-select-pop-in 130ms var(--spring-liquid);
 }
 
 .gui-select-pop--closing {
@@ -165,7 +164,8 @@
 	height: 26px;
 	padding: 0 2px;
 	border: none;
-	border-radius: var(--radius-lg);	background: transparent;
+	border-radius: var(--radius-lg);
+	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
 	overflow: hidden;

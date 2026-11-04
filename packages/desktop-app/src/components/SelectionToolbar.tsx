@@ -141,14 +141,26 @@ export function SelectionToolbar({
 					dismiss();
 					return;
 				}
+				// Kimi Code anchors the chip at the end of the gesture, not at
+				// the top of the whole selection: a long multi-line selection
+				// would otherwise park the toolbar far above the pointer. Use
+				// the release point, falling back to the last line rect for
+				// keyboard selections and synthetic relays.
+				const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+				const endRect = rects[rects.length - 1] ?? rect;
+				const endX = endRect.right || endRect.left + endRect.width;
+				const hasPointer =
+					Number.isFinite(event.clientX) &&
+					Number.isFinite(event.clientY) &&
+					(event.clientX !== 0 || event.clientY !== 0);
 				// A fresh selection while the old toolbar is fading out:
 				// cancel the pending unmount and re-show at the new spot.
 				window.clearTimeout(hideTimer.current);
 				setClosing(false);
 				setPop({
-					x: Math.round(rect.left + rect.width / 2),
-					y: Math.round(rect.top),
-					height: rect.height,
+					x: hasPointer ? Math.round(event.clientX) : Math.round(endX),
+					y: hasPointer ? Math.round(event.clientY) : Math.round(endRect.top),
+					height: Math.round(hasPointer ? Math.max(16, endRect.height) : endRect.height),
 					text: text.length > 400 ? `${text.slice(0, 400)}…` : text,
 				});
 			}, 10);

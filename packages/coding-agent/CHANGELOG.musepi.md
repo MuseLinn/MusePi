@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **引用工具栏跟随选区末端并换成液态玻璃**：长文本选中时工具栏出现在松开鼠标的位置（键盘选择回退到选区最后一行），不再固定在整个选区顶部；面板改用共享的玻璃光泽、描边与液态弹簧入场。
+  - EN: The quote toolbar now follows the end of the selection and uses the shared liquid glass. After a long selection it appears at the release point (keyboard selections fall back to the last line) instead of the top of the whole selection, and the chip uses the shared sheen, rim, and liquid-spring entrance.
+
 ## [0.7.1] - 2026-11-04
 
 ### Added

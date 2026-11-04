@@ -147,7 +147,10 @@ describe("SelectionToolbar DOM selections", () => {
 			isCollapsed: false,
 			toString: () => "selected text",
 			anchorNode: text,
-			getRangeAt: () => ({ getBoundingClientRect: () => ({ left: 100, top: 180, width: 80, height: 20 }) }),
+			getRangeAt: () => ({
+				getBoundingClientRect: () => ({ left: 100, top: 180, width: 80, height: 20 }),
+				getClientRects: () => [{ left: 100, top: 180, width: 80, height: 20 }],
+			}),
 		})) as typeof window.getSelection;
 		try {
 			await act(async () => {
@@ -155,6 +158,58 @@ describe("SelectionToolbar DOM selections", () => {
 				await Bun.sleep(30);
 			});
 			expect(document.querySelector(".gui-select-pop")).not.toBeNull();
+		} finally {
+			window.getSelection = originalSelection;
+		}
+	});
+	it("anchors a long DOM selection at the release point instead of its first line", async () => {
+		const rootElement = document.createElement("div");
+		rootElement.id = "root";
+		document.body.appendChild(rootElement);
+		const root = createRoot(rootElement);
+		mounted.add(root);
+		const containerRef: { current: HTMLElement | null } = { current: null };
+		await act(async () =>
+			root.render(
+				<SelectionToolbar
+					containerRef={containerRef}
+					onQuote={() => {}}
+					onAsk={() => {}}
+					onCopy={() => {}}
+					onNewSession={() => {}}
+					onAddNote={() => {}}
+				/>,
+			),
+		);
+		const container = document.createElement("div");
+		const text = document.createTextNode("a long multi-line selection");
+		container.appendChild(text);
+		document.body.appendChild(container);
+		containerRef.current = container;
+		const originalSelection = window.getSelection;
+		window.getSelection = (() => ({
+			isCollapsed: false,
+			toString: () => "a long multi-line selection",
+			anchorNode: text,
+			getRangeAt: () => ({
+				getBoundingClientRect: () => ({ left: 100, top: 180, width: 300, height: 160 }),
+				getClientRects: () => [
+					{ left: 100, top: 180, width: 300, height: 20 },
+					{ left: 100, top: 320, width: 120, height: 20 },
+				],
+			}),
+		})) as typeof window.getSelection;
+		try {
+			await act(async () => {
+				text.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 212, clientY: 336 }));
+				await Bun.sleep(30);
+			});
+			const pop = document.querySelector<HTMLElement>(".gui-select-pop");
+			expect(pop).not.toBeNull();
+			expect(Math.round(Number.parseFloat(pop!.style.top))).toBe(298);
+			// The chip is centred on the pointer (plus the 8px viewport clamp
+			// in happy-dom, where the unlaid-out rect reports x=0).
+			expect(Math.round(Number.parseFloat(pop!.style.left))).toBe(220);
 		} finally {
 			window.getSelection = originalSelection;
 		}
