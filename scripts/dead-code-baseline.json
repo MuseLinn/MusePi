@@ -297,6 +297,7 @@
 	"types packages/desktop-app/src/lib/highlight.ts ElectronApi",
 	"types packages/desktop-app/src/lib/leaf-walk.ts LeafWalkNode",
 	"types packages/desktop-app/src/lib/managed-browser-host.ts HostRect",
+	"types packages/desktop-app/src/lib/managed-browser-host.ts ManagedTab",
 	"types packages/desktop-app/src/lib/panel-tabs.ts PanelTabSurface",
 	"types packages/desktop-app/src/lib/pet-effects.tsx BadgeSpec",
 	"types packages/desktop-app/src/lib/pet-effects.tsx ConfettiSpec",
