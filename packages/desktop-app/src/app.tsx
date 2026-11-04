@@ -3196,10 +3196,11 @@ function AppInner(): ReactNode {
 			const rows = walk(treeRef.current)
 				.sort((a, b) => b.timestamp - a.timestamp)
 				.slice(0, 6);
+			const snap = storeRef.current?.getSnapshot();
 			void electronAPI.petActivity?.({
 				recentSessions: rows,
 				unreadCount: unreadSessionsRef.current.size,
-				sessions: buildSessionCards(),
+				sessions: buildSessionCards(null, null, snap?.working ?? null),
 			});
 		};
 		let recentTimer: ReturnType<typeof setInterval> | null = null;
