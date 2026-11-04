@@ -2926,6 +2926,7 @@ function AppInner(): ReactNode {
 		const buildSessionCards = (
 			activeToolName: string | null = null,
 			activeLastMessage: string | null = null,
+			liveWorking: boolean | null = null,
 		): PetSessionCard[] => {
 			const findLabel = (nodes: SessionListNode[], id: string): string | null => {
 				for (const n of nodes) {
@@ -2941,7 +2942,10 @@ function AppInner(): ReactNode {
 			for (const [id, meta] of sessionMetaRef.current) {
 				if (meta.subagent || meta.advisor) continue;
 				const title = meta.title ?? findLabel(treeRef.current, id) ?? t("settings.petSessionUntitled");
-				if (meta.working) {
+				// The selected session's store snapshot is fresher than the 5s
+				// session.list poll: trust it so the card flips at turn end.
+				const working = id === selected && liveWorking !== null ? liveWorking : meta.working;
+				if (working) {
 					const live = id === selected;
 					const activityKey = `${meta.updatedAt ?? ""}:${meta.messageCount ?? 0}`;
 					cards.push({
@@ -3007,7 +3011,7 @@ function AppInner(): ReactNode {
 					lastMessage,
 					sessionTitle: activeLabelRef.current,
 				},
-				sessions: buildSessionCards(toolName, lastMessage),
+				sessions: buildSessionCards(toolName, lastMessage, snap.working),
 				// The pet window cannot read this window's localStorage —
 				// carry the locale so its panel strings match the UI, and the
 				// resolved scheme so its chrome follows light/dark.
