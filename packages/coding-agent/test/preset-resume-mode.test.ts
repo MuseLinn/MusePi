@@ -32,8 +32,14 @@ function resumeArgs(cwd: string): Args {
 	} as unknown as Args;
 }
 
-async function writeTranscript(workspace: string, sessionId: string, modeId: string): Promise<string> {
-	const sessionDir = computeDefaultSessionDir(workspace, new FileSessionStorage());
+async function writeTranscript(
+	workspace: string,
+	sessionId: string,
+	modeId: string,
+	// Tests that do not need the daemon's session discovery keep the file
+	// inside the workspace; the daemon suite passes its isolated default root.
+	sessionDir: string = path.join(workspace, ".sessions"),
+): Promise<{ transcript: string; sessionDir: string }> {
 	await fs.promises.mkdir(sessionDir, { recursive: true });
 	const transcript = path.join(sessionDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_${sessionId}.jsonl`);
 	const header = {
@@ -56,7 +62,7 @@ async function writeTranscript(workspace: string, sessionId: string, modeId: str
 		},
 	});
 	await fs.promises.writeFile(transcript, `${JSON.stringify(header)}\n${message}\n`);
-	return transcript;
+	return { transcript, sessionDir };
 }
 
 describe("CLI --continue/--resume restores the header preset", () => {
@@ -64,8 +70,8 @@ describe("CLI --continue/--resume restores the header preset", () => {
 		const workspace = await fs.promises.mkdtemp(path.join(os.tmpdir(), "preset-resume-cli-"));
 		try {
 			const sessionId = crypto.randomUUID();
-			const transcript = await writeTranscript(workspace, sessionId, "chat");
-			const manager = await SessionManager.open(transcript, undefined, undefined, { suppressBreadcrumb: true });
+			const { transcript, sessionDir } = await writeTranscript(workspace, sessionId, "chat");
+			const manager = await SessionManager.open(transcript, sessionDir, undefined, { suppressBreadcrumb: true });
 
 			const options = await buildSessionOptions(
 				resumeArgs(workspace),
@@ -85,8 +91,8 @@ describe("CLI --continue/--resume restores the header preset", () => {
 		const workspace = await fs.promises.mkdtemp(path.join(os.tmpdir(), "preset-resume-cli-explicit-"));
 		try {
 			const sessionId = crypto.randomUUID();
-			const transcript = await writeTranscript(workspace, sessionId, "chat");
-			const manager = await SessionManager.open(transcript, undefined, undefined, { suppressBreadcrumb: true });
+			const { transcript, sessionDir } = await writeTranscript(workspace, sessionId, "chat");
+			const manager = await SessionManager.open(transcript, sessionDir, undefined, { suppressBreadcrumb: true });
 			const args = { ...resumeArgs(workspace), preset: "work" } as Args;
 
 			const options = await buildSessionOptions(args, [], manager, {} as never, Settings.isolated({}));
@@ -122,7 +128,12 @@ describe("daemon activate restores the header preset", () => {
 		const sessionId = crypto.randomUUID();
 		const host = new DaemonSessionHost({ cwd: workspace });
 		try {
-			const transcript = await writeTranscript(workspace, sessionId, "chat");
+			const { transcript } = await writeTranscript(
+				workspace,
+				sessionId,
+				"chat",
+				computeDefaultSessionDir(workspace, new FileSessionStorage()),
+			);
 			new ViewStore(viewStorePath(JOURNAL_DIR)).upsert(sessionId, {
 				cursor: 0,
 				entries: [],

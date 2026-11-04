@@ -193,7 +193,7 @@ describe("SessionManager workspace directories", () => {
 		source.appendMessage(makeAssistantMessage());
 		await source.flush();
 
-		const forked = await SessionManager.forkFrom(source.getSessionFile()!, tempDir.path());
+		const forked = await SessionManager.forkFrom(source.getSessionFile()!, tempDir.path(), tempDir.path());
 		expect(forked.getAdditionalDirectories()).toEqual([path.join(tempDir.path(), "extra")]);
 	});
 });
