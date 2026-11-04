@@ -4591,8 +4591,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			// A late registration must pass the same session gate as the initial
 			// snapshot; otherwise a tool dropped by `enabled`/`tools.disabled`
 			// comes straight back through the listener.
-			const unsubscribeToolRegistrations = extensionRunner.onToolRegistered(registered =>
-				isRegisteredToolEnabled(registered, settings) ? scheduleToolRegistration(registered) : undefined,
+			const unsubscribeToolRegistrations = extensionRunner.onToolRegistered((registered, signal) =>
+				isRegisteredToolEnabled(registered, settings) ? scheduleToolRegistration(registered, signal) : undefined,
 			);
 			disposeCallbacks.add(unsubscribeToolRegistrations);
 
