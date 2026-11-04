@@ -14,7 +14,7 @@ import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
-import type { ExtensionWidget } from "../../extensibility/extensions/types";
+import type { ExtensionWidget } from "../../extensibility/extensions/widget-types";
 import widgetDescription from "./prompt.md" with { type: "text" };
 import { CLOCK_WIDGET } from "./widgets/clock";
 import { METRIC_WIDGET } from "./widgets/metric";

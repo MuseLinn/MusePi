@@ -5,7 +5,7 @@
  * and the GUI registration read one declaration. `market` is the only field;
  * the three session states are computed locally from the clock.
  */
-import type { ExtensionWidget } from "../../../extensibility/extensions/types";
+import type { ExtensionWidget } from "../../../extensibility/extensions/widget-types";
 
 export const CLOCK_WIDGET: ExtensionWidget = {
 	type: "clock",

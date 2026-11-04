@@ -1,5 +1,6 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
+import { logger } from "@musepi/pi-utils";
 import { sanitizeSkillName, writeManagedSkill } from "../autolearn/managed-skills";
 import { isNameClaimedByAuthoredSkill } from "../extensibility/skills";
 import { localBackend } from "../memory-backend/local-backend";
@@ -93,6 +94,16 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 			}
 			state.enqueueRetain(params.memory, params.context);
 			memoryMessage = "Lesson queued for retention";
+		}
+
+		// The injected memory instructions read the just-written lesson, so the
+		// session must refresh its snapshot and rebuild the prompt for the next
+		// turn. A refresh failure must not fail the stored lesson — the lesson is
+		// already durable, and the next natural rebuild still picks it up.
+		try {
+			await this.session.refreshMemoryInstructions?.();
+		} catch (error) {
+			logger.debug("Memory instructions refresh after learn failed", { error: String(error) });
 		}
 
 		// 2) Optionally mint/enhance a managed skill. A failure here is surfaced

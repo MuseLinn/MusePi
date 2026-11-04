@@ -1,0 +1,15 @@
+{
+	"name": "musepi-preset-design",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Persona and workflow prompt sections for the built-in design preset, as a preset-only Cordis plugin.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"label": "MusePi Design Persona",
+		"description": "The design preset's role, workflow, brief, artifact, and boundary prompt sections.",
+		"icon": "🎨",
+		"presetOnly": true,
+		"extensions": ["./index.ts"]
+	}
+}

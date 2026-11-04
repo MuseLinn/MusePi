@@ -25,6 +25,7 @@
  */
 
 import { logger } from "@musepi/pi-utils";
+import type { PromptHostSurface } from "../../../prompts/host";
 import type { EventBus } from "../../../utils/event-bus";
 import { enablementAllowsPath } from "../../enablement-manifest";
 import { ExtensionRuntime } from "../../extensions/loader";
@@ -45,6 +46,19 @@ export interface SessionPluginLoadOptions {
 	 * caller with its own settings source can substitute it.
 	 */
 	readConfig?: MountContext["readConfig"];
+	/**
+	 * The owning session's prompt host, carried on the runtime so factories
+	 * reach it through `pi.promptHost`. Absent when no session is wiring one.
+	 */
+	promptHost?: PromptHostSurface;
+	/**
+	 * Mount into an existing runtime instead of a fresh one. The preload path
+	 * (CLI `preloadedExtensions`) reuses the caller's runtime so the core
+	 * prompt packages' registrations land in the same pending queues and
+	 * prompt-host ledgers the session will drain; the default stays a new
+	 * runtime so unrelated loads never share lifecycle state.
+	 */
+	runtime?: LoadExtensionsResult["runtime"];
 }
 
 /**
@@ -59,8 +73,11 @@ export async function loadSessionPlugins(
 	eventBus: EventBus,
 	options: SessionPluginLoadOptions = {},
 ): Promise<LoadExtensionsResult> {
-	// The runtime is constructed up front because every mount registers into it.
-	const runtime = new ExtensionRuntime();
+	// The runtime is constructed up front because every mount registers into
+	// it; a caller-injected runtime (preload path) replaces the fresh one so
+	// its pending queues and ledgers stay the session's single source.
+	const runtime = options.runtime ?? new ExtensionRuntime();
+	runtime.promptHost = options.promptHost;
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 

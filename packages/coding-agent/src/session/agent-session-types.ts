@@ -34,6 +34,7 @@ import type { ExtensionRunner } from "../extensibility/extensions";
 import type { ContextUsage } from "../extensibility/extensions/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
+import type { PromptContextMessage } from "../prompts/types";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { XdevState } from "../tools/xdev";
@@ -191,6 +192,18 @@ export interface AgentSessionConfig {
 	 *  SDK can drop the old instance's prompt sections (`ext:<id>`) from the
 	 *  composer and re-add the replacement's. Receives the reloaded entry paths. */
 	onExtensionPromptSectionsChanged?: (entryPaths: string[]) => void;
+	/** Modes v2 (§5.5): current composer revision, folded into the prompt
+	 *  rebuild signature so prompt-section changes rebuild even when the tool
+	 *  set is unchanged. */
+	getPromptRevision?: () => number;
+	/**
+	 * Collects volatile prompt-host contexts for per-turn delivery. Wired by
+	 * the SDK to `promptHost.collectContext` with the render inputs of the last
+	 * assembly (same activeTools/context, so toolRefs and policy context match
+	 * the system-prompt view). The session converts delivered contexts into
+	 * hidden `prompt-context:<name>` custom messages at prompt assembly.
+	 */
+	collectPromptContexts?: () => PromptContextMessage[];
 	/** Names whose current registry entry is the built-in implementation. */
 	builtInToolNames?: Iterable<string>;
 	/** MCP names whose initial registry entries came from the manager snapshot. */

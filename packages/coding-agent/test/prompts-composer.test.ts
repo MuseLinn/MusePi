@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { PromptComposer } from "@musepi/pi-coding-agent/prompts/composer";
+import { PROMPT_ORDERS, PromptComposer } from "@musepi/pi-coding-agent/prompts/composer";
 import { prompt } from "@musepi/pi-utils";
 import extensionsInventoryTemplate from "../src/prompts/system/extensions-inventory.md" with { type: "text" };
 
@@ -41,12 +41,42 @@ describe("prompts/composer compose", () => {
 		expect(composer.compose(["core"])).toEqual(["core", "a", "z"]);
 	});
 
+	it("tool anchor keeps its section inside the core slot", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "t:read", order: PROMPT_ORDERS.tool, text: "TOOL" }, "ext:tools");
+		expect(composer.compose(["core", "safety"])).toEqual(["core", "TOOL", "safety"]);
+	});
+
 	it("同名替换(后 add 胜),异名共存", () => {
 		const composer = new PromptComposer();
 		composer.add({ name: "p:role", order: 10, text: "first" }, "mode:a");
 		composer.add({ name: "p:role", order: 20, text: "second" }, "mode:b");
 		composer.add({ name: "p:other", order: 15, text: "other" }, "mode:b");
 		expect(composer.compose(["core"])).toEqual(["core", "other", "second"]); // other(15) 在 second(20) 前
+	});
+
+	it("legacy add keeps {{...}} text byte-for-byte", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "legacy", order: 10, text: "hello {{who}} and {{ name }}" }, "mode:legacy");
+		expect(composer.compose(["core"])).toEqual(["core", "hello {{who}} and {{ name }}"]);
+		expect(composer.composeComplete()).toEqual(["hello {{who}} and {{ name }}"]);
+	});
+
+	it("legacy add replaces a same-name section and removeBySource never restores it", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "p:role", order: 10, text: "OLD" }, "mode:old");
+		composer.add({ name: "p:role", order: 10, text: "NEW" }, "mode:new");
+		expect(composer.compose(["core"])).toEqual(["core", "NEW"]);
+		composer.removeBySource("mode:new");
+		expect(composer.compose(["core"])).toEqual(["core"]);
+		expect(composer.size).toBe(0);
+	});
+
+	it("legacy extension prompt text is not interpolated", () => {
+		const composer = new PromptComposer();
+		composer.registry.registerVariable("name", () => "MusePi");
+		composer.add({ name: "ext:template", order: 10, text: "# {{name}}\n{{unknown}}" }, "ext:template");
+		expect(composer.compose(["core"])).toEqual(["core", "# {{name}}\n{{unknown}}"]);
 	});
 
 	it("removeBySource 按贡献方整体卸载", () => {
@@ -87,6 +117,87 @@ describe("prompts/composer compose", () => {
 	});
 });
 
+describe("prompts/composer base slot anchoring", () => {
+	const addAllRanges = (composer: PromptComposer): void => {
+		composer.add({ name: "m:injection", order: 50, text: "INJ-50" }, "mode:test");
+		composer.add({ name: "m:safety", order: 150, text: "INJ-150" }, "mode:test");
+		composer.add({ name: "m:project", order: 250, text: "INJ-250" }, "mode:test");
+		composer.add({ name: "m:repo", order: 350, text: "INJ-350" }, "mode:test");
+	};
+
+	it("anchors [core, project] without mistaking project for safety", () => {
+		const composer = new PromptComposer();
+		addAllRanges(composer);
+		expect(composer.compose(["core", "project"], {}, ["core", "project"] as const)).toEqual([
+			"core",
+			"INJ-50",
+			"INJ-150",
+			"project",
+			"INJ-250",
+			"INJ-350",
+		]);
+	});
+
+	it("anchors [core, project, repo] with safety absent", () => {
+		const composer = new PromptComposer();
+		addAllRanges(composer);
+		expect(composer.compose(["core", "project", "repo"], {}, ["core", "project", "repo"] as const)).toEqual([
+			"core",
+			"INJ-50",
+			"INJ-150",
+			"project",
+			"INJ-250",
+			"repo",
+			"INJ-350",
+		]);
+	});
+
+	it("anchors [core, safety, project] with repo absent", () => {
+		const composer = new PromptComposer();
+		addAllRanges(composer);
+		expect(composer.compose(["core", "safety", "project"], {}, ["core", "safety", "project"] as const)).toEqual([
+			"core",
+			"INJ-50",
+			"safety",
+			"INJ-150",
+			"project",
+			"INJ-250",
+			"INJ-350",
+		]);
+	});
+
+	it("anchors the full four-block base", () => {
+		const composer = new PromptComposer();
+		addAllRanges(composer);
+		expect(composer.compose(BASE_FULL, {}, ["core", "safety", "project", "repo"] as const)).toEqual([
+			"core",
+			"INJ-50",
+			"safety",
+			"INJ-150",
+			"project",
+			"INJ-250",
+			"repo",
+			"INJ-350",
+		]);
+	});
+
+	it("keeps every order range on its own anchor at the slot boundaries", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "below-safety", order: 99, text: "099" }, "mode:test");
+		composer.add({ name: "at-safety", order: 100, text: "100" }, "mode:test");
+		composer.add({ name: "at-project", order: 200, text: "200" }, "mode:test");
+		composer.add({ name: "at-repo", order: 300, text: "300" }, "mode:test");
+		expect(composer.compose(["core", "project"], {}, ["core", "project"] as const)).toEqual([
+			"core",
+			"099",
+			"100",
+			"project",
+			"200",
+			"300",
+		]);
+	});
+});
+
 describe("prompts/composer composeComplete", () => {
 	it("promptComplete:仅注入层按 order 输出,忽略 base(DSH complete:true)", () => {
 		const composer = new PromptComposer();
@@ -94,6 +205,49 @@ describe("prompts/composer composeComplete", () => {
 		composer.add({ name: "p:style", order: 10, text: "style" }, "mode:minimal");
 		expect(composer.composeComplete()).toEqual(["style", "role"]);
 		expect(composer.composeComplete()).not.toEqual(expect.arrayContaining(["core"]));
+	});
+});
+
+describe("prompts/composer registry delegation", () => {
+	it("a fresh delegate registry changes nothing", () => {
+		const composer = new PromptComposer();
+		expect(composer.compose(BASE_FULL)).toBe(BASE_FULL);
+		expect(composer.revision).toBe(0);
+	});
+
+	it("composes function text with the assembly context and skips undefined", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "gated", order: PROMPT_ORDERS.injection, text: () => undefined }, "mode:design");
+		expect(composer.compose(["core"])).toEqual(["core"]);
+		composer.add(
+			{ name: "gated", order: PROMPT_ORDERS.injection, text: ctx => (ctx.design ? "DESIGN" : "PLAIN") },
+			"mode:design",
+		);
+		expect(composer.compose(["core"], { design: true })).toEqual(["core", "DESIGN"]);
+		expect(composer.compose(["core"], {})).toEqual(["core", "PLAIN"]);
+	});
+
+	it("lets a complete section replace base and composeComplete output", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "m:role", order: 30, text: "ROLE" }, "mode:minimal");
+		composer.add({ name: "m:whole", order: 0, text: "ONLY", complete: true }, "mode:minimal");
+		expect(composer.compose(BASE_FULL)).toEqual(["ONLY"]);
+		expect(composer.composeComplete()).toEqual(["ONLY"]);
+	});
+
+	it("delegates revision and strict variables only to explicit registry sections", () => {
+		const composer = new PromptComposer();
+		composer.registry.registerVariable("who", () => "world");
+		composer.registry.registerSection({ name: "greet", order: 10, text: "hello {{who}}" }, "user");
+		expect(composer.revision).toBe(2);
+		expect(composer.compose(["core"])).toEqual(["core", "hello world"]);
+
+		composer.registry.registerSection({ name: "bad", order: 11, text: "hello {{nobody}}" }, "user");
+		expect(() => composer.compose(["core"])).toThrow(/unknown prompt variable: nobody/);
+
+		composer.removeBySource("user");
+		expect(composer.revision).toBe(4);
+		expect(composer.compose(["core"])).toEqual(["core"]);
 	});
 });
 

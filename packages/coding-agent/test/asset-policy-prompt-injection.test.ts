@@ -20,15 +20,16 @@ import type { Api, Model, ModelSpec } from "@musepi/pi-ai";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { BUILTIN_DESIGN_SYSTEMS } from "@musepi/pi-coding-agent/presets/design-systems";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/bundled-plugins/design-guidance/briefs";
 
 const MODE_MARKER = "MODE-SECTION-MARKER-7f3a9c";
-const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEMS.find(s => s.id === "glass")?.promptSection.text ?? "";
+const DESIGN_GUIDANCE_ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");
+const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEM_BRIEFS.glass;
 const GLASS_BRIEF_HEAD = GLASS_BRIEF.slice(0, 40);
 const POLICY_MARKER = "素材策略（";
 const TOOLCHAIN_MARKER = "generate_image";
@@ -52,6 +53,7 @@ function buildLocalModel(api: string): Model<Api> {
 async function createPolicySession(
 	tempDir: TempDir,
 	metadata: Record<string, unknown> | undefined,
+	options: { loadGuidance?: boolean } = {},
 ): Promise<{ session: AgentSession; authStorage: AuthStorage }> {
 	// A scratch mode carrying one preset section — the anchor both the design
 	// brief and the asset-policy section must land behind.
@@ -82,6 +84,7 @@ async function createPolicySession(
 			settings: Settings.isolated({ "compaction.enabled": false }),
 			model: buildLocalModel(`asset-policy-${Bun.nanoseconds().toString(36)}`),
 			disableExtensionDiscovery: true,
+			additionalExtensionPaths: options.loadGuidance === false ? [] : [DESIGN_GUIDANCE_ENTRY],
 			skills: [],
 			promptTemplates: [],
 			slashCommands: [],
@@ -179,6 +182,46 @@ describe("asset policy prompt injection (projectMetadata.assetPolicy)", () => {
 			const prompt = session.systemPrompt.join("\n");
 			expect(prompt).toContain(MODE_MARKER);
 			expect(prompt).not.toContain(POLICY_MARKER);
+		} finally {
+			await session.dispose();
+			authStorage.close();
+		}
+	});
+
+	it("injects nothing when the design-guidance plugin is not loaded", async () => {
+		using tempDir = TempDir.createSync("@pi-asset-policy-");
+		const { session, authStorage } = await createPolicySession(
+			tempDir,
+			{ version: 1, assetPolicy: "placeholder" },
+			{ loadGuidance: false },
+		);
+		try {
+			const prompt = session.systemPrompt.join("\n");
+			expect(prompt).toContain(MODE_MARKER);
+			expect(prompt).not.toContain(POLICY_MARKER);
+		} finally {
+			await session.dispose();
+			authStorage.close();
+		}
+	});
+
+	it("keeps exactly one latest brief per domain across selection changes", async () => {
+		using tempDir = TempDir.createSync("@pi-asset-policy-");
+		const { session, authStorage } = await createPolicySession(tempDir, {
+			version: 1,
+			designSystemId: "glass",
+			assetPolicy: "placeholder",
+		});
+		try {
+			await session.setDesignSystemId("minimal");
+			await session.refreshBaseSystemPrompt();
+			await session.refreshBaseSystemPrompt();
+
+			const prompt = session.systemPrompt.join("\n");
+			expect(prompt.split("设计体系「").length - 1).toBe(1);
+			expect(prompt.split(POLICY_MARKER).length - 1).toBe(1);
+			expect(prompt).toContain("设计体系「极简留白」");
+			expect(prompt).not.toContain(GLASS_BRIEF_HEAD);
 		} finally {
 			await session.dispose();
 			authStorage.close();

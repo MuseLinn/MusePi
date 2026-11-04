@@ -1,0 +1,16 @@
+{
+	"name": "musepi-delegation",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "任务委托",
+		"description": "子代理委派策略、并发上限与批处理调用形态。",
+		"icon": "🧭",
+		"extensions": ["./index.ts"],
+		"host": {
+			"readonly": true
+		}
+	}
+}

@@ -12,6 +12,7 @@
 | hooks 引擎 | `packages/coding-agent/src/extensibility/hooks/types.ts`（`HookEvent` union） | 同文件头部 |
 | channels（IM 通道） | `packages/coding-agent/src/channels/types.ts`（`ChannelAdapter`） | 同文件头部 |
 | 扩展 API（register* 面） | `packages/coding-agent/src/extensibility/extensions/types.ts`（`ExtensionAPI`） | 同文件头部 + `docs/extensions-dev.md` |
+| 会话提示词宿主与注册表（section/context/variable/tool、scope/lane/owner/cacheScope） | `packages/coding-agent/src/prompts/host.ts`（`PromptHost`；存储 `store.ts`，兼容注册表 `registry.ts`，顺序 `orders.ts`）＋ 核心提示词包装载表 `packages/coding-agent/src/bundled-plugins/loader.ts`（`SESSION_PROMPT_PACKAGE_DIRS`） | `host.ts` / `store.ts` 文件头注释 + `docs/extensions-dev.md` §20 |
 | GUI 渲染侧（widget/插槽/节点 kind） | `packages/client-core/src/widgets/registry.ts`、`packages/collab-proto/src/extension-slots.ts` | 各文件头部 |
 | 编译插件的宿主模块表 | `packages/collab-proto/src/extension-host-modules.ts`（`EXTENSION_HOST_MODULES` / `matchExtensionHostModule`） | 同文件头部；渲染端实例表见 `packages/desktop-app/src/lib/host-modules.ts` |
 | Android 模拟器插件 | `packages/coding-agent/src/bundled-plugins/android-emulator/index.ts`（扩展隔离的 RPC / `android_emulator`） | 同文件头部 |
@@ -27,3 +28,7 @@
 | 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`） | 同文件 `ExternalSubagentUpdate` 前六字段声明 |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。
+
+## 易变 context 的归属
+
+易变 context 按 owner 分担。AGENTS context 文件与工作区树、嵌套活动仓库是会话 `PromptHost` 上的 `project:context` / `project:active-repo` snapshot 区块（owner `session:project-context`；custom prompt 布局仍在自己的模板中渲染 context 文件）。记忆指令、auto-learn 指南、MCP 路由指引、MCP 服务器说明（按名称排序、4000 字符截断在宿主侧施加）与默认用户 append 由 `host-integrations` 插件的 `host:runtime-context` 区块（order 250）唯一渲染。`packages/coding-agent/src/system-prompt.ts` 的 `buildSystemPrompt` 仍装配日期、cwd、skills/rules、工具清单与 persona/预设数据；这些未插件化。plan/goal/vibe 运行时上下文由 `packages/coding-agent/src/session/agent-session.ts` 以 custom 消息持久化——流式 steer、模式退出 marker 与 resume/branch 去重依赖该传输——最近一次已投递副本内容相同时跳过，内容变化时只投递最新副本。

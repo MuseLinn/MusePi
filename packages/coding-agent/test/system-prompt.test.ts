@@ -239,6 +239,65 @@ describe("non-Linux system prompt CPU model", () => {
 	});
 });
 
+describe("system prompt base slot metadata", () => {
+	const baseOptions = {
+		contextFiles: [],
+		skills: [],
+		rules: [],
+		workspaceTree: {
+			rootPath: import.meta.dir,
+			rendered: "",
+			truncated: false,
+			totalLines: 0,
+			agentsMdFiles: [],
+		},
+	};
+	const repoContext = {
+		cwd: "/tmp/slot-base",
+		repoRoot: "/tmp/slot-base/repo",
+		relativeRepoRoot: "repo",
+		source: "single-direct-child-repo" as const,
+	};
+
+	it("tags [core, project] when safety and repo are absent", async () => {
+		const { systemPrompt, systemPromptSlots } = await buildSystemPrompt({
+			...baseOptions,
+			activeRepoContext: null,
+		});
+		expect(systemPrompt).toHaveLength(2);
+		expect(systemPromptSlots).toEqual(["core", "project"]);
+	});
+
+	it("tags [core, project, repo] when an active repo context exists", async () => {
+		const { systemPrompt, systemPromptSlots } = await buildSystemPrompt({
+			...baseOptions,
+			activeRepoContext: repoContext,
+		});
+		expect(systemPrompt).toHaveLength(3);
+		expect(systemPromptSlots).toEqual(["core", "project", "repo"]);
+	});
+
+	it("tags [core, safety, project] when the computer tool is active", async () => {
+		const { systemPrompt, systemPromptSlots } = await buildSystemPrompt({
+			...baseOptions,
+			toolNames: ["computer"],
+			activeRepoContext: null,
+		});
+		expect(systemPrompt).toHaveLength(3);
+		expect(systemPromptSlots).toEqual(["core", "safety", "project"]);
+	});
+
+	it("tags the full four-block base", async () => {
+		const { systemPrompt, systemPromptSlots } = await buildSystemPrompt({
+			...baseOptions,
+			toolNames: ["computer"],
+			activeRepoContext: repoContext,
+		});
+		expect(systemPrompt).toHaveLength(4);
+		expect(systemPromptSlots).toEqual(["core", "safety", "project", "repo"]);
+	});
+});
+
 describe("default system prompt conventions tag", () => {
 	it("opens with <conventions> instead of <system-conventions>", async () => {
 		const { systemPrompt } = await buildSystemPrompt({

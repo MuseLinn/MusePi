@@ -126,10 +126,16 @@ describe("plugin rows", () => {
 });
 
 describe("built-in preset plugin composition", () => {
-	test("design and creator explicitly own product skills while chat stays minimal", () => {
-		expect(BUILTIN_MODE_TEMPLATES.design?.plugins).toEqual([{ name: "musepi-product-skills" }]);
-		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toEqual([{ name: "musepi-product-skills" }]);
-		expect(BUILTIN_MODE_TEMPLATES.chat?.plugins ?? []).toEqual([]);
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(9);
+	test("each preset composes its persona package and keeps product skills where they belong", () => {
+		expect(BUILTIN_MODE_TEMPLATES.design?.plugins).toEqual([
+			{ name: "musepi-preset-design" },
+			{ name: "musepi-product-skills" },
+		]);
+		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toEqual([
+			{ name: "musepi-preset-creator" },
+			{ name: "musepi-product-skills" },
+		]);
+		expect(BUILTIN_MODE_TEMPLATES.chat?.plugins).toEqual([{ name: "musepi-preset-chat" }]);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(10);
 	});
 });

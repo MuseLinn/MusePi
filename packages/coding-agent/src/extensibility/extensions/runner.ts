@@ -20,12 +20,13 @@ import type { Settings } from "../../config/settings";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MemoryRuntimeContext } from "../../memory-backend";
 import { setExtensionThemeTokens, type Theme, theme } from "../../modes/theme/theme";
+import { removeScopedPromptHostLedger, replayPromptHostLedger } from "../../prompts/host";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
-import { loadExtensions } from "./loader";
+import { extensionHostOwner, loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
 import { type ExtensionMcpHost, ExtensionMcpRegistry } from "./mcp-servers";
 import { createExtensionModelQuery } from "./model-api";
@@ -1139,6 +1140,30 @@ export class ExtensionRunner {
 	}
 
 	/**
+	 * Detach one loaded extension without reloading it (preset teardown).
+	 *
+	 * Preset plugin records are synthetic: their fiber is disposed with the
+	 * preset, so keeping the record in the runner leaves a zombie that the HMR
+	 * watcher still sees (its entry mtime is recorded at load) and that
+	 * {@link reloadExtension} can resurrect after the user switched away. The
+	 * caller removes the returned tool names from the session registry.
+	 */
+	removeExtension(entryPath: string): string[] {
+		const resolvedTarget = path.resolve(entryPath);
+		const index = this.extensions.findIndex(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+		if (index === -1) return [];
+		const extension = this.extensions[index]!;
+		const toolNames = [...extension.tools.keys()];
+		for (const handlers of extension.handlers.values()) handlers.length = 0;
+		this.extensions.splice(index, 1);
+		this.#extensionEntryMtimes.delete(resolvedTarget);
+		this.#stopServicesForExtension(extension);
+		this.startServices();
+		this.applyThemeTokens();
+		return toolNames;
+	}
+
+	/**
 	 * Hot-reload one extension entry (P5 session-level HMR v2).
 	 *
 	 * Locates the loaded {@link Extension} whose `resolvedPath` matches
@@ -1170,17 +1195,44 @@ export class ExtensionRunner {
 			return { removedTools: [], errors: [] };
 		}
 		const oldExt = this.extensions[index]!;
+		// Release the old instance's prompt-host contributions before the
+		// replacement factory runs — same-name re-registrations would only
+		// shadow, and sections the new module drops must not linger.
+		const hostOwner = extensionHostOwner(oldExt.path);
+		const sessionHost = this.runtime.promptHost;
+		const oldLedger = sessionHost ? this.runtime.promptHostLedgers.get(hostOwner) : undefined;
+		if (sessionHost && oldLedger) removeScopedPromptHostLedger(sessionHost, hostOwner, oldLedger);
+		else if (sessionHost) sessionHost.removeByOwner(hostOwner);
 		// `fresh: true` — a reload MUST re-evaluate the entry module. Bun caches
 		// ESM by specifier and a cached copy never sees the new bytes, so the only
 		// way new code takes effect is a query-tagged import. The resulting new
 		// module instance is fine HERE (the old one is being replaced); a first
 		// load shares identity so plugin state is not split between loaders.
-		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd, undefined, { fresh: true });
+		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd, undefined, {
+			fresh: true,
+			promptHost: sessionHost,
+		});
 		const replacement = loadResult.extensions[0];
 		if (!replacement) {
 			// Failed load: keep the old instance untouched (no rollback needed —
-			// nothing was mutated yet) and surface the errors to the caller.
+			// nothing was mutated yet), restore its prompt-host contributions from
+			// the retained ledger, and surface the errors to the caller.
+			if (sessionHost && oldLedger) replayPromptHostLedger(sessionHost, hostOwner, oldLedger);
 			return { removedTools: [], errors: loadResult.errors.map(e => e.error) };
+		}
+		// Sync the replacement factory's ledger into the session runtime so a
+		// later disable/enable replays the NEW registrations, not stale ones.
+		// A runtime-loaded extension has no session ledger yet (its first load
+		// ran before this sync existed for the dynamic path), so create one —
+		// same pattern the loader uses when a factory first reaches the host.
+		if (sessionHost) {
+			let sessionLedger = this.runtime.promptHostLedgers.get(hostOwner);
+			if (!sessionLedger) {
+				sessionLedger = { entries: [] };
+				this.runtime.promptHostLedgers.set(hostOwner, sessionLedger);
+			}
+			const freshLedger = loadResult.runtime.promptHostLedgers.get(hostOwner);
+			sessionLedger.entries = freshLedger ? [...freshLedger.entries] : [];
 		}
 		const removedTools = [...oldExt.tools.keys()];
 		// Drop the old instance's handlers before the replacement is live so a
@@ -1302,10 +1354,28 @@ export class ExtensionRunner {
 		if (this.extensions.some(ext => path.resolve(ext.resolvedPath) === resolvedTarget)) {
 			return { addedTools: [], errors: [] };
 		}
-		const loadResult = await loadExtensions([resolvedTarget], cwd ?? this.cwd);
+		const loadResult = await loadExtensions([resolvedTarget], cwd ?? this.cwd, undefined, {
+			promptHost: this.runtime.promptHost,
+		});
 		const extension = loadResult.extensions[0];
 		if (!extension) {
 			return { addedTools: [], errors: loadResult.errors.map(e => e.error) };
+		}
+		// Sync the new factory's prompt-host ledger into the session runtime.
+		// A first runtime load has no session ledger yet (the loader only
+		// creates one when its own API first reaches the host), so create it
+		// here — without it the disable→enable replay is a no-op and a failed
+		// reload cannot restore the old contributions.
+		const sessionHost = this.runtime.promptHost;
+		if (sessionHost) {
+			const owner = extensionHostOwner(resolvedTarget);
+			let sessionLedger = this.runtime.promptHostLedgers.get(owner);
+			if (!sessionLedger) {
+				sessionLedger = { entries: [] };
+				this.runtime.promptHostLedgers.set(owner, sessionLedger);
+			}
+			const freshLedger = loadResult.runtime.promptHostLedgers.get(owner);
+			sessionLedger.entries = freshLedger ? [...freshLedger.entries] : [];
 		}
 		for (const listener of this.#toolRegistrationSubscriptions.keys()) {
 			this.#attachToolRegistrationListener(extension, listener);

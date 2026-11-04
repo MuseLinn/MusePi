@@ -1,0 +1,1 @@
+- **Web UI** → browser-drive with `{{browser}}`; visual confirmation is proof; no tests unless existing suite really breaks.

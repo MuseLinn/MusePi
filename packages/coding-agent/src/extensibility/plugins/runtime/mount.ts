@@ -218,6 +218,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 		skills: [],
 		subagents: new Map(),
 		toolViews: [],
+		widgets: [],
 		notificationChannels: [],
 		services: [],
 		themeTokens: [],

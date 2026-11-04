@@ -84,6 +84,9 @@ interface SessionToolsOptions {
 		tools: Map<string, AgentTool>,
 	) => Promise<{ systemPrompt: string[]; xdevCatalogNames?: readonly string[] }>;
 	getLocalCalendarDate?: () => string;
+	/** Current prompt-registry revision; changes force a rebuild even when the
+	 *  tool set and tool metadata are byte-identical. */
+	getPromptRevision?: () => number;
 	getMcpServerInstructions?: () => Map<string, string> | undefined;
 	xdev?: XdevState;
 	setActiveToolNames?: (names: Iterable<string>) => void;
@@ -247,6 +250,7 @@ export class SessionTools {
 	#promptModelKey: string | undefined;
 	#rebuildSystemPrompt: SessionToolsOptions["rebuildSystemPrompt"];
 	#getLocalCalendarDate: () => string;
+	#getPromptRevision: (() => number) | undefined;
 	#getMcpServerInstructions: SessionToolsOptions["getMcpServerInstructions"];
 	/**
 	 * Session-lifetime factory shared by every custom-tool wrapper. Defining it
@@ -297,6 +301,7 @@ export class SessionTools {
 		this.#ensureWriteRegistered = options.ensureWriteRegistered;
 		this.#rebuildSystemPrompt = options.rebuildSystemPrompt;
 		this.#getLocalCalendarDate = options.getLocalCalendarDate ?? formatLocalCalendarDate;
+		this.#getPromptRevision = options.getPromptRevision;
 		this.#getMcpServerInstructions = options.getMcpServerInstructions;
 		this.#xdev = options.xdev;
 		if (this.#xdev && this.#xdev.tools !== this.#toolRegistry) {
@@ -893,7 +898,11 @@ export class SessionTools {
 				if (forcePromptRefresh || signature !== this.#lastAppliedToolSignature) {
 					const built = await untilAborted(signal, this.#rebuildSystemPrompt(validToolNames, this.#toolRegistry));
 					rebuiltSystemPrompt = built.systemPrompt;
-					rebuiltSignature = signature;
+					// Re-read after the rebuild: composer sections may be re-synced by
+					// remove/add during the rebuild (design-system/asset-policy), which
+					// advances the revision. Storing the pre-rebuild signature would make
+					// the next identical apply look changed and rebuild again.
+					rebuiltSignature = this.#computeAppliedToolSignature(validToolNames, tools);
 					rebuiltXdevCatalogNames = built.xdevCatalogNames;
 				}
 			}
@@ -921,6 +930,16 @@ export class SessionTools {
 			this.#promptModelKey = this.#currentPromptModelKey();
 			this.#basePromptXdevNames = new Set(rebuiltXdevCatalogNames);
 		}
+	}
+
+	/** Rebind the `xd://` presentation state after a preset switch rebuilt the
+	 *  built-in slate (the session captured the previous preset's object). */
+	setXdevState(state: XdevState | undefined): void {
+		if (state && state.tools !== this.#toolRegistry) {
+			throw new Error("xd:// state must reference the canonical session tool map");
+		}
+		this.#xdev = state;
+		if (state) state.decorateExecution = tool => this.#wrapToolForAcpPermission(tool);
 	}
 
 	#setMountedNames(names: Iterable<string>): void {
@@ -1499,6 +1518,8 @@ export class SessionTools {
 	 *   4. MCP server instructions text (per server), since `rebuildSystemPrompt`
 	 *      embeds these in the appended prompt under "## MCP Server Instructions".
 	 *      A server upgrade can change instructions while keeping tools identical.
+	 *   5. The prompt-registry revision, because composer sections can change
+	 *      the assembled prompt while every tool stays identical.
 	 *
 	 * Settings-driven tool metadata is covered automatically: built-in tools that
 	 * depend on settings expose `description`/`label` via getters (see `TaskTool`,
@@ -1552,7 +1573,11 @@ export class SessionTools {
 		// exception above, bounded to the exact projection rendered in the global
 		// route guidance so churn wholly behind its fallback does not rebuild.
 		const date = this.#getLocalCalendarDate();
-		return `${nameSegment}\u0003${descriptionSegment}\u0007${instructionsSegment}\u0008${mountedMCPRouteSegment}|${date}`;
+		// Prompt-registry mutations (section add/remove, variable registration)
+		// change the composed bytes without touching the tool set, so include the
+		// live revision in the gate.
+		const promptRevision = this.#getPromptRevision?.();
+		return `${nameSegment}\u0003${descriptionSegment}\u0007${instructionsSegment}\u0008${mountedMCPRouteSegment}|${date}\u0009${promptRevision ?? ""}`;
 	}
 
 	/**

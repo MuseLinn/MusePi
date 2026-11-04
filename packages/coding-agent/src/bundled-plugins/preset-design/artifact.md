@@ -1,0 +1,1 @@
+产物契约:每个可预览产物都要在产物目录写一份 sidecar manifest,文件名固定为 artifact.manifest.json,声明 entry 文件(相对路径,不得越出产物目录)、kind(page/component/poster/deck)、renderer(html/markdown/react-component/deck-html)、exports(导出格式)。写完文件不等于完成:manifest 必须真实可解析、entry 必须真实可渲染、预览面板必须能识别——缺一就回到第④步修好再交付。

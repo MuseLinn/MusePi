@@ -1,0 +1,2 @@
+- Language server available → MUST use `{{lsp}}` for definition, type_definition, implementation, references, hover; refactors/imports/fixes: list code actions, apply one. NEVER search/manual-edit for code intelligence.
+- Before exported-symbol modification, MUST run `{{lsp}}` references; missed callsites are bugs.

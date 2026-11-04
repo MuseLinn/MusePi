@@ -24,8 +24,8 @@ import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
 import { type Hook, hookCapability } from "../../capability/hook";
 import { isPluginDisabled } from "../../capability/plugin-identity";
-import { rememberRegisteredWidget } from "../../daemon/registered-widgets";
 import { isServiceTierFamily, isServiceTierForFamily } from "../../config/service-tier";
+import { rememberRegisteredWidget } from "../../daemon/registered-widgets";
 import { loadCapability } from "../../discovery";
 import { getExtensionNameFromPath } from "../../discovery/helpers";
 import type { ExecOptions } from "../../exec/exec";
@@ -34,6 +34,8 @@ import { execCommand } from "../../exec/exec";
 import * as PiCodingAgent from "../../index";
 import type { StoredPluginCredential } from "../../plugin-credentials";
 import { getPluginCredentialManager } from "../../plugin-credentials";
+import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/host";
+import { scopePromptHostToOwner } from "../../prompts/host";
 import type { CustomMessagePayload } from "../../session/messages";
 import { normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
@@ -44,6 +46,7 @@ import * as TypeBox from "../legacy-typebox";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../plugins/compat/compatibility-store";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/compat/legacy-pi-compat";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugins/compat/plugin-compatibility";
+import { type PluginEntryModule, resolvePluginEntry, toFactory } from "../plugins/runtime/cordis-entry";
 import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
@@ -67,8 +70,8 @@ import type {
 	ExtensionService,
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
-	ExtensionRuntime as IExtensionRuntime,
 	ExtensionWidget,
+	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MediaProviderConfig,
 	MessageRenderer,
@@ -85,11 +88,12 @@ import { namespaceOf, type PluginWebRouteRequest, scopeRoute } from "./web-route
 installLegacyPiSpecifierShim();
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
-type LoadedExtensionModule = ExtensionFactory | { default?: ExtensionFactory };
+type LoadedExtensionModule = PluginEntryModule;
 
 function getExtensionFactory(module: LoadedExtensionModule): ExtensionFactory | null {
-	const candidate = typeof module === "function" ? module : module.default;
-	return typeof candidate === "function" ? candidate : null;
+	const entry = resolvePluginEntry(module);
+	if (entry === null) return null;
+	return toFactory(entry) as ExtensionFactory;
 }
 
 export class ExtensionRuntimeNotInitializedError extends Error {
@@ -105,6 +109,9 @@ export class ExtensionRuntimeNotInitializedError extends Error {
 export class ExtensionRuntime implements IExtensionRuntime {
 	flagValues = new Map<string, boolean | string>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
+	readonly promptHostLedgers = new Map<string, ScopedPromptHostLedger>();
+	/** Session prompt host; set by the owning session before factories run. */
+	promptHost?: PromptHostSurface;
 	pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
 	pendingDesignSystemRegistrations: RegisteredDesignSystem[] = [];
 	/**
@@ -287,6 +294,15 @@ function toExtensionCredential(stored: StoredPluginCredential): ExtensionCredent
 	};
 }
 
+/**
+ * Owner id a session uses to release/replay one extension's prompt-host
+ * contributions (`ext:<id>`), matching the composer source convention and
+ * `extensionIdOf` in sdk.ts.
+ */
+export function extensionHostOwner(extensionPath: string): string {
+	return `ext:${getExtensionNameFromPath(extensionPath)}`;
+}
+
 class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
@@ -315,6 +331,29 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		private readonly cwd: string,
 		public readonly events: EventBus,
 	) {}
+
+	/**
+	 * Session prompt host scoped to THIS extension: registrations without an
+	 * explicit owner record under `ext:<id>`, so a session can release and
+	 * replay the extension's contributions on disable/enable/reload without
+	 * re-running the factory. Undefined when no session wired a host.
+	 */
+	get promptHost(): PromptHostSurface | undefined {
+		const host = this.runtime.promptHost;
+		if (!host) return undefined;
+		const owner = extensionHostOwner(this.extension.path);
+		let ledger = this.runtime.promptHostLedgers.get(owner);
+		if (!ledger) {
+			ledger = { entries: [] };
+			this.runtime.promptHostLedgers.set(owner, ledger);
+		}
+		return scopePromptHostToOwner(host, owner, ledger);
+	}
+
+	/** The owning runtime's per-owner ledgers, shared so sessions replay this API's records. */
+	get promptHostLedgers(): Map<string, ScopedPromptHostLedger> {
+		return this.runtime.promptHostLedgers;
+	}
 
 	/**
 	 * Manifest-declared config 的运行时读取(pi.config)。清单 meta 按实例
@@ -1003,12 +1042,15 @@ export async function loadExtensions(
 	paths: string[],
 	cwd: string,
 	eventBus?: EventBus,
-	options?: { fresh?: boolean },
+	options?: { fresh?: boolean; promptHost?: PromptHostSurface },
 ): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 	const resolvedEventBus = eventBus ?? new EventBus();
 	const runtime = new ExtensionRuntime();
+	// The session prompt host travels on the runtime so every factory binding
+	// (including cordis mounts reusing this runtime) sees the same host.
+	runtime.promptHost = options?.promptHost;
 
 	// 回退保护②：兼容性预检先于任何 import（dsh「只有兼容性冲突拒绝一行」
 	// parity——清单缺失/不可读不是兼容性意见,交给下方 import 诊断）。

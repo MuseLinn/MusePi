@@ -5,6 +5,7 @@ import { createMockModel } from "@musepi/pi-ai/providers/mock";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { PromptComposer } from "@musepi/pi-coding-agent/prompts/composer";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
@@ -134,5 +135,156 @@ describe("AgentSession extension hot reload busy gate", () => {
 			errors: [],
 			deferred: false,
 		});
+	});
+});
+
+// Prompt-only extensions (registerPrompt without tools) must reach a live
+// session's base prompt on load/reload/removal — not just the next unrelated
+// tool-driven rebuild.
+describe("AgentSession prompt-only extension lifecycle", () => {
+	let session: AgentSession | undefined;
+
+	afterEach(async () => {
+		if (session) {
+			await session.dispose();
+			session = undefined;
+		}
+		vi.restoreAllMocks();
+	});
+
+	const PROMPT_SOURCE = "ext:hmr-ext";
+
+	function createPromptSession(options: { sections: Array<{ name: string; order: number; text: string }> }) {
+		const composer = new PromptComposer();
+		const extension: { promptSections: Array<{ name: string; order: number; text: string }> } = {
+			promptSections: [...options.sections],
+		};
+		const addSections = (): void => {
+			composer.removeBySource(PROMPT_SOURCE);
+			for (const section of extension.promptSections) composer.add({ ...section, source: PROMPT_SOURCE });
+		};
+		addSections();
+		let loaded = false;
+		const runner = {
+			async loadExtension() {
+				loaded = true;
+				return { addedTools: [], errors: [] };
+			},
+			async reloadExtension() {
+				return { removedTools: [], errors: [] };
+			},
+			isExtensionLoaded: () => loaded,
+			getExtensionByPath: () => extension,
+			getRegisteredTool: () => undefined,
+			getExtensionEntryMtimes: () => new Map(),
+			hasHandlers: () => false,
+			emit: async () => undefined,
+		};
+		const mock = createMockModel({ responses: [{ content: ["Done"] }] });
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: {
+				model: createModel(),
+				systemPrompt: ["initial-base"],
+				tools: [],
+				messages: [],
+			},
+			convertToLlm,
+			streamFn: mock.stream,
+		});
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings: Settings.isolated({ "compaction.enabled": false, "todo.enabled": false }),
+			modelRegistry: { getApiKey: async () => "test-key" } as never,
+			extensionRunner: runner as unknown as ExtensionRunner,
+			rebuildSystemPrompt: async () => ({ systemPrompt: composer.compose(["core"]) }),
+			onExtensionPromptSectionsChanged: () => addSections(),
+			getPromptRevision: () => composer.revision,
+		});
+		const setSections = (sections: Array<{ name: string; order: number; text: string }>): void => {
+			extension.promptSections = [...sections];
+		};
+		return { session: session!, agent, composer, setSections };
+	}
+
+	it("refreshes the live base prompt after a prompt-only reload", async () => {
+		const { session: s, setSections } = createPromptSession({
+			sections: [{ name: "hmr:greet", order: 10, text: "OLD" }],
+		});
+		await s.refreshBaseSystemPrompt();
+		expect(s.systemPrompt).toEqual(["core", "OLD"]);
+
+		setSections([{ name: "hmr:greet", order: 10, text: "NEW" }]);
+		await s.reloadExtension(ENTRY_PATH);
+		expect(s.systemPrompt).toEqual(["core", "NEW"]);
+	});
+
+	it("refreshes the live base prompt after loading a prompt-only extension", async () => {
+		const { session: s, setSections } = createPromptSession({ sections: [] });
+		await s.refreshBaseSystemPrompt();
+		expect(s.systemPrompt).toEqual(["core"]);
+
+		setSections([{ name: "hmr:greet", order: 10, text: "ADDED" }]);
+		await s.loadExtension(ENTRY_PATH);
+		expect(s.systemPrompt).toEqual(["core", "ADDED"]);
+	});
+
+	it("drops prompt sections when a reload removes them", async () => {
+		const { session: s, setSections } = createPromptSession({
+			sections: [{ name: "hmr:greet", order: 10, text: "GONE" }],
+		});
+		await s.refreshBaseSystemPrompt();
+		expect(s.systemPrompt).toEqual(["core", "GONE"]);
+
+		setSections([]);
+		await s.reloadExtension(ENTRY_PATH);
+		expect(s.systemPrompt).toEqual(["core"]);
+	});
+
+	it("refreshes the live base prompt after a deferred reload drains", async () => {
+		const {
+			session: s,
+			agent,
+			setSections,
+		} = createPromptSession({
+			sections: [{ name: "hmr:greet", order: 10, text: "OLD" }],
+		});
+		await s.refreshBaseSystemPrompt();
+		expect(s.systemPrompt).toEqual(["core", "OLD"]);
+
+		setSections([{ name: "hmr:greet", order: 10, text: "DEFERRED" }]);
+		agent.state.isStreaming = true;
+		expect(await s.reloadExtension(ENTRY_PATH)).toEqual({ removedTools: [], errors: [], deferred: true });
+		agent.state.isStreaming = false;
+		agent.emitExternalEvent({ type: "agent_end", messages: [] } as never);
+
+		await pollUntil(() => s.systemPrompt.join("|") === "core|DEFERRED");
+	});
+
+	it("refreshes the live base prompt after a deferred load drains", async () => {
+		const { session: s, agent, setSections } = createPromptSession({ sections: [] });
+		await s.refreshBaseSystemPrompt();
+		expect(s.systemPrompt).toEqual(["core"]);
+
+		setSections([{ name: "hmr:greet", order: 10, text: "DEFERRED-LOAD" }]);
+		agent.state.isStreaming = true;
+		expect(await s.loadExtension(ENTRY_PATH)).toEqual({ addedTools: [], errors: [], deferred: true });
+		expect(s.systemPrompt).toEqual(["core"]);
+
+		agent.state.isStreaming = false;
+		agent.emitExternalEvent({ type: "agent_end", messages: [] } as never);
+
+		await pollUntil(() => s.systemPrompt.join("|") === "core|DEFERRED-LOAD");
+	});
+
+	it("rebuilds on a registry revision change with an unchanged tool set", async () => {
+		const { session: s, composer } = createPromptSession({ sections: [] });
+		await s.refreshBaseSystemPrompt();
+		expect(s.systemPrompt).toEqual(["core"]);
+
+		composer.registry.registerSection({ name: "registry:extra", order: 10, text: "EXTRA" }, "ext:registry");
+		await s.setActiveToolsByName([]);
+		expect(s.systemPrompt).toEqual(["core", "EXTRA"]);
 	});
 });

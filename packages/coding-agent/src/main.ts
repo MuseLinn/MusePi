@@ -935,6 +935,16 @@ export async function buildSessionOptions(
 
 	if (sessionManager) {
 		options.sessionManager = sessionManager;
+		// Resume restores the preset persisted in the session header. The daemon
+		// has always surfaced header.modeId in its snapshot, but the CLI resumed
+		// without passing it, so a chat session reopened with the full work
+		// prompt and slate. An explicit `--preset` still wins.
+		if (parsed.preset) {
+			options.modeId = parsed.preset;
+		} else if (parsed.continue || parsed.resume) {
+			const headerModeId = sessionManager.getHeader()?.modeId;
+			if (headerModeId) options.modeId = headerModeId;
+		}
 	}
 	if (parsed.providerSessionId) {
 		options.providerSessionId = parsed.providerSessionId;

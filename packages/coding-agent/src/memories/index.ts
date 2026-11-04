@@ -210,7 +210,19 @@ async function readMemoryToolDeveloperInstructionsSnapshot(
 	return { summary, learned };
 }
 
-function renderMemoryToolDeveloperInstructionsSnapshot(
+/**
+ * Approximate characters per token used by the memory-instructions injection
+ * budget. Part of the public truncation contract: the rendered block is bounded
+ * by `memories.summaryInjectionTokenLimit * MEMORY_INSTRUCTIONS_CHARS_PER_TOKEN`
+ * across the summary and the lessons combined.
+ */
+export const MEMORY_INSTRUCTIONS_CHARS_PER_TOKEN = 4;
+
+/**
+ * Render the injected memory instructions for one snapshot under the shared
+ * token budget. Exported so the truncation contract is directly testable.
+ */
+export function renderMemoryToolDeveloperInstructionsSnapshot(
 	snapshot: MemoryToolDeveloperInstructionsSnapshot | undefined,
 	settings: Settings,
 ): string | undefined {
@@ -228,7 +240,10 @@ function renderMemoryToolDeveloperInstructionsSnapshot(
 	// Clamp to 0: truncateByApproxTokens appends a marker, so a truncated summary
 	// can exceed `limit * 4` chars and drive the remainder negative — when the
 	// summary already fills the budget, lessons are simply dropped.
-	const learnedBudget = Math.max(0, cfg.summaryInjectionTokenLimit - Math.ceil(summaryOut.length / 4));
+	const learnedBudget = Math.max(
+		0,
+		cfg.summaryInjectionTokenLimit - Math.ceil(summaryOut.length / MEMORY_INSTRUCTIONS_CHARS_PER_TOKEN),
+	);
 	const learnedOut =
 		snapshot.learned && learnedBudget > 0 ? truncateByApproxTokens(snapshot.learned, learnedBudget).trim() : "";
 	if (!summaryOut && !learnedOut) return undefined;
@@ -321,6 +336,11 @@ export async function buildMemoryToolDeveloperInstructions(
 
 /**
  * Clear all persisted memory state and generated artifacts.
+ *
+ * Also drops the root's cached instruction baseline: the no-session build seeds
+ * `memoryToolDeveloperInstructionsByRoot` and the startup refresh merges it
+ * forward into sessions with no per-session snapshot, so keeping the baseline
+ * would resurrect lessons the user just cleared.
  */
 export async function clearMemoryData(agentDir: string, cwd: string): Promise<void> {
 	const db = openMemoryDb(getAgentDbPath(agentDir));
@@ -329,7 +349,9 @@ export async function clearMemoryData(agentDir: string, cwd: string): Promise<vo
 	} finally {
 		closeMemoryDb(db);
 	}
-	await fs.rm(getMemoryRoot(agentDir, cwd), { recursive: true, force: true });
+	const memoryRoot = getMemoryRoot(agentDir, cwd);
+	await fs.rm(memoryRoot, { recursive: true, force: true });
+	memoryToolDeveloperInstructionsByRoot.delete(memoryRoot);
 }
 
 /**

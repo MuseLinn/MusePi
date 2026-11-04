@@ -67,6 +67,14 @@ Session advisors are owned by the session-scoped Cordis plugin in `session/advis
 
 Plugin-owned skills live beside the plugin and are declared during `apply` with `registerSkill`. They do not use the standalone bundled-skill installer. Disabling the plugin removes its skill, tools, components, and effects together; standalone file skills installed by a user remain independent.
 
+## Host-owned volatile context
+
+Volatile context is split between the session prompt host and the host prompt builder. Six readonly core prompt packages (`delegation`, `file-tools`, `browser`, `computer`, `lsp`, `host-integrations`) mount on the session `PromptHost` in every session load path — see `docs/extensions-dev.md` §20 for the dedup and per-session guarantees. The session registers the project-context snapshot sections itself: `project:context` (AGENTS files and the workspace tree) and `project:active-repo` (the nested repo) under one owner, while the custom-prompt layout keeps rendering context files in its own template. The `host-integrations` plugin owns the `host:runtime-context` section that renders memory instructions, auto-learn guidance, mounted MCP route guidance, MCP server instructions (sorted by name, with the 4000-character truncation applied by the host), and the default user append.
+
+Extension contributions travel a separate channel: `registerContext` contributions are delivered each turn as hidden `prompt-context:<name>` custom messages on the same transport — `required` contexts re-send every turn, the rest dedupe against the latest delivered copy in history (live, resumed, or branched), and they accept `interpolate: false` for device-carried text. Session collection leaves the host's separate delivery ledger untouched, so compaction or an aborted assembly cannot suppress a later delivery whose earlier copy is no longer in history. Plan, goal, and vibe keep their own pre-existing custom types instead of joining it.
+
+`buildSystemPrompt` still owns date, cwd, skills/rules, the tool inventory, and persona/preset data; these are not pluginized. Plan, goal, and vibe runtime context remain `AgentSession`-persisted custom messages: streaming-steer delivery, mode-exit markers, and resume/branch dedup depend on that message transport, so they are not migrated to system sections. When the latest delivered copy has identical content it is not injected again, so a streaming mode-entry steer does not become a second copy on the next turn.
+
 ## Migration checklist
 
 - Name the authoritative registry, consumer, activation owner, and disposal owner.

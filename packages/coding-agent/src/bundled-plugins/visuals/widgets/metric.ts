@@ -6,7 +6,7 @@
  * the GUI compiles `moduleUrl` and registers the component beside the built-in
  * types. `defaults()` is a function so two boards never share one object.
  */
-import type { ExtensionWidget } from "../../../extensibility/extensions/types";
+import type { ExtensionWidget } from "../../../extensibility/extensions/widget-types";
 
 export const METRIC_WIDGET: ExtensionWidget = {
 	type: "metric",

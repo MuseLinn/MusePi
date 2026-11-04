@@ -1548,6 +1548,13 @@ export class DaemonSessionHost {
 			typeof persistedMetadata === "object" && persistedMetadata !== null && !Array.isArray(persistedMetadata)
 				? (persistedMetadata as Record<string, unknown>)
 				: undefined;
+		// Resume the preset too: the SDK prompt builder and the tool slate only
+		// see `modeId` at create time. `live.modeId` is display state — without
+		// passing it here a reopened chat/design session ran the default work
+		// prompt and full slate while the GUI chip still showed the preset.
+		const persistedModeId = (persisted?.header as { modeId?: unknown } | undefined)?.modeId;
+		const resumeModeId =
+			manager.getHeader()?.modeId ?? (typeof persistedModeId === "string" ? persistedModeId : undefined);
 		const result = await this.#withSessionBootstrapLock(async () =>
 			createAgentSession({
 				cwd: resumeCwd,
@@ -1570,6 +1577,7 @@ export class DaemonSessionHost {
 				scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
 				...(await desktopSessionPromptInputs(resumeCwd)),
 				...(projectMetadata ? { projectMetadata } : {}),
+				...(resumeModeId ? { modeId: resumeModeId } : {}),
 			}),
 		);
 		// The resumed manager adopts the transcript's header id; a mismatch

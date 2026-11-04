@@ -24,6 +24,8 @@ import {
 	resolveMode,
 	validateMode,
 } from "@musepi/pi-coding-agent/presets/resolve";
+import { creatorPersonaSections } from "../src/bundled-plugins/preset-creator/index";
+import { designPersonaSections } from "../src/bundled-plugins/preset-design/index";
 
 let dir: string;
 
@@ -39,23 +41,24 @@ const readJson = (id: string): Record<string, unknown> =>
 	JSON.parse(readFileSync(modeFilePath(dir, id), "utf8")) as Record<string, unknown>;
 
 describe("built-in design preset", () => {
-	it("carries the full workflow, not just a persona", () => {
+	it("composes the persona package instead of carrying prompt text", () => {
 		const design = BUILTIN_MODE_TEMPLATES.design;
 		expect(design).toBeDefined();
-		const sections = (design?.prompt ?? []).map(p => (typeof p === "string" ? p : p.name));
+		expect(design?.prompt ?? []).toEqual([]);
+		expect(design?.plugins).toContainEqual({ name: "musepi-preset-design" });
 		for (const expected of [
 			"mode:design:role",
 			"mode:design:workflow",
 			"mode:design:brief",
 			"mode:design:artifact",
 			"mode:design:boundary",
-		]) {
-			expect(sections).toContain(expected);
+		] as const) {
+			expect(designPersonaSections.map(section => section.name)).toContain(expected);
 		}
 	});
 
 	it("teaches the radius/glass token rules the design system enforces", () => {
-		const prompt = JSON.stringify(BUILTIN_MODE_TEMPLATES.design?.prompt ?? []);
+		const prompt = JSON.stringify(designPersonaSections);
 		// docs/gui-design.md: literal px radii are banned, glass needs content behind it.
 		expect(prompt).toContain("--radius-");
 		expect(prompt).toContain("--glass-");
@@ -69,12 +72,13 @@ describe("built-in design preset", () => {
 });
 
 describe("built-in creator preset", () => {
-	it("owns the design, validate, and save workflow in its system prompt", () => {
-		const prompt = JSON.stringify(BUILTIN_MODE_TEMPLATES.creator?.prompt ?? []);
+	it("owns the design, validate, and save workflow in its persona package", () => {
+		const prompt = JSON.stringify(creatorPersonaSections);
 		expect(prompt).toContain("用户消息只包含创作需求");
 		expect(prompt).toContain("modes.validate");
 		expect(prompt).toContain("modes.save");
 		expect(prompt).not.toContain("docs/archive/modes-plan.md");
+		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toContainEqual({ name: "musepi-preset-creator" });
 	});
 });
 
@@ -109,7 +113,10 @@ describe("ensureModeTemplates upgrade path", () => {
 		ensureModeTemplates(dir);
 		const upgraded = readJson("design");
 		expect(upgraded.builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
-		expect(JSON.stringify(upgraded)).toContain("mode:design:workflow");
+		// v1 inline prompt is replaced by the persona package row; the text is
+		// no longer part of the preset file at all.
+		expect(upgraded.prompt).toBeUndefined();
+		expect(upgraded.plugins).toContainEqual({ name: "musepi-preset-design" });
 	});
 
 	it("upgrades an untouched v3 design preset (creation-prompts absorption)", () => {
@@ -162,9 +169,10 @@ describe("ensureModeTemplates upgrade path", () => {
 		ensureModeTemplates(dir);
 		const upgraded = readJson("design");
 		expect(upgraded.builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
-		// New-content marker from the creation-prompts absorption: every design
-		// judgment must be verifiable (evidence / scale / revision condition).
-		expect(JSON.stringify(upgraded)).toContain("可验证");
+		// The upgrade lands on the package composition; the verifiable-judgment
+		// text now lives in the design package's role Markdown.
+		expect(upgraded.prompt).toBeUndefined();
+		expect(upgraded.plugins).toContainEqual({ name: "musepi-preset-design" });
 	});
 
 	it("upgrades untouched v7 compositions and preserves edited rows", () => {
@@ -180,7 +188,7 @@ describe("ensureModeTemplates upgrade path", () => {
 		ensureModeTemplates(dir);
 		for (const id of ["design", "creator"] as const) {
 			expect(readJson(id).builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
-			expect(readJson(id).plugins).toEqual([{ name: "musepi-product-skills" }]);
+			expect(readJson(id).plugins).toEqual([{ name: `musepi-preset-${id}` }, { name: "musepi-product-skills" }]);
 		}
 
 		const edited = { ...LEGACY_TEMPLATES[7]?.creator, builtinRevision: 7, plugins: [{ name: "custom-plugin" }] };
@@ -200,7 +208,8 @@ describe("ensureModeTemplates upgrade path", () => {
 		);
 		ensureModeTemplates(dir);
 		expect(readJson("creator").builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
-		expect(JSON.stringify(readJson("creator"))).toContain("modes.save");
+		expect(readJson("creator").prompt).toBeUndefined();
+		expect(readJson("creator").plugins).toContainEqual({ name: "musepi-preset-creator" });
 
 		const edited = { ...legacy, builtinRevision: 8, label: "My creator" };
 		writeFileSync(modeFilePath(dir, "creator"), `${JSON.stringify(edited, null, 2)}\n`, "utf8");
@@ -239,6 +248,8 @@ describe("resolved design mode", () => {
 		// Design needs to read/write the repo; narrowing tools would detach it
 		// from engineering reality (see the comment on the template).
 		expect(resolved.extensions).toBeUndefined();
-		expect(resolved.prompt.length).toBeGreaterThanOrEqual(5);
+		// The five sections come from the persona package, not the preset file.
+		expect(resolved.prompt).toEqual([]);
+		expect(resolved.plugins).toContainEqual({ name: "musepi-preset-design" });
 	});
 });

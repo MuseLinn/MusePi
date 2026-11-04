@@ -526,6 +526,7 @@ describe("createAgentSession credential_disabled subscription", () => {
 				skills: [],
 				subagents: new Map(),
 				toolViews: [],
+				widgets: [],
 				notificationChannels: [],
 				services: [],
 				themeTokens: [],

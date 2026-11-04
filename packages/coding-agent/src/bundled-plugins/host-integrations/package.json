@@ -1,0 +1,16 @@
+{
+	"name": "musepi-host-integrations",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "宿主集成",
+		"description": "xd:// 设备协议与自动化 QA 回报通道的提示词，以及记忆/MCP 指引与用户追加提示词等运行时上下文。",
+		"icon": "🔌",
+		"extensions": ["./index.ts"],
+		"host": {
+			"readonly": true
+		}
+	}
+}

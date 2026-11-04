@@ -15,15 +15,16 @@ import type { Api, Model, ModelSpec } from "@musepi/pi-ai";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { BUILTIN_DESIGN_SYSTEMS } from "@musepi/pi-coding-agent/presets/design-systems";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/bundled-plugins/design-guidance/briefs";
 
 const MODE_MARKER = "MODE-SECTION-MARKER-7f3a9c";
-const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEMS.find(s => s.id === "glass")?.promptSection.text ?? "";
+const DESIGN_GUIDANCE_ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");
+const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEM_BRIEFS.glass;
 const GLASS_BRIEF_HEAD = GLASS_BRIEF.slice(0, 40);
 
 function buildLocalModel(api: string): Model<Api> {
@@ -44,6 +45,7 @@ function buildLocalModel(api: string): Model<Api> {
 async function createDesignSession(
 	tempDir: TempDir,
 	metadata: Record<string, unknown> | undefined,
+	options: { loadGuidance?: boolean } = {},
 ): Promise<{ session: AgentSession; authStorage: AuthStorage }> {
 	// A scratch mode carrying one preset section — the anchor the design brief
 	// must land behind.
@@ -74,6 +76,7 @@ async function createDesignSession(
 			settings: Settings.isolated({ "compaction.enabled": false }),
 			model: buildLocalModel(`design-system-${Bun.nanoseconds().toString(36)}`),
 			disableExtensionDiscovery: true,
+			additionalExtensionPaths: options.loadGuidance === false ? [] : [DESIGN_GUIDANCE_ENTRY],
 			skills: [],
 			promptTemplates: [],
 			slashCommands: [],
@@ -132,6 +135,23 @@ describe("design system prompt injection (projectMetadata.designSystemId)", () =
 			const prompt = session.systemPrompt.join("\n");
 			expect(prompt).toContain(MODE_MARKER);
 			expect(prompt).not.toContain("设计体系「");
+		} finally {
+			await session.dispose();
+			authStorage.close();
+		}
+	});
+
+	it("injects nothing when the design-guidance plugin is not loaded", async () => {
+		using tempDir = TempDir.createSync("@pi-design-system-");
+		const { session, authStorage } = await createDesignSession(
+			tempDir,
+			{ version: 1, designSystemId: "glass" },
+			{ loadGuidance: false },
+		);
+		try {
+			const prompt = session.systemPrompt.join("\n");
+			expect(prompt).toContain(MODE_MARKER);
+			expect(prompt).not.toContain(GLASS_BRIEF_HEAD);
 		} finally {
 			await session.dispose();
 			authStorage.close();

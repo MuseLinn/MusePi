@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
-import { widgetDef, useWidgetRegistryVersion } from "../../widgets/registry";
+import { useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 import type { WidgetSource } from "../../widgets/source";
 import { ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";

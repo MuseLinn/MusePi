@@ -32,24 +32,22 @@ import type { Api, Model, ModelSpec } from "@musepi/pi-ai";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { BUILTIN_DESIGN_SYSTEMS } from "@musepi/pi-coding-agent/presets/design-systems";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/bundled-plugins/design-guidance/briefs";
 import { DaemonServer, DaemonSessionHost, JOURNAL_DIR } from "../src/daemon/server";
 import { ViewStore, viewStorePath } from "../src/daemon/view-store";
 import { computeDefaultSessionDir } from "../src/session/session-paths";
 import { FileSessionStorage } from "../src/session/session-storage";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
 
-const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEMS.find(s => s.id === "glass")?.promptSection.text ?? "";
+const DESIGN_GUIDANCE_ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");
+const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEM_BRIEFS.glass;
 const GLASS_BRIEF_HEAD = GLASS_BRIEF.slice(0, 40);
-const MINIMAL_BRIEF_HEAD = (BUILTIN_DESIGN_SYSTEMS.find(s => s.id === "minimal")?.promptSection.text ?? "").slice(
-	0,
-	40,
-);
+const MINIMAL_BRIEF_HEAD = BUILTIN_DESIGN_SYSTEM_BRIEFS.minimal.slice(0, 40);
 
 function buildLocalModel(api: string): Model<Api> {
 	return buildModel({
@@ -80,6 +78,7 @@ async function createSessionWithoutMetadata(tempDir: TempDir): Promise<{ session
 			settings: Settings.isolated({ "compaction.enabled": false }),
 			model: buildLocalModel(`design-system-set-${Bun.nanoseconds().toString(36)}`),
 			disableExtensionDiscovery: true,
+			additionalExtensionPaths: [DESIGN_GUIDANCE_ENTRY],
 			skills: [],
 			promptTemplates: [],
 			slashCommands: [],
@@ -162,6 +161,7 @@ describe("session.setDesignSystem — live AgentSession", () => {
 				settings: Settings.isolated({ "compaction.enabled": false }),
 				model: buildLocalModel(`design-system-set-${Bun.nanoseconds().toString(36)}`),
 				disableExtensionDiscovery: true,
+				additionalExtensionPaths: [DESIGN_GUIDANCE_ENTRY],
 				skills: [],
 				promptTemplates: [],
 				slashCommands: [],

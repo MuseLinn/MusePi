@@ -177,8 +177,10 @@ import type { PlanModeState } from "../plan-mode/state";
 import goalModeContextPrompt from "../prompts/goals/goal-mode-context.md" with { type: "text" };
 import goalTodoContextPrompt from "../prompts/goals/goal-todo-context.md" with { type: "text" };
 import autoContinuePrompt from "../prompts/system/auto-continue.md" with { type: "text" };
+import goalModeClearedPrompt from "../prompts/system/goal-mode-cleared.md" with { type: "text" };
 import interruptedThinkingTemplate from "../prompts/system/interrupted-thinking.md" with { type: "text" };
 import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { type: "text" };
+import planModeClearedPrompt from "../prompts/system/plan-mode-cleared.md" with { type: "text" };
 import planModeReferencePrompt from "../prompts/system/plan-mode-reference.md" with { type: "text" };
 import planModeToolDecisionReminderPrompt from "../prompts/system/plan-mode-tool-decision-reminder.md" with {
 	type: "text",
@@ -186,6 +188,8 @@ import planModeToolDecisionReminderPrompt from "../prompts/system/plan-mode-tool
 import rewindReportTemplate from "../prompts/system/rewind-report.md" with { type: "text" };
 import sideChannelNoToolsReminder from "../prompts/system/side-channel-no-tools.md" with { type: "text" };
 import vibeModeActivePrompt from "../prompts/system/vibe-mode-active.md" with { type: "text" };
+import vibeModeClearedPrompt from "../prompts/system/vibe-mode-cleared.md" with { type: "text" };
+import type { PromptContextMessage } from "../prompts/types";
 import {
 	deobfuscateAssistantContent,
 	deobfuscateSessionContext,
@@ -219,6 +223,7 @@ import {
 import { supportsExternalThinking } from "../tools/think";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
+import type { XdevState } from "../tools/xdev";
 import { parseCommandArgs } from "../utils/command-args";
 import type { EditMode } from "../utils/edit-mode";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
@@ -486,6 +491,19 @@ function hasPersistedMessageEndMark(message: AgentMessage): boolean {
 	return (message as { [kSkipPersistMessageEnd]?: unknown })[kSkipPersistMessageEnd] === true;
 }
 
+/** Plain-text projection of a custom message, preserving block boundaries. */
+function customMessageText(content: CustomMessage["content"]): string {
+	if (typeof content === "string") return content;
+	const parts: string[] = [];
+	for (const block of content) {
+		if (block.type === "text") parts.push(block.text);
+	}
+	return parts.join("\n\n");
+}
+
+/** customType prefix for prompt-host volatile context messages. */
+const PROMPT_CONTEXT_MESSAGE_TYPE_PREFIX = "prompt-context:";
+
 /**
  * Clone one top-level notification field without ever returning an object owned
  * by the live session. Most values take the lossless structured-clone path. If
@@ -574,6 +592,9 @@ export class AgentSession {
 	readonly #advisorLifecycle: CordisAdvisorLifecycle;
 	readonly #advisorTurnEndListeners = new Set<AdvisorPrimaryTurnEndListener>();
 	#advisorDispose: Promise<void> | undefined;
+	/** Prompt host teardown attached by the session creator; runs once in dispose. */
+	#promptHostClose: (() => void) | undefined;
+	#collectPromptContexts: (() => PromptContextMessage[]) | undefined;
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
@@ -673,6 +694,8 @@ export class AgentSession {
 		| undefined;
 	/** Modes v2 (§5.5): extension-reload → composer re-sync callback (SDK-wired). */
 	#onExtensionPromptSectionsChanged: ((entryPaths: string[]) => void) | undefined;
+	/** Modes v2 (§5.5): composer revision included in the prompt rebuild signature. */
+	#getPromptRevision: (() => number) | undefined;
 	/**
 	 * Modes v2 busy gate: when a mode switch is requested while the session
 	 * is streaming, the target is parked here (single slot, last-wins) and
@@ -1192,6 +1215,7 @@ export class AgentSession {
 
 		this.#promptTemplates = config.promptTemplates ?? [];
 		this.#slashCommands = config.slashCommands ?? [];
+		this.#collectPromptContexts = config.collectPromptContexts;
 		this.#extensionRunner = config.extensionRunner;
 		this.#cacheWarmer = config.cacheWarmer;
 		if (config.cacheWarmer) {
@@ -1205,6 +1229,7 @@ export class AgentSession {
 		this.#modeSwitcher = config.modeSwitcher;
 		this.#projectMetadataState = config.projectMetadataState;
 		this.#onExtensionPromptSectionsChanged = config.onExtensionPromptSectionsChanged;
+		this.#getPromptRevision = config.getPromptRevision;
 		this.#customCommands = config.customCommands ?? [];
 		const recoveryHost: TurnRecoveryHost = {
 			agent: this.agent,
@@ -1460,6 +1485,7 @@ export class AgentSession {
 			presentationPinnedToolNames: config.presentationPinnedToolNames,
 			ensureWriteRegistered: config.ensureWriteRegistered,
 			rebuildSystemPrompt: config.rebuildSystemPrompt,
+			getPromptRevision: this.#getPromptRevision,
 			getLocalCalendarDate: config.getLocalCalendarDate,
 			getMcpServerInstructions: config.getMcpServerInstructions,
 			xdev: config.xdev,
@@ -2377,6 +2403,8 @@ export class AgentSession {
 		// a parked extension reload performs now unless a prompt is still in
 		// flight — that case drains at #flushPendingAgentEnd once idle.
 		this.#drainPendingExtensionReload();
+		// P0 自举: same settle boundary performs a parked extension load.
+		this.#drainPendingExtensionLoad();
 		// Modes v2: same idle boundary applies a parked mode switch.
 		this.#drainPendingModeSwitch();
 	};
@@ -4227,6 +4255,19 @@ export class AgentSession {
 			logger.warn("Failed to emit session_shutdown event", { error: String(error) });
 		}
 
+		// Close the session's prompt host: extensions have had their last say
+		// (session_shutdown), so live contributions are dead weight and a late
+		// registration from an unwinding handler must be rejected. Assemblies
+		// against a closed host come back empty, so late prompt rebuilds are safe.
+		if (this.#promptHostClose) {
+			try {
+				this.#promptHostClose();
+			} catch (error) {
+				logger.warn("Failed to close prompt host during dispose", { error: String(error) });
+			}
+			this.#promptHostClose = undefined;
+		}
+
 		// Stop fallback extension timers before aborting deferred work they could enqueue.
 		this.#fallbackExtensionTimers?.clearAll();
 		this.#fallbackScheduleTimer = null;
@@ -4841,6 +4882,9 @@ export class AgentSession {
 		if (staleTools.length > 0) {
 			await this.#tools.removeExtensionTools(staleTools);
 		}
+		// Prompt-only extensions have no tool delta to trigger a rebuild, so
+		// refresh the live base prompt explicitly after the composer re-sync.
+		await this.refreshBaseSystemPrompt();
 		return { removedTools: staleTools, errors, deferred: false };
 	}
 
@@ -4873,6 +4917,9 @@ export class AgentSession {
 		if (runner.isExtensionLoaded(entryPath)) return { addedTools: [], errors: [], deferred: false };
 		const { addedTools, errors } = await runner.loadExtension(entryPath, this.sessionManager.getCwd());
 		this.#onExtensionPromptSectionsChanged?.([entryPath]);
+		// A prompt-only extension adds no tools; rebuild so its sections reach
+		// the live session immediately instead of on the next prompt mutation.
+		await this.refreshBaseSystemPrompt();
 		return { addedTools, errors, deferred: false };
 	}
 
@@ -5046,6 +5093,11 @@ export class AgentSession {
 	/** Drop extension-owned tools from the session registry and active set
 	 *  (Modes v2 disable direction — mirrors the P5 HMR cleanup in
 	 *  {@link #performExtensionReload}). */
+	/** Rebind `xd://` presentation after a preset switch rebuilt the tool slate. */
+	setXdevState(state: XdevState | undefined): void {
+		this.#tools.setXdevState(state);
+	}
+
 	removeExtensionTools(names: string[]): Promise<void> {
 		return this.#tools.removeExtensionTools(names);
 	}
@@ -5728,6 +5780,101 @@ export class AgentSession {
 		};
 	}
 
+	/**
+	 * True when the latest delivered message of the same customType already
+	 * carries identical content. Comparing against the latest copy (not any
+	 * historical copy) keeps a changed context authoritative: a newer rewrite
+	 * is re-delivered, while an unchanged rebuild is skipped.
+	 */
+	#hasCurrentModeContext(candidate: CustomMessage): boolean {
+		const latest = this.#latestModeContext(candidate.customType);
+		if (!latest) return false;
+		return customMessageText(latest.content) === customMessageText(candidate.content);
+	}
+
+	/**
+	 * The latest delivered message of one mode customType, or undefined when the
+	 * history (live, resumed, or branched) carries none.
+	 */
+	#latestModeContext(customType: string): CustomMessage | undefined {
+		const messages = this.agent.state.messages;
+		for (let index = messages.length - 1; index >= 0; index -= 1) {
+			const message = messages[index];
+			if (message.role !== "custom" || message.customType !== customType) continue;
+			return message;
+		}
+		return undefined;
+	}
+
+	/**
+	 * Collect volatile prompt-host contexts and convert them into hidden custom
+	 * messages. `required` contexts deliver every turn; the rest are skipped
+	 * when the latest delivered copy of the same customType already carries
+	 * identical content — the same comparison plan/goal/vibe use, so resumed and
+	 * branched history dedupes too. A closed host collects nothing.
+	 */
+	#collectPromptContextMessages(): CustomMessage[] {
+		const collect = this.#collectPromptContexts;
+		if (!collect) return [];
+		const collected = collect();
+		const messages: CustomMessage[] = [];
+		for (const context of collected) {
+			const candidate: CustomMessage = {
+				role: "custom",
+				customType: `${PROMPT_CONTEXT_MESSAGE_TYPE_PREFIX}${context.name}`,
+				content: context.text,
+				display: false,
+				details: { owner: context.owner, lane: context.lane, cacheScope: context.cacheScope },
+				attribution: "agent",
+				timestamp: Date.now(),
+			};
+			if (!context.required && this.#hasCurrentModeContext(candidate)) continue;
+			messages.push(candidate);
+		}
+		return messages;
+	}
+
+	/**
+	 * Exit marker for one mode context, or null when there is nothing to clear:
+	 * no prior copy of the customType, or the latest copy is already the marker.
+	 *
+	 * Without this, a session that left plan/goal/vibe mode keeps the last
+	 * ACTIVE constraints as the newest word in history — the model still obeys
+	 * plan mode's read-only rules after the user exited it. The marker makes the
+	 * exit explicit, and re-entry delivers a fresh active context because the
+	 * latest copy is then the marker, not the active text.
+	 */
+	#buildModeClearMessage(customType: string, clearedText: string): CustomMessage | null {
+		const latest = this.#latestModeContext(customType);
+		if (!latest) return null;
+		if (customMessageText(latest.content) === clearedText) return null;
+		return {
+			role: "custom",
+			customType,
+			content: clearedText,
+			display: false,
+			attribution: "agent",
+			timestamp: Date.now(),
+		};
+	}
+
+	#buildPlanModeClearMessage(): CustomMessage | null {
+		if (this.#planModeState?.enabled) return null;
+		return this.#buildModeClearMessage("plan-mode-context", prompt.render(planModeClearedPrompt, {}));
+	}
+
+	#buildGoalModeClearMessage(): CustomMessage | null {
+		// A budget-limited goal keeps its state (enabled) while the budget-limit
+		// steer explains the pause; only a fully disabled goal exits.
+		if (this.#goalModeState?.enabled) return null;
+		return this.#buildModeClearMessage("goal-mode-context", prompt.render(goalModeClearedPrompt, {}));
+	}
+
+	#buildVibeModeClearMessage(): CustomMessage | null {
+		if (this.#vibeModeState?.enabled) return null;
+		return this.#buildModeClearMessage("vibe-mode-context", prompt.render(vibeModeClearedPrompt, {}));
+	}
+
 	#sanitizeGoalTodoText(text: string): string {
 		return escapeXmlText(text)
 			.replace(/\r\n/g, "\\n")
@@ -6042,9 +6189,9 @@ export class AgentSession {
 			if (!streamingBehavior) throw new AgentBusyError();
 
 			for (const notice of keywordNotices) {
-				await this.#queueCustomMessage(notice, streamingBehavior);
+				await this.#queueCustomMessage(notice, streamingBehavior, undefined, false);
 			}
-			await this.#queueCustomMessage(message, streamingBehavior, options.queueChipText);
+			await this.#queueCustomMessage(message, streamingBehavior, options.queueChipText, false);
 			return;
 		}
 		if (this.isStreaming) {
@@ -6140,17 +6287,40 @@ export class AgentSession {
 			if (planReferenceMessage) {
 				messages.push(planReferenceMessage);
 			}
+			// Mode entry while streaming steers the context into the running turn,
+			// and that steer is persisted. Re-inject only when the rebuilt context
+			// differs from the latest delivered copy, so identical copies never
+			// stack across turns while a real content change still wins. A mode
+			// that exited since the last turn delivers its clear marker instead,
+			// so the stale active constraints stop being the newest word.
 			const planModeMessage = await this.#buildPlanModeMessage();
 			if (planModeMessage) {
-				messages.push(planModeMessage);
+				if (!this.#hasCurrentModeContext(planModeMessage)) messages.push(planModeMessage);
+			} else {
+				const planClearMessage = this.#buildPlanModeClearMessage();
+				if (planClearMessage) messages.push(planClearMessage);
 			}
 			const goalModeMessage = this.#buildGoalModeMessage();
 			if (goalModeMessage) {
-				messages.push(goalModeMessage);
+				if (!this.#hasCurrentModeContext(goalModeMessage)) messages.push(goalModeMessage);
+			} else {
+				const goalClearMessage = this.#buildGoalModeClearMessage();
+				if (goalClearMessage) messages.push(goalClearMessage);
 			}
 			const vibeModeMessage = this.#buildVibeModeMessage();
 			if (vibeModeMessage) {
-				messages.push(vibeModeMessage);
+				if (!this.#hasCurrentModeContext(vibeModeMessage)) messages.push(vibeModeMessage);
+			} else {
+				const vibeClearMessage = this.#buildVibeModeClearMessage();
+				if (vibeClearMessage) messages.push(vibeClearMessage);
+			}
+			// Prompt-host volatile contexts: every turn collects the contexts that
+			// are new, changed or marked required and turns them into hidden
+			// custom messages on the normal persistence/provider path. Non-required
+			// copies reuse the latest-custom comparison (so resumed/branched
+			// history never stacks duplicates); required contexts deliver per turn.
+			for (const contextMessage of this.#collectPromptContextMessages()) {
+				messages.push(contextMessage);
 			}
 			if (options?.prependMessages) {
 				messages.push(...options.prependMessages);
@@ -6822,6 +6992,7 @@ export class AgentSession {
 		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 		deliverAs: "steer" | "followUp",
 		queueChipText?: string,
+		scheduleIdleDrain = true,
 	): Promise<void> {
 		const details =
 			queueChipText !== undefined
@@ -6849,7 +7020,7 @@ export class AgentSession {
 		} else {
 			this.agent.steer(normalizedAppMessage);
 		}
-		this.#scheduleIdleQueueDrain();
+		if (scheduleIdleDrain) this.#scheduleIdleQueueDrain();
 	}
 
 	/**
@@ -10283,6 +10454,17 @@ export class AgentSession {
 	 */
 	setAdvisorContextPrompt(contextPrompt: string | undefined): void {
 		this.#advisors.setContextPrompt(contextPrompt);
+	}
+
+	/**
+	 * Attach the prompt host's teardown (close) to this session's dispose.
+	 *
+	 * The host itself lives in the session-creation closure (sdk.ts); the session
+	 * only guarantees it closes when the session does. Idempotent — a later call
+	 * replaces the hook, and dispose runs it at most once.
+	 */
+	setPromptHostClose(close: (() => void) | undefined): void {
+		this.#promptHostClose = close;
 	}
 
 	/**

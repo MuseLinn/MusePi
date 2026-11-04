@@ -1,0 +1,15 @@
+{
+	"name": "musepi-preset-creator",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Persona prompt for the built-in creator preset, as a preset-only Cordis plugin.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"label": "MusePi Creator Persona",
+		"description": "The creator preset's persona prompt section.",
+		"icon": "🛠️",
+		"presetOnly": true,
+		"extensions": ["./index.ts"]
+	}
+}

@@ -1,0 +1,15 @@
+{
+	"name": "musepi-preset-chat",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Persona prompt for the built-in chat preset, as a preset-only Cordis plugin.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"label": "MusePi Chat Persona",
+		"description": "The minimal chat preset's persona prompt section.",
+		"icon": "💬",
+		"presetOnly": true,
+		"extensions": ["./index.ts"]
+	}
+}

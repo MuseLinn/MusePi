@@ -16,43 +16,111 @@
  * @module bundled-plugins/loader
  */
 
+import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
+import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
 import { registerMagicKeyword } from "../modes/magic-keyword-registry";
 import { EventBus } from "../utils/event-bus";
 
-let loaded = false;
+/**
+ * Bundled packages whose prompt-host contributions are part of the core
+ * session contract. They are readonly first-party prompt units (manifest
+ * `host.readonly`, distribution-shipped, nothing user-removable) that only
+ * `setLabel` + register on the session prompt host, and their sections —
+ * delegation gates, file-tool guidance, browser/computer/LSP/host-integration
+ * notes — must hold in every real session regardless of discovery options.
+ * They are still mounted PER SESSION (each factory binds that session's
+ * `pi.promptHost`), never globally.
+ */
+const SESSION_PROMPT_PACKAGE_DIRS: ReadonlySet<string> = new Set([
+	"delegation",
+	"file-tools",
+	"browser",
+	"computer",
+	"lsp",
+	"host-integrations",
+]);
 
 /**
- * Load every bundled plugin package once, registering what they contribute.
+ * Entry paths of the six readonly core prompt packages, so a session can bind
+ * them to its own prompt host even when discovery is disabled or the caller
+ * preloaded without one.
  *
- * Fail-soft per package: a bundled package that fails to load is logged, not
- * thrown — a first-party packaging mistake must not take the session down with
- * it. Returns whether any load ran (false when already loaded).
+ * Filtered from {@link discoverBundledPluginPaths} by package directory name:
+ * bundled copies keep the `<root>/<package>/` layout in every distribution
+ * shape (source tree, staged `./bundled-plugins`, packaged roots).
  */
-export async function ensureBundledPluginsLoaded(cwd: string): Promise<boolean> {
-	if (loaded) return false;
-	loaded = true;
+export async function discoverBundledSessionPromptPluginPaths(): Promise<string[]> {
 	const paths = await discoverBundledPluginPaths();
-	const eventBus = new EventBus();
-	for (const entry of paths) {
-		try {
-			// A file URL so the dynamic import works with Windows drive paths.
-			const mod = (await import(`file:///${entry.replaceAll("\\", "/")}`)) as { default: unknown };
-			const runtime = new ExtensionRuntime();
-			await loadExtensionFromFactory(mod.default as never, cwd, eventBus, runtime, entry);
-			for (const keyword of runtime.pendingMagicKeywordRegistrations) {
-				registerMagicKeyword(keyword);
-			}
-		} catch (error) {
-			logger.warn("bundled plugin package failed to load", { entry, error: String(error) });
-		}
-	}
-	return true;
+	return paths.filter(entryPath => SESSION_PROMPT_PACKAGE_DIRS.has(path.basename(path.dirname(entryPath))));
 }
 
-/** Test helper: forget the one-shot flag so a test can load again. */
+export interface BundledPluginLoader {
+	ensure(cwd: string): Promise<boolean>;
+	reset(): void;
+}
+
+/** Create an independently stateful loader. Concurrent callers share the same attempt. */
+export function createBundledPluginLoader(
+	discover: () => Promise<string[]> = discoverBundledPluginPaths,
+): BundledPluginLoader {
+	let loaded = false;
+	let inFlight: Promise<void> | undefined;
+	return {
+		ensure: async cwd => {
+			if (loaded) return false;
+			if (inFlight) {
+				await inFlight;
+				return false;
+			}
+			const pending = (async () => {
+				const paths = await discover();
+				const eventBus = new EventBus();
+				for (const entry of paths) {
+					try {
+						// A file URL so the dynamic import works with Windows drive paths.
+						const mod = (await import(`file:///${entry.replaceAll("\\", "/")}`)) as { default: unknown };
+						const resolved = resolvePluginEntry(mod as never);
+						if (resolved === null) {
+							throw new Error(`bundled plugin exports nothing loadable: ${entry}`);
+						}
+						const runtime = new ExtensionRuntime();
+						await loadExtensionFromFactory(toFactory(resolved) as never, cwd, eventBus, runtime, entry);
+						for (const keyword of runtime.pendingMagicKeywordRegistrations) {
+							registerMagicKeyword(keyword);
+						}
+					} catch (error) {
+						logger.warn("bundled plugin package failed to load", { entry, error: String(error) });
+					}
+				}
+			})();
+			inFlight = pending;
+			try {
+				await pending;
+				loaded = true;
+				return true;
+			} catch (error) {
+				if (inFlight === pending) inFlight = undefined;
+				throw error;
+			}
+		},
+		reset: () => {
+			loaded = false;
+			inFlight = undefined;
+		},
+	};
+}
+
+const bundledPluginLoader = createBundledPluginLoader();
+
+/** Load bundled packages once. Returns false after the shared attempt has already completed. */
+export function ensureBundledPluginsLoaded(cwd: string): Promise<boolean> {
+	return bundledPluginLoader.ensure(cwd);
+}
+
+/** Test helper: forget the process-wide loader state so a test can load again. */
 export function resetBundledPluginsLoaded(): void {
-	loaded = false;
+	bundledPluginLoader.reset();
 }

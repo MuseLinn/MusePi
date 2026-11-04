@@ -68,6 +68,14 @@ preset 组合使用 `CordisPresetRuntime`，不以 legacy 扩展装载器作为�
 
 插件自有 skill 放在插件目录内，并在 `apply` 中通过 `registerSkill` 声明，不再走独立的 bundled-skill 安装器。禁用插件会同时移除它的 skill、工具、组件和 effect；用户独立安装的文件 skill 不受影响。
 
+## 宿主拥有的易变 context
+
+易变 context 由会话提示词宿主与宿主提示词构建器分担。六个只读核心提示词包（`delegation`、`file-tools`、`browser`、`computer`、`lsp`、`host-integrations`）在所有会话加载路径挂载到会话 `PromptHost`——去重与按会话隔离的保证见 `docs/extensions-dev.md` §20。项目上下文 snapshot 区块由会话自己注册：`project:context`（AGENTS 文件与工作区树）与 `project:active-repo`（嵌套仓库）归同一 owner，custom prompt 布局仍在自己的模板中渲染 context 文件。`host-integrations` 插件拥有 `host:runtime-context` 区块，渲染记忆指令、auto-learn 指南、已挂载 MCP 路由指引、MCP 服务器说明（按名称排序、4000 字符截断由宿主施加）与默认用户 append。
+
+扩展贡献走另一条通道：`registerContext` 贡献每轮以隐藏的 `prompt-context:<name>` custom 消息在同一传输上投递——`required` context 每轮重发，其余按历史（活动、resume 或 branch 后）中最近一条已投递副本去重，并支持为设备携带的文本声明 `interpolate: false`。会话收集不推进宿主独立的投递台账，因此压缩或装配中止后，只要旧副本已不在历史中，后续投递就不会被抑制。plan/goal/vibe 保留各自的既有 customType，不并入该通道。
+
+`buildSystemPrompt` 仍拥有日期、cwd、skills/rules、工具清单与 persona/预设数据；这些未插件化。plan/goal/vibe 运行时上下文继续由 `AgentSession` 以 custom 消息持久化：流式 steer 投递、模式退出 marker 与 resume/branch 去重依赖该消息传输，因此不迁为 system 区块。最近一次已投递副本内容相同时不再注入，流式进入模式经 steer 持久化的上下文不会在下一轮变成第二份。
+
 ## 迁移检查
 
 - 指明权威注册表、消费者、激活所有者和销毁所有者。

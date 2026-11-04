@@ -840,7 +840,11 @@ export class DaemonServer {
 			}),
 		);
 		this.#services.register(new ViewStoreService(host.viewStore));
-		this.#services.register(new BoardService());
+		this.#services.register(
+			new BoardService({
+				extensionRuntimeLoad: () => this.#services.get<ExtensionService>("extensions").getExtensionRuntimeLoad(),
+			}),
+		);
 		this.#services.register(
 			new CreationService({
 				loadHeader: sessionId => host.viewStore.load(sessionId)?.header ?? null,
@@ -6640,7 +6644,19 @@ export class DaemonServer {
 				if (!settings) throw new Error("settings unavailable");
 				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
 				const backend = await resolveMemoryBackend(settings);
-				await backend.clear(getAgentDir(), this.#host.cwd());
+				const cwd = this.#host.cwd();
+				// 路由不绑定单会话:对 cwd 匹配本 host 的每个活动会话执行
+				// 带 session 的清空(失效其记忆快照缓存)并刷新系统提示;
+				// 无活动会话时维持允许的全局清空。
+				const affected = [...this.#host.allSessions()].filter(live => live.cwd === cwd);
+				if (affected.length === 0) {
+					await backend.clear(getAgentDir(), cwd);
+				} else {
+					for (const live of affected) {
+						await backend.clear(getAgentDir(), cwd, live.agentSession);
+						await live.agentSession.refreshBaseSystemPrompt();
+					}
+				}
 				return { ok: true };
 			}
 			case "memory.enqueue": {

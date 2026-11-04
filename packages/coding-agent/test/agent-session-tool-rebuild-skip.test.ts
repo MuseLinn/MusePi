@@ -7,6 +7,7 @@ import { buildModel } from "@musepi/pi-catalog/build";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { CustomTool } from "@musepi/pi-coding-agent/extensibility/custom-tools/types";
 import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { PromptComposer } from "@musepi/pi-coding-agent/prompts/composer";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { type CustomMessage, convertToLlm } from "@musepi/pi-coding-agent/session/messages";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
@@ -99,6 +100,10 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 	interface NewSessionOptions {
 		getMcpServerInstructions?: () => Map<string, string> | undefined;
 		getLocalCalendarDate?: () => string;
+		/** Live composer revision, mirroring the SDK wiring. */
+		getPromptRevision?: () => number;
+		/** Runs inside the rebuild, e.g. re-syncing design-system/asset-policy sections. */
+		rebuildPromptSections?: () => void;
 		xdev?: XdevState;
 		lazyWrite?: boolean;
 		/** Scripted mock model responses; enables driving `session.prompt()`. */
@@ -177,6 +182,7 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 					} as unknown as ExtensionRunner)
 				: undefined,
 			rebuildSystemPrompt: async (toolNames, _tools) => {
+				options.rebuildPromptSections?.();
 				const base = await rebuildSystemPrompt(toolNames);
 				if (!options.exposeXdevCatalog) return { systemPrompt: [base] };
 				const catalog = options.xdev ? [...options.xdev.mountedNames] : [];
@@ -184,6 +190,7 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 			},
 			getMcpServerInstructions: options.getMcpServerInstructions,
 			getLocalCalendarDate: options.getLocalCalendarDate,
+			getPromptRevision: options.getPromptRevision,
 			xdev: options.xdev,
 		});
 		sessions.push(session);
@@ -570,6 +577,41 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 		// Restore it: rebuild fires again.
 		await session.setActiveToolsByName(["read", "mcp__nucleus_search", "mcp__nucleus_explain"]);
 		expect(rebuildCount).toBe(baseline + 2);
+	});
+
+	it("keeps the rebuild signature stable when a rebuild re-syncs prompt sections", async () => {
+		// A rebuild hook may remove/re-add a prompt source, so the composer
+		// revision advances *during* the rebuild. The cached signature must be
+		// taken after that mutation; otherwise the next identical apply sees a
+		// different revision, rebuilds again, and clears the provider
+		// prompt-cache key for no prompt change.
+		const composer = new PromptComposer();
+		let rebuildCount = 0;
+		const { session } = newSession(
+			async () => {
+				rebuildCount++;
+				return composer.compose(["core"]).join("\n");
+			},
+			{
+				getPromptRevision: () => composer.revision,
+				rebuildPromptSections: () => {
+					composer.removeBySource("ext:test-guidance");
+					composer.add({ name: "design-system", order: 40, text: "设计体系测试简报" }, "ext:test-guidance");
+				},
+			},
+		);
+
+		await session.setActiveToolsByName(["read"]);
+		expect(rebuildCount).toBe(1);
+		expect(session.systemPrompt.join("\n")).toContain("设计体系");
+
+		// Repeated applyActiveTools with the same set must reuse the post-rebuild
+		// signature instead of rebuilding because the revision moved.
+		await session.setActiveToolsByName(["read"]);
+		expect(rebuildCount).toBe(1);
+
+		await session.setActiveToolsByName(["read"]);
+		expect(rebuildCount).toBe(1);
 	});
 
 	it("updates live active-tool predicates before rebuilding the prompt", async () => {

@@ -255,6 +255,12 @@ export interface ToolSession {
 	getHindsightSessionState?: () => HindsightSessionState | undefined;
 	/** Get Mnemopi runtime state for this agent session. */
 	getMnemopiSessionState?: () => MnemopiSessionState | undefined;
+	/**
+	 * Invalidate the session's cached memory developer instructions and rebuild
+	 * the base prompt. Called by tools that persist memory state (e.g. `learn`)
+	 * so the next turn carries the update instead of the frozen snapshot.
+	 */
+	refreshMemoryInstructions?: () => Promise<void>;
 	/** Agent identity used for IRC routing. Returns the registry id (e.g. "Main", "AuthLoader"). */
 	getAgentId?: () => string | null;
 	/** Look up a registered tool by name (used by the eval js backend's tool bridge). */

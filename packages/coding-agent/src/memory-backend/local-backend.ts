@@ -25,6 +25,9 @@ export const localBackend: MemoryBackend = {
 		return buildMemoryToolDeveloperInstructions(agentDir, settings, session);
 	},
 	async clear(agentDir, cwd, session) {
+		// Drop the session's cached snapshot first, then wipe disk state;
+		// clearMemoryData also drops the by-root baseline so the startup refresh
+		// cannot resurrect cleared lessons into the next session.
 		clearMemoryToolDeveloperInstructionsCache(session);
 		await clearMemoryData(agentDir, cwd);
 	},
@@ -32,7 +35,12 @@ export const localBackend: MemoryBackend = {
 		enqueueMemoryConsolidation(agentDir, cwd);
 	},
 	async save(context, input) {
-		return saveLearnedLesson(context.agentDir, context.cwd, input);
+		const result = await saveLearnedLesson(context.agentDir, context.cwd, input);
+		// The injected instructions read `learned.md`; drop this session's cached
+		// snapshot so the next prompt rebuild carries the new lesson instead of
+		// the frozen one.
+		clearMemoryToolDeveloperInstructionsCache(context.session);
+		return result;
 	},
 	async status() {
 		return {

@@ -19,11 +19,13 @@
  * quietly demotes `grep` or drops the "search the raw file first" constraints.
  */
 import { describe, expect, it } from "bun:test";
+import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { ESSENTIAL_BUILTIN_TOOL_NAMES } from "@musepi/pi-coding-agent/tools/essential-tools";
 import { getEvalToolDescription } from "@musepi/pi-coding-agent/tools/eval";
 import { GrepTool } from "@musepi/pi-coding-agent/tools/grep";
 import { isMountableUnderXdev } from "@musepi/pi-coding-agent/tools/xdev";
 import { prompt } from "@musepi/pi-utils";
+import { registerFileToolPrompts } from "../src/bundled-plugins/file-tools/prompts";
 import systemPromptTemplate from "../src/prompts/system/system-prompt.md" with { type: "text" };
 import bashDescription from "../src/prompts/tools/bash.md" with { type: "text" };
 import grepDescription from "../src/prompts/tools/grep.md" with { type: "text" };
@@ -91,25 +93,29 @@ describe("issue #22: bash.md keeps checked-in entry points in bash", () => {
 	});
 });
 
-describe("issue #22: the system prompt demands text retrieval before semantic query", () => {
-	const systemText = prompt.render(systemPromptTemplate, { tools: ALL_TOOLS, toolRefs: {} });
+describe("issue #22: the grep plugin demands text retrieval before semantic query", () => {
+	function grepSection(activeTools: readonly string[]): string {
+		const host = new PromptHost();
+		registerFileToolPrompts(host);
+		return host.assemble({ activeTools }).sections.find(section => section.name === "tool:grep")?.text ?? "";
+	}
 
 	it("declares the data-source retrieval rule when grep is available", () => {
+		const systemText = grepSection(ALL_TOOLS);
 		expect(systemText).toContain("# Data Sources");
 		expect(systemText).toContain("Text-retrieve BEFORE semantic query");
 	});
 
 	it("names the failure mode: an empty parse is not proof of absence", () => {
+		const systemText = grepSection(ALL_TOOLS);
 		expect(systemText).toMatch(/NOT evidence the field is missing/);
 		expect(systemText).toMatch(/WKT, alias, nested key/);
 		expect(systemText).toMatch(/a fact stated as plain text in the source is invisible to them/i);
 	});
 
-	it("drops the rule entirely when grep is unavailable", () => {
-		const withoutGrep = prompt.render(systemPromptTemplate, {
-			tools: ALL_TOOLS.filter(name => name !== "grep"),
-			toolRefs: {},
-		});
-		expect(withoutGrep).not.toContain("# Data Sources");
+	it("is absent from the core template so the plugin is the only text owner", () => {
+		const core = prompt.render(systemPromptTemplate, { tools: ALL_TOOLS, toolRefs: {} });
+		expect(core).not.toContain("# Data Sources");
+		expect(grepSection(ALL_TOOLS.filter(name => name !== "grep"))).toBe("");
 	});
 });

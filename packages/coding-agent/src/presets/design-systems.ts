@@ -3,20 +3,20 @@
  *
  * 能力缝声明（M2.4）：
  * - 名称+ns：design-systems（daemon 侧设计体系注册表；RPC 面经
- *   DesignSystemsService 的 `design.systems.list` 暴露；prompt 注入消费
- *   走 `applyDesignSystemSection` → PromptComposer）。
+ *   DesignSystemsService 的 `design.systems.list` 暴露；prompt 注入由
+ *   `bundled-plugins/design-guidance` 的 registerPrompt 函数文本消费）。
  * - 输入：内置预设表 `BUILTIN_DESIGN_SYSTEMS`（id 稳定，会话已存引用，
  *   不得改名）+ 扩展经 `pi.registerDesignSystem()` 注册的配置
  *   （kebab-case id；撞内置/撞已注册即抛）。
  * - 输出：`listDesignSystems()`（builtin + extension 合并视图，带 source
- *   徽章）、`getDesignSystem(id)` 单体查询、
- *   `applyDesignSystemSection(composer, metadata)` 把命中体系的
- *   promptSection 注入会话 composer（source=design-system，order 40 位于
- *   mode 预设区块之后；未命中/空 id 不注入不炸）。RPC 写通道
- *   `session.setDesignSystem`（daemon server.ts）经
- *   `AgentSession.setDesignSystemId` 热写会话共享 metadata 状态的
- *   `designSystemId` 键并立即重建 base prompt；历史（非 live）会话走
- *   读-合并-写持久化快照头（整体替换会丢创建面其它键），两侧均
+ *   徽章）、`getDesignSystem(id)` 单体查询、`readDesignSystemSelection`
+ *   从会话 metadata 读出当前选择。提示词简报的文本与渲染由
+ *   `bundled-plugins/design-guidance` 拥有；宿主只把选择状态交给 prompt
+ *   装配（source=design-system，order 40 位于 mode 预设区块之后；未命中/
+ *   空 id 不注入不炸）。RPC 写通道 `session.setDesignSystem`（daemon
+ *   server.ts）经 `AgentSession.setDesignSystemId` 热写会话共享 metadata
+ *   状态的 `designSystemId` 键并立即重建 base prompt；历史（非 live）会话
+ *   走读-合并-写持久化快照头（整体替换会丢创建面其它键），两侧均
  *   best-effort 镜像 `<cwd>/.musepi/project.json`。
  * - 生命周期：模块级 Map，进程内常驻；扩展注册在会话初始化时重放
  *   （pending → register，与 media provider 同机制），扩展
@@ -33,13 +33,17 @@
  *   检视入口：本文件 + `extensibility/extensions/types.ts`（DesignSystemConfig）。
  */
 
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../bundled-plugins/design-guidance/briefs";
 import type { DesignSystemConfig } from "../extensibility/extensions/types";
-import type { PromptComposer } from "../prompts/composer";
 
 /**
  * Built-in design systems (stable ids — persisted sessions reference them).
  * swatches/tokens fragments reuse the existing gui token ladder
  * (client-core tokens.css / docs/gui-design.md §5s); no new tokens.
+ *
+ * `promptSection.text` here is the `design.systems.list` metadata mirror of the
+ * briefs owned by `bundled-plugins/design-guidance`; prompt injection uses the
+ * plugin's function text, not this field.
  */
 export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 	{
@@ -58,7 +62,7 @@ export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 		promptSection: {
 			name: "design-system",
 			order: 40,
-			text: "设计体系「极简留白」(Neutral Minimal)：中性灰阶配色（近黑白灰，无彩色倾向），大面积留白，发丝线（1px 低对比）分隔而非卡片堆叠；圆角取小档（--radius-sm）；排版克制、字重对比弱；禁用阴影与渐变装饰，让内容层级靠间距与对比度建立。",
+			text: BUILTIN_DESIGN_SYSTEM_BRIEFS.minimal,
 		},
 	},
 	{
@@ -76,7 +80,7 @@ export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 		promptSection: {
 			name: "design-system",
 			order: 40,
-			text: "设计体系「玻璃拟态」(Glassmorphism)：四层玻璃配方——半透明底（--glass-bg/--glass-bg-strong）、内缘高光 rim（--glass-edge-hi 上缘/--glass-edge-lo 下缘）、对角泽面（--glass-sheen 仅浮层）、双层投影（--glass-shadow）；内容必须衬在玻璃之下（blur 需要背后的内容）；圆角大档（--radius-2xl）；动效走 --spring-liquid 回弹曲线；禁止实色卡片替代玻璃面。",
+			text: BUILTIN_DESIGN_SYSTEM_BRIEFS.glass,
 		},
 	},
 	{
@@ -96,7 +100,7 @@ export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 		promptSection: {
 			name: "design-system",
 			order: 40,
-			text: "设计体系「编辑杂志」(Editorial)：衬线字体贯穿标题与正文，字阶对比强烈（标题大、引文更大）；版面用分栏、段落首字、分割线组织，像杂志页面而非应用界面；颜色以纸白底 + 近黑文字 + 单一点缀色；分隔用细线（--border 低透明），不用卡片阴影；圆角极小或为零。",
+			text: BUILTIN_DESIGN_SYSTEM_BRIEFS.editorial,
 		},
 	},
 	{
@@ -113,7 +117,7 @@ export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 		promptSection: {
 			name: "design-system",
 			order: 40,
-			text: "设计体系「新粗野」(Neubrutalism)：平涂高饱和色块（黄/红/青/紫），2-3px 纯黑硬边框，硬偏移投影（无模糊、无渐变），圆角为零；按钮与卡片是「贴上去的纸片」，hover 用位移而非变色；字体粗黑、无衬线；整体 raw、直接、反精致。",
+			text: BUILTIN_DESIGN_SYSTEM_BRIEFS.neubrutalism,
 		},
 	},
 	{
@@ -131,7 +135,7 @@ export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 		promptSection: {
 			name: "design-system",
 			order: 40,
-			text: "设计体系「暗黑霓虹」(Dark Neon)：近黑深底（--bg/--bg-inset 暗色阶梯），单一霓虹 accent（青/品红/黄绿系）承担全部强调；层次靠发光与暗部对比——accent 发光描边、暗色卡片嵌套，不用浅色投影；文字高对比近白；暗黑模式下玻璃材质退化为 rim+泽面（blur 归零）。",
+			text: BUILTIN_DESIGN_SYSTEM_BRIEFS.darkneon,
 		},
 	},
 ];
@@ -194,29 +198,12 @@ export function listDesignSystems(): ListedDesignSystem[] {
 }
 
 /**
- * Read `designSystemId` from session project metadata and resolve its prompt
- * section. Unknown/absent ids yield undefined (skip silently — never throws).
+ * Read the current design-system selection from session project metadata.
+ *
+ * The host owns this state; the design-guidance plugin owns the brief text and
+ * rendering. Absent/empty values read as undefined.
  */
-export function resolveDesignSystemPromptSection(
-	metadata: Record<string, unknown> | null | undefined,
-): { name: string; order: number; text: string } | undefined {
+export function readDesignSystemSelection(metadata: Record<string, unknown> | null | undefined): string | undefined {
 	const id = metadata?.designSystemId;
-	if (typeof id !== "string" || !id) return undefined;
-	return getDesignSystem(id)?.promptSection;
-}
-
-/**
- * Session-guidance injection seam (docs/review/0.5.0-m3-mode-page-redesign.md
- * §3.2): sync the `design-system` composer section from project metadata.
- * Idempotent across rebuilds (removeBySource → re-add); leaves the composer
- * untouched when no valid system is selected.
- */
-export function applyDesignSystemSection(
-	composer: PromptComposer,
-	metadata: Record<string, unknown> | null | undefined,
-): void {
-	composer.removeBySource("design-system");
-	const section = resolveDesignSystemPromptSection(metadata);
-	if (!section) return;
-	composer.add({ ...section, source: "design-system" });
+	return typeof id === "string" && id.length > 0 ? id : undefined;
 }

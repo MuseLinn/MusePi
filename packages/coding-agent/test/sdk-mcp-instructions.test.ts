@@ -137,6 +137,14 @@ describe("createAgentSession MCP server instructions (deferred UI)", () => {
 			// normalized name actually mounted in the live xd:// registry.
 			expect(prompt).toContain("MCP Server Instructions");
 			expect(prompt).toContain('- "do\\u0060thing" → `xd://mcp__instr_do_thing`');
+			// Single owner: the host:runtime-context plugin section renders every
+			// runtime block exactly once — nothing is duplicated into the base
+			// append prompt by the session rebuild.
+			const countOf = (needle: string): number => prompt.split(needle).length - 1;
+			expect(countOf(SERVER_INSTRUCTIONS)).toBe(1);
+			expect(countOf("## MCP Server Instructions")).toBe(1);
+			expect(countOf("## MCP Tool Routes")).toBe(1);
+			expect(countOf('- "do\\u0060thing" → `xd://mcp__instr_do_thing`')).toBe(1);
 		} finally {
 			await session.dispose();
 		}

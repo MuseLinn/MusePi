@@ -83,6 +83,8 @@ import type { MemoryRuntimeContext } from "../../memory-backend";
 import type { CustomEditor } from "../../modes/components/custom-editor";
 import type { Theme } from "../../modes/theme/theme";
 import type { PresetPluginRow } from "../../presets/resolve";
+import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/host";
+import type { PromptText } from "../../prompts/registry";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
@@ -145,6 +147,7 @@ import type { SlashCommandInfo } from "../slash-commands";
 import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
 import type { UrlSchemeDefinition } from "./url-schemes";
 import type { PluginWebRouteRequest, ScopedWebRoute } from "./web-route-scope";
+import type { ExtensionWidget } from "./widget-types";
 
 export type { OverlayHandle, OverlayOptions } from "@musepi/pi-tui";
 export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
@@ -1590,6 +1593,16 @@ export interface ExtensionAPI {
 	 *  user sections. Dropped and re-added on extension reload (modes v2 §5.5). */
 	registerPrompt(section: ExtensionPromptSection): void;
 
+	/**
+	 * Session prompt host, when the running session wires one.
+	 *
+	 * The host is the single owner for section, context, variable and tool
+	 * providers; register on it to attach contributions to a scope, lane and
+	 * owner. Absent in hosts that still assemble prompts through the legacy
+	 * composer only, so guard before use.
+	 */
+	readonly promptHost?: PromptHostSurface;
+
 	/** Declare a preset (mode) contributed by this extension (modes v2 §5.5).
 	 *  The mode appears in modes.list and can be selected like a file-based
 	 *  preset; the extension's own `registerPrompt` sections carry
@@ -2275,6 +2288,15 @@ export interface ExtensionRuntimeState {
 	registerProvider(name: string, config: ProviderConfig, sourceId: string): void;
 	/** Remove a queued or initialized provider registration. */
 	unregisterProvider(name: string, sourceId: string): void;
+	/**
+	 * Session prompt host, set by a session before extension factories run.
+	 * Factories reach it through `pi.promptHost`; a session also replays and
+	 * clears per-owner ledgers on enable/disable/reload. Absent when no
+	 * session is wiring one (host-level loads, CLI preload).
+	 */
+	promptHost?: PromptHostSurface;
+	/** Per-owner registration ledgers for {@link ExtensionRuntime.promptHost} replay. */
+	readonly promptHostLedgers: Map<string, ScopedPromptHostLedger>;
 }
 
 /** Shared state created by loader (media registry seam). */
@@ -2384,11 +2406,13 @@ export interface ExtensionRuntime
 
 /** One prompt section contributed by an extension (registerPrompt).
  *  Composed into
- *  the session prompt alongside mode + user sections by source. */
+ *  the session prompt alongside mode + user sections by source.
+ *  `text` may be a function, rendered on every prompt rebuild; returning
+ *  undefined/null omits the section for that build. */
 export interface ExtensionPromptSection {
 	name: string;
 	order: number;
-	text: string;
+	text: PromptText;
 }
 
 /** A preset declared by an extension (registerMode — v2 candidate §5.5).
@@ -2675,42 +2699,7 @@ export interface ExtensionToolView {
 	label?: string;
 }
 
-/**
- * One widget type contributed by an extension (registerWidget).
- *
- * The metadata is daemon-side on purpose: `widget` validates payloads against
- * it and `board` validates card types even in a session-less RPC, before any
- * renderer module has been compiled. `moduleUrl` names the renderer the GUI
- * compiles and registers; the module default-exports a React component with
- * the same props as a built-in `WidgetDef.Component`.
- */
-export interface ExtensionWidget {
-	/** Registry key (`widget.type` / `board` card type). */
-	type: string;
-	/** Display name shown in the picker and card header (plugin-owned, so it
-	 *  is plain text rather than a host i18n key). */
-	label: string;
-	/** Optional one-line description for the picker. */
-	description?: string;
-	fields: ExtensionWidgetField[];
-	/** Fresh default data; called per registration so no shared object leaks. */
-	defaults(): Record<string, unknown>;
-	/** Card shell treatment; defaults to "default". */
-	tone?: "default" | "dark" | "light" | "blue";
-	/** Extension-relative renderer module (e.g. "./ui/metric.tsx"). */
-	moduleUrl: string;
-}
-
-/** Field declaration shared by the board editor and the agent schema. */
-export interface ExtensionWidgetField {
-	key: string;
-	type: "number" | "string" | "boolean" | "select";
-	label?: string;
-	options?: readonly string[];
-	min?: number;
-	max?: number;
-	step?: number;
-}
+export type { ExtensionWidget, ExtensionWidgetField } from "./widget-types";
 
 /** Result of loading extensions. */
 export interface LoadExtensionsResult {

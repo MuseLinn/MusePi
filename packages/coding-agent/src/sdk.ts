@@ -75,8 +75,9 @@ import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-tas
 import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
-import { ensureBundledPluginsLoaded } from "./bundled-plugins/loader";
+import { discoverBundledSessionPromptPluginPaths, ensureBundledPluginsLoaded } from "./bundled-plugins/loader";
 import { initializeWithSettings } from "./discovery";
+import { discoverBundledPresetPluginPackages } from "./discovery/builtin";
 import { setInvocationConfiguredExtensions, withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeVmContextsByOwner } from "./eval/js/context-manager";
@@ -102,12 +103,16 @@ import {
 	ExtensionToolWrapper,
 	type ExtensionUIContext,
 	emitSessionStartEvent,
+	extensionHostOwner,
 	type LoadExtensionsResult,
 	loadExtensionFromFactory,
 	type RegisteredTool,
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
+// Class import off the barrel: the extensions index deliberately omits it, so
+// the preload path takes it from the owning module like `session-loader` does.
+import { ExtensionRuntime } from "./extensibility/extensions/loader";
 import { CordisPresetRuntime, type MountedPresetPlugin } from "./extensibility/plugins/preset-runtime";
 import { collectProfilePresetDefinitions } from "./extensibility/plugins/profile/profile-presets";
 import { defaultSessionConfigReader, loadSessionPlugins } from "./extensibility/plugins/runtime/session-loader";
@@ -133,12 +138,13 @@ import {
 	parseMCPToolName,
 } from "./mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "./mcp/startup-events";
+import { clearMemoryToolDeveloperInstructionsCache } from "./memories";
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
 import { applyPendingMagicKeywords } from "./modes/magic-keyword-registry";
-import { applyAssetPolicySection } from "./presets/asset-policy";
-import { applyDesignSystemSection, registerExtensionDesignSystem } from "./presets/design-systems";
+import { readAssetPolicy } from "./presets/asset-policy";
+import { readDesignSystemSelection, registerExtensionDesignSystem } from "./presets/design-systems";
 import {
 	createModeResolver,
 	type ExtraModeLookup,
@@ -146,9 +152,15 @@ import {
 	type ModeDefinition,
 	type ResolvedMode,
 } from "./presets/resolve";
-import { PromptComposer } from "./prompts/composer";
+import { mergeSectionsIntoBase, PromptComposer } from "./prompts/composer";
+import {
+	type PromptContextOptions,
+	PromptHost,
+	removeScopedPromptHostLedger,
+	replayPromptHostLedger,
+} from "./prompts/host";
+import { type ProjectContextHolder, registerProjectContextSections } from "./prompts/project-context";
 import extensionsInventoryTemplate from "./prompts/system/extensions-inventory.md" with { type: "text" };
-import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
@@ -195,6 +207,8 @@ import {
 	projectSystemPromptToolMetadata,
 } from "./system-prompt";
 import { AgentOutputManager } from "./task/output-manager";
+import { normalizeConcurrencyLimit } from "./task/parallel";
+import { usesCodexTaskPrompt } from "./task/prompt-policy";
 import { wrapStreamFnWithProviderConcurrency } from "./task/provider-concurrency";
 import { isScoutSpawnable } from "./task/spawn-policy";
 import type { StructuredSubagentSchemaMode } from "./task/types";
@@ -680,6 +694,8 @@ export interface CreateAgentSessionResult {
 	session: AgentSession;
 	/** Extensions result (loaded extensions + runtime) */
 	extensionsResult: LoadExtensionsResult;
+	/** The session's prompt host — single owner for section/context/variable/tool contributions. */
+	promptHost?: PromptHost;
 	/** Update tool UI context (interactive mode) */
 	setToolUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
 	/** MCP manager for server lifecycle management (undefined if MCP disabled) */
@@ -794,6 +810,28 @@ export async function discoverSessionExtensionPaths(
 	return discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds, {
 		ambient: !options.disableExtensionDiscovery,
 	});
+}
+
+/**
+ * Merge the six readonly core prompt package paths ahead of caller-provided or
+ * discovered paths, deduped by resolved path.
+ *
+ * Core paths come first so their prompt sections compose before user
+ * extensions'; a core path the caller or discovery already resolved is not
+ * mounted twice. See `discoverBundledSessionPromptPluginPaths` for why these
+ * six load in every session.
+ */
+async function withCoreSessionPromptPaths(otherPaths: readonly string[]): Promise<string[]> {
+	const corePaths = await discoverBundledSessionPromptPluginPaths();
+	const seen = new Set(corePaths.map(corePath => path.resolve(corePath)));
+	const merged = [...corePaths];
+	for (const otherPath of otherPaths) {
+		const resolved = path.resolve(otherPath);
+		if (seen.has(resolved)) continue;
+		seen.add(resolved);
+		merged.push(otherPath);
+	}
+	return merged;
 }
 
 /**
@@ -1538,33 +1576,83 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	})();
 	let cordisPresetRuntime: CordisPresetRuntime | undefined;
 	let cordisPresetRecords: MountedPresetPlugin[] = [];
+	// Every session owns one PromptHost (core prompt pluginization): extension
+	// factories reach it through `pi.promptHost`, assembly merges its sections
+	// per baseSlots in `rebuildSystemPrompt`, and lifecycle switches release or
+	// replay contributions per owner. Main agents and subagents both get one.
+	const promptHost = new PromptHost({ owner: "session" });
+	// Session extension runtime, captured when the load paths below run so the
+	// owner-ledger helpers can reach the per-owner replay records.
+	let sessionExtensionRuntime: LoadExtensionsResult["runtime"] | undefined;
+	/** Release one extension owner's prompt-host contributions (disable/teardown direction). */
+	const removeExtensionHostSections = (extensionPath: string): void => {
+		const owner = extensionHostOwner(extensionPath);
+		const ledger = sessionExtensionRuntime?.promptHostLedgers.get(owner);
+		if (ledger) removeScopedPromptHostLedger(promptHost, owner, ledger);
+		else promptHost.removeByOwner(owner);
+	};
+	/** Forget one extension owner's recorded registrations (records are going away). */
+	const clearExtensionHostLedger = (extensionPath: string): void => {
+		const ledger = sessionExtensionRuntime?.promptHostLedgers.get(extensionHostOwner(extensionPath));
+		if (ledger) ledger.entries.length = 0;
+	};
+	/** Replay one extension owner's recorded registrations (re-enable direction). */
+	const replayExtensionHostSections = (extensionPath: string): void => {
+		const owner = extensionHostOwner(extensionPath);
+		const ledger = sessionExtensionRuntime?.promptHostLedgers.get(owner);
+		if (ledger) replayPromptHostLedger(promptHost, owner, ledger);
+	};
+	// A preset that declares a prompt composition but mounts none of it is a
+	// failed mount, not an empty preset: the prompt builder must fail closed
+	// instead of falling back to the unrestricted default prompt.
+	let cordisPresetMountErrors: Array<{ path: string; error: string }> = [];
 	const mountCordisPreset = async (resolved: ResolvedMode, registrationRuntime: LoadExtensionsResult["runtime"]) => {
 		const { getEnabledPlugins, resolvePluginExtensionPaths } = await import("./extensibility/plugins/runtime/loader");
-		const installed = await getEnabledPlugins(cwd, { home: options.profileHome ?? os.homedir() });
+		const [installed, bundled] = await Promise.all([
+			getEnabledPlugins(cwd, { home: options.profileHome ?? os.homedir() }),
+			discoverBundledPresetPluginPackages(),
+		]);
+		// Package-name resolution is the preset's only path contract. Installed
+		// packages win a name collision (a user's install shadows the shipped
+		// copy); bundled packages supply the first-party rows (including the
+		// preset-only persona packages) without any hardcoded entry path here.
+		const entries = new Map<string, string[]>();
+		for (const plugin of installed) entries.set(plugin.name, resolvePluginExtensionPaths(plugin));
+		for (const [name, paths] of bundled) {
+			if (!entries.has(name)) entries.set(name, [...paths]);
+		}
 		const runtime = new CordisPresetRuntime({
 			cwd,
 			eventBus,
 			runtime: registrationRuntime,
 			readConfig: await defaultSessionConfigReader(),
-			entryResolver: {
-				resolveEntries: async () =>
-					new Map(installed.map(plugin => [plugin.name, resolvePluginExtensionPaths(plugin)])),
-			},
+			entryResolver: { resolveEntries: async () => entries },
 		});
 		const result = await runtime.mount(resolved.plugins);
 		cordisPresetRuntime = runtime;
 		cordisPresetRecords = result.records;
+		cordisPresetMountErrors = result.errors;
 		for (const error of result.errors) logger.error("Failed to mount Cordis preset plugin", error);
 		return result;
 	};
 	const unmountCordisPreset = async (): Promise<void> => {
 		for (const record of cordisPresetRecords) {
+			// Detach the synthetic record from the runner as well as the session
+			// registry. Leaving it behind keeps its entry mtime visible to the
+			// daemon watcher, so a later reload resurrects a preset the user
+			// already switched away from (and re-injects its persona).
+			session.extensionRunner?.removeExtension(record.extension.resolvedPath);
 			await session.removeExtensionTools([...record.extension.tools.keys()]);
 			modeRuntime.composer.removeBySource(`ext:${extensionIdOf(record.extension.path)}`);
+			// Prompt host 贡献随 preset 一起释放;ledger 一并清空,防止后续
+			// replay 把用户已切走的 persona 区块复活(与 runner mtime 同理)。
+			removeExtensionHostSections(record.extension.path);
+			clearExtensionHostLedger(record.extension.path);
 		}
 		await cordisPresetRuntime?.dispose();
 		cordisPresetRuntime = undefined;
 		cordisPresetRecords = [];
+		cordisPresetMountErrors = [];
 	};
 	// M3 §3:projectMetadata 挂可变 ref —— session.setDesignSystem 热写
 	// designSystemId 键,rebuildSystemPrompt 闭包每次重建都重读
@@ -2011,6 +2099,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				return session?.skills ?? skills;
 			},
 			refreshSkills: () => session.refreshSkills(),
+			// LearnTool calls this after a lesson save: drop the frozen per-session
+			// memory-instruction snapshot, then rebuild the base prompt so the next
+			// turn carries the new lesson. `session` is unassigned until the
+			// AgentSession is constructed below, so the closure stays nullable.
+			refreshMemoryInstructions: async () => {
+				clearMemoryToolDeveloperInstructionsCache(session);
+				await session?.refreshBaseSystemPrompt();
+			},
 			rules: allRules,
 			eventBus,
 			outputSchema: options.outputSchema,
@@ -2101,7 +2197,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				}
 			},
 			getArtifactManager: () => sessionManager.getArtifactManager(),
-			settings,
+			// Read through to the live binding: the initial preset resolve swaps
+			// `settings` for a per-session clone AFTER the tool session object is
+			// built, and a captured value would keep every tool gate (including
+			// `tools.disabled`) on the preset-less original.
+			get settings() {
+				return settings;
+			},
 			authStorage,
 			modelRegistry,
 			getTelemetry: () => agent?.telemetry,
@@ -2308,29 +2410,63 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// re-bind under their own `CustomToolAPI` while skipping the FS scan.
 		toolSession.customToolPaths = customToolPaths;
 
-		// Load extensions. Three paths:
+		// Load extensions. Four paths:
 		//   1. `preloadedExtensions` (CLI): caller already loaded — reuse the
-		//      Extension instances. Shallow-clone `extensions` so the inline
-		//      push below cannot mutate the caller's array. `runtime` is shared
-		//      so flag values set pre-creation flow into the live session.
+		//      Extension instances. `runtime` is shared so flag values set
+		//      pre-creation flow into the live session.
 		//   2. `preloadedExtensionPaths` (subagent): caller resolved paths;
-		//      skip the FS scan but always re-call `loadExtensions` here so
+		//      skip the FS scan but always re-call `loadSessionPlugins` here so
 		//      each `Extension` binds to THIS session's `ExtensionAPI`
 		//      (cwd, eventBus, runtime).
 		//   3. No preload: run the full session discovery.
+		//   4. `restrictToolNames` (subagents): no caller extensions at all.
+		// Every branch mounts the six readonly core prompt packages on THIS
+		// session (see `discoverBundledSessionPromptPluginPaths`): they only
+		// contribute through `pi.promptHost`, so a preload pass that ran
+		// without a session host produced no live sections, and discovery
+		// never runs in branches 2 and 4. Core paths are deduped against
+		// caller/discovered paths so a core package already resolved elsewhere
+		// mounts exactly once. Nothing outside the six is loaded globally into
+		// every session — ambient plugins stay discovery-scoped.
 		// `disableExtensionDiscovery` is honored implicitly: a caller that set
 		// the flag and pre-resolved the result already reflects that choice.
+		// The session PromptHost (declared above) is created before extension
+		// loading so factories reach it through `pi.promptHost`; every load
+		// path below carries it on the session runtime.
 		let extensionPaths: string[];
 		let extensionsResult: LoadExtensionsResult;
 		if (restrictToolNames) {
 			// Allocate a session runtime without evaluating caller-provided extension
-			// instances, paths, or factories.
-			extensionPaths = [];
-			extensionsResult = await loadSessionPlugins([], cwd, eventBus);
+			// instances, paths, or factories. The core prompt packages still mount:
+			// their prompt-host sections are part of a restricted session's contract.
+			extensionPaths = await discoverBundledSessionPromptPluginPaths();
+			extensionsResult = await loadSessionPlugins(extensionPaths, cwd, eventBus, { promptHost });
 		} else if (options.preloadedExtensions) {
+			const preloaded = options.preloadedExtensions;
+			// A stub result (tests) may carry a minimal runtime; a real one is
+			// reused so the remount lands in the session's single runtime.
+			const runtime = preloaded.runtime ?? new ExtensionRuntime();
+			// Remount the core prompt packages through the SHARED runtime: the
+			// preload pass ran without this session's prompt host, so its core
+			// records hold no live promptHost contributions. Same-path preload
+			// records are replaced by the fresh core Extension records; every
+			// other preload record is kept as-is and NOT re-executed.
+			const coreResult = await loadSessionPlugins(await discoverBundledSessionPromptPluginPaths(), cwd, eventBus, {
+				promptHost,
+				runtime,
+			});
+			for (const { path, error } of coreResult.errors) {
+				logger.error("Failed to load core prompt package", { path, error });
+			}
+			const corePathSet = new Set(coreResult.extensions.map(ext => path.resolve(ext.resolvedPath)));
 			extensionsResult = {
-				...options.preloadedExtensions,
-				extensions: [...options.preloadedExtensions.extensions],
+				...preloaded,
+				extensions: [
+					...coreResult.extensions,
+					...preloaded.extensions.filter(ext => !corePathSet.has(path.resolve(ext.resolvedPath))),
+				],
+				errors: [...preloaded.errors, ...coreResult.errors],
+				runtime,
 			};
 			// Capture paths for downstream forwarding; filter inline-factory
 			// entries (`<inline-N>`) — those are per-session, not source paths.
@@ -2338,20 +2474,26 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				.map(ext => ext.resolvedPath)
 				.filter(p => !p.startsWith("<inline"));
 		} else if (options.preloadedExtensionPaths) {
-			extensionPaths = options.preloadedExtensionPaths;
-			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus);
+			extensionPaths = await withCoreSessionPromptPaths(options.preloadedExtensionPaths);
+			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus, {
+				promptHost,
+			});
 			for (const { path, error } of extensionsResult.errors) {
 				logger.error("Failed to load extension", { path, error });
 			}
 		} else {
-			extensionPaths = await logger.time("discoverSessionExtensionPaths", () =>
+			const discovered = await logger.time("discoverSessionExtensionPaths", () =>
 				discoverSessionExtensionPaths(options, cwd, settings),
 			);
-			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus);
+			extensionPaths = await withCoreSessionPromptPaths(discovered);
+			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus, {
+				promptHost,
+			});
 			for (const { path, error } of extensionsResult.errors) {
 				logger.error("Failed to load extension", { path, error });
 			}
 		}
+		sessionExtensionRuntime = extensionsResult.runtime;
 		// Forward the source-path list (NOT the loaded instances) so subagents
 		// rebuild their own session-scoped extensions.
 		toolSession.extensionPaths = extensionPaths;
@@ -2382,6 +2524,18 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				}
 				settings = sessionSettings;
 				appliedModeSettingsKeys.push(...Object.keys(modeRuntime.resolved.settings));
+			}
+			// `createTools` ran before the preset resolved settings were known, so
+			// a preset denylist (chat's keep-set) has to prune the slate it already
+			// built. Without this the first turn after choosing chat still sees
+			// read/edit/write; the runtime switch path rebuilds the slate instead.
+			const initialDenylist = settings.get("tools.disabled");
+			if (Array.isArray(initialDenylist)) {
+				for (const name of initialDenylist) {
+					toolRegistry.delete(name);
+					toolSession.xdev?.builtInNames.delete(name);
+					toolSession.xdev?.mountedNames.delete(name);
+				}
 			}
 		}
 
@@ -3272,6 +3426,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const eagerTasksAlways = settings.get("task.eager") === "always";
 		const intentField = $flag("PI_INTENT_TRACING", settings.get("tools.intentTracing")) ? INTENT_FIELD : undefined;
 		const includeWorkspaceTree = settings.get("includeWorkspaceTree") ?? false;
+		let projectContextHolder: ProjectContextHolder | undefined;
+		// Volatile prompt-host contexts collect with the render inputs of the last
+		// assembly (same activeTools and toolRefs-bearing context object), so
+		// context text functions see the identical view as section text functions.
+		let latestPromptContextOptions: PromptContextOptions | undefined;
 		const rebuildSystemPrompt = async (
 			toolNames: string[],
 			tools: Map<string, AgentTool>,
@@ -3295,12 +3454,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				? await memoryBackend.buildDeveloperInstructions(agentDir, settings, session)
 				: undefined;
 
-			// Build combined append prompt: memory instructions + auto-learn guidance
-			// + mounted MCP route guidance + optional MCP server instructions. For UI
-			// sessions MCP discovery is deferred, so the initial registry and
-			// `getServerInstructions()` are empty until the background connect
-			// completes; the rebuild that `refreshMCPTools` triggers post-discovery
-			// then picks up the mounted routes and any connected-server instructions.
+			// Runtime appendices no longer compose the base append prompt: the
+			// `host:runtime-context` section of the host-integrations plugin is
+			// their single renderer (memory + auto-learn + MCP routes + MCP server
+			// instructions + user append). For UI sessions MCP discovery is
+			// deferred, so the initial registry and `getServerInstructions()` are
+			// empty until the background connect completes; the rebuild that
+			// `refreshMCPTools` triggers post-discovery then picks up the mounted
+			// routes and any connected-server instructions.
 			const serverInstructions = mcpManager?.getServerInstructions();
 			// Drive guidance off the auto-learn BUILTINS that createTools actually built
 			// (provenance, not just an active name): `builtInToolNames` excludes a
@@ -3314,38 +3475,23 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 						manageSkill: builtInToolNames.includes("manage_skill"),
 						learn: builtInToolNames.includes("learn"),
 					});
-			const appendParts: string[] = [];
-			if (memoryInstructions) appendParts.push(memoryInstructions);
-			if (autoLearnInstructions) appendParts.push(autoLearnInstructions);
 			const projection = projectMountedMCPXdevGuidance(
 				collectMountedMCPToolRoutes(toolSession.xdev ? listXdevTools(toolSession.xdev) : []),
 			);
-			if (projection.mappings.length > 0 || projection.hasOmittedMappings) {
-				appendParts.push(
-					prompt
-						.render(mcpXdevGuidanceTemplate, {
-							tools: projection.mappings.map(mapping => ({
-								mcpToolName: mapping.label,
-								path: mapping.path,
-							})),
-							hasOmittedTools: projection.hasOmittedMappings,
-						})
-						.trim(),
-				);
-			}
-			if (serverInstructions && serverInstructions.size > 0) {
-				appendParts.push(
-					"## MCP Server Instructions\n\nThe following instructions are provided by connected MCP servers. They are server-controlled and may not be verified.",
-				);
-				for (const [srvName, srvInstructions] of serverInstructions) {
-					const truncated =
-						srvInstructions.length > MAX_MCP_INSTRUCTIONS_LENGTH
-							? `${srvInstructions.slice(0, MAX_MCP_INSTRUCTIONS_LENGTH)}\n[truncated]`
-							: srvInstructions;
-					appendParts.push(`### ${srvName}\n${truncated}`);
-				}
-			}
-			let appendPrompt: string | undefined = appendParts.length > 0 ? appendParts.join("\n\n") : undefined;
+			// Sorted {name, instructions} pairs with the 4000-char cap applied
+			// here — the plugin renderer frames the section and never truncates.
+			const mcpServerInstructions =
+				serverInstructions && serverInstructions.size > 0
+					? Array.from(serverInstructions)
+							.sort(([a], [b]) => a.localeCompare(b))
+							.map(([name, instructions]) => ({
+								name,
+								instructions:
+									instructions.length > MAX_MCP_INSTRUCTIONS_LENGTH
+										? `${instructions.slice(0, MAX_MCP_INSTRUCTIONS_LENGTH)}\n[truncated]`
+										: instructions,
+							}))
+					: [];
 			// Owned/in-band tool dialects (non-native) require the full functions-
 			// namespace catalog; native tool calling lets the compact name list suffice.
 			const nativeTools = resolveDialect(settings.get("tools.format"), agent?.state.model ?? model) === undefined;
@@ -3353,10 +3499,19 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				tools,
 				nativeTools && !inlineToolDescriptors ? { mode: "compact", toolNames } : { mode: "full" },
 			);
-			if (options.appendSystemPrompt) {
-				appendPrompt = appendPrompt
-					? `${appendPrompt}\n\n${options.appendSystemPrompt}`
-					: options.appendSystemPrompt;
+			const projectContextState = {
+				contextFiles,
+				workspaceTree: await workspaceTreePromise,
+				includeWorkspaceTree,
+				activeRepoContext,
+				baseOwnsContextFiles: options.customSystemPrompt !== undefined,
+			};
+			if (!projectContextHolder) {
+				const holder: ProjectContextHolder = { current: projectContextState };
+				projectContextHolder = holder;
+				registerProjectContextSections(promptHost, holder);
+			} else {
+				projectContextHolder.current = projectContextState;
 			}
 			const defaultPrompt = await buildSystemPromptInternal({
 				cwd: promptCwd,
@@ -3373,7 +3528,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				toolNames,
 				rules: rulebookRules,
 				alwaysApplyRules,
-				resolvedAppendSystemPrompt: appendPrompt,
+				resolvedAppendSystemPrompt: options.appendSystemPrompt,
 				skillsSettings: settings.getGroup("skills"),
 				inlineToolDescriptors,
 				nativeTools,
@@ -3398,39 +3553,150 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				personality: agentKind === "sub" ? "none" : settings.get("personality"),
 				renderMermaid: settings.get("tui.renderMermaid"),
 				activeRepoContext,
+				projectContextOwnedByHost: true,
 			});
 
+			// Prompt host 装配(核心提示词插件化):活动工具集与 wire 名映射
+			// (toolRefs)传进装配上下文,host 区块按 baseSlots 锚定合并进 base。
+			// default / preset composer / custom systemPrompt(子代理路径)三分支
+			// 都经同一合并 —— 子代理不丢工具段;空 host 原样返回(零行为变化)。
+			const activeXdevNames = toolSession.xdev ? xdevEntries(toolSession.xdev).map(mounted => mounted.name) : [];
+			const activeTools = [...new Set([...toolNames, ...activeXdevNames])];
+			const toolRefs: Record<string, string> = Object.fromEntries([
+				...toolNames.map(name => [name, tools.get(name)?.customWireName ?? name] as const),
+				...activeXdevNames.map(name => [name, name] as const),
+			]);
+			const promptContextOptions: PromptContextOptions = {
+				context: {
+					toolRefs,
+					xdevTools: toolSession.xdev ? xdevEntries(toolSession.xdev) : [],
+					xdevDocs: toolSession.xdev
+						? xdevDocsAll(
+								toolSession.xdev,
+								settings.get("tools.xdevDocs"),
+								settings.get("tools.xdevInlineDevices"),
+							)
+						: "",
+					autoQaEnabled: !restrictToolNames && isAutoQaEnabled(settings),
+					eagerTasks,
+					eagerTasksAlways,
+					useCodexTaskPrompt: usesCodexTaskPrompt(getActiveModelString()),
+					taskBatch: settings.get("task.batch"),
+					scoutAvailable: isScoutSpawnable(
+						settings.get("task.disabledAgents") as string[] | undefined,
+						options.spawns ?? "*",
+					),
+					taskIrcEnabled: !restrictToolNames && isIrcEnabled(settings, options.taskDepth ?? 0),
+					MAX_CONCURRENCY: normalizeConcurrencyLimit(settings.get("task.maxConcurrency")),
+					// Runtime appendices: the host-integrations plugin's
+					// `host:runtime-context` section is the only renderer for all of
+					// these. With a custom system prompt the user append already
+					// renders inside the custom template itself, so the host copy is
+					// omitted to keep the text single-owned.
+					memoryInstructions,
+					autoLearnInstructions,
+					mcpXdevGuidance: projection,
+					mcpServerInstructions,
+					...(options.customSystemPrompt === undefined ? { appendSystemPrompt: options.appendSystemPrompt } : {}),
+				},
+				activeTools,
+			};
+			latestPromptContextOptions = promptContextOptions;
+			const hostAssembly = promptHost.assemble(promptContextOptions);
+			const hostComplete = hostAssembly.complete;
+			// complete 区块只接管 default 分支(整 prompt 替换);custom prompt 是
+			// 调用方显式覆盖,complete 在该分支不渲染,普通区块照常合并。
+			const hostSections = hostComplete
+				? hostAssembly.sections.filter(section => section !== hostComplete)
+				: hostAssembly.sections;
+			const mergeHostSections = (result: BuildSystemPromptResult): BuildSystemPromptResult =>
+				hostSections.length === 0
+					? result
+					: {
+							...result,
+							systemPrompt: mergeSectionsIntoBase(result.systemPrompt, hostSections, result.systemPromptSlots),
+						};
+
 			if (options.systemPrompt === undefined) {
-				// M3 §3: design system brief rides the same composer channel as
-				// mode preset sections (re-resolved on every rebuild, so an
-				// extension-registered system picked up by a reload takes effect
-				// on the next prompt rebuild; unknown/absent id → no section).
-				applyDesignSystemSection(modeRuntime.composer, projectMetadataState.current);
-				// M3.7c §4: asset policy section right behind the design-system
-				// brief (order 41 vs 40) — ai-image = generate_image /
-				// agnes_video_gen toolchain at asset references, placeholder =
-				// color-block placeholders, no media generation. Re-resolved on
-				// every rebuild; missing/unknown value → no section.
-				applyAssetPolicySection(modeRuntime.composer, projectMetadataState.current);
+				if (hostComplete) {
+					const promptSelection = {
+						designSystemId: readDesignSystemSelection(projectMetadataState.current),
+						assetPolicy: readAssetPolicy(projectMetadataState.current),
+					};
+					const composerComplete = modeRuntime.composer.registry.assemble(promptSelection).complete;
+					if (modeRuntime.resolved?.promptComplete || composerComplete) {
+						const otherOwner = modeRuntime.resolved?.promptComplete
+							? `preset "${modeRuntime.resolved.id}"`
+							: `composer section "${composerComplete?.name}"`;
+						throw new Error(
+							`complete prompt conflict between host section "${hostComplete.name}" and ${otherOwner}`,
+						);
+					}
+					return { ...defaultPrompt, systemPrompt: [hostComplete.text] };
+				}
+				const hostMerged = mergeHostSections(defaultPrompt);
+				// The design-guidance bundled plugin owns the design/asset brief
+				// text and rendering. The host supplies only the current selection;
+				// the plugin's registerPrompt function text resolves it on every
+				// rebuild (single section per name — no accumulation).
+				const promptSelection = {
+					designSystemId: readDesignSystemSelection(projectMetadataState.current),
+					assetPolicy: readAssetPolicy(projectMetadataState.current),
+				};
 				// Modes v1(§5.7):composer 挂点 —— 注入区块按 order 插槽进 base;
-				// promptComplete 时只输出预设 sections(DSH complete:true,忽略内置区块)。
-				if (modeRuntime.composer.size > 0) {
-					if (modeRuntime.resolved?.promptComplete) {
+				// promptComplete 时只输出预设 sections,忽略内置区块。
+				const preset = modeRuntime.resolved;
+				if (preset) {
+					const pluginPromptSections = cordisPresetRecords.reduce(
+						(total, record) => total + record.extension.promptSections.length,
+						0,
+					);
+					const compositionExpected =
+						preset.promptComplete ||
+						preset.prompt.length > 0 ||
+						preset.plugins.some(row => row.enabled !== false);
+					// A selected preset whose packages failed to mount and contributed
+					// no prompt section is a failed persona, not a preset-less session.
+					// Returning the default prompt here would silently restore the full
+					// work persona the user switched away from.
+					if (
+						pluginPromptSections === 0 &&
+						compositionExpected &&
+						cordisPresetMountErrors.length > 0 &&
+						preset.plugins.some(row => row.enabled !== false)
+					) {
+						throw new Error(
+							`preset "${preset.id}" failed to mount its prompt package: ${cordisPresetMountErrors
+								.map(error => `${error.path}: ${error.error}`)
+								.join("; ")}`,
+						);
+					}
+					if (preset.promptComplete) {
 						return {
 							...defaultPrompt,
-							systemPrompt: modeRuntime.composer.composeComplete(),
+							systemPrompt: modeRuntime.composer.composeComplete(promptSelection),
 						};
+					}
+				}
+				if (modeRuntime.composer.size > 0) {
+					const composed = modeRuntime.composer.registry.assemble(promptSelection);
+					if (composed.complete) {
+						return { ...defaultPrompt, systemPrompt: [composed.complete.text] };
 					}
 					return {
 						...defaultPrompt,
-						systemPrompt: modeRuntime.composer.compose(defaultPrompt.systemPrompt),
+						systemPrompt: mergeSectionsIntoBase(
+							defaultPrompt.systemPrompt,
+							[...hostSections, ...composed.sections],
+							defaultPrompt.systemPromptSlots,
+						),
 					};
 				}
-				return defaultPrompt;
+				return hostMerged;
 			}
 			const customPrompt =
 				typeof options.systemPrompt === "function"
-					? options.systemPrompt(defaultPrompt.systemPrompt)
+					? options.systemPrompt(mergeHostSections(defaultPrompt).systemPrompt)
 					: options.systemPrompt;
 			return {
 				systemPrompt: typeof customPrompt === "string" ? [customPrompt] : customPrompt,
@@ -3916,6 +4182,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					const entryPath = extensionPaths.find(p => extensionIdOf(p) === id);
 					if (entryPath) {
 						await session.removeExtensionTools(extensionRunner.getExtensionToolNames(entryPath));
+						removeExtensionHostSections(entryPath);
 					}
 					modeRuntime.composer.removeBySource(`ext:${id}`);
 				}
@@ -3952,6 +4219,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			for (const section of next.prompt) modeRuntime.composer.add({ ...section, source: `mode:${next.id}` });
 			// 2) settings:清旧 mode 的运行时覆盖 → 应用新 mode 的(用户全局显式值
 			//    最后生效,§4.3;override/clearOverride 非持久,不污染会话配置)。
+			const toolSettingsSnapshot = (): string =>
+				JSON.stringify([settings.get("tools.disabled"), settings.get("tools.extensionMetaTools")]);
+			const toolSettingsBefore = toolSettingsSnapshot();
 			for (const key of appliedModeSettingsKeys) {
 				(settings as Settings).clearOverride(key as never);
 			}
@@ -3961,6 +4231,61 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			appliedModeSettingsKeys.length = 0;
 			appliedModeSettingsKeys.push(...nextSettingsKeys);
+			// Before the first message a preset switch changes the tool contract
+			// itself (chat removes read/edit/write; work restores them). The
+			// built-in slate was derived once at session start, so rebuild it from
+			// the now-current preset settings and re-apply the active set — the
+			// prompt is rebuilt from that same set below, keeping both in sync.
+			if (toolSettingsSnapshot() !== toolSettingsBefore) {
+				const previousBuiltIns = new Set(builtInRegistryToolNames);
+				const previousActive = session.getActiveToolNames();
+				const previousXdev = toolSession.xdev;
+				const rebuilt = await createTools(toolSession, options.toolNames);
+				const rebuiltXdev = toolSession.xdev;
+				let nextBuiltInNames: string[];
+				if (rebuiltXdev && rebuiltXdev !== previousXdev) {
+					nextBuiltInNames = [...rebuiltXdev.builtInNames];
+					if (previousXdev) {
+						// SessionTools holds the original xdev object by reference —
+						// createTools allocates a fresh one, so fold its state back
+						// into the live object instead of orphaning the old one.
+						previousXdev.builtInNames.clear();
+						for (const name of rebuiltXdev.builtInNames) previousXdev.builtInNames.add(name);
+						previousXdev.mountedNames.clear();
+						for (const name of rebuiltXdev.mountedNames) previousXdev.mountedNames.add(name);
+						toolSession.xdev = previousXdev;
+					}
+				} else {
+					// The preset denied the write transport (chat), so createTools
+					// did not rebuild xd:// and left the previous preset's mounts
+					// in place. Detach them; the rebuilt slate is top-level.
+					nextBuiltInNames = rebuilt.map(tool => tool.name);
+					toolSession.xdev = undefined;
+				}
+				session.setXdevState(toolSession.xdev);
+				const nextBuiltInSet = new Set(nextBuiltInNames);
+				for (const name of previousBuiltIns) {
+					if (!nextBuiltInSet.has(name)) toolRegistry.delete(name);
+				}
+				if (!toolSession.xdev) {
+					builtInRegistryToolNames.clear();
+					for (const name of nextBuiltInSet) builtInRegistryToolNames.add(name);
+				}
+				const nextActive = new Set(
+					previousActive.filter(name => !previousBuiltIns.has(name) && toolRegistry.has(name)),
+				);
+				for (const name of nextBuiltInSet) {
+					if (!defaultInactiveToolNames.has(name)) nextActive.add(name);
+				}
+				for (const name of EXTENSION_META_TOOL_NAMES) {
+					if (settings.get("tools.extensionMetaTools") === true && !options.toolNames && toolRegistry.has(name)) {
+						nextActive.add(name);
+					} else {
+						nextActive.delete(name);
+					}
+				}
+				await session.setActiveToolsByName([...nextActive]);
+			}
 			// 3) 扩展启用/禁用方向(§6.2):白名单 diff。undefined = 无白名单,
 			//    保持当前加载集不动(边界见上)。
 			if (next.extensions !== undefined) {
@@ -3987,12 +4312,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 						modeRuntime.composer.removeBySource(source);
 						for (const section of loaded.promptSections) modeRuntime.composer.add({ ...section, source });
 					}
+					// Prompt host 贡献恢复:已加载扩展由 ledger 重放(工厂不重跑),
+					// 新加载扩展工厂已重注册,replay 幂等(remove + 重放同一 ledger)。
+					replayExtensionHostSections(entryPath);
 				}
 				for (const id of prevIds) {
 					if (nextIds.has(id)) continue;
 					const entryPath = extensionPaths.find(p => extensionIdOf(p) === id);
 					if (entryPath) {
 						await session.removeExtensionTools(extensionRunner.getExtensionToolNames(entryPath));
+						removeExtensionHostSections(entryPath);
 					}
 					modeRuntime.composer.removeBySource(`ext:${id}`);
 				}
@@ -4074,6 +4403,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					}
 				}
 			},
+			getPromptRevision: () => modeRuntime.composer.revision,
 			customCommands: customCommandsResult.commands,
 			projectMetadataState,
 			skills,
@@ -4114,6 +4444,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			preferWebsockets: preferOpenAICodexWebsockets,
 			convertToLlm: convertToLlmFinal,
 			rebuildSystemPrompt,
+			collectPromptContexts: () =>
+				promptHost.collectContext({ ...(latestPromptContextOptions ?? {}), recordDelivery: false }),
 			getXdevToolEntries: () => (toolSession.xdev ? xdevEntries(toolSession.xdev) : []),
 			xdev: toolSession.xdev,
 			presentationPinnedToolNames: explicitlyRequestedToolNameSet,
@@ -4306,6 +4638,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		let unregisterMcpPostmortem: (() => void) | undefined;
 
 		{
+			// The session owns the prompt host's lifetime: closing it releases every
+			// live contribution and rejects late registrations from unwinding
+			// handlers, so a disposed session cannot keep prompt state alive.
+			session.setPromptHostClose(() => promptHost.close());
 			const originalDispose = session.dispose.bind(session);
 			session.dispose = async () => {
 				try {
@@ -4618,6 +4954,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		return {
 			session,
 			extensionsResult,
+			promptHost,
 			setToolUIContext,
 			mcpManager,
 			modelFallbackMessage,

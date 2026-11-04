@@ -1,0 +1,13 @@
+{
+	"name": "musepi-design-guidance",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "设计/素材简报",
+		"description": "内置设计体系与素材策略的提示词简报（按当前选择渲染）。",
+		"icon": "◈",
+		"extensions": ["./index.ts"]
+	}
+}

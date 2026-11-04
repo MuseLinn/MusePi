@@ -1,0 +1,2 @@
+- File/directory reads → `{{read}}`; directory path lists entries.
+- Use `{{read}}` offset/limit, not whole-file reads.

@@ -25,6 +25,7 @@ import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile
 import { expandAtImports } from "./discovery/at-imports";
 import { loadSkills, type Skill } from "./extensibility/skills";
 import { hasObsidian } from "./internal-urls/vault-protocol";
+import type { PromptBaseSlot } from "./prompts/composer";
 import activeRepoContextTemplate from "./prompts/system/active-repo-context.md" with { type: "text" };
 import computerSafetyPrompt from "./prompts/system/computer-safety.md" with { type: "text" };
 import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md" with { type: "text" };
@@ -130,7 +131,12 @@ function promptSourceContainsRule(source: string | null | undefined, ruleContent
 	return promptBlocksContain(splitComparablePromptBlocks(source), splitComparablePromptBlocks(ruleContent));
 }
 
-function dedupeAlwaysApplyRules(
+/**
+ * Drop always-apply rules whose content a prompt source already carries.
+ * Exported so the session can pre-filter against the discovered context files
+ * when those render from the prompt host instead of the base template.
+ */
+export function dedupeAlwaysApplyRules(
 	alwaysApplyRules: AlwaysApplyRule[] | undefined,
 	promptSources: Array<string | null | undefined>,
 ): AlwaysApplyRule[] {
@@ -156,7 +162,28 @@ function firstNonEmpty(...values: (string | undefined | null)[]): string | null 
 	return null;
 }
 
-function renderActiveRepoContextPrompt(activeRepoContext: ActiveRepoContext | null): string {
+/**
+ * Derive the project prompt's date/weekday pair from one instant.
+ *
+ * Two separate `new Date()` calls can straddle local midnight and pair
+ * yesterday's date with today's weekday. A single instant keeps the model's
+ * time anchor internally consistent; the prompt is rebuilt on the next normal
+ * turn, never by a timer.
+ */
+export function resolvePromptCalendar(now: Date): { date: string; dateTime: string; weekday: string } {
+	const date = formatLocalCalendarDate(now);
+	return {
+		date,
+		dateTime: date,
+		weekday: new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(now),
+	};
+}
+
+/**
+ * Render the active child-repo context block. Exported so the prompt host's
+ * project-context sections reuse the exact legacy rendering (single owner).
+ */
+export function renderActiveRepoContextPrompt(activeRepoContext: ActiveRepoContext | null): string {
 	if (!activeRepoContext) return "";
 	return prompt
 		.render(activeRepoContextTemplate, {
@@ -634,6 +661,16 @@ export interface BuildSystemPromptOptions {
 	renderMermaid?: boolean;
 	/** Pre-resolved nested active repo context. Undefined resolves from cwd. */
 	activeRepoContext?: ActiveRepoContext | null;
+	/**
+	 * The session prompt host owns the project context (AGENTS.md context
+	 * files, workspace tree, active-repo context) as its own sections. When
+	 * true, the base stops rendering those pieces: the project footer blanks
+	 * `contextFiles`, `agentsMdSearch.files` and `includeWorkspaceTree`, and
+	 * the active-repo block is not pushed — the host stays the single owner.
+	 * The resolved custom-prompt main template still renders context files
+	 * itself. Default: false (legacy inline rendering).
+	 */
+	projectContextOwnedByHost?: boolean;
 	/** Tools mounted under `xd://`; renders the protocol section when non-empty. `dynamic` marks external devices whose summary is third-party metadata. */
 	xdevTools?: Array<{ name: string; summary: string; dynamic?: boolean }>;
 	/** Full docs + JSON schema for every `xd://`-mounted tool, inlined into the protocol section so no discovery `read` is needed. */
@@ -650,6 +687,12 @@ export interface BuildSystemPromptResult {
 	/** Ordered system prompt blocks. Providers should preserve entries as distinct messages/blocks. */
 	systemPrompt: string[];
 	/**
+	 * Per-entry base slot identity, parallel to {@link systemPrompt}. Lets the
+	 * composer anchor injected sections to the real safety/project/repo block even
+	 * when an optional block is absent.
+	 */
+	systemPromptSlots?: PromptBaseSlot[];
+	/**
 	 * Names of `xd://` devices whose catalog/protocol section this prompt renders.
 	 * Empty/undefined when no catalog was emitted (no mounted devices, or a custom
 	 * prompt template that omits the section). Lets the session fold these devices
@@ -662,7 +705,7 @@ export interface BuildSystemPromptResult {
 /** Build the system prompt with tools, guidelines, and context */
 export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}): Promise<BuildSystemPromptResult> {
 	if ($env.NULL_PROMPT === "true") {
-		return { systemPrompt: [] };
+		return { systemPrompt: [], systemPromptSlots: [] };
 	}
 
 	const {
@@ -702,6 +745,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		autoQaEnabled = false,
 		interfaceLabel,
 		activeRepoContext: providedActiveRepoContext,
+		projectContextOwnedByHost = false,
 	} = options;
 	const inlineToolDescriptors = providedInlineToolDescriptors ?? false;
 	const resolvedCwd = cwd ?? getProjectDir();
@@ -875,12 +919,11 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		}
 	}
 
-	const date = formatLocalCalendarDate();
-	const dateTime = date;
 	// 星期 + 时间锚点指令:弱模型常忽略 buried 的日期行,问天气/新闻时自行
 	// 编造年月(user: 问今天天气搜成一年前的)。date 值保持 YYYY-MM-DD 不动
-	// (system-prompt-model 测试按此格式断言)。
-	const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
+	// (system-prompt-model 测试按此格式断言)。date/weekday 共用同一时刻,
+	// 避免跨午夜时两字段落在不同日子。
+	const { date, dateTime, weekday } = resolvePromptCalendar(new Date());
 	const promptCwd = normalizePromptPath(resolvedCwd);
 	const activeRepoContextPrompt = renderActiveRepoContextPrompt(activeRepoContext);
 
@@ -994,25 +1037,49 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		interfaceLabel,
 	};
 	const rendered = prompt.render(resolvedCustomPrompt ? customSystemPromptTemplate : systemPromptTemplate, data);
-	const systemPrompt = [rendered];
+	const systemPrompt: string[] = [];
+	const systemPromptSlots: PromptBaseSlot[] = [];
+	const pushBlock = (slot: PromptBaseSlot, text: string): void => {
+		systemPrompt.push(text);
+		systemPromptSlots.push(slot);
+	};
+	pushBlock("core", rendered);
 	if (toolNames.includes("computer")) {
-		systemPrompt.push(computerSafetyPrompt.trim());
+		pushBlock("safety", computerSafetyPrompt.trim());
 	}
 	// Custom prompt templates already render context files and append text; the
 	// project footer still carries environment, cwd, workspace, and dir-context.
+	// A host-owned project context blanks the same footer fields — plus the
+	// AGENTS.md index, the workspace tree, and the append prompt (the
+	// `host:runtime-context` plugin section is that content's single owner) —
+	// and drops the active-repo block; the custom-prompt main template keeps
+	// its own context files and append text.
 	const projectPrompt = prompt
-		.render(projectPromptTemplate, resolvedCustomPrompt ? { ...data, contextFiles: [], appendPrompt: "" } : data)
+		.render(
+			projectPromptTemplate,
+			projectContextOwnedByHost
+				? {
+						...data,
+						contextFiles: [],
+						agentsMdSearch: { files: [] },
+						includeWorkspaceTree: false,
+						appendPrompt: "",
+					}
+				: resolvedCustomPrompt
+					? { ...data, contextFiles: [], appendPrompt: "" }
+					: data,
+		)
 		.trim();
 	if (projectPrompt) {
-		systemPrompt.push(projectPrompt);
+		pushBlock("project", projectPrompt);
 	}
-	if (activeRepoContextPrompt) {
-		systemPrompt.push(activeRepoContextPrompt);
+	if (activeRepoContextPrompt && !projectContextOwnedByHost) {
+		pushBlock("repo", activeRepoContextPrompt);
 	}
 
 	// The xd:// protocol section (with its device catalog) is only rendered by the
 	// default template; a resolved custom prompt uses a template that omits it.
 	const xdevCatalogNames =
 		!resolvedCustomPrompt && xdevTools.length > 0 ? xdevTools.map(mounted => mounted.name) : undefined;
-	return { systemPrompt, xdevCatalogNames };
+	return { systemPrompt, systemPromptSlots, xdevCatalogNames };
 }

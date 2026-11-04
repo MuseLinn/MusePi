@@ -1,0 +1,1 @@
+- Structure mapping/globbing → `{{glob}}`, not `ls **/*.ext` or `fd`.

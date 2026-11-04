@@ -803,6 +803,22 @@ import { resolvePromptOrder } from "@musepi/pi-coding-agent/prompts/orders";
 
 每次提示词重建都会重新求值函数文本、重新解析变量，并重新运行宿主区块 resolver，再调用 `compose(base)`（`promptComplete` 预设走 `composeComplete`）。`AgentSession.setDesignSystemId` 是仅提示词的实时路径：写入 metadata 键并调用 `refreshBaseSystemPrompt()`，不改变活动工具集，新简报在下一次模型调用生效。扩展 load/reload 会立即重挂 composer 来源，然后调用 `refreshBaseSystemPrompt()`，因此仅提示词扩展（没有工具）无需等待下一次重建即可进入活动会话；忙会话在延迟的 load/reload 排空时执行同样的刷新。composer revision 已计入重建签名，工具集不变时仅区块变化也不会被跳过。同一次 load/reload 产生的工具变更仍走常规工具注册表路径，两条路径都不需要重启会话。
 
-这是组合，不是迁移。核心 Handlebars 模板和易变 context 仍留在 `buildSystemPrompt`：日期、cwd、仓库/工作区树、AGENTS 等 context 文件、skills/rules、工具清单、MCP 服务器说明、记忆以及 persona/预设数据都不是注册表变量，日期与 cwd 也未插件化。plan/goal/vibe 运行时上下文同样由宿主 `AgentSession` 在提示词装配时重建；若最近一次已投递的副本内容相同则跳过，因此流式进入模式时经 steer 持久化的上下文不会在下一轮产生第二份。注册表也不拥有缓存策略或 diff 式运行时消息。
+composer 注册表同样不拥有缓存策略或 diff 式运行时消息。
 
-**回归锚点**：`packages/coding-agent/test/prompts-registry.test.ts`、`packages/coding-agent/test/prompts-composer.test.ts`、`packages/coding-agent/src/prompts/{orders,registry,composer}.ts`。
+### 会话提示词宿主（PromptHost）
+
+每个会话——主代理与子代理一样——创建一个 `PromptHost`（`packages/coding-agent/src/prompts/host.ts`）；扩展工厂经可选的 `pi.promptHost` 注册四类贡献：`registerSection`、`registerContext`、`registerVariable` 与 `registerTool`。放置有三个维度：`scope`（子 scope 继承全部祖先贡献）、`lane`（同一 scope 内的来源优先级；默认顺序为 `core` < `extension` < `preset` < `session`，靠后的 lane 遮蔽靠前的）与 `owner`（经 `removeByOwner` 整组释放；预设启停、热重载与会话销毁按 owner 释放或重放）。区块、context 与工具区块还声明 `cacheScope`（`prefix` / `snapshot` / `turn` / `request`；区块与工具区块默认 `prefix`，context 默认 `turn`），说明渲染文本可复用多久。变量没有 cache scope。空宿主保持提示词逐字节不变。
+
+区块声明 `interpolate: false` 只跳过文本渲染之后的最终 `{{name}}` 替换——函数文本照常求值，未带该标记的区块维持严格默认（未知或未解析变量即抛错）。承载发现内容或用户/服务器可控文本的区块（项目上下文、运行时附录）以 `interpolate: false` 注册，数据中的 `{{...}}` 序列按字面通过，不会触发严格解析失败。
+
+`registerContext` 已接入每轮投递。SDK 每轮用与 `assemble` 相同的活动工具集和装配上下文调用 `promptHost.collectContext`，`AgentSession` 把每条投递转为隐藏的 `role: "custom"` 消息——`customType` 为 `prompt-context:<name>`、`display: false`——走常规 provider 与持久化管线：模型可见、随会话持久化、时间线不显示。`required: true` 的 context 每轮投递；其余 context 在历史中最近一条同类型消息内容相同时跳过，而这里比较的是活动、resume 或 branch 之后的最新历史副本——续接与分支会话按自己的最新副本去重，不会叠加重复。context 与区块一样支持 `interpolate: false`；`xd://` 设备目录区块用它让挂载设备文本中的花括号按字面保留。会话收集不会推进宿主独立的投递台账：实际历史是唯一去重依据，因此压缩或提示词装配中止后，只要旧副本已不在历史中，后续投递就不会被提前记作“已投递”而抑制。plan/goal/vibe 运行时上下文不走这条通道——它们保留各自的既有 customType（见下）。
+
+六个只读第一方核心提示词包——`delegation`、`file-tools`、`browser`、`computer`、`lsp`、`host-integrations`——在所有会话加载路径自动挂载：预加载会话在会话宿主上重挂它们，子代理与工具受限会话在发现被关闭时也加载它们，完整发现则把它们合并到调用方路径之前。它们的入口只设置标签并注册提示词宿主贡献（工具由单独挂载的组件 entry 提供），按会话挂载、从不全局，路径按解析结果去重，核心包恰好挂载一次。
+
+会话易变上下文按 owner 分割。AGENTS context 文件与工作区树渲染为 `project:context` snapshot 区块，嵌套活动仓库渲染为 `project:active-repo`，两者都归 `session:project-context` 所有，函数文本在每次重建时刷新；custom prompt 布局仍在自己的模板中渲染 context 文件，因此该布局同样每块只有一个 owner。记忆指令、auto-learn 指南、已挂载 MCP 路由指引、MCP 服务器说明与默认用户 append 只经 host-integrations 插件的 `host:runtime-context` 区块渲染（order 250，位于 project 区块 200 与 repo context 300 之间）；宿主在该区块渲染前按名称排序 MCP 服务器说明并施加 4000 字符截断，custom system prompt 下 append 在该模板内渲染、宿主省略自己的副本。
+
+plan/goal/vibe 运行时上下文刻意保持宿主持有的 custom 消息：`AgentSession` 以 `role: "custom"` 持久化它们，因为流式 steer 投递、模式退出 marker 与 resume/branch 去重依赖该消息传输。它们不是 system 区块；"最近已投递副本不再重发、流式进入模式经 steer 持久化的上下文不会产生第二份"的去重也在这条路径上。
+
+日期、cwd、skills/rules、工具清单与 persona/预设数据仍在 `buildSystemPrompt`；不要把提示词面描述成已全部插件化。
+
+**回归锚点**：`packages/coding-agent/test/prompts-registry.test.ts`、`packages/coding-agent/test/prompts-composer.test.ts`、`packages/coding-agent/test/prompts-host.test.ts`、`packages/coding-agent/test/prompt-host-session.test.ts`、`packages/coding-agent/test/prompt-project-context.test.ts`、`packages/coding-agent/src/prompts/{orders,registry,composer,host,store,types,project-context}.ts`、`packages/coding-agent/src/bundled-plugins/loader.ts`。

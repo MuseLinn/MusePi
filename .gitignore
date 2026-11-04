@@ -170,3 +170,10 @@ packages/.desktop-build/
 
 # JiuwenSwarm runtime file operation logs
 .agent_history/
+
+# Local test/daemon scratch and generated app builds — never release sources.
+.agent-tmp/
+packages/coding-agent/.agent-tmp/
+packages/desktop-app/.musepi/
+packages/mobile/android/.android-build/
+perler-showcase/

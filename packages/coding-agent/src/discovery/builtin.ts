@@ -625,8 +625,16 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	return { items, warnings };
 }
 
+/** One package under a bundled plugin root, read from its manifest. */
+interface BundledPluginPackage {
+	name: string;
+	entries: string[];
+	/** A preset-owned package; excluded from ambient session/extension discovery. */
+	presetOnly: boolean;
+}
+
 /**
- * Extension entry paths from the bundled plugin packages.
+ * Every bundled plugin package, including preset-owned ones.
  *
  * `MUSEPI_BUNDLED_PLUGIN_ROOTS` supplies the absolute distribution roots.
  * Without it, development resolves the two source trees and `./bundled-plugins`
@@ -634,7 +642,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
  * manifest is skipped — it is not a package, and reporting it would make
  * every stray directory in the tree a plugin.
  */
-export async function discoverBundledPluginPaths(): Promise<string[]> {
+async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 	// Packaged desktop builds cannot discover source trees relative to the
 	// compiled module. The Electron shell stages both trees beside the daemon
 	// and passes their absolute paths explicitly; development keeps the source
@@ -652,7 +660,7 @@ export async function discoverBundledPluginPaths(): Promise<string[]> {
 					path.resolve(process.cwd(), "bundled-plugins"),
 				];
 	const seen = new Set<string>();
-	const out: string[] = [];
+	const out: BundledPluginPackage[] = [];
 	for (const root of roots) {
 		// readDirEntries never throws (absent root reads as empty) and returns
 		// Dirents — only directories are packages; a stray file is not.
@@ -661,24 +669,64 @@ export async function discoverBundledPluginPaths(): Promise<string[]> {
 			if (!dirent.isDirectory()) continue;
 			const pkgDir = path.join(root, dirent.name);
 			const manifestPath = path.join(pkgDir, "package.json");
-			let manifest: { musepi?: { extensions?: unknown } };
+			let manifest: { name?: unknown; musepi?: { extensions?: unknown; presetOnly?: unknown } };
 			try {
 				manifest = (await Bun.file(manifestPath).json()) as typeof manifest;
 			} catch {
 				continue;
 			}
+			if (typeof manifest.name !== "string" || manifest.name.length === 0) continue;
 			const declared = manifest.musepi?.extensions;
 			if (!Array.isArray(declared)) continue;
+			const resolvedEntries: string[] = [];
 			for (const entry of declared) {
 				if (typeof entry !== "string" || entry.length === 0) continue;
 				const resolved = path.resolve(pkgDir, entry);
 				if (seen.has(resolved)) continue;
 				seen.add(resolved);
-				out.push(resolved);
+				resolvedEntries.push(resolved);
 			}
+			if (resolvedEntries.length === 0) continue;
+			out.push({
+				name: manifest.name,
+				entries: resolvedEntries,
+				presetOnly: manifest.musepi?.presetOnly === true,
+			});
 		}
 	}
 	return out;
+}
+
+/**
+ * Extension entry paths from the bundled plugin packages that ambient
+ * discovery should load.
+ *
+ * Preset-owned packages are skipped: their contribution only makes sense while
+ * a preset composes them, and loading them as ordinary session extensions
+ * would either double-register a selected persona or leave an inert package in
+ * every session's extension inventory. Preset mounting resolves them through
+ * {@link discoverBundledPresetPluginPackages} instead.
+ */
+export async function discoverBundledPluginPaths(): Promise<string[]> {
+	const packages = await readBundledPluginPackages();
+	return packages.filter(pkg => !pkg.presetOnly).flatMap(pkg => pkg.entries);
+}
+
+/**
+ * Bundled packages addressable by package name for preset composition rows.
+ *
+ * This is the same discovery pass ambient discovery uses, so a preset never
+ * hardcodes a filesystem path: the row names a package, and the package
+ * manifest decides which entry files that name resolves to. Preset-only
+ * packages are included here and excluded from ambient discovery.
+ */
+export async function discoverBundledPresetPluginPackages(): Promise<Map<string, string[]>> {
+	const packages = await readBundledPluginPackages();
+	const byName = new Map<string, string[]>();
+	for (const pkg of packages) {
+		if (!byName.has(pkg.name)) byName.set(pkg.name, pkg.entries);
+	}
+	return byName;
 }
 
 registerProvider<ExtensionModule>(extensionModuleCapability.id, {

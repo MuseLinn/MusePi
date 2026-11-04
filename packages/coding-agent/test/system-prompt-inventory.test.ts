@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { buildSystemPrompt as buildSdkSystemPrompt } from "@musepi/pi-coding-agent/sdk";
 import {
 	buildSystemPrompt,
@@ -12,6 +13,10 @@ import {
 	type SystemPromptToolMetadata,
 } from "@musepi/pi-coding-agent/system-prompt";
 import { createTools, type Tool, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { registerBrowserPrompts } from "../src/bundled-plugins/browser/prompts";
+import { registerComputerPrompts } from "../src/bundled-plugins/computer/prompts";
+import { registerDelegationPrompts } from "../src/bundled-plugins/delegation/prompts";
+import { registerHostIntegrationPrompts } from "../src/bundled-plugins/host-integrations/prompts";
 import { cleanupTempHome } from "./helpers/temp-home-cleanup";
 
 const EMPTY_TREE = {
@@ -105,7 +110,7 @@ describe("system prompt tool inventory", () => {
 		const inventoryStart =
 			["# Tool Inventory", "# Inventory"].map(header => text.indexOf(header)).find(index => index >= 0) ?? -1;
 		expect(inventoryStart).toBeGreaterThan(-1);
-		const sectionEnds = ["\nENV\n", "\nTOOL POLICY", "\n§ ", "\n# "]
+		const sectionEnds = ["\nENV\n", "\nTOOL POLICY", "\nTool Policy\n", "\n§ ", "\n# "]
 			.map(marker => text.indexOf(marker, inventoryStart + 1))
 			.filter(index => index > inventoryStart);
 		const inventoryEnd = sectionEnds.length > 0 ? Math.min(...sectionEnds) : text.length;
@@ -419,7 +424,7 @@ describe("system prompt tool inventory", () => {
 		expect(text).not.toContain("Reads files from disk.");
 	});
 
-	it("keeps enabled computer routing explicit in compact native-tool mode", async () => {
+	it("keeps enabled computer routing explicit through the computer plugin", async () => {
 		const tools = new Map(TOOLS);
 		tools.set("computer", {
 			label: "Computer",
@@ -437,8 +442,16 @@ describe("system prompt tool inventory", () => {
 			nativeTools: true,
 			inlineToolDescriptors: false,
 		});
-		const text = systemPrompt.join("\n\n");
-		expect(text).toContain("# Computer Use");
+		expect(systemPrompt.join("\n\n")).not.toContain("# Computer Use");
+
+		const host = new PromptHost();
+		registerComputerPrompts(host);
+		const routed = host
+			.assemble({ activeTools: ["read", "computer"] })
+			.sections.map(section => section.text)
+			.join("\n");
+		expect(routed).toContain("# Computer Use");
+		expect(routed).toContain("`computer` enabled/available.");
 	});
 
 	it("renders the functions namespace (not a name list) when tools are not native", async () => {
@@ -467,8 +480,21 @@ describe("system prompt tool inventory", () => {
 
 		expect(inventory).toContain(nativeTools ? "`read`" : "type read = (_: {");
 		expect(inventory).not.toContain(nativeTools ? "`web_search`" : "type web_search = (");
-		expect(text).toContain("# xd:// Tool Devices");
-		expect(text).toContain("Mounted web search documentation.");
+		expect(text).not.toContain("# xd:// Tool Devices");
+
+		const host = new PromptHost();
+		registerHostIntegrationPrompts(host);
+		const routed = host
+			.assemble({
+				context: {
+					xdevTools: [{ name: "web_search", summary: "Searches the web." }],
+					xdevDocs: "Mounted web search documentation.",
+				},
+			})
+			.sections.map(section => section.text)
+			.join("\n");
+		expect(routed).toContain("# xd:// Tool Devices");
+		expect(routed).toContain("Mounted web search documentation.");
 	});
 
 	it.each([
@@ -655,29 +681,11 @@ describe("system prompt tool inventory", () => {
 	});
 
 	it("omits the read-only scout delegation gate when scout is unavailable", async () => {
-		const opts = { toolNames: ["read", "bash", "task"], tools: TOOLS };
-		const withScout = (
-			await buildSystemPrompt({
-				...opts,
-				cwd: tempDir,
-				contextFiles: [],
-				skills: [],
-				rules: [],
-				workspaceTree: { ...EMPTY_TREE, rootPath: tempDir },
-				scoutAvailable: true,
-			})
-		).systemPrompt.join("\n\n");
-		const withoutScout = (
-			await buildSystemPrompt({
-				...opts,
-				cwd: tempDir,
-				contextFiles: [],
-				skills: [],
-				rules: [],
-				workspaceTree: { ...EMPTY_TREE, rootPath: tempDir },
-				scoutAvailable: false,
-			})
-		).systemPrompt.join("\n\n");
+		const host = new PromptHost();
+		registerDelegationPrompts(host);
+		const withScout = host.assemble({ activeTools: ["task"], context: { scoutAvailable: true } }).sections[0]?.text;
+		const withoutScout = host.assemble({ activeTools: ["task"], context: { scoutAvailable: false } }).sections[0]
+			?.text;
 
 		expect(withScout).toContain("one read-only scout while working is allowed");
 		expect(withoutScout).not.toContain("read-only scout");
@@ -692,40 +700,29 @@ describe("system prompt tool inventory", () => {
 			workspaceTree: { ...EMPTY_TREE, rootPath: tempDir },
 		};
 		const tools = new Map(TOOLS);
-		const withoutBrowser = (
-			await buildSystemPrompt({
-				...opts,
-				toolNames: ["read", "bash"],
-				tools,
-				nativeTools: true,
-				inlineToolDescriptors: false,
-			})
-		).systemPrompt.join("\n\n");
-
-		expect(withoutBrowser).not.toContain("browser-drive with `browser`");
-		expect(withoutBrowser).not.toContain("browser-drive with browser");
-		expect(withoutBrowser).toContain("TUI/CLI");
-		expect(withoutBrowser).toContain("behavioral test or smoke test");
-
-		tools.set("browser", {
-			label: "Browser",
-			description: "Drives a real Chromium tab.",
-			parameters: { type: "object", properties: {} },
+		const { systemPrompt } = await buildSystemPrompt({
+			...opts,
+			toolNames: ["read", "bash"],
+			tools,
+			nativeTools: true,
+			inlineToolDescriptors: false,
 		});
-		const withBrowser = (
-			await buildSystemPrompt({
-				...opts,
-				toolNames: ["read", "bash", "browser"],
-				tools,
-				nativeTools: true,
-				inlineToolDescriptors: false,
-			})
-		).systemPrompt.join("\n\n");
+		const core = systemPrompt.join("\n\n");
 
-		expect(withBrowser).toContain("browser-drive with `browser`");
-		// A browser-only session still needs the smoke-test fallback for
-		// native-desktop surfaces (no computer tool).
-		expect(withBrowser).toContain("behavioral test or smoke test");
+		expect(core).not.toContain("browser-drive with `browser`");
+		expect(core).toContain("TUI/CLI");
+		expect(core).toContain("behavioral test or smoke test");
+
+		const host = new PromptHost();
+		registerBrowserPrompts(host);
+		expect(host.assemble({ activeTools: ["read", "bash"] }).sections).toEqual([]);
+		expect(
+			host
+				.assemble({ activeTools: ["read", "bash", "browser"] })
+				.sections.map(section => section.text)
+				.join("\n"),
+		).toContain("browser-drive with `browser`");
+		expect(core).toContain("behavioral test or smoke test");
 	});
 
 	it("omits todo workflow guidance when the todo tool is absent", async () => {

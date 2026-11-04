@@ -7,6 +7,7 @@ export {
 	discoverAndLoadExtensions,
 	discoverExtensionPaths,
 	ExtensionRuntimeNotInitializedError,
+	extensionHostOwner,
 	loadExtensionFromFactory,
 	loadExtensions,
 } from "./loader";

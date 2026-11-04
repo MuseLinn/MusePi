@@ -530,6 +530,34 @@
 			"types": "./src/prompts/composer.ts",
 			"import": "./src/prompts/composer.ts"
 		},
+		"./prompts/host": {
+			"types": "./src/prompts/host.ts",
+			"import": "./src/prompts/host.ts"
+		},
+		"./prompts/orders": {
+			"types": "./src/prompts/orders.ts",
+			"import": "./src/prompts/orders.ts"
+		},
+		"./prompts/project-context": {
+			"types": "./src/prompts/project-context.ts",
+			"import": "./src/prompts/project-context.ts"
+		},
+		"./prompts/registry": {
+			"types": "./src/prompts/registry.ts",
+			"import": "./src/prompts/registry.ts"
+		},
+		"./prompts/scope": {
+			"types": "./src/prompts/scope.ts",
+			"import": "./src/prompts/scope.ts"
+		},
+		"./prompts/store": {
+			"types": "./src/prompts/store.ts",
+			"import": "./src/prompts/store.ts"
+		},
+		"./prompts/types": {
+			"types": "./src/prompts/types.ts",
+			"import": "./src/prompts/types.ts"
+		},
 		"./prompts/*": "./src/prompts/*.md",
 		"./secrets": {
 			"types": "./src/secrets/index.ts",
