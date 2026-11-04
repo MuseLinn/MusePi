@@ -114,3 +114,49 @@ describe("SelectionToolbar external selections", () => {
 		expect(rootElement.querySelector<HTMLElement>(".gui-select-pop")?.style.top).toBe("244px");
 	});
 });
+
+describe("SelectionToolbar DOM selections", () => {
+	it("binds after the pane container appears following the first render", async () => {
+		const rootElement = document.createElement("div");
+		rootElement.id = "root";
+		document.body.appendChild(rootElement);
+		const root = createRoot(rootElement);
+		mounted.add(root);
+		const containerRef: { current: HTMLElement | null } = { current: null };
+		await act(async () =>
+			root.render(
+				<SelectionToolbar
+					containerRef={containerRef}
+					onQuote={() => {}}
+					onAsk={() => {}}
+					onCopy={() => {}}
+					onNewSession={() => {}}
+					onAddNote={() => {}}
+				/>,
+			),
+		);
+
+		// FilePane mounts the preview body only once a file is open.
+		const container = document.createElement("div");
+		const text = document.createTextNode("selected text");
+		container.appendChild(text);
+		document.body.appendChild(container);
+		containerRef.current = container;
+		const originalSelection = window.getSelection;
+		window.getSelection = (() => ({
+			isCollapsed: false,
+			toString: () => "selected text",
+			anchorNode: text,
+			getRangeAt: () => ({ getBoundingClientRect: () => ({ left: 100, top: 180, width: 80, height: 20 }) }),
+		})) as typeof window.getSelection;
+		try {
+			await act(async () => {
+				text.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+				await Bun.sleep(30);
+			});
+			expect(document.querySelector(".gui-select-pop")).not.toBeNull();
+		} finally {
+			window.getSelection = originalSelection;
+		}
+	});
+});

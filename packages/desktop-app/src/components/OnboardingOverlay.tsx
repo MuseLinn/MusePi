@@ -1613,7 +1613,7 @@ export function OnboardingOverlay({
 											/>
 										</button>
 										<Reveal open={branch === "import"}>
-											<ImportSessionsSetup rpc={rpc} />
+											<ImportSessionsSetup rpc={rpc} embedded />
 										</Reveal>
 									</div>
 									<div className="gui-obo-branch">

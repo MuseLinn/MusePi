@@ -1,3 +1,4 @@
+import { PackageOpen, SearchX } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -5,6 +6,7 @@ import { useScrollShadow } from "../../lib/scroll-shadow";
 import { MarketplaceCard } from "./MarketplaceCard";
 import type { MarketplaceCardAction, MarketplaceCardEntry } from "./types";
 import "./marketplace.css";
+import "./marketplace-visual.css";
 
 /**
  * Marketplace grid container — fetches the plugin catalog via
@@ -146,6 +148,11 @@ export function MarketplaceGrid({
 
 	const grouped = useMemo(() => groupByMarketplace(filtered), [filtered]);
 	const allCategories = useMemo(() => extractCategories(entries), [entries]);
+	const hasFilter = filter.trim().length > 0 || category !== null;
+	const clearFilters = (): void => {
+		setFilter("");
+		setCategory(null);
+	};
 	// 纵向边缘羽化:卡片网格长列表溢出时上下羽化。
 	const shellRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(shellRef);
@@ -215,13 +222,17 @@ export function MarketplaceGrid({
 				</div>
 			)}
 
-			{!showLoading && grouped.length === 0 && (
-				<div className="mp-empty">
-					<span className="mp-empty-icon" aria-hidden="true">
-						🧩
+			{!showLoading && fetchError === null && grouped.length === 0 && (
+				<div className="mp-empty" role="status">
+					<span className="mp-empty-mark" aria-hidden="true">
+						{hasFilter ? <SearchX size={18} strokeWidth={1.6} /> : <PackageOpen size={18} strokeWidth={1.6} />}
 					</span>
-					<span>{t("guest.pluginEmptyTitle")}</span>
-					<span>{t("guest.pluginEmptyHint")}</span>
+					<p className="mp-empty-title">{hasFilter ? t("guest.pluginEmptyTitle") : t("guest.noPluginsYet")}</p>
+					{hasFilter && (
+						<button type="button" className="mp-btn mp-btn--ghost" onClick={clearFilters}>
+							{t("guest.pluginEmptyClear")}
+						</button>
+					)}
 				</div>
 			)}
 

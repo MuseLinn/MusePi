@@ -1,0 +1,207 @@
+/* MusePi visual Markdown (Crepe) — editor chrome.
+ *
+ * Crepe's base and theme layers load first, in this file, so every editor rule
+ * below wins the equal-specificity ties against the package's defaults (the
+ * 36px top bar, for one) no matter when the host injects this stylesheet. */
+@import "@milkdown/crepe/theme/common/style.css";
+@import "@milkdown/crepe/theme/classic.css";
+
+/* ── Document geometry ───────────────────────────────────────────────── */
+
+/* ProseMirror's own widget nodes (Crepe's virtual cursor / placeholder) sit
+ * at the start of the document until the first interaction removes them.
+ * The leading block must not take its top margin from whether that transient
+ * widget exists: `:first-child` alone made the whole document jump up 32px on
+ * the first text selection, when the widget disappeared and the block finally
+ * matched the rule. Treat a widget as transparent for this purpose. */
+.gui-filepane-markdown-editor .milkdown .ProseMirror > :first-child,
+.gui-filepane-markdown-editor .milkdown .ProseMirror > .ProseMirror-widget + * {
+	margin-top: 0;
+}
+
+.gui-filepane-markdown-editor {
+	/* A scrollbar that appears while a toolbar is revealed must not reflow
+	 * the column: the stable gutter keeps the text width fixed. */
+	scrollbar-gutter: stable;
+	/* Selection reveals and scrollIntoView stay clear of the sticky bar. */
+	scroll-padding-top: 42px;
+}
+
+/* Single-column page margins. Crepe's own 60px page padding loses to the
+ * documented compact column here; the rule has to live after the package
+ * layers for that reason. */
+.gui-filepane-markdown-editor .milkdown .ProseMirror {
+	min-height: calc(100% - 42px);
+	padding: 20px clamp(12px, 2.5%, 32px) 56px;
+	font-size: 14px;
+	line-height: 1.75;
+	outline: none;
+}
+
+@media (max-width: 560px) {
+	.gui-filepane-markdown-editor .milkdown .ProseMirror {
+		padding: 20px 16px 56px;
+	}
+}
+
+/* ── Formatting toolbar (36px, one row) ──────────────────────────────── */
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	box-sizing: border-box;
+	height: 36px;
+	min-height: 36px;
+	padding: 0 8px;
+	flex-wrap: nowrap;
+	overflow: visible;
+	border-bottom: 1px solid var(--glass-border);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-inner {
+	height: 36px;
+	flex-wrap: nowrap;
+	overflow: visible;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-item,
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-heading-button {
+	border-radius: var(--radius-sm);
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-item {
+	width: 28px;
+	height: 28px;
+	margin: 4px 2px;
+	padding: 3px;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-item svg {
+	width: 18px;
+	height: 18px;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-heading-button {
+	height: 28px;
+	margin-block: 4px;
+	padding: 3px 4px 3px 8px;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-item:focus-visible,
+.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-heading-button:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+}
+
+/* ── Inline selection toolbar ───────────────────────────────────────── */
+
+/* Crepe positions this chip with floating-ui inside `.milkdown`. The
+ * placement is load-bearing: a static toolbar changes the document height
+ * every time a selection appears. Restated here together with the visibility
+ * gate — shown for a non-empty selection, hidden on collapse — so a theme or
+ * bundler regression cannot put it back into the text flow. */
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar {
+	position: absolute;
+	z-index: var(--z-dropdown);
+	display: flex;
+	align-items: center;
+	max-width: calc(100vw - 16px);
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-lg);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	box-shadow: var(--glass-shadow);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar[data-show="false"] {
+	display: none;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar[data-show="true"] {
+	display: flex;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .toolbar-item {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 32px;
+	height: 32px;
+	margin: 4px;
+	padding: 4px;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .toolbar-item:hover {
+	background: var(--color-accent-soft);
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .toolbar-item:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .toolbar-item svg {
+	width: 18px;
+	height: 18px;
+	color: var(--color-text-muted);
+	fill: var(--color-text-muted);
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .toolbar-item.active svg {
+	color: var(--color-accent);
+	fill: var(--color-accent);
+}
+
+.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .divider {
+	width: 1px;
+	height: 24px;
+	margin: 0 4px;
+	background: var(--border);
+}
+
+/* ── Floating Crepe panels ──────────────────────────────────────────── */
+
+/* Link preview/edit and the heading dropdown are float layers: never let a
+ * stale theme demote them into the document flow. */
+.gui-filepane-markdown-editor .milkdown .milkdown-link-preview,
+.gui-filepane-markdown-editor .milkdown .milkdown-link-edit,
+.gui-filepane-markdown-editor .milkdown .top-bar-heading-dropdown {
+	position: absolute;
+	z-index: var(--z-dropdown);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-lg);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	box-shadow: var(--glass-shadow);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+}
+
+/* ── Touch targets ──────────────────────────────────────────────────── */
+
+/* The visual bar stays compact; coarse pointers get a 44px hit target. */
+@media (pointer: coarse) {
+	.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-item,
+	.gui-filepane-markdown-editor .milkdown .milkdown-toolbar .toolbar-item {
+		width: 44px;
+		height: 44px;
+	}
+
+	.gui-filepane-markdown-editor .milkdown .milkdown-top-bar {
+		height: 52px;
+		min-height: 52px;
+	}
+
+	.gui-filepane-markdown-editor .milkdown .milkdown-top-bar .top-bar-inner {
+		height: 52px;
+	}
+}

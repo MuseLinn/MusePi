@@ -1,3 +1,4 @@
+import { Check, Download } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import {
@@ -6,6 +7,7 @@ import {
 	type MarketplaceCardEntry,
 	resolveCardIcon,
 } from "./types";
+import "./marketplace-visual.css";
 
 /**
  * Single plugin card used by the marketplace grid. Pure presentational
@@ -45,7 +47,7 @@ export function MarketplaceCard({
 	className,
 	index = 0,
 }: MarketplaceCardProps): ReactNode {
-	const icon = resolveCardIcon(entry);
+	const Icon = resolveCardIcon(entry);
 	const isInstalled = entry.installed === true;
 	const isBusy = entry.busy === true;
 	const classes = ["mp-card", isInstalled ? "mp-card--installed" : "", className ?? ""].filter(Boolean).join(" ");
@@ -74,7 +76,7 @@ export function MarketplaceCard({
 				aria-label={`${entry.name} details`}
 			>
 				<span className="mp-card-icon" aria-hidden="true">
-					{icon}
+					<Icon size={18} strokeWidth={1.75} />
 				</span>
 				<span className="mp-card-body">
 					<span className="mp-card-head">
@@ -87,7 +89,12 @@ export function MarketplaceCard({
 						<span className="mp-card-desc">{entry.description}</span>
 					)}
 					<span className="mp-card-meta">
-						{isInstalled && <span className="mp-card-badge">✓ {t("guest.pluginInstalledBadge")}</span>}
+						{isInstalled && (
+							<span className="mp-card-badge">
+								<Check size={11} strokeWidth={2.5} aria-hidden="true" />
+								{t("guest.pluginInstalledBadge")}
+							</span>
+						)}
 						{/* 设计体系内容标识（M3.7d）：catalog 声明 category/tags =
 						 *  design-system 的包在能力中心市场 tab 带徽章，可发现。 */}
 						{hasDesignSystemContent(entry) && (
@@ -97,7 +104,10 @@ export function MarketplaceCard({
 							<span className="mp-card-meta-item">by {entry.author}</span>
 						)}
 						{typeof entry.installs === "number" && (
-							<span className="mp-card-meta-item">↓ {shortNumber(entry.installs)}</span>
+							<span className="mp-card-meta-item">
+								<Download size={11} strokeWidth={1.9} aria-hidden="true" />
+								{shortNumber(entry.installs)}
+							</span>
 						)}
 						{entry.category !== undefined && entry.category.length > 0 && (
 							<span className="mp-card-chip">{entry.category}</span>

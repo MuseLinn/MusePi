@@ -1,3 +1,41 @@
+import type { LucideIcon } from "lucide-react";
+import {
+	Activity,
+	BookOpen,
+	Boxes,
+	Braces,
+	ChartNoAxesColumn,
+	Clapperboard,
+	Cloud,
+	Container,
+	Cpu,
+	CreditCard,
+	Database,
+	Eraser,
+	FileText,
+	FlaskConical,
+	Gamepad2,
+	GitBranch,
+	Globe,
+	HardDrive,
+	Layers,
+	ListChecks,
+	MessageSquare,
+	MonitorCog,
+	MonitorPlay,
+	Network,
+	Package,
+	Palette,
+	PenTool,
+	Plug,
+	Puzzle,
+	Search,
+	ShieldCheck,
+	Siren,
+	Wallet,
+	Wrench,
+} from "lucide-react";
+
 /**
  * Plugin entry shape consumed by the GUI. Mirrors the wire-side
  * MarketplacePluginEntry from `@musepi/pi-coding-agent/extensibility/plugins/marketplace`,
@@ -6,13 +44,12 @@
  * runtime into the browser bundle — the client-core is a guest over a
  * WebSocket and shouldn't carry the host's plugin discovery layer.
  *
- * `icon` accepts the same forms as the TUI resolver:
- *   - single emoji/glyph ("🛠")
- *   - icon set prefix ("lucide:wrench", "tabler:test-pipe")
- *   - file:// or http(s):// URI for plugin authors shipping artwork
- *
- * When `icon` is omitted or unresolvable, callers fall back to {@link resolveCardIcon}
- * which uses category/tag heuristics; the result lands in `icon` for render.
+ * `icon` may name a vector icon (`"lucide:wrench"` or `"wrench"`); other
+ * identifier-like values (`"tabler:test-pipe"`) map through the same
+ * keyword table. Emoji, arbitrary glyphs and artwork URIs are not rendered
+ * by the GUI: the card uses a consistent lucide icon and falls back to
+ * category/tag heuristics, so one catalog entry cannot break the visual
+ * language.
  */
 export interface MarketplaceCardEntry {
 	name: string;
@@ -24,7 +61,7 @@ export interface MarketplaceCardEntry {
 	homepage?: string;
 	repository?: string;
 	license?: string;
-	/** Optional explicit icon (emoji/glyph/set-prefix/URI). */
+	/** Optional lucide icon name (`"lucide:wrench"` or `"wrench"`). */
 	icon?: string;
 	/** True when the plugin is already installed locally. */
 	installed?: boolean;
@@ -48,77 +85,108 @@ export interface MarketplaceCardAction {
 }
 
 /**
- * Icon resolution for the GUI: same lookup table as the TUI resolver
- * (`@musepi/pi-coding-agent/extensibility/plugins/marketplace/icon-resolver`)
- * but kept locally so the browser bundle has no dependency on the agent
- * package. Both tables share a stable convention — if you add a new
- * category, update BOTH.
+ * Vector icon resolution for the GUI. The terminal keeps its emoji table
+ * (`coding-agent/extensibility/plugins/marketplace/icon-resolver`); the
+ * desktop card renders lucide components so every entry shares one stroke
+ * weight and palette. Category icons double as the named-icon vocabulary,
+ * which keeps `icon: "lucide:security"` and `category: "security"` aligned.
  */
-const CATEGORY_ICONS: Readonly<Record<string, string>> = {
-	security: "🛡️",
-	testing: "🧪",
-	data: "📊",
-	ai: "🧠",
-	web: "🌐",
-	devops: "⚙️",
-	database: "🗄️",
-	productivity: "✨",
-	messaging: "💬",
-	finance: "💰",
-	design: "🎨",
-	media: "🎬",
-	docs: "📚",
-	game: "🎮",
-	search: "🔍",
-	storage: "📦",
-	monitoring: "📈",
-	network: "🛰️",
-	utility: "🔧",
-	integration: "🔌",
+const CATEGORY_ICONS: Readonly<Record<string, LucideIcon>> = {
+	security: ShieldCheck,
+	testing: FlaskConical,
+	data: ChartNoAxesColumn,
+	ai: Cpu,
+	web: Globe,
+	devops: Container,
+	database: Database,
+	productivity: ListChecks,
+	messaging: MessageSquare,
+	finance: Wallet,
+	design: Palette,
+	media: Clapperboard,
+	docs: BookOpen,
+	game: Gamepad2,
+	search: Search,
+	storage: HardDrive,
+	monitoring: Activity,
+	network: Network,
+	utility: Wrench,
+	integration: Plug,
 };
 
-const KEYWORD_ICONS: ReadonlyArray<readonly [RegExp, string]> = [
-	[/^github/, "🐙"],
-	[/^playwright/, "🎭"],
-	[/^puppeteer/, "🎭"],
-	[/^selenium/, "🎭"],
-	[/^chrome[-_]?devtools/, "🛠"],
-	[/^aws/, "☁️"],
-	[/^gcp|^google[-_]?cloud/, "☁️"],
-	[/^azure/, "☁️"],
-	[/^docker/, "🐳"],
-	[/^kubernetes|^k8s/, "⎈"],
-	[/^terraform/, "🏗️"],
-	[/^postgres|^psql/, "🐘"],
-	[/^mysql/, "🐬"],
-	[/^redis/, "🟥"],
-	[/^mongo/, "🍃"],
-	[/^sqlite/, "🗃️"],
-	[/^stripe/, "💳"],
-	[/^slack/, "💬"],
-	[/^discord/, "💬"],
-	[/^notion/, "📝"],
-	[/^figma/, "🎨"],
-	[/^linear/, "📋"],
-	[/^jira/, "📋"],
-	[/^sentry/, "🚨"],
-	[/^grafana/, "📈"],
-	[/^prometheus/, "📈"],
-	[/^openai/, "🧠"],
-	[/^anthropic/, "🧠"],
-	[/^claude/, "🧠"],
-	[/^gemini/, "🧠"],
-	[/^ollama/, "🧠"],
-	[/mcp/, "🔌"],
-	[/skill/, "🧩"],
-	[/lsp/, "🧠"],
-	[/^lint|^eslint|^prettier/, "🧹"],
-	[/^format/, "🧹"],
-	[/test|^jest|^pytest|^vitest/, "🧪"],
-	[/doc|^mdx|^markdown/, "📚"],
+/** Common lucide names an author may write after `lucide:`. */
+const NAMED_ICONS: Readonly<Record<string, LucideIcon>> = {
+	...CATEGORY_ICONS,
+	activity: Activity,
+	book: BookOpen,
+	bookopen: BookOpen,
+	boxes: Boxes,
+	braces: Braces,
+	chart: ChartNoAxesColumn,
+	chartnoaxescolumn: ChartNoAxesColumn,
+	clapperboard: Clapperboard,
+	cloud: Cloud,
+	code: Braces,
+	container: Container,
+	cpu: Cpu,
+	creditcard: CreditCard,
+	database: Database,
+	docs: BookOpen,
+	eraser: Eraser,
+	filetext: FileText,
+	flask: FlaskConical,
+	flaskconical: FlaskConical,
+	gamepad: Gamepad2,
+	git: GitBranch,
+	gitbranch: GitBranch,
+	globe: Globe,
+	harddrive: HardDrive,
+	layers: Layers,
+	listchecks: ListChecks,
+	message: MessageSquare,
+	messagesquare: MessageSquare,
+	monitorcog: MonitorCog,
+	monitorplay: MonitorPlay,
+	network: Network,
+	package: Package,
+	palette: Palette,
+	pentool: PenTool,
+	plug: Plug,
+	puzzle: Puzzle,
+	search: Search,
+	shield: ShieldCheck,
+	shieldcheck: ShieldCheck,
+	siren: Siren,
+	wallet: Wallet,
+	wrench: Wrench,
+};
+
+const KEYWORD_ICONS: ReadonlyArray<readonly [RegExp, LucideIcon]> = [
+	[/^github/, GitBranch],
+	[/^playwright|^puppeteer|^selenium/, MonitorPlay],
+	[/^chrome[-_]?devtools/, MonitorCog],
+	[/^aws|^gcp|^google[-_]?cloud|^azure/, Cloud],
+	[/^docker/, Container],
+	[/^kubernetes|^k8s/, Boxes],
+	[/^terraform/, Layers],
+	[/^postgres|^psql|^mysql|^sqlite|^mongo|^redis/, Database],
+	[/^stripe/, CreditCard],
+	[/^slack|^discord/, MessageSquare],
+	[/^notion/, FileText],
+	[/^figma/, PenTool],
+	[/^linear|^jira/, ListChecks],
+	[/^sentry/, Siren],
+	[/^grafana|^prometheus/, Activity],
+	[/^openai|^anthropic|^claude|^gemini|^ollama/, Cpu],
+	[/mcp/, Plug],
+	[/skill/, Puzzle],
+	[/lsp/, Braces],
+	[/^lint|^eslint|^prettier|^format/, Eraser],
+	[/test|^jest|^pytest|^vitest/, FlaskConical],
+	[/doc|^mdx|^markdown/, BookOpen],
 ];
 
-const NEUTRAL_ICON = "🧩";
+const NEUTRAL_ICON = Package;
 
 /**
  * Design-system content marker (M3.7d): a marketplace package declares
@@ -140,21 +208,23 @@ export function hasDesignSystemContent(entry: Pick<MarketplaceCardEntry, "catego
 	return haystack.some(v => (DESIGN_SYSTEM_MARKERS as readonly string[]).includes(v));
 }
 
-/** Sanitize an explicit icon string: strip control chars, cap length. */
-function sanitizeIcon(raw: string): string | null {
-	const cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim();
-	if (cleaned.length === 0) return null;
-	return cleaned.length > 8 ? cleaned.slice(0, 8) : cleaned;
-}
-
 /**
- * Resolve the best icon for an entry. Order of precedence mirrors the
- * TUI resolver: explicit icon → category table → keyword scan → neutral.
+ * Resolve the best vector icon for an entry: recognized explicit name →
+ * category → keyword scan → neutral package. An explicit value that reads
+ * as an icon identifier (for example `tabler:test-pipe`) also gets a
+ * keyword pass before the category fallback; emoji, glyphs and artwork
+ * URIs never render inside the card.
  */
-export function resolveCardIcon(entry: Pick<MarketplaceCardEntry, "icon" | "name" | "category" | "tags">): string {
+export function resolveCardIcon(entry: Pick<MarketplaceCardEntry, "icon" | "name" | "category" | "tags">): LucideIcon {
 	if (entry.icon) {
-		const sanitized = sanitizeIcon(entry.icon);
-		if (sanitized !== null) return sanitized;
+		const raw = entry.icon.trim().toLowerCase();
+		const named = NAMED_ICONS[raw.replace(/^lucide:/, "").replace(/[\s_-]/g, "")];
+		if (named !== undefined) return named;
+		if (/^[a-z0-9][a-z0-9:-]*$/.test(raw)) {
+			for (const [pattern, icon] of KEYWORD_ICONS) {
+				if (pattern.test(raw)) return icon;
+			}
+		}
 	}
 	if (entry.category) {
 		const cat = CATEGORY_ICONS[entry.category.toLowerCase()];

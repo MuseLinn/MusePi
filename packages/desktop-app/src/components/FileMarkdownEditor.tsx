@@ -2,8 +2,7 @@ import type { Crepe } from "@milkdown/crepe";
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import "@milkdown/crepe/theme/common/style.css";
-import "@milkdown/crepe/theme/classic.css";
+import "../styles/gui-markdown-editor.css";
 import { installMarkdownToolbarOverflow } from "./markdown-toolbar";
 
 /** Resolve an image reference without turning the Markdown source into a
@@ -66,6 +65,62 @@ function labelToolbar(root: HTMLElement): () => void {
 	return () => observer.disconnect();
 }
 
+/** The five-action quote toolbar captures `mouseup` inside the pane that hosts
+ * this editor, so it only ever saw pointer selections. Mirror the editor's
+ * selection onto that contract: re-dispatch a bubbling `mouseup` from the pane
+ * boundary — never from the editor root, where ProseMirror's own DOM handlers
+ * would read it as a user click. Collapsing the selection relays too because
+ * the toolbar treats a collapsed selection as "dismiss". */
+function relaySelection(host: HTMLElement): () => void {
+	const pane = host.parentElement;
+	if (!pane) return () => {};
+	let frame: number | null = null;
+	let pointerDown = false;
+	let lastText = "";
+	const relay = (): void => {
+		frame = null;
+		const selection = window.getSelection();
+		const anchor = selection?.anchorNode ?? null;
+		const inside = anchor !== null && host.contains(anchor);
+		// A selection that moved into another element belongs to that element;
+		// only a cleared or collapsed selection of our own is a dismissal.
+		if (!inside && anchor !== null) {
+			lastText = "";
+			return;
+		}
+		const text = inside && selection && !selection.isCollapsed ? selection.toString() : "";
+		if (text === lastText) return;
+		lastText = text;
+		pane.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+	};
+	const schedule = (): void => {
+		if (frame === null) frame = requestAnimationFrame(relay);
+	};
+	const onSelectionChange = (): void => {
+		// A drag ends with a real mouseup, so mid-drag frames only re-read
+		// layout; keyboard selection and refocus never produce one.
+		if (!pointerDown) schedule();
+	};
+	const onPointerDown = (event: PointerEvent): void => {
+		if (event.isPrimary) pointerDown = true;
+	};
+	const onPointerUp = (): void => {
+		pointerDown = false;
+		schedule();
+	};
+	document.addEventListener("selectionchange", onSelectionChange);
+	document.addEventListener("pointerup", onPointerUp);
+	host.addEventListener("pointerdown", onPointerDown);
+	host.addEventListener("focusin", schedule);
+	return () => {
+		if (frame !== null) cancelAnimationFrame(frame);
+		document.removeEventListener("selectionchange", onSelectionChange);
+		document.removeEventListener("pointerup", onPointerUp);
+		host.removeEventListener("pointerdown", onPointerDown);
+		host.removeEventListener("focusin", schedule);
+	};
+}
+
 interface FileMarkdownEditorProps {
 	path: string;
 	name: string;
@@ -107,6 +162,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 			let crepe: Crepe | null = null;
 			let removeToolbarLabels: (() => void) | null = null;
 			let removeToolbarOverflow: (() => void) | null = null;
+			let removeSelectionRelay: (() => void) | null = null;
 			setReady(false);
 			const host = hostRef.current;
 			if (!host) return;
@@ -161,6 +217,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 					host.querySelector(".ProseMirror")?.setAttribute("aria-label", name);
 					removeToolbarLabels = labelToolbar(host);
 					removeToolbarOverflow = installMarkdownToolbarOverflow(host);
+					removeSelectionRelay = relaySelection(host);
 					setReady(true);
 				})
 				.catch(reason => {
@@ -175,6 +232,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 				if (latest !== null && latest !== valueRef.current) callbacksRef.current.onChange(latest);
 				removeToolbarLabels?.();
 				removeToolbarOverflow?.();
+				removeSelectionRelay?.();
 				crepeRef.current = null;
 				initialMarkdownRef.current = null;
 				if (crepe) void crepe.destroy().catch(() => {});

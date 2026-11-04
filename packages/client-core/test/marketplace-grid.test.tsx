@@ -171,6 +171,48 @@ describe("MarketplaceGrid data flow", () => {
 		}
 	});
 
+	it("shows the no-match state and clears a stale category filter", async () => {
+		const { root, div } = await mount({
+			entries: [makeEntry({ name: "web-tool", category: "web" })],
+			onAction: () => {},
+		});
+		try {
+			const chip = Array.from(div.querySelectorAll<HTMLButtonElement>(".mp-chip")).find(
+				button => button.textContent === "web",
+			);
+			expect(chip).not.toBeUndefined();
+			await act(async () => {
+				chip?.click();
+			});
+			expect(div.querySelectorAll(".mp-card").length).toBe(1);
+
+			// The catalog refreshes under the active filter and no entry is
+			// "web" anymore, so the filter now matches nothing.
+			await act(async () => {
+				root.render(
+					createElement(MarketplaceGrid, {
+						entries: [makeEntry({ name: "ai-tool", category: "ai" })],
+						onAction: () => {},
+					}),
+				);
+			});
+			const empty = div.querySelector(".mp-empty");
+			expect(empty?.textContent ?? "").toContain("No matching plugins.");
+			const clear = Array.from(div.querySelectorAll<HTMLButtonElement>(".mp-btn")).find(
+				button => button.textContent === "Clear filters",
+			);
+			expect(clear).not.toBeUndefined();
+			await act(async () => {
+				clear?.click();
+			});
+			expect(div.querySelector(".mp-empty")).toBeNull();
+			expect(div.querySelectorAll(".mp-card").length).toBe(1);
+			expect(div.textContent ?? "").toContain("ai-tool");
+		} finally {
+			await unmount(root, div);
+		}
+	});
+
 	it("controlled mode mirrors entry prop updates without a client", async () => {
 		const entries = [makeEntry()];
 		const { root, div } = await mount({ entries, onAction: () => {} });

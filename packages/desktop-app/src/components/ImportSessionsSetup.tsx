@@ -1,9 +1,32 @@
 import { t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
+import {
+	ArrowLeft,
+	Bot,
+	Braces,
+	Check,
+	Download,
+	Flower2,
+	FolderClosed,
+	LoaderCircle,
+	Minus,
+	MoonStar,
+	Plus,
+	ScanSearch,
+	Search,
+	ShieldCheck,
+	Sparkles,
+	SquareTerminal,
+	Terminal,
+	TriangleAlert,
+	Zap,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
+import "../styles/gui-import.css";
 import type { CustomGroup } from "./CustomGroups";
 import { FadeScroll } from "./FadeScroll";
 
@@ -39,18 +62,43 @@ interface WorkspaceGroup {
 /** Selection key — source and workspace the session lives in. */
 const selKey = (source: string, cwd: string): string => `${source}\u0000${cwd}`;
 
+/** Per-agent glyph for the source picker; unknown sources keep the generic bot. */
+const SOURCE_ICONS: Record<string, typeof Bot> = {
+	musepi: Sparkles,
+	omp: Terminal,
+	pi: Bot,
+	opencode: SquareTerminal,
+	grok: Zap,
+	kimicode: MoonStar,
+	claude: Flower2,
+	codex: Braces,
+};
+
+const sourceIcon = (source: string): typeof Bot => SOURCE_ICONS[source] ?? Bot;
+
+const workspaceName = (cwd: string): string => cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
+
 /**
  * Import sessions from other agents (omp/pi/opencode/grok/kimi/claude/codex).
  *
- * Explicit three-step flow — nothing scans on entry:
- *   1. import.agents lists the candidate agents (no session scan);
- *   2. the user picks agents and clicks scan → import.sources scans ONLY the
- *      selected agents;
- *   3. results are grouped by workspace (session cwd), with per-workspace
- *      select-all, and import.session copies the picked sessions into MusePi
- *      (each keeps its original workspace directory).
+ * Explicit two-step flow — nothing scans on entry:
+ *   1. import.agents lists the candidate agents (no session scan); the user
+ *      picks sources and presses scan → import.sources scans ONLY those;
+ *   2. results are grouped by source and workspace (session cwd), searchable,
+ *      with per-workspace select-all; import.session copies the picked
+ *      sessions into MusePi (each keeps its original workspace directory).
+ *
+ * Presentation only: RPC calls and the idempotent skip of already-imported
+ * sessions are unchanged. `embedded` drops the dialog header so the same flow
+ * reads correctly inside the onboarding sheet's import branch.
  */
-export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function ImportSessionsSetup({
+	rpc,
+	embedded = false,
+}: {
+	rpc: RpcClient | null;
+	embedded?: boolean;
+}): ReactNode {
 	const [agents, setAgents] = useState<AgentSource[] | null>(null);
 	const [picked, setPicked] = useState<Set<string>>(new Set());
 	const [scanning, setScanning] = useState(false);
@@ -63,6 +111,11 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 	const [failedItems, setFailedItems] = useState<Array<{ source: string; title: string }>>([]);
 	const [done, setDone] = useState<{ ok: number; skipped: number; failed: number; grouped?: number } | null>(null);
+	/** Sessions copied in this run, so the list reflects the result immediately. */
+	const [importedNow, setImportedNow] = useState<Set<string>>(new Set());
+
+	const isImported = (source: string, session: ForeignSessionRow): boolean =>
+		Boolean(session.importedSessionId) || importedNow.has(`${source}\u0000${session.id}`);
 
 	// Agent list only — deliberately cheap, no session store scan.
 	useEffect(() => {
@@ -100,6 +153,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setFilter("");
 		setProgress(null);
 		setFailedItems([]);
+		setImportedNow(new Set());
 		try {
 			const list = await rpc.request<ImportSource[]>("import.sources", { sources: [...picked] });
 			setScanned(list ?? []);
@@ -118,6 +172,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setFilter("");
 		setProgress(null);
 		setFailedItems([]);
+		setImportedNow(new Set());
 	};
 
 	/** Per-source sessions grouped by workspace; empty cwd last. */
@@ -146,7 +201,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 	}, [scanned, filter]);
 
 	const toggleSession = (source: string, cwd: string, session: ForeignSessionRow): void => {
-		if (session.importedSessionId) return;
+		if (isImported(source, session)) return;
 		setSelected(prev => {
 			const key = selKey(source, cwd);
 			const next = new Set(prev[key] ?? []);
@@ -160,7 +215,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setSelected(prev => {
 			const key = selKey(source, group.cwd);
 			const cur = prev[key] ?? new Set();
-			const selectable = group.sessions.filter(s => !s.importedSessionId).map(s => s.id);
+			const selectable = group.sessions.filter(s => !isImported(source, s)).map(s => s.id);
 			const allChecked = selectable.length > 0 && selectable.every(id => cur.has(id));
 			const next = new Set(cur);
 			for (const id of selectable) {
@@ -173,6 +228,20 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 
 	const totalSelected = useMemo(() => Object.values(selected).reduce((sum, set) => sum + set.size, 0), [selected]);
 
+	const visibleCount = useMemo(
+		() =>
+			(scanned ?? []).reduce(
+				(sum, src) => sum + (groupsBySource[src.source] ?? []).reduce((n, g) => n + g.sessions.length, 0),
+				0,
+			),
+		[scanned, groupsBySource],
+	);
+
+	const importedTotal = (scanned ?? []).reduce(
+		(sum, src) => sum + src.sessions.filter(s => isImported(src.source, s)).length,
+		0,
+	);
+
 	const importSelected = async (): Promise<void> => {
 		if (!rpc || totalSelected === 0 || busy) return;
 		setBusy(true);
@@ -182,6 +251,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		let skipped = 0;
 		let failed = 0;
 		const failures: Array<{ source: string; title: string }> = [];
+		const copied: string[] = [];
 		// Imported session ids per workspace — the 引导归纳 below folds them
 		// into editable custom groups (one per workspace) after the copy loop.
 		const byCwd = new Map<string, string[]>();
@@ -213,6 +283,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 					skipped += 1;
 				} else {
 					ok += 1;
+					copied.push(`${source}\u0000${id}`);
 					if (res?.sessionId) {
 						const list = byCwd.get(cwd) ?? [];
 						list.push(res.sessionId);
@@ -264,183 +335,326 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setProgress(null);
 		setDone({ ok, skipped, failed, grouped });
 		setSelected({});
+		if (copied.length > 0) {
+			setImportedNow(prev => {
+				const next = new Set(prev);
+				for (const key of copied) next.add(key);
+				return next;
+			});
+		}
 	};
 
+	const sourcesStep = scanned === null;
+	const scanningPct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+
 	return (
-		<div className="flex flex-col gap-2">
-			<p className="text-[12px] text-[var(--color-text-faint)]">{t("settings.importSessionsHint")}</p>
-			<p className="text-[11px] text-[var(--color-text-faint)]">{t("settings.importSafety")}</p>
-			{agents === null ? (
-				<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
-			) : scanned === null ? (
-				<>
-					{agents.length === 0 && (
-						<div className="text-[12px] text-[var(--color-text-faint)]">{t("settings.noAgents")}</div>
-					)}
-					<FadeScroll className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-						{agents.map(agent => (
-							<label key={agent.source} className="flex cursor-pointer items-center gap-2">
-								<input
-									type="checkbox"
-									checked={picked.has(agent.source)}
-									onChange={() => toggleAgent(agent.source)}
-								/>
-								<span className="text-[13px]">{agent.name}</span>
-							</label>
-						))}
-					</FadeScroll>
-					{scanError && <div className="text-[12px] text-[var(--color-danger)]">{scanError}</div>}
-					<button
-						type="button"
-						className="gui-btn gui-btn-primary"
-						disabled={scanning || picked.size === 0}
-						onClick={() => void scan()}
-					>
-						{scanning ? t("settings.scanning") : t("settings.scan")}
-					</button>
-				</>
-			) : (
-				<>
-					{scanned.length === 0 && (
-						<div className="text-[12px] text-[var(--color-text-faint)]">
-							{t("settings.noSessionsFoundSelected")}
+		<div
+			className={`gui-import${embedded ? " gui-import--embedded" : ""}`}
+			data-step={sourcesStep ? "sources" : "sessions"}
+		>
+			{!embedded && (
+				<div className="gui-import-head">
+					<span className="gui-import-head-icon">
+						<MorphIcon icon={sourcesStep ? ScanSearch : Search} size={16} spring="snappy" reducedMotion="user" />
+					</span>
+					<span className="gui-import-head-text">
+						<span className="gui-import-head-title">{t("settings.importSessions")}</span>
+						<span className="gui-import-head-step">
+							{sourcesStep ? t("settings.importStepSources") : t("settings.importStepSessions")}
+						</span>
+					</span>
+					<span className="gui-import-step-count">{sourcesStep ? "1 / 2" : "2 / 2"}</span>
+				</div>
+			)}
+
+			<div className="gui-import-body">
+				{sourcesStep ? (
+					agents === null ? (
+						<div className="gui-import-empty">
+							<MorphIcon icon={LoaderCircle} size={14} className="gui-import-spin" />
+							<span>{t("settings.loading2")}</span>
 						</div>
-					)}
-					{scanned.length > 0 && (
-						<input
-							type="search"
-							className="gui-task-input"
-							value={filter}
-							placeholder={t("settings.searchSessions")}
-							aria-label={t("settings.searchSessions")}
-							onChange={e => setFilter(e.target.value)}
-						/>
-					)}
-					{filter.trim().length > 0 && !scanned.some(src => (groupsBySource[src.source] ?? []).length > 0) && (
-						<div className="text-[12px] text-[var(--color-text-faint)]">{t("general.noResults")}</div>
-					)}
-					<FadeScroll className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-						{scanned.map(src => {
-							const importedCount = src.sessions.filter(s => s.importedSessionId).length;
-							return (
-								<div key={src.source} className="rounded-lg border border-[var(--border)] p-2">
-									<div className="flex items-center justify-between gap-2">
-										<span className="text-[13px] font-semibold">{src.name}</span>
-										<span className="text-[11px] text-[var(--color-text-faint)]">
-											{t("settings.sessionCountLabel", { count: src.count })}
-											{importedCount > 0 ? ` · ${t("settings.importAlreadyImported")} ${importedCount}` : ""}
+					) : agents.length === 0 ? (
+						<div className="gui-import-empty">{t("settings.noAgents")}</div>
+					) : (
+						<FadeScroll className="gui-import-sources">
+							{agents.map(agent => {
+								const on = picked.has(agent.source);
+								return (
+									<button
+										key={agent.source}
+										type="button"
+										className={`gui-import-source${on ? " is-on" : ""}`}
+										aria-pressed={on}
+										onClick={() => toggleAgent(agent.source)}
+									>
+										<span className="gui-import-source-glyph">
+											<MorphIcon icon={sourceIcon(agent.source)} size={15} spring="snappy" />
 										</span>
-									</div>
-									<div className="mt-1 flex flex-col gap-1.5">
-										{(groupsBySource[src.source] ?? []).map(group => {
-											const key = selKey(src.source, group.cwd);
-											const cur = selected[key] ?? new Set();
-											const selectable = group.sessions.filter(s => !s.importedSessionId);
-											const allChecked = selectable.length > 0 && selectable.every(s => cur.has(s.id));
-											const someChecked = selectable.some(s => cur.has(s.id));
-											return (
-												<div key={group.cwd || "no-workspace"}>
-													<label className="flex cursor-pointer items-center gap-2">
-														<input
-															type="checkbox"
-															checked={allChecked}
-															ref={el => {
-																if (el) el.indeterminate = someChecked && !allChecked;
-															}}
-															onChange={() => toggleWorkspace(src.source, group)}
-														/>
-														<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-															{group.cwd || t("settings.noWorkspace")}
-														</span>
-														<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
-															{group.sessions.length}
-														</span>
-													</label>
-													<div className="ml-5 flex flex-col gap-0.5">
+										<span className="gui-import-source-name">{agent.name}</span>
+										<span className="gui-import-tick">
+											<MorphIcon icon={on ? Check : Plus} size={11} spring="snappy" />
+										</span>
+									</button>
+								);
+							})}
+						</FadeScroll>
+					)
+				) : (
+					<>
+						<div className="gui-import-toolbar">
+							<label className="gui-import-search">
+								<MorphIcon icon={Search} size={13} className="gui-import-search-icon" />
+								<input
+									type="search"
+									className="gui-import-search-input"
+									value={filter}
+									placeholder={t("settings.searchSessions")}
+									aria-label={t("settings.searchSessions")}
+									onChange={e => setFilter(e.target.value)}
+								/>
+							</label>
+							{importedTotal > 0 && (
+								<span className="gui-import-imported-total">
+									{t("settings.importImportedCount", { count: importedTotal })}
+								</span>
+							)}
+						</div>
+						{scanned.length === 0 ? (
+							<div className="gui-import-empty">{t("settings.noSessionsFoundSelected")}</div>
+						) : visibleCount === 0 ? (
+							<div className="gui-import-empty">{t("general.noResults")}</div>
+						) : (
+							<FadeScroll className="gui-import-sessions">
+								{scanned.map(src => {
+									const groups = groupsBySource[src.source] ?? [];
+									if (groups.length === 0) return null;
+									const visible = groups.reduce((n, g) => n + g.sessions.length, 0);
+									const importedCount = src.sessions.filter(s => isImported(src.source, s)).length;
+									return (
+										<section key={src.source} className="gui-import-group">
+											<div className="gui-import-group-head">
+												<MorphIcon icon={sourceIcon(src.source)} size={12} />
+												<span className="gui-import-group-name">{src.name}</span>
+												<span className="gui-import-group-count">{visible}</span>
+												{importedCount > 0 && (
+													<span className="gui-import-group-imported">
+														<MorphIcon icon={Check} size={10} />
+														{importedCount}
+													</span>
+												)}
+											</div>
+											{groups.map(group => {
+												const key = selKey(src.source, group.cwd);
+												const cur = selected[key] ?? new Set<string>();
+												const selectable = group.sessions.filter(s => !isImported(src.source, s));
+												const allChecked = selectable.length > 0 && selectable.every(s => cur.has(s.id));
+												const someChecked = selectable.some(s => cur.has(s.id));
+												const name = group.cwd ? workspaceName(group.cwd) : t("settings.noWorkspace");
+												return (
+													<div key={group.cwd || "no-workspace"} className="gui-import-ws">
+														<div className="gui-import-ws-head">
+															<button
+																type="button"
+																className={`gui-import-tick gui-import-tick--ws${
+																	allChecked || someChecked ? " is-on" : ""
+																}${someChecked && !allChecked ? " is-partial" : ""}`}
+																role="checkbox"
+																aria-checked={allChecked ? true : someChecked ? "mixed" : false}
+																aria-label={
+																	allChecked ? t("settings.deselectAll") : t("settings.selectAll")
+																}
+																title={allChecked ? t("settings.deselectAll") : t("settings.selectAll")}
+																disabled={selectable.length === 0}
+																onClick={() => toggleWorkspace(src.source, group)}
+															>
+																<MorphIcon
+																	icon={allChecked ? Check : someChecked ? Minus : Plus}
+																	size={10}
+																	spring="snappy"
+																/>
+															</button>
+															<MorphIcon icon={FolderClosed} size={12} className="gui-import-ws-icon" />
+															<span className="gui-import-ws-name" title={group.cwd || undefined}>
+																{name}
+															</span>
+															{group.cwd && (
+																<span className="gui-import-ws-path" title={group.cwd}>
+																	{group.cwd}
+																</span>
+															)}
+															<span className="gui-import-ws-count">{group.sessions.length}</span>
+														</div>
 														{group.sessions.map(s => {
-															const imported = Boolean(s.importedSessionId);
-															const checked = imported || cur.has(s.id);
+															const imported = isImported(src.source, s);
+															const checked = cur.has(s.id);
 															return (
-																<label
+																<button
 																	key={s.id}
-																	className={`flex items-center gap-2${imported ? " opacity-70" : " cursor-pointer"}`}
+																	type="button"
+																	className={`gui-import-session${
+																		imported ? " is-imported" : checked ? " is-on" : ""
+																	}`}
+																	disabled={imported}
+																	aria-pressed={imported || checked}
 																	title={s.cwd}
+																	onClick={() => toggleSession(src.source, group.cwd, s)}
 																>
-																	<input
-																		type="checkbox"
-																		checked={checked}
-																		disabled={imported}
-																		onChange={() => toggleSession(src.source, group.cwd, s)}
-																	/>
-																	<span className="min-w-0 flex-1 truncate text-[12px]">
+																	<span className="gui-import-tick gui-import-tick--row">
+																		<MorphIcon
+																			icon={imported || checked ? Check : Plus}
+																			size={10}
+																			spring="snappy"
+																		/>
+																	</span>
+																	<span className="gui-import-session-title">
 																		{s.title || s.firstMessage || s.id}
 																	</span>
 																	{imported && (
-																		<span className="flex-none rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-faint)]">
+																		<span className="gui-import-tag">
+																			<MorphIcon icon={Check} size={9} />
 																			{t("settings.importAlreadyImported")}
 																		</span>
 																	)}
-																	<span className="flex-none text-[10px] text-[var(--color-text-faint)]">
+																	<span className="gui-import-session-meta">
 																		{formatWhen(new Date(s.modified).getTime())}
-																		{s.messageCount > 0 ? ` · ${s.messageCount} msgs` : ""}
+																		{s.messageCount > 0
+																			? ` · ${t("settings.importMessageCount", { count: s.messageCount })}`
+																			: ""}
 																	</span>
-																</label>
+																</button>
 															);
 														})}
 													</div>
-												</div>
-											);
-										})}
-									</div>
-								</div>
-							);
+												);
+											})}
+										</section>
+									);
+								})}
+							</FadeScroll>
+						)}
+					</>
+				)}
+			</div>
+
+			<div className="gui-import-foot">
+				{busy && progress && (
+					<div
+						className="gui-import-progress"
+						role="progressbar"
+						aria-valuemin={0}
+						aria-valuemax={progress.total}
+						aria-valuenow={progress.done}
+						aria-label={t("settings.importProgress", {
+							done: String(progress.done),
+							total: String(progress.total),
 						})}
-					</FadeScroll>
-					{scanError && <div className="text-[12px] text-[var(--color-danger)]">{scanError}</div>}
-					{done && (
-						<div className="text-[12px] text-[var(--color-text-faint)]">
-							{t("settings.importDone", { count: done.ok })}
-							{done.skipped > 0 ? ` · ${t("settings.importSkipped", { count: done.skipped })}` : ""}
-							{done.failed > 0 ? ` · ${t("settings.importFailed", { count: done.failed })}` : ""}
-							{done.grouped ? ` · ${t("settings.importGrouped", { count: done.grouped })}` : ""}
-						</div>
-					)}
-					{failedItems.length > 0 && (
-						<div className="flex flex-col gap-0.5 text-[11px] text-[var(--color-danger)]">
-							{failedItems.slice(0, 5).map(item => (
-								<span key={`${item.source}:${item.title}`} className="truncate">
-									{item.source}: {item.title}
-								</span>
-							))}
-						</div>
-					)}
-					<div className="flex items-center justify-between">
-						<button
-							type="button"
-							className="gui-btn gui-btn-ghost"
-							disabled={busy || scanning}
-							onClick={changeAgents}
-						>
-							{t("settings.changeSelection")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn gui-btn-primary"
-							disabled={busy || totalSelected === 0}
-							onClick={() => void importSelected()}
-						>
-							{busy
-								? progress
-									? t("settings.importProgress", {
-											done: String(progress.done),
-											total: String(progress.total),
-										})
-									: t("settings.importing")
-								: t("settings.importSelected", { count: totalSelected })}
-						</button>
+					>
+						<span className="gui-import-progress-track">
+							<span className="gui-import-progress-fill" style={{ width: `${scanningPct}%` }} />
+						</span>
+						<span className="gui-import-progress-text">
+							{t("settings.importProgress", {
+								done: String(progress.done),
+								total: String(progress.total),
+							})}
+						</span>
 					</div>
-				</>
-			)}
+				)}
+				<div
+					className={`gui-import-foot-row${
+						done || failedItems.length > 0 || scanError ? " gui-import-foot-row--stack" : ""
+					}`}
+				>
+					<span className="gui-import-status">
+						{done ? (
+							<span className="gui-import-status-line gui-import-status-line--ok">
+								<MorphIcon icon={Check} size={12} />
+								<span>
+									{t("settings.importDone", { count: done.ok })}
+									{done.skipped > 0 ? ` · ${t("settings.importSkipped", { count: done.skipped })}` : ""}
+									{done.grouped ? ` · ${t("settings.importGrouped", { count: done.grouped })}` : ""}
+								</span>
+							</span>
+						) : null}
+						{failedItems.length > 0 ? (
+							<span
+								className="gui-import-status-line gui-import-status-line--error"
+								title={failedItems.map(item => `${item.source}: ${item.title}`).join("\n")}
+							>
+								<MorphIcon icon={TriangleAlert} size={12} />
+								<span>
+									{t("settings.importFailed", { count: failedItems.length })} · {failedItems[0]?.title}
+									{failedItems.length > 1 ? ` +${failedItems.length - 1}` : ""}
+								</span>
+							</span>
+						) : null}
+						{scanError ? (
+							<span className="gui-import-status-line gui-import-status-line--error" title={scanError}>
+								<MorphIcon icon={TriangleAlert} size={12} />
+								<span>{scanError}</span>
+							</span>
+						) : null}
+						{!done && failedItems.length === 0 && !scanError && (
+							<span className="gui-import-hint" title={t("settings.importSafety")}>
+								<MorphIcon icon={ShieldCheck} size={12} />
+								<span>{t("settings.importSafety")}</span>
+							</span>
+						)}
+					</span>
+					<span className="gui-import-actions">
+						{!sourcesStep && (
+							<button
+								type="button"
+								className="gui-btn gui-btn-ghost"
+								disabled={busy || scanning}
+								onClick={changeAgents}
+							>
+								<MorphIcon icon={ArrowLeft} size={12} spring="snappy" />
+								{t("settings.changeSelection")}
+							</button>
+						)}
+						{sourcesStep ? (
+							<button
+								type="button"
+								className="gui-btn gui-btn-primary"
+								disabled={scanning || picked.size === 0}
+								onClick={() => void scan()}
+							>
+								<MorphIcon
+									icon={scanning ? LoaderCircle : ScanSearch}
+									size={13}
+									spring="snappy"
+									className={scanning ? "gui-import-spin" : undefined}
+								/>
+								{scanning ? t("settings.scanning") : t("settings.scan")}
+							</button>
+						) : !done || totalSelected > 0 ? (
+							<button
+								type="button"
+								className="gui-btn gui-btn-primary"
+								disabled={busy || totalSelected === 0}
+								onClick={() => void importSelected()}
+							>
+								<MorphIcon
+									icon={busy ? LoaderCircle : Download}
+									size={13}
+									spring="snappy"
+									className={busy ? "gui-import-spin" : undefined}
+								/>
+								{busy
+									? progress
+										? t("settings.importProgress", {
+												done: String(progress.done),
+												total: String(progress.total),
+											})
+										: t("settings.importing")
+									: t("settings.importSelected", { count: totalSelected })}
+							</button>
+						) : null}
+					</span>
+				</div>
+			</div>
 		</div>
 	);
 }

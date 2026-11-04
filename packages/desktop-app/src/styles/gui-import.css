@@ -1,0 +1,672 @@
+/* Import sessions (ImportSessionsSetup.tsx) — two-step import picker.
+ *
+ * Step 1 is a source picker: one row per importable agent (glyph, name, custom
+ * selection indicator), never a raw checkbox list. Step 2 is the scan result:
+ * searchable sessions grouped by source and workspace, already-imported rows
+ * tagged and inert, with one sticky footer carrying the actions plus compact
+ * progress / failure feedback.
+ *
+ * The same component renders inside the DialogFrame (`.gui-import-dialog`) and
+ * inline in the onboarding sheet (`.gui-import--embedded`): the dialog mode
+ * owns the height and scrolls the list, the embedded mode caps the list height
+ * inside the sheet's own scroll container and drops the dialog header.
+ */
+
+.gui-import {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	gap: var(--space-3);
+	container: gui-import / inline-size;
+	color: var(--fg);
+	font-size: var(--ui-font-size-sm);
+}
+
+/* The default dialog frame is 600×420; the picker needs the session list to
+ * breathe while the footer stays pinned. The source step is shorter by nature
+ * (a grid of agent cards), so it sizes to content instead of leaving a gap. */
+.gui-dialog.gui-import-dialog {
+	width: min(700px, 92vw);
+	height: min(580px, 86vh);
+}
+
+.gui-dialog.gui-import-dialog:has(.gui-import[data-step="sources"]) {
+	height: auto;
+	max-height: min(580px, 86vh);
+}
+
+.gui-dialog.gui-import-dialog .gui-import {
+	flex: 1 1 auto;
+	min-height: 0;
+	gap: 0;
+}
+
+/* ── Step header (dialog only) ───────────────────────────────────────── */
+
+.gui-import-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: none;
+	padding: 14px 18px 12px;
+}
+
+.gui-import-head-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 30px;
+	height: 30px;
+	border-radius: var(--radius-lg);
+	background: var(--accent-muted);
+	color: var(--accent);
+}
+
+.gui-import-head-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.gui-import-head-title {
+	overflow: hidden;
+	color: var(--fg);
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-import-head-step {
+	color: var(--fg-faint);
+	font-size: 11.5px;
+}
+
+.gui-import-step-count {
+	flex: none;
+	color: var(--fg-faint);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.04em;
+}
+
+/* ── Body ────────────────────────────────────────────────────────────── */
+
+.gui-import-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: var(--space-3);
+	min-height: 0;
+	padding: 12px 18px;
+}
+
+.gui-import--embedded .gui-import-body {
+	flex: 0 0 auto;
+	gap: var(--space-2);
+	padding: 0;
+}
+
+.gui-import-empty {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 18px 4px;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-sm);
+}
+
+/* ── Step 1: source rows ─────────────────────────────────────────────── */
+
+.gui-import-sources {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-content: start;
+	gap: 6px;
+	min-height: 0;
+	max-height: 252px;
+	overflow-y: auto;
+	padding-right: 4px;
+}
+
+.gui-import--embedded .gui-import-sources {
+	max-height: 236px;
+}
+
+.gui-import-source {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 7px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background-color 140ms ease,
+		border-color 140ms ease;
+}
+
+.gui-import-source:hover {
+	border-color: color-mix(in oklab, var(--accent) 28%, var(--border));
+	background: var(--color-surface-raised);
+}
+
+.gui-import-source.is-on {
+	border-color: var(--accent-bd);
+	background: color-mix(in oklab, var(--accent) 9%, var(--color-surface));
+}
+
+.gui-import-source-glyph {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+	color: var(--fg-muted);
+	transition:
+		background-color 140ms ease,
+		color 140ms ease;
+}
+
+.gui-import-source.is-on .gui-import-source-glyph {
+	background: var(--accent-muted);
+	color: var(--accent);
+}
+
+.gui-import-source-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ── Selection indicator (rows, workspace headers) ───────────────────── */
+
+.gui-import-tick {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg-faint);
+	font: inherit;
+	cursor: pointer;
+	transition:
+		background-color 140ms ease,
+		border-color 140ms ease,
+		color 140ms ease;
+}
+
+.gui-import-source.is-on .gui-import-tick,
+.gui-import-session.is-on .gui-import-tick,
+.gui-import-tick.is-on {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+.gui-import-tick--ws {
+	position: relative;
+	width: 16px;
+	height: 16px;
+}
+
+/* The visible box stays 16px; the hit area is padded out to a comfortable
+ * desktop target without changing the workspace header's geometry. */
+.gui-import-tick--ws::after {
+	content: "";
+	position: absolute;
+	inset: -7px;
+}
+
+.gui-import-tick--row {
+	width: 16px;
+	height: 16px;
+	cursor: inherit;
+}
+
+.gui-import-tick.is-partial {
+	border-color: var(--accent-bd);
+	color: var(--accent);
+}
+
+.gui-import-tick.is-partial:not(.is-on) {
+	background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.gui-import-tick:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* ── Step 2: search + grouped session list ───────────────────────────── */
+
+.gui-import-toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex: none;
+}
+
+.gui-import-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 1 1 auto;
+	min-width: 0;
+	height: var(--control-height-sm);
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-sunken);
+	transition:
+		border-color 140ms ease,
+		box-shadow 140ms ease;
+}
+
+.gui-import-search:focus-within {
+	border-color: var(--color-accent-bd);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.gui-import-search-icon {
+	flex: none;
+	color: var(--fg-faint);
+}
+
+.gui-import-search-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-import-search-input::placeholder {
+	color: var(--fg-faint);
+}
+
+.gui-import-imported-total {
+	flex: none;
+	color: var(--fg-faint);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.gui-import-sessions {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-height: 0;
+	overflow-y: auto;
+	padding-right: 4px;
+}
+
+.gui-import--embedded .gui-import-sessions {
+	flex: 0 1 auto;
+	max-height: 300px;
+}
+
+.gui-import-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-import-group-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 2px;
+	color: var(--fg-faint);
+}
+
+.gui-import-group-name {
+	color: var(--fg-muted);
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+.gui-import-group-count {
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-import-group-imported {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin-left: auto;
+	color: var(--color-ok);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-import-ws {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+}
+
+.gui-import-ws + .gui-import-ws {
+	margin-top: 6px;
+}
+
+.gui-import-ws-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 6px 9px;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+}
+
+.gui-import-ws-icon {
+	flex: none;
+	color: var(--fg-faint);
+}
+
+.gui-import-ws-name {
+	flex: none;
+	max-width: 52%;
+	overflow: hidden;
+	color: var(--fg-muted);
+	font-size: 11.5px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-import-ws-path {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-import-ws-count {
+	flex: none;
+	margin-left: auto;
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-import-session {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 9px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 120ms ease;
+}
+
+.gui-import-session + .gui-import-session {
+	border-top: 1px solid color-mix(in oklab, var(--fg) 7%, transparent);
+}
+
+.gui-import-session:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+}
+
+.gui-import-session.is-on {
+	background: color-mix(in oklab, var(--accent) 9%, transparent);
+}
+
+.gui-import-session.is-imported,
+.gui-import-session:disabled {
+	opacity: 0.62;
+	cursor: default;
+}
+
+.gui-import-session.is-imported .gui-import-tick {
+	border-color: color-mix(in oklab, var(--color-ok) 38%, var(--border));
+	background: color-mix(in oklab, var(--color-ok) 16%, transparent);
+	color: var(--color-ok);
+}
+
+.gui-import-session-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	font-size: var(--ui-font-size-sm);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-import-session-meta {
+	flex: none;
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.gui-import-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-ok) 14%, transparent);
+	color: var(--color-ok);
+	font-size: 10px;
+	white-space: nowrap;
+}
+
+/* ── Sticky footer: safety / progress / failures + actions ───────────── */
+
+.gui-import-foot {
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 18px 14px;
+	border-top: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+}
+
+.gui-import--embedded .gui-import-foot {
+	padding: 10px 0 0;
+	border-top: 0;
+	background: transparent;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+.gui-import-progress {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.gui-import-progress-track {
+	display: block;
+	overflow: hidden;
+	height: 3px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+}
+
+.gui-import-progress-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--accent);
+	transition: width 180ms var(--gui-ease-out);
+}
+
+.gui-import-progress-text {
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-import-foot-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.gui-import-status {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+	color: var(--fg-faint);
+	font-size: 11px;
+}
+
+.gui-import-status-line,
+.gui-import-hint {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+}
+
+.gui-import-status-line > span,
+.gui-import-hint > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-import-status-line--ok {
+	color: var(--color-ok);
+}
+
+.gui-import-status-line--error {
+	color: var(--color-danger);
+}
+
+.gui-import-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex: none;
+}
+
+.gui-import-actions .gui-btn {
+	white-space: nowrap;
+}
+
+/* Result / failure feedback keeps the full width; actions drop beneath it so
+ * the summary never competes with the buttons for the same line. */
+.gui-import-foot-row--stack {
+	flex-wrap: wrap;
+}
+
+.gui-import-foot-row--stack .gui-import-status {
+	flex: 1 1 100%;
+}
+
+.gui-import-foot-row--stack .gui-import-actions {
+	margin-left: auto;
+}
+
+.gui-import-spin {
+	animation: gui-import-spin 900ms linear infinite;
+	transform-origin: center;
+}
+
+@keyframes gui-import-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Narrow hosts (the onboarding sheet's import branch is ~430–490px wide inside
+ * a 1000px card): secondary metadata yields before the row titles do. */
+@container gui-import (max-width: 520px) {
+	.gui-import-session-meta,
+	.gui-import-imported-total {
+		display: none;
+	}
+
+	/* Narrow footer: the safety / status line keeps the full width and the
+	 * actions sit beneath it instead of squeezing both into one row. */
+	.gui-import-foot-row {
+		flex-wrap: wrap;
+	}
+
+	.gui-import-status {
+		order: 1;
+		flex: 1 1 100%;
+	}
+
+	.gui-import-actions {
+		order: 2;
+		margin-left: auto;
+	}
+}
+
+@container gui-import (max-width: 440px) {
+	.gui-import-ws-path {
+		display: none;
+	}
+
+	.gui-import-ws-name {
+		max-width: 70%;
+	}
+
+	.gui-import-sources {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.gui-motion-off .gui-import-spin,
+.gui-motion-off .gui-import-progress-fill {
+	animation: none;
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-import-spin {
+		animation: none;
+	}
+
+	.gui-import-progress-fill,
+	.gui-import-source,
+	.gui-import-source-glyph,
+	.gui-import-tick,
+	.gui-import-session,
+	.gui-import-search {
+		transition: none;
+	}
+}

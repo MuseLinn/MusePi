@@ -6002,51 +6002,6 @@ body.gui-resizing {
 	box-shadow: inset 0 2px 0 var(--color-accent);
 }
 
-.gui-browser-device-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-shrink: 0;
-	padding: 5px 8px;
-	border-bottom: 1px solid var(--border);
-	overflow-x: auto;
-	font-size: 10.5px;
-	color: var(--color-text-muted);
-}
-
-.gui-browser-device-toolbar label,
-.gui-browser-device-dimensions {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	flex-shrink: 0;
-}
-
-.gui-browser-device-toolbar select,
-.gui-browser-device-toolbar input {
-	min-height: 24px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
-	color: var(--color-text);
-	font: inherit;
-}
-
-.gui-browser-device-toolbar select {
-	max-width: 132px;
-	padding: 1px 5px;
-}
-
-.gui-browser-device-dimensions input {
-	width: 58px;
-	padding: 1px 4px;
-	font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
-}
-
-.gui-browser-device-dimensions input:disabled {
-	opacity: 0.45;
-}
-
 .gui-browser-content[data-background="light"] {
 	background: #eef0f3;
 }

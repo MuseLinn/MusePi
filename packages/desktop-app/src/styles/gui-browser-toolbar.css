@@ -1,0 +1,320 @@
+/*
+ * Device toolbar (managed browser pane).
+ *
+ * Owned by components/browser-device-toolbar.tsx, which imports this file —
+ * the browser surface carries its own stylesheet instead of growing
+ * gui-settings.css. Controls use the shared tokens only (surface / border /
+ * accent / radius ladder / motion), and every interactive box is at least
+ * --control-height-touch tall so the strip stays usable with a touch or
+ * trackpad.
+ *
+ * Width tiers resolve against .gui-browser-pane's container
+ * (gui-settings.css declares container-type: inline-size there):
+ *   ≤659px  exact size fields fold away — the dashed viewport frame's drag
+ *           handles resize the same two numbers, so nothing is lost.
+ *   ≤519px  page-background swatches fold away; preset, display scale and
+ *           the collapse toggle stay reachable at any pane width.
+ * Groups wrap as a last resort instead of clipping.
+ */
+
+.gui-browser-toolbar {
+	--browser-toolbar-control: var(--control-height-touch);
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	flex-shrink: 0;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-browser-toolbar-body {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	flex: 1 1 auto;
+	min-width: 0;
+	animation: gui-browser-toolbar-in var(--gui-motion-fade-in) ease;
+}
+
+@keyframes gui-browser-toolbar-in {
+	from {
+		opacity: 0;
+		translate: 0 -2px;
+	}
+	to {
+		opacity: 1;
+		translate: 0 0;
+	}
+}
+
+/* Presets: shared sliding-thumb Segmented, icon-only. The override gives
+ * each segment the full touch box (44 × 44) instead of the header's 30 × 28
+ * rhythm, and the thumb spans the full segment height. */
+.gui-browser-toolbar .gui-seg {
+	width: auto;
+	min-width: 0;
+	max-width: none;
+	height: var(--browser-toolbar-control);
+	padding: 0;
+}
+
+.gui-browser-toolbar .gui-seg-thumb {
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: calc(100% / var(--seg-count));
+}
+
+.gui-browser-toolbar .gui-seg--icon .gui-seg-item {
+	width: var(--browser-toolbar-control);
+	height: var(--browser-toolbar-control);
+}
+
+/* Emulated size: one capsule holding both numbers, so the pair reads as one
+ * value (`393 × 852`) rather than two unrelated inputs. */
+.gui-browser-toolbar-size {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	height: var(--browser-toolbar-control);
+	padding: 0 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	transition:
+		border-color var(--gui-motion-chip) ease,
+		box-shadow var(--gui-motion-chip) ease;
+}
+
+.gui-browser-toolbar-size:focus-within {
+	border-color: var(--color-accent-bd);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-browser-toolbar-input {
+	width: 46px;
+	height: 100%;
+	padding: 0 2px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-sm);
+	text-align: center;
+	outline: none;
+	transition: background var(--gui-motion-chip) ease;
+}
+
+.gui-browser-toolbar-input:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-browser-toolbar-input:focus {
+	background: var(--color-surface-sunken);
+}
+
+.gui-browser-toolbar-size-x {
+	padding: 0 1px;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+/* Display scale: shared GuiSelect trigger, sized to the strip. */
+.gui-browser-toolbar .gui-select-trigger {
+	min-width: 92px;
+	height: var(--browser-toolbar-control);
+	padding: 0 8px 0 10px;
+	gap: 6px;
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	white-space: nowrap;
+}
+
+.gui-browser-toolbar .gui-select-trigger:hover {
+	border-color: var(--color-accent-bd);
+}
+
+/* Page background: three swatches, one radio group (roving tabindex +
+ * arrow keys). The disc grows on hover and carries the accent ring when
+ * selected, so state is legible without a redundant label. */
+.gui-browser-toolbar-bg {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.gui-browser-toolbar-swatch {
+	position: relative;
+	width: var(--browser-toolbar-control);
+	height: var(--browser-toolbar-control);
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.gui-browser-toolbar-swatch::before {
+	content: "";
+	position: absolute;
+	inset: 10px;
+	border-radius: 50%;
+	background: var(--swatch-fill);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-text) 16%, transparent);
+	transition:
+		inset var(--gui-motion-chip) var(--spring-snappy),
+		box-shadow var(--gui-motion-chip) ease;
+}
+
+.gui-browser-toolbar-swatch:hover::before {
+	inset: 8px;
+}
+
+.gui-browser-toolbar-swatch[aria-checked="true"]::before {
+	inset: 8px;
+	box-shadow:
+		inset 0 0 0 1px color-mix(in oklab, var(--color-text) 14%, transparent),
+		0 0 0 2px var(--color-accent);
+}
+
+.gui-browser-toolbar-swatch--auto {
+	--swatch-fill: linear-gradient(135deg, #eef0f3 0 50%, #101216 50% 100%);
+}
+
+.gui-browser-toolbar-swatch--light {
+	--swatch-fill: #eef0f3;
+}
+
+.gui-browser-toolbar-swatch--dark {
+	--swatch-fill: #101216;
+}
+
+/* Badge keeps the check readable on all three discs (white check on the
+ * light half of "auto" would otherwise disappear). */
+.gui-browser-toolbar-swatch-check {
+	position: relative;
+	z-index: 1;
+	width: 12px;
+	height: 12px;
+	padding: 2px;
+	border-radius: 50%;
+	box-sizing: content-box;
+	background: var(--color-surface-raised);
+	color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--border);
+}
+
+.gui-browser-toolbar-swatch:focus-visible,
+.gui-browser-toolbar-toggle:focus-visible {
+	outline: 2px solid var(--color-accent-bd);
+	outline-offset: 2px;
+}
+
+.gui-browser-toolbar-swatch:active::before {
+	inset: 12px;
+}
+
+/* Collapse: one button, morphing chevron (morphicons). Expanded it is an
+ * icon button on the trailing edge; collapsed the same button becomes the
+ * compact reveal pill that carries the active preset. */
+.gui-browser-toolbar-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	flex: 0 0 auto;
+	min-width: var(--browser-toolbar-control);
+	height: var(--browser-toolbar-control);
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition:
+		background var(--gui-motion-chip) ease,
+		color var(--gui-motion-chip) ease;
+}
+
+.gui-browser-toolbar-toggle:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-browser-toolbar-toggle:active {
+	transform: scale(0.96);
+}
+
+.gui-browser-toolbar--collapsed {
+	width: fit-content;
+	padding: 4px 10px;
+	border-bottom-color: transparent;
+	background: transparent;
+}
+
+.gui-browser-toolbar-toggle--collapsed {
+	padding: 0 10px 0 12px;
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--color-surface-raised) 92%, transparent);
+	color: var(--color-text);
+	box-shadow: 0 1px 2px oklch(0 0 0 / 10%);
+	animation: gui-browser-toolbar-in var(--gui-motion-fade-in) ease;
+}
+
+.gui-browser-toolbar-toggle-device {
+	flex: 0 0 auto;
+	color: var(--color-text-muted);
+}
+
+.gui-browser-toolbar-toggle-label {
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 550;
+}
+
+@container (max-width: 659px) {
+	.gui-browser-toolbar-size {
+		display: none;
+	}
+}
+
+@container (max-width: 519px) {
+	.gui-browser-toolbar-bg {
+		display: none;
+	}
+}
+
+.gui-motion-off .gui-browser-toolbar-body,
+.gui-motion-off .gui-browser-toolbar-toggle--collapsed {
+	animation: none;
+}
+
+.gui-motion-off .gui-browser-toolbar-swatch::before,
+.gui-motion-off .gui-browser-toolbar-toggle {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-browser-toolbar-body,
+	.gui-browser-toolbar-toggle--collapsed {
+		animation: none;
+	}
+
+	.gui-browser-toolbar-swatch::before,
+	.gui-browser-toolbar-toggle {
+		transition: none;
+	}
+}

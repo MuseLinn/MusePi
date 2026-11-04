@@ -115,9 +115,9 @@ describe("FilePane panel tab opening", () => {
 			/>
 		);
 		await act(async () => root.render(pane(null)));
-		await waitFor(() => container.querySelector(".gui-filepane-file-btn") !== null);
+		await waitFor(() => container.querySelector(".gui-filepane-row") !== null);
 
-		await act(async () => container.querySelector<HTMLButtonElement>(".gui-filepane-file-btn")?.click());
+		await act(async () => container.querySelector<HTMLButtonElement>(".gui-filepane-row")?.click());
 		expect(opens).toEqual([{ path: "a.txt", pin: false }]);
 		expect(reads).toEqual([]);
 
@@ -126,10 +126,10 @@ describe("FilePane panel tab opening", () => {
 		expect(reads).toEqual(["/workspace/a.txt"]);
 
 		await act(async () => root.render(pane(null)));
-		await waitFor(() => container.querySelector(".gui-filepane-file-btn") !== null);
+		await waitFor(() => container.querySelector(".gui-filepane-row") !== null);
 		await act(async () =>
 			container
-				.querySelector<HTMLButtonElement>(".gui-filepane-file-btn")
+				.querySelector<HTMLButtonElement>(".gui-filepane-row")
 				?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, detail: 2 })),
 		);
 		expect(opens.at(-1)).toEqual({ path: "a.txt", pin: true });
@@ -171,9 +171,9 @@ describe("FilePane panel tab opening", () => {
 		expect(container.querySelector(".gui-filepane-list")?.getAttribute("aria-hidden")).toBe("true");
 
 		await act(async () => container.querySelector<HTMLButtonElement>(".gui-filepane-tree-toggle")?.click());
-		await waitFor(() => container.querySelectorAll(".gui-filepane-file-btn").length === 2);
+		await waitFor(() => container.querySelectorAll(".gui-filepane-row").length === 2);
 		expect(container.querySelector<HTMLElement>(".gui-filepane-list")?.inert).toBe(false);
-		const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>(".gui-filepane-file-btn"));
+		const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>(".gui-filepane-row"));
 		await act(async () => buttons.find(button => button.textContent === "a.txt")?.click());
 		expect(opens).toEqual([]);
 

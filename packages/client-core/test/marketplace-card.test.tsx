@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { Container, Cpu, FlaskConical, GitBranch, MonitorPlay, Package, ShieldCheck, Wrench } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarketplaceCard } from "../src/components/marketplace/MarketplaceCard";
 import { MarketplaceGrid } from "../src/components/marketplace/MarketplaceGrid";
@@ -19,61 +20,54 @@ function makeEntry(over: Partial<MarketplaceCardEntry> = {}): MarketplaceCardEnt
 }
 
 describe("resolveCardIcon", () => {
-	it("uses the explicit icon when supplied", () => {
-		expect(resolveCardIcon({ name: "x", icon: "🛠" })).toBe("🛠");
+	it("uses a recognized explicit vector name", () => {
+		expect(resolveCardIcon({ name: "x", icon: "lucide:shield" })).toBe(ShieldCheck);
+		expect(resolveCardIcon({ name: "x", icon: "wrench" })).toBe(Wrench);
 	});
 
-	it("strips control characters from the explicit icon", () => {
-		expect(resolveCardIcon({ name: "x", icon: "🛠\u0007\u0000" })).toBe("🛠");
+	it("maps legacy icon identifiers through the keyword table", () => {
+		expect(resolveCardIcon({ name: "x", icon: "tabler:test-pipe" })).toBe(FlaskConical);
+		expect(resolveCardIcon({ name: "x", icon: "github" })).toBe(GitBranch);
 	});
 
-	it("caps the explicit icon length", () => {
-		expect(resolveCardIcon({ name: "x", icon: "abcdefghijklmnop" }).length).toBe(8);
-	});
-
-	it("preserves short URIs verbatim", () => {
-		// The 8-char cap is for emoji/glyph abuse, not real URIs. Short
-		// file:// and https:// icons come back untouched; long ones get
-		// truncated just like any other over-long icon.
-		expect(resolveCardIcon({ name: "x", icon: "file://x" })).toBe("file://x");
-	});
-
-	it("truncates URIs longer than the 8-char glyph cap", () => {
-		const truncated = resolveCardIcon({ name: "x", icon: "https://example.com/long.png" });
-		expect(truncated.length).toBe(8);
+	it("ignores emoji, glyphs and artwork URIs", () => {
+		// The GUI keeps one vector language: a catalog author's emoji or
+		// image URI falls through to the category/keyword heuristics.
+		expect(resolveCardIcon({ name: "x", icon: "🛠" })).toBe(Package);
+		expect(resolveCardIcon({ name: "x", icon: "file://x" })).toBe(Package);
 	});
 
 	it("falls back to category table", () => {
-		expect(resolveCardIcon({ name: "x", category: "security" })).toBe("🛡️");
-		expect(resolveCardIcon({ name: "x", category: "ai" })).toBe("🧠");
+		expect(resolveCardIcon({ name: "x", category: "security" })).toBe(ShieldCheck);
+		expect(resolveCardIcon({ name: "x", category: "ai" })).toBe(Cpu);
 	});
 
 	it("falls back to keyword scan when no category match", () => {
-		expect(resolveCardIcon({ name: "playwright-mcp" })).toBe("🎭");
-		expect(resolveCardIcon({ name: "docker-tool" })).toBe("🐳");
-		expect(resolveCardIcon({ name: "github-mcp" })).toBe("🐙");
+		expect(resolveCardIcon({ name: "playwright-mcp" })).toBe(MonitorPlay);
+		expect(resolveCardIcon({ name: "docker-tool" })).toBe(Container);
+		expect(resolveCardIcon({ name: "github-mcp" })).toBe(GitBranch);
 	});
 
 	it("falls back to neutral when nothing matches", () => {
-		expect(resolveCardIcon({ name: "x" })).toBe("🧩");
+		expect(resolveCardIcon({ name: "x" })).toBe(Package);
 	});
 
 	it("ignores empty needles", () => {
-		expect(resolveCardIcon({ name: "x" })).toBe("🧩");
-		expect(resolveCardIcon({ name: "" })).toBe("🧩");
+		expect(resolveCardIcon({ name: "x" })).toBe(Package);
+		expect(resolveCardIcon({ name: "" })).toBe(Package);
 	});
 
 	it("category wins over keyword (category lookup is narrower)", () => {
 		// 'aws' would match the aws keyword icon, but the category explicitly
 		// takes precedence — so security category must surface the shield.
-		expect(resolveCardIcon({ name: "aws", category: "security" })).toBe("🛡️");
+		expect(resolveCardIcon({ name: "aws", category: "security" })).toBe(ShieldCheck);
 	});
 });
 
 describe("MarketplaceCard", () => {
-	it("renders the resolved icon and the name", () => {
+	it("renders the resolved vector icon and the name", () => {
 		const html = renderToStaticMarkup(<MarketplaceCard entry={makeEntry()} />);
-		expect(html).toContain("🐙");
+		expect(html).toContain("lucide-git-branch");
 		expect(html).toContain("github-mcp");
 	});
 
@@ -92,23 +86,24 @@ describe("MarketplaceCard", () => {
 		expect(html).toContain("Talk to GitHub from your agent.");
 	});
 
-	it("renders short install counts (under 1000) verbatim", () => {
+	it("renders short install counts (under 1000) with a vector glyph", () => {
 		const html = renderToStaticMarkup(<MarketplaceCard entry={makeEntry({ installs: 742 })} />);
-		expect(html).toContain("↓ 742");
+		expect(html).toContain("lucide-download");
+		expect(html).toContain("742");
 	});
 
 	it("renders thousand-suffix counts in the compact form", () => {
 		// 5-digit counts (≥10k) drop the decimal to keep the chip narrow;
 		// 4-digit counts (≥1k, <10k) keep one decimal so 1_234 → 1.2k.
 		const html1 = renderToStaticMarkup(<MarketplaceCard entry={makeEntry({ installs: 1_234 })} />);
-		expect(html1).toContain("↓ 1.2k");
+		expect(html1).toContain("1.2k");
 		const html2 = renderToStaticMarkup(<MarketplaceCard entry={makeEntry({ installs: 12_300 })} />);
-		expect(html2).toContain("↓ 12k");
+		expect(html2).toContain("12k");
 	});
 
 	it("renders million-suffix counts in the compact form", () => {
 		const html = renderToStaticMarkup(<MarketplaceCard entry={makeEntry({ installs: 2_500_000 })} />);
-		expect(html).toContain("↓ 2.5M");
+		expect(html).toContain("2.5M");
 	});
 
 	it("renders the author and category chips", () => {
@@ -145,9 +140,12 @@ describe("MarketplaceCard", () => {
 });
 
 describe("MarketplaceGrid", () => {
-	it("renders the empty-state message when no entries match", () => {
+	it("renders the catalog-empty message when the catalog is empty", () => {
 		const html = renderToStaticMarkup(<MarketplaceGrid entries={[]} />);
-		expect(html).toContain("No plugins match the current filter.");
+		expect(html).toContain("No plugins yet");
+		expect(html).toContain("mp-empty-mark");
+		// No filter is active, so there is nothing to clear.
+		expect(html).not.toContain("Clear filters");
 	});
 
 	it("renders a card per entry", () => {

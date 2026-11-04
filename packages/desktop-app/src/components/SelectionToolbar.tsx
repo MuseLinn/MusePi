@@ -112,21 +112,26 @@ export function SelectionToolbar({
 	}, [selection, dismiss]);
 
 	useEffect(() => {
-		const el = containerRef.current;
-		if (!el) return;
-
-		const onMouseUp = (): void => {
+		// The pane container is created after this component mounts (FilePane
+		// keys tabs and starts with no preview), so resolve it per event instead
+		// of bailing out once and never binding the listeners.
+		const onMouseUp = (event: MouseEvent): void => {
+			const el = containerRef.current;
+			if (!el) return;
+			// Ignore releases outside the pane (other tab, toolbar, composer).
+			if (!(event.target instanceof Node) || !el.contains(event.target)) return;
 			// Let the browser settle the selection (click-drag releases
 			// before the range is final).
 			window.clearTimeout(hideTimer.current);
 			hideTimer.current = window.setTimeout(() => {
+				const host = containerRef.current;
 				const sel = window.getSelection();
 				if (!sel || sel.isCollapsed) {
 					dismiss();
 					return;
 				}
 				const text = sel.toString().trim();
-				if (!text || !sel.anchorNode || !el.contains(sel.anchorNode)) {
+				if (!text || !host || !sel.anchorNode || !host.contains(sel.anchorNode)) {
 					dismiss();
 					return;
 				}
@@ -154,7 +159,11 @@ export function SelectionToolbar({
 			if (target?.closest(".gui-select-pop")) return;
 			dismiss();
 		};
-		const onScroll = (): void => dismiss();
+		const onScroll = (event: Event): void => {
+			const el = containerRef.current;
+			if (!el || !(event.target instanceof Node) || !el.contains(event.target)) return;
+			dismiss();
+		};
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key !== "Escape") return;
 			// Capture phase + preventDefault: this transient toolbar owns
@@ -165,15 +174,15 @@ export function SelectionToolbar({
 			e.preventDefault();
 			dismiss();
 		};
-		if (selection === undefined) el.addEventListener("mouseup", onMouseUp);
+		if (selection === undefined) document.addEventListener("mouseup", onMouseUp);
 		window.addEventListener("mousedown", onDown);
-		el.addEventListener("scroll", onScroll, true);
+		document.addEventListener("scroll", onScroll, true);
 		window.addEventListener("keydown", onKey, true);
 		return () => {
 			window.clearTimeout(hideTimer.current);
-			el.removeEventListener("mouseup", onMouseUp);
+			document.removeEventListener("mouseup", onMouseUp);
 			window.removeEventListener("mousedown", onDown);
-			el.removeEventListener("scroll", onScroll, true);
+			document.removeEventListener("scroll", onScroll, true);
 			window.removeEventListener("keydown", onKey, true);
 		};
 	}, [containerRef, dismiss, selection === undefined]);

@@ -906,42 +906,6 @@
 	margin: 0;
 }
 
-.gui-filepane-dir-btn,
-.gui-filepane-file-btn {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex: 1;
-	min-width: 0;
-	height: 100%;
-	padding: 0 4px;
-	border: none;
-	background: none;
-	color: inherit;
-	font: inherit;
-	text-align: left;
-	cursor: pointer;
-	border-radius: var(--radius-xs);
-}
-
-.gui-filepane-dir-btn:hover,
-.gui-filepane-file-btn:hover {
-	background: var(--color-surface-raised);
-}
-
-.gui-filepane-caret {
-	font-size: 9px;
-	line-height: 1;
-	width: 10px;
-	flex-shrink: 0;
-	transition: transform 0.12s ease;
-	color: var(--color-text-faint);
-}
-
-.gui-filepane-caret--closed {
-	transform: rotate(-90deg);
-}
-
 /* Working-dir breadcrumb (proma/openchamber toolbar parity). */
 .gui-filepane-path {
 	display: flex;

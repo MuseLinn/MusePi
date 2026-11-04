@@ -199,18 +199,6 @@
 	border-radius: var(--radius-sm);
 }
 
-.mp-card-icon {
-	flex: none;
-	font-size: 22px;
-	line-height: 1.2;
-	filter: saturate(1.05);
-	transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-
-.mp-card:hover .mp-card-icon {
-	transform: scale(1.12);
-}
-
 .mp-card-body {
 	flex: 1;
 	display: flex;
@@ -261,10 +249,6 @@
 	align-items: center;
 	color: var(--fg-faint);
 	font-size: var(--ui-font-size-xs);
-}
-
-.mp-card-meta-item {
-	white-space: nowrap;
 }
 
 .mp-card-badge {
@@ -384,24 +368,6 @@
 
 /* --- states ------------------------------------------------------------ */
 
-.mp-empty {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	align-items: center;
-	margin: 24px 0;
-	color: var(--fg-faint);
-	font-size: var(--ui-font-size-xs);
-	text-align: center;
-	animation: mp-fade-in 200ms ease-out both;
-}
-
-.mp-empty-icon {
-	font-size: 28px;
-	line-height: 1;
-	filter: saturate(0.8);
-}
-
 .mp-error {
 	margin: 0;
 	padding: 8px 10px;
@@ -500,7 +466,6 @@
 @media (prefers-reduced-motion: reduce) {
 	.mp-card,
 	.mp-section,
-	.mp-empty,
 	.mp-error {
 		animation: none;
 	}
@@ -510,14 +475,10 @@
 	.mp-card:hover {
 		transform: none;
 	}
-	.mp-card-icon,
 	.mp-chip,
 	.mp-btn,
 	.mp-card-face {
 		transition: none;
-	}
-	.mp-card:hover .mp-card-icon {
-		transform: none;
 	}
 	.mp-chip:active,
 	.mp-btn:active:not(:disabled) {

@@ -2,20 +2,27 @@ import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type Segmented
 import { createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import { renderAsync as renderDocx } from "docx-preview";
 import {
+	ChevronDown,
 	ClipboardCopy,
 	Download,
 	ExternalLink,
 	Eye,
 	EyeOff,
+	FileArchive,
+	FileAudio,
 	FileCode,
+	FileCog,
 	File as FileIcon,
 	FileImage,
 	FileJson,
+	FileLock,
 	FilePlus,
 	FileSpreadsheet,
 	FileText,
 	FileType,
+	FileVideo,
 	Folder,
+	FolderOpen,
 	FolderPlus,
 	PanelLeft,
 	Presentation,
@@ -25,7 +32,7 @@ import {
 	ScanEye,
 	Search,
 } from "lucide-react";
-import type { ReactElement, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { ContextMenu, type ContextMenuItem } from "../../components/ContextMenu";
@@ -47,6 +54,7 @@ import { dismissActionToastSource, pushActionToast } from "../../lib/action-toas
 import { owningArtifact, useArtifactIndex } from "../../lib/artifact-index";
 import { type BuiltinViewerDeps, builtinFileViewers } from "../../lib/builtin-file-viewers";
 import type { EditorLocation } from "../../lib/editor-navigation";
+import { openExternalUrl } from "../../lib/electron";
 import { listFileViewers, orderViewers, renderWithViewerList } from "../../lib/file-viewers";
 import {
 	type FilePreviewBufferStore,
@@ -72,6 +80,7 @@ import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { captureSelectionContext } from "../../lib/selection-capture";
 import { Icon } from "../../vendor/oc-icons";
+import "../../styles/gui-file-workspace.css";
 
 export type { WorkspaceEntry };
 export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath };
@@ -114,8 +123,12 @@ interface PreviewState {
 }
 
 const OFFICE_SHEET_ROWS = 1000;
-const ROW_H = 26;
+/** Virtual row height — must match --gui-file-row-h in gui-file-workspace.css. */
+const ROW_H = 28;
 const ROW_BUFFER = 6;
+/** Indent per tree level; the disclosure/icon gutter is reserved inside each
+ *  row, so only this step moves the text column. */
+const TREE_INDENT = 14;
 
 interface TreeNode {
 	entry: WorkspaceEntry;
@@ -254,21 +267,181 @@ function extOf(name: string): string {
 	return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-/** Extension-aware file glyph: code, image,
- *  JSON and text files get a recognizable icon; the rest keep the plain
- *  document glyph. */
+const CODE_EXTENSIONS = new Set([
+	"ts",
+	"tsx",
+	"mts",
+	"cts",
+	"js",
+	"jsx",
+	"mjs",
+	"cjs",
+	"rs",
+	"go",
+	"py",
+	"rb",
+	"java",
+	"kt",
+	"kts",
+	"swift",
+	"php",
+	"lua",
+	"sh",
+	"bash",
+	"zsh",
+	"fish",
+	"ps1",
+	"sql",
+	"css",
+	"scss",
+	"sass",
+	"less",
+	"html",
+	"htm",
+	"xml",
+	"vue",
+	"svelte",
+	"astro",
+	"c",
+	"h",
+	"cc",
+	"cpp",
+	"hpp",
+	"cs",
+	"dart",
+	"clj",
+	"cljs",
+	"ex",
+	"exs",
+	"hs",
+	"scala",
+	"zig",
+]);
+const CONFIG_EXTENSIONS = new Set(["toml", "ini", "conf", "cfg", "env", "properties", "yaml", "yml"]);
+const DATA_EXTENSIONS = new Set(["json", "jsonc", "json5", "lock"]);
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"]);
+const TEXT_EXTENSIONS = new Set(["md", "markdown", "mdx", "txt", "log", "rst"]);
+const FONT_EXTENSIONS = new Set(["ttf", "otf", "woff", "woff2"]);
+const SHEET_EXTENSIONS = new Set(["xlsx", "xls", "csv", "tsv", "ods"]);
+const DOC_EXTENSIONS = new Set(["docx", "doc", "odt", "rtf"]);
+const SLIDE_EXTENSIONS = new Set(["pptx", "ppt", "key", "odp"]);
+const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "ogg", "flac", "m4a", "aac", "opus"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "mkv", "avi", "m4v"]);
+const ARCHIVE_EXTENSIONS = new Set(["zip", "tar", "gz", "tgz", "bz2", "xz", "rar", "7z", "zst"]);
+
+/** Extension-aware file glyph: one recognizable family per row keeps the
+ *  tree scannable without labelling every file. */
 function TypeIcon({ name }: { name: string }): ReactElement {
 	const ext = extOf(name);
 	let IconCmp = FileIcon;
-	if (["ts", "tsx", "js", "jsx", "rs", "go", "py", "sh", "css", "html"].includes(ext)) IconCmp = FileCode;
-	else if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(ext)) IconCmp = FileImage;
-	else if (ext === "json") IconCmp = FileJson;
-	else if (["md", "txt", "toml", "yml", "yaml"].includes(ext)) IconCmp = FileText;
-	else if (["ttf", "otf", "woff", "woff2"].includes(ext)) IconCmp = FileType;
-	else if (["xlsx", "xls", "csv", "tsv"].includes(ext)) IconCmp = FileSpreadsheet;
-	else if (["docx", "doc"].includes(ext)) IconCmp = FileText;
-	else if (["pptx", "ppt"].includes(ext)) IconCmp = Presentation;
-	return <IconCmp size={12} className="gui-filepane-icon" />;
+	if (CODE_EXTENSIONS.has(ext)) IconCmp = FileCode;
+	else if (CONFIG_EXTENSIONS.has(ext)) IconCmp = FileCog;
+	else if (DATA_EXTENSIONS.has(ext)) IconCmp = ext === "lock" ? FileLock : FileJson;
+	else if (IMAGE_EXTENSIONS.has(ext)) IconCmp = FileImage;
+	else if (SHEET_EXTENSIONS.has(ext)) IconCmp = FileSpreadsheet;
+	else if (SLIDE_EXTENSIONS.has(ext)) IconCmp = Presentation;
+	else if (DOC_EXTENSIONS.has(ext) || TEXT_EXTENSIONS.has(ext)) IconCmp = FileText;
+	else if (FONT_EXTENSIONS.has(ext)) IconCmp = FileType;
+	else if (AUDIO_EXTENSIONS.has(ext)) IconCmp = FileAudio;
+	else if (VIDEO_EXTENSIONS.has(ext)) IconCmp = FileVideo;
+	else if (ARCHIVE_EXTENSIONS.has(ext)) IconCmp = FileArchive;
+	return <IconCmp size={14} strokeWidth={1.8} className="gui-filepane-icon" aria-hidden="true" />;
+}
+
+/** Directory that relative Markdown media and links resolve against. */
+function parentDirectory(path: string): string {
+	const normalized = path.replace(/\\/g, "/");
+	const slash = normalized.lastIndexOf("/");
+	if (slash < 0) return normalized;
+	return slash === 0 ? "/" : normalized.slice(0, slash);
+}
+
+function isAbsoluteFilePath(path: string): boolean {
+	return path.startsWith("file://") || /^([A-Za-z]:[\\/]|[\\/])/.test(path);
+}
+
+/** Join a relative reference onto a directory (collapse `.`/`..`). */
+function joinFilePath(directory: string, reference: string): string {
+	const parts = directory.replace(/\\/g, "/").replace(/\/+$/, "").split("/");
+	for (const segment of reference.replace(/\\/g, "/").split("/")) {
+		if (!segment || segment === ".") continue;
+		if (segment === "..") {
+			if (parts.length > 1) parts.pop();
+			continue;
+		}
+		parts.push(segment);
+	}
+	return parts.join("/");
+}
+
+/** Bounded data-URL cache: README images repeat across previews and a file
+ *  page remounts whenever its panel tab is re-activated. */
+const PREVIEW_IMAGE_CACHE = new Map<string, string>();
+const PREVIEW_IMAGE_CACHE_MAX = 80;
+
+function readHtmlAttribute(tag: string, name: string): string | null {
+	const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, "i").exec(tag);
+	if (!match) return null;
+	return match[1] ?? match[2] ?? match[3] ?? "";
+}
+
+function markdownDestination(value: string): string {
+	const trimmed = value.trim();
+	return /[\s()<>]/.test(trimmed) ? `<${trimmed.replace(/[<>]/g, "")}>` : trimmed;
+}
+
+/** Turn README-style raw HTML inside Markdown into Markdown itself. The
+ *  shared renderer escapes raw HTML on purpose (chat safety), so a file
+ *  preview of text like `<img src="./shot.png">` would otherwise show the
+ *  tag. Only images, links and `<br>` are translated; fenced and inline code
+ *  are preserved verbatim. */
+function normalizeMarkdownHtml(text: string): string {
+	// A pathological file (multi-MB, many unclosed tags) is not worth the
+	// rewrite: leave it to the shared renderer's escaping.
+	if (text.length > 2_000_000) return text;
+	const fenced: string[] = [];
+	const withoutFences = text.replace(
+		/(^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]*$)/gm,
+		match => {
+			const token = `\u0000fence${fenced.length}\u0000`;
+			fenced.push(match);
+			return token;
+		},
+	);
+	const inlineCode: string[] = [];
+	const withoutCode = withoutFences.replace(/(`+[^`\n]*?`+)/g, match => {
+		const token = `\u0000code${inlineCode.length}\u0000`;
+		inlineCode.push(match);
+		return token;
+	});
+	const converted = withoutCode
+		.replace(/<img\b[^>]*>/gi, tag => {
+			const src = readHtmlAttribute(tag, "src");
+			if (!src) return "";
+			const alt = (readHtmlAttribute(tag, "alt") ?? "").replace(/[\r\n]+/g, " ").replace(/[[\]]/g, "");
+			return `![${alt}](${markdownDestination(src)})`;
+		})
+		.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, (tag, inner: string) => {
+			const href = readHtmlAttribute(tag, "href");
+			if (!href) return inner;
+			const label = inner.replace(/\s+/g, " ").trim();
+			return label === "" ? "" : `[${label}](${markdownDestination(href)})`;
+		})
+		// Layout wrappers a README uses to centre a badge block: the Markdown
+		// renderer has no alignment, so keep the content and drop the tags
+		// rather than printing them.
+		.replace(/<\/?(?:p|div|center|picture)\b[^>]*>/gi, "")
+		.replace(/<source\b[^>]*>/gi, "")
+		.replace(/<summary\b[^>]*>([\s\S]*?)<\/summary>/gi, (_tag, inner: string) => {
+			const label = inner.replace(/\s+/g, " ").trim();
+			return label === "" ? "" : `\n\n**${label}**\n\n`;
+		})
+		.replace(/<\/?details\b[^>]*>/gi, "")
+		.replace(/<kbd\b[^>]*>([\s\S]*?)<\/kbd>/gi, (_tag, inner: string) => `\`${inner.replace(/`/g, "")}\``)
+		.replace(/<br\s*\/?>/gi, "\n");
+	return converted
+		.replace(/\u0000code(\d+)\u0000/g, (_match, index: string) => inlineCode[Number(index)] ?? "")
+		.replace(/\u0000fence(\d+)\u0000/g, (_match, index: string) => fenced[Number(index)] ?? "");
 }
 
 /** Virtual-row index of the inline editor: renames replace their target
@@ -790,6 +963,103 @@ export function FilePane({
 	);
 	useMarkdownFileNavigation(bodyRef.current, mdPreviewPath, mdFileNavigation);
 
+	// Markdown FILE preview. The shared renderer escapes raw HTML (correct for
+	// chat, wrong for a README), so the previewed text is normalized to
+	// Markdown first and relative media resolves against this file's directory
+	// rather than the workspace root.
+	const mdPreviewDir = useMemo(() => (preview ? parentDirectory(preview.path) : null), [preview?.path]);
+	const mdPreviewText = useMemo(
+		() =>
+			preview && extOf(preview.name) === "md" && preview.text !== undefined
+				? normalizeMarkdownHtml(preview.text)
+				: "",
+		[preview],
+	);
+
+	// Local images are read through the desktop bridge, exactly like the
+	// transcript's, but resolved against the markdown file's own directory —
+	// which is what `./screenshot.png` in a README means.
+	useEffect(() => {
+		if (!preview || extOf(preview.name) !== "md" || !mdRender || edit) return;
+		const container = mdPreviewRef.current;
+		if (!container) return;
+		const directory = parentDirectory(preview.path);
+		for (const img of Array.from(container.querySelectorAll<HTMLImageElement>("img[src]"))) {
+			const src = img.getAttribute("src") ?? "";
+			if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;
+			const rawPath = src.startsWith("file://") ? src.slice("file://".length) : src;
+			const path = isAbsoluteFilePath(rawPath) ? rawPath.replace(/\\/g, "/") : joinFilePath(directory, rawPath);
+			const cached = PREVIEW_IMAGE_CACHE.get(path);
+			if (cached !== undefined) {
+				img.src = cached;
+				continue;
+			}
+			img.dataset.filepanePending = "true";
+			void Promise.resolve(window.electronAPI?.readFileDataUrl(path))
+				.then(result => {
+					delete img.dataset.filepanePending;
+					if (!result?.dataUrl || !img.isConnected) return;
+					PREVIEW_IMAGE_CACHE.set(path, result.dataUrl);
+					if (PREVIEW_IMAGE_CACHE.size > PREVIEW_IMAGE_CACHE_MAX) {
+						const oldest = PREVIEW_IMAGE_CACHE.keys().next().value;
+						if (oldest !== undefined) PREVIEW_IMAGE_CACHE.delete(oldest);
+					}
+					img.src = result.dataUrl;
+				})
+				.catch(() => {
+					// Unreadable asset: show the browser's alt/broken state rather
+					// than leaving an invisible placeholder.
+					delete img.dataset.filepanePending;
+				});
+		}
+	}, [preview, mdRender, edit, mdPreviewText]);
+
+	// A file preview's links belong to the file, not to the chat: web links
+	// open in the system browser, and rendered local paths open in this pane
+	// when they live inside the workspace.
+	useEffect(() => {
+		if (!preview || extOf(preview.name) !== "md" || !mdRender || edit) return;
+		const container = mdPreviewRef.current;
+		if (!container) return;
+		const directory = parentDirectory(preview.path);
+		const handleClick = (event: MouseEvent): void => {
+			if (event.defaultPrevented || event.button !== 0) return;
+			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			const anchor = target.closest("a[href]");
+			if (anchor instanceof HTMLAnchorElement && container.contains(anchor)) {
+				const href = anchor.getAttribute("href") ?? "";
+				if (!/^https?:\/\//i.test(href)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				void openExternalUrl(href);
+				return;
+			}
+			const pathElement = target.closest("[data-open-path]");
+			if (!(pathElement instanceof HTMLElement) || !container.contains(pathElement)) return;
+			const raw = pathElement.getAttribute("data-open-path") ?? "";
+			if (!raw) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const rawPath = raw.startsWith("file://") ? raw.slice("file://".length) : raw;
+			const absolute = isAbsoluteFilePath(rawPath) ? rawPath.replace(/\\/g, "/") : joinFilePath(directory, rawPath);
+			const root = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
+			const windows = /^[A-Za-z]:[\\/]/.test(cwd);
+			const inside = windows
+				? absolute.toLowerCase().startsWith(`${root.toLowerCase()}/`)
+				: absolute.startsWith(`${root}/`);
+			if (!inside) {
+				void window.electronAPI?.openWith("", absolute);
+				return;
+			}
+			const rel = absolute.slice(root.length + 1);
+			openFile({ path: rel, name: rel.slice(rel.lastIndexOf("/") + 1), size: 0, isDir: false, mtime: 0, depth: 0 });
+		};
+		container.addEventListener("click", handleClick, true);
+		return () => container.removeEventListener("click", handleClick, true);
+	}, [preview, mdRender, edit, cwd, openFile, mdPreviewText]);
+
 	const toggleDir = useCallback((path: string): void => {
 		setCollapsed(prev => {
 			const next = new Set(prev);
@@ -1104,7 +1374,8 @@ export function FilePane({
 		const isDir = entry.isDir;
 		const closed = isDir && collapsed.has(entry.path);
 		const selected = selectedPath === entry.path;
-		const indent = (depth - 1) * 14;
+		const indent = (depth - 1) * TREE_INDENT;
+		const rowStyle = { "--tree-indent": `${indent}px` } as CSSProperties;
 		// A hover action opens the entry in
 		// the OS default app (folder → Explorer/Finder, file → default app).
 		const openInApp = (
@@ -1126,7 +1397,7 @@ export function FilePane({
 				<li
 					key={entry.path}
 					className="gui-filepane-vrow gui-filepane-dir"
-					style={{ paddingLeft: indent }}
+					style={rowStyle}
 					role="treeitem"
 					aria-level={depth}
 					aria-posinset={posInSet}
@@ -1135,15 +1406,22 @@ export function FilePane({
 				>
 					<button
 						type="button"
-						className="gui-filepane-dir-btn"
+						className="gui-filepane-row"
 						onClick={() => toggleDir(entry.path)}
 						onContextMenu={ev => {
 							ev.preventDefault();
 							setCtx({ entry, x: ev.clientX, y: ev.clientY });
 						}}
 					>
-						<span className={`gui-filepane-caret${closed ? " gui-filepane-caret--closed" : ""}`}>▾</span>
-						<Folder size={12} className="gui-filepane-icon" />
+						<span
+							className={`gui-filepane-twist${closed ? " gui-filepane-twist--closed" : ""}`}
+							aria-hidden="true"
+						>
+							<ChevronDown size={12} />
+						</span>
+						<span className="gui-filepane-glyph" aria-hidden="true">
+							{closed ? <Folder size={14} strokeWidth={1.8} /> : <FolderOpen size={14} strokeWidth={1.8} />}
+						</span>
 						<span className="gui-filepane-name" title={entry.path}>
 							{node.label}
 						</span>
@@ -1158,7 +1436,7 @@ export function FilePane({
 				className={`gui-filepane-vrow${selected ? " gui-filepane-selected" : ""}${
 					!isDir && Date.now() - entry.mtime < 60_000 ? " gui-filepane-recent" : ""
 				}`}
-				style={{ paddingLeft: indent }}
+				style={rowStyle}
 				role="treeitem"
 				aria-level={depth}
 				aria-posinset={posInSet}
@@ -1166,7 +1444,7 @@ export function FilePane({
 			>
 				<button
 					type="button"
-					className="gui-filepane-file-btn"
+					className="gui-filepane-row"
 					onClick={() => openFile(entry, { pin: false, newTab: activeFile !== null })}
 					onDoubleClick={() => openFile(entry, { pin: true, newTab: activeFile !== null })}
 					onContextMenu={ev => {
@@ -1174,7 +1452,10 @@ export function FilePane({
 						setCtx({ entry, x: ev.clientX, y: ev.clientY });
 					}}
 				>
-					<TypeIcon name={entry.name} />
+					<span className="gui-filepane-twist" aria-hidden="true" />
+					<span className="gui-filepane-glyph" aria-hidden="true">
+						<TypeIcon name={entry.name} />
+					</span>
 					<span
 						className={`gui-filepane-name${entry.name === "AGENTS.md" ? " gui-filepane-agents" : ""}`}
 						title={entry.path}
@@ -1191,9 +1472,20 @@ export function FilePane({
 		<li
 			key="editing"
 			className="gui-filepane-vrow gui-filepane-editing"
-			style={{ paddingLeft: (editing.depth - 1) * 14 }}
+			style={{ "--tree-indent": `${(editing.depth - 1) * TREE_INDENT}px` } as CSSProperties}
 		>
-			{editing.kind === "rename" ? <FileIcon size={12} className="gui-filepane-icon" /> : null}
+			<span className="gui-filepane-twist" aria-hidden="true" />
+			<span className="gui-filepane-glyph" aria-hidden="true">
+				{editing.kind === "rename" && editing.entry.isDir ? (
+					<Folder size={14} strokeWidth={1.8} />
+				) : editing.kind === "new-dir" ? (
+					<Folder size={14} strokeWidth={1.8} />
+				) : editing.kind === "rename" ? (
+					<TypeIcon name={editing.entry.name} />
+				) : (
+					<FileIcon size={14} strokeWidth={1.8} className="gui-filepane-icon" />
+				)}
+			</span>
 			<input
 				ref={editRef}
 				className="gui-filepane-edit-input"
@@ -1455,16 +1747,6 @@ export function FilePane({
 								>
 									<Quote size={12} />
 								</button>
-								<button
-									type="button"
-									className="gui-btn gui-btn-icon"
-									title={t("settings.openDefaultApp")}
-									onClick={() => {
-										window.electronAPI?.openWith("", preview.path).catch(() => {});
-									}}
-								>
-									<ExternalLink size={12} />
-								</button>
 								<FileOpenWith path={preview.path} />
 							</span>
 							<button
@@ -1504,7 +1786,7 @@ export function FilePane({
 								)}
 								{preview.text !== undefined && extOf(preview.name) === "md" && mdRender && !edit ? (
 									<div className="gui-filepane-preview-md" ref={mdPreviewRef}>
-										<Markdown text={preview.text} basePath={cwd} />
+										<Markdown text={mdPreviewText} basePath={mdPreviewDir ?? cwd} />
 									</div>
 								) : preview.text !== undefined && !edit ? (
 									<pre className="gui-filepane-preview-text">{preview.text}</pre>

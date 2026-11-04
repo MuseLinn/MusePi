@@ -1,0 +1,88 @@
+/* Marketplace visual language: vector icon tiles, status glyphs and the
+ * empty-state mark. Card geometry and motion stay in marketplace.css;
+ * every value here routes through design tokens. */
+
+.mp-card-icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+	color: var(--fg-muted);
+	transition:
+		background 150ms ease-out,
+		color 150ms ease-out;
+}
+
+.mp-card:hover .mp-card-icon {
+	background: var(--bg-overlay);
+	color: var(--fg);
+}
+
+.mp-card--installed .mp-card-icon {
+	background: var(--accent-muted);
+	color: var(--accent-fg);
+}
+
+.mp-card-badge svg,
+.mp-card-meta-item svg {
+	flex: none;
+}
+
+.mp-card-meta-item {
+	display: inline-flex;
+	gap: 3px;
+	align-items: center;
+	white-space: nowrap;
+}
+
+/* Empty state: one vector mark, one statement, and a direct way out of a
+ * filter that matched nothing. The shell centers it in the remaining area
+ * so a sparse catalog does not leave the copy stranded under the toolbar. */
+.mp-empty {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 10px;
+	align-items: center;
+	justify-content: center;
+	min-height: 180px;
+	padding: 24px 16px 48px;
+	text-align: center;
+	animation: mp-fade-in 200ms ease-out both;
+}
+
+.mp-empty-mark {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg-raised);
+	color: var(--fg-faint);
+}
+
+.mp-empty-title {
+	max-width: 34ch;
+	margin: 0;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	line-height: 1.4;
+}
+
+.mp-empty .mp-btn {
+	margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mp-empty {
+		animation: none;
+	}
+	.mp-card-icon {
+		transition: none;
+	}
+}
