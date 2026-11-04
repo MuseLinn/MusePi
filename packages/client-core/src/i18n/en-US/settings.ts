@@ -3387,6 +3387,26 @@ export const settings = {
 	"Framed horizontal rules with status line at bottom": "Framed horizontal rules with status line at bottom",
 	"Full-width horizontal rules above and below, status line at bottom":
 		"Full-width horizontal rules above and below, status line at bottom",
+	"Agent Control": "Agent Control",
+	"Allow the agent to drive the built-in browser. When off, the agent's browser tool refuses immediately; panel browsing keeps working.":
+		"Allow the agent to drive the built-in browser. When off, the agent's browser tool refuses immediately; panel browsing keeps working.",
+	"Default Search Engine": "Default Search Engine",
+	"Search engine for the built-in browser's address bar: google, bing, duckduckgo or baidu.":
+		"Search engine for the built-in browser's address bar: google, bing, duckduckgo or baidu.",
+	"Default Zoom": "Default Zoom",
+	"Default zoom level applied to open and new browser tabs (0.25-3).":
+		"Default zoom level applied to open and new browser tabs (0.25-3).",
+	"User Agent": "User Agent",
+	"Custom user agent for managed browser tabs. Empty uses the default browser user agent.":
+		"Custom user agent for managed browser tabs. Empty uses the default browser user agent.",
+	"Ask Where to Save": "Ask Where to Save",
+	"Ask for a save location before every browser download.": "Ask for a save location before every browser download.",
+	"Download Directory": "Download Directory",
+	"Download folder for the built-in browser. Empty uses the system Downloads folder; agent downloads default here.":
+		"Download folder for the built-in browser. Empty uses the system Downloads folder; agent downloads default here.",
+	"Agent Download Limit": "Agent Download Limit",
+	"Maximum size in bytes for an agent-initiated browser download; larger downloads are cancelled and deleted. Default 5 GB.":
+		"Maximum size in bytes for an agent-initiated browser download; larger downloads are cancelled and deleted. Default 5 GB.",
 	"GUI Managed Browser": "GUI Managed Browser",
 	"GUI Managed Browser URL": "GUI Managed Browser URL",
 	Gemini: "Gemini",

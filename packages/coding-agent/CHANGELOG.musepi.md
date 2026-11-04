@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **插件入口按粒度拆分，桌宠气泡状态跟随会话轮询**：能力中心的插件列表只显示内置的真实插件与用户安装/自建插件，完整的内置插件单元留在 设置 → 扩展与插件；设置里的清单保留整块表面，能力中心改用无外框紧凑行。桌宠气泡卡片在 `session.list` 轮询把会话从「工作中」更新后立即重推，不再停留在旧的「正在工作」。
+  - EN: Plugin entrances now differ by scope, and pet cards follow the session poll. The capability center lists only built-in real plugins plus user-installed or self-built ones, while the full built-in unit inventory stays in Settings → Extensions & plugins; the settings list keeps its boxed surface and the capability center uses frameless compact rows. Pet bubble cards re-push as soon as the session.list poll flips a session out of working, so they no longer keep a stale "working" state.
+
 - **会话列表与输入区细节对齐**：子会话的引导线与折叠按钮同列，子会话标题与父会话左对齐；顾问会话没有标题时显示「顾问会话」而不是未命名占位。窄视图下「思考」标签不再逐字竖排；运行中插件数移到输入框上方、与连接器同一行，并统一称为插件。设置里的插件列表改成管理清单（单列、分隔行、状态与开关），与能力中心的市场卡片（图标磁贴、分类、安装动作）形成明确区分。
   - EN: Session-list and composer details now line up. Child-session thread lines sit in the disclosure gutter so child titles share the parent's left edge, and an untitled advisor transcript shows "Advisor session" instead of the untitled placeholder. The thinking label no longer stacks vertically in narrow views; the running-plugin count moves above the input onto the connector row and uses plugin terminology. The settings plugin list is now a management list (single column, divider rows, status and toggle), clearly distinct from the marketplace's discovery cards (icon tiles, categories, install actions).
 

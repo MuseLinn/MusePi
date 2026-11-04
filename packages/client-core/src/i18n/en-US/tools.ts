@@ -663,6 +663,8 @@ export const tools = {
 	"tools.extEnabled": "Enabled in",
 	"tools.extPresetTag": "Preset-enabled",
 	"tools.extPresetProvidedDetail": "Provided per session by agent presets",
+	"tools.pluginsListScopeHint":
+		"Installed and built-in plugins only. The full extension inventory lives in Settings → Extensions & plugins.",
 	"tools.extSearchPlugins": "Search plugins",
 	"tools.extFullName": "Full name",
 	"tools.extensionType": "Type",

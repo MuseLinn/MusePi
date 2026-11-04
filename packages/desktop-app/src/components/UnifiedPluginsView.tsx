@@ -438,8 +438,9 @@ export function UnifiedPluginsView({
 	onError(message: string | null): void;
 	/** 父级持有插件包清单；spec 安装完成后由本视图回读并交给它替换。 */
 	onPackagesRefreshed?(packages: PluginPackageEntry[]): void;
-	/** list = dsh 插件列表面板（能力中心,管理导向:分组行+开关）;
-	 *  cards = 卡片网格（扩展中心,发现导向,与设置插件分区同款）。 */
+	/** list = 能力中心的插件列表：只列真实插件模块（内置几个 + 用户
+	 *  安装/自建）与插件包；cards = 设置 → 扩展与插件：完整库存（含内置
+	 *  插件单元），管理导向。 */
 	variant?: "list" | "cards";
 }): ReactNode {
 	const data = useExtensionRegistry(rpc);
@@ -515,14 +516,23 @@ export function UnifiedPluginsView({
 	const modules = useMemo(() => (data?.extensions ?? []).filter(isPluginLaneEntry), [data]);
 	// dsh 分组：官方 = 内置插件单元；已安装 = 插件包 + 用户级模块。
 	const normalizedQuery = query.trim().toLocaleLowerCase();
+	// 能力中心的插件列表只收真实插件模块（内置的几个 + 用户安装/自建）；
+	// 设置里的扩展与插件是完整库存，内置插件单元也一并列出。
+	const officialPool = useMemo(
+		() =>
+			variant === "list"
+				? modules.filter(e => e.kind === "plugin-module" || e.kind === "extension-module")
+				: modules,
+		[modules, variant],
+	);
 	const official = useMemo(
 		() =>
-			modules.filter(
+			officialPool.filter(
 				e =>
 					e.builtin &&
 					matchesQuery([e.name, e.displayName, e.id, e.description, builtinDescription(e)], normalizedQuery),
 			),
-		[modules, normalizedQuery],
+		[officialPool, normalizedQuery],
 	);
 	const installedModules = useMemo(
 		() =>
@@ -577,7 +587,7 @@ export function UnifiedPluginsView({
 	// 双清空才是真空态：任一链路有货就展示统一清单。
 	if (plugins.length === 0 && modules.length === 0 && !pluginsError) {
 		return (
-			<div className="gui-ext-plugins">
+			<div className="gui-ext-plugins" data-variant={variant}>
 				{/* Empty state with an exit: a bald「未加载插件」read as a
 				 * broken page. Both plugin systems now surface here unified —
 				 * when even the module lane is empty, say where each comes
@@ -597,7 +607,7 @@ export function UnifiedPluginsView({
 	}
 
 	return (
-		<div className="gui-ext-plugins">
+		<div className="gui-ext-plugins" data-variant={variant}>
 			{/* dsh 面板顶栏：搜索 + 计数 + 「+ 添加插件」 */}
 			<div className="gui-ext-plugins-toolbar">
 				<label className="gui-ext-plugins-search">
@@ -624,6 +634,7 @@ export function UnifiedPluginsView({
 					{t("settings.pluginInstallTitle")}
 				</button>
 			</div>
+			{variant === "list" && <div className="gui-ext-plugins-scope">{t("tools.pluginsListScopeHint")}</div>}
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
 			{normalizedQuery.length > 0 &&
 				official.length === 0 &&

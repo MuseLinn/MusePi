@@ -2252,6 +2252,23 @@
 .gui-plugin-card + .gui-plugin-card {
 	border-top: 1px solid var(--border);
 }
+/* 能力中心：有限的插件列表用无外框的紧凑行；设置里的完整库存保留
+ * 整块表面与分隔线，两个入口一眼可分。 */
+.gui-ext-plugins[data-variant="list"] .gui-plugin-cards {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+.gui-ext-plugins[data-variant="list"] .gui-plugin-card {
+	padding-left: 4px;
+	padding-right: 4px;
+}
+.gui-ext-plugins-scope {
+	padding: 2px 2px 8px;
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--color-text-faint);
+}
 .gui-ext-group > .gui-plugin-card {
 	margin-top: 8px;
 }

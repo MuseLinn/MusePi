@@ -547,6 +547,12 @@ function AppInner(): ReactNode {
 	const [sessionMeta, setSessionMeta] = useState<Map<string, SessionMetaRow>>(new Map());
 	const sessionMetaRef = useRef<Map<string, SessionMetaRow>>(new Map());
 	sessionMetaRef.current = sessionMeta;
+	/** Pet-bubble refresh hook. The 5s session.list poll can flip `working`
+	 *  after the store's final snapshot, so the cards need one more push. */
+	const petPushRef = useRef<(() => void) | null>(null);
+	useEffect(() => {
+		petPushRef.current?.();
+	}, [sessionMeta]);
 	// Per-session "last seen message count" — the source of truth for the
 	// cursor-based unread derivation: a session whose count grew past the
 	// last count the user had it open at is unread. Persisted so sessions
@@ -3009,6 +3015,7 @@ function AppInner(): ReactNode {
 				theme: document.documentElement.dataset.theme === "light" ? "light" : "dark",
 			});
 		};
+		petPushRef.current = () => pushState(true);
 		const pushMood = (): void => {
 			if (!petEnabled() || petMode() !== "desktop") return;
 			const snap = store?.getSnapshot();
@@ -3337,6 +3344,7 @@ function AppInner(): ReactNode {
 		});
 		onPetChanged(); // initial visibility sync
 		return () => {
+			petPushRef.current = null;
 			unsub?.();
 			unsubReq?.();
 			unsubCmd?.();

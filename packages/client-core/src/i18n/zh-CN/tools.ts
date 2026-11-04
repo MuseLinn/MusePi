@@ -633,6 +633,7 @@ export const tools = {
 	"tools.extEnabled": "启用于",
 	"tools.extPresetTag": "预设中启用",
 	"tools.extPresetProvidedDetail": "由 Agent 预设按会话提供",
+	"tools.pluginsListScopeHint": "只显示内置插件与已安装/自建插件；完整扩展清单在 设置 → 扩展与插件。",
 	"tools.extSearchPlugins": "搜索插件",
 	"tools.extFullName": "完整名称",
 	"tools.extensionType": "类型",
