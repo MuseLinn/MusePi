@@ -13,8 +13,8 @@
  *   row can still leave the transcript a usable width.
  * - `float`: the same tile over the transcript's right edge, inside the chat
  *   column, when the panel is open (manual reveal) or the row is too narrow for
- *   a docked column. It starts below the transcript's surface-mode row and
- *   paints under its header cluster.
+ *   a docked column. It starts below the chat card's header row and paints
+ *   under menus and tooltips.
  *
  * Wiring split: app.tsx owns the open state (per-session, see
  * `useSessionInfoCardVisibility`), ChatView picks the seat and supplies the panel
@@ -29,6 +29,7 @@
  * duplicating its timeline.
  */
 import { type TranslationKey, t } from "@musepi/client-core";
+import { fmtCost, fmtDuration } from "@musepi/client-core/src/lib/format";
 import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
@@ -309,8 +310,10 @@ interface SessionInfoCardProps {
 	/** Seat: a docked column or the floating card. ChatView picks it (panel
 	 *  state + measured row width); the tile itself only paints the difference. */
 	mode?: "dock" | "float";
-	/** Float only: px from the chat column's top — below the surface-mode row. */
+	/** Float only: px from the chat column's top — below the chat header row. */
 	top?: number;
+	/** Playing the exit animation; the host unmounts the card afterwards. */
+	closing?: boolean;
 	onSelectTab?(id: string): void;
 	onOpenSurface?(id: string): void;
 	/** Open the settings pane at a section — the connector section's
@@ -329,7 +332,8 @@ export function SessionInfoCard({
 	entries = [],
 	working = false,
 	mode = "float",
-	top = 54,
+	top = 44,
+	closing = false,
 	onSelectTab,
 	onOpenSurface,
 	onOpenSettings,
@@ -502,7 +506,7 @@ export function SessionInfoCard({
 	const floating = mode === "float";
 	return (
 		<aside
-			className={`gui-session-info gui-session-info--${mode}`}
+			className={`gui-session-info gui-session-info--${mode}${closing ? " gui-session-info--closing" : ""}`}
 			role="region"
 			aria-label={t("sessionInfo.title")}
 			data-mode={mode}
@@ -584,6 +588,9 @@ export function SessionInfoCard({
 										<span className="tv-swarm-bar-fill" style={{ width: `${pct}%` }} />
 									</span>
 									<span className="gui-session-info-elapsed">{elapsed(id)}</span>
+									{entry.progress.cost > 0 ? (
+										<span className="gui-session-info-elapsed">{fmtCost(entry.progress.cost)}</span>
+									) : null}
 								</button>
 							);
 						})}
@@ -614,7 +621,14 @@ export function SessionInfoCard({
 										>
 											<Icon name="check" className="gui-session-info-row-icon" />
 											<span className="gui-session-info-item-label">{entry.agent}</span>
-											<span className="gui-session-info-elapsed">{elapsed(id)}</span>
+											<span className="gui-session-info-elapsed">
+												{entry.progress.durationMs > 0
+													? fmtDuration(entry.progress.durationMs)
+													: elapsed(id)}
+											</span>
+											{entry.progress.cost > 0 ? (
+												<span className="gui-session-info-elapsed">{fmtCost(entry.progress.cost)}</span>
+											) : null}
 										</button>
 									</li>
 								))}

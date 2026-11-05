@@ -394,6 +394,8 @@ describe("SessionInfoCard 子代理与待办", () => {
 		task: string,
 		status: "running" | "completed",
 		toolCount: number,
+		cost = 0,
+		durationMs = 0,
 	): SubagentProgressPayload {
 		return {
 			index: 0,
@@ -410,8 +412,8 @@ describe("SessionInfoCard 子代理与待办", () => {
 				toolCount,
 				requests: 0,
 				tokens: 0,
-				cost: 0,
-				durationMs: 0,
+				cost,
+				durationMs,
 			},
 		};
 	}
@@ -446,6 +448,20 @@ describe("SessionInfoCard 子代理与待办", () => {
 			host.querySelectorAll<HTMLButtonElement>(".gui-session-info-agent")[0]!.click();
 		});
 		expect(opened).toEqual(["trajectory"]);
+		await unmount();
+	});
+
+	it("已结束子代理显示耗时与成本", async () => {
+		const progress = new Map<string, SubagentProgressPayload>([
+			["c", progressPayload("c", "worker", "整理数据", "completed", 3, 0.42, 62_000)],
+		]);
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={makeRpc()} progress={progress} />);
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>(".gui-session-info-agent--ended")!.click();
+		});
+		const text = host.querySelector(".gui-session-info-agents")!.textContent ?? "";
+		expect(text).toContain("1m02s");
+		expect(text).toContain("$0.420");
 		await unmount();
 	});
 
@@ -691,8 +707,9 @@ describe("ChatView 会话信息卡座位", () => {
 		const card = view.host.querySelector<HTMLElement>(".gui-session-info--float");
 		expect(card).not.toBeNull();
 		expect(card!.closest(".gui-chat-column")).not.toBeNull();
-		// Default float geometry: below the 46px surface-mode row + one gap.
-		expect(card!.style.top).toBe("54px");
+		// Default float geometry: below the surface-mode row (44px + one gap
+		// is folded into the default; the status-card stack is gone).
+		expect(card!.style.top).toBe("44px");
 		// The old status-card stack is gone from the scene entirely.
 		expect(view.host.querySelector(".gui-status-cards")).toBeNull();
 		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();

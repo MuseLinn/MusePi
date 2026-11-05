@@ -6,6 +6,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **信息卡子代理行显示成本与耗时**：运行中/已结束的子代理行直接读取 `AgentProgress` 的 `cost`、`durationMs` 与状态，结束行显示实际耗时；不再需要打开子代理详情才能看到花费。阻塞状态仍无独立字段，未伪造。
+  - EN: Subagent rows in the session info card now show the cost and duration carried by `AgentProgress`; finished rows use the measured duration instead of the local first-seen timer, so spend is visible without opening the detail panel. There is still no explicit blocked field, so none is invented.
+
+- **会话卡顶部工具条与信息卡推拉**：对话/地图切换移到会话卡左上角，信息卡开关留在右上角并改用 morphicons 形变图标；两者改为同一行布局，不再浮在消息上遮挡首行与悬浮引用按钮。会话信息卡停靠列按右面板同一弹簧折叠/展开，transcript 随之推拉，浮动座关闭时先淡出再卸载。
+  - EN: The Chat|Canvas switch moves to the chat card's top-left and the session-info toggle stays top-right with a morphing icon; both now sit in one layout row instead of floating over the transcript and covering the first row and its hover quote action. The docked info column folds and unfolds on the right panel's spring so the transcript pushes and pulls with it, and the floating card fades out before it unmounts.
+
 - **MCP 设置支持浏览器 OAuth 登录**:设置 → MCP 服务器列出已配置连接器，OAuth 类通过 `mcp.oauth.start/status/cancel` 在系统浏览器完成授权，凭据写入 auth storage 后自动重连并刷新工具；不提供 token 输入框，Token/stdio 凭据仍由 mcp.json 或子进程管理。
   - EN: MCP settings now support browser OAuth. The configured connector list shows transport, URL, and auth kind; OAuth entries authorize through `mcp.oauth.start/status/cancel` in the system browser, the credential lands in auth storage, and the connection reconnects with refreshed tools. No token input is offered; token and stdio credentials stay in mcp.json or the child process.
 
