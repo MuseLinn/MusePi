@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **复制会话快捷键**：`Mod+Alt+C` 复制全部对话为 Markdown，`Mod+Alt+Shift+C` 只复制最终总结；输入框、文本域和可编辑区域保持原生复制。
+  - EN: `Mod+Alt+C` copies the whole conversation as Markdown and `Mod+Alt+Shift+C` copies only the final summary; inputs, textareas, and editable regions keep native copy.
+
 - **信息卡显示当前分支 PR**：当前分支关联 PR 时，改动统计下方显示 `PR #编号` 与开放/草稿/已合并/已关闭状态，点击在系统浏览器打开；没有 PR 或非 git 目录时不渲染。
   - EN: The session info card now shows the current branch's PR below the change totals — number plus open/draft/merged/closed — and opens it in the system browser on click. It stays absent without a PR or outside a repository.
 

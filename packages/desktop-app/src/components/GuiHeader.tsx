@@ -585,8 +585,30 @@ export function GuiHeader({
 		});
 	};
 
-	// Availability of the two copy actions is read from the transcript only
-	// while their menu is open (a closed menu never pays the scan).
+	// Keyboard access to the two clipboard actions: Mod+Alt+C copies the
+	// conversation, Mod+Alt+Shift+C only the final summary. Text fields keep
+	// their native copy.
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent): void => {
+			if (!(event.metaKey || event.ctrlKey) || !event.altKey) return;
+			if (event.key.toLowerCase() !== "c") return;
+			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				(target.isContentEditable ||
+					target.tagName === "INPUT" ||
+					target.tagName === "TEXTAREA" ||
+					target.closest('[contenteditable="true"]') !== null)
+			) {
+				return;
+			}
+			event.preventDefault();
+			copyConversation(event.shiftKey ? "final" : "all");
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [copyConversation]);
+
 	const copyActions = useMemo((): { conversation: boolean; final: string } => {
 		if (!titleMenuOpen || !snap) return { conversation: false, final: "" };
 		return { conversation: hasSessionConversation(snap.entries), final: finalAssistantText(snap.entries) };

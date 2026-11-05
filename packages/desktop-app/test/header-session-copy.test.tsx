@@ -211,6 +211,40 @@ describe("session menu copy actions", () => {
 		expect(menuItem(t("general.copyFinalSummary")).disabled).toBe(true);
 	});
 
+	test("Mod+Alt+C copies all and Mod+Alt+Shift+C copies only the summary", async () => {
+		const copied: string[] = [];
+		stubClipboard(copied);
+		await renderHeader([user("first"), assistant("draft"), user("again"), assistant("final answer")]);
+
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, altKey: true, bubbles: true }));
+		});
+		expect(copied[0]).toContain("first");
+		expect(copied[0]).toContain("final answer");
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "c", ctrlKey: true, altKey: true, shiftKey: true, bubbles: true }),
+			);
+		});
+		expect(copied[1]).toBe("final answer");
+	});
+
+	test("keyboard copy leaves text fields to native copy", async () => {
+		const copied: string[] = [];
+		stubClipboard(copied);
+		await renderHeader([user("q"), assistant("a")]);
+		const input = document.createElement("input");
+		document.body.appendChild(input);
+		input.focus();
+
+		await act(async () => {
+			input.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, altKey: true, bubbles: true }));
+		});
+		expect(copied).toEqual([]);
+		input.remove();
+	});
+
 	test("reports a clipboard failure instead of claiming success", async () => {
 		stubClipboard([], false);
 		const { host, toasts } = await renderHeader([user("q"), assistant("a")]);
