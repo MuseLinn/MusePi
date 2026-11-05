@@ -21,6 +21,7 @@ import {
 	selectLaunchablePanelTabs,
 	selectPanelTabComponent,
 } from "../lib/slot-host";
+import { surfaceGlyph } from "../lib/surface-glyphs";
 import {
 	readHiddenSurfaces,
 	readSurfaceOrder,
@@ -35,6 +36,7 @@ import {
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
+import { FillWipeIcon } from "./FillWipeIcon";
 import { RailTooltip } from "./RailTooltip";
 
 /**
@@ -243,7 +245,7 @@ export function RightRail({
 	}, []);
 
 	// Git changed-files badge: a live count on the git
-	// rail icon. Same RPC + 15s cadence as StatusCards — the panel shows the
+	// rail icon. Same RPC + 15s cadence as the session info card — the panel shows the
 	// same fact in words a few pixels away, so no second source of truth.
 	// Paths deduped (a file can be staged AND modified again).
 	const [gitChanges, setGitChanges] = useState<number | null>(null);
@@ -555,6 +557,7 @@ function SortableRailItem({
 	const label = t(s.label as TranslationKey);
 	const displayBadge = badgeCount != null && badgeCount > 0 ? (badgeCount > 99 ? "99+" : String(badgeCount)) : null;
 	const badgeAria = badgeCount ? t("general.changedFilesWithCount", { count: badgeCount }) : null;
+	const glyph = surfaceGlyph(id);
 	// A launcher button opens its surface; the modifier means "another one of
 	// these". Both live on one button rather than a separate affordance: the
 	// modifier is how browsers open new tabs of a link, and the rail is the same
@@ -599,7 +602,7 @@ function SortableRailItem({
 				onFocus={e => onHover(e.currentTarget, id)}
 				onBlur={() => onHover(null, null)}
 			>
-				<Icon name={s.icon as IconName} className="h-4 w-4" />
+				{glyph ? <FillWipeIcon icon={glyph} size={16} /> : <Icon name={s.icon as IconName} className="h-4 w-4" />}
 				{revealNumbers ? (
 					<span className="gui-right-rail-badge gui-right-rail-badge--order" aria-hidden="true">
 						{orderNumber}

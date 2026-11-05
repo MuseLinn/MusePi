@@ -10,7 +10,7 @@ import {
 } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
 import {
 	copyToClipboard,
@@ -29,9 +29,16 @@ import {
 	resolveProjectActionIcon,
 	writeProjectActions,
 } from "../lib/project-actions";
+import { pathBaseName } from "../lib/project-label";
 import { usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
-import { buildSessionMarkdown, markdownFileName } from "../lib/session-markdown";
+import {
+	buildSessionMarkdown,
+	finalAssistantText,
+	hasSessionConversation,
+	type MarkdownLabels,
+	markdownFileName,
+} from "../lib/session-markdown";
 import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
@@ -70,6 +77,11 @@ const OPENIN_FALLBACK_ICON: Record<string, string> = {
 function openInLabel(app: { id: string; label: string }): string {
 	const key = `open in ${app.id}` as unknown as Parameters<typeof t>[0];
 	return t(key) === key ? app.label : t(key);
+}
+
+/** Transcript labels shared by the Markdown export and the clipboard copies. */
+function sessionMarkdownLabels(): MarkdownLabels {
+	return { user: t("general.user"), assistant: t("general.assistant"), advisor: t("general.advisor") };
 }
 
 import { AgentAvatar } from "./AgentAvatar";
@@ -479,7 +491,7 @@ export function GuiHeader({
 	}, [rpc, store, snap?.working]);
 
 	// Git branch chip: read-only display (branch switching lives in the
-	// transcript StatusCards); 15s cadence matches the RightRail counters.
+	// transcript session info card); 15s cadence matches the RightRail counters.
 	const [gitBranch, setGitBranch] = useState<string | null>(null);
 	useEffect(() => {
 		const cwd = store?.cwd ?? null;
@@ -524,7 +536,7 @@ export function GuiHeader({
 						: "";
 			if (text) return text.slice(0, 40);
 		}
-		return snap?.state?.cwd?.split("/").pop() ?? t("settings.session2");
+		return (snap?.state?.cwd ? pathBaseName(snap.state.cwd) : "") || t("settings.session2");
 	})();
 	// A renamed title comes from the session tree, not the message stream.
 	const title = sessionLabel?.trim() ? sessionLabel : sessionTitle;
@@ -547,11 +559,7 @@ export function GuiHeader({
 		const snap = store.getSnapshot();
 		// Selection rule (advisor cards, hook notices, collab/skill prompts, and
 		// the model-facing-XML trap) lives in lib/session-markdown.ts.
-		const markdown = buildSessionMarkdown(title, snap.entries, {
-			user: t("general.user"),
-			assistant: t("general.assistant"),
-			advisor: t("general.advisor"),
-		});
+		const markdown = buildSessionMarkdown(title, snap.entries, sessionMarkdownLabels());
 		const blob = new Blob([markdown], { type: "text/markdown" });
 		const a = document.createElement("a");
 		a.href = URL.createObjectURL(blob);
@@ -559,6 +567,30 @@ export function GuiHeader({
 		a.click();
 		URL.revokeObjectURL(a.href);
 	};
+
+	/** Clipboard copy of the conversation: the whole transcript in the export's
+	 *  Markdown shape, or just the final assistant reply. */
+	const copyConversation = (mode: "all" | "final"): void => {
+		if (!store) return;
+		const { entries } = store.getSnapshot();
+		const text =
+			mode === "all" ? buildSessionMarkdown(title, entries, sessionMarkdownLabels()) : finalAssistantText(entries);
+		if (!text) return;
+		void copyToClipboard(text).then(copied => {
+			if (!copied) {
+				toast(t("general.copyFailed"), "error");
+				return;
+			}
+			toast(mode === "all" ? t("general.copiedAllConversation") : t("general.copiedFinalSummary"), "success");
+		});
+	};
+
+	// Availability of the two copy actions is read from the transcript only
+	// while their menu is open (a closed menu never pays the scan).
+	const copyActions = useMemo((): { conversation: boolean; final: string } => {
+		if (!titleMenuOpen || !snap) return { conversation: false, final: "" };
+		return { conversation: hasSessionConversation(snap.entries), final: finalAssistantText(snap.entries) };
+	}, [titleMenuOpen, snap]);
 
 	/** Archive the active session:
 	 *  the shared session-archive store the sidebar reads, so the sidebar and
@@ -1053,6 +1085,30 @@ export function GuiHeader({
 							>
 								<Icon name="download" className="h-3.5 w-3.5" />
 								<span>{t("general.exportMarkdown")}</span>
+							</button>
+							<button
+								type="button"
+								className={`gui-view-opt${copyActions.conversation ? "" : " opacity-50"}`}
+								disabled={!copyActions.conversation}
+								onClick={() => {
+									setTitleMenuOpen(false);
+									copyConversation("all");
+								}}
+							>
+								<Icon name="file-copy" className="h-3.5 w-3.5" />
+								<span>{t("general.copyAllConversation")}</span>
+							</button>
+							<button
+								type="button"
+								className={`gui-view-opt${copyActions.final === "" ? " opacity-50" : ""}`}
+								disabled={copyActions.final === ""}
+								onClick={() => {
+									setTitleMenuOpen(false);
+									copyConversation("final");
+								}}
+							>
+								<Icon name="clipboard" className="h-3.5 w-3.5" />
+								<span>{t("general.copyFinalSummary")}</span>
 							</button>
 							<button
 								type="button"

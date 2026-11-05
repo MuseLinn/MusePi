@@ -4,6 +4,7 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
+import { workspaceKeyLabels } from "../../lib/project-label";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 
@@ -211,6 +212,10 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		else break;
 	}
 	const byRequests = [...(stats?.byModel ?? [])].sort((a, b) => b.totalRequests - a.totalRequests);
+	// The stats DB keys a project by its encoded session-directory name
+	// (`/D-Projects-demo/`), never a real path — label those folder names and
+	// keep the recorded key on the row's title.
+	const folderLabels = workspaceKeyLabels((stats?.byFolder ?? []).map(f => f.folder));
 	const topModel = byRequests[0];
 	const topShare =
 		topModel && overall?.totalRequests ? Math.round((topModel.totalRequests / overall.totalRequests) * 100) : 0;
@@ -661,7 +666,9 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							{stats.byFolder.map(f => (
 								<div key={f.folder} className="gui-agent-card">
 									<div className="min-w-0 flex-1">
-										<div className="truncate text-[13px] font-medium">{f.folder}</div>
+										<div className="truncate text-[13px] font-medium" title={f.folder}>
+											{folderLabels.get(f.folder) ?? f.folder}
+										</div>
 										<div className="truncate text-[12px] text-[var(--color-text-muted)]">
 											{fmtCompact(f.totalRequests)} {t("settings.requests")} ·{" "}
 											{fmtCompact(f.totalInputTokens + f.totalOutputTokens)} tok · {fmtCost(f.totalCost)}

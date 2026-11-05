@@ -304,7 +304,7 @@ export const tools = {
 	"tools.agentCreatedTab": "Agent",
 	"tools.browserTabFrozen": "Frozen (power-saving; auto-resumes on click)",
 	"tools.newBrowserTab": "New browser tab",
-	"tools.publicHttpHttpsOnly": "Only http/https or omp-file:// URLs",
+	"tools.publicHttpHttpsOnly": "Only http/https or musepi-file:// URLs",
 	"tools.closeDestroyBrowser": "Close and destroy the managed browser",
 	"tools.managedBrowserLocalOnly": "Login state stored locally only",
 	"tools.riskyNavigation": "Risky navigation confirmation",

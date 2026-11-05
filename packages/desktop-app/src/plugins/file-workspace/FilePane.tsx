@@ -30,6 +30,7 @@ import {
 	FolderPlus,
 	Link2,
 	PanelLeft,
+	PanelRight,
 	Presentation,
 	Quote,
 	RefreshCw,
@@ -65,6 +66,7 @@ import {
 	type FilePreviewBufferStore,
 	filePreviewPathEquals,
 	filePreviewWorkspacePath,
+	panelBrowserPreviewUrl,
 	resolveFilePreviewPath,
 	type WorkspaceEntry,
 } from "../../lib/file-workspace";
@@ -1374,7 +1376,7 @@ export function FilePane({
 	/** Quote the latest Monaco selection. Read-only previews can still supply a
 	 * DOM selection; with neither, the header action quotes the whole file. */
 	const appendFileQuote = useCallback(
-		(selection: FileEditorSelection | PdfEditorSelection | OfficeEditorSelection | null): void => {
+		(selection: FileEditorSelection | PdfEditorSelection | OfficeEditorSelection | null, comment?: string): void => {
 			if (!preview) return;
 			const pdfSelection: PdfEditorSelection | null =
 				selection && "anchor" in selection && "startPage" in selection.anchor
@@ -1405,6 +1407,7 @@ export function FilePane({
 				...(startLine !== undefined && endLine !== undefined ? { startLine, endLine } : {}),
 				...(pdfSelection ? { pdf: { ...pdfSelection.anchor, fileSize: preview.size } } : {}),
 				...(officeSelection ? { office: officeSelection.anchor } : {}),
+				...(comment?.trim() ? { comment: comment.trim() } : {}),
 			});
 			window.dispatchEvent(
 				new CustomEvent("musepi-gui-quote-append", {
@@ -1881,6 +1884,24 @@ export function FilePane({
 								>
 									<Quote size={12} />
 								</button>
+								{preview.htmlLive !== undefined && (
+									<button
+										type="button"
+										className="gui-btn gui-btn-icon"
+										title={t("general.openInPanelBrowser")}
+										aria-label={t("general.openInPanelBrowser")}
+										onClick={() => {
+											const absolute = resolveFilePreviewPath(cwd, preview.path);
+											window.dispatchEvent(
+												new CustomEvent("musepi-open-url", {
+													detail: { url: panelBrowserPreviewUrl(absolute) },
+												}),
+											);
+										}}
+									>
+										<PanelRight size={12} />
+									</button>
+								)}
 								<FileOpenWith path={preview.path} />
 							</span>
 							<button
@@ -2072,13 +2093,14 @@ export function FilePane({
 								? fileSelection
 								: undefined
 				}
-				onQuote={(text, pdf, office) =>
+				onQuote={(text, pdf, office, comment) =>
 					appendFileQuote(
 						pdf && pdfSelection
 							? { ...pdfSelection, text, anchor: pdf }
 							: office && officeSelection
 								? { ...officeSelection, text, anchor: office }
 								: fileSelection,
+						comment,
 					)
 				}
 				onAsk={(text, x, y) => window.dispatchEvent(new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }))}

@@ -21,7 +21,7 @@ import {
 	type DisplayContext,
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
-import type { OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
+import type { ChatQuoteAnchor, OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
@@ -85,6 +85,7 @@ import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer } from "./Composer";
 import type { CreationMessage } from "./CreationModeRow";
+import { flushPendingConnectorSelection } from "./composer/connector-panel";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
@@ -92,8 +93,7 @@ import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
-import { StatusCards } from "./StatusCards";
-import { SessionInfoCard } from "./session-info-card";
+import { SESSION_INFO_DOCK_MIN_ROW_PX, SessionInfoCard } from "./session-info-card";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
@@ -896,12 +896,29 @@ export function ChatView({
 	}, [store?.sessionId, store]);
 	// Quote chips retain their source entry so a later card can jump back to it.
 	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
-	const appendQuote = useCallback((text: string, messageId?: string): void => {
-		setQuotes(current => {
-			if (current.some(context => context.kind === "chat-quote" && context.quote === text)) return current;
-			return [...current, createChatQuoteContext({ messageId, quote: text })];
-		});
-	}, []);
+	const appendQuote = useCallback(
+		(text: string, messageId?: string, comment?: string, anchor?: ChatQuoteAnchor): void => {
+			const normalizedComment = comment?.trim() || undefined;
+			setQuotes(current => {
+				// Same text at a different spot in the message is a different
+				// quote: the anchor's capture offset tells the two apart.
+				const sameSpot = (existing: ChatQuoteAnchor | undefined): boolean =>
+					(existing?.text ?? "") === (anchor?.text ?? "") && (existing?.start ?? 0) === (anchor?.start ?? 0);
+				if (
+					current.some(
+						context =>
+							context.kind === "chat-quote" &&
+							context.quote === text &&
+							(context.comment ?? "") === (normalizedComment ?? "") &&
+							(!anchor || (context.messageId === messageId && sameSpot(context.anchor))),
+					)
+				)
+					return current;
+				return [...current, createChatQuoteContext({ messageId, quote: text, comment: normalizedComment, anchor })];
+			});
+		},
+		[],
+	);
 	// Global Cmd+L (app.tsx) lands here through the shared window event.
 	useEffect(() => {
 		const onQuoteAppend = (e: Event): void => {
@@ -2301,24 +2318,24 @@ export function ChatView({
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
 	const wrapMorphVer = useRef(0);
 
-	// StatusCards(工作状态悬浮卡)的展开预留:展开时按它的实测高度在列表
-	// 头部让出空间,首行不再被玻璃盖住;折叠成胶囊时不预留(矮,遮挡一行
-	// 可接受,常驻预留反而每屏吃掉一行)。wrapper 是普通 static div,绝对
-	// 定位的卡仍锚到 .gui-transcript-wrap(最近的 positioned 祖先不变)。
-	const statusCardsHostRef = useRef<HTMLDivElement | null>(null);
-	const [statusCardsExpanded, setStatusCardsExpanded] = useState(false);
-	const [statusCardsHeight, setStatusCardsHeight] = useState(0);
+	// Session info dock seat. The dock is a real flex column beside the chat
+	// column, so it needs a row wide enough to leave the transcript usable.
+	// The ROW is measured, never the chat column: docking shrinks the column,
+	// and measuring that would oscillate between the two seats.
+	const chatRowRef = useRef<HTMLDivElement | null>(null);
+	const [chatRowWidth, setChatRowWidth] = useState<number | null>(null);
 	useEffect(() => {
-		const el = statusCardsHostRef.current;
+		if (!showChat) return;
+		const el = chatRowRef.current;
 		if (!el || typeof ResizeObserver === "undefined") return;
 		const update = (): void => {
-			setStatusCardsHeight(Math.ceil(el.getBoundingClientRect().height));
+			setChatRowWidth(Math.floor(el.getBoundingClientRect().width));
 		};
 		update();
 		const observer = new ResizeObserver(update);
 		observer.observe(el);
 		return () => observer.disconnect();
-	}, []);
+	}, [showChat]);
 
 	/**
 	 * Publish the floating composer's geometry.
@@ -2443,6 +2460,46 @@ export function ChatView({
 		setTimeout(release, 320);
 	}, [focusMode]);
 
+	// Session info seat: the panel's own state decides WHETHER the tile shows
+	// (app.tsx); this only decides WHERE. A collapsed panel gets the docked
+	// column, an open panel or a narrow row gets the float card. Before the
+	// first measurement it docks, so a wide window never flashes a float card
+	// in the corner it is about to leave.
+	const sessionInfoDock = !rightPanelOpen && (chatRowWidth === null || chatRowWidth >= SESSION_INFO_DOCK_MIN_ROW_PX);
+	// A draft session's connector pick was stored under the cwd while the
+	// welcome composer owned it; that composer unmounts the moment the first
+	// message creates a session, so the write-back is driven here instead.
+	const connectorFlushedSessionRef = useRef<string | null>(null);
+	const connectorSessionId = store?.sessionId ?? null;
+	const connectorCwd = store?.cwd ?? null;
+	useEffect(() => {
+		if (!rpc || !connectorSessionId) return;
+		if (connectorFlushedSessionRef.current === connectorSessionId) return;
+		connectorFlushedSessionRef.current = connectorSessionId;
+		void flushPendingConnectorSelection(rpc, connectorSessionId, connectorCwd);
+	}, [rpc, connectorSessionId, connectorCwd]);
+	// One props object, two seats: the dock is a SIBLING of the chat column (it
+	// must never overlay the transcript), the float card lives inside it.
+	const sessionInfoCardProps = {
+		sessionId: store?.sessionId ?? null,
+		rpc,
+		cwd: store?.cwd ?? null,
+		title: sessionTitle ?? null,
+		tabs: panelTabs.tabs,
+		activeTabId: panelTabs.activeId,
+		progress: snap?.progress ?? null,
+		entries: snap?.entries ?? [],
+		working: snap?.working ?? false,
+		onSelectTab: (id: string): void => {
+			panelTabs.activate(id);
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		},
+		onOpenSurface: (id: string): void => {
+			setActiveView(id);
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		},
+	};
+
 	return (
 		<main
 			id={`session-panel-${store?.sessionId ?? "welcome"}`}
@@ -2517,7 +2574,7 @@ export function ChatView({
 							ref={chatSceneRef}
 							className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
 						>
-							<div className="flex min-h-0 flex-1">
+							<div ref={chatRowRef} className="flex min-h-0 flex-1">
 								{/* Session column: transcript + composer + dock — the
 								 * right panel sits BESIDE this column (same level), so
 								 * opening it pushes the composer left (main | ContextPanel). */}
@@ -2641,32 +2698,6 @@ export function ChatView({
 													</span>
 												</button>
 											)}
-											{/* Floating status cards: live git
-											 * state + subagents + todo progress + MCP
-											 * connectors, pinned top-right; hidden
-											 * entirely when there is nothing to show.
-											 * While the panel is EXPANDED its height is
-											 * reserved at the transcript's head (spacer
-											 * below), so at rest no row hides under the
-											 * glass; rows scrolled up still pass under,
-											 * the same trade the reference overlay makes
-											 * (its column-reserving mode is a separate
-											 * layout project). */}
-											<div ref={statusCardsHostRef}>
-												<StatusCards
-													rpc={rpc}
-													cwd={store?.cwd ?? ""}
-													sessionId={store?.sessionId ?? null}
-													progress={snap?.progress ?? null}
-													entries={snap?.entries ?? []}
-													working={snap?.working ?? false}
-													onOpenSurface={view => {
-														setActiveView(view);
-														if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-													}}
-													onExpandedChange={setStatusCardsExpanded}
-												/>
-											</div>
 											{/* History-session cold-open skeleton (React-Bits style):
 											 * the daemon reactivates the session on demand — cover
 											 * the (stale) previous transcript while the RPC runs. */}
@@ -2720,18 +2751,6 @@ export function ChatView({
 														data-top-scroll="false"
 														data-bottom-scroll="false"
 													>
-														{/* Head reservation for the expanded status
-														 * panel: the card pins at top:46px of the wrap,
-														 * so the first rows must start below 46 + card
-														 * height + one gap. Only while expanded (the
-														 * collapsed pill is short enough to overlay). */}
-														{statusCardsExpanded && statusCardsHeight > 0 && (
-															<div
-																aria-hidden="true"
-																className="flex-shrink-0"
-																style={{ height: 46 + statusCardsHeight + 8 }}
-															/>
-														)}
 														<CodeHighlightProvider highlight={chatHighlight}>
 															<Transcript
 																key={store?.sessionId ?? ""}
@@ -2949,11 +2968,13 @@ export function ChatView({
 														activePathIds={trustedPathIds}
 													/>
 													{/* In-message text selection actions:
-													 * quote a snippet (not the whole message), copy, start a
-													 * new session from it, or append it to the workspace notes. */}
+													 * quote a snippet (not the whole message), quote it with a comment, copy,
+													 * start a new session from it, or append it to the workspace notes. */}
 													<SelectionToolbar
 														containerRef={transcriptRef}
-														onQuote={text => appendQuote(text)}
+														onQuote={(text, _pdf, _office, comment, source) =>
+															appendQuote(text, source?.messageId, comment, source?.anchor)
+														}
 														onAsk={(text, x, y) =>
 															window.dispatchEvent(
 																new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }),
@@ -3237,30 +3258,22 @@ export function ChatView({
 											/>
 										)}
 									</div>
-									{/* Floating session info card — the collapsed right panel's
-									 * stand-in. Anchored below the status cards so the two right-edge
-									 * overlays never fight for the corner, and INSIDE this column so the
-									 * rail and the open panel stay uncovered. */}
-									{sessionInfoOpen && !focusMode && (
-										<SessionInfoCard
-											sessionId={store.sessionId}
-											rpc={rpc}
-											cwd={store.cwd}
-											title={sessionTitle ?? null}
-											tabs={panelTabs.tabs}
-											activeTabId={panelTabs.activeId}
-											top={46 + statusCardsHeight + 8}
-											onSelectTab={id => {
-												panelTabs.activate(id);
-												if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-											}}
-											onOpenSurface={id => {
-												setActiveView(id);
-												if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-											}}
-										/>
+									{/* Floating session info card — the manual reveal while the
+									 * right panel is open, or a narrow row's fallback for the dock.
+									 * INSIDE this column (never over the rail or the open panel)
+									 * and below the surface-mode row; z-index 3 keeps it under
+									 * the header tools, menus and tooltips. */}
+									{sessionInfoOpen && !focusMode && !sessionInfoDock && (
+										<SessionInfoCard {...sessionInfoCardProps} mode="float" />
 									)}
 								</div>
+								{/* Docked session info column — the collapsed right panel's
+								 * stand-in. Its own flex column between the chat column and
+								 * the panel host, same card gutter as the panel, so it reads
+								 * as a third workspace card instead of an overlay. */}
+								{sessionInfoOpen && !focusMode && sessionInfoDock && (
+									<SessionInfoCard {...sessionInfoCardProps} mode="dock" />
+								)}
 								{/* Right panel stays mounted so the width collapse animates;
 								 * `open` folds it to a 0px sliver instead of unmounting. */}
 								<SlotComponentHost

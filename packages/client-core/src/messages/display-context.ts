@@ -1,4 +1,4 @@
-import type { DisplayContext, MessageDisplayContext } from "@musepi/pi-wire";
+import type { ChatQuoteAnchor, DisplayContext, MessageDisplayContext } from "@musepi/pi-wire";
 import type { AnnotationPayload } from "../annotation/contract";
 
 export type { DisplayContext, MessageDisplayContext } from "@musepi/pi-wire";
@@ -29,6 +29,18 @@ function isPdfAnchor(value: unknown): boolean {
 	);
 }
 
+/** Anchors arrive from persisted sessions and peer GUIs, so a malformed shape
+ *  is dropped instead of making the whole quote unreadable. */
+function isChatQuoteAnchor(value: unknown): boolean {
+	if (!isRecord(value)) return false;
+	return (
+		typeof value.text === "string" &&
+		optionalString(value.prefix) &&
+		optionalString(value.suffix) &&
+		optionalNumber(value.start)
+	);
+}
+
 function isOfficeAnchor(value: unknown): boolean {
 	if (!isRecord(value)) return false;
 	if (value.kind === "word") return nonNegativeInteger(value.paragraphId);
@@ -49,7 +61,12 @@ export function isDisplayContext(value: unknown): value is DisplayContext {
 		);
 	}
 	if (value.kind === "chat-quote") {
-		return typeof value.quote === "string" && optionalString(value.messageId) && optionalString(value.comment);
+		return (
+			typeof value.quote === "string" &&
+			optionalString(value.messageId) &&
+			optionalString(value.comment) &&
+			(value.anchor === undefined || isChatQuoteAnchor(value.anchor))
+		);
 	}
 	if (value.kind === "file-quote") {
 		return (
@@ -88,16 +105,19 @@ export function createChatQuoteContext({
 	messageId,
 	quote,
 	comment,
+	anchor,
 }: {
 	messageId?: string;
 	quote: string;
 	comment?: string;
+	anchor?: ChatQuoteAnchor;
 }): ChatQuoteContext {
 	return {
 		kind: "chat-quote",
 		...(messageId ? { messageId } : {}),
 		quote,
 		...(comment !== undefined ? { comment } : {}),
+		...(anchor ? { anchor } : {}),
 	};
 }
 

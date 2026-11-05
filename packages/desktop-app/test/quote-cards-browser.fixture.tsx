@@ -1,4 +1,4 @@
-import type { DisplayContext } from "@musepi/client-core/src/messages/display-context";
+import { composeDisplayContextPrompt, type DisplayContext } from "@musepi/client-core/src/messages/display-context";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QuoteCards } from "../src/components/composer/quote-cards";
@@ -10,17 +10,21 @@ function Fixture() {
 			pageUrl: "https://example.com",
 			prompt: "Page: https://example.com\nElement 1: button\nComment: old comment",
 		},
+		{ kind: "chat-quote", quote: "quoted answer", comment: "toolbar comment" },
 	]);
 	return (
-		<QuoteCards
-			contexts={contexts}
-			onRemove={index => setContexts(current => current.filter((_, candidate) => candidate !== index))}
-			onChange={(index, context) =>
-				setContexts(current =>
-					current.map((candidate, candidateIndex) => (candidateIndex === index ? context : candidate)),
-				)
-			}
-		/>
+		<>
+			<QuoteCards
+				contexts={contexts}
+				onRemove={index => setContexts(current => current.filter((_, candidate) => candidate !== index))}
+				onChange={(index, context) =>
+					setContexts(current =>
+						current.map((candidate, candidateIndex) => (candidateIndex === index ? context : candidate)),
+					)
+				}
+			/>
+			<pre data-testid="prompt">{composeDisplayContextPrompt(contexts, "")}</pre>
+		</>
 	);
 }
 

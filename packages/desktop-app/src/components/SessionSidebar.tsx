@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
 import type { ModeLabelEntry } from "../lib/mode-label";
-import { projectLabel, projectLabels } from "../lib/project-label";
+import { pathBaseName, projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
@@ -64,12 +64,6 @@ import { filterSessionTree } from "./session-list-shared";
  */
 /** Accent colors for custom groups (right-click → 更改颜色). */
 const GROUP_COLORS = ["accent", "green", "orange", "blue", "purple", "pink"];
-
-/** Folder basename for project blocks (sessions carry full cwd paths). */
-function baseName(p: string): string {
-	const parts = p.split(/[\\/]/).filter(Boolean);
-	return parts[parts.length - 1] || p;
-}
 
 /**
  * Collapsible body of a project block (shared Reveal standard — height via
@@ -401,6 +395,10 @@ export function SessionSidebar({
 	// archive row can show the folder (tree nodes carry no cwd).
 	const { archived, ids: archivedIds, archive: archiveSession, unarchive: unarchiveSession } = useArchivedSessions();
 	const [archivedView, setArchivedView] = useState(false);
+	// Archive rows name the folder; two archived workspaces that share a
+	// basename widen to their parent instead of reading as the same project.
+	// The full cwd stays on the row's title.
+	const archivedLabels = useMemo(() => projectLabels(archived.flatMap(a => (a.cwd ? [a.cwd] : []))), [archived]);
 	// Content-boundary feather (transcript parity): the session list scrolls
 	// inside the sidebar — data-top-scroll / data-bottom-scroll flip the
 	// mask-image fade on and off as the list overflows (useScrollShadow).
@@ -1329,9 +1327,9 @@ export function SessionSidebar({
 												</div>
 												<div className="flex items-center gap-1 text-[13px] text-[var(--color-text-faint)]">
 													<Icon name="folder-3" className="h-3 w-3 flex-shrink-0" />
-													<span className="min-w-0 flex-1 truncate">
+													<span className="min-w-0 flex-1 truncate" title={a.cwd || undefined}>
 														{a.cwd
-															? (a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd)
+															? (archivedLabels.get(a.cwd) ?? pathBaseName(a.cwd))
 															: t("transcript.noFolder")}
 													</span>
 													<span className="flex-shrink-0">{new Date(a.archivedAt).toLocaleString()}</span>
@@ -1515,7 +1513,7 @@ export function SessionSidebar({
 													const isCollapsed = collapsedProjects.includes(path);
 													const label =
 														(nameCounts.get(project.name) ?? 0) > 1
-															? (labels.get(path) ?? baseName(path))
+															? (labels.get(path) ?? pathBaseName(path))
 															: project.name;
 													return (
 														<div
@@ -1969,7 +1967,7 @@ export function SessionSidebar({
 										{ divider: true },
 										...(roots.length > 1
 											? roots.map(path => ({
-													label: baseName(path),
+													label: pathBaseName(path),
 													description: directoriesEqual(path, cwd) ? t("settings.primaryDirectory") : path,
 													icon: directoriesEqual(path, selected) ? "check" : "folder",
 													onSelect: () => {
@@ -1989,7 +1987,7 @@ export function SessionSidebar({
 										...sessionDirs
 											.filter(directory => !directory.primary)
 											.map(directory => ({
-												label: `${t("settings.removeDirectory")}: ${baseName(directory.path)}`,
+												label: `${t("settings.removeDirectory")}: ${pathBaseName(directory.path)}`,
 												description: directory.path,
 												icon: "delete-bin",
 												danger: true,

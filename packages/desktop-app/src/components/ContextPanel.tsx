@@ -21,11 +21,16 @@ import {
 	WidgetCard,
 } from "@musepi/client-core";
 import type { AgentSnapshot, PdfQuoteAnchor } from "@musepi/pi-wire";
-import { Maximize2 as Maximize2IconData, Minimize2 as Minimize2IconData } from "lucide";
+import {
+	Columns2 as Columns2IconData,
+	Maximize2 as Maximize2IconData,
+	Minimize2 as Minimize2IconData,
+	PanelLeft as PanelLeftIconData,
+} from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 import { browserPanelDescriptor, browserTarget, reconcileBrowserPanelTabs } from "../lib/browser-panel-tabs";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import {
@@ -57,9 +62,17 @@ import {
 	subscribeHost as subscribeBrowserHost,
 } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
-import { getPanelMaximized, setPanelMaximized, subscribePanelMaximize } from "../lib/panel-maximize";
+import {
+	clearPanelMaximizedGeometry,
+	exitPanelMaximized,
+	getPanelMaximized,
+	measurePanelMaximizedGeometry,
+	panelMaximizeColumn,
+	subscribePanelMaximize,
+} from "../lib/panel-maximize";
 import { closePanelTabs, type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
+import { pathBaseName } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
@@ -70,6 +83,7 @@ import {
 	SlotComponentMount,
 	selectPanelTabComponent,
 } from "../lib/slot-host";
+import { surfaceGlyph } from "../lib/surface-glyphs";
 import { panelWidth, SURFACES, surfaceById, writePanelWidth } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
@@ -587,133 +601,13 @@ export function ContextPanel({
 	// adapted to the desktop surface).
 	const [width, setWidth] = useState(() => Math.min(1200, Math.max(260, panelWidth(0.5))));
 	// Maximize (openchamber fullscreen-surface / proma quick-window parity):
-	// the panel floats over the chat column at near-full width/height; toggling
-	// off returns to the persisted width. Width-drag is disabled while maximized.
+	// the panel floats over the session column at near-full width/height;
+	// toggling off returns to the persisted width. The toggle itself lives in
+	// lib/panel-maximize.ts: one document-level controller owns the store, the
+	// class, the measured geometry and the FLIP. This component only reads the
+	// store for the labels/icon and tags its buttons with `data-panel-maximize`.
 	const maximized = useSyncExternalStore(subscribePanelMaximize, getPanelMaximized, getPanelMaximized);
-	const setMaximized = setPanelMaximized;
 	maximizedRef.current = maximized;
-	// Maximize/restore morph (FLIP): the docked↔fixed switch is not
-	// interpolable (position is discrete, so toggling the class teleported
-	// the panel: user 2026-09-22 — 最大化没有动效，只有还原有). The toggle
-	// therefore pins the pre-toggle box inline, forces a reflow, and animates
-	// left/top/width/height to the post-toggle box on the spring curve:
-	//   maximize:  measure docked rect → flushSync(class on) → measure the
-	//     fixed --pane-max-* box → animate first→last, then drop the inline
-	//     geometry (CSS vars already paint the same box).
-	//   restore:   measure fixed rect → flushSync(class off) → measure the
-	//     real docked box → pin the OLD box via relative left/top offsets
-	//     and animate to zero-offset/docked-size, then clear (leaving width
-	//     at the measured px so React's own inline width prop is untouched).
-	// Mid-animation clicks are ignored; .gui-motion-off / reduced motion
-	// falls back to the plain instant toggle.
-	const flipAnimatingRef = useRef(false);
-	const lastMaximizeEventRef = useRef<globalThis.MouseEvent | null>(null);
-	const toggleMaximized = (event?: globalThis.MouseEvent | { nativeEvent: globalThis.MouseEvent }): void => {
-		const nativeEvent = event && "nativeEvent" in event ? event.nativeEvent : event;
-		if (nativeEvent && lastMaximizeEventRef.current === nativeEvent) return;
-		lastMaximizeEventRef.current = nativeEvent ?? null;
-		const el = panelRef.current;
-		const toMaximized = el ? !el.classList.contains("gui-pane-right--maximized") : !maximized;
-		const motionOff =
-			(document.body.closest(".gui-motion-off") ?? document.querySelector(".gui-motion-off")) !== null ||
-			window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (!el || motionOff) {
-			setMaximized(toMaximized);
-			if (el) {
-				el.classList.toggle("gui-pane-right--maximized", toMaximized);
-				const column = el.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
-				const rect = column?.getBoundingClientRect();
-				if (rect) {
-					el.style.setProperty("--pane-max-left", `${rect.left}px`);
-					el.style.setProperty("--pane-max-top", `${rect.top}px`);
-					el.style.setProperty("--pane-max-width", `${rect.width}px`);
-					el.style.setProperty("--pane-max-height", `${rect.height}px`);
-				}
-			}
-			return;
-		}
-		if (flipAnimatingRef.current) return;
-		const GEO = ["left", "top", "width", "height"] as const;
-		const clearGeometry = (): void => {
-			for (const p of GEO) el.style.removeProperty(p);
-			el.style.removeProperty("transition");
-		};
-		const runFlip = (toMaximized: boolean): void => {
-			const first = el.getBoundingClientRect();
-			// Transitions OFF before the state flip: the docked→fixed switch
-			// changes which declaration supplies width (inline px ↔ var(--pane-
-			// max-width)), and the panel's own 220ms width transition would
-			// otherwise be RUNNING when the post-flip box is measured — the
-			// FLIP target then captures a mid-animation rect and the morph
-			// animates to the wrong geometry (verified 2026-09-22: restore
-			// pinned width 1244 and never came back to the docked 395).
-			el.style.transition = "none";
-			flushSync(() => setMaximized(toMaximized));
-			// Commit the visual contract with the FLIP transaction itself. A compiled
-			// surface must not leave the click successful only inside React state.
-			el.classList.toggle("gui-pane-right--maximized", toMaximized);
-			if (toMaximized) {
-				const column = el.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
-				const rect = column?.getBoundingClientRect();
-				if (rect) {
-					el.style.setProperty("--pane-max-left", `${rect.left}px`);
-					el.style.setProperty("--pane-max-top", `${rect.top}px`);
-					el.style.setProperty("--pane-max-width", `${rect.width}px`);
-					el.style.setProperty("--pane-max-height", `${rect.height}px`);
-				}
-			}
-			if (!el.isConnected) {
-				el.style.removeProperty("transition");
-				return;
-			}
-			const last = el.getBoundingClientRect();
-			if (toMaximized) {
-				el.style.left = `${first.left}px`;
-				el.style.top = `${first.top}px`;
-				el.style.width = `${first.width}px`;
-				el.style.height = `${first.height}px`;
-			} else {
-				// Relative positioning: left/top offset the element VISUALLY
-				// from its layout box. The panel is a RIGHT-ANCHORED flex item,
-				// so its layout left SWEEPS with its width — the offset must be
-				// taken at the PINNED (old fixed) width, not computed against
-				// the docked rect, or the first frame lands one chat-column-
-				// width off (verified 2026-09-22: restore started at left −565
-				// instead of 272). The docked target was captured above.
-				el.style.width = `${first.width}px`;
-				el.style.height = `${first.height}px`;
-				const pinned = el.getBoundingClientRect();
-				el.style.left = `${first.left - pinned.left}px`;
-				el.style.top = `${first.top - pinned.top}px`;
-			}
-			void el.getBoundingClientRect();
-			el.style.transition =
-				"left 260ms var(--spring), top 260ms var(--spring), width 260ms var(--spring), height 260ms var(--spring)";
-			el.style.left = toMaximized ? `${last.left}px` : "0px";
-			el.style.top = toMaximized ? `${last.top}px` : "0px";
-			el.style.width = `${last.width}px`;
-			el.style.height = `${last.height}px`;
-			flipAnimatingRef.current = true;
-			const finish = (widthPx: number | null): void => {
-				clearGeometry();
-				if (widthPx !== null) el.style.width = `${widthPx}px`;
-				flipAnimatingRef.current = false;
-			};
-			const onEnd = (e: TransitionEvent): void => {
-				if (e.target !== el || e.propertyName !== "width") return;
-				el.removeEventListener("transitionend", onEnd);
-				finish(toMaximized ? null : last.width);
-			};
-			el.addEventListener("transitionend", onEnd);
-			// Safety net: if transitionend never fires (tab hidden, mid-frame
-			// unmount), commit the end state anyway.
-			window.setTimeout(() => {
-				el.removeEventListener("transitionend", onEnd);
-				if (flipAnimatingRef.current) finish(toMaximized ? null : last.width);
-			}, 450);
-		};
-		runFlip(toMaximized);
-	};
 	// Width drag runs on the normalised pointer-drag primitive (capture +
 	// preventDefault + pointerId filtering) rather than window listeners: the
 	// ad-hoc version had no capture, so the pointer left the 4px strip and the
@@ -788,7 +682,7 @@ export function ContextPanel({
 	const resizeHandleHandlers: PointerDragHandlers = {
 		...resizeDrag,
 		onPointerDown: e => {
-			if (maximized) setMaximized(false);
+			if (maximized) exitPanelMaximized(panelRef.current);
 			setGestureShield(true);
 			resizeDrag.onPointerDown(e);
 		},
@@ -812,35 +706,23 @@ export function ContextPanel({
 	// window resize, sidebar toggle or rail drag keeps the panel flush instead
 	// of leaving it off the container's insets.
 	// Maximize geometry: measure the SESSION COLUMN (.gui-chat-column), not
-	// .gui-chat-surface — the surface card also contains this panel and the
-	// rail, so the old surface rect maximized the panel OVER the rail. The
-	// measured vars now position ONLY the panel: there is no scrim to drive
-	// (user 2026-09-16 — 最大化不要遮罩，正常缩放卡片尺寸即可).
+	// .gui-chat-surface — the surface card also contains this panel, the rail
+	// and the collapsed panel's session-info dock, so the old surface rect
+	// maximized the panel OVER the rail. The measured vars now position ONLY
+	// the panel: there is no scrim to drive (user 2026-09-16 — 最大化不要遮罩，
+	// 正常缩放卡片尺寸即可). The owner of the measurement is panel-maximize.ts;
+	// this effect re-runs it when the column resizes or the panel folds.
 	useLayoutEffect(() => {
 		const panel = panelRef.current;
-		const column = panel?.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
+		const column = panelMaximizeColumn(panel);
 		if (!maximized || !open || !panel || !column) return;
-		const targets = [panel].filter((el): el is HTMLElement => el !== null);
-		const measure = (): void => {
-			const r = column.getBoundingClientRect();
-			for (const el of targets) {
-				el.style.setProperty("--pane-max-left", `${r.left}px`);
-				el.style.setProperty("--pane-max-top", `${r.top}px`);
-				el.style.setProperty("--pane-max-width", `${r.width}px`);
-				el.style.setProperty("--pane-max-height", `${r.height}px`);
-			}
-		};
+		const measure = (): void => measurePanelMaximizedGeometry(panel);
 		measure();
 		const observer = new ResizeObserver(measure);
 		observer.observe(column, { box: "border-box" });
 		return () => {
 			observer.disconnect();
-			for (const el of targets) {
-				el.style.removeProperty("--pane-max-left");
-				el.style.removeProperty("--pane-max-top");
-				el.style.removeProperty("--pane-max-width");
-				el.style.removeProperty("--pane-max-height");
-			}
+			clearPanelMaximizedGeometry(panel);
 		};
 	}, [maximized, open]);
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
@@ -1242,7 +1124,9 @@ export function ContextPanel({
 						<div className="flex flex-col gap-1 px-2 text-[13px]">
 							<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
 								<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
-								<span className="truncate">{cwd || t("transcript.noFolder")}</span>
+								<span className="truncate" title={cwd || undefined}>
+									{cwd ? pathBaseName(cwd) : t("transcript.noFolder")}
+								</span>
 							</div>
 							{snap?.state?.model?.id && (
 								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
@@ -1369,6 +1253,7 @@ export function ContextPanel({
 		const managed = managedId ? browserTabs.find(candidate => candidate.id === managedId) : undefined;
 		const registry = surfaceById(tab.surface);
 		return {
+			glyph: managedId ? undefined : surfaceGlyph(tab.surface),
 			icon: managedId ? (
 				<BrowserPanelTabIcon key={`${managedId}:${managed?.favicon ?? ""}`} favicon={managed?.favicon ?? null} />
 			) : registry ? (
@@ -1630,7 +1515,13 @@ export function ContextPanel({
 																className="gui-pane-tool"
 																onClick={() => panelTabs.setSplit(false)}
 															>
-																<Icon name="layout-left" className="h-3.5 w-3.5" />
+																<MorphIcon
+																	icon={panelTabs.split ? PanelLeftIconData : Columns2IconData}
+																	size={14}
+																	spring="snappy"
+																	reducedMotion="user"
+																	className="h-3.5 w-3.5"
+																/>
 															</button>
 															<button
 																type="button"
@@ -1640,9 +1531,10 @@ export function ContextPanel({
 																aria-label={
 																	maximized ? t("settings.restorePanel") : t("settings.maximizePanel")
 																}
+																aria-pressed={maximized}
+																data-panel-maximize
 																className="gui-pane-tool"
 																onPointerDown={event => event.stopPropagation()}
-																onClick={toggleMaximized}
 															>
 																<MorphIcon
 																	icon={maximized ? Minimize2IconData : Maximize2IconData}
@@ -1727,15 +1619,22 @@ export function ContextPanel({
 										className="gui-pane-tool"
 										onClick={() => panelTabs.setSplit(true)}
 									>
-										<Icon name="layout-column" className="h-3.5 w-3.5" />
+										<MorphIcon
+											icon={panelTabs.split ? PanelLeftIconData : Columns2IconData}
+											size={14}
+											spring="snappy"
+											reducedMotion="user"
+											className="h-3.5 w-3.5"
+										/>
 									</button>
 									<button
 										type="button"
 										title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
 										aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
+										aria-pressed={maximized}
+										data-panel-maximize
 										className="gui-pane-tool"
 										onPointerDown={event => event.stopPropagation()}
-										onClick={toggleMaximized}
 									>
 										<MorphIcon
 											icon={maximized ? Minimize2IconData : Maximize2IconData}

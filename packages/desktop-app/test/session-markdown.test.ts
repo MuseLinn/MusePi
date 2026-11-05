@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@musepi/pi-wire";
-import { buildSessionMarkdown, type MarkdownLabels, markdownFileName } from "../src/lib/session-markdown";
+import {
+	buildSessionMarkdown,
+	finalAssistantText,
+	hasSessionConversation,
+	type MarkdownLabels,
+	markdownFileName,
+} from "../src/lib/session-markdown";
 
 /**
  * Session → Markdown export.
@@ -173,5 +179,54 @@ describe("markdownFileName", () => {
 	test("falls back to a usable name instead of an empty one", () => {
 		expect(markdownFileName("///")).toBe("session");
 		expect(markdownFileName("")).toBe("session");
+	});
+});
+
+describe("hasSessionConversation", () => {
+	test("is false until something a reader would see exists", () => {
+		expect(hasSessionConversation([])).toBe(false);
+		expect(
+			hasSessionConversation([
+				{ type: "model_change", id: "m1", parentId: null, timestamp: "x", model: "m" } as unknown as SessionEntry,
+				toolResult("bash output"),
+				advisor("hidden nudge", false),
+			]),
+		).toBe(false);
+	});
+
+	test("counts user text, assistant text and a visible advisor note", () => {
+		expect(hasSessionConversation([user("q")])).toBe(true);
+		expect(hasSessionConversation([assistant("a")])).toBe(true);
+		expect(hasSessionConversation([advisor("note")])).toBe(true);
+	});
+});
+
+describe("finalAssistantText", () => {
+	test("returns the last reply, not the first", () => {
+		expect(finalAssistantText([user("q"), assistant("first"), user("q2"), assistant("second")])).toBe("second");
+	});
+
+	test("is empty when the session has no reply yet", () => {
+		expect(finalAssistantText([])).toBe("");
+		expect(finalAssistantText([user("q")])).toBe("");
+	});
+
+	test("a trailing advisor card is not the summary", () => {
+		expect(finalAssistantText([assistant("answer"), advisor("later nudge")])).toBe("answer");
+	});
+
+	test("joins block content and trims it", () => {
+		const blocks = {
+			...assistant("ignored"),
+			message: {
+				role: "assistant",
+				timestamp: 9,
+				content: [
+					{ type: "text", text: "  line one\n" },
+					{ type: "text", text: "line two  " },
+				],
+			},
+		} as unknown as SessionEntry;
+		expect(finalAssistantText([blocks])).toBe("line one\n\nline two");
 	});
 });

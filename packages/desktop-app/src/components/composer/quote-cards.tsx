@@ -7,7 +7,7 @@ import {
 } from "@musepi/client-core/src/messages/display-context";
 import { Eye, FileText, Globe2, MessageSquareQuote, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 
@@ -26,17 +26,25 @@ function fileName(path: string): string {
 function QuoteEntry({
 	entry,
 	preview,
+	focusComment,
 	onPreview,
 	onRemove,
 	onChange,
 }: {
 	entry: ContextEntry;
 	preview: boolean;
+	/** Focus the comment field when this card opens with an existing comment,
+	 * so the user lands where the quote can still be edited. */
+	focusComment: boolean;
 	onPreview(): void;
 	onRemove(): void;
 	onChange(context: DisplayContext): void;
 }): ReactNode {
 	const { context } = entry;
+	const commentRef = useRef<HTMLInputElement | null>(null);
+	useEffect(() => {
+		if (focusComment) commentRef.current?.focus();
+	}, [focusComment]);
 	return (
 		<div className="gui-quote-card">
 			<div className="gui-quote-context-body">
@@ -75,9 +83,11 @@ function QuoteEntry({
 				<label className="gui-quote-comment-label">
 					<span>{t("annotation.commentLabel")}</span>
 					<input
+						ref={commentRef}
 						className="gui-quote-comment"
 						value={context.comment ?? ""}
 						placeholder={t("annotation.commentPlaceholder")}
+						aria-label={t("annotation.commentLabel")}
 						onChange={event => onChange(withDisplayContextComment(context, event.target.value))}
 					/>
 				</label>
@@ -149,6 +159,7 @@ function QuoteGroupChip({
 							key={entry.index}
 							entry={entry}
 							preview={preview === entry.index}
+							focusComment={Boolean(entry.context.comment?.trim())}
 							onPreview={() => onPreview(entry.index)}
 							onRemove={() => onRemove(entry.index)}
 							onChange={context => onChange(entry.index, context)}

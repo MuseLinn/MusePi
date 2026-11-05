@@ -1,32 +1,73 @@
 /**
- * Floating session info card (desktop GUI).
+ * Session info card (desktop GUI).
  *
- * The right panel owns the session's metadata while it is open, so this card is
- * the collapsed panel's stand-in: it floats over the transcript's right edge and
- * repeats the few facts that otherwise cost a panel open — session title, model
- * reference ("provider/id"), working-tree diff totals, the open panel tabs, and
- * the surfaces that can still be opened from here.
+ * The right panel owns the session's metadata while it is open, so this tile is
+ * the collapsed panel's stand-in: it repeats the few facts that otherwise cost a
+ * panel open — session title, model reference ("provider/id"), working-tree diff
+ * totals, live/ended subagents, todo-board progress, the MCP connectors the
+ * session may use, running plugins, the open panel tabs, and the surfaces that
+ * can still be opened here. It has two seats:
+ *
+ * - `dock`: an independent glass column between the chat column and the panel
+ *   host, with its own scroll. Used while the panel is collapsed and the shared
+ *   row can still leave the transcript a usable width.
+ * - `float`: the same tile over the transcript's right edge, inside the chat
+ *   column, when the panel is open (manual reveal) or the row is too narrow for
+ *   a docked column. It starts below the transcript's surface-mode row and
+ *   paints under its header cluster.
  *
  * Wiring split: app.tsx owns the open state (per-session, see
- * `useSessionInfoCardVisibility`), ChatView supplies the panel tabs + surface
- * callbacks, and this module reads only what the daemon already exposes —
- * `session.contextUsage` for the model and `git.numstat` for the diff totals.
+ * `useSessionInfoCardVisibility`), ChatView picks the seat and supplies the panel
+ * tabs + surface callbacks, and this module reads only what the daemon already
+ * exposes — `session.contextUsage` for the model, `git.numstat` for the diff
+ * totals, `connectors.list` for the MCP servers, and the shared extension
+ * registry for running plugins.
+ *
+ * The connectors and plugins readouts are the session's only entry points for
+ * those two choices: the composer carries no second copy. Subagent and todo
+ * rows are readouts too — they open the trajectory surface instead of
+ * duplicating its timeline.
  */
 import { type TranslationKey, t } from "@musepi/client-core";
+import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
+import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelTab } from "../lib/panel-tabs";
 import type { RpcClient } from "../lib/rpc";
+import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
+import { SESSION_INFO_SLOT, SlotComponentHost, useExtensionRegistry } from "../lib/slot-host";
 import { readHiddenSurfaces, SURFACE_HIDDEN_KEY, SURFACES, surfaceVisible } from "../lib/surfaces/registry";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
+import { Reveal } from "./Reveal";
 
 /** One preference per session; the `musepi-gui-` prefix is the GUI's key rule. */
 const SESSION_INFO_STORAGE_PREFIX = "musepi-gui-session-info-";
 
+/**
+ * Width the docked column reserves for itself, matching the right panel and the
+ * status cards. gui-chat.css carries the same number for `.gui-session-info`;
+ * the constant is what ChatView budgets against.
+ */
+export const SESSION_INFO_DOCK_WIDTH_PX = 288;
+
+/** Chat column width the dock must leave free; under this the transcript
+ *  stops reading as a conversation and the float seat is the better trade. */
+const DOCK_MIN_CHAT_COLUMN_PX = 560;
+
+/**
+ * Everything the shared row spends before the chat column sees a pixel: the
+ * dock (288 + its gutters), the rail (44 + its gutters) and the folded right
+ * panel's leftover gutter. Below this row width ChatView floats the tile
+ * instead of docking it.
+ */
+export const SESSION_INFO_DOCK_MIN_ROW_PX = SESSION_INFO_DOCK_WIDTH_PX + 16 + 44 + 16 + 8 + DOCK_MIN_CHAT_COLUMN_PX;
+
 /** Tabs past this fold behind 「查看更多」 so the card stays a glanceable tile. */
 const VISIBLE_TAB_LIMIT = 6;
 
-/** Same cadence as StatusCards' git poll — the two read the same working tree. */
+/** Same cadence as the other working-tree readouts — they describe one tree. */
 const POLL_MS = 15_000;
 
 /** Wire shape of `session.contextUsage` (only the model field is read here). */
@@ -132,6 +173,121 @@ function hasChangesOf(changes: ChangesView | null): changes is ChangesView {
 	return changes !== null && changes.files > 0;
 }
 
+/** A subagent still producing progress (vs. a finished one). */
+const isLiveAgent = (p: SubagentProgressPayload): boolean =>
+	p.progress.status === "pending" || p.progress.status === "running";
+
+/** Latest todo-tool snapshot from the transcript (result details carry
+ *  `{ phases: [{ name, tasks: [{ content, status }] }] }`). Returns null
+ *  when the session has no todo board yet. */
+function latestTodo(entries: readonly SessionEntry[]): { done: number; total: number; current: string | null } | null {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const e = entries[i];
+		if (e?.type !== "message") continue;
+		const msg = e.message;
+		if (msg.role !== "toolResult" || msg.toolName !== "todo" || msg.isError) continue;
+		const phases = (msg.details as { phases?: unknown } | null)?.phases;
+		if (!Array.isArray(phases)) continue;
+		let total = 0;
+		let done = 0;
+		let current: string | null = null;
+		for (const phase of phases) {
+			if (!phase || typeof phase !== "object") continue;
+			const tasks = (phase as { tasks?: unknown }).tasks;
+			if (!Array.isArray(tasks)) continue;
+			for (const task of tasks) {
+				if (!task || typeof task !== "object") continue;
+				const { content, status } = task as { content?: unknown; status?: unknown };
+				if (typeof content !== "string") continue;
+				total++;
+				if (status === "completed") done++;
+				else if (status === "in_progress" && current === null) current = content;
+			}
+		}
+		if (total > 0) return { done, total, current };
+	}
+	return null;
+}
+
+/** Collapsible card section — same disclosure language as the plugins row. */
+function InfoSection({
+	title,
+	trailing,
+	children,
+}: {
+	title: string;
+	trailing?: ReactNode;
+	children: ReactNode;
+}): ReactNode {
+	const [open, setOpen] = useState(true);
+	return (
+		<section className="gui-session-info-section">
+			<button
+				type="button"
+				className="gui-session-info-section-head"
+				aria-expanded={open}
+				onClick={() => setOpen(value => !value)}
+			>
+				<span className="gui-session-info-section-label">{title}</span>
+				{trailing}
+				<Icon
+					name="arrow-down-s"
+					className={`gui-session-info-chev${open ? "" : " gui-session-info-chev--closed"}`}
+				/>
+			</button>
+			<Reveal open={open}>{children}</Reveal>
+		</section>
+	);
+}
+
+/**
+ * 内置「插件」分区 —— `chat.session-info.plugins` 没有可渲染占据者
+ * (插件停用、编译失败或旧 daemon 不下发组件)时的回退。
+ *
+ * 标记、文案与折叠语言与插件版分区一致:切换贡献者不改变卡片外观。
+ */
+function SessionInfoPluginsFallback({ sessionInfo }: { sessionInfo: SessionInfoSlotData }): ReactNode {
+	const [open, setOpen] = useState(false);
+	const { runningPlugins, pluginEntries } = sessionInfo;
+	return (
+		<section className="gui-session-info-plugins" data-state={runningPlugins > 0 ? "running" : "idle"}>
+			<button
+				type="button"
+				className="gui-session-info-plugins-head"
+				aria-expanded={open}
+				title={t("settings.extensionsRunning", { count: String(runningPlugins) })}
+				onClick={() => setOpen(value => !value)}
+			>
+				<Icon name="plug" className="gui-session-info-row-icon" />
+				<span className="gui-session-info-section-label">{t("general.sessionInfoPlugins")}</span>
+				<span className="gui-session-info-count">{`${runningPlugins}/${pluginEntries.length}`}</span>
+				<Icon
+					name="arrow-down-s"
+					className={`gui-session-info-chev${open ? "" : " gui-session-info-chev--closed"}`}
+				/>
+			</button>
+			<Reveal open={open}>
+				<ul className="gui-session-info-list">
+					{pluginEntries.map(entry => (
+						<li key={entry.id}>
+							<div className="gui-session-info-plugin" title={entry.label}>
+								<span
+									className={`gui-session-info-dot${entry.active ? " gui-session-info-dot--active" : ""}`}
+									aria-hidden="true"
+								/>
+								<span className="gui-session-info-item-label">{entry.label}</span>
+								<span className="gui-session-info-plugin-state">
+									{entry.active ? t("settings.extensionsStateRunning") : t("settings.extensionsStateDisabled")}
+								</span>
+							</div>
+						</li>
+					))}
+				</ul>
+			</Reveal>
+		</section>
+	);
+}
+
 interface SessionInfoCardProps {
 	sessionId: string | null;
 	rpc: RpcClient | null;
@@ -142,7 +298,17 @@ interface SessionInfoCardProps {
 	/** Open panel tabs, in strip order. */
 	tabs: readonly PanelTab[];
 	activeTabId?: string | null;
-	/** Px from the chat column's top — keeps the card clear of the header row. */
+	/** Subagent progress keyed by agent id; ended agents stay in the map. */
+	progress?: ReadonlyMap<string, SubagentProgressPayload> | null;
+	/** Transcript entries, read for the latest todo-board snapshot. */
+	entries?: readonly SessionEntry[];
+	/** Whether the session is working — keeps an unfinished todo board visible
+	 *  while every task is still pending. */
+	working?: boolean;
+	/** Seat: a docked column or the floating card. ChatView picks it (panel
+	 *  state + measured row width); the tile itself only paints the difference. */
+	mode?: "dock" | "float";
+	/** Float only: px from the chat column's top — below the surface-mode row. */
 	top?: number;
 	onSelectTab?(id: string): void;
 	onOpenSurface?(id: string): void;
@@ -155,6 +321,10 @@ export function SessionInfoCard({
 	title,
 	tabs,
 	activeTabId = null,
+	progress = null,
+	entries = [],
+	working = false,
+	mode = "float",
 	top = 54,
 	onSelectTab,
 	onOpenSurface,
@@ -166,6 +336,7 @@ export function SessionInfoCard({
 	const [changesError, setChangesError] = useState<string | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
 	const [showAllTabs, setShowAllTabs] = useState(false);
+	const [showAllSurfaces, setShowAllSurfaces] = useState(false);
 
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
@@ -240,6 +411,72 @@ export function SessionInfoCard({
 		return () => window.removeEventListener("storage", onStorage);
 	}, []);
 
+	// ── Connectors (MCP): which servers this session may use ────────────────
+	// The panel below is the single picker; `useConnectors` owns the write-back
+	// (`connectors.setSelected`) and the draft-to-live pending handoff.
+	const {
+		snapshot: connectorSnapshot,
+		loadFailed: connectorsLoadFailed,
+		setSelection: setConnectorSelection,
+	} = useConnectors(rpc, sessionId, cwd);
+	const connectorServers = connectorSnapshot?.servers ?? [];
+
+	// ── Plugins: the shared extension registry the GUI's other hosts read ────
+	// 分区组件(`chat.session-info.plugins`)与内置回退拿到的是同一份读数:
+	// 卡片读注册表一次,counts 与 rows 都从这里出。
+	const extensionRegistry = useExtensionRegistry(rpc);
+	const pluginEntries = useMemo(
+		() =>
+			(extensionRegistry?.extensions ?? []).filter(
+				entry => entry.kind === "plugin-module" || entry.kind === "extension-module",
+			),
+		[extensionRegistry],
+	);
+	const sessionInfo = useMemo<SessionInfoSlotData>(() => {
+		const rows: SessionInfoPluginRow[] = pluginEntries.map(entry => ({
+			id: entry.id,
+			label: entry.displayName || entry.name || entry.id,
+			active: entry.state === "active",
+		}));
+		return { runningPlugins: rows.filter(row => row.active).length, pluginEntries: rows };
+	}, [pluginEntries]);
+
+	// ── Subagents: live/ended split + per-agent elapsed timers ─────────────
+	const liveAgents = useMemo(
+		() => (progress ? [...progress.entries()].filter(([, entry]) => isLiveAgent(entry)) : []),
+		[progress],
+	);
+	const endedAgents = useMemo(
+		() => (progress ? [...progress.entries()].filter(([, entry]) => !isLiveAgent(entry)) : []),
+		[progress],
+	);
+	const [endedOpen, setEndedOpen] = useState(false);
+	// Elapsed seconds per agent id, measured from first sighting in this mount
+	// (the wire payload carries no start timestamp).
+	const firstSeenRef = useRef<Map<string, number>>(new Map());
+	const [, setTick] = useState(0);
+	useEffect(() => {
+		if (!progress || liveAgents.length === 0) return;
+		const now = Date.now();
+		for (const [id, entry] of progress) {
+			if (isLiveAgent(entry) && !firstSeenRef.current.has(id)) firstSeenRef.current.set(id, now);
+		}
+		const timer = window.setInterval(() => setTick(value => value + 1), 1000);
+		return () => window.clearInterval(timer);
+	}, [progress, liveAgents.length]);
+	const elapsed = useCallback((agentId: string): string => {
+		const start = firstSeenRef.current.get(agentId);
+		if (!start) return "";
+		const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000));
+		return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+	}, []);
+
+	// ── Todo board progress ────────────────────────────────────────────────
+	const todo = useMemo(() => latestTodo(entries), [entries]);
+	// An unfinished board stays visible while the session works even before the
+	// first task flips to in_progress; a finished board drops out of the card.
+	const showTodo = Boolean(todo && (todo.current || working) && todo.done < todo.total);
+
 	const openSurfaces = useMemo(() => new Set(tabs.map(item => item.surface)), [tabs]);
 	const surfaces = useMemo(() => {
 		const hidden = new Set(hiddenSurfaces);
@@ -251,16 +488,23 @@ export function SessionInfoCard({
 
 	const visibleTabs = showAllTabs ? tabs : tabs.slice(0, VISIBLE_TAB_LIMIT);
 	const foldedTabCount = tabs.length - visibleTabs.length;
+	const visibleSurfaces = showAllSurfaces ? surfaces : surfaces.slice(0, VISIBLE_TAB_LIMIT);
+	const foldedSurfaceCount = surfaces.length - visibleSurfaces.length;
 	const sessionTitle = title?.trim() || t("general.sessionInfoUntitled");
 	const model = usage?.model ?? null;
 	const retry = useCallback((): void => setReloadToken(token => token + 1), []);
 
+	const floating = mode === "float";
 	return (
 		<aside
-			className="gui-session-info"
+			className={`gui-session-info gui-session-info--${mode}`}
 			role="region"
 			aria-label={t("sessionInfo.title")}
-			style={{ top: `${top}px`, maxHeight: `calc(100% - ${top + 12}px)` }}
+			data-mode={mode}
+			/* Float geometry only: the dock is an in-flow flex column whose box
+			 * and scroll come from CSS. Inline top on the dock would fight the
+			 * card gutter and detach it from the column it shares with the chat. */
+			style={floating ? { top: `${top}px`, maxHeight: `calc(100% - ${top + 12}px)` } : undefined}
 		>
 			<header className="gui-session-info-head">
 				<Icon name="information" className="gui-session-info-head-icon" />
@@ -290,14 +534,133 @@ export function SessionInfoCard({
 						</button>
 					</div>
 				) : changesState === "ready" && hasChangesOf(changes) ? (
-					<div className="gui-session-info-nums">
+					<button
+						type="button"
+						className="gui-session-info-nums gui-session-info-nums--link"
+						title={t("general.sessionInfoChanges")}
+						onClick={() => onOpenSurface?.("git")}
+					>
 						<span className="gui-session-info-num-add">+{changes.added}</span>
 						<span className="gui-session-info-num-del">−{changes.removed}</span>
-					</div>
+					</button>
 				) : (
 					<p className="gui-session-info-note">{t("general.sessionInfoNoChanges")}</p>
 				)}
 			</section>
+
+			{liveAgents.length > 0 || endedAgents.length > 0 ? (
+				<InfoSection
+					title={t("general.agents")}
+					trailing={
+						liveAgents.length > 0 ? (
+							<span className="gui-session-info-count gui-session-info-count--live">{liveAgents.length}</span>
+						) : undefined
+					}
+				>
+					<div className="gui-session-info-agents">
+						{liveAgents.map(([id, entry]) => {
+							// Same fraction the TUI task card and the guest swarm card use,
+							// so a row reads the same progress everywhere.
+							const pct = Math.round(agentProgressFraction(entry.progress) * 100);
+							return (
+								<button
+									key={id}
+									type="button"
+									className="gui-session-info-agent"
+									title={entry.task}
+									onClick={() => onOpenSurface?.("trajectory")}
+								>
+									<Icon name="loader-4" className="gui-session-info-row-icon gui-session-info-spin" />
+									<span className="gui-session-info-item-label">
+										{entry.agent}
+										{entry.task ? ` · ${entry.task}` : ""}
+									</span>
+									<span className="gui-session-info-bar" aria-hidden="true">
+										<span className="tv-swarm-bar-fill" style={{ width: `${pct}%` }} />
+									</span>
+									<span className="gui-session-info-elapsed">{elapsed(id)}</span>
+								</button>
+							);
+						})}
+						{endedAgents.length > 0 ? (
+							<button
+								type="button"
+								className="gui-session-info-agent gui-session-info-agent--ended"
+								aria-expanded={endedOpen}
+								onClick={() => setEndedOpen(value => !value)}
+							>
+								<Icon
+									name="arrow-down-s"
+									className={`gui-session-info-chev${endedOpen ? "" : " gui-session-info-chev--closed"}`}
+								/>
+								<span className="gui-session-info-item-label">{t("general.ended")}</span>
+								<span className="gui-session-info-count">{endedAgents.length}</span>
+							</button>
+						) : null}
+						<Reveal open={endedOpen}>
+							<ul className="gui-session-info-list">
+								{endedAgents.map(([id, entry]) => (
+									<li key={id}>
+										<button
+											type="button"
+											className="gui-session-info-agent gui-session-info-agent--ended"
+											title={entry.task}
+											onClick={() => onOpenSurface?.("trajectory")}
+										>
+											<Icon name="check" className="gui-session-info-row-icon" />
+											<span className="gui-session-info-item-label">{entry.agent}</span>
+											<span className="gui-session-info-elapsed">{elapsed(id)}</span>
+										</button>
+									</li>
+								))}
+							</ul>
+						</Reveal>
+					</div>
+				</InfoSection>
+			) : null}
+
+			{showTodo && todo ? (
+				<InfoSection
+					title={t("general.todoProgress")}
+					trailing={<span className="gui-session-info-count">{`${todo.done}/${todo.total}`}</span>}
+				>
+					<button
+						type="button"
+						className="gui-session-info-agent"
+						title={todo.current ?? undefined}
+						onClick={() => onOpenSurface?.("trajectory")}
+					>
+						<Icon name="list-check-2" className="gui-session-info-row-icon" />
+						<span className="gui-session-info-item-label">{todo.current ?? t("general.todoProgress")}</span>
+					</button>
+				</InfoSection>
+			) : null}
+
+			{connectorServers.length > 0 ? (
+				<section className="gui-session-info-connectors">
+					<ConnectorPanel
+						snapshot={connectorSnapshot}
+						loadFailed={connectorsLoadFailed}
+						onToggleServer={name =>
+							connectorSnapshot && setConnectorSelection(nextSelection(connectorSnapshot, name))
+						}
+						onToggleServers={names =>
+							setConnectorSelection(names.length === connectorSnapshot?.servers.length ? null : names)
+						}
+						onSelectAll={() => setConnectorSelection([])}
+						onUseAll={() => setConnectorSelection(null)}
+					/>
+				</section>
+			) : null}
+
+			{/* 「插件」分区是 Cordis 贡献点(chat.session-info.plugins):插件停用或
+			 *  编译失败时渲染下方内置同构列表,卡片不留白。 */}
+			<SlotComponentHost
+				rpc={rpc}
+				slot={SESSION_INFO_SLOT}
+				sessionInfo={sessionInfo}
+				fallback={pluginEntries.length > 0 ? <SessionInfoPluginsFallback sessionInfo={sessionInfo} /> : null}
+			/>
 
 			<section className="gui-session-info-tabs">
 				<div className="gui-session-info-section-label">{t("general.sessionInfoOpenTabs")}</div>
@@ -334,7 +697,7 @@ export function SessionInfoCard({
 			<section className="gui-session-info-surfaces">
 				<div className="gui-session-info-section-label">{t("general.sessionInfoSurfaces")}</div>
 				<div className="gui-session-info-surface-grid">
-					{surfaces.map(surface => (
+					{visibleSurfaces.map(surface => (
 						<button
 							key={surface.id}
 							type="button"
@@ -347,6 +710,11 @@ export function SessionInfoCard({
 						</button>
 					))}
 				</div>
+				{foldedSurfaceCount > 0 ? (
+					<button type="button" className="gui-session-info-more" onClick={() => setShowAllSurfaces(true)}>
+						{t("general.sessionInfoMore", { count: foldedSurfaceCount })}
+					</button>
+				) : null}
 			</section>
 		</aside>
 	);

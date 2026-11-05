@@ -88,16 +88,13 @@ export function useConnectors(rpc: RpcClient | null, sessionId: string | null, c
 
 	// Draft → live 过渡：把空态攒下的选择写进新会话头。发生在会话创建
 	// 之后（store.sessionId 置上），setSelected 即刻生效于 live 会话。
+	// 幂等：flush 成功后暂存即清，重复调用是 no-op；与 ChatView 的会话
+	// 级写入共享同一次 in-flight 请求。
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
-		const pending = cwd ? readPendingSelection(cwd) : undefined;
-		if (pending === undefined) return;
-		rpc.request<{ ok: true; appliedToLive: boolean }>("connectors.setSelected", { sessionId, servers: pending })
-			.then(() => {
-				if (cwd) clearPendingSelection(cwd);
-				reload();
-			})
-			.catch(() => {});
+		void flushPendingConnectorSelection(rpc, sessionId, cwd).then(applied => {
+			if (applied) reload();
+		});
 	}, [rpc, sessionId, cwd, reload]);
 
 	/**
@@ -171,6 +168,45 @@ function clearPendingSelection(cwd: string): void {
 	} catch {
 		// 同上。
 	}
+}
+
+/** In-flight draft writes, keyed by the draft's cwd (the pending entry's key). */
+const flushes = new Map<string, Promise<boolean>>();
+
+/**
+ * Write the draft's pending connector choice into a live session.
+ *
+ * The welcome composer is the only place a choice can be made without a
+ * session, and it unmounts as soon as the first message creates one — before
+ * its own write-back effect can run. ChatView therefore calls this once per new
+ * session id.
+ *
+ * The pending entry is read before the request and removed only on success, so
+ * a failed write is retried by the next caller. Concurrent callers (ChatView
+ * and the info card's `useConnectors`) share one request through `flushes`,
+ * keyed like the pending entry itself; after the clear, every later call is a
+ * no-op.
+ */
+export function flushPendingConnectorSelection(
+	rpc: RpcClient | null,
+	sessionId: string | null,
+	cwd: string | null | undefined,
+): Promise<boolean> {
+	if (!rpc || !sessionId || !cwd) return Promise.resolve(false);
+	const pending = readPendingSelection(cwd);
+	if (pending === undefined) return Promise.resolve(false);
+	const inFlight = flushes.get(cwd);
+	if (inFlight) return inFlight;
+	const flush = rpc
+		.request<{ ok: true; appliedToLive: boolean }>("connectors.setSelected", { sessionId, servers: pending })
+		.then(() => {
+			clearPendingSelection(cwd);
+			return true;
+		})
+		.catch(() => false)
+		.finally(() => flushes.delete(cwd));
+	flushes.set(cwd, flush);
+	return flush;
 }
 
 export function ConnectorChip({

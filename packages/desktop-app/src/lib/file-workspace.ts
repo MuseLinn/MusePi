@@ -59,6 +59,17 @@ export function resolveFilePreviewPath(cwd: string, path: string): string {
 	return `${cwd.replace(/[\\/]+$/, "")}/${path}`;
 }
 
+/**
+ * Canonical URL for a local file preview in the managed browser. The main
+ * process serves `musepi-file://localhost/<path>` from the managed partition;
+ * Windows drive paths need the leading slash so its URL parser can strip it
+ * before `pathToFileURL`.
+ */
+export function panelBrowserPreviewUrl(absolutePath: string): string {
+	const normalized = absolutePath.replace(/\\/g, "/");
+	return `musepi-file://localhost${encodeURI(normalized.startsWith("/") ? normalized : `/${normalized}`)}`;
+}
+
 /** fs.write accepts workspace-relative paths only. Monaco normalizes Windows
  * paths to lowercase drive letters and backslashes, so compare Windows roots
  * case-insensitively and return slash-separated paths to the daemon. Paths

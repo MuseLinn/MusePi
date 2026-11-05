@@ -134,6 +134,17 @@ describe("DisplayContext contract", () => {
 		expect(updated.prompt).toBe("Intro:\nPage: Docs\nComment: new comment\n\nElement 1: button");
 	});
 
+	it("carries comments added to an existing quote into the send prompt", () => {
+		const chat = withDisplayContextComment(createChatQuoteContext({ quote: "answer" }), "why?");
+		const file = withDisplayContextComment(
+			createFileQuoteContext({ path: "src/example.ts", quote: "const answer = 42;" }),
+			"rename this",
+		);
+		expect(composeDisplayContextPrompt([chat, file], "fix it")).toBe(
+			"> answer\n\nwhy?\n\nComment on this fragment of `src/example.ts`:\n> const answer = 42;\n\nrename this\n\nfix it",
+		);
+	});
+
 	it("preserves one context as an object and multiple contexts as an array", () => {
 		const first = createChatQuoteContext({ quote: "one" });
 		const second = createChatQuoteContext({ quote: "two" });
@@ -146,5 +157,18 @@ describe("DisplayContext contract", () => {
 		const quote = createChatQuoteContext({ quote: "quoted", comment: "note" });
 		expect(textWithoutDisplayContext("> quoted\n\nnote\n\nordinary body", quote)).toBe("ordinary body");
 		expect(textWithoutDisplayContext("> an ordinary blockquote", undefined)).toBe("> an ordinary blockquote");
+	});
+
+	it("carries an optional quote anchor through persistence without touching the prompt", () => {
+		const anchor = { text: "rendered fragment", prefix: "before ", suffix: " after", start: 12 };
+		const context = createChatQuoteContext({ messageId: "user-1", quote: "**rendered** fragment", anchor });
+		expect(context.anchor).toEqual(anchor);
+		expect(isDisplayContext(JSON.parse(JSON.stringify(context)))).toBe(true);
+		// The model still reads the Markdown quote; the anchor is UI metadata.
+		expect(composeDisplayContextPrompt([context], "")).toBe("> **rendered** fragment");
+		// Legacy quotes stay valid and gain no anchor field.
+		expect(createChatQuoteContext({ quote: "plain" })).toEqual({ kind: "chat-quote", quote: "plain" });
+		expect(isDisplayContext({ kind: "chat-quote", quote: "plain", anchor: { text: 42 } })).toBe(false);
+		expect(isDisplayContext({ kind: "chat-quote", quote: "plain", anchor: { text: "x", start: "12" } })).toBe(false);
 	});
 });

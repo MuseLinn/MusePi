@@ -240,7 +240,7 @@ function formatAddressDisplayParts(url: string, title?: string): AddressDisplayP
 }
 
 function isHistoryUrl(url: string): boolean {
-	return url !== EMPTY_URL && (/^https?:\/\//i.test(url) || /^omp-file:\/\//i.test(url));
+	return url !== EMPTY_URL && (/^https?:\/\//i.test(url) || /^(?:musepi-file|omp-file):\/\//i.test(url));
 }
 
 // ── quick links (start page 快速链接) ─────────────────────────────────
@@ -766,8 +766,8 @@ export function ManagedBrowserPane({
 		async (target: string): Promise<void> => {
 			const trimmed = target.trim();
 			if (!trimmed) return;
-			// Main normalizes the address (localhost / omp-file paths) and owns the
-			// risk policy, then loads the guest; failures land in the host store.
+			// Main normalizes the address (localhost / local-preview paths) and owns
+			// the risk policy, then loads the guest; failures land in the host store.
 			const ok = await navigateInStore(trimmed);
 			if (!ok) return;
 			commitVisit(trimmed);

@@ -33,7 +33,6 @@ import {
 	COMPOSER_REQUEST_DRAFT_SLOT,
 	COMPOSER_RIGHT_SLOT,
 	SlotComponentHost,
-	useExtensionRegistry,
 	useSlotComponents,
 } from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
@@ -54,7 +53,6 @@ import {
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
-import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
@@ -109,7 +107,6 @@ import { useSessionDesignSystem } from "./composer/use-session-design-system";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
-import { ExtensionStatusCard } from "./ExtensionStatusCard";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { PetSprite, usePet } from "./PetSprite";
 import { SketchPad } from "./SketchPad";
@@ -1167,33 +1164,6 @@ export function Composer({
 		className: "gui-queue-popup",
 	});
 
-	// Connector picker (M4 P1 client): which MCP servers this session may use.
-	// Session composers always carry a live sessionId; the cwd is passed along
-	// so the draft→live transition and the not-quite-live frame still resolve
-	// (daemon falls back to the cwd-scoped manager).
-	const [connectorsOpen, setConnectorsOpen] = useState(false);
-	const { anchorRef: connectorsAnchorRef, renderMenu: renderConnectorsMenu } = useFloatingMenu(
-		connectorsOpen,
-		setConnectorsOpen,
-		{ className: "gui-connector-popup" },
-	);
-	const {
-		snapshot: connectorSnapshot,
-		loadFailed: connectorsLoadFailed,
-		setSelection: setConnectorSelection,
-	} = useConnectors(rpc, sessionId, cwd);
-	const connectorServers = connectorSnapshot?.servers ?? [];
-	// Same registry singleton ExtensionStatusCard renders from: the dock needs
-	// to know whether the chip will have anything to show.
-	const extensionRegistry = useExtensionRegistry(rpc);
-	const runningPlugins = (extensionRegistry?.extensions ?? []).filter(
-		entry => (entry.kind === "plugin-module" || entry.kind === "extension-module") && entry.state === "active",
-	).length;
-	const connectorChosen = connectorSnapshot
-		? connectorServers.filter(s => connectorSnapshot.selected === null || connectorSnapshot.selected.includes(s.name))
-				.length
-		: 0;
-
 	// ── Slash commands (TUI parity) ──────────────────────────────────────
 	// "/xxx" executes the daemon's builtin registry headlessly; "//xxx"
 	// escapes to literal text (the doubled slash parses to no command, so
@@ -2006,44 +1976,11 @@ export function Composer({
 				aboveRow={
 					<div className="gui-composer-above">
 						{(modes && (todoTotal > 0 || (queued != null && queued.count > 0))) ||
-						connectorServers.length > 0 ||
-						runningPlugins > 0 ||
 						composerLeftItems.length > 0 ||
 						activeTask ? (
 							<div className="gui-composer-dock">
-								{/* Connector picker (M4 P1): which MCP servers this session
-								    may use. Only appears once the daemon has reported at
-								    least one — an empty list has nothing to pick. */}
-								{connectorServers.length > 0 && (
-									<ConnectorChip
-										open={connectorsOpen}
-										onToggle={() => setConnectorsOpen(v => !v)}
-										anchorRef={connectorsAnchorRef}
-										serverCount={connectorServers.length}
-										chosenCount={connectorChosen}
-										menu={renderConnectorsMenu(
-											<ConnectorPanel
-												snapshot={connectorSnapshot}
-												loadFailed={connectorsLoadFailed}
-												onToggleServer={name =>
-													connectorSnapshot &&
-													setConnectorSelection(nextSelection(connectorSnapshot, name))
-												}
-												onToggleServers={names =>
-													setConnectorSelection(
-														names.length === connectorSnapshot?.servers.length ? null : names,
-													)
-												}
-												onSelectAll={() => setConnectorSelection([])}
-												onUseAll={() => setConnectorSelection(null)}
-											/>,
-										)}
-									/>
-								)}
-								{/* Running Cordis plugins sit on the same row as the
-								 * connector picker, above the input card. */}
-								{runningPlugins > 0 && !welcome && <ExtensionStatusCard rpc={rpc} />}
-								{/* composer.left chips share the status row with connectors. */}
+								{/* composer.left chips share the status row with the
+								 * todo/queue chips. */}
 								<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
 								{/* composer.activity 座位槽:
 								 * 进行中的活动(子代理、后台任务)的扩展视图。 */}

@@ -1,8 +1,10 @@
 import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
+import { t } from "@musepi/client-core";
 import type { ExtensionAPI, ExtensionComponent } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import type { RpcClient } from "../src/lib/rpc";
 import {
 	hostReactBindings,
 	hostReactDOMBindings,
@@ -100,6 +102,45 @@ describe("capability-center Cordis plugin", () => {
 		expect(globals.__capabilityCleanup).toBe(1);
 		delete globals.__capabilityCleanup;
 		delete globals.__capabilityImports;
+	});
+
+	it("shows the running-plugin status strip inside the plugins pane", async () => {
+		const rpc = {
+			request: async (method: string): Promise<unknown> => {
+				if (method === "extensions.list") {
+					return {
+						extensions: [
+							{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "active" },
+						],
+					};
+				}
+				if (method === "plugins.packages") return { plugins: [] };
+				if (method === "skills.list") return { skills: [] };
+				if (method === "marketplace.list") return { entries: [] };
+				if (method === "marketplace.sources.list") return { sources: [] };
+				return {};
+			},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+		const host = document.createElement("div");
+		const root = createRoot(host);
+		const page = {
+			tab: "plugins" as const,
+			onTabChange() {},
+			onBack() {},
+		};
+		await act(async () => {
+			root.render(createElement(CapabilityCenterPage, { rpc, page }));
+		});
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		const chip = host.querySelector<HTMLButtonElement>(".gui-mode-chip");
+		expect(chip?.textContent).toContain(t("settings.extensionsRunning", { count: "1" }));
+		// The strip lives inside the plugins pane, next to the managed list.
+		expect(chip?.closest(".gui-capability-pane")).not.toBeNull();
+		await act(async () => root.unmount());
 	});
 
 	it("exposes the complete host React bindings required by the page graph", () => {

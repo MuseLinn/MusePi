@@ -23,16 +23,12 @@ function segments(p: string): string[] {
 }
 
 /**
- * Per-path display labels: the basename, widened with just enough parent
- * segments to make every label in `paths` unique. Unambiguous folders keep the
- * plain basename — this must not turn every row into a long path.
+ * Basename-then-parent labels for `keys`, each keyed by its own segment list.
+ * The widening stops at the first depth where every label is unique, so
+ * unambiguous entries keep a short label.
  */
-export function projectLabels(paths: readonly string[]): Map<string, string> {
-	// Deduplicate first: the same path listed twice is one workspace and must
-	// not read as a collision (it would otherwise widen to its full path).
-	const unique = [...new Set(paths)];
-	const segs = new Map<string, string[]>();
-	for (const p of unique) segs.set(p, segments(p));
+function widenLabels(segs: ReadonlyMap<string, readonly string[]>): Map<string, string> {
+	const unique = [...segs.keys()];
 	// Depth = how many trailing segments the label shows.
 	const depth = new Map<string, number>();
 	for (const p of unique) depth.set(p, 1);
@@ -75,7 +71,49 @@ export function projectLabels(paths: readonly string[]): Map<string, string> {
 	return out;
 }
 
+/**
+ * Per-path display labels: the basename, widened with just enough parent
+ * segments to make every label in `paths` unique. Unambiguous folders keep the
+ * plain basename — this must not turn every row into a long path.
+ */
+export function projectLabels(paths: readonly string[]): Map<string, string> {
+	// Deduplicate first: the same path listed twice is one workspace and must
+	// not read as a collision (it would otherwise widen to its full path).
+	const segs = new Map<string, string[]>();
+	for (const p of new Set(paths)) segs.set(p, segments(p));
+	return widenLabels(segs);
+}
+
 /** Convenience for single-row call sites that know the competing paths. */
 export function projectLabel(path: string, allPaths: readonly string[]): string {
 	return projectLabels(allPaths).get(path) ?? pathBaseName(path);
+}
+
+/**
+ * Segments of an on-disk workspace directory key. The daemon names session and
+ * memory directories after the cwd, encoding `[/\\:]` as `-` and wrapping
+ * absolute paths in `--` (`--D-Projects-demo--`); home and temp workspaces get
+ * the `-` / `-tmp` prefix instead. The encoding is lossy — a hyphen inside a
+ * folder name reads as a separator — so these segments are a display aid only;
+ * the key itself stays the identity.
+ */
+export function workspaceKeySegments(key: string): string[] {
+	return key.split(/[\\/:-]+/).filter(Boolean);
+}
+
+/**
+ * Display labels for encoded workspace directory keys — the same
+ * basename-then-parent widening as {@link projectLabels}, applied to the
+ * segments the encoding still carries.
+ */
+export function workspaceKeyLabels(keys: readonly string[]): Map<string, string> {
+	const segs = new Map<string, string[]>();
+	for (const key of new Set(keys)) segs.set(key, workspaceKeySegments(key));
+	return widenLabels(segs);
+}
+
+/** Convenience for single-row call sites that know the competing keys. */
+export function workspaceKeyLabel(key: string, allKeys: readonly string[]): string {
+	const segmentsOfKey = workspaceKeySegments(key);
+	return workspaceKeyLabels(allKeys).get(key) ?? segmentsOfKey[segmentsOfKey.length - 1] ?? key;
 }

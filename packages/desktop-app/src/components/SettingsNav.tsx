@@ -299,7 +299,11 @@ export function navGroups(
 	// 扩展声明一个设置页即出现在导航。
 	// 配置项级贡献走 registerSetting 的 ui.tab(插入现有 tab)或
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
+	// The sessions plugin replaces the built-in 会话 page in place: keep the
+	// built-in nav id (so `sessions` stays a valid section) and skip its
+	// duplicate extension row below.
 	for (const c of extTabs) {
+		if (c.slot === "settings.tab.sessions") continue;
 		groups[1]!.items.push({
 			id: `ext:${c.slot}`,
 			icon: "plug",
@@ -325,7 +329,10 @@ function filterNavGroups(
 			...group,
 			items: group.items.filter(item => {
 				if (item.label.toLowerCase().includes(q)) return true;
-				const terms = SECTION_SEARCH_TERMS[item.id] ?? [];
+				// Extension rows carry `ext:<slot>`; search the underlying
+				// section id so a replaced page keeps the built-in keywords.
+				const termsKey = item.id.startsWith("ext:") ? (item.id.slice(4).split(".").pop() ?? item.id) : item.id;
+				const terms = SECTION_SEARCH_TERMS[termsKey] ?? [];
 				return terms.some(k => k.includes(q) || q.includes(k));
 			}),
 		}))

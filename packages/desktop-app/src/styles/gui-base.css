@@ -391,6 +391,55 @@ html.gui-glass-adaptive {
 	transform: none;
 }
 
+/* ── Fill wipe (FillWipeIcon) ─────────────────────────────────────────
+ * Two copies of one lucide glyph: the outline stays, the filled copy is
+ * revealed by an expanding circular clip. A state change reads as the icon
+ * filling from its center; the rail triggers the same clip on hover/focus
+ * without a JS state. Geometry animation, not a path morph. */
+.gui-fill-wipe {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	line-height: 0;
+}
+.gui-fill-wipe__outline,
+.gui-fill-wipe__fill {
+	display: block;
+}
+.gui-fill-wipe__fill {
+	position: absolute;
+	inset: 0;
+	fill: currentColor;
+	clip-path: circle(0% at 50% 50%);
+	transition: clip-path 220ms var(--spring);
+	pointer-events: none;
+}
+.gui-fill-wipe--on .gui-fill-wipe__fill {
+	clip-path: circle(75% at 50% 50%);
+}
+/* Target-style glyph: fill only the center dot, not the rings. */
+.gui-fill-wipe__fill--center {
+	fill: none;
+}
+.gui-fill-wipe__fill--center circle:last-child {
+	fill: currentColor;
+}
+/* Rail items preview the same fill on hover/focus. */
+.gui-right-rail-btn:hover .gui-fill-wipe__fill,
+.gui-right-rail-btn:focus-visible .gui-fill-wipe__fill {
+	clip-path: circle(75% at 50% 50%);
+}
+.gui-motion-off .gui-fill-wipe__fill {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-fill-wipe__fill {
+		transition: none;
+	}
+}
+
 /* ── Pac-man chomp animation (vendor/pac-man.tsx) ─────────────────────
  * The glyph renders a rest sector plus three chomp frames; while
  * .pac-chomp is present the frames cycle (open → mid → closed) with

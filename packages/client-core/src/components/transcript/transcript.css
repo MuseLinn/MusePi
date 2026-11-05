@@ -1615,6 +1615,34 @@ button.tr-display-context-source:hover {
 	color: var(--fg);
 }
 
+/* Wide table (toolbar 加宽表格 / 恢复默认宽度). The default table is clamped to
+ * the message column (`width: 100%`) and wraps its cells to fit it, so a
+ * content-rich table reads cramped. Wide mode lays the table out at its
+ * intrinsic width — cells stop being squeezed by the column, and the block
+ * still stays inside it because the pane clips horizontal overflow, so
+ * anything past the column keeps scrolling inside .tr-table-scroll. */
+.tr-table--wide .tr-table-scroll > table {
+	width: max-content;
+	min-width: 100%;
+}
+
+/* A user message is a bubble capped at min(70%, 620px); a wide table needs
+ * the row's full width instead of the bubble's measure. */
+.tr-row--user .tr-body > .tr-md:has(.tr-table--wide) {
+	max-width: 100%;
+}
+
+/* The toolbar is the only way back (the toggle stays pressed), so a wide
+ * table keeps it on screen instead of requiring a hover. */
+.tr-table--wide .tr-table-bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.tr-table-wide[aria-pressed="true"] {
+	color: var(--accent);
+}
+
 /* Advisor note cards (the advisor tool's <advisory> blocks): a bordered
  * aside whose accent follows the severity (blocker > concern > nit). */
 .tr-advisory {
@@ -3475,6 +3503,18 @@ a.tr-tool-search-title:hover {
 .tr-flash-highlight {
 	animation: tr-flash-highlight 1.3s ease-out;
 	border-radius: var(--radius-lg);
+}
+
+/* Anchored chat quotes (CSS Custom Highlight API): the quoted fragment of a
+ * sent quote stays softly marked inside its source message, and a click on the
+ * quote card flashes it once stronger. `::highlight()` paints behind the text,
+ * so the rendered markdown DOM is never touched. */
+::highlight(musepi-quote) {
+	background-color: color-mix(in oklab, var(--color-accent, #4f7cff) 16%, transparent);
+}
+
+::highlight(musepi-quote-focus) {
+	background-color: color-mix(in oklab, var(--color-accent, #4f7cff) 34%, transparent);
 }
 
 /* ── Completed-round fold header (openchamber 活动 header parity) ───────

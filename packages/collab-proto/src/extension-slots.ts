@@ -9,6 +9,9 @@
  * assistant 都是该 seat 的节点 kind,而非独立槽。宿主(渲染器)按 kind
  * 派发到注册的渲染器,无注册时回退到内建渲染(fallback)。
  *
+ * chat.session-info.<id> —— 会话信息卡的分区座位:收起的面板右缘那张卡片
+ * 逐区贡献(当前是「插件」分区)。分区无占据者时宿主渲染内建实现。
+ *
  * ## 输入区席位
  *
  * 席位沿用 `composer.*` 前缀(改名会作废所有已注册组件)。
@@ -76,7 +79,14 @@ export const EXTENSION_SLOT_DECLARATION = {
 		"composer.model": { kind: "single" },
 		"transcript.node": { kind: "list" },
 	} as const satisfies Record<string, SlotDeclaration>,
-	prefixes: ["panel.tab.", "settings.tab.", "rail.", "settings.item.", "settings.action."] as const,
+	prefixes: [
+		"panel.tab.",
+		"settings.tab.",
+		"rail.",
+		"settings.item.",
+		"settings.action.",
+		"chat.session-info.",
+	] as const,
 } as const;
 
 /** Every exact slot name, in UI order. */

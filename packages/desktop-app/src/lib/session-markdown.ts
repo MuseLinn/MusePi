@@ -31,15 +31,24 @@ function textOf(content: unknown): string {
 	return "";
 }
 
-/** Render the conversation as Markdown. Bookkeeping entries are skipped. */
-export function buildSessionMarkdown(title: string, entries: readonly SessionEntry[], labels: MarkdownLabels): string {
-	const lines: string[] = [`# ${title}`, ""];
+interface ConversationBlock {
+	role: "user" | "assistant" | "advisor";
+	text: string;
+}
+
+/** Reader-facing rows of a session, in order.
+ *
+ * One selection rule feeds the Markdown export and both clipboard actions: the
+ * two easy-to-get-wrong cases (an advisor card's human-readable note, and
+ * `display: false` staying hidden) must not diverge between them. */
+function conversationBlocks(entries: readonly SessionEntry[]): ConversationBlock[] {
+	const blocks: ConversationBlock[] = [];
 	for (const e of entries) {
 		if (e.type === "custom_message") {
 			if (!e.display) continue;
 			const note = advisorNoteText(e.details).trim();
 			if (!note) continue;
-			lines.push(`## ${labels.advisor}`, "", note, "");
+			blocks.push({ role: "advisor", text: note });
 			continue;
 		}
 		if (e.type !== "message") continue;
@@ -47,9 +56,35 @@ export function buildSessionMarkdown(title: string, entries: readonly SessionEnt
 		if (role !== "user" && role !== "assistant") continue;
 		const body = textOf(e.message?.content).trim();
 		if (!body) continue;
-		lines.push(`## ${role === "user" ? labels.user : labels.assistant}`, "", body, "");
+		blocks.push({ role, text: body });
+	}
+	return blocks;
+}
+
+/** Render the conversation as Markdown. Bookkeeping entries are skipped. */
+export function buildSessionMarkdown(title: string, entries: readonly SessionEntry[], labels: MarkdownLabels): string {
+	const lines: string[] = [`# ${title}`, ""];
+	for (const block of conversationBlocks(entries)) {
+		lines.push(`## ${labels[block.role]}`, "", block.text, "");
 	}
 	return lines.join("\n");
+}
+
+/** Whether the session holds anything a reader would see — the clipboard
+ *  actions stay disabled until it does. */
+export function hasSessionConversation(entries: readonly SessionEntry[]): boolean {
+	return conversationBlocks(entries).length > 0;
+}
+
+/** Text for "仅复制最终总结": the last assistant reply, or "" when the session
+ *  has no reply yet. An advisor card after it is not a summary. */
+export function finalAssistantText(entries: readonly SessionEntry[]): string {
+	const blocks = conversationBlocks(entries);
+	for (let i = blocks.length - 1; i >= 0; i--) {
+		const block = blocks[i];
+		if (block?.role === "assistant") return block.text;
+	}
+	return "";
 }
 
 /** Filesystem-safe download name derived from a session title. */

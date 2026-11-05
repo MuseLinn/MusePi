@@ -471,6 +471,7 @@ export const general = {
 	"general.newTab": "新标签页",
 	"general.attachSelectionChat": "附加到对话",
 	"general.citeFileComposer": "引用文件到输入框",
+	"general.openInPanelBrowser": "在侧边面板浏览器打开",
 	"general.projectActions": "项目操作",
 	"general.finder": "访达",
 	"general.addNewAction": "添加新操作",
@@ -487,6 +488,13 @@ export const general = {
 	"general.share": "分享",
 	"general.exportMarkdown": "导出 Markdown",
 	"general.exportFailed": "导出失败",
+	"general.copyAllConversation": "复制全部对话为 Markdown",
+	"general.copyFinalSummary": "仅复制最终总结",
+	"general.copiedAllConversation": "已复制全部对话",
+	"general.copiedFinalSummary": "已复制最终总结",
+	"general.copyFailed": "复制失败",
+	"general.widenTable": "加宽表格",
+	"general.resetTableWidth": "恢复默认宽度",
 	"general.deleteSession": "删除会话",
 	"general.deleteSession2": "删除这个会话？该操作不可撤销。",
 	"general.aiRename": "AI 重命名",
@@ -1489,6 +1497,7 @@ export const general = {
 	"general.sessionInfoSurfaces": "可打开",
 	"general.sessionInfoMore": "查看更多（{count}）",
 	"general.sessionInfoUntitled": "未命名会话",
+	"general.sessionInfoPlugins": "插件",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

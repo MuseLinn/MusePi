@@ -33,6 +33,7 @@ import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
+import { requestQuoteReveal } from "./quote-highlight";
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
@@ -498,7 +499,15 @@ function DisplayContextCard({
 				<button
 					type="button"
 					className="tr-display-context-source"
-					onClick={() => onJumpToMessage?.(context.messageId!)}
+					onClick={() => {
+						// Reveal the anchored fragment while the row mounts; the
+						// source label alone still jumps to the message when the
+						// anchor no longer resolves.
+						if (context.anchor) {
+							requestQuoteReveal({ entryId: context.messageId!, anchor: context.anchor });
+						}
+						onJumpToMessage?.(context.messageId!);
+					}}
 				>
 					{source}
 				</button>

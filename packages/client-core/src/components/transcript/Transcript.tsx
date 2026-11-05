@@ -27,6 +27,8 @@ import { TurnErrorBody } from "./error-notice";
 import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
+import { collectQuoteMarks } from "./quote-anchor";
+import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
 import { buildToolRuns, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
@@ -1494,6 +1496,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const folding = collapseCompacted && !compactedOpen && firstCompactionIdx > 0;
 
 	const rootRef = useRef<HTMLDivElement | null>(null);
+	// Anchored chat quotes carried by the entries: the layer re-finds each
+	// fragment in its source message body whenever a row mounts or changes.
+	const quoteMarks = useMemo(() => collectQuoteMarks(entries), [entries]);
 	// M1.3 scroll-anchor state machine (scroll-anchor.ts):
 	// `following` is the user's scrolling INTENT — only real user input flips
 	// it; programmatic stick-to-bottom writes and layout scroll events only
@@ -2649,6 +2654,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				onIndexChange={i => setPreviewImg(prev => (prev ? { ...prev, index: i } : prev))}
 				onEdit={onEditImage}
 			/>
+			<QuoteHighlightLayer rootRef={rootRef} marks={quoteMarks} />
 		</div>
 	);
 });

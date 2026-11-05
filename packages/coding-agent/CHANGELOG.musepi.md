@@ -6,6 +6,42 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **旧浮动状态卡移除，信息集中到会话信息卡**：Git 改动、连接器、运行中插件、子代理与待办全部由同一张会话信息卡承载；子代理显示进度与已用时，待办显示当前任务与完成数。运行中插件状态条移到能力中心，欢迎页暂存的连接器选择在会话创建后立即写回。
+  - EN: The old floating status card is gone; Git totals, connectors, running plugins, subagents, and todo progress all live in the session info card. Subagents show progress and elapsed time, todos show the current task and count, the running-plugin status strip moves to the capability center, and connector selections stashed on the welcome screen flush as soon as the session exists.
+
+- **本地文件预览 scheme 改为 musepi-file**：受管浏览器用 `musepi-file://` 提供 HTML 等本地预览，旧 `omp-file://` 继续接受并自动规范化；Windows 盘符路径仍正确落到 `file:///D:/...`。
+  - EN: The managed browser's local preview scheme is now `musepi-file://`. Legacy `omp-file://` URLs are still accepted and normalized, and Windows drive paths still resolve to `file:///D:/...`.
+
+- **表格可加宽，会话可复制为 Markdown**：表格工具栏新增「加宽表格 / 恢复默认宽度」；会话菜单新增「复制全部对话为 Markdown」与「仅复制最终总结」，无内容时禁用。
+  - EN: Tables gain Widen / Restore width in their toolbar, and the session menu adds Copy all conversation as Markdown and Copy final summary, disabled when there is nothing to copy.
+
+- **引用带锚点并在原文高亮，选区保留 Markdown**：引用会记录文本位置并在源消息中高亮，点击引用卡跳转并闪烁；代码块、表格、强调与链接从渲染 DOM 还原为 Markdown，长选区不再截断。
+  - EN: Quotes now record an anchor, highlight the source text, and jump-and-flash from the quote card. Selections preserve code fences, tables, emphasis, and links as Markdown, and long selections are no longer truncated.
+
+- **会话信息卡分区可插件扩展**：运行中插件分区改由 `chat.session-info.plugins` Cordis 插件贡献，插件停用或编译失败时回退内置列表。
+  - EN: Session info sections are plugin-extensible. The running-plugins section is contributed by the `chat.session-info.plugins` Cordis plugin, with the built-in list as the fallback when it is disabled or fails to compile.
+
+- **会话信息卡收拢连接器、插件与改动入口**：停靠卡改为内容自适应高度，深色下不再是一整列空卡片；连接器勾选与运行中插件列表直接放进卡内，输入框与状态卡不再保留第二套入口；改动数字可打开 Git，可打开表面超过 6 项折叠为「查看更多」。
+  - EN: The session info card now owns connectors, plugins, and change entry points. The dock shrinks to its content instead of painting an empty column in dark mode, connector selection and running plugins live inside the card, the composer and status cards keep no duplicate entries, change totals open Git, and more than six openable surfaces fold behind More.
+
+- **引用工具栏可带评论添加引用**：选中文本后点「评论」，在浮层里输入评论并添加；评论随引用卡进入输入框，可继续编辑，发送时进入引用正文。文件、PDF 与 Office 选区同样支持。
+  - EN: The selection toolbar can add a quoted selection with a comment. Choosing Comment opens an inline field; the comment travels with the quote card into the composer, stays editable, and becomes part of the quoted body on send. File, PDF, and Office selections support it too.
+
+- **HTML 文件可在侧边面板浏览器中完整打开**：HTML 预览头部新增侧边面板浏览器按钮，通过受管浏览器的本地预览通道渲染页面，样式、脚本与相对资源都能加载，页面内相对链接继续导航；Windows 盘符路径的本地预览 URL 也已修正。
+  - EN: HTML files can open fully in the side panel browser. The HTML preview header adds a side-panel action that renders through the managed browser's local preview channel with styles, scripts, and relative assets, and relative links keep navigating inside the page. Local preview URLs for Windows drive paths are fixed as well.
+
+- **会话信息卡改为停靠/悬浮双座位，不再占用右侧面板标签**：右侧面板收起时，信息卡停靠成会话右侧的独立列，不覆盖聊天内容；面板展开时默认收起，点头部信息按钮后以圆角玻璃浮卡悬浮在会话上。浮卡层级低于状态卡、菜单与 tooltip，状态卡与连接器信息始终可见。
+  - EN: The session info card now has two seats instead of a right-panel tab. With the panel collapsed it docks as its own column at the session's right edge without covering the transcript; with the panel open it stays collapsed until the header button shows it as a rounded-glass card floating over the session. The card layers below status cards, menus, and tooltips, so connector info stays visible.
+
+- **右侧面板最大化/还原恢复可靠**：最大化收敛为唯一控制器，点击与状态、图标、`aria-pressed` 在同一次提交内同步；动效进行中再次点击会从当前矩形反向，还原回到记住的停靠宽度，切换标签、折叠再展开后面板几何仍然正确。
+  - EN: Panel maximize/restore is reliable again. One controller owns the transition, committing the state, icon, and `aria-pressed` together with the geometry. A click during the morph reverses from the current rectangle, restore returns to the remembered docked width, and geometry stays correct across tab switches and collapse/expand.
+
+- **历史会话管理改为 Kimi 式页面并做成 Cordis 插件**：设置中的会话页由 `settings.tab.sessions` 插件接管（插件不可用时回退内置页），支持项目/状态/更新时间筛选、搜索、可排序分页表格、最后一条 prompt、批量归档/恢复/删除与打开会话；会话默认值和保留策略保留在同一页。
+  - EN: Session history management is now a Kimi-style page delivered by the `settings.tab.sessions` Cordis plugin, falling back to the built-in page when unavailable. It adds project/status/time filters, search, a sortable paged table with the last prompt, batch archive/restore/delete, and open-session; session defaults and retention stay on the same page.
+
+- **项目名称在设置等位置统一显示文件夹名**：设置、归档、定时任务、记忆与用量视图不再显示完整路径或磁盘工作区键；重名目录自动加父级区分，完整路径只保留在悬停标题中，标题栏回退也按文件夹名处理。
+  - EN: Project names now read as folder names across settings, archives, scheduled tasks, memory, and usage views instead of full paths or on-disk workspace keys. Duplicate folder names widen with parent segments, full paths remain in hover titles, and the header fallback uses the folder name too.
+
 - **浏览器网页内右键菜单，浮层打开时点击网页即关闭**：页面右键提供复制、粘贴、标注、检查元素、复制选中文字的链接，不可用项禁用；右键菜单、rail 悬浮提示等浮层与网页宿主统一层级，菜单打开时在页面上覆盖透明关闭层，点击网页直接收起而不必先点面板空白处。
   - EN: The browser page now has its own context menu with copy, paste, annotate, inspect element, and copy-link-of-selection, disabling what does not apply. Menus and rail tooltips share one overlay stack above the page host, and while a menu is open a transparent dismissal layer covers the page so clicking the page closes it without first clicking panel chrome.
 

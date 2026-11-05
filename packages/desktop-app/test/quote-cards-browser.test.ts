@@ -50,7 +50,7 @@ afterAll(async () => {
 describe("QuoteCards in Chromium", () => {
 	it("updates the annotation context and its model prompt when the user edits a comment", async () => {
 		await page.waitForSelector(".gui-quote-chip", { timeout: 3000 });
-		await page.click(".gui-quote-chip");
+		await page.click('.gui-quote-chip[data-quote-kind="browser-annotation"]');
 		await page.waitForSelector(".gui-quote-comment", { timeout: 3000 }).catch((error: unknown) => {
 			throw new Error(`${pageErrors.join("\n")}\n${error instanceof Error ? error.message : String(error)}`);
 		});
@@ -66,5 +66,24 @@ describe("QuoteCards in Chromium", () => {
 		await page.waitForSelector(".gui-quote-context-preview", { timeout: 3000 });
 		const result = await page.evaluate(() => document.querySelector(".gui-quote-context-preview pre")?.textContent);
 		expect(result).toContain("Comment: new comment");
+	});
+
+	it("shows a toolbar comment on its quote card and keeps edits in the send prompt", async () => {
+		await page.keyboard.press("Escape");
+		await page.waitForFunction(() => document.querySelectorAll(".gui-quote-popup").length === 0, { timeout: 3000 });
+		await page.click('.gui-quote-chip[data-quote-kind="chat-quote"]');
+		await page.waitForFunction(() => document.activeElement?.classList.contains("gui-quote-comment") === true, {
+			timeout: 3000,
+		});
+		expect(await page.evaluate(() => document.querySelector<HTMLInputElement>(".gui-quote-comment")?.value)).toBe(
+			"toolbar comment",
+		);
+
+		await page.keyboard.down("Control");
+		await page.keyboard.press("a");
+		await page.keyboard.up("Control");
+		await page.type(".gui-quote-comment", "edited comment");
+		const prompt = await page.evaluate(() => document.querySelector('[data-testid="prompt"]')?.textContent);
+		expect(prompt).toContain("> quoted answer\n\nedited comment");
 	});
 });

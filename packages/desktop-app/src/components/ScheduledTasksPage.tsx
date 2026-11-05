@@ -3,6 +3,7 @@ import { Calendar as CalendarIconData, Kanban as KanbanIconData, ListChecks as L
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
+import { pathBaseName, projectLabels } from "../lib/project-label";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { GuiSelect } from "./GuiSelect";
@@ -283,6 +284,9 @@ export function ScheduledTasksPage({
 			.sort(([a], [b]) => (a === "~" ? -1 : b === "~" ? 1 : a.localeCompare(b)))
 			.map(([cwd, list]) => ({ cwd, tasks: list.sort((a, b) => a.name.localeCompare(b.name)) }));
 	}, [tasks]);
+	// Workspace headers name the folder (full path on the header's title); two
+	// workspaces sharing a basename widen to their parent.
+	const workspaceLabels = useMemo(() => projectLabels(groups.map(group => group.cwd)), [groups]);
 
 	const save = (task: CronTask): void => {
 		if (!rpc) return;
@@ -474,8 +478,8 @@ export function ScheduledTasksPage({
 							<div key={group.cwd} className="gui-scheduled-ws-block">
 								<div className="gui-scheduled-ws-head">
 									<Icon name="folder-3" className="h-3.5 w-3.5" />
-									<span className="min-w-0 flex-1 truncate">
-										{group.cwd === "~" ? "~" : (group.cwd.split("/").filter(Boolean).at(-1) ?? group.cwd)}
+									<span className="min-w-0 flex-1 truncate" title={group.cwd}>
+										{workspaceLabels.get(group.cwd) ?? group.cwd}
 									</span>
 									<span className="gui-scheduled-ws-count">{group.tasks.length}</span>
 								</div>
@@ -682,6 +686,9 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 		}
 	}, []);
 	const matches = query.trim() ? projects.filter(p => p.toLowerCase().includes(query.trim().toLowerCase())) : projects;
+	// The field shows the folder name (full path on the option's title) so the
+	// picker reads like the project blocks it feeds; the cwd stays the value.
+	const labels = useMemo(() => projectLabels(projects), [projects]);
 	return (
 		<div className="gui-calendar-wrap">
 			<button
@@ -690,9 +697,12 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 				className="gui-calendar-field"
 				onClick={() => setOpen(o => !o)}
 				aria-expanded={open}
+				title={value || undefined}
 			>
 				<Icon name="folder-3" className="h-4 w-4" />
-				<span className="gui-calendar-field-text">{value || t("settings.scheduledCwdPlaceholder")}</span>
+				<span className="gui-calendar-field-text">
+					{value ? (labels.get(value) ?? pathBaseName(value)) : t("settings.scheduledCwdPlaceholder")}
+				</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
 			<MenuPopup
@@ -716,6 +726,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 							key={p}
 							type="button"
 							className={`gui-cwd-item${value === p ? " gui-cwd-item--active" : ""}`}
+							title={p}
 							onClick={() => {
 								onChange(p);
 								setOpen(false);
@@ -723,7 +734,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 							}}
 						>
 							<Icon name="folder-3" className="h-3.5 w-3.5" />
-							<span className="min-w-0 flex-1 truncate">{p}</span>
+							<span className="min-w-0 flex-1 truncate">{labels.get(p) ?? pathBaseName(p)}</span>
 						</button>
 					))}
 					{matches.length === 0 && <span className="gui-cwd-empty">{t("settings.scheduledCwdEmpty")}</span>}

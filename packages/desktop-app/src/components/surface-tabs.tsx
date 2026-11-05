@@ -25,9 +25,11 @@ import {
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/client-core";
+import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useTabMotion } from "../lib/use-tab-motion";
+import { FillWipeIcon } from "./FillWipeIcon";
 
 /** One open instance inside a surface. Content lives elsewhere; the strip
  *  only tracks tab metadata, so serialization stays trivial. */
@@ -37,6 +39,8 @@ export interface SurfaceTab {
 	title: string;
 	/** Decorative built-in, favicon, or fallback visual. */
 	icon?: ReactNode;
+	/** Built-in surface glyph; fills on selection via FillWipeIcon. */
+	glyph?: LucideIcon;
 	/** Agent activity on this instance, including background tabs. */
 	agentActive?: boolean;
 	/** Unsaved-changes dot. */
@@ -296,7 +300,11 @@ export function SurfaceTabStripSortable({
 								aria-hidden="true"
 								inert
 							>
-								{tab.icon ? (
+								{tab.glyph ? (
+									<span className="gui-surface-tab-icon" aria-hidden="true">
+										<FillWipeIcon icon={tab.glyph} size={14} />
+									</span>
+								) : tab.icon ? (
 									<span className="gui-surface-tab-icon" aria-hidden="true">
 										{tab.icon}
 									</span>
@@ -394,7 +402,11 @@ function SurfaceTabButton({
 				}
 			}}
 		>
-			{tab.icon ? (
+			{tab.glyph ? (
+				<span className="gui-surface-tab-icon" aria-hidden="true">
+					<FillWipeIcon icon={tab.glyph} active={active} size={14} />
+				</span>
+			) : tab.icon ? (
 				<span className="gui-surface-tab-icon" aria-hidden="true">
 					{tab.icon}
 				</span>

@@ -93,6 +93,11 @@ export function SettingsView({
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
 	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
+	// 会话管理插件页:声明 `settings.tab.sessions` 的扩展接管内置「会话」分区。
+	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
+	const extSessionsTab = extSettingsTabs.find(
+		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}sessions` && tab.code.length > 0 && !tab.error,
+	);
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
 	// Nav groups are the single source of truth for "which section ids exist":
@@ -412,7 +417,17 @@ export function SettingsView({
 							)}
 							{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
 							{activeSection === "pet" && <PetSection />}
-							{activeSection === "sessions" && <SessionsSection rpc={rpc} currentSessionId={sessionId} />}
+							{activeSection === "sessions" &&
+								(extSessionsTab ? (
+									<SlotComponentMount
+										item={extSessionsTab}
+										rpc={rpc}
+										sessionId={sessionId}
+										onOpenSession={onOpenSession}
+									/>
+								) : (
+									<SessionsSection rpc={rpc} currentSessionId={sessionId} />
+								))}
 							{activeSection === "git" && <GitSection rpc={rpc} />}
 							{activeSection === "shortcuts" && <ShortcutsSection />}
 							{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
@@ -426,7 +441,12 @@ export function SettingsView({
 										const item = extSettingsTabs.find(x => `ext:${x.slot}` === activeSection);
 										return item ? (
 											<div className="px-3 py-2">
-												<SlotComponentMount item={item} rpc={rpc} />
+												<SlotComponentMount
+													item={item}
+													rpc={rpc}
+													sessionId={sessionId}
+													onOpenSession={onOpenSession}
+												/>
 											</div>
 										) : null;
 									})()

@@ -1,0 +1,12 @@
+{
+	"name": "musepi-session-manager",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned session management settings page: filters, search, paginated table and bulk archive/restore/delete over the daemon session list.",
+	"type": "module",
+	"musepi": {
+		"icon": "▤",
+		"description": "在设置中管理历史会话：按项目、状态与更新时间筛选，搜索并批量归档、恢复或删除会话。",
+		"extensions": ["./index.ts"]
+	}
+}

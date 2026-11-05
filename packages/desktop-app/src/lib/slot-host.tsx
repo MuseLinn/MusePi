@@ -236,6 +236,35 @@ export const COMPOSER_FOR_SLOT = slot("composer.for");
  *  都是该 seat 的节点 kind,而非独立槽。 */
 export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
 
+/**
+ * 会话信息卡的分区席位命名空间(`chat.session-info.<id>`)。
+ *
+ * 声明在 collab-proto 的 `EXTENSION_SLOT_DECLARATION.prefixes`(daemon 校验
+ * 权威);这里只是桌面端取用的名字,前缀值必须与那边一致。
+ *
+ * 信息卡在面板收起时代替右面板展示会话元数据,右侧每个分区都是可替换的贡献
+ * 点:宿主按前缀发现组件,组件从 `sessionInfo` 拿到卡片已读好的只读数据。
+ * 分区因此不需要各自再拉一遍 `extensions.list`,也不会与内置回退产生两份判定。
+ */
+export const SESSION_INFO_SLOT_PREFIX = "chat.session-info.";
+/** 内置「插件」分区占用的席位(`session-info-plugins` 插件注册到这里)。 */
+export const SESSION_INFO_SLOT = `${SESSION_INFO_SLOT_PREFIX}plugins`;
+
+/** 一条插件读数(卡片从扩展注册表筛出的 plugin-module / extension-module)。 */
+export interface SessionInfoPluginRow {
+	id: string;
+	/** 展示名(displayName → name → id 的优先级已合并)。 */
+	label: string;
+	active: boolean;
+}
+
+/** `chat.session-info.*` 分区收到的只读数据。 */
+export interface SessionInfoSlotData {
+	/** 运行中条目数。 */
+	readonly runningPlugins: number;
+	readonly pluginEntries: readonly SessionInfoPluginRow[];
+}
+
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
  *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */
 /** 桌面端实际挂载的槽位(与 EXTENSION_SLOT_DECLARATION 对齐,诊断未挂载)。
@@ -569,6 +598,9 @@ export interface SlotComponentProps {
 	sessionId?: string | null;
 	/** Session working directory, when the host has one. */
 	cwd?: string;
+	/** Host-owned navigation into another session (settings pages that list
+	 *  sessions). Absent when the host cannot switch sessions. */
+	onOpenSession?: (sessionId: string) => void;
 	/** The slot id this component was registered into. */
 	slot?: string;
 	/** Extension path that contributed this component. */
@@ -642,6 +674,8 @@ export interface SlotComponentProps {
 		usage?: { input?: number; output?: number; cache?: number };
 		durationMs?: number;
 	} | null;
+	/** `chat.session-info.*` 分区的只读卡片数据(宿主已从共享扩展注册表读好)。 */
+	sessionInfo?: SessionInfoSlotData | null;
 }
 
 /** ── 全局单例 registry 数据源 ─────────────────────────────────────
@@ -800,7 +834,11 @@ export function resolveManagedBrowserPanelTab(options?: {
 	return created;
 }
 
-/** Mount every extension-contributed component registered for a slot. */
+/** Mount every extension-contributed component registered for a slot.
+ *
+ *  `fallback` 属于「该槽位必须有内容」的宿主(信息卡的分区):没有任何可渲染
+ *  贡献时渲染宿主内置实现,而不是留白。编译失败的贡献(`error` 有值、`code`
+ *  为空)同样按不可用处理 —— 卡片里放一个错误框不如继续显示内置读数。 */
 export function SlotComponentHost({
 	rpc,
 	slot,
@@ -810,6 +848,8 @@ export function SlotComponentHost({
 	chatView,
 	panelShell,
 	browser,
+	sessionInfo,
+	fallback,
 }: {
 	rpc: RpcClient | null;
 	slot: string;
@@ -819,11 +859,16 @@ export function SlotComponentHost({
 	chatView?: SlotComponentProps["chatView"];
 	panelShell?: SlotComponentProps["panelShell"];
 	browser?: SlotComponentProps["browser"];
+	sessionInfo?: SlotComponentProps["sessionInfo"];
+	/** 无可用贡献时渲染的内容(不传则保持原有「无贡献即空白」语义)。 */
+	fallback?: ReactNode;
 }): ReactNode {
 	const items = useSlotComponents(rpc, slot);
+	const renderable = fallback === undefined ? items : items.filter(item => item.error === undefined);
+	if (fallback !== undefined && renderable.length === 0) return <>{fallback}</>;
 	return (
 		<>
-			{items.map(item => (
+			{renderable.map(item => (
 				<SlotComponentMount
 					key={`${item.extensionId}:${item.slot}`}
 					item={item}
@@ -834,6 +879,7 @@ export function SlotComponentHost({
 					chatView={chatView}
 					panelShell={panelShell}
 					browser={browser}
+					sessionInfo={sessionInfo}
 				/>
 			))}
 		</>
@@ -848,6 +894,7 @@ export function SlotComponentMount({
 	rpc,
 	sessionId,
 	cwd,
+	onOpenSession,
 	page,
 	chatView,
 	panelShell,
@@ -857,12 +904,14 @@ export function SlotComponentMount({
 	fileWorkspace,
 	node,
 	turn,
+	sessionInfo,
 	configForm,
 }: {
 	item: SlotComponent;
 	rpc?: RpcClient | null;
 	sessionId?: string | null;
 	cwd?: string;
+	onOpenSession?: SlotComponentProps["onOpenSession"];
 	page?: SlotComponentProps["page"];
 	/** Host-owned welcome and session surface contract (app.chat only). */
 	chatView?: SlotComponentProps["chatView"];
@@ -879,6 +928,8 @@ export function SlotComponentMount({
 	node?: SlotComponentProps["node"];
 	/** turn 级上下文。 */
 	turn?: SlotComponentProps["turn"];
+	/** `chat.session-info.*` 分区的只读卡片数据。 */
+	sessionInfo?: SlotComponentProps["sessionInfo"];
 	/** 该组件的 config form(宿主从 pluginConfig.* 构造);缺省时本组件
 	 *  按 extensionId 自行构造一个。 */
 	configForm?: SlotConfigForm | null;
@@ -1004,6 +1055,7 @@ export function SlotComponentMount({
 		rpc,
 		sessionId,
 		cwd,
+		onOpenSession,
 		page,
 		chatView,
 		panelShell,
@@ -1017,6 +1069,7 @@ export function SlotComponentMount({
 		formatTokens: fmtTokens,
 		node,
 		turn,
+		sessionInfo,
 		// 扩展 RPC 桥(registerRpc):绑定当前
 		// 组件的 extensionId,组件直接调自己扩展的 daemon 侧方法。
 		extensionCall:
@@ -1152,6 +1205,8 @@ const slotHostBindings = {
 	COMPOSER_REQUEST_DRAFT_SLOT,
 	COMPOSER_FOR_SLOT,
 	TRANSCRIPT_NODE_SLOT,
+	SESSION_INFO_SLOT_PREFIX,
+	SESSION_INFO_SLOT,
 	GUI_SLOT_HOSTS,
 	ConfigFormSlotMount,
 	resolveManagedBrowserPanelTab,

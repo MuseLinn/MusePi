@@ -1,9 +1,11 @@
 import "./happy-dom-shim";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ContextPanel } from "../src/components/ContextPanel";
-import { installPanelMaximizeController, setPanelMaximized } from "../src/lib/panel-maximize";
+import { getPanelMaximized, installPanelMaximizeController, setPanelMaximized } from "../src/lib/panel-maximize";
+import type { PanelTab } from "../src/lib/panel-tabs";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
 import type { UsePanelTabsResult } from "../src/lib/use-panel-tabs";
@@ -11,20 +13,21 @@ import type { UsePanelTabsResult } from "../src/lib/use-panel-tabs";
 const roots: Root[] = [];
 const hosts: HTMLElement[] = [];
 const rpc = { request: async () => null, addEventListener: () => () => {} } as unknown as RpcClient;
+const agentsTab: PanelTab = {
+	id: "agents::",
+	surface: "agents",
+	target: null,
+	label: "Agents",
+	readOnly: false,
+	touchedAt: 1,
+	dedupeKey: null,
+	dirty: false,
+	preview: false,
+	column: 0,
+};
+const secondTab: PanelTab = { ...agentsTab, id: "agents::two", label: "Agents 2", touchedAt: 2 };
 const panelTabs: UsePanelTabsResult = {
-	tabs: [
-		{
-			id: "agents::",
-			surface: "agents",
-			target: null,
-			label: "Agents",
-			readOnly: false,
-			touchedAt: 1,
-			dedupeKey: null,
-			dirty: false,
-			column: 0,
-		},
-	],
+	tabs: [agentsTab],
 	activeId: "agents::",
 	split: false,
 	columnActive: ["agents::", null],
@@ -59,30 +62,62 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
 	return { x: left, y: top, left, top, width, height, right: left + width, bottom: top + height } as DOMRect;
 }
 
-function mountPanel(): { panel: HTMLElement; dockedWidth: number; transitions: string[]; measures: DOMRect[] } {
+interface MountOptions {
+	open?: boolean;
+	tabs?: PanelTab[];
+	activeId?: string;
+	/** A collapsed-panel session-info column docked beside the session. */
+	sessionInfoDock?: boolean;
+}
+
+function mountPanel(options: MountOptions = {}): {
+	panel: HTMLElement;
+	dockedWidth: number;
+	transitions: string[];
+	measures: DOMRect[];
+	styleValues: Map<string, string>;
+	rerender(next: MountOptions): void;
+} {
 	const surface = document.createElement("div");
 	surface.className = "gui-chat-surface";
+	if (options.sessionInfoDock) {
+		const dock = document.createElement("div");
+		dock.className = "gui-chat-column gui-session-info-dock";
+		dock.getBoundingClientRect = () => rect(0, 0, 216, 700);
+		surface.append(dock);
+	}
 	const column = document.createElement("div");
 	column.className = "gui-chat-column";
 	column.getBoundingClientRect = () => rect(272, 48, 1244, 700);
+	const transcript = document.createElement("div");
+	transcript.className = "gui-transcript-wrap";
+	column.append(transcript);
 	const host = document.createElement("div");
 	surface.append(column, host);
 	document.body.appendChild(surface);
 	hosts.push(surface);
 	const root = createRoot(host);
 	roots.push(root);
-	act(() =>
-		root.render(
-			<ContextPanel
-				snap={snap}
-				rpc={rpc}
-				onViewChange={() => {}}
-				panelTabs={panelTabs}
-				agentId={null}
-				onAgentSelect={() => {}}
-			/>,
-		),
-	);
+	const render = (next: MountOptions = options): void => {
+		act(() =>
+			root.render(
+				<ContextPanel
+					snap={snap}
+					rpc={rpc}
+					open={next.open ?? true}
+					onViewChange={() => {}}
+					panelTabs={{
+						...panelTabs,
+						tabs: next.tabs ?? panelTabs.tabs,
+						activeId: next.activeId ?? panelTabs.activeId,
+					}}
+					agentId={null}
+					onAgentSelect={() => {}}
+				/>,
+			),
+		);
+	};
+	render();
 	const panel = document.querySelector<HTMLElement>(".gui-pane-right--inner")!;
 	const dockedWidth = Number.parseFloat(panel.style.width);
 	const transitions: string[] = [];
@@ -155,7 +190,11 @@ function mountPanel(): { panel: HTMLElement; dockedWidth: number; transitions: s
 		measures.push(measured);
 		return measured;
 	};
-	return { panel, dockedWidth, transitions, measures };
+	return { panel, dockedWidth, transitions, measures, styleValues: values, rerender: render };
+}
+
+function maximizeButton(panel: HTMLElement): HTMLButtonElement {
+	return panel.querySelector<HTMLButtonElement>("[data-panel-maximize]")!;
 }
 
 function click(label: "maximize" | "restore"): void {
@@ -174,6 +213,14 @@ function finishFlip(panel: HTMLElement): void {
 
 const OriginalResizeObserver = globalThis.ResizeObserver;
 let stopMaximizeListener: () => void;
+
+beforeAll(async () => {
+	// A sibling suite that installs test/dom-shim.ts leaves a stub `document` on
+	// globalThis while happy-dom still reports registered, so this file's own
+	// mount would build nodes without the element surface React needs.
+	if (GlobalRegistrator.isRegistered) await GlobalRegistrator.unregister();
+	GlobalRegistrator.register();
+});
 
 beforeEach(() => {
 	setPanelMaximized(false);
@@ -211,6 +258,7 @@ describe("ContextPanel maximize/restore", () => {
 			expect(measures[measureStart + 1]?.width).toBe(1244);
 			expect(transitions.at(-2)).toBe("none");
 			expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+			expect(getPanelMaximized()).toBe(true);
 			finishFlip(panel);
 			expect(panel.style.left).toBe("");
 			expect(panel.style.width).toBe("");
@@ -219,6 +267,7 @@ describe("ContextPanel maximize/restore", () => {
 			expect(transitions.at(-2)).toBe("none");
 			finishFlip(panel);
 			expect(panel.classList.contains("gui-pane-right--maximized")).toBe(false);
+			expect(getPanelMaximized()).toBe(false);
 			expect(panel.style.width).toBe(`${dockedWidth}px`);
 			expect(panel.style.left).toBe("");
 			expect(panel.style.top).toBe("");
@@ -230,10 +279,7 @@ describe("ContextPanel maximize/restore", () => {
 
 	it("keeps title and accessible name synchronized through maximize and restore", () => {
 		const { panel } = mountPanel();
-		const button = [...panel.querySelectorAll<HTMLButtonElement>(".gui-pane-tool")].find(candidate => {
-			const label = candidate.getAttribute("aria-label");
-			return label === "Maximize panel" || label === "最大化面板";
-		})!;
+		const button = maximizeButton(panel);
 		const maximizeLabel = button.title;
 		const restoreLabel = maximizeLabel === "Maximize panel" ? "Restore panel" : "还原面板";
 
@@ -241,11 +287,13 @@ describe("ContextPanel maximize/restore", () => {
 		finishFlip(panel);
 		expect(button.title).toBe(restoreLabel);
 		expect(button.getAttribute("aria-label")).toBe(restoreLabel);
+		expect(button.getAttribute("aria-pressed")).toBe("true");
 
 		click("restore");
 		finishFlip(panel);
 		expect(button.title).toBe(maximizeLabel);
 		expect(button.getAttribute("aria-label")).toBe(maximizeLabel);
+		expect(button.getAttribute("aria-pressed")).toBe("false");
 	});
 
 	it("keeps maximize pointer events away from tab-drag ancestors", () => {
@@ -253,14 +301,114 @@ describe("ContextPanel maximize/restore", () => {
 		const surface = document.querySelector<HTMLElement>(".gui-chat-surface")!;
 		let captured = 0;
 		surface.addEventListener("pointerdown", () => captured++);
-		const button = ["最大化面板", "Maximize panel"]
-			.map(text => document.querySelector<HTMLButtonElement>(`.gui-pane-tool[aria-label="${text}"]`))
-			.find(candidate => candidate !== null)!;
+		const button = maximizeButton(panel);
 		act(() => button.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
 		expect(captured).toBe(0);
 		// dnd ancestors can cancel the bubble phase; the native button handler must still run.
 		surface.addEventListener("click", event => event.stopPropagation());
 		act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+	});
+
+	it("reverses a click that lands mid-morph instead of dropping it", () => {
+		const { panel, dockedWidth } = mountPanel();
+		const button = maximizeButton(panel);
+
+		click("maximize");
+		expect(getPanelMaximized()).toBe(true);
+		// No transitionend yet: the panel is still morphing.
+		click("restore");
+		expect(getPanelMaximized()).toBe(false);
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(false);
+		expect(button.getAttribute("aria-pressed")).toBe("false");
+		finishFlip(panel);
+		expect(panel.style.width).toBe(`${dockedWidth}px`);
+
+		click("maximize");
+		expect(getPanelMaximized()).toBe(true);
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+		finishFlip(panel);
+		expect(button.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("keeps state, labels and restore geometry through a tab switch while maximized", () => {
+		const options: MountOptions = { tabs: [agentsTab, secondTab], activeId: agentsTab.id };
+		const { panel, dockedWidth, rerender } = mountPanel(options);
+		click("maximize");
+		finishFlip(panel);
+
+		rerender({ ...options, activeId: secondTab.id });
+		expect(getPanelMaximized()).toBe(true);
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+		const button = maximizeButton(panel);
+		expect(button.getAttribute("aria-pressed")).toBe("true");
+		expect(button.getAttribute("aria-label")).toBe(button.title);
+
+		click("restore");
+		finishFlip(panel);
+		expect(getPanelMaximized()).toBe(false);
+		expect(panel.style.width).toBe(`${dockedWidth}px`);
+		expect(maximizeButton(panel).getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("keeps the persisted width when the panel collapses and reopens while maximized", () => {
+		const options: MountOptions = {};
+		const { panel, dockedWidth, rerender } = mountPanel(options);
+		click("maximize");
+		finishFlip(panel);
+
+		rerender({ ...options, open: false });
+		expect(getPanelMaximized()).toBe(true);
+		rerender({ ...options, open: true });
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+		expect(maximizeButton(panel).getAttribute("aria-pressed")).toBe("true");
+
+		click("restore");
+		finishFlip(panel);
+		expect(getPanelMaximized()).toBe(false);
+		expect(panel.style.width).toBe(`${dockedWidth}px`);
+		expect(panel.getBoundingClientRect().width).toBe(dockedWidth);
+	});
+
+	it("applies the toggle instantly under reduced motion and stays reversible", () => {
+		vi.spyOn(window, "matchMedia").mockReturnValue({
+			matches: true,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		} as unknown as MediaQueryList);
+		const { panel, dockedWidth, styleValues } = mountPanel();
+
+		click("maximize");
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+		expect(getPanelMaximized()).toBe(true);
+		expect(styleValues.get("--pane-max-width")).toBe("1244px");
+		expect(panel.style.transition).not.toBe("none");
+		expect(maximizeButton(panel).getAttribute("aria-pressed")).toBe("true");
+
+		click("restore");
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(false);
+		expect(getPanelMaximized()).toBe(false);
+		expect(panel.style.width).toBe(`${dockedWidth}px`);
+		expect(panel.style.left).toBe("");
+	});
+
+	it("leaves other pane tools (new tab, split) alone", () => {
+		const { panel } = mountPanel();
+		let bubbled = 0;
+		panel.addEventListener("click", () => bubbled++);
+		const other = panel.querySelector<HTMLButtonElement>(".gui-pane-tool:not([data-panel-maximize])");
+		expect(other).not.toBeNull();
+		if (!other) return;
+		act(() => other.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(getPanelMaximized()).toBe(false);
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(false);
+		expect(bubbled).toBe(1);
+	});
+
+	it("measures the session column, never a sibling session-info dock", () => {
+		const { panel, styleValues } = mountPanel({ sessionInfoDock: true });
+		click("maximize");
+		expect(styleValues.get("--pane-max-left")).toBe("272px");
+		expect(styleValues.get("--pane-max-width")).toBe("1244px");
 	});
 });

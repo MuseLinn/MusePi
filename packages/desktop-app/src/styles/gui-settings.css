@@ -602,39 +602,6 @@
 	color: var(--color-accent);
 }
 
-/* Favorite star: one glyph fills in place. morphicons forces fill:none and
- * only interpolates stroke centerlines, so a fill↔hollow shape morph is not
- * available; this fill-opacity transition is the closest honest reading and
- * avoids the two-glyph cross-scale. */
-.gui-fill-icon {
-	fill: currentColor;
-	fill-opacity: 0;
-	transition: fill-opacity 180ms var(--spring);
-}
-.gui-fill-icon--on {
-	fill-opacity: 1;
-}
-/* Default-model target: fill only the center dot, keeping the rings as an
- * outline (filling the whole lucide Target would collapse the bullseye). */
-.gui-target-fill circle:last-child {
-	fill: currentColor;
-	fill-opacity: 0;
-	transition: fill-opacity 180ms var(--spring);
-}
-.gui-target-fill--on circle:last-child {
-	fill-opacity: 1;
-}
-.gui-motion-off .gui-fill-icon,
-.gui-motion-off .gui-target-fill circle:last-child {
-	transition: none;
-}
-@media (prefers-reduced-motion: reduce) {
-	.gui-fill-icon,
-	.gui-target-fill circle:last-child {
-		transition: none;
-	}
-}
-
 .gui-model-empty {
 	padding: 8px;
 	font-size: var(--ui-font-size-sm);

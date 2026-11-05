@@ -11,6 +11,7 @@ import type { RpcClient } from "../lib/rpc";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
+import { FillWipeIcon } from "./FillWipeIcon";
 import { ModelBrandIcon } from "./model-brand-icon";
 import { Reveal } from "./Reveal";
 
@@ -856,7 +857,7 @@ const ModelRow = memo(function ModelRow({
 						onToggleFav(m.id, m.provider);
 					}}
 				>
-					<Star size={14} className={`gui-fill-icon${fav ? " gui-fill-icon--on" : ""}`} aria-hidden />
+					<FillWipeIcon icon={Star} active={fav} size={14} />
 				</button>
 				{allowSetDefault && (
 					<button
@@ -869,11 +870,7 @@ const ModelRow = memo(function ModelRow({
 							onSetDefault(m.id, m.provider);
 						}}
 					>
-						<Target
-							size={14}
-							className={`gui-target-fill${isDefault ? " gui-target-fill--on" : ""}`}
-							aria-hidden
-						/>
+						<FillWipeIcon icon={Target} active={isDefault} size={14} fill="center" />
 					</button>
 				)}
 				{`${m.provider}/${m.id}` === modelId && <Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />}

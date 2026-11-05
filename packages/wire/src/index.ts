@@ -90,6 +90,24 @@ export type OfficeQuoteAnchor =
 	| { kind: "workbook"; sheet: string; startCell: string; endCell: string }
 	| { kind: "presentation"; slide: number; shapeId: string };
 
+/**
+ * Locator for a quoted fragment inside the rendered text of the message it
+ * came from. Offsets count characters of the message body's text stream (the
+ * concatenated data of every descendant text node), so they survive
+ * re-rendering and virtualization; `prefix`/`suffix` disambiguate repeated
+ * fragments. `quote` carries the Markdown form for the prompt, so it cannot be
+ * used for lookup — `text` is the same fragment as the reader selected it.
+ */
+export interface ChatQuoteAnchor {
+	text: string;
+	/** Up to 32 characters before the fragment in the message text stream. */
+	prefix?: string;
+	/** Up to 32 characters after the fragment in the message text stream. */
+	suffix?: string;
+	/** Stream offset at capture time; a tie-breaker, not a position. */
+	start?: number;
+}
+
 export type DisplayContext =
 	| {
 			kind: "browser-annotation";
@@ -103,6 +121,7 @@ export type DisplayContext =
 			messageId?: string;
 			quote: string;
 			comment?: string;
+			anchor?: ChatQuoteAnchor;
 	  }
 	| {
 			kind: "file-quote";

@@ -12,7 +12,7 @@
  *   drag handles and overlays layer normally over it (no more "native view
  *   always above the DOM").
  * - Main keeps what the renderer cannot own: the partition policy (deny-all
- *   permissions, `omp-file://` previews), the CDP bridge, and the sanitized
+ *   permissions, `musepi-file://` previews), the CDP bridge, and the sanitized
  *   activity ledger. A loopback HTTP+WS server impersonates Chrome's CDP
  *   discovery endpoint (the relay bridge's emulation, minus
  *   extension/grouping machinery) so the browser tool's `connected` kind
@@ -59,9 +59,17 @@ const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 /** URLs the tool must never see as targets (mirrors the relay's ineligible set). */
 const INELIGIBLE_URL = /^(chrome|devtools|edge|view-source|chrome-extension|chrome-untrusted|chrome-search):/i;
-/** Sanctioned local-preview scheme: `omp-file://<urlencoded absolute path>`
- *  serves agent-generated artifacts through the managed session. */
-const LOCAL_PREVIEW_SCHEME = "omp-file";
+/** Sanctioned local-preview scheme: `musepi-file://<urlencoded absolute path>`
+ *  serves agent-generated artifacts through the managed session. `omp-file` is
+ *  the pre-rename spelling: persisted tabs and links keep working through it,
+ *  and every entry point canonicalizes to {@link LOCAL_PREVIEW_SCHEME}. */
+const LOCAL_PREVIEW_SCHEME = "musepi-file";
+const LEGACY_LOCAL_PREVIEW_SCHEME = "omp-file";
+/** Both spellings, canonical first. */
+const LOCAL_PREVIEW_SCHEMES = [LOCAL_PREVIEW_SCHEME, LEGACY_LOCAL_PREVIEW_SCHEME];
+/** Matches either scheme prefix at the start of an address. */
+const LOCAL_PREVIEW_URL = new RegExp(`^(?:${LOCAL_PREVIEW_SCHEMES.join("|")}):`, "i");
+
 /** Timeout for the renderer's risky-navigation consent dialog (auto-deny). */
 const CONFIRM_TIMEOUT_MS = 30_000;
 /** Upload confirmation window: the card (and the OS file picker it opens) may
@@ -99,12 +107,12 @@ const AGENT_HIGHLIGHT_CONFIG = {
 // registerSchemesAsPrivileged can only be called once per process.
 if (!process.env.MUSEPI_MANAGED_BROWSER_SCHEMES_REGISTERED) {
 	process.env.MUSEPI_MANAGED_BROWSER_SCHEMES_REGISTERED = "1";
-	protocol.registerSchemesAsPrivileged([
-		{
-			scheme: LOCAL_PREVIEW_SCHEME,
+	protocol.registerSchemesAsPrivileged(
+		LOCAL_PREVIEW_SCHEMES.map((scheme) => ({
+			scheme,
 			privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
-		},
-	]);
+		})),
+	);
 }
 
 function tabTargetId(tabId) {
@@ -285,22 +293,30 @@ function redactUrl(url) {
 	return url;
 }
 
+/** True when `url` addresses the local-preview surface in either spelling. */
+function isLocalPreviewUrl(url) {
+	return LOCAL_PREVIEW_URL.test(String(url));
+}
+
 /** Address-bar normalization: bare hostnames default to https; http/https or
- *  omp-file (local preview) are accepted. */
+ *  the local-preview scheme (both spellings) are accepted. */
 function normalizeAddressBarUrl(input) {
 	const value = String(input).trim();
 	if (!value) return null;
 	if (value.startsWith("//")) return null;
-	if (/^omp-file:/i.test(value)) {
-		// Local preview, canonical form `omp-file://localhost<absolute path>`.
-		// An empty host is unstable: Chromium canonicalizes `omp-file:///tmp/x`
-		// into `omp-file://tmp/x`, folding the first path segment into the
+	if (isLocalPreviewUrl(value)) {
+		// Local preview, canonical form `musepi-file://localhost<absolute path>`.
+		// An empty host is unstable: Chromium canonicalizes `musepi-file:///tmp/x`
+		// into `musepi-file://tmp/x`, folding the first path segment into the
 		// host. With a real host the pathname IS the absolute path.
 		try {
-			const parsed = new URL(value);
-			const filePath = path.normalize(decodeURIComponent(parsed.pathname));
-			if (!path.isAbsolute(filePath)) return null;
-			return `omp-file://localhost${encodeURI(filePath)}`;
+			const filePath = localPreviewFilePath(value);
+			if (!filePath) return null;
+			// URL paths always use `/`; Windows drive paths need the leading
+			// slash (`musepi-file://localhost/D:/x`) so `pathname` round-trips.
+			// A persisted `omp-file://` link lands here too and upgrades.
+			const urlPath = filePath.replace(/\\/g, "/");
+			return `${LOCAL_PREVIEW_SCHEME}://localhost${encodeURI(urlPath.startsWith("/") ? urlPath : `/${urlPath}`)}`;
 		} catch {
 			return null;
 		}
@@ -314,6 +330,26 @@ function normalizeAddressBarUrl(input) {
 	} catch {
 		return null;
 	}
+}
+
+/** Absolute filesystem path behind a local-preview URL, or null when the URL
+ *  cannot address a file. Throws on a malformed URL. */
+function localPreviewFilePath(url) {
+	let decoded = decodeURIComponent(new URL(url).pathname);
+	// Windows drive paths arrive as `/D:/...`; strip the URL separator so
+	// `path.normalize` + `pathToFileURL` resolve the real file instead of
+	// producing `file:///D:/D:/...`.
+	if (/^\/[A-Za-z]:\//.test(decoded)) decoded = decoded.slice(1);
+	const filePath = path.normalize(decoded);
+	if (!path.isAbsolute(filePath) || path.basename(filePath) === "") return null;
+	return filePath;
+}
+
+/** `file://` URL the protocol handlers fetch for a local-preview URL; null when
+ *  the URL cannot address a file. Throws on a malformed URL. */
+function localPreviewFileUrl(url) {
+	const filePath = localPreviewFilePath(url);
+	return filePath === null ? null : pathToFileURL(filePath).toString();
 }
 
 /** Minimal deferred (`Promise.withResolvers()` without a runtime floor). */
@@ -595,13 +631,15 @@ class ManagedTab {
 			// escaping the app (deny would silently drop user clicks).
 			// User-initiated opens (window.open via click) are NOT agent tabs;
 			// only Target.createTarget from the CDP side sets openedByAgent=true.
-			if (/^https?:/i.test(targetUrl)) {
+			if (/^https?:/i.test(targetUrl) || isLocalPreviewUrl(targetUrl)) {
 				void this.controller.createTab(targetUrl, false).catch(() => {});
 			}
 			return { action: "deny" };
 		});
 		wc.on("will-navigate", (event, targetUrl) => {
-			if (!/^https?:/i.test(targetUrl)) event.preventDefault();
+			// Local previews navigate within their scheme (relative links,
+			// anchors); everything else non-http(s) stays blocked.
+			if (!/^https?:/i.test(targetUrl) && !isLocalPreviewUrl(targetUrl)) event.preventDefault();
 		});
 		wc.on("did-start-loading", () => {
 			this.loading = true;
@@ -728,7 +766,7 @@ class ManagedTab {
 
 	async navigate(url) {
 		const target = normalizeAddressBarUrl(url);
-		if (!target) return { ok: false, error: "Only http/https or omp-file:// URLs are allowed" };
+		if (!target) return { ok: false, error: `Only http/https or ${LOCAL_PREVIEW_SCHEME}:// URLs are allowed` };
 		const wc = this.wc;
 		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
 		try {
@@ -871,21 +909,22 @@ class ManagedBrowserController {
 			// (camera/mic/notifications/…) — deny outright so pages cannot
 			// hang on or abuse prompts.
 			ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-			// Local artifact preview: `omp-file://<urlencoded absolute path>`.
+			// Local artifact preview: `musepi-file://<urlencoded absolute path>`.
 			// Absolute paths only; navigation to it from renderer-initiated
-			// non-http(s) links is blocked by will-navigate.
-			ses.protocol.handle(LOCAL_PREVIEW_SCHEME, (request) => {
-				let filePath;
+			// non-http(s) links is blocked by will-navigate. The legacy
+			// `omp-file` spelling shares the same reader so already-persisted
+			// tabs keep loading.
+			const serveLocalPreview = (request) => {
+				let fileUrl;
 				try {
-					filePath = path.normalize(decodeURIComponent(new URL(request.url).pathname));
+					fileUrl = localPreviewFileUrl(request.url);
 				} catch {
 					return new Response("bad request", { status: 400 });
 				}
-				if (!path.isAbsolute(filePath) || path.basename(filePath) === "") {
-					return new Response("not found", { status: 404 });
-				}
-				return net.fetch(pathToFileURL(filePath).toString());
-			});
+				if (fileUrl === null) return new Response("not found", { status: 404 });
+				return net.fetch(fileUrl);
+			};
+			for (const scheme of LOCAL_PREVIEW_SCHEMES) ses.protocol.handle(scheme, serveLocalPreview);
 		} catch {
 			// session unavailable (tests / headless) — best effort
 		}
@@ -1305,7 +1344,7 @@ class ManagedBrowserController {
 		if (
 			parsed.protocol === "http:" ||
 			parsed.protocol === "https:" ||
-			parsed.protocol === `${LOCAL_PREVIEW_SCHEME}:`
+			LOCAL_PREVIEW_SCHEMES.some((scheme) => `${scheme}:` === parsed.protocol)
 		) {
 			return true;
 		}
@@ -2587,7 +2626,13 @@ class ManagedBrowserController {
 module.exports = {
 	ManagedBrowserController,
 	DEFAULT_PORT,
-	// Pure helpers the upload request/response tests exercise without Electron.
+	LOCAL_PREVIEW_SCHEME,
+	LEGACY_LOCAL_PREVIEW_SCHEME,
+	// Pure helpers the upload/local-preview tests exercise without Electron.
+	normalizeAddressBarUrl,
+	localPreviewFilePath,
+	localPreviewFileUrl,
+	isLocalPreviewUrl,
 	sanitizeUploadRequest,
 	validateUploadPaths,
 	uploadFilters,

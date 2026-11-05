@@ -1,0 +1,12 @@
+{
+	"name": "musepi-session-info-plugins",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned session info card section: running-plugin count and the expandable running/disabled list.",
+	"type": "module",
+	"musepi": {
+		"icon": "◉",
+		"description": "会话信息卡里的「插件」分区：运行中计数与可展开的插件状态列表。",
+		"extensions": ["./index.ts"]
+	}
+}

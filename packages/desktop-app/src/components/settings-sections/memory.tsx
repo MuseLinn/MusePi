@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { workspaceKeyLabels } from "../../lib/project-label";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
@@ -70,22 +71,6 @@ function memoryAgeLabel(mtimeMs: number): string {
 	return new Date(mtimeMs).toLocaleDateString();
 }
 
-/** Workspace label from a memory-dir slug: `encodeProjectPath` is lossy
- *  (`--` ⇄ separators), so this is cosmetic — decode to a path-ish string
- *  and show the FOLDER NAME; when several workspaces share a basename,
- *  disambiguate with the parent segment. */
-function workspaceLabel(slug: string, all: readonly string[]): string {
-	const decoded = `${slug.slice(2, -2).replace(/--/g, "/")}`;
-	const segments = decoded.split("/");
-	const base = segments[segments.length - 1] || slug;
-	const siblings = all.filter(w => {
-		const segs = `${w.slice(2, -2).replace(/--/g, "/")}`.split("/");
-		return segs[segs.length - 1] === base;
-	});
-	if (siblings.length > 1 && segments.length >= 2) return `${segments[segments.length - 2]}/${base}`;
-	return base;
-}
-
 /** Workspace memory browser (ZCode 记忆面板 parity): per-workspace memory
  *  directory — workspace selector (folder names), entry count, name
  *  search, refresh, and file rows (click → in-panel viewer; folder button
@@ -147,6 +132,10 @@ function WorkspaceMemory({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	};
 
 	const filtered = query.trim() ? files.filter(f => f.name.toLowerCase().includes(query.trim().toLowerCase())) : files;
+	// The selector names the folder; the raw on-disk directory key stays on the
+	// select's title. Two workspaces sharing a basename widen to their parent.
+	const workspaceOptions = slug && !workspaces.includes(slug) ? [slug, ...workspaces] : workspaces;
+	const workspaceLabels = workspaceKeyLabels(workspaceOptions);
 	return (
 		<div className="gui-settings-section">
 			{/* Section head — title + desc only. The backend on/off lives in the
@@ -167,9 +156,9 @@ function WorkspaceMemory({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					aria-label={t("settings.workspaceMemory")}
 					title={slug}
 				>
-					{(slug && !workspaces.includes(slug) ? [slug, ...workspaces] : workspaces).map(w => (
+					{workspaceOptions.map(w => (
 						<option key={w} value={w}>
-							{workspaceLabel(w, workspaces)}
+							{workspaceLabels.get(w) ?? w}
 						</option>
 					))}
 				</select>

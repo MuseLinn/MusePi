@@ -2115,485 +2115,6 @@ body.gui-resizing .gui-pane-right {
 	animation: gui-loading-fadein 200ms ease-out;
 }
 
-/* ── Floating status panel (ZCode 悬浮卡 parity) ───────────────────────── */
-/* Pinned to the transcript's top-right: ONE frosted card with collapsible
- * sections (git state / running subagents / todo progress). Collapses to a
- * slim capsule on the SAME element (HeightMorph drives the height morph,
- * the class flip eases radius/background/shadow). */
-.gui-status-cards {
-	position: absolute;
-	/* Below the 对话/地图 surface-mode toggle (top 8px + ~28px row) — both
-	 * pin to the transcript's top-right corner and used to overlap. */
-	top: 46px;
-	right: 12px;
-	z-index: 4;
-	/* Narrow-chat guard: the stack shrink-wraps its card, so the viewport
-	 * relative cap lives HERE (percentages on the shrink-wrapped card would
-	 * resolve against its own content width — no constraint at all). */
-	max-width: calc(100% - 24px);
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 8px;
-}
-.gui-status-card {
-	position: relative;
-	width: 288px;
-	max-width: 100%;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-xl);
-	/* The backdrop-filter lives on the .gui-liquid-glass warp layer
-	 * (gui-base.css); the card keeps the tint + shadow. */
-	--gui-liquid-glass-blur: 14px;
-	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
-	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-	display: flex;
-	flex-direction: column;
-	/* The pill⇄panel class flip eases what interpolates; height itself is
-	 * the HeightMorph inline transition. Width snaps (auto↔288px), masked
-	 * by the morph's 160ms content fade — same trade ZCode makes. */
-	transition:
-		border-radius 240ms cubic-bezier(0.22, 1, 0.36, 1),
-		background-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
-		box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.gui-status-card--mini {
-	width: auto;
-	border-radius: var(--radius-xl);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-/* Panel controls (collapse-to-capsule), pinned to the card's top-right so
- * they survive the body scrolling underneath (ZCode right-3 top-3 spot). */
-.gui-status-tools {
-	position: absolute;
-	top: 4px;
-	right: 5px;
-	z-index: 1;
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-.gui-status-tool {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	border-radius: var(--radius-md);
-	color: var(--color-text-faint);
-	transition: background 120ms ease, color 120ms ease;
-}
-.gui-status-tool:hover {
-	background: color-mix(in oklab, var(--color-text) 7%, transparent);
-	color: var(--color-text);
-}
-/* Scrollable section stack; the card caps like ZCode's panel
- * (min(64dvh, 32rem)) so three live sections can't overrun the chat. */
-.gui-status-body {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding: 3px 5px 5px;
-	max-height: min(64dvh, 32rem);
-	overflow-y: auto;
-	overflow-x: hidden;
-}
-.gui-status-section {
-	min-width: 0;
-}
-/* Section head: subtle title + hover-surfaced chevron (CSS-only reveal);
- * the right padding reserves the tools button's spot for the first
- * section's header line. */
-.gui-status-section-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	width: 100%;
-	padding: 5px 30px 3px 8px;
-	border-radius: var(--radius-lg);
-	text-align: left;
-	transition: background 120ms ease;
-}
-.gui-status-section-head:hover {
-	background: color-mix(in oklab, var(--color-text) 4%, transparent);
-}
-.gui-status-section-title {
-	flex: 1;
-	min-width: 0;
-	font-size: 11px;
-	font-weight: 650;
-	letter-spacing: 0.02em;
-	color: var(--color-text-muted);
-}
-.gui-status-section-count {
-	display: inline-flex;
-	align-items: center;
-	flex-shrink: 0;
-}
-.gui-status-section-chev {
-	width: 12px;
-	height: 12px;
-	flex-shrink: 0;
-	color: var(--color-text-faint);
-	opacity: 0;
-	transition: opacity 120ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.gui-status-section-head:hover .gui-status-section-chev,
-.gui-status-section-head:focus-visible .gui-status-section-chev {
-	opacity: 1;
-}
-.gui-status-section-chev--closed {
-	transform: rotate(-90deg);
-}
-.gui-status-section-body {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	padding: 0 2px 2px;
-}
-.gui-status-count {
-	display: inline-flex;
-	align-items: center;
-	padding: 1px 7px;
-	border-radius: 999px;
-	font-size: 10.5px;
-	font-weight: 650;
-	color: var(--color-text-muted);
-	background: color-mix(in oklab, var(--color-text) 8%, transparent);
-	font-variant-numeric: tabular-nums;
-}
-.gui-status-count--live {
-	color: var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-}
-.gui-status-row {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	width: 100%;
-	padding: 5px 8px;
-	border-radius: var(--radius-lg);
-	font-size: 12px;
-	color: var(--color-text);
-	transition: background 120ms ease;
-	text-align: left;
-}
-.gui-status-row:hover {
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-}
-.gui-status-row--ended {
-	color: var(--color-text-faint);
-}
-.gui-status-row-icon {
-	width: 14px;
-	height: 14px;
-	flex-shrink: 0;
-	color: var(--color-text-faint);
-}
-.gui-status-caret {
-	width: 12px;
-	height: 12px;
-	flex-shrink: 0;
-	color: var(--color-text-faint);
-}
-.gui-status-nums {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	flex-shrink: 0;
-	font-size: 11px;
-	font-weight: 650;
-	font-variant-numeric: tabular-nums;
-}
-/* Branch row: tracking position vs upstream (openchamber work-status). */
-.gui-status-tracks {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	flex-shrink: 0;
-	font-size: 10.5px;
-	font-weight: 650;
-	font-variant-numeric: tabular-nums;
-}
-.gui-status-track-up {
-	color: var(--color-ok);
-}
-.gui-status-track-down {
-	color: var(--color-warning);
-}
-/* Changed-files disclosure: one row per path, badge + path, opening the git
- * surface (the card stays a launcher). */
-.gui-status-files {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	padding: 2px 0 2px 6px;
-}
-.gui-status-file {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	padding: 3px 6px;
-	border-radius: var(--radius-md);
-	font-size: 11.5px;
-	color: var(--color-text-muted);
-	transition: background 120ms ease, color 120ms ease;
-}
-.gui-status-file:hover {
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	color: var(--color-text);
-}
-.gui-status-file-badge {
-	flex-shrink: 0;
-	min-width: 15px;
-	text-align: center;
-	font-size: 10px;
-	font-weight: 700;
-	font-variant-numeric: tabular-nums;
-	color: var(--color-text-faint);
-}
-.gui-status-file-badge--new {
-	color: var(--color-ok);
-}
-.gui-status-file--more {
-	color: var(--color-text-faint);
-	font-style: italic;
-}
-.gui-status-num-add {
-	color: var(--color-ok);
-}
-.gui-status-num-del {
-	color: var(--color-danger);
-}
-.gui-status-branch {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	width: 100%;
-	padding: 5px 8px;
-	border-radius: var(--radius-lg);
-	font-size: 12px;
-	font-weight: 550;
-	color: var(--color-text);
-	transition: background 120ms ease;
-}
-.gui-status-branch:hover {
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-}
-/* Branch menu (ZCode branch-popover parity): search field, section label,
- * current-branch block with the dirty-file count, filtered list, and the
- * create-and-checkout action. */
-.gui-status-branch-menu {
-	display: flex;
-	flex-direction: column;
-	padding: 6px;
-	gap: 1px;
-	min-width: 236px;
-	max-width: 320px;
-	max-height: 340px;
-	overflow-y: auto;
-}
-.gui-status-branch-search {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 0 6px 6px;
-	border-bottom: 1px solid var(--border);
-	margin-bottom: 3px;
-}
-.gui-status-branch-search-ico {
-	width: 13px;
-	height: 13px;
-	flex-shrink: 0;
-	color: var(--color-text-faint);
-}
-/* Compact inline field (house inline-edit language: transparent bg, thin
- * accent border only where the field must read as active). */
-.gui-status-branch-input {
-	flex: 1;
-	min-width: 0;
-	padding: 4px 2px;
-	border: none;
-	background: none;
-	outline: none;
-	font-size: 12.5px;
-	color: var(--color-text);
-}
-.gui-status-branch-input::placeholder {
-	color: var(--color-text-faint);
-}
-.gui-status-branch-new {
-	margin: 0 4px;
-	padding: 5px 8px;
-	border: 1px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-	border-radius: var(--radius-lg);
-}
-.gui-status-branch-section {
-	padding: 2px 8px 3px;
-	font-size: 10.5px;
-	font-weight: 650;
-	letter-spacing: 0.02em;
-	color: var(--color-text-faint);
-}
-.gui-status-branch-current {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 5px 8px;
-	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--color-text) 5%, transparent);
-	margin-bottom: 2px;
-}
-.gui-status-branch-current-main {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	flex: 1;
-	min-width: 0;
-}
-.gui-status-branch-name {
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--color-text);
-}
-.gui-status-branch-sub {
-	font-size: 10.5px;
-	color: var(--color-text-faint);
-}
-.gui-status-branch-check {
-	width: 13px;
-	height: 13px;
-	flex-shrink: 0;
-	color: var(--color-ok);
-}
-.gui-status-branch-sep {
-	height: 1px;
-	flex-shrink: 0;
-	margin: 4px 6px;
-	background: var(--border);
-}
-.gui-status-branch-item {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	padding: 5px 8px;
-	border-radius: var(--radius-lg);
-	font-size: 12px;
-	color: var(--color-text);
-}
-.gui-status-branch-item:hover {
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-}
-.gui-status-branch-empty {
-	padding: 6px 8px;
-	font-size: 11.5px;
-	color: var(--color-text-faint);
-}
-.gui-status-elapsed {
-	flex-shrink: 0;
-	font-size: 10.5px;
-	color: var(--color-text-faint);
-	font-variant-numeric: tabular-nums;
-}
-/* Per-agent progress bar in a status row. The track is this app's layout (the
- * row is one line tall); the fill is the shared `.tv-swarm-bar-fill` language,
- * so the phase colors stay in one place (tool-render.css). Without an explicit
- * width the fill collapses to zero and the row reads as "no progress at all"
- * (user: 客户端的 swarm 卡片没有 TUI 那种进度条). */
-.gui-status-bar {
-	/* Bridge the shared fill's accent to this app's token (tool-render.css
-	 * falls back to the guest default otherwise). */
-	--tv-accent: var(--color-accent);
-	width: 54px;
-	height: 4px;
-	flex-shrink: 0;
-	border-radius: var(--radius-xs);
-	overflow: hidden;
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-.gui-status-spin {
-	animation: gui-loading-pulse 1.1s ease-in-out infinite;
-}
-/* Collapsed mini card (ZCode folded panel): a compact one-row CARD —
- * section label + git diff stats inline, expand control at the right. */
-.gui-status-mini {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 2px;
-	padding: 3px 4px 3px 6px;
-}
-.gui-status-mini-main {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-	padding: 4px 6px;
-	border-radius: var(--radius-lg);
-	text-align: left;
-	transition: background 120ms ease;
-}
-.gui-status-mini-main:hover {
-	background: color-mix(in oklab, var(--color-text) 5%, transparent);
-}
-.gui-status-mini-label {
-	flex-shrink: 0;
-	font-size: 11.5px;
-	font-weight: 650;
-	color: var(--color-text-muted);
-}
-.gui-status-mini-sub {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	min-width: 0;
-	font-size: 11.5px;
-	color: var(--color-text-muted);
-}
-/* Collapsed capsule (the manual fold): the round pill — icon + 更改 +
- * colored diff stats, nothing else (ZCode 胶囊). Shape and wording are the
- * distinction from the folded header card above. */
-.gui-status-card--pill {
-	width: auto;
-	border-radius: 999px;
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-.gui-status-pill {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	max-width: 320px;
-	padding: 6px 12px;
-	border-radius: 999px;
-	font-size: 11.5px;
-	font-weight: 600;
-	color: var(--color-text);
-	text-align: left;
-	transition: background 120ms ease;
-}
-.gui-status-pill:hover {
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-}
-.gui-status-pill-label {
-	color: var(--color-text-muted);
-}
-.gui-status-pill-ico {
-	width: 14px;
-	height: 14px;
-	flex-shrink: 0;
-	color: var(--color-text);
-}
-.gui-motion-off .gui-status-card,
-.gui-motion-off .gui-status-spin {
-	animation: none;
-}
-@media (prefers-reduced-motion: reduce) {
-	.gui-status-card,
-	.gui-status-spin {
-		animation: none;
-	}
-}
-
 .gui-motion-off .gui-loading-bar,
 .gui-motion-off .gui-loading-orb,
 .gui-motion-off .gui-loading-note {
@@ -6047,19 +5568,16 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text);
 }
 
-/* The card itself: right edge of the session column, over the transcript but
- * INSIDE the column (the rail is a sibling), so it can never cover the rail,
- * the panel or a portaled menu. `top`/`max-height` are set by ChatView — they
- * depend on the measured status-card stack this card sits below. */
+/* The tile itself — ONE glass card in two seats (session-info-card.tsx): a
+ * docked column while the right panel is collapsed, a floating card over the
+ * transcript when the panel is open (manual reveal) or the row is too narrow
+ * to dock. Material, radius, shadow, spacing and scrolling live here so the
+ * two seats can never drift apart; only the box model is per seat. */
 .gui-session-info {
-	position: absolute;
-	right: 12px;
-	z-index: 5;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
 	width: 288px;
-	max-width: calc(100% - 24px);
 	padding: 10px 12px 12px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
@@ -6072,6 +5590,36 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text);
 	animation: gui-session-info-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Float seat: right edge of the session column, over the transcript but INSIDE
+ * the column (the rail is a sibling), so it can never cover the rail, the
+ * panel or a portaled menu. `top`/`max-height` come from ChatView and start
+ * below the surface-mode row.
+ *
+ * z-index 3 is load-bearing: it keeps the card under the header tool cluster
+ * (30), menus and tooltips. */
+.gui-session-info--float {
+	position: absolute;
+	right: 12px;
+	z-index: 3;
+	max-width: calc(100% - 24px);
+}
+
+/* Dock seat: a real flex column between the chat column and the panel host,
+ * carrying the same card gutter as the panel and the chat column so the three
+ * workspace cards read as one row of equal inset. Content-sized: a stretched
+ * column painted a mostly empty full-height card in dark mode, so the card is
+ * only as tall as its sections (`flex-start`) with the row height as a cap,
+ * and the base `overflow-y` scrolls whatever exceeds it. */
+.gui-session-info--dock {
+	position: relative;
+	flex: 0 0 auto;
+	align-self: flex-start;
+	max-height: calc(100% - var(--gui-card-gutter) * 2);
+	min-height: 0;
+	margin: var(--gui-card-gutter);
+}
+
 @keyframes gui-session-info-in {
 	from {
 		opacity: 0;
@@ -6152,6 +5700,22 @@ body.gui-resizing .gui-pane-right {
 }
 .gui-session-info-num-del {
 	color: var(--color-danger);
+}
+.gui-session-info-nums--link {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	cursor: pointer;
+	text-align: left;
+}
+.gui-session-info-nums--link:hover {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.gui-session-info-nums--link:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+	border-radius: var(--radius-xs);
 }
 .gui-session-info-error {
 	display: flex;
@@ -6250,8 +5814,190 @@ body.gui-resizing .gui-pane-right {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* ── Connectors: the composer picker, reused as a card section ─────────
+ * Same rows and write-back as the popup, so only the popup's box is undone:
+ * the card already owns the scroll, and the panel's header becomes the
+ * section label instead of a floating-menu title. */
+.gui-session-info-connectors .gui-connector-panel {
+	max-height: none;
+	overflow: visible;
+}
+.gui-session-info-connectors .gui-connector-panel-head {
+	gap: 8px;
+	padding: 0 0 3px;
+	border-bottom: 0;
+}
+.gui-session-info-connectors .gui-connector-panel-title {
+	font-size: 10.5px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	color: var(--color-text-faint);
+}
+.gui-session-info-connectors .gui-connector-list {
+	padding: 0;
+}
+.gui-session-info-connectors .gui-connector-row {
+	gap: 7px;
+	padding: 3px 4px;
+	border-radius: var(--radius-md);
+}
+.gui-session-info-connectors .gui-connector-row-name {
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+/* ── Plugins: count in the header, roster behind the disclosure ──────── */
+.gui-session-info-plugins-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 0;
+	color: var(--color-text-muted);
+	text-align: left;
+}
+.gui-session-info-plugins-head:hover {
+	color: var(--color-text);
+}
+.gui-session-info-plugins-head .gui-session-info-section-label {
+	flex: 1;
+	min-width: 0;
+	padding-bottom: 0;
+}
+.gui-session-info-count {
+	flex: none;
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-faint);
+}
+.gui-session-info-chev {
+	width: 12px;
+	height: 12px;
+	flex: none;
+	color: var(--color-text-faint);
+	transition: transform 140ms ease;
+}
+.gui-session-info-chev--closed {
+	transform: rotate(-90deg);
+}
+
+/* ── Subagents / todo: readouts that open the trajectory surface ──────── */
+.gui-session-info-section {
+	min-width: 0;
+}
+.gui-session-info-section-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 0;
+	color: var(--color-text-muted);
+	text-align: left;
+}
+.gui-session-info-section-head:hover {
+	color: var(--color-text);
+}
+.gui-session-info-section-head .gui-session-info-section-label {
+	flex: 1;
+	min-width: 0;
+	padding-bottom: 0;
+}
+.gui-session-info-count--live {
+	padding: 1px 6px;
+	border-radius: 999px;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+.gui-session-info-agents {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.gui-session-info-agent {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 3px 4px;
+	border-radius: var(--radius-md);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	text-align: left;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-session-info-agent:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-agent .gui-session-info-item-label {
+	flex: 1;
+}
+.gui-session-info-agent--ended {
+	color: var(--color-text-faint);
+}
+.gui-session-info-elapsed {
+	flex: none;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+/* Per-agent progress: the track is this row's layout, the fill stays the
+ * shared `.tv-swarm-bar-fill` language so phase colors live in one place. */
+.gui-session-info-bar {
+	--tv-accent: var(--color-accent);
+	width: 46px;
+	height: 4px;
+	flex: none;
+	border-radius: var(--radius-xs);
+	overflow: hidden;
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+.gui-session-info-spin {
+	animation: gui-loading-pulse 1.1s ease-in-out infinite;
+}
+.gui-motion-off .gui-session-info-spin {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-session-info-spin {
+		animation: none;
+	}
+}
+.gui-session-info-plugin {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 4px;
+	border-radius: var(--radius-md);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+.gui-session-info-plugin .gui-session-info-item-label {
+	flex: 1;
+}
+.gui-session-info-dot {
+	width: 6px;
+	height: 6px;
+	flex: none;
+	border-radius: 999px;
+	background: var(--color-text-faint);
+}
+.gui-session-info-dot--active {
+	background: var(--color-ok);
+}
+.gui-session-info-plugin-state {
+	flex: none;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
 @media (prefers-reduced-motion: reduce) {
 	.gui-session-info {
 		animation: none;
+	}
+	.gui-session-info-chev {
+		transition: none;
 	}
 }

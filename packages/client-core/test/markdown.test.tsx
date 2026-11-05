@@ -149,10 +149,13 @@ describe("Transcript mermaid", () => {
 });
 
 describe("Transcript tables", () => {
-	it("wraps tables with a hover toolbar: copy menu + download menu", () => {
+	it("wraps tables with a hover toolbar: width toggle + copy menu + download menu", () => {
 		const html = renderMarkdown("| a | b |\n|---|---|\n| 1 | 2 |");
-		expect(html).toContain('<div class="tr-table">');
+		expect(html).toContain('<div class="tr-table" data-table-hash="');
 		expect(html).toContain('<div class="tr-table-bar">');
+		expect(html).toMatch(
+			/<button type="button" class="tr-table-btn tr-table-wide" data-table-wide="[a-z0-9]+" aria-pressed="false"/,
+		);
 		expect(html).toContain('data-table-copy="csv"');
 		expect(html).toContain('data-table-copy="tsv"');
 		expect(html).toContain('data-table-copy="markdown"');

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { pathBaseName, projectLabel, projectLabels } from "../src/lib/project-label";
+import {
+	pathBaseName,
+	projectLabel,
+	projectLabels,
+	workspaceKeyLabel,
+	workspaceKeyLabels,
+} from "../src/lib/project-label";
 
 /**
  * Issue #15 — two different folders named `demo` (e.g. `D:\a\demo` and
@@ -67,5 +73,43 @@ describe("projectLabel (single-row convenience)", () => {
 
 	test("falls back to the basename for an unknown path", () => {
 		expect(projectLabel("D:\\z\\unknown", ["D:\\a\\demo"])).toBe("unknown");
+	});
+});
+
+/**
+ * On-disk workspace directory keys encode the cwd (session dirs and the
+ * per-workspace memory dirs): separators and `:` become `-`, wrapped in `--`
+ * for absolute paths and prefixed `-` / `-tmp` for home / temp scopes. The
+ * settings surfaces that only receive the key showed it verbatim
+ * (`--D-Projects-demo--`, `/D-Projects-demo/`), so a key needs the same
+ * basename-then-parent label a real path gets.
+ */
+describe("workspaceKeyLabels", () => {
+	test("absolute key shows the folder name", () => {
+		const labels = workspaceKeyLabels(["--D-Projects-Agents-MusePi--"]);
+		expect(labels.get("--D-Projects-Agents-MusePi--")).toBe("MusePi");
+	});
+
+	test("home-scoped and temp-scoped keys lose their scope prefix", () => {
+		const labels = workspaceKeyLabels(["-Projects-Agents-MusePi", "-tmp-scratch"]);
+		expect(labels.get("-Projects-Agents-MusePi")).toBe("MusePi");
+		expect(labels.get("-tmp-scratch")).toBe("scratch");
+	});
+
+	test("statistics keys keep their legacy leading slash without a stray segment", () => {
+		// packages/stats records `--D-Projects-demo--` as `/D-Projects-demo/`.
+		const labels = workspaceKeyLabels(["/D-Projects-Agents-MusePi/"]);
+		expect(labels.get("/D-Projects-Agents-MusePi/")).toBe("MusePi");
+	});
+
+	test("colliding folder names widen to the parent instead of repeating", () => {
+		const keys = ["--D-work-a-demo--", "--D-work-b-demo--"];
+		const labels = workspaceKeyLabels(keys);
+		expect(labels.get("--D-work-a-demo--")).toBe("a/demo");
+		expect(labels.get("--D-work-b-demo--")).toBe("b/demo");
+	});
+
+	test("a key with no readable segments still renders something", () => {
+		expect(workspaceKeyLabel("-", ["-"])).toBe("-");
 	});
 });
