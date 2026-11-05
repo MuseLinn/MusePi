@@ -1,5 +1,5 @@
 {
-	"builtAt": "2026-11-05T07:35:32.302Z",
+	"builtAt": "2026-11-05T07:53:55.012Z",
 	"distHash": "sha256:6cfe1b4ba8d24b9993092f7a7c72fc453eefb7e840f68b58c26dda1703f1d639",
 	"distFiles": [
 		"07rjedsz.js",
@@ -15,5 +15,5 @@
 		"xwz1b0fc.js"
 	],
 	"fileCount": 20,
-	"totalBytes": 23472735
+	"totalBytes": 23473142
 }

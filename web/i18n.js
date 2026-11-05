@@ -48,7 +48,7 @@
     "preview.kicker": "Product preview",
     "preview.h2": "One screen that shows every step of the work",
     "preview.desc":
-      "Try it here: switch views, open a session or file, check the board. What loads is the same desktop renderer the app ships, running entirely on local demo data — no daemon, no network.",
+      "Try it here: switch views, open a session or file, check the board. This is the same desktop renderer the app ships, running entirely on local demo data — no daemon, no network.",
     "preview.shot.aria":
       "MusePi desktop app welcome screen in the brand dark theme: composer, suggestions and the session sidebar",
     "preview.shot.note":
@@ -68,18 +68,12 @@
     "demo.action.fullscreen": "Full screen",
     "demo.poster.aria":
       "MusePi desktop interface in the brand dark theme: the welcome workspace with composer, quick suggestions and session navigation",
-    "demo.gate.eyebrow": "Real renderer · local demo data",
-    "demo.gate.title": "Try the real interface in your browser",
-    "demo.gate.body":
-      "This loads the same desktop renderer the app ships (about 8 MB): sessions, files and the board all come from local demo data, with no daemon or network behind them.",
-    "demo.gate.cta": "Load the real interface",
-    "demo.gate.note": "A large payload, loaded on demand; phones open it in a new tab.",
     "demo.loading": "Loading the real interface…",
     "demo.fallback.title": "The real interface didn't load",
     "demo.fallback.body": "A network or browser restriction got in the way. Retry, or open it in a new tab.",
     "demo.fallback.retry": "Retry",
     "demo.caption":
-      "Real renderer, local data: switch views, open a session or file, check the board. Nothing is requested before you load it.",
+      "Real desktop renderer with local demo data: switch views, open a session or file, check the board. Nothing here talks to a daemon.",
 
     /* 0.7.0 能力浏览 */
     "nav.release": "0.7.0 highlights",
@@ -257,12 +251,10 @@
 
   /* MPI18N.t() 供 main.js 调用；这里放需要运行时切换的文案。 */
   var JS = {
-    "demo.status.idle": { zh: "待载入", en: "Not loaded" },
+    "demo.status.idle": { zh: "准备中", en: "Preparing" },
     "demo.status.loading": { zh: "载入中…", en: "Loading…" },
     "demo.status.ready": { zh: "运行中 · 本地", en: "Running · local" },
     "demo.status.error": { zh: "载入失败", en: "Failed" },
-    "demo.pending": { zh: "载入后显示「{view}」", en: "Opens “{view}” once loaded" },
-    "demo.gate.note": { zh: "体积较大，按需载入；手机上会另开标签页。", en: "A large payload, loaded on demand; phones open it in a new tab." },
     "demo.action.exitFullscreen": { zh: "退出全屏", en: "Exit full screen" },
     "demo.action.fullscreen": { zh: "全屏", en: "Full screen" },
     "demo.frame.title": { zh: "真实 MusePi 界面", en: "MusePi live interface" },

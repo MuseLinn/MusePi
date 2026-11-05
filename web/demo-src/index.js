@@ -32,3 +32,30 @@ registerAll(sessions.methods);
 registerAll(files.methods);
 registerAll(agent.methods);
 install();
+
+/**
+ * Tell the embedding page the renderer mounted. The host cannot rely on
+ * reading this document (a proxy or file:// origin makes it cross-origin), so
+ * readiness is announced from inside the frame.
+ */
+function announceReady() {
+	if (window.parent === window) return;
+	window.parent.postMessage({ type: "musepi:demo-ready" }, "*");
+}
+
+function watchRoot() {
+	const root = document.getElementById("root");
+	if (!root || root.childElementCount > 0) {
+		announceReady();
+		return;
+	}
+	const observer = new MutationObserver(() => {
+		if (root.childElementCount === 0) return;
+		observer.disconnect();
+		announceReady();
+	});
+	observer.observe(root, { childList: true });
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchRoot);
+else watchRoot();

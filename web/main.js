@@ -262,16 +262,15 @@
   var demo = document.querySelector("[data-demo-embed]");
   if (demo) {
     var DEMO_SRC = "./app/index.html";
-    var DEMO_BOOT_MS = 30000;
+    // The artifact is ~22 MiB of JS on a cold cache; the boot budget has to
+    // cover a slow connection, not just a warm local disk.
+    var DEMO_BOOT_MS = 90000;
     var demoFrame = demo.querySelector("[data-demo-stage]");
     var demoScreen = demo.querySelector("[data-demo-screen]");
-    var demoGate = demo.querySelector("[data-demo-gate]");
     var demoLoading = demo.querySelector("[data-demo-loading]");
     var demoFallback = demo.querySelector("[data-demo-fallback]");
-    var demoNote = demo.querySelector("[data-demo-note]");
     var demoStatus = demo.querySelector("[data-demo-status]");
     var demoFull = demo.querySelector("[data-demo-fullscreen]");
-    var demoLoadBtn = demo.querySelector("[data-demo-load]");
     var demoRetryBtn = demo.querySelector("[data-demo-retry]");
     var demoTabs = Array.prototype.slice.call(demo.querySelectorAll("[data-demo-view]"));
     var demoList = demo.querySelector(".mp-demo-tabs");
@@ -280,6 +279,7 @@
     var demoView = "welcome";
     var demoApplyToken = 0;
     var demoBootTimer = 0;
+    var demoRetries = 0;
     var demoNarrow = window.matchMedia("(max-width: 720px)");
     var DEMO_STATUS = {
       idle: "demo.status.idle",
@@ -300,22 +300,11 @@
       }
     }
 
-    function demoViewLabel(view) {
-      var tab = demoTabs.filter(function (t) { return t.getAttribute("data-demo-view") === view; })[0];
-      return tab ? tab.textContent : view;
-    }
-
     function renderDemoChrome() {
-      demoGate.hidden = demoState !== "idle";
       demoLoading.hidden = demoState !== "loading";
       demoFallback.hidden = demoState !== "error";
       demoFull.hidden = demoState !== "ready";
       if (demoStatus) demoStatus.textContent = demoText(DEMO_STATUS[demoState]);
-      if (demoNote) {
-        demoNote.textContent = demoState === "idle" && demoView !== "welcome"
-          ? demoText("demo.pending").replace("{view}", demoViewLabel(demoView))
-          : demoText("demo.gate.note");
-      }
     }
 
     function setDemoState(next) {
@@ -431,6 +420,14 @@
         demoIframe = null;
       }
       setDemoState("error");
+      // One silent retry: the usual cause is a deploy swapping files under a
+      // live page, which a reload fixes.
+      if (demoRetries < 1) {
+        demoRetries += 1;
+        window.setTimeout(function () {
+          if (demoState === "error") mountDemo();
+        }, 2500);
+      }
     }
 
     // The renderer draws at its authored window size and the frame scales it:
@@ -452,6 +449,17 @@
     window.addEventListener("resize", syncDemoScale);
     document.addEventListener("fullscreenchange", syncDemoScale);
 
+    // The demo posts this from inside the frame once #root has children, so
+    // readiness does not depend on the parent being able to read the frame's
+    // DOM (a proxy or file:// origin makes contentDocument null).
+    window.addEventListener("message", function (event) {
+      if (!demoIframe || event.source !== demoIframe.contentWindow) return;
+      var data = event.data;
+      if (!data || data.type !== "musepi:demo-ready") return;
+      window.clearTimeout(demoBootTimer);
+      if (demoState === "loading") setDemoState("ready");
+    });
+
     function mountDemo() {
       if (demoState === "loading" || demoState === "ready") return;
       if (demoIframe) {
@@ -459,6 +467,15 @@
         demoIframe = null;
       }
       setDemoState("loading");
+      // Preflight the artifact: a missing build is a deployment problem, not
+      // a slow boot, and deserves the fallback immediately.
+      window.fetch(DEMO_SRC, { cache: "no-store" }).then(function (response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.text();
+      }).then(startDemoFrame, failDemo);
+    }
+
+    function startDemoFrame() {
       demoIframe = document.createElement("iframe");
       demoIframe.className = "mp-demo-iframe";
       demoIframe.title = demoText("demo.frame.title");
@@ -481,11 +498,11 @@
       });
     }
 
+    // The preview is the product, so it loads itself: the poster stands in
+    // until the frame is ready. Narrow viewports keep the poster and use the
+    // toolbar link (a 1440x900 app scaled to a phone is not usable).
     function requestDemo() {
-      if (demoNarrow.matches) {
-        window.open(DEMO_SRC, "_blank", "noopener");
-        return;
-      }
+      if (demoNarrow.matches) return;
       mountDemo();
     }
 
@@ -526,8 +543,26 @@
       });
     }
 
-    if (demoLoadBtn) demoLoadBtn.addEventListener("click", requestDemo);
-    if (demoRetryBtn) demoRetryBtn.addEventListener("click", requestDemo);
+    if (demoRetryBtn) {
+      demoRetryBtn.addEventListener("click", function () {
+        demoRetries = 0;
+        requestDemo();
+      });
+    }
+
+    // Mount when the section approaches the viewport, so the preview is
+    // already there by the time it is looked at.
+    if ("IntersectionObserver" in window) {
+      var demoObserver = new IntersectionObserver(function (entries) {
+        var visible = entries.some(function (entry) { return entry.isIntersecting; });
+        if (!visible) return;
+        demoObserver.disconnect();
+        requestDemo();
+      }, { rootMargin: "200px 0px" });
+      demoObserver.observe(demo);
+    } else {
+      requestDemo();
+    }
 
     function fullscreenOn() {
       return (document.fullscreenElement || document.webkitFullscreenElement) === demoFrame;
