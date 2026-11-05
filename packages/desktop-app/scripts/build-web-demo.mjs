@@ -208,8 +208,8 @@ while (queue.length > 0) {
 
 for (const name of chunks) copyFileSync(path.join(dist, name), path.join(out, name));
 
-// The welcome surface paints the default pet spritesheet; the other sheets stay
-// out of the artifact.
+// The preset grid can paint the MusePi spritesheet (the default companion is
+// the code-drawn orb, which needs no asset); the other sheets stay out.
 const petSheet = "pets/musepi.webp";
 if (!existsSync(path.join(dist, petSheet))) fail(`dist/${petSheet} is missing`);
 mkdirSync(path.join(out, "pets"), { recursive: true });

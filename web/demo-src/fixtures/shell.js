@@ -103,6 +103,13 @@ export const methods = {
 	"modes.list": () => ({ modes: MODES }),
 	"modes.getDefault": () => ({ id: "work" }),
 	"daemon.pauseStatus": () => ({ paused: false, pausedAt: null }),
+	// Panels reachable from the shell: empty answers keep their empty states
+	// instead of a `{}` that the components iterate as an array.
+	"remote-access.status": () => ({ hosting: false }),
+	"channels.list": () => [],
+	"channels.plugins": () => [],
+	"design.systems.list": () => ({ systems: [] }),
+	"board.list": () => ({ boards: [] }),
 	"browser.managedBridge": () => ({ url: null }),
 	"settings.get": () => ({
 		modelRoles: {},

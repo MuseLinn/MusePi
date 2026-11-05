@@ -160,14 +160,18 @@
   overflow: hidden;
 }
 
-.mp-demo-poster {
+/* Idle/loading placeholder: the brand orb, not a screenshot of the app. */
+.mp-demo-screen::before {
+  content: "";
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  filter: saturate(0.9) brightness(0.8);
+  background: url("./assets/musepi-mark.svg") center / 64px no-repeat;
+  opacity: 0.22;
+  transition: opacity 240ms var(--ease);
+}
+
+.mp-demo[data-state="ready"] .mp-demo-screen::before {
+  opacity: 0;
 }
 
 .mp-demo-loading,
@@ -281,30 +285,17 @@
   color: var(--text-faint);
 }
 
-.mp-shot-more {
-  margin: 34px 0 14px;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
-}
-
-.mp-shot-grid--compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.mp-shot-grid--compact .mp-shot-note {
-  font-size: 11.5px;
-}
 
 @media (max-width: 980px) {
+  /* Keep the renderer 16:10: the frame scales the 1440x900 layout to fit, so
+   * any other ratio letterboxes the app inside its own window. */
   .mp-demo-screen {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 10;
   }
 }
 
 @media (max-width: 720px) {
-  /* 手机上不嵌入 8MB 渲染器：只留海报和按钮，标签页没有可驱动的目标。 */
+  /* 手机上不嵌入 8MB 渲染器：只留品牌占位与「新标签页打开」，标签页没有可驱动的目标。 */
   .mp-demo-tabs {
     display: none;
   }
@@ -319,9 +310,6 @@
   }
   .mp-demo-titlebar {
     padding: 8px 12px;
-  }
-  .mp-shot-grid--compact {
-    grid-template-columns: 1fr;
   }
 }
 

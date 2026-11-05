@@ -49,15 +49,6 @@
     "preview.h2": "One screen that shows every step of the work",
     "preview.desc":
       "Try it here: switch views, open a session or file, check the board. This is the same desktop renderer the app ships, running entirely on local demo data — no daemon, no network.",
-    "preview.shot.aria":
-      "MusePi desktop app welcome screen in the brand dark theme: composer, suggestions and the session sidebar",
-    "preview.shot.note":
-      "Real interface capture — the welcome workspace in the brand dark theme: composer, quick suggestions and session navigation.",
-    "preview.editor.aria":
-      "MusePi file workspace with file tabs, path navigation and an editable TypeScript file",
-    "preview.editor.note":
-      "Real interface capture — browse the project, switch files and edit code in the same workspace.",
-    "preview.more": "More real captures",
     "demo.tabs.aria": "Interface demo",
     "demo.hint": "Real renderer · local data",
     "demo.tab.welcome": "Welcome",
@@ -66,8 +57,6 @@
     "demo.tab.board": "Board",
     "demo.action.open": "Open in new tab",
     "demo.action.fullscreen": "Full screen",
-    "demo.poster.aria":
-      "MusePi desktop interface in the brand dark theme: the welcome workspace with composer, quick suggestions and session navigation",
     "demo.loading": "Loading the real interface…",
     "demo.fallback.title": "The real interface didn't load",
     "demo.fallback.body": "A network or browser restriction got in the way. Retry, or open it in a new tab.",

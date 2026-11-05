@@ -42,7 +42,9 @@ export function resetSeq() {
 function answer(method, params) {
 	const handler = handlers.get(method);
 	if (handler) return Promise.resolve().then(() => handler(params ?? {}));
-	if (typeof method === "string" && method.endsWith(".list")) return Promise.resolve([]);
+	// Unanswered list-shaped methods must be arrays: a `{}` here reaches
+	// components that map over the result and takes the whole surface down.
+	if (typeof method === "string" && method.includes("list")) return Promise.resolve([]);
 	return Promise.resolve({});
 }
 
@@ -85,6 +87,10 @@ class MockSocket extends EventTarget {
 			message = JSON.parse(String(raw));
 		} catch {
 			return;
+		}
+		if (location.search.includes("debug")) {
+			const node = document.documentElement;
+			node.dataset.demoRpc = `${node.dataset.demoRpc ?? ""} ${message.method}`.trim().slice(-400);
 		}
 		if (message.id === undefined) return;
 		answer(message.method, message.params).then(

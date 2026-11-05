@@ -43,18 +43,28 @@ function announceReady() {
 	window.parent.postMessage({ type: "musepi:demo-ready" }, "*");
 }
 
+// The first thing React mounts is the splash/connect screen, so "root has
+// children" is not readiness — the host would show the shell while the app is
+// still connecting. Wait for the real shell and for the splash to leave.
+function shellMounted() {
+	if (document.querySelector(".gui-splash, .gui-connect-wrap")) return false;
+	return Boolean(document.querySelector(".gui-shell, .gui-workspace-keeper, .gui-main"));
+}
+
 function watchRoot() {
-	const root = document.getElementById("root");
-	if (!root || root.childElementCount > 0) {
+	if (shellMounted()) {
 		announceReady();
 		return;
 	}
-	const observer = new MutationObserver(() => {
-		if (root.childElementCount === 0) return;
-		observer.disconnect();
+	const timer = setInterval(() => {
+		if (!shellMounted()) return;
+		clearInterval(timer);
 		announceReady();
-	});
-	observer.observe(root, { childList: true });
+	}, 100);
+	setTimeout(() => {
+		clearInterval(timer);
+		announceReady();
+	}, 30_000);
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchRoot);
