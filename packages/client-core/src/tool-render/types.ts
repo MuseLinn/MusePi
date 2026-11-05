@@ -105,6 +105,13 @@ export interface ToolRenderProps {
 export interface ToolRenderer {
 	/** Human-readable tool name in the shared card chrome. Defaults to the wire name. */
 	label?: string;
+	/**
+	 * i18n key for the tool name ("tools.toolBash" …), resolved when the card
+	 * renders. Built-in registrations get one per wire name; an explicit
+	 * `label` still wins (extension override). Unknown tools have neither and
+	 * keep their raw wire name.
+	 */
+	labelKey?: string;
 	/** Optional tool glyph beside the label; the shared chrome owns status and layout. */
 	Icon?: ComponentType;
 	/** Inline single-line header summary. Must not render block elements. */

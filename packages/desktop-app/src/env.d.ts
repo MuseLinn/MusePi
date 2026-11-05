@@ -16,10 +16,24 @@ interface Window {
 		probeDaemonPort(): Promise<number | null>;
 		startDaemon(port: number): Promise<number>;
 		restartDaemon(port: number): Promise<number>;
+		/**
+		 * Restart the whole app (splash / connect-failure recovery). The shell
+		 * relaunches only after the normal before-quit teardown, so an owned
+		 * daemon is never orphaned by the restart.
+		 */
+		appRestart(): Promise<{ ok: boolean }>;
+		/**
+		 * Bundle shell-side logs, system facts, and the renderer's uncaught
+		 * error ring into one report file and return its absolute path. Works
+		 * while the daemon is unreachable — that is the point.
+		 */
+		diagnosticsExport(input: {
+			errors: string[];
+		}): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
 		openDirectory(): Promise<string | null>;
 		/** Relocate the app data root; resolves { ok:true, root } | { ok:false, error }. */
 		dataRootApply(picked: string): Promise<{ ok: true; root: string } | { ok: false; error: string }>;
-		copyText(text: string): Promise<void>;
+		copyText(text: string): Promise<boolean>;
 		readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
 		openWith(app: string, path: string): Promise<boolean>;
 		listOpenInApps(): Promise<{ apps: OpenInApp[] }>;
@@ -38,7 +52,12 @@ interface Window {
 		/** Address-bar navigation: main normalizes the address and applies the
 		 *  risk policy, then loads it in the target guest. */
 		managedBrowserNavigate(input: { url: string }): Promise<{ ok: boolean; url?: string; error?: string }>;
-		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean }>;
+		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean; error?: string }>;
+		managedBrowserPrint(input: { tabId: string }): Promise<{ ok: boolean; error?: string }>;
+		managedBrowserShowDownloads(): Promise<{ ok: boolean; error?: string }>;
+		managedBrowserSaveScreenshot(input: {
+			tabId: string;
+		}): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>;
 		/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 		managedBrowserStop(tabId?: string): Promise<unknown>;
 		/** Stop automation without closing the agent tab or changing its page. */
@@ -93,8 +112,11 @@ interface Window {
 		onManagedBrowserUploadRequest(cb: (input: ManagedBrowserUploadRequest) => void): () => void;
 		/** The shell's 60s decision window elapsed; close the card. */
 		onManagedBrowserUploadDismiss(cb: (input: { requestId: string }) => void): () => void;
-		/** Agent-created tab (CDP `Target.createTarget`): mount a `<webview>`. */
-		onManagedBrowserCreateTab(cb: (input: { tabId: string; url: string }) => void): () => void;
+		/** Agent-created tab (CDP `Target.createTarget`): mount a `<webview>`.
+		 *  The creating agent rides along when known; user/app tabs omit both. */
+		onManagedBrowserCreateTab(
+			cb: (input: { tabId: string; url: string; agentId?: string; agentName?: string }) => void,
+		): () => void;
 		onManagedBrowserSelectTab(cb: (input: { tabId: string }) => void): () => void;
 		onManagedBrowserCloseTab(cb: (input: { tabId: string }) => void): () => void;
 		/** Main-process powerMonitor "resume" (system sleep/wake): fires reliably
@@ -128,6 +150,9 @@ interface ManagedBrowserActivity {
 	status: string;
 	tabId: string;
 	at: number;
+	/** Operator of the tab, when the create request named one. */
+	agentId?: string;
+	agentName?: string;
 }
 
 /** Everything main still owns about the panel: the CDP port, the running agent

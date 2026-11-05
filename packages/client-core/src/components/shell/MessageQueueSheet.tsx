@@ -1,4 +1,6 @@
-import { ArrowUp, Paperclip, Pause, Play, Trash2, Undo2, X } from "lucide-react";
+import { Pause as PauseIconData, Play as PlayIconData } from "lucide";
+import { ArrowUp, Paperclip, Trash2, Undo2, X } from "lucide-react";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
@@ -240,7 +242,12 @@ export function MessageQueueSheet({
 								if (snapshot) void queue.setPaused(!snapshot.paused);
 							}}
 						>
-							{snapshot?.paused ? <Play size={16} /> : <Pause size={16} />}
+							<MorphIcon
+								icon={snapshot?.paused ? PlayIconData : PauseIconData}
+								size={16}
+								spring="snappy"
+								reducedMotion="user"
+							/>
 							{t(snapshot?.paused ? "general.resumeQueue" : "general.pauseQueue")}
 						</button>
 						<button type="button" disabled={!snapshot?.count} onClick={() => void queue.clear()}>

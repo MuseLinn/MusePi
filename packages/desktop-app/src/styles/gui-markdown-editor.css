@@ -44,6 +44,32 @@
 	}
 }
 
+/* ── Raw HTML (README media and layout) ─────────────────────────────── */
+
+/* Milkdown's `html` atom renders through a node view. Block wrappers such as
+ * `<p align="center">` must lay out as blocks even though the atom itself is
+ * inline, and images stay inside the column instead of overflowing it. */
+.gui-filepane-markdown-editor .milkdown .ProseMirror .gui-md-html--block {
+	display: block;
+}
+
+.gui-filepane-markdown-editor .milkdown .ProseMirror .gui-md-html > :first-child {
+	margin-top: 0;
+}
+
+.gui-filepane-markdown-editor .milkdown .ProseMirror .gui-md-html > :last-child {
+	margin-bottom: 0;
+}
+
+.gui-filepane-markdown-editor .milkdown .ProseMirror .gui-md-html img {
+	max-width: 100%;
+	height: auto;
+}
+
+.gui-filepane-markdown-editor .milkdown .ProseMirror .gui-md-html a {
+	cursor: pointer;
+}
+
 /* ── Formatting toolbar (36px, one row) ──────────────────────────────── */
 
 .gui-filepane-markdown-editor .milkdown .milkdown-top-bar {

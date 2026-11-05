@@ -65,7 +65,13 @@ export interface MarketplaceCardEntry {
 	icon?: string;
 	/** True when the plugin is already installed locally. */
 	installed?: boolean;
-	/** True while an install/remove request is in flight. */
+	/** Scope of the active install; project shadows user. */
+	installedScope?: "user" | "project" | null;
+	/** Version of the active install (project scope shadowing user). */
+	installedVersion?: string;
+	/** Catalog version is newer than the active install. */
+	updateAvailable?: boolean;
+	/** True while an install/remove/upgrade request is in flight. */
 	busy?: boolean;
 	/** Total installs across the marketplace; omit if unknown. */
 	installs?: number;
@@ -80,8 +86,17 @@ export interface MarketplaceCardEntry {
  * to disambiguate which affordance fired.
  */
 export interface MarketplaceCardAction {
-	kind: "open" | "install" | "remove";
+	kind: "open" | "install" | "remove" | "upgrade";
 	entry: MarketplaceCardEntry;
+}
+
+/** One custom marketplace source as served by `marketplace.sources.list`. */
+export interface MarketplaceSource {
+	name: string;
+	sourceType: "github" | "git" | "url" | "local";
+	sourceUri: string;
+	addedAt: string;
+	updatedAt: string;
 }
 
 /**

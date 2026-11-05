@@ -55,7 +55,7 @@
 		"html-to-image": "^1.11.13",
 		"lucide": "^1.29.0",
 		"lucide-react": "^1.24.0",
-		"morphicons": "^1.4.2",
+		"morphicons": "^1.7.1",
 		"puppeteer-core": "catalog:",
 		"react": "19.2.7",
 		"react-dom": "19.2.7",

@@ -16,13 +16,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/client-core";
+import { Check as CheckIconData, Download as DownloadIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
-import { StateIcon } from "./StateIcon";
 
 /**
  * Project knowledge panel (right-panel 项目知识, openchamber v1.19
@@ -627,7 +628,13 @@ function PlanEditor({
 					onClick={() => void save()}
 					title={t("general.save")}
 				>
-					<StateIcon on={saved} pair={["check", "download"]} className="h-3.5 w-3.5" />
+					<MorphIcon
+						icon={saved ? CheckIconData : DownloadIconData}
+						size={14}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-3.5 w-3.5"
+					/>
 					<span className="text-[12px]">{saved ? t("general.saved") : t("general.save")}</span>
 				</button>
 			</div>

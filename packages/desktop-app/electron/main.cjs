@@ -71,9 +71,15 @@ function mainLogPath() {
 	return path.join(HOME_LOG_DIR, `gui-main.${day}.log`);
 }
 const mainLogStream = fs.createWriteStream(mainLogPath(), { flags: "a" });
+// Recent lines stay in memory too: an exported diagnostics report must show
+// what just happened even when the file stream has not flushed yet.
+const MAIN_LOG_RING_LIMIT = 200;
+const mainLogRing = [];
 function writeMainLog(level, args) {
 	const line = `${new Date().toISOString()} [${level}] ${args.map(a => (typeof a === "string" ? a : safeStringify(a))).join(" ")}\n`;
 	mainLogStream.write(line);
+	mainLogRing.push(line.trimEnd());
+	if (mainLogRing.length > MAIN_LOG_RING_LIMIT) mainLogRing.splice(0, mainLogRing.length - MAIN_LOG_RING_LIMIT);
 }
 function safeStringify(value) {
 	try {
@@ -3222,6 +3228,159 @@ ipcMain.handle("updater-install", async () => {
 // musepiVersion 比对 —— 不一致说明运行中的 daemon 是旧进程,走
 // daemon-restart 刷新(见 app.tsx boot)。
 ipcMain.handle("app-version", () => app.getVersion());
+
+// ── Startup recovery: diagnostics export + app restart ────────────────────
+// The /debug panel fetches logs over the daemon RPC — exactly the connection
+// that is missing when the splash is stuck or the connect page is up. This
+// path is shell-local instead: it bundles the GUI log sink, the daemon's
+// dated logs, the Electron updater log, the renderer's uncaught-error ring
+// (passed in — localStorage lives in the renderer), and system facts into one
+// text report. Downloads first (the folder a user actually opens), temp when
+// it is missing or not writable.
+const DIAGNOSTICS_MAX_LOG_FILES = 8;
+const DIAGNOSTICS_TAIL_BYTES = 64 * 1024;
+const DIAGNOSTICS_MAX_ERROR_LINES = 200;
+
+/** Every directory the shell may have written `.log` files to. */
+function diagnosticsLogDirs() {
+	const dirs = [path.dirname(mainLogPath()), path.join(currentDataRoot(), "logs")];
+	try {
+		dirs.push(app.getPath("logs"), app.getPath("userData"));
+	} catch {}
+	return [...new Set(dirs.filter(Boolean))];
+}
+
+/** Newest `.log` files across those directories, each capped to its tail. */
+function diagnosticsLogSections() {
+	const candidates = [];
+	for (const dir of diagnosticsLogDirs()) {
+		let entries;
+		try {
+			entries = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			continue; // missing/unreadable dir: the report names the dirs it read
+		}
+		for (const entry of entries) {
+			if (!entry.isFile() || !entry.name.endsWith(".log")) continue;
+			const file = path.join(dir, entry.name);
+			try {
+				candidates.push({ file, mtime: fs.statSync(file).mtimeMs });
+			} catch {}
+		}
+	}
+	candidates.sort((a, b) => b.mtime - a.mtime);
+	const sections = [];
+	for (const candidate of candidates.slice(0, DIAGNOSTICS_MAX_LOG_FILES)) {
+		try {
+			const stat = fs.statSync(candidate.file);
+			const start = Math.max(0, stat.size - DIAGNOSTICS_TAIL_BYTES);
+			const buffer = Buffer.alloc(stat.size - start);
+			let bytesRead = 0;
+			const fd = fs.openSync(candidate.file, "r");
+			try {
+				bytesRead = fs.readSync(fd, buffer, 0, buffer.length, start);
+			} finally {
+				fs.closeSync(fd);
+			}
+			sections.push({
+				file: candidate.file,
+				size: stat.size,
+				mtime: new Date(stat.mtimeMs).toISOString(),
+				truncated: start > 0,
+				text: buffer.subarray(0, bytesRead).toString("utf8"),
+			});
+		} catch {}
+	}
+	return sections;
+}
+
+/** The report consumed by support: plain text so it opens anywhere. */
+function diagnosticsReport(rendererErrors) {
+	const lines = [];
+	const port = probe();
+	lines.push("MusePi diagnostics", `generated: ${new Date().toISOString()}`, "", "[system]");
+	lines.push(`app: ${app.getName()} ${app.getVersion()}${app.isPackaged ? "" : " (dev)"}`);
+	lines.push(`platform: ${process.platform} ${process.arch} ${os.type()} ${os.release()}`);
+	lines.push(
+		`runtime: electron ${process.versions.electron ?? "-"}, chrome ${process.versions.chrome ?? "-"}, node ${process.versions.node ?? "-"}`,
+	);
+	lines.push(`locale: ${app.getLocale?.() ?? "-"}  timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+	lines.push(
+		`cpu: ${os.cpus().length} cores  memory: ${Math.round(os.totalmem() / 1048576)}MB total / ${Math.round(os.freemem() / 1048576)}MB free`,
+	);
+	try {
+		lines.push(`userData: ${app.getPath("userData")}`);
+	} catch {}
+	lines.push(`dataRoot: ${currentDataRoot()}`);
+	lines.push(`logDirs: ${diagnosticsLogDirs().join("; ")}`);
+	lines.push(`daemon: ${port ? `ws://127.0.0.1:${port}` : "not running"}`);
+	lines.push("", `[renderer errors]${rendererErrors.length === 0 ? " none" : ""}`);
+	for (const line of rendererErrors) lines.push(line);
+	lines.push("");
+	const logs = diagnosticsLogSections();
+	lines.push(`[logs] ${logs.length} file(s)`);
+	for (const log of logs) {
+		lines.push("", `--- ${log.file} (${log.size} bytes, ${log.mtime})${log.truncated ? " [tail]" : ""} ---`);
+		lines.push(log.text.replace(/\s+$/, ""));
+	}
+	lines.push("", `[gui log (memory)] ${mainLogRing.length} line(s)`);
+	for (const line of mainLogRing) lines.push(line);
+	return `${lines.join("\n")}\n`;
+}
+
+function diagnosticsWriteDir() {
+	const candidates = [];
+	try {
+		candidates.push(app.getPath("downloads"));
+	} catch {}
+	try {
+		candidates.push(app.getPath("temp"));
+	} catch {}
+	for (const dir of candidates) {
+		try {
+			fs.mkdirSync(dir, { recursive: true });
+			fs.accessSync(dir, fs.constants.W_OK);
+			return dir;
+		} catch {}
+	}
+	return os.tmpdir();
+}
+
+ipcMain.handle("diagnostics-export", (_event, payload) => {
+	try {
+		writeMainLog("info", ["[diagnostics] export requested"]);
+		const errors = Array.isArray(payload?.errors)
+			? payload.errors
+					.filter(entry => typeof entry === "string")
+					.slice(-DIAGNOSTICS_MAX_ERROR_LINES)
+					.map(entry => entry.slice(0, 4000))
+			: [];
+		const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+		const file = path.join(diagnosticsWriteDir(), `musepi-diagnostics-${stamp}.txt`);
+		fs.writeFileSync(file, diagnosticsReport(errors), "utf8");
+		console.error(`[diagnostics] exported ${file}`);
+		return { ok: true, path: file };
+	} catch (err) {
+		console.error("[diagnostics] export failed:", err?.message ?? err);
+		return { ok: false, error: err instanceof Error ? err.message : String(err) };
+	}
+});
+
+ipcMain.handle("app-restart", () => {
+	// app.relaunch() only takes effect when this process exits, so hand the
+	// exit to the normal quit path: before-quit tears the OWNED daemon down
+	// (and leaves a daemon this shell merely connected to alone) before the
+	// relaunched instance starts. app.exit()/process.exit() would skip that
+	// teardown and orphan the daemon.
+	// A restart is an explicit intent (the same rule as the --quit-request
+	// relaunch), so the active-session warning does not hold it up.
+	writeMainLog("info", ["[app] restart requested"]);
+	quittingConfirmed = true;
+	app.relaunch();
+	app.quit();
+	return { ok: true };
+});
+
 
 // ── Window behavior (close → quit vs close → tray) ────────────────────────
 // The close gate inside createWindow must decide synchronously, so the

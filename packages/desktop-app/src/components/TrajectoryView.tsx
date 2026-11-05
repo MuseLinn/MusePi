@@ -1,4 +1,10 @@
 import { t } from "@musepi/client-core";
+import {
+	ChevronDown as ChevronDownIconData,
+	ChevronRight as ChevronRightIconData,
+	ChevronsUp as ChevronsUpIconData,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { timeFormatOptions } from "../lib/appearance";
@@ -12,7 +18,6 @@ import {
 } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
-import { StateIcon } from "./StateIcon";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import { turnEndEventOf, turnUserEventOf } from "./TurnMapCanvas";
 import {
@@ -757,7 +762,13 @@ export function TrajectoryView({
 						className="traj-fold-all"
 						onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(turns.map(trajectoryTurnKey)))}
 					>
-						<Icon name={collapsed.size > 0 ? "arrow-down-s" : "arrow-up-double"} className="h-3 w-3" />
+						<MorphIcon
+							icon={collapsed.size > 0 ? ChevronDownIconData : ChevronsUpIconData}
+							size={12}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-3 w-3"
+						/>
 						{collapsed.size > 0 ? t("transcript.trajectoryExpandAll") : t("transcript.trajectoryCollapseAll")}
 					</button>
 				)}
@@ -919,9 +930,11 @@ export function TrajectoryView({
 											aria-expanded={!isCollapsed}
 											onClick={() => toggleTurn(turnKey)}
 										>
-											<StateIcon
-												on={isCollapsed}
-												pair={["arrow-right-s", "arrow-down-s"]}
+											<MorphIcon
+												icon={isCollapsed ? ChevronRightIconData : ChevronDownIconData}
+												size={14}
+												spring="snappy"
+												reducedMotion="user"
 												className="h-3.5 w-3.5 shrink-0 opacity-60"
 											/>
 											<span className="traj-turn-tag">

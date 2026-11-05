@@ -9,6 +9,11 @@ export interface WorkspaceEntry {
 	name: string;
 	path: string;
 	isDir: boolean;
+	/** The entry itself is a symbolic link. A directory link reports `isDir`
+	 *  when the daemon could follow it inside the workspace. */
+	isSymlink?: boolean;
+	/** Raw link target text as stored on disk, for the row tooltip. */
+	linkTarget?: string;
 	size: number;
 	mtime: number;
 	depth: number;

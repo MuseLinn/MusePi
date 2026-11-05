@@ -10,6 +10,8 @@ import {
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type TranslationKey, t } from "@musepi/client-core";
+import { ChevronLeft as ChevronLeftIconData, ChevronRight as ChevronRightIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
@@ -34,7 +36,6 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { RailTooltip } from "./RailTooltip";
-import { StateIcon } from "./StateIcon";
 
 /**
  * RightRail — the right-edge 44px icon rail, driven by the surface registry:
@@ -345,6 +346,7 @@ export function RightRail({
 				ref={scrollRef}
 				className="gui-right-rail-group gui-right-rail-scroll"
 				data-feathered={feathered ? "" : undefined}
+				data-gui-scrollbar="off"
 			>
 				<DndContext
 					sensors={sensors}
@@ -486,7 +488,13 @@ export function RightRail({
 					aria-label={rightPanelOpen ? t("general.collapseRightPanel") : t("general.expandRightPanel")}
 					onClick={() => onToggleRightPanel?.()}
 				>
-					<StateIcon on={rightPanelOpen} pair={["arrow-right", "arrow-left"]} className="h-4 w-4" />
+					<MorphIcon
+						icon={rightPanelOpen ? ChevronRightIconData : ChevronLeftIconData}
+						size={16}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-4 w-4"
+					/>
 				</button>
 				<SlotComponentHost rpc={rpc} slot={RIGHT_RAIL_SLOT} sessionId={sessionId} cwd={cwd} />
 			</div>

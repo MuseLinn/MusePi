@@ -254,6 +254,62 @@ describe("serializePanelTabs / restorePanelTabs", () => {
 		};
 		expect(restorePanelTabs(raw).activeId).toBe("files::/a.md");
 	});
+
+	it("drops stale browser targets so host restoration remains authoritative", () => {
+		const raw = {
+			v: 2,
+			split: false,
+			tabs: [
+				{
+					surface: "files",
+					target: "/a.md",
+					label: "a",
+					readOnly: false,
+					touchedAt: 1,
+					dedupeKey: null,
+					column: 0,
+				},
+				{
+					surface: "browser",
+					target: "stale-guest",
+					label: "Stale",
+					readOnly: false,
+					touchedAt: 2,
+					dedupeKey: "stale-guest",
+					column: 0,
+				},
+			],
+			activeId: "browser::stale-guest",
+			columnActive: ["browser::stale-guest", null],
+		};
+
+		const restored = restorePanelTabs(raw);
+		expect(restored.tabs.map(tab => tab.id)).toEqual(["files::/a.md"]);
+		expect(restored.activeId).toBe("files::/a.md");
+		expect(restored.columnActive).toEqual(["files::/a.md", null]);
+	});
+
+	it("drops the invalid legacy settings.browser surface during v1 migration", () => {
+		const raw = {
+			v: 1,
+			tabs: [
+				{ surface: "files", target: "/a.md", label: "a", readOnly: false, touchedAt: 1, dedupeKey: null },
+				{
+					surface: "settings.browser",
+					target: null,
+					label: "Browser",
+					readOnly: false,
+					touchedAt: 2,
+					dedupeKey: null,
+				},
+			],
+			activeId: "settings.browser::",
+		};
+
+		const restored = restorePanelTabs(raw);
+		expect(restored.tabs.map(tab => tab.id)).toEqual(["files::/a.md"]);
+		expect(restored.activeId).toBe("files::/a.md");
+	});
 });
 
 describe("setPanelTabDirty", () => {

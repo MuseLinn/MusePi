@@ -5,6 +5,8 @@ const DELIVERY_RETRY_MAX_MS = 30_000;
 const DELIVERY_RETRY_JITTER_MS = 200;
 const DEFAULT_RETENTION_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_RUNNING_JOBS = 15;
+/** Live-output ring capacity per job. Older bytes are dropped once exceeded. */
+const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
 /** Abort reason used only when the owning session shuts down the entire manager. */
 export const ASYNC_JOB_MANAGER_SHUTDOWN_REASON = Symbol("AsyncJobManager shutdown");
 
@@ -29,9 +31,17 @@ interface PollEscalationState {
 	lastPollEndAt: number;
 }
 
+export type AsyncJobType = "bash" | "task" | "agnes-video";
+/**
+ * Refined kind of a job whose `type` cannot express it. Background questions
+ * run as `task` jobs so every existing job surface keeps working, but the job
+ * row still records that it is a question (with `questionCount`/`toolCallId`).
+ */
+export type AsyncJobKind = "question";
+
 export interface AsyncJob {
 	id: string;
-	type: "bash" | "task" | "agnes-video";
+	type: AsyncJobType;
 	status: "running" | "completed" | "failed" | "cancelled";
 	startTime: number;
 	label: string;
@@ -60,6 +70,84 @@ export interface AsyncJob {
 	 * until the caller invokes `markRunning()` from the run context.
 	 */
 	queued?: boolean;
+	/** Refined job kind; see {@link AsyncJobKind}. */
+	kind?: AsyncJobKind;
+	/** Number of questions a `question` job is waiting on. */
+	questionCount?: number;
+	/** Tool call that registered a `question` job, for transcript linking. */
+	toolCallId?: string;
+}
+
+/**
+ * Public summary of one job (job HUD, daemon `session.jobs`). `outputBytes` is
+ * the current size of the job's live-output ring, so a surface can tell that
+ * more output is available than the summary carries.
+ */
+export interface AsyncJobSummary {
+	id: string;
+	type: AsyncJobType;
+	status: AsyncJob["status"];
+	label: string;
+	startTime: number;
+	kind?: AsyncJobKind;
+	questionCount?: number;
+	toolCallId?: string;
+	outputBytes: number;
+}
+
+/** Result of reading a job's live-output ring. */
+export interface AsyncJobOutput {
+	output: string;
+	/** True when `output` omits accumulated bytes (tail limit or ring overflow). */
+	truncated: boolean;
+}
+
+/**
+ * Bounded per-job output ring. Appends accumulate; once the byte budget is
+ * exceeded the oldest bytes are dropped so a chatty background job cannot grow
+ * its row without bound. Reads return a suffix and report whether anything was
+ * left out.
+ */
+class JobOutputRing {
+	#text = "";
+	#bytes = 0;
+	#dropped = false;
+
+	constructor(private readonly maxBytes: number) {}
+
+	get bytes(): number {
+		return this.#bytes;
+	}
+
+	append(text: string): void {
+		if (text.length === 0) return;
+		this.#text += text;
+		this.#bytes += Buffer.byteLength(text);
+		if (this.#bytes <= this.maxBytes) return;
+		this.#text = dropHeadBytes(this.#text, this.#bytes - this.maxBytes);
+		this.#bytes = Buffer.byteLength(this.#text);
+		this.#dropped = true;
+	}
+
+	read(tail?: number): AsyncJobOutput {
+		const tailBytes = typeof tail === "number" && Number.isFinite(tail) ? Math.max(0, Math.floor(tail)) : undefined;
+		if (tailBytes === undefined || tailBytes >= this.#bytes) {
+			return { output: this.#text, truncated: this.#dropped };
+		}
+		return { output: dropHeadBytes(this.#text, this.#bytes - tailBytes), truncated: true };
+	}
+}
+
+/** Drop `count` bytes from the front, skipping partial UTF-8 sequences. */
+function dropHeadBytes(text: string, count: number): string {
+	if (count <= 0) return text;
+	const buffer = Buffer.from(text);
+	if (count >= buffer.byteLength) return "";
+	let start = count;
+	// A continuation byte (10xxxxxx) cannot start a decoded character; advancing
+	// past it keeps the returned suffix valid UTF-8 instead of a replacement char.
+	while (start < buffer.byteLength && (buffer[start]! & 0xc0) === 0x80) start += 1;
+	return buffer.subarray(start).toString("utf8");
 }
 
 /** Delivery callback for a settled job's result text. */
@@ -111,6 +199,14 @@ export interface AsyncJobRegisterOptions {
 	onProgress?: (text: string, details?: Record<string, unknown>) => void | Promise<void>;
 	/** Register the job in queued state; see {@link AsyncJob.queued}. */
 	queued?: boolean;
+	/** Refined job kind; see {@link AsyncJobKind}. */
+	kind?: AsyncJobKind;
+	/** Number of questions a `question` job is waiting on. */
+	questionCount?: number;
+	/** Tool call that registered a `question` job; see {@link AsyncJob.toolCallId}. */
+	toolCallId?: string;
+	/** Override the live-output ring capacity (bytes); defaults to 64 KiB. */
+	maxOutputBytes?: number;
 }
 
 /**
@@ -141,6 +237,7 @@ export class AsyncJobManager {
 	}
 
 	readonly #jobs = new Map<string, AsyncJob>();
+	readonly #outputs = new Map<string, JobOutputRing>();
 	readonly #deliveries: AsyncJobDelivery[] = [];
 	readonly #inFlightDeliveries: AsyncJobDelivery[] = [];
 	readonly #suppressedDeliveries = new Set<string>();
@@ -183,12 +280,14 @@ export class AsyncJobManager {
 	}
 
 	register(
-		type: "bash" | "task" | "agnes-video",
+		type: AsyncJobType,
 		label: string,
 		run: (ctx: {
 			jobId: string;
 			signal: AbortSignal;
 			reportProgress: (text: string, details?: Record<string, unknown>) => Promise<void>;
+			/** Append to the job's live-output ring (see {@link getJobOutput}). */
+			appendOutput: (text: string) => void;
 			/** Clear the queued flag once the job actually starts executing. */
 			markRunning: () => void;
 		}) => Promise<string>,
@@ -225,7 +324,12 @@ export class AsyncJobManager {
 			ownerId: options?.ownerId,
 			agentId: options?.agentId,
 			queued: options?.queued === true,
+			kind: options?.kind,
+			questionCount: options?.questionCount,
+			toolCallId: options?.toolCallId,
 		};
+		const output = new JobOutputRing(Math.max(0, Math.floor(options?.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES)));
+		this.#outputs.set(id, output);
 
 		const reportProgress = async (text: string, details?: Record<string, unknown>): Promise<void> => {
 			if (details) job.latestDetails = details;
@@ -245,28 +349,33 @@ export class AsyncJobManager {
 					jobId: id,
 					signal: abortController.signal,
 					reportProgress,
+					appendOutput: chunk => output.append(chunk),
 					markRunning: () => {
 						job.queued = false;
 					},
 				});
 				if (job.status === "cancelled") {
 					job.resultText = text;
+					output.append(text);
 					this.#scheduleEviction(id);
 					return;
 				}
 				job.status = "completed";
 				job.resultText = text;
+				output.append(text);
 				this.#enqueueDelivery(id, text);
 				this.#scheduleEviction(id);
 			} catch (error) {
+				const errorText = error instanceof Error ? error.message : String(error);
 				if (job.status === "cancelled") {
-					job.errorText = error instanceof Error ? error.message : String(error);
+					job.errorText = errorText;
+					output.append(errorText);
 					this.#scheduleEviction(id);
 					return;
 				}
-				const errorText = error instanceof Error ? error.message : String(error);
 				job.status = "failed";
 				job.errorText = errorText;
+				output.append(errorText);
 				this.#enqueueDelivery(id, errorText);
 				this.#scheduleEviction(id);
 			}
@@ -294,6 +403,30 @@ export class AsyncJobManager {
 
 	getJob(id: string): AsyncJob | undefined {
 		return this.#jobs.get(id);
+	}
+
+	/** Public summary of one job, including live-output size and question metadata. */
+	snapshotJob(job: AsyncJob): AsyncJobSummary {
+		return {
+			id: job.id,
+			type: job.type,
+			status: job.status,
+			label: job.label,
+			startTime: job.startTime,
+			...(job.kind === undefined ? {} : { kind: job.kind }),
+			...(job.questionCount === undefined ? {} : { questionCount: job.questionCount }),
+			...(job.toolCallId === undefined ? {} : { toolCallId: job.toolCallId }),
+			outputBytes: this.#outputs.get(job.id)?.bytes ?? 0,
+		};
+	}
+
+	/**
+	 * Read a job's accumulated live output. `tail` limits the returned suffix to
+	 * that many bytes from the end of the ring; without it the whole retained
+	 * ring is returned. Returns undefined for an evicted or unknown job.
+	 */
+	getJobOutput(id: string, options?: { tail?: number }): AsyncJobOutput | undefined {
+		return this.#outputs.get(id)?.read(options?.tail);
 	}
 
 	getRunningJobs(filter?: AsyncJobFilter): AsyncJob[] {
@@ -605,6 +738,7 @@ export class AsyncJobManager {
 		const drained = await this.drainDeliveries({ timeoutMs: Math.max(deadline - Date.now(), 0) });
 		this.#clearEvictionTimers();
 		this.#jobs.clear();
+		this.#outputs.clear();
 		this.#deliveries.length = 0;
 		this.#notifyDeliveryQueueChanged();
 		this.#inFlightDeliveries.length = 0;
@@ -645,6 +779,7 @@ export class AsyncJobManager {
 		this.#evictionTimers.delete(jobId);
 		this.#suppressedDeliveries.delete(jobId);
 		this.#watchedJobs.delete(jobId);
+		this.#outputs.delete(jobId);
 		return this.#jobs.delete(jobId);
 	}
 

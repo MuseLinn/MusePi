@@ -41,6 +41,7 @@ import type {
 	MarketplaceRegistryEntry,
 } from "./types";
 import { buildPluginId, parsePluginId } from "./types";
+import { isNewerVersion } from "./version";
 
 const RUNTIME_PACKAGE_NAME_RE = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/;
 const MAX_RUNTIME_PACKAGE_NAME_LENGTH = 214;
@@ -246,7 +247,7 @@ export class MarketplaceManager {
 	async installPlugin(
 		name: string,
 		marketplace: string,
-		options?: { force?: boolean; scope?: "user" | "project" },
+		options?: { force?: boolean; scope?: "user" | "project"; expectedVersion?: string },
 	): Promise<InstalledPluginEntry> {
 		const force = options?.force ?? false;
 		const scope = options?.scope ?? "user";
@@ -264,6 +265,20 @@ export class MarketplaceManager {
 		const pluginEntry = catalog.plugins.find(p => p.name === name);
 		if (!pluginEntry) {
 			throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
+		}
+
+		// Trust gate for GUI confirmations: the caller approved a specific
+		// catalog version, so refuse to install a different one. Checked
+		// before any disk write; catalogs without a version cannot be pinned.
+		if (
+			options?.expectedVersion !== undefined &&
+			pluginEntry.version !== undefined &&
+			pluginEntry.version !== options.expectedVersion
+		) {
+			throw new Error(
+				`Plugin "${name}@${marketplace}" changed since it was reviewed: ` +
+					`expected version ${options.expectedVersion}, catalog now has ${pluginEntry.version}`,
+			);
 		}
 
 		const pluginId = buildPluginId(name, marketplace);
@@ -684,14 +699,7 @@ export class MarketplaceManager {
 				if (!catalogVersion || catalogVersion === installed.version) continue;
 
 				// Treat newer semver as an update; fall back to inequality for non-semver tags.
-				let isNewer: boolean;
-				try {
-					isNewer = Bun.semver.order(catalogVersion, installed.version) > 0;
-				} catch {
-					isNewer = catalogVersion !== installed.version;
-				}
-
-				if (isNewer) {
+				if (isNewerVersion(catalogVersion, installed.version)) {
 					updates.push({ pluginId, scope, from: installed.version, to: catalogVersion });
 				}
 			}

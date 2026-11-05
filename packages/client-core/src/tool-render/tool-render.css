@@ -137,6 +137,20 @@
 	white-space: nowrap;
 }
 
+/* Key-argument slot: localized parentheses around the tool's own summary. A
+ * summary that has not rendered anything yet (a streaming call whose args are
+ * still empty) must not leave a bare paren pair behind. */
+.tv-arg {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+}
+
+.tv-arg:has(> .tv-sum:empty) > .tv-arg-paren {
+	display: none;
+}
+
 .tv-chev {
 	flex: none;
 	width: 7px;

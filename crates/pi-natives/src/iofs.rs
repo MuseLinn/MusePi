@@ -26,13 +26,18 @@ pub enum FileType {
 #[napi(object)]
 pub struct GlobMatch {
 	/// Relative path from the search root, using forward slashes.
-	pub path:      String,
-	/// Resolved filesystem type for the match.
-	pub file_type: FileType,
+	pub path:        String,
+	/// Resolved filesystem type for the match. A followed directory symlink
+	/// reports `Dir` so tree consumers can descend into it.
+	pub file_type:   FileType,
+	/// True when the entry itself is a symbolic link.
+	pub is_symlink:  Option<bool>,
+	/// Raw symbolic-link target text, when the entry is a symbolic link.
+	pub link_target: Option<String>,
 	/// Modification time in milliseconds since Unix epoch.
-	pub mtime:     Option<f64>,
+	pub mtime:       Option<f64>,
 	/// File size in bytes for regular files.
-	pub size:      Option<f64>,
+	pub size:        Option<f64>,
 }
 
 fn walker_error_to_napi<E: std::fmt::Display>(err: pi_walker::WalkError<E>) -> Error {
@@ -56,10 +61,12 @@ pub(crate) const fn from_walker_file_type(file_type: pi_walker::FileType) -> Fil
 impl From<pi_walker::CollectedEntry> for GlobMatch {
 	fn from(entry: pi_walker::CollectedEntry) -> Self {
 		Self {
-			path:      entry.path,
-			file_type: from_walker_file_type(entry.file_type),
-			mtime:     entry.mtime,
-			size:      entry.size,
+			path:        entry.path,
+			file_type:   from_walker_file_type(entry.file_type),
+			is_symlink:  None,
+			link_target: None,
+			mtime:       entry.mtime,
+			size:        entry.size,
 		}
 	}
 }

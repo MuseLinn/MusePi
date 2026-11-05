@@ -34,7 +34,8 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
-import { StartupSplash } from "./components/StartupSplash";
+import { type BootPhase, BootRecoveryActions, StartupSplash, useSlowBoot } from "./components/StartupSplash";
+import { useSessionInfoCardVisibility } from "./components/session-info-card";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateDialog } from "./components/UpdateDialog";
@@ -105,6 +106,7 @@ import {
 import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
+import { createProject } from "./lib/workspace-projects";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
@@ -626,6 +628,11 @@ function AppInner(): ReactNode {
 	const [store, setStore] = useState<GuiSessionStore | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
+	// Splash diagnostics: the stage boot() is in (probe → spawn → gate →
+	// connect) and the 8s slow-start gate. Both are in-memory only — they
+	// describe THIS attempt, so a retry starts from a clean stage.
+	const [bootPhase, setBootPhase] = useState<BootPhase>("probe");
+	const bootSlow = useSlowBoot(booting);
 	// Session-open loading overlay (React-Bits-style skeleton): armed by
 	// openSession with a 250ms flicker threshold, cleared when the store
 	// lands (or the open fails). MUST sit above the booting/connect early
@@ -679,6 +686,9 @@ function AppInner(): ReactNode {
 		document.body.classList.add("gui-resizing");
 	};
 	const [rightCollapsed, setRightCollapsed] = useState(() => localStorage.getItem("musepi-gui-right") === "0");
+	// Session info card (the collapsed right panel's stand-in): one open choice
+	// per session, reset by the panel's own state — see the hook's contract.
+	const sessionInfo = useSessionInfoCardVisibility({ sessionId: selectedId, panelOpen: !rightCollapsed });
 	const [project, setProject] = useState<string | null>(() => {
 		try {
 			return localStorage.getItem("musepi-gui-project");
@@ -729,7 +739,18 @@ function AppInner(): ReactNode {
 			const dir = `${parent.replace(/\/+$/, "")}/${name}`;
 			setProject(dir);
 			localStorage.setItem("musepi-gui-project", dir);
+			if (rpc) {
+				try {
+					await createProject(rpc, dir);
+				} catch (error) {
+					// The folder exists either way; only the registry row failed, so
+					// report it and still open the workspace.
+					const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+					pushActionToast({ kind: "error", message: `${t("settings.createProjectFailed")}${detail}` });
+				}
+			}
 			window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-projects-changed"));
 			setNewProjectOpen(false);
 			setNewProjectName("");
 			setNewProjectParent(null);
@@ -913,9 +934,9 @@ function AppInner(): ReactNode {
 	}, [capabilityAvailable]);
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
 	// composer 自定义补充 preselect).
-	const [settingsSection, setSettingsSection] = useState<"skills" | "suggestions" | "providers" | undefined>(
-		undefined,
-	);
+	const [settingsSection, setSettingsSection] = useState<
+		"skills" | "suggestions" | "providers" | "browser" | undefined
+	>(undefined);
 	// Settings open/close rides the same blur transition as the board /
 	// scheduled / chat swaps: the outgoing surface blurs out (150ms), then
 	// the settings view (or the workspace) enters with its 300ms blur-in.
@@ -928,12 +949,13 @@ function AppInner(): ReactNode {
 		// passes a MouseEvent. It used to be stored as the active section
 		// verbatim — SettingsView's content switch has no branch for an event
 		// object, so the pane opened BLANK and only a nav click (a real id)
-		// filled it in. Only the three known section names are accepted;
-		// everything else (DOM event, undefined, retired id) means "land on
-		// the default section".
+		// filled it in. Only known section names are accepted; everything else
+		// (DOM event, undefined, retired id) means "land on the default section".
 		(section?: unknown): void => {
 			const target =
-				section === "skills" || section === "suggestions" || section === "providers" ? section : undefined;
+				section === "skills" || section === "suggestions" || section === "providers" || section === "browser"
+					? section
+					: undefined;
 			if (settingsOpen) return;
 			// Blur the current surface out first (leavingView keeps it mounted).
 			setLeavingView(
@@ -1021,7 +1043,7 @@ function AppInner(): ReactNode {
 	useEffect(() => {
 		const onOpenSection = (e: Event): void => {
 			const section = (e as CustomEvent<string>).detail;
-			if (section === "skills" || section === "suggestions") {
+			if (section === "skills" || section === "suggestions" || section === "browser") {
 				// Pass the section INTO openSettings — its 150ms blur-in timer
 				// owns the final setSettingsSection, so a separate pre-set here
 				// gets overwritten back to undefined.
@@ -1606,6 +1628,7 @@ function AppInner(): ReactNode {
 	const boot = useCallback(async (): Promise<void> => {
 		setBooting(true);
 		setConnectError(null);
+		setBootPhase("probe");
 		// Let the brand intro finish on fast connections. SDK prewarming stays
 		// in the daemon and never holds the interactive shell hostage.
 		markStartup("boot.start");
@@ -1624,6 +1647,7 @@ function AppInner(): ReactNode {
 		const capabilityRestarted = new Set<string>();
 		const tryUrl = async (u: string): Promise<boolean> => {
 			try {
+				setBootPhase("connect");
 				await connect(u);
 				// OTA/发布一致性:daemon 是 detached 进程(daemon.cjs spawn
 				// detached:true),GUI 重启从不刷新它 —— 新版本 GUI 连旧
@@ -1642,6 +1666,7 @@ function AppInner(): ReactNode {
 				// Token-bearing URLs are user-configured remote instances (the
 				// instance switcher): the version gate must NOT restart them.
 				if (isElectron() && isLocalUrl(u) && !new URL(u).searchParams.has("token")) {
+					setBootPhase("gate");
 					const rpc = rpcRef.current;
 					const api = (
 						window as unknown as {
@@ -1723,9 +1748,11 @@ function AppInner(): ReactNode {
 			if ((await tryUrl(url)) === true) return;
 			// Electron shell: discover a running daemon, else spawn one.
 			if (isElectron() && isLocalUrl(url)) {
+				setBootPhase("probe");
 				const port = await probeDaemonPort();
 				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) return;
 				try {
+					setBootPhase("spawn");
 					const spawned = await startDaemonViaShell(DEFAULT_PORT);
 					markStartup("daemon.spawned");
 					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) return;
@@ -2394,14 +2421,22 @@ function AppInner(): ReactNode {
 	);
 
 	/** Pick a folder and register it as the workspace/project. Sidebar projects
-	 *  tab contract: surface the picked folder via the project-added event. */
+	 *  tab contract: the daemon owns the registry, so registering is a
+	 *  `workspace.create` and the broadcast only asks the tab to re-read. */
 	const pickProjectFolder = useCallback((): void => {
-		void pickDirectory().then(dir => {
-			if (dir) {
-				setProject(dir);
-				localStorage.setItem("musepi-gui-project", dir);
-				window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
+		void pickDirectory().then(async dir => {
+			if (!dir) return;
+			setProject(dir);
+			localStorage.setItem("musepi-gui-project", dir);
+			try {
+				const client = rpcRef.current;
+				if (client) await createProject(client, dir);
+			} catch (error) {
+				const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+				pushActionToast({ kind: "error", message: `${t("settings.createProjectFailed")}${detail}` });
 			}
+			window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-projects-changed"));
 		});
 	}, []);
 
@@ -3524,7 +3559,7 @@ function AppInner(): ReactNode {
 	if (booting) {
 		return (
 			<div className="gui-shell">
-				<StartupSplash />
+				<StartupSplash phase={bootPhase} slow={bootSlow} />
 			</div>
 		);
 	}
@@ -3547,6 +3582,7 @@ function AppInner(): ReactNode {
 					{status === "connecting" && <p className="gui-note">{t("settings.connecting2")}</p>}
 					{connectError && <p className="gui-error">{connectError}</p>}
 					{error && <p className="gui-error">{error}</p>}
+					<BootRecoveryActions />
 					<details className="gui-connect-advanced">
 						<summary>{t("settings.manualConnection")}</summary>
 						<form
@@ -4105,6 +4141,9 @@ function AppInner(): ReactNode {
 												reminders,
 												onSelectReminder: id => void openSession(id),
 												onMarkAllRead: markAllRead,
+												sessionTitle: activeSessionLabel,
+												sessionInfoOpen: sessionInfo.open,
+												onToggleSessionInfo: sessionInfo.toggle,
 												sessionLoading,
 												waitSeconds,
 												ask: activeAsk,

@@ -628,6 +628,7 @@ import { SessionService } from "./services/session-service";
 import { TerminalService, type TerminalServiceDeps } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
+import { resolveWorkspaceDirectories, WorkspaceRegistry, WorkspaceService } from "./services/workspace-registry";
 import type { DaemonConnection, DaemonOptions, LiveSession, RpcRequest } from "./session-host";
 import {
 	assistantReplyText,
@@ -741,6 +742,11 @@ export class DaemonServer {
 	 *  #sttDownloads: two windows (or a double-click race) must reuse the
 	 *  running fetch instead of starting parallel ones into the same cache. */
 	readonly #ttsDownloads = new Map<string, Promise<void>>();
+	/** Source sessions with a snapshot fork in flight. A fork reads a
+	 *  settled prefix while the source may keep streaming, so two forks of
+	 *  one session could interleave their snapshot cuts; the second is
+	 *  rejected as retryable instead of queued. */
+	readonly #forkInFlight = new Set<string>();
 
 	/** Drop a connection from the global-event targets (called on close —
 	 *  the host's disconnect handles the session subscription side). Also
@@ -985,6 +991,30 @@ export class DaemonServer {
 				resolveLive: sessionId => this.#host.get(sessionId),
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
 				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
+			}),
+		);
+		this.#services.register(
+			new WorkspaceService({
+				registry: new WorkspaceRegistry(),
+				knownSessionCwds: async () => {
+					const rows = await this.#host.knownSessions();
+					return [
+						...new Set(
+							rows.map(row => row.cwd).filter((cwd): cwd is string => typeof cwd === "string" && cwd.length > 0),
+						),
+					];
+				},
+				sessionDirectories: sessionId => {
+					const live = this.#host.get(sessionId);
+					if (!live) return undefined;
+					const manager = live.agentSession.sessionManager;
+					return {
+						cwd: manager.getCwd(),
+						list: () => manager.getAdditionalDirectories(),
+						add: directory => manager.addWorkspaceDirectory(directory),
+						remove: directory => manager.removeWorkspaceDirectory(directory),
+					};
+				},
 			}),
 		);
 		this.#services.register(
@@ -1856,11 +1886,55 @@ export class DaemonServer {
 				await setAutostartState(enabled);
 				return { enabled };
 			}
+			case "workspace.list": {
+				// 持久化项目注册表 + 会话 cwd 回填的隐式项目（GUI 侧栏多项目）。
+				return this.#services.get<WorkspaceService>("workspaces").listWorkspaces();
+			}
+			case "workspace.create": {
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.createWorkspace((params ?? {}) as Record<string, unknown>);
+			}
+			case "workspace.update": {
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.updateWorkspace((params ?? {}) as Record<string, unknown>);
+			}
+			case "workspace.delete": {
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.deleteWorkspace((params ?? {}) as Record<string, unknown>);
+			}
+			case "workspace.setPrimary": {
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.setPrimary((params ?? {}) as Record<string, unknown>);
+			}
+			case "session.directories.list": {
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.listSessionDirectories((params ?? {}) as Record<string, unknown>);
+			}
+			case "session.directories.add": {
+				// 重复目录不是错误：返回结构化 duplicate，GUI 就地提示。
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.addSessionDirectory((params ?? {}) as Record<string, unknown>);
+			}
+			case "session.directories.remove": {
+				return this.#services
+					.get<WorkspaceService>("workspaces")
+					.removeSessionDirectory((params ?? {}) as Record<string, unknown>);
+			}
 			case "session.create": {
 				// modeId(modelPattern/thinkingLevel/projectMetadata)透传
 				// host.createSession —— GUI welcome 预设 chip 的选择与创作面
 				// metadata(M3.2)在创建时一次应用;metadata 校验(形状/version/
 				// 16KiB)归 host,失败即语义报错。
+				//
+				// additionalDirectories 先在 RPC 边界做绝对化/存在性/去重/
+				// 64 条上限校验;创建成功后经 SessionManager 的既有合并点
+				// 叠加到设置默认目录上（不替换 resume/设置带来的根）。
 				const p = (params ?? {}) as {
 					cwd?: string;
 					title?: string;
@@ -1869,8 +1943,25 @@ export class DaemonServer {
 					modelPattern?: string;
 					thinkingLevel?: ConfiguredThinkingLevel;
 					projectMetadata?: Record<string, unknown>;
+					additionalDirectories?: unknown;
 				};
-				return this.#host.createSession(p);
+				if (p.additionalDirectories !== undefined && !Array.isArray(p.additionalDirectories)) {
+					throw new Error("additionalDirectories must be an array.");
+				}
+				const requestedDirs = p.additionalDirectories ?? [];
+				if (requestedDirs.length === 0) return this.#host.createSession(p);
+				const resolved = await resolveWorkspaceDirectories(path.resolve(p.cwd ?? this.#host.cwd()), requestedDirs);
+				const created = await this.#host.createSession(p);
+				const live = this.#host.get(created.sessionId);
+				if (!live) throw new Error(`Session not live after create: ${created.sessionId}`);
+				const manager = live.agentSession.sessionManager;
+				const merged = [...new Set([...manager.getAdditionalDirectories(), ...resolved.directories])];
+				await manager.setAdditionalDirectories(merged);
+				return {
+					...created,
+					additionalDirectories: manager.getAdditionalDirectories(),
+					duplicates: resolved.duplicates,
+				};
 			}
 			case "subagents.live": {
 				// What is running under a session right now, straight from the
@@ -2426,6 +2517,24 @@ export class DaemonServer {
 			}
 			case "marketplace.remove": {
 				return this.#services.get<MarketplaceService>("marketplace").remove(params ?? {});
+			}
+			case "marketplace.updates": {
+				return this.#services.get<MarketplaceService>("marketplace").updates();
+			}
+			case "marketplace.upgrade": {
+				return this.#services.get<MarketplaceService>("marketplace").upgrade(params ?? {});
+			}
+			case "marketplace.sources.list": {
+				return this.#services.get<MarketplaceService>("marketplace").listSources();
+			}
+			case "marketplace.sources.add": {
+				return this.#services.get<MarketplaceService>("marketplace").addSource(params ?? {});
+			}
+			case "marketplace.sources.remove": {
+				return this.#services.get<MarketplaceService>("marketplace").removeSource(params ?? {});
+			}
+			case "marketplace.sources.refresh": {
+				return this.#services.get<MarketplaceService>("marketplace").refreshSources(params ?? {});
 			}
 			case "skills.list": {
 				return this.#services.get<MarketplaceService>("marketplace").listSkills();
@@ -4606,109 +4715,155 @@ export class DaemonServer {
 				// or toolResult stays and the user continues from there).
 				// Default (false) truncates BEFORE the target — the user-message
 				// case, whose text is backfilled into the composer to re-answer.
-				const p = (params ?? {}) as { sessionId: string; messageId: string; includeTarget?: boolean };
+				//
+				// `snapshot: true` forks WITHOUT stopping a running source
+				// session: when a turn is in flight the copy is cut at that
+				// turn's start, so the fork never carries half a turn (an
+				// assistant/toolResult cycle with no terminal reply). A target
+				// that is still streaming — or any id the settled file does not
+				// carry yet — falls back to the same turn-start cut. The
+				// transition is explicit so callers that fork from completed
+				// history keep the exact includeTarget semantics.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					messageId: string;
+					includeTarget?: boolean;
+					snapshot?: boolean;
+				};
 				if (!p.messageId) throw new Error("messageId required");
-				const live = this.#host.get(p.sessionId);
-				// Flush a live session's pending writes so the file on disk
-				// reflects everything the agent has produced.
-				if (live) {
-					const mgr = (
-						live.agentSession as unknown as {
-							sessionManager?: { flush?(): Promise<unknown> };
-						}
-					)?.sessionManager;
-					await mgr?.flush?.();
+				const snapshot = p.snapshot === true;
+				if (snapshot && this.#forkInFlight.has(p.sessionId)) {
+					// Both forks would read the same source; reject the second
+					// instead of queueing a potentially long file read behind an
+					// unbounded flush. Retryable: the GUI shows a toast.
+					throw new Error("SESSION_FORK_IN_PROGRESS: another fork of this session is still being written; retry");
 				}
-				const { resolveResumableSession } = await import("../session/session-listing");
-				const match = await resolveResumableSession(p.sessionId, this.#host.cwd());
-				if (!match) throw new Error(`Unknown session: ${p.sessionId}`);
-				const file = match.session.path;
-				const lines = (await fs.promises.readFile(file, "utf8")).split("\n");
-				// The SDK file is `[title slot]` + `[session header]` + entries.
-				// The title slot (type "title") holds the display title; it is
-				// NOT the session header. DO NOT assume lines[0] is the header —
-				// a stale parse produced forks whose header was type "title" and
-				// whose body still contained the parent's header, so
-				// loadSessionFile picked the parent's id and activation threw
-				// `Unknown session` (fork send was unusable). Scan for the
-				// actual session record (type "session", string id).
-				let headerIdx = -1;
-				let header: Record<string, unknown> = {};
-				for (let i = 0; i < Math.min(lines.length, 8); i++) {
-					const line = lines[i];
-					if (!line?.trim()) continue;
-					try {
-						const rec = JSON.parse(line) as { type?: unknown; id?: unknown };
-						if (rec.type === "session" && typeof rec.id === "string") {
-							headerIdx = i;
-							header = rec as Record<string, unknown>;
-							break;
-						}
-					} catch {
-						// malformed early line — skip
+				if (snapshot) this.#forkInFlight.add(p.sessionId);
+				try {
+					const live = this.#host.get(p.sessionId);
+					// A turn is in flight only while the agent is streaming or a
+					// tool is executing. Compaction/pause alone leave the turn
+					// settled, so a fork still copies its completed transcript.
+					const turnInFlight =
+						live !== undefined && (live.agentSession.isStreaming || live.activeToolCalls.size > 0);
+					// Flush a live session's pending writes so the file on disk
+					// reflects everything the agent has produced.
+					if (live) {
+						const mgr = (
+							live.agentSession as unknown as {
+								sessionManager?: { flush?(): Promise<unknown> };
+							}
+						)?.sessionManager;
+						await mgr?.flush?.();
 					}
-				}
-				if (headerIdx < 0) throw new Error(`Unreadable session file: ${file}`);
-				// Title slot lines (before the header) are preserved so the
-				// fork keeps the parent's display title in the session list.
-				const titleSlot = lines.slice(0, headerIdx).join("\n");
-				let keep = 0;
-				let found = false;
-				for (let i = headerIdx + 1; i < lines.length; i++) {
-					const line = lines[i];
-					if (!line?.trim()) continue;
-					try {
-						const rec = JSON.parse(line) as {
-							type?: string;
-							id?: string;
-							message?: { role?: string; timestamp?: number | string; toolCallId?: string };
-						};
-						if (rec.type === "message") {
-							// Match the jsonl id (SDK hex) OR the view key
-							// ("role:timestamp") — the GUI sends the latter.
-							const key =
-								rec.message &&
-								(rec.message.role === "toolResult"
-									? `toolResult:${rec.message.toolCallId}`
-									: `${rec.message.role}:${rec.message.timestamp}`);
-							if (rec.id === p.messageId || key === p.messageId) {
-								found = true;
-								if (p.includeTarget === true) keep = i;
+					const { resolveResumableSession } = await import("../session/session-listing");
+					const match = await resolveResumableSession(p.sessionId, this.#host.cwd());
+					if (!match) throw new Error(`Unknown session: ${p.sessionId}`);
+					const file = match.session.path;
+					const lines = (await fs.promises.readFile(file, "utf8")).split("\n");
+					// The SDK file is `[title slot]` + `[session header]` + entries.
+					// The title slot (type "title") holds the display title; it is
+					// NOT the session header. DO NOT assume lines[0] is the header —
+					// a stale parse produced forks whose header was type "title" and
+					// whose body still contained the parent's header, so
+					// loadSessionFile picked the parent's id and activation threw
+					// `Unknown session` (fork send was unusable). Scan for the
+					// actual session record (type "session", string id).
+					let headerIdx = -1;
+					let header: Record<string, unknown> = {};
+					for (let i = 0; i < Math.min(lines.length, 8); i++) {
+						const line = lines[i];
+						if (!line?.trim()) continue;
+						try {
+							const rec = JSON.parse(line) as { type?: unknown; id?: unknown };
+							if (rec.type === "session" && typeof rec.id === "string") {
+								headerIdx = i;
+								header = rec as Record<string, unknown>;
 								break;
 							}
+						} catch {
+							// malformed early line — skip
 						}
-					} catch {
-						// malformed line — treat as content to keep
 					}
-					keep = i;
+					if (headerIdx < 0) throw new Error(`Unreadable session file: ${file}`);
+					// Title slot lines (before the header) are preserved so the
+					// fork keeps the parent's display title in the session list.
+					const titleSlot = lines.slice(0, headerIdx).join("\n");
+					let keep = 0;
+					let found = false;
+					// Last user prompt in the settled file: the start of the turn
+					// that may still be running. Stays at the header when the
+					// file has no user message yet (fork body is empty).
+					let turnStart = headerIdx;
+					for (let i = headerIdx + 1; i < lines.length; i++) {
+						const line = lines[i];
+						if (!line?.trim()) continue;
+						try {
+							const rec = JSON.parse(line) as {
+								type?: string;
+								id?: string;
+								message?: { role?: string; timestamp?: number | string; toolCallId?: string };
+							};
+							if (rec.type === "message") {
+								if (rec.message?.role === "user") turnStart = i;
+								// Match the jsonl id (SDK hex) OR the view key
+								// ("role:timestamp") — the GUI sends the latter.
+								const key =
+									rec.message &&
+									(rec.message.role === "toolResult"
+										? `toolResult:${rec.message.toolCallId}`
+										: `${rec.message.role}:${rec.message.timestamp}`);
+								if (rec.id === p.messageId || key === p.messageId) {
+									found = true;
+									if (p.includeTarget === true) keep = i;
+									break;
+								}
+							}
+						} catch {
+							// malformed line — treat as content to keep
+						}
+						keep = i;
+					}
+					if (!found) {
+						// The in-flight assistant reply is not durable until its
+						// message_end, so a snapshot fork cannot match it. Fork at
+						// the current turn's start instead of failing the gesture.
+						if (!snapshot || !turnInFlight) throw new Error(`Unknown message: ${p.messageId}`);
+						keep = turnStart;
+					}
+					// Never carry part of a running turn: an assistant toolCall or
+					// toolResult already on disk is dropped so the fork ends on the
+					// turn's user prompt — a legal, resumable transcript.
+					if (snapshot && turnInFlight && keep > turnStart) keep = turnStart;
+					const newId = randomUUID();
+					const timestamp = new Date().toISOString();
+					const newHeader = {
+						...header,
+						id: newId,
+						timestamp,
+						// The SDK's fork() records the parent under parentSession.
+						parentSession: typeof header.id === "string" ? header.id : p.sessionId,
+					};
+					const dir = path.dirname(file);
+					const newFile = path.join(dir, `${timestamp.replace(/[:.]/g, "-")}_${newId}.jsonl`);
+					// Body = entries after the header, up to and including the
+					// target message (or before it, per includeTarget).
+					// Exclude the header line itself — it was already copied into
+					// the new file's header, and including it would make
+					// loadSessionFile find the parent's id as the fork's header.
+					const body = lines
+						.slice(headerIdx + 1, keep + 1)
+						.filter(l => l?.trim())
+						.join("\n");
+					const head = titleSlot ? `${titleSlot}\n` : "";
+					await fs.promises.writeFile(newFile, `${head}${JSON.stringify(newHeader)}\n${body}${body ? "\n" : ""}`);
+					// Bust the SDK-session scan cache so the tree lists the fork
+					// on the next refresh (listAllSessions is TTL-cached).
+					this.#host.invalidateHistoryCache();
+					return { sessionId: newId, parentId: typeof header.id === "string" ? header.id : p.sessionId };
+				} finally {
+					if (snapshot) this.#forkInFlight.delete(p.sessionId);
 				}
-				if (!found) throw new Error(`Unknown message: ${p.messageId}`);
-				const newId = randomUUID();
-				const timestamp = new Date().toISOString();
-				const newHeader = {
-					...header,
-					id: newId,
-					timestamp,
-					// The SDK's fork() records the parent under parentSession.
-					parentSession: typeof header.id === "string" ? header.id : p.sessionId,
-				};
-				const dir = path.dirname(file);
-				const newFile = path.join(dir, `${timestamp.replace(/[:.]/g, "-")}_${newId}.jsonl`);
-				// Body = entries after the header, up to and including the
-				// target message (or before it, per includeTarget).
-				// Exclude the header line itself — it was already copied into
-				// the new file's header, and including it would make
-				// loadSessionFile find the parent's id as the fork's header.
-				const body = lines
-					.slice(headerIdx + 1, keep + 1)
-					.filter(l => l?.trim())
-					.join("\n");
-				const head = titleSlot ? `${titleSlot}\n` : "";
-				await fs.promises.writeFile(newFile, `${head}${JSON.stringify(newHeader)}\n${body}${body ? "\n" : ""}`);
-				// Bust the SDK-session scan cache so the tree lists the fork
-				// on the next refresh (listAllSessions is TTL-cached).
-				this.#host.invalidateHistoryCache();
-				return { sessionId: newId, parentId: typeof header.id === "string" ? header.id : p.sessionId };
 			}
 			case "session.close": {
 				const p = (params ?? {}) as { sessionId: string };
@@ -6492,8 +6647,9 @@ export class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string; recentLimit?: number };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				return (
-					live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 }) ?? {
+				const snapshot = live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 });
+				if (!snapshot) {
+					return {
 						running: [],
 						recent: [],
 						// Must match AsyncJobDeliveryState — the GUI reads
@@ -6501,8 +6657,17 @@ export class DaemonServer {
 						// crashes (ErrorBoundary) the jobs pane for sessions
 						// without an async job manager.
 						delivery: { queued: 0, delivering: false, pendingJobIds: [] },
-					}
-				);
+					};
+				}
+				// GUI 用 `type === "question"` 区分后台提问;任务在内部仍是 `task`
+				// (后台提问记录在 `kind`),daemon 边界统一投影成 wire 类型,避免
+				// 扩大 AsyncJob["type"] 而影响 hub/TUI 的现有消费者。
+				const manager = live.agentSession.asyncJobManager;
+				const project = (items: typeof snapshot.running) =>
+					items.map(item =>
+						manager?.getJob(item.id)?.kind === "question" ? { ...item, type: "question" as const } : item,
+					);
+				return { ...snapshot, running: project(snapshot.running), recent: project(snapshot.recent) };
 			}
 			case "session.jobsCancel": {
 				// 取消一个后台任务(TUI /jobs parity)。
@@ -6512,6 +6677,19 @@ export class DaemonServer {
 				const manager = live.agentSession.asyncJobManager;
 				if (!manager) throw new Error("async jobs unavailable in this session");
 				return { cancelled: manager.cancel(p.jobId) };
+			}
+			case "session.jobOutput": {
+				// 后台任务实时输出尾部(会话信息卡/ jobs 面板按需读取)。
+				// tail 为从尾部起算的字节数;任务不存在或不属于该会话时显式报错。
+				const p = (params ?? {}) as { sessionId: string; jobId: string; tail?: number };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const result = live.agentSession.getAsyncJobOutput(
+					p.jobId,
+					p.tail === undefined ? undefined : { tail: p.tail },
+				);
+				if (!result) throw new Error(`Unknown job: ${p.jobId}`);
+				return result;
 			}
 			case "session.setFastMode": {
 				// TUI /fast parity:优先服务层级开关(持久化 tier.* 设置)。

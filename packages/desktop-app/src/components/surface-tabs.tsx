@@ -12,6 +12,7 @@
  * Deliberately NOT here: docking, pop-out, cross-panel drag, or any notion of
  * "which surface is active" — that stays in ChatView's activeView state.
  */
+
 import {
 	closestCenter,
 	DndContext,
@@ -23,16 +24,21 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useTabMotion } from "../lib/use-tab-motion";
 
 /** One open instance inside a surface. Content lives elsewhere; the strip
- *  only tracks labels, so serialization stays trivial. */
+ *  only tracks tab metadata, so serialization stays trivial. */
 export interface SurfaceTab {
 	/** Stable identity (e.g. file path, doc id). Never an array index. */
 	readonly id: string;
 	title: string;
+	/** Decorative built-in, favicon, or fallback visual. */
+	icon?: ReactNode;
+	/** Agent activity on this instance, including background tabs. */
+	agentActive?: boolean;
 	/** Unsaved-changes dot. */
 	dirty?: boolean;
 	/** Replaceable file preview, shown in italics and pinned by double click. */
@@ -290,7 +296,18 @@ export function SurfaceTabStripSortable({
 								aria-hidden="true"
 								inert
 							>
+								{tab.icon ? (
+									<span className="gui-surface-tab-icon" aria-hidden="true">
+										{tab.icon}
+									</span>
+								) : null}
 								<span className="gui-surface-tab-title">{tab.title}</span>
+								{tab.agentActive ? (
+									<span className="gui-surface-tab-agent">
+										<span aria-hidden="true">{t("tools.agentCreatedTab")}</span>
+										<span className="sr-only">{t("general.agentRunning")}</span>
+									</span>
+								) : null}
 							</div>
 						);
 					}
@@ -377,7 +394,18 @@ function SurfaceTabButton({
 				}
 			}}
 		>
+			{tab.icon ? (
+				<span className="gui-surface-tab-icon" aria-hidden="true">
+					{tab.icon}
+				</span>
+			) : null}
 			<span className="gui-surface-tab-title">{tab.title}</span>
+			{tab.agentActive ? (
+				<span className="gui-surface-tab-agent">
+					<span aria-hidden="true">{t("tools.agentCreatedTab")}</span>
+					<span className="sr-only">{t("general.agentRunning")}</span>
+				</span>
+			) : null}
 			{tab.dirty ? <span className="gui-surface-tab-dirty" aria-label={tab.title} /> : null}
 			<span
 				className="gui-surface-tab-close"

@@ -2,11 +2,11 @@
  * Wire-shape transform for `marketplace.list` RPC.
  *
  * Walks every marketplace in the user's registry, lists the catalog plugins,
- * then merges in `installed` / `installedScope` from the user + project
- * installed-plugins registries so the GUI can flip each card between
- * Install / Remove without a second round-trip. Project entries take
- * precedence over user entries (matches `MarketplaceManager.uninstallPlugin`
- * disambiguation).
+ * then merges in `installed` / `installedScope` / `installedVersion` /
+ * `updateAvailable` from the user + project installed-plugins registries so
+ * the GUI can flip each card between Install / Upgrade / Remove without a
+ * second round-trip. Project entries take precedence over user entries
+ * (matches `MarketplaceManager.uninstallPlugin` disambiguation).
  *
  * Kept as a free function so it can be unit-tested without spinning up a
  * daemon server. The daemon `marketplace.list` handler calls this and
@@ -16,10 +16,12 @@
 import { getInstalledPlugin } from "./registry";
 import type { InstalledPluginsRegistry, MarketplacePluginEntry, MarketplacesRegistry } from "./types";
 import { buildPluginId } from "./types";
+import { isNewerVersion } from "./version";
 
 export interface MarketplaceListEntry {
 	name: string;
 	marketplace: string;
+	/** Catalog version (what installing now would deliver). */
 	version?: string;
 	description?: string;
 	author?: string;
@@ -31,6 +33,10 @@ export interface MarketplaceListEntry {
 	icon?: string;
 	installed: boolean;
 	installedScope: "user" | "project" | null;
+	/** Version of the active (project-over-user) install, when installed. */
+	installedVersion?: string;
+	/** Catalog version is newer than the active install. */
+	updateAvailable?: boolean;
 }
 
 export interface MarketplaceListInput {
@@ -59,9 +65,13 @@ function buildEntry(
 	projectReg: InstalledPluginsRegistry | null,
 ): MarketplaceListEntry {
 	const id = buildPluginId(p.name, marketplaceName);
-	const inProject = projectReg !== null && (getInstalledPlugin(projectReg, id)?.length ?? 0) > 0;
-	const inUser = (getInstalledPlugin(userReg, id)?.length ?? 0) > 0;
-	const installedScope: "user" | "project" | null = inProject ? "project" : inUser ? "user" : null;
+	const projectEntry = projectReg !== null ? getInstalledPlugin(projectReg, id)?.[0] : undefined;
+	const userEntry = getInstalledPlugin(userReg, id)?.[0];
+	// Project scope wins: it is the entry the runtime actually loads, so the
+	// version/update state must describe that install, not the shadowed one.
+	const installedEntry = projectEntry ?? userEntry;
+	const installedScope: "user" | "project" | null =
+		projectEntry !== undefined ? "project" : userEntry !== undefined ? "user" : null;
 	return {
 		name: p.name,
 		marketplace: marketplaceName,
@@ -76,5 +86,8 @@ function buildEntry(
 		icon: p.icon,
 		installed: installedScope !== null,
 		installedScope,
+		installedVersion: installedEntry?.version,
+		updateAvailable:
+			installedEntry !== undefined && p.version !== undefined && isNewerVersion(p.version, installedEntry.version),
 	};
 }

@@ -1,7 +1,8 @@
 import { type TurnIndexItem, t } from "@musepi/client-core";
+import { ArrowUp as ArrowUpIconData, LoaderCircle as LoaderCircleIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Icon } from "../vendor/oc-icons/Icon";
 import { PacMan } from "../vendor/pac-man";
 
 interface TurnMarker {
@@ -600,7 +601,13 @@ export function TurnRail({
 						if (!olderPager.loadingOlder) olderPager.onRequestOlder?.();
 					}}
 				>
-					<Icon name={olderPager.loadingOlder ? "loader" : "arrow-up"} className="gui-turn-loadmore-icon" />
+					<MorphIcon
+						icon={olderPager.loadingOlder ? LoaderCircleIconData : ArrowUpIconData}
+						size={14}
+						spring="snappy"
+						reducedMotion="user"
+						className="gui-turn-loadmore-icon"
+					/>
 				</button>
 			)}
 			<div

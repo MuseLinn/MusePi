@@ -109,6 +109,27 @@ describe("readExtensionPluginMeta", () => {
 		expect(await readExtensionPluginMeta(entry)).toEqual({ fields: [], configErrors: [], experimental: true });
 	});
 
+	test("parses the declared icon and preset-only flag", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ musepi: { icon: "▣", presetOnly: true } }),
+		});
+		expect(await readExtensionPluginMeta(entry)).toEqual({
+			fields: [],
+			configErrors: [],
+			icon: "▣",
+			presetOnly: true,
+		});
+	});
+
+	test("ignores a non-string icon and a non-true preset-only value", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ musepi: { icon: 42, presetOnly: "true" } }),
+		});
+		expect(await readExtensionPluginMeta(entry)).toBeNull();
+	});
+
 	test("ignores non-boolean and false experimental values", async () => {
 		const entry = await writeExtension({
 			"index.ts": "export default {}",

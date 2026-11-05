@@ -5,7 +5,9 @@ import {
 	type ChangelogVersion,
 	parseChangelogHighlights,
 } from "@musepi/client-core/src/lib/changelog-highlights";
-import { ChevronDown, ChevronRight, ExternalLink, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
+import { ExternalLink, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { changelogMatchesAppVersion } from "../lib/daemon-version";
@@ -133,7 +135,6 @@ function OlderVersionRow({
 	onToggle(): void;
 }): ReactNode {
 	const total = entry.counts.added + entry.counts.fixed + entry.counts.changed + entry.counts.removed;
-	const Chevron = expanded ? ChevronDown : ChevronRight;
 	// The markdown mounts on first expand (lazy render) but stays mounted
 	// afterwards so the collapse can animate back to zero height instead of
 	// popping out (the shared Reveal contract).
@@ -149,7 +150,13 @@ function OlderVersionRow({
 				}}
 				aria-expanded={expanded}
 			>
-				<Chevron size={13} aria-hidden />
+				<MorphIcon
+					icon={expanded ? ChevronDownIconData : ChevronRightIconData}
+					size={13}
+					spring="snappy"
+					reducedMotion="user"
+					aria-hidden
+				/>
 				<span style={{ fontWeight: 600, color: "var(--fg)" }}>v{entry.version}</span>
 				{entry.date && <span style={DATE_STYLE}>{entry.date}</span>}
 				<span style={COUNT_BADGE_STYLE}>{t("announcement.announcementChangeswithcount", { count: total })}</span>
@@ -495,7 +502,13 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 							}}
 							aria-expanded={showFullLog}
 						>
-							{showFullLog ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
+							<MorphIcon
+								icon={showFullLog ? ChevronDownIconData : ChevronRightIconData}
+								size={13}
+								spring="snappy"
+								reducedMotion="user"
+								aria-hidden
+							/>
 							{t("announcement.announcementMorefixeswithcount", { count: remaining })}
 						</button>
 					)}

@@ -6,6 +6,69 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **浏览器网页内右键菜单，浮层打开时点击网页即关闭**：页面右键提供复制、粘贴、标注、检查元素、复制选中文字的链接，不可用项禁用；右键菜单、rail 悬浮提示等浮层与网页宿主统一层级，菜单打开时在页面上覆盖透明关闭层，点击网页直接收起而不必先点面板空白处。
+  - EN: The browser page now has its own context menu with copy, paste, annotate, inspect element, and copy-link-of-selection, disabling what does not apply. Menus and rail tooltips share one overlay stack above the page host, and while a menu is open a transparent dismissal layer covers the page so clicking the page closes it without first clicking panel chrome.
+
+- **每轮末尾显示来源卡与改动文件卡**：来源卡汇总本轮浏览，按读过/经过分组，显示重复访问次数、完整 URL，并提供右侧打开、系统浏览器打开、复制链接；文件卡显示「N 个文件已修改」、本轮 +/−、前五行与「还有 N 个文件」，每行可打开文件，无法逐项统计时给出说明。无数据时两卡都不渲染。
+  - EN: Each turn now ends with a sources card and a changed-files card. Sources group read and passed pages with repeat counts, full URLs, and open-in-panel, open-in-system-browser, and copy-link actions; the files card shows the changed count, the turn's +/−, the first five rows with "N more files", per-file open, and an explanation when per-file stats are unavailable. Both stay absent without data.
+
+- **工具调用标题改为「已使用 X（关键参数）」**：内置工具头使用本地化名称与关键参数，执行中显示「正在使用 …」；工具选择调用也有独立卡片；未知工具保持原 wire 名且不追加空括号。
+  - EN: Tool heads now read "Used X (key argument)" with localized names and key arguments, switching to "Using …" while running. Tool-selection calls get their own card, and unknown tools keep their wire name with no empty parentheses.
+
+- **新增右侧会话信息面板（Cordis 插件）**：右侧 rail 出现「会话信息」入口，默认不打开标签（收起），内容含会话 ID 与复制、消息数、审批模式、工作目录、`provider/id` 模型、上下文占用条与 token 汇总；加载、空、错误三态齐全，切换会话不串数据。
+  - EN: A Session info panel ships as a Cordis plugin. The right rail shows its entry, the tab stays closed by default, and the panel lists the session id with copy, message count, approval mode, working directory, the `provider/id` model, a context-usage bar, and token totals, with loading, empty, and error states that never leak across session switches.
+
+- **项目与多工作目录持久化，取代前端 localStorage 项目表**：项目注册表落在 daemon 配置目录的 `projects.json`，支持新建、重命名、删除、设为主目录；项目菜单可添加/移除附加工作目录，重复目录就地提示；文件面板可在多个根目录间切换，隐式项目可一键转为托管项目。
+  - EN: Projects and extra working directories are now persisted in the daemon's `projects.json` instead of the renderer's localStorage. Create, rename, delete, and set-primary are available, the project menu adds and removes extra directories with duplicate feedback, the file pane switches between roots, and implicit projects promote to managed in one step.
+
+- **文件树可展开工作区内的软链接目录**：指向目录的软链显示链接徽标并可展开子项，展开受工作区边界与循环保护约束；工作区外软链仍是叶子，越界读取继续被拒绝。
+  - EN: The file tree expands symlinked directories inside the workspace. Directory links show a badge and expand with boundary and cycle protection, while links pointing outside the workspace stay leaves and out-of-root reads remain rejected.
+
+- **运行中分叉改为快照分叉，不再打断源会话**：流式输出或工具执行中从历史轮次分叉时，复制边界收敛到当前轮次的起点，源会话继续运行；同一源会话的并发快照分叉返回可重试错误，界面提示重试。branch、重试等操作仍保留原来的停止语义。
+  - EN: Forking while the session runs now snapshots history instead of interrupting the source. When streaming or tools are active, the copy boundary collapses to the current turn's start and the source keeps running; concurrent snapshot forks on the same source return a retryable error and the GUI asks to retry. Branch and retry keep their existing stop semantics.
+
+- **子智能体浏览器标签归属细化到 agent，浮层显示操作者**：同名标签不再被不同智能体互相复用，运行期标记当前操作者；子智能体结束只回收自己的标签，有父级时移交父级并保持打开，用户自己的连接/转发页面永不被智能体关闭。
+  - EN: Browser tab ownership now follows the agent. Same-named tabs are no longer reused across agents, runs mark the active operator, and a finishing subagent releases only its own tabs — handing them to the parent when one exists — while the user's connected or relay pages are never closed by an agent.
+
+- **插件市场支持更新徽标、升级与自定义源**：卡片显示已装版本与「v旧 → v新」，可单项或全部升级；市场分「已装 / 目录 / 自定义源」，源可添加、刷新、移除并显示逐源失败；安装、卸载、升级前统一确认来源与版本，安装时校验目录版本未漂移。
+  - EN: The plugin marketplace shows installed versions and `vold → vnew` update badges with single and bulk upgrade. It splits into installed, catalog, and custom sources; sources can be added, refreshed, and removed with per-source failures shown; install, uninstall, and upgrade share one confirmation with source and version, and installs reject a catalog version that drifted after review.
+
+- **启动页显示加载阶段，并可直接导出诊断或重启**：加载页显示当前阶段，超过 8 秒提示启动较慢；导出诊断在 daemon 未连通时也能工作，收集日志尾部、系统信息、daemon 探测与渲染层错误并返回保存路径；重启应用会先拆除自启动的 daemon，避免孤儿进程。连接失败页提供同样的两个入口。
+  - EN: The startup page now shows the current phase and, after eight seconds, a slow-start note. Export diagnostics works before the daemon is reachable, collecting log tails, system info, daemon probes, and renderer errors and returning the saved path. Restarting tears down the daemon this app launched first, avoiding orphans, and the connection-failure page offers the same two actions.
+
+- **插件入口按层级拆分，图标改用清单标记与透明卡框**：能力中心只列可启停或可配置的官方插件与已安装/自建插件；设置 → 扩展与插件保留完整库存（含只读提示词/渲染包与预设专用 persona），行内显示 id、只读/预设专用、配置与组件数等技术身份。插件图标改用清单声明的 emoji、字形或 URI，卡框改为透明底 + 0.5px 细边，图片按 contain 缩放且解码失败回退字形。
+  - EN: Plugin entrances now split by layer, and plugin marks come from the manifest. The capability center lists only toggleable or configurable official plugins plus installed ones, while Settings → Extensions & plugins keeps the full inventory — read-only prompt/render packs and preset-only personas included — with ids, read-only/preset-only tags, and config/component counts per row. Plugin marks use the manifest's emoji, glyph, or URI; the card frame is transparent with a 0.5px hairline, images fit with contain, and a failed decode falls back to the glyph.
+
+- **右侧面板按会话隔离，修复 rail/拖拽/设备尺寸与标注动效**：面板标签以会话为存储键，浏览器标签带 owner 会话，A/B 会话各自恢复分栏、标签顺序和网页；rail tooltip 提升到页面宿主之上，rail 不再挂全局皮肤滚动条，贪吃蛇与橡皮糖滚动条收窄；拖拽面板标签时加手势护盾，浏览器打开时仍可排序并拖出分栏；设备尺寸预设扩展为 iPhone/Pixel/Galaxy/折叠屏/iPad/桌面并新增宽高拖动滑块；标注元素悬停框改为 110ms 形变。
+  - EN: Right-panel state is now session-scoped, including browser tabs and split layout. Rail tooltips sit above the page host, the rail opts out of the global skin scrollbar, and snake/gummy bars are slimmer. A tab-drag shield keeps reorder and drag-to-split working over the browser guest. Device presets now cover modern phones, foldables, iPads, and desktops, with width/height sliders beside numeric entry, and the annotation element box morphs over 110ms.
+
+- **Markdown 可视化编辑直接渲染 README 原始 HTML**：文件面板的 `.md` 编辑器不再把 `<p align="center">`、`<img>` 和徽章链接显示成源码，而是按白名单净化后渲染（居中块、图片、可点击链接），相对图片仍按当前文件目录经桌面桥读取；脚本、事件属性和不安全 URL 被丢弃，源码在保存时原样写回。
+  - EN: The file pane's visual Markdown editor now renders README raw HTML instead of printing it. Centered blocks, images, and badge links display through a sanitized node view, relative images still resolve against the file's directory through the desktop bridge, scripts/event attributes/unsafe URLs are dropped, and saving writes the original HTML back verbatim.
+
+- **侧栏分组/项目在窄面板下变为纯图标，实例弹窗改用滑块 tab**：分组/项目胶囊按标签实际宽度布局，滑块跟随当前 pill；放不下文字时自动 morph 成图标 pill（保留 tooltip 与可访问名称），不再出现「分组项…」挤压。实例与远程工作区弹窗的 tab 换成共享 `Segmented` 滑块，实例页改为列表 + 添加实例双栏，输入框带标签，删除入口 hover/focus 出现，并去掉固定高度留下的大片空白。侧栏的搜索、全部展开/收起、归档三个动作改为状态图标 morph（search↔close、expand↔contract、archive↔unarchive），归档视图补上常显选中态；实例弹窗的「测试并添加」在提交中从 + morph 成加载圈。
+  - EN: The sidebar group/project capsule now sizes pills to their labels with a measured thumb and morphs to icon-only pills (tooltips and accessible names preserved) when the pane cannot fit the text, so labels no longer clip. The instances & remote workspaces dialog uses the shared sliding Segmented control for its tabs, and the instances page is a list + add-instance two-column layout with labelled fields, a hover/focus remove action, and no fixed-height void. The sidebar's search, expand/collapse-all, and archive actions now morph with state (search↔close, expand↔contract, archive↔unarchive), the archive view keeps a persistent on-state, and the dialog's Test and add button morphs from + to a spinner while connecting.
+
+- **会话树引导线在最后一个子会话处收口**：最后一个子会话的分支线改为 ⌊ 形，不再延伸进下一个根会话；某一层祖先没有后续兄弟时也不再画那条竖线，层级归属更清晰。
+  - EN: **Session-tree guides close at the last child**: the last child's branch now ends in an elbow instead of running into the next root session, and an ancestor's vertical line disappears once that branch has ended, so nesting stays unambiguous.
+
+- **状态图标统一走 morphicons**：剩余的状态切换图标从 oc-icons 的 `StateIcon` 改为 lucide stroke + `MorphIcon`（搜索/展开/归档、播放/暂停、眼睛、加载/完成、折叠箭头、模式选择等），并把 `morphicons` 依赖升到 `^1.7.1`；收藏星标/默认目标改为单字形 + CSS fill 过渡（morphicons 只插值 stroke，不能动画 fill）。
+  - EN: **State icons now use morphicons**: the remaining state-swap icons move from oc-icons `StateIcon` to lucide stroke `MorphIcon` (search/expand/archive, play/pause, eye, loading/done, fold arrows, mode selection), and the `morphicons` dependency is raised to `^1.7.1`; the favorite star and default target now use one glyph with a CSS fill transition (morphicons interpolates strokes only, not fill).
+
+- **更新日志按界面语言显示**：更新 Toast、更新弹窗和设置里的「检查更新」说明不再中英混排；manifest 只有一份双语字符串，渲染时按当前语言套用与「新功能」相同的 `- EN:` 选择规则。
+  - EN: **Update notes follow the UI language**: the update toast, update dialog, and Settings → Check for updates no longer mix Chinese and English. The manifest ships one bilingual string, and rendering picks a language with the same `- EN:` rule as the What's New panel.
+
+- **浏览器设备栏改为 KimiCode 式紧凑单行，标签菜单提供状态化操作**：尺寸预设、模拟宽高、页面背景与显示比例改为带当前值文本的下拉控件，背景选中项不再依赖悬停；隐藏设备栏时整条工具栏消失并停止设备模拟，显示时恢复原设置。浏览器标签右键菜单新增右侧新建、刷新、重命名、重命名后的标题保持、静音/取消静音与关闭右侧，空白页和 URL 状态决定各项是否可用。
+  - EN: The browser device bar is now a compact KimiCode-style row: size preset, emulated dimensions, page background, and display scale are labelled dropdowns, so the selected background no longer depends on hover. Hiding the bar removes it entirely and stops device emulation; showing it restores the saved settings. Browser tab menus add new-tab-right, reload, rename with runtime title persistence, mute/unmute, and close-right, with availability derived from blank and URL state.
+
+- **右侧面板共享宽度，选中会话自动揭示**：切换右侧标签不再跳变宽度，整个面板只记住一个宽度并把旧分表面值自动迁移；选中或新建会话时只展开其项目与父会话链，其他手动折叠保持原状。
+  - EN: The right panel now shares one remembered width across tabs, migrating the first legacy per-surface value, and selecting or creating a session reveals only its project and ancestor-session chain while unrelated folds stay collapsed.
+
+- **浏览器标签统一投影到右侧面板**：每个受管浏览器标签对应一个右栏标签，新增、切换、复制、关闭、分栏与 Agent 揭示双向同步，内部标签条移除；重启恢复由受管宿主重建投影，不再恢复失效的旧面板项。所有内置标签显示图标，浏览器使用 favicon 回退并在后台 Agent 活动时显示 badge；最大化/还原图标、tooltip 和可访问名称保持同步，动态标题不会被旧 tooltip 覆盖。
+  - EN: Managed browser tabs now project one-to-one into the right panel. New, select, duplicate, close, split-column, and Agent-reveal operations reconcile in both directions, and the internal tab strip is gone. Restart restoration rebuilds projections from the managed host instead of restoring stale panel entries. Built-in tabs show icons, browser tabs use favicon fallback and expose background Agent activity, and maximize/restore icons, tooltips, and accessible names stay synchronized without stale tooltip text overwriting dynamic titles.
+
+- **浏览器菜单与空白页动作模型对齐**：页内查找、打印、缩放、设备工具栏、保持焦点、截图、复制网址、系统打开与硬刷新统一只在非空白页面启用；下载、历史、清除浏览数据和浏览器设置保持可用。设备栏支持菜单控制显隐，空白页上的设备预设、尺寸、比例和背景控件禁用且不能通过键盘激活；打印、截图、下载与清数据失败会显示反馈；截图由主进程按下载策略保存 PNG，复制网址使用原生剪贴板。折叠时几何轮询不再覆盖隐藏状态，地址栏聚焦后的文本选择不会因事件对象释放而报错。
+  - EN: Browser menu and blank-page actions now share one availability model. Find, print, zoom, device toolbar, page focus, screenshot, copy URL, system open, and hard refresh require a nonblank page, while downloads, history, data clearing, and browser settings remain available. The device toolbar supports menu-controlled visibility, and its presets, dimensions, scale, and background controls reject pointer and keyboard activation on blank pages. Print, screenshot, download, and cleanup failures surface feedback. Screenshots are saved as PNG by the main process under the download policy, and URL copying uses the native clipboard. Folded geometry polling no longer overrides the hidden report, and address-bar selection no longer reads a released event object.
+
 - **浏览器工具调用变成可回看的操作时间线**：卡片头直接显示浏览页面数、点击/截图次数、失败数与总耗时，并提供「查看」跳到 Agent 浏览器标签；步骤按页面分组，带动作图标、目标/坐标、单步耗时和展开详情，缩略图可点击跳转。操作事件补充 `pageUrl`，导航后的步骤归到新页面；页面标题与元素数量继续保留。
   - EN: Browser tool calls now read as a reviewable operation timeline. The card header shows page count, clicks, screenshots, failures and total duration, plus a View button that jumps to the agent's browser tab. Steps group by page with action icons, target/coordinates, per-step duration, expandable details, and clickable thumbnails. Operation events carry pageUrl so steps after a navigation belong to the new page; page titles and element counts remain.
 

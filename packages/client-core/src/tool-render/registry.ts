@@ -2,6 +2,8 @@
  * Tool renderer registry. Keys are current wire tool names; aliases keep old
  * transcript names renderable. Unknown tools fall back to the generic JSON renderer.
  */
+import { tLoose } from "../i18n/index.js";
+import { TOOL_RENDER_CARD_LABELS } from "./card-tools";
 import { genericRenderer } from "./generic";
 import { askRenderer } from "./tools/ask";
 import { astEditRenderer } from "./tools/ast-edit";
@@ -32,6 +34,7 @@ import { readRenderer } from "./tools/read";
 import { reportToolIssueRenderer } from "./tools/report-tool-issue";
 import { resolveRenderer } from "./tools/resolve";
 import { scheduleTaskRenderer } from "./tools/schedule-task";
+import { selectToolsRenderer } from "./tools/select-tools";
 import { taskRenderer } from "./tools/task";
 import { todoRenderer } from "./tools/todo";
 import { vibeRenderer } from "./tools/vibe";
@@ -82,6 +85,7 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	propose: resolveRenderer,
 	grep: grepRenderer,
 	search: grepRenderer,
+	select_tools: selectToolsRenderer,
 	task: taskRenderer,
 	knowledge: knowledgeRenderer,
 	todo: todoRenderer,
@@ -98,6 +102,27 @@ const RENDERERS: Record<string, ToolRenderer> = {
 
 export function resolveToolRenderer(name: string): ToolRenderer {
 	return externalRenderers[name] ?? RENDERERS[name] ?? genericRenderer;
+}
+
+/**
+ * Card head title: "已使用 Bash" / "Used Bash" for a labeled renderer, and
+ * `running` flips the verb to "正在使用"/"Using". An explicit `label` (the
+ * extension override) wins over the renderer's own `labelKey`, which wins over
+ * the wire-name entry in {@link TOOL_RENDER_CARD_LABELS} — the last one is what
+ * keeps shared renderers (browser/puppeteer, eval/js/python/notebook, …) titled
+ * by the wire tool that was actually called. Renderers with none of these
+ * (unknown wire names, extension views that declare no label) keep the raw wire
+ * name — the pre-title behavior — so an unrecognized tool never gets a
+ * misleading localized identity.
+ */
+export function toolCallTitle(name: string, renderer: ToolRenderer, running = false): string {
+	const explicit = renderer.label;
+	const labelKey = renderer.labelKey ?? TOOL_RENDER_CARD_LABELS[name];
+	let label: string | null = null;
+	if (explicit !== undefined && explicit.length > 0) label = explicit;
+	else if (labelKey !== undefined) label = tLoose(labelKey);
+	if (label === null || label.length === 0) return name;
+	return tLoose(running ? "tools.usingTool" : "tools.usedTool", { tool: label });
 }
 
 /** Wire tool names with a builtin card renderer (keys of the builtin

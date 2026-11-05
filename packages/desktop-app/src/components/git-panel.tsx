@@ -6,6 +6,19 @@
  */
 import { CodeHighlightProvider, DiffBlock, type TranslationKey, t } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import {
+	ArrowDown as ArrowDownIconData,
+	ArrowUp as ArrowUpIconData,
+	Check as CheckIconData,
+	ChevronDown as ChevronDownIconData,
+	ChevronRight as ChevronRightIconData,
+	CloudDownload as CloudDownloadIconData,
+	Eye as EyeIconData,
+	EyeOff as EyeOffIconData,
+	LoaderCircle as LoaderCircleIconData,
+	X as XIconData,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { solveGraphLanes } from "../lib/git-graph-lanes";
@@ -15,7 +28,6 @@ import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
 import { type MonacoDiffContent, MonacoDiffEditor } from "./MonacoDiffEditor";
-import { StateIcon } from "./StateIcon";
 
 /** Structured commit row from the daemon git.log RPC (parsed from
  *  `git log --all --topo-order` with \x1f fields). */
@@ -263,7 +275,13 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 								disabled={loadingMore}
 								onClick={() => load("more")}
 							>
-								<StateIcon on={loadingMore} pair={["loader-4", "arrow-down"]} className="h-3.5 w-3.5" />
+								<MorphIcon
+									icon={loadingMore ? LoaderCircleIconData : ArrowDownIconData}
+									size={14}
+									spring="snappy"
+									reducedMotion="user"
+									className="h-3.5 w-3.5"
+								/>
 								<span>{loadingMore ? t("settings.loading2") : t("settings.loadMore")}</span>
 							</button>
 						)}
@@ -492,9 +510,11 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
 							</span>
 						))}
-					<StateIcon
-						on={open}
-						pair={["arrow-down", "arrow-right"]}
+					<MorphIcon
+						icon={open ? ChevronDownIconData : ChevronRightIconData}
+						size={12}
+						spring="snappy"
+						reducedMotion="user"
 						className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
 					/>
 				</button>
@@ -589,9 +609,11 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							<Icon name="folder" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
 							<span className="min-w-0 flex-1 truncate text-left font-medium">{dir}/</span>
 							<span className="text-[11px] text-[var(--color-text-faint)]">{entries.length}</span>
-							<StateIcon
-								on={open}
-								pair={["arrow-down", "arrow-right"]}
+							<MorphIcon
+								icon={open ? ChevronDownIconData : ChevronRightIconData}
+								size={12}
+								spring="snappy"
+								reducedMotion="user"
 								className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
 							/>
 						</button>
@@ -654,7 +676,13 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							writeShowIgnored(next);
 						}}
 					>
-						<StateIcon on={showIgnored} pair={["eye", "eye-off"]} className="h-3.5 w-3.5" />
+						<MorphIcon
+							icon={showIgnored ? EyeIconData : EyeOffIconData}
+							size={14}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-3.5 w-3.5"
+						/>
 					</button>
 					<button
 						type="button"
@@ -905,7 +933,13 @@ function StashPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 										void act("git.stashDrop", entry.ref);
 									}}
 								>
-									<Icon name={confirmDrop === entry.ref ? "check" : "close"} className="h-3.5 w-3.5" />
+									<MorphIcon
+										icon={confirmDrop === entry.ref ? CheckIconData : XIconData}
+										size={14}
+										spring="snappy"
+										reducedMotion="user"
+										className="h-3.5 w-3.5"
+									/>
 								</button>
 							</div>
 						</div>
@@ -966,7 +1000,13 @@ function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 				aria-label={t("fetch")}
 				onClick={() => void run("git.fetch")}
 			>
-				<StateIcon on={busyAction === "git.fetch"} pair={["loader-4", "download-cloud"]} className="h-3.5 w-3.5" />
+				<MorphIcon
+					icon={busyAction === "git.fetch" ? LoaderCircleIconData : CloudDownloadIconData}
+					size={14}
+					spring="snappy"
+					reducedMotion="user"
+					className="h-3.5 w-3.5"
+				/>
 			</button>
 			<button
 				type="button"
@@ -976,7 +1016,13 @@ function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 				aria-label={t("pull")}
 				onClick={() => void run("git.pull")}
 			>
-				<StateIcon on={busyAction === "git.pull"} pair={["loader-4", "arrow-down"]} className="h-3.5 w-3.5" />
+				<MorphIcon
+					icon={busyAction === "git.pull" ? LoaderCircleIconData : ArrowDownIconData}
+					size={14}
+					spring="snappy"
+					reducedMotion="user"
+					className="h-3.5 w-3.5"
+				/>
 			</button>
 			<button
 				type="button"
@@ -986,7 +1032,13 @@ function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 				aria-label={t("push")}
 				onClick={() => void run("git.push")}
 			>
-				<StateIcon on={busyAction === "git.push"} pair={["loader-4", "arrow-up"]} className="h-3.5 w-3.5" />
+				<MorphIcon
+					icon={busyAction === "git.push" ? LoaderCircleIconData : ArrowUpIconData}
+					size={14}
+					spring="snappy"
+					reducedMotion="user"
+					className="h-3.5 w-3.5"
+				/>
 			</button>
 			{error && (
 				<span className="ml-1 max-w-[140px] truncate text-[10.5px] text-[var(--color-danger)]" title={error}>

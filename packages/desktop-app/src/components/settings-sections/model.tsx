@@ -1,4 +1,6 @@
 import { SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
+import { ChevronDown as ChevronDownIconData, ChevronUp as ChevronUpIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
@@ -13,7 +15,6 @@ import { HeightMorph } from "../HeightMorph";
 import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
 import { ModelBrandIcon } from "../model-brand-icon";
-import { StateIcon } from "../StateIcon";
 import { type CustomProvider, CustomProviderPane } from "./custom-provider";
 import { SchemaTabSection } from "./schema";
 
@@ -1858,10 +1859,11 @@ export function ModelSection({
 												{showAll
 													? t("tools.collapse")
 													: t("settings.showAllWithCount", { count: String(filteredProviders.length) })}
-												<StateIcon
-													on={showAll}
-													pair={["arrow-up-s", "arrow-down-s"]}
-													className="h-3.5 w-3.5"
+												<MorphIcon
+													icon={showAll ? ChevronUpIconData : ChevronDownIconData}
+													size={14}
+													spring="snappy"
+													reducedMotion="user"
 												/>
 											</button>
 										)}

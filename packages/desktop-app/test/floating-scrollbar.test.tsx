@@ -651,6 +651,15 @@ describe("FloatingScrollbar 水平轴", () => {
 		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
 	});
 
+	test("navigation rails opt out of the global skin", async () => {
+		const el = mountScroller();
+		el.setAttribute("data-gui-scrollbar", "off");
+		userScroll(el);
+		await flushFrames();
+
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+	});
+
 	test("没有横向溢出时不显示横向拇指", async () => {
 		scrollWidth = clientWidth;
 		const el = mountScroller();

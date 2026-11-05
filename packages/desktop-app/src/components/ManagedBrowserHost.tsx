@@ -12,9 +12,10 @@ import {
 	wireHost,
 } from "../lib/managed-browser-host";
 import { managedTabIsBlank } from "../lib/managed-browser-visibility";
+import { getFloatingMenuOpen, subscribeFloatingMenuOpen } from "../lib/use-floating-menu";
 
 /** Guest partition — every managed tab shares it, so logins persist here. */
-export const MANAGED_BROWSER_PARTITION = "persist:musepi-managed-browser";
+const MANAGED_BROWSER_PARTITION = "persist:musepi-managed-browser";
 
 /**
  * 托管浏览器宿主(常驻单例,挂载在 App 根).
@@ -37,6 +38,7 @@ export const MANAGED_BROWSER_PARTITION = "persist:musepi-managed-browser";
  */
 export function ManagedBrowserHost(): ReactNode {
 	const state = useSyncExternalStore(subscribeHost, getHostState);
+	const menuOpen = useSyncExternalStore(subscribeFloatingMenuOpen, getFloatingMenuOpen, getFloatingMenuOpen);
 
 	useEffect(() => {
 		wireHost();
@@ -124,6 +126,15 @@ export function ManagedBrowserHost(): ReactNode {
 					</div>
 				);
 			})}
+			{menuOpen ? (
+				<div
+					className="gui-managed-host-dismiss"
+					aria-hidden
+					onPointerDown={() =>
+						window.dispatchEvent(new CustomEvent("musepi-ui-dismiss", { detail: { source: "managed-browser" } }))
+					}
+				/>
+			) : null}
 		</div>
 	);
 }

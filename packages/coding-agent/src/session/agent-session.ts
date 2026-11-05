@@ -103,7 +103,7 @@ import {
 } from "@musepi/pi-utils";
 import type { MessageDisplayContext } from "@musepi/pi-wire";
 import { type AdvisorConfig, type AdvisorRuntimeStatus, loadAdvisorTranscriptCosts } from "../advisor";
-import { ASYNC_JOB_MANAGER_SHUTDOWN_REASON, type AsyncJob, AsyncJobManager } from "../async";
+import { ASYNC_JOB_MANAGER_SHUTDOWN_REASON, type AsyncJob, AsyncJobManager, type AsyncJobOutput } from "../async";
 import { reset as resetCapabilities } from "../capability";
 import { shouldEnableAppendOnlyContext } from "../config/append-only-context-mode";
 import type { ModelRegistry } from "../config/model-registry";
@@ -2009,22 +2009,27 @@ export class AgentSession {
 		const manager = this.#asyncJobManager;
 		if (!manager) return null;
 		const ownerFilter = this.#agentId ? { ownerId: this.#agentId } : undefined;
-		const running = manager.getRunningJobs(ownerFilter).map(job => ({
-			id: job.id,
-			type: job.type,
-			status: job.status,
-			label: job.label,
-			startTime: job.startTime,
-		}));
-		const recent = manager.getRecentJobs(options?.recentLimit ?? 5, ownerFilter).map(job => ({
-			id: job.id,
-			type: job.type,
-			status: job.status,
-			label: job.label,
-			startTime: job.startTime,
-		}));
+		// `snapshotJob` adds question metadata and the live-output size on top of
+		// the shared item shape, so job HUDs can show "waiting on questions" and
+		// hint that `session.jobOutput` has more to read.
+		const running = manager.getRunningJobs(ownerFilter).map(job => manager.snapshotJob(job));
+		const recent = manager.getRecentJobs(options?.recentLimit ?? 5, ownerFilter).map(job => manager.snapshotJob(job));
 		const delivery = manager.getDeliveryState(ownerFilter);
 		return { running, recent, delivery };
+	}
+
+	/**
+	 * Live-output tail for an async job owned by this agent. Returns undefined
+	 * for unknown jobs and for jobs owned by another agent, so the daemon RPC
+	 * can answer with an explicit error instead of leaking a sibling's output.
+	 */
+	getAsyncJobOutput(jobId: string, options?: { tail?: number }): AsyncJobOutput | undefined {
+		const manager = this.#asyncJobManager;
+		if (!manager) return undefined;
+		const job = manager.getJob(jobId);
+		if (!job) return undefined;
+		if (this.#agentId !== undefined && job.ownerId !== this.#agentId) return undefined;
+		return manager.getJobOutput(jobId, options);
 	}
 
 	/**
@@ -4185,8 +4190,12 @@ export class AgentSession {
 	async #releaseOwnedBrowserTabs(ownerId: string | undefined): Promise<void> {
 		if (!ownerId) return;
 		try {
+			// Scope to THIS agent's tabs: a subagent shares its parent's session
+			// id, and a session-wide reap there would close tabs the parent (or
+			// the user) is still driving. Tabs the subagent created revert to the
+			// spawning agent recorded on them instead of closing.
 			const released = await withTimeout(
-				releaseTabsForOwner(ownerId, { kill: true }),
+				releaseTabsForOwner(ownerId, { kill: true, agentId: this.#agentId }),
 				3_000,
 				"Timed out releasing owned browser tabs during dispose",
 			);

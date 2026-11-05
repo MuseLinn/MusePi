@@ -1,8 +1,157 @@
 import { BlurText, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { SplashOrb } from "./SplashOrb";
 
-export function StartupSplash(): ReactNode {
+/** Boot stage the shell is currently in. Owned by app.tsx boot(); the splash
+ *  only names it so a slow start shows WHERE it is stuck rather than a
+ *  featureless hold. */
+export type BootPhase = "probe" | "spawn" | "gate" | "connect";
+
+/** Brand-only hold before the splash admits the start is slow. A warm daemon
+ *  connects in ~150ms, so this never fires on the common path. */
+const SLOW_BOOT_MS = 8_000;
+
+/** Same key main.tsx appends uncaught renderer errors to. Read here at
+ *  export time so a broken renderer can hand the trace to the shell even
+ *  when the daemon connection never came up. */
+const ERROR_LOG_KEY = "musepi-gui-error-log";
+
+const PHASE_KEYS = {
+	probe: "general.bootPhaseProbe",
+	spawn: "general.bootPhaseSpawn",
+	gate: "general.bootPhaseGate",
+	connect: "general.bootPhaseConnect",
+} as const;
+
+export function bootPhaseLabel(phase: BootPhase): string {
+	return t(PHASE_KEYS[phase]);
+}
+
+/**
+ * Uncaught renderer errors recorded by main.tsx, oldest first. A missing or
+ * corrupt ring is an empty history: this runs while the app is already
+ * unhealthy, so it must never throw a second failure into the recovery UI.
+ */
+export function readRendererErrorLog(
+	storage: Pick<Storage, "getItem"> | null = typeof localStorage === "undefined" ? null : localStorage,
+): string[] {
+	if (!storage) return [];
+	try {
+		const parsed: unknown = JSON.parse(storage.getItem(ERROR_LOG_KEY) ?? "[]");
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter((line): line is string => typeof line === "string").slice(-100);
+	} catch {
+		return [];
+	}
+}
+
+export type DiagnosticsExportResult = { ok: true; path: string } | { ok: false; error: string };
+
+/** Ask the shell to bundle logs + system info + the renderer error ring.
+ *  Resolves the absolute report path the shell actually wrote. */
+export async function exportDiagnostics(): Promise<DiagnosticsExportResult> {
+	const bridge = window.electronAPI;
+	if (!bridge?.diagnosticsExport) return { ok: false, error: t("general.bootDiagnosticsUnavailable") };
+	try {
+		return await bridge.diagnosticsExport({ errors: readRendererErrorLog() });
+	} catch (err) {
+		return { ok: false, error: err instanceof Error ? err.message : String(err) };
+	}
+}
+
+/** Relaunch through the shell's quit path (owned daemon torn down first).
+ *  False when there is no Electron shell to ask. */
+export async function restartApplication(): Promise<boolean> {
+	const bridge = window.electronAPI;
+	if (!bridge?.appRestart) return false;
+	await bridge.appRestart();
+	return true;
+}
+
+/**
+ * Slow-boot gate: true once `enabled` has stayed set for `delayMs`. The
+ * timer restarts on each activation so a retry gets a fresh window.
+ */
+export function useSlowBoot(enabled: boolean, delayMs: number = SLOW_BOOT_MS): boolean {
+	const [slow, setSlow] = useState(false);
+	useEffect(() => {
+		if (!enabled) {
+			setSlow(false);
+			return;
+		}
+		const timer = setTimeout(() => setSlow(true), delayMs);
+		return () => clearTimeout(timer);
+	}, [enabled, delayMs]);
+	return slow;
+}
+
+/**
+ * Recovery controls shared by the splash and the connect-failure page: the
+ * same two actions must work before a daemon connection exists, which is
+ * why both are shell IPC calls and not daemon RPCs.
+ */
+export function BootRecoveryActions(): ReactNode {
+	const [busy, setBusy] = useState<"export" | "restart" | null>(null);
+	const [status, setStatus] = useState<{ text: string; failed: boolean } | null>(null);
+
+	const runExport = async (): Promise<void> => {
+		setBusy("export");
+		setStatus(null);
+		const result = await exportDiagnostics();
+		setBusy(null);
+		setStatus(
+			result.ok
+				? { text: t("general.bootDiagnosticsSaved", { path: result.path }), failed: false }
+				: { text: t("general.bootDiagnosticsFailed", { error: result.error }), failed: true },
+		);
+	};
+
+	const runRestart = async (): Promise<void> => {
+		setBusy("restart");
+		setStatus(null);
+		try {
+			if (!(await restartApplication())) {
+				setBusy(null);
+				setStatus({ text: t("general.bootRestartUnavailable"), failed: true });
+				return;
+			}
+			// The process is exiting; keep the controls disabled until it does.
+			setStatus({ text: t("general.bootRestarting"), failed: false });
+		} catch (err) {
+			// The IPC rejected: the shell is still alive, so re-enable the
+			// controls instead of leaving them disabled forever.
+			setBusy(null);
+			setStatus({
+				text: t("general.bootRestartFailed", { error: err instanceof Error ? err.message : String(err) }),
+				failed: true,
+			});
+		}
+	};
+
+	return (
+		<>
+			<button className="gui-btn" type="button" disabled={busy !== null} onClick={() => void runExport()}>
+				{t("general.bootExportDiagnostics")}
+			</button>
+			<button
+				className="gui-btn gui-btn-primary"
+				type="button"
+				disabled={busy !== null}
+				onClick={() => void runRestart()}
+			>
+				{t("general.bootRestartApp")}
+			</button>
+			{status && (
+				<p className={status.failed ? "gui-error" : "gui-note"} role="status">
+					{status.text}
+				</p>
+			)}
+		</>
+	);
+}
+
+export function StartupSplash({ phase, slow = false }: { phase?: BootPhase; slow?: boolean } = {}): ReactNode {
 	return (
 		<div className="gui-splash">
 			<div className="gui-splash-inner">
@@ -14,6 +163,19 @@ export function StartupSplash(): ReactNode {
 					<span className="gui-splash-progress-fill" />
 				</div>
 				<progress className="gui-splash-progress-native" aria-label={t("settings.loading")} />
+				{phase && (
+					<p className="gui-note" role="status">
+						{bootPhaseLabel(phase)}
+					</p>
+				)}
+				{slow && (
+					<>
+						<p className="gui-note" role="status">
+							{t("general.bootTakingLongerThan")}
+						</p>
+						<BootRecoveryActions />
+					</>
+				)}
 			</div>
 		</div>
 	);

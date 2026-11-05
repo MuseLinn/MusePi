@@ -2889,6 +2889,8 @@ export const settings = {
 	"Model Role Storage": "模型角色存储",
 	"Model decides when to delegate": "由模型决定何时委派",
 	"Model decides; no automatic todo list": "由模型决定；不自动创建待办列表",
+	"Default model for subagents. Precedence: a model passed by the parent, then a per-agent override, then this value, then the agent definition's own role. Empty keeps each agent's role — specialized agents stay on their role chain, and the general task agent follows the session model. Use @task to make every subagent follow the session's active model; other role aliases such as @smol keep that role's retry fallback chain, while a concrete model runs without one.":
+		"子智能体的默认模型。优先级：父级显式传入的模型 → 单项 Agent 覆盖 → 此设置 → Agent 定义自带的角色。留空时各 Agent 保持自己的角色：专用 Agent 沿用其角色链，通用 task Agent 跟随会话模型。选择 @task 可让所有子智能体跟随会话当前模型；@smol 等角色别名会沿用该角色的重试回退链，具体模型则没有角色回退链。",
 	"Model, git, cost, context": "模型、git、成本、上下文",
 	"Model, path, git, context, tokens, cost": "模型、路径、git、上下文、tokens、成本",
 	Moderate: "适中",
@@ -3264,6 +3266,7 @@ export const settings = {
 	"Strong novelty": "重度创新",
 	"Strong penalty": "重度惩罚",
 	"Style of separators between segments": "段落间分隔符样式",
+	"Subagent Model": "子智能体模型",
 	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`":
 		"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
 	"Suggests a todo list on the first message (reminder, not forced)": "在首条消息时建议 todo 列表（提醒，非强制）",

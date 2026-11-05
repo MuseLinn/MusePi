@@ -39,7 +39,7 @@ import { vocalizer } from "../tts/vocalizer";
 import { framedBlock, outputBlockContentWidth, renderStatusLine } from "../tui";
 import type { ToolSession } from ".";
 import { formatErrorMessage, formatMeta, formatTitle } from "./render-utils";
-import { ToolAbortError } from "./tool-errors";
+import { ToolAbortError, ToolError } from "./tool-errors";
 
 // =============================================================================
 // Types
@@ -77,6 +77,9 @@ const QuestionItem = arkType({
 
 const askSchema = arkType({
 	questions: QuestionItem.array().atLeastLength(1).describe("questions to ask"),
+	"background?": arkType("boolean").describe(
+		"set true to ask without blocking: the call returns a task id immediately and the answer arrives automatically in a later turn. Use it only when you can keep working without the answer; never predict or fabricate it.",
+	),
 });
 
 export type AskToolInput = typeof askSchema.infer;
@@ -126,6 +129,10 @@ export interface AskToolDetails {
 	chatRedirect?: boolean;
 	/** Questions surfaced when chatRedirect is true. */
 	questions?: string[];
+	/** True when the question was registered as a background task. */
+	background?: boolean;
+	/** Async job id for a background question (read output via `getAsyncJobOutput`). */
+	taskId?: string;
 }
 
 interface AskOption {
@@ -797,6 +804,24 @@ function formatSingleQuestionResponse(result: {
 type AskParams = AskToolInput;
 
 /**
+ * Cancellation policy for the shared question flow. A background question
+ * belongs to an async job, so cancelling it must never abort the turn that
+ * asked it — the job settles with a "not answered" result instead.
+ */
+interface AskFlowOptions {
+	abortTurnOnCancel: boolean;
+}
+
+/** Job label for a background question: the first question, width-bounded. */
+function backgroundQuestionLabel(questions: AskParams["questions"]): string {
+	const first = (questions[0]?.question ?? "Question").replace(/\s+/g, " ").trim() || "Question";
+	const suffix = questions.length > 1 ? ` (+${questions.length - 1} more)` : "";
+	const maxTextLength = Math.max(1, 120 - suffix.length);
+	const text = first.length > maxTextLength ? `${first.slice(0, maxTextLength - 3)}...` : first;
+	return `Ask: ${text}${suffix}`;
+}
+
+/**
  * Ask tool for interactive user prompting during execution.
  *
  * Allows gathering user preferences, clarifying instructions, and getting decisions
@@ -879,8 +904,14 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 		});
 	}
 
+	/** Cancel the ask flow: foreground aborts the turn; background only settles the job. */
+	#cancelAsk(context: AgentToolContext, flow: AskFlowOptions): never {
+		if (flow.abortTurnOnCancel) context.abort();
+		throw new ToolAbortError("Ask tool was cancelled by the user");
+	}
+
 	async execute(
-		_toolCallId: string,
+		toolCallId: string,
 		params: AskParams,
 		signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<AskToolDetails>,
@@ -891,8 +922,73 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 			context?.abort();
 			throw new ToolAbortError("Ask tool requires interactive mode");
 		}
+		if (params.background === true) {
+			return this.#executeBackground(toolCallId, params, context, context.ui);
+		}
+		return this.#ask(params, signal, context.ui, context, { abortTurnOnCancel: true });
+	}
 
-		const extensionUi = context.ui;
+	/**
+	 * Register the question as a `question`-kind async task and return its id at
+	 * once. The job runs the same picker/dialog flow under the job's own abort
+	 * signal; its result travels the existing async-result delivery channel as
+	 * a follow-up turn, so the asking agent is woken with the answer.
+	 */
+	#executeBackground(
+		toolCallId: string,
+		params: AskParams,
+		context: AgentToolContext,
+		extensionUi: NonNullable<AgentToolContext["ui"]>,
+	): AgentToolResult<AskToolDetails> {
+		const manager = this.session.asyncJobManager;
+		if (!manager) {
+			throw new ToolError("Background questions are unavailable in this session.");
+		}
+		const label = backgroundQuestionLabel(params.questions);
+		const jobId = manager.register(
+			"task",
+			label,
+			async ({ signal, appendOutput }) => {
+				const count = params.questions.length;
+				appendOutput(`Waiting for answers to ${count} question${count === 1 ? "" : "s"}:\n`);
+				for (const question of params.questions) {
+					appendOutput(`- ${question.question}\n`);
+				}
+				try {
+					const result = await this.#ask(params, signal, extensionUi, context, { abortTurnOnCancel: false });
+					return result.content.find(block => block.type === "text")?.text ?? "";
+				} catch (error) {
+					if (error instanceof ToolAbortError) {
+						return "The user did not answer the background question.";
+					}
+					throw error;
+				}
+			},
+			{
+				ownerId: this.session.getAgentId?.() ?? undefined,
+				kind: "question",
+				questionCount: params.questions.length,
+				toolCallId,
+			},
+		);
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: `Started background question ${jobId}. Continue with other work; the answer arrives automatically in a later turn. Do not poll for it or guess it.`,
+				},
+			],
+			details: { background: true, taskId: jobId },
+		};
+	}
+
+	async #ask(
+		params: AskParams,
+		signal: AbortSignal | undefined,
+		extensionUi: NonNullable<AgentToolContext["ui"]>,
+		context: AgentToolContext,
+		flow: AskFlowOptions,
+	): Promise<AgentToolResult<AskToolDetails>> {
 		const ui: UIContext = {
 			timeoutStartsOnPresentation: extensionUi.timeoutStartsOnPresentation,
 			select: (prompt, options, dialogOptions) => extensionUi.select(prompt, options, dialogOptions),
@@ -945,8 +1041,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 					);
 				const richResult = signal ? await untilAborted(signal, showRichDialog) : await showRichDialog();
 				if (!richResult) {
-					context.abort();
-					throw new ToolAbortError("Ask tool was cancelled by the user");
+					this.#cancelAsk(context, flow);
 				}
 				if (richResult.kind === "chat") {
 					const questionText = params.questions.map(q => q.question).join("\n");
@@ -993,8 +1088,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 							result.selectedOptions.length === 0 &&
 							result.customInput === undefined)
 					) {
-						context.abort();
-						throw new ToolAbortError("Ask tool was cancelled by the user");
+						this.#cancelAsk(context, flow);
 					}
 					const details: AskToolDetails = {
 						question: result.question,
@@ -1056,8 +1150,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 			const { optionLabels, selectedOptions, customInput, note, cancelled, timedOut } = await askQuestion(q);
 
 			if (!timedOut && (cancelled || (selectedOptions.length === 0 && customInput === undefined))) {
-				context.abort();
-				throw new ToolAbortError("Ask tool was cancelled by the user");
+				this.#cancelAsk(context, flow);
 			}
 			const details: AskToolDetails = {
 				question: q.question,
@@ -1102,8 +1195,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 			} = await askQuestion(q, { previous, navigation });
 
 			if (cancelled && !timedOut) {
-				context.abort();
-				throw new ToolAbortError("Ask tool was cancelled by the user");
+				this.#cancelAsk(context, flow);
 			}
 
 			resultsByIndex[questionIndex] = {

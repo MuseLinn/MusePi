@@ -1,5 +1,7 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
-import { Archive, ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Square, Trash2 } from "lucide-react";
+import { PanelLeftClose as PanelLeftCloseIconData, PanelLeft as PanelLeftIconData } from "lucide";
+import { Archive, ChevronRight, Loader2, Pencil, Plus, Square, Trash2 } from "lucide-react";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -63,7 +65,12 @@ export function WorkspaceView({
 					aria-label={sidebarOpen ? t("settings.collapseSessionList") : t("settings.expandSessionList")}
 					title={sidebarOpen ? t("settings.collapseSessionList") : t("settings.expandSessionList")}
 				>
-					{sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeft size={14} />}
+					<MorphIcon
+						icon={sidebarOpen ? PanelLeftCloseIconData : PanelLeftIconData}
+						size={14}
+						spring="snappy"
+						reducedMotion="user"
+					/>
 				</button>
 				{sidebarOpen && (
 					<>

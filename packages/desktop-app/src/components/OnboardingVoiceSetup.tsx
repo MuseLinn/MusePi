@@ -1,11 +1,12 @@
 import { getLocaleSnapshot, t, tLoose, useLocale } from "@musepi/client-core";
 import { isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
+import { Download as DownloadIconData, Mic as MicIconData, TriangleAlert as TriangleAlertIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import "../i18n/voice";
 import { onboardingPending } from "../lib/onboarding";
 import type { RpcClient } from "../lib/rpc";
 import { probeMicrophone } from "../lib/voice";
-import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 
 type MicrophonePhase = "unknown" | "granted" | "checking" | "ready" | "denied" | "unavailable";
@@ -175,7 +176,12 @@ export function OnboardingVoiceSetup({
 		<div className="gui-obo-voice-setup">
 			<section className="gui-obo-voice-check" data-state={microphone}>
 				<span className="gui-obo-voice-check-icon" aria-hidden="true">
-					<Icon name={microphone === "denied" || microphone === "unavailable" ? "error-warning" : "mic"} />
+					<MorphIcon
+						icon={microphone === "denied" || microphone === "unavailable" ? TriangleAlertIconData : MicIconData}
+						size={16}
+						spring="snappy"
+						reducedMotion="user"
+					/>
 				</span>
 				<div className="gui-obo-voice-check-copy">
 					<div className="gui-obo-voice-check-title">{tLoose("Microphone")}</div>
@@ -197,7 +203,14 @@ export function OnboardingVoiceSetup({
 
 			<section className="gui-obo-voice-check" data-state={model.phase}>
 				<span className="gui-obo-voice-check-icon" aria-hidden="true">
-					<Icon name={model.phase === "error" || model.phase === "unavailable" ? "error-warning" : "download"} />
+					<MorphIcon
+						icon={
+							model.phase === "error" || model.phase === "unavailable" ? TriangleAlertIconData : DownloadIconData
+						}
+						size={16}
+						spring="snappy"
+						reducedMotion="user"
+					/>
 				</span>
 				<div className="gui-obo-voice-check-copy">
 					<div className="gui-obo-voice-check-title">{tLoose("Recognition model")}</div>

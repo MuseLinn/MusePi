@@ -9,6 +9,8 @@ import {
 	runTimeString,
 	type TaskRunResult,
 } from "@musepi/client-core/src/widgets/task-run";
+import { Bot as BotIconData, LoaderCircle as LoaderCircleIconData, Play as PlayIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -40,7 +42,6 @@ import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
-import { StateIcon } from "./StateIcon";
 import { TaskModal, widgetHasTask } from "./TaskModal";
 import { WidgetEditor } from "./WidgetEditor";
 import { WorkspacePageHeader } from "./WorkspacePageHeader";
@@ -1232,7 +1233,13 @@ export function BoardPage({
 							aria-label={t("settings.boardGenerate")}
 							onClick={() => setGenOpen(true)}
 						>
-							<StateIcon on={genBusy} pair={["loader", "robot"]} className="h-4 w-4" />
+							<MorphIcon
+								icon={genBusy ? LoaderCircleIconData : BotIconData}
+								size={16}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-4 w-4"
+							/>
 							<span>{t("settings.boardGenerate")}</span>
 						</button>
 					</div>
@@ -1291,9 +1298,11 @@ export function BoardPage({
 													onPointerDown={e => e.stopPropagation()}
 													onClick={() => runTask(w)}
 												>
-													<StateIcon
-														on={runningId === w.id}
-														pair={["loader", "play"]}
+													<MorphIcon
+														icon={runningId === w.id ? LoaderCircleIconData : PlayIconData}
+														size={14}
+														spring="snappy"
+														reducedMotion="user"
 														className="h-3.5 w-3.5"
 													/>
 												</button>
@@ -1435,9 +1444,11 @@ export function BoardPage({
 										aria-label={t("settings.widgetRun")}
 										onClick={() => runTask(focusWidget)}
 									>
-										<StateIcon
-											on={runningId === focusWidget.id}
-											pair={["loader", "play"]}
+										<MorphIcon
+											icon={runningId === focusWidget.id ? LoaderCircleIconData : PlayIconData}
+											size={14}
+											spring="snappy"
+											reducedMotion="user"
 											className="h-3.5 w-3.5"
 										/>
 									</button>

@@ -1,10 +1,11 @@
 import { getPuppeteerDir, logger, postmortem, Snowflake, withTimeout, workerHostEntry } from "@musepi/pi-utils";
-import type { Page, Target } from "puppeteer-core";
+import type { CDPSession, Page, Target } from "puppeteer-core";
 import { callSessionTool } from "../../eval/js/tool-bridge";
 import { webpExclusionForModel } from "../../utils/image-loading";
 import type { ToolSession } from "../index";
 import { expandPath } from "../path-utils";
 import { ToolAbortError, ToolError } from "../tool-errors";
+import { agentCdpParams, type BrowserAgentIdentity, isUnknownCdpMethodError } from "./agent-identity";
 import { pickElectronTarget, shouldPreserveConnectedBrowserFocus } from "./attach";
 import { CmuxTab, runCmuxCode } from "./cmux/cmux-tab";
 import { mapWaitUntil } from "./cmux/rpc";
@@ -78,6 +79,52 @@ interface TabSessionBase<TBrowser extends BrowserHandle = BrowserHandle> {
 	 * Undefined when the acquirer did not identify itself.
 	 */
 	ownerSessionId?: string;
+	/**
+	 * Agent registry id ({@link ToolSession.getAgentId}) of the caller that
+	 * CREATED the tab. A subagent disposes independently of its parent while
+	 * both share one session id, so session-scoped ownership alone would let
+	 * the child's teardown close tabs the parent (or the user) is still using.
+	 * Recorded on creation only, like {@link ownerSessionId}.
+	 */
+	ownerAgentId?: string;
+	/** Display name for {@link ownerAgentId}, when the registry knows one. */
+	ownerAgentName?: string;
+	/**
+	 * Agent that inherits this tab when {@link ownerAgentId} releases it — the
+	 * spawning agent for a subagent. `releaseTabsForOwner` hands the tab over
+	 * instead of closing it, so a finished child never shuts a tab the parent
+	 * can still drive.
+	 */
+	parentAgentId?: string;
+	/** Display name for {@link parentAgentId}. */
+	parentAgentName?: string;
+	/**
+	 * Session id that reaps this tab after a hand-off. Equal to
+	 * {@link ownerSessionId} unless the subagent minted its own session id, in
+	 * which case the parent's live session id takes over.
+	 */
+	parentSessionId?: string;
+	/**
+	 * Agent whose run most recently held this tab. Set while a run is in
+	 * flight so a concurrent run's rejection can name the operator.
+	 */
+	activeAgentId?: string;
+	activeAgentName?: string;
+	/**
+	 * Panel tab this open CREATED through standard CDP `Target.createTarget` on
+	 * the managed browser (a shell that predates `ManagedBrowser.ensureAgentTab`
+	 * has no dedicated agent tab to reuse). The supervisor owns its lifetime and
+	 * closes it on release so version skew does not accumulate panel tabs.
+	 */
+	createdTargetId?: string;
+	/**
+	 * This tab drives the managed browser's DEDICATED agent tab, so the panel
+	 * badge can be republished when the operator changes (hand-off, a run by a
+	 * different agent) without creating or adopting another page.
+	 */
+	managedAgentTab?: boolean;
+	/** Agent last published as this tab's operator on the managed panel. */
+	publishedAgentId?: string;
 }
 
 export interface WorkerTabSession extends TabSessionBase<PuppeteerBrowserHandle> {
@@ -110,6 +157,25 @@ export interface AcquireTabOptions {
 	 * dispose. Optional — omitting it opts the tab out of session-scoped reap.
 	 */
 	ownerSessionId?: string;
+	/**
+	 * Agent registry id of the acquirer. Recorded on creation only. Two
+	 * different agents never reuse the same tab name, so a subagent cannot
+	 * hijack a parent's tab (or vice versa) by picking the same name.
+	 */
+	agentId?: string;
+	/** Display name of {@link agentId} for the GUI operator badge. */
+	agentName?: string;
+	/** Agent that inherits the tab when {@link agentId} releases it. */
+	parentAgentId?: string;
+	/** Display name of {@link parentAgentId}. */
+	parentAgentName?: string;
+	/**
+	 * Session id of {@link parentAgentId}'s session, when the registry has a
+	 * live entry. A subagent's in-memory transcript can mint its own session id,
+	 * in which case the hand-off must also move the reap key to the parent or
+	 * the tab outlives every session that could release it.
+	 */
+	parentSessionId?: string;
 }
 
 export interface AcquireTabResult {
@@ -122,6 +188,9 @@ export interface RunInTabOptions {
 	timeoutMs: number;
 	signal?: AbortSignal;
 	session: ToolSession;
+	/** Agent driving the run; recorded while it is in flight. */
+	agentId?: string;
+	agentName?: string;
 	onOperations?: (operations: BrowserOperation[]) => void;
 }
 
@@ -129,6 +198,23 @@ export interface ReleaseTabOptions {
 	kill?: boolean;
 	/** Maximum time for each asynchronous cleanup resource before close fails with diagnostics. */
 	timeoutMs?: number;
+}
+
+export interface ReleaseTabsForOwnerOptions extends ReleaseTabOptions {
+	/**
+	 * Scope the reap to tabs CREATED by this agent. Subagents share their
+	 * parent's session id but not its agent id, so this is what keeps a
+	 * finished child from tearing down tabs the parent still drives.
+	 */
+	agentId?: string;
+	/**
+	 * Agent that inherits the scoped tabs instead of seeing them closed — the
+	 * spawning agent for a subagent. Without it the scoped tabs close, which is
+	 * the pre-existing behavior for a top-level session.
+	 */
+	fallbackAgentId?: string;
+	/** Display name for {@link fallbackAgentId}. */
+	fallbackAgentName?: string;
 }
 
 const tabs = new Map<string, TabSession>();
@@ -208,6 +294,15 @@ async function acquireTabImpl(
 	let tempHold = false;
 	const existing = tabs.get(name);
 	if (existing) {
+		// Agent-scoped ownership: two agents never share a tab NAME. Reusing a
+		// tab the other agent created would let a subagent silently take over
+		// (and later release/hand off) the parent's tab, so refuse loudly
+		// instead of re-driving someone else's page.
+		if (existing.ownerAgentId && opts.agentId && existing.ownerAgentId !== opts.agentId) {
+			throw new ToolError(
+				`Tab ${JSON.stringify(name)} belongs to agent ${JSON.stringify(existing.ownerAgentName ?? existing.ownerAgentId)}; close it or open a different tab name.`,
+			);
+		}
 		if (existing.browser === browser && existing.state === "alive") {
 			const requestedCmuxSurface = "client" in browser ? (opts.cmuxSurface ?? browser.surface) : undefined;
 			if (existing.backend === "cmux" && existing.cmuxAttachedSurface !== requestedCmuxSurface) {
@@ -264,9 +359,14 @@ async function acquireTabImpl(
 		}
 	}
 	let initPayload: WorkerInitPayload;
+	let createdTargetId: string | undefined;
+	let managedAgentTab: boolean | undefined;
 	let worker: WorkerHandle;
 	try {
-		initPayload = await buildInitPayload(browser, opts);
+		const built = await buildInitPayload(browser, opts);
+		initPayload = built.payload;
+		createdTargetId = built.createdTargetId;
+		managedAgentTab = built.managedAgentTab;
 		worker = await spawnTabWorker();
 	} catch (error) {
 		// Failing before the worker took its own hold must release the
@@ -339,6 +439,15 @@ async function acquireTabImpl(
 		kindTag: browser.kind.kind,
 		activateForScreenshot: initPayload.mode === "headless" || initPayload.activateForScreenshot !== false,
 		ownerSessionId: opts.ownerSessionId,
+		ownerAgentId: opts.agentId,
+		ownerAgentName: opts.agentName,
+		parentAgentId: opts.parentAgentId,
+		parentAgentName: opts.parentAgentName,
+		parentSessionId: opts.parentSessionId,
+		createdTargetId,
+		managedAgentTab,
+		// The open itself published the creating agent on that dedicated tab.
+		publishedAgentId: managedAgentTab ? opts.agentId : undefined,
 	};
 	worker.onMessage(msg => handleTabMessage(tab, msg));
 	tabs.set(name, tab);
@@ -410,6 +519,11 @@ async function acquireCmuxTab(
 			kindTag: browser.kind.kind,
 			cmuxAttachedSurface: attachedSurface,
 			ownerSessionId: opts.ownerSessionId,
+			ownerAgentId: opts.agentId,
+			ownerAgentName: opts.agentName,
+			parentAgentId: opts.parentAgentId,
+			parentAgentName: opts.parentAgentName,
+			parentSessionId: opts.parentSessionId,
 		};
 		tabs.set(name, tab);
 		return { tab, created: true };
@@ -429,6 +543,8 @@ export async function runInTab(name: string, opts: RunInTabOptions): Promise<Run
 			timeoutMs: opts.timeoutMs,
 			signal: opts.signal,
 			session: opts.session,
+			agentId: opts.agentId,
+			agentName: opts.agentName,
 			onOperations: opts.onOperations,
 		},
 		{
@@ -446,6 +562,8 @@ async function runInTabWithSnapshot(
 		timeoutMs: number;
 		signal?: AbortSignal;
 		session?: ToolSession;
+		agentId?: string;
+		agentName?: string;
 		onOperations?: (operations: BrowserOperation[]) => void;
 	},
 	snapshot: SessionSnapshot,
@@ -459,7 +577,14 @@ async function runInTabWithSnapshot(
 				: `Tab ${JSON.stringify(name)} is not alive. Open it first with action:"open".`,
 		);
 	}
-	if (tab.pending.size > 0) throw new ToolError(`Tab ${JSON.stringify(name)} is busy`);
+	if (tab.pending.size > 0) {
+		// Mutex: a tab drives one run at a time (the check and the `pending.set`
+		// below are in the same synchronous turn, so two callers cannot both
+		// pass). Naming the current operator makes the rejection actionable when
+		// a parent and its subagent race for the same shared tab.
+		const operator = tab.activeAgentId ? ` by agent ${JSON.stringify(tab.activeAgentName ?? tab.activeAgentId)}` : "";
+		throw new ToolError(`Tab ${JSON.stringify(name)} is busy${operator}`);
+	}
 	const id = Snowflake.next();
 	const { promise, resolve, reject } = Promise.withResolvers<RunResultOk>();
 	// `releaseTab` calls `pending.reject(closeError)` when the tab dies
@@ -488,6 +613,12 @@ async function runInTabWithSnapshot(
 		closeAc,
 	};
 	tab.pending.set(id, pending);
+	tab.activeAgentId = opts.agentId;
+	tab.activeAgentName = opts.agentName;
+	// The panel badge names the agent driving the page, so a run by a different
+	// agent (parent after a hand-off, or a sibling sharing the dedicated tab)
+	// republishes it. Skipped when the operator is already published.
+	publishTabOperator(tab, opts.agentId, opts.agentName);
 	if (tab.backend === "cmux") {
 		const runSignal = opts.signal ? AbortSignal.any([opts.signal, closeAc.signal]) : closeAc.signal;
 		try {
@@ -507,6 +638,7 @@ async function runInTabWithSnapshot(
 			return await promise;
 		} finally {
 			tab.pending.delete(id);
+			clearRunAgent(tab, opts.agentId);
 		}
 	}
 	const abort = (): void => {
@@ -556,7 +688,15 @@ async function runInTabWithSnapshot(
 	} finally {
 		opts.signal?.removeEventListener("abort", abort);
 		tab.pending.delete(id);
+		clearRunAgent(tab, opts.agentId);
 	}
+}
+
+/** Clear the run-operator marker once this run no longer holds the tab. */
+function clearRunAgent(tab: TabSession, agentId: string | undefined): void {
+	if (tab.activeAgentId !== agentId) return;
+	tab.activeAgentId = undefined;
+	tab.activeAgentName = undefined;
 }
 
 export async function releaseTab(name: string, opts: ReleaseTabOptions = {}): Promise<boolean> {
@@ -589,6 +729,7 @@ export async function releaseTab(name: string, opts: ReleaseTabOptions = {}): Pr
 	}
 	tab.pending.clear();
 	const timeoutMs = opts.timeoutMs ?? DEFAULT_TAB_CLOSE_TIMEOUT_MS;
+	if (tab.backend === "worker") await closeCreatedTarget(tab);
 	if (tab.backend === "cmux") {
 		let closeError: unknown;
 		if (wasAlive && tab.cmuxOwnsSurface) {
@@ -687,15 +828,96 @@ export async function dropHeadlessTabs(): Promise<void> {
  * session opened will not yank teardown responsibility away from the
  * creator. Tabs opened with no owner (e.g. from an SDK caller that doesn't
  * identify a session) are skipped and must be released explicitly.
+ *
+ * Passing {@link ReleaseTabsForOwnerOptions.agentId} narrows the reap to tabs
+ * that agent created, and
+ * {@link ReleaseTabsForOwnerOptions.fallbackAgentId} turns the reap into a
+ * hand-off: the tabs stay alive and their ownership moves to the spawning
+ * agent. `AgentSession.dispose()` uses both so a finishing subagent never
+ * closes a tab its parent — or the user — is still driving.
  */
-export async function releaseTabsForOwner(ownerId: string, opts: ReleaseTabOptions = {}): Promise<number> {
+export async function releaseTabsForOwner(ownerId: string, opts: ReleaseTabsForOwnerOptions = {}): Promise<number> {
 	if (!ownerId) return 0;
-	const names = [...tabs.values()].filter(tab => tab.ownerSessionId === ownerId).map(tab => tab.name);
+	const { agentId, fallbackAgentId, fallbackAgentName, ...releaseOpts } = opts;
+	const targets = [...tabs.values()].filter(
+		tab => tab.ownerSessionId === ownerId && (agentId === undefined || tab.ownerAgentId === agentId),
+	);
 	let count = 0;
-	for (const name of names) {
-		if (await releaseTab(name, opts)) count++;
+	for (const tab of targets) {
+		// The spawning agent recorded when the tab was created is the default
+		// hand-off target, so session teardown only needs to know its own id.
+		const handoffAgentId = fallbackAgentId ?? tab.parentAgentId;
+		const handoffAgentName = fallbackAgentId === undefined ? tab.parentAgentName : fallbackAgentName;
+		const handOff = agentId !== undefined && handoffAgentId !== undefined && handoffAgentId !== agentId;
+		// A user-driven browser (their Chrome via relay/CDP) is never closed by
+		// an agent-scoped reap: the page outlives our record, so hand ownership
+		// back instead of tearing the supervisor entry down under the parent.
+		// The managed panel page the daemon itself created is the exception —
+		// no one opened it by hand, so owning it means closing it.
+		if (agentId !== undefined && (tab.kindTag === "connected" || tab.kindTag === "relay")) {
+			if (handOff) {
+				assignTabAgent(tab, handoffAgentId, handoffAgentName);
+				continue;
+			}
+			if (!tab.createdTargetId) {
+				dropTabAgent(tab);
+				continue;
+			}
+		}
+		// A subagent disposes independently while its parent keeps running.
+		// Its tabs revert to the parent instead of closing, so a finished child
+		// never shuts a tab the parent (or the user watching it) still uses.
+		if (handOff) {
+			assignTabAgent(tab, handoffAgentId, handoffAgentName);
+			continue;
+		}
+		if (await releaseTab(tab.name, releaseOpts)) count++;
 	}
 	return count;
+}
+
+/** Move tab ownership to another agent without touching the live page. */
+function assignTabAgent(tab: TabSession, agentId: string, agentName: string | undefined): void {
+	tab.ownerAgentId = agentId;
+	tab.ownerAgentName = agentName ?? agentId;
+	// A subagent that minted its own session id hands the reap key to the
+	// parent's live session; the shared-transcript case is a no-op.
+	if (tab.parentSessionId) tab.ownerSessionId = tab.parentSessionId;
+	tab.parentAgentId = undefined;
+	tab.parentAgentName = undefined;
+	tab.parentSessionId = undefined;
+	// The panel still badges the finished child until the parent republishes;
+	// rename the dedicated agent tab now so "操作者" follows the hand-off.
+	publishTabOperator(tab, agentId, tab.ownerAgentName);
+}
+
+/**
+ * Publish `agentId` as the operator of the managed browser's dedicated agent
+ * tab, so the panel badge ("操作者：X") follows a hand-off or a run by another
+ * agent. Best-effort: a closed bridge or an older shell must not turn a
+ * hand-off into a failure, and only the dedicated tab is renamed — an adopted
+ * user page is never touched.
+ */
+function publishTabOperator(tab: TabSession, agentId: string | undefined, agentName: string | undefined): void {
+	if (!agentId || !tab.managedAgentTab || tab.publishedAgentId === agentId) return;
+	if (tab.backend !== "worker") return;
+	const browser = tab.browser;
+	if (browser.kind.kind !== "connected" || browser.kind.gui !== true) return;
+	tab.publishedAgentId = agentId;
+	publishManagedOperator(browser, { agentId, agentName }).catch(error => {
+		logger.debug("Failed to republish managed-browser operator", {
+			error: error instanceof Error ? error.message : String(error),
+		});
+	});
+}
+
+/** Keep the tab alive but stop attributing it to any agent. */
+function dropTabAgent(tab: TabSession): void {
+	tab.ownerAgentId = undefined;
+	tab.ownerAgentName = undefined;
+	tab.parentAgentId = undefined;
+	tab.parentAgentName = undefined;
+	tab.parentSessionId = undefined;
 }
 
 /** Test-only accessor for the module-global tabs map. */
@@ -708,20 +930,31 @@ function isLastSurfaceCloseError(err: unknown): boolean {
 	return /last/i.test(message);
 }
 
-async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTabOptions): Promise<WorkerInitPayload> {
+/** A tab-worker payload plus the panel tab this open created, if any. */
+interface InitPayloadBuild {
+	payload: WorkerInitPayload;
+	/** Set when the managed bridge had no dedicated agent tab to reuse. */
+	createdTargetId?: string;
+	/** Set when the tab drives the managed browser's dedicated agent tab. */
+	managedAgentTab?: boolean;
+}
+
+async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTabOptions): Promise<InitPayloadBuild> {
 	const safeDir = getPuppeteerDir();
 	const browserWSEndpoint = browser.browser.wsEndpoint();
 	if (!browserWSEndpoint) throw new ToolError("Browser websocket endpoint is unavailable");
 	if (browser.kind.kind === "headless") {
 		return {
-			mode: "headless",
-			browserWSEndpoint,
-			safeDir,
-			viewport: opts.viewport,
-			dialogs: opts.dialogs,
-			url: opts.url,
-			waitUntil: opts.waitUntil,
-			timeoutMs: opts.timeoutMs,
+			payload: {
+				mode: "headless",
+				browserWSEndpoint,
+				safeDir,
+				viewport: opts.viewport,
+				dialogs: opts.dialogs,
+				url: opts.url,
+				waitUntil: opts.waitUntil,
+				timeoutMs: opts.timeoutMs,
+			},
 		};
 	}
 	// Connected and relay browsers are user-driven. When no target is requested,
@@ -739,8 +972,14 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 	// `app.target` adopts the matching OPEN tab by url/title substring — the
 	// lookup never selects it — and a miss fails instead of falling back to a
 	// fresh agent tab that would silently ignore the requested page.
-	const targetId = isManagedGui
-		? await requestManagedBrowserTarget(browser, opts.target)
+	const managed = isManagedGui
+		? await requestManagedBrowserTarget(browser, opts.target, {
+				agentId: opts.agentId,
+				agentName: opts.agentName,
+			})
+		: undefined;
+	const targetId = managed
+		? managed.targetId
 		: await targetIdForPage(
 				await pickElectronTarget(browser.browser, {
 					matcher: opts.target,
@@ -748,16 +987,22 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 				}),
 			);
 	return {
-		mode: "attach",
-		browserWSEndpoint,
-		safeDir,
-		targetId,
-		dialogs: opts.dialogs,
-		url: opts.url,
-		waitUntil: opts.waitUntil,
-		timeoutMs: opts.timeoutMs,
-		activateForScreenshot,
-		...(isManagedGui ? { managedGui: true, uploadBridge: uploadBridgeOrigin(browser) } : {}),
+		payload: {
+			mode: "attach",
+			browserWSEndpoint,
+			safeDir,
+			targetId,
+			dialogs: opts.dialogs,
+			url: opts.url,
+			waitUntil: opts.waitUntil,
+			timeoutMs: opts.timeoutMs,
+			activateForScreenshot,
+			...(isManagedGui ? { managedGui: true, uploadBridge: uploadBridgeOrigin(browser) } : {}),
+		},
+		...(managed?.created ? { createdTargetId: managed.targetId } : {}),
+		// Only the dedicated agent tab can be re-badged later: an adopted
+		// `app.target` page belongs to the user and carries no operator.
+		...(managed && !managed.created && !opts.target ? { managedAgentTab: true } : {}),
 	};
 }
 
@@ -769,33 +1014,78 @@ function uploadBridgeOrigin(browser: PuppeteerBrowserHandle): string | undefined
 }
 
 /**
+ * Page target the managed browser bridge handed out, plus whether this open
+ * created it (`Target.createTarget`) and therefore owns closing it.
+ */
+export interface ManagedBrowserTarget {
+	targetId: string;
+	created: boolean;
+}
+
+/** Browser-level CDP session on the managed bridge; always detached. */
+async function withManagedSession<T>(
+	browser: PuppeteerBrowserHandle,
+	fn: (raw: { send(method: string, params?: object): Promise<{ targetId?: string | null }> }) => Promise<T>,
+): Promise<T> {
+	const session = await browser.browser.target().createCDPSession();
+	try {
+		return await fn(
+			session as unknown as { send(method: string, params?: object): Promise<{ targetId?: string | null }> },
+		);
+	} finally {
+		await session.detach().catch(() => undefined);
+	}
+}
+
+/**
+ * Tell the bridge who is driving its dedicated agent tab so the panel badge
+ * ("操作者：X") follows the actual operator. Never creates a tab: only a tab
+ * that came from `ensureAgentTab` is ever re-badged.
+ */
+async function publishManagedOperator(browser: PuppeteerBrowserHandle, identity: BrowserAgentIdentity): Promise<void> {
+	await withManagedSession(browser, raw => raw.send("ManagedBrowser.ensureAgentTab", agentCdpParams(identity)));
+}
+
+/**
  * Ask the managed browser bridge (browser.gui) for the page target id to drive.
  * Without a target, the bridge creates or reuses the DEDICATED agent tab;
  * with one, it resolves an already-open tab by url/title substring and never
  * creates or selects anything. Uses the browser-level CDP session so no page
- * needs to exist yet; the bridge answers a private method the same way the
+ * needs to exist yet; the bridge answers private methods the same way the
  * relay answers `MusePi.claimTarget`.
+ *
+ * `identity` names the operating agent on that tab ("操作者：X"). It is sent as
+ * `agentId`/`agentName` only, and omitted entirely for an unidentified caller
+ * so user-tab payloads keep their old shape.
  */
-export async function requestManagedBrowserTarget(browser: PuppeteerBrowserHandle, target?: string): Promise<string> {
-	const session = await browser.browser.target().createCDPSession();
-	try {
-		const raw = session as unknown as {
-			send(method: string, params?: Record<string, unknown>): Promise<{ targetId?: string | null }>;
-		};
-		const result = target
-			? await raw.send("ManagedBrowser.findTabTarget", { target })
-			: await raw.send("ManagedBrowser.ensureAgentTab", {});
-		if (!result.targetId) {
-			throw new ToolError(
-				target
-					? `No open managed-browser tab matches app.target ${JSON.stringify(target)}`
-					: "The managed browser did not provide an agent tab target",
-			);
+export async function requestManagedBrowserTarget(
+	browser: PuppeteerBrowserHandle,
+	target?: string,
+	identity?: BrowserAgentIdentity,
+): Promise<ManagedBrowserTarget> {
+	return await withManagedSession(browser, async raw => {
+		if (target) {
+			const resolved = await raw.send("ManagedBrowser.findTabTarget", { target });
+			if (!resolved.targetId) {
+				throw new ToolError(`No open managed-browser tab matches app.target ${JSON.stringify(target)}`);
+			}
+			return { targetId: resolved.targetId, created: false };
 		}
-		return result.targetId;
-	} finally {
-		await session.detach().catch(() => undefined);
-	}
+		const agent = agentCdpParams(identity);
+		try {
+			const ensured = await raw.send("ManagedBrowser.ensureAgentTab", agent);
+			if (!ensured.targetId) throw new ToolError("The managed browser did not provide an agent tab target");
+			return { targetId: ensured.targetId, created: false };
+		} catch (error) {
+			// A shell that predates the private method still speaks standard CDP.
+			// Creating the tab ourselves keeps the open working and still badges
+			// it, at the cost of owning its lifetime (see `createdTargetId`).
+			if (!isUnknownCdpMethodError(error, "ManagedBrowser.ensureAgentTab")) throw error;
+			const fallback = await raw.send("Target.createTarget", { url: "about:blank", ...agent });
+			if (!fallback.targetId) throw new ToolError("The managed browser did not provide an agent tab target");
+			return { targetId: fallback.targetId, created: true };
+		}
+	});
 }
 
 function handleTabMessage(tab: WorkerTabSession, msg: WorkerOutbound): void {
@@ -949,8 +1239,32 @@ async function forceKillTab(name: string, reason: string): Promise<void> {
 	}
 	await tab.worker.terminate().catch(() => undefined);
 	if (tab.kindTag === "headless") await closeOrphanTarget(tab);
+	else await closeCreatedTarget(tab);
 	await releaseBrowser(tab.browser, { kill: false });
 	tabs.delete(name);
+}
+
+async function closeCreatedTarget(tab: WorkerTabSession): Promise<void> {
+	const targetId = tab.createdTargetId;
+	if (!targetId) return;
+	// The page lives in the managed panel, not in a Chromium we launched, so it
+	// is closed through CDP rather than by terminating a process. Best-effort:
+	// a shell that already dropped the tab must not fail the release.
+	let session: CDPSession | undefined;
+	try {
+		session = await tab.browser.browser.target().createCDPSession();
+		// `Target.closeTarget` is a browser-domain command puppeteer's session
+		// types cover; the generic send shape keeps this independent of them.
+		const raw = session as unknown as { send(method: string, params: object): Promise<unknown> };
+		await raw.send("Target.closeTarget", { targetId });
+	} catch (error) {
+		logger.debug("Failed to close managed-browser target", {
+			targetId,
+			error: error instanceof Error ? error.message : String(error),
+		});
+	} finally {
+		await session?.detach().catch(() => undefined);
+	}
 }
 
 async function closeOrphanTarget(tab: WorkerTabSession): Promise<void> {

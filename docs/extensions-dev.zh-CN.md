@@ -50,7 +50,7 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 - 事件处理：`pi.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
 - LLM 工具：`pi.registerTool({ name, description, parameters, execute })`（进入工具注册表，权限链照常生效）
-- 子智能体：`pi.registerSubagent({ name, description, systemPrompt, external })`；本地 Agent 必须提供非空 `systemPrompt`，外部 Agent 改为提供一次性 `external(context)` 执行器，并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物
+- 子智能体：`pi.registerSubagent({ name, description, systemPrompt, external })`；本地 Agent 必须提供非空 `systemPrompt`，外部 Agent 改为提供一次性 `external(context)` 执行器，并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力；本地子智能体的多轮接续属于运行时生命周期（`hub send` / `agents.chat` / 冷恢复），不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件，可参考 DSH 将团队服务、模型工具与 UI 拆包的做法，不要把任务所有权塞进 `registerSubagent`。
 - 斜杠命令：`pi.registerCommand(...)`（TUI `/cmd` + GUI 命令面板）
 - 快捷键/flags、自定义消息渲染、会话/消息注入（`sendMessage` / `sendUserMessage` / `appendEntry`）
 - **工具执行拦截**：每个工具执行都被扩展拦截层包裹（`tool_call` / `tool_result` 事件可介入）
@@ -413,6 +413,8 @@ pi.unregisterDesignSystem("my-brand");
 ```
 
 - `experimental` 只接受字面值 `true`，会沿 daemon 条目传到普通包和模块卡片并显示本地化「实验性」标签；缺省和其他值不标记。
+- `icon` 是插件自己的标记：emoji、文字字形或 `http(s)://`/`file://` URI。插件列表与详情优先使用它，图片按 `contain` 缩放，解码失败回退名字字形。
+- `presetOnly` 只接受字面值 `true`：`true` 的 persona 包只在 Agent 预设里按会话提供，不出现于能力中心的插件列表；完整库存仍在 设置 → 扩展与插件。
 - 字段类型：`boolean | number | string | select | path`；number 可带 `min/max/step`，select 必须给 `options`。
 - `restart` 生效域：`none`（默认，立即） / `session`（新会话） / `daemon`（重启 daemon）。
 - fail-soft：manifest 是用户可写 JSON，坏字段逐个被丢弃进结构化 errors（详情页有可见警告），好字段照常生效，绝不拖垮扩展登记。

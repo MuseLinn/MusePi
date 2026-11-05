@@ -284,6 +284,35 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 		return this.#description;
 	}
 
+	/**
+	 * Agent identity attached to the tabs this tool opens/runs. The registry
+	 * carries both the display name and the spawning agent, which the tab
+	 * supervisor uses to keep a subagent's tab ownership from outliving its
+	 * parent — or from stealing the parent's tab name.
+	 */
+	#agentIdentity(): {
+		agentId?: string;
+		agentName?: string;
+		parentAgentId?: string;
+		parentAgentName?: string;
+		parentSessionId?: string;
+	} {
+		const agentId = this.session.getAgentId?.() ?? undefined;
+		if (!agentId) return {};
+		const ref = this.session.agentRegistry?.get(agentId);
+		const parentAgentId = ref?.parentId;
+		const parentRef = parentAgentId ? this.session.agentRegistry?.get(parentAgentId) : undefined;
+		return {
+			agentId,
+			agentName: ref?.displayName ?? agentId,
+			parentAgentId,
+			parentAgentName: parentRef?.displayName,
+			// The parent's own session id is the key its dispose passes; a
+			// subagent without a shared transcript mints its own id instead.
+			parentSessionId: parentRef?.session?.sessionManager.getSessionId(),
+		};
+	}
+
 	/** Restart browser to apply mode changes (e.g. headless toggle). Drops only headless browsers. */
 	async restartForModeChange(): Promise<void> {
 		await dropHeadlessTabs();
@@ -403,6 +432,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 						dialogs: params.dialogs,
 						signal: openSignal,
 						ownerSessionId: this.session.getSessionId?.() ?? undefined,
+						...this.#agentIdentity(),
 					}),
 				);
 			} catch (error) {
@@ -468,11 +498,14 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			details.url = tab.info.url;
 		}
 
+		const identity = this.#agentIdentity();
 		const run = await runInTab(name, {
 			code: params.code,
 			timeoutMs,
 			signal,
 			session: this.session,
+			agentId: identity.agentId,
+			agentName: identity.agentName,
 			onOperations: current => {
 				details.operations = current;
 				onUpdate?.({ content: [], details: { ...details } });

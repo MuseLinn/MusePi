@@ -5385,6 +5385,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"task.subagentModel": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "tasks",
+			group: "Subagents",
+			label: "Subagent Model",
+			description:
+				"Default model for subagents. Precedence: a model passed by the parent, then a per-agent override, then this value, then the agent definition's own role. Empty keeps each agent's role — specialized agents stay on their role chain, and the general task agent follows the session model. Use @task to make every subagent follow the session's active model; other role aliases such as @smol keep that role's retry fallback chain, while a concrete model runs without one.",
+		},
+	},
+
 	"task.eager": {
 		type: "enum",
 		values: ["default", "preferred", "always"] as const,

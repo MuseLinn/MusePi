@@ -1,11 +1,12 @@
 import { archiveSession, t } from "@musepi/client-core";
+import { Calendar as CalendarIconData, Kanban as KanbanIconData, ListChecks as ListChecksIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { GuiSelect } from "./GuiSelect";
 import { MenuPopup } from "./MenuPopup";
-import { StateIconN } from "./StateIcon";
 import { TaskBoardView, TaskCalendarView } from "./TaskCenterViews";
 import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
@@ -363,9 +364,13 @@ export function ScheduledTasksPage({
 								className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
 								onClick={() => setView(v)}
 							>
-								<StateIconN
-									value={v}
-									options={{ calendar: "calendar", board: "list-check-2", list: "calendar-schedule" }}
+								<MorphIcon
+									icon={
+										v === "calendar" ? CalendarIconData : v === "board" ? KanbanIconData : ListChecksIconData
+									}
+									size={16}
+									spring="snappy"
+									reducedMotion="user"
 									className="h-4 w-4"
 								/>
 								<span>

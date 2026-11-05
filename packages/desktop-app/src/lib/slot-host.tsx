@@ -66,6 +66,13 @@ import type { ChatViewProps } from "../components/ChatView";
 import type { ContextPanel } from "../components/ContextPanel";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
 import { exposeHostModules, registerHostModule } from "./host-modules";
+import {
+	browserTabsForSession,
+	createTab,
+	getHostState,
+	type ManagedTab,
+	setBrowserSession,
+} from "./managed-browser-host";
 import type { RpcClient } from "./rpc";
 
 export const hostReactBindings = {
@@ -331,6 +338,10 @@ export interface ExtensionItem {
 	description?: string;
 	/** Manifest-declared experimental status. */
 	experimental?: boolean;
+	/** 清单声明的图标：emoji、文字字形或 http(s)/file URI。 */
+	icon?: string;
+	/** 只在 Agent 预设里按会话提供（persona 包）。 */
+	presetOnly?: boolean;
 	trigger?: string;
 	path: string;
 	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
@@ -771,6 +782,24 @@ export function selectLaunchablePanelTabs(components: readonly SlotComponent[]):
 	);
 }
 
+export function resolveManagedBrowserPanelTab(options?: {
+	forceNew?: boolean;
+	url?: string;
+	sessionId?: string | null;
+}): ManagedTab {
+	if (options?.sessionId !== undefined) setBrowserSession(options.sessionId);
+	const current = getHostState();
+	const scoped = browserTabsForSession(current.sessionId, current);
+	const active = options?.forceNew === true ? undefined : scoped.find(tab => tab.id === current.activeId);
+	if (active) return active;
+	void createTab(options?.url ?? "about:blank", { sessionId: current.sessionId }).catch(() => {});
+	const created = browserTabsForSession(getHostState().sessionId, getHostState()).find(
+		tab => tab.id === getHostState().activeId,
+	);
+	if (!created) throw new Error("managed browser tab creation did not publish an active tab");
+	return created;
+}
+
 /** Mount every extension-contributed component registered for a slot. */
 export function SlotComponentHost({
 	rpc,
@@ -1125,6 +1154,7 @@ const slotHostBindings = {
 	TRANSCRIPT_NODE_SLOT,
 	GUI_SLOT_HOSTS,
 	ConfigFormSlotMount,
+	resolveManagedBrowserPanelTab,
 	SlotComponentHost,
 	SlotComponentMount,
 	selectLaunchablePanelTabs,

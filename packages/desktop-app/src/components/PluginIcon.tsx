@@ -10,11 +10,17 @@
  * Otherwise a deterministic mark is derived from the name — hue from a
  * string hash, leading letters in a rounded tile.
  *
+ * Declared marks paint on a transparent background: the container supplies
+ * the frame, and a tinted tile behind an emoji or logo read as a second box
+ * inside it. Only the name-derived fallback fills its own tile, because it
+ * has no artwork of its own. An unreadable URI falls back to that same
+ * derived mark instead of leaving a blank frame.
+ *
  * The status dot rides as a corner badge ON the mark instead of sitting
  * beside it: as a sibling it overlapped wide emoji icons (the glyph and the
  * dot fought for the same 30px row).
  */
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 /** Glyphs for the host's built-in plugin units, keyed by extension kind —
  *  the kinds the built-in registry actually declares (theme-pack,
@@ -90,25 +96,32 @@ export function PluginIcon({
 	/** "active" | "off" | "error" | "shadowed" — drawn as a corner badge. */
 	status?: "active" | "off" | "error" | "shadowed";
 }): ReactNode {
+	const [broken, setBroken] = useState<string | null>(null);
 	const badge = status && status !== "active" ? status : null;
+	const uri = icon && isUri(icon) ? icon : null;
+	const showImage = uri !== null && broken !== uri;
 	const mark = (() => {
-		if (icon && isUri(icon)) {
+		if (showImage) {
 			return (
 				<img
 					alt=""
-					src={icon}
+					src={uri}
+					onError={() => setBroken(uri)}
 					style={{
 						width: "100%",
 						height: "100%",
 						borderRadius: "inherit",
-						objectFit: "cover",
+						objectFit: "contain",
 						display: "block",
 					}}
 				/>
 			);
 		}
-		const glyph = icon?.trim() || glyphOf(name);
-		const derived = !icon;
+		// A declared text glyph keeps its own shape on transparency; only the
+		// name-derived fallback (no icon, or an unreadable URI) gets a tile.
+		const declared = uri === null ? (icon?.trim() ?? "") : "";
+		const glyph = declared || glyphOf(name);
+		const derived = declared.length === 0;
 		const hue = hueOf(name);
 		return (
 			<span
@@ -121,7 +134,7 @@ export function PluginIcon({
 					borderRadius: "inherit",
 					background: derived ? `oklch(0.72 0.13 ${hue} / 0.22)` : "transparent",
 					color: derived ? `oklch(0.68 0.16 ${hue})` : "var(--color-text)",
-					fontSize: Math.round(size * (derived ? 0.42 : 0.62)),
+					fontSize: Math.round(size * (derived ? 0.42 : 0.74)),
 					fontWeight: derived ? 700 : 400,
 					lineHeight: 1,
 					letterSpacing: "0.02em",

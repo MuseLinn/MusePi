@@ -194,6 +194,10 @@ export class FileService implements DaemonService {
 	 * entries 路径**仍相对 cwd**（带子根前缀），FilePane 的预览/外显对账
 	 * 等逻辑不需要第二条路径规则。越出 cwd 的 root 拒绝为空树，与 fs 面板
 	 * 其余部位的越界契约一致（不抛进 JSON-RPC）。
+	 *
+	 * 指向目录的软链按 Kimi 的 fs.list 契约处理：目标 realpath 仍在工作区
+	 * （以 cwd 为边界，不随 root 收窄）内时按目录返回并可展开，同时保留
+	 * `isSymlink`/`linkTarget`；越界目标保持叶子条目，不会被扫描或预览。
 	 */
 	async tree(params: {
 		cwd?: string;
@@ -204,7 +208,16 @@ export class FileService implements DaemonService {
 	}): Promise<{
 		rootPath: string;
 		truncated: boolean;
-		entries: Array<{ name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }>;
+		entries: Array<{
+			name: string;
+			path: string;
+			isDir: boolean;
+			isSymlink: boolean;
+			linkTarget?: string;
+			size: number;
+			mtime: number;
+			depth: number;
+		}>;
 	}> {
 		const p = params ?? {};
 		const rootPath = path.resolve(p.cwd || this.#deps.fallbackCwd() || os.homedir());
@@ -228,6 +241,10 @@ export class FileService implements DaemonService {
 				maxDepth,
 				hidden: true,
 				gitignore: p.gitignore ?? true,
+				// The file pane can descend into directory links; the boundary is
+				// the workspace itself even when a tab browses a sub-root.
+				followDirSymlinks: true,
+				symlinkBoundary: rootPath,
 			});
 			result = { entries: scan.entries, truncated: scan.truncated };
 		} catch {
@@ -237,8 +254,16 @@ export class FileService implements DaemonService {
 		// Per-directory cap: sort by mtime desc, keep recent + oldest (same
 		// strategy as the TUI: limit-1 newest + the single oldest).
 		const byParent = new Map<string, Array<{ name: string; entry: GlobMatch; parentPath: string }>>();
-		const entries: Array<{ name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }> =
-			[];
+		const entries: Array<{
+			name: string;
+			path: string;
+			isDir: boolean;
+			isSymlink: boolean;
+			linkTarget?: string;
+			size: number;
+			mtime: number;
+			depth: number;
+		}> = [];
 		for (const entry of result.entries) {
 			// Scan paths are relative to `scanRoot`; re-root them onto cwd so every
 			// consumer below keeps one path rule.
@@ -271,6 +296,8 @@ export class FileService implements DaemonService {
 					name: item.name,
 					path: parentPath ? `${parentPath}/${item.name}` : item.name,
 					isDir: item.entry.fileType === FileType.Dir,
+					isSymlink: item.entry.isSymlink === true,
+					linkTarget: item.entry.linkTarget,
 					size: item.entry.size ?? 0,
 					mtime: item.entry.mtime ?? 0,
 					depth: parentPath ? parentPath.split("/").length + 1 : 1,

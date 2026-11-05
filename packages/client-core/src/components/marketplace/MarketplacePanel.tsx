@@ -29,8 +29,22 @@ async function handleAction(client: SessionClient, action: MarketplaceCardAction
 		await client.rpc("notice", { level: "info", message: `${action.entry.name}: details coming soon` });
 		return;
 	}
+	const marketplace = action.entry.marketplace ?? "default";
+	if (action.kind === "upgrade") {
+		await client.rpc("marketplace.upgrade", {
+			pluginId: `${action.entry.name}@${marketplace}`,
+			scope: action.entry.installedScope ?? undefined,
+		});
+		return;
+	}
 	const method = action.kind === "install" ? "marketplace.install" : "marketplace.remove";
-	await client.rpc(method, { name: action.entry.name, marketplace: action.entry.marketplace ?? "default" });
+	// The catalog version the card rendered is the version the user approved;
+	// the daemon refuses the install if the catalog moved since.
+	await client.rpc(method, {
+		name: action.entry.name,
+		marketplace,
+		...(action.kind === "install" ? { expectedVersion: action.entry.version } : {}),
+	});
 }
 
 export function MarketplacePanel({ client, initialEntries }: MarketplacePanelProps): ReactNode {

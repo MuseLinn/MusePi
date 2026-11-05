@@ -91,6 +91,129 @@
 	border-color: var(--accent-bd);
 }
 
+/* --- segments (installed / catalog / custom sources) -------------------- */
+
+.mp-segments {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+}
+
+.mp-segment {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+	flex: 1;
+	justify-content: center;
+	padding: 5px 8px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.mp-segment:hover {
+	color: var(--fg);
+}
+
+.mp-segment:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--ring);
+}
+
+.mp-segment--active {
+	background: var(--bg-raised);
+	color: var(--fg);
+	box-shadow: 0 1px 2px color-mix(in oklab, var(--bg) 60%, transparent);
+}
+
+.mp-segment-count {
+	padding: 0 5px;
+	border-radius: 999px;
+	background: var(--bg-overlay);
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	line-height: 15px;
+}
+
+/* --- custom marketplace sources ---------------------------------------- */
+
+.mp-sources {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+}
+
+.mp-source-add {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.mp-source-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.mp-source-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-raised);
+}
+
+.mp-source-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.mp-source-head {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	min-width: 0;
+}
+
+.mp-source-name {
+	color: var(--fg);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mp-source-uri {
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .mp-section {
 	display: flex;
 	flex-direction: column;
@@ -268,6 +391,17 @@
 .mp-card-badge--ds {
 	border-color: color-mix(in oklab, var(--accent) 45%, transparent);
 	background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+/* 可更新徽章：warning hue，与「已安装」的 accent 区分——状态是警示而非完成。 */
+.mp-card-badge--update {
+	border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+	background: color-mix(in srgb, var(--warn) 12%, transparent);
+	color: var(--warn);
+}
+
+.mp-card--update .mp-card-version {
+	color: var(--warn);
 }
 
 .mp-card-chip {

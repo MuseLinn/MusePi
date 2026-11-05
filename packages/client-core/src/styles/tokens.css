@@ -1027,12 +1027,17 @@
 	transition: color 150ms ease-out;
 }
 
-.gui-seg-item:hover {
+.gui-seg-item:hover:not(:disabled) {
 	color: var(--color-text);
 }
 
 .gui-seg-item[aria-checked="true"] {
 	color: var(--color-text);
+}
+
+.gui-seg-item:disabled {
+	color: var(--color-text-faint);
+	cursor: default;
 }
 
 .gui-seg-item:focus-visible {

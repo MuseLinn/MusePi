@@ -6,6 +6,13 @@ import {
 	t,
 	useModalFocus,
 } from "@musepi/client-core";
+import {
+	Check as CheckIconData,
+	CircleCheck as CircleCheckIconData,
+	Circle as CircleIconData,
+	ExternalLink as ExternalLinkIconData,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -495,7 +502,13 @@ function SkillDrawer({
 				{flash && <div className="gui-cap-drawer-flash">{flash}</div>}
 				<div className="gui-cap-drawer-actions">
 					<button type="button" className="gui-btn gui-cap-drawer-primary" onClick={invokeSkill}>
-						<Icon name={copied ? "check" : "external-link"} className="h-3.5 w-3.5" />
+						<MorphIcon
+							icon={copied ? CheckIconData : ExternalLinkIconData}
+							size={14}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-3.5 w-3.5"
+						/>
 						{copied ? t("tools.skillInvokeCopied") : t("tools.skillInvoke")}
 					</button>
 					{canDelete && (
@@ -860,7 +873,13 @@ function InstalledSkillsPane({
 						if (manage) setSelected(new Set());
 					}}
 				>
-					<StateIcon on={manage} pair={["checkbox-blank", "checkbox-circle"]} className="h-3.5 w-3.5" />
+					<MorphIcon
+						icon={manage ? CircleIconData : CircleCheckIconData}
+						size={14}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-3.5 w-3.5"
+					/>
 					{t("tools.skillManage")}
 				</button>
 			</div>

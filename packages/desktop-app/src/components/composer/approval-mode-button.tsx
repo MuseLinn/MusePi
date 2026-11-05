@@ -1,4 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
+import { Check as CheckIconData, Shield as ShieldIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
@@ -120,7 +122,13 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 							aria-checked={mode === m.value}
 							onClick={() => pick(m.value)}
 						>
-							<Icon name={mode === m.value ? "check" : "shield"} className="h-4 w-4" />
+							<MorphIcon
+								icon={mode === m.value ? CheckIconData : ShieldIconData}
+								size={16}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-4 w-4"
+							/>
 							<span className="min-w-0 flex-1">
 								<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
 									{t(m.label)}

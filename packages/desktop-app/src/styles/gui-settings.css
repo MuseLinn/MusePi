@@ -602,6 +602,39 @@
 	color: var(--color-accent);
 }
 
+/* Favorite star: one glyph fills in place. morphicons forces fill:none and
+ * only interpolates stroke centerlines, so a fill↔hollow shape morph is not
+ * available; this fill-opacity transition is the closest honest reading and
+ * avoids the two-glyph cross-scale. */
+.gui-fill-icon {
+	fill: currentColor;
+	fill-opacity: 0;
+	transition: fill-opacity 180ms var(--spring);
+}
+.gui-fill-icon--on {
+	fill-opacity: 1;
+}
+/* Default-model target: fill only the center dot, keeping the rings as an
+ * outline (filling the whole lucide Target would collapse the bullseye). */
+.gui-target-fill circle:last-child {
+	fill: currentColor;
+	fill-opacity: 0;
+	transition: fill-opacity 180ms var(--spring);
+}
+.gui-target-fill--on circle:last-child {
+	fill-opacity: 1;
+}
+.gui-motion-off .gui-fill-icon,
+.gui-motion-off .gui-target-fill circle:last-child {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-fill-icon,
+	.gui-target-fill circle:last-child {
+		transition: none;
+	}
+}
+
 .gui-model-empty {
 	padding: 8px;
 	font-size: var(--ui-font-size-sm);
@@ -739,6 +772,12 @@
 .gui-tab-action:hover {
 	color: var(--color-text);
 	background: var(--color-surface-raised);
+}
+
+/* Persistent on-state for toggles (archive view). */
+.gui-tab-action--active {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
 
 .gui-view-opt {
@@ -2282,11 +2321,14 @@
 .gui-plugin-card-icon {
 	display: grid;
 	place-items: center;
-	width: 28px;
-	height: 28px;
+	width: 32px;
+	height: 32px;
 	flex-shrink: 0;
-	border-radius: var(--radius-sm);
-	background: var(--color-surface-sunken);
+	border: 0.5px solid var(--border);
+	border-radius: var(--radius-lg);
+	/* The mark carries its own artwork; a filled tile behind it reads as a
+	 * second square inside this frame. */
+	background: transparent;
 	color: var(--color-text-muted);
 }
 .gui-plugin-card-content {
@@ -3927,13 +3969,11 @@ body.gui-resizing {
 	font-weight: 600;
 }
 
-.gui-surface-tab--entering,
-.gui-browser-tab--entering {
+.gui-surface-tab--entering {
 	animation: gui-tab-enter 130ms var(--spring-snappy);
 }
 
-.gui-surface-tab--closing,
-.gui-browser-tab--closing {
+.gui-surface-tab--closing {
 	min-width: 0;
 	pointer-events: none;
 	animation: gui-tab-exit 140ms var(--spring-snappy) forwards;
@@ -3962,17 +4002,13 @@ body.gui-resizing {
 }
 
 .gui-motion-off .gui-surface-tab--entering,
-.gui-motion-off .gui-surface-tab--closing,
-.gui-motion-off .gui-browser-tab--entering,
-.gui-motion-off .gui-browser-tab--closing {
+.gui-motion-off .gui-surface-tab--closing {
 	animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.gui-surface-tab--entering,
-	.gui-surface-tab--closing,
-	.gui-browser-tab--entering,
-	.gui-browser-tab--closing {
+	.gui-surface-tab--closing {
 		animation: none;
 	}
 }
@@ -5625,109 +5661,35 @@ body.gui-resizing {
 .gui-browser-menu button:disabled svg {
 	color: var(--color-text-faint);
 }
-.gui-browser-menu-label {
-	display: block;
-	padding: 5px 8px 4px;
-	color: var(--color-text-faint);
-	font-size: var(--ui-font-size-xs);
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-}
-.gui-browser-menu-viewports {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 5px;
-	padding: 0 8px 6px;
-}
-.gui-browser-menu-viewports button {
-	grid-template-columns: minmax(0, 1fr);
-	min-height: 24px;
-	padding: 4px 8px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	font-size: var(--ui-font-size-xs);
-	font-weight: 550;
-	white-space: nowrap;
-}
-.gui-browser-menu-viewports button.gui-browser-menu-chip--active {
-	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
-	background: var(--color-accent-soft);
-	color: var(--color-accent);
-}
 .gui-browser-menu-sep {
 	display: block;
 	height: 1px;
 	margin: 5px 4px;
 	background: color-mix(in oklab, var(--border) 70%, transparent);
 }
-/* ---- Tab strip ---- */
-.gui-browser-tab {
-	display: inline-flex;
+.gui-browser-find {
+	display: flex;
 	align-items: center;
-	flex-shrink: 0;
-	border: 1px solid transparent;
-	border-radius: var(--radius);
-	overflow: hidden;
-	transition: background var(--gui-motion-menu-in) var(--spring), border-color var(--gui-motion-menu-in) var(--spring);
-}
-.gui-browser-tab--active {
-	background: var(--color-surface-raised);
-	border-color: var(--border);
-}
-/* Agent tab: an inset accent hairline marks tabs the agent drives — box-shadow
- * (not border) so it survives themeColor's inline border reset. */
-.gui-browser-tab--agent {
-	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 60%, transparent);
-}
-.gui-browser-tab-main {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 3px 6px;
-	font-size: var(--ui-font-size-xs);
+	gap: 6px;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--border);
 	color: var(--color-text-muted);
-	background: transparent;
-	border: 0;
-	cursor: pointer;
-	white-space: nowrap;
-	max-width: 150px;
 }
-.gui-browser-tab--active .gui-browser-tab-main {
-	color: var(--color-text);
-}
-.gui-browser-tab-badge {
-	border-radius: var(--radius);
-	padding: 0 4px;
-	font-size: 9px;
-	font-weight: 550;
-	background: color-mix(in oklab, var(--color-accent) 15%, transparent);
-	color: var(--color-accent);
-}
-.gui-browser-tab-close {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	padding: 0;
-	border: 0;
-	border-radius: var(--radius);
-	background: transparent;
-	color: var(--color-text-faint);
-	cursor: pointer;
-	margin-right: 3px;
-	opacity: 0;
-	transition: opacity var(--gui-motion-fade-in) ease, background var(--gui-motion-menu-in) ease, color
-		var(--gui-motion-menu-in) ease;
-}
-.gui-browser-tab:hover .gui-browser-tab-close,
-.gui-browser-tab--active .gui-browser-tab-close {
-	opacity: 1;
-}
-.gui-browser-tab-close:hover {
+.gui-browser-find-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 28px;
+	padding: 4px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+}
+.gui-browser-find-input:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
 }
 /* ---- Content surface ---- */
 .gui-browser-content {

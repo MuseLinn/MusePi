@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/client-core";
+import { Markdown, t, useLocale } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	downloadInstaller,
@@ -10,6 +10,7 @@ import {
 	type UpdateCheckResult,
 	type UpdaterState,
 } from "../lib/electron";
+import { localizeUpdateNotes } from "../lib/update-notes";
 import {
 	isUpdateInstalling,
 	requestUpdateInstall,
@@ -57,6 +58,7 @@ function formatMB(bytes: number): string {
 }
 
 export function UpdateToast(): ReactNode {
+	const locale = useLocale();
 	const [notice, setNotice] = useState<UpdateCheckResult | null>(null);
 	const [state, setState] = useState<UpdaterState | null>(null);
 	const [notes, setNotes] = useState<string | null>(null);
@@ -124,7 +126,8 @@ export function UpdateToast(): ReactNode {
 	}, [toastVisible]);
 
 	// Release notes: one cached main-process fetch per notice. The manifest
-	// ships a bilingual-mixed string; render as-is. Never nags on failure.
+	// ships one bilingual string; the render localizes it to the UI language.
+	// Never nags on failure.
 	useEffect(() => {
 		if (!notice?.latest) {
 			setNotes(null);
@@ -154,7 +157,8 @@ export function UpdateToast(): ReactNode {
 	const percent = Math.min(100, Math.round(progress?.percent ?? 0));
 	const total = progress?.total ?? 0;
 	const speed = progress?.bytesPerSecond ?? 0;
-	const hasNotes = notes !== null && notes.trim().length > 0;
+	const localizedNotes = notes ? localizeUpdateNotes(notes, locale) : null;
+	const hasNotes = localizedNotes !== null && localizedNotes.trim().length > 0;
 
 	const close = (skipVersion: boolean): void => {
 		if (skipVersion) {
@@ -224,11 +228,11 @@ export function UpdateToast(): ReactNode {
 			{hasNotes && (
 				<div className={`gui-update-toast-notes${expanded ? " gui-update-toast-notes--expanded" : ""}`}>
 					<div className="gui-update-toast-notes-scroll">
-						<Markdown text={notes} />
+						<Markdown text={localizedNotes} />
 					</div>
 				</div>
 			)}
-			{hasNotes && notes.length > NOTES_EXPAND_THRESHOLD && (
+			{hasNotes && localizedNotes.length > NOTES_EXPAND_THRESHOLD && (
 				<button type="button" className="gui-update-toast-notes-toggle" onClick={() => setExpanded(v => !v)}>
 					{t(expanded ? "settings.showLess" : "settings.showMore")}
 				</button>

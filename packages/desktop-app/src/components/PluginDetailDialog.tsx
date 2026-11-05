@@ -318,7 +318,7 @@ export function PluginDetailDialog({
 					<div className="gui-dialog-head">
 						<PluginIcon
 							name={builtinDisplayName(item)}
-							icon={kindGlyph(item.kind)}
+							icon={item.icon ?? kindGlyph(item.kind)}
 							size={30}
 							status={
 								item.loadError

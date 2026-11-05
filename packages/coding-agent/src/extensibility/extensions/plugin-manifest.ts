@@ -50,6 +50,10 @@ export interface ExtensionPluginMeta {
 	components?: PluginComponentDecl[];
 	label?: string;
 	description?: string;
+	/** 清单声明的图标：emoji、文字字形或 http(s)/file URI（插件列表与详情共用）。 */
+	icon?: string;
+	/** 只在 Agent 预设里按会话提供的 persona 包：没有独立的用户启停面。 */
+	presetOnly?: boolean;
 	experimental?: boolean;
 	host?: ExtensionHostBinding;
 }
@@ -81,6 +85,8 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 	const label = typeof raw.label === "string" && raw.label.trim() ? raw.label.trim() : undefined;
 	const description =
 		typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
+	const icon = typeof raw.icon === "string" && raw.icon.trim() ? raw.icon.trim() : undefined;
+	const presetOnly = raw.presetOnly === true;
 	if (
 		fields.length === 0 &&
 		errors.length === 0 &&
@@ -89,6 +95,8 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		!host &&
 		!label &&
 		!description &&
+		!icon &&
+		!presetOnly &&
 		!experimental
 	) {
 		return null;
@@ -100,6 +108,8 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		...(components.length > 0 ? { components } : {}),
 		...(label ? { label } : {}),
 		...(description ? { description } : {}),
+		...(icon ? { icon } : {}),
+		...(presetOnly ? { presetOnly } : {}),
 		...(experimental ? { experimental } : {}),
 		...(host ? { host } : {}),
 	};
@@ -111,6 +121,8 @@ interface ManifestBlock {
 	components?: unknown;
 	label?: unknown;
 	description?: unknown;
+	icon?: unknown;
+	presetOnly?: unknown;
 	experimental?: unknown;
 	host?: unknown;
 }

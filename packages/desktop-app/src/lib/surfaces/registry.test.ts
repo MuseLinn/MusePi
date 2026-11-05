@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import {
+	panelWidth,
 	readHiddenSurfaces,
 	readSurfaceOrder,
 	readSurfaceWidths,
 	SURFACE_HIDDEN_KEY,
+	SURFACE_WIDTH_KEY,
 	SURFACE_WIDTHS_KEY,
 	type SurfaceDescriptor,
 	surfaceVisible,
-	widthForSurface,
 	writeHiddenSurfaces,
-	writeSurfaceWidth,
+	writePanelWidth,
 } from "./registry";
 
 // bun test has no DOM storage; install an in-memory stand-in (only when the
@@ -43,6 +44,7 @@ if (typeof localStorage === "undefined") {
 function clearKeys(): void {
 	try {
 		localStorage.removeItem(SURFACE_WIDTHS_KEY);
+		localStorage.removeItem(SURFACE_WIDTH_KEY);
 		localStorage.removeItem(SURFACE_HIDDEN_KEY);
 	} catch {
 		/* storage unavailable */
@@ -60,30 +62,38 @@ function hasContentSurface(): SurfaceDescriptor {
 	};
 }
 
-describe("surface widths", () => {
+describe("panel width", () => {
 	beforeEach(clearKeys);
 
-	it("round-trips per-surface widths independently", () => {
-		writeSurfaceWidth("git", 500);
-		writeSurfaceWidth("browser", 900);
-		expect(readSurfaceWidths()).toEqual({ git: 500, browser: 900 });
+	it("shares one width across every surface", () => {
+		writePanelWidth(700);
+		expect(panelWidth(0.5)).toBe(700);
+		expect(panelWidth(0.9)).toBe(700);
 	});
 
 	it("clamps to the 200–1200 range", () => {
-		writeSurfaceWidth("git", 50);
-		writeSurfaceWidth("browser", 5000);
-		expect(readSurfaceWidths()).toEqual({ git: 200, browser: 1200 });
+		writePanelWidth(50);
+		expect(panelWidth(0.5)).toBe(200);
+		writePanelWidth(5000);
+		expect(panelWidth(0.5)).toBe(1200);
 	});
 
 	it("falls back to the default fraction when unset", () => {
-		expect(widthForSurface("git", 0.5)).toBe(450);
+		expect(panelWidth(0.5)).toBe(450);
 	});
 
-	it("drops corrupt payloads instead of throwing", () => {
+	it("migrates the first valid per-surface width into the shared record", () => {
+		localStorage.setItem(SURFACE_WIDTHS_KEY, JSON.stringify({ git: 540, browser: 900 }));
+		expect(panelWidth(0.5)).toBe(540);
+	});
+
+	it("drops corrupt legacy payloads instead of throwing", () => {
 		localStorage.setItem(SURFACE_WIDTHS_KEY, "{nope");
 		expect(readSurfaceWidths()).toEqual({});
+		expect(panelWidth(0.5)).toBe(450);
 		localStorage.setItem(SURFACE_WIDTHS_KEY, JSON.stringify({ git: "wide", "": 10, ok: 400 }));
 		expect(readSurfaceWidths()).toEqual({ ok: 400 });
+		expect(panelWidth(0.5)).toBe(400);
 	});
 });
 

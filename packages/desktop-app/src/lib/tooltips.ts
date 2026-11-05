@@ -106,6 +106,21 @@ let showTimer: number | null = null;
 let hideTimer: number | null = null;
 let touch: { el: Element; pointerId: number; x: number; y: number } | null = null;
 const savedTitles = new WeakMap<Element, string>();
+let titleObserver: MutationObserver | null = null;
+
+function syncTitle(el: Element): void {
+	const currentTitle = el.getAttribute("title");
+	if (currentTitle === null) return;
+	if (savedTitles.has(el)) savedTitles.set(el, currentTitle);
+	if (shownEl !== el || !tipEl) return;
+	const text = tooltipText(el);
+	if (!text) {
+		hide();
+		return;
+	}
+	tipEl.textContent = text;
+	placeTooltip(tipEl, el);
+}
 
 function ensureTip(): HTMLDivElement {
 	if (!tipEl) {
@@ -136,14 +151,15 @@ function findTitled(target: EventTarget | null): Element | null {
 function restoreTitle(): void {
 	if (!titleEl) return;
 	const saved = savedTitles.get(titleEl);
-	if (saved !== undefined) titleEl.setAttribute("title", saved);
+	if (saved !== undefined && titleEl.getAttribute("title") === null) titleEl.setAttribute("title", saved);
 	savedTitles.delete(titleEl);
 	titleEl = null;
 }
 
 function saveTitle(el: Element): void {
 	if (titleEl && titleEl !== el) restoreTitle();
-	if (!savedTitles.has(el)) savedTitles.set(el, el.getAttribute("title") ?? "");
+	const currentTitle = el.getAttribute("title");
+	if (currentTitle !== null || !savedTitles.has(el)) savedTitles.set(el, currentTitle ?? "");
 	titleEl = el;
 	el.removeAttribute("title");
 }
@@ -205,7 +221,7 @@ function show(el: Element, text: string): void {
 	tip.classList.add("gui-tooltip--show");
 }
 
-function schedule(el: Element, text: string, delay = TOOLTIP_SHOW_DELAY_MS): void {
+function schedule(el: Element, delay = TOOLTIP_SHOW_DELAY_MS): void {
 	if (shownEl === el || pendingEl === el || dismissedEl === el) return;
 	hide();
 	saveTitle(el);
@@ -213,6 +229,11 @@ function schedule(el: Element, text: string, delay = TOOLTIP_SHOW_DELAY_MS): voi
 	showTimer = window.setTimeout(() => {
 		showTimer = null;
 		if (pendingEl !== el || !el.isConnected || dismissedEl === el) return;
+		const text = tooltipText(el);
+		if (!text) {
+			hide();
+			return;
+		}
 		pendingEl = null;
 		show(el, text);
 	}, delay);
@@ -236,7 +257,7 @@ function onPointerOver(event: PointerEvent): void {
 	if (!el) return;
 	hoveredEl = el;
 	dismissedEl = null;
-	schedule(el, tooltipText(el));
+	schedule(el);
 }
 
 function onPointerOut(event: PointerEvent): void {
@@ -280,7 +301,7 @@ function onPointerDown(event: PointerEvent): void {
 	touchFocusEl = el;
 	dismissedEl = null;
 	touch = { el, pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-	schedule(el, text, TOOLTIP_TOUCH_DELAY_MS);
+	schedule(el, TOOLTIP_TOUCH_DELAY_MS);
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -306,7 +327,7 @@ function onFocusIn(event: FocusEvent): void {
 	if (rect.width === 0 && rect.height === 0) return;
 	focusedEl = el;
 	dismissedEl = null;
-	schedule(el, tooltipText(el));
+	schedule(el);
 }
 
 function onFocusOut(event: FocusEvent): void {
@@ -332,6 +353,12 @@ export function initTooltips(): void {
 	if (inited) return;
 	inited = true;
 	ensureTip();
+	titleObserver ??= new MutationObserver(records => {
+		for (const record of records) {
+			if (record.target instanceof Element) syncTitle(record.target);
+		}
+	});
+	titleObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["title"], subtree: true });
 	document.addEventListener("pointerover", onPointerOver);
 	document.addEventListener("pointerdown", onPointerDown);
 	document.addEventListener("pointerout", onPointerOut);
@@ -353,6 +380,13 @@ export function initTooltips(): void {
 		true,
 	);
 	window.addEventListener("blur", () => {
+		hoveredEl = null;
+		focusedEl = null;
+		touch = null;
+		dismissedEl = null;
+		hide();
+	});
+	window.addEventListener("musepi-ui-dismiss", () => {
 		hoveredEl = null;
 		focusedEl = null;
 		touch = null;

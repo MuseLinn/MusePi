@@ -1,6 +1,16 @@
 import { t, useArchivedSessions } from "@musepi/client-core";
+import type { SessionDirectoryInfo, WorkspaceProject } from "@musepi/pi-wire";
+import {
+	Archive as ArchiveIconData,
+	ArchiveRestore as ArchiveRestoreIconData,
+	ChevronsDownUp as ChevronsDownUpIconData,
+	ChevronsUpDown as ChevronsUpDownIconData,
+	Search as SearchIconData,
+	X as XIconData,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { projectLabel, projectLabels } from "../lib/project-label";
@@ -9,9 +19,26 @@ import type { RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
+import {
+	addProjectDirectory,
+	addSessionDirectory,
+	createProject,
+	deleteProject,
+	directoriesEqual,
+	listProjects,
+	listSessionDirectories,
+	migrateLegacyProjects,
+	mirrorProjects,
+	removeProjectDirectory,
+	removeSessionDirectory,
+	renameProject,
+	setProjectPrimary,
+} from "../lib/workspace-projects";
+import { fileRootSelection, resolveWorkspaceRoot, rootSelectionKey } from "../lib/workspace-roots";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
+import { DialogFrame } from "./DialogFrame";
 import { GroupedSessionList } from "./GroupedSessionList";
 import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
@@ -19,10 +46,12 @@ import { Reveal } from "./Reveal";
 import { SessionHoverCard } from "./SessionHoverCard";
 import {
 	hasCollapsedSubtrees,
+	revealSessionInTree,
 	SessionList,
 	type SessionListNode,
 	type SessionStatus,
 	setAllSubtreesCollapsed,
+	useHasCollapsedSubtrees,
 } from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
@@ -219,6 +248,45 @@ export function SessionSidebar({
 			// storage unavailable
 		}
 	};
+	// The capsule holds two content-sized pills; its thumb is measured from
+	// the active pill instead of assuming equal widths (labels differ by
+	// locale). A hidden copy of the labelled capsule reports how much room
+	// the row needs, so the pills morph to icons exactly when the pane can
+	// no longer fit the text — not at a hardcoded pixel width.
+	const tabstripRef = useRef<HTMLDivElement | null>(null);
+	const tabCapsuleRef = useRef<HTMLDivElement | null>(null);
+	const tabMeasureRef = useRef<HTMLDivElement | null>(null);
+	const tabActionsRef = useRef<HTMLDivElement | null>(null);
+	const tabPillRefs = useRef<Array<HTMLButtonElement | null>>([]);
+	const [tabsIconOnly, setTabsIconOnly] = useState(false);
+	const syncTabstrip = useCallback((): void => {
+		const strip = tabstripRef.current;
+		const capsule = tabCapsuleRef.current;
+		const measure = tabMeasureRef.current;
+		const actions = tabActionsRef.current;
+		if (!strip || !capsule || !measure || !actions) return;
+		setTabsIconOnly(measure.offsetWidth + actions.offsetWidth + 4 > strip.clientWidth);
+		const pill = tabPillRefs.current[tab === "groups" ? 0 : 1];
+		if (!pill) return;
+		// The thumb is inset 2px (capsule padding) and offsetLeft is measured
+		// from the capsule's padding box, so subtract that inset.
+		capsule.style.setProperty("--tab-thumb-x", `${pill.offsetLeft - 2}px`);
+		capsule.style.setProperty("--tab-thumb-w", `${pill.offsetWidth}px`);
+	}, [tab]);
+	useLayoutEffect(() => {
+		syncTabstrip();
+	}, [syncTabstrip, tabsIconOnly]);
+	useEffect(() => {
+		const strip = tabstripRef.current;
+		const measure = tabMeasureRef.current;
+		const actions = tabActionsRef.current;
+		if (!strip || !measure || !actions || typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(() => syncTabstrip());
+		observer.observe(strip);
+		observer.observe(measure);
+		observer.observe(actions);
+		return () => observer.disconnect();
+	}, [syncTabstrip]);
 	const [projMenu, setProjMenu] = useState(false);
 	// 能力中心枢纽悬停菜单：鼠标悬停行即弹出直达 tab 的浮层（单一
 	// 按钮，无独立 chevron），走全局 MenuPopup（portal + 互斥 +
@@ -338,19 +406,37 @@ export function SessionSidebar({
 	// mask-image fade on and off as the list overflows (useScrollShadow).
 	const sessionListRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(sessionListRef);
-	// Persisted project list (projects tab): every folder the app knows —
-	// seeded from session cwds (effect below) and grown by folder picks
-	// (musepi-gui-project-added, dispatched by app.tsx after pickDirectory) so
-	// empty folders show up even before any session exists. Full paths.
-	const [projects, setProjects] = useState<string[]>(() => {
+	// Project blocks (projects tab): the daemon's persisted registry
+	// (`workspace.list`) — explicit managed projects plus implicit rows
+	// backfilled from session cwds. The sidebar keeps no project list of its
+	// own; every mutation goes through RPC and then reloads.
+	const [projects, setProjects] = useState<WorkspaceProject[]>([]);
+	const [projectsError, setProjectsError] = useState<string | null>(null);
+	// Bumped after a mutation or a project-added broadcast to re-run the load.
+	const [projectsRevision, setProjectsRevision] = useState(0);
+	const reloadProjects = useCallback((): void => setProjectsRevision(revision => revision + 1), []);
+	/** Visual order only (drag-to-reorder). Daemon rows the order does not name
+	 *  keep their `lastOpenedAt` order at the bottom. */
+	const [projectOrder, setProjectOrder] = useState<string[]>(() => {
 		try {
-			const raw = localStorage.getItem("musepi-gui-projects");
+			const raw = localStorage.getItem("musepi-gui-projects-order");
 			const parsed: unknown = raw ? JSON.parse(raw) : [];
 			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
 		} catch {
 			return [];
 		}
 	});
+	const orderedProjects = useMemo(() => {
+		const rank = new Map(projectOrder.map((root, index) => [root, index]));
+		return [...projects].sort((a, b) => {
+			const left = rank.get(a.root);
+			const right = rank.get(b.root);
+			if (left === undefined && right === undefined) return 0;
+			if (left === undefined) return 1;
+			if (right === undefined) return -1;
+			return left - right;
+		});
+	}, [projects, projectOrder]);
 	/** Insert-edge hint while dragging a project head (M2.8): which block
 	 * shows the shared .gui-drop-line, and on which edge. The block body
 	 * keeps its swap-on-drop semantics; the head offers precise
@@ -359,7 +445,7 @@ export function SessionSidebar({
 		path: string;
 		edge: "before" | "after";
 	} | null>(null);
-	// Per-project collapse state, keyed by path (expanded by default).
+	// Per-project collapse state, keyed by root (expanded by default).
 	const [collapsedProjects, setCollapsedProjects] = useState<string[]>(() => {
 		try {
 			const raw = localStorage.getItem("musepi-gui-projects-collapsed");
@@ -369,23 +455,27 @@ export function SessionSidebar({
 			return [];
 		}
 	});
-	// Tombstones for the session-cwd seeding below: a project the user
-	// explicitly removed must not be silently resurrected just because its
-	// sessions still exist.
-	const [dismissedProjects, setDismissedProjects] = useState<string[]>(() => {
-		try {
-			const raw = localStorage.getItem("musepi-gui-projects-dismissed");
-			const parsed: unknown = raw ? JSON.parse(raw) : [];
-			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
-		} catch {
-			return [];
+	// Selecting or creating a session reveals it once: its project and its
+	// parent-session chain expand, while every unrelated manual fold stays put.
+	const revealedSelection = useRef<string | null>(null);
+	useEffect(() => {
+		if (!selectedId || revealedSelection.current === selectedId) return;
+		const cwd = sessionMeta.get(selectedId)?.cwd;
+		if (cwd) {
+			setCollapsedProjects(current => (current.includes(cwd) ? current.filter(path => path !== cwd) : current));
 		}
-	});
+		// A brand-new session reaches the tree one poll later; leave the marker
+		// unset until then so the parent chain still opens.
+		if (revealSessionInTree(nodes, selectedId)) revealedSelection.current = selectedId;
+	}, [nodes, selectedId, sessionMeta]);
 	const [sessionCtx, setSessionCtx] = useState<{
 		id: string;
 		x: number;
 		y: number;
 	} | null>(null);
+	/** Working directories of the session whose row menu is open (loaded on
+	 *  demand; a snapshot session has none). */
+	const [sessionDirs, setSessionDirs] = useState<SessionDirectoryInfo[] | null>(null);
 	// Stable row callback: session rows are memoized, so an inline arrow at each
 	// call site would defeat the memo on every sidebar render (5s status poll,
 	// streaming updates, pinned/tag edits) and re-render the whole list.
@@ -476,13 +566,6 @@ export function SessionSidebar({
 	}, []);
 	useEffect(() => {
 		try {
-			localStorage.setItem("musepi-gui-projects", JSON.stringify(projects));
-		} catch {
-			// storage unavailable
-		}
-	}, [projects]);
-	useEffect(() => {
-		try {
 			localStorage.setItem("musepi-gui-projects-collapsed", JSON.stringify(collapsedProjects));
 		} catch {
 			// storage unavailable
@@ -490,70 +573,112 @@ export function SessionSidebar({
 	}, [collapsedProjects]);
 	useEffect(() => {
 		try {
-			localStorage.setItem("musepi-gui-projects-dismissed", JSON.stringify(dismissedProjects));
+			localStorage.setItem("musepi-gui-projects-order", JSON.stringify(projectOrder));
 		} catch {
 			// storage unavailable
 		}
-	}, [dismissedProjects]);
-	// Folders the app picks (打开文件夹 menu, ⌘O, welcome composer) announce
-	// themselves here — add them so empty projects appear immediately, and
-	// clear any dismissal tombstone: an explicit re-add wins.
-	useEffect(() => {
-		const onProjectAdded = (e: Event): void => {
-			const path = (e as CustomEvent<string>).detail;
-			if (typeof path !== "string" || !path) return;
-			setProjects(prev => (prev.includes(path) ? prev : [...prev, path]));
-			setDismissedProjects(prev => (prev.includes(path) ? prev.filter(p => p !== path) : prev));
-		};
-		window.addEventListener("musepi-gui-project-added", onProjectAdded);
-		return () => window.removeEventListener("musepi-gui-project-added", onProjectAdded);
-	}, []);
-	// Seed the project list from session cwds — the behavior the storage-key
-	// comment always promised but that was never implemented. The welcome
-	// chip reads `musepi-gui-project` (current workspace) while this tab read
-	// only the explicitly-added `musepi-gui-projects` list, so a project the
-	// user opened via the header showed in the chip but left the tab blank.
-	// Every folder with at least one session now shows as a block. Remote-
-	// session mirrors (~/.musepi/remote/…) stay out — they belong to
-	// 远程连接, not the local workspace list.
-	useEffect(() => {
+	}, [projectOrder]);
+	// Session cwds are the daemon's implicit-project backfill input, so a new
+	// workspace must re-run `workspace.list` — that is how a folder picked in
+	// the header (or a session created elsewhere) reaches this tab. Remote
+	// mirrors (~/.musepi/remote/…) stay out; they belong to 远程连接.
+	const sessionCwdKey = useMemo(() => {
 		const cwds = new Set<string>();
 		for (const [, meta] of sessionMeta) {
 			if (meta.cwd && !/(^|[\\/])\.musepi[\\/]remote[\\/]/.test(meta.cwd)) cwds.add(meta.cwd);
 		}
-		if (cwds.size === 0) return;
-		setProjects(prev => {
-			const missing = [...cwds].filter(c => !prev.includes(c) && !dismissedProjects.includes(c));
-			return missing.length === 0 ? prev : [...prev, ...missing];
-		});
-	}, [sessionMeta, dismissedProjects]);
-	// Ghost sweep (projects tab): the persisted list accumulates folders seeded
-	// from session cwds over time — deleted/test workspaces (Temp\daemon-viewkey-*)
-	// would linger forever even after the daemon pruned its own rows. Probe each
-	// known path with fs.stat and drop the ones the disk no longer has, together
-	// with their collapse/tombstone state. Runs per list change; a sweep that
-	// removes nothing leaves state untouched, so the effect settles after at
-	// most one removal round.
+		return [...cwds].sort().join("\n");
+	}, [sessionMeta]);
+	// Registry load: import the pre-registry localStorage list once, then read
+	// `workspace.list` and mirror the roots back for surfaces that still read
+	// the legacy key (WelcomeComposer, PR board, scheduled tasks).
 	useEffect(() => {
-		if (!rpc || projects.length === 0) return;
+		if (!rpc) {
+			setProjects([]);
+			return;
+		}
+		let cancelled = false;
+		void (async () => {
+			try {
+				const migration = await migrateLegacyProjects(rpc);
+				if (cancelled) return;
+				if (!migration.migrated && migration.imported.length === 0 && migration.failed.length > 0) {
+					pushActionToast({ kind: "error", message: t("settings.projectMigrationFailed") });
+				}
+				const rows = await listProjects(rpc);
+				if (cancelled) return;
+				// Remote-session mirrors (~/.musepi/remote/…) belong to 远程连接,
+				// not the local workspace list: keep them out of the implicit
+				// blocks the daemon backfills from every session cwd.
+				const visible = rows.filter(
+					row => row.kind !== "implicit" || !/(^|[\\/])\.musepi[\\/]remote[\\/]/.test(row.root),
+				);
+				setProjects(visible);
+				setProjectsError(null);
+				mirrorProjects(localStorage, visible);
+			} catch (error) {
+				if (cancelled) return;
+				setProjectsError(error instanceof Error ? error.message : String(error));
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, projectsRevision, sessionCwdKey]);
+	// Folders the app picks (打开文件夹 menu, ⌘O, welcome composer) create the
+	// registry row themselves and announce it — re-read instead of patching a
+	// local copy, so the daemon stays the only list.
+	useEffect(() => {
+		const onProjectsChanged = (): void => reloadProjects();
+		window.addEventListener("musepi-gui-projects-changed", onProjectsChanged);
+		window.addEventListener("musepi-gui-project-added", onProjectsChanged);
+		return () => {
+			window.removeEventListener("musepi-gui-projects-changed", onProjectsChanged);
+			window.removeEventListener("musepi-gui-project-added", onProjectsChanged);
+		};
+	}, [reloadProjects]);
+	// Implicit rows are backfilled from session cwds, so deleted temp/test
+	// workspaces (Temp\daemon-viewkey-*) would linger forever. Sweep only
+	// implicit rows (a managed row was added deliberately and may be a
+	// temporarily unavailable mount); the daemon tombstones the root, so the
+	// removed row does not come back on the next load.
+	useEffect(() => {
+		if (!rpc) return;
+		const gone = projects.filter(project => project.kind === "implicit");
+		if (gone.length === 0) return;
 		let cancelled = false;
 		void Promise.all(
-			projects.map(p => rpc.request<{ exists?: boolean }>("fs.stat", { path: p }).catch(() => null)),
+			gone.map(p => rpc.request<{ exists?: boolean }>("fs.stat", { path: p.root }).catch(() => null)),
 		).then(results => {
 			if (cancelled) return;
-			const gone = new Set<string>();
-			results.forEach((r, i) => {
-				if (r && r.exists === false) gone.add(projects[i]!);
+			const missing = gone.filter((_, index) => results[index]?.exists === false);
+			if (missing.length === 0) return;
+			void Promise.allSettled(missing.map(project => deleteProject(rpc, project.id))).then(() => {
+				if (!cancelled) reloadProjects();
 			});
-			if (gone.size === 0) return;
-			setProjects(prev => prev.filter(p => !gone.has(p)));
-			setCollapsedProjects(prev => prev.filter(p => !gone.has(p)));
-			setDismissedProjects(prev => prev.filter(p => !gone.has(p)));
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [rpc, projects]);
+	}, [rpc, projects, reloadProjects]);
+	// Root choices in the session row menu need the live session's working
+	// directories; load them when the menu opens and drop them on close.
+	useEffect(() => {
+		const sessionId = sessionCtx?.id;
+		setSessionDirs(null);
+		if (!rpc || !sessionId) return;
+		let cancelled = false;
+		void listSessionDirectories(rpc, sessionId)
+			.then(rows => {
+				if (!cancelled) setSessionDirs(rows);
+			})
+			.catch(() => {
+				// A snapshot session is not live: no additional roots to offer.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, sessionCtx?.id]);
 	// The header's session ⋯ menu (and the task center) can archive sessions —
 	// useArchivedSessions subscribes to the shared store, so this component's
 	// copy follows every writer without a reload.
@@ -629,27 +754,188 @@ export function SessionSidebar({
 			/>
 		</div>
 	);
+	const projectRoots = useMemo(() => projects.map(project => project.root), [projects]);
+	const projectOf = useCallback(
+		(root: string): WorkspaceProject | undefined => projects.find(project => project.root === root),
+		[projects],
+	);
+	/** Run one registry mutation, then re-read `workspace.list`. */
+	const runProjectMutation = useCallback(
+		async (action: () => Promise<unknown>, message: string): Promise<void> => {
+			try {
+				await action();
+				reloadProjects();
+			} catch (error) {
+				const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+				pushActionToast({ kind: "error", message: `${message}${detail}` });
+			}
+		},
+		[reloadProjects],
+	);
 	const toggleProject = (path: string): void => {
 		setCollapsedProjects(prev => (prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]));
 	};
-	const removeProject = (path: string): void => {
+	const removeProject = (root: string): void => {
+		const project = projectOf(root);
+		if (!rpc || !project) return;
 		// Disambiguated too (issue #15) — "remove demo?" is ambiguous when two
 		// different folders are both called demo.
-		void confirm(`${t("general.removeProject")} ${projectLabel(path, projects)}?`, t("general.remove"), {
+		void confirm(`${t("general.removeProject")} ${projectLabel(root, projectRoots)}?`, t("general.remove"), {
 			destructive: true,
 		}).then(ok => {
 			if (!ok) return;
-			setProjects(prev => prev.filter(p => p !== path));
-			setCollapsedProjects(prev => prev.filter(p => p !== path));
-			// Keep the seeder honest: remember the explicit removal so the
-			// session-cwd seed doesn't resurrect the block on the next poll.
-			setDismissedProjects(prev => (prev.includes(path) ? prev : [...prev, path]));
+			void runProjectMutation(() => deleteProject(rpc, project.id), t("settings.projectDeleteFailed")).then(() => {
+				setCollapsedProjects(prev => prev.filter(p => p !== root));
+				setProjectOrder(prev => prev.filter(p => p !== root));
+			});
 		});
+	};
+	const renameProjectByRoot = (root: string): void => {
+		const project = projectOf(root);
+		if (!rpc || !project) return;
+		void prompt({ title: t("settings.renameProject"), defaultValue: project.name }).then(name => {
+			const trimmed = name?.trim();
+			if (!trimmed || trimmed === project.name) return;
+			void runProjectMutation(async () => {
+				// An implicit row is a session-history backfill; renaming it is an
+				// explicit claim, so promote it to managed. `workspace.create`
+				// keeps the row id for an existing root.
+				if (project.kind === "implicit") await createProject(rpc, project.root, trimmed);
+				else await renameProject(rpc, project.id, trimmed);
+			}, t("settings.projectRenameFailed"));
+		});
+	};
+	const promoteProject = (root: string): void => {
+		const project = projectOf(root);
+		if (!rpc || !project) return;
+		void runProjectMutation(() => createProject(rpc, project.root, project.name), t("settings.projectPromoteFailed"));
+	};
+	// Working-directory manager (project context menu): the daemon row is the
+	// authority, so the dialog re-reads the project from the loaded list on
+	// every render and mutations reload it.
+	const [dirsProjectId, setDirsProjectId] = useState<string | null>(null);
+	const [dirsBusy, setDirsBusy] = useState(false);
+	const [dirsNotice, setDirsNotice] = useState<string | null>(null);
+	const dirsProject = dirsProjectId ? (projects.find(project => project.id === dirsProjectId) ?? null) : null;
+	const openProjectDirectories = (root: string): void => {
+		const project = projectOf(root);
+		if (!project) return;
+		setDirsNotice(null);
+		setDirsProjectId(project.id);
+	};
+	const closeProjectDirectories = (): void => {
+		setDirsProjectId(null);
+		setDirsNotice(null);
+		setDirsBusy(false);
+	};
+	const addDirectoryToProject = async (): Promise<void> => {
+		if (!rpc || !dirsProject) return;
+		const value = await prompt({
+			title: t("settings.addDirectoryPrompt"),
+			placeholder: t("settings.directoryPathPlaceholder"),
+		});
+		const directory = value?.trim();
+		if (!directory) return;
+		setDirsBusy(true);
+		setDirsNotice(null);
+		try {
+			const result = await addProjectDirectory(rpc, dirsProject, directory);
+			const duplicate = result.duplicates[0];
+			if (duplicate) setDirsNotice(t("settings.directoryDuplicate", { path: duplicate.directory }));
+			reloadProjects();
+		} catch (error) {
+			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+			setDirsNotice(`${t("settings.addDirectoryFailed")}${detail}`);
+		} finally {
+			setDirsBusy(false);
+		}
+	};
+	const removeDirectoryFromProject = async (directory: string): Promise<void> => {
+		if (!rpc || !dirsProject) return;
+		setDirsBusy(true);
+		setDirsNotice(null);
+		try {
+			await removeProjectDirectory(rpc, dirsProject, directory);
+			reloadProjects();
+		} catch (error) {
+			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+			setDirsNotice(`${t("settings.removeDirectoryFailed")}${detail}`);
+		} finally {
+			setDirsBusy(false);
+		}
+	};
+	const makeDirectoryPrimary = async (directory: string): Promise<void> => {
+		if (!rpc || !dirsProject) return;
+		const previousRoot = dirsProject.root;
+		setDirsBusy(true);
+		setDirsNotice(null);
+		try {
+			const workspace = await setProjectPrimary(rpc, dirsProject.id, directory);
+			// Collapse/order state is keyed by root; move it with the swap so the
+			// block does not lose its place (or reopen) after promotion.
+			const remap = (root: string): string => (directoriesEqual(root, previousRoot) ? workspace.root : root);
+			setCollapsedProjects(prev => prev.map(remap));
+			setProjectOrder(prev => prev.map(remap));
+			reloadProjects();
+		} catch (error) {
+			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+			setDirsNotice(`${t("settings.setPrimaryFailed")}${detail}`);
+		} finally {
+			setDirsBusy(false);
+		}
+	};
+	// ── Session working directories (live session header) ──────────────
+	// The file pane offers these roots; the daemon validates and reports an
+	// already-present directory through `duplicate` instead of failing.
+	const addWorkingDirectory = async (sessionId: string): Promise<void> => {
+		if (!rpc) return;
+		const value = await prompt({
+			title: t("settings.addDirectoryPrompt"),
+			placeholder: t("settings.directoryPathPlaceholder"),
+		});
+		const directory = value?.trim();
+		if (!directory) return;
+		try {
+			const result = await addSessionDirectory(rpc, sessionId, directory);
+			setSessionDirs(result.directories);
+			if (result.duplicate) {
+				pushActionToast({
+					kind: "error",
+					message: t("settings.directoryDuplicate", { path: result.duplicate.directory }),
+				});
+				return;
+			}
+			pushActionToast({
+				kind: "success",
+				message: t("settings.directoryAdded", { path: result.directory ?? directory }),
+			});
+		} catch (error) {
+			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+			pushActionToast({ kind: "error", message: `${t("settings.addDirectoryFailed")}${detail}` });
+		}
+	};
+	const removeWorkingDirectory = async (sessionId: string, directory: string): Promise<void> => {
+		if (!rpc) return;
+		try {
+			setSessionDirs(await removeSessionDirectory(rpc, sessionId, directory));
+			pushActionToast({
+				kind: "success",
+				message: t("settings.directoryRemoved", { path: directory }),
+			});
+		} catch (error) {
+			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+			pushActionToast({ kind: "error", message: `${t("settings.removeDirectoryFailed")}${detail}` });
+		}
 	};
 	// Collapse/expand every project at once (tab-row quick toggle).
 	const collapseAllProjects = (collapse: boolean): void => {
-		setCollapsedProjects(collapse ? [...projects] : []);
+		setCollapsedProjects(collapse ? [...projectRoots] : []);
 	};
+	// Icon direction for the same button: any collapsed subtree/block means
+	// the next click expands, so the glyph shows the action, not a fixed shape.
+	const subtreesCollapsed = useHasCollapsedSubtrees();
+	const anyCollapsed =
+		tab === "groups" ? groupsAll === true || subtreesCollapsed : collapsedProjects.length > 0 || subtreesCollapsed;
 	const renameGroup = (index: number): void => {
 		// Inline edit inside the group block (no prompt dialog).
 		setGroupCtx(null);
@@ -765,39 +1051,65 @@ export function SessionSidebar({
 						</div>
 					)}
 				</div>
-				{/* Group / project tabs: the capsule wraps ONLY the two fixed-width
-				 * pills; the right cluster carries a collapse/expand-all quick toggle
-				 * plus the contextual and archive actions. mx-5 keeps the capsule
-				 * flush with the menu row's content above (px-2.5 container + 10px
-				 * item padding), and ml-auto on the cluster mirrors the shortcut
+				{/* Group / project tabs: the capsule wraps ONLY the two pills; the
+				 * right cluster carries a collapse/expand-all quick toggle plus the
+				 * contextual and archive actions. mx-5 keeps the capsule flush with
+				 * the menu row's content above (px-2.5 container + 10px item
+				 * padding), and ml-auto on the cluster mirrors the shortcut
 				 * symbols' right edge — both scale with pane width. */}
-				<div className="gui-tabstrip mx-5 mt-3 flex items-center">
+				<div className="gui-tabstrip mx-5 mt-3 flex items-center" ref={tabstripRef}>
 					{/* Sliding thumb: the capsule tracks the active tab with one
-					 * translating highlight (both pills are fixed-width, so the
-					 * thumb position is deterministic — no measuring). */}
-					<div className="gui-tabstrip-capsule" data-tab={tab}>
+					 * translating highlight. Pills size to their labels (locale-
+					 * dependent), so the thumb geometry is measured from the active
+					 * pill instead of assuming equal halves. */}
+					<div
+						className={`gui-tabstrip-capsule${tabsIconOnly ? " gui-tabstrip-capsule--icon" : ""}`}
+						ref={tabCapsuleRef}
+					>
 						<span className="gui-tab-thumb" aria-hidden />
+						{/* Hidden label copy: reports the width the row needs for text,
+						 * so the morph below reacts to the real content, not a guess. */}
+						<div className="gui-tab-measure" aria-hidden ref={tabMeasureRef}>
+							<span className="gui-tab-pill gui-tab-pill--fixed">
+								<Icon name="stack" className="h-3.5 w-3.5" />
+								<span className="gui-tab-pill-label">{t("settings.groups")}</span>
+							</span>
+							<span className="gui-tab-pill gui-tab-pill--fixed">
+								<Icon name="folder" className="h-3.5 w-3.5" />
+								<span className="gui-tab-pill-label">{t("settings.projects")}</span>
+							</span>
+						</div>
 						<button
 							type="button"
+							ref={el => {
+								tabPillRefs.current[0] = el;
+							}}
 							className={`gui-tab-pill gui-tab-pill--fixed${tab === "groups" ? " gui-tab-pill--active" : ""}`}
+							title={t("settings.groups")}
+							aria-label={t("settings.groups")}
 							onClick={() => pickTab("groups")}
 						>
-							<Icon name="folder-3" className="h-3.5 w-3.5" />
-							<span>{t("settings.groups")}</span>
+							<Icon name="stack" className="h-3.5 w-3.5" />
+							<span className="gui-tab-pill-label">{t("settings.groups")}</span>
 						</button>
 						<button
 							type="button"
+							ref={el => {
+								tabPillRefs.current[1] = el;
+							}}
 							className={`gui-tab-pill gui-tab-pill--fixed${tab === "projects" ? " gui-tab-pill--active" : ""}`}
+							title={t("settings.projects")}
+							aria-label={t("settings.projects")}
 							onClick={() => pickTab("projects")}
 						>
 							<Icon name="folder" className="h-3.5 w-3.5" />
-							<span>{t("settings.projects")}</span>
+							<span className="gui-tab-pill-label">{t("settings.projects")}</span>
 						</button>
 					</div>
 					{/* Right cluster: never shrinks — the capsule flexes instead, so
 					 * the toggle/add/archive buttons stay fully visible at any pane
 					 * width and always sit flush to the strip's right edge. */}
-					<div className="ml-auto flex flex-shrink-0 items-center gap-0.5">
+					<div className="ml-auto flex flex-shrink-0 items-center gap-0.5" ref={tabActionsRef}>
 						{/* Session search toggle: keyboard reachable (Tab → Enter) and
 						 * the ⌘⇧F accelerator (⌘F is the in-chat find bar); `data-search-toggle`
 						 * keeps the box's outside-dismiss from swallowing the closing click. */}
@@ -813,7 +1125,13 @@ export function SessionSidebar({
 								else setSearchOpen(true);
 							}}
 						>
-							<Icon name="search" className="h-3.5 w-3.5" />
+							<MorphIcon
+								icon={searchOpen ? XIconData : SearchIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
 						</button>
 						<button
 							type="button"
@@ -832,7 +1150,13 @@ export function SessionSidebar({
 								setAllSubtreesCollapsed(collapse);
 							}}
 						>
-							<Icon name="expand-up-down" className="h-3.5 w-3.5" />
+							<MorphIcon
+								icon={anyCollapsed ? ChevronsUpDownIconData : ChevronsDownUpIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
 						</button>
 						{tab === "groups" ? (
 							<button
@@ -868,15 +1192,22 @@ export function SessionSidebar({
 						)}
 						<button
 							type="button"
-							className="gui-tab-action"
+							className={`gui-tab-action${archivedView ? " gui-tab-action--active" : ""}`}
 							title={t("settings.archive")}
 							aria-label={t("settings.archive")}
+							aria-pressed={archivedView}
 							onClick={() => {
 								setArchivedView(v => !v);
 								setViewMenu(false);
 							}}
 						>
-							<Icon name="archive" className="h-3.5 w-3.5" />
+							<MorphIcon
+								icon={archivedView ? ArchiveRestoreIconData : ArchiveIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
 						</button>
 					</div>
 				</div>
@@ -1095,6 +1426,11 @@ export function SessionSidebar({
 										</button>
 									</MenuPopup>
 								</div>
+								{projectsError && (
+									<p className="gui-error mx-2" role="alert">
+										{projectsError}
+									</p>
+								)}
 								{projView === "timeline" ? (
 									<>
 										{pinnedNodes.length > 0 && (
@@ -1129,10 +1465,10 @@ export function SessionSidebar({
 									</>
 								) : (
 									(() => {
-										// Project blocks: persisted folder list, each a
-										// collapsible block. Sessions group by exact cwd; folders
-										// without sessions still show (empty state) so a freshly
-										// picked 打开文件夹 appears immediately.
+										// Project blocks: registry rows from `workspace.list`,
+										// each a collapsible block. Sessions group by exact cwd;
+										// a project without sessions still shows (empty state)
+										// so a freshly picked 打开文件夹 appears immediately.
 										const byCwd = new Map<string, SessionListNode[]>();
 										const noFolder: SessionListNode[] = [];
 										for (const n of regularNodes) {
@@ -1145,25 +1481,15 @@ export function SessionSidebar({
 												noFolder.push(n);
 											}
 										}
-										// Only user-added workspaces show; their sessions appear below.
-										const known = [...projects];
-										// Most recently touched projects first; empty ones keep
-										// list order at the bottom.
-										const order = known.sort((a, b) => {
-											const la = byCwd.get(a);
-											const lb = byCwd.get(b);
-											if (!la && !lb) return 0;
-											if (!la) return 1;
-											if (!lb) return -1;
-											return (
-												new Date(lb[0]!.entry.timestamp).getTime() -
-												new Date(la[0]!.entry.timestamp).getTime()
-											);
-										});
 										// Issue #15: identity stays the full path; only the
 										// LABEL widens when two folders share a basename
-										// (`a/demo` vs `b/demo`).
-										const labels = projectLabels(order);
+										// (`a/demo` vs `b/demo`). A managed project's own name
+										// wins unless two projects share it.
+										const labels = projectLabels(orderedProjects.map(project => project.root));
+										const nameCounts = new Map<string, number>();
+										for (const project of orderedProjects) {
+											nameCounts.set(project.name, (nameCounts.get(project.name) ?? 0) + 1);
+										}
 										return (
 											<>
 												{pinnedNodes.length > 0 && (
@@ -1183,9 +1509,14 @@ export function SessionSidebar({
 													</div>
 												)}
 												{cronNodes.length > 0 && cronSection}
-												{order.map(path => {
+												{orderedProjects.map(project => {
+													const path = project.root;
 													const list = byCwd.get(path) ?? [];
 													const isCollapsed = collapsedProjects.includes(path);
+													const label =
+														(nameCounts.get(project.name) ?? 0) > 1
+															? (labels.get(path) ?? baseName(path))
+															: project.name;
 													return (
 														<div
 															key={path}
@@ -1200,13 +1531,13 @@ export function SessionSidebar({
 																if (!data.startsWith("project:")) return;
 																const from = data.slice(8);
 																if (from === path) return;
-																setProjects(prev => {
-																	const fi = prev.indexOf(from);
-																	const ti = prev.indexOf(path);
-																	if (fi < 0 || ti < 0) return prev;
-																	const next = [...prev];
+																setProjectOrder(() => {
+																	const next = orderedProjects.map(project => project.root);
+																	const fi = next.indexOf(from);
+																	const ti = next.indexOf(path);
+																	if (fi < 0 || ti < 0) return next;
 																	const [moved] = next.splice(fi, 1);
-																	next.splice(ti, 0, moved);
+																	next.splice(ti, 0, moved!);
 																	return next;
 																});
 															}}
@@ -1259,10 +1590,13 @@ export function SessionSidebar({
 																		if (!data.startsWith("project:")) return;
 																		const from = data.slice(8);
 																		if (from === path) return;
-																		setProjects(prev => {
-																			const next = prev.filter(p => p !== from);
+																		setProjectOrder(() => {
+																			const next = orderedProjects
+																				.map(project => project.root)
+																				.filter(root => root !== from);
 																			let ti = next.indexOf(path);
-																			if (ti < 0) return prev;
+																			if (ti < 0)
+																				return orderedProjects.map(project => project.root);
 																			if (edge === "after") ti += 1;
 																			next.splice(ti, 0, from);
 																			return next;
@@ -1282,9 +1616,15 @@ export function SessionSidebar({
 																	}}
 																>
 																	<Icon name="folder" className="h-3 w-3" />
-																	<span className="min-w-0 flex-1 truncate">
-																		{labels.get(path) ?? baseName(path)}
-																	</span>
+																	<span className="min-w-0 flex-1 truncate">{label}</span>
+																	{project.kind === "implicit" && (
+																		<span
+																			className="flex-shrink-0 text-[10px] text-[var(--color-text-faint)]"
+																			title={t("settings.implicitProjectHint")}
+																		>
+																			{t("settings.implicitProject")}
+																		</span>
+																	)}
 																	<span className="gui-project-count">{list.length}</span>
 																	<Icon
 																		name="arrow-down-s"
@@ -1612,6 +1952,51 @@ export function SessionSidebar({
 										if (cwd) void navigator.clipboard?.writeText(cwd).catch(() => {});
 									},
 								},
+								// 文件面板根目录：一个会话可挂多个工作目录，文件面板
+								// 一次只浏览一个；这里选择的是「下次打开文件面板时用哪
+								// 个根」，选择按 session id 隔离，切会话不会串。
+								...(() => {
+									if (!sessionDirs || !rpc) return [];
+									const roots = sessionDirs.map(directory => directory.path);
+									const cwd = sessionMeta.get(sessionCtx.id)?.cwd ?? roots[0] ?? "";
+									if (!cwd) return [];
+									const selected = resolveWorkspaceRoot(
+										cwd,
+										roots,
+										fileRootSelection.get(rootSelectionKey(sessionCtx.id, cwd)),
+									);
+									return [
+										{ divider: true },
+										...(roots.length > 1
+											? roots.map(path => ({
+													label: baseName(path),
+													description: directoriesEqual(path, cwd) ? t("settings.primaryDirectory") : path,
+													icon: directoriesEqual(path, selected) ? "check" : "folder",
+													onSelect: () => {
+														fileRootSelection.set(rootSelectionKey(sessionCtx.id, cwd), path);
+														pushActionToast({
+															kind: "success",
+															message: t("general.fileRootSelected", { path }),
+														});
+													},
+												}))
+											: []),
+										{
+											label: t("settings.addWorkingDirectory"),
+											icon: "folder-add",
+											onSelect: () => void addWorkingDirectory(sessionCtx.id),
+										},
+										...sessionDirs
+											.filter(directory => !directory.primary)
+											.map(directory => ({
+												label: `${t("settings.removeDirectory")}: ${baseName(directory.path)}`,
+												description: directory.path,
+												icon: "delete-bin",
+												danger: true,
+												onSelect: () => void removeWorkingDirectory(sessionCtx.id, directory.path),
+											})),
+									];
+								})(),
 								{
 									label: t("transcript.copySessionId"),
 									icon: "clipboard",
@@ -1699,46 +2084,169 @@ export function SessionSidebar({
 				}
 			/>
 			{/* Project block right-click menu: same frosted-glass ContextMenu
-			 * component as the group menu — open folder,
-			 * copy path, remove project. */}
+			 * component as the group menu — open folder, copy path, rename,
+			 * working directories, remove project. An implicit row (session
+			 * history backfill) is read-only until it is promoted to managed. */}
 			<ContextMenu
 				open={projectCtx !== null}
 				x={projectCtx?.x ?? 0}
 				y={projectCtx?.y ?? 0}
 				onClose={() => setProjectCtx(null)}
-				items={
-					projectCtx
-						? [
-								{
-									label: t("settings.openFinder"),
-									icon: "folder-open",
-									onSelect: () => {
-										const api = (
-											window as unknown as {
-												electronAPI?: { revealPath?(p: string): Promise<void> };
-											}
-										).electronAPI;
-										if (api?.revealPath) void api.revealPath(projectCtx.path);
-									},
-								},
-								{
-									label: t("settings.copyPath"),
-									icon: "clipboard",
-									onSelect: () => {
-										void navigator.clipboard?.writeText(projectCtx.path).catch(() => {});
-									},
-								},
-								{ divider: true },
-								{
-									label: t("general.removeProject"),
-									icon: "delete-bin",
-									danger: true,
-									onSelect: () => removeProject(projectCtx.path),
-								},
-							]
-						: []
-				}
+				items={(() => {
+					if (!projectCtx) return [];
+					const project = projectOf(projectCtx.path);
+					const reveal = {
+						label: t("settings.openFinder"),
+						icon: "folder-open",
+						onSelect: () => {
+							const api = (
+								window as unknown as {
+									electronAPI?: { revealPath?(p: string): Promise<void> };
+								}
+							).electronAPI;
+							if (api?.revealPath) void api.revealPath(projectCtx.path);
+						},
+					};
+					const copyPath = {
+						label: t("settings.copyPath"),
+						icon: "clipboard",
+						onSelect: () => {
+							void navigator.clipboard?.writeText(projectCtx.path).catch(() => {});
+						},
+					};
+					if (!project || project.kind === "implicit") {
+						return [
+							reveal,
+							copyPath,
+							{ divider: true },
+							{
+								label: t("settings.promoteProject"),
+								description: t("settings.promoteProjectHint"),
+								icon: "folder-add",
+								disabled: !rpc,
+								onSelect: () => promoteProject(projectCtx.path),
+							},
+						];
+					}
+					return [
+						reveal,
+						copyPath,
+						{ divider: true },
+						{
+							label: t("settings.renameProject"),
+							icon: "pencil",
+							disabled: !rpc,
+							onSelect: () => renameProjectByRoot(projectCtx.path),
+						},
+						{
+							label: t("settings.manageDirectories"),
+							description: t("settings.manageDirectoriesHint"),
+							icon: "folder",
+							disabled: !rpc,
+							onSelect: () => {
+								setProjectCtx(null);
+								openProjectDirectories(projectCtx.path);
+							},
+						},
+						{ divider: true },
+						{
+							label: t("general.removeProject"),
+							icon: "delete-bin",
+							danger: true,
+							disabled: !rpc,
+							onSelect: () => removeProject(projectCtx.path),
+						},
+					];
+				})()}
 			/>
+			{/* Working-directory manager: primary root plus the registry's
+			 * additional directories, all mutated through `workspace.*`. The
+			 * daemon reports an already-present directory through `duplicates`;
+			 * that hint wins over a silent no-op. */}
+			<DialogFrame
+				open={dirsProject !== null}
+				onClose={closeProjectDirectories}
+				label={t("settings.manageDirectories")}
+			>
+				{dirsProject && (
+					<div className="flex w-[min(420px,80vw)] flex-col gap-3 p-4">
+						<div>
+							<h3 className="m-0 text-[14px] font-medium">{dirsProject.name}</h3>
+							<p className="m-0 mt-1 text-[11px] text-[var(--color-text-faint)]">{dirsProject.root}</p>
+						</div>
+						<div className="flex flex-col gap-1">
+							<div className="gui-group-label pb-1">{t("settings.projectDirectories")}</div>
+							{(() => {
+								const rows = [dirsProject.root, ...dirsProject.additionalDirs];
+								return rows.map(directory => {
+									const primary = directory === dirsProject.root;
+									return (
+										<div
+											key={directory}
+											className="flex items-center gap-2 rounded-md px-2 py-1 text-[12px] hover:bg-[var(--color-hover)]"
+										>
+											<Icon name={primary ? "folder" : "folder-add"} className="h-3.5 w-3.5 flex-shrink-0" />
+											<span className="min-w-0 flex-1 truncate" title={directory}>
+												{directory}
+											</span>
+											{primary ? (
+												<span className="flex-shrink-0 text-[10px] text-[var(--color-text-faint)]">
+													{t("settings.primaryDirectory")}
+												</span>
+											) : (
+												<>
+													<button
+														type="button"
+														className="gui-pane-action w-auto flex-shrink-0 px-1.5 text-[11px]"
+														disabled={dirsBusy}
+														onClick={() => void makeDirectoryPrimary(directory)}
+													>
+														{t("settings.setAsPrimary")}
+													</button>
+													<button
+														type="button"
+														className="gui-pane-action w-auto flex-shrink-0 px-1.5 text-[11px]"
+														disabled={dirsBusy}
+														title={t("settings.removeDirectory")}
+														aria-label={t("settings.removeDirectory")}
+														onClick={() => void removeDirectoryFromProject(directory)}
+													>
+														<Icon name="delete-bin" className="h-3.5 w-3.5" />
+													</button>
+												</>
+											)}
+										</div>
+									);
+								});
+							})()}
+						</div>
+						{dirsProject.additionalDirs.length === 0 && (
+							<p className="m-0 text-[11px] text-[var(--color-text-faint)]">
+								{t("settings.projectDirectoriesEmpty")}
+							</p>
+						)}
+						{dirsNotice && (
+							<p className="m-0 text-[11px] text-[var(--color-danger)]" role="alert">
+								{dirsNotice}
+							</p>
+						)}
+						<div className="flex items-center justify-between gap-2">
+							<button
+								type="button"
+								className="gui-pane-action w-auto"
+								disabled={dirsBusy}
+								onClick={() => void addDirectoryToProject()}
+							>
+								<Icon name="add-circle" className="h-3.5 w-3.5" />
+								<span>{t("settings.addDirectory")}</span>
+							</button>
+							<button type="button" className="gui-pane-action w-auto" onClick={closeProjectDirectories}>
+								{t("settings.close")}
+							</button>
+						</div>
+					</div>
+				)}
+			</DialogFrame>
 			{/* Session hover card — one instance for the whole sidebar; rows
 			 *  report through the module bus (SessionHoverCard.tsx), the card
 			 *  portals to document.body so the sidebar's glass/transform

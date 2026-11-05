@@ -1,4 +1,6 @@
 import { t } from "@musepi/client-core";
+import { ListChecks as ListChecksIconData, Menu as MenuIconData, Rocket as RocketIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,7 +11,6 @@ import { useFocusTrap } from "../lib/use-focus-trap";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { MENU_ANIM_MS } from "./MenuPopup";
-import { StateIconN } from "./StateIcon";
 
 type PaletteTab = "all" | "actions" | "tasks";
 
@@ -313,13 +314,11 @@ export function CommandPalette({
 								setActive(0);
 							}}
 						>
-							<StateIconN
-								value={id}
-								options={{
-									all: "menu-2",
-									actions: "rocket",
-									list: "list-check-2",
-								}}
+							<MorphIcon
+								icon={id === "all" ? MenuIconData : id === "actions" ? RocketIconData : ListChecksIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
 								className="h-3.5 w-3.5"
 							/>
 							<span>

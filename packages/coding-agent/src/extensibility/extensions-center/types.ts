@@ -73,6 +73,10 @@ export interface Extension {
 	description?: string;
 	/** Manifest-declared experimental status. */
 	experimental?: boolean;
+	/** 清单声明的图标：emoji、文字字形或 http(s)/file URI。 */
+	icon?: string;
+	/** 只在 Agent 预设里按会话提供（persona 包）：不构成独立的用户启停面。 */
+	presetOnly?: boolean;
 	/** Trigger pattern (slash command, glob, regex) */
 	trigger?: string;
 	/** Absolute path to source file */

@@ -2,6 +2,7 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { tabAgent } from "../lib/managed-browser-host";
 import { Icon } from "../vendor/oc-icons";
 
 export interface BrowserControlActivity {
@@ -12,6 +13,9 @@ export interface BrowserControlActivity {
 	status: string;
 	tabId: string;
 	at: number;
+	/** Operator announced with the activity, when the host knows it. */
+	agentId?: string | null;
+	agentName?: string | null;
 }
 
 const EXIT_MS = 180;
@@ -66,6 +70,10 @@ export function BrowserControlOverlay({
 	const seconds = elapsed % 60;
 	const time = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 	const state = closing ? "closing" : inView ? "running" : "out-of-view";
+	// The activity ledger names the tab, not the agent. A subagent's browser
+	// tab carries its operator, so resolve the name from the tab when the
+	// activity itself does not carry one.
+	const agentName = displayActivity.agentName ?? tabAgent(displayActivity.tabId)?.name ?? null;
 	const takeover = async (): Promise<void> => {
 		if (pending) return;
 		setPending(true);
@@ -101,6 +109,15 @@ export function BrowserControlOverlay({
 							: inView
 								? t("tools.agentOperating")
 								: t("tools.controlOutOfView")}
+						{agentName && (
+							<span
+								data-browser-agent={agentName}
+								title={agentName}
+								style={{ marginLeft: 6, fontWeight: 500, color: "var(--color-text-muted)" }}
+							>
+								{t("tools.browserAgentOperator", { agent: agentName })}
+							</span>
+						)}
 					</span>
 					<span className="gui-browser-control-summary">{displayActivity.summary}</span>
 				</span>

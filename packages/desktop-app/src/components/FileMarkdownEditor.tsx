@@ -3,29 +3,10 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "../styles/gui-markdown-editor.css";
+import { markdownHtmlView, markdownImagePath } from "./markdown-html";
 import { installMarkdownToolbarOverflow } from "./markdown-toolbar";
 
-/** Resolve an image reference without turning the Markdown source into a
- * temporary blob/data URL. Only the DOM receives the readable data URL. */
-export function markdownImagePath(documentPath: string, source: string): string | null {
-	if (/^(https?:|data:)/i.test(source)) return null;
-	if (!source || /^blob:/i.test(source)) return null;
-	const raw = source.startsWith("file://") ? source.slice("file://".length) : source;
-	if (!/\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)(?:[?#].*)?$/i.test(raw)) return null;
-	const clean = raw.split(/[?#]/, 1)[0] ?? "";
-	if (/^(?:[a-z]:[\\/]|\/|~)/i.test(clean)) return clean;
-	const separator = Math.max(documentPath.lastIndexOf("/"), documentPath.lastIndexOf("\\"));
-	const base = separator >= 0 ? documentPath.slice(0, separator + 1) : "";
-	const segments = `${base}${clean}`.replace(/\\/g, "/").split("/");
-	const normalized: string[] = [];
-	for (const segment of segments) {
-		if (!segment || segment === ".") continue;
-		if (segment === ".." && normalized.at(-1) !== "..") normalized.pop();
-		else normalized.push(segment);
-	}
-	const prefix = /^[a-z]:/i.test(segments[0] ?? "") ? "" : "/";
-	return `${prefix}${normalized.join("/")}`;
-}
+export { markdownImagePath };
 
 export function hasYamlFrontMatter(markdown: string): boolean {
 	return /^\uFEFF?---[\t ]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[\t ]*(?:\r?\n|$)/.test(markdown);
@@ -214,6 +195,9 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 							},
 						},
 					});
+					// README raw HTML (`<p align="center">`, `<img>`, badges) renders
+					// through a node view; the atom's value still serializes verbatim.
+					next.editor.use(markdownHtmlView(path));
 					crepe = next;
 					next.on(listener => {
 						listener.markdownUpdated((_ctx, markdown) => {

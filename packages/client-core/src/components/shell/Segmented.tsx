@@ -40,6 +40,7 @@ export function Segmented<T extends string>({
 	shake = false,
 	onShakeEnd,
 	className,
+	disabled = false,
 }: {
 	value: T;
 	options: readonly SegmentedOption<T>[];
@@ -54,6 +55,8 @@ export function Segmented<T extends string>({
 	 *  background-window timers throttle and would leave it stuck). */
 	onShakeEnd?(): void;
 	className?: string;
+	/** Prevent pointer and keyboard selection while preserving the current value. */
+	disabled?: boolean;
 }): ReactNode {
 	const activeIndex = Math.max(
 		0,
@@ -70,10 +73,11 @@ export function Segmented<T extends string>({
 		return () => cancelAnimationFrame(id);
 	}, []);
 
-	const thumbIndex = hoverIndex ?? activeIndex;
+	const thumbIndex = disabled ? activeIndex : (hoverIndex ?? activeIndex);
 
 	/** Move by `delta` with wraparound, keeping focus on the new segment. */
 	const move = (delta: number): void => {
+		if (disabled) return;
 		const n = options.length;
 		if (n === 0) return;
 		const next = (((activeIndex + delta) % n) + n) % n;
@@ -84,6 +88,7 @@ export function Segmented<T extends string>({
 	};
 
 	const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+		if (disabled) return;
 		if (e.key === "ArrowRight" || e.key === "ArrowDown") {
 			e.preventDefault();
 			move(1);
@@ -104,6 +109,7 @@ export function Segmented<T extends string>({
 			className={`gui-seg${iconOnly ? " gui-seg--icon" : ""}${armed ? " gui-seg--armed" : ""}${shake ? " gui-seg--shake" : ""}${className ? ` ${className}` : ""}`}
 			role="radiogroup"
 			aria-label={ariaLabel}
+			aria-disabled={disabled || undefined}
 			style={{ "--seg-count": options.length, "--seg-index": thumbIndex } as CSSProperties}
 			onPointerLeave={() => setHoverIndex(null)}
 			onKeyDown={onKeyDown}
@@ -120,14 +126,21 @@ export function Segmented<T extends string>({
 						type="button"
 						role="radio"
 						aria-checked={active}
-						tabIndex={active ? 0 : -1}
+						tabIndex={!disabled && active ? 0 : -1}
+						disabled={disabled}
 						className="gui-seg-item"
 						title={o.title ?? o.label}
 						aria-label={iconOnly ? (o.title ?? o.label) : undefined}
-						onPointerEnter={() => setHoverIndex(i)}
-						onFocus={() => setHoverIndex(i)}
+						onPointerEnter={() => {
+							if (!disabled) setHoverIndex(i);
+						}}
+						onFocus={() => {
+							if (!disabled) setHoverIndex(i);
+						}}
 						onBlur={() => setHoverIndex(null)}
-						onClick={() => onChange(o.value)}
+						onClick={() => {
+							if (!disabled) onChange(o.value);
+						}}
 					>
 						{o.icon ? <o.icon size={iconOnly ? 15 : 14} /> : null}
 						{iconOnly ? null : <span className="gui-seg-item-label">{o.label}</span>}

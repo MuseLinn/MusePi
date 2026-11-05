@@ -65,6 +65,8 @@ import {
 	WorkingLine,
 } from "./transcript-content";
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
+import { collectTurnFiles, type TurnFileChange } from "./turn-files.js";
+import { collectTurnSources, type TurnSources } from "./turn-sources.js";
 
 export {
 	isBranchFormingEntry,
@@ -684,6 +686,10 @@ interface EntryRowProps {
 	taskCardStyle?: "swarm" | "classic";
 	/** Turn-final aggregated file artifacts (undefined = no cards). */
 	artifacts?: FileCardItem[];
+	/** Turn-wide file changes (undefined = no change card). */
+	turnFiles?: TurnFileChange[];
+	/** Turn-wide browsed pages (undefined = no sources card). */
+	sources?: TurnSources;
 	/** Attempt count for a failed turn, merged in from the transcript-wide error
 	 *  surface plan. */
 	errorAttempt?: number;
@@ -801,6 +807,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	)
 		return false;
 	if (prev.artifacts !== next.artifacts) return false;
+	if (prev.turnFiles !== next.turnFiles || prev.sources !== next.sources) return false;
 	if (prev.thinkingLevel !== next.thinkingLevel) return false;
 	if (prev.onRevert !== next.onRevert || prev.onFork !== next.onFork) return false;
 	if (prev.retryTarget !== next.retryTarget) return false;
@@ -1049,6 +1056,8 @@ const EntryRow = memo(function EntryRow({
 	smoothStreaming = true,
 	taskCardStyle = "swarm",
 	artifacts,
+	turnFiles,
+	sources,
 	thinkingLevel,
 	onQuote,
 	onJumpToMessage,
@@ -1162,6 +1171,8 @@ const EntryRow = memo(function EntryRow({
 									smoothStreaming={smoothStreaming}
 									taskCardStyle={taskCardStyle}
 									artifacts={artifacts}
+									turnFiles={turnFiles}
+									sources={sources}
 									thinkingLevel={thinkingLevel}
 									onPreviewImage={onPreviewImage}
 									errorAttempt={errorAttempt}
@@ -1380,27 +1391,32 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		[branchChildren, branchInfo?.activePathIds],
 	);
 
-	// Turn-final file artifacts (本轮文件卡片展示在最底部): a turn spans
-	// multiple assistant messages (one per agent step), so the final files
-	// the turn produced aggregate across ALL of them and render once, under
-	// the turn's FINAL assistant message. Keyed by the final message's entry
-	// id; built over the full entries (window-safe). Turns without artifacts
-	// are omitted so untouched rows keep their memo (undefined prop = no
-	// cards) — only settled results count (finalArtifacts' completed gate).
-	const turnArtifactsByFinal = useMemo(() => {
-		const byFinal = new Map<string, FileCardItem[]>();
+	// Turn-final surfaces (本轮文件/来源卡片展示在最底部): a turn spans
+	// multiple assistant messages (one per agent step), so everything the turn
+	// produced aggregates across ALL of them and renders once, under the
+	// turn's FINAL assistant message. Keyed by the final message's entry id;
+	// built over the full entries (window-safe). Turns without a surface are
+	// omitted so untouched rows keep their memo (undefined prop = no cards) —
+	// only settled results count (finalArtifacts' completed gate).
+	const turnSurfacesByFinal = useMemo(() => {
+		const artifacts = new Map<string, FileCardItem[]>();
+		const files = new Map<string, TurnFileChange[]>();
+		const sources = new Map<string, TurnSources>();
+		const resultOf = (id: string) => results.get(id);
 		let turn: AssistantMessage[] = [];
 		let finalId: string | null = null;
 		const flush = (): void => {
 			if (finalId !== null && turn.length > 0) {
-				const artifacts = finalArtifacts(
-					turn.flatMap(m => m.content),
-					id => {
-						const r = results.get(id);
-						return r !== undefined && r.isError !== true;
-					},
-				);
-				if (artifacts.length > 0) byFinal.set(finalId, artifacts);
+				const blocks = turn.flatMap(m => m.content);
+				const produced = finalArtifacts(blocks, id => {
+					const r = results.get(id);
+					return r !== undefined && r.isError !== true;
+				});
+				if (produced.length > 0) artifacts.set(finalId, produced);
+				const changed = collectTurnFiles(blocks, resultOf);
+				if (changed.length > 0) files.set(finalId, changed);
+				const browsed = collectTurnSources(blocks, resultOf);
+				if (browsed.pages.length > 0) sources.set(finalId, browsed);
 			}
 			turn = [];
 			finalId = null;
@@ -1416,8 +1432,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			}
 		}
 		flush();
-		return byFinal;
+		return { artifacts, files, sources };
 	}, [entries, results]);
+	const turnArtifactsByFinal = turnSurfacesByFinal.artifacts;
 
 	// display.collapseCompacted parity: fold everything before the FIRST
 	// compaction divider behind a toggle row ("show pre-compaction
@@ -2393,6 +2410,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						smoothStreaming={smoothStreaming}
 						taskCardStyle={taskCardStyle}
 						artifacts={turnArtifactsByFinal.get(entry.id)}
+						turnFiles={turnSurfacesByFinal.files.get(entry.id)}
+						sources={turnSurfacesByFinal.sources.get(entry.id)}
 						errorAttempt={entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined}
 						thinkingLevel={thinkingLevel}
 						streamingLast={streamingLast}

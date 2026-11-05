@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
 	hasCollapsedSubtrees,
+	revealSessionInTree,
 	SessionList,
 	type SessionListNode,
 	setAllSubtreesCollapsed,
@@ -129,5 +130,32 @@ describe("session subtree collapse", () => {
 		expect(hasCollapsedSubtrees()).toBe(false);
 		expect(container.textContent).toContain("Child c4");
 		expect(container.textContent).toContain("Child c5");
+	});
+
+	it("reveals only the selected session's ancestor chain", async () => {
+		const tree = [parent("p6", "c6"), parent("p7", "c7")];
+		const container = await mount(<SessionList nodes={tree} selectedId={null} onSelect={() => {}} />);
+		await flush();
+		await act(async () => setAllSubtreesCollapsed(true));
+		await flush(40);
+		expect(container.textContent).not.toContain("Child c6");
+		expect(container.textContent).not.toContain("Child c7");
+
+		await act(async () => revealSessionInTree(tree, "c6"));
+		await flush(40);
+		expect(container.textContent).toContain("Child c6");
+		expect(container.textContent).not.toContain("Child c7");
+		expect(hasCollapsedSubtrees()).toBe(true);
+	});
+
+	it("cancels an in-flight collapse when the hidden child becomes selected", async () => {
+		const tree = [parent("p8", "c8")];
+		const container = await mount(<SessionList nodes={tree} selectedId={null} onSelect={() => {}} />);
+		await flush();
+		await act(async () => container.querySelector<HTMLButtonElement>(".gui-tree-fold")?.click());
+		await act(async () => revealSessionInTree(tree, "c8"));
+		await flush(40);
+		expect(container.textContent).toContain("Child c8");
+		expect(hasCollapsedSubtrees()).toBe(false);
 	});
 });

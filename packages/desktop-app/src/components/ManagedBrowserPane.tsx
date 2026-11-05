@@ -3,7 +3,7 @@
  * UI/UX 吸收).
  *
  * 页面是 DOM 里的 `<webview>`,由常驻的 `ManagedBrowserHost` 持有 —— 本组件只渲染
- * chrome(地址栏/标签条/菜单/台账/起始页),并把内容槽位的 rect 报给宿主定位。
+ * chrome(地址栏/菜单/台账/起始页),并把内容槽位的 rect 报给宿主定位。
  * 因为页面参与 DOM 层叠,菜单、悬浮提示与右侧面板的 4px 拖拽手柄都按普通 z-index
  * 正常显示;原生 `WebContentsView` 时代的「让位 4px」「有浮层就隐藏页面」规避
  * 全部删除。
@@ -19,45 +19,55 @@
 import { t } from "@musepi/client-core";
 import { dispatchAnnotationResult, resolveAnnotationOverlayTheme } from "@musepi/client-core/src/annotation";
 import { widgetHostTheme } from "@musepi/client-core/src/widgets/html";
+import { Eye as EyeIconData, EyeOff as EyeOffIconData, RefreshCw as RefreshCwIconData, X as XIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
+import { browserMenuModel } from "../lib/browser-menu-model";
 import {
+	beginViewportDrag,
+	cancelViewportDragOnBlank,
 	clampViewportSize,
 	fitViewport,
 	resolveViewportScale,
 	viewportClip,
+	viewportControlsVisible,
 	viewportOverflow,
 } from "../lib/browser-viewport";
 import type { ManagedBrowserPreferences } from "../lib/electron";
-import { openExternalUrl, setManagedBrowserPreferences } from "../lib/electron";
+import { copyToClipboard, openExternalUrl, setManagedBrowserPreferences } from "../lib/electron";
+import type { BrowserPageContextDetail } from "../lib/managed-browser-host";
 import {
 	allowAgentUpload,
 	answerConfirm,
+	browserTabsForSession,
 	cancelUpload,
 	chooseUploadFiles,
 	clearData as clearBrowserDataInStore,
-	closeTab,
 	createTab,
+	findInActivePage,
 	getHostState,
 	goBack,
 	goForward,
 	hostElement,
 	navigate as navigateInStore,
+	printActivePage,
 	reload,
 	resolveAddressBarInput,
+	saveActivePageScreenshot,
 	selectTab,
+	setBrowserSession,
 	setPaneRect,
+	showDownloads,
 	stopAgentOp,
+	stopFindInActivePage,
 	subscribeHost,
 	takeoverAgentOp,
 } from "../lib/managed-browser-host";
-import { managedTabIsBlank } from "../lib/managed-browser-visibility";
 import type { RpcClient } from "../lib/rpc";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { useScrollShadow } from "../lib/use-scroll-shadow";
-import { useTabMotion } from "../lib/use-tab-motion";
 import { Icon } from "../vendor/oc-icons";
 import { BrowserControlOverlay } from "./browser-control-overlay";
 import {
@@ -65,10 +75,11 @@ import {
 	BrowserDeviceToolbar,
 	type BrowserPageBackground,
 	type BrowserViewportPreset,
+	readBrowserDeviceToolbarVisibility,
+	setBrowserDeviceToolbarVisibility,
 } from "./browser-device-toolbar";
 import { BrowserUploadDialog } from "./browser-upload-dialog";
-import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-import { StateIcon } from "./StateIcon";
+import { ContextMenu } from "./ContextMenu";
 
 // ── URL helpers (open-design DesignBrowserPanel parity) ───────────────
 
@@ -214,20 +225,6 @@ function faviconUrl(url: string): string | undefined {
 	}
 }
 
-/** #rgb/#rrggbb → {r,g,b} (0–255); 无效返回 null。 */
-function parseHexColor(color: string): { r: number; g: number; b: number } | null {
-	const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
-	if (!m) return null;
-	let hex = m[1]!;
-	if (hex.length === 3)
-		hex = hex
-			.split("")
-			.map(c => `${c}${c}`)
-			.join("");
-	const n = Number.parseInt(hex, 16);
-	return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
 interface AddressDisplayParts {
 	url: string;
 	title?: string;
@@ -266,6 +263,7 @@ export function ManagedBrowserPane({
 	openRequest = null,
 	onTakeover,
 	rpc = null,
+	sessionId = null,
 }: {
 	/** External reveal (chat link click / agent browser open): navigate the
 	 *  active tab to this URL when the nonce advances (proma
@@ -279,10 +277,14 @@ export function ManagedBrowserPane({
 	/** Daemon RPC bridge (settings.get): reads the browser preferences main
 	 *  applies to the guests. */
 	rpc?: RpcClient | null;
+	/** Chat session owning this pane; its browser tabs are isolated per session. */
+	sessionId?: string | null;
 } = {}): ReactNode {
 	// 页面状态在宿主 store 里(`<webview>` 元素由常驻的 ManagedBrowserHost 持有);
 	// 本组件只渲染 chrome,并把内容槽位的 rect 报给宿主定位。
 	const host = useSyncExternalStore(subscribeHost, getHostState);
+	const sessionTabs = browserTabsForSession(sessionId, host);
+	useEffect(() => setBrowserSession(sessionId), [sessionId]);
 	const [annotating, setAnnotating] = useState(false);
 	const annotationHostRef = useRef<AnnotationHost | null>(null);
 	// Address omnibox state: editing shows the raw URL,
@@ -325,56 +327,30 @@ export function ManagedBrowserPane({
 	// width drives the fit-scaling.
 	const [viewportKey, setViewportKey] = useState<BrowserViewportPreset>("tools.browserViewportFit");
 	const activePreset = BROWSER_VIEWPORTS.find(preset => preset.key === viewportKey) ?? BROWSER_VIEWPORTS[0];
-	const viewport = activePreset.width;
 	const [displayScale, setDisplayScale] = useState<"fit" | number>("fit");
 	const [pageBackground, setPageBackground] = useState<BrowserPageBackground>("auto");
 	const [copied, setCopied] = useState(false);
+	const [pageContext, setPageContext] = useState<BrowserPageContextDetail | null>(null);
 	const slotRef = useRef<HTMLDivElement | null>(null);
 	const contentRef = useRef<HTMLDivElement | null>(null);
 	const [controlRect, setControlRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-	// 横向边缘羽化:标签页 strip 横向滚动时左右羽化(通用 .gui-panel-tabs
-	// 类,与 ContextPanel 的 agent tabs strip 同配方)。
-	const tabsRef = useRef<HTMLDivElement | null>(null);
-	useScrollShadow(tabsRef);
-
-	// 标签右键菜单(桌面浏览器 parity):关闭/关闭其他/复制标签页/复制网址。
-	const [tabMenu, setTabMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
-	const tabMenuItems = useMemo((): ContextMenuItem[] => {
-		if (!tabMenu) return [];
-		const target = host.tabs.find(tab => tab.id === tabMenu.tabId);
-		if (!target) return [];
-		return [
-			{
-				label: t("tools.browserCloseTab"),
-				icon: "settings.close",
-				onSelect: () => closeTab(target.id),
-			},
-			{
-				label: t("general.closeOtherTabs"),
-				icon: "close-circle",
-				disabled: host.tabs.length <= 1,
-				onSelect: () => {
-					for (const tab of host.tabs) if (tab.id !== target.id) closeTab(tab.id);
-				},
-			},
-			{ divider: true },
-			{
-				label: t("tools.browserDuplicateTab"),
-				icon: "file-copy",
-				onSelect: () => void createTab(target.url).catch(() => {}),
-			},
-			{
-				label: t("tools.browserCopyUrl"),
-				icon: "clipboard",
-				onSelect: () => void window.electronAPI?.copyText(target.url).catch(() => {}),
-			},
-		];
-	}, [tabMenu, host.tabs]);
+	const [findOpen, setFindOpen] = useState(false);
+	const [findQuery, setFindQuery] = useState("");
+	const [deviceToolbarVisible, setDeviceToolbarVisible] = useState(readBrowserDeviceToolbarVisibility);
+	const [keepPageFocused, setKeepPageFocused] = useState(false);
 	const urlRef = useRef<HTMLInputElement | null>(null);
 
-	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
+	const activeTab = sessionTabs.find(tab => tab.id === host.activeId) ?? null;
 	const activeUrl = activeTab?.url ?? EMPTY_URL;
-	const isBlank = managedTabIsBlank(activeTab);
+	const availability = browserMenuModel(activeTab);
+	const isBlank = !availability.hasPage;
+	const deviceToolbarActive = deviceToolbarVisible && availability.hasPage;
+	const activePresetForPage = deviceToolbarActive ? activePreset : BROWSER_VIEWPORTS[0];
+	const pageDisplayScale = deviceToolbarActive ? displayScale : "fit";
+	const changeDeviceToolbarVisibility = useCallback((visible: boolean): void => {
+		setBrowserDeviceToolbarVisibility(visible);
+		setDeviceToolbarVisible(visible);
+	}, []);
 
 	// ── Zoom controls (§3.2.1, zcode parity): per-tab factor persisted in
 	// localStorage; applied through main (WebContents zoom — independent of
@@ -403,12 +379,36 @@ export function ManagedBrowserPane({
 		void api.managedBrowserSetZoom({ tabId, zoom: override }).catch(() => {});
 	}, [host.activeId, zoomByTab, isBlank]);
 
+	useEffect(() => {
+		setFindOpen(false);
+		setFindQuery("");
+		stopFindInActivePage();
+	}, [host.activeId]);
+
+	useEffect(() => {
+		if (!keepPageFocused || isBlank || !host.activeId) return;
+		const webview = hostElement(host.activeId);
+		if (!webview) return;
+		let frame = 0;
+		const focusPage = (): void => {
+			window.cancelAnimationFrame(frame);
+			frame = window.requestAnimationFrame(() => webview.focus());
+		};
+		focusPage();
+		webview.addEventListener("blur", focusPage);
+		return () => {
+			window.cancelAnimationFrame(frame);
+			webview.removeEventListener("blur", focusPage);
+		};
+	}, [host.activeId, isBlank, keepPageFocused]);
+
 	// Custom emulated size while a preset is active (§3.2.2): the dashed
 	// viewport frame's right/bottom handles drag the preset away from the
 	// catalog value (width floor 320). Reset when the preset changes.
 	const [customVp, setCustomVp] = useState<{ width: number; height: number | null } | null>(null);
-	const presetWidth = viewport === null ? null : (customVp?.width ?? viewport);
-	const presetHeight = customVp?.height ?? activePreset.height;
+	const deviceViewport = activePresetForPage.width;
+	const presetWidth = deviceViewport === null ? null : (customVp?.width ?? deviceViewport);
+	const presetHeight = customVp?.height ?? activePresetForPage.height;
 	useEffect(() => setCustomVp(null), [viewportKey]);
 	// Viewport-frame geometry for the drag handles, measured in report().
 	const [pageBox, setPageBox] = useState<{
@@ -427,7 +427,7 @@ export function ManagedBrowserPane({
 	// google.com) keep sending their desktop document. Main applies the
 	// UA/client-hints/touch override on the active tab; switching the preset
 	// reloads so the page re-serves, while a tab switch re-applies silently.
-	const device = activePreset.device;
+	const device = activePresetForPage.device;
 	// Identity AND emulated layout size ride one channel, because main owns the
 	// guest's debugger. Both matter: the preset decides what the SITE serves
 	// (UA + client hints + touch), and the page's viewport has to be emulated
@@ -436,8 +436,8 @@ export function ManagedBrowserPane({
 	// page a 327px viewport, so wide presets only zoomed the desktop layout out
 	// instead of giving it room).
 	const deviceSyncRef = useRef<{ tabId: string; device: string; width: number; height: number } | null>(null);
-	const syncContextRef = useRef({ tabId: host.activeId, device });
-	syncContextRef.current = { tabId: host.activeId, device };
+	const syncContextRef = useRef({ tabId: isBlank ? null : host.activeId, device });
+	syncContextRef.current = { tabId: isBlank ? null : host.activeId, device };
 	const syncDevice = useCallback(
 		(tabId: string, deviceKey: string, size: { width: number; height: number } | null, reload: boolean): void => {
 			const api = window.electronAPI;
@@ -473,16 +473,16 @@ export function ManagedBrowserPane({
 		const avail = el.getBoundingClientRect();
 		if (avail.width <= 0 || avail.height <= 0) return null;
 		const fit = fitViewport(presetWidth, avail.width);
-		const scale = resolveViewportScale(fit.scale, displayScale);
+		const scale = resolveViewportScale(fit.scale, pageDisplayScale);
 		return { width: fit.width, height: Math.round(presetHeight ?? avail.height / scale) };
-	}, [presetWidth, presetHeight, displayScale]);
+	}, [presetWidth, presetHeight, pageDisplayScale]);
 	useEffect(() => {
-		if (!host.activeId) return;
+		if (isBlank || !host.activeId) return;
 		const previous = deviceSyncRef.current;
 		// Reload only when the IDENTITY changed on the tab already on screen: a
 		// tab switch re-applies silently instead of yanking the page.
 		syncDevice(host.activeId, device, deviceSize(), previous?.tabId === host.activeId && previous.device !== device);
-	}, [host.activeId, device, deviceSize, syncDevice]);
+	}, [host.activeId, device, deviceSize, isBlank, syncDevice]);
 
 	// Persist history (debounced, open-design parity).
 	useEffect(() => {
@@ -568,6 +568,16 @@ export function ManagedBrowserPane({
 			});
 	}, [annotating, host.activeId, isBlank]);
 
+	useEffect(() => {
+		const onPageContextMenu = (event: Event): void => {
+			const detail = (event as CustomEvent<NonNullable<typeof pageContext>>).detail;
+			if (!detail || detail.tabId !== host.activeId) return;
+			setPageContext(detail);
+		};
+		window.addEventListener("musepi-browser-page-context-menu", onPageContextMenu);
+		return () => window.removeEventListener("musepi-browser-page-context-menu", onPageContextMenu);
+	}, [host.activeId]);
+
 	// Escape 从应用侧退出标注:overlay 自己处理页面内的 Escape,但焦点可能在
 	// 面板上而不是页面里。
 	useEffect(() => {
@@ -586,8 +596,8 @@ export function ManagedBrowserPane({
 	// First open with no tabs: give the host one to mount (main learns about it
 	// through guest-ready, so no IPC call is needed here).
 	useEffect(() => {
-		if (host.tabs.length === 0) void createTab(EMPTY_URL).catch(() => {});
-	}, [host.tabs.length]);
+		if (sessionTabs.length === 0) void createTab(EMPTY_URL).catch(() => {});
+	}, [sessionTabs.length]);
 
 	// 内容槽位是宿主的「定位靶」:页面元素在同级常驻宿主里,这里只把槽位 rect 交给
 	// store,由宿主用 fixed 定位浮上来(纯 DOM,无 IPC)。槽位卸载 = 面板关闭;宿主
@@ -595,6 +605,10 @@ export function ManagedBrowserPane({
 	useLayoutEffect(() => {
 		const el = slotRef.current;
 		if (!el) return;
+		if (!open) {
+			setPaneRect(null);
+			return;
+		}
 		const report = (): void => {
 			const avail = el.getBoundingClientRect();
 			const scrollport = contentRef.current?.getBoundingClientRect() ?? avail;
@@ -615,7 +629,7 @@ export function ManagedBrowserPane({
 			);
 			if (presetWidth !== null) {
 				const fit = fitViewport(presetWidth, avail.width);
-				const scale = resolveViewportScale(fit.scale, displayScale);
+				const scale = resolveViewportScale(fit.scale, pageDisplayScale);
 				const layoutHeight = presetHeight ?? avail.height / scale;
 				const visualWidth = fit.width * scale;
 				const hostX = avail.x + Math.max(0, (avail.width - visualWidth) / 2);
@@ -653,7 +667,7 @@ export function ManagedBrowserPane({
 				}
 			} else {
 				setPageBox(prev => (prev === null ? prev : null));
-				const scale = resolveViewportScale(1, displayScale);
+				const scale = resolveViewportScale(1, pageDisplayScale);
 				const visualWidth = avail.width * scale;
 				const hostX = avail.x + Math.max(0, (avail.width - visualWidth) / 2);
 				setPageOverflow(previous => {
@@ -693,23 +707,26 @@ export function ManagedBrowserPane({
 			window.removeEventListener("transitionend", report, true);
 			setPaneRect(null);
 		};
-	}, [presetWidth, presetHeight, displayScale, syncDevice]);
+	}, [open, presetWidth, presetHeight, pageDisplayScale, syncDevice]);
 
 	// Viewport-handle drag (§3.2.2): the pointer delta is visual px; convert
 	// through the fit scale so dragging feels 1:1 on screen. Width floor 320
 	// (design minimum); height floor 480.
+	useEffect(() => {
+		vpDragRef.current = cancelViewportDragOnBlank(vpDragRef.current, availability.hasPage);
+	}, [availability.hasPage]);
+
 	const startVpDrag = (e: React.PointerEvent<HTMLButtonElement>, axis: "x" | "y"): void => {
 		e.preventDefault();
-		if (presetWidth === null || pageBox === null) return;
-		vpDragRef.current = {
-			axis,
-			startClient: axis === "x" ? e.clientX : e.clientY,
-			startSize: axis === "x" ? pageBox.layoutWidth : pageBox.layoutHeight,
-			scale: pageBox.scale,
-		};
-		e.currentTarget.setPointerCapture(e.pointerId);
+		if (!availability.hasPage || presetWidth === null || pageBox === null) return;
+		vpDragRef.current = beginViewportDrag(availability.hasPage, pageBox, axis, axis === "x" ? e.clientX : e.clientY);
+		if (vpDragRef.current) e.currentTarget.setPointerCapture(e.pointerId);
 	};
 	const onVpDragMove = (e: React.PointerEvent<HTMLButtonElement>): void => {
+		if (!availability.hasPage) {
+			vpDragRef.current = null;
+			return;
+		}
 		const drag = vpDragRef.current;
 		if (!drag) return;
 		const delta = ((drag.axis === "x" ? e.clientX : e.clientY) - drag.startClient) / drag.scale;
@@ -826,14 +843,24 @@ export function ManagedBrowserPane({
 	});
 	const addressDisplayParts = addressEditing ? { url: "" } : formatAddressDisplayParts(activeUrl, activeTab?.title);
 	const shownAddressValue = addressEditing ? addressValue : "";
-	const pageTitle = activeTab?.title?.trim() || labelFromUrl(activeUrl);
 	const pageIconUrl = faviconUrl(activeUrl);
 
 	const copyCurrentUrl = useCallback(async (): Promise<void> => {
-		await navigator.clipboard.writeText(activeUrl).catch(() => {});
+		if (!(await copyToClipboard(activeUrl))) throw new Error(t("tools.browserCopyUrlFailed"));
 		setCopied(true);
 		window.setTimeout(() => setCopied(false), 1400);
 	}, [activeUrl]);
+
+	const runBrowserAction = useCallback(async (action: () => Promise<void>): Promise<void> => {
+		try {
+			await action();
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : String(error);
+			window.dispatchEvent(
+				new CustomEvent("musepi-gui-toast", { detail: t("tools.browserActionFailed", { detail }) }),
+			);
+		}
+	}, []);
 
 	const clearHistory = useCallback((): void => {
 		setHistory([]);
@@ -841,16 +868,48 @@ export function ManagedBrowserPane({
 		setMenuOpen(false);
 	}, []);
 
-	const clearBrowserData = useCallback(async (mode: "cookies" | "all"): Promise<void> => {
-		await clearBrowserDataInStore(mode);
+	const clearBrowserData = useCallback(
+		(mode: "cookies" | "all"): void => {
+			setMenuOpen(false);
+			void runBrowserAction(async () => {
+				await clearBrowserDataInStore(mode);
+				window.dispatchEvent(
+					new CustomEvent("musepi-gui-toast", {
+						detail: { message: t("tools.browserDataCleared"), kind: "success" },
+					}),
+				);
+			});
+		},
+		[runBrowserAction],
+	);
+
+	const openHistory = useCallback((): void => {
 		setMenuOpen(false);
+		if (history.length === 0) {
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("tools.browserNoHistory") }));
+			return;
+		}
+		setAddressEditing(true);
+		setSuggestionsOpen(true);
+		urlRef.current?.focus();
+		window.requestAnimationFrame(() => {
+			setAddressValue("");
+			setSuggestionsOpen(true);
+			urlRef.current?.select();
+		});
+	}, [history.length]);
+
+	const closeFind = useCallback((): void => {
+		setFindOpen(false);
+		setFindQuery("");
+		stopFindInActivePage();
 	}, []);
 
 	const openInSystem = useCallback((): void => {
-		if (!/^https?:\/\//i.test(activeUrl)) return;
+		if (!availability.canOpenExternal) return;
 		void openExternalUrl(activeUrl).catch(() => {});
 		setMenuOpen(false);
-	}, [activeUrl]);
+	}, [activeUrl, availability.canOpenExternal]);
 
 	const onAddressKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
 		if (e.key === "Escape") {
@@ -885,14 +944,14 @@ export function ManagedBrowserPane({
 	const activeTabLoading = Boolean(activeTab?.loading);
 	// Agent occupancy (§3.2.5): only when the dispatched op targets the tab
 	// on screen — background-tab work paints the ledger, not this chrome.
-	const agentBusy = host.activity?.status === "dispatched" && host.activity.tabId === host.activeId && !isBlank;
-	const agentOutOfView = host.activity?.status === "dispatched" && host.activity.tabId !== host.activeId;
+	const activityInSession =
+		host.activity?.status === "dispatched" && sessionTabs.some(tab => tab.id === host.activity?.tabId);
+	const agentBusy = activityInSession && host.activity?.tabId === host.activeId && !isBlank;
+	const agentOutOfView = activityInSession && host.activity?.tabId !== host.activeId;
 	const handleTakeover = useCallback(async (): Promise<void> => {
 		await takeoverAgentOp(host.activity?.tabId);
 		onTakeover?.();
 	}, [host.activity?.tabId, onTakeover]);
-	const tabMotion = useTabMotion(host.tabs);
-
 	return (
 		<div className="gui-browser-pane relative flex min-h-0 flex-1 flex-col">
 			{/* Chrome bar: nav / address omnibox / zoom / actions (§3.2.4 IA:
@@ -932,7 +991,12 @@ export function ManagedBrowserPane({
 							else reload();
 						}}
 					>
-						<StateIcon on={activeTabLoading} pair={["close", "refresh"]} className="h-4 w-4" />
+						<MorphIcon
+							icon={activeTabLoading ? XIconData : RefreshCwIconData}
+							size={16}
+							spring="snappy"
+							reducedMotion="user"
+						/>
 					</button>
 				</div>
 				<form className="gui-browser-address" onSubmit={handleAddressSubmit}>
@@ -956,7 +1020,7 @@ export function ManagedBrowserPane({
 								setAddressEditing(true);
 								setAddressValue(activeUrl === EMPTY_URL ? "" : activeUrl);
 								setSuggestionsOpen(true);
-								window.requestAnimationFrame(() => e.currentTarget.select());
+								window.requestAnimationFrame(() => urlRef.current?.select());
 							}}
 							onBlur={e => {
 								const next = e.relatedTarget as Node | null;
@@ -1023,6 +1087,7 @@ export function ManagedBrowserPane({
 						aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
 						title={annotating ? t("annotation.stop") : t("annotation.toggle")}
 						aria-pressed={annotating}
+						disabled={isBlank}
 						onClick={handleAnnotate}
 					>
 						<Icon name="pencil" className="h-4 w-4" />
@@ -1046,7 +1111,7 @@ export function ManagedBrowserPane({
 						className="gui-browser-icon-btn"
 						aria-label={t("tools.browserOpenSystem")}
 						title={t("tools.browserOpenSystem")}
-						disabled={!/^https?:\/\//i.test(activeUrl)}
+						disabled={!availability.canOpenExternal}
 						onClick={() => void openExternalUrl(activeUrl).catch(() => {})}
 					>
 						<Icon name="external-link" className="h-4 w-4" />
@@ -1068,17 +1133,37 @@ export function ManagedBrowserPane({
 						</button>
 						{renderActionsMenu(
 							<div role="menu">
-								{/* Zoom (§3.2.1): moved off the address row into the
-								 * menu — the standing − 100% ＋ group is gone; the
-								 * percent label still resets to 100%. Per-tab,
-								 * persisted. */}
+								<button
+									type="button"
+									role="menuitem"
+									disabled={!availability.actions.find}
+									onClick={() => {
+										setFindOpen(true);
+										setMenuOpen(false);
+									}}
+								>
+									<Icon name="search" className="h-3.5 w-3.5" />
+									{t("tools.browserFindInPage")}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									disabled={!availability.actions.print}
+									onClick={() => {
+										setMenuOpen(false);
+										void runBrowserAction(printActivePage);
+									}}
+								>
+									<Icon name="file-text" className="h-3.5 w-3.5" />
+									{t("tools.browserPrint")}
+								</button>
 								<div className="gui-browser-menu-zoom" role="group">
 									<button
 										type="button"
 										className="gui-browser-icon-btn"
 										aria-label={t("tools.browserZoomOut")}
 										title={t("tools.browserZoomOut")}
-										disabled={isBlank}
+										disabled={!availability.actions.zoom}
 										onClick={() => setActiveZoom(activeZoom - 0.1)}
 									>
 										<Icon name="subtract" className="h-3.5 w-3.5" />
@@ -1087,7 +1172,7 @@ export function ManagedBrowserPane({
 										type="button"
 										className="gui-browser-zoom-value"
 										title={t("tools.browserResetZoom")}
-										disabled={isBlank}
+										disabled={!availability.actions.zoom}
 										onClick={() => setActiveZoom(1)}
 									>
 										{Math.round(activeZoom * 100)}%
@@ -1097,7 +1182,7 @@ export function ManagedBrowserPane({
 										className="gui-browser-icon-btn"
 										aria-label={t("tools.browserZoom")}
 										title={t("tools.browserZoom")}
-										disabled={isBlank}
+										disabled={!availability.actions.zoom}
 										onClick={() => setActiveZoom(activeZoom + 0.1)}
 									>
 										<Icon name="add" className="h-3.5 w-3.5" />
@@ -1105,10 +1190,63 @@ export function ManagedBrowserPane({
 								</div>
 								<button
 									type="button"
-									role="menuitem"
-									disabled={isBlank}
+									role="menuitemcheckbox"
+									aria-checked={deviceToolbarActive}
+									disabled={!availability.actions.deviceToolbar}
 									onClick={() => {
-										void copyCurrentUrl();
+										changeDeviceToolbarVisibility(!deviceToolbarVisible);
+										setMenuOpen(false);
+									}}
+								>
+									<Icon name="computer" className="h-3.5 w-3.5" />
+									{deviceToolbarActive
+										? t("tools.browserHideDeviceToolbar")
+										: t("tools.browserShowDeviceToolbar")}
+								</button>
+								<button
+									type="button"
+									role="menuitemcheckbox"
+									aria-checked={keepPageFocused}
+									disabled={!availability.actions.focus}
+									onClick={() => {
+										setKeepPageFocused(focused => !focused);
+										setMenuOpen(false);
+									}}
+								>
+									<MorphIcon
+										icon={keepPageFocused ? EyeIconData : EyeOffIconData}
+										size={14}
+										spring="snappy"
+										reducedMotion="user"
+									/>
+									{t("tools.browserAlwaysFocus")}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									disabled={!availability.actions.screenshot}
+									onClick={() => {
+										setMenuOpen(false);
+										void runBrowserAction(async () => {
+											const result = await saveActivePageScreenshot();
+											if (result.canceled) return;
+											window.dispatchEvent(
+												new CustomEvent("musepi-gui-toast", {
+													detail: { message: t("tools.browserScreenshotSaved"), kind: "success" },
+												}),
+											);
+										});
+									}}
+								>
+									<Icon name="camera" className="h-3.5 w-3.5" />
+									{t("tools.browserScreenshot")}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									disabled={!availability.actions.copyUrl}
+									onClick={() => {
+										void runBrowserAction(copyCurrentUrl);
 										setMenuOpen(false);
 									}}
 								>
@@ -1118,7 +1256,7 @@ export function ManagedBrowserPane({
 								<button
 									type="button"
 									role="menuitem"
-									disabled={isBlank || !/^https?:\/\//i.test(activeUrl)}
+									disabled={!availability.actions.openExternal}
 									onClick={openInSystem}
 								>
 									<Icon name="external-link" className="h-3.5 w-3.5" />
@@ -1127,7 +1265,7 @@ export function ManagedBrowserPane({
 								<button
 									type="button"
 									role="menuitem"
-									disabled={isBlank}
+									disabled={!availability.actions.hardRefresh}
 									onClick={() => {
 										reload(true);
 										setMenuOpen(false);
@@ -1137,17 +1275,46 @@ export function ManagedBrowserPane({
 									{t("tools.browserHardReload")}
 								</button>
 								<span className="gui-browser-menu-sep" />
+								<button
+									type="button"
+									role="menuitem"
+									onClick={() => {
+										setMenuOpen(false);
+										void runBrowserAction(showDownloads);
+									}}
+								>
+									<Icon name="download" className="h-3.5 w-3.5" />
+									{t("tools.browserDownloads")}
+								</button>
+								<button type="button" role="menuitem" onClick={openHistory}>
+									<Icon name="history" className="h-3.5 w-3.5" />
+									{t("tools.browserHistory")}
+								</button>
+								<span className="gui-browser-menu-sep" />
 								<button type="button" role="menuitem" disabled={history.length === 0} onClick={clearHistory}>
 									<Icon name="history" className="h-3.5 w-3.5" />
 									{t("tools.browserClearHistory")}
 								</button>
-								<button type="button" role="menuitem" onClick={() => void clearBrowserData("cookies")}>
+								<button type="button" role="menuitem" onClick={() => clearBrowserData("cookies")}>
 									<Icon name="lock" className="h-3.5 w-3.5" />
 									{t("tools.browserClearCookies")}
 								</button>
-								<button type="button" role="menuitem" onClick={() => void clearBrowserData("all")}>
+								<button type="button" role="menuitem" onClick={() => clearBrowserData("all")}>
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
 									{t("tools.browserClearAllData")}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									onClick={() => {
+										setMenuOpen(false);
+										window.dispatchEvent(
+											new CustomEvent("musepi-gui-open-settings-section", { detail: "browser" }),
+										);
+									}}
+								>
+									<Icon name="settings-3" className="h-3.5 w-3.5" />
+									{t("tools.browserSettings")}
 								</button>
 							</div>,
 						)}
@@ -1163,90 +1330,64 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 			</div>
+			{findOpen && availability.actions.find && (
+				<form
+					className="gui-browser-find"
+					onSubmit={event => {
+						event.preventDefault();
+						findInActivePage(findQuery);
+					}}
+				>
+					<Icon name="search" className="h-3.5 w-3.5" />
+					<input
+						autoFocus
+						className="gui-browser-find-input"
+						value={findQuery}
+						placeholder={t("tools.browserFindPlaceholder")}
+						aria-label={t("tools.browserFindInPage")}
+						onChange={event => {
+							setFindQuery(event.target.value);
+							findInActivePage(event.target.value);
+						}}
+						onKeyDown={event => {
+							if (event.key === "Escape") {
+								event.preventDefault();
+								closeFind();
+							}
+						}}
+					/>
+					<button
+						type="submit"
+						className="gui-browser-icon-btn"
+						aria-label={t("tools.browserFindNext")}
+						title={t("tools.browserFindNext")}
+					>
+						<Icon name="arrow-go-forward" className="h-3.5 w-3.5" />
+					</button>
+					<button
+						type="button"
+						className="gui-browser-icon-btn"
+						aria-label={t("tools.browserCloseFind")}
+						title={t("tools.browserCloseFind")}
+						onClick={closeFind}
+					>
+						<Icon name="close" className="h-3.5 w-3.5" />
+					</button>
+				</form>
+			)}
 			<BrowserDeviceToolbar
 				preset={viewportKey}
 				width={presetWidth}
 				height={presetHeight}
 				displayScale={displayScale}
 				background={pageBackground}
+				disabled={!availability.actions.deviceToolbar}
+				visible={deviceToolbarVisible && availability.hasPage}
 				onPresetChange={setViewportKey}
 				onSizeChange={size => setCustomVp(size)}
 				onDisplayScaleChange={setDisplayScale}
 				onBackgroundChange={setPageBackground}
 			/>
-			{/* Tab strip (Agent-created tabs are badged; selecting only changes
-			 * what the user sees — the agent keeps its own working tab). */}
-			{host.tabs.length > 0 && (
-				<div ref={tabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					{tabMotion.tabs.map(tab => {
-						// 网页 theme-color 只做低透明度晕染 + 细环,不再整块实底
-						// 反白文字——玻璃标签的质感与可读性都保住(部分站点的
-						// theme-color 与界面明暗冲突,实底标签读起来就是"样式坏了")。
-						const themeRgb = tab.themeColor ? parseHexColor(tab.themeColor) : null;
-						const closing = tabMotion.closingIds.has(tab.id);
-						return (
-							<div
-								key={tab.id}
-								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}${closing ? " gui-browser-tab--closing" : ""}${tabMotion.enteringIds.has(tab.id) ? " gui-browser-tab--entering" : ""}`}
-								data-motion={closing ? "closing" : tabMotion.enteringIds.has(tab.id) ? "entering" : undefined}
-								aria-hidden={closing ? true : undefined}
-								inert={closing}
-								title={tab.frozen ? `${tab.url} · ${t("tools.browserTabFrozen")}` : tab.url}
-								style={
-									themeRgb
-										? {
-												backgroundColor: `rgba(${themeRgb.r}, ${themeRgb.g}, ${themeRgb.b}, 0.18)`,
-												boxShadow: `inset 0 0 0 1px rgba(${themeRgb.r}, ${themeRgb.g}, ${themeRgb.b}, 0.32)`,
-												borderColor: "transparent",
-											}
-										: undefined
-								}
-								onContextMenu={ev => {
-									ev.preventDefault();
-									setTabMenu({ tabId: tab.id, x: ev.clientX, y: ev.clientY });
-								}}
-							>
-								<button
-									type="button"
-									className="gui-browser-tab-main"
-									aria-label={`${tab.title}${tab.agent ? ` (${t("tools.agentCreatedTab")})` : ""}`}
-									onClick={() => selectTab(tab.id)}
-								>
-									{tab.frozen ? (
-										<Icon name="hourglass" className="h-3 w-3 shrink-0 opacity-70" />
-									) : tab.loading ? (
-										<Icon name="loader-4" className="h-3 w-3 shrink-0 animate-spin opacity-70" />
-									) : tab.favicon ? (
-										<img
-											src={tab.favicon}
-											alt=""
-											className="h-3.5 w-3.5 shrink-0 rounded-[3px]"
-											onError={e => {
-												e.currentTarget.style.display = "none";
-											}}
-										/>
-									) : (
-										<Icon name="global" className="h-3 w-3 shrink-0 opacity-60" />
-									)}
-									<span className="max-w-[110px] truncate">
-										{tab.title?.trim() || t("tools.browserEmptyTab")}
-									</span>
-									{tab.agent && <span className="gui-browser-tab-badge">{t("tools.agentCreatedTab")}</span>}
-								</button>
-								<button
-									type="button"
-									className="gui-browser-tab-close"
-									aria-label={t("tools.browserCloseTab")}
-									title={t("tools.browserCloseTab")}
-									onClick={() => closeTab(tab.id)}
-								>
-									<Icon name="close" className="h-3 w-3" />
-								</button>
-							</div>
-						);
-					})}
-				</div>
-			)}
 			{host.error && (
 				<div className="border-b border-[var(--border)] px-2 py-1 text-[11px] text-[var(--color-danger)]">
 					{host.error}
@@ -1258,7 +1399,7 @@ export function ManagedBrowserPane({
 			<div
 				ref={contentRef}
 				className="gui-browser-content"
-				data-background={pageBackground}
+				data-background={deviceToolbarActive ? pageBackground : "auto"}
 				style={{ overflow: pageOverflow.x || pageOverflow.y ? "auto" : "hidden" }}
 			>
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
@@ -1277,7 +1418,7 @@ export function ManagedBrowserPane({
 				 * (§3.2.2). Pure overlay siblings of the slot — the §23 webview
 				 * constraints are untouched (no display/reparent near the page
 				 * element). The 6px offset matches the slot's fixed margin. */}
-				{pageBox && presetWidth !== null && (
+				{pageBox && viewportControlsVisible(availability.hasPage, pageBox, presetWidth) && (
 					<div
 						className="gui-browser-vp-frame"
 						style={{ left: 6 + pageBox.left, top: 6, width: pageBox.width, height: pageBox.height }}
@@ -1387,13 +1528,52 @@ export function ManagedBrowserPane({
 				onChoose={request => void chooseUploadFiles(request)}
 				onAllowAgent={requestId => void allowAgentUpload(requestId)}
 			/>
-			<ContextMenu
-				open={tabMenu !== null}
-				x={tabMenu?.x ?? 0}
-				y={tabMenu?.y ?? 0}
-				items={tabMenuItems}
-				onClose={() => setTabMenu(null)}
-			/>
+			{pageContext ? (
+				<ContextMenu
+					open
+					x={pageContext.x}
+					y={pageContext.y}
+					onClose={() => setPageContext(null)}
+					items={[
+						{
+							label: t("tools.browserPageCopy"),
+							icon: "file-copy-2",
+							disabled: !pageContext.selectionText,
+							onSelect: () => {
+								if (pageContext.selectionText) {
+									void copyToClipboard(pageContext.selectionText);
+								}
+							},
+						},
+						{
+							label: t("tools.browserPagePaste"),
+							icon: "clipboard",
+							disabled: !pageContext.isEditable,
+							onSelect: () => hostElement(pageContext.tabId)?.paste(),
+						},
+						{
+							label: t("annotation.toggle"),
+							icon: "pencil",
+							divider: true,
+							onSelect: () => handleAnnotate(),
+						},
+						{
+							label: t("tools.browserInspectElement"),
+							icon: "code-box",
+							onSelect: () =>
+								hostElement(pageContext.tabId)?.inspectElement(pageContext.elementX, pageContext.elementY),
+						},
+						{
+							label: t("tools.browserCopySelectionLink"),
+							icon: "external-link",
+							disabled: !pageContext.linkURL,
+							onSelect: () => {
+								if (pageContext.linkURL) void copyToClipboard(pageContext.linkURL);
+							},
+						},
+					]}
+				/>
+			) : null}
 		</div>
 	);
 }

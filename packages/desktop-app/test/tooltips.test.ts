@@ -146,6 +146,87 @@ describe("global tooltips", () => {
 		expect(element.title).toBe("More detail");
 	});
 
+	test("a visible tooltip follows an external title update and preserves it on leave", async () => {
+		vi.useFakeTimers();
+		initTooltips();
+		const element = anchor("Before update");
+		showWithMouse(element);
+
+		await act(async () => {
+			element.title = "After update";
+			await Promise.resolve();
+		});
+		expect(tooltip().textContent).toBe("After update");
+		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
+		pointer(element, "pointerout", { relatedTarget: document.body });
+		expect(element.title).toBe("After update");
+
+		showWithMouse(element);
+		pointer(element, "pointerout", { relatedTarget: document.body });
+		expect(element.title).toBe("After update");
+	});
+
+	test("keyboard activation synchronizes the visible tooltip with the activated button title", async () => {
+		vi.useFakeTimers();
+		initTooltips();
+		const element = anchor("Maximize panel");
+		element.addEventListener("click", () => {
+			element.title = "Restore panel";
+		});
+		act(() => element.dispatchEvent(new FocusEvent("focusin", { bubbles: true })));
+		advance(150);
+		expect(tooltip().textContent).toBe("Maximize panel");
+
+		await act(async () => {
+			element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+			element.click();
+			await Promise.resolve();
+		});
+
+		expect(element.title).toBe("Restore panel");
+		expect(tooltip().textContent).toBe("Restore panel");
+		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
+	});
+
+	test("a pending hover tooltip reads the latest title when its delay elapses", async () => {
+		vi.useFakeTimers();
+		initTooltips();
+		const element = anchor("Before pending update");
+		pointer(element, "pointerover");
+
+		await act(async () => {
+			element.title = "After pending update";
+			await Promise.resolve();
+		});
+		advance(149);
+		expect(tooltip().getAttribute("aria-hidden")).toBe("true");
+		advance(1);
+
+		expect(tooltip().textContent).toBe("After pending update");
+		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
+		pointer(element, "pointerout", { relatedTarget: document.body });
+		expect(element.title).toBe("After pending update");
+	});
+
+	test("emptying a title during the touch delay cancels and cleans up the pending tooltip", async () => {
+		vi.useFakeTimers();
+		initTooltips();
+		const element = anchor("Touch detail");
+		touchStart(element);
+
+		await act(async () => {
+			element.title = "";
+			await Promise.resolve();
+		});
+		advance(500);
+
+		expect(tooltip().getAttribute("aria-hidden")).toBe("true");
+		expect(element.title).toBe("");
+		expect(element.getAttribute("aria-describedby")).toBeNull();
+		pointer(element, "pointerup", { pointerType: "touch", pointerId: 7 });
+		expect(element.title).toBe("");
+	});
+
 	test("a narrow-window width cap is removed when the window widens", () => {
 		vi.useFakeTimers();
 		initTooltips();
@@ -244,6 +325,19 @@ describe("global tooltips", () => {
 		hideWithEscape();
 
 		expect(tooltip().style.visibility).toBe("hidden");
+	});
+
+	test("musepi-ui-dismiss hides a visible tooltip and restores the anchor title", () => {
+		vi.useFakeTimers();
+		initTooltips();
+		const element = anchor("Dismiss through the page");
+		showWithMouse(element);
+		expect(tooltip().getAttribute("aria-hidden")).toBe("false");
+
+		act(() => window.dispatchEvent(new Event("musepi-ui-dismiss")));
+
+		expect(tooltip().getAttribute("aria-hidden")).toBe("true");
+		expect(element.title).toBe("Dismiss through the page");
 	});
 
 	test("scrolling keeps the visible tooltip anchored to its trigger", () => {
@@ -420,6 +514,18 @@ describe("RailTooltip accessibility", () => {
 		act(() => document.dispatchEvent(new Event("wheel")));
 
 		expect(host.querySelector<HTMLElement>(".gui-rail-tooltip")?.style.top).not.toBe(previousTop);
+	});
+
+	test("musepi-ui-dismiss closes the rich tooltip", () => {
+		vi.useFakeTimers();
+		const { host, buttons } = renderRail();
+		act(() => buttons[0]!.focus());
+		advance(150);
+		expect(host.querySelector(".gui-rail-tooltip")).not.toBeNull();
+
+		act(() => window.dispatchEvent(new Event("musepi-ui-dismiss")));
+
+		expect(host.querySelector(".gui-rail-tooltip") === null).toBe(true);
 	});
 
 	test("window blur closes the rich tooltip", () => {

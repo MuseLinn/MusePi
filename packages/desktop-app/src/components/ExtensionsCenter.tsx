@@ -1,5 +1,7 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dismissActionToastSource, pushActionToast } from "../lib/action-toast";
 import { setPluginManagementEnabled } from "../lib/plugin-management";
@@ -18,7 +20,6 @@ import { Icon } from "../vendor/oc-icons";
 import { DiagnosticsView } from "./CapabilityCenter";
 import { HeightMorph } from "./HeightMorph";
 import { MarketplaceView } from "./MarketplaceView";
-import { StateIcon } from "./StateIcon";
 import {
 	isPluginLaneEntry,
 	type PluginPackageEntry as PluginEntry,
@@ -578,9 +579,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					{t("tools.extInventory")}
 					<span className="gui-ext-tab-count">{(extensions ?? []).length}</span>
 				</button>
-				{/* 插件 tab:统一清单(UnifiedPluginsView)—— 插件包(marketplace/npm)
-				 * 与热加载扩展模块(kind=extension-module)同屏,像 skill 管理一样
-				 * 逐项标记来源类别(内置/项目级/用户级)。 */}
+				{/* 插件 tab:完整库存(UnifiedPluginsView, variant=cards)—— 内置插件
+				 * 单元（含只读包与预设专用 persona）与插件包同屏，行内带技术身份；
+				 * 能力中心的「插件」只收可启停/可配置的 manage 层。 */}
 				<button
 					type="button"
 					role="tab"
@@ -702,9 +703,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 													tabIndex={0}
 													onClick={() => toggleKind(providerKey)}
 												>
-													<StateIcon
-														on={providerCollapsed}
-														pair={["arrow-right-s", "arrow-down-s"]}
+													<MorphIcon
+														icon={providerCollapsed ? ChevronRightIconData : ChevronDownIconData}
+														size={14}
+														spring="snappy"
+														reducedMotion="user"
 														className="h-3.5 w-3.5 shrink-0 opacity-60"
 													/>
 													<span className={`gui-ext-dot${node.enabled ? "" : " gui-ext-dot--off"}`} />
@@ -741,9 +744,13 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																		tabIndex={0}
 																		onClick={() => toggleKind(kindKey)}
 																	>
-																		<StateIcon
-																			on={kindCollapsed}
-																			pair={["arrow-right-s", "arrow-down-s"]}
+																		<MorphIcon
+																			icon={
+																				kindCollapsed ? ChevronRightIconData : ChevronDownIconData
+																			}
+																			size={12}
+																			spring="snappy"
+																			reducedMotion="user"
 																			className="h-3 w-3 shrink-0 opacity-50"
 																		/>
 																		<span className="min-w-0 flex-1 truncate text-[11.5px]">
@@ -920,9 +927,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												onClick={loadRaw}
 												aria-expanded={rawOpen}
 											>
-												<StateIcon
-													on={rawOpen}
-													pair={["arrow-down-s", "arrow-right-s"]}
+												<MorphIcon
+													icon={rawOpen ? ChevronDownIconData : ChevronRightIconData}
+													size={14}
+													spring="snappy"
+													reducedMotion="user"
 													className="h-3.5 w-3.5"
 												/>
 												{t("tools.rawData")}

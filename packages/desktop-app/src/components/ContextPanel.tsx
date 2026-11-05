@@ -12,15 +12,21 @@ import {
 	AgentsPanel,
 	latestWidgetFromEntries,
 	relTime,
+	replaceTabs,
+	Segmented,
+	stripAnsi,
 	type ToolRenderHost,
 	type TranslationKey,
 	t,
 	WidgetCard,
 } from "@musepi/client-core";
 import type { AgentSnapshot, PdfQuoteAnchor } from "@musepi/pi-wire";
+import { Maximize2 as Maximize2IconData, Minimize2 as Minimize2IconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal, flushSync } from "react-dom";
+import { browserPanelDescriptor, browserTarget, reconcileBrowserPanelTabs } from "../lib/browser-panel-tabs";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import {
 	canMoveEditorHistory,
@@ -31,7 +37,7 @@ import {
 	pushEditorHistory,
 	updateEditorHistoryCurrent,
 } from "../lib/editor-navigation";
-import { isElectron, openExternalUrl } from "../lib/electron";
+import { copyToClipboard, isElectron, openExternalUrl } from "../lib/electron";
 import {
 	discardFilePreviewBuffer,
 	FILE_WORKSPACE_SURFACE,
@@ -39,16 +45,32 @@ import {
 	filePreviewBuffers,
 	filePreviewWorkspacePath,
 } from "../lib/file-workspace";
-import { createTab as createBrowserTab } from "../lib/managed-browser-host";
+import {
+	browserTabsForSession,
+	closeTab as closeBrowserTab,
+	getHostState as getBrowserHostState,
+	reloadTab as reloadBrowserTab,
+	renameTab as renameBrowserTab,
+	selectTab as selectBrowserTab,
+	setBrowserSession,
+	setTabMuted as setBrowserTabMuted,
+	subscribeHost as subscribeBrowserHost,
+} from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import { getPanelMaximized, setPanelMaximized, subscribePanelMaximize } from "../lib/panel-maximize";
-import { type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
+import { closePanelTabs, type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
-import { useConfirm } from "../lib/prompt-dialog";
+import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
-import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount, selectPanelTabComponent } from "../lib/slot-host";
-import { SURFACES, surfaceById, widthForSurface, writeSurfaceWidth } from "../lib/surfaces/registry";
+import {
+	RIGHT_PANEL_SLOT,
+	resolveManagedBrowserPanelTab,
+	SlotComponentHost,
+	SlotComponentMount,
+	selectPanelTabComponent,
+} from "../lib/slot-host";
+import { panelWidth, SURFACES, surfaceById, writePanelWidth } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -59,7 +81,6 @@ import { FadeScroll } from "./FadeScroll";
 import { GitPanel } from "./git-panel";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
-import { StateIcon } from "./StateIcon";
 import { SubagentPanel } from "./SubagentPanel";
 import { SurfaceTabStripSortable } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
@@ -93,6 +114,21 @@ function fmtTokens(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
 	if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
 	return String(n);
+}
+
+function BrowserPanelTabIcon({ favicon }: { favicon: string | null }): ReactNode {
+	const [failed, setFailed] = useState(false);
+	if (favicon && !failed) {
+		return (
+			<img
+				src={favicon}
+				alt=""
+				className="h-3.5 w-3.5 rounded-[3px] object-contain"
+				onError={() => setFailed(true)}
+			/>
+		);
+	}
+	return <Icon name={surfaceById("browser")?.icon as IconName} className="h-3.5 w-3.5" />;
 }
 
 /** Shape of the mode fields the daemon injects into `snap.state`. */
@@ -249,6 +285,13 @@ export function ContextPanel({
 	planShowRequest?: { directory: string; id: string; title: string; nonce: number } | null;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
+	const browserSessionId = snap?.sessionId ?? null;
+	const browserHost = useSyncExternalStore(subscribeBrowserHost, getBrowserHostState, getBrowserHostState);
+	const browserTabs = useMemo(
+		() => browserTabsForSession(browserSessionId, browserHost),
+		[browserSessionId, browserHost],
+	);
+	useEffect(() => setBrowserSession(browserSessionId), [browserSessionId]);
 	// Runtime-only editor locations survive file-tab remounts, but never cross
 	// workspaces. Ordinary cursor movement updates the current entry in place.
 	const editorHistoryRef = useRef(EMPTY_EDITOR_HISTORY);
@@ -332,6 +375,7 @@ export function ContextPanel({
 	// each daemon RPC returns counts rendered into a shared status line.
 	// The clear action asks for confirmation first (destructive).
 	const { confirm } = useConfirm();
+	const { prompt } = usePrompt();
 	const [maintenanceBusy, setMaintenanceBusy] = useState<"shake" | "fresh" | "clear" | null>(null);
 	// Surface-tab context menu (right-click): close / close others / close all.
 	const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -450,77 +494,104 @@ export function ContextPanel({
 		[openEditorLocation, syncEditorHistoryAvailability],
 	);
 
-	// Relay external browser reveals: switch to the browser view (the rail
-	// selects it; ManagedBrowserPane navigates on the nonce).
+	const openBrowserPanel = useCallback(
+		(options?: { column?: PanelColumn; forceNew?: boolean; url?: string }): string => {
+			const managed = resolveManagedBrowserPanelTab({
+				forceNew: options?.forceNew,
+				url: options?.url,
+				sessionId: browserSessionId,
+			});
+			const existing = panelTabs.tabs.find(tab => browserTarget(tab) === managed.id);
+			panelTabs.open(browserPanelDescriptor(managed, t("tools.browserEmptyTab")), {
+				column: options?.column ?? existing?.column,
+				maxPerSurface: Number.POSITIVE_INFINITY,
+			});
+			return managed.id;
+		},
+		[browserSessionId, panelTabs.open, panelTabs.tabs],
+	);
+	const revealBrowserTab = useCallback(
+		(tabId: string): void => {
+			const managed = browserTabs.find(tab => tab.id === tabId);
+			if (!managed) return;
+			selectBrowserTab(tabId);
+			const existing = panelTabs.tabs.find(tab => browserTarget(tab) === tabId);
+			panelTabs.open(browserPanelDescriptor(managed, t("tools.browserEmptyTab")), {
+				column: existing?.column,
+				maxPerSurface: Number.POSITIVE_INFINITY,
+			});
+		},
+		[browserTabs, panelTabs.open, panelTabs.tabs],
+	);
+
+	useEffect(() => {
+		const desired = reconcileBrowserPanelTabs(panelTabs, browserTabs, t("tools.browserEmptyTab"));
+		const current = new Map(panelTabs.tabs.filter(tab => tab.surface === "browser").map(tab => [tab.id, tab]));
+		const desiredTabs = desired.tabs.filter(tab => tab.surface === "browser");
+		const desiredIds = new Set(desiredTabs.map(tab => tab.id));
+		const removed = [...current.keys()].filter(id => !desiredIds.has(id));
+		if (removed.length > 0) panelTabs.closeMany(removed);
+		for (const tab of desiredTabs) {
+			const existing = current.get(tab.id);
+			if (existing?.label === tab.label) continue;
+			const managed = browserTabs.find(candidate => candidate.id === browserTarget(tab));
+			if (!managed) continue;
+			panelTabs.open(browserPanelDescriptor(managed, t("tools.browserEmptyTab")), {
+				column: tab.column,
+				reveal: false,
+				now: tab.touchedAt,
+				maxPerSurface: Number.POSITIVE_INFINITY,
+			});
+		}
+	}, [browserTabs, panelTabs]);
+
+	const hostActiveRef = useRef<string | null>(null);
+	const panelCloseHostSyncRef = useRef(false);
+	useEffect(() => {
+		const activeId = browserHost.activeId;
+		if (hostActiveRef.current === activeId) return;
+		hostActiveRef.current = activeId;
+		if (panelCloseHostSyncRef.current) {
+			panelCloseHostSyncRef.current = false;
+			return;
+		}
+		if (!activeId) return;
+		const managed = browserTabs.find(tab => tab.id === activeId);
+		if (!managed) return;
+		const existing = panelTabs.tabs.find(tab => browserTarget(tab) === activeId);
+		panelTabs.open(browserPanelDescriptor(managed, t("tools.browserEmptyTab")), {
+			column: existing?.column,
+			maxPerSurface: Number.POSITIVE_INFINITY,
+		});
+	}, [browserHost.activeId, browserTabs, panelTabs.open, panelTabs.tabs]);
+
 	useEffect(() => {
 		if (!browserOpenRequest || browserOpenRequest.nonce === revealedNonceRef.current.browser) return;
 		revealedNonceRef.current.browser = browserOpenRequest.nonce;
-		onViewChange("browser");
-	}, [browserOpenRequest, onViewChange]);
-	// Managed browser: when the agent opens a tab in the in-app
-	// browser (browser.gui), surface the browser tool so the user sees the
-	// agent's work without hunting for the panel. Skipped while the panel is
-	// maximized (the mirror ref is declared here, wired to state below) — an
-	// agent browsing in the background must not yank the maximized view.
+		openBrowserPanel();
+	}, [browserOpenRequest, openBrowserPanel]);
+
 	const agentBrowserTabRef = useRef<string | null>(null);
 	const maximizedRef = useRef(false);
-	// Mirrors for the mount-only subscription below (the same reason
-	// maximizedRef exists): the reveal has to know whether the panel is
-	// actually on screen, and call an expand callback that stays fresh.
-	const openRef = useRef(open);
-	openRef.current = open;
-	const expandRef = useRef(onExpandPanel);
-	expandRef.current = onExpandPanel;
 	useEffect(() => {
-		const api = window.electronAPI;
-		if (!api || typeof api.onManagedBrowserState !== "function") return;
-		return api.onManagedBrowserState(next => {
-			if (maximizedRef.current) return;
-			// Dedupe on the ledger row: every state push for the same agent
-			// operation must not switch the view again.
-			const key = next.activity?.id ?? null;
-			if (next.agentActivity === true && key !== null && agentBrowserTabRef.current !== key) {
-				agentBrowserTabRef.current = key;
-				onViewChange("browser");
-				// Reveal, not just select: on a folded panel the view switch is
-				// invisible, so the agent's work would stay unseen.
-				if (!openRef.current) expandRef.current?.();
-			}
-		});
-	}, []);
-	// Resizable right-pane width, remembered per surface: drag the left edge;
-	// persisted per run.
-	// Width range 260–1200 (openchamber ContextPanel 380–1400, adapted to the
-	// desktop surface): file preview takeover and the browser need room; 260
-	// keeps a minimal notes/context view usable. 1200 = code previews at
-	// readable width.
-	const activeSurfaceId = panelTabs.tabs.find(tab => tab.id === panelTabs.activeId)?.surface ?? null;
-	const [width, setWidth] = useState(() => {
-		const descriptor = activeSurfaceId ? surfaceById(activeSurfaceId) : undefined;
-		const initial = widthForSurface(activeSurfaceId ?? "", descriptor?.defaultWidthFraction ?? 0.5);
-		return Math.min(1200, Math.max(260, initial));
-	});
-	// Switching surfaces restores that surface's remembered width.
-	useEffect(() => {
-		if (!activeSurfaceId) return;
-		const descriptor = surfaceById(activeSurfaceId);
-		setWidth(current => {
-			// Preserve an in-progress drag; only re-anchor on surface change.
-			if (document.body.classList.contains("gui-resizing")) return current;
-			const remembered = widthForSurface(activeSurfaceId, descriptor?.defaultWidthFraction ?? 0.5);
-			return Math.min(1200, Math.max(260, remembered));
-		});
-	}, [activeSurfaceId]);
+		if (maximizedRef.current || !browserHost.agentActivity || !browserHost.activity) return;
+		if (!browserTabs.some(tab => tab.id === browserHost.activity?.tabId)) return;
+		const key = browserHost.activity.id;
+		if (agentBrowserTabRef.current === key) return;
+		agentBrowserTabRef.current = key;
+		revealBrowserTab(browserHost.activity.tabId);
+		if (!open) onExpandPanel?.();
+	}, [browserHost.agentActivity, browserHost.activity, browserTabs, revealBrowserTab, open, onExpandPanel]);
+	// One resizable width for the whole panel: switching tabs never resizes the
+	// workspace. Width range 260–1200 (openchamber ContextPanel 380–1400,
+	// adapted to the desktop surface).
+	const [width, setWidth] = useState(() => Math.min(1200, Math.max(260, panelWidth(0.5))));
 	// Maximize (openchamber fullscreen-surface / proma quick-window parity):
 	// the panel floats over the chat column at near-full width/height; toggling
 	// off returns to the persisted width. Width-drag is disabled while maximized.
 	const maximized = useSyncExternalStore(subscribePanelMaximize, getPanelMaximized, getPanelMaximized);
 	const setMaximized = setPanelMaximized;
 	maximizedRef.current = maximized;
-	// Active surface at drag end (the drag callbacks close over the render
-	// that started the gesture, so a ref carries the current surface).
-	const activeSurfaceRef = useRef<string | null>(null);
-	activeSurfaceRef.current = activeSurfaceId;
 	// Maximize/restore morph (FLIP): the docked↔fixed switch is not
 	// interpolable (position is discrete, so toggling the class teleported
 	// the panel: user 2026-09-22 — 最大化没有动效，只有还原有). The toggle
@@ -706,8 +777,7 @@ export function ContextPanel({
 			// below its minimum on a narrow window.
 			const settled = Math.min(maxWidthRef.current, snapWidth(resizeWidthRef.current));
 			setWidth(settled);
-			const surface = activeSurfaceRef.current;
-			if (surface) writeSurfaceWidth(surface, settled);
+			writePanelWidth(settled);
 		},
 		onTap: () => setGestureShield(false),
 	});
@@ -781,6 +851,38 @@ export function ContextPanel({
 	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
 	const view = activePanelTab?.surface ?? null;
 
+	const activateTab = useCallback(
+		(id: string): void => {
+			const tab = panelTabs.tabs.find(candidate => candidate.id === id);
+			const managedId = tab ? browserTarget(tab) : null;
+			if (managedId) selectBrowserTab(managedId);
+			panelTabs.activate(id);
+		},
+		[panelTabs],
+	);
+
+	const closeTabsFromPanel = useCallback(
+		(ids: readonly string[]): void => {
+			if (ids.length === 0) return;
+			const closing = new Set(ids);
+			const closesHostActive = panelTabs.tabs.some(
+				tab => closing.has(tab.id) && browserTarget(tab) === browserHost.activeId,
+			);
+			if (closesHostActive) panelCloseHostSyncRef.current = true;
+			const next = closePanelTabs(panelTabs, ids);
+			panelTabs.closeMany(ids);
+			for (const tab of panelTabs.tabs) {
+				if (!closing.has(tab.id)) continue;
+				const managedId = browserTarget(tab);
+				if (managedId) closeBrowserTab(managedId);
+			}
+			const nextActive = next.tabs.find(tab => tab.id === next.activeId);
+			const nextManagedId = nextActive ? browserTarget(nextActive) : null;
+			if (nextManagedId) selectBrowserTab(nextManagedId);
+		},
+		[browserHost.activeId, panelTabs],
+	);
+
 	// Close a tab whose file has unsaved in-app edits only after the user
 	// confirms — discarding is destructive and silent. Declining keeps it.
 	const closeTabWithGuard = useCallback(
@@ -792,9 +894,9 @@ export function ContextPanel({
 			)
 				return;
 			if (tab?.surface === "files" && tab.target) discardFilePreviewBuffer(cwd, tab.target);
-			panelTabs.close(id);
+			closeTabsFromPanel([id]);
 		},
-		[panelTabs, confirm, cwd],
+		[closeTabsFromPanel, panelTabs, confirm, cwd],
 	);
 
 	// Mirror the inline editor's dirty state onto the file tab: the dot
@@ -829,6 +931,24 @@ export function ContextPanel({
 		[panelTabs],
 	);
 
+	const duplicateTab = useCallback(
+		(id: string): void => {
+			const sourceIndex = panelTabs.tabs.findIndex(candidate => candidate.id === id);
+			const tab = panelTabs.tabs[sourceIndex];
+			const managedId = tab ? browserTarget(tab) : null;
+			if (tab && managedId) {
+				const source = browserTabs.find(candidate => candidate.id === managedId);
+				if (!source) return;
+				const rightNeighbour = panelTabs.tabs[sourceIndex + 1];
+				const duplicateId = openBrowserPanel({ column: tab.column, forceNew: true, url: source.url });
+				if (rightNeighbour?.column === tab.column) panelTabs.reorder(`browser::${duplicateId}`, rightNeighbour.id);
+				return;
+			}
+			panelTabs.duplicate(id);
+		},
+		[openBrowserPanel, panelTabs],
+	);
+
 	/** Close a batch (close others / close all): confirm once for every dirty
 	 *  tab, then close only the ones the user accepted. Tab strips do not
 	 *  name individual files, so each dirty tab gets its own confirm. */
@@ -849,9 +969,9 @@ export function ContextPanel({
 				const tab = panelTabs.tabs.find(t => t.id === id);
 				if (tab?.surface === "files" && tab.target) discardFilePreviewBuffer(cwd, tab.target);
 			}
-			if (closing.length > 0) panelTabs.closeMany(closing);
+			closeTabsFromPanel(closing);
 		},
-		[panelTabs, confirm, cwd],
+		[closeTabsFromPanel, panelTabs, confirm, cwd],
 	);
 
 	const fileWorkspace: FileWorkspaceHost = {
@@ -969,7 +1089,7 @@ export function ContextPanel({
 				<button
 					type="button"
 					className="gui-pane-tab-empty gui-pane-tab-empty--clickable"
-					onClick={() => panelTabs.activate(bodyTab.id)}
+					onClick={() => activateTab(bodyTab.id)}
 				>
 					<span className="gui-pane-tab-empty-icon">
 						<Icon name="window" />
@@ -992,6 +1112,7 @@ export function ContextPanel({
 					rpc={rpc}
 					sessionId={snap?.sessionId}
 					cwd={cwd}
+					panelTab={bodyTab ?? undefined}
 					browser={{ open, openRequest: browserOpenRequest, onTakeover: onBrowserTakeover }}
 				/>
 			) : isElectron() ? null : (
@@ -1051,7 +1172,7 @@ export function ContextPanel({
 					<WidgetSidebarTab entries={snap?.entries ?? []} />
 				) : bodyView === "jobs" ? (
 					snap?.sessionId ? (
-						<JobsPane rpc={rpc} sessionId={snap.sessionId} />
+						<JobsPane rpc={rpc} sessionId={snap.sessionId} visible={open} />
 					) : (
 						<div className="gui-pane-tab-empty">
 							<span className="gui-pane-tab-empty-icon">
@@ -1243,6 +1364,23 @@ export function ContextPanel({
 			</FadeScroll>
 		);
 
+	const surfaceTabVisual = (tab: PanelTab) => {
+		const managedId = browserTarget(tab);
+		const managed = managedId ? browserTabs.find(candidate => candidate.id === managedId) : undefined;
+		const registry = surfaceById(tab.surface);
+		return {
+			icon: managedId ? (
+				<BrowserPanelTabIcon key={`${managedId}:${managed?.favicon ?? ""}`} favicon={managed?.favicon ?? null} />
+			) : registry ? (
+				<Icon name={registry.icon as IconName} className="h-3.5 w-3.5" />
+			) : undefined,
+			agentActive:
+				managedId !== null &&
+				(browserHost.busyTabIds.includes(managedId) ||
+					(browserHost.activity?.status === "dispatched" && browserHost.activity.tabId === managedId)),
+		};
+	};
+
 	return (
 		<>
 			{/* Surface-tab context menu (right-click on a panel tab): close /
@@ -1252,36 +1390,129 @@ export function ContextPanel({
 					open
 					x={tabMenu.x}
 					y={tabMenu.y}
-					items={[
-						{
-							label: t("general.duplicateTab"),
-							icon: "file-copy-2",
-							// A copy is a second independent instance of the same
-							// target (M1.12): single-instance surfaces (the whole
-							// panel renders one of them) have nothing to duplicate.
-							disabled: panelTabs.tabs.find(tb => tb.id === tabMenu.id)?.surface === "context",
-							onSelect: () => panelTabs.duplicate(tabMenu.id),
-						},
-						{
-							label: t("general.closeTab"),
-							icon: "settings.close",
-							onSelect: () => void closeTabWithGuard(tabMenu.id),
-						},
-						{
-							label: t("general.closeOtherTabs"),
-							icon: "settings.close",
-							divider: true,
-							disabled: panelTabs.tabs.length <= 1,
-							onSelect: () =>
-								void closeManyWithGuard(panelTabs.tabs.filter(tb => tb.id !== tabMenu.id).map(tb => tb.id)),
-						},
-						{
-							label: t("general.closeAllTabs"),
-							icon: "settings.close",
-							disabled: panelTabs.tabs.length === 0,
-							onSelect: () => void closeManyWithGuard(panelTabs.tabs.map(tb => tb.id)),
-						},
-					]}
+					items={(() => {
+						const menuIndex = panelTabs.tabs.findIndex(tb => tb.id === tabMenu.id);
+						const menuTab = panelTabs.tabs[menuIndex];
+						const managedId = menuTab ? browserTarget(menuTab) : null;
+						const managed = managedId ? browserTabs.find(candidate => candidate.id === managedId) : null;
+						if (menuTab && managed) {
+							const hasPage = !managed.blank && managed.url !== "";
+							const canExternal = hasPage && /^https?:\/\//i.test(managed.url);
+							const closeRight = panelTabs.tabs.filter(
+								(tb, index) => index > menuIndex && tb.column === menuTab.column,
+							);
+							return [
+								{
+									label: t("tools.browserNewTabRight"),
+									icon: "add",
+									onSelect: () => openBrowserPanel({ column: menuTab.column, forceNew: true }),
+								},
+								{
+									label: t("tools.browserRefresh"),
+									icon: "refresh",
+									disabled: !hasPage,
+									onSelect: () => {
+										selectBrowserTab(managed.id);
+										reloadBrowserTab(managed.id);
+									},
+								},
+								{
+									label: t("general.duplicateTab"),
+									icon: "file-copy-2",
+									onSelect: () => duplicateTab(menuTab.id),
+								},
+								{
+									label: t("tools.browserRenameTab"),
+									icon: "edit-2",
+									onSelect: () => {
+										void prompt({
+											title: t("tools.browserRenameTabPrompt"),
+											defaultValue: managed.customTitle ?? managed.title,
+										}).then(name => {
+											if (name !== null) renameBrowserTab(managed.id, name);
+										});
+									},
+								},
+								{
+									label: t("tools.browserCopyUrl"),
+									icon: "clipboard",
+									divider: true,
+									disabled: !hasPage,
+									onSelect: () => {
+										void copyToClipboard(managed.url).then(ok => {
+											if (!ok) {
+												window.dispatchEvent(
+													new CustomEvent("musepi-gui-toast", {
+														detail: t("tools.browserCopyUrlFailed"),
+													}),
+												);
+											}
+										});
+									},
+								},
+								{
+									label: t("tools.browserOpenSystem"),
+									icon: "external-link",
+									disabled: !canExternal,
+									onSelect: () => void openExternalUrl(managed.url),
+								},
+								{
+									label: managed.muted ? t("tools.browserUnmuteTab") : t("tools.browserMuteTab"),
+									icon: "volume-up",
+									disabled: !hasPage,
+									onSelect: () => setBrowserTabMuted(managed.id, !managed.muted),
+								},
+								{
+									label: t("general.closeTab"),
+									icon: "settings.close",
+									divider: true,
+									onSelect: () => void closeTabWithGuard(menuTab.id),
+								},
+								{
+									label: t("general.closeOtherTabs"),
+									icon: "settings.close",
+									disabled: panelTabs.tabs.length <= 1,
+									onSelect: () =>
+										void closeManyWithGuard(
+											panelTabs.tabs.filter(tb => tb.id !== menuTab.id).map(tb => tb.id),
+										),
+								},
+								{
+									label: t("tools.browserCloseRightTabs"),
+									icon: "settings.close",
+									disabled: closeRight.length === 0,
+									onSelect: () => void closeManyWithGuard(closeRight.map(tb => tb.id)),
+								},
+							];
+						}
+						return [
+							{
+								label: t("general.duplicateTab"),
+								icon: "file-copy-2",
+								disabled: menuTab?.surface === "context",
+								onSelect: () => duplicateTab(tabMenu.id),
+							},
+							{
+								label: t("general.closeTab"),
+								icon: "settings.close",
+								onSelect: () => void closeTabWithGuard(tabMenu.id),
+							},
+							{
+								label: t("general.closeOtherTabs"),
+								icon: "settings.close",
+								divider: true,
+								disabled: panelTabs.tabs.length <= 1,
+								onSelect: () =>
+									void closeManyWithGuard(panelTabs.tabs.filter(tb => tb.id !== tabMenu.id).map(tb => tb.id)),
+							},
+							{
+								label: t("general.closeAllTabs"),
+								icon: "settings.close",
+								disabled: panelTabs.tabs.length === 0,
+								onSelect: () => void closeManyWithGuard(panelTabs.tabs.map(tb => tb.id)),
+							},
+						];
+					})()}
 					onClose={() => setTabMenu(null)}
 				/>
 			)}
@@ -1298,8 +1529,7 @@ export function ContextPanel({
 						icon: s.icon as IconName,
 						onSelect: () => {
 							if (s.id === "browser") {
-								panelTabs.open({ surface: "settings.browser" }, { column: addMenu.column });
-								void createBrowserTab("about:blank").catch(() => {});
+								openBrowserPanel({ column: addMenu.column, forceNew: true });
 								return;
 							}
 							// Files uses the in-app workspace tree. Selecting another
@@ -1328,6 +1558,11 @@ export function ContextPanel({
 					/>,
 					document.getElementById("transcript.root") ?? document.body,
 				)}
+			{stripDragId !== null &&
+				createPortal(
+					<div className="gui-drag-shield gui-panel-drag-shield" aria-hidden />,
+					document.getElementById("transcript.root") ?? document.body,
+				)}
 			<aside ref={panelRef} className={panelClass} style={maximized ? undefined : { width }}>
 				{/* Left-edge drag handle for width: pointer capture on the 4px
 				 * strip plus the gesture shield (the page guest swallows captured
@@ -1338,7 +1573,12 @@ export function ContextPanel({
 						<DndContext
 							sensors={splitSensors}
 							collisionDetection={panelSplitCollision}
-							onDragEnd={onSplitDragEnd}
+							onDragStart={e => setStripDragId(String(e.active.id))}
+							onDragEnd={e => {
+								setStripDragId(null);
+								onSplitDragEnd(e);
+							}}
+							onDragCancel={() => setStripDragId(null)}
 						>
 							<div className="gui-pane-columns">
 								{([0, 1] as const).map(col => {
@@ -1356,6 +1596,7 @@ export function ContextPanel({
 												<div className="gui-pane-col-strip">
 													<SurfaceTabStripSortable
 														tabs={colTabs.map(t => ({
+															...surfaceTabVisual(t),
 															id: t.id,
 															title: t.label,
 															dirty: t.dirty,
@@ -1363,7 +1604,7 @@ export function ContextPanel({
 														}))}
 														activeId={colTab?.id ?? null}
 														closeLabel={t("general.closeTab")}
-														onActivate={panelTabs.activate}
+														onActivate={activateTab}
 														onClose={closeTabWithGuard}
 														onPin={pinTab}
 														onReorder={panelTabs.reorder}
@@ -1403,9 +1644,11 @@ export function ContextPanel({
 																onPointerDown={event => event.stopPropagation()}
 																onClick={toggleMaximized}
 															>
-																<StateIcon
-																	on={maximized}
-																	pair={["fullscreen-exit", "fullscreen"]}
+																<MorphIcon
+																	icon={maximized ? Minimize2IconData : Maximize2IconData}
+																	size={14}
+																	spring="snappy"
+																	reducedMotion="user"
 																	className="h-3.5 w-3.5"
 																/>
 															</button>
@@ -1446,6 +1689,7 @@ export function ContextPanel({
 									{panelTabs.tabs.length > 0 && (
 										<SurfaceTabStripSortable
 											tabs={panelTabs.tabs.map(t => ({
+												...surfaceTabVisual(t),
 												preview: t.preview,
 												id: t.id,
 												title: t.label,
@@ -1453,7 +1697,7 @@ export function ContextPanel({
 											}))}
 											activeId={panelTabs.activeId}
 											closeLabel={t("general.closeTab")}
-											onActivate={panelTabs.activate}
+											onActivate={activateTab}
 											onClose={closeTabWithGuard}
 											onPin={pinTab}
 											onReorder={panelTabs.reorder}
@@ -1493,9 +1737,11 @@ export function ContextPanel({
 										onPointerDown={event => event.stopPropagation()}
 										onClick={toggleMaximized}
 									>
-										<StateIcon
-											on={maximized}
-											pair={["fullscreen-exit", "fullscreen"]}
+										<MorphIcon
+											icon={maximized ? Minimize2IconData : Maximize2IconData}
+											size={14}
+											spring="snappy"
+											reducedMotion="user"
 											className="h-3.5 w-3.5"
 										/>
 									</button>
@@ -1511,7 +1757,7 @@ export function ContextPanel({
 											id: s.id,
 											label: t(s.label as TranslationKey),
 											icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
-											onSelect: () => onViewChange(s.id),
+											onSelect: () => (s.id === "browser" ? openBrowserPanel() : onViewChange(s.id)),
 										}))}
 									/>
 								) : (
@@ -1608,13 +1854,20 @@ function WidgetSidebarTab({ entries }: { entries: readonly unknown[] }): ReactNo
 }
 
 /** One async job row from `session.jobs` (daemon wire shape). startTime is
- *  an epoch-ms number from the job manager; tolerate strings for robustness. */
+ *  an epoch-ms number from the job manager; tolerate strings for robustness.
+ *  `questionCount`/`toolCallId`/`outputBytes` come from the async job summary
+ *  and are absent on daemons that predate background questions. */
 interface JobItem {
 	id: string;
 	type: string;
 	status: string;
 	label: string;
 	startTime: number | string;
+	/** Background `question` job: how many questions await an answer. */
+	questionCount?: number;
+	toolCallId?: string;
+	/** Bytes retained in the job's live-output ring. */
+	outputBytes?: number;
 }
 
 /** `session.jobs` response: running/recent job lists + delivery counters. */
@@ -1757,17 +2010,85 @@ function SubSessionsSection({
 	);
 }
 
-/** Jobs HUD (会话任务): running jobs with per-job cancel, recent jobs with
- *  status + start time, and the async delivery queue counters. Polls
- *  session.jobs every 5s while mounted; a cancel triggers an immediate
- *  re-poll (nonce) instead of waiting for the next tick. */
-function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): ReactNode {
+/** Display window for a selected job's live output (characters). */
+export const JOB_OUTPUT_TAIL_LIMIT = 4000;
+
+/** Poll cadence for the jobs list and the selected job's output (ms). */
+const JOBS_POLL_INTERVAL_MS = 1000;
+
+/** `session.jobOutput` takes a UTF-8 *byte* tail; a character is at most four
+ *  bytes, so this window still holds JOB_OUTPUT_TAIL_LIMIT multi-byte
+ *  characters before the display trim. */
+const JOB_OUTPUT_TAIL_BYTES = JOB_OUTPUT_TAIL_LIMIT * 4;
+
+/** Jobs-pane filter: live jobs only (default) or everything still retained. */
+type JobsFilter = "running" | "all";
+
+/** Live-output state for the selected job. Tagged by job id so a poll that
+ *  lands after the selection changed cannot paint the previous job's text. */
+interface JobOutputState {
+	jobId: string | null;
+	text: string;
+	truncated: boolean;
+	unavailable: boolean;
+}
+
+const EMPTY_JOB_OUTPUT: JobOutputState = { jobId: null, text: "", truncated: false, unavailable: false };
+
+function clampJobOutput(text: string, limit: number): string {
+	return text.length > limit ? text.slice(-limit) : text;
+}
+
+/**
+ * Append a freshly polled tail to the accumulated output. Each poll returns
+ * only the last `limit` characters, so the window slides as the job writes:
+ * merge on the longest suffix/prefix overlap instead of concatenating (blind
+ * appending duplicates the boundary) or replacing (that drops the start of a
+ * buffer that is still growing). A tail that overlaps nothing supersedes the
+ * buffer — it is the newest window.
+ */
+export function mergeJobOutput(current: string, incoming: string, limit = JOB_OUTPUT_TAIL_LIMIT): string {
+	if (incoming.length === 0) return current;
+	if (current.length === 0 || incoming.startsWith(current)) return clampJobOutput(incoming, limit);
+	if (current.startsWith(incoming)) return current;
+	for (let k = Math.min(current.length, incoming.length); k > 0; k -= 1) {
+		if (current.endsWith(incoming.slice(0, k))) return clampJobOutput(current + incoming.slice(k), limit);
+	}
+	return clampJobOutput(incoming, limit);
+}
+
+/** Question count on a background `question` job (absent on older daemons). */
+function jobQuestionCount(job: JobItem): number | null {
+	const count = job.questionCount;
+	return typeof count === "number" && Number.isFinite(count) ? count : null;
+}
+
+/** Jobs HUD (会话任务): running/all filter, per-job cancel, and the selected
+ *  job's live output tail. Polls session.jobs every second only while the pane
+ *  is visible (`visible` mirrors the right panel's open state — a closed panel
+ *  keeps its body mounted, so mounting alone is not visibility). Selecting a
+ *  job polls session.jobOutput on the same cadence and accumulates the tail
+ *  into one JOB_OUTPUT_TAIL_LIMIT buffer, reading once more after it settles.
+ *  A cancel triggers an immediate re-poll (nonce) instead of the next tick. */
+export function JobsPane({
+	rpc,
+	sessionId,
+	visible = true,
+}: {
+	rpc: RpcClient;
+	sessionId: string;
+	/** False while the right panel is collapsed. */
+	visible?: boolean;
+}): ReactNode {
 	const [data, setData] = useState<JobsData | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [cancelling, setCancelling] = useState<string | null>(null);
 	const [nonce, setNonce] = useState(0);
+	const [filter, setFilter] = useState<JobsFilter>("running");
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [output, setOutput] = useState<JobOutputState>(EMPTY_JOB_OUTPUT);
 	useEffect(() => {
-		if (!sessionId) return;
+		if (!sessionId || !visible) return;
 		let alive = true;
 		const poll = (): void => {
 			void rpc
@@ -1782,12 +2103,69 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 				});
 		};
 		poll();
-		const timer = setInterval(poll, 5000);
+		const timer = setInterval(poll, JOBS_POLL_INTERVAL_MS);
 		return () => {
 			alive = false;
 			clearInterval(timer);
 		};
-	}, [rpc, sessionId, nonce]);
+	}, [rpc, sessionId, nonce, visible]);
+
+	const running = data?.running ?? [];
+	const recent = data?.recent ?? [];
+	const selectedJob = running.find(job => job.id === selectedId) ?? recent.find(job => job.id === selectedId) ?? null;
+	const selectedRunning = selectedJob?.status === "running";
+	// A settled job is read once so its final output replaces the last live
+	// tail; the interval only exists while the job keeps writing.
+	useEffect(() => {
+		if (!sessionId || !selectedId || !visible) return;
+		const jobId = selectedId;
+		let alive = true;
+		const poll = (): void => {
+			void rpc
+				.request<{ output?: string; truncated?: boolean }>("session.jobOutput", {
+					sessionId,
+					jobId,
+					tail: JOB_OUTPUT_TAIL_BYTES,
+				})
+				.then(res => {
+					if (!alive) return;
+					setOutput(prev =>
+						prev.jobId === jobId
+							? {
+									...prev,
+									text: mergeJobOutput(prev.text, typeof res?.output === "string" ? res.output : ""),
+									truncated: res?.truncated === true,
+									unavailable: false,
+								}
+							: {
+									jobId,
+									text: mergeJobOutput("", typeof res?.output === "string" ? res.output : ""),
+									truncated: res?.truncated === true,
+									unavailable: false,
+								},
+					);
+				})
+				.catch(() => {
+					if (!alive) return;
+					setOutput(prev =>
+						prev.jobId === jobId
+							? { ...prev, unavailable: true }
+							: { ...EMPTY_JOB_OUTPUT, jobId, unavailable: true },
+					);
+				});
+		};
+		poll();
+		if (!selectedRunning) {
+			return () => {
+				alive = false;
+			};
+		}
+		const timer = setInterval(poll, JOBS_POLL_INTERVAL_MS);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [rpc, sessionId, selectedId, selectedRunning, visible]);
 
 	const cancelJob = async (jobId: string): Promise<void> => {
 		if (cancelling) return;
@@ -1802,54 +2180,132 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 		}
 	};
 
-	const running = data?.running ?? [];
-	const recent = data?.recent ?? [];
 	const delivery = data?.delivery;
+	const selectedOutput = output.jobId === selectedId ? output.text : "";
+	const selectedTruncated = output.jobId === selectedId && output.truncated;
+	const selectedOutputUnavailable = output.jobId === selectedId && output.unavailable;
+	const runningIds = new Set(running.map(job => job.id));
+	const sections: { key: string; label: string; jobs: JobItem[]; live: boolean }[] =
+		filter === "running"
+			? [{ key: "running", label: t("tools.jobsRunning"), jobs: running, live: true }]
+			: [
+					{ key: "running", label: t("tools.jobsRunning"), jobs: running, live: true },
+					{
+						key: "recent",
+						label: t("tools.jobsRecent"),
+						jobs: recent.filter(job => !runningIds.has(job.id)),
+						live: false,
+					},
+				];
+
+	const renderJobRow = (job: JobItem, live: boolean): ReactNode => {
+		const selected = job.id === selectedId;
+		const questionCount = job.type === "question" ? jobQuestionCount(job) : null;
+		return (
+			<div key={job.id} className="flex items-center gap-1.5 text-[13px]">
+				<button
+					type="button"
+					aria-pressed={selected}
+					aria-label={job.label || job.type}
+					className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left ${
+						selected
+							? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+							: "hover:bg-[var(--color-surface-sunken)]"
+					}`}
+					onClick={() => setSelectedId(prev => (prev === job.id ? null : job.id))}
+				>
+					{live ? (
+						<Icon name="loader-4" className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-[var(--color-accent)]" />
+					) : (
+						<span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--color-text-faint)]" />
+					)}
+					<span className="min-w-0 flex-1 truncate">{job.label || job.type}</span>
+					{questionCount !== null && (
+						<span className="flex-shrink-0 text-[11px] text-[var(--color-text-muted)]">
+							{t("tools.questionWithCount", { count: String(questionCount) })}
+						</span>
+					)}
+					{job.type === "question" && live && (
+						<span className="flex-shrink-0 rounded-full bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]">
+							{t("tools.jobsWaitingAnswer")}
+						</span>
+					)}
+					{!live && <span className="flex-shrink-0 text-[11px] text-[var(--color-text-muted)]">{job.status}</span>}
+					{!live && (
+						<span className="flex-shrink-0 text-[11px] tabular-nums text-[var(--color-text-faint)]">
+							{fmtJobTime(job.startTime)}
+						</span>
+					)}
+				</button>
+				{live && (
+					<button
+						type="button"
+						className="gui-pane-action !w-auto flex-shrink-0 px-1.5 text-[12px]"
+						title={t("tools.jobsCancel")}
+						aria-label={`${t("tools.jobsCancel")}: ${job.label || job.id}`}
+						disabled={cancelling !== null}
+						onClick={() => void cancelJob(job.id)}
+					>
+						{cancelling === job.id ? (
+							<Icon name="loader-4" className="h-3 w-3 animate-spin" />
+						) : (
+							<Icon name="close" className="h-3 w-3" />
+						)}
+						<span>{t("tools.jobsCancel")}</span>
+					</button>
+				)}
+			</div>
+		);
+	};
+
 	return (
 		<div className="px-1 py-2">
-			<div className="gui-group-label px-2 pb-1 pt-1">{t("tools.jobsRunning")}</div>
-			{running.length === 0 ? (
-				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
-			) : (
-				<div className="flex flex-col gap-1 px-2">
-					{running.map(job => (
-						<div key={job.id} className="flex items-center gap-2 text-[13px]">
-							<Icon
-								name="loader-4"
-								className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-[var(--color-accent)]"
-							/>
-							<span className="min-w-0 flex-1 truncate">{job.label || job.type}</span>
-							<button
-								type="button"
-								className="gui-pane-action !w-auto flex-shrink-0 px-1.5 text-[12px]"
-								title={t("tools.jobsCancel")}
-								aria-label={`${t("tools.jobsCancel")}: ${job.label || job.id}`}
-								disabled={cancelling !== null}
-								onClick={() => void cancelJob(job.id)}
-							>
-								{cancelling === job.id ? (
-									<Icon name="loader-4" className="h-3 w-3 animate-spin" />
-								) : (
-									<Icon name="close" className="h-3 w-3" />
-								)}
-								<span>{t("tools.jobsCancel")}</span>
-							</button>
+			<div className="px-2 pb-2 pt-1">
+				<Segmented<JobsFilter>
+					className="gui-seg--compact"
+					ariaLabel={t("tools.jobs")}
+					value={filter}
+					options={[
+						{ value: "running", label: t("tools.jobsRunning") },
+						{ value: "all", label: t("tools.all") },
+					]}
+					onChange={setFilter}
+				/>
+			</div>
+			{sections.map(section => (
+				<div key={section.key}>
+					<div className="gui-group-label px-2 pb-1 pt-1">{section.label}</div>
+					{section.jobs.length === 0 ? (
+						<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
+					) : (
+						<div className="flex flex-col gap-0.5 px-2">
+							{section.jobs.map(job => renderJobRow(job, section.live))}
 						</div>
-					))}
+					)}
 				</div>
-			)}
-			<div className="gui-group-label px-2 pb-1 pt-3">{t("tools.jobsRecent")}</div>
-			{recent.length === 0 ? (
-				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
-			) : (
-				<div className="flex flex-col gap-1 px-2">
-					{recent.map(job => (
-						<div key={job.id} className="flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
-							<span className="min-w-0 flex-1 truncate">{job.label || job.type}</span>
-							<span className="flex-shrink-0">{job.status}</span>
-							<span className="flex-shrink-0 tabular-nums">{fmtJobTime(job.startTime)}</span>
-						</div>
-					))}
+			))}
+			{selectedId && (
+				<div className="mt-2 px-2">
+					<div className="gui-group-label pb-1">
+						<span className="inline-flex items-center gap-1">
+							<Icon name="file-text" className="h-3.5 w-3.5" />
+							{t("tools.jobsOutput")}
+						</span>
+					</div>
+					{selectedOutputUnavailable ? (
+						<p className="text-[12px] text-[var(--color-text-faint)]">{t("tools.jobsOutputUnavailable")}</p>
+					) : selectedOutput.length > 0 ? (
+						<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2 font-mono text-[11px] leading-relaxed text-[var(--color-text)]">
+							{stripAnsi(replaceTabs(selectedOutput))}
+						</pre>
+					) : (
+						<p className="text-[12px] text-[var(--color-text-faint)]">{t("tools.jobsOutputEmpty")}</p>
+					)}
+					{selectedTruncated && (
+						<p className="pt-1 text-[11px] text-[var(--color-text-faint)]">
+							{t("tools.jobsOutputTruncated", { count: String(JOB_OUTPUT_TAIL_LIMIT) })}
+						</p>
+					)}
 				</div>
 			)}
 			{delivery && (

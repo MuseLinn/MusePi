@@ -1,4 +1,4 @@
-import { DotMatrixMark, Markdown, type TranslationKey, t } from "@musepi/client-core";
+import { DotMatrixMark, Markdown, type TranslationKey, t, useLocale } from "@musepi/client-core";
 import { ToolView } from "@musepi/client-core/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/client-core/src/tool-render/tools/task";
 import type { ReactNode } from "react";
@@ -28,6 +28,7 @@ import {
 } from "../../lib/pet-decor";
 import type { RpcClient } from "../../lib/rpc";
 import { dispatchSettingsChanged } from "../../lib/settings-events";
+import { localizeUpdateNotes } from "../../lib/update-notes";
 import { UPDATE_ERROR_BODY_KEYS } from "../../lib/update-ux";
 import { readWelcomeGreeting, writeWelcomeGreeting } from "../../lib/welcome-greeting";
 import { Icon } from "../../vendor/oc-icons";
@@ -216,6 +217,7 @@ export function TaskCardStylePreview({
 }
 
 export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const locale = useLocale();
 	const [info, setInfo] = useState<{
 		version?: string;
 		musepiVersion?: string | null;
@@ -746,7 +748,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								<div className="gui-update-result">
 									{updateResult.notes ? (
 										<div className="gui-update-result-notes">
-											<Markdown text={updateResult.notes} />
+											<Markdown text={localizeUpdateNotes(updateResult.notes, locale)} />
 										</div>
 									) : null}
 									<div className="gui-update-result-actions">

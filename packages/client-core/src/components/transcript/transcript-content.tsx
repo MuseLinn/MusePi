@@ -36,6 +36,10 @@ import { Markdown } from "./Markdown";
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
+import type { TurnFileChange } from "./turn-files.js";
+import { TurnFilesCard } from "./turn-files-card.js";
+import type { TurnSources } from "./turn-sources.js";
+import { TurnSourcesCard } from "./turn-sources-card.js";
 import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
 import { useHoldAnchor } from "./use-hold-anchor";
 import { useWorkingNow } from "./use-working-now";
@@ -1042,6 +1046,11 @@ export function AssistantBody({
 	/** Turn-final aggregated file artifacts (本轮文件卡片展示在最底部):
 	 *  set only on the turn's FINAL assistant message; undefined elsewhere. */
 	artifacts,
+	/** Turn-wide file changes (本轮修改文件卡). When present it supersedes the
+	 *  artifact chips — one file surface per turn, not two. */
+	turnFiles,
+	/** Turn-wide browsed pages (来源卡). Empty turns keep it undefined. */
+	sources,
 	/** Session thinking level — rendered as `model · level` beside the work
 	 *  timer (auto-thinking transparency). */
 	thinkingLevel,
@@ -1084,6 +1093,10 @@ export function AssistantBody({
 	taskCardStyle?: "swarm" | "classic";
 	/** Turn-final aggregated file artifacts (see above). */
 	artifacts?: FileCardItem[];
+	/** Turn-wide file changes (see above). */
+	turnFiles?: TurnFileChange[];
+	/** Turn-wide browsed pages (see above). */
+	sources?: TurnSources;
 	/** Session thinking level — rendered as `model · level` beside the work
 	 *  timer (auto-thinking transparency). */
 	thinkingLevel?: string;
@@ -1177,7 +1190,13 @@ export function AssistantBody({
 					attempt={errorAttempt}
 				/>
 			) : null}
-			{!pending && artifacts !== undefined && <FileCards items={artifacts} />}
+			{!pending &&
+				(turnFiles !== undefined && turnFiles.length > 0 ? (
+					<TurnFilesCard files={turnFiles} />
+				) : artifacts !== undefined ? (
+					<FileCards items={artifacts} />
+				) : null)}
+			{!pending && sources !== undefined && <TurnSourcesCard sources={sources} />}
 			{/* Standalone widget display (config 开启): the visualization
 			 * renders as its own adaptive card in the message flow, like a
 			 * file-preview card — the tool-call card folds to its summary. */}

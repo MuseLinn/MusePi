@@ -158,7 +158,7 @@ export function RailTooltip({
 	}, [anchor, hoveredTip, touchTip]);
 
 	useEffect(() => {
-		const onWindowBlur = (): void => {
+		const dismiss = (): void => {
 			dismissedRef.current = anchor;
 			if (touchTimerRef.current !== null) window.clearTimeout(touchTimerRef.current);
 			touchTimerRef.current = null;
@@ -167,8 +167,12 @@ export function RailTooltip({
 			setHoveredTip(null);
 			setShown(false);
 		};
-		window.addEventListener("blur", onWindowBlur);
-		return () => window.removeEventListener("blur", onWindowBlur);
+		window.addEventListener("blur", dismiss);
+		window.addEventListener("musepi-ui-dismiss", dismiss);
+		return () => {
+			window.removeEventListener("blur", dismiss);
+			window.removeEventListener("musepi-ui-dismiss", dismiss);
+		};
 	}, [anchor]);
 
 	useLayoutEffect(() => {

@@ -7,7 +7,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
 import { collapseStyle, useCollapseHeight } from "../lib/use-collapse.js";
-import { resolveToolRenderer } from "./registry";
+import { resolveToolRenderer, toolCallTitle } from "./registry";
 import type { ToolKind, ToolRenderHost, ToolRenderProps, ToolResultLike } from "./types";
 import { isRecord, replaceTabs, stripAnsi } from "./util";
 import "./tool-render.css";
@@ -139,7 +139,11 @@ export function ToolView(props: ToolViewProps): ReactNode {
 
 	const isError = props.result?.isError === true;
 	const status = props.running ? "run" : isError ? "err" : props.result ? "ok" : "pending";
-	const displayName = xdev ? `xd://${name}` : (renderer.label ?? name);
+	// Known tools read as "已使用 Bash" / "Used Bash"; the key argument stays in
+	// the Summary slot beside it. Unknown tools keep the raw wire name.
+	const title = toolCallTitle(name, renderer, props.running === true);
+	const displayName = xdev ? `xd://${name}` : title;
+	const titled = !xdev && title !== name;
 	const ToolIcon = renderer.Icon;
 	const partial = props.running && !props.result && props.partial ? stripAnsi(replaceTabs(props.partial)) : "";
 	// Progressive per-line reveal (aicss streaming-text): each line fades in
@@ -188,8 +192,20 @@ export function ToolView(props: ToolViewProps): ReactNode {
 					</span>
 				) : null}
 				<span className="tv-name">{displayName}</span>
-				<span className="tv-sum">
-					<renderer.Summary {...renderProps} />
+				<span className="tv-arg">
+					{titled ? (
+						<span className="tv-arg-paren" aria-hidden="true">
+							{t("tools.argOpen")}
+						</span>
+					) : null}
+					<span className="tv-sum">
+						<renderer.Summary {...renderProps} />
+					</span>
+					{titled ? (
+						<span className="tv-arg-paren" aria-hidden="true">
+							{t("tools.argClose")}
+						</span>
+					) : null}
 				</span>
 				<span className="tv-chev" aria-hidden="true" />
 			</button>

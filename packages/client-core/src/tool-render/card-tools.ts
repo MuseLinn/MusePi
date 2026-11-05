@@ -1,3 +1,5 @@
+import type { ToolsKey } from "../i18n/zh-CN/tools.js";
+
 /**
  * Canonical inventory of wire tool names that have a first-party card
  * renderer in `registry.ts` (RENDERERS). This is the single source of truth
@@ -55,6 +57,7 @@ export const TOOL_RENDER_CARD_TOOLS: readonly string[] = [
 	"retain",
 	"schedule_task",
 	"search",
+	"select_tools",
 	"task",
 	"todo",
 	"vibe_kill",
@@ -67,3 +70,76 @@ export const TOOL_RENDER_CARD_TOOLS: readonly string[] = [
 	"write",
 	"yield",
 ];
+
+/**
+ * Localized card title for every wire name the GUI renders. `registry.ts`
+ * resolves the key for the name it dispatches, so a shared renderer still
+ * reports the name of the wire tool that was actually called (a `puppeteer`
+ * call reads "浏览器自动化", not `browser`'s title). Aliases that mean the same
+ * thing share a translation key.
+ *
+ * Built-in tools with no dedicated card renderer (checkpoint, security_scan, …)
+ * are listed too: their generic body keeps the args digest, but the head still
+ * gets a readable title. A name absent here keeps the pre-title raw wire name.
+ */
+export const TOOL_RENDER_CARD_LABELS: Readonly<Record<string, ToolsKey>> = {
+	apply_patch: "tools.toolApplyPatch",
+	ask: "tools.toolAsk",
+	ast_edit: "tools.toolAstEdit",
+	ast_grep: "tools.toolAstGrep",
+	await: "tools.toolAwait",
+	bash: "tools.toolBash",
+	board: "tools.toolBoard",
+	browser: "tools.toolBrowser",
+	cancel_job: "tools.toolCancelJob",
+	checkpoint: "tools.toolCheckpoint",
+	computer: "tools.toolComputer",
+	debug: "tools.toolDebug",
+	edit: "tools.toolEdit",
+	eval: "tools.toolEval",
+	fetch: "tools.toolFetch",
+	find: "tools.toolFind",
+	generate_image: "tools.toolGenerateImage",
+	github: "tools.toolGithub",
+	glob: "tools.toolGlob",
+	goal: "tools.toolGoal",
+	grep: "tools.toolGrep",
+	hub: "tools.toolHub",
+	inspect_image: "tools.toolInspectImage",
+	irc: "tools.toolIrc",
+	job: "tools.toolJob",
+	js: "tools.toolJs",
+	knowledge: "tools.toolKnowledge",
+	learn: "tools.toolLearn",
+	lsp: "tools.toolLsp",
+	manage_skill: "tools.toolManageSkill",
+	memory_edit: "tools.toolMemoryEdit",
+	notebook: "tools.toolNotebook",
+	poll: "tools.toolPoll",
+	propose: "tools.toolPropose",
+	puppeteer: "tools.toolPuppeteer",
+	python: "tools.toolPython",
+	read: "tools.toolRead",
+	recall: "tools.toolRecall",
+	reflect: "tools.toolReflect",
+	reject: "tools.toolReject",
+	report_tool_issue: "tools.toolReportToolIssue",
+	resolve: "tools.toolResolve",
+	retain: "tools.toolRetain",
+	rewind: "tools.toolRewind",
+	schedule_task: "tools.toolScheduleTask",
+	security_scan: "tools.toolSecurityScan",
+	search: "tools.toolSearch",
+	select_tools: "tools.toolSelectTools",
+	task: "tools.toolTask",
+	todo: "tools.toolTodo",
+	vibe_kill: "tools.toolVibeKill",
+	vibe_list: "tools.toolVibeList",
+	vibe_send: "tools.toolVibeSend",
+	vibe_spawn: "tools.toolVibeSpawn",
+	vibe_wait: "tools.toolVibeWait",
+	web_search: "tools.toolWebSearch",
+	widget: "tools.toolWidget",
+	write: "tools.toolWrite",
+	yield: "tools.toolYield",
+};

@@ -207,6 +207,9 @@ export interface SessionHeader {
 	 *  §4 契约,≤16KiB,daemon 侧校验)。创建路径经 persistHeaderPatch 落入
 	 *  view-store 快照头;shape 校验归 daemon/creation.ts。 */
 	projectMetadata?: Record<string, unknown>;
+	/** Additional workspace directories beyond `cwd` (multi-root). Absolute,
+	 *  normalized, deduplicated. Absent on legacy single-cwd sessions. */
+	additionalDirectories?: string[];
 }
 
 export interface EntryBase {
@@ -865,6 +868,40 @@ export interface WorkspaceEntry {
 	size: number;
 	mtime: number;
 	depth: number;
+}
+
+/**
+ * Persisted project registry entry (`workspace.*` RPCs, `<config>/projects.json`).
+ *
+ * `managed` entries are created explicitly by the user; `implicit` entries are
+ * backfilled from a session cwd so the GUI can list history projects that were
+ * never registered. `additionalDirs` are the secondary workspace roots beyond
+ * `root` (the primary directory).
+ */
+export interface WorkspaceProject {
+	id: string;
+	root: string;
+	name: string;
+	kind: "managed" | "implicit";
+	additionalDirs: string[];
+	createdAt: number;
+	lastOpenedAt: number;
+}
+
+/** A caller-supplied directory that was already part of a workspace. */
+export interface WorkspaceDuplicateDirectory {
+	/** The path exactly as the caller supplied it. */
+	path: string;
+	/** The normalized directory already present. */
+	directory: string;
+}
+
+/** One directory in a session workspace, primary first. */
+export interface SessionDirectoryInfo {
+	path: string;
+	primary: boolean;
+	/** False when the directory no longer exists on disk. */
+	exists: boolean;
 }
 
 /**

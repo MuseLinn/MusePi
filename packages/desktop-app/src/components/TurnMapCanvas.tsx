@@ -1,5 +1,7 @@
 import { t, tLoose } from "@musepi/client-core";
 import { replaceTabs } from "@musepi/client-core/src/tool-render/util";
+import { ChevronsDownUp as ChevronsDownUpIconData, ChevronsUpDown as ChevronsUpDownIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { timeFormatOptions } from "../lib/appearance";
@@ -892,7 +894,13 @@ export function TurnMapCanvas({
 					aria-label={t(anyExpanded ? "transcript.trajectoryCollapseAll" : "transcript.trajectoryExpandAll")}
 					onClick={toggleAll}
 				>
-					<Icon name={anyExpanded ? "contract-up-down" : "expand-up-down"} className="h-3 w-3" />
+					<MorphIcon
+						icon={anyExpanded ? ChevronsDownUpIconData : ChevronsUpDownIconData}
+						size={12}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-3 w-3"
+					/>
 				</button>
 				<button
 					type="button"

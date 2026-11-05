@@ -3,7 +3,8 @@ import { FILE_WORKSPACE_SLOT } from "../../lib/file-workspace";
 /**
  * 能力缝声明（索引：docs/capability-seams.md「Cordis 文件工作区」）：
  * - 名称+ns：`file-workspace` 桌面 Cordis 插件、`panel.tab.files` 动态面板槽位。
- * - 输入：宿主标签、草稿存储、外部定位、编辑历史与 daemon 文件 RPC。
+ * - 输入：宿主标签、草稿存储、外部定位、编辑历史、会话工作目录（`session.directories.list`）与 daemon 文件 RPC。
+ *   面板一次浏览一个根；附加根由宿主 `roots` 提供，切换时以该目录作为 cwd 访问文件 RPC。
  * - 输出：文件树、文本/Markdown 编辑、PDF/Office/媒体预览与引用工具。
  * - 生命周期：面板随插件 fiber 和槽位挂载/卸载；草稿与标签始终归宿主。
  * - 启停：停用时移除文件入口和渲染，不保留静态 FilePane 备用实现。

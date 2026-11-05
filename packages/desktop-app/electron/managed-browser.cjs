@@ -31,7 +31,7 @@
  */
 "use strict";
 
-const { app, dialog, ipcMain, net, protocol, session: electronSession, webContents } = require("electron");
+const { app, dialog, ipcMain, net, protocol, session: electronSession, shell, webContents } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -258,6 +258,16 @@ function findTabByQuery(tabs, query) {
 		if (String(tab.title).toLowerCase().includes(needle)) return tab;
 	}
 	return null;
+}
+
+/** Agent identity carried by a create request (CDP params or the private
+ *  `ManagedBrowser.*` bridge methods). A missing id keeps user/app tab
+ *  semantics: no attribution and no operator badge. */
+function normalizeAgent(input) {
+	const id = typeof input?.agentId === "string" ? input.agentId.trim() : "";
+	if (!id) return null;
+	const name = typeof input?.agentName === "string" ? input.agentName.trim() : "";
+	return { id, name: name || id };
 }
 
 /** Strip credentials from a URL for display/state (never leak user:pass). */
@@ -535,13 +545,17 @@ function agentHighlightPoint(method, params) {
  * the partition policy that governs it.
  */
 class ManagedTab {
-	constructor(controller, url, openedByAgent, explicitId) {
+	constructor(controller, url, openedByAgent, explicitId, agent = null) {
 		this.controller = controller;
 		/** Opaque tab id: main mints numeric ones for the tabs it creates
 		 *  (agent lanes, prewarm), the renderer's own (`local-N`) for tabs the
 		 *  user opened. It only has to round-trip through `tabs`. */
 		this.id = explicitId ?? ++controller.tabSeq;
 		this.openedByAgent = openedByAgent;
+		/** Agent that asked for this tab; null for user/app tabs. */
+		this.agentId = agent?.id ?? null;
+		/** Display name of {@link agentId}, falling back to the id. */
+		this.agentName = agent?.name ?? this.agentId;
 		this.url = "about:blank";
 		this.title = "";
 		this.loading = false;
@@ -1010,15 +1024,21 @@ class ManagedBrowserController {
 	 *  then wait for its `guest-ready` report. Resolves to null when the tab
 	 *  could not be created (no owner, guest never attached) — callers turn
 	 *  that into a CDP error rather than a silent no-op. */
-	async createTab(url = "about:blank", openedByAgent = false) {
+	async createTab(url = "about:blank", openedByAgent = false, agent = null) {
 		if (!this.owner || this.owner.isDestroyed()) return null;
 		if (!(await this.waitForHostReady())) return null;
-		const tab = new ManagedTab(this, url, openedByAgent);
+		const tab = new ManagedTab(this, url, openedByAgent, undefined, agent);
 		const id = String(tab.id);
 		this.tabs.set(id, tab);
 		if (!this.activeTabId) this.activeTabId = id;
 		this.recordActivity(tab, "open", url, "opened");
-		this.sendToRenderer("managed-browser:create-tab", { tabId: id, url });
+		// The renderer badges the tab with its operator; a user tab omits the
+		// fields entirely so the pre-existing payload shape is unchanged.
+		this.sendToRenderer("managed-browser:create-tab", {
+			tabId: id,
+			url,
+			...(tab.agentId ? { agentId: tab.agentId, agentName: tab.agentName } : {}),
+		});
 		// The agent's work must stay visible: creating an agent tab selects it
 		// (and pushes agentActivity so the closed pane re-opens).
 		if (openedByAgent) this.selectTab(id, { agentActivity: true });
@@ -1036,10 +1056,21 @@ class ManagedBrowserController {
 	}
 
 	/** The dedicated agent tab; creates it on first use. */
-	async ensureAgentTab() {
+	async ensureAgentTab(agent = null) {
 		const existing = this.agentTabId ? this.tabs.get(this.agentTabId) : null;
-		if (existing) return existing;
-		const tab = await this.createTab("about:blank", true);
+		if (existing) {
+			// A later caller may be the first to publish an identity for the
+			// dedicated tab (older daemons send no agent fields). The renderer
+			// learns about it through the ledger, which the next activity row
+			// carries.
+			if (agent && (existing.agentId !== agent.id || existing.agentName !== agent.name)) {
+				existing.agentId = agent.id;
+				existing.agentName = agent.name;
+				this.emitState({});
+			}
+			return existing;
+		}
+		const tab = await this.createTab("about:blank", true, agent);
 		if (!tab) return null;
 		this.agentTabId = String(tab.id);
 		return tab;
@@ -1215,7 +1246,7 @@ class ManagedBrowserController {
 		} catch {
 			// about:blank etc.
 		}
-		return startActivity(this.ledger, {
+		const item = startActivity(this.ledger, {
 			key: key ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 			action,
 			summary: this.activitySummary(action, tab, url),
@@ -1224,6 +1255,13 @@ class ManagedBrowserController {
 			tabId: String(tab.id),
 			at: Date.now(),
 		}, MAX_ACTIVITY_ITEMS);
+		// The projected state carries the operator so the overlay can name the
+		// agent even when the renderer's tab record has no attribution.
+		if (tab.agentId) {
+			item.agentId = tab.agentId;
+			item.agentName = tab.agentName;
+		}
+		return item;
 	}
 
 	activitySummary(action, tab, url) {
@@ -1482,7 +1520,7 @@ class ManagedBrowserController {
 	/**
 	 * Clear managed-browser browsing data for the shared partition.
 	 * `mode: "cookies"` clears cookies/storage; `"all"` also wipes cache.
-	 * Returns `{ ok: boolean }`.
+	 * Returns `{ ok: boolean, error?: string }`.
 	 */
 	async clearBrowserData(mode) {
 		try {
@@ -1496,8 +1534,8 @@ class ManagedBrowserController {
 				});
 			}
 			return { ok: true };
-		} catch {
-			return { ok: false };
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
 		}
 	}
 
@@ -1852,7 +1890,7 @@ class ManagedBrowserController {
 					this.replyError(conn, msg, "Navigation blocked by the user");
 					return;
 				}
-				const tab = await this.createTab(url, true);
+				const tab = await this.createTab(url, true, normalizeAgent(msg.params));
 				if (!tab) {
 					this.replyError(conn, msg, "The managed browser did not provide a tab");
 					return;
@@ -1903,7 +1941,7 @@ class ManagedBrowserController {
 				// without app.target): return the DEDICATED agent tab's page target
 				// id, creating it on first use so the agent never adopts the user's
 				// tab.
-				const tab = await this.ensureAgentTab();
+				const tab = await this.ensureAgentTab(normalizeAgent(msg.params));
 				if (!tab) {
 					this.replyError(conn, msg, "The managed browser did not provide an agent tab");
 					return;
@@ -2125,6 +2163,69 @@ class ManagedBrowserController {
 			wc.setZoomFactor(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number.isFinite(zoom) && zoom > 0 ? zoom : 1)));
 			tab.zoomOverride = true;
 			return { ok: true };
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	async printTab(tabId) {
+		const tab = this.tabs.get(String(tabId));
+		const wc = tab?.wc;
+		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
+		return await new Promise(resolve => {
+			try {
+				wc.print({}, (success, reason) => {
+					resolve(success ? { ok: true } : { ok: false, error: reason || "print failed" });
+				});
+			} catch (error) {
+				resolve({ ok: false, error: error instanceof Error ? error.message : String(error) });
+			}
+		});
+	}
+
+	async saveScreenshot(tabId) {
+		const tab = this.tabs.get(String(tabId));
+		const wc = tab?.wc;
+		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
+		const prefs = this.preferences.download;
+		const dir = prefs.dir || app.getPath("downloads");
+		const fileName = downloadFileName(`${tab.title || "screenshot"}.png`);
+		let timer;
+		try {
+			const image = await Promise.race([
+				wc.capturePage(),
+				new Promise((_resolve, reject) => {
+					timer = setTimeout(() => reject(new Error("Screenshot unavailable")), CAPTURE_TIMEOUT_MS);
+				}),
+			]);
+			if (!image) return { ok: false, error: "Screenshot unavailable" };
+			fs.mkdirSync(dir, { recursive: true });
+			let target;
+			if (prefs.askWhereToSave) {
+				const options = { defaultPath: path.join(dir, fileName) };
+				const owner = this.owner && !this.owner.isDestroyed() ? this.owner : null;
+				const picked = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
+				if (!picked || picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+				target = picked.filePath;
+				fs.mkdirSync(path.dirname(target), { recursive: true });
+			} else {
+				target = uniqueDownloadPath(path.join(dir, fileName));
+			}
+			fs.writeFileSync(target, image.toPNG());
+			return { ok: true, path: target };
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	async showDownloads() {
+		const dir = this.preferences.download.dir || app.getPath("downloads");
+		try {
+			fs.mkdirSync(dir, { recursive: true });
+			const error = await shell.openPath(dir);
+			return error ? { ok: false, error } : { ok: true };
 		} catch (error) {
 			return { ok: false, error: error instanceof Error ? error.message : String(error) };
 		}
@@ -2412,6 +2513,12 @@ class ManagedBrowserController {
 			this.applyDevicePreset(input?.tabId, input?.preset, input?.reload === true, input?.viewport ?? null),
 		);
 		ipcMain.handle("managed-browser:set-zoom", (_e, input) => this.setZoom(input));
+		ipcMain.handle("managed-browser:clear-data", (_e, input) =>
+			this.clearBrowserData(input?.mode === "all" ? "all" : "cookies"),
+		);
+		ipcMain.handle("managed-browser:print", (_e, input) => this.printTab(input?.tabId));
+		ipcMain.handle("managed-browser:save-screenshot", (_e, input) => this.saveScreenshot(input?.tabId));
+		ipcMain.handle("managed-browser:show-downloads", () => this.showDownloads());
 		// Settings → 浏览器: default zoom / UA / search engine / download policy.
 		ipcMain.handle("managed-browser:set-preferences", (_e, input) => this.setPreferences(input));
 		// Page freeze/thaw for tab residency (CDP `Page.setWebLifecycleState`).

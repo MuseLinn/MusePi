@@ -221,6 +221,10 @@ export const buildAnnotationOverlayScript = (
     '*{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}',
     '.layer{position:fixed;inset:0;pointer-events:none}',
     '.box{position:fixed;left:0;top:0;display:none;pointer-events:none;border:1.5px solid ' + THEME.primary + ';background:' + THEME.primarySoft + ';border-radius:2px}',
+    // Element-hover box eases from one target rect to the next; marquee and
+    // selected outlines use the same .box but stay instant / stable.
+    '.box--morph{transition:transform 110ms cubic-bezier(.22,1,.36,1),width 110ms cubic-bezier(.22,1,.36,1),height 110ms cubic-bezier(.22,1,.36,1);will-change:transform,width,height}',
+    '@media (prefers-reduced-motion: reduce){.box--morph{transition:none}}',
     '.label{position:fixed;left:0;top:0;display:none;pointer-events:none;padding:1px 6px;border-radius:4px;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';font-size:11px;line-height:17px;white-space:nowrap;font-weight:600}',
     '.tools{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px;border-radius:999px;border:1px solid ' + THEME.border + ';background:' + THEME.glassSurface + ';-webkit-backdrop-filter:' + THEME.glassFilter + ';backdrop-filter:' + THEME.glassFilter + ';box-shadow:0 6px 20px rgba(0,0,0,.24);pointer-events:auto}',
     '.tools button{appearance:none;border:none;background:transparent;color:' + THEME.mutedText + ';border-radius:999px;padding:5px 14px;font-size:12px;line-height:18px;font-weight:500;cursor:pointer;white-space:nowrap}',
@@ -249,7 +253,7 @@ export const buildAnnotationOverlayScript = (
   shadow.appendChild(svg);
 
   var hoverBox = document.createElement('div');
-  hoverBox.className = 'box';
+  hoverBox.className = 'box box--morph';
   var hoverLabel = document.createElement('div');
   hoverLabel.className = 'label';
   var marqueeBox = document.createElement('div');

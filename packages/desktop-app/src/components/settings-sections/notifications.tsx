@@ -1,5 +1,7 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { SoundName } from "cuelume";
+import { Play as PlayIconData, Square as SquareIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
@@ -35,7 +37,6 @@ import {
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { Reveal } from "../Reveal";
-import { StateIcon } from "../StateIcon";
 
 /** One configurable activity row (opencode per-category sounds parity):
  *  activity name + trigger desc, a preview button for the current choice,
@@ -472,7 +473,13 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								setAuditionTimer([...ids, stop]);
 							}}
 						>
-							<StateIcon on={auditionTimer !== null} pair={["stop", "play"]} className="h-3.5 w-3.5" />
+							<MorphIcon
+								icon={auditionTimer !== null ? SquareIconData : PlayIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
 							{auditionTimer !== null ? t("settings.stop") : t("settings.auditionAll")}
 						</button>
 					</div>

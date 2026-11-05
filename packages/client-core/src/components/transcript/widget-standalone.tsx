@@ -13,7 +13,9 @@
  */
 
 import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
-import { Check, Code2, Copy, Download, Eye, ImageDown, Images, Maximize2, MoreHorizontal, X } from "lucide-react";
+import { Check as CheckIconData, Code2 as Code2IconData, Copy as CopyIconData, Eye as EyeIconData } from "lucide";
+import { Download, ImageDown, Images, Maximize2, MoreHorizontal, X } from "lucide-react";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -283,7 +285,7 @@ function WidgetCardMenu({
 							</button>
 						)}
 						<button type="button" role="menuitem" onClick={copySource}>
-							{copied ? <Check size={13} /> : <Copy size={13} />}
+							<MorphIcon icon={copied ? CheckIconData : CopyIconData} size={13} spring="snappy" />
 							{copied ? t("settings.copied") : t("settings.copy")}
 						</button>
 						<button
@@ -294,7 +296,7 @@ function WidgetCardMenu({
 								setAt(null);
 							}}
 						>
-							{showCode ? <Eye size={13} /> : <Code2 size={13} />}
+							<MorphIcon icon={showCode ? EyeIconData : Code2IconData} size={13} spring="snappy" />
 							{showCode ? t("settings.widgetViewUi") : t("settings.widgetViewCode")}
 						</button>
 					</div>,

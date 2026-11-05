@@ -1,7 +1,8 @@
+import { Pause as PauseIconData, Target as TargetIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
-import { StateIcon } from "../StateIcon";
 
 /** Goal-mode chip: armed state (one tap with no live
  *  goal arms goal mode — the NEXT SENT MESSAGE becomes the objective),
@@ -36,7 +37,13 @@ export function GoalChip({
 			}
 			onClick={armed ? onToggle : onOpen}
 		>
-			<StateIcon on={paused} pair={["pause", "target"]} className="h-3 w-3" />
+			<MorphIcon
+				icon={paused ? PauseIconData : TargetIconData}
+				size={12}
+				spring="snappy"
+				reducedMotion="user"
+				className="h-3 w-3"
+			/>
 			<span className="max-w-[200px] truncate">{armed ? t("general.goal") : objective || t("general.goal")}</span>
 			{!armed && <Icon name="more" className="h-2.5 w-2.5 opacity-60" />}
 		</button>

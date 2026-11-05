@@ -1,4 +1,6 @@
 import { t } from "@musepi/client-core";
+import { Check as CheckIconData, Palette as PaletteIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type MouseEvent, type ReactNode, useRef, useState } from "react";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { Icon } from "../../vendor/oc-icons";
@@ -97,7 +99,13 @@ export function DesignStyleSelect({
 						title={t("composer.designStyleHint")}
 						onClick={() => pick(null)}
 					>
-						<Icon name={selected === null ? "check" : "palette"} className="h-4 w-4" />
+						<MorphIcon
+							icon={selected === null ? CheckIconData : PaletteIconData}
+							size={16}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-4 w-4"
+						/>
 						<span className="min-w-0 flex-1 truncate text-[13px] leading-tight text-[var(--color-text)]">
 							{t("composer.designStyleInherit")}
 						</span>
@@ -114,7 +122,13 @@ export function DesignStyleSelect({
 							onMouseLeave={scheduleHide}
 							onClick={() => pick(s.id)}
 						>
-							<Icon name={selected === s.id ? "check" : "palette"} className="h-4 w-4" />
+							<MorphIcon
+								icon={selected === s.id ? CheckIconData : PaletteIconData}
+								size={16}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-4 w-4"
+							/>
 							<span className="min-w-0 flex-1 truncate text-[13px] leading-tight text-[var(--color-text)]">
 								{designSystemLabel(s)}
 							</span>

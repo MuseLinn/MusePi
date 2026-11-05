@@ -251,6 +251,29 @@ export const transcript = {
 	"transcript.runBrowserActionWithCount": "{action} {count} 次",
 	"transcript.runBrowserFailuresWithCount": "另有 {count} 次失败",
 	"transcript.runBrowserRetriesWithCount": "重试 {count} 次",
+	// ── 来源卡（本轮浏览的页面）───────────────────────────────────────────────
+	"transcript.sourcesLabel": "本轮浏览的页面",
+	"transcript.sourcesReadWithCount": "来源 · 读了 {count} 个页面",
+	"transcript.sourcesReadAndPassed": "来源 · 读了 {read} 个页面 · 经过 {passed} 个页面",
+	"transcript.sourcesVisitedWithCount": "来源 · 浏览了 {count} 个页面",
+	"transcript.sourcesReadGroup": "读过的页面",
+	"transcript.sourcesPassedGroup": "经过的页面",
+	"transcript.sourcesReadTag": "已读",
+	"transcript.sourcesPassedTag": "经过",
+	"transcript.sourcesVisitsWithCount": "打开 {count} 次",
+	"transcript.sourcesOpenSidebar": "在右侧浏览器打开",
+	"transcript.sourcesOpenExternal": "用系统浏览器打开",
+	"transcript.sourcesCopy": "复制链接",
+	"transcript.sourcesCopied": "已复制链接",
+	// ── 本轮修改文件卡 ────────────────────────────────────────────────────────
+	"transcript.turnFilesTitleOne": "{count} 个文件已修改",
+	"transcript.turnFilesTitleWithCount": "{count} 个文件已修改",
+	"transcript.turnFilesMoreWithCount": "还有 {count} 个文件",
+	"transcript.turnFilesMoreOne": "还有 1 个文件",
+	"transcript.turnFilesShowLess": "收起",
+	"transcript.turnFilesDiffUnavailable": "此文件的改动无法逐项展示",
+	"transcript.turnFilesRebuilding": "正在加载本轮改动…",
+	"transcript.turnFilesOpenFile": "打开文件",
 } as const;
 
 /** Key union for the transcript domain (source of truth). */

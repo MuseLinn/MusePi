@@ -1,6 +1,7 @@
 import { type TranslationKey, t } from "@musepi/client-core";
+import { Command as CommandIconData, Lightbulb as LightbulbIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactElement } from "react";
-import { StateIcon } from "./StateIcon";
 import { slashDisplayName } from "./slash-row-shared";
 
 /**
@@ -43,7 +44,13 @@ export function SlashRow({
 			onClick={onClick}
 		>
 			<span className={`gui-slash-row-icon${isSkill ? " gui-slash-row-icon--skill" : ""}`}>
-				<StateIcon on={isSkill} pair={["lightbulb", "command"]} className="h-4 w-4" />
+				<MorphIcon
+					icon={isSkill ? LightbulbIconData : CommandIconData}
+					size={16}
+					spring="snappy"
+					reducedMotion="user"
+					className="h-4 w-4"
+				/>
 			</span>
 			<span className="gui-slash-row-body">
 				<span className="gui-slash-row-line1">

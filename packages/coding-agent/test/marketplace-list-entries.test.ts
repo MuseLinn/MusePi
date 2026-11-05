@@ -127,4 +127,54 @@ describe("marketplace list-entries", () => {
 		});
 		expect(result[0].author).toBe("Alice");
 	});
+
+	test("reports the installed version and flags a newer catalog version", () => {
+		const reg = registry([{ name: "alpha" }]);
+		const id = buildPluginId("lint", "alpha");
+		const baseEntry = {
+			installPath: "/tmp/x",
+			installedAt: "2026-01-01T00:00:00Z",
+			lastUpdated: "2026-01-01T00:00:00Z",
+		};
+		const catalogs = new Map([["alpha", [plugin({ name: "lint", version: "2.0.0" })]]]);
+
+		const outdated = listMarketplaceEntries({
+			registry: reg,
+			catalogs,
+			userRegistry: installed({ [id]: [{ scope: "user", version: "1.0.0", ...baseEntry }] }),
+			projectRegistry: null,
+		});
+		expect(outdated[0]).toMatchObject({ installedVersion: "1.0.0", updateAvailable: true });
+
+		// A catalog version below the installed one is not an update.
+		const newer = listMarketplaceEntries({
+			registry: reg,
+			catalogs,
+			userRegistry: installed({ [id]: [{ scope: "user", version: "2.1.0", ...baseEntry }] }),
+			projectRegistry: null,
+		});
+		expect(newer[0]).toMatchObject({ installedVersion: "2.1.0", updateAvailable: false });
+	});
+
+	test("update state follows the project install that shadows user", () => {
+		const reg = registry([{ name: "alpha" }]);
+		const id = buildPluginId("lint", "alpha");
+		const baseEntry = {
+			installPath: "/tmp/x",
+			installedAt: "2026-01-01T00:00:00Z",
+			lastUpdated: "2026-01-01T00:00:00Z",
+		};
+		const catalogs = new Map([["alpha", [plugin({ name: "lint", version: "1.5.0" })]]]);
+		const result = listMarketplaceEntries({
+			registry: reg,
+			catalogs,
+			userRegistry: installed({ [id]: [{ scope: "user", version: "1.0.0", ...baseEntry }] }),
+			projectRegistry: installed({ [id]: [{ scope: "project", version: "1.5.0", ...baseEntry }] }),
+		});
+		expect(result[0]).toMatchObject({
+			installedScope: "project",
+			installedVersion: "1.5.0",
+			updateAvailable: false,
+		});
+	});
 });

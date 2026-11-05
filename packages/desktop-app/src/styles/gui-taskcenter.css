@@ -35,6 +35,15 @@
 	opacity: 0.6;
 }
 
+.gui-select-leading {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex: none;
+}
+
 .gui-select-menu {
 	display: flex;
 	flex-direction: column;

@@ -4,7 +4,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
-import { flattenTree, sessionSortKey, sortSessionTree } from "./session-list-shared";
+import { flattenTree, sessionAncestorIds, sessionSortKey, sortSessionTree } from "./session-list-shared";
 
 /**
  * 会话列表节点(命名来源:本组件渲染的是左侧栏的**会话列表** — 每个节点
@@ -171,16 +171,26 @@ const WORKING_RAYS = Array.from({ length: 8 }, (_, i) => {
 /** Indent guides for one flat node: one vertical line per ancestor level,
  *  drawn in the disclosure gutter so the row title keeps the parent's left
  *  edge (the old in-flow 1em guides pushed every child title right). The
- *  deepest guide (--branch) carries the blossom dot. */
-function treeGuides(indent: number): ReactNode {
+ *  deepest guide (--branch) carries the blossom dot and closes with an
+ *  elbow when this row is its parent's last child. Ancestor lines are
+ *  skipped once that ancestor has no following sibling, so a finished
+ *  branch never leaks into the next row. */
+function treeGuides(indent: number, continuations: readonly boolean[]): ReactNode {
 	if (indent <= 0) return null;
-	return Array.from({ length: indent }, (_, i) => (
-		<span
-			key={i}
-			className={`gui-tree-guide${i === indent - 1 ? " gui-tree-guide--branch" : ""}`}
-			style={{ left: `${21 + i * 8}px` }}
-		/>
-	));
+	return Array.from({ length: indent }, (_, i) => {
+		const branch = i === indent - 1;
+		const continues = continuations[i] ?? false;
+		if (!branch && !continues) return null;
+		return (
+			<span
+				key={i}
+				className={`gui-tree-guide${branch ? " gui-tree-guide--branch" : ""}${
+					branch && !continues ? " gui-tree-guide--last" : ""
+				}`}
+				style={{ left: `${21 + i * 8}px` }}
+			/>
+		);
+	});
 }
 
 /** 折叠态持久化(openchamber 文件夹层级 parity):父行 chevron 收起后整棵
@@ -298,6 +308,14 @@ export function hasCollapsedSubtrees(): boolean {
 	return subtreeCollapsed.size > 0;
 }
 
+/** Reactive form of {@link hasCollapsedSubtrees}: the sidebar's header icon
+ *  follows individual fold changes (the plain function reads the module
+ *  store without subscribing). */
+export function useHasCollapsedSubtrees(): boolean {
+	const { collapsed } = useSyncExternalStore(subscribeSubtrees, getSubtreesSnapshot, getSubtreesSnapshot);
+	return collapsed.size > 0;
+}
+
 /** 全量收起/展开所有已注册的父行。逐棵走 toggleSubtreeCollapse 的动画
  *  路径，视觉与单棵 chevron 折叠一致（多棵同时补间）。 */
 export function setAllSubtreesCollapsed(collapse: boolean): void {
@@ -308,6 +326,30 @@ export function setAllSubtreesCollapsed(collapse: boolean): void {
 	} else {
 		for (const id of [...subtreeCollapsed]) toggleSubtreeCollapse(id);
 	}
+}
+
+/** Reveal a session selected by navigation or creation: clear only the
+ *  ancestor chain that hides it, leaving every unrelated fold untouched.
+ *  Returns false while the selected node is absent so a late-arriving new
+ *  session is retried on the next tree update. */
+export function revealSessionInTree(nodes: SessionListNode[], selectedId: string): boolean {
+	const ancestors = sessionAncestorIds(nodes, selectedId);
+	if (!ancestors) return false;
+	const next = new Set(subtreeCollapsed);
+	let changed = false;
+	for (const id of ancestors) {
+		// Selecting the hidden child cancels a collapse that is still animating;
+		// otherwise its delayed commit would re-hide the revealed row.
+		const timer = subtreeTimers.get(id);
+		if (timer !== undefined) {
+			clearTimeout(timer);
+			subtreeTimers.delete(id);
+		}
+		if (subtreePhases.delete(id)) changed = true;
+		if (next.delete(id)) changed = true;
+	}
+	if (changed) commitSubtreeCollapsed(next);
+	return true;
 }
 
 function registerSubtreeParents(ids: ReadonlySet<string>): void {
@@ -360,6 +402,7 @@ const SessionRow = memo(function SessionRow({
 	status,
 	untitled,
 	indent,
+	continuations,
 	searchQuery,
 	subagent,
 	advisor,
@@ -384,6 +427,8 @@ const SessionRow = memo(function SessionRow({
 	status?: SessionStatus;
 	untitled: boolean;
 	indent: number;
+	/** Per ancestor guide level: whether that line continues below this row. */
+	continuations: readonly boolean[];
 	searchQuery: string;
 	/** 子代理会话行（父会话的子树行）——渲染子代理标记。 */
 	subagent: boolean;
@@ -502,7 +547,7 @@ const SessionRow = memo(function SessionRow({
 					style={fill ? { background: fill } : undefined}
 					title={status ? t(SESSION_STATUS_KEY[status] ?? status) : undefined}
 				/>
-				{treeGuides(indent)}
+				{treeGuides(indent, continuations)}
 				<span className="gui-session-title">
 					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
 				</span>
@@ -695,7 +740,7 @@ function SessionListComponent({
 	const byId = new Map(flat.map(f => [f.node.entry.id, f.node]));
 	return (
 		<ul className="gui-session-list">
-			{flat.map(({ node, indent }) => {
+			{flat.map(({ node, indent, continuations }) => {
 				const parent = node.entry.parentId ? byId.get(node.entry.parentId) : null;
 				// Manual status tag wins over the derived one — same precedence
 				// as `statusFill`, so the chip's tooltip always matches its color.
@@ -719,6 +764,7 @@ function SessionListComponent({
 						status={status}
 						untitled={!advisorUntitled && !rawLabel.trim()}
 						indent={indent}
+						continuations={continuations}
 						searchQuery={searchQuery}
 						subagent={node.entry.subagent === true}
 						advisor={node.entry.advisor === true}

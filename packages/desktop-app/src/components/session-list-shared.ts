@@ -4,6 +4,12 @@ import type { SessionListNode } from "./SessionList";
 interface FlatNode {
 	node: SessionListNode;
 	indent: number;
+	/** True when this node is the last of its siblings — its branch guide
+	 *  closes with an elbow instead of running into the next row. */
+	last: boolean;
+	/** Per ancestor guide level: whether that ancestor has a following
+	 *  sibling, i.e. its vertical line continues below this row. */
+	continuations: readonly boolean[];
 }
 
 /** Sort key for one session — last-activity (updatedAt) with a createdAt
@@ -45,19 +51,21 @@ export function sortSessionTree(
  * - default (GUI sidebar) — openchamber 文件夹层级 parity: EVERY child
  *   indents one level, so a session with a single subagent still reads as a
  *   nested subtree instead of a flat sibling.
- * Hierarchy is expressed by indentation alone; no connector glyphs.
+ * Hierarchy is expressed by indentation plus the per-row guide lines;
+ * `last`/`continuations` let the deepest guide close with an elbow instead
+ * of running into the next row.
  */
 export function flattenTree(roots: SessionListNode[], opts?: { compactSingleChildChains?: boolean }): FlatNode[] {
 	const result: FlatNode[] = [];
 	const compact = opts?.compactSingleChildChains === true;
-	type StackItem = [SessionListNode, number, boolean];
+	type StackItem = [SessionListNode, number, boolean, readonly boolean[], boolean];
 	const items: StackItem[] = [];
 	for (let i = roots.length - 1; i >= 0; i--) {
-		items.push([roots[i], 0, true]);
+		items.push([roots[i], 0, true, [], i === roots.length - 1]);
 	}
 	while (items.length > 0) {
-		const [node, indent, justBranched] = items.pop()!;
-		result.push({ node, indent });
+		const [node, indent, justBranched, continuations, last] = items.pop()!;
+		result.push({ node, indent, last, continuations });
 		const children = node.children;
 		const multipleChildren = children.length > 1;
 		let childIndent: number;
@@ -69,10 +77,33 @@ export function flattenTree(roots: SessionListNode[], opts?: { compactSingleChil
 			childIndent = indent;
 		}
 		for (let i = children.length - 1; i >= 0; i--) {
-			items.push([children[i], childIndent, multipleChildren]);
+			const childLast = i === children.length - 1;
+			items.push([
+				children[i],
+				childIndent,
+				multipleChildren,
+				childIndent > indent ? [...continuations, !childLast] : continuations,
+				childLast,
+			]);
 		}
 	}
 	return result;
+}
+
+/**
+ * Ancestor ids that must be expanded for `selectedId` to be visible.
+ * Returns `null` when the id is absent, and an empty array for a root row.
+ */
+export function sessionAncestorIds(roots: SessionListNode[], selectedId: string): string[] | null {
+	const visit = (nodes: SessionListNode[], ancestors: string[]): string[] | null => {
+		for (const node of nodes) {
+			if (node.entry.id === selectedId) return ancestors;
+			const hit = visit(node.children, [...ancestors, node.entry.id]);
+			if (hit !== null) return hit;
+		}
+		return null;
+	};
+	return visit(roots, []);
 }
 
 /**

@@ -10,6 +10,23 @@ const CLOSE_MS = 130;
 // the second anchor left both menus on screen. Opening one closes the
 // previously-open instance (which still plays its exit fade).
 let activeMenu: { close(): void } | null = null;
+let floatingMenuOpen = false;
+const floatingMenuListeners = new Set<() => void>();
+
+function setFloatingMenuOpen(open: boolean): void {
+	if (floatingMenuOpen === open) return;
+	floatingMenuOpen = open;
+	for (const listener of floatingMenuListeners) listener();
+}
+
+export function subscribeFloatingMenuOpen(listener: () => void): () => void {
+	floatingMenuListeners.add(listener);
+	return () => floatingMenuListeners.delete(listener);
+}
+
+export function getFloatingMenuOpen(): boolean {
+	return floatingMenuOpen;
+}
 
 /**
  * Fixed-position floating menu anchored to a button (openchamber/radix
@@ -311,8 +328,12 @@ export function useFloatingMenu(
 		activeMenu?.close();
 		const mine = { close: () => closeRef.current() };
 		activeMenu = mine;
+		setFloatingMenuOpen(true);
 		return () => {
-			if (activeMenu === mine) activeMenu = null;
+			if (activeMenu === mine) {
+				activeMenu = null;
+				setFloatingMenuOpen(false);
+			}
 		};
 	}, [open]);
 

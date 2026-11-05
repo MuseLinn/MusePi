@@ -293,7 +293,7 @@ describe("语音测试共用模拟会话视图", () => {
 		// Error presentation contract: red state class, warning icon, reason in title.
 		expect(speakBtn.classList.contains("tr-action--error")).toBe(true);
 		expect(speakBtn.title).toBe("Failed to download model.onnx: HTTP 404");
-		expect(speakBtn.querySelector("use")?.getAttribute("href")).toBe("#oc-error-warning");
+		expect(speakBtn.querySelector("svg path")).not.toBeNull();
 	});
 });
 

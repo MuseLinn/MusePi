@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ManagedBrowserPane } from "../../components/ManagedBrowserPane";
 import type { SlotComponentProps } from "../../lib/slot-host";
 
-export default function ManagedBrowserPage({ browser, rpc }: SlotComponentProps): ReactNode {
+export default function ManagedBrowserPage({ browser, rpc, sessionId }: SlotComponentProps): ReactNode {
 	if (!browser) return null;
 	return (
 		<ManagedBrowserPane
@@ -10,6 +10,7 @@ export default function ManagedBrowserPage({ browser, rpc }: SlotComponentProps)
 			openRequest={browser.openRequest}
 			onTakeover={browser.onTakeover}
 			rpc={rpc}
+			sessionId={sessionId}
 		/>
 	);
 }

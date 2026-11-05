@@ -2,6 +2,8 @@ import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor,
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { QueuedMessageItem, QueueGroup, QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
+import { Pause as PauseIconData, Play as PlayIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
@@ -64,7 +66,13 @@ export function QueuePanel({
 			{renderGroup("followUp", queued.followUp)}
 			<div className="gui-queue-panel-actions">
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={onTogglePause}>
-					<Icon name={queued.paused ? "play" : "pause"} className="h-3 w-3" />
+					<MorphIcon
+						icon={queued.paused ? PlayIconData : PauseIconData}
+						size={12}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-3 w-3"
+					/>
 					<span>{t(queued.paused ? "general.resumeQueue" : "general.pauseQueue")}</span>
 				</button>
 				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => void onPop()}>

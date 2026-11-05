@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/client-core";
+import { Markdown, t, useLocale } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	downloadUpdate,
@@ -9,6 +9,7 @@ import {
 	openExternalUrl,
 	type UpdateErrorInfo,
 } from "../lib/electron";
+import { localizeUpdateNotes } from "../lib/update-notes";
 import {
 	getInstallFailureCount,
 	isUpdateInstalling,
@@ -44,6 +45,7 @@ const REBOOT_NUDGE_AFTER_MS = 10 * 60_000;
 const NUDGE_CHECK_INTERVAL_MS = 30_000;
 
 export function UpdateDialog(): ReactNode {
+	const locale = useLocale();
 	const [open, setOpen] = useState(false);
 	const [mode, setMode] = useState<"reboot" | "failure">("reboot");
 	const [failureInfo, setFailureInfo] = useState<UpdateErrorInfo | null>(null);
@@ -209,6 +211,7 @@ export function UpdateDialog(): ReactNode {
 		mode === "reboot"
 			? t("update.updateReadyBody", { version: version ?? "" })
 			: t(UPDATE_ERROR_BODY_KEYS[failureInfo?.kind ?? "install"]);
+	const localizedNotes = notes ? localizeUpdateNotes(notes, locale) : null;
 
 	// DialogFrame is ALWAYS rendered (never conditionally mounted) — it owns
 	// the 180ms exit animation internally; unmounting it here would kill the
@@ -218,9 +221,9 @@ export function UpdateDialog(): ReactNode {
 			<h3 className="text-base font-semibold">{title}</h3>
 			{mode === "reboot" && version && <div className="mt-1 text-sm opacity-70">v{version}</div>}
 			<p className="mt-2 text-sm">{body}</p>
-			{notes && (
+			{localizedNotes && (
 				<div className="mt-2 max-h-28 overflow-y-auto text-sm opacity-80">
-					<Markdown text={notes} />
+					<Markdown text={localizedNotes} />
 				</div>
 			)}
 			{mode === "failure" && failureInfo && (failureInfo.message || failureInfo.technicalDetails) && (

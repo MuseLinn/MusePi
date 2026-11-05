@@ -1,4 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
+import { CircleCheck as CircleCheckIconData, Circle as CircleIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { BUILTIN_PETDEX, BUILTIN_SVG_ID, loadPetdex, type PetdexPackage, petForId, petId, setPetId } from "../lib/pet";
@@ -15,7 +17,6 @@ import type { RpcClient } from "../lib/rpc";
 import { dispatchSettingsChanged } from "../lib/settings-events";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
 import { PetSprite } from "./PetSprite";
-import { StateIcon } from "./StateIcon";
 
 /** Onboarding personalization uses the same pet, decoration, avatar and
  * streaming preferences as Settings. Every pet card and the right-hand
@@ -205,9 +206,11 @@ export function PersonalizeSetup({
 								</span>
 								<span className="gui-obo-pet-name">
 									{p.displayName}
-									<StateIcon
-										on={selected}
-										pair={["checkbox-circle", "checkbox-blank"]}
+									<MorphIcon
+										icon={selected ? CircleCheckIconData : CircleIconData}
+										size={14}
+										spring="snappy"
+										reducedMotion="user"
 										className="gui-obo-pet-check"
 									/>
 								</span>

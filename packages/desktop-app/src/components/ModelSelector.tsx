@@ -2,6 +2,7 @@ import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor,
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/client-core";
+import { Star, Target } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { matchesModelQuery } from "../lib/fuzzy-model-match";
@@ -12,7 +13,6 @@ import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ModelBrandIcon } from "./model-brand-icon";
 import { Reveal } from "./Reveal";
-import { StateIcon } from "./StateIcon";
 
 export interface WireModel {
 	id: string;
@@ -856,7 +856,7 @@ const ModelRow = memo(function ModelRow({
 						onToggleFav(m.id, m.provider);
 					}}
 				>
-					<StateIcon on={fav} pair={["star-fill", "star"]} className="h-3.5 w-3.5" />
+					<Star size={14} className={`gui-fill-icon${fav ? " gui-fill-icon--on" : ""}`} aria-hidden />
 				</button>
 				{allowSetDefault && (
 					<button
@@ -869,7 +869,11 @@ const ModelRow = memo(function ModelRow({
 							onSetDefault(m.id, m.provider);
 						}}
 					>
-						<StateIcon on={isDefault} pair={["target-fill", "target"]} className="h-3.5 w-3.5" />
+						<Target
+							size={14}
+							className={`gui-target-fill${isDefault ? " gui-target-fill--on" : ""}`}
+							aria-hidden
+						/>
 					</button>
 				)}
 				{`${m.provider}/${m.id}` === modelId && <Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />}

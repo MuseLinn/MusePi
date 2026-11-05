@@ -1,4 +1,14 @@
 import { t, unarchiveSession, archiveSession as writeArchivedSession } from "@musepi/client-core";
+import {
+	MessageSquare as MessageSquareIconData,
+	MessageSquareText as MessageSquareTextIconData,
+	PanelLeft as PanelLeftIconData,
+	PanelRight as PanelRightIconData,
+	Pause as PauseIconData,
+	Play as PlayIconData,
+	Square as SquareIconData,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
@@ -26,7 +36,6 @@ import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
 import { type SessionTabRow, SessionTabsStrip } from "./SessionTabsStrip";
-import { StateIcon } from "./StateIcon";
 
 /** Known open-in app ids → built-in oc-icon fallback (shown when the
  *  shell couldn't extract a real icon, e.g. WindowsApps aliases like
@@ -693,7 +702,13 @@ export function GuiHeader({
 					aria-label={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
 					onClick={onToggleSidebar}
 				>
-					<StateIcon on={sideCollapsed} pair={["layout-right", "layout-left"]} className="h-4 w-4" />
+					<MorphIcon
+						icon={sideCollapsed ? PanelRightIconData : PanelLeftIconData}
+						size={16}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-4 w-4"
+					/>
 				</button>
 				<div className="gui-openin-capsule">
 					<button
@@ -953,9 +968,11 @@ export function GuiHeader({
 										onSelectSession(s.id);
 									}}
 								>
-									<StateIcon
-										on={active}
-										pair={["chat-thread", "chat-1"]}
+									<MorphIcon
+										icon={active ? MessageSquareTextIconData : MessageSquareIconData}
+										size={14}
+										spring="snappy"
+										reducedMotion="user"
 										className="h-3.5 w-3.5 flex-shrink-0"
 									/>
 									<span className="min-w-0 flex-1 truncate">
@@ -1104,7 +1121,13 @@ export function GuiHeader({
 						disabled={pauseDisabled === true}
 						onClick={() => onTogglePause()}
 					>
-						<StateIcon on={paused} pair={["play", "pause"]} className="h-3.5 w-3.5" />
+						<MorphIcon
+							icon={paused ? PlayIconData : PauseIconData}
+							size={14}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-3.5 w-3.5"
+						/>
 					</button>
 				)}
 				{onToggleGlobalPause && (
@@ -1117,7 +1140,13 @@ export function GuiHeader({
 						aria-pressed={globalPaused === true}
 						onClick={() => onToggleGlobalPause()}
 					>
-						<StateIcon on={globalPaused} pair={["play", "stop"]} className="h-3.5 w-3.5" />
+						<MorphIcon
+							icon={globalPaused ? PlayIconData : SquareIconData}
+							size={14}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-3.5 w-3.5"
+						/>
 					</button>
 				)}
 				{/* Mini chat (picture-in-picture). */}

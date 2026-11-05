@@ -849,22 +849,56 @@
 
 /* Sliding highlight (分组/项目 segmented control): one thumb translates
  * behind the active pill instead of two backgrounds fading — the switch
- * reads as motion, not a swap. Both pills are fixed-width so the thumb
- * geometry is deterministic: width = pill width (50% − padding/gap),
- * projects shifts by one pill + the 2px gap. */
+ * reads as motion, not a swap. Pills size to their labels, so React writes
+ * the active pill's measured offset/width as --tab-thumb-x / -w; the
+ * calc() fallback only covers the pre-measurement first frame. */
 .gui-tab-thumb {
 	position: absolute;
 	top: 2px;
 	bottom: 2px;
 	left: 2px;
-	width: calc(50% - 3px);
+	width: var(--tab-thumb-w, calc(50% - 3px));
 	border-radius: 999px;
 	background: var(--color-surface-raised);
 	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+	transform: translateX(var(--tab-thumb-x, 0px));
 	transition: transform 200ms var(--spring);
 }
-.gui-tabstrip-capsule[data-tab="projects"] .gui-tab-thumb {
-	transform: translateX(calc(100% + 2px));
+/* Narrow pane: the row can no longer fit both labels, so the capsule
+ * morphs to icon-only pills (tooltips + aria-label keep them named). The
+ * switch is driven by measured content width in SessionSidebar, not a
+ * fixed breakpoint, because label widths differ by locale. Scoped to the
+ * direct pill children so the hidden label measurement keeps its text. */
+.gui-tabstrip-capsule--icon > .gui-tab-pill--fixed {
+	flex: 0 1 24px;
+	min-width: 22px;
+	padding: 4px 0;
+	gap: 0;
+}
+.gui-tabstrip-capsule--icon > .gui-tab-pill--fixed .gui-tab-pill-label {
+	display: none;
+}
+/* Hidden label copy used to measure the row's text requirement. Absolute
+ * so it never participates in the visible layout. */
+.gui-tab-measure {
+	position: absolute;
+	left: 0;
+	top: 0;
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	visibility: hidden;
+	pointer-events: none;
+	white-space: nowrap;
+}
+.gui-tab-measure .gui-tab-pill {
+	flex: 0 0 auto;
+}
+/* Dense row: 20px actions buy the capsule the 8px it needs to keep both
+ * labels visible at the default 256px pane. */
+.gui-tabstrip .gui-tab-action {
+	width: 20px;
+	height: 20px;
 }
 /* The thumb IS the active fill in the capsule — the pill keeps only the
  * text-color emphasis (base .gui-tab-pill--active fill stays for other
@@ -884,7 +918,7 @@
 }
 
 .gui-tab-pill--fixed {
-	flex: 0 1 56px;
+	flex: 0 1 auto;
 	min-width: 0;
 	width: auto;
 	justify-content: center;
@@ -896,8 +930,10 @@
 	white-space: nowrap;
 }
 
-.gui-tab-pill--fixed .gui-tab-pill-icon {
-	display: none;
+.gui-tab-pill-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .gui-project-remove {

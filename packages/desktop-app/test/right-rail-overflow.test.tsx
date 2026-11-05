@@ -93,6 +93,12 @@ function openOverflow(rail: HTMLElement): void {
 }
 
 describe("right-rail overflow menu", () => {
+	test("the navigation scroller opts out of the global skin scrollbar", () => {
+		const rootHost = renderRail();
+		const scroller = railOf(rootHost).querySelector(".gui-right-rail-scroll");
+		expect(scroller?.getAttribute("data-gui-scrollbar")).toBe("off");
+	});
+
 	test("the menu mounts OUTSIDE the clipping rail card", () => {
 		const rootHost = renderRail();
 		const rail = railOf(rootHost);

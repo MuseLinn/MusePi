@@ -3749,3 +3749,327 @@ a.tr-tool-search-title:hover {
 :is(.tr-table-scroll, .tr-md pre, .katex-display, .tr-mermaid, .tr-mermaid-ascii, .tr-usage, .tr-mm-lb-scroll, .tv-pre, .tv-diff, .tv-diff-sbs-cell, .sh-wspanel-tabs, .sh-changes-diff, .sh-attach-chips)[data-right-scroll="true"]:not([data-left-scroll="true"]) {
 	mask-image: linear-gradient(to left, transparent 0, #000 var(--gui-fade-x, 16px));
 }
+
+/* ── Turn 来源卡(本轮浏览的页面):折叠头部 + 读/经过分组列表 ─────────────
+ * 卡片面与顾问卡同配方(border --border / surface-raised),动作按钮沿用
+ * transcript 的轻量 ghost 按钮;不可用的能力(客端/导出渲染)置灰而不是
+ * 静默失败。 */
+.tr-sources {
+	display: flex;
+	flex-direction: column;
+	max-width: 100%;
+	margin-top: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	overflow: hidden;
+}
+
+.tr-sources-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 6px 10px;
+	border: none;
+	background: none;
+	color: var(--fg);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.tr-sources-head:hover {
+	background: var(--color-hover);
+}
+
+.tr-sources-head-icon {
+	flex: none;
+	color: var(--accent);
+}
+
+.tr-sources-headline {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tr-sources-chev {
+	margin-left: auto;
+	flex: none;
+	color: var(--fg-faint);
+	transition: transform 160ms var(--spring, ease);
+}
+
+.tr-sources-head--open .tr-sources-chev {
+	transform: rotate(90deg);
+}
+
+/* collapse: header stays mounted; body animates via useCollapseHeight --h */
+.tr-sources-body {
+	height: var(--h, 0px);
+	overflow: hidden;
+	box-sizing: content-box;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 0 10px 9px;
+	transition: height 220ms var(--spring, ease), padding 220ms var(--spring, ease);
+}
+
+.tr-sources-body--closed {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+.tr-sources-group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.tr-sources-group-title {
+	color: var(--fg-faint);
+	font-size: 11px;
+	letter-spacing: 0.02em;
+}
+
+.tr-sources-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	padding: 3px 0;
+	min-width: 0;
+}
+
+.tr-sources-icon {
+	flex: none;
+	margin-top: 2px;
+	color: var(--fg-faint);
+}
+
+.tr-sources-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.tr-sources-title-line {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tr-sources-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg);
+}
+
+.tr-sources-tag {
+	flex: none;
+	padding: 0 5px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	color: var(--fg-faint);
+	font-size: 10px;
+	line-height: 15px;
+}
+
+.tr-sources-tag--read {
+	color: var(--accent);
+	border-color: color-mix(in oklab, var(--accent) 50%, var(--border));
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.tr-sources-visits {
+	flex: none;
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-sources-url {
+	color: var(--fg-faint);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10.5px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tr-sources-actions {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 1px;
+}
+
+.tr-sources-act {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--fg-faint);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.tr-sources-act:hover:not(:disabled) {
+	background: var(--color-hover);
+	color: var(--fg);
+}
+
+.tr-sources-act:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+/* ── Turn 修改文件卡:标题计数 + 逐文件 ± + 展开更多 + 打开文件 ─────────── */
+.tr-turn-files {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	max-width: 100%;
+	margin-top: 6px;
+	padding: 6px 10px 7px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.tr-turn-files-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--fg);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+}
+
+.tr-turn-files-icon {
+	flex: none;
+	color: var(--accent);
+}
+
+.tr-turn-files-add {
+	color: var(--success, #46a758);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-turn-files-remove {
+	color: var(--err, #f85149);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-turn-file {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 2px 0;
+}
+
+.tr-turn-file-icon {
+	flex: none;
+	color: var(--fg-faint);
+}
+
+.tr-turn-file-name {
+	flex: none;
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--fg);
+	font-size: var(--ui-font-size-xs);
+}
+
+.tr-turn-file-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--fg-faint);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10.5px;
+}
+
+.tr-turn-file-stats {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.tr-turn-file-nodiff {
+	flex: none;
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--fg-faint);
+	font-size: 10.5px;
+}
+
+.tr-turn-file-open {
+	flex: none;
+	padding: 1px 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-muted);
+	font-size: 11px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.tr-turn-file-open:hover:not(:disabled) {
+	background: var(--color-hover);
+	color: var(--fg);
+}
+
+.tr-turn-file-open:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.tr-turn-files-more {
+	align-self: flex-start;
+	padding: 1px 2px;
+	border: none;
+	background: none;
+	color: var(--accent);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.tr-turn-files-more:hover {
+	text-decoration: underline;
+}
+
+.tr-turn-files-pending {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--fg-faint);
+	font-size: 11.5px;
+}

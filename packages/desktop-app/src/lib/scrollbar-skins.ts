@@ -65,7 +65,7 @@ const BUILTIN_PACMAN: ScrollbarSkin = {
 };
 
 /** Snake: the previous gummy colors, reshaped — a rounded head riding a
- *  segmented body (the 12px pitch reads as snake vertebrae). */
+ *  segmented body. Slimmer than the original rail so it recedes further. */
 const BUILTIN_SNAKE: ScrollbarSkin = {
 	id: "builtin-snake",
 	displayName: "Snake",
@@ -75,11 +75,12 @@ const BUILTIN_SNAKE: ScrollbarSkin = {
 		track: "color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent)",
 		eaten: "transparent",
 	},
-	size: 12,
+	size: 10,
 	pacGlyph: null,
 };
 
-/** Gummy Rainbow: the candy capsule, thicker (15px) and multi-color. */
+/** Gummy Rainbow: the candy capsule, slightly thicker than the snake and
+ *  multi-color. */
 const BUILTIN_GUMMY_RAINBOW: ScrollbarSkin = {
 	id: "builtin-gummy-rainbow",
 	displayName: "Gummy Rainbow",
@@ -89,7 +90,7 @@ const BUILTIN_GUMMY_RAINBOW: ScrollbarSkin = {
 		track: "color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent)",
 		eaten: "transparent",
 	},
-	size: 15,
+	size: 12,
 	pacGlyph: null,
 };
 

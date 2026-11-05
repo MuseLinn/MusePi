@@ -189,9 +189,10 @@ export function CapabilityCenterPage({
 					</div>
 				</div>
 				<div className={`gui-capability-pane${tab === "plugins" ? " gui-capability-pane--on" : ""}`}>
-					{/* Shared unified list (settings-side 扩展控制中心 parity):
-					 * plugin packages + hot-loaded extension modules, source-
-					 * category tags per item, shared empty-state contract. */}
+					{/* Shared unified list, manage layer only: official plugins the user
+					 * can toggle or configure plus installed/self-built packages. The
+					 * full built-in inventory (read-only packs, preset-only personas)
+					 * stays in Settings → Extensions & plugins. */}
 					<UnifiedPluginsView
 						rpc={rpc}
 						plugins={plugins}

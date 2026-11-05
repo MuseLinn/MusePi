@@ -126,6 +126,46 @@ describe("SurfaceTabStrip markup", () => {
 		expect(html).toContain("gui-surface-tab-dirty");
 		expect(html.match(/gui-surface-tab-dirty/g)?.length).toBe(1);
 	});
+
+	it("renders built-in, favicon, and browser fallback icons as decorative visuals", () => {
+		const html = renderToStaticMarkup(
+			<SurfaceTabStrip
+				tabs={[
+					{ id: "files", title: "Files", icon: <svg data-icon="files" /> },
+					{
+						id: "favicon",
+						title: "Example",
+						icon: <img src="https://example.com/favicon.ico" alt="" />,
+					},
+					{ id: "fallback", title: "Blank", icon: <svg data-icon="browser-fallback" /> },
+				]}
+				activeId="files"
+				onActivate={() => {}}
+				onClose={() => {}}
+				onReorder={() => {}}
+			/>,
+		);
+		expect(html.match(/gui-surface-tab-icon/g)?.length).toBe(3);
+		expect(html.match(/gui-surface-tab-icon" aria-hidden="true"/g)?.length).toBe(3);
+		expect(html).toContain('data-icon="files"');
+		expect(html).toContain('src="https://example.com/favicon.ico" alt=""');
+		expect(html).toContain('data-icon="browser-fallback"');
+	});
+
+	it("exposes Agent activity as accessible text without adding it to inactive tabs", () => {
+		const html = renderToStaticMarkup(
+			<SurfaceTabStrip
+				tabs={[{ id: "a", title: "A", agentActive: true }, tab("b", "B")]}
+				activeId="a"
+				onActivate={() => {}}
+				onClose={() => {}}
+				onReorder={() => {}}
+			/>,
+		);
+		expect(html.match(/gui-surface-tab-agent/g)?.length).toBe(1);
+		expect(html).toContain('<span aria-hidden="true">Agent</span>');
+		expect(html).toContain("The agent is running");
+	});
 });
 
 describe("SurfaceTabPanels", () => {

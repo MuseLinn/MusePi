@@ -196,6 +196,7 @@ afterEach(() => {
 	while (hosts.length) hosts.pop()?.remove();
 	globalThis.ResizeObserver = OriginalResizeObserver;
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 describe("ContextPanel maximize/restore", () => {
@@ -225,6 +226,26 @@ describe("ContextPanel maximize/restore", () => {
 			expect(panel.style.transition).toBe("");
 			expect(panel.getBoundingClientRect().width).toBe(dockedWidth);
 		}
+	});
+
+	it("keeps title and accessible name synchronized through maximize and restore", () => {
+		const { panel } = mountPanel();
+		const button = [...panel.querySelectorAll<HTMLButtonElement>(".gui-pane-tool")].find(candidate => {
+			const label = candidate.getAttribute("aria-label");
+			return label === "Maximize panel" || label === "最大化面板";
+		})!;
+		const maximizeLabel = button.title;
+		const restoreLabel = maximizeLabel === "Maximize panel" ? "Restore panel" : "还原面板";
+
+		click("maximize");
+		finishFlip(panel);
+		expect(button.title).toBe(restoreLabel);
+		expect(button.getAttribute("aria-label")).toBe(restoreLabel);
+
+		click("restore");
+		finishFlip(panel);
+		expect(button.title).toBe(maximizeLabel);
+		expect(button.getAttribute("aria-label")).toBe(maximizeLabel);
 	});
 
 	it("keeps maximize pointer events away from tab-drag ancestors", () => {

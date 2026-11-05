@@ -76,4 +76,67 @@ describe("shared plugin horizontal card", () => {
 		await act(async () => root.unmount());
 		host.remove();
 	});
+
+	it("prefers the manifest icon over the name-derived tile", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		act(() =>
+			root.render(
+				createElement(ModuleRow, {
+					e: { ...plugin(), name: "android-emulator", displayName: "Android Emulator", icon: "▣" },
+					rpc: {} as never,
+					busy: false,
+					onOpen: () => {},
+					onToggle: () => {},
+				}),
+			),
+		);
+		expect(host.querySelector(".gui-plugin-card-icon")?.textContent).toBe("▣");
+		await act(async () => root.unmount());
+		host.remove();
+	});
+
+	it("shows technical identity only in the inventory view", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		const inventoryItem = {
+			...plugin(),
+			readonly: true,
+			presetOnly: true,
+			version: "1.2.3",
+			config: [{ key: "backend", type: "string" as const, label: "Backend" }],
+		};
+		const render = (detail: boolean): void => {
+			act(() =>
+				root.render(
+					createElement(ModuleRow, {
+						e: inventoryItem,
+						rpc: {} as never,
+						busy: false,
+						detail,
+						onOpen: () => {},
+						onToggle: () => {},
+					}),
+				),
+			);
+		};
+
+		render(false);
+		expect(host.textContent).not.toContain("subagent-kimi-code");
+		expect(host.textContent).not.toContain("Read-only");
+		expect(host.textContent).not.toContain("Preset-only");
+		expect(host.textContent).not.toContain("Config ×1");
+
+		render(true);
+		expect(host.textContent).toContain("subagent-kimi-code");
+		expect(host.textContent).toContain("Read-only");
+		expect(host.textContent).toContain("Preset-only");
+		expect(host.textContent).toContain("Config ×1");
+		expect(host.textContent).toContain("v1.2.3");
+
+		await act(async () => root.unmount());
+		host.remove();
+	});
 });

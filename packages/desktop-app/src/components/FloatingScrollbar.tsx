@@ -736,6 +736,10 @@ export function FloatingScrollbar(): ReactNode {
 		const onScroll = (e: Event): void => {
 			const t = e.target;
 			if (!(t instanceof HTMLElement) || t === document.documentElement) return;
+			// Narrow navigation rails opt out: the global skin would cover the
+			// icons with a bead column, and their overflow is handled by the
+			// rail's own fold/feather rules instead.
+			if (t.closest('[data-gui-scrollbar="off"]')) return;
 			// Detached container: cheap `isConnected` check only. Whether a LIVE
 			// container still overflows is settled by the periodic probe, not
 			// here — a rect read per scroll frame is exactly the layout cost the

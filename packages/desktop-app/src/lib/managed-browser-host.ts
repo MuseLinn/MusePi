@@ -55,6 +55,12 @@ export interface HostWebview extends HTMLElement {
 	stop(): void;
 	isLoading(): boolean;
 	executeJavaScript(code: string, userGesture?: boolean): Promise<unknown>;
+	findInPage(text: string): number;
+	stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
+	setAudioMuted(muted: boolean): void;
+	copy(): void;
+	paste(): void;
+	inspectElement(x: number, y: number): void;
 	openDevTools(): void;
 	addEventListener(event: string, listener: (event: Event) => void, useCapture?: boolean): void;
 	removeEventListener(event: string, listener: (event: Event) => void, useCapture?: boolean): void;
@@ -65,6 +71,15 @@ export interface ManagedTab {
 	/** Creation URL — set once as the element's `src`. */
 	url: string;
 	title: string;
+	/** User rename; survives page-title updates for this runtime. */
+	customTitle: string | null;
+	muted: boolean;
+	/** Owning chat session — panel/browser tabs never leak across sessions. */
+	ownerSessionId: string | null;
+	/** Agent that created this tab; null for user tabs and restored tabs. */
+	agentId: string | null;
+	/** Display name of {@link agentId}, so the panel can say WHO is driving. */
+	agentName: string | null;
 	loading: boolean;
 	/** about:blank resting state: the React start page is layered over the guest. */
 	blank: boolean;
@@ -91,9 +106,33 @@ export interface HostRect {
 	clip?: { top: number; right: number; bottom: number; left: number };
 }
 
+/** Guest `context-menu` event payload (Electron's webview params subset). */
+export interface BrowserPageContextParams {
+	x: number;
+	y: number;
+	linkURL?: string;
+	selectionText?: string;
+	isEditable?: boolean;
+}
+
+/** Viewport coordinates + page details for the pane's right-click menu. */
+export interface BrowserPageContextDetail {
+	tabId: string;
+	x: number;
+	y: number;
+	linkURL: string;
+	selectionText: string;
+	isEditable: boolean;
+	/** Pointer position inside the guest's own layout box (inspectElement). */
+	elementX: number;
+	elementY: number;
+}
+
 export interface ManagedBrowserHostState {
 	tabs: readonly ManagedTab[];
 	activeId: string | null;
+	/** Chat session whose tabs the panel is currently showing. */
+	sessionId: string | null;
 	/** Panel content slot rect; null while the panel is closed (guest stays mounted). */
 	rect: HostRect | null;
 	paneVisible: boolean;
@@ -110,6 +149,7 @@ export interface ManagedBrowserHostState {
 let state: ManagedBrowserHostState = {
 	tabs: [],
 	activeId: null,
+	sessionId: null,
 	rect: null,
 	paneVisible: false,
 	port: null,
@@ -126,6 +166,8 @@ const elements = new Map<string, HostWebview>();
 const pendingCreates = new Map<string, PromiseWithResolvers<string>>();
 /** Elements already wired (ref callbacks re-invoke on every re-render). */
 const wiredElements = new WeakSet<HostWebview>();
+/** Last active tab per chat session, so switching sessions restores its view. */
+const activeBySession = new Map<string | null, string | null>();
 
 let tabSeq = 0;
 
@@ -136,6 +178,49 @@ function set(patch: Partial<ManagedBrowserHostState>): void {
 
 export function getHostState(): ManagedBrowserHostState {
 	return state;
+}
+
+export function browserTabsForSession(
+	sessionId: string | null,
+	snapshot: ManagedBrowserHostState = state,
+): readonly ManagedTab[] {
+	return snapshot.tabs.filter(tab => tab.ownerSessionId === sessionId);
+}
+
+/**
+ * Agent driving a tab, when it is an agent-created one. The control overlay
+ * resolves the operator through the activity's `tabId` so a subagent's run is
+ * attributed even when main's activity ledger carries no agent fields.
+ */
+export function tabAgent(tabId: string): { id: string; name: string } | null {
+	const tab = state.tabs.find(candidate => candidate.id === tabId);
+	if (!tab?.agentId) return null;
+	return { id: tab.agentId, name: tab.agentName ?? tab.agentId };
+}
+
+/** Switch the panel's browser view to one chat session. Webviews for every
+ *  session stay mounted; only the visible/active tab changes. */
+export function setBrowserSession(sessionId: string | null): void {
+	if (state.sessionId === sessionId) return;
+	activeBySession.set(state.sessionId, state.activeId);
+	// Legacy restore had no owner. The first real session adopts those tabs
+	// once; later switches keep every session's set separate.
+	const adopted =
+		state.sessionId === null && sessionId !== null && state.tabs.some(tab => tab.ownerSessionId === null)
+			? state.tabs.map(tab => (tab.ownerSessionId === null ? { ...tab, ownerSessionId: sessionId } : tab))
+			: state.tabs;
+	const rememberedOwner = state.sessionId;
+	const rememberedTabs = adopted.filter(tab => tab.ownerSessionId === rememberedOwner);
+	activeBySession.set(
+		rememberedOwner,
+		rememberedTabs.find(tab => tab.id === state.activeId)?.id ?? rememberedTabs.at(-1)?.id ?? null,
+	);
+	const candidates = adopted.filter(tab => tab.ownerSessionId === sessionId);
+	const remembered = activeBySession.get(sessionId);
+	const activeId = candidates.find(tab => tab.id === remembered)?.id ?? candidates.at(-1)?.id ?? null;
+	set({ tabs: adopted, sessionId, activeId });
+	activeBySession.set(sessionId, activeId);
+	if (state.paneVisible && activeId) reportActive(activeId);
 }
 /**
  * The `src` a tab's element was created with — fixed for the element's life.
@@ -232,6 +317,31 @@ export function resolveAddressBarInput(value: string, engine: string | undefined
 	return looksLikeAddress(input) ? input : searchUrl(engine, input);
 }
 
+/**
+ * Map a guest `context-menu` event into the pane's viewport coordinates.
+ *
+ * The guest reports pointer coordinates in its OWN layout box, while the host
+ * may be transform-scaled to fit a viewport preset and clipped to the pane's
+ * scrollport — the menu has to open where the user actually sees the pointer.
+ */
+export function browserPageContextDetail(
+	tabId: string,
+	params: BrowserPageContextParams,
+	rect: HostRect | null,
+): BrowserPageContextDetail {
+	const scale = rect?.scale ?? 1;
+	return {
+		tabId,
+		x: (rect?.x ?? 0) + (params.x - (rect?.clip?.left ?? 0)) * scale,
+		y: (rect?.y ?? 0) + (params.y - (rect?.clip?.top ?? 0)) * scale,
+		linkURL: params.linkURL ?? "",
+		selectionText: params.selectionText ?? "",
+		isEditable: params.isEditable === true,
+		elementX: params.x,
+		elementY: params.y,
+	};
+}
+
 /** Element lifecycle: registered by the host renderer, reported to main. */
 export function attachElement(tabId: string, el: HostWebview | null): void {
 	if (el === null) {
@@ -319,6 +429,17 @@ export function attachElement(tabId: string, el: HostWebview | null): void {
 		void window.electronAPI?.managedBrowserGuestGone(tabId).catch(() => {});
 	};
 	const onDestroyed = (): void => onGone();
+	const onContextMenu = (raw: Event): void => {
+		const event = raw as Event & { params?: BrowserPageContextParams };
+		const params = event.params;
+		if (!params) return;
+		event.preventDefault();
+		window.dispatchEvent(
+			new CustomEvent("musepi-browser-page-context-menu", {
+				detail: browserPageContextDetail(tabId, params, state.rect),
+			}),
+		);
+	};
 	el.addEventListener("page-favicon-updated", onFavicon);
 	el.addEventListener("did-start-loading", onLoadStart);
 	el.addEventListener("did-stop-loading", onLoadEnd);
@@ -327,6 +448,7 @@ export function attachElement(tabId: string, el: HostWebview | null): void {
 	el.addEventListener("did-navigate-in-page", onLoadEnd);
 	el.addEventListener("did-fail-load", onFail);
 	el.addEventListener("page-title-updated", onTitle);
+	el.addEventListener("context-menu", onContextMenu);
 	// `dom-ready` — NOT `did-attach` — is the readiness gate: the webview API
 	// throws "must be attached to the DOM and the dom-ready event emitted"
 	// before it (measured). `did-attach` stays registered as an early trigger;
@@ -394,13 +516,30 @@ function pumpTabFromElement(tabId: string): void {
  * bridge can name the target before the DOM element exists); user tabs get a
  * local id. Resolves once the guest is attached and reported.
  */
-export function createTab(url: string, options?: { tabId?: string; agent?: boolean }): Promise<string> {
+export function createTab(
+	url: string,
+	options?: {
+		tabId?: string;
+		agent?: boolean;
+		sessionId?: string | null;
+		/** Agent that asked main to create this tab; the panel badges it. */
+		agentId?: string | null;
+		agentName?: string | null;
+	},
+): Promise<string> {
 	const id = options?.tabId ?? `local-${++tabSeq}`;
 	const target = url || "about:blank";
+	const ownerSessionId = options?.sessionId === undefined ? state.sessionId : options.sessionId;
+	const agentId = options?.agentId ?? null;
 	const tab: ManagedTab = {
 		id,
 		url: target,
 		title: target,
+		customTitle: null,
+		muted: false,
+		ownerSessionId,
+		agentId,
+		agentName: agentId ? (options?.agentName ?? agentId) : null,
 		loading: true,
 		blank: isBlankUrl(target),
 		agent: options?.agent === true,
@@ -413,8 +552,12 @@ export function createTab(url: string, options?: { tabId?: string; agent?: boole
 	};
 	const created = Promise.withResolvers<string>();
 	pendingCreates.set(id, created);
-	set({ tabs: [...state.tabs, tab], activeId: id });
-	if (state.paneVisible) reportActive(id);
+	const isCurrentSession = ownerSessionId === state.sessionId;
+	set({ tabs: [...state.tabs, tab], ...(isCurrentSession ? { activeId: id } : {}) });
+	if (isCurrentSession) {
+		activeBySession.set(ownerSessionId, id);
+		if (state.paneVisible) reportActive(id);
+	}
 	// A new tab can push the set past the residency cap — reap in the background.
 	enforceResidency();
 	// A guest that never attaches (window closed mid-create) must not hang main.
@@ -442,8 +585,13 @@ export function closeTab(tabId: string, options?: { notifyMain?: boolean }): voi
 		pendingCreates.delete(tabId);
 		pending.reject(new Error("tab closed before attach"));
 	}
-	const activeId = state.activeId === tabId ? (tabs[tabs.length - 1]?.id ?? null) : state.activeId;
+	const closing = state.tabs.find(tab => tab.id === tabId);
+	const sameSession = tabs.filter(tab => tab.ownerSessionId === (closing?.ownerSessionId ?? state.sessionId));
+	const activeId = state.activeId === tabId ? (sameSession[sameSession.length - 1]?.id ?? null) : state.activeId;
 	set({ tabs, activeId });
+	if (state.sessionId === (closing?.ownerSessionId ?? state.sessionId)) {
+		activeBySession.set(state.sessionId, activeId);
+	}
 	if (elementNeverMounted && options?.notifyMain !== false) {
 		// Never mounted ⇒ no ref will ever detach: main must hear the demise
 		// from here (its dispose-then has no element to race).
@@ -455,13 +603,14 @@ export function closeTab(tabId: string, options?: { notifyMain?: boolean }): voi
 }
 
 export function selectTab(tabId: string): void {
-	if (!state.tabs.some(tab => tab.id === tabId)) return;
+	const tab = state.tabs.find(candidate => candidate.id === tabId);
+	if (!tab || tab.ownerSessionId !== state.sessionId) return;
 	set({ activeId: tabId });
+	activeBySession.set(state.sessionId, tabId);
 	touchTab(tabId);
 	reportActive(tabId);
 	// A frozen page is dead to input — always thaw on activation.
-	const tab = state.tabs.find(x => x.id === tabId);
-	if (tab?.frozen) void thawTab(tabId);
+	if (tab.frozen) void thawTab(tabId);
 }
 
 function reportActive(tabId: string): void {
@@ -560,14 +709,37 @@ export function goForward(): void {
 	}
 }
 
-export function reload(hard = false): void {
-	const tab = activeTab();
-	if (!tab) return;
-	const el = elements.get(tab.id);
+export function reloadTab(tabId: string, hard = false): void {
+	if (!state.tabs.some(tab => tab.id === tabId)) return;
+	const el = elements.get(tabId);
 	try {
 		if (hard) el?.reloadIgnoringCache();
 		else el?.reload();
-		if (el) touchTab(tab.id);
+		if (el) touchTab(tabId);
+	} catch {
+		// element not attached
+	}
+}
+
+export function reload(hard = false): void {
+	const tab = activeTab();
+	if (tab) reloadTab(tab.id, hard);
+}
+
+/** User rename wins over later page-title updates for this runtime. */
+export function renameTab(tabId: string, title: string): void {
+	if (!state.tabs.some(tab => tab.id === tabId)) return;
+	const trimmed = title.trim();
+	patchTab(tabId, { customTitle: trimmed || null });
+}
+
+export function setTabMuted(tabId: string, muted: boolean): void {
+	if (!state.tabs.some(tab => tab.id === tabId)) return;
+	const el = elements.get(tabId);
+	try {
+		el?.setAudioMuted(muted);
+		patchTab(tabId, { muted });
+		touchTab(tabId);
 	} catch {
 		// element not attached
 	}
@@ -647,8 +819,75 @@ export async function takeoverAgentOp(tabId?: string): Promise<void> {
 	await window.electronAPI?.managedBrowserTakeover(tabId);
 }
 
+async function requireBrowserActionOk(
+	request: Promise<{ ok: boolean; error?: string }> | undefined,
+	fallback: string,
+): Promise<void> {
+	const result = await request;
+	if (!result?.ok) throw new Error(result?.error || fallback);
+}
+
+export function findInActivePage(query: string): void {
+	const tab = activeTab();
+	if (!tab) return;
+	if (!query) {
+		stopFindInActivePage();
+		return;
+	}
+	try {
+		elements.get(tab.id)?.findInPage(query);
+	} catch {
+		// element not attached
+	}
+}
+
+export function stopFindInActivePage(): void {
+	const tab = activeTab();
+	if (!tab) return;
+	try {
+		elements.get(tab.id)?.stopFindInPage("clearSelection");
+	} catch {
+		// element not attached
+	}
+}
+
+export async function printActivePage(): Promise<void> {
+	const tab = activeTab();
+	if (!tab) throw new Error("No active browser page");
+	await requireBrowserActionOk(window.electronAPI?.managedBrowserPrint({ tabId: tab.id }), "Print unavailable");
+}
+
+export async function captureActivePage(): Promise<{ mime: string; base64: string; width: number; height: number }> {
+	const tab = activeTab();
+	const webview = tab ? elements.get(tab.id) : null;
+	if (!webview) throw new Error("No active browser page");
+	const webContentsId = webview.getWebContentsId();
+	const capture = await window.electronAPI?.managedBrowserCapturePage({ webContentsId });
+	if (!capture) throw new Error("Screenshot unavailable");
+	return capture;
+}
+
+export async function saveActivePageScreenshot(): Promise<{
+	ok: boolean;
+	path?: string;
+	canceled?: boolean;
+	error?: string;
+}> {
+	const tab = activeTab();
+	if (!tab) throw new Error("No active browser page");
+	const result = await window.electronAPI?.managedBrowserSaveScreenshot({ tabId: tab.id });
+	if (!result) throw new Error("Screenshot unavailable");
+	if (result.canceled) return result;
+	if (!result.ok) throw new Error(result.error || "Screenshot unavailable");
+	return result;
+}
+
+export async function showDownloads(): Promise<void> {
+	await requireBrowserActionOk(window.electronAPI?.managedBrowserShowDownloads(), "Downloads unavailable");
+}
+
 export async function clearData(mode: "cookies" | "all"): Promise<void> {
-	await window.electronAPI?.managedBrowserClearData(mode);
+	await requireBrowserActionOk(window.electronAPI?.managedBrowserClearData(mode), "Clear data unavailable");
 }
 
 export async function answerConfirm(requestId: string, allow: boolean): Promise<void> {
@@ -725,8 +964,22 @@ export function wireHost(): void {
 			if (state.upload?.requestId === requestId) set({ upload: null });
 		}) ?? (() => {}),
 		api.onManagedBrowserCreateTab(input => {
-			void createTab(input.url, { tabId: input.tabId, agent: true }).catch(() => {
-				void api.managedBrowserGuestGone(input.tabId).catch(() => {});
+			// Main may publish the creating agent alongside the tab. The preload
+			// contract predates agent attribution, so read the fields
+			// structurally and treat their absence as a user/app tab.
+			const push = input as {
+				tabId: string;
+				url: string;
+				agentId?: string | null;
+				agentName?: string | null;
+			};
+			void createTab(push.url, {
+				tabId: push.tabId,
+				agent: true,
+				agentId: push.agentId ?? null,
+				agentName: push.agentName ?? null,
+			}).catch(() => {
+				void api.managedBrowserGuestGone(push.tabId).catch(() => {});
 			});
 		}),
 		api.onManagedBrowserSelectTab(input => selectTab(input.tabId)),
@@ -773,12 +1026,26 @@ export function unwireHost(): void {
  */
 const TABS_KEY = "musepi-gui-managed-browser-tabs";
 
+interface PersistedTab {
+	url: string;
+	sessionId: string | null;
+	customTitle?: string | null;
+	muted?: boolean;
+}
+
 export function persistTabs(): void {
 	try {
-		const activeIndex = state.tabs.findIndex(tab => tab.id === state.activeId);
 		localStorage.setItem(
 			TABS_KEY,
-			JSON.stringify({ urls: state.tabs.map(tab => tab.url), active: Math.max(0, activeIndex) }),
+			JSON.stringify({
+				v: 2,
+				tabs: state.tabs.map(tab => ({
+					url: tab.url,
+					sessionId: tab.ownerSessionId,
+					customTitle: tab.customTitle,
+					muted: tab.muted,
+				})),
+			}),
 		);
 	} catch {
 		// storage unavailable
@@ -790,21 +1057,38 @@ export function restoreTabs(): void {
 		const raw = localStorage.getItem(TABS_KEY);
 		if (!raw) return;
 		const parsed: unknown = JSON.parse(raw);
-		// Accept the older plain-array record too.
-		const urls = Array.isArray(parsed)
-			? parsed
+		// Older records were a URL array or `{ urls, active }`; both belong to
+		// the session current at restore time (null), which the first session
+		// switch adopts explicitly.
+		const records: PersistedTab[] = Array.isArray(parsed)
+			? (parsed as unknown[]).flatMap(url => (typeof url === "string" && url ? [{ url, sessionId: null }] : []))
 			: Array.isArray((parsed as { urls?: unknown })?.urls)
-				? ((parsed as { urls: unknown[] }).urls ?? [])
-				: [];
-		const active = Array.isArray(parsed) ? 0 : Number((parsed as { active?: unknown })?.active) || 0;
-		let first: string | null = null;
-		urls.slice(0, 8).forEach((url, index) => {
-			if (typeof url !== "string" || !url) return;
-			if (index === active) first = url;
-			else void createTab(url).catch(() => {});
-		});
-		// Restore the active tab last so it ends up selected.
-		if (first !== null) void createTab(first).catch(() => {});
+				? ((parsed as { urls: unknown[] }).urls ?? []).flatMap(url =>
+						typeof url === "string" && url ? [{ url, sessionId: null }] : [],
+					)
+				: Array.isArray((parsed as { tabs?: unknown })?.tabs)
+					? ((parsed as { tabs: unknown[] }).tabs ?? []).flatMap(entry => {
+							if (!entry || typeof entry !== "object") return [];
+							const value = entry as Partial<PersistedTab>;
+							if (typeof value.url !== "string" || !value.url) return [];
+							return [
+								{
+									url: value.url,
+									sessionId: typeof value.sessionId === "string" ? value.sessionId : null,
+									customTitle: typeof value.customTitle === "string" ? value.customTitle : null,
+									muted: value.muted === true,
+								},
+							];
+						})
+					: [];
+		for (const entry of records.slice(0, 8)) {
+			void createTab(entry.url, { sessionId: entry.sessionId })
+				.then(id => {
+					if (entry.customTitle) renameTab(id, entry.customTitle);
+					if (entry.muted) setTabMuted(id, true);
+				})
+				.catch(() => {});
+		}
 	} catch {
 		// corrupted record — start clean
 	}

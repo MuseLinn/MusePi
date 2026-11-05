@@ -36,6 +36,46 @@ export function clampViewportSize(width: number, height: number): { width: numbe
 	};
 }
 
+export interface ViewportPageBox {
+	layoutWidth: number;
+	layoutHeight: number;
+	scale: number;
+}
+
+export interface ViewportDrag {
+	axis: "x" | "y";
+	startClient: number;
+	startSize: number;
+	scale: number;
+}
+
+export function viewportControlsVisible(
+	hasPage: boolean,
+	pageBox: ViewportPageBox | null,
+	presetWidth: number | null,
+): boolean {
+	return hasPage && pageBox !== null && presetWidth !== null;
+}
+
+export function beginViewportDrag(
+	hasPage: boolean,
+	pageBox: ViewportPageBox,
+	axis: "x" | "y",
+	startClient: number,
+): ViewportDrag | null {
+	if (!hasPage) return null;
+	return {
+		axis,
+		startClient,
+		startSize: axis === "x" ? pageBox.layoutWidth : pageBox.layoutHeight,
+		scale: pageBox.scale,
+	};
+}
+
+export function cancelViewportDragOnBlank(drag: ViewportDrag | null, hasPage: boolean): ViewportDrag | null {
+	return hasPage ? drag : null;
+}
+
 export interface ViewportClip {
 	top: number;
 	right: number;

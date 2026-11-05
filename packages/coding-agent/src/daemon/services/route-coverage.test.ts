@@ -27,6 +27,7 @@ import { SessionService } from "./session-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
+import { WorkspaceRegistry, WorkspaceService } from "./workspace-registry";
 
 /** 路由覆盖快照（P1 服务抽取纪律）：server.ts 巨型 switch 的每个 case
  *  必须二选一——委托给 HostServices 某服务，或登记在 LEGACY_ROUTES。
@@ -188,6 +189,16 @@ function buildRegistry(): HostServices {
 	);
 	// ArchiveService：无宿主依赖（本测试不发起归档），仅需认领路由参与闭包。
 	services.register(new ArchiveService({ archivesDir: () => join(mkdtempSync(join(tmpdir(), "musepi-arch-")), "z") }));
+	// WorkspaceService：注册表文件指向隔离 temp，仅认领路由（本测试不触会话）。
+	services.register(
+		new WorkspaceService({
+			registry: new WorkspaceRegistry({
+				filePath: join(mkdtempSync(join(tmpdir(), "musepi-projects-")), "projects.json"),
+			}),
+			knownSessionCwds: async () => [],
+			sessionDirectories: () => undefined,
+		}),
+	);
 	return services;
 }
 

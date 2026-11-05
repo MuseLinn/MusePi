@@ -6,6 +6,14 @@ import { reset as resetCapabilities } from "../../capability";
 import type { Settings } from "../../config/settings";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import type { Extension } from "../../extensibility/extensions-center/types";
+import type { MarketplaceListEntry } from "../../extensibility/plugins/marketplace/list-entries";
+import type { MarketplaceManager } from "../../extensibility/plugins/marketplace/manager";
+import type {
+	InstalledPluginsRegistry,
+	MarketplacePluginEntry,
+	MarketplaceRegistryEntry,
+	MarketplaceSourceType,
+} from "../../extensibility/plugins/marketplace/types";
 import {
 	MarketplaceInstallMachine,
 	type MarketplaceInstallStartParams,
@@ -18,7 +26,12 @@ import type { DaemonService } from "./types";
  *
  * 能力缝声明（M2-2.4）：
  * - 输入：RPC `marketplace.list` / `marketplace.install` / `marketplace.remove`
- *   （GUI 商店面板：目录浏览/安装/移除）、`skills.list` / `skills.delete` /
+ *   （GUI 商店面板：目录浏览/安装/移除）、`marketplace.updates` /
+ *   `marketplace.upgrade`（已装版本对 catalog 的升级清单与升级执行）、
+ *   `marketplace.sources.list` / `marketplace.sources.add` /
+ *   `marketplace.sources.remove` / `marketplace.sources.refresh`（自定义
+ *   marketplace 源的增删查刷新，持久化在 marketplaces.json）、
+ *   `skills.list` / `skills.delete` /
  *   `skills.install` / `skills.read` / `skills.setIgnored`（技能扫描/删除/
  *   git 安装/源码读取/启停写 ignoredSkills）与
  *   `skills.marketplace.query` / `skills.marketplace.categories` /
@@ -30,9 +43,10 @@ import type { DaemonService } from "./types";
  *   #skillsCache）随变更 RPC 与宿主 watcher 失效；extensions.changed 广播
  *   经注入的 onChanged 扇出（宿主侧接 EventService，lazy 调用无循环）；
  *   安装状态迁移经 onInstallState 广播 marketplace.install.state 事件。
- *   marketplace.install/remove 成功后除插件双缓存失效外还扇出
+ *   marketplace.install/remove/upgrade 成功后除插件双缓存失效外还扇出
  *   invalidateExtensionsCache + onChanged（M3 §3.7d：装包/卸包贡献的
  *   设计体系经宿主注册表重放，GUI 监听 extensions.changed 重拉）。
+ *   源增删/刷新只清目录缓存并广播 onChanged（不动已装插件）。
  * - 生命周期：stop 中止进行中的安装（状态机半成品清理）；缓存惰性构建；
  *   宿主扩展 watcher 经 invalidateSkillsCache 失效技能扫描，加载/卸载可逆。
  *
@@ -107,6 +121,35 @@ export interface MarketplaceServiceDeps {
 	onChanged(): void;
 	/** marketplace 安装状态机事件广播（宿主接 EventService.broadcast）。 */
 	onInstallState(payload: Record<string, unknown>): void;
+	/** 测试缝：指向隔离 registry/cache 目录的 manager；生产不传，按宿主路径自建。 */
+	buildManager?(): Promise<MarketplaceManager>;
+}
+
+/** One custom marketplace source as served by marketplace.sources.*. */
+export interface MarketplaceSourceSummary {
+	name: string;
+	sourceType: MarketplaceSourceType;
+	sourceUri: string;
+	addedAt: string;
+	updatedAt: string;
+}
+
+function toSourceSummary(entry: MarketplaceRegistryEntry): MarketplaceSourceSummary {
+	return {
+		name: entry.name,
+		sourceType: entry.sourceType,
+		sourceUri: entry.sourceUri,
+		addedAt: entry.addedAt,
+		updatedAt: entry.updatedAt,
+	};
+}
+
+/** One marketplace plugin upgrade as served by marketplace.updates/upgrade. */
+export interface MarketplaceUpdate {
+	pluginId: string;
+	scope: "user" | "project";
+	from: string;
+	to: string;
 }
 
 export class MarketplaceService implements DaemonService {
@@ -115,6 +158,12 @@ export class MarketplaceService implements DaemonService {
 		"marketplace.list": "list",
 		"marketplace.install": "install",
 		"marketplace.remove": "remove",
+		"marketplace.updates": "updates",
+		"marketplace.upgrade": "upgrade",
+		"marketplace.sources.list": "listSources",
+		"marketplace.sources.add": "addSource",
+		"marketplace.sources.remove": "removeSource",
+		"marketplace.sources.refresh": "refreshSources",
 		"skills.list": "listSkills",
 		"skills.delete": "deleteSkill",
 		"skills.install": "installSkill",
@@ -141,24 +190,10 @@ export class MarketplaceService implements DaemonService {
 	 *  tab). Combines {@link MarketplaceManager.listAvailablePlugins}
 	 *  output with per-plugin `installed`/`installedScope` flags so the GUI
 	 *  renders Install/Remove affordances without a second round-trip.
-	 *  Busted on install/remove mutations. */
+	 *  Busted on install/remove/upgrade and source mutations. */
 	#marketplaceCache: {
 		at: number;
-		entries: {
-			name: string;
-			marketplace: string;
-			version?: string;
-			description?: string;
-			author?: string;
-			category?: string;
-			tags?: readonly string[];
-			homepage?: string;
-			repository?: string;
-			license?: string;
-			icon?: string;
-			installed: boolean;
-			installedScope: "user" | "project" | null;
-		}[];
+		entries: MarketplaceListEntry[];
 	} | null = null;
 
 	/** TTL cache of the skills scan (settings → skills tab + slash
@@ -196,7 +231,8 @@ export class MarketplaceService implements DaemonService {
 	/** Build a `MarketplaceManager` wired to the host's cwd and the global
 	 *  registry/cache dirs. Reused by the marketplace RPCs so the path
 	 *  resolution stays consistent with the TUI /marketplace flow. */
-	async #buildMarketplaceManager() {
+	async #buildMarketplaceManager(): Promise<MarketplaceManager> {
+		if (this.#deps.buildManager) return this.#deps.buildManager();
 		const m = await import("../../extensibility/plugins/marketplace");
 		const {
 			getInstalledPluginsRegistryPath,
@@ -273,45 +309,57 @@ export class MarketplaceService implements DaemonService {
 	async list() {
 		// Marketplace catalog + install state for the GUI store panel.
 		// Mirrors TUI /marketplace discover output, plus an
-		// installed/installedScope pair derived from the merged
-		// installed-plugins registry so the card grid can flip its
-		// "Install"/"Remove" affordance without a second RPC.
-		// TTL-cached so flipping the marketplace tab doesn't rewalk
-		// every catalog; the install/remove handlers below bust it.
+		// installed/installedScope/installedVersion/updateAvailable view
+		// derived from the manager's merged installed-plugins registry so the
+		// card grid can flip its Install/Upgrade/Remove affordance without a
+		// second RPC. TTL-cached so flipping the marketplace tab doesn't
+		// rewalk every catalog; the mutation handlers below bust it.
 		if (!this.#marketplaceCache || Date.now() - this.#marketplaceCache.at > 10_000) {
-			const m = await import("../../extensibility/plugins/marketplace");
-			const { getMarketplacesRegistryPath, listMarketplaceEntries, readMarketplacesRegistry } = m;
+			const { listMarketplaceEntries } = await import("../../extensibility/plugins/marketplace");
 			const manager = await this.#buildMarketplaceManager();
-			const registry = await readMarketplacesRegistry(getMarketplacesRegistryPath());
-			const catalogs = new Map<string, Awaited<ReturnType<typeof manager.listAvailablePlugins>>>();
-			for (const mkt of registry.marketplaces) {
-				const plugins = await manager.listAvailablePlugins(mkt.name);
-				catalogs.set(mkt.name, plugins);
+			const marketplaces = await manager.listMarketplaces();
+			const catalogs = new Map<string, readonly MarketplacePluginEntry[]>();
+			for (const mkt of marketplaces) {
+				catalogs.set(mkt.name, await manager.listAvailablePlugins(mkt.name));
 			}
-			const userReg = await m.readInstalledPluginsRegistry(m.getInstalledPluginsRegistryPath());
-			const projectPath = await resolveOrDefaultProjectRegistryPath(this.#deps.cwd());
-			const projectReg = projectPath ? await m.readInstalledPluginsRegistry(projectPath) : null;
+			// listInstalledPlugins merges both scopes without re-reading global
+			// paths, so an injected manager (tests) and the production manager
+			// see exactly the registries they were configured with.
+			const userPlugins: InstalledPluginsRegistry["plugins"] = {};
+			const projectPlugins: InstalledPluginsRegistry["plugins"] = {};
+			for (const summary of await manager.listInstalledPlugins()) {
+				const target = summary.scope === "project" ? projectPlugins : userPlugins;
+				target[summary.id] = summary.entries;
+			}
 			const entries = listMarketplaceEntries({
-				registry,
+				registry: { version: 1, marketplaces },
 				catalogs,
-				userRegistry: userReg,
-				projectRegistry: projectReg,
+				userRegistry: { version: 2, plugins: userPlugins },
+				projectRegistry: { version: 2, plugins: projectPlugins },
 			});
 			this.#marketplaceCache = { at: Date.now(), entries };
 		}
 		return { entries: this.#marketplaceCache.entries };
 	}
 
-	/** RPC marketplace.install：安装一个 marketplace 插件（GUI 商店 → Install）。 */
+	/** RPC marketplace.install：安装一个 marketplace 插件（GUI 商店 → Install）。
+	 *  `expectedVersion` 来自用户确认框展示的 catalog 版本：catalog 在确认后
+	 *  被刷新成别的版本时拒绝安装（信任确认与实际安装内容一致）。 */
 	async install(params: unknown) {
 		// Install a marketplace plugin (GUI store → Install button).
 		// Busts caches so the next list reflects the new state.
-		const p = (params ?? {}) as { name?: string; marketplace?: string; scope?: "user" | "project" };
+		const p = (params ?? {}) as {
+			name?: string;
+			marketplace?: string;
+			scope?: "user" | "project";
+			expectedVersion?: string;
+		};
 		if (!p.name) throw new Error("marketplace.install: name required");
 		if (!p.marketplace) throw new Error("marketplace.install: marketplace required");
 		const manager = await this.#buildMarketplaceManager();
 		await manager.installPlugin(p.name, p.marketplace, {
 			scope: p.scope ?? "user",
+			expectedVersion: typeof p.expectedVersion === "string" ? p.expectedVersion : undefined,
 		});
 		this.#marketplaceCache = null;
 		this.#deps.invalidatePluginCaches();
@@ -340,6 +388,122 @@ export class MarketplaceService implements DaemonService {
 		this.#deps.invalidateExtensionsCache();
 		this.#deps.onChanged();
 		return { ok: true };
+	}
+
+	/** RPC marketplace.updates：按 (pluginId, scope) 列出 catalog 版本高于
+	 *  已装版本的项——与 `/marketplace upgrade` 的计划同源。卡片徽标由
+	 *  marketplace.list 的 updateAvailable 提供；两者对同一活动 scope 判定
+	 *  一致（被覆盖的非活动 scope 仍单独可升级）。 */
+	async updates(): Promise<{ updates: MarketplaceUpdate[] }> {
+		const manager = await this.#buildMarketplaceManager();
+		return { updates: await manager.checkForUpdates() };
+	}
+
+	/** RPC marketplace.upgrade：升级单个插件（pluginId + scope）或全部可
+	 *  升级项（`all: true`）。升级即按 catalog 版本重装，成功后与 install
+	 *  同款失效 + 广播，装包贡献的设计体系立即重放。 */
+	async upgrade(params: unknown) {
+		const p = (params ?? {}) as { pluginId?: string; scope?: "user" | "project"; all?: boolean };
+		const manager = await this.#buildMarketplaceManager();
+
+		let upgraded: MarketplaceUpdate[];
+		if (p.all === true) {
+			upgraded = await manager.upgradeAllPlugins();
+		} else {
+			if (typeof p.pluginId !== "string" || p.pluginId.length === 0) {
+				throw new Error("marketplace.upgrade: pluginId required (or all: true)");
+			}
+			const installed = await manager.listInstalledPlugins();
+			const matches = installed.filter(s => s.id === p.pluginId);
+			const scoped = p.scope === undefined ? matches : matches.filter(s => s.scope === p.scope);
+			if (scoped.length === 0) {
+				throw new Error(`Plugin "${p.pluginId}" is not installed${p.scope ? ` in ${p.scope} scope` : ""}`);
+			}
+			if (scoped.length > 1) {
+				throw new Error(
+					`Plugin "${p.pluginId}" is installed in both user and project scope. ` +
+						`Use scope to specify which to upgrade.`,
+				);
+			}
+			const target = scoped[0]!;
+			const entry = await manager.upgradePlugin(p.pluginId, target.scope);
+			upgraded = [
+				{
+					pluginId: p.pluginId,
+					scope: target.scope,
+					from: target.entries[0]?.version ?? "",
+					to: entry.version,
+				},
+			];
+		}
+
+		this.#marketplaceCache = null;
+		this.#deps.invalidatePluginCaches();
+		this.#deps.invalidateExtensionsCache();
+		this.#deps.onChanged();
+		return { ok: true, upgraded };
+	}
+
+	/** RPC marketplace.sources.list：自定义 marketplace 源清单（持久化在
+	 *  marketplaces.json，顺序即注册顺序）。 */
+	async listSources(): Promise<{ sources: MarketplaceSourceSummary[] }> {
+		const manager = await this.#buildMarketplaceManager();
+		return { sources: (await manager.listMarketplaces()).map(toSourceSummary) };
+	}
+
+	/** RPC marketplace.sources.add：拉取并登记一个自定义源（本地路径 / git /
+	 *  github / url，识别由 fetcher 负责）。重名拒绝，落到 registry 后 GUI
+	 *  下一轮 list 即见其目录。 */
+	async addSource(params: unknown) {
+		const p = (params ?? {}) as { source?: string };
+		if (typeof p.source !== "string" || p.source.trim().length === 0) {
+			throw new Error("marketplace.sources.add: source required");
+		}
+		const manager = await this.#buildMarketplaceManager();
+		const entry = await manager.addMarketplace(p.source.trim());
+		this.#marketplaceCache = null;
+		this.#deps.onChanged();
+		return { ok: true, source: toSourceSummary(entry) };
+	}
+
+	/** RPC marketplace.sources.remove：移除自定义源并删其目录缓存；已装插件
+	 *  记录保留（卸载走 marketplace.remove）。 */
+	async removeSource(params: unknown) {
+		const p = (params ?? {}) as { name?: string };
+		if (typeof p.name !== "string" || p.name.length === 0) {
+			throw new Error("marketplace.sources.remove: name required");
+		}
+		const manager = await this.#buildMarketplaceManager();
+		await manager.removeMarketplace(p.name);
+		this.#marketplaceCache = null;
+		this.#deps.onChanged();
+		return { ok: true };
+	}
+
+	/** RPC marketplace.sources.refresh：重拉一个源（`name`）或全部源的
+	 *  catalog。全部刷新按源收集失败（离线/坏目录不阻断其余源），单个刷新
+	 *  直接抛出该源的错误。 */
+	async refreshSources(params: unknown) {
+		const p = (params ?? {}) as { name?: string };
+		const manager = await this.#buildMarketplaceManager();
+
+		const sources: MarketplaceSourceSummary[] = [];
+		const failures: string[] = [];
+		if (p.name !== undefined) {
+			sources.push(toSourceSummary(await manager.updateMarketplace(p.name)));
+		} else {
+			for (const mkt of await manager.listMarketplaces()) {
+				try {
+					sources.push(toSourceSummary(await manager.updateMarketplace(mkt.name)));
+				} catch (e: unknown) {
+					failures.push(`${mkt.name}: ${e instanceof Error ? e.message : String(e)}`);
+				}
+			}
+		}
+
+		this.#marketplaceCache = null;
+		this.#deps.onChanged();
+		return { ok: failures.length === 0, sources, failures };
 	}
 
 	/** RPC skills.list：settings → skills tab 的技能清单（enablement 响应时计算）。 */

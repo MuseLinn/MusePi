@@ -14,9 +14,13 @@ import { PluginPackageDialog } from "./PluginPackageDialog";
 /**
  * 插件 tab 的统一清单（ExtensionsCenter 与 CapabilityCenterPage 共用）：
  * 插件包（plugins.packages，marketplace/npm 安装）与热加载的插件模块
- * （extensions.list 的 kind=extension-module —— deepseek-harness 式
- * 插件化基础组件）同屏汇总，布局对齐 dsh 插件列表面板：
- * - 分组：官方（内置插件单元）/ 已安装（插件包 + 用户模块）;
+ * （extensions.list 的 kind=plugin-module / extension-module）同屏汇总，
+ * 布局对齐 dsh 插件列表面板。两个入口按 dsh 的层级分开：
+ * - 能力中心（variant="list"）：manage 层——可启停或可配置的官方插件 +
+ *   已安装/自建插件，紧凑行，只留实验性/状态/版本；
+ * - 设置 → 扩展与插件（variant="cards"）：完整库存——含只读提示词/渲染
+ *   包与预设专用 persona，行内带 id、只读/预设专用、配置/组件数等技术
+ *   身份，是管理/诊断面。
  * - 行：图标 + 名称 + 一行描述 + 右侧启停开关;
  * - 点击行打开插件详情液态玻璃弹层（PluginDetailDialog）——配置表单、
  *   资源卡与「包含的组件」独立开关都在弹层内,不跳转页面;
@@ -76,6 +80,31 @@ export function isPluginLaneEntry(e: ExtensionItem): boolean {
 	// 两条轨道都算插件模块行（kind 拆分见 capability/module-entry.ts）。
 	if (e.kind === "plugin-module" || e.kind === "extension-module") return true;
 	return e.source.provider === "musepi-extensions" && e.source.level === "native" && e.kind !== "skill";
+}
+
+/**
+ * 官方插件在两个入口的分层（dsh 的「插件」页 vs「插件列表」库存）：
+ * - manage：能力中心——用户能启停或配置的官方插件；
+ * - inventory：设置里的完整库存——只读提示词/渲染包、预设专用 persona
+ *   这类没有用户动作的单元。
+ *
+ * 判定只吃清单事实（presetOnly / readonly / config / components），不维护
+ * 第二份插件名单：清单新增字段时两侧自动跟随。
+ */
+export type PluginSurface = "manage" | "inventory";
+
+export function pluginSurface(e: ExtensionItem): PluginSurface {
+	if (!e.builtin) return "manage";
+	if (e.presetOnly) return "inventory";
+	const actionable = (e.config?.length ?? 0) > 0 || (e.components?.length ?? 0) > 0;
+	return e.readonly && !actionable ? "inventory" : "manage";
+}
+
+/** 一个入口要展示的官方条目：能力中心只取 manage，设置取完整库存。 */
+export function officialPluginsFor(variant: "list" | "cards", modules: ExtensionItem[]): ExtensionItem[] {
+	const lane =
+		variant === "list" ? modules.filter(e => e.kind === "plugin-module" || e.kind === "extension-module") : modules;
+	return lane.filter(e => e.builtin && (variant === "cards" || pluginSurface(e) === "manage"));
 }
 
 /** 条目状态标签（ExtensionsCenter detail pane 同款语义单一权威——
@@ -283,10 +312,15 @@ interface ModuleCardProps {
 	busy: boolean;
 	onOpen(item: ExtensionItem): void;
 	onToggle(item: ExtensionItem): void;
+	/** 设置里的完整库存：带上技术身份（id、只读/预设专用、配置/组件数）。
+	 *  能力中心只留用户能判断的状态与版本。 */
+	detail?: boolean;
 }
 
-function ModulePluginCard({ e, rpc, busy, onOpen, onToggle }: ModuleCardProps): ReactNode {
+function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, detail = false }: ModuleCardProps): ReactNode {
 	const name = builtinDisplayName(e);
+	const configCount = e.config?.length ?? 0;
+	const componentCount = e.components?.length ?? 0;
 	return (
 		<PluginHorizontalCard
 			name={name}
@@ -294,8 +328,8 @@ function ModulePluginCard({ e, rpc, busy, onOpen, onToggle }: ModuleCardProps): 
 			icon={
 				<PluginIcon
 					name={name}
-					icon={kindGlyph(e.kind)}
-					size={24}
+					icon={e.icon ?? kindGlyph(e.kind)}
+					size={26}
 					status={
 						e.loadError ? "error" : e.state === "active" ? "active" : e.state === "shadowed" ? "shadowed" : "off"
 					}
@@ -306,14 +340,22 @@ function ModulePluginCard({ e, rpc, busy, onOpen, onToggle }: ModuleCardProps): 
 					{e.experimental && (
 						<span className="gui-ext-item-tag gui-ext-item-tag--experimental">{t("tools.extExperimental")}</span>
 					)}
+					{detail && e.presetOnly && <span className="gui-ext-item-tag">{t("tools.extPresetOnlyTag")}</span>}
+					{detail && e.readonly && <span className="gui-ext-item-tag">{t("tools.extReadonlyTag")}</span>}
 					{e.enabledInPresets && e.enabledInPresets.length > 0 && (
 						<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("tools.extPresetTag")}</span>
 					)}
 					<span className={`gui-ext-item-tag${e.loadError ? " gui-ext-item-tag--err" : ""}`}>
 						{pluginStateLabel(e)}
 					</span>
-					<span className="gui-ext-item-tag">{e.id}</span>
+					{detail && <span className="gui-ext-item-tag">{e.id}</span>}
 					{e.version && <span className="gui-ext-item-tag">{`v${e.version}`}</span>}
+					{detail && configCount > 0 && (
+						<span className="gui-ext-item-tag">{t("tools.extConfigCount", { count: configCount })}</span>
+					)}
+					{detail && componentCount > 0 && (
+						<span className="gui-ext-item-tag">{t("tools.extComponentCount", { count: componentCount })}</span>
+					)}
 				</>
 			}
 			actions={
@@ -354,28 +396,30 @@ function PackagePluginCard({
 	onOpen,
 	onToggle,
 	onUninstall,
+	detail = false,
 }: {
 	pkg: PluginPackageEntry;
 	uninstallBusy: boolean;
 	onOpen(): void;
 	onToggle(): void;
 	onUninstall(): void;
+	detail?: boolean;
 }): ReactNode {
 	return (
 		<PluginHorizontalCard
 			name={pkg.name}
 			description={pkg.description}
-			icon={<PluginIcon name={pkg.name} icon={pkg.icon} size={24} status={pkg.enabled ? "active" : "off"} />}
+			icon={<PluginIcon name={pkg.name} icon={pkg.icon} size={26} status={pkg.enabled ? "active" : "off"} />}
 			tags={
 				<>
 					{pkg.experimental && (
 						<span className="gui-ext-item-tag gui-ext-item-tag--experimental">{t("tools.extExperimental")}</span>
 					)}
 					<span className="gui-ext-item-tag">{t("tools.pluginPackageTag")}</span>
-					{pkg.readable === false && (
+					{detail && pkg.readable === false && (
 						<span className="gui-ext-item-tag">{t("tools.bundleUnreadable" as Parameters<typeof t>[0])}</span>
 					)}
-					<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", pkg.scope)}</span>
+					{detail && <span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", pkg.scope)}</span>}
 					<span className="gui-ext-item-tag">{`v${pkg.version}`}</span>
 				</>
 			}
@@ -516,21 +560,13 @@ export function UnifiedPluginsView({
 	const modules = useMemo(() => (data?.extensions ?? []).filter(isPluginLaneEntry), [data]);
 	// dsh 分组：官方 = 内置插件单元；已安装 = 插件包 + 用户级模块。
 	const normalizedQuery = query.trim().toLocaleLowerCase();
-	// 能力中心的插件列表只收真实插件模块（内置的几个 + 用户安装/自建）；
-	// 设置里的扩展与插件是完整库存，内置插件单元也一并列出。
-	const officialPool = useMemo(
-		() =>
-			variant === "list"
-				? modules.filter(e => e.kind === "plugin-module" || e.kind === "extension-module")
-				: modules,
-		[modules, variant],
-	);
+	// 两个入口的官方清单不同层：能力中心只收 manage（可启停/可配置），
+	// 设置里的扩展与插件是完整库存（含只读单元与预设专用 persona）。
+	const officialPool = useMemo(() => officialPluginsFor(variant, modules), [modules, variant]);
 	const official = useMemo(
 		() =>
-			officialPool.filter(
-				e =>
-					e.builtin &&
-					matchesQuery([e.name, e.displayName, e.id, e.description, builtinDescription(e)], normalizedQuery),
+			officialPool.filter(e =>
+				matchesQuery([e.name, e.displayName, e.id, e.description, builtinDescription(e)], normalizedQuery),
 			),
 		[officialPool, normalizedQuery],
 	);
@@ -584,8 +620,12 @@ export function UnifiedPluginsView({
 		// daemon 广播 extensions.changed → registry 单例重拉，不本地乐观更新。
 	};
 
-	// 双清空才是真空态：任一链路有货就展示统一清单。
-	if (plugins.length === 0 && modules.length === 0 && !pluginsError) {
+	// 两个入口的官方分组标题不同名：能力中心是「官方」，设置是完整「内置插件」。
+	const officialLabel = variant === "cards" ? t("tools.extPluginsBuiltin") : t("tools.extPluginsOfficial");
+
+	// 双清空才是真空态：任一链路有货就展示统一清单。能力中心按 manage 层
+	// 计数——只有只读库存时不该声称「已加载插件」。
+	if (plugins.length === 0 && officialPool.length === 0 && standaloneModules.length === 0 && !pluginsError) {
 		return (
 			<div className="gui-ext-plugins" data-variant={variant}>
 				{/* Empty state with an exit: a bald「未加载插件」read as a
@@ -621,7 +661,7 @@ export function UnifiedPluginsView({
 					/>
 				</label>
 				<span className="gui-ext-plugins-toolbar-count">
-					{t("tools.extPluginsOfficial")} {official.length} · {t("tools.extPluginsInstalled")}{" "}
+					{officialLabel} {official.length} · {t("tools.extPluginsInstalled")}{" "}
 					{filteredPackages.length + standaloneModules.length}
 				</span>
 				<button type="button" className="gui-btn gui-btn--sm" onClick={onOpenMarketplace}>
@@ -634,7 +674,9 @@ export function UnifiedPluginsView({
 					{t("settings.pluginInstallTitle")}
 				</button>
 			</div>
-			{variant === "list" && <div className="gui-ext-plugins-scope">{t("tools.pluginsListScopeHint")}</div>}
+			<div className="gui-ext-plugins-scope">
+				{variant === "cards" ? t("tools.pluginsInventoryScopeHint") : t("tools.pluginsListScopeHint")}
+			</div>
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
 			{normalizedQuery.length > 0 &&
 				official.length === 0 &&
@@ -645,7 +687,7 @@ export function UnifiedPluginsView({
 					{official.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("tools.extPluginsOfficial")} · {official.length}
+								{officialLabel} · {official.length}
 							</div>
 							<div className="gui-plugin-cards">
 								{official.map(e => (
@@ -654,6 +696,7 @@ export function UnifiedPluginsView({
 										e={e}
 										rpc={rpc}
 										busy={busyId !== null}
+										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
 									/>
@@ -673,6 +716,7 @@ export function UnifiedPluginsView({
 											key={p.path}
 											pkg={p}
 											uninstallBusy={uninstallBusy}
+											detail
 											onOpen={() => setPackageDetail(p)}
 											onToggle={() => onTogglePackage(p)}
 											onUninstall={() => uninstallWithConfirm(p)}
@@ -687,6 +731,7 @@ export function UnifiedPluginsView({
 										e={e}
 										rpc={rpc}
 										busy={busyId !== null}
+										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
 									/>
@@ -700,6 +745,23 @@ export function UnifiedPluginsView({
 					{/* Package management stays a two-section list. Preset composition and
 					 * failure details remain available in each item's detail dialog; they
 					 * must not duplicate every row on the management landing page. */}
+					{official.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{officialLabel} · {official.length}
+							</div>
+							{official.map(e => (
+								<ModuleRow
+									key={e.id}
+									e={e}
+									rpc={rpc}
+									busy={busyId !== null}
+									onToggle={toggleModule}
+									onOpen={item => setDetailId(item.id)}
+								/>
+							))}
+						</div>
+					)}
 					{(filteredPackages.length > 0 || standaloneModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
@@ -718,23 +780,6 @@ export function UnifiedPluginsView({
 								))}
 							</div>
 							{standaloneModules.map(e => (
-								<ModuleRow
-									key={e.id}
-									e={e}
-									rpc={rpc}
-									busy={busyId !== null}
-									onToggle={toggleModule}
-									onOpen={item => setDetailId(item.id)}
-								/>
-							))}
-						</div>
-					)}
-					{official.length > 0 && (
-						<div className="gui-ext-group">
-							<div className="gui-ext-group-title">
-								{t("tools.extPluginsOfficial")} · {official.length}
-							</div>
-							{official.map(e => (
 								<ModuleRow
 									key={e.id}
 									e={e}

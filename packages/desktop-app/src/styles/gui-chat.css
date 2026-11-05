@@ -426,6 +426,7 @@
 .gui-right-rail-scroll {
 	min-height: 0;
 	overflow-y: auto;
+	overflow-x: clip;
 	scrollbar-width: none;
 }
 .gui-right-rail-scroll::-webkit-scrollbar {
@@ -498,7 +499,9 @@
 /* Rich rail tooltip; RailTooltip shares the global anchor/collision helper. */
 .gui-rail-tooltip {
 	position: fixed;
-	z-index: 70;
+	/* Above the managed-browser page host (z 900); tooltips describe the rail,
+	 * so a page must never cover them. */
+	z-index: var(--z-tooltip);
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
@@ -646,6 +649,23 @@ body.gui-resizing .gui-pane-resize-x::after {
 	z-index: 950;
 	cursor: col-resize;
 	touch-action: none;
+}
+
+/* While any floating menu/tooltip is open, the page host exposes one
+ * transparent hit layer above the guest. A click that lands in the page
+ * closes the app-level menu first instead of being swallowed by the OOPIF;
+ * the menu itself is portalled above the host. */
+.gui-managed-host-dismiss {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background: transparent;
+}
+
+/* Panel-tab drag: keep pointermove over the page guest inside the renderer so
+ * reorder and the right-half split drop zone both receive the full gesture. */
+.gui-panel-drag-shield {
+	cursor: grabbing;
 }
 
 /* Notes pane height drag handle (bottom edge of the note editor). */
@@ -5953,4 +5973,285 @@ body.gui-resizing .gui-pane-right {
  * equal specificity, so this override is appended last to win. */
 .gui-pane-right--maximized {
 	margin: 0;
+}
+
+.gui-surface-tab-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 14px;
+	width: 14px;
+	height: 14px;
+}
+
+.gui-surface-tab-icon > :is(img, svg) {
+	display: block;
+	width: 14px;
+	height: 14px;
+	object-fit: contain;
+}
+
+.gui-surface-tab-agent {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	padding: 1px 4px;
+	border-radius: 999px;
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+/* ── Session info card (collapsed right panel's stand-in) ─────────────── */
+/* Chat-header tool cluster: the Chat|Canvas switch plus the session-info
+ * toggle. The cluster is the positioned box and the switch inside it goes
+ * static — the pill's width follows the locale, so an offset that dodged it
+ * would be wrong in one language or the other. */
+.gui-chat-head-tools {
+	position: absolute;
+	top: 8px;
+	right: 12px;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.gui-chat-head-tools > .gui-surface-mode {
+	position: static;
+	top: auto;
+	right: auto;
+}
+.gui-chat-info-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	color: var(--color-text-muted);
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-chat-info-toggle:hover {
+	color: var(--color-text);
+}
+.gui-chat-info-toggle[aria-pressed="true"] {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-text);
+}
+
+/* The card itself: right edge of the session column, over the transcript but
+ * INSIDE the column (the rail is a sibling), so it can never cover the rail,
+ * the panel or a portaled menu. `top`/`max-height` are set by ChatView — they
+ * depend on the measured status-card stack this card sits below. */
+.gui-session-info {
+	position: absolute;
+	right: 12px;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 288px;
+	max-width: calc(100% - 24px);
+	padding: 10px 12px 12px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+	color: var(--color-text);
+	animation: gui-session-info-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes gui-session-info-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+.gui-session-info-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.gui-session-info-head-icon {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--color-text-muted);
+}
+.gui-session-info-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	font-weight: 650;
+}
+.gui-session-info-model {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+.gui-session-info-row-icon {
+	width: 12px;
+	height: 12px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+.gui-session-info-row-label {
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+.gui-session-info-model-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.gui-session-info-section-label {
+	padding-bottom: 2px;
+	font-size: 10.5px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	color: var(--color-text-faint);
+}
+.gui-session-info-note {
+	margin: 0;
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+.gui-session-info-nums {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+.gui-session-info-num-add {
+	color: var(--color-ok);
+}
+.gui-session-info-num-del {
+	color: var(--color-danger);
+}
+.gui-session-info-error {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.gui-session-info-error-detail {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	color: var(--color-danger);
+}
+.gui-session-info-retry,
+.gui-session-info-more {
+	align-self: flex-start;
+	padding: 2px 8px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	font-size: 11px;
+	color: var(--color-text-muted);
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-session-info-retry:hover,
+.gui-session-info-more:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.gui-session-info-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 4px 6px;
+	border-radius: var(--radius-md);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	text-align: left;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-session-info-item:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-item--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-item-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-session-info-surface-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px;
+}
+.gui-session-info-surface {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	padding: 4px 6px;
+	border-radius: var(--radius-md);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	text-align: left;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-session-info-surface:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-surface-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-session-info {
+		animation: none;
+	}
 }

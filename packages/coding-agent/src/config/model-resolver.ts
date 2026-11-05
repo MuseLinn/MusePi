@@ -1126,6 +1126,30 @@ function resolveEffectiveAgentModelSelection(
 		return { source: settingsOverride, patterns: overridePatterns };
 	}
 
+	// Global subagent model: below an explicit per-agent override, above the
+	// agent definition's own frontmatter so an explicit spawn or override always
+	// wins. Empty (the default) means "follow the agent/session chain", which
+	// keeps every caller's pre-setting resolution unchanged.
+	const subagentModel = settings?.get("task.subagentModel");
+	const subagentModelPatterns = resolveConfiguredModelPatterns(subagentModel, settings);
+	if (subagentModelPatterns.length > 0) {
+		return { source: subagentModel, patterns: subagentModelPatterns };
+	}
+	// `@task`/`@default`/`*` as the global default mean "follow the session",
+	// exactly as they do in an agent definition. They expand to nothing when
+	// no role is configured, so resolve the session fallback here instead of
+	// letting the agent's own frontmatter silently win.
+	const normalizedSubagentPatterns = normalizeModelPatternList(subagentModel);
+	const singleSubagentPattern = normalizedSubagentPatterns.length === 1 ? normalizedSubagentPatterns[0] : undefined;
+	if (singleSubagentPattern && isSessionInheritedAgentPattern(singleSubagentPattern)) {
+		const inherited =
+			activeModelPattern?.trim() || fallbackModelPattern?.trim() || settings?.getModelRole("default")?.trim() || "";
+		const inheritedPatterns = resolveConfiguredModelPatterns(inherited, settings);
+		if (inheritedPatterns.length > 0) {
+			return { source: singleSubagentPattern, patterns: inheritedPatterns };
+		}
+	}
+
 	const normalizedAgentPatterns = normalizeModelPatternList(agentModel);
 	const configuredAgentPatterns = resolveConfiguredModelPatterns(agentModel, settings);
 	const singleAgentPattern = normalizedAgentPatterns.length === 1 ? normalizedAgentPatterns[0] : undefined;

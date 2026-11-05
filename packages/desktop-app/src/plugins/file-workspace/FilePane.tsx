@@ -2,12 +2,17 @@ import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type Segmented
 import { createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import { renderAsync as renderDocx } from "docx-preview";
 import {
+	Eye as EyeIconData,
+	EyeOff as EyeOffIconData,
+	Folder as FolderIconData,
+	FolderOpen as FolderOpenIconData,
+	ScanEye as ScanEyeIconData,
+} from "lucide";
+import {
 	ChevronDown,
 	ClipboardCopy,
 	Download,
 	ExternalLink,
-	Eye,
-	EyeOff,
 	FileArchive,
 	FileAudio,
 	FileCode,
@@ -22,16 +27,16 @@ import {
 	FileType,
 	FileVideo,
 	Folder,
-	FolderOpen,
 	FolderPlus,
+	Link2,
 	PanelLeft,
 	Presentation,
 	Quote,
 	RefreshCw,
 	Save,
-	ScanEye,
 	Search,
 } from "lucide-react";
+import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
@@ -76,9 +81,11 @@ import { downloadMarkdownDocx } from "../../lib/markdown-docx";
 import { type MonacoPeekBuffer, revealEditorLocation } from "../../lib/monaco-lsp";
 import { type OfficeDraft, parseOfficeDraft, serializeOfficeDraft, writeOfficeDraft } from "../../lib/office-documents";
 import { previewMappingFor } from "../../lib/preview-from-viewer";
+import { pathBaseName } from "../../lib/project-label";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { captureSelectionContext } from "../../lib/selection-capture";
+import { directoriesEqual } from "../../lib/workspace-projects";
 import { Icon } from "../../vendor/oc-icons";
 import "../../styles/gui-file-workspace.css";
 
@@ -348,6 +355,27 @@ function TypeIcon({ name }: { name: string }): ReactElement {
 	return <IconCmp size={14} strokeWidth={1.8} className="gui-filepane-icon" aria-hidden="true" />;
 }
 
+/** Link marker for symlink rows. A followed directory link expands through the
+ *  same collapse state as any other folder; the badge keeps the indirection
+ *  visible and its tooltip names the raw target. */
+function SymlinkBadge({ entry }: { entry: WorkspaceEntry }): ReactElement | null {
+	if (!entry.isSymlink) return null;
+	const label = entry.linkTarget
+		? t("tools.fileTreeSymlinkTarget", { target: entry.linkTarget })
+		: t("tools.fileTreeSymlink");
+	return (
+		<span
+			className="gui-filepane-symlink"
+			role="img"
+			aria-label={label}
+			title={label}
+			style={{ display: "inline-flex", flex: "0 0 auto", color: "var(--color-text-faint)" }}
+		>
+			<Link2 size={11} aria-hidden="true" />
+		</span>
+	);
+}
+
 /** Directory that relative Markdown media and links resolve against. */
 function parentDirectory(path: string): string {
 	const normalized = path.replace(/\\/g, "/");
@@ -460,9 +488,28 @@ function editingIndex(rows: Array<{ node: TreeNode; depth: number }>, editing: E
 	return last + 1;
 }
 
+/** An absolute path (POSIX, UNC, or Windows drive) rather than a
+ *  workspace-relative tree path. */
+function isAbsolutePath(path: string): boolean {
+	return path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path);
+}
+
+/** Whether a pane path belongs to `root`. Workspace-relative paths always do;
+ *  absolute paths must sit inside it (Windows/UNC compare case-insensitively). */
+function pathInsideRoot(root: string, path: string): boolean {
+	if (!isAbsolutePath(path)) return true;
+	const base = root.replace(/\\/g, "/").replace(/\/+$/, "");
+	const candidate = path.replace(/\\/g, "/");
+	const windows = /^[A-Za-z]:[\\/]/.test(root) || root.startsWith("\\\\");
+	return windows ? candidate.toLowerCase().startsWith(`${base.toLowerCase()}/`) : candidate.startsWith(`${base}/`);
+}
+
 export function FilePane({
 	rpc,
-	cwd,
+	cwd: primaryCwd,
+	root: activeRoot = null,
+	roots = [],
+	onRootChange,
 	bufferStore,
 	openRequest = null,
 	activeFile = null,
@@ -479,7 +526,15 @@ export function FilePane({
 	onEditorPositionChange,
 }: {
 	rpc: RpcClient;
+	/** Session primary directory (workspace root of the session). */
 	cwd: string;
+	/** Directory this pane currently browses: the primary root or one of the
+	 *  session's additional working directories. */
+	root?: string | null;
+	/** Selectable roots (primary first), offered by the host. Fewer than two
+	 *  hides the root switcher. */
+	roots?: readonly string[];
+	onRootChange?(root: string): void;
 	bufferStore: FilePreviewBufferStore;
 	/** External reveal (artifact cards / transcript paths): preview this
 	 *  path via the same pipeline as a tree click. */
@@ -520,6 +575,14 @@ export function FilePane({
 	onEditorNavigate?(source: EditorLocation, target: EditorLocation): void;
 	onEditorPositionChange?(location: EditorLocation): void;
 }): ReactNode {
+	// A session can expose several working directories. `cwd` below is the
+	// directory this pane reads and writes through; every path rule (fs RPCs,
+	// preview resolution, save) is workspace-relative to it. Tab identity stays
+	// the primary root, which is why files opened from an additional root are
+	// registered by absolute path (see `openFile`).
+	const cwd = activeRoot && activeRoot !== primaryCwd ? activeRoot : primaryCwd;
+	/** Floating menu position for the breadcrumb root switcher (null = closed). */
+	const [rootMenu, setRootMenu] = useState<{ x: number; y: number } | null>(null);
 	// Keep the existing editor code on one injected, host-owned draft lifecycle.
 	const unsavedBufferCache = bufferStore;
 	const stashFilePreviewBuffer = bufferStore.stash;
@@ -860,19 +923,49 @@ export function FilePane({
 				setSelectedPath(entry.path);
 				const absolute = resolveFilePreviewPath(cwd, entry.path);
 				if (opts?.newTab && preview && filePreviewPathEquals(cwd, preview.path, absolute)) return;
-				onOpenFile(entry.path, entry.name, { pin: opts?.pin ?? false, newTab: opts?.newTab ?? false });
+				// Panel tabs are keyed by path. A file under an additional root
+				// would collide with the same relative path in the primary root, so
+				// those tabs register the absolute path instead.
+				const tabPath = cwd === primaryCwd ? entry.path : absolute;
+				onOpenFile(tabPath, entry.name, { pin: opts?.pin ?? false, newTab: opts?.newTab ?? false });
 				return;
 			}
 			void openPreview(entry);
 		},
-		[cwd, onOpenFile, openPreview, preview],
+		[cwd, primaryCwd, onOpenFile, openPreview, preview],
 	);
 
 	// The active file tab owns content loading. A cancelled leave-guard rolls
 	// the ref back so the declined tab can still be activated later.
 	const lastLoadedRef = useRef<string | null>(null);
+
+	// Switching the browsing root invalidates everything tied to the old root:
+	// stash a dirty buffer, then drop the preview so the active tab reloads
+	// against the new root. Declared BEFORE the active-file loader so the reset
+	// runs first in the same commit; the mount run early-returns and leaves the
+	// initial tab load alone.
+	const previousRootRef = useRef(cwd);
+	useEffect(() => {
+		if (previousRootRef.current === cwd) return;
+		previousRootRef.current = cwd;
+		previewRequestRef.current += 1;
+		const buffer = editBufRef.current;
+		const path = previewPathRef.current;
+		if (buffer && path) stashFilePreviewBuffer(path, buffer);
+		lastLoadedRef.current = null;
+		setPreview(null);
+		setEdit(null);
+		setSelectedPath(null);
+		setError(null);
+	}, [cwd]);
+
 	useEffect(() => {
 		if (!activeFile) {
+			lastLoadedRef.current = null;
+			return;
+		}
+		// A tab from another root cannot be resolved against this one.
+		if (!pathInsideRoot(cwd, activeFile)) {
 			lastLoadedRef.current = null;
 			return;
 		}
@@ -884,7 +977,7 @@ export function FilePane({
 		});
 		// openPreview is stable (useCallback) — deliberately not a trigger.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeFile]);
+	}, [activeFile, cwd]);
 
 	// Scroll the inline editor into the virtual window (it may sit outside
 	// the visible slice otherwise and never mount). Declared after `rows`.
@@ -1420,11 +1513,18 @@ export function FilePane({
 							<ChevronDown size={12} />
 						</span>
 						<span className="gui-filepane-glyph" aria-hidden="true">
-							{closed ? <Folder size={14} strokeWidth={1.8} /> : <FolderOpen size={14} strokeWidth={1.8} />}
+							<MorphIcon
+								icon={closed ? FolderIconData : FolderOpenIconData}
+								size={14}
+								strokeWidth={1.8}
+								spring="snappy"
+								reducedMotion="user"
+							/>
 						</span>
 						<span className="gui-filepane-name" title={entry.path}>
 							{node.label}
 						</span>
+						<SymlinkBadge entry={entry} />
 					</button>
 					{openInApp}
 				</li>
@@ -1462,6 +1562,7 @@ export function FilePane({
 					>
 						{node.label}
 					</span>
+					<SymlinkBadge entry={entry} />
 				</button>
 				{openInApp}
 			</li>
@@ -1569,7 +1670,12 @@ export function FilePane({
 							writeShowIgnored(next);
 						}}
 					>
-						{showIgnored ? <Eye size={12} /> : <EyeOff size={12} />}
+						<MorphIcon
+							icon={showIgnored ? EyeIconData : EyeOffIconData}
+							size={12}
+							spring="snappy"
+							reducedMotion="user"
+						/>
 					</button>
 					<button
 						className={`gui-btn gui-btn-icon${showHidden ? " gui-btn-icon--active" : ""}`}
@@ -1583,7 +1689,12 @@ export function FilePane({
 							writeShowHidden(next);
 						}}
 					>
-						{showHidden ? <ScanEye size={12} /> : <EyeOff size={12} />}
+						<MorphIcon
+							icon={showHidden ? ScanEyeIconData : EyeOffIconData}
+							size={12}
+							spring="snappy"
+							reducedMotion="user"
+						/>
 					</button>
 					<button
 						className="gui-btn gui-btn-icon"
@@ -1595,9 +1706,32 @@ export function FilePane({
 					</button>
 				</div>
 			</div>
-			{/* Working-dir breadcrumb. */}
+			{/* Working-dir breadcrumb. With several session working directories the
+			 *  leading segment switches which root this pane browses. */}
 			<div className="gui-filepane-path" title={cwd}>
-				<span className="gui-filepane-path-root">~/</span>
+				{roots.length > 1 ? (
+					<button
+						type="button"
+						className="gui-filepane-path-root flex items-center gap-1 border-0 bg-transparent p-0 text-[11px] hover:text-[var(--color-text)]"
+						aria-haspopup="menu"
+						aria-expanded={rootMenu !== null}
+						title={t("settings.workspaceRootHint")}
+						onClick={event => {
+							if (rootMenu) {
+								setRootMenu(null);
+								return;
+							}
+							const rect = event.currentTarget.getBoundingClientRect();
+							setRootMenu({ x: rect.left, y: rect.bottom + 4 });
+						}}
+					>
+						<Folder size={11} />
+						<span className="truncate">{pathBaseName(cwd)}</span>
+						<ChevronDown size={11} />
+					</button>
+				) : (
+					<span className="gui-filepane-path-root">~/</span>
+				)}
 				<span className="truncate">{cwd.replace(/^\/Users\/[^/]+\//, "")}</span>
 			</div>
 			{error && <p className="gui-error">{error}</p>}
@@ -1973,6 +2107,21 @@ export function FilePane({
 						.then(() => window.dispatchEvent(new CustomEvent("musepi-notes-changed")))
 						.catch(() => {});
 				}}
+			/>
+			<ContextMenu
+				open={rootMenu !== null}
+				x={rootMenu?.x ?? 0}
+				y={rootMenu?.y ?? 0}
+				items={roots.map(path => ({
+					label: pathBaseName(path),
+					description: path,
+					icon: directoriesEqual(path, cwd) ? "check" : "folder",
+					onSelect: () => {
+						setRootMenu(null);
+						onRootChange?.(path);
+					},
+				}))}
+				onClose={() => setRootMenu(null)}
 			/>
 			<ContextMenu
 				open={ctx !== null}

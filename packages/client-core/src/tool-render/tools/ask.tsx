@@ -1,4 +1,6 @@
-/** `ask` — interactive questions posed to the user mid-run. */
+/** `ask` — interactive questions posed to the user mid-run. A `background`
+ *  ask returns a task id instead of blocking, so its card stays a one-line
+ *  header (question count + task id) until a result carries answers. */
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, InvalidArg, Note, ResultText, Row } from "../parts";
@@ -151,7 +153,41 @@ function questionsFromDetails(details: Record<string, unknown>): AskQuestion[] {
 	return out;
 }
 
-function Summary({ args }: ToolRenderProps): ReactNode {
+/** Unresolved background ask: the result carries the task id, not answers. */
+interface PendingBackgroundAsk {
+	/** Async job id; null while the call is still streaming. */
+	taskId: string | null;
+}
+
+/**
+ * A `background` ask returns `{background: true, taskId}` immediately and the
+ * answer arrives later through the async delivery channel. Until a result
+ * carries answers the card must stay a one-line header; an answered result
+ * (`results`/`selectedOptions`) renders as an ordinary Q&A. Errors keep their
+ * own body so the failure text is not hidden.
+ */
+function pendingBackgroundAsk(
+	args: Record<string, unknown>,
+	result?: ToolRenderProps["result"],
+): PendingBackgroundAsk | null {
+	const details = detailsRecord(result);
+	if (result?.isError === true) return null;
+	if (details?.background !== true && args.background !== true) return null;
+	if (answersOf(details)) return null;
+	return { taskId: str(details?.taskId) };
+}
+
+function Summary({ args, result }: ToolRenderProps): ReactNode {
+	const pending = pendingBackgroundAsk(args, result);
+	if (pending) {
+		const count = questionsOf(args).length;
+		return (
+			<>
+				<span>{count > 0 ? t("tools.questionWithCount", { count: String(count) }) : t("tools.askBackground")}</span>
+				{pending.taskId && <Badge>{t("tools.jobWithId", { id: pending.taskId })}</Badge>}
+			</>
+		);
+	}
 	const questions = questionsOf(args);
 	const first = questions[0];
 	if (!first) return <InvalidArg what="questions" />;
@@ -201,6 +237,7 @@ function QuestionBlock({ q, answer }: { q: AskQuestion; answer: AskAnswer | unde
 }
 
 function Body({ args, result }: ToolRenderProps): ReactNode {
+	if (pendingBackgroundAsk(args, result)) return null;
 	const details = detailsRecord(result);
 	const answers = answersOf(details);
 	let questions = questionsOf(args);

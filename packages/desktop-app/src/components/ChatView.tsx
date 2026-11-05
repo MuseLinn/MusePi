@@ -25,6 +25,7 @@ import type { OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
 import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import {
 	publishComposerInsets,
@@ -56,6 +57,7 @@ import { onSettingsChanged } from "../lib/settings-events";
 import {
 	PANEL_SHELL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
+	resolveManagedBrowserPanelTab,
 	SlotComponentHost,
 	SlotComponentMount,
 	selectPanelTabComponent,
@@ -68,7 +70,7 @@ import {
 } from "../lib/slot-host";
 import { COMPACTION_PANEL_SURFACE, compactionTabDescriptor, surfaceById } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
-import { usePanelTabs } from "../lib/use-panel-tabs";
+import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
@@ -91,6 +93,7 @@ import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { StatusCards } from "./StatusCards";
+import { SessionInfoCard } from "./session-info-card";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
@@ -309,6 +312,15 @@ let sceneMorphGeneration = 0;
  * steady-state rect (captured during showWelcome renders) is not. */
 let lastWelcomeFrameRect: { left: number; top: number; width: number; height: number } | null = null;
 
+function openChatViewBrowserPanel(panelTabs: UsePanelTabsResult, sessionId: string | null, forceNew = false): void {
+	const managed = resolveManagedBrowserPanelTab({ forceNew, sessionId });
+	const existing = panelTabs.tabs.find(tab => tab.surface === "browser" && tab.target === managed.id);
+	panelTabs.open(browserPanelDescriptor(managed, t("tools.browserEmptyTab")), {
+		column: existing?.column,
+		maxPerSurface: Number.POSITIVE_INFINITY,
+	});
+}
+
 export function ChatView({
 	store,
 	rpc,
@@ -355,6 +367,9 @@ export function ChatView({
 	waitSeconds,
 	ask,
 	onAskAnswer,
+	sessionTitle,
+	sessionInfoOpen = false,
+	onToggleSessionInfo,
 }: {
 	store: GuiSessionStore | null;
 	rpc: RpcClient;
@@ -463,6 +478,12 @@ export function ChatView({
 	 *  via onAskAnswer (session.askAnswer). */
 	ask?: AskRequest | null;
 	onAskAnswer?(answer: AskAnswer): void;
+	/** Session title shown in the floating session info card (app.tsx owns the
+	 *  session label; the card is the collapsed right panel's stand-in). */
+	sessionTitle?: string | null;
+	/** Session info card visibility (app.tsx persists one choice per session). */
+	sessionInfoOpen?: boolean;
+	onToggleSessionInfo?(): void;
 }): ReactNode {
 	const noopSubscribe = (): (() => void) => () => {};
 	const snap = useStore(
@@ -913,7 +934,7 @@ export function ChatView({
 	// instead of swapping the panel body. `activeView` is DERIVED from the
 	// active tab's surface so every existing setActiveView call site keeps its
 	// exact meaning — it now upserts a tab rather than mutating one variable.
-	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.cwd ?? ""}`);
+	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.sessionId ?? store?.cwd ?? ""}`);
 	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
 	const activeView = activePanelTab?.surface ?? null;
 	// Surfaces with open tabs — feeds the rail's has-content fallback so a
@@ -962,15 +983,23 @@ export function ChatView({
 		const ext = view.startsWith("ext:") ? extTabsRef.current.find(x => `ext:${x.slot}` === view) : undefined;
 		return ext ? (ext.label ?? ext.slot) : t((surfaceById(view)?.label ?? view) as TranslationKey);
 	}, []);
+	const openBrowserPanel = useCallback(
+		(forceNew = false): void => openChatViewBrowserPanel(panelTabs, store?.sessionId ?? null, forceNew),
+		[panelTabs, store?.sessionId],
+	);
 	const setActiveView = useCallback(
 		(view: string | null): void => {
 			// null = "nothing selected"; the empty state owns that, the rail and
 			// the strip never navigate to it.
 			if (!view) return;
+			if (view === "browser") {
+				openBrowserPanel();
+				return;
+			}
 			if (view === FILE_WORKSPACE_SURFACE && !selectPanelTabComponent(extTabsRef.current, view)) return;
 			panelTabs.open({ surface: view, label: tabLabelFor(view) });
 		},
-		[panelTabs.open, tabLabelFor],
+		[openBrowserPanel, panelTabs.open, tabLabelFor],
 	);
 	const openCompaction = useCallback(
 		(entry: Extract<SessionEntry, { type: "compaction" }>): void => {
@@ -1351,7 +1380,18 @@ export function ChatView({
 			t("general.interruptContinue"),
 		);
 	}, [confirm, snap?.working, t]);
-	// 统一树操作守卫(retry / rewind / switchBranch / fork 共用):运行中先
+	// Fork is the one tree op that does NOT stop the run: the daemon snapshots
+	// history at the current turn's start and the source keeps streaming.
+	// Confirm only explains the snapshot boundary, so a user expecting the
+	// in-flight reply can cancel instead of losing it. Returns false = cancelled.
+	const confirmForkWhileWorking = useCallback(async (): Promise<boolean> => {
+		if (snap?.working !== true) return true;
+		return confirm(
+			`${t("general.agentRunning")}\n\n${t("general.forkSnapshotHint")}`,
+			t("general.continuePointNewSession"),
+		);
+	}, [confirm, snap?.working, t]);
+	// 统一树操作守卫(retry / rewind / switchBranch 共用):运行中先
 	// 确认,确认后停下在途回合并等它真正收敛(branchAt 在在途回合下重锚
 	// 会把回复挂错节点,2026-09-16 用户报告)。纯导航(jump)不走此守卫。
 	// 返回 false = 用户取消了确认(操作未执行)。
@@ -1425,25 +1465,31 @@ export function ChatView({
 	const forkFromMessage = useCallback(
 		async (messageId: string, text?: string, includeTarget?: boolean): Promise<void> => {
 			if (!store) return;
-			// Tree-op guard (runTreeOp): forking while a run is in flight copies a
-			// mid-flight snapshot — confirm + stop + wait like the other tree ops.
-			await runTreeOp(async () => {
-				try {
-					const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
-						sessionId: store.sessionId,
-						messageId,
-						includeTarget,
-					});
-					if (res?.sessionId) {
-						await onForkSession?.(res.sessionId);
-						if (text) setPendingEdit(text);
-					}
-				} catch {
-					// daemon rejected (unknown message/session) — keep as-is
+			// Fork does NOT stop the source: `snapshot: true` makes the daemon
+			// cut at the current turn's start while the run keeps streaming, so
+			// the fork is non-destructive even mid-answer.
+			if (!(await confirmForkWhileWorking())) return;
+			try {
+				const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
+					sessionId: store.sessionId,
+					messageId,
+					includeTarget,
+					snapshot: true,
+				});
+				if (res?.sessionId) {
+					await onForkSession?.(res.sessionId);
+					if (text) setPendingEdit(text);
 				}
-			});
+			} catch (err) {
+				// Concurrent snapshot forks are rejected with a retryable code
+				// (the source file is mid-read by another fork); other failures
+				// keep the old silent behaviour (unknown message/session).
+				if (err instanceof Error && err.message.includes("SESSION_FORK_IN_PROGRESS")) {
+					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("general.forkSnapshotRetry") }));
+				}
+			}
 		},
-		[rpc, store, runTreeOp, onForkSession],
+		[confirmForkWhileWorking, rpc, store, onForkSession],
 	);
 	// ── Layer-1 session-tree topology (nav unification, 2026-08-24) ────
 	// Children index over the view entries by parentId; the active path
@@ -2528,28 +2574,54 @@ export function ChatView({
 										 * content fade via mask-image, applied only while the
 										 * transcript overflows (top/bottom data attrs). */}
 										<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
-											{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
-											<div className="gui-surface-mode" role="tablist">
-												<button
-													type="button"
-													role="tab"
-													aria-selected={viewMode === "chat"}
-													className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
-													onClick={() => setViewMode("chat")}
-												>
-													<Icon name="chat-history" className="h-3 w-3" />
-													{t("transcript.surfaceChat")}
-												</button>
-												<button
-													type="button"
-													role="tab"
-													aria-selected={viewMode === "canvas"}
-													className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
-													onClick={() => setViewMode("canvas")}
-												>
-													<Icon name="apps-2-ai" className="h-3 w-3" />
-													{t("transcript.surfaceCanvas")}
-												</button>
+											{/* Chat header tool cluster: the Chat|Canvas switch plus the
+											 * session-info toggle (the collapsed right panel's
+											 * stand-in card). One absolutely positioned row so the
+											 * toggle cannot drift with the pill's translated width. */}
+											<div className="gui-chat-head-tools">
+												{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
+												<div className="gui-surface-mode" role="tablist">
+													<button
+														type="button"
+														role="tab"
+														aria-selected={viewMode === "chat"}
+														className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
+														onClick={() => setViewMode("chat")}
+													>
+														<Icon name="chat-history" className="h-3 w-3" />
+														{t("transcript.surfaceChat")}
+													</button>
+													<button
+														type="button"
+														role="tab"
+														aria-selected={viewMode === "canvas"}
+														className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
+														onClick={() => setViewMode("canvas")}
+													>
+														<Icon name="apps-2-ai" className="h-3 w-3" />
+														{t("transcript.surfaceCanvas")}
+													</button>
+												</div>
+												{onToggleSessionInfo && (
+													<button
+														type="button"
+														className="gui-chat-info-toggle"
+														aria-pressed={sessionInfoOpen}
+														title={
+															sessionInfoOpen
+																? t("general.sessionInfoHide")
+																: t("general.sessionInfoShow")
+														}
+														aria-label={
+															sessionInfoOpen
+																? t("general.sessionInfoHide")
+																: t("general.sessionInfoShow")
+														}
+														onClick={() => onToggleSessionInfo()}
+													>
+														<Icon name="information" className="h-3.5 w-3.5" />
+													</button>
+												)}
 											</div>
 											{/* Parent-session back chip: when the
 											 * open session is a subagent child, pin a liquid-glass
@@ -3165,6 +3237,29 @@ export function ChatView({
 											/>
 										)}
 									</div>
+									{/* Floating session info card — the collapsed right panel's
+									 * stand-in. Anchored below the status cards so the two right-edge
+									 * overlays never fight for the corner, and INSIDE this column so the
+									 * rail and the open panel stay uncovered. */}
+									{sessionInfoOpen && !focusMode && (
+										<SessionInfoCard
+											sessionId={store.sessionId}
+											rpc={rpc}
+											cwd={store.cwd}
+											title={sessionTitle ?? null}
+											tabs={panelTabs.tabs}
+											activeTabId={panelTabs.activeId}
+											top={46 + statusCardsHeight + 8}
+											onSelectTab={id => {
+												panelTabs.activate(id);
+												if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+											}}
+											onOpenSurface={id => {
+												setActiveView(id);
+												if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+											}}
+										/>
+									)}
 								</div>
 								{/* Right panel stays mounted so the width collapse animates;
 								 * `open` folds it to a 0px sliver instead of unmounting. */}
@@ -3240,7 +3335,8 @@ export function ChatView({
 										// these" — a new instance, not a focus. The panel also
 										// has to be showing for a second instance to be
 										// reachable, so this expands rather than folds.
-										panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
+										if (id === "browser") openBrowserPanel(true);
+										else panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
 										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 									}}
 									onToggleRightPanel={onToggleRightPanel}

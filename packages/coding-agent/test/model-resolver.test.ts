@@ -1055,6 +1055,103 @@ describe("resolveAgentModelPatterns", () => {
 	});
 });
 
+describe("task.subagentModel", () => {
+	test("unset keeps today's agent-definition then session chain", () => {
+		const settings = Settings.isolated({ modelRoles: { default: "anthropic/claude-sonnet-4-5" } });
+
+		expect(
+			resolveAgentModelPatterns({ agentModel: "zai/glm-5", settings, activeModelPattern: "openai/gpt-4o" }),
+		).toEqual(["zai/glm-5"]);
+		expect(resolveAgentModelPatterns({ agentModel: "@task", settings, activeModelPattern: "openai/gpt-4o" })).toEqual(
+			["openai/gpt-4o"],
+		);
+	});
+
+	test("ranks below an explicit spawn model and a per-agent override", () => {
+		const settings = Settings.isolated({
+			"task.subagentModel": "zai/glm-5.2",
+			modelRoles: { override: "openai/gpt-4o" },
+		});
+
+		expect(
+			resolveAgentModelPatterns({
+				requestModel: "anthropic/claude-sonnet-4-5",
+				settingsOverride: "@override",
+				agentModel: "moonshot/k3",
+				settings,
+			}),
+		).toEqual(["anthropic/claude-sonnet-4-5"]);
+		expect(resolveAgentModelPatterns({ settingsOverride: "@override", agentModel: "moonshot/k3", settings })).toEqual(
+			["openai/gpt-4o"],
+		);
+	});
+
+	test("overrides the agent frontmatter model and expands role aliases", () => {
+		const settings = Settings.isolated({
+			"task.subagentModel": "@smol",
+			modelRoles: { smol: "local/qwen3" },
+		});
+
+		expect(resolveAgentModelPatterns({ agentModel: "moonshot/k3", settings })).toEqual(["local/qwen3"]);
+		expect(resolveAgentModelSelection({ agentModel: "moonshot/k3", settings })).toEqual({
+			patterns: ["local/qwen3"],
+			role: "smol",
+		});
+	});
+
+	test("a concrete global model carries no role fallback chain", () => {
+		const settings = Settings.isolated({
+			"task.subagentModel": "zai/glm-5.2",
+			modelRoles: { default: "anthropic/claude-sonnet-4-5" },
+		});
+
+		expect(resolveAgentModelSelection({ agentModel: "@slow", settings })).toEqual({
+			patterns: ["zai/glm-5.2"],
+			role: undefined,
+		});
+	});
+
+	test("@task as the global default follows the session's active model", () => {
+		const settings = Settings.isolated({
+			"task.subagentModel": "@task",
+			modelRoles: { default: "anthropic/claude-sonnet-4-5" },
+		});
+
+		expect(resolveAgentModelPatterns({ agentModel: "@slow", settings, activeModelPattern: "openai/gpt-4o" })).toEqual(
+			["openai/gpt-4o"],
+		);
+		expect(resolveAgentModelPatterns({ agentModel: "@slow", settings })).toEqual(["anthropic/claude-sonnet-4-5"]);
+	});
+
+	test("a configured task role wins over the session for @task", () => {
+		const settings = Settings.isolated({
+			"task.subagentModel": "@task",
+			modelRoles: { task: "zai/glm-5", default: "anthropic/claude-sonnet-4-5" },
+		});
+
+		expect(resolveAgentModelPatterns({ agentModel: "@slow", settings, activeModelPattern: "openai/gpt-4o" })).toEqual(
+			["zai/glm-5"],
+		);
+	});
+
+	test("clearing the setting restores the frontmatter and session chain", () => {
+		const configured = Settings.isolated({
+			"task.subagentModel": "zai/glm-5.2",
+			modelRoles: { default: "anthropic/claude-sonnet-4-5" },
+		});
+		expect(resolveAgentModelPatterns({ agentModel: "@task", settings: configured })).toEqual(["zai/glm-5.2"]);
+
+		for (const cleared of ["", "   "]) {
+			const settings = Settings.isolated({
+				"task.subagentModel": cleared,
+				modelRoles: { default: "anthropic/claude-sonnet-4-5" },
+			});
+			expect(resolveAgentModelPatterns({ agentModel: "@task", settings })).toEqual(["anthropic/claude-sonnet-4-5"]);
+			expect(resolveAgentModelPatterns({ agentModel: "moonshot/k3", settings })).toEqual(["moonshot/k3"]);
+		}
+	});
+});
+
 describe("resolveModelFromString", () => {
 	test("falls back to pattern parsing for provider/model:thinking when strict provider+id miss", () => {
 		const resolved = resolveModelFromString("openrouter/qwen/qwen3-coder:exacto:high", allModels);

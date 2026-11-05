@@ -1,5 +1,3 @@
-import { t } from "@musepi/client-core";
-
 let maximized = false;
 const listeners = new Set<() => void>();
 const animating = new WeakSet<HTMLElement>();
@@ -30,11 +28,8 @@ function writeMaximizedGeometry(panel: HTMLElement): void {
 }
 
 function writeButtonState(panel: HTMLElement, next: boolean): void {
-	const label = next ? t("settings.restorePanel") : t("settings.maximizePanel");
 	for (const button of panel.querySelectorAll<HTMLButtonElement>(".gui-pane-tool")) {
 		if (!button.querySelector('use[href="#oc-fullscreen"], use[href="#oc-fullscreen-exit"]')) continue;
-		button.title = label;
-		button.setAttribute("aria-label", label);
 		button.querySelector(".gui-icon-morph")?.classList.toggle("is-on", next);
 	}
 }

@@ -17,6 +17,8 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 export interface SelectOption<T extends string> {
 	value: T;
 	label: string;
+	/** Optional leading visual (color dot, icon); repeated in the trigger. */
+	leading?: ReactNode;
 }
 
 export function GuiSelect<T extends string>({
@@ -43,7 +45,8 @@ export function GuiSelect<T extends string>({
 		anchor: btnRef.current,
 	});
 
-	const label = options.find(o => o.value === value)?.label ?? String(value);
+	const selected = options.find(o => o.value === value);
+	const label = selected?.label ?? String(value);
 
 	// Keyboard navigation on the open listbox: ↑/↓ move the highlight,
 	// Enter commits the highlighted option. Opening happens on the trigger
@@ -53,12 +56,16 @@ export function GuiSelect<T extends string>({
 	// flips 2↔N at runtime (role thinking ladder loads) — a conditional
 	// hook here was crashing React #300 on the roles tab.
 	const commit = (opt: SelectOption<T>): void => {
-		onChange(opt.value);
+		if (!disabled) onChange(opt.value);
 		setOpen(false);
 	};
 
 	useEffect(() => {
-		if (!open) return;
+		if (disabled) setOpen(false);
+	}, [disabled]);
+
+	useEffect(() => {
+		if (!open || disabled) return;
 		const onKey = (e: KeyboardEvent): void => {
 			const t = e.target as Node | null;
 			// Navigation applies while focus is on the trigger OR inside the
@@ -79,7 +86,7 @@ export function GuiSelect<T extends string>({
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open, highlight, options]);
+	}, [open, highlight, options, disabled]);
 
 	// Two options → a segmented toggle instead of a dropdown (the listbox
 	// chrome is overkill for a binary choice; the trigger width was the
@@ -88,7 +95,14 @@ export function GuiSelect<T extends string>({
 	// Segmented, so every binary setting in the app slides identically.
 	if (options.length === 2) {
 		return (
-			<Segmented className={className} ariaLabel={ariaLabel} value={value} options={options} onChange={onChange} />
+			<Segmented
+				className={className}
+				ariaLabel={ariaLabel}
+				value={value}
+				options={options}
+				onChange={onChange}
+				disabled={disabled}
+			/>
 		);
 	}
 
@@ -101,15 +115,19 @@ export function GuiSelect<T extends string>({
 				className={`gui-select-trigger${className ? ` ${className}` : ""}`}
 				aria-label={ariaLabel}
 				aria-haspopup="listbox"
-				aria-expanded={open}
-				onClick={() => setOpen(v => !v)}
+				aria-expanded={!disabled && open}
+				onClick={() => {
+					if (!disabled) setOpen(v => !v);
+				}}
 				onKeyDown={e => {
+					if (disabled) return;
 					if (!open && (e.key === "Enter" || e.key === " " || e.key === "ArrowDown" || e.key === "ArrowUp")) {
 						e.preventDefault();
 						setOpen(true);
 					}
 				}}
 			>
+				{selected?.leading ? <span className="gui-select-leading">{selected.leading}</span> : null}
 				<span className="min-w-0 flex-1 truncate text-left">{label}</span>
 				<svg viewBox="0 0 16 16" className="gui-select-chev" aria-hidden="true">
 					<path
@@ -127,6 +145,7 @@ export function GuiSelect<T extends string>({
 					ref={listRef}
 					role="listbox"
 					aria-label={ariaLabel}
+					aria-disabled={disabled || undefined}
 					style={{ minWidth: `${Math.max(btnRef.current?.getBoundingClientRect().width ?? 190, 190)}px` }}
 				>
 					{options.map((opt, i) => (
@@ -135,10 +154,14 @@ export function GuiSelect<T extends string>({
 							key={opt.value}
 							role="option"
 							aria-selected={opt.value === value}
+							disabled={disabled}
 							className={`gui-select-opt${opt.value === value ? " gui-select-opt--sel" : ""}${i === highlight ? " gui-select-opt--hl" : ""}`}
-							onMouseEnter={() => setHighlight(i)}
+							onMouseEnter={() => {
+								if (!disabled) setHighlight(i);
+							}}
 							onClick={() => commit(opt)}
 						>
+							{opt.leading ? <span className="gui-select-leading">{opt.leading}</span> : null}
 							<span className="min-w-0 flex-1 truncate">{opt.label}</span>
 							{opt.value === value && (
 								<svg viewBox="0 0 16 16" className="gui-select-check" aria-hidden="true">

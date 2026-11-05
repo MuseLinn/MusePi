@@ -1,6 +1,8 @@
 import { t } from "@musepi/client-core";
 import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
+import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
@@ -9,7 +11,6 @@ import { Icon } from "../vendor/oc-icons";
 import { CONNECTOR_STATUS_KEY, nextSelection, useConnectors } from "./composer/connector-panel";
 import { HeightMorph } from "./HeightMorph";
 import { Reveal } from "./Reveal";
-import { StateIcon } from "./StateIcon";
 
 /** Collapse preference (renderer-local): "1" → slim pill. */
 const COLLAPSE_KEY = "musepi-gui-status-cards";
@@ -415,9 +416,11 @@ export function StatusCards({
 									<Icon name="loader-4" className="gui-status-row-icon gui-status-spin" />
 								) : (
 									changedFiles.length > 0 && (
-										<StateIcon
-											on={changesOpen}
-											pair={["arrow-down-s", "arrow-right-s"]}
+										<MorphIcon
+											icon={changesOpen ? ChevronDownIconData : ChevronRightIconData}
+											size={14}
+											spring="snappy"
+											reducedMotion="user"
 											className="gui-status-caret"
 										/>
 									)
@@ -557,9 +560,11 @@ export function StatusCards({
 							})}
 							{endedCount > 0 && (
 								<button type="button" className="gui-status-row" onClick={() => setEndedOpen(v => !v)}>
-									<StateIcon
-										on={endedOpen}
-										pair={["arrow-down-s", "arrow-right-s"]}
+									<MorphIcon
+										icon={endedOpen ? ChevronDownIconData : ChevronRightIconData}
+										size={14}
+										spring="snappy"
+										reducedMotion="user"
 										className="gui-status-row-icon"
 									/>
 									<span className="min-w-0 flex-1 truncate text-left">{t("general.ended")}</span>

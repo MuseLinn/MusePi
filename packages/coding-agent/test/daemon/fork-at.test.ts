@@ -18,7 +18,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AppendJournal } from "../../src/daemon/journal";
-import { startDaemon } from "../../src/daemon/server";
+import { type DaemonConnection, DaemonServer, type DaemonSessionHost, startDaemon } from "../../src/daemon/server";
 import { JOURNAL_DIR } from "../../src/daemon/session-host";
 import { ViewStore, viewStorePath } from "../../src/daemon/view-store";
 import { computeDefaultSessionDir } from "../../src/session/session-paths";
@@ -335,6 +335,264 @@ ${sdkLines.join("\n")}
 			expect(rows(resume.snapshot)).toEqual([{ role: "user", text: "第一轮 A" }]);
 			const sent = await call("session.send", { sessionId: fb.sessionId, text: "fork 续问" });
 			expect(sent.accepted).toBe(true);
+		},
+		{ timeout: 30000 },
+	);
+
+	// ── Running fork (snapshot) ────────────────────────────────────────
+	// A fork must not stop the source session. While a turn is in flight the
+	// daemon copies only the settled prefix ending on that turn's user prompt;
+	// entries the running turn already persisted (assistant toolCall,
+	// toolResult) are dropped so the fork is a legal, resumable transcript.
+	// Concurrent snapshot forks of one source reject the second with a
+	// retryable code instead of interleaving two cuts.
+
+	interface SeedMessage {
+		role: string;
+		timestamp: number;
+		content: unknown[];
+		stopReason?: string;
+		toolCallId?: string;
+		toolName?: string;
+	}
+
+	interface RawRow {
+		type?: string;
+		role: string;
+		text: string;
+	}
+
+	async function seedSession(
+		tmp: string,
+		sessionId: string,
+		messages: SeedMessage[],
+	): Promise<{ file: string; sessionDir: string }> {
+		const sessionDir = computeDefaultSessionDir(tmp, new FileSessionStorage());
+		const iso = new Date().toISOString().replace(/[:.]/g, "-");
+		const file = path.join(sessionDir, `${iso}_${sessionId}.jsonl`);
+		const header = { type: "session", version: 3, id: sessionId, timestamp: new Date().toISOString(), cwd: tmp };
+		const body = messages.map((m, i) =>
+			JSON.stringify({
+				type: "message",
+				id: `seed-${i}`,
+				parentId: i === 0 ? null : `seed-${i - 1}`,
+				timestamp: new Date(m.timestamp).toISOString(),
+				message: m,
+			}),
+		);
+		await fs.promises.writeFile(file, `${JSON.stringify(header)}\n${body.join("\n")}\n`);
+		return { file, sessionDir };
+	}
+
+	async function rawRows(file: string): Promise<RawRow[]> {
+		const text = await fs.promises.readFile(file, "utf8");
+		return text
+			.split("\n")
+			.filter(l => l?.trim())
+			.slice(1)
+			.map(l => {
+				const rec = JSON.parse(l) as { type?: string; message?: SeedMessage };
+				const first = rec.message?.content?.[0] as { text?: string } | undefined;
+				return {
+					type: rec.type,
+					role: rec.message?.role ?? "?",
+					text: typeof first?.text === "string" ? first.text : "",
+				};
+			});
+	}
+
+	function busyHost(
+		sessionId: string,
+		tmp: string,
+		state: { streaming: boolean; aborts: number; flush?: () => Promise<unknown> },
+	): DaemonSessionHost {
+		const live = {
+			sessionId,
+			agentSession: {
+				get isStreaming() {
+					return state.streaming;
+				},
+				abort: () => {
+					state.aborts += 1;
+				},
+				sessionManager: { flush: () => state.flush?.() ?? Promise.resolve() },
+			},
+			activeToolCalls: new Map(),
+		};
+		return {
+			cwd: () => tmp,
+			get: (id: string) => (id === sessionId ? live : undefined),
+			invalidateHistoryCache: () => {},
+			setCollabToolProvider: () => {},
+			setScheduledTaskProvider: () => {},
+			setOnExtensionNotification: () => {},
+		} as unknown as DaemonSessionHost;
+	}
+
+	const runningMessages = (t0: number): SeedMessage[] => [
+		{ role: "user", timestamp: t0, content: [{ type: "text", text: "第一轮 A" }] },
+		{
+			role: "assistant",
+			timestamp: t0 + 1000,
+			stopReason: "stop",
+			content: [{ type: "text", text: "助手回复 A" }],
+		},
+		{ role: "user", timestamp: t0 + 2000, content: [{ type: "text", text: "第二轮 B（在途）" }] },
+		{
+			role: "assistant",
+			timestamp: t0 + 3000,
+			stopReason: "toolUse",
+			content: [{ type: "toolCall", id: "call-1", name: "bash", arguments: {} }],
+		},
+		{
+			role: "toolResult",
+			timestamp: t0 + 4000,
+			toolCallId: "call-1",
+			toolName: "bash",
+			content: [{ type: "text", text: "工具结果" }],
+		},
+	];
+
+	test(
+		"snapshot fork during a run keeps the settled prefix and leaves the source running",
+		async () => {
+			const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-forkat-snap-"));
+			const sessionId = crypto.randomUUID();
+			const t0 = Date.now() - 5000;
+			const { file, sessionDir } = await seedSession(tmp, sessionId, runningMessages(t0));
+			const state = { streaming: true, aborts: 0 };
+			const server = new DaemonServer(busyHost(sessionId, tmp, state));
+			const conn = { id: "test" } as unknown as DaemonConnection;
+			const forkIds: string[] = [];
+			cleanup.push(async () => {
+				for (const id of forkIds) {
+					const fork = await forkFile(sessionDir, id).catch(() => "");
+					if (fork) await fs.promises.rm(fork, { force: true });
+				}
+				await fs.promises.rm(file, { force: true });
+				await fs.promises.rm(sessionDir, { recursive: true, force: true });
+				await fs.promises.rm(tmp, { recursive: true, force: true });
+			});
+
+			// Target is the assistant toolCall the running turn already persisted:
+			// the fork must NOT carry that half turn (no dangling toolCall).
+			const throughTool = (await server.handle(
+				"session.forkAt",
+				{ sessionId, messageId: `assistant:${t0 + 3000}`, includeTarget: true, snapshot: true },
+				conn,
+			)) as { sessionId: string };
+			forkIds.push(throughTool.sessionId);
+			expect((await rawRows(await forkFile(sessionDir, throughTool.sessionId))).map(r => r.text)).toEqual([
+				"第一轮 A",
+				"助手回复 A",
+				"第二轮 B（在途）",
+			]);
+
+			// The streaming reply is not durable yet: an id the file cannot
+			// carry falls back to the same turn-start cut instead of failing.
+			const throughStream = (await server.handle(
+				"session.forkAt",
+				{ sessionId, messageId: `assistant:${t0 + 5000}`, includeTarget: true, snapshot: true },
+				conn,
+			)) as { sessionId: string };
+			forkIds.push(throughStream.sessionId);
+			expect(await rawRows(await forkFile(sessionDir, throughStream.sessionId))).toHaveLength(3);
+
+			// Opt-in only: without `snapshot`, the historical includeTarget copy
+			// still keeps the in-flight toolCall record.
+			const legacy = (await server.handle(
+				"session.forkAt",
+				{ sessionId, messageId: `assistant:${t0 + 3000}`, includeTarget: true },
+				conn,
+			)) as { sessionId: string };
+			forkIds.push(legacy.sessionId);
+			expect((await rawRows(await forkFile(sessionDir, legacy.sessionId))).map(r => r.role)).toEqual([
+				"user",
+				"assistant",
+				"user",
+				"assistant",
+			]);
+
+			// Source was never stopped and its transcript is intact.
+			expect(state.aborts).toBe(0);
+			expect(await rawRows(file)).toHaveLength(5);
+
+			// The run finishes: the source keeps appending and the next snapshot
+			// fork sees the completed turn.
+			await fs.promises.appendFile(
+				file,
+				`${JSON.stringify({
+					type: "message",
+					id: "seed-5",
+					parentId: "seed-4",
+					timestamp: new Date(t0 + 6000).toISOString(),
+					message: {
+						role: "assistant",
+						timestamp: t0 + 6000,
+						stopReason: "stop",
+						content: [{ type: "text", text: "助手回复 B" }],
+					},
+				})}\n`,
+			);
+			state.streaming = false;
+			const completed = (await server.handle(
+				"session.forkAt",
+				{ sessionId, messageId: `assistant:${t0 + 6000}`, includeTarget: true, snapshot: true },
+				conn,
+			)) as { sessionId: string };
+			forkIds.push(completed.sessionId);
+			expect((await rawRows(await forkFile(sessionDir, completed.sessionId))).map(r => r.text)).toEqual([
+				"第一轮 A",
+				"助手回复 A",
+				"第二轮 B（在途）",
+				"",
+				"工具结果",
+				"助手回复 B",
+			]);
+		},
+		{ timeout: 30000 },
+	);
+
+	test(
+		"concurrent snapshot forks of one session reject the second as retryable",
+		async () => {
+			const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-forkat-lock-"));
+			const sessionId = crypto.randomUUID();
+			const t0 = Date.now() - 5000;
+			const { file, sessionDir } = await seedSession(tmp, sessionId, runningMessages(t0));
+			const gate = Promise.withResolvers<void>();
+			const state = { streaming: true, aborts: 0, flush: () => gate.promise };
+			const server = new DaemonServer(busyHost(sessionId, tmp, state));
+			const conn = { id: "test" } as unknown as DaemonConnection;
+			const forked: string[] = [];
+			cleanup.push(async () => {
+				for (const id of forked) {
+					const fork = await forkFile(sessionDir, id).catch(() => "");
+					if (fork) await fs.promises.rm(fork, { force: true });
+				}
+				await fs.promises.rm(file, { force: true });
+				await fs.promises.rm(sessionDir, { recursive: true, force: true });
+				await fs.promises.rm(tmp, { recursive: true, force: true });
+			});
+
+			const params = {
+				sessionId,
+				messageId: `user:${t0 + 2000}`,
+				includeTarget: true,
+				snapshot: true,
+			};
+			const first = server.handle("session.forkAt", params, conn) as Promise<{ sessionId: string }>;
+			// The first fork is parked on flush with the per-session lock held.
+			await expect(server.handle("session.forkAt", params, conn)).rejects.toThrow("SESSION_FORK_IN_PROGRESS");
+			gate.resolve();
+			const firstResult = await first;
+			forked.push(firstResult.sessionId);
+			expect(firstResult.sessionId).toBeTruthy();
+
+			// The lock is released: a retry succeeds.
+			const retry = (await server.handle("session.forkAt", params, conn)) as { sessionId: string };
+			forked.push(retry.sessionId);
+			expect(retry.sessionId).toBeTruthy();
 		},
 		{ timeout: 30000 },
 	);

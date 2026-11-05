@@ -295,6 +295,9 @@ export function upsertPanelTab(
 						!tab.dirty,
 				)
 			: -1;
+	const requestedInsertIndex =
+		insertAfter === null ? (column === 0 ? base.findIndex(tab => tab.column === 1) : base.length) : insertAfter + 1;
+	const insertIndex = requestedInsertIndex === -1 ? base.length : requestedInsertIndex;
 	const added = existing
 		? base.map(tab =>
 				tab.id === next.id
@@ -310,9 +313,7 @@ export function upsertPanelTab(
 			)
 		: replacedPreview !== -1
 			? base.map((tab, index) => (index === replacedPreview ? next : tab))
-			: insertAfter === null
-				? [...base, next]
-				: [...base.slice(0, insertAfter + 1), next, ...base.slice(insertAfter + 1)];
+			: [...base.slice(0, insertIndex), next, ...base.slice(insertIndex)];
 
 	const clamped = clampPanelTabs(added, maxPerSurface, reveal ? next.id : state.activeId);
 	const activeId = reveal ? next.id : (state.activeId ?? next.id);
@@ -344,6 +345,10 @@ export function closePanelTab(state: PanelTabState, id: string): PanelTabState {
 	];
 	// Closing the active tab resolves against the flat array (right neighbour,
 	// then left); per-column display fell back within its own column above.
+	if (activeId !== null) {
+		const activeColumn = panelTabColumn(tabs, activeId);
+		if (activeColumn !== null) columnActive[activeColumn] = activeId;
+	}
 	return { ...state, tabs, activeId, columnActive };
 }
 
@@ -541,6 +546,11 @@ export function serializePanelTabs(state: PanelTabState): SerializedPanelTabsV2 
 	};
 }
 
+function isRestorablePanelSurface(surface: string): boolean {
+	// The managed browser host restores its own guests and recreates their projections.
+	return surface !== "browser" && surface !== "settings.browser";
+}
+
 function validSerializedTab(t: unknown): t is SerializedPanelTab {
 	const row = t as Partial<SerializedPanelTab> | null;
 	return (
@@ -548,6 +558,7 @@ function validSerializedTab(t: unknown): t is SerializedPanelTab {
 		row !== null &&
 		typeof row.surface === "string" &&
 		row.surface.length > 0 &&
+		isRestorablePanelSurface(row.surface) &&
 		(row.target === null || typeof row.target === "string") &&
 		(row.column === 0 || row.column === 1)
 	);
@@ -569,6 +580,7 @@ export function restorePanelTabs(raw: unknown): PanelTabState {
 				(t): t is SerializedPanelTabsV1["tabs"][number] =>
 					typeof t?.surface === "string" &&
 					t.surface.length > 0 &&
+					isRestorablePanelSurface(t.surface) &&
 					(t.target === null || typeof t.target === "string"),
 			)
 			.map(t =>

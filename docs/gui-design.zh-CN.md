@@ -105,12 +105,12 @@ lang: zh-CN
 ## 4. 组件与设置模式
 
 - **设置行**:`gui-settings-row` = label+desc 左、控件右;`PrefToggle`(开关,`storageKey` + 可选 `onClass` 反相挂 documentElement)/`PrefSegmented`(分段选择)是两个标准控件,新设置优先复用。每个设置独占一个兄弟行，不得把一个设置嵌进另一设置的行内。
-- **分段控件 = 单一滑块(2026-09-21)**:所有多选一都渲染共享的 `Segmented`(`packages/client-core/src/components/shell/Segmented.tsx`,样式在 `guest-client/src/styles/tokens.css` § Segmented control)——不要再新写 `.gui-segmented`/`.gui-seg-btn` 一行,也不要让每个按钮各自换背景(N 次重绘 + 硬跳;滑块只是一次合成的 transform)。几何契约:段为 `flex: 1 1 0` 且**没有 gap**,所以滑块宽恰为 `calc((100% - 4px) / var(--seg-count))`,并以自身宽度步进 `translateX(calc(var(--seg-index) * 100%))`;React 只写 `--seg-count`/`--seg-index`,其余几何归 CSS。手感规则:悬停**预览**落点(`thumbIndex = hoverIndex ?? activeIndex`),点击只是落定;transition 在挂载后一帧才 arm(`gui-seg--armed`),否则每个控件都会从第 0 格滑进来;重复点击的抖动动画用独立 `translate` 属性,绝不用 `transform`——`transform` 存着段位移,动画它会让滑块弹回第 0 格;`gui-motion-off`(设置 动效 → 关闭)与 `prefers-reduced-motion` 都会去掉滑动。变体:默认(拉伸到 `max-width: 260px`)、`gui-seg--compact`(贴合内容——弹层、预览条)、`gui-seg--icon`(纯图标,顶栏主题开关)。键盘:roving tabindex + ←/→/Home/End。两选项的 `GuiSelect` 会自动渲染成它,二值设置无需额外处理。不适用:多选 chip 行(一个滑块表达不了 N 个选中)与变宽 tab 条(等宽换算失效)——这两类仍用普通按钮。
+- **分段控件 = 单一滑块(2026-09-21)**:所有多选一都渲染共享的 `Segmented`(`packages/client-core/src/components/shell/Segmented.tsx`,样式在 `guest-client/src/styles/tokens.css` § Segmented control)——不要再新写 `.gui-segmented`/`.gui-seg-btn` 一行,也不要让每个按钮各自换背景(N 次重绘 + 硬跳;滑块只是一次合成的 transform)。几何契约:段为 `flex: 1 1 0` 且**没有 gap**,所以滑块宽恰为 `calc((100% - 4px) / var(--seg-count))`,并以自身宽度步进 `translateX(calc(var(--seg-index) * 100%))`;React 只写 `--seg-count`/`--seg-index`,其余几何归 CSS。手感规则:悬停**预览**落点(`thumbIndex = hoverIndex ?? activeIndex`),点击只是落定;transition 在挂载后一帧才 arm(`gui-seg--armed`),否则每个控件都会从第 0 格滑进来;重复点击的抖动动画用独立 `translate` 属性,绝不用 `transform`——`transform` 存着段位移,动画它会让滑块弹回第 0 格;`gui-motion-off`(设置 动效 → 关闭)与 `prefers-reduced-motion` 都会去掉滑动。变体:默认(拉伸到 `max-width: 260px`)、`gui-seg--compact`(贴合内容——弹层、预览条)、`gui-seg--icon`(纯图标,顶栏主题开关)。键盘:roving tabindex + ←/→/Home/End。两选项的 `GuiSelect` 会自动渲染成它,二值设置无需额外处理。不适用:多选 chip 行(一个滑块表达不了 N 个选中);变宽 tab 条不用共享的等宽控件,而是自己的实测滑块——SessionSidebar 的分组/项目胶囊按标签定宽、按当前 pill 实测滑块位置,并用一份隐藏的标签副本判断整行是否还放得下文字,放不下时整条胶囊 morph 成纯图标 pill(tooltip + `aria-label`)。
 - **TUI 设置同步(2026-08-11,合并进既有 tab)**:TUI 设置面板 10 个 tab 的 **336 项配置全部并入桌面设置**,不设独立"TUI 设置"页——**有对应 tab 就合并,没有就新增 tab,需要更名的更名**:外观(并入,原生主题卡 + schema 30 项)/模型设置(并入,角色模型 + schema 44 项)/任务与子智能体(原"子智能体"更名,并入 tasks 28 项)/新增 交互(41)·上下文(27)·Shell(16)·工具(60)·供应商(36);文件与 LSP、记忆 保持独立 schema section。全部 **schema 驱动**(daemon `settings.schema` RPC,与 TUI 同源)。控件:boolean→toggle / enum→select(无 options 的 enum 由 daemon 合成)/ string→input(凭据掩码保留)/ number→input / **array→逗号分隔输入(blur 提交)** / **record→紧凑 JSON 输入(非法 JSON 内联报错,不提交)**;改动 `settings.set` 乐观写入、失败回滚。条件门控 CONDITIONS 与 TUI settings-defs 对齐(11 个;`hasImageProtocol` 在桌面恒真)。**i18n 全量中文**:从 coding-agent i18n 移植 966 条翻译进 guest-client zh-CN(标签/描述/选项/分组;模型/供应商/音色等专有名词保持原文,与 TUI 一致);未覆盖项回退英文。行为抽查:textVerbosity low≈150 字 vs high≈250 字(GUI→daemon→会话行为链路生效)。**重复定义审计修复(2026-08-11)**:①语言单源——`settings.locale`(config.yml)为唯一源:boot 经 `settings.get` 同步渲染器 locale(daemon 对未配置的 `settings.locale`/`defaultThinkingLevel` 不回填 schema 默认值,防止未配置时把中文 UI 强制切英文),常规语言 select 与交互 tab「界面语言」行均双写 RPC + localStorage 镜像;NAV_GROUPS 改渲染期求值(原模块级常量冻结首语言);②思考层级——删除 `musepi-gui-default-thinking` localStorage 镜像,WelcomeComposer 预选改为 boot 快照:`modelRoles.default` 的 `:level` 后缀优先(off→关闭思考),否则回退已配置的 `defaultThinkingLevel`(auto 允许),未配置保持 medium;boot 同时剥离后缀给模型预选;③`options:"runtime"` 的 schema 行(theme.light/dark)GUI 渲染为只读输入(防键入非法主题 id 写坏 config.yml),提示「选项由 TUI 运行时提供」。**导航去重合**:「智能体」更名「运行中智能体」(实时 roster,agents.list 2s 轮询)与「任务与子智能体」(tasks schema 配置)明确区分——两者内容本不重叠,命名消除混淆。**设置页 roster 全面移除(2026-08-11)**:「运行中智能体」设置 tab 与「任务与子智能体」内嵌 roster 均删除——live roster 由会话右栏 ContextPanel 的 AgentsPanel 承载(session stream 驱动的实时 HUD:主/子行、状态、活动、相对时间、进度/生命周期,比 agents.list 轮询更丰富);设置页回归纯配置语义。swarm GUI 盘点(对比 kimi-code apps/kimi-web):kimi 有转录内联 SwarmTool 卡片(成员手风琴+阶段点+概览条+done/total)、AgentDetailPanel 详情面板(暂停原因/流式输出/进度组)、ChatDock+TasksPane 底部 dock;我们现有右栏 AgentsPanel HUD + task/yield 工具卡片渲染 agent results,无转录内联 swarm 卡片、无详情面板。**task 工具卡升级为 SwarmTool 级(2026-08-11)**:头部 done/total chip(聚合失败红显)、body 顶部阶段概览(分段条 done/merge-failed/running/failed/aborted 五段 + legend)、成员行首阶段色点(running 脉冲)、每成员手风琴(点击 chevron 展开完整输出/错误/patch;已结束成员默认折叠,有详情才渲染 chevron);数据全部来自既有 TaskToolDetails.results/progress,无新数据管道。SSR 6 测试 + CDP 实测(2/2、3/3 chip、ok/run dots、chevron 展开 alpha 输出)。后续打磨:无内容的任务清单行(只有 #N 无 description)不再渲染空行;live/settle 时 AgentProgress 高级字段(retryState/extractedToolData/inflightTaskDetails)尚未消费。
 
 **桌面子代理操作(2026-08-11, TUI Agent Hub 对等)**:daemon 新增 RPC `agents.kill`(abort + release tombstone→aborted)/`agents.revive`(ensureLive)/`agents.chat`(ensureLive + prompt steer,与 collab host 的 agent-cmd 同构,server.ts agents.list 旁)。GUI 右栏 ContextPanel 的 AgentsPanel 选中行后渲染 AgentControls 操作条(packages/desktop-app/src/components/AgentControls.tsx):running→停止、parked/aborted→复活、chat 输入框(Enter 发送),错误小字展示。collab guest 走 agent-cmd 帧,桌面走 RPC——两条路语义一致。SDK events.ts 的 agent-progress payload 注释修正为 SubagentProgressPayload 包装(daemon 实际发送形状)。RPC 实测:kill idle→{ok}+ref aborted、kill/revive 错误路径、chat→ensureLive+steer 生效;running 态 kill 时序窗口未抓到(step-3.7-flash 子代理完成过快),abort 路径与 collab host 同构。**i18n 补全**:schema 全部 UI 字符串覆盖 100% 可译项——标签/描述/选项标签/选项描述全量中文(新增 ~240 条手译,复用 coding-agent zh 78 条),仅剩专有名词(模型/供应商/音色/硬件/API key 名/数值)保持英文与 TUI 一致;zh-CN.ts 经 biome --write 全量格式化。
 - **设置键名**:一律 `musepi-gui-*`(如 `musepi-gui-chat-usermsg`、`musepi-gui-statusbar-indicator`);类开关类偏好(如 `gui-chat-hide-time`)在 documentElement 上切换,样式写在 gui.css 的偏好区。
-- **设置 → 检查更新(2026-08-22)**:行内展示「当前版本 / 状态(检查中·已是最新·发现新版本)」+ 手动检查按钮;发现新版时在 desc 下方展开**更新说明摘要 + 明确的「前往下载」按钮**(不自动 window.open 弹浏览器)。启动自动检查(主进程 12s 后)推送的更新提示是**右下角 toast**(`UpdateToast`):版本(当前 → 最新)+ 说明 + 「前往下载」/「跳过此版本」(按版本 localStorage 记忆,bitfun parity)。**两条说明链路独立**:toast 读 `update-manifest.json.notes`(OTA 渠道),「新功能」弹窗读 `CHANGELOG.musepi.md`,发版都要填。实现细节见 `gui-implementation.md §17`。
+- **设置 → 检查更新(2026-08-22)**:行内展示「当前版本 / 状态(检查中·已是最新·发现新版本)」+ 手动检查按钮;发现新版时在 desc 下方展开**更新说明摘要 + 明确的「前往下载」按钮**(不自动 window.open 弹浏览器)。启动自动检查(主进程 12s 后)推送的更新提示是**右下角 toast**(`UpdateToast`):版本(当前 → 最新)+ 说明 + 「前往下载」/「跳过此版本」(按版本 localStorage 记忆,bitfun parity)。**两条说明链路独立**:toast 读 `update-manifest.json.notes`(OTA 渠道),「新功能」弹窗读 `CHANGELOG.musepi.md`,发版都要填。manifest 只有一份中英混排字符串,toast/弹窗/设置里的更新行按当前界面语言用与「新功能」相同的 `- EN:` 规则选一种语言。实现细节见 `gui-implementation.md §17`。
 - **预览模式**:配置项带实时预览(效果预览/聊天预览)——复用**真实渲染组件** + 示例内容,选项状态驱动;不要造静态假预览。
 - **状态条**:braille/球体指示器(`--gui-status-accent` 会话色,TUI djb2 哈希移植)+ 流光/KITT/简洁文字效果;KITT 是文字渐变亮带(非独立条);扫光颜色可选默认色调/强调色。
 - **暂停 UI(2026-08-20,与 TUI /pause 同 gate)**:两级暂停,状态来自 daemon(重连/重启不丢,见 gui-implementation.md §1c)。**全局暂停** = 全屏磨砂遮罩 `GlobalPauseOverlay`(`.gui-global-pause`,active 态遮罩 + 居中卡片:暂停图标 + "已暂停"标题 + 实时计时 `formatPauseElapsed` 分:秒,`data-paused-at` 锚定 pausedAt 不随组件重挂清零);header 暂停按钮发 `daemon.pause/pauseRelease`。**会话级暂停** = ChatView 内 banner + 实时 hold 计时(同样锚定 pausedAt),header 会话暂停按钮发 `session.pause/pauseRelease`。两级互不干扰:会话暂停只冻该会话(每会话独立 AgentPauseGate),全局暂停冻全部会话(进程级 gate,agent loop 先查全局再查会话)。暂停中会话 `working` 显示为 false(列表/树 paused 徽标同源)。恢复 = 重新拉 `pauseStatus` + 订阅流 `pause-state`/`global-pause-state` envelope 驱动。
@@ -252,10 +252,12 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **拖拽排序**:`@dnd-kit` 全套(PointerSensor distance 8 + TouchSensor delay 200/tolerance 6),在**完整 order** 上 arrayMove 后整表回写 localStorage(`writeSurfaceOrder`)。扩展槽 tab(`ext:`)不进 SortableContext。
 - **⌘/Ctrl 长按揭示序号**:按住修饰键 500ms → rail 图标右上角显示 1..N(对应 ⌘1..8 跳转);松开、失焦、或真的按了数字键即消费并消除,下次按住才回来。app.tsx 的 ⌘1..8 处理器不变,这边只负责可视化。
 - **角标**:live 计数(当前仅 git 变更文件数,99+ 封顶)优先于序号;序号只在修饰键长按时出现。a11y 标签把计数读进 `aria-label`(「git,3 个已更改文件」)。
-- **富 tooltip**:registry 每项带可选 `description`(i18n key);hover 与键盘焦点共用 150ms 延迟,触屏静止长按 500ms 后打开、释放关闭。单个 portal 由 rail 层托管(`RailTooltip`),优先显示在图标左侧,但通过 flip/shift 保持在视口内,并在滚动、滚轮移动和缩放时跟随锚点。窗口失焦或锚点断开时立即关闭。Escape 不移动焦点即可关闭;拖拽中抑制。显隐只过渡透明度,减少动态效果时立即完成。普通提示与富提示共用 L2 玻璃材质，但不改变既有浮层层级。
+- **富 tooltip**:registry 每项带可选 `description`(i18n key);hover 与键盘焦点共用 150ms 延迟,触屏静止长按 500ms 后打开、释放关闭。单个 portal 由 rail 层托管(`RailTooltip`),优先显示在图标左侧,但通过 flip/shift 保持在视口内,并在滚动、滚轮移动和缩放时跟随锚点。提示使用共享 tooltip 层，层级高于受管浏览器页面宿主。窗口失焦或锚点断开时立即关闭。Escape 不移动焦点即可关闭;拖拽中抑制。显隐只过渡透明度,减少动态效果时立即完成。普通提示与富提示共用 L2 玻璃材质，但不改变既有浮层层级。
+- **rail 不挂皮肤滚动条**:导航 rail 的滚动容器标记 `data-gui-scrollbar="off"`，并设置 `overflow-x: clip`，折叠与边缘羽化自行处理溢出。全局贪吃蛇/橡皮糖轨不得覆盖图标或在这里生成横向拇指。贪吃蛇与橡皮糖内置尺寸分别收窄到 10px/12px，让滚动条退到内容之后。
 - **不做**:surface 显示/隐藏配置弹窗(openchamber 的 equalizer 入口)——右键隐藏 + overflow 恢复已覆盖,不做弹窗。
 - **rail 右键隐藏(2026-10-15,openchamber 吸收 A2)**:rail 图标右键 →「隐藏表面」(`ContextMenu`;图标按钮仍是唯一的拖拽 activator)。隐藏 id 持久化,rail、⌘1..8 跳转、陈旧顺序回填三处过滤;已打开的面板不强制关闭。从「…」overflow 菜单「显示已隐藏的表面」分区逐个恢复(有隐藏项时 overflow 按钮常显)。
-- **按表面记忆宽度(2026-10-15,吸收 A3)**:`musepi-gui-right-widths` 映射(`surfaceId → px`,200–1200 钳制);切换表面载入其记忆宽度(默认 `defaultWidthFraction`),拖拽结束写回。旧单键只做首次回退。RightRail 原先按 surface 切 effect 写宽度的代码删除(写了没人读,归 ContextPanel 统一拥有)。
+- **单一面板宽度(2026-11-04)**:右侧面板是一个工作区,所有标签共享 `musepi-gui-right-width`(200–1200 钳制);切换标签不再改变宽度。旧 `musepi-gui-right-widths` 中首个有效值迁移到共享键,拖拽结束也只写共享键。`ContextPanel` 是唯一宽度所有者。
+- **选中会话自动揭示(2026-11-04)**:选中或新建会话时,展开其项目以及挡住它的父会话链(每个选中 id 只揭示一次)。无关的手动折叠项目与子树保持不变,导航不会退化成「全部展开」。
 - **has-content 回退规则(2026-10-15,吸收 A1,仅机制)**:无显式判定的 has-content 退到"有打开 tab 即见"(`openSurfaces` 由 ChatView → RightRail → ctx);暂无内置翻转,翻转是一行产品决策。
 
 ### 模型选择器(provider 复合键)
@@ -514,16 +516,26 @@ turn
 
 ### 标签带契约
 
-- 身份仍是 `surface::target`（`panelTabId`，`lib/panel-tabs.ts:64`）：target 为实例地址（文件路径 / note id / URL）。`surface::`（空 target）仍是该表面的占位标签——无打开标签时 rail 点开占位，首个真实打开替换占位（既有语义，不变）。
-- 标签带头部「**+**」开新实例菜单，按表面分组：每项带表面图标 + 新实例动作与其 target 选择器（文件→目录、笔记→新建、浏览器→地址）。位置：标签带第一个子节点，常驻不被挤出（标签在其下横向滚动）。
-- 每表面预算维持 `PANEL_TABS_MAX_PER_SURFACE = 12`（openchamber parity）：逐出消耗该表面最旧的非活动标签。「+」遇预算打满时聚焦最旧标签并 toast 提示，不静默逐出。
+- 身份仍是 `surface::target`（`panelTabId`，`lib/panel-tabs.ts:64`）：target 为实例地址（文件路径 / note id），浏览器则使用受管标签 id。`surface::`（空 target）仍是支持占位表面的占位标签——无打开标签时 rail 点开占位，首个真实打开替换占位。浏览器标签始终解析到受管标签 id，不再打开占位。
+- 标签带头部「**+**」开新实例菜单，按表面分组：每项带表面图标 + 新实例动作与其 target 选择器（文件→目录、笔记→新建、浏览器→新建空白受管标签）。位置：标签带第一个子节点，常驻不被挤出（标签在其下横向滚动）。
+- 默认每表面预算维持 `PANEL_TABS_MAX_PER_SURFACE = 12`（openchamber parity）：逐出消耗该表面最旧的非活动标签。「+」遇预算打满时聚焦最旧标签并 toast 提示，不静默逐出。浏览器投影不设该上限，因为关闭投影也会关闭对应受管 guest；纯展示预算不得静默销毁浏览器会话。
 - 溢出横向滚动，沿用现有左右羽化（`--gui-fade-x`，gui-chat.css horizontal 段）；标签带永不折行。
 
 ### 标签交互
 
-- **右键菜单**：复制标签（同 surface+target，标签名加「（副本）」式后缀，经独立 `dedupeKey`）、关闭其他标签、关闭。菜单动效与材质走 §5u（L2 float 配方 + `--spring-liquid`）。
+- **右键菜单**：浏览器标签提供随状态变化的动作列表——在右侧新建、刷新、复制、重命名、复制网址、外部打开、静音/取消静音、关闭、关闭其他、关闭右侧。空白页禁用页面动作；外部打开额外要求 HTTP(S)；最右侧标签禁用关闭右侧。复制浏览器标签按源 URL 新建受管标签而不是复制面板身份，用户重命名在本次运行内覆盖后续页面标题。其他表面保留复制、关闭、关闭其他与关闭全部。菜单动效与材质走 §5u（L2 float 配方 + `--spring-liquid`）。
+- **面板状态按会话隔离(2026-11-05)**：右侧面板标签布局以聊天会话为存储键，受管浏览器标签带 owner 会话。切换会话恢复该会话自己的分栏、标签顺序和浏览器标签；其他会话的标签与 webview 保持挂载但不可见，因此 A 会话的网页不会出现在 B 会话。Agent 揭示只在活动目标属于当前会话时生效。
+- **标签拖拽护盾(2026-11-05)**：拖动面板标签时挂载与面板宽度拖拽相同的固定手势护盾，层级高于页面宿主。指针越过浏览器 guest 时 dnd-kit 仍持续收到 move，因此浏览器标签也能正常同列排序并拖到右半区分栏。
 - 拖拽排序沿用现有 dnd-kit 实现；drop 只重排，不改变表面归属。
-- 每个标签的关闭钮（×）：悬停显现，沿用现有样式；关闭活动标签激活其右邻（既有行为）。
+- 每个标签的关闭钮（×）：悬停显现，沿用现有样式；关闭活动标签激活其右邻（既有行为）。关闭浏览器投影也会关闭对应受管 guest，宿主侧发起的关闭则移除投影。
+
+### 受管浏览器投影与控件
+
+- 受管浏览器宿主仍是运行时与重启持久化权威。每个受管标签恰好对应一个右侧面板标签，`target` 与 `dedupeKey` 都使用受管 id；浏览器面板不再渲染内部标签条。新增/打开、激活、关闭、复制、分栏位置与 Agent 揭示都经该 id 双向协调，稳定 webview 宿主不会重挂。恢复面板时过滤持久化的 `browser` 与旧 `settings.browser` 项，由宿主恢复后重建有效投影。
+- 每个内置面板标签显示注册表图标。浏览器标签使用页面 favicon，失败时回退到浏览器图标，这些视觉均为装饰。受管 id 处于忙碌或有已派发 Agent 操作时，对应标签即使在后台也显示 Agent badge，并提供可读的运行状态文本。
+- 浏览器菜单根据活动受管标签派生可用性。无标签或位于 `about:blank` 时，页内查找、打印、缩放、设备工具栏显隐、页面保持焦点、截图、复制网址与硬刷新均禁用；在系统浏览器打开额外限定 HTTP(S)。下载、历史、清除浏览数据与浏览器设置保持全局可用。打印、截图、下载目录与清数据失败会显示反馈。
+- 设备栏是一条 36px 的紧凑控件行，全部使用带当前值文本的 `GuiSelect`：尺寸预设、可选的模拟宽高、页面背景（常驻色点 + 当前值，不再依赖悬停显示选中）与显示比例。预设覆盖响应式、当前 iPhone/Pixel/Galaxy 手机、折叠屏、iPad 与 1280/1440/1920 桌面；旧 phone/tablet/desktop 键保持可选以兼容持久化。宽高旁提供滑块浮层，除文本输入外可实时拖动调节。背景是单选菜单，不是三个悬停色块。隐藏即整个设备栏不渲染，页面模拟同时回落到自适应/自动；浏览器菜单是唯一显隐入口。窄面板依次让出显示比例、背景与尺寸，绝不折成两行。
+- 通用 tooltip 在每次悬停/聚焦交互时读取最新 `title`，仅在未出现外部新标题时恢复旧值。最大化控件的 React 所有者同步维护最大化/还原的图标、tooltip 与可访问名称，命令式 FLIP 控制器不再写入过期文案。
 
 ### 动效
 
@@ -771,6 +783,7 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 
 - **内核在 client-core**（`packages/client-core/src/annotation/`）：注入脚本在访客文档内构建叠加层 DOM（类名全部带 `musepi-ann-` 前缀）。提示词正文不论界面语言恒为英文。载荷契约（`contract.ts`）在到达时逐字段校验——半合法的载荷直接丢弃并拆除叠加层，不做半吊子应用。
 - **截图合成在 client-core**（`screenshot.ts`，纯 canvas）：先铺底基础截图，再按载荷自身坐标重描每个形状，注释扛得住压缩；长边上限 1600px。宿主只提供底图——浏览器走新增的 `managed-browser:capturePage` IPC，widget 卡片走 `ToolRenderHost.rasterizeCard`（ChatView 实现，底色取 computed style，pixelRatio 2）。
+- **元素悬停框形变**：指针在元素间移动时，悬停框的 transform/width/height 以 110ms 共享 ease-out 补间，而不是直接跳变；框选与已选轮廓保持即时/稳定。减少动态效果时直接跳变，不延迟命中测试。
 - **附图通道**：标注完成时在宿主 window 上派发 `musepi-gui-attach-annotation`。`Composer` 与 `WelcomeComposer` 监听后把注释文本追加进草稿、经 `addFiles` 登记 PNG——监听 effect 必须写在 `addFiles` 定义之后（前向引用会以 TDZ 错误暴毙），且双方经 ref 注册，避免每次渲染都重挂 DOM 监听。
 - **浏览器栏**：受管浏览器主行新增三个玻璃图标按钮——标注（铅笔）、开发者工具（code-slash，对 webview 调 `openDevTools()`）、外部打开（external-link，`shell.openExternal`）——归入 `gui-browser-tools` 组；缩放三件套收进 ⋯ 菜单（`gui-browser-menu-zoom`）。旧的选元素菜单项、选中选择器 chip 与 `pickElement` 宿主导出已删除。
 - **卡片入口**：`HtmlCard` 右上角挂液态玻璃悬浮按钮（`.gui-widget-annotate-btn`）；srcdoc 卡片经 postMessage 握手。ContextPanel 回退面板的旧拾取器不动。
@@ -877,4 +890,17 @@ Guest／移动端顶栏使用 `HostManager` 统一完成已保存电脑的切换
 - **插件市场界面**：卡片、元信息与空态图标都用矢量组件（不用表情符号）；空目录与筛选无结果使用不同的图标与文案，加载失败时不显示空态。
 - **引用工具栏**：五动作胶囊按手势落点定位，而不是选区包围盒——拖选取鼠标松开位置，键盘选择取最后一行矩形；材质走共享液态玻璃（`--glass-sheen`、`--glass-border`、`--glass-shadow`、液态弹簧入场）。
 - **浏览器 Agent 控制**：设置 → 浏览器 统一管理 Agent 开关、搜索引擎、下载策略（询问 / Agent 目录 / Agent 大小上限）、默认缩放、自定义 UA，以及应用内上传确认卡。Agent 下载不弹框；用户下载在开关开启时询问。站点发起的文件选择器由 tab worker 拦截、面板卡片处理，不再出现 Chromium 原生对话框。操作行显示元素坐标、页面标题与操作后缩略图（每次运行最多 24 张）。
-- **会话列表与输入区**：子会话引导线画在折叠槽里（标题与父会话同列），无标题的顾问行显示「顾问会话」，思考标签不再竖排，运行中插件 chip 与连接器同处输入框上方一行。设置的插件管理是带分隔线的紧凑清单，能力中心保持带图标磁贴与安装动作的发现式卡片。
+- **插件入口按层级分工**：能力中心的「插件」只列用户可启停或可配置的官方插件（排除预设专用，以及没有配置/组件声明的只读包）与已安装/自建插件；设置 → 扩展与插件保留完整库存，包含只读提示词/渲染包与预设专用 persona，并在行内给出 id、只读/预设专用标签与配置/组件数。插件图标来自清单 `musepi.icon`（emoji、字形或 URI），画在 32px 透明细边框内——声明图标不再垫色块，URI 解码失败回退名字字形。
+- **会话列表与输入区**：子会话引导线画在折叠槽里（标题与父会话同列；最后一个子会话用 ⌊ 收口，不再延伸进下一个根会话，祖先分支结束后也不再画多余竖线），无标题的顾问行显示「顾问会话」，思考标签不再竖排，运行中插件 chip 与连接器同处输入框上方一行。设置的插件管理是带分隔线的紧凑清单，能力中心保持带图标磁贴与安装动作的发现式卡片。
+
+
+## 9. KimiCode 对齐:消息附件、右侧面板与浏览器浮层(2026-11-05)
+
+- **来源卡**:每轮末尾以折叠卡汇总本轮浏览,头部按状态显示「只读 N 个页面」或「读了 A 个页面 · 经过 B 个页面」;展开后分「读过的页面」「经过的页面」两组,行内是标题、已读/经过标签、重复访问次数与完整 URL。右侧打开、系统浏览器打开、复制链接三个动作按能力可用性禁用,复制后显示短反馈;无页面时整卡不渲染。
+- **本轮修改文件卡**:标题为「N 个文件已修改」并带本轮 `+A/−R`,默认展示前 5 行,「还有 N 个文件」展开、「收起」收回;每行给文件路径与增删数,无法逐项统计时显示说明文案,「打开文件」在文件面板定位。与来源卡一样只在有数据时出现。
+- **工具标题**:工具头从裸 wire 名改为「已使用 终端命令(命令摘要)」,执行中为「正在使用 …」。参数摘要复用各渲染器已有的摘要节点,不另起一套;未知工具保持原名与无括号。
+- **会话信息面板**:右侧 rail 新增「会话信息」入口,作为 Cordis 插件挂载;默认不打开 tab(收起),内容为会话 ID 与复制、消息数、审批模式、工作目录、`provider/id` 模型、上下文占用条与 token 汇总。加载、空、错误三态齐全,会话切换不串数据。
+- **项目与工作目录**:侧栏项目来自 daemon 注册表(托管/隐式两种),支持新建、重命名、删除、设为主目录;项目菜单可管理附加工作目录,重复目录就地提示。文件面板的根目录下拉在多个目录间切换,附加根使用绝对路径注册标签。隐式项目只读,可一键转为托管项目。
+- **浏览器网页右键菜单**:页面内右键提供复制、粘贴、标注、检查元素、复制选中文字的链接;不可用项禁用。菜单与 rail tooltip 属于同一浮层栈:打开时在网页宿主上铺透明关闭层,点击网页即关闭,不再需要先点面板空白处。
+- **启动页诊断**:加载页显示当前阶段;超过 8 秒显示慢启动提示,并提供「导出诊断」与「重启应用」。导出在 daemon 未连通时也可用,连接失败页同样提供这两个入口。
+- **插件市场状态**:卡片区分已装版本与可更新(`v旧 → v新`),提供升级与全部升级;市场分「已装 / 目录 / 自定义源」,源可添加、刷新、移除并显示逐源失败;安装、卸载、升级前用同一确认框展示来源与版本。

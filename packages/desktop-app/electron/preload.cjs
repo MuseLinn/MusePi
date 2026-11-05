@@ -41,6 +41,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	probeDaemonPort: () => ipcRenderer.invoke("daemon-probe"),
 	/** GUI package version (OTA/发布一致性比对,见 app.tsx boot)。 */
 	getAppVersion: () => ipcRenderer.invoke("app-version"),
+	/** Restart the whole app (splash / connect-failure recovery). The shell
+	 *  relaunches only after the normal before-quit daemon teardown. */
+	appRestart: () => ipcRenderer.invoke("app-restart"),
+	/** Bundle shell logs + system info + the renderer error ring into one
+	 *  report file; resolves { ok:true, path } | { ok:false, error }. Works
+	 *  with the daemon unreachable (that is when it is needed). */
+	diagnosticsExport: (input) => ipcRenderer.invoke("diagnostics-export", input),
 	/** Close behavior (设置 → 常规): true = close hides to tray, app keeps
 	 *  running; false/absent = close quits and the before-quit path stops the
 	 *  owned daemon. Default false. */
@@ -326,6 +333,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserNavigate: (input) => ipcRenderer.invoke("managed-browser:navigate", input),
 	/** Clear managed-browser cookies ("cookies") or all data ("all"). */
 	managedBrowserClearData: (mode) => ipcRenderer.invoke("managed-browser:clear-data", { mode }),
+	/** Open the guest's native print dialog. */
+	managedBrowserPrint: (input) => ipcRenderer.invoke("managed-browser:print", input),
+	/** Reveal the configured managed-browser download folder in the OS. */
+	managedBrowserShowDownloads: () => ipcRenderer.invoke("managed-browser:show-downloads"),
+	/** Capture and save a PNG without navigating the renderer to a data URL. */
+	managedBrowserSaveScreenshot: (input) => ipcRenderer.invoke("managed-browser:save-screenshot", input),
 	/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 	managedBrowserStop: (tabId) => ipcRenderer.invoke("managed-browser:stop", tabId),
 	/** Stop the current turn's automation but keep the page for the user. */
@@ -382,7 +395,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("managed-browser:upload-dismiss", listener);
 		return () => ipcRenderer.removeListener("managed-browser:upload-dismiss", listener);
 	},
-	/** Agent-created tab (CDP Target.createTarget / popup): mount a <webview>. */
+	/** Agent-created tab (CDP Target.createTarget / popup): mount a <webview>.
+	 *  `agentId`/`agentName` name the operator when the create request carried
+	 *  one; user and app tabs leave both absent. */
 	onManagedBrowserCreateTab: (cb) => {
 		const listener = (_e, payload) => cb(payload);
 		ipcRenderer.on("managed-browser:create-tab", listener);

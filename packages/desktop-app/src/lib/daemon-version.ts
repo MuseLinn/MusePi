@@ -42,11 +42,13 @@ export const REQUIRED_DAEMON_METHODS: readonly string[] = [
 	"skills.marketplace.query",
 	"browser.managedBridge",
 	"session.compaction",
+	// Project registry and per-session extra work directories; the sidebar and
+	// file pane read these instead of the retired localStorage project list.
+	"workspace.list",
+	"session.directories.list",
+	// Plugin marketplace source management and update badges.
+	"marketplace.sources.list",
 ];
-// NOTE: `marketplace.sources.*` (plugin-marketplace source management) was
-// implemented then rolled back — the plugin marketplace is deferred until
-// MusePi's plugin system settles (it may be reworked wholesale). If it
-// ships, re-add "marketplace.sources.list" here and the 4 daemon RPCs.
 
 /** Side-effect-free parameters for each capability probe. Validation errors
  * still prove the method exists; only an unknown-method response proves absence. */

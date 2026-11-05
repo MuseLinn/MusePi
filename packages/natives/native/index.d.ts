@@ -987,8 +987,15 @@ export declare function glob(options: GlobOptions, onMatch?: ((error: Error | nu
 export interface GlobMatch {
   /** Relative path from the search root, using forward slashes. */
   path: string
-  /** Resolved filesystem type for the match. */
+  /**
+   * Resolved filesystem type for the match. A followed directory symlink
+   * reports `Dir` so tree consumers can descend into it.
+   */
   fileType: FileType
+  /** True when the entry itself is a symbolic link. */
+  isSymlink?: boolean
+  /** Raw symbolic-link target text, when the entry is a symbolic link. */
+  linkTarget?: string
   /** Modification time in milliseconds since Unix epoch. */
   mtime?: number
   /** File size in bytes for regular files. */
@@ -1351,6 +1358,12 @@ export interface LineRange {
  * File-level ignore rules for AGENTS.md are bypassed by checking each
  * traversed directory directly when `collectAgentsMd` is enabled, but ignored
  * directories are still pruned by the walker and are not searched.
+ *
+ * `followDirSymlinks` expands directory links only while their real target
+ * stays inside `symlinkBoundary` (default: the scanned directory). The link
+ * entry itself keeps `isSymlink` and its target text, and reported `isDir`
+ * consumers see `fileType: Dir`, so the tree can descend into it. Links that
+ * leave the boundary remain leaf entries.
  */
 export declare function listWorkspace(options: ListWorkspaceOptions): Promise<ListWorkspaceResult>
 
@@ -1370,6 +1383,18 @@ export interface ListWorkspaceOptions {
    * to find them. Default: false.
    */
   collectAgentsMd?: boolean
+  /**
+   * Expand symbolic links whose real target is a directory inside
+   * `symlinkBoundary`. Entries stay marked as symlinks and carry their
+   * target text. Default: false (never follows directory links).
+   */
+  followDirSymlinks?: boolean
+  /**
+   * Directory bounding followed symlink targets. Defaults to `path`, so a
+   * link that leaves the scanned directory stays a leaf entry. Ignored when
+   * `followDirSymlinks` is false.
+   */
+  symlinkBoundary?: string
   /** Timeout in milliseconds for the operation. */
   timeoutMs?: number
   /** Abort signal for cancelling the operation. */

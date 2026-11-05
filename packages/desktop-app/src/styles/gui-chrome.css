@@ -666,6 +666,20 @@
 	background: color-mix(in oklab, var(--color-border) 88%, var(--color-text-faint) 12%);
 }
 
+/* Last child: close the branch with an L-shaped foot (⌊) at the row's
+ * bottom edge instead of letting the line run into the next row. The dot
+ * stays centered on the vertical line; only the foot is added. */
+.gui-tree-guide--last::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 8px;
+	height: 2px;
+	border-radius: 0 999px 999px 0;
+	background: inherit;
+}
+
 .gui-tree-guide--branch::after {
 	content: "";
 	position: absolute;
@@ -2431,38 +2445,69 @@
 	color: var(--color-text-faint);
 }
 
-/* Instance connections and remote workspaces share one wide dialog. */
+/* Instance connections and remote workspaces share one wide dialog. Height
+ * follows content (the embedded workspace wizard defines its own), so the
+ * instances tab no longer floats in a fixed 620px void. */
 .gui-dialog.gui-dialog--instance-manager {
 	width: min(1040px, 94vw);
-	min-height: min(58vh, 620px);
+	height: auto;
+	min-height: min(46vh, 460px);
 	max-height: min(88vh, 880px);
 	overflow: hidden;
 }
+/* One sliding-thumb control instead of two half-width menu rows: the tab
+ * switch is a choice, not a second toolbar. */
 .gui-instance-manager-tabs {
 	display: flex;
-	gap: 8px;
-	padding: 0 16px 12px;
-	border-bottom: 1px solid var(--border);
+	align-items: center;
+	padding: 12px 20px 0;
 }
 .gui-instance-manager-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+	align-content: start;
+	gap: 24px;
 	min-height: 0;
 	flex: 1 1 auto;
 	overflow-y: auto;
-	padding: 16px;
+	padding: 16px 20px 20px;
+}
+.gui-instance-manager-panel {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 12px;
+}
+.gui-instance-manager-section-title {
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	color: var(--color-text);
+}
+.gui-instance-manager-section-desc {
+	margin: 4px 0 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-muted);
 }
 .gui-instance-manager-list {
 	overflow: hidden;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface) 35%, transparent);
 }
 .gui-instance-manager-row {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 4px 8px;
+	padding-right: 6px;
+	transition: background 120ms ease-out;
 }
 .gui-instance-manager-row + .gui-instance-manager-row {
 	border-top: 1px solid var(--border);
+}
+.gui-instance-manager-row:hover {
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
 }
 .gui-instance-manager-select {
 	display: flex;
@@ -2470,37 +2515,88 @@
 	gap: 10px;
 	min-width: 0;
 	flex: 1 1 auto;
-	padding: 8px;
+	padding: 10px 12px;
 	border: 0;
 	background: transparent;
 	color: var(--color-text);
+	text-align: left;
 }
 .gui-instance-manager-select:not(:disabled) {
 	cursor: pointer;
 }
-.gui-instance-manager-select:not(:disabled):hover {
-	background: var(--color-surface-raised);
+.gui-instance-manager-dot {
+	width: 7px;
+	height: 7px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--color-text-faint);
+}
+.gui-instance-manager-dot--live {
+	background: var(--color-success);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-success) 18%, transparent);
+}
+.gui-instance-manager-copy {
+	display: flex;
+	min-width: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+}
+.gui-instance-manager-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+}
+.gui-instance-manager-chip {
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 500;
+	color: var(--color-success);
+	background: color-mix(in oklab, var(--color-success) 16%, transparent);
+}
+.gui-instance-manager-url {
+	overflow: hidden;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+/* Row removal is a destructive secondary action: hover/focus reveal keeps
+ * the list calm without hiding it from the keyboard. */
+.gui-instance-manager-remove {
+	opacity: 0;
+	transition: opacity 120ms ease-out;
+}
+.gui-instance-manager-row:hover .gui-instance-manager-remove,
+.gui-instance-manager-remove:focus-visible {
+	opacity: 1;
+}
+.gui-instance-manager-panel-actions {
+	display: flex;
+	justify-content: flex-start;
 }
 .gui-instance-manager-add {
-	margin-top: 20px;
-	padding-top: 16px;
-	border-top: 1px solid var(--border);
+	padding: 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--color-surface) 55%, transparent);
 }
 .gui-instance-manager-fields {
-	display: grid;
-	grid-template-columns: 1fr 1.5fr 1.2fr;
+	display: flex;
+	flex-direction: column;
 	gap: 12px;
-	margin-top: 12px;
 }
 .gui-instance-manager-actions {
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	margin-top: 16px;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 4px;
 }
 .gui-instance-manager-error {
-	margin-top: 8px;
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-danger);
 }
@@ -2509,8 +2605,8 @@
 	min-height: 0;
 	flex: 1 1 auto;
 }
-@media (max-width: 640px) {
-	.gui-instance-manager-fields {
+@media (max-width: 860px) {
+	.gui-instance-manager-body {
 		grid-template-columns: 1fr;
 	}
 }

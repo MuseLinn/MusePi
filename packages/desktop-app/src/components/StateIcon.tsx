@@ -5,15 +5,14 @@ import { Icon, type IconName } from "../vendor/oc-icons";
  * Spring cross-morph for state-paired sprite icons.
  *
  * Design spec (docs/gui-design.md 动效 + 设计板「图标 morph 规范」): any icon
- * that flips with runtime state — play/pause, eye/eye-off, expand/collapse,
- * saved/download, panel direction — morphs between its two shapes instead of
- * hard-swapping. The onboarding step icon does this with a path-level
- * MorphIcon, but that primitive is stroke-based (single interpolated `d`) and
- * the app-wide sprite set is fill-based (Remix-style `<use>` shapes), where a
- * path morph would render outlines and break the icon language. So the sprite
- * world gets the same *reading* through a different mechanic: both shapes stay
- * mounted in an inline-grid, the outgoing one collapses while the incoming one
- * grows in from the opposite side, driven by `--spring`.
+ * that flips with runtime state morphs between its two shapes instead of
+ * hard-swapping. Stroke icons use `MorphIcon` (morphicons); fill-only pairs
+ * use a single lucide glyph with a CSS fill transition. This component is
+ * retained for sprite glyphs without a stroke equivalent, where a path morph
+ * would turn filled shapes into outlines. It keeps the same reading through a
+ * different mechanic: both shapes stay mounted in an inline-grid, the
+ * outgoing one collapses while the incoming one grows in from the opposite
+ * side, driven by `--spring`.
  *
  * Pure CSS on purpose: `.gui-motion-off` and `prefers-reduced-motion` degrade
  * it globally, and no per-component matchMedia wiring is needed.

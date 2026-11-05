@@ -21,6 +21,7 @@ describe("browserOperationsOf", () => {
 					width: 88,
 					height: 32,
 					pageTitle: "Upload Manuscript | IEEE Author Portal",
+					pageUrl: "https://ieee.test/submit",
 					thumbnail: "data:image/jpeg;base64,AAAA",
 				},
 			],
@@ -38,6 +39,7 @@ describe("browserOperationsOf", () => {
 				width: 88,
 				height: 32,
 				pageTitle: "Upload Manuscript | IEEE Author Portal",
+				pageUrl: "https://ieee.test/submit",
 				thumbnail: "data:image/jpeg;base64,AAAA",
 			},
 		]);

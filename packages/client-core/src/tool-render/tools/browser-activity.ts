@@ -116,6 +116,7 @@ export function browserOperationsOf(details: unknown): BrowserOperation[] {
 				...(stringOrUndefined(value.pageTitle) !== undefined
 					? { pageTitle: stringOrUndefined(value.pageTitle) }
 					: {}),
+				...(stringOrUndefined(value.pageUrl) !== undefined ? { pageUrl: stringOrUndefined(value.pageUrl) } : {}),
 				...(typeof value.thumbnail === "string" && value.thumbnail.startsWith("data:image/")
 					? { thumbnail: value.thumbnail }
 					: {}),

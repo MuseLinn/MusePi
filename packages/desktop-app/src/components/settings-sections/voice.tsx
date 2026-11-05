@@ -26,6 +26,8 @@ import {
 	type TtsModelRow,
 	type TtsModelStatusResponse,
 } from "@musepi/pi-wire";
+import { TriangleAlert as TriangleAlertIconData, Volume2 as Volume2IconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../../i18n/voice";
 import { useConfirm } from "../../lib/prompt-dialog";
@@ -639,7 +641,13 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 			disabled={!rpc}
 			onClick={toggle}
 		>
-			<Icon name={state === "error" ? "error-warning" : "volume-up"} className="h-3.5 w-3.5" />
+			<MorphIcon
+				icon={state === "error" ? TriangleAlertIconData : Volume2IconData}
+				size={14}
+				spring="snappy"
+				reducedMotion="user"
+				className="h-3.5 w-3.5"
+			/>
 		</button>
 	);
 }

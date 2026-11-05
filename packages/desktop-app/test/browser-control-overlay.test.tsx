@@ -120,4 +120,37 @@ describe("BrowserControlOverlay", () => {
 		act(() => root.render(<BrowserControlOverlay activity={null} onTakeover={() => {}} />));
 		expect(host.querySelector("[data-browser-control]")).toBeNull();
 	});
+
+	it("names the agent operating a tab so a subagent's run is attributable", async () => {
+		const { createTab, closeTab } = await import("../src/lib/managed-browser-host");
+		void createTab("https://example.test", {
+			tabId: "agent-tab",
+			agent: true,
+			agentId: "Helper",
+			agentName: "Helper",
+		}).catch(() => {});
+
+		act(() =>
+			root.render(
+				<BrowserControlOverlay activity={{ ...running, tabId: "agent-tab" }} now={2_000} onTakeover={() => {}} />,
+			),
+		);
+		const badge = document.querySelector("[data-browser-agent]");
+		expect(badge?.getAttribute("data-browser-agent")).toBe("Helper");
+		expect(badge?.textContent).toBe(t("tools.browserAgentOperator", { agent: "Helper" }));
+
+		closeTab("agent-tab", { notifyMain: false });
+	});
+
+	it("prefers an operator published with the activity over the tab lookup", () => {
+		act(() =>
+			root.render(
+				<BrowserControlOverlay
+					activity={{ ...running, tabId: "unknown-tab", agentId: "Writer", agentName: "Writer" }}
+					onTakeover={() => {}}
+				/>,
+			),
+		);
+		expect(document.querySelector("[data-browser-agent]")?.getAttribute("data-browser-agent")).toBe("Writer");
+	});
 });
