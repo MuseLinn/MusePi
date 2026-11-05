@@ -54,16 +54,14 @@ describe("normalizeBrowserUrl", () => {
 		expect(normalizeBrowserUrl("example.com:8080/path")).toBe("https://example.com:8080/path");
 	});
 
-	it("passes the local-preview scheme through and canonicalizes the legacy spelling", () => {
+	it("passes the local-preview scheme through unchanged", () => {
 		// musepi-file:// is the sanctioned local artifact preview (browser.gui);
-		// it flows to the bridge whenever restrictToPublic is off. Persisted
-		// omp-file:// links normalize to the same canonical scheme.
+		// it flows to the bridge whenever restrictToPublic is off.
 		expect(normalizeBrowserUrl("musepi-file:///tmp/artifact.html")).toBe("musepi-file:///tmp/artifact.html");
 		expect(normalizeBrowserUrl("musepi-file://localhost/D:/report.html")).toBe(
 			"musepi-file://localhost/D:/report.html",
 		);
-		expect(normalizeBrowserUrl("omp-file:///tmp/artifact.html")).toBe("musepi-file:///tmp/artifact.html");
-		expect(normalizeBrowserUrl("OMP-FILE:///Users/me/report.html")).toBe("musepi-file:///Users/me/report.html");
+		expect(normalizeBrowserUrl("MUSEPI-FILE://localhost/report.html")).toBe("MUSEPI-FILE://localhost/report.html");
 	});
 
 	it("rejects protocol-relative input", () => {
@@ -77,13 +75,13 @@ describe("assertSafeBrowserUrl", () => {
 		expect(() => assertSafeBrowserUrl("file:///etc/passwd")).toThrow(/protocol/);
 	});
 
-	it("rejects the local-preview scheme, either spelling, when restricted to public", () => {
+	it("rejects the local-preview scheme and the retired spelling under public-only policy", () => {
 		// With browser.policy.restrictToPublic on, local artifacts are out of
 		// scope: the guard only allows public http/https destinations. The
-		// legacy spelling is canonicalized first, so both report the same
-		// protocol.
+		// retired spelling is no longer canonicalized, so it is rejected as the
+		// unknown scheme it now is.
 		expect(() => assertSafeBrowserUrl("musepi-file:///tmp/artifact.html")).toThrow(/musepi-file:/);
-		expect(() => assertSafeBrowserUrl("omp-file:///tmp/artifact.html")).toThrow(/musepi-file:/);
+		expect(() => assertSafeBrowserUrl("omp-file:///tmp/artifact.html")).toThrow(/omp-file:/);
 	});
 
 	it("rejects credentials and private hosts", () => {

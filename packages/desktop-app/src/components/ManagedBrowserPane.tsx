@@ -240,7 +240,7 @@ function formatAddressDisplayParts(url: string, title?: string): AddressDisplayP
 }
 
 function isHistoryUrl(url: string): boolean {
-	return url !== EMPTY_URL && (/^https?:\/\//i.test(url) || /^(?:musepi-file|omp-file):\/\//i.test(url));
+	return url !== EMPTY_URL && (/^https?:\/\//i.test(url) || /^musepi-file:\/\//i.test(url));
 }
 
 // ── quick links (start page 快速链接) ─────────────────────────────────
@@ -548,6 +548,28 @@ export function ManagedBrowserPane({
 				draw: t("annotation.tool.draw"),
 				commentPlaceholder: t("annotation.commentPlaceholder"),
 				submit: t("annotation.submit"),
+				panel: {
+					title: t("annotation.panelTitle"),
+					close: t("annotation.panelClose"),
+					sectionGeometry: t("annotation.panelGeometry"),
+					sectionSemantics: t("annotation.panelSemantics"),
+					sectionData: t("annotation.panelData"),
+					sectionPage: t("annotation.panelPage"),
+					selector: t("annotation.panelSelector"),
+					path: t("annotation.panelPath"),
+					bounds: t("annotation.panelBounds"),
+					size: t("annotation.panelSize"),
+					center: t("annotation.panelCenter"),
+					text: t("annotation.panelText"),
+					styles: t("annotation.panelStyles"),
+					page: t("annotation.panelPageTitle"),
+					url: t("annotation.panelUrl"),
+					viewport: t("annotation.panelViewport"),
+					dpr: t("annotation.panelDpr"),
+					screenshot: t("annotation.panelScreenshot"),
+					cancel: t("annotation.panelCancel"),
+					add: t("annotation.panelAdd"),
+				},
 			},
 		})
 			.then(result => {

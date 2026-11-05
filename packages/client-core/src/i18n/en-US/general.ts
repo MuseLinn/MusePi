@@ -510,8 +510,15 @@ export const general = {
 	"general.deleteSession": "Delete session",
 	"general.deleteSession2": "Delete this session? This action cannot be undone.",
 	"general.aiRename": "AI rename",
-	"general.aiRenameFailed": "AI rename failed",
+	"general.aiRenameFailed": "AI rename failed — try again",
 	"general.aiRenameEmpty": "This session has no content to name",
+	"general.aiRenaming": "Renaming with AI…",
+	"general.aiRenamingFor": "Generating a title for “{name}”…",
+	"general.aiRenameGenerationFailed":
+		"Title generation failed — check that a title model is configured, then try again",
+	"general.aiRenameOffline": "Not connected to the daemon — reconnect before renaming",
+	"general.aiRenameTimeout": "AI rename timed out — try again in a moment",
+	"general.aiRenameUnsupported": "This daemon does not support AI rename — restart the daemon and retry",
 	"general.reconnect": "Reconnect",
 	"general.restartDaemon": "Restart daemon",
 	"general.restartDaemonDescription":

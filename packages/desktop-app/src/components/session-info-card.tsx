@@ -40,6 +40,7 @@ import { SESSION_INFO_SLOT, SlotComponentHost, useExtensionRegistry } from "../l
 import { readHiddenSurfaces, SURFACE_HIDDEN_KEY, SURFACES, surfaceVisible } from "../lib/surfaces/registry";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
+import { ExtensionStatusCard } from "./ExtensionStatusCard";
 import { Reveal } from "./Reveal";
 
 /** One preference per session; the `musepi-gui-` prefix is the GUI's key rule. */
@@ -654,13 +655,19 @@ export function SessionInfoCard({
 			) : null}
 
 			{/* 「插件」分区是 Cordis 贡献点(chat.session-info.plugins):插件停用或
-			 *  编译失败时渲染下方内置同构列表,卡片不留白。 */}
-			<SlotComponentHost
-				rpc={rpc}
-				slot={SESSION_INFO_SLOT}
-				sessionInfo={sessionInfo}
-				fallback={pluginEntries.length > 0 ? <SessionInfoPluginsFallback sessionInfo={sessionInfo} /> : null}
-			/>
+			 *  编译失败时渲染下方内置同构列表,卡片不留白。分区上方的状态条把运行
+			 *  读数提到一眼可见的位置,点开仍是逐个扩展的运行/禁用明细。 */}
+			{pluginEntries.length > 0 ? (
+				<section className="gui-session-info-plugins-group">
+					<ExtensionStatusCard rpc={rpc} variant="inline" extensions={pluginEntries} />
+					<SlotComponentHost
+						rpc={rpc}
+						slot={SESSION_INFO_SLOT}
+						sessionInfo={sessionInfo}
+						fallback={<SessionInfoPluginsFallback sessionInfo={sessionInfo} />}
+					/>
+				</section>
+			) : null}
 
 			<section className="gui-session-info-tabs">
 				<div className="gui-session-info-section-label">{t("general.sessionInfoOpenTabs")}</div>

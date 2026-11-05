@@ -66,6 +66,38 @@ import { filterSessionTree } from "./session-list-shared";
 const GROUP_COLORS = ["accent", "green", "orange", "blue", "purple", "pink"];
 
 /**
+ * Outcome of an AI rename as the row menu consumes it. `ok` carries the
+ * generated title so the caller can show it before its list refresh lands;
+ * a failure carries why, so the toast names the next action instead of a
+ * generic "failed" (the reason vocabulary is the daemon's own, plus the
+ * client-side transport/version failures).
+ */
+export interface SessionRetitleResult {
+	ok: boolean;
+	title?: string;
+	reason?: "empty" | "generation-failed" | "offline" | "timeout" | "unsupported" | "failed";
+}
+
+/** Failure copy per reason. `unsupported` is an old daemon that predates
+ *  `session.retitle` — only an app/daemon restart loads the handler. */
+function retitleFailureMessage(reason: string | undefined): string {
+	switch (reason) {
+		case "empty":
+			return t("general.aiRenameEmpty");
+		case "generation-failed":
+			return t("general.aiRenameGenerationFailed");
+		case "offline":
+			return t("general.aiRenameOffline");
+		case "timeout":
+			return t("general.aiRenameTimeout");
+		case "unsupported":
+			return t("general.aiRenameUnsupported");
+		default:
+			return t("general.aiRenameFailed");
+	}
+}
+
+/**
  * Collapsible body of a project block (shared Reveal standard — height via
  * useCollapse px, see components/Reveal.tsx).
  */
@@ -188,7 +220,7 @@ export function SessionSidebar({
 	/** AI rename a session from its row menu (daemon session.retitle).
 	 *  Resolves the outcome so the menu can toast the failure reason.
 	 *  Optional: without it the row menu omits the AI item. */
-	onRetitleSession?(sessionId: string): Promise<{ ok: boolean; reason?: string }>;
+	onRetitleSession?(sessionId: string): Promise<SessionRetitleResult>;
 	/** Pane width in px (draggable resize). */
 	width?: number;
 	/** Unread session ids (single source: app-level unread set — pet
@@ -1301,6 +1333,21 @@ export function SessionSidebar({
 							</button>
 						)}
 					</div>
+					{/* AI rename runs a model pass (seconds, up to the RPC cap): the
+					 *  row cannot show its own spinner, so the pane pins the running
+					 *  session's name here — visible even when the list is scrolled. */}
+					{retitlingId !== null && (
+						<div
+							className="gui-group-label flex items-center gap-1.5 px-3 pb-1 pt-1 text-[var(--color-accent)]"
+							role="status"
+							aria-live="polite"
+						>
+							<Icon name="loader-4" className="h-3.5 w-3.5 flex-shrink-0 animate-spin" />
+							<span className="min-w-0 truncate">
+								{t("general.aiRenamingFor", { name: sessionLabelOf(retitlingId) })}
+							</span>
+						</div>
+					)}
 					<div
 						ref={sessionListRef}
 						/* Keyed by view so a groups↔projects (or archive) switch
@@ -1310,6 +1357,7 @@ export function SessionSidebar({
 						className="gui-sessions-list gui-tab-pane-in min-h-0 flex-1 overflow-y-auto px-1.5 pb-2"
 						data-top-scroll="false"
 						data-bottom-scroll="false"
+						aria-busy={retitlingId !== null || undefined}
 					>
 						{archivedView ? (
 							archived.length === 0 ? (
@@ -1855,28 +1903,30 @@ export function SessionSidebar({
 								},
 								// AI rename (daemon session.retitle: title from the first
 								// user message, same pipeline as auto-title). Gated on the
-								// prop so hosts without it keep the old menu shape.
+								// prop so hosts without it keep the old menu shape. The
+								// run reports its own outcome, so a rejected prop can never
+								// leave the busy state stuck.
 								...(onRetitleSession
 									? [
 											{
-												label: t("general.aiRename"),
+												label:
+													retitlingId === sessionCtx.id ? t("general.aiRenaming") : t("general.aiRename"),
 												icon: "ai-generate-2",
 												disabled: retitlingId !== null,
 												onSelect: () => {
 													const id = sessionCtx.id;
+													const run = onRetitleSession;
 													setRetitlingId(id);
-													void onRetitleSession(id).then(r => {
-														setRetitlingId(cur => (cur === id ? null : cur));
-														if (!r.ok)
-															pushActionToast({
-																kind: "error",
-																message: t(
-																	r.reason === "empty"
-																		? "general.aiRenameEmpty"
-																		: "general.aiRenameFailed",
-																),
-															});
-													});
+													void run(id)
+														.catch((): SessionRetitleResult => ({ ok: false, reason: "failed" }))
+														.then(r => {
+															setRetitlingId(cur => (cur === id ? null : cur));
+															if (!r.ok)
+																pushActionToast({
+																	kind: "error",
+																	message: retitleFailureMessage(r.reason),
+																});
+														});
 												},
 											},
 										]

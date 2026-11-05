@@ -38,12 +38,40 @@ export type AnnotationOverlayTheme = {
 	readonly mutedText: string;
 };
 
+/**
+ * 结构化目标卡片上的文案。存在时 overlay 用卡片替代紧凑输入条;缺失时
+ * 保持旧输入条(会话内 HTML 卡片仍走旧版,不因缺文案而出现空白分区)。
+ */
+export type AnnotationOverlayPanelLabels = {
+	readonly title: string;
+	readonly close: string;
+	readonly sectionGeometry: string;
+	readonly sectionSemantics: string;
+	readonly sectionData: string;
+	readonly sectionPage: string;
+	readonly selector: string;
+	readonly path: string;
+	readonly bounds: string;
+	readonly size: string;
+	readonly center: string;
+	readonly text: string;
+	readonly styles: string;
+	readonly page: string;
+	readonly url: string;
+	readonly viewport: string;
+	readonly dpr: string;
+	readonly screenshot: string;
+	readonly cancel: string;
+	readonly add: string;
+};
+
 export type AnnotationOverlayLabels = {
 	readonly select: string;
 	readonly marquee: string;
 	readonly draw: string;
 	readonly commentPlaceholder: string;
 	readonly submit: string;
+	readonly panel?: AnnotationOverlayPanelLabels;
 };
 
 const ANNOTATION_ACTIVE_FLAG = "__musepiAnnotationActive";
@@ -167,6 +195,14 @@ export const buildAnnotationOverlayScript = (
       var value = element.getAttribute(name);
       if (value) attributes[name] = String(value).slice(0, 200);
     }
+    // data-* 没有固定名单,但"页面把这些值写进了 DOM"往往正是改动依据。
+    var dataCount = 0;
+    for (var d = 0; d < element.attributes.length && dataCount < 40; d += 1) {
+      var attribute = element.attributes[d];
+      if (attribute.name.indexOf('data-') !== 0) continue;
+      attributes[attribute.name] = String(attribute.value).slice(0, 200);
+      dataCount += 1;
+    }
     var computedStyle = {};
     for (var j = 0; j < STYLE_PROPS.length; j += 1) {
       var prop = STYLE_PROPS[j];
@@ -235,7 +271,42 @@ export const buildAnnotationOverlayScript = (
     '.editor textarea::placeholder{color:' + THEME.mutedText + '}',
     '.editor button{appearance:none;border:none;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';border-radius:999px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}',
     '.editor button svg{width:16px;height:16px;display:block}',
-    '.editor button[disabled]{opacity:.5;cursor:default}'
+    '.editor button[disabled]{opacity:.5;cursor:default}',
+    // 结构化目标卡片:同一份 chrome,给"选中元素"提供可折叠的结构信息。
+    '.panel{position:fixed;left:0;top:0;display:none;flex-direction:column;width:min(360px,calc(100vw - 16px));max-height:min(480px,calc(100vh - 16px));border-radius:16px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 18px 48px rgba(0,0,0,.38);pointer-events:auto;overflow:hidden;color:' + THEME.text + '}',
+    '.panel [hidden]{display:none !important}',
+    '.panel-head{display:flex;align-items:center;gap:8px;padding:10px 10px 10px 14px;border-bottom:1px solid ' + THEME.border + ';flex-shrink:0}',
+    '.panel-id{flex:1;min-width:0;display:flex;align-items:baseline;gap:6px;overflow:hidden;font-size:12px;line-height:18px}',
+    '.panel-tag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;color:' + THEME.primary + ';white-space:nowrap}',
+    '.panel-classes{color:' + THEME.mutedText + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}',
+    '.panel-close{appearance:none;border:none;background:transparent;color:' + THEME.mutedText + ';width:26px;height:26px;padding:0;border-radius:999px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}',
+    '.panel-close:hover{background:' + THEME.primaryFaint + ';color:' + THEME.text + '}',
+    '.panel-close svg{width:14px;height:14px;display:block}',
+    '.panel-scroll{overflow:auto;overscroll-behavior:contain;flex:1 1 auto;min-height:0;padding:2px 0}',
+    '.panel-section{border-bottom:1px solid ' + THEME.border + '}',
+    '.panel-section:last-child{border-bottom:none}',
+    '.panel-section-head{appearance:none;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:none;background:transparent;color:' + THEME.mutedText + ';padding:8px 14px;font-size:11px;line-height:16px;font-weight:600;cursor:pointer;text-align:left}',
+    '.panel-section-head:hover{background:' + THEME.primaryFaint + '}',
+    '.panel-chevron{font-size:10px;line-height:1;transition:transform 120ms ease}',
+    '.panel-section-head[aria-expanded="false"] .panel-chevron{transform:rotate(-90deg)}',
+    '@media (prefers-reduced-motion: reduce){.panel-chevron{transition:none}}',
+    '.panel-rows{display:grid;gap:5px;padding:0 14px 10px}',
+    '.panel-row{display:grid;grid-template-columns:minmax(56px,auto) minmax(0,1fr);gap:10px;font-size:11px;line-height:16px}',
+    '.panel-key{color:' + THEME.mutedText + '}',
+    '.panel-val{color:' + THEME.text + ';font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;white-space:pre-wrap}',
+    '.panel-val--text{font-family:inherit}',
+    '.panel-foot{display:flex;flex-direction:column;gap:8px;padding:10px 14px 12px;border-top:1px solid ' + THEME.border + ';flex-shrink:0}',
+    '.panel textarea{width:100%;resize:none;border:1px solid ' + THEME.border + ';border-radius:10px;background:transparent;color:' + THEME.text + ';font-size:12.5px;line-height:18px;outline:none;padding:7px 9px;min-height:34px;max-height:104px;display:block}',
+    '.panel textarea::placeholder{color:' + THEME.mutedText + '}',
+    '.panel textarea:focus{border-color:' + THEME.primary + '}',
+    '.panel-toggle{display:flex;align-items:center;gap:7px;font-size:11.5px;line-height:16px;color:' + THEME.mutedText + ';cursor:pointer;user-select:none}',
+    '.panel-toggle input{width:14px;height:14px;margin:0;accent-color:' + THEME.primary + ';cursor:pointer;flex-shrink:0}',
+    '.panel-actions{display:flex;justify-content:flex-end;gap:8px}',
+    '.panel-actions button{appearance:none;border-radius:999px;font-size:12px;line-height:18px;font-weight:600;padding:6px 14px;cursor:pointer;white-space:nowrap}',
+    '.panel-cancel{border:1px solid ' + THEME.border + ';background:transparent;color:' + THEME.text + '}',
+    '.panel-cancel:hover{background:' + THEME.primaryFaint + '}',
+    '.panel-add{border:none;background:' + THEME.primary + ';color:' + THEME.primaryContrast + '}',
+    '.panel-add[disabled]{opacity:.5;cursor:default}'
   ].join('');
   shadow.appendChild(style);
 
@@ -281,20 +352,243 @@ export const buildAnnotationOverlayScript = (
     tools.appendChild(button);
   });
 
-  var editor = document.createElement('div');
-  editor.className = 'editor';
-  shadow.appendChild(editor);
+  var PANEL = LABELS.panel || null;
+  var includeScreenshot = true;
+  var collapsedSections = {};
 
   var comment = document.createElement('textarea');
   comment.rows = 1;
   comment.placeholder = LABELS.commentPlaceholder;
-  var submit = document.createElement('button');
-  submit.type = 'button';
-  // 纯图标附加按钮,与聊天注释输入一致;本地化标签留给无障碍。
-  submit.setAttribute('aria-label', LABELS.submit);
-  submit.title = LABELS.submit;
-  submit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.8287 7.75737L9.1718 13.4142C8.78127 13.8047 8.78127 14.4379 9.1718 14.8284C9.56232 15.219 10.1955 15.219 10.586 14.8284L16.2429 9.17158C17.4144 8.00001 17.4144 6.10052 16.2429 4.92894C15.0713 3.75737 13.1718 3.75737 12.0002 4.92894L6.34337 10.5858C4.39075 12.5384 4.39075 15.7042 6.34337 17.6569C8.29599 19.6095 11.4618 19.6095 13.4144 17.6569L19.0713 12L20.4855 13.4142L14.8287 19.0711C12.095 21.8047 7.66283 21.8047 4.92916 19.0711C2.19549 16.3374 2.19549 11.9053 4.92916 9.17158L10.586 3.51473C12.5386 1.56211 15.7045 1.56211 17.6571 3.51473C19.6097 5.46735 19.6097 8.63317 17.6571 10.5858L12.0002 16.2427C10.8287 17.4142 8.92916 17.4142 7.75759 16.2427C6.58601 15.0711 6.58601 13.1716 7.75759 12L13.4144 6.34316L14.8287 7.75737Z" fill="currentColor"/></svg>';
-  editor.append(comment, submit);
+
+  var editor;
+  var submit;
+  var panelHead = null;
+  var panelIdentity = null;
+  var panelSections = null;
+  var geometryRefs = null;
+
+  var createSubmit = function (className) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    if (className) button.className = className;
+    // attach 在脚本末尾才赋值,包装一层按调用时解析。
+    button.addEventListener('click', function () { attach(); });
+    return button;
+  };
+
+  if (PANEL) {
+    editor = document.createElement('div');
+    editor.className = 'panel';
+    editor.setAttribute('role', 'dialog');
+    editor.setAttribute('aria-modal', 'false');
+    editor.setAttribute('aria-label', PANEL.title);
+
+    panelHead = document.createElement('div');
+    panelHead.className = 'panel-head';
+    panelIdentity = document.createElement('div');
+    panelIdentity.className = 'panel-id';
+    var closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'panel-close';
+    closeButton.setAttribute('aria-label', PANEL.close);
+    closeButton.title = PANEL.close;
+    closeButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6 6.4 5Z" fill="currentColor"/></svg>';
+    closeButton.addEventListener('click', function () { dropSelection(); syncChrome(); });
+    panelHead.append(panelIdentity, closeButton);
+
+    panelSections = document.createElement('div');
+    panelSections.className = 'panel-scroll';
+
+    var foot = document.createElement('div');
+    foot.className = 'panel-foot';
+
+    var toggleLabel = document.createElement('label');
+    toggleLabel.className = 'panel-toggle';
+    var toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.checked = includeScreenshot;
+    toggle.addEventListener('change', function () { includeScreenshot = toggle.checked; });
+    var toggleText = document.createElement('span');
+    toggleText.textContent = PANEL.screenshot;
+    toggleLabel.append(toggle, toggleText);
+
+    var actions = document.createElement('div');
+    actions.className = 'panel-actions';
+    var cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'panel-cancel';
+    cancelButton.textContent = PANEL.cancel;
+    cancelButton.addEventListener('click', function () { finish(null); });
+    submit = createSubmit('panel-add');
+    submit.textContent = PANEL.add;
+    actions.append(cancelButton, submit);
+
+    foot.append(comment, toggleLabel, actions);
+    editor.append(panelHead, panelSections, foot);
+  } else {
+    editor = document.createElement('div');
+    editor.className = 'editor';
+    submit = createSubmit(null);
+    // 纯图标附加按钮,与聊天注释输入一致;本地化标签留给无障碍。
+    submit.setAttribute('aria-label', LABELS.submit);
+    submit.title = LABELS.submit;
+    submit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.8287 7.75737L9.1718 13.4142C8.78127 13.8047 8.78127 14.4379 9.1718 14.8284C9.56232 15.219 10.1955 15.219 10.586 14.8284L16.2429 9.17158C17.4144 8.00001 17.4144 6.10052 16.2429 4.92894C15.0713 3.75737 13.1718 3.75737 12.0002 4.92894L6.34337 10.5858C4.39075 12.5384 4.39075 15.7042 6.34337 17.6569C8.29599 19.6095 11.4618 19.6095 13.4144 17.6569L19.0713 12L20.4855 13.4142L14.8287 19.0711C12.095 21.8047 7.66283 21.8047 4.92916 19.0711C2.19549 16.3374 2.19549 11.9053 4.92916 9.17158L10.586 3.51473C12.5386 1.56211 15.7045 1.56211 17.6571 3.51473C19.6097 5.46735 19.6097 8.63317 17.6571 10.5858L12.0002 16.2427C10.8287 17.4142 8.92916 17.4142 7.75759 16.2427C6.58601 15.0711 6.58601 13.1716 7.75759 12L13.4144 6.34316L14.8287 7.75737Z" fill="currentColor"/></svg>';
+    editor.append(comment, submit);
+  }
+  shadow.appendChild(editor);
+
+  // ------------------------------------------------------------ panel content
+
+  var formatBounds = function (rect) {
+    return 'x ' + Math.round(rect.x) + ', y ' + Math.round(rect.y) + ', w ' + Math.round(rect.width) + ', h ' + Math.round(rect.height);
+  };
+  var formatSize = function (rect) {
+    return Math.round(rect.width) + ' × ' + Math.round(rect.height);
+  };
+  var addRow = function (parent, label, value, mono, refKey) {
+    var text = value == null ? '' : String(value);
+    if (!text) return;
+    var row = document.createElement('div');
+    row.className = 'panel-row';
+    var key = document.createElement('span');
+    key.className = 'panel-key';
+    key.textContent = label;
+    var val = document.createElement('span');
+    val.className = mono === false ? 'panel-val panel-val--text' : 'panel-val';
+    val.textContent = text;
+    if (refKey && geometryRefs) geometryRefs[refKey] = val;
+    row.append(key, val);
+    parent.appendChild(row);
+  };
+  var addSection = function (key, title, fill) {
+    var section = document.createElement('div');
+    section.className = 'panel-section';
+    var head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'panel-section-head';
+    var expanded = !collapsedSections[key];
+    head.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    var label = document.createElement('span');
+    label.textContent = title;
+    var chevron = document.createElement('span');
+    chevron.className = 'panel-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▾';
+    head.append(label, chevron);
+    var body = document.createElement('div');
+    body.className = 'panel-rows';
+    body.hidden = !expanded;
+    fill(body);
+    head.addEventListener('click', function () {
+      var next = head.getAttribute('aria-expanded') !== 'true';
+      head.setAttribute('aria-expanded', next ? 'true' : 'false');
+      body.hidden = !next;
+      collapsedSections[key] = !next;
+      // 折叠改变高度,重新贴回目标旁边。
+      positionEditor();
+    });
+    section.append(head, body);
+    panelSections.appendChild(section);
+  };
+
+  var renderIdentity = function (target) {
+    panelIdentity.textContent = '';
+    var tag = document.createElement('span');
+    tag.className = 'panel-tag';
+    tag.textContent = target.tag + (target.attributes.id ? '#' + target.attributes.id : '');
+    panelIdentity.appendChild(tag);
+    var classes = String(target.attributes.class || '').split(/\s+/).filter(Boolean).slice(0, 4);
+    if (classes.length === 0) return;
+    var cls = document.createElement('span');
+    cls.className = 'panel-classes';
+    cls.textContent = classes.map(function (name) { return '.' + name; }).join('');
+    cls.title = target.attributes.class;
+    panelIdentity.appendChild(cls);
+  };
+
+  var SEMANTIC_ATTRS = ['role', 'aria-label', 'title', 'alt', 'name', 'type', 'href', 'src', 'placeholder'];
+  var styleSummary = function (styles) {
+    var parts = [];
+    if (styles.display) parts.push('display: ' + styles.display);
+    if (styles.position) parts.push('position: ' + styles.position);
+    var font = [styles.fontWeight, styles.fontSize].filter(Boolean).join(' ');
+    if (font) parts.push('font: ' + font + (styles.lineHeight ? ' / ' + styles.lineHeight : ''));
+    if (styles.color) parts.push('color: ' + styles.color);
+    if (styles.backgroundColor && styles.backgroundColor !== 'rgba(0, 0, 0, 0)') parts.push('background: ' + styles.backgroundColor);
+    if (styles.opacity && styles.opacity !== '1') parts.push('opacity: ' + styles.opacity);
+    return parts.join('; ');
+  };
+
+  var renderGeometry = function (body, target) {
+    addRow(body, PANEL.selector, target.selector, true);
+    addRow(body, PANEL.path, target.path, true);
+    addRow(body, PANEL.bounds, formatBounds(target.bounds), true, 'bounds');
+    addRow(body, PANEL.size, formatSize(target.bounds), true, 'size');
+    addRow(body, PANEL.center, 'x ' + Math.round(target.center.x) + ', y ' + Math.round(target.center.y), true, 'center');
+  };
+
+  var renderSemantics = function (body, target) {
+    addRow(body, PANEL.text, target.text, false);
+    SEMANTIC_ATTRS.forEach(function (name) {
+      if (target.attributes[name]) addRow(body, name, target.attributes[name], false);
+    });
+    addRow(body, PANEL.styles, styleSummary(target.computedStyle), false);
+  };
+
+  var renderData = function (body, target) {
+    Object.keys(target.attributes)
+      .filter(function (name) { return name.indexOf('data-') === 0; })
+      .sort()
+      .forEach(function (name) { addRow(body, name, target.attributes[name], true); });
+  };
+
+  var renderPage = function (body) {
+    addRow(body, PANEL.page, document.title || String(location.href), false);
+    addRow(body, PANEL.url, String(location.href), true);
+    addRow(body, PANEL.viewport, window.innerWidth + ' × ' + window.innerHeight, true);
+    addRow(body, PANEL.dpr, String(window.devicePixelRatio || 1), true);
+  };
+
+  /** 区域与笔迹标的是"这块地方",卡片只给几何,不装成元素语义。 */
+  var renderMarks = function (body) {
+    regions.forEach(function (entry, index) {
+      addRow(body, LABELS.marquee + ' ' + (index + 1), formatBounds(entry.rect) + ' · ' + formatSize(entry.rect), true);
+    });
+    strokes.forEach(function (entry, index) {
+      addRow(body, LABELS.draw + ' ' + (index + 1), formatBounds(entry.bounds) + ' · ' + formatSize(entry.bounds), true);
+    });
+  };
+
+  var renderSections = function () {
+    if (!PANEL) return;
+    geometryRefs = {};
+    panelSections.textContent = '';
+    if (!selected) {
+      panelHead.hidden = true;
+      addSection('geometry', PANEL.sectionGeometry, renderMarks);
+      return;
+    }
+    panelHead.hidden = false;
+    renderIdentity(selected.description);
+    addSection('geometry', PANEL.sectionGeometry, function (body) { renderGeometry(body, selected.description); });
+    addSection('semantics', PANEL.sectionSemantics, function (body) { renderSemantics(body, selected.description); });
+    var dataNames = Object.keys(selected.description.attributes).filter(function (name) {
+      return name.indexOf('data-') === 0;
+    });
+    if (dataNames.length > 0) {
+      addSection('data', PANEL.sectionData, function (body) { renderData(body, selected.description); });
+    }
+    addSection('page', PANEL.sectionPage, renderPage);
+  };
+
+  /** 滚动时元素的盒变了,几何行的值得跟着更新;语义/属性不用重算。 */
+  var refreshGeometry = function () {
+    if (!geometryRefs || !selected) return;
+    var bounds = selected.description.bounds;
+    if (geometryRefs.bounds) geometryRefs.bounds.textContent = formatBounds(bounds);
+    if (geometryRefs.size) geometryRefs.size.textContent = formatSize(bounds);
+    if (geometryRefs.center) geometryRefs.center.textContent = 'x ' + Math.round(selected.description.center.x) + ', y ' + Math.round(selected.description.center.y);
+  };
 
   /** 输入框随内容长高。隐藏元素的 scrollHeight 是 0,量它会塌缩;只在
    *  可见时量、且不低于 CSS min-height。 */
@@ -324,9 +618,11 @@ export const buildAnnotationOverlayScript = (
     var top = lastTargetRect.y + lastTargetRect.height + EDITOR_GAP;
     // 下方没空间时翻到目标上方,盒子不会被留半截在页面底外。
     if (top + box.height > window.innerHeight - 8) {
-      top = Math.max(8, lastTargetRect.y - box.height - EDITOR_GAP);
+      var above = lastTargetRect.y - box.height - EDITOR_GAP;
+      top = above >= 8 ? above : window.innerHeight - box.height - 8;
     }
     left = Math.max(8, Math.min(left, window.innerWidth - box.width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - box.height - 8));
     editor.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
   };
 
@@ -351,12 +647,16 @@ export const buildAnnotationOverlayScript = (
       editor.style.display = 'none';
       return;
     }
+    renderSections();
     positionEditor();
   };
 
   var syncSelectionVisuals = function () {
     if (!selected) return;
     var rect = rectFrom(selected.element.getBoundingClientRect());
+    selected.description.bounds = rect;
+    selected.description.center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    refreshGeometry();
     if (!usableRect(rect)) {
       selected.outline.style.display = 'none';
       selected.badge.style.display = 'none';
@@ -390,7 +690,7 @@ export const buildAnnotationOverlayScript = (
     badge.className = 'label';
     badge.textContent = selectorPart(element);
     shadow.append(outline, badge);
-    selected = { id: nextId('element'), element: element, outline: outline, badge: badge };
+    selected = { id: nextId('element'), element: element, description: describe(element), outline: outline, badge: badge };
     syncSelectionVisuals();
     syncChrome();
     focusComment();
@@ -596,14 +896,14 @@ export const buildAnnotationOverlayScript = (
 
   var placeHost = function () {
     var parent = topModal() || document.body || document.documentElement;
-    var hadFocus = shadow.activeElement === comment;
+    // 搬动宿主会让卡片里的焦点(评论框、分区按钮、开关)在打字中途丢掉。
+    var focused = shadow.activeElement;
     if (host.parentNode !== parent) parent.appendChild(host);
     try {
       if (host.matches(':popover-open')) host.hidePopover();
       host.showPopover();
     } catch (error) { /* 无 popover 支持:z-index 仍能盖住普通页面 */ }
-    // 搬动宿主会让注释框在打字中途失焦。
-    if (hadFocus) comment.focus({ preventScroll: true });
+    if (focused && typeof focused.focus === 'function') focused.focus({ preventScroll: true });
   };
 
   var topLayerObserver = new window.MutationObserver(function (records) {
@@ -701,6 +1001,7 @@ export const buildAnnotationOverlayScript = (
       viewport: { width: window.innerWidth, height: window.innerHeight },
       devicePixelRatio: window.devicePixelRatio || 1,
       comment: comment.value,
+      includeScreenshot: includeScreenshot,
       // 元素至多一个,绝不更多。保持列表形态,让元素/区域/笔迹对下游
       // 始终是同一个形状。
       elements: selected ? [{ id: selected.id, element: describe(selected.element) }] : [],
@@ -710,8 +1011,6 @@ export const buildAnnotationOverlayScript = (
       })
     });
   };
-
-  submit.addEventListener('click', attach);
 
   startTopLayer();
   setTool('select');

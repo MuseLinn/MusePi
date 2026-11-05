@@ -1026,6 +1026,10 @@ export function unwireHost(): void {
  */
 const TABS_KEY = "musepi-gui-managed-browser-tabs";
 
+/** Pre-rename local-preview spelling inside the persisted record. Rewritten on
+ *  read (and written back) so a restored guest never loads through it. */
+const LEGACY_LOCAL_PREVIEW_URL = /omp-file:\/\//gi;
+
 interface PersistedTab {
 	url: string;
 	sessionId: string | null;
@@ -1054,8 +1058,17 @@ export function persistTabs(): void {
 
 export function restoreTabs(): void {
 	try {
-		const raw = localStorage.getItem(TABS_KEY);
-		if (!raw) return;
+		const stored = localStorage.getItem(TABS_KEY);
+		if (!stored) return;
+		const raw = stored.replace(LEGACY_LOCAL_PREVIEW_URL, "musepi-file://");
+		if (raw !== stored) {
+			try {
+				localStorage.setItem(TABS_KEY, raw);
+			} catch {
+				// Storage full / disabled — the restored guests still use the
+				// canonical scheme.
+			}
+		}
 		const parsed: unknown = JSON.parse(raw);
 		// Older records were a URL array or `{ urls, active }`; both belong to
 		// the session current at restore time (null), which the first session

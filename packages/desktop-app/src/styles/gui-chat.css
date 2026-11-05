@@ -5848,6 +5848,40 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Plugins: count in the header, roster behind the disclosure ──────── */
+/* Status strip above the section head: the running-plugin readout, with the
+ * per-extension detail in a useFloatingMenu portal (surface/placement live
+ * there, so this row only owns its box). */
+.gui-session-info-plugins-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+.gui-session-info-plugin-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 4px 6px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-ok) 8%, transparent);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	text-align: left;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-session-info-plugin-status:hover {
+	background: color-mix(in oklab, var(--color-ok) 14%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-plugin-status .gui-session-info-item-label {
+	flex: 1;
+}
+.gui-session-info-plugin-status-icon {
+	color: var(--color-ok);
+}
 .gui-session-info-plugins-head {
 	display: flex;
 	align-items: center;

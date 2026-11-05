@@ -1530,8 +1530,9 @@ export function ChatView({
 		return map;
 		// P1-12: gate on structureRev, not snap.entries — a streaming content
 		// upsert replaces the message object but never touches id/parentId, so
-		// the topology is unchanged. Deps stay deliberately narrow.
-	}, [snap?.structureRev]);
+		// the topology is unchanged. Deps stay deliberately narrow; sessionId is
+		// the other list-shape event (a switch re-seeds entries at rev 0).
+	}, [snap?.sessionId, snap?.structureRev]);
 	// Current leaf: explicit branch switch wins; otherwise the LAST entry
 	// (linear tip). Reset the override whenever the session changes.
 	const effectiveLeaf = useMemo(() => {
@@ -1546,7 +1547,11 @@ export function ChatView({
 		// optimistic echo appends outside that counter — its row is parentless
 		// and always renders, so a stale leaf id for the sub-second echo
 		// window is invisible (see session-store.structureRev note).
-	}, [currentLeafKey, snap?.structureRev]);
+		// sessionId: the component is reused across sessions and a snapshot-
+		// seeded store starts its counter back at 0, so structureRev alone kept
+		// the PREVIOUS session's leaf here (and its walk below) — the new
+		// transcript was then filtered against the old path, leaving one row.
+	}, [currentLeafKey, snap?.sessionId, snap?.structureRev]);
 	// Walk root → leaf via parentId (breadcrumb path). `complete` records WHY the
 	// walk stopped — at a genuine root (an entry with no parentId — the topology
 	// is trustworthy) or on a parentId that is not in the loaded window (the
@@ -1565,8 +1570,9 @@ export function ChatView({
 		return walkLeafPath(snap?.entries ?? [], effectiveLeaf);
 		// P1-12: the parentId chain only changes when the entry list shape
 		// changes (structureRev); a content upsert preserves parentId on the
-		// replacement object.
-	}, [effectiveLeaf, currentLeafKey, snap?.structureRev]);
+		// replacement object. sessionId: a session switch re-seeds the entries
+		// with the counter reset to 0, so the walk must be rebuilt with them.
+	}, [effectiveLeaf, currentLeafKey, snap?.sessionId, snap?.structureRev]);
 	const leafPath = leafWalk.path;
 	// Map-mode prompt-rail focus request: the rail is navigation, not a branch
 	// change, so it hands the canvas a node to center + highlight.

@@ -104,7 +104,7 @@ describe("capability-center Cordis plugin", () => {
 		delete globals.__capabilityImports;
 	});
 
-	it("shows the running-plugin status strip inside the plugins pane", async () => {
+	it("no longer hosts the running-plugin status strip", async () => {
 		const rpc = {
 			request: async (method: string): Promise<unknown> => {
 				if (method === "extensions.list") {
@@ -136,10 +136,9 @@ describe("capability-center Cordis plugin", () => {
 			await Promise.resolve();
 			await Promise.resolve();
 		});
-		const chip = host.querySelector<HTMLButtonElement>(".gui-mode-chip");
-		expect(chip?.textContent).toContain(t("settings.extensionsRunning", { count: "1" }));
-		// The strip lives inside the plugins pane, next to the managed list.
-		expect(chip?.closest(".gui-capability-pane")).not.toBeNull();
+		// The session info card owns the running-plugin readout now; this
+		// management page keeps only the unified plugin list.
+		expect(host.textContent).not.toContain(t("settings.extensionsRunning", { count: "1" }));
 		await act(async () => root.unmount());
 	});
 

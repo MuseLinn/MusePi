@@ -35,11 +35,14 @@ export async function dispatchAnnotationResult({
 	screenshot: File | null;
 	intro: string;
 }): Promise<void> {
-	const prompt = formatAnnotationPrompt({ payload, screenshotAttached: screenshot !== null, intro });
-	const image = screenshot ? await readDataUrl(screenshot).catch(() => undefined) : undefined;
+	// 开关关掉时既不带图,也不在 prompt 里声称有图;截图本身可能已经被
+	// 调用方拍好,丢弃它比让附件与正文互相矛盾便宜。
+	const attachScreenshot = payload.includeScreenshot !== false && screenshot !== null;
+	const prompt = formatAnnotationPrompt({ payload, screenshotAttached: attachScreenshot, intro });
+	const image = attachScreenshot && screenshot ? await readDataUrl(screenshot).catch(() => undefined) : undefined;
 	dispatchAnnotationAttach({
 		text: prompt,
 		displayContext: createBrowserAnnotationContext({ payload, prompt, image }),
-		...(screenshot ? { image: screenshot } : {}),
+		...(attachScreenshot && screenshot ? { image: screenshot } : {}),
 	});
 }

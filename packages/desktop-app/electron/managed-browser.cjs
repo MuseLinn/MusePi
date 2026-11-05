@@ -60,15 +60,12 @@ const ZOOM_MAX = 3;
 /** URLs the tool must never see as targets (mirrors the relay's ineligible set). */
 const INELIGIBLE_URL = /^(chrome|devtools|edge|view-source|chrome-extension|chrome-untrusted|chrome-search):/i;
 /** Sanctioned local-preview scheme: `musepi-file://<urlencoded absolute path>`
- *  serves agent-generated artifacts through the managed session. `omp-file` is
- *  the pre-rename spelling: persisted tabs and links keep working through it,
- *  and every entry point canonicalizes to {@link LOCAL_PREVIEW_SCHEME}. */
+ *  serves agent-generated artifacts through the managed session. It is the ONLY
+ *  local scheme: renderer persistence migrates the pre-rename spelling before a
+ *  URL reaches this process. */
 const LOCAL_PREVIEW_SCHEME = "musepi-file";
-const LEGACY_LOCAL_PREVIEW_SCHEME = "omp-file";
-/** Both spellings, canonical first. */
-const LOCAL_PREVIEW_SCHEMES = [LOCAL_PREVIEW_SCHEME, LEGACY_LOCAL_PREVIEW_SCHEME];
-/** Matches either scheme prefix at the start of an address. */
-const LOCAL_PREVIEW_URL = new RegExp(`^(?:${LOCAL_PREVIEW_SCHEMES.join("|")}):`, "i");
+/** Matches the scheme prefix at the start of an address. */
+const LOCAL_PREVIEW_URL = new RegExp(`^${LOCAL_PREVIEW_SCHEME}:`, "i");
 
 /** Timeout for the renderer's risky-navigation consent dialog (auto-deny). */
 const CONFIRM_TIMEOUT_MS = 30_000;
@@ -107,12 +104,12 @@ const AGENT_HIGHLIGHT_CONFIG = {
 // registerSchemesAsPrivileged can only be called once per process.
 if (!process.env.MUSEPI_MANAGED_BROWSER_SCHEMES_REGISTERED) {
 	process.env.MUSEPI_MANAGED_BROWSER_SCHEMES_REGISTERED = "1";
-	protocol.registerSchemesAsPrivileged(
-		LOCAL_PREVIEW_SCHEMES.map((scheme) => ({
-			scheme,
+	protocol.registerSchemesAsPrivileged([
+		{
+			scheme: LOCAL_PREVIEW_SCHEME,
 			privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
-		})),
-	);
+		},
+	]);
 }
 
 function tabTargetId(tabId) {
@@ -299,7 +296,8 @@ function isLocalPreviewUrl(url) {
 }
 
 /** Address-bar normalization: bare hostnames default to https; http/https or
- *  the local-preview scheme (both spellings) are accepted. */
+ *  the local-preview scheme are accepted. Anything else, including the retired
+ *  pre-rename spelling, is rejected. */
 function normalizeAddressBarUrl(input) {
 	const value = String(input).trim();
 	if (!value) return null;
@@ -314,7 +312,6 @@ function normalizeAddressBarUrl(input) {
 			if (!filePath) return null;
 			// URL paths always use `/`; Windows drive paths need the leading
 			// slash (`musepi-file://localhost/D:/x`) so `pathname` round-trips.
-			// A persisted `omp-file://` link lands here too and upgrades.
 			const urlPath = filePath.replace(/\\/g, "/");
 			return `${LOCAL_PREVIEW_SCHEME}://localhost${encodeURI(urlPath.startsWith("/") ? urlPath : `/${urlPath}`)}`;
 		} catch {
@@ -911,9 +908,7 @@ class ManagedBrowserController {
 			ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
 			// Local artifact preview: `musepi-file://<urlencoded absolute path>`.
 			// Absolute paths only; navigation to it from renderer-initiated
-			// non-http(s) links is blocked by will-navigate. The legacy
-			// `omp-file` spelling shares the same reader so already-persisted
-			// tabs keep loading.
+			// non-http(s) links is blocked by will-navigate.
 			const serveLocalPreview = (request) => {
 				let fileUrl;
 				try {
@@ -924,7 +919,7 @@ class ManagedBrowserController {
 				if (fileUrl === null) return new Response("not found", { status: 404 });
 				return net.fetch(fileUrl);
 			};
-			for (const scheme of LOCAL_PREVIEW_SCHEMES) ses.protocol.handle(scheme, serveLocalPreview);
+			ses.protocol.handle(LOCAL_PREVIEW_SCHEME, serveLocalPreview);
 		} catch {
 			// session unavailable (tests / headless) — best effort
 		}
@@ -1331,7 +1326,8 @@ class ManagedBrowserController {
 	/**
 	 * Agent-driven navigations to sanctioned destinations (http/https, the
 	 * local preview scheme) pass without asking. Raw file://, credentials in
-	 * the URL, and exotic schemes need explicit user consent (default deny).
+	 * the URL, the retired pre-rename spelling, and exotic schemes need
+	 * explicit user consent (default deny).
 	 */
 	async gateAgentNavigation(url) {
 		if (!url || url === "about:blank") return true;
@@ -1344,7 +1340,7 @@ class ManagedBrowserController {
 		if (
 			parsed.protocol === "http:" ||
 			parsed.protocol === "https:" ||
-			LOCAL_PREVIEW_SCHEMES.some((scheme) => `${scheme}:` === parsed.protocol)
+			parsed.protocol === `${LOCAL_PREVIEW_SCHEME}:`
 		) {
 			return true;
 		}
@@ -2627,7 +2623,6 @@ module.exports = {
 	ManagedBrowserController,
 	DEFAULT_PORT,
 	LOCAL_PREVIEW_SCHEME,
-	LEGACY_LOCAL_PREVIEW_SCHEME,
 	// Pure helpers the upload/local-preview tests exercise without Electron.
 	normalizeAddressBarUrl,
 	localPreviewFilePath,

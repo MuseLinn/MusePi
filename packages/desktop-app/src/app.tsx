@@ -30,6 +30,7 @@ import type { ReminderRow } from "./components/RemindersPanel";
 import { RemoteAccessDialog } from "./components/RemoteAccessDialog";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import type { SessionListNode } from "./components/SessionList";
+import type { SessionRetitleResult } from "./components/SessionSidebar";
 import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
@@ -255,6 +256,55 @@ function collectTreeIds(nodes: SessionListNode[], out: Set<string>): void {
 		out.add(n.entry.id);
 		if (n.children.length > 0) collectTreeIds(n.children, out);
 	}
+}
+
+/**
+ * Stamp a freshly generated title onto one session tree row. The sidebar row,
+ * its tab and the reminders all read the tree label / session metadata, so
+ * applying the response locally is what makes AI rename visible when it
+ * returns instead of on the next list poll. Every untouched subtree keeps its
+ * identity, so memoized rows do not re-render. The 60-char cut and ellipsis
+ * match `session.tree`'s own label rule, so the reconcile refresh does not
+ * visibly re-trim the row.
+ */
+export function applyRetitledSessionLabel(
+	nodes: SessionListNode[],
+	sessionId: string,
+	sessionTitle: string,
+): SessionListNode[] {
+	const label = sessionTitle.length > 60 ? `${sessionTitle.slice(0, 60)}…` : sessionTitle;
+	const relabel = (list: SessionListNode[]): SessionListNode[] => {
+		let changed = false;
+		const next = list.map(node => {
+			if (node.entry.id === sessionId) {
+				if (node.entry.label === label) return node;
+				changed = true;
+				return { ...node, entry: { ...node.entry, label } };
+			}
+			const children = relabel(node.children);
+			if (children === node.children) return node;
+			changed = true;
+			return { ...node, children };
+		});
+		return changed ? next : list;
+	};
+	return relabel(nodes);
+}
+
+/**
+ * Map a failed `session.retitle` request onto the reason the row menu toasts.
+ * The daemon reports its own rename failures as data; only transport and
+ * version mismatches reach this classifier, and each one has a different
+ * remedy: a dead socket needs a reconnect, an old daemon needs a restart (it
+ * predates the method and answers "Unknown method"), and a late model pass
+ * needs a retry.
+ */
+export function retitleFailureReason(error: unknown): SessionRetitleResult["reason"] {
+	const message = error instanceof Error ? error.message : String(error);
+	if (/unknown method/i.test(message)) return "unsupported";
+	if (/request timeout/i.test(message)) return "timeout";
+	if (/not connected|connection closed|cannot connect/i.test(message)) return "offline";
+	return "failed";
 }
 
 /** Shared chrome for a surface-replacing view (board / scheduled / agents):
@@ -2890,24 +2940,47 @@ function AppInner(): ReactNode {
 	}, []);
 
 	/** AI rename any session: the
-	 *  daemon generates a title from the first user message. Refreshes the
-	 *  tree on success; callers toast the reason on failure. The model pass
-	 *  runs past the 15s default RPC cap, so this carries its own timeout. */
+	 *  daemon generates a title from the first user message. The title lands
+	 *  in the tree/metadata locally before the list refresh, so the row and
+	 *  its tab rename on the response instead of waiting for a poll; the
+	 *  refresh then reconciles with the daemon. Callers toast the reason on
+	 *  failure. The model pass runs past the 15s default RPC cap, so this
+	 *  carries its own timeout. */
 	const retitleSessionById = useCallback(
-		async (sessionId: string): Promise<{ ok: boolean; reason?: string }> => {
+		async (sessionId: string): Promise<SessionRetitleResult> => {
 			const client = rpcRef.current;
 			if (!client) return { ok: false, reason: "offline" };
+			let res: { ok?: boolean; title?: string; reason?: string } | null;
 			try {
-				const res = (await client.request("session.retitle", { sessionId }, { timeoutMs: 120_000 })) as {
-					ok: boolean;
+				res = (await client.request("session.retitle", { sessionId }, { timeoutMs: 120_000 })) as {
+					ok?: boolean;
 					title?: string;
 					reason?: string;
-				};
-				if (res?.ok) await refreshSessions(client);
-				return { ok: res?.ok === true, reason: res?.reason };
-			} catch {
-				return { ok: false, reason: "failed" };
+				} | null;
+			} catch (err) {
+				return { ok: false, reason: retitleFailureReason(err) };
 			}
+			if (res?.ok !== true) {
+				const reason = res?.reason;
+				return {
+					ok: false,
+					reason: reason === "empty" || reason === "generation-failed" || reason === "offline" ? reason : "failed",
+				};
+			}
+			const title = typeof res.title === "string" ? res.title.trim() : "";
+			if (title) {
+				setTree(prev => applyRetitledSessionLabel(prev, sessionId, title));
+				setSessionMeta(prev => {
+					const row = prev.get(sessionId);
+					if (!row || row.title === title) return prev;
+					const next = new Map(prev);
+					next.set(sessionId, { ...row, title });
+					return next;
+				});
+			}
+			// Reconcile in the background: nesting/cwd/status may have moved too.
+			void refreshSessions(client);
+			return { ok: true, title: title || undefined };
 		},
 		[refreshSessions],
 	);

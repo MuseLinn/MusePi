@@ -48,16 +48,12 @@ export function isPrivateAddress(hostname: string): boolean {
 	);
 }
 
-/** The managed browser's local-preview scheme and its pre-rename spelling. */
-const LOCAL_PREVIEW_SCHEME = "musepi-file";
-const LEGACY_LOCAL_PREVIEW_SCHEME = "omp-file";
-const LEGACY_LOCAL_PREVIEW_URL = new RegExp(`^${LEGACY_LOCAL_PREVIEW_SCHEME}:`, "i");
-
 /**
  * Normalize address-bar input: `example.com/docs` → https, bare
  * `localhost:3000`/`example.com:8080` keep their port, explicit schemes pass
- * through for the scheme check below; the legacy local-preview spelling is
- * rewritten to {@link LOCAL_PREVIEW_SCHEME} so persisted links converge.
+ * through for the scheme check below. The managed browser's local-preview
+ * scheme needs no rewriting; the retired pre-rename spelling is no longer
+ * special-cased and is rejected there as the unknown scheme it now is.
  * `//host` protocol-relative input is rejected outright so it can never be
  * misread as a hostname.
  */
@@ -68,9 +64,6 @@ export function normalizeBrowserUrl(input: string): string {
 	// `localhost:3000` and `example.com:8080` are common no-scheme inputs that
 	// must not be mistaken for a scheme.
 	if (/^[^/?#:\s]+:\d+(?:[/?#]|$)/.test(value)) return `https://${value}`;
-	if (LEGACY_LOCAL_PREVIEW_URL.test(value)) {
-		return `${LOCAL_PREVIEW_SCHEME}:${value.slice(LEGACY_LOCAL_PREVIEW_SCHEME.length + 1)}`;
-	}
 	if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value)) return value;
 	return `https://${value}`;
 }

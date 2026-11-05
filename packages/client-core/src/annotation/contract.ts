@@ -69,6 +69,8 @@ export type AnnotationPayload = {
 	readonly viewport: { readonly width: number; readonly height: number };
 	readonly devicePixelRatio: number;
 	readonly comment: string;
+	/** 是否把页面截图附给智能体。缺省视为 true,旧 payload 与旧宿主因此不受影响。 */
+	readonly includeScreenshot?: boolean;
 	readonly elements: ReadonlyArray<AnnotationElement>;
 	readonly regions: ReadonlyArray<AnnotationRegion>;
 	readonly strokes: ReadonlyArray<AnnotationStroke>;
@@ -137,6 +139,7 @@ export const isAnnotationPayload = (value: unknown): value is AnnotationPayload 
 	isFiniteNumber(value.viewport.width) &&
 	isFiniteNumber(value.viewport.height) &&
 	isFiniteNumber(value.devicePixelRatio) &&
+	(value.includeScreenshot === undefined || typeof value.includeScreenshot === "boolean") &&
 	Array.isArray(value.elements) &&
 	value.elements.every(isAnnotationElement) &&
 	Array.isArray(value.regions) &&

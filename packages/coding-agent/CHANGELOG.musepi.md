@@ -6,11 +6,23 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **营销预览改为真实渲染器 + 夹具 daemon**：站点交互预览直接运行桌面渲染器，`build:web-demo` 从 `dist/` 组装 `web/app/`，并用 daemon 自己的插槽编译器产出 `app.chat`、`panel.tab.files`、`panel.shell` 组件；`web/demo-src/` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，会话、文件与 git 应答照真实 daemon 的形状录制。socket 目标固定为死端口 `ws://127.0.0.1:9/demo`，夹具失效时只会停在连接页，不会连到本机 8300 的 daemon。`verify-web-demo.mjs` 用无头 Edge 断言外壳、欢迎输入框、会话 transcript、零个 8300 请求与零个真实 WebSocket 连接。
+  - EN: The site's interactive preview now runs the real desktop renderer against a fixture daemon. `build:web-demo` assembles `web/app/` from `dist/` and compiles the `app.chat`, `panel.tab.files`, and `panel.shell` slot components with the daemon's own compiler; `web/demo-src/` swaps `window.WebSocket` for an in-page JSON-RPC mock whose session, file, and git answers follow recorded daemon shapes. The socket target stays the dead port `ws://127.0.0.1:9/demo`, so a broken fixture set can only reach the connect screen and never a daemon on 8300. `verify-web-demo.mjs` drives headless Edge and asserts the shell, welcome composer, session transcript, zero :8300 requests, and zero real WebSocket connections.
+
+- **标注面板显示结构化元素信息**：选中网页元素时显示标签/类名、定位与几何、语义与状态、data-* 属性、页面与捕获信息，并可切换「引用发送截图」；区域与手绘只显示几何与评论。关闭开关后不再附加截图。
+  - EN: Element annotations now show structured details — tag and classes, position and geometry, semantics and state, data-* attributes, and page/capture info — plus an Include screenshot toggle. Regions and strokes show geometry and comment only, and turning the toggle off omits the screenshot attachment.
+
+- **插件状态条移入会话信息卡**：运行中插件状态条与逐项运行/禁用明细显示在信息卡的插件分区，能力中心不再重复；插件状态仍是全局（profile 级），与 DSH 的插件管理一致。
+  - EN: The running-plugin status strip and its per-plugin state details now live in the session info card's plugin section, with no duplicate in the capability center. Plugin state remains global (profile-level), matching DSH's plugin manager.
+
+- **AI 重命名即时反馈**：成功后会话标题立即更新，不再等待整棵树刷新；进行中显示状态条并禁用菜单，空会话、标题模型失败、离线、超时与旧 daemon 分别给出可操作提示。
+  - EN: AI rename now updates the session title immediately instead of waiting for a tree refresh, shows a busy state while running, and explains empty sessions, title-model failures, offline, timeout, and old-daemon cases separately.
+
 - **旧浮动状态卡移除，信息集中到会话信息卡**：Git 改动、连接器、运行中插件、子代理与待办全部由同一张会话信息卡承载；子代理显示进度与已用时，待办显示当前任务与完成数。运行中插件状态条移到能力中心，欢迎页暂存的连接器选择在会话创建后立即写回。
   - EN: The old floating status card is gone; Git totals, connectors, running plugins, subagents, and todo progress all live in the session info card. Subagents show progress and elapsed time, todos show the current task and count, the running-plugin status strip moves to the capability center, and connector selections stashed on the welcome screen flush as soon as the session exists.
 
-- **本地文件预览 scheme 改为 musepi-file**：受管浏览器用 `musepi-file://` 提供 HTML 等本地预览，旧 `omp-file://` 继续接受并自动规范化；Windows 盘符路径仍正确落到 `file:///D:/...`。
-  - EN: The managed browser's local preview scheme is now `musepi-file://`. Legacy `omp-file://` URLs are still accepted and normalized, and Windows drive paths still resolve to `file:///D:/...`.
+- **本地文件预览 scheme 改为 musepi-file**：受管浏览器用 `musepi-file://` 提供 HTML 等本地预览；旧 `omp-file://` 不再接受，已持久化的面板/浏览器标签在读取时自动迁移到新 scheme。Windows 盘符路径仍正确落到 `file:///D:/...`。
+  - EN: The managed browser's local preview scheme is now `musepi-file://`. Legacy `omp-file://` is no longer accepted; persisted panel and browser tabs migrate to the new scheme when loaded. Windows drive paths still resolve to `file:///D:/...`.
 
 - **表格可加宽，会话可复制为 Markdown**：表格工具栏新增「加宽表格 / 恢复默认宽度」；会话菜单新增「复制全部对话为 Markdown」与「仅复制最终总结」，无内容时禁用。
   - EN: Tables gain Widen / Restore width in their toolbar, and the session menu adds Copy all conversation as Markdown and Copy final summary, disabled when there is nothing to copy.

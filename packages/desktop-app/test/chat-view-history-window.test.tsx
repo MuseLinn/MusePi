@@ -96,6 +96,75 @@ describe("ChatView history window", () => {
 		expect(host.textContent).toContain("older map entry");
 	});
 
+	it("renders both transcripts when switching between snapshot-seeded sessions", async () => {
+		const rpc = {
+			request: async (method: string) =>
+				method.startsWith("models.list") ? [] : method === "session.turns" ? { turns: [] } : {},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+		// Both stores are snapshot-seeded, so both report structureRev 0 — the
+		// leaf/topology memos must still re-derive on the switch.
+		const alpha = new GuiSessionStore(
+			"alpha-session",
+			{
+				entries: [
+					message("alpha-1", null, "alpha first turn", 1),
+					message("alpha-2", "alpha-1", "alpha second turn", 2),
+				],
+				cursor: 0,
+			},
+			"C:/workspace",
+		);
+		const beta = new GuiSessionStore(
+			"beta-session",
+			{
+				entries: [
+					message("beta-1", null, "beta first turn", 3),
+					message("beta-2", "beta-1", "beta second turn", 4),
+					message("beta-3", "beta-2", "beta third turn", 5),
+				],
+				cursor: 0,
+			},
+			"C:/workspace",
+		);
+		stores.add(alpha);
+		stores.add(beta);
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		roots.add(root);
+		const view = (store: GuiSessionStore) => (
+			<ChatView
+				store={store}
+				rpc={rpc}
+				onSend={() => {}}
+				onStop={() => {}}
+				onDecideApproval={() => {}}
+				busy={false}
+				project="C:/workspace"
+				onProject={() => {}}
+				onSubmitNewSession={() => {}}
+				rightPanelOpen={false}
+				terminalOpen={false}
+				focusMode={false}
+				onToggleFocus={() => {}}
+			/>
+		);
+		await act(async () => root.render(view(alpha)));
+		expect(host.textContent).toContain("alpha first turn");
+		expect(host.textContent).toContain("alpha second turn");
+
+		await act(async () => root.render(view(beta)));
+		expect(host.textContent).toContain("beta first turn");
+		expect(host.textContent).toContain("beta second turn");
+		expect(host.textContent).toContain("beta third turn");
+		expect(host.textContent).not.toContain("alpha second turn");
+
+		await act(async () => root.render(view(alpha)));
+		expect(host.textContent).toContain("alpha second turn");
+		expect(host.textContent).not.toContain("beta third turn");
+	});
+
 	it("returns from an advisor record to the main session's latest turn", async () => {
 		const rpc = {
 			request: async (method: string) =>

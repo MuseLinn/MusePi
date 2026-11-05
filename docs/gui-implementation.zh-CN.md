@@ -259,6 +259,14 @@ daemon RPC:
 - **为什么不照抄 IPC spawn 模型**（dsh 的形态：`stdio: [.., 'ipc']` + `disconnect` 自尽）：dsh 能那样做是因为它**没有 attach 场景**——一个 server 进程对一 owner，压根没有 daemon 概念。我们有实例切换、开机自启、终端起的 daemon，所以 daemon 必须活过它的壳。RPC 给出了同样的有序拆除，且不改变归属模型。
 - **测试**：`coding-agent/test/daemon/system-shutdown.test.ts`（应答顺序、监听释放、重复关闭幂等）+ `desktop-app/test/daemon-kill-tree.test.ts`（端口释放、后代回收、空闲快路径、旁观进程不受影响）。每个 daemon 测试文件的端口都向 **OS** 申请（`listen(0)`）：套件会并行跑多个 `bun test` 进程，任何固定或 pid 推导的端口段都会跨 runner 撞车。
 
+### 8d. 营销预览 demo（2026-11-05）
+
+站点落地页的交互预览跑的是真实桌面渲染器，只把对端换成夹具 daemon，而不是另做一套假 UI。`packages/desktop-app/scripts/build-web-demo.mjs` 从 `dist/` 组装 `web/app/`（外壳 chunk 与样式表，字体裁剪到外壳实际绘制的字面），再用 daemon 自己的编译器把 `app.chat`、`panel.tab.files`、`panel.shell` 三个插槽组件编译进 `web/app/plugins/`。`web/demo-src/` 提供假 daemon：`transport.js` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，夹具模块应答启动、会话、文件与 git 的 RPC，`push()` 发出脚本化回合所流经的订阅信封。
+
+- **socket 目标刻意指向死端口**：`demo-boot.js` 在渲染器 bundle 之前把 `musepi-gui-url` 固定为 `ws://127.0.0.1:9/demo`。夹具传输层安装失败时，demo 只能停在连接页，绝不能落到本机 8300 的 daemon 上。改夹具时不要把这个 URL 改成活的。
+- **夹具形状是录制的，不是编的**：`web/demo-src/fixtures/` 里的 RPC 应答照隔离 daemon 的真实形状（会话 tree/list/resume 快照、工作区树、`fs.readBytes`、git 状态），渲染器解析的就是生产环境那一套。演示值全部虚构，不含真实路径或人名。
+- **验证**（`packages/desktop-app/scripts/verify-web-demo.mjs`）：在系统分配的本地端口上服务 `web/app/`，用无头 Edge 启动，断言真实外壳（侧栏导航 + 状态栏）、欢迎输入框、某个演示会话的 transcript、零个发往 8300 的请求，以及 socket 目标不可达时零个真实 WebSocket 连接。每项打印一行 PASS/FAIL，失败以非零码退出，并把 `welcome.png` / `session.png` 写到 `.tmp/verify-web-demo/`。先跑 `packages/desktop-app` 里的 `bun run build:web-demo`；产物缺失时脚本以 2 退出。
+
 ## 9. 平台适配(2026-08-11)
 
 - **原则**:跨平台特性按平台实现,不因"当前只有 macOS 实现"就把特性/设置项砍掉;只有**硬件层面 macOS 独有**的才隐藏。
@@ -294,7 +302,7 @@ daemon RPC:
 
 ### 边界项落地（2026-08-12，均 E2E 验证）
 - **agentTabId 分离**：桥维护专用 agent tab（`ManagedBrowser.ensureAgentTab` 浏览器级命令，supervisor 在 gui kind 下经 `browser.target().createCDPSession()` 请求），默认回合不会收养用户标签页，首次 open 自动建 agent tab（`openedByAgent` 徽标 + 自动激活显示）。唯一的收养路径是显式 `app.target`：`ManagedBrowser.findTabTarget` 按 url/title 子串命中已打开的用户标签页并直接返回，不选中、不聚焦、不新建；未命中则报错，不静默退回 agent tab。配套：桥公告 `type:"browser"` 的 browser target（`attached:true`，puppeteer 的 `CdpBrowser.target()` 依赖它）并支持对 `browser` targetId 的 attachToTarget（browser-kind 会话路由到 handleBrowserCommand）；新 tab 的 attach 事件等 `whenDebuggerReady` 后再发（已连接客户端也能收养新建 tab）。
-- **musepi-file:// 本地预览协议**：`registerSchemesAsPrivileged`（standard+secure+fetch+stream）+ `ses.protocol.handle` 按 pathname 服务本地文件。**规范形式必须带 host**：`musepi-file://localhost<绝对路径>`——空 host 会被 Chromium 规范化成 `musepi-file://tmp/x`（首段并入 host），handler 拿不到绝对路径。旧 `omp-file://` 仍然接受并规范化为 `musepi-file://`；两个 scheme 都注册并由同一读取器服务。
+- **musepi-file:// 本地预览协议**：`registerSchemesAsPrivileged`（standard+secure+fetch+stream）+ `ses.protocol.handle` 按 pathname 服务本地文件。**规范形式必须带 host**：`musepi-file://localhost<绝对路径>`——空 host 会被 Chromium 规范化成 `musepi-file://tmp/x`（首段并入 host），handler 拿不到绝对路径。旧 `omp-file://` 不再注册或接受；渲染端在读取面板标签与受管浏览器标签持久化状态时把它重写为 `musepi-file://`，旧标签仍能打开且不会暴露旧 scheme。
 - **风险告知门**：agent 车道（CDP Page.navigate / Target.createTarget）导航到 file://、带凭据或异常 scheme 时先问 renderer（`managed-browser:confirm` + `confirm-result`，30s 超时自动拒绝，一次一问）；http/https/musepi-file 直接放行。拒绝时 CDP 回 `Navigation blocked by the user`，agent 立即看到失败。
 - **停止按钮**：账本状态 dispatched→completed/failed/canceled；`managed-browser:stop` → `webContents.stop()` + **关闭 agent tab**（Electron debugger 接受 `Runtime.terminateExecution` 但不中止脚本，关 tab 是唯一可靠硬中止——pending CDP 调用随 target 关闭而拒绝，daemon 工具快速失败）。detach 会让 pending sendCommand resolve 而非 reject，成功标记需在 tab 存活时才写（否则覆盖 canceled）。`Runtime.callFunctionOn` 已映射到 evaluate 活动。
 - 9229 remote-debugging 会把受管 view 也列成 target（agent 默认不会碰到；桥面只暴露受管 tabs）。
@@ -1115,3 +1123,6 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 - **验证**:`bun run gen:tool-views` 需在改动工具渲染后重跑,导出页与聊天共用同一份生成物。
 - **引用评论**:`SelectionToolbar` 的 `onQuote` 增加第 4 个 `comment` 参数;浮层内输入后由 `ChatView.appendQuote` 传入 `createChatQuoteContext`,引用卡继续用 `withDisplayContextComment` 编辑,发送时 `composeDisplayContextPrompt` 把评论拼进引用正文。文件/PDF/Office 选区的评论同样经 `FilePane.appendFileQuote` 写入 `createFileQuoteContext`。
 - **HTML 本地预览**:`lib/file-workspace.ts` 的 `panelBrowserPreviewUrl()` 生成 `musepi-file://localhost/<path>`;主进程 `normalizeAddressBarUrl` 与协议处理器统一补/去 Windows 盘符前的斜杠,`pathToFileURL` 才不会拼成 `file:///D:/D:/...`。`will-navigate` 允许 `musepi-file:` 同方案导航,页面内相对链接可继续跳转;FilePane 的 HTML 预览头部按钮经 `musepi-open-url` 在受管浏览器中打开。
+- **标注面板**:`annotation/overlay.ts` 在 shadow DOM 内渲染结构化卡片，分区数据直接取自 `AnnotationElementTarget`（tag/classes、selector/path/bounds/center、role/aria/disabled 等语义、data-*、pageUrl/viewport/DPR）；`AnnotationPayload.includeScreenshot` 缺省为 true，关闭时 `attach.ts` 不附截图且 prompt 标记 `Screenshot: not attached`。未传 panel 文案的宿主自动回退旧紧凑输入条。
+- **插件状态条**:`ExtensionStatusCard` 新增 `inline` 变体，渲染在会话信息卡的插件分区顶部；卡片把同一份注册表条目下发，避免第二个 `useExtensionRegistry` 订阅。插件状态是 profile 级全局状态，与 DSH 的 `ui-plugin-manager` 一致，不做会话级启停。
+- **AI 重命名**:`retitleSessionById` 成功后先用返回标题写 `session.tree` 的目标行与 `sessionMeta.title`，再后台 `refreshSessions` 对账；失败按 `empty/generation-failed/offline/timeout/unsupported` 映射为不同提示，进行中显示状态条并禁用菜单。

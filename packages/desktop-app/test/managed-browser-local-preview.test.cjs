@@ -1,6 +1,7 @@
 /**
- * Local-preview scheme handling (`musepi-file://`, legacy `omp-file://`):
- * address-bar canonicalization and the file URL the protocol handler serves.
+ * Local-preview scheme handling (`musepi-file://` only): address-bar
+ * canonicalization and the file URL the protocol handler serves. The retired
+ * pre-rename spelling is not a local preview anymore.
  */
 const { describe, expect, it } = require("bun:test");
 const path = require("node:path");
@@ -9,7 +10,6 @@ const { pathToFileURL } = require("node:url");
 // These tests never reach Electron; skip the one-time scheme hook.
 process.env.MUSEPI_MANAGED_BROWSER_SCHEMES_REGISTERED = "1";
 const {
-	LEGACY_LOCAL_PREVIEW_SCHEME,
 	LOCAL_PREVIEW_SCHEME,
 	ManagedBrowserController,
 	isLocalPreviewUrl,
@@ -18,17 +18,15 @@ const {
 	normalizeAddressBarUrl,
 } = require("../electron/managed-browser.cjs");
 
-describe("local-preview schemes", () => {
-	it("registers the MusePi spelling and the legacy one", () => {
+describe("local-preview scheme", () => {
+	it("registers the MusePi spelling only", () => {
 		expect(LOCAL_PREVIEW_SCHEME).toBe("musepi-file");
-		expect(LEGACY_LOCAL_PREVIEW_SCHEME).toBe("omp-file");
 	});
 
-	it("accepts both spellings and nothing else", () => {
+	it("accepts the canonical spelling and nothing else", () => {
 		expect(isLocalPreviewUrl("musepi-file://localhost/tmp/a.html")).toBe(true);
 		expect(isLocalPreviewUrl("musepi-file://localhost/D:/a.html")).toBe(true);
-		expect(isLocalPreviewUrl("omp-file://localhost/tmp/a.html")).toBe(true);
-		expect(isLocalPreviewUrl("OMP-FILE://localhost/tmp/a.html")).toBe(true);
+		expect(isLocalPreviewUrl("musepi-file.example.com")).toBe(false);
 		expect(isLocalPreviewUrl("https://example.com/a.html")).toBe(false);
 		expect(isLocalPreviewUrl("file:///tmp/a.html")).toBe(false);
 		expect(isLocalPreviewUrl("about:blank")).toBe(false);
@@ -42,13 +40,10 @@ describe("normalizeAddressBarUrl — local preview", () => {
 		);
 	});
 
-	it("upgrades a persisted legacy URL to the canonical scheme", () => {
-		expect(normalizeAddressBarUrl("omp-file://localhost/D:/Projects/MusePi/web/index.html")).toBe(
-			"musepi-file://localhost/D:/Projects/MusePi/web/index.html",
-		);
-		expect(normalizeAddressBarUrl("omp-file://localhost/tmp/artifact.html")).toBe(
-			"musepi-file://localhost/tmp/artifact.html",
-		);
+	it("rejects the retired pre-rename spelling", () => {
+		expect(normalizeAddressBarUrl("omp-file://localhost/D:/Projects/MusePi/web/index.html")).toBeNull();
+		expect(normalizeAddressBarUrl("omp-file://localhost/tmp/artifact.html")).toBeNull();
+		expect(normalizeAddressBarUrl("OMP-FILE://localhost/tmp/artifact.html")).toBeNull();
 	});
 
 	it("restores the host when the address arrives without one", () => {
@@ -67,12 +62,12 @@ describe("normalizeAddressBarUrl — local preview", () => {
 
 	it("rejects a local-preview address that names no file", () => {
 		expect(normalizeAddressBarUrl("musepi-file://localhost/")).toBeNull();
-		expect(normalizeAddressBarUrl("omp-file://localhost/%E0%A4%A")).toBeNull();
+		expect(normalizeAddressBarUrl("musepi-file://localhost/%E0%A4%A")).toBeNull();
 	});
 
 	it("leaves http(s) and bare hostnames alone", () => {
 		expect(normalizeAddressBarUrl("example.com/docs")).toBe("https://example.com/docs");
-		expect(normalizeAddressBarUrl("omp-file.example.com")).toBe("https://omp-file.example.com/");
+		expect(normalizeAddressBarUrl("musepi-file.example.com")).toBe("https://musepi-file.example.com/");
 	});
 });
 
@@ -96,12 +91,6 @@ describe("localPreviewFileUrl — protocol handler target", () => {
 		);
 	});
 
-	it.skipIf(!WINDOWS)("serves the legacy spelling through the same reader", () => {
-		expect(localPreviewFileUrl("omp-file://localhost/D:/Projects/MusePi/web/index.html")).toBe(
-			"file:///D:/Projects/MusePi/web/index.html",
-		);
-	});
-
 	it("decodes URL-encoded path segments", () => {
 		expect(localPreviewFileUrl("musepi-file://localhost/tmp/a%20b/%E9%A1%B5%E9%9D%A2.html")).toBe(
 			pathToFileURL(path.normalize("/tmp/a b/页面.html")).toString(),
@@ -118,11 +107,15 @@ describe("localPreviewFileUrl — protocol handler target", () => {
 });
 
 describe("agent navigation gate — sanctioned destinations", () => {
-	it("passes both preview spellings through without asking", async () => {
+	it("passes the canonical preview scheme through without asking", async () => {
 		const controller = new ManagedBrowserController();
 		expect(await controller.gateAgentNavigation("musepi-file://localhost/D:/a.html")).toBe(true);
-		expect(await controller.gateAgentNavigation("omp-file://localhost/D:/a.html")).toBe(true);
 		expect(await controller.gateAgentNavigation("https://example.com/a.html")).toBe(true);
+	});
+
+	it("treats the retired spelling as a risky scheme (denied with no window)", async () => {
+		const controller = new ManagedBrowserController();
+		expect(await controller.gateAgentNavigation("omp-file://localhost/D:/a.html")).toBe(false);
 	});
 
 	it("still asks about raw file:// navigation (denied with no window)", async () => {

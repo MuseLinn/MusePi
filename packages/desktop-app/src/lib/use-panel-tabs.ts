@@ -43,10 +43,23 @@ export interface UsePanelTabsResult extends PanelTabState {
 	setSplit(split: boolean): void;
 }
 
+/** Pre-rename local-preview spelling inside a persisted layout. It is rewritten
+ *  on read (and written back) so no surface ever renders the retired scheme. */
+const LEGACY_LOCAL_PREVIEW_URL = /omp-file:\/\//gi;
+
 function readPanelTabs(storageKey: string): PanelTabState {
 	try {
 		const raw = localStorage.getItem(storageKey);
-		return raw ? restorePanelTabs(JSON.parse(raw)) : { ...EMPTY_PANEL_TAB_STATE };
+		if (!raw) return { ...EMPTY_PANEL_TAB_STATE };
+		const migrated = raw.replace(LEGACY_LOCAL_PREVIEW_URL, "musepi-file://");
+		if (migrated !== raw) {
+			try {
+				localStorage.setItem(storageKey, migrated);
+			} catch {
+				// Storage full / disabled — the in-memory migration still applies.
+			}
+		}
+		return restorePanelTabs(JSON.parse(migrated));
 	} catch {
 		return { ...EMPTY_PANEL_TAB_STATE };
 	}

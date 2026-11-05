@@ -147,3 +147,20 @@ describe("formatAnnotationPrompt", () => {
 		expect(text).not.toContain("Comment:");
 	});
 });
+
+describe("includeScreenshot", () => {
+	it("缺省不写字段也合法(旧 payload 向后兼容)", () => {
+		expect(validPayload.includeScreenshot).toBeUndefined();
+		expect(isAnnotationPayload(validPayload)).toBe(true);
+	});
+
+	it("接受显式的 true / false", () => {
+		expect(isAnnotationPayload({ ...validPayload, includeScreenshot: true })).toBe(true);
+		expect(isAnnotationPayload({ ...validPayload, includeScreenshot: false })).toBe(true);
+	});
+
+	it("拒绝非布尔值,避免把字符串当成开关", () => {
+		expect(isAnnotationPayload({ ...validPayload, includeScreenshot: "no" })).toBe(false);
+		expect(isAnnotationPayload({ ...validPayload, includeScreenshot: 0 })).toBe(false);
+	});
+});

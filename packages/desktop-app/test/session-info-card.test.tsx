@@ -299,8 +299,90 @@ describe("SessionInfoCard 连接器与插件", () => {
 		expect(rows).toHaveLength(3);
 		expect(rows[0]).toContain("Alpha");
 		expect(rows[0]).toContain(t("settings.extensionsStateRunning"));
+		await unmount();
+	});
+
+	it("插件状态条位于分区上方，点开列出运行/禁用明细", async () => {
+		const rpc = makeRpc({
+			"extensions.list": () => ({
+				extensions: [
+					{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "active" },
+					{ id: "beta", kind: "plugin-module", name: "beta", displayName: "", state: "disabled" },
+					{ id: "gamma", kind: "extension-module", name: "gamma", displayName: "", state: "active" },
+					{ id: "theme", kind: "theme-pack", name: "theme", displayName: "", state: "active" },
+				],
+			}),
+		});
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		const strip = host.querySelector<HTMLButtonElement>(".gui-session-info-plugin-status")!;
+		expect(strip).not.toBeNull();
+		expect(strip.textContent).toContain(t("settings.extensionsRunning", { count: "2" }));
+		expect(strip.getAttribute("aria-expanded")).toBe("false");
+		// The readout sits above the section's own count + roster.
+		const head = host.querySelector<HTMLElement>(".gui-session-info-plugins-head")!;
+		expect(strip.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+		await act(async () => strip.click());
+		expect(strip.getAttribute("aria-expanded")).toBe("true");
+		const menu = document.querySelector<HTMLElement>(".gui-ext-status-menu")!;
+		expect(menu).not.toBeNull();
+		// Portaled out of the card's scrolling box, so the roster cannot be clipped.
+		expect(host.contains(menu)).toBe(false);
+		const rows = [...menu.querySelectorAll(".gui-ext-status-row")].map(node => node.textContent);
+		expect(rows).toHaveLength(3);
+		expect(rows[0]).toContain("Alpha");
+		expect(rows[0]).toContain(t("settings.extensionsStateRunning"));
 		expect(rows[1]).toContain("beta");
 		expect(rows[1]).toContain(t("settings.extensionsStateDisabled"));
+		await unmount();
+	});
+
+	it("全部插件停用时状态条消失，分区仍保留禁用读数", async () => {
+		const rpc = makeRpc({
+			"extensions.list": () => ({
+				extensions: [{ id: "beta", kind: "plugin-module", name: "beta", displayName: "", state: "disabled" }],
+			}),
+		});
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
+		expect(host.querySelector(".gui-session-info-plugins-head")?.textContent).toContain("0/1");
+		expect(host.querySelector(".gui-session-info-plugin-state")?.textContent).toBe(
+			t("settings.extensionsStateDisabled"),
+		);
+		await unmount();
+	});
+
+	it("没有任何插件时状态条与分区都不渲染", async () => {
+		const rpc = makeRpc({ "extensions.list": () => ({ extensions: [] }) });
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		expect(host.querySelector(".gui-session-info-plugins-group")).toBeNull();
+		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
+		expect(host.querySelector(".gui-session-info-plugins-head")).toBeNull();
+		await unmount();
+	});
+
+	it("最后一个插件停用后状态条随 extensions.changed 消失", async () => {
+		let extensions: Array<Record<string, unknown>> = [
+			{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "active" },
+		];
+		const listeners: Array<(event: { payload?: unknown }) => void> = [];
+		const rpc = {
+			request: async (method: string): Promise<unknown> =>
+				method === "extensions.list" ? { extensions } : method.startsWith("models.list") ? [] : {},
+			addEventListener: (listener: (event: { payload?: unknown }) => void) => {
+				listeners.push(listener);
+				return () => {};
+			},
+		} as unknown as RpcClient;
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		expect(host.querySelector(".gui-session-info-plugin-status")).not.toBeNull();
+
+		extensions = [{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "disabled" }];
+		for (const listener of listeners) listener({ payload: { type: "extensions.changed" } });
+		await flush();
+		await flush();
+		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
+		expect(host.querySelector(".gui-session-info-plugins-head")?.textContent).toContain("0/1");
 		await unmount();
 	});
 });

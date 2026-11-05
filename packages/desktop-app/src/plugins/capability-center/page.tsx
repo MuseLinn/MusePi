@@ -2,7 +2,6 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { CapabilityCenter } from "../../components/CapabilityCenter";
-import { ExtensionStatusCard } from "../../components/ExtensionStatusCard";
 import { MarketplaceView } from "../../components/MarketplaceView";
 import { SkillMarketView } from "../../components/SkillMarketView";
 import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "../../components/UnifiedPluginsView";
@@ -190,10 +189,6 @@ export function CapabilityCenterPage({
 					</div>
 				</div>
 				<div className={`gui-capability-pane${tab === "plugins" ? " gui-capability-pane--on" : ""}`}>
-					{/* Running-plugin status: the composer used to carry it; the
-					 * capability page is now its host. The chip renders nothing when
-					 * no plugin is running, so the pane keeps its normal top. */}
-					<ExtensionStatusCard rpc={rpc} />
 					{/* Shared unified list, manage layer only: official plugins the user
 					 * can toggle or configure plus installed/self-built packages. The
 					 * full built-in inventory (read-only packs, preset-only personas)
