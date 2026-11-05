@@ -51,6 +51,7 @@
 	"exports packages/desktop-app/src/components/MockConversationPreview.tsx TypewriterPreview",
 	"exports packages/desktop-app/src/components/MockConversationPreview.tsx useTypewriterSample",
 	"exports packages/desktop-app/src/components/PetSprite.tsx PET_BOX_RATIO",
+	"exports packages/desktop-app/src/components/StartupSplash.tsx SPLASH_HANDOFF_MS",
 	"exports packages/desktop-app/src/components/StateIcon.tsx StateIconN",
 	"exports packages/desktop-app/src/components/TaskCenterViews.tsx taskScheduleLabel",
 	"exports packages/desktop-app/src/components/UnifiedPluginsView.tsx ModuleCard",

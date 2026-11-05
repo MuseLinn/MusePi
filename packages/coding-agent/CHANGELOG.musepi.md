@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **引用卡改为非模态，网页右键「标注」直达元素卡**：引用/标注卡打开时聊天与浏览器页面仍可滚动；网页右键菜单里的「标注」直接按指针位置打开结构化元素卡，不再要求二次框选；关闭「引用发送截图」后不再先捕获再丢弃。
+  - EN: Quote and annotation cards are non-modal, so the transcript and browser page keep scrolling while they are open. The page context menu's Annotate entry opens the structured element card at the pointer without a second selection, and turning off Include screenshot no longer captures an image that would be discarded.
+
 - **伙伴显隐与启动页改为粒子过渡**：显示伙伴时粒子光球在球体位置汇聚，球体从 0.72 弹入并淡入（420ms，弹簧缓动）；隐藏时球体先碎成粒子散开淡出，主进程再等 280ms 才收起窗口，期间再次显示会取消这次收起。启动页开机时运行同一个粒子光球，就绪后用 300ms 交叉淡入静态品牌球体。开启「减少动态效果」时粒子与缩放全部关闭，显隐保持瞬时；Petdex 精灵图不受影响。
   - EN: Showing the companion is now a transition: the particle orb converges at the sphere's box while the brand sphere springs in from 0.72 scale and fades up (420ms, spring easing). Hiding dissolves the sphere into scattering particles first and only then hides the window, 280ms later — a show inside that window cancels the pending hide. The startup splash runs the same particle orb while booting and cross-fades to the static brand sphere over 300ms once the shell is ready. With reduced motion the particles and the scale are dropped and showing/hiding stays instant; Petdex sheets are unaffected.
 

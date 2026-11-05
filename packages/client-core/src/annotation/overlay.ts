@@ -92,12 +92,14 @@ export const ANNOTATION_TEARDOWN_SCRIPT = `(() => {
 export const buildAnnotationOverlayScript = (
 	theme: AnnotationOverlayTheme,
 	labels: AnnotationOverlayLabels,
+	options?: { elementAt?: { x: number; y: number } },
 ): string => {
-	const config = JSON.stringify({ theme, labels });
+	const config = JSON.stringify({ theme, labels, elementAt: options?.elementAt ?? null });
 	return String.raw`new Promise((resolve) => {
   var CONFIG = ${config};
   var THEME = CONFIG.theme;
   var LABELS = CONFIG.labels;
+  var ELEMENT_AT = CONFIG.elementAt;
   var OVERLAY_ATTR = 'data-musepi-annotation';
   var Z_OVERLAY = 2147483646;
   var MAX_TEXT = 400;
@@ -1015,5 +1017,11 @@ export const buildAnnotationOverlayScript = (
   startTopLayer();
   setTool('select');
   syncChrome();
+  // Context-menu entry: the pointer already names the element, so open its
+  // structured card immediately instead of asking for a second selection.
+  if (ELEMENT_AT) {
+    var initialElement = elementFromPoint(ELEMENT_AT.x, ELEMENT_AT.y);
+    if (initialElement) selectElement(initialElement);
+  }
 });`;
 };

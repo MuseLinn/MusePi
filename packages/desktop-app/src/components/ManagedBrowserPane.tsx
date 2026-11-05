@@ -512,56 +512,62 @@ export function ManagedBrowserPane({
 	/** 统一标注(与会话内 HTML 卡片同一份 overlay):注入页面 → 用户选元素/
 	 *  区域/绘制+注释 → 拆 chrome → 页面截图 → 合成带标记的图 → 附图+prompt
 	 *  一起进 composer。页面本身从不被修改 —— 标注只标记已有内容。 */
-	const handleAnnotate = useCallback((): void => {
-		if (annotating) {
-			setAnnotating(false);
-			if (annotationHostRef.current) void cancelAnnotationSession(annotationHostRef.current);
-			return;
-		}
-		const tabId = host.activeId;
-		const webview = tabId ? hostElement(tabId) : null;
-		if (isBlank || !webview) {
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.noPage") }));
-			return;
-		}
-		const sessionHost: AnnotationHost = {
-			executeJavaScript: (code, userGesture) => webview.executeJavaScript(code, userGesture),
-			capturePage: async () => {
-				const webContentsId = webview.getWebContentsId();
-				if (!Number.isFinite(webContentsId)) return null;
-				try {
-					return (await window.electronAPI?.managedBrowserCapturePage({ webContentsId })) ?? null;
-				} catch {
-					return null;
-				}
-			},
-		};
-		annotationHostRef.current = sessionHost;
-		const theme = resolveAnnotationOverlayTheme(widgetHostTheme());
-		setAnnotating(true);
-		void runAnnotationSession({
-			host: sessionHost,
-			theme,
-			// 与会话内 HTML 卡片同一份文案与结构卡(见 annotationOverlayLabels)。
-			labels: annotationOverlayLabels(),
-		})
-			.then(result => {
+	const handleAnnotate = useCallback(
+		(elementAt?: { x: number; y: number }): void => {
+			if (annotating) {
 				setAnnotating(false);
-				if (!result) return;
-				void dispatchAnnotationResult({
-					payload: result.payload,
-					screenshot: result.screenshot,
-					intro: t("annotation.browserIntro"),
-				});
-				window.dispatchEvent(
-					new CustomEvent("musepi-gui-toast", { detail: { message: t("annotation.attached"), kind: "success" } }),
-				);
+				if (annotationHostRef.current) void cancelAnnotationSession(annotationHostRef.current);
+				return;
+			}
+			const tabId = host.activeId;
+			const webview = tabId ? hostElement(tabId) : null;
+			if (isBlank || !webview) {
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.noPage") }));
+				return;
+			}
+			const sessionHost: AnnotationHost = {
+				executeJavaScript: (code, userGesture) => webview.executeJavaScript(code, userGesture),
+				capturePage: async () => {
+					const webContentsId = webview.getWebContentsId();
+					if (!Number.isFinite(webContentsId)) return null;
+					try {
+						return (await window.electronAPI?.managedBrowserCapturePage({ webContentsId })) ?? null;
+					} catch {
+						return null;
+					}
+				},
+			};
+			annotationHostRef.current = sessionHost;
+			const theme = resolveAnnotationOverlayTheme(widgetHostTheme());
+			setAnnotating(true);
+			void runAnnotationSession({
+				host: sessionHost,
+				theme,
+				// 与会话内 HTML 卡片同一份文案与结构卡(见 annotationOverlayLabels)。
+				labels: annotationOverlayLabels(),
+				...(elementAt ? { elementAt } : {}),
 			})
-			.catch(() => {
-				setAnnotating(false);
-				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.failed") }));
-			});
-	}, [annotating, host.activeId, isBlank]);
+				.then(result => {
+					setAnnotating(false);
+					if (!result) return;
+					void dispatchAnnotationResult({
+						payload: result.payload,
+						screenshot: result.screenshot,
+						intro: t("annotation.browserIntro"),
+					});
+					window.dispatchEvent(
+						new CustomEvent("musepi-gui-toast", {
+							detail: { message: t("annotation.attached"), kind: "success" },
+						}),
+					);
+				})
+				.catch(() => {
+					setAnnotating(false);
+					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.failed") }));
+				});
+		},
+		[annotating, host.activeId, isBlank],
+	);
 
 	useEffect(() => {
 		const onPageContextMenu = (event: Event): void => {
@@ -1083,7 +1089,7 @@ export function ManagedBrowserPane({
 						title={annotating ? t("annotation.stop") : t("annotation.toggle")}
 						aria-pressed={annotating}
 						disabled={isBlank}
-						onClick={handleAnnotate}
+						onClick={() => handleAnnotate()}
 					>
 						<Icon name="pencil" className="h-4 w-4" />
 					</button>
@@ -1550,7 +1556,7 @@ export function ManagedBrowserPane({
 							label: t("annotation.toggle"),
 							icon: "pencil",
 							divider: true,
-							onSelect: () => handleAnnotate(),
+							onSelect: () => handleAnnotate({ x: pageContext.elementX, y: pageContext.elementY }),
 						},
 						{
 							label: t("tools.browserInspectElement"),

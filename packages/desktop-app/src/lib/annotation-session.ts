@@ -64,12 +64,16 @@ export const runAnnotationSession = async ({
 	host,
 	theme,
 	labels,
+	elementAt,
 }: {
 	host: AnnotationHost;
 	theme: AnnotationOverlayTheme;
 	labels: AnnotationOverlayLabels;
+	/** Context-menu entry: open the structured card for this page element
+	 *  instead of starting in selection mode. */
+	elementAt?: { x: number; y: number };
 }): Promise<AnnotationSessionResult | null> => {
-	const script = buildAnnotationOverlayScript(theme, labels);
+	const script = buildAnnotationOverlayScript(theme, labels, elementAt ? { elementAt } : undefined);
 	const raw = await host.executeJavaScript(script, true);
 
 	// 页面内取消。
@@ -80,6 +84,10 @@ export const runAnnotationSession = async ({
 		return null;
 	}
 	const payload = raw;
+
+	// The overlay's toggle is authoritative: when it is off, do not capture a
+	// page that attach.ts would immediately drop.
+	if (payload.includeScreenshot === false) return { payload, screenshot: null };
 
 	try {
 		const viewport = (await readViewport(host)) ?? payload.viewport;

@@ -78,6 +78,10 @@ export function useFloatingMenu(
 		side?: MenuSide;
 		/** Distance in px from the anchor (default 6). */
 		gap?: number;
+		/** Cover the managed webview with a dismissal layer while open. Menus
+		 *  that only read or edit a value (quote cards) set this false so the
+		 *  page keeps scrolling. */
+		blockPage?: boolean;
 	},
 ): {
 	anchorRef: (el: HTMLElement | null) => void;
@@ -89,6 +93,7 @@ export function useFloatingMenu(
 		anchor: anchorOption,
 		side = "bottom",
 		gap = 6,
+		blockPage = true,
 	} = options ?? {};
 	const anchorRef = useRef<HTMLElement | null>(null);
 	const setAnchor = (el: HTMLElement | null): void => {
@@ -328,14 +333,14 @@ export function useFloatingMenu(
 		activeMenu?.close();
 		const mine = { close: () => closeRef.current() };
 		activeMenu = mine;
-		setFloatingMenuOpen(true);
+		if (blockPage) setFloatingMenuOpen(true);
 		return () => {
 			if (activeMenu === mine) {
 				activeMenu = null;
-				setFloatingMenuOpen(false);
+				if (blockPage) setFloatingMenuOpen(false);
 			}
 		};
-	}, [open]);
+	}, [open, blockPage]);
 
 	const renderMenu = (children: ReactNode): ReactNode => {
 		if (!pos) return null;
@@ -344,6 +349,17 @@ export function useFloatingMenu(
 				ref={menuRef}
 				data-header-menu=""
 				className={`gui-menu-popup ${className}${closing ? " gui-menu-popup--closing" : ""}${!closing && entered ? " gui-menu-popup--entered" : ""}`}
+				onWheel={event => {
+					const el = menuRef.current;
+					if (!el) return;
+					// A popover that cannot consume the wheel must not trap it:
+					// close so the next gesture reaches the chat/page beneath.
+					const canScroll = el.scrollHeight > el.clientHeight + 1;
+					const atTop = el.scrollTop <= 0;
+					const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+					if (canScroll && !((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom))) return;
+					onOpenChange?.(false);
+				}}
 				style={{
 					// Inline position wins over the menu-specific classes
 					// (gui-creds-menu etc. declare position:absolute + top/right

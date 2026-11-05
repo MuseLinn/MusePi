@@ -154,6 +154,17 @@ describe("annotation session", () => {
 		expect(result?.screenshot).toBeNull();
 	});
 
+	test("跳过截图时不触发页面捕获", async () => {
+		const capturePage = vi.fn(async () => capture);
+		const { host } = createHost({
+			overlayResult: { ...validPayload, includeScreenshot: false },
+			capturePage,
+		});
+		const result = await runAnnotationSession({ host, theme, labels });
+		expect(result?.screenshot).toBeNull();
+		expect(capturePage).not.toHaveBeenCalled();
+	});
+
 	test("overlay 以用户手势执行,页面把它当成交互", async () => {
 		const { host, calls } = createHost({ overlayResult: null });
 		await runAnnotationSession({ host, theme, labels });

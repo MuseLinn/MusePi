@@ -134,9 +134,15 @@ function QuoteGroupChip({
 	onRemove(index: number): void;
 	onChange(index: number, context: DisplayContext): void;
 }): ReactNode {
-	const menu = useFloatingMenu(open, next => {
-		if (!next && open) onToggle();
-	});
+	const menu = useFloatingMenu(
+		open,
+		next => {
+			if (!next && open) onToggle();
+		},
+		// A quote card is a read/comment popover, not a modal: the page and the
+		// transcript keep scrolling underneath it.
+		{ blockPage: false },
+	);
 	return (
 		<>
 			<button

@@ -96,6 +96,9 @@ const mountOverlay = ({
 	vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(120, 80, 200, 60));
 
 	const script = buildAnnotationOverlayScript(theme, overlayLabels);
+	expect(buildAnnotationOverlayScript(theme, overlayLabels, { elementAt: { x: 12, y: 34 } })).toContain(
+		'"elementAt":{"x":12,"y":34}',
+	);
 	const promise = new Function(`return ${script}`)() as Promise<unknown>;
 	if (!captured) throw new Error("overlay did not create a shadow root");
 	return { promise, shadow: captured, target };
