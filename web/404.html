@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<meta name="robots" content="noindex" />
+		<title>页面不存在 · MusePi</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #121013;
+				--fg: #f2efe9;
+				--muted: #9c968c;
+				--accent: #d9a441;
+				--line: rgba(255, 255, 255, 0.1);
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				min-height: 100vh;
+				display: grid;
+				place-items: center;
+				padding: 32px;
+				background: radial-gradient(60% 50% at 50% 0%, #221d17 0%, var(--bg) 70%);
+				color: var(--fg);
+				font: 15px/1.7 ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+			}
+			main {
+				width: min(560px, 100%);
+			}
+			.brand {
+				display: inline-flex;
+				align-items: center;
+				gap: 10px;
+				font-weight: 700;
+				letter-spacing: 0.01em;
+				text-decoration: none;
+				color: var(--fg);
+			}
+			.brand img {
+				width: 28px;
+				height: 28px;
+			}
+			code {
+				font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+				font-size: 0.92em;
+				color: var(--accent);
+			}
+			h1 {
+				margin: 28px 0 8px;
+				font-size: clamp(26px, 5vw, 38px);
+				line-height: 1.2;
+				letter-spacing: -0.02em;
+			}
+			p {
+				margin: 0 0 24px;
+				color: var(--muted);
+			}
+			nav {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 10px;
+			}
+			nav a {
+				padding: 9px 16px;
+				border: 1px solid var(--line);
+				border-radius: 999px;
+				color: var(--fg);
+				text-decoration: none;
+				transition: border-color 140ms ease, background 140ms ease;
+			}
+			nav a:hover,
+			nav a:focus-visible {
+				border-color: var(--accent);
+				background: rgba(217, 164, 65, 0.12);
+				outline: none;
+			}
+			nav a[data-primary] {
+				background: var(--accent);
+				border-color: transparent;
+				color: #241a05;
+				font-weight: 600;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<a class="brand" href="./"><img src="./assets/musepi-mark.svg" alt="" width="28" height="28" />MusePi</a>
+			<h1>这个页面不存在</h1>
+			<p>链接可能已经失效，或者地址写错了。下面的入口都能继续用。</p>
+			<nav>
+				<a href="./" data-primary>返回首页</a>
+				<a href="./#preview">界面预览</a>
+				<a href="./docs/">文档</a>
+				<a href="./app/index.html">完整演示</a>
+				<a href="https://github.com/MuseLinn/MusePi">GitHub</a>
+			</nav>
+		</main>
+	</body>
+</html>

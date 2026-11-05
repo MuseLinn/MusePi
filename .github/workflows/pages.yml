@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - uses: actions/jekyll-build-pages@v1
+      - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1
       # The sitemap lists every published document, and the documents change
       # far more often than the landing page does. Generating it here rather
       # than committing it keeps it in step with whatever is in docs/ right
@@ -36,6 +36,8 @@ jobs:
         run: |
           sudo rm -f _site/index.html _site/index.zh-CN.html
           sudo cp -r web/. _site/
+          # demo-src is the fixture source behind the preview, not an asset.
+          sudo rm -rf _site/demo-src
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
 
   deploy:

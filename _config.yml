@@ -3,10 +3,51 @@ description: MusePi — an AI pair engineer that writes the code, on desktop, te
 baseurl: /MusePi
 lang: en
 
-# web/ is the landing page; pages.yml copies it onto the artifact root, so
-# building it here too would publish a second copy at /MusePi/web/.
+# The published site is docs/ plus the landing page in web/ (pages.yml copies
+# web/ onto the artifact root). Everything else is source: excluding it keeps
+# the artifact to what visitors can actually open instead of shipping the
+# repository tree.
 exclude:
   - web
+  - packages
+  - crates
+  - python
+  - nix
+  - patches
+  - bazel
+  - scripts
+  - types
+  - target
+  - node_modules
+  - perler-showcase
+  - "NVIDIA Corporation"
+  - AGENTS.md
+  - BUILD.bazel
+  - CONTRIBUTING.md
+  - Cargo.lock
+  - Cargo.toml
+  - Dockerfile
+  - Dockerfile.dockerignore
+  - Dockerfile.robomp.dockerignore
+  - HANDOFF-session-tree-router.md
+  - MODULE.bazel
+  - MODULE.bazel.lock
+  - README.i18n.yaml
+  - README.md
+  - README.zh-CN.md
+  - UPSTREAM.md
+  - banner.png
+  - biome.json
+  - bun.lock
+  - flake.lock
+  - flake.nix
+  - knip.json
+  - package.json
+  - rust-toolchain.toml
+  - rustfmt.toml
+  - tsconfig.base.json
+  - tsconfig.json
+  - tsconfig.tools.json
 
 # Render every docs/*.md as an HTML page. Files without explicit front
 # matter would otherwise be copied verbatim by Jekyll and served as raw
