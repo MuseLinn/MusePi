@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **集成目录组件化，自带插件默认不启用**：集成 entry 支持 MCP、内置插件、市场插件与技能四类组件，主组件决定安装/移除路径；集成页新增「内置插件」区，列出可启停的自带插件并提供开关，默认全部关闭，不写入任何默认启用状态。平台 MCP 目录仍保持按需安装，默认不安装。
+  - EN: Integrations are now componentized: an entry can carry MCP, builtin plugin, marketplace plugin, and skill components, with the primary component deciding install and removal. The Integrations page adds a Built-in plugins section listing enableable bundled plugins with switches, all off by default and with no default enablement written. The platform MCP catalog stays install-on-demand and empty until chosen.
+
 - **引用卡改为非模态，网页右键「标注」直达元素卡**：引用/标注卡打开时聊天与浏览器页面仍可滚动；网页右键菜单里的「标注」直接按指针位置打开结构化元素卡，不再要求二次框选；关闭「引用发送截图」后不再先捕获再丢弃。
   - EN: Quote and annotation cards are non-modal, so the transcript and browser page keep scrolling while they are open. The page context menu's Annotate entry opens the structured element card at the pointer without a second selection, and turning off Include screenshot no longer captures an image that would be discarded.
 

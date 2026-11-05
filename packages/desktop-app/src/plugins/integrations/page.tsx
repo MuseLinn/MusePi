@@ -1,24 +1,40 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SlotComponentProps } from "../../lib/slot-host";
+import type { ExtensionItem, SlotComponentProps } from "../../lib/slot-host";
 import { Icon } from "../../vendor/oc-icons";
+import { selectBuiltinPlugins } from "./builtin-plugins";
 import {
+	catalogBuiltinPluginIds,
 	INTEGRATION_CATALOG,
 	INTEGRATION_CATEGORY_LABEL_KEY,
 	INTEGRATION_CATEGORY_ORDER,
+	INTEGRATION_COMPONENT_LABEL_KEY,
+	type IntegrationCall,
 	type IntegrationCategory,
 	type IntegrationEntry,
+	installCall,
+	mcpComponent,
+	primaryComponent,
+	removeCall,
 } from "./catalog";
 
 /**
- * Settings → 集成 (Cordis `settings.tab.integrations`): the curated connector
- * catalog. Browsing, searching and filtering are local; installing and removing
- * go through `mcp.servers.*`, which owns the user-scope `<agentDir>/mcp.json`.
+ * Settings → 集成 (Cordis `settings.tab.integrations`): the curated integration
+ * catalog plus the builtin-plugin switches. Browsing, searching and filtering
+ * are local; installing and removing go through the RPC the entry's primary
+ * component names — `mcp.servers.*` for a connector, `extensions.setEnabled`
+ * for a bundled plugin, `marketplace.*` / `skills.*` for the other kinds — so
+ * this page owns no second registry and no second credential store.
  *
- * A token-typed entry asks for the secret on its card and writes it into that
- * server's `headers`. That is ordinary local configuration — the same place
- * `/mcp add` writes — and never leaves this machine through the GUI.
+ * A token-typed connector asks for the secret on its card and writes it into
+ * that server's `headers`. That is ordinary local configuration — the same
+ * place `/mcp add` writes — and never leaves this machine through the GUI.
+ *
+ * The 「内置插件」 section below the catalog reads `extensions.list`, so a switch
+ * shows the daemon's real enablement and nothing is enabled by default. It
+ * skips the plugins the catalog already presents as cards: one switch per
+ * plugin on this page.
  */
 
 interface McpServerSummary {
@@ -32,12 +48,34 @@ interface McpServerSummary {
 
 type Notice = { kind: "ok" | "error"; text: string } | null;
 
+/** Catalog-promoted plugins, which the section below must not repeat. */
+const PROMOTED_BUILTIN_PLUGIN_IDS = catalogBuiltinPluginIds();
+
 function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-function authLabel(entry: IntegrationEntry): string {
-	return entry.auth === "token" ? t("settings.integrations.status.token") : t("settings.integrations.status.oauth");
+/** The success/failure copy for an entry's primary component. */
+function actionText(entry: IntegrationEntry, action: "install" | "remove", error?: string): string {
+	const name = entry.name;
+	if (action === "install") {
+		if (primaryComponent(entry).kind === "builtin") {
+			return error === undefined
+				? t("settings.integrations.builtin.enableSuccess", { name })
+				: t("settings.integrations.builtin.enableFailed", { name, error });
+		}
+		return error === undefined
+			? t("settings.integrations.installSuccess", { name })
+			: t("settings.integrations.installFailed", { name, error });
+	}
+	if (primaryComponent(entry).kind === "builtin") {
+		return error === undefined
+			? t("settings.integrations.builtin.disableSuccess", { name })
+			: t("settings.integrations.builtin.disableFailed", { name, error });
+	}
+	return error === undefined
+		? t("settings.integrations.removeSuccess", { name })
+		: t("settings.integrations.removeFailed", { name, error });
 }
 
 function matchesQuery(entry: IntegrationEntry, query: string): boolean {
@@ -48,6 +86,7 @@ function matchesQuery(entry: IntegrationEntry, query: string): boolean {
 
 export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode {
 	const [servers, setServers] = useState<McpServerSummary[]>([]);
+	const [extensions, setExtensions] = useState<ExtensionItem[]>([]);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
 	const [category, setCategory] = useState<IntegrationCategory | null>(null);
@@ -58,21 +97,31 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 	const reload = useCallback((): (() => void) | undefined => {
 		if (!rpc) {
 			setServers([]);
+			setExtensions([]);
 			setLoadError(null);
 			return;
 		}
 		let alive = true;
-		rpc.request<{ servers?: McpServerSummary[] }>("mcp.servers.list", {})
-			.then(result => {
-				if (!alive) return;
-				setServers(Array.isArray(result?.servers) ? result.servers : []);
-				setLoadError(null);
-			})
-			.catch((error: unknown) => {
-				if (!alive) return;
-				setServers([]);
-				setLoadError(errorText(error));
-			});
+		// Two independent sources: a connector-file failure must not blank the
+		// plugin switches, and vice versa.
+		void Promise.allSettled([
+			rpc.request<{ servers?: McpServerSummary[] }>("mcp.servers.list", {}),
+			rpc.request<{ extensions?: ExtensionItem[] }>("extensions.list", {}),
+		]).then(([mcpResult, extensionResult]) => {
+			if (!alive) return;
+			const failures: string[] = [];
+			setServers(
+				mcpResult.status === "fulfilled" && Array.isArray(mcpResult.value?.servers) ? mcpResult.value.servers : [],
+			);
+			if (mcpResult.status === "rejected") failures.push(errorText(mcpResult.reason));
+			setExtensions(
+				extensionResult.status === "fulfilled" && Array.isArray(extensionResult.value?.extensions)
+					? extensionResult.value.extensions
+					: [],
+			);
+			if (extensionResult.status === "rejected") failures.push(errorText(extensionResult.reason));
+			setLoadError(failures.length > 0 ? failures.join("; ") : null);
+		});
 		return () => {
 			alive = false;
 		};
@@ -82,7 +131,30 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 		const cleanup = reload();
 		return () => cleanup?.();
 	}, [reload]);
-	const installedNames = useMemo(() => new Set(servers.map(server => server.name)), [servers]);
+
+	/**
+	 * Entries whose primary component is installed. Connectors and bundled
+	 * plugins have a page-local source (`mcp.servers.list`, `extensions.list`);
+	 * marketplace plugins and skills are judged by their own manager surfaces,
+	 * so a catalog row of those kinds stays on the install side.
+	 */
+	const installedIds = useMemo(() => {
+		const serverNames = new Set(servers.map(server => server.name));
+		const pluginStates = new Map(extensions.map(extension => [extension.id, extension.state]));
+		const installed = new Set<string>();
+		for (const entry of INTEGRATION_CATALOG) {
+			const primary = primaryComponent(entry);
+			const isInstalled =
+				primary.kind === "mcp"
+					? serverNames.has(entry.id)
+					: primary.kind === "builtin"
+						? pluginStates.get(primary.pluginId) === "active"
+						: false;
+			if (isInstalled) installed.add(entry.id);
+		}
+		return installed;
+	}, [servers, extensions]);
+
 	const normalizedQuery = query.trim().toLowerCase();
 	const visibleEntries = useMemo(
 		() =>
@@ -91,64 +163,78 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 			),
 		[category, normalizedQuery],
 	);
+	const builtinPlugins = useMemo(() => selectBuiltinPlugins(extensions, PROMOTED_BUILTIN_PLUGIN_IDS), [extensions]);
+
+	const run = (
+		id: string,
+		call: IntegrationCall,
+		copy: { ok: string; failed: (error: string) => string },
+		onSuccess?: () => void,
+	): void => {
+		if (!rpc || busyId) return;
+		setBusyId(id);
+		setNotice(null);
+		rpc.request<{ ok: boolean }>(call.method, call.params)
+			.then(() => {
+				onSuccess?.();
+				setNotice({ kind: "ok", text: copy.ok });
+				reload();
+			})
+			.catch((error: unknown) => setNotice({ kind: "error", text: copy.failed(errorText(error)) }))
+			.finally(() => setBusyId(null));
+	};
 
 	const install = (entry: IntegrationEntry): void => {
-		if (!rpc || busyId) return;
 		const token = (tokens[entry.id] ?? "").trim();
-		if (entry.auth === "token" && token.length === 0) return;
-		const headers =
-			entry.auth === "token" && entry.tokenHeader
-				? { [entry.tokenHeader.name]: `${entry.tokenHeader.valuePrefix ?? ""}${token}` }
-				: undefined;
-		setBusyId(entry.id);
-		setNotice(null);
-		rpc.request<{ ok: boolean }>("mcp.servers.add", {
-			name: entry.id,
-			url: entry.url,
-			headers,
-			auth: entry.auth === "oauth" ? { type: "oauth" } : undefined,
-		})
-			.then(() => {
+		if (mcpComponent(entry)?.auth === "token" && token.length === 0) return;
+		run(
+			entry.id,
+			installCall(entry, token),
+			{
+				ok: actionText(entry, "install"),
+				failed: error => actionText(entry, "install", error),
+			},
+			() =>
 				setTokens(previous => {
 					const next = { ...previous };
 					delete next[entry.id];
 					return next;
-				});
-				setNotice({ kind: "ok", text: t("settings.integrations.installSuccess", { name: entry.name }) });
-				reload();
-			})
-			.catch((error: unknown) =>
-				setNotice({
-					kind: "error",
-					text: t("settings.integrations.installFailed", { name: entry.name, error: errorText(error) }),
 				}),
-			)
-			.finally(() => setBusyId(null));
+		);
 	};
 
 	const remove = (entry: IntegrationEntry): void => {
-		if (!rpc || busyId) return;
-		setBusyId(entry.id);
-		setNotice(null);
-		rpc.request<{ ok: boolean }>("mcp.servers.remove", { name: entry.id })
-			.then(() => {
-				setNotice({ kind: "ok", text: t("settings.integrations.removeSuccess", { name: entry.name }) });
-				reload();
-			})
-			.catch((error: unknown) =>
-				setNotice({
-					kind: "error",
-					text: t("settings.integrations.removeFailed", { name: entry.name, error: errorText(error) }),
-				}),
-			)
-			.finally(() => setBusyId(null));
+		const call = removeCall(entry);
+		if (!call) return;
+		run(entry.id, call, { ok: actionText(entry, "remove"), failed: error => actionText(entry, "remove", error) });
+	};
+
+	const toggleBuiltin = (extension: ExtensionItem): void => {
+		const next = extension.state !== "active";
+		const name = extension.displayName || extension.name;
+		run(
+			extension.id,
+			{ method: "extensions.setEnabled", params: { id: extension.id, enabled: next } },
+			next
+				? {
+						ok: t("settings.integrations.builtin.enableSuccess", { name }),
+						failed: error => t("settings.integrations.builtin.enableFailed", { name, error }),
+					}
+				: {
+						ok: t("settings.integrations.builtin.disableSuccess", { name }),
+						failed: error => t("settings.integrations.builtin.disableFailed", { name, error }),
+					},
+		);
 	};
 
 	const renderCard = (entry: IntegrationEntry): ReactNode => {
-		const installed = installedNames.has(entry.id);
+		const mcp = mcpComponent(entry);
+		const installed = installedIds.has(entry.id);
 		const busy = busyId === entry.id;
-		const needsToken = entry.auth === "token" && !installed;
+		const needsToken = mcp?.auth === "token" && !installed;
 		const canInstall = !needsToken || (tokens[entry.id] ?? "").trim().length > 0;
+		const canRemove = removeCall(entry) !== null;
+		const componentKinds = [...new Set(entry.components.map(component => component.kind))];
 		return (
 			<article className="gui-integrations-card gui-agent-card" data-integration-id={entry.id} key={entry.id}>
 				<div className="gui-integrations-card-main flex items-start gap-3">
@@ -164,7 +250,18 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 							{entry.status === "beta" && (
 								<span className="gui-provider-chip">{t("settings.integrations.status.beta")}</span>
 							)}
-							<span className="gui-provider-chip">{authLabel(entry)}</span>
+							{componentKinds.map(kind => (
+								<span className="gui-provider-chip" data-component-kind={kind} key={kind}>
+									{t(INTEGRATION_COMPONENT_LABEL_KEY[kind])}
+								</span>
+							))}
+							{mcp && (
+								<span className="gui-provider-chip" data-auth-kind={mcp.auth}>
+									{mcp.auth === "token"
+										? t("settings.integrations.status.token")
+										: t("settings.integrations.status.oauth")}
+								</span>
+							)}
 							{installed && (
 								<span className="gui-provider-chip" data-installed="true">
 									{t("settings.integrations.status.installed")}
@@ -172,7 +269,7 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 							)}
 						</div>
 						<p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">{t(entry.descriptionKey)}</p>
-						{needsToken && (
+						{needsToken && mcp && (
 							<div className="gui-integrations-token-row mt-2 flex flex-wrap items-center gap-2">
 								<input
 									className="gui-settings-input gui-integrations-token"
@@ -186,8 +283,8 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 										setTokens(previous => ({ ...previous, [entry.id]: value }));
 									}}
 								/>
-								{entry.tokenHelpUrl && (
-									<a className="gui-connector-link" href={entry.tokenHelpUrl} target="_blank" rel="noreferrer">
+								{mcp.tokenHelpUrl && (
+									<a className="gui-connector-link" href={mcp.tokenHelpUrl} target="_blank" rel="noreferrer">
 										{t("settings.integrations.tokenHelp")}
 									</a>
 								)}
@@ -197,7 +294,7 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 							</div>
 						)}
 					</div>
-					{installed ? (
+					{installed && canRemove ? (
 						<button
 							type="button"
 							className="gui-btn gui-btn--small gui-btn--danger gui-integrations-remove"
@@ -300,6 +397,57 @@ export default function IntegrationsPage({ rpc }: SlotComponentProps): ReactNode
 					{visibleEntries.map(entry => renderCard(entry))}
 				</div>
 			)}
+
+			<section className="gui-integrations-builtin mt-5" aria-label={t("settings.integrations.builtin.title")}>
+				<div className="gui-settings-section-title">{t("settings.integrations.builtin.title")}</div>
+				<p className="gui-settings-page-desc">{t("settings.integrations.builtin.description")}</p>
+				{builtinPlugins.length === 0 ? (
+					<div className="gui-settings-row gui-integrations-builtin-empty">
+						{t("settings.integrations.builtin.empty")}
+					</div>
+				) : (
+					builtinPlugins.map(extension => {
+						const enabled = extension.state === "active";
+						return (
+							<div
+								className="gui-agent-card gui-integrations-builtin-row mt-1.5 flex items-center gap-3"
+								data-builtin-plugin-id={extension.id}
+								key={extension.id}
+							>
+								<div className="min-w-0 flex-1">
+									<div className="flex flex-wrap items-center gap-1.5">
+										<span className="truncate text-[13px] font-medium">
+											{extension.displayName || extension.name}
+										</span>
+										{extension.experimental && (
+											<span className="gui-provider-chip">{t("settings.integrations.status.beta")}</span>
+										)}
+										<span className="gui-provider-chip" data-builtin-state={enabled ? "on" : "off"}>
+											{enabled
+												? t("settings.integrations.builtin.state.on")
+												: t("settings.integrations.builtin.state.off")}
+										</span>
+									</div>
+									{extension.description && (
+										<p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+											{extension.description}
+										</p>
+									)}
+								</div>
+								<button
+									type="button"
+									role="switch"
+									aria-checked={enabled}
+									aria-label={extension.displayName || extension.name}
+									className={`gui-toggle gui-integrations-builtin-toggle${enabled ? " gui-toggle--on" : ""}`}
+									disabled={!rpc || busyId !== null}
+									onClick={() => toggleBuiltin(extension)}
+								/>
+							</div>
+						);
+					})
+				)}
+			</section>
 		</>
 	);
 }

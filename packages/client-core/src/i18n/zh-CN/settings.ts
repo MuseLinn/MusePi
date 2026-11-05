@@ -6502,9 +6502,9 @@ export const settings = {
 	"settings.sessionManager.sortBy": "按{column}排序",
 	// ── Integrations catalog (settings.tab.integrations) ─────────────────────
 	"settings.integrations.title": "集成",
-	"settings.integrations.description": "连接 Linear、GitHub、Notion 等外部服务，让智能体直接读写它们的数据。",
-	"settings.integrations.localNote":
-		"安装会写入本机用户级 mcp.json（~/.musepi/agent/mcp.json），只在本机生效，不会进入仓库。",
+	"settings.integrations.description":
+		"连接 Linear、GitHub、Notion 等外部服务，或启用随应用自带的能力，让智能体直接读写它们。",
+	"settings.integrations.localNote": "安装只写入本机配置（用户级 mcp.json 或插件开关），只在本机生效，不会进入仓库。",
 	"settings.integrations.searchPlaceholder": "搜索集成",
 	"settings.integrations.allCategories": "全部",
 	"settings.integrations.category.product": "效率工具",
@@ -6517,6 +6517,10 @@ export const settings = {
 	"settings.integrations.status.oauth": "OAuth 登录",
 	"settings.integrations.status.token": "API Token",
 	"settings.integrations.status.beta": "Beta",
+	"settings.integrations.component.mcp": "MCP",
+	"settings.integrations.component.builtin": "内置插件",
+	"settings.integrations.component.plugin": "插件",
+	"settings.integrations.component.skill": "技能",
 	"settings.integrations.action.install": "安装",
 	"settings.integrations.action.remove": "移除",
 	"settings.integrations.action.installing": "安装中…",
@@ -6533,6 +6537,16 @@ export const settings = {
 	"settings.integrations.removeFailed": "移除 {name} 失败：{error}",
 	"settings.integrations.manage": "管理集成",
 	"settings.integrations.infoCardEmpty": "未连接连接器",
+	"settings.integrations.builtin.title": "内置插件",
+	"settings.integrations.builtin.description":
+		"随应用自带、默认关闭的插件能力。这里列出未作为上方集成卡片展示的内置插件；打开即在本机生效，不会下载任何东西。",
+	"settings.integrations.builtin.empty": "没有可在此启停的内置插件。",
+	"settings.integrations.builtin.state.on": "已启用",
+	"settings.integrations.builtin.state.off": "已停用",
+	"settings.integrations.builtin.enableSuccess": "已启用 {name}。",
+	"settings.integrations.builtin.enableFailed": "启用 {name} 失败：{error}",
+	"settings.integrations.builtin.disableSuccess": "已停用 {name}。",
+	"settings.integrations.builtin.disableFailed": "停用 {name} 失败：{error}",
 	"settings.integrations.catalog.linear": "问题、项目与周期管理。",
 	"settings.integrations.catalog.atlassian": "Jira 与 Confluence 工作项和文档。",
 	"settings.integrations.catalog.notion": "页面、数据库与知识库检索。",
@@ -6545,6 +6559,9 @@ export const settings = {
 	"settings.integrations.catalog.cloudflare": "Workers、KV、R2 与账户资源。",
 	"settings.integrations.catalog.vercel": "项目、部署与构建日志。",
 	"settings.integrations.catalog.dropbox": "文件、文件夹与共享链接。",
+	"settings.integrations.catalog.androidEmulator": "预览并操作 Android 模拟器：安装 APK、查看界面树与 logcat。",
+	"settings.integrations.catalog.statsPills": "输入框上方的本轮用量与性能读数：token、花费与缓存命中率。",
+	"settings.integrations.catalog.visuals": "在会话中绘制可交互卡片与独立页面。",
 } as const;
 
 /** Key union for the settings domain (source of truth). */

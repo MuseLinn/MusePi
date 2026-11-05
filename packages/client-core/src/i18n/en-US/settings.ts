@@ -6785,9 +6785,9 @@ export const settings = {
 	// ── Integrations catalog (settings.tab.integrations) ─────────────────────
 	"settings.integrations.title": "Integrations",
 	"settings.integrations.description":
-		"Connect Linear, GitHub, Notion and other services so the agent can read and write their data.",
+		"Connect Linear, GitHub, Notion and other services, or turn on a capability the app already ships, so the agent can work with them.",
 	"settings.integrations.localNote":
-		"Installing writes the user-scope mcp.json on this machine (~/.musepi/agent/mcp.json). It is local configuration and never enters the repository.",
+		"Installing only writes local configuration (the user-scope mcp.json or a plugin switch) on this machine and never enters the repository.",
 	"settings.integrations.searchPlaceholder": "Search integrations",
 	"settings.integrations.allCategories": "All",
 	"settings.integrations.category.product": "Productivity",
@@ -6800,6 +6800,10 @@ export const settings = {
 	"settings.integrations.status.oauth": "OAuth sign-in",
 	"settings.integrations.status.token": "API token",
 	"settings.integrations.status.beta": "Beta",
+	"settings.integrations.component.mcp": "MCP",
+	"settings.integrations.component.builtin": "Built-in plugin",
+	"settings.integrations.component.plugin": "Plugin",
+	"settings.integrations.component.skill": "Skill",
 	"settings.integrations.action.install": "Install",
 	"settings.integrations.action.remove": "Remove",
 	"settings.integrations.action.installing": "Installing…",
@@ -6816,6 +6820,16 @@ export const settings = {
 	"settings.integrations.removeFailed": "Could not remove {name}: {error}",
 	"settings.integrations.manage": "Manage integrations",
 	"settings.integrations.infoCardEmpty": "No connectors connected",
+	"settings.integrations.builtin.title": "Built-in plugins",
+	"settings.integrations.builtin.description":
+		"Capabilities that ship with the app, off by default. These are the built-in plugins not already offered as integration cards above; turning one on takes effect locally and downloads nothing.",
+	"settings.integrations.builtin.empty": "No built-in plugins can be switched here.",
+	"settings.integrations.builtin.state.on": "On",
+	"settings.integrations.builtin.state.off": "Off",
+	"settings.integrations.builtin.enableSuccess": "Turned on {name}.",
+	"settings.integrations.builtin.enableFailed": "Could not turn on {name}: {error}",
+	"settings.integrations.builtin.disableSuccess": "Turned off {name}.",
+	"settings.integrations.builtin.disableFailed": "Could not turn off {name}: {error}",
 	"settings.integrations.catalog.linear": "Issues, projects and cycle planning.",
 	"settings.integrations.catalog.atlassian": "Jira and Confluence work items and docs.",
 	"settings.integrations.catalog.notion": "Pages, databases and knowledge-base search.",
@@ -6828,4 +6842,9 @@ export const settings = {
 	"settings.integrations.catalog.sentry": "Errors, performance and release tracking.",
 	"settings.integrations.catalog.cloudflare": "Workers, KV, R2 and account resources.",
 	"settings.integrations.catalog.dropbox": "Files, folders and shared links.",
+	"settings.integrations.catalog.androidEmulator":
+		"Preview and drive Android emulators: install APKs, inspect the UI tree and read logcat.",
+	"settings.integrations.catalog.statsPills":
+		"Per-turn usage and performance readout above the composer: tokens, spend and cache hit rate.",
+	"settings.integrations.catalog.visuals": "Draw interactive cards and self-contained pages in the conversation.",
 } as const satisfies Record<SettingsKey, string>;
