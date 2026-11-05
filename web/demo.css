@@ -514,7 +514,7 @@
 
 .mp-demo-msg[hidden],
 .mp-demo-tool[hidden],
-.mp-demo-diff[hidden] {
+.mp-demo-diff-real[hidden] {
   display: none;
 }
 
@@ -547,36 +547,70 @@
   font-size: 10px;
 }
 
-.mp-demo-diff {
+/* Real DiffBlock (client-core tool-render/parts) rendered at build time.
+ * Subset of packages/client-core/src/tool-render/tool-render.css § diff;
+ * regenerate the markup with packages/client-core/scripts/render-site-diff.tsx. */
+.mp-demo-diff-real {
+  --tv-fg: var(--text);
+  --tv-muted: var(--text-muted);
+  --tv-faint: var(--text-faint);
+  --tv-ok: var(--ok);
+  --tv-err: var(--danger);
+  --tv-border: var(--line);
+  --tv-inset: var(--bg-2);
+  --tv-raised: var(--bg-1);
+  --tv-mono: var(--mono);
   align-self: stretch;
   border: 1px solid var(--line);
   border-radius: 11px;
   overflow: hidden;
   background: var(--bg-2);
-  font-family: var(--mono);
+}
+
+.mp-demo-diff-real .tv-out {
+  padding: 0;
+}
+
+.mp-demo-diff-real .tv-diff {
+  margin: 0;
+  border-radius: 0;
+  background: var(--tv-inset);
+  font-family: var(--tv-mono);
   font-size: 11.5px;
   line-height: 1.7;
+  overflow-x: auto;
+  padding: 5px 0;
 }
 
-.mp-demo-diff div {
-  padding: 1px 12px;
+.mp-demo-diff-real .tv-diff-row {
+  padding: 0 12px;
   white-space: pre;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.mp-demo-diff .is-add {
-  background: rgba(70, 167, 88, 0.12);
-  color: #8fd19e;
+.mp-demo-diff-real .tv-diff-row--add {
+  background: color-mix(in oklch, var(--tv-ok) 11%, transparent);
+  color: color-mix(in oklch, var(--tv-ok) 70%, var(--tv-fg));
 }
 
-.mp-demo-diff .is-del {
-  background: rgba(242, 85, 90, 0.12);
-  color: #ff9a9d;
+.mp-demo-diff-real .tv-diff-row--del {
+  background: color-mix(in oklch, var(--tv-err) 11%, transparent);
+  color: color-mix(in oklch, var(--tv-err) 70%, var(--tv-fg));
 }
 
-.mp-demo-diff .is-meta {
-  color: var(--text-faint);
+.mp-demo-diff-real .tv-diff-row--hunk,
+.mp-demo-diff-real .tv-diff-row--header,
+.mp-demo-diff-real .tv-diff-row--gap {
+  color: var(--tv-faint);
+}
+
+.mp-demo-diff-real .tv-diff-ln {
+  display: inline-block;
+  width: 30px;
+  margin-right: 8px;
+  text-align: right;
+  color: var(--tv-faint);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Files */

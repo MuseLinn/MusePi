@@ -227,11 +227,10 @@
                       <span class="mp-demo-tool-icon" aria-hidden="true">▤</span>
                       <span><b data-i18n="demo.chat.tool">读取文件</b> <span data-i18n="demo.chat.toolmeta">src/panel.tsx · 42 行</span></span>
                     </div>
-                    <div class="mp-demo-diff" data-demo-step="diff" hidden>
-                      <div class="is-meta" data-i18n="demo.chat.diffmeta">src/panel.tsx · +2 −1</div>
-                      <div class="is-del">- if (user.role === "admin") {</div>
-                      <div class="is-add">+ if (isOwner(user) || user.role === "admin") {</div>
-                      <div class="is-add">+   audit("panel.open", user.id);</div>
+                    <div class="mp-demo-diff-real" data-demo-step="diff" hidden>
+                      <!-- demo-diff:start -->
+<div class="tv-out"><div class="tv-diff"><div class="tv-diff-row tv-diff-row--header"><span class="tv-diff-ln"></span>--- a/src/panel.tsx</div><div class="tv-diff-row tv-diff-row--header"><span class="tv-diff-ln"></span>+++ b/src/panel.tsx</div><div class="tv-diff-row tv-diff-row--hunk"><span class="tv-diff-ln"></span>@@ -1,4 +1,5 @@</div><div class="tv-diff-row tv-diff-row--del"><span class="tv-diff-ln">1</span>- if (user.role === &quot;admin&quot;) {</div><div class="tv-diff-row tv-diff-row--add"><span class="tv-diff-ln">1</span>+ if (isOwner(user) || user.role === &quot;admin&quot;) {</div><div class="tv-diff-row tv-diff-row--add"><span class="tv-diff-ln">2</span>+   audit(&quot;panel.open&quot;, user.id);</div><div class="tv-diff-row"><span class="tv-diff-ln">2</span>    return &lt;Panel /&gt;;</div><div class="tv-diff-row"><span class="tv-diff-ln">3</span>  }</div></div></div>
+<!-- demo-diff:end -->
                     </div>
                     <div class="mp-demo-msg mp-demo-msg--assistant" data-demo-step="done" data-i18n="demo.chat.done" hidden>权限判断没有问题；只有 isOwner 的兜底分支建议补一条测试。</div>
                   </div>

@@ -85,7 +85,6 @@
     "demo.chat.think": "Let me look at the change first, then summarize.",
     "demo.chat.tool": "Read file",
     "demo.chat.toolmeta": "src/panel.tsx · 42 lines",
-    "demo.chat.diffmeta": "src/panel.tsx · +2 −1",
     "demo.chat.done": "The permission check is fine; add a test for the isOwner fallback branch.",
     "demo.files.tree": "desktop-app",
     "demo.rail.context": "Context",
