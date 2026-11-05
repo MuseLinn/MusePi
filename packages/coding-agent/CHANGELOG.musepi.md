@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **信息卡显示当前分支 PR**：当前分支关联 PR 时，改动统计下方显示 `PR #编号` 与开放/草稿/已合并/已关闭状态，点击在系统浏览器打开；没有 PR 或非 git 目录时不渲染。
+  - EN: The session info card now shows the current branch's PR below the change totals — number plus open/draft/merged/closed — and opens it in the system browser on click. It stays absent without a PR or outside a repository.
+
 - **信息卡子代理行显示成本与耗时**：运行中/已结束的子代理行直接读取 `AgentProgress` 的 `cost`、`durationMs` 与状态，结束行显示实际耗时；不再需要打开子代理详情才能看到花费。阻塞状态仍无独立字段，未伪造。
   - EN: Subagent rows in the session info card now show the cost and duration carried by `AgentProgress`; finished rows use the measured duration instead of the local first-seen timer, so spend is visible without opening the detail panel. There is still no explicit blocked field, so none is invented.
 

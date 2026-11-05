@@ -34,6 +34,7 @@ import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { openExternalUrl } from "../lib/electron";
 import type { PanelTab } from "../lib/panel-tabs";
 import type { RpcClient } from "../lib/rpc";
 import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
@@ -81,6 +82,15 @@ interface UsageView {
 interface NumstatView {
 	files?: Array<{ path: string; added: number; removed: number; binary: boolean }>;
 	error?: string;
+}
+
+/** Current-branch PR from `github.prStatus`. */
+interface PrView {
+	number: number;
+	title: string;
+	state: string;
+	isDraft: boolean;
+	url: string;
 }
 
 interface ChangesView {
@@ -343,6 +353,7 @@ export function SessionInfoCard({
 	const [changes, setChanges] = useState<ChangesView | null>(null);
 	const [changesState, setChangesState] = useState<ChangesState>("loading");
 	const [changesError, setChangesError] = useState<string | null>(null);
+	const [pr, setPr] = useState<PrView | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
 	const [showAllTabs, setShowAllTabs] = useState(false);
 	const [showAllSurfaces, setShowAllSurfaces] = useState(false);
@@ -351,11 +362,15 @@ export function SessionInfoCard({
 		if (!rpc || !sessionId) return;
 		let alive = true;
 		const load = async (): Promise<void> => {
-			const [usageResult, numstatResult] = await Promise.allSettled([
+			const [usageResult, numstatResult, prResult] = await Promise.allSettled([
 				rpc.request<UsageView | null>("session.contextUsage", { sessionId }),
 				cwd ? rpc.request<NumstatView>("git.numstat", { cwd }) : Promise.resolve(null),
+				cwd ? rpc.request<{ pr?: PrView | null }>("github.prStatus", { cwd }) : Promise.resolve(null),
 			]);
 			if (!alive) return;
+
+			if (prResult.status === "fulfilled") setPr(prResult.value?.pr ?? null);
+			else setPr(null);
 
 			if (usageResult.status === "fulfilled") {
 				setUsage({ model: usageResult.value?.model ?? null });
@@ -556,6 +571,27 @@ export function SessionInfoCard({
 					<p className="gui-session-info-note">{t("general.sessionInfoNoChanges")}</p>
 				)}
 			</section>
+
+			{pr ? (
+				<button
+					type="button"
+					className="gui-session-info-pr"
+					title={pr.title}
+					onClick={() => void openExternalUrl(pr.url)}
+				>
+					<Icon name="git-pull-request" className="gui-session-info-row-icon" />
+					<span className="gui-session-info-item-label">{`PR #${pr.number}`}</span>
+					<span className="gui-session-info-count">
+						{pr.isDraft
+							? t("general.prDraft")
+							: pr.state.toLowerCase() === "merged"
+								? t("general.prStateMerged")
+								: pr.state.toLowerCase() === "closed"
+									? t("general.prStateClosed")
+									: t("general.prStateOpen")}
+					</span>
+				</button>
+			) : null}
 
 			{liveAgents.length > 0 || endedAgents.length > 0 ? (
 				<InfoSection

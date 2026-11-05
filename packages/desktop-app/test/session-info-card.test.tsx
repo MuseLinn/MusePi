@@ -132,6 +132,22 @@ describe("SessionInfoCard 数据契约", () => {
 		await unmount();
 	});
 
+	it("当前分支有 PR 时显示编号与状态", async () => {
+		const rpc = makeRpc({
+			"session.contextUsage": () => ({ model: "openai/gpt" }),
+			"git.numstat": () => ({ files: [] }),
+			"github.prStatus": () => ({
+				pr: { number: 12, title: "Fix things", state: "OPEN", isDraft: false, url: "https://example.test/pr/12" },
+			}),
+		});
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		const row = host.querySelector(".gui-session-info-pr");
+		expect(row).not.toBeNull();
+		expect(row!.textContent).toContain("PR #12");
+		expect(row!.textContent).toContain(t("general.prStateOpen"));
+		await unmount();
+	});
+
 	it("非 git 目录降级为无变更而不是错误", async () => {
 		const rpc = makeRpc({
 			"session.contextUsage": () => ({ model: "openai/gpt" }),
