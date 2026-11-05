@@ -48,7 +48,7 @@
     "preview.kicker": "Product preview",
     "preview.h2": "One screen that shows every step of the work",
     "preview.desc":
-      "From the welcome workspace to the file tree and code editor, these are captures of the real application, not illustrations.",
+      "Try it here: switch views, open a session or file, and play an agent turn. This is a local interactive replica of the real interface — no daemon, no network.",
     "preview.shot.aria":
       "MusePi desktop app welcome screen in the brand dark theme: composer, suggestions and the session sidebar",
     "preview.shot.note":
@@ -57,6 +57,54 @@
       "MusePi file workspace with a project tree, file tabs and an editable TypeScript file",
     "preview.editor.note":
       "Real interface capture — browse the project, switch files and edit code in the same workspace.",
+    "preview.more": "More real captures",
+    "demo.tabs.aria": "Interface demo",
+    "demo.hint": "Interactive preview",
+    "demo.tab.welcome": "Welcome",
+    "demo.tab.chat": "Chat",
+    "demo.tab.files": "Files",
+    "demo.tab.board": "Board",
+    "demo.new": "New task",
+    "demo.search": "Search",
+    "demo.today": "Today",
+    "demo.session.s1": "Review PR #128 diff",
+    "demo.session.s2": "Settings shortcut",
+    "demo.time.s2": "Nov 2",
+    "demo.welcome.title": "Good evening, Linn",
+    "demo.welcome.sub": "What should the agent do today?",
+    "demo.composer": "Describe what you want to do…",
+    "demo.send": "Send",
+    "demo.chip.1": "Review PR #128",
+    "demo.chip.2": "Add a settings shortcut",
+    "demo.chip.3": "Check the board usage",
+    "demo.chat.meta": "kimi-k3 · 2 min ago",
+    "demo.chat.play": "Run agent turn",
+    "demo.chat.replay": "Replay",
+    "demo.chat.user1": "Review this PR diff, especially the permission check.",
+    "demo.chat.user2": "Add a shortcut to the settings page and warn me on conflicts.",
+    "demo.chat.think": "Let me look at the change first, then summarize.",
+    "demo.chat.tool": "Read file",
+    "demo.chat.toolmeta": "src/panel.tsx · 42 lines",
+    "demo.chat.diffmeta": "src/panel.tsx · +2 −1",
+    "demo.chat.done": "The permission check is fine; add a test for the isOwner fallback branch.",
+    "demo.files.tree": "desktop-app",
+    "demo.rail.context": "Context",
+    "demo.rail.model": "Model",
+    "demo.rail.running": "Running",
+    "demo.board.tokens": "Tokens",
+    "demo.board.tokensDelta": "+12% this week",
+    "demo.board.tasks": "Today's tasks",
+    "demo.board.tasksDelta": "3 done",
+    "demo.board.focus": "Focus time",
+    "demo.board.focusDelta": "18m more than yesterday",
+    "demo.board.activity": "Active days",
+    "demo.board.activityDelta": "12-day streak",
+    "demo.caption":
+      "Interactive replica: switch views, open a session or file, and play an agent turn. Download the desktop app for the real thing.",
+    "demo.tour.start": "Tour",
+    "demo.tour.skip": "Skip",
+    "demo.tour.prev": "Previous",
+    "demo.tour.next": "Next",
 
     /* 0.7.0 能力浏览 */
     "nav.release": "0.7.0 highlights",
@@ -233,7 +281,37 @@
   };
 
   /* MPI18N.t() 供 main.js 调用；当前没有运行时文案，保留这个空表作为接口。 */
-  var JS = {};
+  var JS = {
+    "demo.status.idle": { zh: "就绪", en: "Ready" },
+    "demo.status.thinking": { zh: "思考中…", en: "Thinking…" },
+    "demo.status.reading": { zh: "读取文件…", en: "Reading file…" },
+    "demo.status.writing": { zh: "写入修改…", en: "Writing changes…" },
+    "demo.status.done": { zh: "完成", en: "Done" },
+    "demo.chat.play": { zh: "运行 Agent 回合", en: "Run agent turn" },
+    "demo.chat.replay": { zh: "重播", en: "Replay" },
+    "demo.tour.1.title": { zh: "四个视图", en: "Four views" },
+    "demo.tour.1.body": {
+      zh: "欢迎、对话、文件和看板共用同一套工作台；先选一个视图，下面的区域会跟着切换。",
+      en: "Welcome, chat, files and board share one workspace; pick a view and the area below follows.",
+    },
+    "demo.tour.2.title": { zh: "会话列表", en: "Session list" },
+    "demo.tour.2.body": {
+      zh: "切换会话、查看运行状态；点一条会话会直接打开它的对话。",
+      en: "Switch sessions and see their state; clicking a session opens its conversation.",
+    },
+    "demo.tour.3.title": { zh: "Agent 回合", en: "Agent turn" },
+    "demo.tour.3.body": {
+      zh: "点「运行 Agent 回合」，看它思考、读取文件、给出 diff 和结论。",
+      en: "Run an agent turn to watch it think, read a file, show a diff and summarize.",
+    },
+    "demo.tour.4.title": { zh: "上下文", en: "Context" },
+    "demo.tour.4.body": {
+      zh: "右栏保留上下文环、模型和运行中的任务；真正的工作台也在这里切换。",
+      en: "The rail keeps the context ring, model and running tasks; the real workspace switches here too.",
+    },
+    "demo.tour.next": { zh: "下一步", en: "Next" },
+    "demo.tour.done": { zh: "完成", en: "Done" },
+  };
 
   var nodes = [];
   document.querySelectorAll("[data-i18n]").forEach(function (el) {
