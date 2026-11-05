@@ -121,7 +121,7 @@
  * pet-main.tsx; 104px is the scale-1 authored body height, so the ball lands
  * at the same visual size the inline `size * scale` used to produce.
  * Petdex sheets ignore all of this — they carry their own frame geometry. */
-.pet-window__pet > .gui-pet {
+.pet-window__pet-flip > .gui-pet:has(> .gui-pet-svg) {
 	--gui-pet-height: calc(104px * var(--gui-pet-window-scale, 1));
 	width: auto;
 	height: var(--gui-pet-height);
