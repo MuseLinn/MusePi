@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="light dark" />
+		<!-- Renderer CSP: no unsafe-eval (no eval in src); wasm-unsafe-eval
+		 * permits only WebAssembly compilation for the sandboxed PDFium worker.
+		 * 'unsafe-inline' scripts stay for the pre-React theme bootstrap,
+		 * styles are inline by design. ws/wss/http/https cover the daemon
+		 * socket, provider streams and remote images; the browser tool runs
+		 * in a <webview> guest (own context, exempt from this policy).
+		 * script-src blob: mounts extension-contributed slot components —
+		 * the daemon compiles them and the GUI blob-imports the result
+		 * (slot-host.tsx SlotComponentMount); without it every third-party
+		 * plugin panel fails with "Failed to fetch dynamically imported
+		 * module: blob:…". -->
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'self' file:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http: file:; font-src 'self' data: file: https: http:; connect-src 'self' ws: wss: http: https: file:; media-src 'self' blob: data: https: http: file:; worker-src 'self' blob: file:; object-src 'none'; frame-src 'self' https: http: file: data:; child-src 'self' https: http: file: blob:"
+		/>
+		<title>MusePi</title>
+	<script src="./demo-boot.js"></script><link rel="stylesheet" href="./34vd49tf.css"><script type="module" src="./e6qeaepc.js"></script><link rel="modulepreload" href="./pyth9myq.js"><link rel="modulepreload" href="./0d581w8x.js"><link rel="modulepreload" href="./07rjedsz.js"><link rel="modulepreload" href="./n044cm2z.js"><link rel="modulepreload" href="./t3g50554.js"><link rel="modulepreload" href="./xwz1b0fc.js"><link rel="modulepreload" href="./tjd6h3x3.js"></head>
+	<body>
+		<div id="root"></div>
+		<script>(function(){try{var s=localStorage.getItem("omp-collab-theme");var sys=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var t=(s==="light"||s==="dark")?s:sys;document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;var a=localStorage.getItem("omp-collab-accent");if(a==="mono"||a==="ocean"||a==="jade")document.documentElement.dataset.accent=a;}catch(e){}})();</script>
+		
+	</body>
+</html>

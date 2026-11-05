@@ -17,6 +17,7 @@
 		"build:monaco": "mkdir -p dist/monaco-workers && cp node_modules/monaco-editor/min/vs/assets/editor.worker-_vAIFJDs.js dist/monaco-workers/editor.worker.js && cp node_modules/monaco-editor/min/vs/assets/json.worker-Csf_TLih.js dist/monaco-workers/json.worker.js && cp node_modules/monaco-editor/min/vs/assets/css.worker-BpD9FCKP.js dist/monaco-workers/css.worker.js && cp node_modules/monaco-editor/min/vs/assets/html.worker-CLuInTTy.js dist/monaco-workers/html.worker.js && cp node_modules/monaco-editor/min/vs/assets/ts.worker-g3pjEjl4.js dist/monaco-workers/ts.worker.js",
 		"build:fix": "bun scripts/fix-dist-html.mjs",
 		"build:haptic": "bun scripts/build-haptic.mjs",
+		"build:web-demo": "bun scripts/build-web-demo.mjs",
 		"build": "bun run build:tailwind && bun run build:bundle && bun run --parallel build:embedpdf build:monaco build:fix build:haptic",
 		"desktop": "bun scripts/desktop-run.mjs",
 		"desktop:rebuild": "bun run build && bun scripts/desktop-run.mjs",

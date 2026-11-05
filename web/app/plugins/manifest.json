@@ -1,0 +1,26 @@
+{
+	"components": [
+		{
+			"slot": "app.chat",
+			"extensionId": "packages/desktop-app/src/plugins/chat-view/index.ts",
+			"label": "会话",
+			"code": "chat-view.js",
+			"css": "chat-view.css"
+		},
+		{
+			"slot": "panel.tab.files",
+			"extensionId": "packages/desktop-app/src/plugins/file-workspace/index.ts",
+			"label": "文件",
+			"availability": "always",
+			"code": "file-workspace.js",
+			"css": "file-workspace.css"
+		},
+		{
+			"slot": "panel.shell",
+			"extensionId": "packages/desktop-app/src/plugins/panel/index.ts",
+			"label": "右侧面板",
+			"code": "panel.js",
+			"css": "panel.css"
+		}
+	]
+}

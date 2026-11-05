@@ -1,0 +1,132 @@
+(()=>{var A=new Map,O=new Set;function L(e,t){A.set(e,t)}function p(e){for(let[t,s]of Object.entries(e))L(t,s)}function Y(e,t){let s=A.get(e);if(s)return Promise.resolve().then(()=>s(t??{}));if(typeof e==="string"&&e.endsWith(".list"))return Promise.resolve([]);return Promise.resolve({})}var y=1,b=3;class u extends EventTarget{constructor(e){super();this.url=String(e),this.readyState=0,this.binaryType="arraybuffer",this.bufferedAmount=0,this.protocol="",this.extensions="",this.onopen=null,this.onmessage=null,this.onerror=null,this.onclose=null,O.add(this),setTimeout(()=>{if(this.readyState!==0)return;this.readyState=y;let t=new Event("open");if(this.dispatchEvent(t),typeof this.onopen==="function")this.onopen.call(this,t)},16)}deliver(e){if(this.readyState!==y)return;let t=new MessageEvent("message",{data:JSON.stringify(e)});if(this.dispatchEvent(t),typeof this.onmessage==="function")this.onmessage.call(this,t)}send(e){let t;try{t=JSON.parse(String(e))}catch{return}if(t.id===void 0)return;Y(t.method,t.params).then((s)=>this.deliver({jsonrpc:"2.0",id:t.id,result:s}),(s)=>this.deliver({jsonrpc:"2.0",id:t.id,error:{code:-32000,message:String(s?.message??s)}}))}close(){if(this.readyState===b)return;this.readyState=b,O.delete(this);let e=new CloseEvent("close",{code:1000,reason:"demo"});if(this.dispatchEvent(e),typeof this.onclose==="function")this.onclose.call(this,e)}}u.CONNECTING=0;u.OPEN=y;u.CLOSING=2;u.CLOSED=b;function S({url:e="ws://127.0.0.1:9/demo"}={}){try{localStorage.setItem("musepi-gui-url",e)}catch{}window.WebSocket=u}var w={};var N=["docs","src"],g=new Map([["README.md",{mtime:1792997600000,content:`# 星轨手账
+
+记录每次观星计划的小工具：挑目标、估算可见窗口，再把它们写进当晚的清单。
+
+## 快速开始
+
+\`\`\`bash
+bun install
+bun run dev
+\`\`\`
+
+## 目录
+
+| 路径 | 说明 |
+| --- | --- |
+| \`src/app.ts\` | 命令行入口：读取星表并排期 |
+| \`src/schedule.ts\` | 可见窗口计算与排序 |
+| \`docs/notes.md\` | 设计笔记与取舍记录 |
+| \`package.json\` | 脚本与依赖 |
+
+> 这里的文件来自演示 daemon 的内存，不会读写你的磁盘。
+`}],["package.json",{mtime:1792994600000,content:`{
+	"name": "orbit-notes",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run src/app.ts",
+		"test": "bun test"
+	}
+}
+`}],["src/app.ts",{mtime:1792999280000,content:`import { schedule } from "./schedule";
+
+interface Target {
+	name: string;
+	ra: number;
+	dec: number;
+}
+
+const targets: Target[] = [
+	{ name: "M31", ra: 0.712, dec: 41.27 },
+	{ name: "M42", ra: 5.588, dec: -5.39 },
+	{ name: "M13", ra: 16.695, dec: 36.46 },
+];
+
+const tonight = schedule(targets, { start: "20:30", end: "23:45" });
+
+for (const slot of tonight) {
+	console.log(\`\${slot.start}  \${slot.target.name}  \${slot.altitude}°\`);
+}
+`}],["src/schedule.ts",{mtime:1792998440000,content:`interface Target {
+	name: string;
+	ra: number;
+	dec: number;
+}
+
+interface Slot {
+	start: string;
+	target: Target;
+	altitude: number;
+}
+
+/** Upper culmination at 20:30 local: a target is visible while its hour angle
+ *  stays inside ±2h and it clears the 20° haze band. */
+const MIN_ALTITUDE = 20;
+const WINDOW_MINUTES = 240;
+
+function altitudeAt(target: Target, minutes: number): number {
+	const hourAngle = (minutes / 60 - (target.ra * 15 + 20.5)) % 24;
+	const folded = Math.abs(hourAngle) > 12 ? 24 - Math.abs(hourAngle) : Math.abs(hourAngle);
+	return 90 - Math.abs(target.dec) - folded * 15;
+}
+
+export function schedule(targets: Target[], night: { start: string; end: string }): Slot[] {
+	const [startH, startM] = night.start.split(":").map(Number);
+	const [endH, endM] = night.end.split(":").map(Number);
+	const from = startH * 60 + startM;
+	const to = endH * 60 + endM;
+
+	return targets
+		.map(target => {
+			const minutes = from + WINDOW_MINUTES / 2;
+			return { target, minutes, altitude: Math.round(altitudeAt(target, minutes)) };
+		})
+		.filter(slot => slot.altitude >= MIN_ALTITUDE && slot.minutes <= to)
+		.sort((a, b) => b.altitude - a.altitude)
+		.map(slot => ({
+			start: \`\${String(Math.floor(slot.minutes / 60)).padStart(2, "0")}:\${String(slot.minutes % 60).padStart(2, "0")}\`,
+			target: slot.target,
+			altitude: slot.altitude,
+		}));
+}
+`}],["docs/notes.md",{mtime:1792989200000,content:`# 设计笔记
+
+## 为什么先做排期，而不是星图
+
+排期只需要赤经赤纬和观测地坐标，一小时就能算完；星图要渲染、要缩放、
+要对齐星等，投入大得多。先用排期验证「今晚看什么」这个真问题。
+
+## 取舍
+
+- 目标数量上限 20 个：再多一个晚上也看不完。
+- 高度角低于 20° 直接跳过，大气抖动太大。
+- 不做自动寻星，只输出时间与方位角，剩下的交给赤道仪。
+`}]]),K={md:"text/markdown",json:"application/json",ts:"text/plain"};function j(e){let t=e.lastIndexOf(".");return t===-1?"application/octet-stream":K[e.slice(t+1)]??"application/octet-stream"}function M(e){let t=String(e??"").replace(/\\/g,"/").replace(/\/+$/,"");if(t==="/home/musepi/Projects/atlas")return"";if(!t.startsWith("/home/musepi/Projects/atlas/"))return null;return t.slice(28)}function D(e){return new TextEncoder().encode(e)}function F(e){let t="";for(let s of e)t+=String.fromCharCode(s);return btoa(t)}function U(){return[...N.map((t)=>({path:t,isDir:!0,size:0,mtime:1792992800000})),...[...g].map(([t,s])=>({path:t,isDir:!1,size:D(s.content).length,mtime:s.mtime}))].map((t)=>({name:t.path.slice(t.path.lastIndexOf("/")+1),path:t.path,isDir:t.isDir,isSymlink:!1,size:t.size,mtime:t.mtime,depth:t.path.split("/").length}))}var B={id:"ws_demo_project",root:"/home/musepi/Projects/atlas",name:"星轨手账",kind:"managed",additionalDirs:[],createdAt:1790408000000,lastOpenedAt:1793000000000},v={"workspace.list":()=>({workspaces:[B]}),"workspace.tree":(e)=>{let t=String(e.root??"").replace(/^\/+|\/+$/g,""),s=(t===""?0:t.split("/").length)+(e.maxDepth??2);return{rootPath:"/home/musepi/Projects/atlas",truncated:!1,entries:U().filter((o)=>t===""||o.path.startsWith(`${t}/`)).filter((o)=>o.depth<=s).sort((o,a)=>o.path.localeCompare(a.path))}},"fs.readBytes":(e)=>{let t=g.get(M(e.path)??"");if(!t)return{error:`ENOENT: no such file or directory, stat '${e.path}'`};let s=D(t.content);return{base64:F(s),size:s.length,mime:j(e.path)}},"fs.read":(e)=>({content:g.get(M(e.path)??"")?.content??null}),"fs.stat":(e)=>{let t=M(e.path),s=t===""||N.includes(t);return{exists:s||g.has(t??""),isDirectory:s}},"git.status":()=>({root:"/home/musepi/Projects/atlas",branch:"main",ahead:0,behind:0,staged:[],unstaged:[]}),"git.branches":()=>({current:"main",branches:["main","demo"]}),"git.identity":()=>({name:"MusePi Demo",email:"demo@musepi.example",source:"global"})};var C=[{id:"chat",builtin:!0,label:"对话模式",description:"极简对话：仅内置核心工具",extends:[],extensions:[],hasPrompt:!1,promptComplete:!1,settingsKeys:[]},{id:"creator",builtin:!0,label:"创作模式",description:"原型、演示稿与内容创作",extends:[],extensions:[],hasPrompt:!1,promptComplete:!1,settingsKeys:[]},{id:"design",builtin:!0,label:"设计模式",description:"界面与交互设计",extends:[],extensions:[],hasPrompt:!1,promptComplete:!1,settingsKeys:[]},{id:"work",builtin:!0,label:"工作模式",description:"日常开发与任务推进",extends:[],extensions:[],hasPrompt:!1,promptComplete:!1,settingsKeys:[]}],E={extensions:[{id:"skill:musepi-help",kind:"skill",name:"musepi-help",displayName:"MusePi 帮助",description:"回答 MusePi 自身的使用问题",state:"active",enabled:!0},{id:"skill:board-design",kind:"skill",name:"board-design",displayName:"看板设计",description:"生成与调整看板结构",state:"active",enabled:!0}]},h={"system.ping":()=>({ok:!0}),"system.meta":()=>({version:"0.7.1",musepiVersion:null,engineVersion:"0.7.1",engine:"MusePi 0.7.1",dataRoot:"/home/musepi",configDir:"/home/musepi/.config/musepi",runtime:"Bun"}),"system.prewarmStart":()=>({}),"setup.status":()=>({model:"ready",providers:{oauthLoggedIn:!1,apiConfigured:!0,customCount:0},modes:{count:C.length},extensions:{active:E.extensions.length,disabled:0}}),"extensions.list":()=>E,"models.listAvailable":()=>[],"cron.list":()=>({tasks:[],runs:[]}),"modes.list":()=>({modes:C}),"modes.getDefault":()=>({id:"work"}),"daemon.pauseStatus":()=>({paused:!1,pausedAt:null}),"browser.managedBridge":()=>({url:null}),"settings.get":()=>({modelRoles:{},cycleOrder:["smol","default","slow"],knownRoleIds:["default","smol","slow","vision","plan","designer","commit","tiny","task","advisor"]}),"events.subscribe":()=>({subscriptionId:"demo"}),"changelog.startup":()=>({show:!1})};var q=h["extensions.list"],T=null;async function x(e){let t=await fetch(e);if(!t.ok)throw Error(`${e} responded ${t.status}`);return await t.text()}function H(){return T??=(async()=>{let e=JSON.parse(await x("./plugins/manifest.json"));return await Promise.all(e.components.map(async(t)=>({slot:t.slot,extensionId:t.extensionId,label:t.label,...t.order!==void 0?{order:t.order}:{},...t.availability?{availability:t.availability}:{},code:await x(`./plugins/${t.code}`),...t.css?{css:await x(`./plugins/${t.css}`)}:{}})))})(),T}var W={"extensions.list":async()=>({...q(),components:await H()})};var n=Date.now();function d(e){return new Date(e).toISOString()}function I(e,t,s,i){return{id:e,parentId:t,timestamp:d(i),type:"message",message:{role:"user",content:s,timestamp:i}}}function c(e,t,s,i,o="stop",a=[2400,320,18000,0.012]){let[r,l,k,R]=a;return{id:e,parentId:t,timestamp:d(s),type:"message",message:{role:"assistant",content:i,model:"anthropic/claude-sonnet-4-5",usage:{input:r,output:l,cacheRead:k,cacheWrite:0,totalTokens:r+l+k,cost:{total:R}},stopReason:o,timestamp:s}}}function f(e,t,s,i,o,a,r=!1){return{id:e,parentId:t,timestamp:d(s),type:"message",message:{role:"toolResult",toolCallId:i,toolName:o,content:[{type:"text",text:a}],isError:r,timestamp:s}}}function _({id:e,title:t,modeId:s,createdAt:i,updatedAt:o,entries:a}){let r=a[a.length-1];return{id:e,title:t,modeId:s,createdAt:i,updatedAt:o,entries:a,roundDurations:a.filter((l)=>l.type==="message"&&l.message.role==="user").map((l)=>[l.message.timestamp,r.message.timestamp-l.message.timestamp])}}var V=_({id:"demo-sidebar-groups",title:"设计侧栏分组",modeId:"design",createdAt:n-172800000-10800000,updatedAt:n-1080000,entries:[I("g1",null,"侧栏的会话列表现在是平铺的，帮我按日期分组（今天 / 最近 7 天），并在行上标出未读。",n-2040000),c("g2","g1",n-1980000,[{type:"thinking",thinking:"分组只该影响排序和组标题，行本身的渲染要复用同一个列表组件——先看现在的结构再动。"},{type:"text",text:"先确认现在的列表是怎么组织的：分组应该只包在列表外面，行组件不动。"},{type:"toolCall",id:"call-read-grouped",name:"read",arguments:{path:"packages/desktop-app/src/components/GroupedSessionList.tsx",limit:40},intent:"读取现有的分组列表"}],"toolUse",[1860,210,12400,0.0091]),f("g3","g2",n-1980000+4000,"call-read-grouped","read",`1  /** Bucket a timestamp into a date-group label. */
+2  function dateGroup(ts: string): string {
+3  	const days = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000);
+4  	if (days <= 0) return t("settings.today");
+5  	if (days === 1) return t("settings.yesterday");
+6  	if (days <= 7) return t("settings.last7Days");
+7  	return t("settings.earlier");
+8  }`),c("g4","g3",n-1860000,[{type:"text",text:"结构够用，只需要补两处：分组键改用最近活动时间，未读沿用已有的 `messageCount`。"},{type:"toolCall",id:"call-edit-groups",name:"edit",arguments:{path:"packages/desktop-app/src/components/GroupedSessionList.tsx",old:"const g = dateGroup(n.entry.timestamp)",new:"const g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp)"},intent:"改用最近活动时间分组"}],"toolUse",[2120,268,13800,0.0102]),f("g5","g4",n-1860000+3000,"call-edit-groups","edit",`--- a/packages/desktop-app/src/components/GroupedSessionList.tsx
++++ b/packages/desktop-app/src/components/GroupedSessionList.tsx
+@@ -67,3 +67,3 @@
+-			const g = dateGroup(n.entry.timestamp) || "earlier";
++			const g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp) || "earlier";`),c("g6","g5",n-1800000,[{type:"text",text:'改完了，分组键和未读标记两处：\n\n- 分组键改用 `entry.updatedAt ?? entry.timestamp`，最近有活动的会话才会浮到今天\n- 未读沿用 `session.list` 的 `messageCount`，与已读游标比对，不新增 RPC\n- 空桶不渲染，侧栏不会多出空行\n\n```ts\nconst key = node.entry.updatedAt ?? node.entry.timestamp;\nconst group = dateGroup(key) || "earlier";\n```\n\n侧栏现在只剩两个组：今天和最近 7 天。'}],"stop",[2480,96,15100,0.0108])]}),Q=_({id:"demo-review-pr128",title:"审查 PR #128 的 diff",modeId:"work",createdAt:n-172800000-2400000,updatedAt:n-172800000,entries:[I("r1",null,"看下 PR #128 的 diff，重点确认重连退避的上限有没有改。",n-172800000-1560000),c("r2","r1",n-172800000-1500000,[{type:"text",text:"先取完整的 diff，再只盯重连那一段。"},{type:"toolCall",id:"call-pr-diff",name:"bash",arguments:{command:"gh pr diff 128 -- patch",intent:"Fetch PR 128 diff"},intent:"取 PR #128 的 diff"}],"toolUse",[3120,184,21600,0.0128]),f("r3","r2",n-172800000-1500000+6000,"call-pr-diff","bash",`diff --git a/src/net/reconnect.ts b/src/net/reconnect.ts
+@@ -12,7 +12,7 @@
+-const BACKOFF_MAX_MS = 5_000;
++const BACKOFF_MAX_MS = 30_000;
+ 
+-const delay = Math.min(500 * 2 ** attempt, BACKOFF_MAX_MS);
++const delay = Math.min(1_000 * 2 ** attempt, BACKOFF_MAX_MS);`),c("r4","r3",n-172800000-1440000,[{type:"text",text:`diff 只动了两个常量，没有触碰分支逻辑：
+
+1. 退避上限 5s → 30s
+2. 基数 500ms → 1s
+
+\`\`\`ts
+const delay = Math.min(1_000 * 2 ** attempt, 30_000);
+\`\`\`
+
+需要注意的地方：上限拉长后，前三次重试的间隔变成 1s / 2s / 4s，首帧恢复比以前慢；如果这是为了压住重连风暴，可以接受。`}],"stop",[3480,214,23100,0.0136])]}),Z=_({id:"demo-settings-keys",title:"设置页快捷键",modeId:"work",createdAt:n-432000000-7200000,updatedAt:n-432000000,entries:[I("k1",null,"设置页要加一个快捷键编辑区，按键冲突怎么检测？",n-432000000-2880000),c("k2","k1",n-432000000-2820000,[{type:"thinking",thinking:"快捷键注册表是唯一事实来源，冲突检测应该读它而不是自己再维护一张表。"},{type:"text",text:"冲突检测不该另建一张表——键位注册表已经是唯一事实来源，直接读它。"},{type:"toolCall",id:"call-grep-keys",name:"grep",arguments:{pattern:"app\\.session\\.tree|app\\.command\\.palette",path:"packages/coding-agent/src/config"},intent:"查键位注册表结构"}],"toolUse",[1940,152,11200,0.0084]),f("k3","k2",n-432000000-2820000+5000,"call-grep-keys","grep",`packages/coding-agent/src/config/keybindings.ts:43:	"app.session.tree": true;
+packages/coding-agent/src/config/keybindings.ts:173:	"app.session.tree": {
+packages/coding-agent/src/config/keybindings.ts:267:	tree: "app.session.tree",`),c("k4","k3",n-432000000-2760000,[{type:"text",text:"注册表里每个动作都有默认键位和可覆盖项，检测分两层：\n\n| 层级 | 判据 | 结果 |\n| --- | --- | --- |\n| 同一动作 | 新旧键位相同 | 静默忽略 |\n| 跨动作 | 归一化后的键位相同 | 行内报错，阻止保存 |\n\n归一化只做三件事：小写、按固定顺序排列修饰键、把 `Cmd` 映射成 `Mod`。这样 `Shift+Cmd+K` 和 `Cmd+Shift+K` 才会被判成同一个键位。"}],"stop",[2260,236,12900,0.0096])]}),m=[V,Q,Z];function tt(){return m.map((e)=>({entry:{type:"session",id:e.id,parentId:null,subagent:!1,advisor:!1,timestamp:d(e.createdAt),updatedAt:d(e.updatedAt),label:e.title},children:[]}))}function et(){return m.map((e)=>({id:e.id,parentId:null,kind:"session",subagent:!1,advisor:!1,timestamp:d(e.createdAt),updatedAt:d(e.updatedAt),model:"anthropic/claude-sonnet-4-5",messageCount:e.entries.length,cwd:"/home/musepi/Projects/atlas",modeId:e.modeId,paused:!1,agentCount:0,working:!1,live:!1,status:"complete",title:e.title}))}function st(e){let t=m.find((s)=>s.id===e);if(!t)return{stream:null,snapshot:{entries:[],cursor:0,state:{isStreaming:!1,queuedMessageCount:0,cwd:"/home/musepi/Projects/atlas",participants:[]}},compactedThrough:!1};return{stream:null,snapshot:{header:{type:"session",id:t.id,timestamp:d(t.createdAt),cwd:"/home/musepi/Projects/atlas",title:t.title,model:"anthropic/claude-sonnet-4-5",modeId:t.modeId},entries:t.entries,state:{isStreaming:!1,queuedMessageCount:0,cwd:"/home/musepi/Projects/atlas",participants:[],goalMode:null,planMode:!1,todo:[],isCompacting:!1,paused:!1,pausedAt:null},agents:[],cursor:t.entries.length,roundDurations:t.roundDurations,structureRev:0,tail:{hasMore:!1,beforeId:null}},compactedThrough:!1}}var nt={"demo-sidebar-groups":{tokens:128400,contextWindow:1e6,percent:13},"demo-review-pr128":{tokens:42600,contextWindow:1e6,percent:4},"demo-settings-keys":{tokens:18900,contextWindow:1e6,percent:2}},P={"session.tree":tt,"session.list":et,"session.resume":(e)=>st(e.sessionId),"session.pauseStatus":()=>({paused:!1,pausedAt:null}),"session.contextUsage":(e)=>nt[e.sessionId]??null,"session.thinkingInfo":()=>({ceiling:"high",level:"medium",auto:!1,resolved:null,efforts:["minimal","low","medium","high","xhigh"],model:{id:"claude-sonnet-4-5",name:"Claude Sonnet 4.5",provider:"anthropic"}}),"session.turns":(e)=>{let s=m.find((o)=>o.id===e.sessionId)?.entries??[];return{turns:s.flatMap((o,a)=>{if(o.message?.role!=="user")return[];let r=typeof o.message.content==="string"?o.message.content:"";return[{startIdx:a,entryId:o.id,timestamp:o.timestamp,summary:r.replace(/\s+/g," ").trim().slice(0,90),kind:"user"}]}),totalEntries:s.length,hasMore:!1,remaining:0,nextBeforeTurn:null,stale:!1}}},rt=m.map((e)=>e.id);try{localStorage.setItem("musepi-gui-onboarding-done","1"),localStorage.setItem("omp-collab-theme","dark"),localStorage.setItem("musepi-gui-url","ws://127.0.0.1:9/demo")}catch{}p(h);p(W);p(P);p(v);p(w);S();})();

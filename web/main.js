@@ -258,6 +258,312 @@
     });
   });
 
+  /* ---------- 产品预览：按需载入真实渲染器 ---------- */
+  var demo = document.querySelector("[data-demo-embed]");
+  if (demo) {
+    var DEMO_SRC = "./app/index.html";
+    var DEMO_BOOT_MS = 30000;
+    var demoFrame = demo.querySelector("[data-demo-stage]");
+    var demoScreen = demo.querySelector("[data-demo-screen]");
+    var demoGate = demo.querySelector("[data-demo-gate]");
+    var demoLoading = demo.querySelector("[data-demo-loading]");
+    var demoFallback = demo.querySelector("[data-demo-fallback]");
+    var demoNote = demo.querySelector("[data-demo-note]");
+    var demoStatus = demo.querySelector("[data-demo-status]");
+    var demoFull = demo.querySelector("[data-demo-fullscreen]");
+    var demoLoadBtn = demo.querySelector("[data-demo-load]");
+    var demoRetryBtn = demo.querySelector("[data-demo-retry]");
+    var demoTabs = Array.prototype.slice.call(demo.querySelectorAll("[data-demo-view]"));
+    var demoList = demo.querySelector(".mp-demo-tabs");
+    var demoIframe = null;
+    var demoState = "idle";
+    var demoView = "welcome";
+    var demoApplyToken = 0;
+    var demoBootTimer = 0;
+    var demoNarrow = window.matchMedia("(max-width: 720px)");
+    var DEMO_STATUS = {
+      idle: "demo.status.idle",
+      loading: "demo.status.loading",
+      ready: "demo.status.ready",
+      error: "demo.status.error",
+    };
+
+    function demoText(key) {
+      return window.MPI18N ? window.MPI18N.t(key) : key;
+    }
+
+    function demoDoc() {
+      try {
+        return demoIframe && demoIframe.contentDocument;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function demoViewLabel(view) {
+      var tab = demoTabs.filter(function (t) { return t.getAttribute("data-demo-view") === view; })[0];
+      return tab ? tab.textContent : view;
+    }
+
+    function renderDemoChrome() {
+      demoGate.hidden = demoState !== "idle";
+      demoLoading.hidden = demoState !== "loading";
+      demoFallback.hidden = demoState !== "error";
+      demoFull.hidden = demoState !== "ready";
+      if (demoStatus) demoStatus.textContent = demoText(DEMO_STATUS[demoState]);
+      if (demoNote) {
+        demoNote.textContent = demoState === "idle" && demoView !== "welcome"
+          ? demoText("demo.pending").replace("{view}", demoViewLabel(demoView))
+          : demoText("demo.gate.note");
+      }
+    }
+
+    function setDemoState(next) {
+      demoState = next;
+      demo.setAttribute("data-state", next);
+      renderDemoChrome();
+      if (next === "ready") applyDemoView(demoView);
+    }
+
+    /* 真实应用没有 URL 路由：视图靠点它自己的入口切换，同源 iframe 直接驱动。
+     * 侧栏菜单按图标名匹配，面板入口按文案匹配，都不依赖 DOM 位置。
+     * 每次切换发一个 token，旧的等待链在应用新视图后自动失效。 */
+    function clickWhen(selector, token) {
+      return waitForDemo(function () {
+        if (token !== demoApplyToken) return null;
+        var doc = demoDoc();
+        return doc && doc.querySelector(selector);
+      }, 8000).then(function (found) {
+        if (!found || token !== demoApplyToken) return false;
+        (found.closest("button") || found).click();
+        return true;
+      });
+    }
+
+    function clickLabel(nodes, labels) {
+      for (var i = 0; i < nodes.length; i++) {
+        var text = nodes[i].textContent.trim();
+        for (var j = 0; j < labels.length; j++) {
+          if (text.indexOf(labels[j]) === 0) {
+            nodes[i].click();
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function waitForDemo(find, timeout) {
+      return new Promise(function (resolve) {
+        var deadline = Date.now() + timeout;
+        (function tick() {
+          var found = find();
+          if (found || Date.now() > deadline) {
+            resolve(found || null);
+            return;
+          }
+          window.setTimeout(tick, 120);
+        })();
+      });
+    }
+
+    // The file pane opens on its tree; opening the demo README shows the
+    // Markdown editor instead of an empty pane.
+    function openDemoReadme(token) {
+      waitForDemo(function () {
+        if (token !== demoApplyToken) return null;
+        var current = demoDoc();
+        if (!current) return null;
+        var rows = current.querySelectorAll(".gui-filepane-row");
+        for (var i = 0; i < rows.length; i++) {
+          if ((rows[i].textContent || "").indexOf("README.md") >= 0) return rows[i];
+        }
+        return null;
+      }, 6000).then(function (row) {
+        if (row && token === demoApplyToken) row.click();
+      });
+    }
+
+    function applyDemoView(view) {
+      if (!demoDoc()) return;
+      var token = ++demoApplyToken;
+      if (view === "welcome") {
+        clickWhen('.gui-menu-item use[href="#oc-add-circle"]', token);
+        return;
+      }
+      if (view === "chat") {
+        clickWhen(".gui-session-row", token);
+        return;
+      }
+      if (view === "board") {
+        clickWhen('.gui-menu-item use[href="#oc-layout-column"]', token);
+        return;
+      }
+      if (view !== "files") return;
+      waitForDemo(function () {
+        if (token !== demoApplyToken) return null;
+        var current = demoDoc();
+        if (!current) return null;
+        // 面板入口要先打开一个会话才出现。
+        if (current.querySelector("#session-panel-welcome")) {
+          var row = current.querySelector(".gui-session-row");
+          if (row) row.click();
+          return null;
+        }
+        return current.querySelector(".gui-surface-tab") || current.querySelector(".gui-panel-empty-item");
+      }, 8000).then(function (found) {
+        if (!found || token !== demoApplyToken) return;
+        var current = demoDoc();
+        if (!current) return;
+        if (clickLabel(current.querySelectorAll(".gui-surface-tab"), ["文件", "Files"])) {
+          openDemoReadme(token);
+          return;
+        }
+        clickLabel(current.querySelectorAll(".gui-panel-empty-item"), ["文件", "Files"]);
+        openDemoReadme(token);
+      });
+    }
+
+    function failDemo() {
+      window.clearTimeout(demoBootTimer);
+      if (demoIframe) {
+        demoIframe.remove();
+        demoIframe = null;
+      }
+      setDemoState("error");
+    }
+
+    // The renderer draws at its authored window size and the frame scales it:
+    // reflowing the real shell into a short viewport overlaps the welcome
+    // hero, so the demo keeps the 1440x900 layout and letterboxes when the
+    // frame is not 16:10 (fullscreen on tall displays).
+    function syncDemoScale() {
+      if (!demoIframe || !demoScreen) return;
+      var width = demoScreen.clientWidth;
+      var height = demoScreen.clientHeight;
+      if (!width || !height) return;
+      var scale = Math.min(width / 1440, height / 900);
+      var offsetX = (width - 1440 * scale) / 2;
+      var offsetY = (height - 900 * scale) / 2;
+      demoIframe.style.transform =
+        "translate(" + offsetX + "px," + offsetY + "px) scale(" + scale + ")";
+    }
+
+    window.addEventListener("resize", syncDemoScale);
+    document.addEventListener("fullscreenchange", syncDemoScale);
+
+    function mountDemo() {
+      if (demoState === "loading" || demoState === "ready") return;
+      if (demoIframe) {
+        demoIframe.remove();
+        demoIframe = null;
+      }
+      setDemoState("loading");
+      demoIframe = document.createElement("iframe");
+      demoIframe.className = "mp-demo-iframe";
+      demoIframe.title = demoText("demo.frame.title");
+      demoIframe.src = DEMO_SRC;
+      demoIframe.setAttribute("allow", "clipboard-write");
+      demoIframe.addEventListener("error", failDemo);
+      demoIframe.addEventListener("load", syncDemoScale);
+      demoScreen.appendChild(demoIframe);
+      syncDemoScale();
+      demoBootTimer = window.setTimeout(function () {
+        if (demoState !== "ready") failDemo();
+      }, DEMO_BOOT_MS);
+      waitForDemo(function () {
+        var doc = demoDoc();
+        return doc && doc.querySelector(".gui-workspace-keeper, .gui-main");
+      }, DEMO_BOOT_MS).then(function (found) {
+        if (!found) return;
+        window.clearTimeout(demoBootTimer);
+        setDemoState("ready");
+      });
+    }
+
+    function requestDemo() {
+      if (demoNarrow.matches) {
+        window.open(DEMO_SRC, "_blank", "noopener");
+        return;
+      }
+      mountDemo();
+    }
+
+    function selectDemoTab(view, moveFocus) {
+      demoView = view;
+      demoTabs.forEach(function (tab) {
+        var active = tab.getAttribute("data-demo-view") === view;
+        tab.classList.toggle("is-active", active);
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+        tab.tabIndex = active ? 0 : -1;
+        if (active && demoFrame) demoFrame.setAttribute("aria-labelledby", tab.id);
+      });
+      if (moveFocus) {
+        var activeTab = demoTabs.filter(function (t) { return t.getAttribute("data-demo-view") === view; })[0];
+        if (activeTab) activeTab.focus();
+      }
+      renderDemoChrome();
+      if (demoState === "ready") applyDemoView(view);
+    }
+
+    demoTabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        selectDemoTab(tab.getAttribute("data-demo-view"), false);
+      });
+    });
+    if (demoList) {
+      demoList.addEventListener("keydown", function (event) {
+        var index = demoTabs.indexOf(document.activeElement);
+        if (index < 0) return;
+        var next = index;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % demoTabs.length;
+        else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + demoTabs.length) % demoTabs.length;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = demoTabs.length - 1;
+        else return;
+        event.preventDefault();
+        selectDemoTab(demoTabs[next].getAttribute("data-demo-view"), true);
+      });
+    }
+
+    if (demoLoadBtn) demoLoadBtn.addEventListener("click", requestDemo);
+    if (demoRetryBtn) demoRetryBtn.addEventListener("click", requestDemo);
+
+    function fullscreenOn() {
+      return (document.fullscreenElement || document.webkitFullscreenElement) === demoFrame;
+    }
+
+    function syncFullscreen() {
+      if (!demoFull) return;
+      var on = fullscreenOn();
+      demoFull.textContent = demoText(on ? "demo.action.exitFullscreen" : "demo.action.fullscreen");
+      demoFull.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+
+    if (demoFull) {
+      demoFull.addEventListener("click", function () {
+        if (fullscreenOn()) {
+          var exit = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exit) exit.call(document);
+        } else if (demoFrame.requestFullscreen) {
+          demoFrame.requestFullscreen().catch(function () {});
+        } else if (demoFrame.webkitRequestFullscreen) {
+          demoFrame.webkitRequestFullscreen();
+        }
+      });
+      document.addEventListener("fullscreenchange", syncFullscreen);
+      document.addEventListener("webkitfullscreenchange", syncFullscreen);
+    }
+
+    document.addEventListener("mp:lang", function () {
+      renderDemoChrome();
+      syncFullscreen();
+      if (demoIframe) demoIframe.title = demoText("demo.frame.title");
+    });
+
+    setDemoState("idle");
+  }
+
   /* ---------- 滚动定位高亮（scroll-spy） ---------- */
   var navLinks = Array.prototype.slice.call(document.querySelectorAll(".mp-nav-link"));
   var linkById = {};

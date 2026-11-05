@@ -147,162 +147,54 @@
         <header class="mp-section-head">
           <p class="mp-kicker" data-i18n="preview.kicker">产品界面预览</p>
           <h2 class="mp-h2" data-i18n="preview.h2">一块屏幕，看得见协作的每一步</h2>
-          <p class="mp-section-desc" data-i18n="preview.desc">现在可以直接上手：切换视图、点开会话或文件、播放一段 Agent 回合。下面是真实界面的本地交互副本，不连后台。</p>
+          <p class="mp-section-desc" data-i18n="preview.desc">现在可以直接上手：切换视图、点开会话或文件、查看看板。载入后跑的是官网同款的真实桌面渲染器，数据全部来自本地演示，不连后台。</p>
         </header>
 
-        <div class="mp-demo" data-mp-demo>
+        <div class="mp-demo" data-demo-embed data-state="idle">
           <div class="mp-demo-toolbar">
             <div class="mp-demo-tabs" role="tablist" aria-label="界面演示" data-i18n-aria="demo.tabs.aria">
-              <button class="mp-demo-tab is-active" type="button" role="tab" id="demo-tab-welcome" aria-selected="true" aria-controls="demo-panel-welcome" tabindex="0" data-demo-view="welcome" data-i18n="demo.tab.welcome">欢迎</button>
-              <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-chat" aria-selected="false" aria-controls="demo-panel-chat" tabindex="-1" data-demo-view="chat" data-i18n="demo.tab.chat">对话</button>
-              <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-files" aria-selected="false" aria-controls="demo-panel-files" tabindex="-1" data-demo-view="files" data-i18n="demo.tab.files">文件</button>
-              <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-board" aria-selected="false" aria-controls="demo-panel-board" tabindex="-1" data-demo-view="board" data-i18n="demo.tab.board">看板</button>
+              <button class="mp-demo-tab is-active" type="button" role="tab" id="demo-tab-welcome" aria-selected="true" aria-controls="demo-stage" tabindex="0" data-demo-view="welcome" data-i18n="demo.tab.welcome">欢迎</button>
+              <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-chat" aria-selected="false" aria-controls="demo-stage" tabindex="-1" data-demo-view="chat" data-i18n="demo.tab.chat">对话</button>
+              <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-files" aria-selected="false" aria-controls="demo-stage" tabindex="-1" data-demo-view="files" data-i18n="demo.tab.files">文件</button>
+              <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-board" aria-selected="false" aria-controls="demo-stage" tabindex="-1" data-demo-view="board" data-i18n="demo.tab.board">看板</button>
             </div>
-            <button class="mp-demo-tour-btn" type="button" data-demo-tour-start data-i18n="demo.tour.start">导览</button>
-            <span class="mp-demo-hint" data-i18n="demo.hint">可交互预览</span>
+            <div class="mp-demo-actions">
+              <a class="mp-demo-action" href="./app/index.html" target="_blank" rel="noopener" data-i18n="demo.action.open">新标签页打开</a>
+              <button class="mp-demo-action" type="button" data-demo-fullscreen hidden data-i18n="demo.action.fullscreen">全屏</button>
+              <span class="mp-demo-hint" data-i18n="demo.hint">真实渲染器 · 本地数据</span>
+            </div>
           </div>
 
-          <div class="mp-demo-frame">
+          <div class="mp-demo-frame" id="demo-stage" role="tabpanel" aria-labelledby="demo-tab-welcome" data-demo-stage>
             <div class="mp-demo-titlebar">
               <span class="mp-demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
               <span class="mp-demo-title">MusePi</span>
-              <span class="mp-demo-status" data-demo-status aria-live="polite">就绪</span>
+              <span class="mp-demo-status" data-demo-status aria-live="polite">待载入</span>
             </div>
-            <div class="mp-demo-body">
-              <aside class="mp-demo-side">
-                <div class="mp-demo-side-group" data-demo-side="sessions">
-                  <button class="mp-demo-new" type="button">＋ <span data-i18n="demo.new">新建任务</span></button>
-                  <button class="mp-demo-search" type="button"><span data-i18n="demo.search">搜索</span><kbd>⌘K</kbd></button>
-                  <div class="mp-demo-side-label" data-i18n="demo.today">今天</div>
-                  <button class="mp-demo-session is-active" type="button" data-demo-session="s1">
-                    <span class="mp-demo-dot" aria-hidden="true"></span>
-                    <span class="mp-demo-session-title" data-i18n="demo.session.s1">修复 PR #128 的 diff</span>
-                    <span class="mp-demo-time">22:28</span>
-                  </button>
-                  <button class="mp-demo-session" type="button" data-demo-session="s2">
-                    <span class="mp-demo-dot" aria-hidden="true"></span>
-                    <span class="mp-demo-session-title" data-i18n="demo.session.s2">设置页快捷键</span>
-                    <span class="mp-demo-time" data-i18n="demo.time.s2">11月2日</span>
-                  </button>
+            <div class="mp-demo-screen" data-demo-screen>
+              <img class="mp-demo-poster" src="./assets/shots/app-session.webp" alt="MusePi 桌面界面：暗色主题下的欢迎工作台，含输入框、快捷建议与会话导航" data-i18n-aria="demo.poster.aria" width="2400" height="1500" decoding="async" />
+              <div class="mp-demo-gate" data-demo-gate>
+                <p class="mp-demo-gate-eyebrow" data-i18n="demo.gate.eyebrow">真实渲染器 · 本地演示数据</p>
+                <h3 data-i18n="demo.gate.title">在浏览器里试用真实界面</h3>
+                <p class="mp-demo-gate-body" data-i18n="demo.gate.body">载入的是官网同款的真实桌面渲染器（约 8 MB）：会话、文件与看板都来自本地演示数据，不连接任何后台服务。</p>
+                <button class="mp-btn mp-btn--primary mp-demo-load" type="button" data-demo-load data-i18n="demo.gate.cta">载入真实界面</button>
+                <p class="mp-demo-gate-note" data-demo-note data-i18n="demo.gate.note">体积较大，按需载入；手机上会另开标签页。</p>
+              </div>
+              <div class="mp-demo-loading" data-demo-loading hidden>
+                <span class="mp-demo-spinner" aria-hidden="true"></span>
+                <p data-i18n="demo.loading">正在载入真实界面…</p>
+              </div>
+              <div class="mp-demo-fallback" data-demo-fallback hidden>
+                <h3 data-i18n="demo.fallback.title">真实界面没能载入</h3>
+                <p data-i18n="demo.fallback.body">可能是网络或浏览器限制。你可以重试，或在新标签页里打开。</p>
+                <div class="mp-demo-fallback-actions">
+                  <button class="mp-btn mp-btn--primary mp-btn--sm" type="button" data-demo-retry data-i18n="demo.fallback.retry">重试</button>
+                  <a class="mp-btn mp-btn--soft mp-btn--sm" href="./app/index.html" target="_blank" rel="noopener" data-i18n="demo.action.open">新标签页打开</a>
                 </div>
-                <div class="mp-demo-side-group" data-demo-side="files" hidden>
-                  <div class="mp-demo-side-label" data-i18n="demo.files.tree">desktop-app</div>
-                  <button class="mp-demo-file is-active" type="button" data-demo-file="panel">panel.tsx</button>
-                  <button class="mp-demo-file" type="button" data-demo-file="chat">chat.tsx</button>
-                  <button class="mp-demo-file" type="button" data-demo-file="styles">styles.css</button>
-                </div>
-              </aside>
-
-              <main class="mp-demo-main">
-                <section class="mp-demo-view" role="tabpanel" id="demo-panel-welcome" aria-labelledby="demo-tab-welcome" data-demo-panel="welcome" tabindex="0">
-                  <div class="mp-demo-welcome">
-                    <img class="mp-demo-mark" src="./assets/musepi-mark.svg" alt="" width="44" height="44" />
-                    <h3 data-i18n="demo.welcome.title">晚上好，Linn</h3>
-                    <p data-i18n="demo.welcome.sub">今天想让 Agent 做什么？</p>
-                    <div class="mp-demo-composer">
-                      <input type="text" data-demo-input placeholder="描述你想做的事…" data-i18n-ph="demo.composer" aria-label="描述你想做的事" data-i18n-aria="demo.composer" />
-                      <button class="mp-demo-send" type="button" data-demo-send aria-label="发送" data-i18n-aria="demo.send">↵</button>
-                    </div>
-                    <div class="mp-demo-chips">
-                      <button class="mp-demo-chip" type="button" data-demo-chip data-i18n="demo.chip.1">检查 PR #128</button>
-                      <button class="mp-demo-chip" type="button" data-demo-chip data-i18n="demo.chip.2">给设置页加快捷键</button>
-                      <button class="mp-demo-chip" type="button" data-demo-chip data-i18n="demo.chip.3">看看看板的用量</button>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="mp-demo-view" role="tabpanel" id="demo-panel-chat" aria-labelledby="demo-tab-chat" data-demo-panel="chat" hidden tabindex="0">
-                  <div class="mp-demo-chat-head">
-                    <div>
-                      <strong data-demo-chat-title>修复 PR #128 的 diff</strong>
-                      <span data-i18n="demo.chat.meta">kimi-k3 · 2 分钟前</span>
-                    </div>
-                    <button class="mp-demo-play" type="button" data-demo-play data-i18n="demo.chat.play">运行 Agent 回合</button>
-                  </div>
-                  <div class="mp-demo-messages">
-                    <div class="mp-demo-msg mp-demo-msg--user" data-session-content="s1" data-i18n="demo.chat.user1">帮我检查一下这个 PR 的 diff，重点看权限判断。</div>
-                    <div class="mp-demo-msg mp-demo-msg--user" data-session-content="s2" data-i18n="demo.chat.user2" hidden>给设置页加一个快捷键，冲突时提示我。</div>
-                    <div class="mp-demo-msg mp-demo-msg--assistant" data-demo-step="think" data-i18n="demo.chat.think" hidden>我先看一下改动，再给出结论。</div>
-                    <div class="mp-demo-tool" data-demo-step="tool" hidden>
-                      <span class="mp-demo-tool-icon" aria-hidden="true">▤</span>
-                      <span><b data-i18n="demo.chat.tool">读取文件</b> <span data-i18n="demo.chat.toolmeta">src/panel.tsx · 42 行</span></span>
-                    </div>
-                    <div class="mp-demo-diff-real" data-demo-step="diff" hidden>
-                      <!-- demo-diff:start -->
-<div class="tv-out"><div class="tv-diff"><div class="tv-diff-row tv-diff-row--header"><span class="tv-diff-ln"></span>--- a/src/panel.tsx</div><div class="tv-diff-row tv-diff-row--header"><span class="tv-diff-ln"></span>+++ b/src/panel.tsx</div><div class="tv-diff-row tv-diff-row--hunk"><span class="tv-diff-ln"></span>@@ -1,4 +1,5 @@</div><div class="tv-diff-row tv-diff-row--del"><span class="tv-diff-ln">1</span>- if (user.role === &quot;admin&quot;) {</div><div class="tv-diff-row tv-diff-row--add"><span class="tv-diff-ln">1</span>+ if (isOwner(user) || user.role === &quot;admin&quot;) {</div><div class="tv-diff-row tv-diff-row--add"><span class="tv-diff-ln">2</span>+   audit(&quot;panel.open&quot;, user.id);</div><div class="tv-diff-row"><span class="tv-diff-ln">2</span>    return &lt;Panel /&gt;;</div><div class="tv-diff-row"><span class="tv-diff-ln">3</span>  }</div></div></div>
-<!-- demo-diff:end -->
-                    </div>
-                    <div class="mp-demo-msg mp-demo-msg--assistant" data-demo-step="done" data-i18n="demo.chat.done" hidden>权限判断没有问题；只有 isOwner 的兜底分支建议补一条测试。</div>
-                  </div>
-                </section>
-
-                <section class="mp-demo-view" role="tabpanel" id="demo-panel-files" aria-labelledby="demo-tab-files" data-demo-panel="files" hidden tabindex="0">
-                  <div class="mp-demo-file-tabs">
-                    <span class="mp-demo-file-tab is-active" data-demo-file-tab>panel.tsx</span>
-                  </div>
-                  <pre class="mp-demo-code" data-demo-code></pre>
-                </section>
-
-                <section class="mp-demo-view" role="tabpanel" id="demo-panel-board" aria-labelledby="demo-tab-board" data-demo-panel="board" hidden tabindex="0">
-                  <div class="mp-demo-board">
-                    <div class="mp-demo-card">
-                      <span data-i18n="demo.board.tokens">Token 用量</span>
-                      <strong>165.1M</strong>
-                      <small data-i18n="demo.board.tokensDelta">+12% 本周</small>
-                      <div class="mp-demo-bars" aria-hidden="true">
-                        <i style="height: 28%"></i><i style="height: 44%"></i><i style="height: 36%"></i><i style="height: 58%"></i>
-                        <i style="height: 52%"></i><i style="height: 70%"></i><i style="height: 64%"></i><i style="height: 86%"></i>
-                      </div>
-                    </div>
-                    <div class="mp-demo-card">
-                      <span data-i18n="demo.board.tasks">今日任务</span>
-                      <strong>3 / 5</strong>
-                      <small data-i18n="demo.board.tasksDelta">已完成 3 项</small>
-                    </div>
-                    <div class="mp-demo-card">
-                      <span data-i18n="demo.board.focus">专注时长</span>
-                      <strong>2h 14m</strong>
-                      <small data-i18n="demo.board.focusDelta">比昨天多 18m</small>
-                    </div>
-                    <div class="mp-demo-card">
-                      <span data-i18n="demo.board.activity">活跃天数</span>
-                      <strong>121</strong>
-                      <small data-i18n="demo.board.activityDelta">连续 12 天</small>
-                    </div>
-                  </div>
-                </section>
-              </main>
-
-              <aside class="mp-demo-rail">
-                <div class="mp-demo-rail-card">
-                  <span data-i18n="demo.rail.context">上下文</span>
-                  <div class="mp-demo-ring"><span>42%</span></div>
-                </div>
-                <div class="mp-demo-rail-card">
-                  <span data-i18n="demo.rail.model">模型</span>
-                  <strong>kimi-k3</strong>
-                </div>
-                <div class="mp-demo-rail-card">
-                  <span data-i18n="demo.rail.running">运行中</span>
-                  <strong>2</strong>
-                </div>
-              </aside>
-            </div>
-          </div>
-          <div class="mp-demo-tour" data-demo-tour hidden>
-            <div class="mp-demo-tour-spot" data-demo-tour-spot aria-hidden="true"></div>
-            <div class="mp-demo-tour-card" data-demo-tour-card role="dialog" aria-modal="false" aria-labelledby="demo-tour-title">
-              <p class="mp-demo-tour-step" data-demo-tour-step>1 / 4</p>
-              <h4 id="demo-tour-title" data-demo-tour-title>四个视图</h4>
-              <p class="mp-demo-tour-body" data-demo-tour-body>欢迎、对话、文件和看板共用同一套工作台；先选一个视图，下面的区域会跟着切换。</p>
-              <div class="mp-demo-tour-actions">
-                <button class="mp-demo-tour-skip" type="button" data-demo-tour-skip data-i18n="demo.tour.skip">跳过</button>
-                <button class="mp-demo-tour-prev" type="button" data-demo-tour-prev data-i18n="demo.tour.prev">上一步</button>
-                <button class="mp-demo-tour-next" type="button" data-demo-tour-next data-i18n="demo.tour.next">下一步</button>
               </div>
             </div>
           </div>
-          <p class="mp-demo-caption" data-i18n="demo.caption">交互副本：切换视图、点开会话或文件、播放一段 Agent 回合。真实应用请下载桌面端。</p>
+          <p class="mp-demo-caption" data-i18n="demo.caption">真实渲染器，本地数据：切换视图、点开会话或文件、查看看板。载入前不请求任何脚本。</p>
         </div>
 
         <p class="mp-shot-more" data-i18n="preview.more">更多真实截图</p>
@@ -654,6 +546,5 @@
 
   <script src="./i18n.js" defer></script>
   <script src="./main.js" defer></script>
-  <script src="./demo.js" defer></script>
 </body>
 </html>
