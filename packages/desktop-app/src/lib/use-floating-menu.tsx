@@ -358,7 +358,11 @@ export function useFloatingMenu(
 					const atTop = el.scrollTop <= 0;
 					const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
 					if (canScroll && !((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom))) return;
+					// Not scrollable in this direction: close, and move the chat
+					// under the same gesture so the wheel never feels swallowed.
 					onOpenChange?.(false);
+					const chat = document.querySelector<HTMLElement>(".gui-transcript");
+					chat?.scrollBy({ top: event.deltaY });
 				}}
 				style={{
 					// Inline position wins over the menu-specific classes
