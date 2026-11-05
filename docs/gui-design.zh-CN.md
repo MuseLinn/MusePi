@@ -125,7 +125,7 @@ lang: zh-CN
 
 ### 伙伴(Agent Companion,BitFun parity,2026-08-06)
 
-- **默认形象:品牌光球(2026-11-05)**:`DEFAULT_PET_ID = "musepi-orb"`,由 `PetOrb` 用 `vendor/thinking-orbs` 的 `ThinkingOrb` 画布渲染(64px 预设拉伸到 `.gui-pet` 盒),31 态经 `ORB_STATE_FOR` 映射到七个动画(idle→listening、working→working、thinking→solving、searching→searching、writing→composing、alerting→waiting),错误态加红色危险光晕,按下/拖拽走同一 `pet-gesture` 弹簧,睡眠沿用 `.pet-window__pet--sleeping` 的变暗。设置与首次启动的列表保留音符机器人和全部 Petdex 精灵图预设,显式保存的选择优先。
+- **默认形象：内置球体品牌伙伴（2026-11-05）**：`DEFAULT_PET_ID = BUILTIN_SVG_ID`（`musepi-note-bot`），由 `PetSprite.tsx` 的内置分支绘制手绘球体——`.gui-pet-svg__shell` 加 `lib/pet-face.ts` 的表情层（眼动追踪、眨眼、31 态情绪）、`lib/pet-decor.ts` 的 `headphones` 配饰，以及 `pet-gesture` 按压/拖拽弹簧；这张脸的 `happy` 环也是应用与站点 Logo 的表情来源。设置与首次启动的列表以它开头，其后是全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。`ThinkingOrb` 画布不是伙伴形象——它仍是智能体头像与顶栏活动指示器。
 - **预置**:10 个内置 Petdex 预置(`src/lib/pet.ts` 的 `BUILTIN_PETDEX`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
 - **形象选择**:`.gui-pet-trigger` 行显示当前伙伴缩略图 + 名称 + 箭头(展开翻转);预览缩略图用 `zoom: 0.55`。删除按钮只出现在导入卡,hover 显现,`stopPropagation` 防选中。
 - **渲染形态**(PetSprite.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`PETDEX_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。内置球体不使用 Petdex 的悬停/拖拽行和方向镜像：指针速度驱动独立的连续手势层，产生倾斜、拉伸、提起与阻尼落地；该层与会话动作、交互动效和眼动组合。

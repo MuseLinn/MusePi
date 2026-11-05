@@ -12,11 +12,8 @@
 import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
 	activePet,
-	BUILTIN_ORB_ID,
-	isPetError,
 	migratePetdexContent,
 	moodOfState,
-	orbStateFor,
 	PET_CONTENT_TARGET_H,
 	PETDEX_COLUMNS,
 	PETDEX_MOOD_ANIM,
@@ -61,7 +58,6 @@ import {
 	petGestureTransform,
 } from "../lib/pet-gesture";
 import { gazeDrift, INTERACTION_MOTION, MOOD_MOTION, motionTransform, STATE_MOTION } from "../lib/pet-motion";
-import { ThinkingOrb } from "../vendor/thinking-orbs";
 
 export type { GazeVec } from "../lib/pet-gaze";
 
@@ -914,82 +910,6 @@ export function BuiltinPetSprite({
 	);
 }
 
-/** Brand orb — the spherical MusePi mark (vendor/thinking-orbs) as the
- *  default companion.
- *
- *  The orb has no face, so the pet axes drive its ANIMATION instead: the
- *  31-state table picks one of the seven shipped thinking-orb modes (see
- *  pet.ts ORB_STATE_FOR) and the pointer rig composes on top — press squash,
- *  drag tilt/lift and the release landing come from the same pet-gesture
- *  springs the note-bot uses. Host feedback stays where it already lives:
- *  `.pet-window__pet:hover` lifts, `--sleeping` dims, the composer hop plays
- *  on click.
- *
- *  Sizing: the canvas renders the 64px preset (its densest tuning) and the
- *  box stretches it, so the orb keeps one design from the composer slot to
- *  the 104px desktop pet instead of falling back to the sparse 32px tuning
- *  at every larger host. */
-export function PetOrb({
-	mood,
-	state,
-	size = 48,
-	scale = 1,
-	gestureRef,
-	interaction,
-}: {
-	mood: PetdexMood;
-	state?: PetState | null;
-	/** Fallback box (px) for hosts that size the wrapper via CSS. */
-	size?: number;
-	/** User size slider multiplier (0.6–1.5) — the orb has no sheet geometry
-	 *  to normalize against, so it applies directly. */
-	scale?: number;
-	gestureRef?: RefObject<PetGestureInput>;
-	interaction?: PetInteraction | null;
-}): ReactNode {
-	const motionRef = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		if (!gestureRef) return;
-		const motion = createPetGestureMotion();
-		let raf = 0;
-		let last = performance.now();
-		const tick = (now: number): void => {
-			const dt = Math.min(now - last, 64);
-			last = now;
-			const g = advancePetGesture(motion, gestureRef.current, dt, now);
-			const el = motionRef.current;
-			if (el) {
-				const dy = g.lift + g.drop;
-				const deform = g.stretch - g.squash;
-				el.style.transform = `translateY(${dy.toFixed(2)}px) rotate(${g.tilt.toFixed(2)}deg) scale(${(1 - deform * 0.65).toFixed(4)}, ${(1 + deform).toFixed(4)})`;
-			}
-			raf = requestAnimationFrame(tick);
-		};
-		raf = requestAnimationFrame(tick);
-		return () => cancelAnimationFrame(raf);
-	}, [gestureRef]);
-	const classes = new Set(["gui-pet-orb", `gui-pet-orb--${mood}`]);
-	if (state) classes.add(`gui-pet-orb--${state}`);
-	if (isPetError(state, mood) && mood !== "error") classes.add("gui-pet-orb--error");
-	if (interaction) classes.add(`gui-pet-orb--${interaction}`);
-	return (
-		<PetBox size={size * scale} className={[...classes].join(" ")}>
-			<span className="gui-pet-orb__halo" aria-hidden />
-			<div className="gui-pet-orb__breathe">
-				<div ref={motionRef} className="gui-pet-orb__motion">
-					<ThinkingOrb
-						state={orbStateFor(state, mood)}
-						size={64}
-						theme="auto"
-						aria-hidden
-						style={{ width: "100%", height: "100%" }}
-					/>
-				</div>
-			</div>
-		</PetBox>
-	);
-}
-
 /** The sizing box for a bare builtin SVG — `.gui-pet` plus the two variables
  *  that make it resolvable outside a `PetSprite`.
  *
@@ -1292,9 +1212,9 @@ export function PetdexSprite({
 	);
 }
 
-/** Unified pet renderer: brand orb, note-bot SVG, or petdex spritesheet.
+/** Unified pet renderer: builtin sphere or petdex spritesheet.
  *
- *  Sizing is deliberately NOT the same for the kinds:
+ *  Sizing is deliberately NOT the same for the two kinds:
  *
  *  - petdex spritesheets bake their own frame geometry, so they carry an
  *    inline width/height (that is their intrinsic size) — unchanged.
@@ -1391,21 +1311,6 @@ export function PetSprite({
 				smooth={pet.pkg.smooth}
 				state={state}
 				tier={tier}
-			/>
-		);
-	}
-	// The brand orb is a canvas, not the note-bot's SVG — it owns its own box
-	// and takes the gesture rig directly (press/drag/release). `gloss` and
-	// `accessory` are note-bot surface options and do not apply.
-	if (pet.id === BUILTIN_ORB_ID) {
-		return (
-			<PetOrb
-				mood={mood}
-				state={state}
-				size={size}
-				scale={scale ?? petScale()}
-				gestureRef={gestureRef}
-				interaction={interaction}
 			/>
 		);
 	}

@@ -16,7 +16,7 @@ import {
 	shellPlatform,
 	type UpdateCheckResult,
 } from "../../lib/electron";
-import { activePet, BUILTIN_ORB_ID, BUILTIN_SVG_ID } from "../../lib/pet";
+import { activePet, BUILTIN_SVG_ID } from "../../lib/pet";
 import {
 	PET_ACCESSORIES,
 	PET_DECOR_FLAGS,
@@ -61,20 +61,17 @@ import { SchemaTabSection } from "./schema";
  *  instead of silently doing nothing. */
 function PetDecorSection(): ReactNode {
 	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
-	// Decoration only exists on the note-bot — the brand orb is a canvas and
-	// the imported spritesheets are baked bitmaps. Drives both the disabled
-	// state and the explainer copy.
+	// Decoration only exists on the builtin sphere — an imported spritesheet
+	// is a baked bitmap. Drives both the disabled state and the explainer
+	// copy.
 	const [activePetId, setActivePetId] = useState<string>(() => {
 		const pet = activePet();
 		return pet.kind === "builtin" ? pet.id : "";
 	});
 	const builtinSelected = activePetId === BUILTIN_SVG_ID;
-	const decorDescription =
-		activePetId === BUILTIN_SVG_ID
-			? t("settings.petDecorDescription")
-			: activePetId === BUILTIN_ORB_ID
-				? t("settings.petDecorDescriptionOrb")
-				: t("settings.petDecorDescriptionImported");
+	const decorDescription = builtinSelected
+		? t("settings.petDecorDescription")
+		: t("settings.petDecorDescriptionImported");
 	useEffect(() => {
 		const refresh = (): void => {
 			setDecor(petDecor());

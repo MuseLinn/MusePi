@@ -1858,9 +1858,6 @@ export const settings = {
 	"settings.petImportFailed":
 		"Import failed: the file is corrupt or in an unsupported format. Try another Petdex package.",
 	"settings.desktopPetNeedsDesktop": "Floating desktop pets and imports require the desktop version of MusePi",
-	"settings.brandOrb": "MusePi Orb",
-	"settings.brandOrbDescription": "The MusePi brand orb — the living sphere from the logo, breathing with the agent",
-	"settings.musepiSprite": "MusePi Sprite",
 	"settings.builtinPet": "MusePi Note-bot",
 	"settings.builtinPetDescription": "The hand-drawn MusePi note-bot, animated in pure vector",
 	"settings.deletePet": "Delete character",
@@ -1874,8 +1871,6 @@ export const settings = {
 	"settings.petDecorDescription": "Optional layers on the built-in vector companion. Off is always safe.",
 	"settings.petDecorDescriptionImported":
 		"These detail layers only exist on the built-in vector companion — the selected imported spritesheet is a baked bitmap.",
-	"settings.petDecorDescriptionOrb":
-		"These detail layers belong to the MusePi note-bot — the brand orb is a canvas with no surface to decorate.",
 	"settings.petDecorGloss": "Surface gloss",
 	"settings.petDecorGlossDescription":
 		"Specular highlight and drifting sheen on the shell — makes the ball read as lit. Off leaves a flat silhouette.",

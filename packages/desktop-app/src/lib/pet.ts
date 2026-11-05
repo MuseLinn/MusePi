@@ -136,66 +136,6 @@ export const STATE_MOOD: Record<PetState, PetdexMood> = {
 	drowsy: "rest",
 };
 
-/** Collapse a 31-state reading onto the thinking-orb vocabulary (the seven
- *  shipped animations in vendor/thinking-orbs). The orb has no face, so this
- *  is its whole expression: a busy turn reads as orbiting particles, a search
- *  as the scanning globe, reasoning as the quarter-turn scramble. */
-export const ORB_STATE_FOR: Record<PetState, OrbState> = {
-	idle: "listening",
-	listening: "listening",
-	thinking: "solving",
-	working: "working",
-	searching: "searching",
-	writing: "composing",
-	sending: "working",
-	receiving: "composing",
-	uploading: "working",
-	loading: "shaping",
-	progress: "shaping",
-	orbit: "working",
-	radar: "searching",
-	"thinking-dots": "solving",
-	humming: "listening",
-	notifying: "waiting",
-	alerting: "waiting",
-	dictating: "listening",
-	excited: "working",
-	happy: "listening",
-	celebrate: "shaping",
-	confused: "waiting",
-	curious: "listening",
-	proud: "shaping",
-	shy: "listening",
-	playful: "working",
-	spawning: "shaping",
-	"powering-down": "listening",
-	bouncing: "shaping",
-	dragging: "working",
-	drowsy: "listening",
-};
-
-/** Mood-only fallback for hosts that have not moved to the state axis. */
-const ORB_STATE_FOR_MOOD: Record<PetdexMood, OrbState> = {
-	rest: "listening",
-	hover: "listening",
-	waiting: "waiting",
-	working: "working",
-	analyzing: "solving",
-	error: "waiting",
-	dragging: "working",
-};
-
-/** Resolve the orb animation from whichever axis the host carries. */
-export function orbStateFor(state: PetState | null | undefined, mood: PetdexMood): OrbState {
-	return (state ? ORB_STATE_FOR[state] : undefined) ?? ORB_STATE_FOR_MOOD[mood] ?? "listening";
-}
-
-/** Whether the orb should wear the error tone (the sprite's red face). The
- *  orb has no face to tint, so the renderer puts the signal in a danger halo. */
-export function isPetError(state: PetState | null | undefined, mood: PetdexMood): boolean {
-	return mood === "error" || state === "alerting" || state === "confused";
-}
-
 /** Legacy-mood lookup with a `rest` fallback — for callers holding a string
  *  that may be either axis (activity payloads, old persisted values). */
 export function moodOfState(state: string | null | undefined): PetdexMood {
@@ -314,12 +254,7 @@ export const BUILTIN_PET_ID = "musepi";
  *  resolve "musepi" to the sheet and the SVG branch would be dead code. */
 export const BUILTIN_SVG_ID = "musepi-note-bot";
 
-/** Brand-orb id — the spherical MusePi mark (vendor/thinking-orbs), the
- *  default companion. */
-export const BUILTIN_ORB_ID = "musepi-orb";
-
-/**
- * Builtin spritesheet presets — the MusePi sheet (AI-designed smooth art,
+/** Builtin spritesheet presets — the MusePi sheet (AI-designed smooth art,
  * 2026-09-16) first, then sheets vendored from BitFun (MIT, Copyright 2026
  * CWing) public/agent-companion-pets, downscaled to 768×936 (8×9 grid,
  * 96×104 frames). Ids/descriptions match the upstream pet.json metadata;
@@ -327,8 +262,9 @@ export const BUILTIN_ORB_ID = "musepi-orb";
  * pixel-art `image-rendering: pixelated` treatment (musepi.webp is smooth
  * vector-style art and must downscale bilinearly).
  *
- * The default companion is NOT in this list — it is the brand orb
- * ({@link BUILTIN_ORB_ID}, drawn by PetOrb), which has no spritesheet.
+ * The default companion is NOT in this list — it is the hand-drawn sphere
+ * ({@link BUILTIN_SVG_ID}, drawn by PetSprite's builtin branch), which has
+ * no spritesheet.
  */
 export const BUILTIN_PETDEX: readonly {
 	id: string;
@@ -347,7 +283,7 @@ export const BUILTIN_PETDEX: readonly {
 }[] = [
 	{
 		id: "musepi",
-		displayName: "settings.musepiSprite",
+		displayName: "MusePi",
 		description: "builtin pet description",
 		spritesheetPath: "./pets/musepi.webp",
 		width: 2048,
@@ -535,10 +471,10 @@ export function petMode(): PetDisplayMode {
 	}
 }
 
-/** Default active pet — the MusePi brand orb (builtin, the spherical logo
- *  mark animated by vendor/thinking-orbs). Every spritesheet preset and the
- *  note-bot stay selectable; an explicit stored pick always wins. */
-export const DEFAULT_PET_ID = BUILTIN_ORB_ID;
+/** Default active pet — the builtin spherical brand pet (the hand-drawn
+ *  vector sphere with its face and headphones). Every spritesheet preset
+ *  stays selectable; an explicit stored pick always wins. */
+export const DEFAULT_PET_ID = BUILTIN_SVG_ID;
 
 export function petId(): string {
 	try {
@@ -584,10 +520,9 @@ export function savePetdex(pets: PetdexPackage[]): void {
 }
 
 /** Resolve any pet id to a renderable descriptor (preset grid previews,
- *  unknown ids → the brand-orb fallback). */
+ *  unknown ids → the builtin sphere fallback). */
 export function petForId(id: string): { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage } {
-	// The two code-owned builtins render from PetSprite directly (no sheet).
-	if (id === BUILTIN_ORB_ID) return { kind: "builtin", id: BUILTIN_ORB_ID };
+	// The vector sphere is rendered by PetSprite directly (no sheet).
 	if (id === BUILTIN_SVG_ID) return { kind: "builtin", id: BUILTIN_SVG_ID };
 	const pkg = loadPetdex().find(p => p.id === id);
 	if (pkg) return { kind: "petdex", pkg };
@@ -611,8 +546,8 @@ export function petForId(id: string): { kind: "builtin"; id: string } | { kind: 
 	return { kind: "builtin", id: DEFAULT_PET_ID };
 }
 
-/** Resolve the active pet: imported petdex, builtin preset, or the brand
- *  orb fallback. */
+/** Resolve the active pet: imported petdex, builtin preset, or the builtin
+ *  sphere fallback. */
 export function activePet(): { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage } {
 	return petForId(petId());
 }

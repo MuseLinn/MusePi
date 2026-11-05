@@ -140,7 +140,6 @@
 	"exports packages/desktop-app/src/lib/pet-palette.ts resolvedTheme",
 	"exports packages/desktop-app/src/lib/pet.ts BUILTIN_PET_ID",
 	"exports packages/desktop-app/src/lib/pet.ts INTERACTION_HOLD_MS",
-	"exports packages/desktop-app/src/lib/pet.ts ORB_STATE_FOR",
 	"exports packages/desktop-app/src/lib/pet.ts PET_DISPLAY_MODES",
 	"exports packages/desktop-app/src/lib/pet.ts PET_INTERACTIONS",
 	"exports packages/desktop-app/src/lib/pet.ts PET_MOODS",

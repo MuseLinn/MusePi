@@ -516,41 +516,6 @@ try {
 			);
 
 		await mainPage.evaluate(`//!world=main
-			window.electronAPI.petActivity({
-				mood: "working",
-				petState: "working",
-				pet: { kind: "builtin", id: "musepi-orb" }
-			});
-		`);
-		await petPage.waitForFunction(() => Boolean(document.querySelector(".gui-pet-orb canvas")), { timeout: 4000 });
-		await sleep(400);
-		const brandOrb = await petPage.evaluate(() => {
-			const root = document.querySelector(".gui-pet-orb");
-			const canvas = root?.querySelector("canvas");
-			const rect = root?.getBoundingClientRect();
-			return {
-				classes: root?.className ?? null,
-				box: rect ? { width: rect.width, height: rect.height } : null,
-				canvas: canvas ? { width: canvas.width, height: canvas.height, label: canvas.getAttribute("aria-label") } : null,
-				svg: Boolean(document.querySelector(".gui-pet-svg")),
-			};
-		});
-		check(
-			"real brand orb renders the thinking-orb canvas in the pet window",
-			brandOrb.classes?.includes("gui-pet-orb--working") && brandOrb.canvas?.width > 0 && !brandOrb.svg,
-			brandOrb,
-		);
-		await capture("pet-brand-orb-electron", petPage);
-		await mainPage.evaluate(`//!world=main
-			window.electronAPI.petActivity({
-				mood: "rest",
-				petState: "idle",
-				pet: { kind: "builtin", id: "musepi-note-bot" }
-			});
-		`);
-		await petPage.waitForFunction(() => Boolean(document.querySelector(".gui-pet-svg__gesture")), { timeout: 4000 });
-
-		await mainPage.evaluate(`//!world=main
 			window.__petPhase2Card = {
 				sessionId: "phase2-session",
 				title: "桌宠原生验证",
@@ -1014,23 +979,18 @@ try {
 			const preview = document.querySelector(".gui-obo-pers-desktop");
 			const bubble = preview?.querySelector(".gui-obo-pers-desktop-bubble");
 			return {
-				orbOption: document.querySelector(".gui-obo-pet-grid [role=radio]")?.getAttribute("aria-checked") === "true",
-				orbPreview: Boolean(preview?.querySelector(".gui-obo-pers-desktop-pet .gui-pet-orb canvas")),
+				vectorOption: document.querySelector(".gui-obo-pet-grid [role=radio]")?.getAttribute("aria-checked") === "true",
+				vectorPreview: Boolean(preview?.querySelector(".gui-obo-pers-desktop-pet .gui-pet svg")),
 				bubble: Boolean(bubble),
 				glass: bubble ? getComputedStyle(bubble).backgroundImage.includes("linear-gradient") : false,
 			};
 		});
-		check("real onboarding desktop preview follows the default brand orb and glass bubble", onboarding.orbOption && onboarding.orbPreview && onboarding.bubble && onboarding.glass, onboarding);
+		check("real onboarding desktop preview follows the selected vector pet and glass bubble", onboarding.vectorOption && onboarding.vectorPreview && onboarding.bubble && onboarding.glass, onboarding);
 		const onboardingShot = path.join(outDir, "onboarding-personalize-desktop.png");
 		await mainPage.screenshot({ path: onboardingShot });
 		const onboardingShotOk = fs.existsSync(onboardingShot) && fs.statSync(onboardingShot).size > 0;
 		check("real onboarding desktop preview screenshot", onboardingShotOk, onboardingShot);
 		if (onboardingShotOk) result.screenshots.push(onboardingShot);
-		await mainPage.evaluate(() => document.querySelectorAll(".gui-obo-pet-grid [role=radio]")[1]?.click());
-		const vectorPreview = await mainPage.evaluate(() =>
-			Boolean(document.querySelector(".gui-obo-pers-desktop-pet .gui-pet-svg")),
-		);
-		check("real onboarding desktop preview follows the note-bot selection", vectorPreview, vectorPreview);
 	} finally {
 		await browser.disconnect();
 	}
