@@ -38,9 +38,9 @@ install();
  * reading this document (a proxy or file:// origin makes it cross-origin), so
  * readiness is announced from inside the frame.
  */
-function announceReady() {
+function announce(type) {
 	if (window.parent === window) return;
-	window.parent.postMessage({ type: "musepi:demo-ready" }, "*");
+	window.parent.postMessage({ type }, "*");
 }
 
 // The first thing React mounts is the splash/connect screen, so "root has
@@ -53,17 +53,19 @@ function shellMounted() {
 
 function watchRoot() {
 	if (shellMounted()) {
-		announceReady();
+		announce("musepi:demo-ready");
 		return;
 	}
 	const timer = setInterval(() => {
 		if (!shellMounted()) return;
 		clearInterval(timer);
-		announceReady();
+		announce("musepi:demo-ready");
 	}, 100);
+	// A blank shell after the budget means a chunk never arrived; saying
+	// "ready" here would leave the host showing an empty window.
 	setTimeout(() => {
 		clearInterval(timer);
-		announceReady();
+		if (!shellMounted()) announce("musepi:demo-failed");
 	}, 30_000);
 }
 

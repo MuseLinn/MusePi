@@ -48,7 +48,7 @@
     "preview.kicker": "Product preview",
     "preview.h2": "One screen that shows every step of the work",
     "preview.desc":
-      "Try it here: switch views, open a session or file, check the board. This is the same desktop renderer the app ships, running entirely on local demo data — no daemon, no network.",
+      'Try it here: switch views, open a session or file, check the board. This is the same renderer the desktop app ships, running entirely on local demo data — no daemon, no network. On a phone the renderer is not embedded, so <a href="./app/index.html" target="_blank" rel="noopener">open the full demo in a new tab</a>.',
     "demo.tabs.aria": "Interface demo",
     "demo.hint": "Real renderer · local data",
     "demo.tab.welcome": "Welcome",
@@ -57,12 +57,11 @@
     "demo.tab.board": "Board",
     "demo.action.open": "Open in new tab",
     "demo.action.fullscreen": "Full screen",
-    "demo.loading": "Loading the real interface…",
-    "demo.fallback.title": "The real interface didn't load",
+    "demo.loading": "Loading the interface demo…",
+    "demo.fallback.title": "The demo didn't load",
     "demo.fallback.body": "A network or browser restriction got in the way. Retry, or open it in a new tab.",
     "demo.fallback.retry": "Retry",
-    "demo.caption":
-      "Real desktop renderer with local demo data: switch views, open a session or file, check the board. Nothing here talks to a daemon.",
+    "demo.caption": "Real desktop renderer with local demo data — nothing here talks to a daemon.",
 
     /* 0.7.0 能力浏览 */
     "nav.release": "0.7.0 highlights",
@@ -148,7 +147,7 @@
     "price.kicker": "Pricing",
     "price.h2": "Free to test now; the community edition is free forever",
     "price.desc":
-      "MusePi is in a feature-polishing free-test phase: all core capabilities are open, with no usage limits. The community edition stays free forever; Pro and Team are a farther-off consideration that waits until the existing features are polished. The monthly / yearly toggle below is already in place — once paid tiers truly open you'll see prices with one click. For now all three point to the free community edition.",
+      "MusePi is in a feature-polishing free-test phase: all core capabilities are open, with no usage limits. The community edition stays free forever; Pro and Team are a farther-off consideration that waits until the existing features are polished. The monthly / yearly toggle below is already in place, so prices will be one click away once paid tiers open — for now only the free community edition is available.",
     "price.billing.aria": "Billing cycle toggle",
     "price.monthly": "Monthly",
     "price.yearly": "Yearly",
@@ -240,13 +239,13 @@
 
   /* MPI18N.t() 供 main.js 调用；这里放需要运行时切换的文案。 */
   var JS = {
-    "demo.status.idle": { zh: "准备中", en: "Preparing" },
+    "demo.status.idle": { zh: "待载入", en: "Not loaded" },
     "demo.status.loading": { zh: "载入中…", en: "Loading…" },
     "demo.status.ready": { zh: "运行中 · 本地", en: "Running · local" },
     "demo.status.error": { zh: "载入失败", en: "Failed" },
     "demo.action.exitFullscreen": { zh: "退出全屏", en: "Exit full screen" },
     "demo.action.fullscreen": { zh: "全屏", en: "Full screen" },
-    "demo.frame.title": { zh: "真实 MusePi 界面", en: "MusePi live interface" },
+    "demo.frame.title": { zh: "MusePi 界面演示", en: "MusePi interface demo" },
   };
 
   var nodes = [];
@@ -296,7 +295,9 @@
     if (metaOgDesc) metaOgDesc.setAttribute("content", useEn ? HEAD_EN.ogDescription : headZh.ogDescription);
 
     document.querySelectorAll(".mp-lang-opt").forEach(function (b) {
-      b.classList.toggle("is-active", b.getAttribute("data-lang") === current);
+      var active = b.getAttribute("data-lang") === current;
+      b.classList.toggle("is-active", active);
+      b.setAttribute("aria-pressed", active ? "true" : "false");
     });
   }
 

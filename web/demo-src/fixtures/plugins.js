@@ -26,15 +26,21 @@ function loadComponents() {
 	loaded ??= (async () => {
 		const manifest = JSON.parse(await text("./plugins/manifest.json"));
 		return await Promise.all(
-			manifest.components.map(async item => ({
-				slot: item.slot,
-				extensionId: item.extensionId,
-				label: item.label,
-				...(item.order !== undefined ? { order: item.order } : {}),
-				...(item.availability ? { availability: item.availability } : {}),
-				code: await text(`./plugins/${item.code}`),
-				...(item.css ? { css: await text(`./plugins/${item.css}`) } : {}),
-			})),
+			manifest.components.map(async item => {
+				const [code, css] = await Promise.all([
+					text(`./plugins/${item.code}`),
+					item.css ? text(`./plugins/${item.css}`) : Promise.resolve(undefined),
+				]);
+				return {
+					slot: item.slot,
+					extensionId: item.extensionId,
+					label: item.label,
+					...(item.order !== undefined ? { order: item.order } : {}),
+					...(item.availability ? { availability: item.availability } : {}),
+					code,
+					...(css ? { css } : {}),
+				};
+			}),
 		);
 	})();
 	return loaded;

@@ -265,6 +265,12 @@
     // The artifact is ~22 MiB of JS on a cold cache; the boot budget has to
     // cover a slow connection, not just a warm local disk.
     var DEMO_BOOT_MS = 90000;
+    // The shell paints into #root within a second of its own load event on any
+    // connection that already finished the module graph. A root that stays
+    // empty this long means a chunk failed, and the visitor should hear it
+    // from the fallback instead of waiting out the boot budget.
+    var DEMO_STALL_MS = 15000;
+    var DEMO_POLL_MS = 120;
     var demoFrame = demo.querySelector("[data-demo-stage]");
     var demoScreen = demo.querySelector("[data-demo-screen]");
     var demoLoading = demo.querySelector("[data-demo-loading]");
@@ -275,10 +281,15 @@
     var demoTabs = Array.prototype.slice.call(demo.querySelectorAll("[data-demo-view]"));
     var demoList = demo.querySelector(".mp-demo-tabs");
     var demoIframe = null;
-    var demoState = "idle";
+    var demoState = "";
     var demoView = "welcome";
     var demoApplyToken = 0;
+    // Every mount owns a generation; pollers and timers from an earlier mount
+    // exit instead of adopting the frame that replaced theirs.
+    var demoGen = 0;
     var demoBootTimer = 0;
+    var demoStallTimer = 0;
+    var demoRootEmptySince = 0;
     var demoRetries = 0;
     var demoNarrow = window.matchMedia("(max-width: 720px)");
     var DEMO_STATUS = {
@@ -307,11 +318,17 @@
       if (demoStatus) demoStatus.textContent = demoText(DEMO_STATUS[demoState]);
     }
 
+    // One transition per state: a second "ready" would replay the tab's view
+    // automation, and a late "loading" would flash the overlay over the shell.
     function setDemoState(next) {
+      if (demoState === next) return;
       demoState = next;
       demo.setAttribute("data-state", next);
       renderDemoChrome();
-      if (next === "ready") applyDemoView(demoView);
+      if (next === "ready") {
+        syncFullscreen();
+        applyDemoView(demoView);
+      }
     }
 
     /* 真实应用没有 URL 路由：视图靠点它自己的入口切换，同源 iframe 直接驱动。
@@ -322,7 +339,7 @@
         if (token !== demoApplyToken) return null;
         var doc = demoDoc();
         return doc && doc.querySelector(selector);
-      }, 8000).then(function (found) {
+      }, 8000, demoGen).then(function (found) {
         if (!found || token !== demoApplyToken) return false;
         (found.closest("button") || found).click();
         return true;
@@ -342,16 +359,22 @@
       return false;
     }
 
-    function waitForDemo(find, timeout) {
+    // gen is read from the mount that started the wait, so a frame replaced by
+    // a retry ends the wait instead of being driven by the old view's script.
+    function waitForDemo(find, timeout, gen) {
       return new Promise(function (resolve) {
         var deadline = Date.now() + timeout;
         (function tick() {
+          if (gen !== demoGen) {
+            resolve(null);
+            return;
+          }
           var found = find();
           if (found || Date.now() > deadline) {
             resolve(found || null);
             return;
           }
-          window.setTimeout(tick, 120);
+          window.setTimeout(tick, DEMO_POLL_MS);
         })();
       });
     }
@@ -368,7 +391,7 @@
           if ((rows[i].textContent || "").indexOf("README.md") >= 0) return rows[i];
         }
         return null;
-      }, 6000).then(function (row) {
+      }, 6000, demoGen).then(function (row) {
         if (row && token === demoApplyToken) row.click();
       });
     }
@@ -400,7 +423,7 @@
           return null;
         }
         return current.querySelector(".gui-surface-tab") || current.querySelector(".gui-panel-empty-item");
-      }, 8000).then(function (found) {
+      }, 8000, demoGen).then(function (found) {
         if (!found || token !== demoApplyToken) return;
         var current = demoDoc();
         if (!current) return;
@@ -413,15 +436,27 @@
       });
     }
 
-    function failDemo() {
+    function stopDemoTimers() {
       window.clearTimeout(demoBootTimer);
+      window.clearInterval(demoStallTimer);
+      demoBootTimer = 0;
+      demoStallTimer = 0;
+    }
+
+    function failDemo() {
+      // Ready is terminal: an error after the shell painted must not replace a
+      // working preview with the loading overlay and the fallback.
+      if (demoState === "ready" || demoState === "error") return;
+      demoGen += 1;
+      stopDemoTimers();
       if (demoIframe) {
         demoIframe.remove();
         demoIframe = null;
       }
       setDemoState("error");
       // One silent retry: the usual cause is a deploy swapping files under a
-      // live page, which a reload fixes.
+      // live page, which a reload fixes. The counter bounds it to a single
+      // attempt per visitor action, so a persistent failure cannot loop.
       if (demoRetries < 1) {
         demoRetries += 1;
         window.setTimeout(function () {
@@ -434,7 +469,7 @@
     // reflowing the real shell into a short viewport overlaps the welcome
     // hero, so the demo keeps the 1440x900 layout and letterboxes when the
     // frame is not 16:10 (fullscreen on tall displays).
-    function syncDemoScale() {
+    function applyDemoScale() {
       if (!demoIframe || !demoScreen) return;
       var width = demoScreen.clientWidth;
       var height = demoScreen.clientHeight;
@@ -446,8 +481,25 @@
         "translate(" + offsetX + "px," + offsetY + "px) scale(" + scale + ")";
     }
 
+    // Apply now for the synchronous layout, then once more on the next frame:
+    // fullscreen and font swaps resize the stage after the event that
+    // announced them, and a ResizeObserver notification waits for a frame the
+    // page may never produce (a hidden tab, headless rendering).
+    var demoSyncQueued = false;
+    function syncDemoScale() {
+      applyDemoScale();
+      if (demoSyncQueued) return;
+      demoSyncQueued = true;
+      window.requestAnimationFrame(function () {
+        demoSyncQueued = false;
+        applyDemoScale();
+      });
+    }
+
     window.addEventListener("resize", syncDemoScale);
+    if ("ResizeObserver" in window) new ResizeObserver(syncDemoScale).observe(demoScreen);
     document.addEventListener("fullscreenchange", syncDemoScale);
+    document.addEventListener("webkitfullscreenchange", syncDemoScale);
 
     // The demo posts this from inside the frame once #root has children, so
     // readiness does not depend on the parent being able to read the frame's
@@ -455,47 +507,94 @@
     window.addEventListener("message", function (event) {
       if (!demoIframe || event.source !== demoIframe.contentWindow) return;
       var data = event.data;
-      if (!data || data.type !== "musepi:demo-ready") return;
-      window.clearTimeout(demoBootTimer);
-      if (demoState === "loading") setDemoState("ready");
+      if (!data) return;
+      if (data.type === "musepi:demo-failed") {
+        if (demoState !== "ready") failDemo();
+        return;
+      }
+      if (data.type !== "musepi:demo-ready") return;
+      stopDemoTimers();
+      setDemoState("ready");
     });
 
     function mountDemo() {
       if (demoState === "loading" || demoState === "ready") return;
+      stopDemoTimers();
       if (demoIframe) {
         demoIframe.remove();
         demoIframe = null;
       }
+      demoGen += 1;
       setDemoState("loading");
-      // Preflight the artifact: a missing build is a deployment problem, not
-      // a slow boot, and deserves the fallback immediately.
-      window.fetch(DEMO_SRC, { cache: "no-store" }).then(function (response) {
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        return response.text();
-      }).then(startDemoFrame, failDemo);
+      startDemoFrame(demoGen);
     }
 
-    function startDemoFrame() {
-      demoIframe = document.createElement("iframe");
-      demoIframe.className = "mp-demo-iframe";
-      demoIframe.title = demoText("demo.frame.title");
-      demoIframe.src = DEMO_SRC;
-      demoIframe.setAttribute("allow", "clipboard-write");
-      demoIframe.addEventListener("error", failDemo);
-      demoIframe.addEventListener("load", syncDemoScale);
-      demoScreen.appendChild(demoIframe);
+    // The frame is created immediately: the artifact answers for itself. A
+    // document without #root is a 404 or the wrong page, which the load
+    // handler below turns into the fallback without a separate probe request.
+    function startDemoFrame(gen) {
+      var frame = document.createElement("iframe");
+      frame.className = "mp-demo-iframe";
+      frame.title = demoText("demo.frame.title");
+      frame.src = DEMO_SRC;
+      frame.setAttribute("allow", "clipboard-write");
+      frame.addEventListener("error", function () {
+        if (gen === demoGen) failDemo();
+      });
+      frame.addEventListener("load", function () {
+        if (gen !== demoGen) return;
+        syncDemoScale();
+        onDemoFrameLoad(gen);
+      });
+      demoIframe = frame;
+      demoScreen.appendChild(frame);
       syncDemoScale();
       demoBootTimer = window.setTimeout(function () {
-        if (demoState !== "ready") failDemo();
+        if (gen === demoGen && demoState !== "ready") failDemo();
       }, DEMO_BOOT_MS);
-      waitForDemo(function () {
-        var doc = demoDoc();
-        return doc && doc.querySelector(".gui-workspace-keeper, .gui-main");
-      }, DEMO_BOOT_MS).then(function (found) {
-        if (!found) return;
-        window.clearTimeout(demoBootTimer);
+    }
+
+    function onDemoFrameLoad(gen) {
+      var doc = demoDoc();
+      // Cross-origin frames are opaque here; the ready message decides.
+      if (!doc) return;
+      if (!doc.getElementById("root")) {
+        failDemo();
+        return;
+      }
+      // The shell can already be painted when the frame's own load fires (it
+      // runs before the fixture's next 100 ms tick would post the message).
+      if (doc.querySelector(".gui-workspace-keeper, .gui-main")) {
         setDemoState("ready");
-      });
+        return;
+      }
+      demoRootEmptySince = doc.getElementById("root").childElementCount ? 0 : Date.now();
+      if (!demoRootEmptySince) return;
+      window.clearInterval(demoStallTimer);
+      demoStallTimer = window.setInterval(function () {
+        if (gen !== demoGen || demoState !== "loading") {
+          window.clearInterval(demoStallTimer);
+          demoStallTimer = 0;
+          return;
+        }
+        var current = demoDoc();
+        if (!current) {
+          window.clearInterval(demoStallTimer);
+          demoStallTimer = 0;
+          return;
+        }
+        var root = current.getElementById("root");
+        if (!root) {
+          failDemo();
+          return;
+        }
+        if (root.childElementCount) {
+          window.clearInterval(demoStallTimer);
+          demoStallTimer = 0;
+          return;
+        }
+        if (Date.now() - demoRootEmptySince > DEMO_STALL_MS) failDemo();
+      }, 1000);
     }
 
     // The preview is the product, so it loads itself: the poster stands in
@@ -545,8 +644,10 @@
 
     if (demoRetryBtn) {
       demoRetryBtn.addEventListener("click", function () {
+        // An explicit retry earns a fresh auto-retry budget, and it must work
+        // even when the viewport is too narrow to have mounted on its own.
         demoRetries = 0;
-        requestDemo();
+        mountDemo();
       });
     }
 

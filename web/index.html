@@ -50,9 +50,9 @@
 
       <div class="mp-topbar-actions">
         <div class="mp-lang" role="group" aria-label="语言" data-i18n-aria="lang.aria">
-          <button class="mp-lang-opt is-active" type="button" data-lang="zh" lang="zh-CN">中</button>
+          <button class="mp-lang-opt is-active" type="button" data-lang="zh" lang="zh-CN" aria-pressed="true">中</button>
           <span class="mp-lang-sep" aria-hidden="true"></span>
-          <button class="mp-lang-opt" type="button" data-lang="en" lang="en">EN</button>
+          <button class="mp-lang-opt" type="button" data-lang="en" lang="en" aria-pressed="false">EN</button>
         </div>
         <a class="mp-topbar-gh" href="https://github.com/MuseLinn/MusePi" target="_blank" rel="noopener" aria-label="GitHub 仓库" data-i18n-aria="nav.gh.aria">
           <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M8 .2a8 8 0 0 0-2.5 15.6c.4.07.55-.17.55-.38v-1.3c-2.25.5-2.72-1.08-2.72-1.08-.37-.94-.9-1.19-.9-1.19-.73-.5.06-.49.06-.49.82.06 1.25.84 1.25.84.73 1.25 1.9.89 2.37.68.07-.53.29-.89.52-1.1-1.8-.2-3.7-.9-3.7-4 0-.88.31-1.6.83-2.16-.08-.2-.36-1.02.08-2.12 0 0 .68-.22 2.23.83a7.7 7.7 0 0 1 4.05 0c1.54-1.05 2.22-.83 2.22-.83.45 1.1.16 1.92.08 2.13.52.56.83 1.27.83 2.16 0 3.11-1.9 3.8-3.7 4 .29.25.55.75.55 1.51v2.24c0 .21.15.46.55.38A8 8 0 0 0 8 .2z"/></svg>
@@ -131,23 +131,23 @@
             </button>
           </span>
           <span class="mp-term-tabs" role="tablist" aria-label="选择安装命令" data-i18n-aria="hero.term.tabs">
-            <button class="mp-term-tab is-active" type="button" role="tab" aria-selected="true" data-term="sh">macOS / Linux / WSL</button>
-            <button class="mp-term-tab" type="button" role="tab" aria-selected="false" data-term="ps">Windows PowerShell</button>
+            <button class="mp-term-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="term-line-sh" data-term="sh">macOS / Linux / WSL</button>
+            <button class="mp-term-tab" type="button" role="tab" aria-selected="false" aria-controls="term-line-ps" data-term="ps">Windows PowerShell</button>
           </span>
-          <code class="mp-term-line" data-term-line="sh"><span class="mp-cmd-prompt">$</span> curl -fsSL <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh</span> | sh</code>
-          <code class="mp-term-line" data-term-line="ps" hidden><span class="mp-cmd-prompt">&gt;</span> irm <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1</span> | iex</code>
+          <code class="mp-term-line" id="term-line-sh" data-term-line="sh"><span class="mp-cmd-prompt">$</span> curl -fsSL <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh</span> | sh</code>
+          <code class="mp-term-line" id="term-line-ps" data-term-line="ps" hidden><span class="mp-cmd-prompt">&gt;</span> irm <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1</span> | iex</code>
           <p class="mp-term-note" data-i18n="hero.term.note">这一条命令装的是终端版（后台服务随之启动）；想直接用图形界面，就从上面的平台菜单里挑安装包。装好后桌面版、终端 TUI 与移动伴侣共用同一批会话。</p>
         </div>
       </div>
     </section>
 
-    <!-- ===== 产品界面预览：真实应用截图 ===== -->
+    <!-- ===== 产品界面预览：内嵌真实渲染器 ===== -->
     <section class="mp-section" id="preview">
       <div class="mp-container">
         <header class="mp-section-head">
           <p class="mp-kicker" data-i18n="preview.kicker">产品界面预览</p>
           <h2 class="mp-h2" data-i18n="preview.h2">一块屏幕，看得见协作的每一步</h2>
-          <p class="mp-section-desc" data-i18n="preview.desc">直接上手：切换视图、点开会话或文件、查看看板。这里跑的就是官网同款的真实桌面渲染器，数据全部来自本地演示，不连后台。</p>
+          <p class="mp-section-desc" data-i18n="preview.desc">直接上手：切换视图、点开会话或文件、查看看板。这里跑的就是桌面应用同款的渲染器，数据全部来自本地演示，不连后台。手机屏幕上不内嵌渲染器，<a href="./app/index.html" target="_blank" rel="noopener">在新标签页打开完整演示</a>。</p>
         </header>
 
         <div class="mp-demo" data-demo-embed data-state="idle">
@@ -160,7 +160,7 @@
             </div>
             <div class="mp-demo-actions">
               <a class="mp-demo-action" href="./app/index.html" target="_blank" rel="noopener" data-i18n="demo.action.open">新标签页打开</a>
-              <button class="mp-demo-action" type="button" data-demo-fullscreen hidden data-i18n="demo.action.fullscreen">全屏</button>
+              <button class="mp-demo-action" type="button" data-demo-fullscreen hidden aria-pressed="false" data-i18n="demo.action.fullscreen">全屏</button>
               <span class="mp-demo-hint" data-i18n="demo.hint">真实渲染器 · 本地数据</span>
             </div>
           </div>
@@ -174,10 +174,10 @@
             <div class="mp-demo-screen" data-demo-screen>
               <div class="mp-demo-loading" data-demo-loading hidden>
                 <span class="mp-demo-spinner" aria-hidden="true"></span>
-                <p data-i18n="demo.loading">正在载入真实界面…</p>
+                <p data-i18n="demo.loading">正在载入界面演示…</p>
               </div>
               <div class="mp-demo-fallback" data-demo-fallback hidden>
-                <h3 data-i18n="demo.fallback.title">真实界面没能载入</h3>
+                <h3 data-i18n="demo.fallback.title">界面演示没能载入</h3>
                 <p data-i18n="demo.fallback.body">可能是网络或浏览器限制。你可以重试，或在新标签页里打开。</p>
                 <div class="mp-demo-fallback-actions">
                   <button class="mp-btn mp-btn--primary mp-btn--sm" type="button" data-demo-retry data-i18n="demo.fallback.retry">重试</button>
@@ -186,7 +186,7 @@
               </div>
             </div>
           </div>
-          <p class="mp-demo-caption" data-i18n="demo.caption">真实桌面渲染器 + 本地演示数据：切换视图、点开会话或文件、查看看板，不会连接任何后台服务。</p>
+          <p class="mp-demo-caption" data-i18n="demo.caption">真实桌面渲染器 + 本地演示数据，不连接任何后台服务。</p>
         </div>
 
       </div>
@@ -354,7 +354,7 @@
         <header class="mp-section-head">
           <p class="mp-kicker" data-i18n="price.kicker">价格</p>
           <h2 class="mp-h2" data-i18n="price.h2">现在免费测试，社区版永久免费</h2>
-          <p class="mp-section-desc" data-i18n="price.desc">MusePi 正处于打磨功能的免费测试阶段，全部核心能力都开放使用、不限用量。社区版会一直免费；专业版与团队版是更远期、要等现有功能打磨成熟之后才考虑的事。下面的月付 / 年付切换已经就位，等付费档位真正开放即可一键查看——现在三档都指向免费的社区版。</p>
+          <p class="mp-section-desc" data-i18n="price.desc">MusePi 正处于打磨功能的免费测试阶段，全部核心能力都开放使用、不限用量。社区版会一直免费；专业版与团队版是更远期、要等现有功能打磨成熟之后才考虑的事。下面的月付 / 年付切换已经就位，等付费档位真正开放即可一键查看——现在开放的只有免费的社区版。</p>
         </header>
 
         <div class="mp-billing" role="group" aria-label="计费周期切换" data-i18n-aria="price.billing.aria">

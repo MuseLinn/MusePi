@@ -1,5 +1,5 @@
 /* 产品界面预览（官网）。
- * 页面只画窗口边框与门控层；真实渲染器在 iframe 里，用户点「载入」才请求。
+ * 页面只画窗口边框；真实渲染器在 iframe 里，滚到预览区附近才请求。
  * 与 styles.css 分开，落地页不需要为它加载任何额外样式依赖。 */
 
 .mp-demo {
@@ -262,6 +262,8 @@
 }
 
 .mp-demo-frame:fullscreen {
+  display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   border: 0;
@@ -269,8 +271,12 @@
   background: var(--bg);
 }
 
+/* The screen takes whatever the titlebar leaves, whatever its height; a fixed
+ * subtraction overflows the frame (and crops the scaled renderer) as soon as
+ * the titlebar wraps. */
 .mp-demo-frame:fullscreen .mp-demo-screen {
-  height: calc(100vh - 39px);
+  flex: 1 1 auto;
+  min-height: 0;
   aspect-ratio: auto;
 }
 
@@ -295,7 +301,7 @@
 }
 
 @media (max-width: 720px) {
-  /* 手机上不嵌入 8MB 渲染器：只留品牌占位与「新标签页打开」，标签页没有可驱动的目标。 */
+  /* 手机上不嵌入 22 MiB 的渲染器：只留品牌占位，完整演示走新标签页。 */
   .mp-demo-tabs {
     display: none;
   }
