@@ -2504,10 +2504,6 @@ export function ChatView({
 			setActiveView(id);
 			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 		},
-		// The session info card's connector entry names "integrations". The
-		// host's openSettings forwards only its own section allowlist, so record
-		// the intent before opening and let SettingsView consume it on mount —
-		// otherwise the pane would land on the default section.
 		onOpenSettings: (section?: string): void => {
 			onOpenSettings?.(section);
 		},

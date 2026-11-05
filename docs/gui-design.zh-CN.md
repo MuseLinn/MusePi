@@ -85,7 +85,7 @@ lang: zh-CN
 - **三条正交轴**(DOM 层永远是已解析值,无 "system"):`data-theme`(light/dark 已解析)+ `data-accent`(强调色预设)+ `data-ui-theme`(独立浅/深主题预设)。
 - **密度**:`--gui-density` 是**无单位系数**(如 `1`/`0.85`),CSS 用 `calc(32px * var(--gui-density, 1))`。
 - **共享几何与语义**：间距、控件尺寸和从 `--z-dropdown` 到 `--z-tooltip` 的层级阶梯统一放在 `tokens.css`。语义文字别名映射到前景色层级，触控控件保持 44px 最小目标。组件内部层级与装饰艺术色可保留局部定义，但不得逸出所属容器。`scripts/check-css-tokens.ts` 只检查语义颜色引用均有定义，不代表全部移植主题的对比度均已实测。
-- **圆角——6 步阶梯(2026-09-17)**:`--radius-xs 2` / `sm 4` / `md 6` / `lg 8` / `xl 12` / `2xl 16`(+胶囊 `999px`、圆 `50%`)。同心规则:子圆角 = 父圆角 − 父内边距(16−4→12−4→8−2→6),出现「外圆内方」即同心被破坏。手写 CSS 禁止字面 px 圆角(`scripts/check-radius-tokens.ts` 已进 `check:tools`;生成的 `tailwind.out.css` 豁免)——卡片/面板用 `lg`,对话框/抽屉/浮层用 `xl`,全屏 sheet 用 `2xl`。卡片统一保留 `border: 1px solid var(--border)` + `background: var(--color-surface-raised|sunken)`。
+- **圆角——6 步阶梯(2026-09-17)**:`--radius-xs 2` / `sm 4` / `md 6` / `lg 8` / `xl 12` / `2xl 16`(+胶囊 `999px`、圆 `50%`;`--radius-full` = 9999px 同时服务两者,`border-radius` 会自动收敛到盒子的一半)。同心规则:子圆角 = 父圆角 − 父内边距(16−4→12−4→8−2→6),出现「外圆内方」即同心被破坏。手写 CSS 禁止字面 px 圆角(`scripts/check-radius-tokens.ts` 已进 `check:tools`;生成的 `tailwind.out.css` 豁免),且每个被引用的 `--radius-*` 必须在 `tokens.css` 有定义(未定义的自定义属性会让圆角静默渲染成直角,控制台不报错)——卡片/面板用 `lg`,对话框/抽屉/浮层用 `xl`,全屏 sheet 用 `2xl`。卡片统一保留 `border: 1px solid var(--border)` + `background: var(--color-surface-raised|sunken)`。
 - **字体**:UI 默认 serif + 打包的 Maple Mono NF CN(等宽);变量字体 Inter/JetBrains Mono 在 `@fontsource-variable/*`。代码块字号走 `--gui-code-size`。
 - **玻璃**:`gui-vibrancy` IPC + CSS `--gui-glass-overlay` 透明度;窗口透明度开关关=100% overlay 覆盖所有半透明规则。 **液态玻璃(2026-09-17)**:在 vibrancy 窗口之上,高层玻璃面(对话框、shell 侧栏/顶栏、lightbox 主按钮)渲染为液态玻璃——tokens.css 的 `--glass-*` 阶梯(半透明填充、内侧顶部镜面亮边 `--glass-edge-hi` + 底部暗回声、对角 `--glass-sheen` 走未被占用的 ::before、抬升 `--glass-shadow`),入场/菜单/按压用 `--spring-liquid`(过冲弹簧 cubic-bezier(.34,1.56,.64,1))。`.gui-dialog` 是参考实现(72% 半透明面 + blur(3xl) saturate(170%);::before 是 sheen 层——内容 z-index 必须在其上)。强调色换色不影响玻璃阶梯;语义绿(成功态/桌宠)保留绿色。
 
@@ -911,5 +911,4 @@ Guest／移动端顶栏使用 `HostManager` 统一完成已保存电脑的切换
 - **引用锚点与原文高亮**:引用记录选中文本及其上下文位置,源消息中被引用的文字以强调色高亮;点击引用卡滚动到原文并闪烁一次,锚点失效时退回按消息跳转。
 - **表格与复制**:表格工具栏可加宽/恢复默认宽度,复制与下载仍提供 CSV/TSV/Markdown;会话菜单可复制全部对话为 Markdown 或仅复制最终总结。
 - **结构化标注卡**:元素标注显示标签/类名、定位与几何、语义与状态、data-* 属性、页面与捕获信息，评论区与「引用发送截图」开关在同一张卡内；区域与手绘只保留几何与评论。分区可折叠，关闭开关后发送内容不含截图。
-- **集成目录**:设置中的「集成」按类别（项目工具、代码、设计、云、数据库、质量）浏览外部服务；卡片显示名称、说明、认证方式与安装状态，支持搜索、安装、移除。安装 OAuth 服务写入 `auth: oauth`，Token 服务在当前页输入令牌并写入用户级配置；安装后由连接器分区统一展示与会话选择。
-- **内置系统插件默认关闭**:集成页顶部列出可启停的自带插件,默认全部关闭;需要时用开关启用。平台 MCP 目录保持按需安装,首次打开不安装任何条目。集成 entry 以主组件决定类型——MCP、内置插件、市场插件或技能;需要自定义工具/面板的平台应发布 Cordis 插件并作为内置或市场组件挂载,而不是额外造一套集成运行时。
+- **连接器管理归 MCP 设置**:不设独立「集成」页或集成概念;MCP 连接器在设置 → MCP 服务器管理与启停,插件在扩展与插件市场中安装。需要平台专属工具/面板的能力以 Cordis 插件发布并默认关闭,由用户按需启用。

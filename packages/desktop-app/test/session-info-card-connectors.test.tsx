@@ -6,10 +6,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { SessionInfoCard } from "../src/components/session-info-card";
 
 /**
- * The connector section is the session-side entry point to integrations. It
+ * The connector section is the session-side entry point to MCP settings. It
  * must render even with zero servers — the former "only when servers exist"
  * gate left a new user with no visible way to add one — and its manage button
- * must name the integrations section, not a generic settings open.
+ * must open the MCP section, not a generic settings open.
  */
 
 const roots = new Set<Root>();
@@ -64,12 +64,12 @@ describe("SessionInfoCard connectors", () => {
 		const opened: Array<string | undefined> = [];
 		const container = await mount([], section => opened.push(section));
 
-		expect(container.textContent).toContain(t("settings.integrations.infoCardEmpty"));
+		expect(container.textContent).toContain(t("settings.mcpSettings"));
 		const manage = container.querySelector<HTMLButtonElement>(".gui-session-info-manage-connectors");
 		expect(manage).not.toBeNull();
 
 		await act(async () => manage?.click());
-		expect(opened).toEqual(["integrations"]);
+		expect(opened).toEqual(["mcp"]);
 	});
 
 	it("lists configured servers and still offers the manage entry", async () => {
@@ -79,11 +79,11 @@ describe("SessionInfoCard connectors", () => {
 		);
 
 		expect(container.textContent).toContain("linear");
-		expect(container.textContent).not.toContain(t("settings.integrations.infoCardEmpty"));
+		expect(container.textContent).not.toContain(t("settings.mcpSettings"));
 		const manage = container.querySelector<HTMLButtonElement>(".gui-session-info-manage-connectors");
 		expect(manage).not.toBeNull();
 
 		await act(async () => manage?.click());
-		expect(opened).toEqual(["integrations"]);
+		expect(opened).toEqual(["mcp"]);
 	});
 });

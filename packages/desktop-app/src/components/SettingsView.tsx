@@ -11,7 +11,6 @@ import {
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
-import { INTEGRATIONS_SECTION, INTEGRATIONS_SETTINGS_SECTION } from "../plugins/integrations/nav";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
 import { navGroups, SettingsNav } from "./SettingsNav";
@@ -81,7 +80,7 @@ export function SettingsView({
 	/** Section to land on when the pane opens (sidebar 技能 entry, composer
 	 *  添加供应商 entry). A capability alias is accepted and resolved to its
 	 *  page — see lib/settings-nav.ts. */
-	initialSection?: SectionRequest | "integrations";
+	initialSection?: SectionRequest;
 	/** Open a session from the 索引库 search results (app layer owns openSession). */
 	onOpenSession?: (sessionId: string) => void;
 	/** DSH creation-flow entry: settings preset 新建 sends a natural-language
@@ -91,8 +90,6 @@ export function SettingsView({
 	cwd?: string | null;
 }): ReactNode {
 	const [section, setSection] = useState<SectionRequest | string>(() => {
-		const requested = initialSection as string | undefined;
-		if (requested === INTEGRATIONS_SECTION) return INTEGRATIONS_SETTINGS_SECTION;
 		return initialSection ?? "appearance";
 	});
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项

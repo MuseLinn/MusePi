@@ -314,7 +314,7 @@ interface SessionInfoCardProps {
 	onSelectTab?(id: string): void;
 	onOpenSurface?(id: string): void;
 	/** Open the settings pane at a section — the connector section's
-	 *  「管理集成」 entry passes "integrations". */
+	 *  manage entry passes "mcp". */
 	onOpenSettings?(section?: string): void;
 }
 
@@ -661,21 +661,21 @@ export function SessionInfoCard({
 					<button
 						type="button"
 						className="gui-connector-link gui-session-info-manage-connectors"
-						onClick={() => onOpenSettings?.("integrations")}
+						onClick={() => onOpenSettings?.("mcp")}
 					>
-						{t("settings.integrations.manage")}
+						{t("settings.mcpServers")}
 					</button>
 				</section>
 			) : (
 				<section className="gui-session-info-connectors gui-session-info-connectors--empty flex flex-col gap-1">
 					<div className="gui-session-info-section-label">{t("tools.connectorsPanelTitle")}</div>
-					<p className="gui-session-info-note">{t("settings.integrations.infoCardEmpty")}</p>
+					<p className="gui-session-info-note">{t("settings.mcpSettings")}</p>
 					<button
 						type="button"
 						className="gui-connector-link gui-session-info-manage-connectors self-start"
-						onClick={() => onOpenSettings?.("integrations")}
+						onClick={() => onOpenSettings?.("mcp")}
 					>
-						{t("settings.integrations.manage")}
+						{t("settings.mcpServers")}
 					</button>
 				</section>
 			)}

@@ -6,8 +6,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
-- **集成目录组件化，自带插件默认不启用**：集成 entry 支持 MCP、内置插件、市场插件与技能四类组件，主组件决定安装/移除路径；集成页新增「内置插件」区，列出可启停的自带插件并提供开关，默认全部关闭，不写入任何默认启用状态。平台 MCP 目录仍保持按需安装，默认不安装。
-  - EN: Integrations are now componentized: an entry can carry MCP, builtin plugin, marketplace plugin, and skill components, with the primary component deciding install and removal. The Integrations page adds a Built-in plugins section listing enableable bundled plugins with switches, all off by default and with no default enablement written. The platform MCP catalog stays install-on-demand and empty until chosen.
+- **修复 9 处圆角渲染为直角**：`--radius-full` 被 `.gui-chip`、`.sh-pull-indicator`、`.sh-attach-remove`、`.ss-search`、`.ss-search-clear`、`.ss-grabber`、`.ss-item-dot`、`.gui-pr-review-outdated` 引用但从未定义，`var()` 失效让 `border-radius` 回退到初始值 `0`。现在于 tokens.css 定义为 9999px（胶囊与圆点共用，按盒子一半收敛），半径守门脚本同时校验每个引用都有定义，未定义时 CI 直接失败。
+  - EN: Nine corners rendered square because `--radius-full` was referenced by `.gui-chip`, `.sh-pull-indicator`, `.sh-attach-remove`, `.ss-search`, `.ss-search-clear`, `.ss-grabber`, `.ss-item-dot`, and `.gui-pr-review-outdated` but never defined, leaving `border-radius` at its initial `0`. The token is now defined as 9999px in tokens.css (one value for capsules and round dots, clamped to half the box), and the radius gate also fails CI on any reference without a definition.
+- **连接器管理回到 MCP 设置，撤销独立集成页**：不设「集成」概念；MCP 连接器在设置 → MCP 服务器管理，插件在扩展与插件市场安装。安装/移除连接器仍会 reconcile live manager，并把刷新后的 MCP 工具集推给运行中会话。
+  - EN: Connector management moves back into Settings → MCP servers, with no separate Integrations concept; plugins install from Extensions & plugins. Adding or removing a connector still reconciles the live manager and refreshes running sessions' MCP tool set.
+
 
 - **引用卡改为非模态，网页右键「标注」直达元素卡**：引用/标注卡打开时聊天与浏览器页面仍可滚动；网页右键菜单里的「标注」直接按指针位置打开结构化元素卡，不再要求二次框选；关闭「引用发送截图」后不再先捕获再丢弃。
   - EN: Quote and annotation cards are non-modal, so the transcript and browser page keep scrolling while they are open. The page context menu's Annotate entry opens the structured element card at the pointer without a second selection, and turning off Include screenshot no longer captures an image that would be discarded.
@@ -21,11 +24,7 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **营销预览改为真实渲染器 + 夹具 daemon**：站点交互预览直接运行桌面渲染器，`build:web-demo` 从 `dist/` 组装 `web/app/`，并用 daemon 自己的插槽编译器产出 `app.chat`、`panel.tab.files`、`panel.shell` 组件；`web/demo-src/` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，会话、文件与 git 应答照真实 daemon 的形状录制。socket 目标固定为死端口 `ws://127.0.0.1:9/demo`，夹具失效时只会停在连接页，不会连到本机 8300 的 daemon。`verify-web-demo.mjs` 用无头 Edge 断言外壳、欢迎输入框、会话 transcript、零个 8300 请求与零个真实 WebSocket 连接。
   - EN: The site's interactive preview now runs the real desktop renderer against a fixture daemon. `build:web-demo` assembles `web/app/` from `dist/` and compiles the `app.chat`, `panel.tab.files`, and `panel.shell` slot components with the daemon's own compiler; `web/demo-src/` swaps `window.WebSocket` for an in-page JSON-RPC mock whose session, file, and git answers follow recorded daemon shapes. The socket target stays the dead port `ws://127.0.0.1:9/demo`, so a broken fixture set can only reach the connect screen and never a daemon on 8300. `verify-web-demo.mjs` drives headless Edge and asserts the shell, welcome composer, session transcript, zero :8300 requests, and zero real WebSocket connections.
 
-- **集成安装即时生效**：安装/移除连接器会就地 reconcile 当前工作目录的 MCP manager，移除或变更的服务器断开、新服务器连接，并把刷新后的 MCP 工具集推给该目录下所有运行中会话，无需重启 daemon。
-  - EN: Installing or removing a connector reconciles the working directory's MCP manager in place — removed or changed servers disconnect, new ones connect, and the refreshed MCP tool set reaches every running session in that directory without a daemon restart.
 
-- **新增「集成」目录与连接器管理**：设置中的集成页按类别浏览 Linear、Atlassian、Notion、Asana、GitHub、Figma、Supabase、Neon、Sentry、Cloudflare、Vercel、Dropbox 等平台，支持搜索、安装与移除；OAuth 类写入 `auth: oauth`，Token 类写入用户级 `mcp.json` 的请求头（不进仓库）。会话信息卡的连接器分区始终可见，没有连接器时也能直接进入集成页管理。
-  - EN: A new Integrations page browses and installs Linear, Atlassian, Notion, Asana, GitHub, Figma, Supabase, Neon, Sentry, Cloudflare, Vercel, Dropbox and more by category, with search, install, and remove. OAuth entries write `auth: oauth`; token entries write headers into the user-level `mcp.json` (never the repository). The session info card's connector section is always visible and links to the Integrations page even when nothing is connected.
 
 - **HTML 卡片标注使用结构化面板，表格加宽可持久化**：会话内 HTML 卡片的标注与浏览器页面共用同一张结构化元素卡；表格加宽状态写入本地偏好，重新挂载或切换会话后仍保持，恢复默认即清除。
   - EN: HTML cards in the session now open the same structured annotation card as browser pages, and table width preferences persist across remounts and session switches, clearing when the table returns to its default width.
