@@ -179,6 +179,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"session.history",
 	"session.jobs",
 	"session.jobsCancel",
+	"session.jobOutput",
 	"session.list",
 	"session.modes",
 	"session.pause",

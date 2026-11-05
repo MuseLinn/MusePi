@@ -297,6 +297,44 @@ export function applyTableWideState(
 	}
 }
 
+const WIDE_TABLES_KEY = "musepi-gui-wide-tables";
+/** Bound on remembered hashes. A streamed table hashes its content, so every
+ *  row that lands while the user has it widened is a new key; the list would
+ *  otherwise grow with the conversation and never shrink. */
+const WIDE_TABLES_LIMIT = 200;
+
+/** Read the widened-table hashes. Anything unreadable (private mode, a value
+ *  from an older shape) means "nothing widened" rather than a broken table. */
+function loadWideTables(): Set<string> {
+	if (typeof window === "undefined") return new Set();
+	try {
+		const raw = window.localStorage.getItem(WIDE_TABLES_KEY);
+		const parsed: unknown = raw ? JSON.parse(raw) : [];
+		if (!Array.isArray(parsed)) return new Set();
+		const hashes = parsed.filter((entry): entry is string => typeof entry === "string");
+		return new Set(hashes.slice(-WIDE_TABLES_LIMIT));
+	} catch {
+		return new Set();
+	}
+}
+
+/** Persist the widened-table hashes. Restoring a table to its default width
+ *  removes its record, so a remount renders it at the default width again. */
+function saveWideTables(hashes: Set<string>): void {
+	if (typeof window === "undefined") return;
+	const overflow = hashes.size - WIDE_TABLES_LIMIT;
+	if (overflow > 0) {
+		const iterator = hashes.values();
+		for (let i = 0; i < overflow; i++) hashes.delete(iterator.next().value as string);
+	}
+	try {
+		if (hashes.size === 0) window.localStorage.removeItem(WIDE_TABLES_KEY);
+		else window.localStorage.setItem(WIDE_TABLES_KEY, JSON.stringify(Array.from(hashes)));
+	} catch {
+		// storage quota / private mode — best effort
+	}
+}
+
 /**
  * Incremental streaming-markdown cache: `blocks` are frozen boundary-bounded
  * chunks; a later append reuses everything before the cut verbatim.
@@ -703,12 +741,16 @@ export const Markdown = memo(function Markdown({
 		".tr-table-scroll, .tr-md pre, .katex-display, .tr-mermaid, .tr-mermaid-ascii, .tr-usage",
 	);
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
-	// 表格加宽: widened tables by content hash. Held in a ref (not state)
-	// because toggling must not re-render: a re-render rewrites the markdown
-	// innerHTML, which would drop code highlighting and scroll position for
-	// the whole message. The observer effect below re-applies the set whenever
-	// that html is rebuilt anyway (stream tick, copy-label swap, settle).
-	const wideTablesRef = useRef<Set<string>>(new Set<string>());
+	// 表格加宽: widened tables by content hash, persisted so a remount (session
+	// switch, transcript virtualization) keeps the user's choice. Held in a ref
+	// (not state) because toggling must not re-render: a re-render rewrites the
+	// markdown innerHTML, which would drop code highlighting and scroll position
+	// for the whole message. The observer effect below re-applies the set
+	// whenever that html is rebuilt anyway (stream tick, copy-label swap, settle).
+	// Lazy state seeds the ref once per mount; reading storage on every render
+	// would put a JSON parse on the streaming path.
+	const [seededWideTables] = useState(loadWideTables);
+	const wideTablesRef = useRef<Set<string>>(seededWideTables);
 	const [mermaidFull, setMermaidFull] = useState<{ html: string; source: string; hash: string } | null>(null);
 	const [mermaidFsZoom, setMermaidFsZoom] = useState(1);
 	// 平滑流式渲染: character-level reveal (逐字输出). The setting writes
@@ -871,6 +913,7 @@ export const Markdown = memo(function Markdown({
 			const widened = wideTablesRef.current;
 			if (widened.has(hash)) widened.delete(hash);
 			else widened.add(hash);
+			saveWideTables(widened);
 			const root = rootRef.current;
 			if (root) {
 				applyTableWideState(root, widened, {

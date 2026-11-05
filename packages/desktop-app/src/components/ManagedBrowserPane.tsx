@@ -18,7 +18,7 @@
  */
 import { t } from "@musepi/client-core";
 import { dispatchAnnotationResult, resolveAnnotationOverlayTheme } from "@musepi/client-core/src/annotation";
-import { widgetHostTheme } from "@musepi/client-core/src/widgets/html";
+import { annotationOverlayLabels, widgetHostTheme } from "@musepi/client-core/src/widgets/html";
 import { Eye as EyeIconData, EyeOff as EyeOffIconData, RefreshCw as RefreshCwIconData, X as XIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { KeyboardEvent, ReactNode } from "react";
@@ -542,35 +542,8 @@ export function ManagedBrowserPane({
 		void runAnnotationSession({
 			host: sessionHost,
 			theme,
-			labels: {
-				select: t("annotation.tool.element"),
-				marquee: t("annotation.tool.region"),
-				draw: t("annotation.tool.draw"),
-				commentPlaceholder: t("annotation.commentPlaceholder"),
-				submit: t("annotation.submit"),
-				panel: {
-					title: t("annotation.panelTitle"),
-					close: t("annotation.panelClose"),
-					sectionGeometry: t("annotation.panelGeometry"),
-					sectionSemantics: t("annotation.panelSemantics"),
-					sectionData: t("annotation.panelData"),
-					sectionPage: t("annotation.panelPage"),
-					selector: t("annotation.panelSelector"),
-					path: t("annotation.panelPath"),
-					bounds: t("annotation.panelBounds"),
-					size: t("annotation.panelSize"),
-					center: t("annotation.panelCenter"),
-					text: t("annotation.panelText"),
-					styles: t("annotation.panelStyles"),
-					page: t("annotation.panelPageTitle"),
-					url: t("annotation.panelUrl"),
-					viewport: t("annotation.panelViewport"),
-					dpr: t("annotation.panelDpr"),
-					screenshot: t("annotation.panelScreenshot"),
-					cancel: t("annotation.panelCancel"),
-					add: t("annotation.panelAdd"),
-				},
-			},
+			// 与会话内 HTML 卡片同一份文案与结构卡(见 annotationOverlayLabels)。
+			labels: annotationOverlayLabels(),
 		})
 			.then(result => {
 				setAnnotating(false);

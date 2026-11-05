@@ -11,6 +11,7 @@ import {
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
+import { INTEGRATIONS_SECTION, INTEGRATIONS_SETTINGS_SECTION } from "../plugins/integrations/nav";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
 import { navGroups, SettingsNav } from "./SettingsNav";
@@ -80,7 +81,7 @@ export function SettingsView({
 	/** Section to land on when the pane opens (sidebar 技能 entry, composer
 	 *  添加供应商 entry). A capability alias is accepted and resolved to its
 	 *  page — see lib/settings-nav.ts. */
-	initialSection?: SectionRequest;
+	initialSection?: SectionRequest | "integrations";
 	/** Open a session from the 索引库 search results (app layer owns openSession). */
 	onOpenSession?: (sessionId: string) => void;
 	/** DSH creation-flow entry: settings preset 新建 sends a natural-language
@@ -89,7 +90,11 @@ export function SettingsView({
 	/** Active session's workspace dir — the 代码库 index scans this. */
 	cwd?: string | null;
 }): ReactNode {
-	const [section, setSection] = useState<SectionRequest>(initialSection ?? "appearance");
+	const [section, setSection] = useState<SectionRequest | string>(() => {
+		const requested = initialSection as string | undefined;
+		if (requested === INTEGRATIONS_SECTION) return INTEGRATIONS_SETTINGS_SECTION;
+		return initialSection ?? "appearance";
+	});
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
 	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);

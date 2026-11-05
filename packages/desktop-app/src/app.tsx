@@ -985,7 +985,7 @@ function AppInner(): ReactNode {
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
 	// composer 自定义补充 preselect).
 	const [settingsSection, setSettingsSection] = useState<
-		"skills" | "suggestions" | "providers" | "browser" | undefined
+		"skills" | "suggestions" | "providers" | "browser" | "integrations" | undefined
 	>(undefined);
 	// Settings open/close rides the same blur transition as the board /
 	// scheduled / chat swaps: the outgoing surface blurs out (150ms), then
@@ -1003,7 +1003,11 @@ function AppInner(): ReactNode {
 		// (DOM event, undefined, retired id) means "land on the default section".
 		(section?: unknown): void => {
 			const target =
-				section === "skills" || section === "suggestions" || section === "providers" || section === "browser"
+				section === "skills" ||
+				section === "suggestions" ||
+				section === "providers" ||
+				section === "browser" ||
+				section === "integrations"
 					? section
 					: undefined;
 			if (settingsOpen) return;
@@ -1093,7 +1097,7 @@ function AppInner(): ReactNode {
 	useEffect(() => {
 		const onOpenSection = (e: Event): void => {
 			const section = (e as CustomEvent<string>).detail;
-			if (section === "skills" || section === "suggestions" || section === "browser") {
+			if (section === "skills" || section === "suggestions" || section === "browser" || section === "integrations") {
 				// Pass the section INTO openSettings — its 150ms blur-in timer
 				// owns the final setSettingsSection, so a separate pre-set here
 				// gets overwritten back to undefined.

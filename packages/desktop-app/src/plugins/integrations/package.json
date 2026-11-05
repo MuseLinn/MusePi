@@ -1,0 +1,12 @@
+{
+	"name": "musepi-integrations",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned integrations settings page: browse and search a curated connector catalog, then install or remove MCP servers in the user-scope mcp.json.",
+	"type": "module",
+	"musepi": {
+		"icon": "plug-2",
+		"description": "在设置中浏览并连接 Linear、GitHub、Notion 等外部服务；安装写入本机用户级 mcp.json。",
+		"extensions": ["./index.ts"]
+	}
+}

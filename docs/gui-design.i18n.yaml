@@ -1,5 +1,5 @@
 # Consistency record for gui-design.md / gui-design.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-design
-gui-design.md: d93809bfefa4ee53ea1b0b5cdfe8e5fe4322d71f
-gui-design.zh-CN.md: 957bb57986b2f7a36793d4993daffe863b1aec54
+gui-design.md: 75812880c7fadb179bce617a6252e38cde5f0e21
+gui-design.zh-CN.md: 84ca64bc863c4480240f80da4d56004e9d93be52

@@ -19,6 +19,7 @@ import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { MarketplaceService } from "./marketplace-service";
+import { McpServersService } from "./mcp-servers-service";
 import { PluginInstallService } from "./plugin-install-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
@@ -161,6 +162,12 @@ function buildRegistry(): HostServices {
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			readSelection: () => null,
 			setSelection: async () => ({ ok: true, appliedToLive: false }),
+		}),
+	);
+	// McpServersService：只认领路由（本测试不读写 mcp.json），路径用隔离 temp。
+	services.register(
+		new McpServersService({
+			userConfigPath: () => join(mkdtempSync(join(tmpdir(), "musepi-mcp-")), "mcp.json"),
 		}),
 	);
 	// CredentialService：凭据 store 指向隔离 temp 文件（本测试不触凭据面）。

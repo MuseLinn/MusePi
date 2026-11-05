@@ -38,6 +38,7 @@ import {
 	$env,
 	getAgentDir,
 	getConfigRootDir,
+	getMCPConfigPath,
 	getSessionsDir,
 	logger,
 	prompt,
@@ -620,6 +621,7 @@ import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
 import { MarketplaceService } from "./services/marketplace-service";
+import { McpServersService } from "./services/mcp-servers-service";
 import { PluginInstallService } from "./services/plugin-install-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
@@ -976,6 +978,14 @@ export class DaemonServer {
 				connectorsSnapshotForCwd: cwd => this.#host.connectorsSnapshotForCwd(cwd),
 				readSelection: sessionId => this.#host.readSessionConnectors(sessionId),
 				setSelection: (sessionId, servers) => this.#host.setSessionConnectors(sessionId, servers),
+			}),
+		);
+		// User-scope connector file (integrations page add/remove). The path is
+		// the same one discovery and `/mcp add` read, so an install lands where
+		// every other connector consumer looks.
+		this.#services.register(
+			new McpServersService({
+				userConfigPath: () => getMCPConfigPath("user", this.#host.cwd()),
 			}),
 		);
 		this.#services.register(
@@ -2112,6 +2122,17 @@ export class DaemonServer {
 				// M4 P1: 写会话级连接器白名单并即时生效（安全边界在
 				// SessionTools，daemon 权威）。实现归 ConnectorService。
 				return this.#services.get<ConnectorService>("connectors").setSelected(params ?? {});
+			}
+			case "mcp.servers.list": {
+				// 用户级 mcp.json 清单（集成页安装态）；摘要不含 token。
+				return this.#services.get<McpServersService>("mcpServers").list();
+			}
+			case "mcp.servers.add": {
+				// 集成页安装：写用户级 mcp.json，保留既有条目。
+				return this.#services.get<McpServersService>("mcpServers").add(params ?? {});
+			}
+			case "mcp.servers.remove": {
+				return this.#services.get<McpServersService>("mcpServers").remove(params ?? {});
 			}
 			case "credentials.list": {
 				// M4 P1: 连接器配置的凭据引用清单（只有 meta，无密钥）。

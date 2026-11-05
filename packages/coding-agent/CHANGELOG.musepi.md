@@ -6,8 +6,17 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **默认伙伴改为品牌光球**：新增 `musepi-orb`，用 `ThinkingOrb` 画布渲染与 Logo 同源的球体，随会话状态切换轨道粒子、扫描球、拼字与波形等动画，并保留悬停抬升、按下挤压、拖拽跟随与睡眠变暗；设置与首次启动的伙伴列表保留音符机器人和全部 Petdex 精灵图预设。
+  - EN: The default companion is now the brand orb. `musepi-orb` renders the logo's sphere with the ThinkingOrb canvas, switching between orbiting particles, the scanning globe, the scramble, the waveform, and the other shipped animations as the session changes, while keeping hover lift, press squash, drag follow, and sleep dim. Settings and first-run keep the note-bot and every Petdex spritesheet preset selectable.
+
 - **营销预览改为真实渲染器 + 夹具 daemon**：站点交互预览直接运行桌面渲染器，`build:web-demo` 从 `dist/` 组装 `web/app/`，并用 daemon 自己的插槽编译器产出 `app.chat`、`panel.tab.files`、`panel.shell` 组件；`web/demo-src/` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，会话、文件与 git 应答照真实 daemon 的形状录制。socket 目标固定为死端口 `ws://127.0.0.1:9/demo`，夹具失效时只会停在连接页，不会连到本机 8300 的 daemon。`verify-web-demo.mjs` 用无头 Edge 断言外壳、欢迎输入框、会话 transcript、零个 8300 请求与零个真实 WebSocket 连接。
   - EN: The site's interactive preview now runs the real desktop renderer against a fixture daemon. `build:web-demo` assembles `web/app/` from `dist/` and compiles the `app.chat`, `panel.tab.files`, and `panel.shell` slot components with the daemon's own compiler; `web/demo-src/` swaps `window.WebSocket` for an in-page JSON-RPC mock whose session, file, and git answers follow recorded daemon shapes. The socket target stays the dead port `ws://127.0.0.1:9/demo`, so a broken fixture set can only reach the connect screen and never a daemon on 8300. `verify-web-demo.mjs` drives headless Edge and asserts the shell, welcome composer, session transcript, zero :8300 requests, and zero real WebSocket connections.
+
+- **新增「集成」目录与连接器管理**：设置中的集成页按类别浏览 Linear、Atlassian、Notion、Asana、GitHub、Figma、Supabase、Neon、Sentry、Cloudflare、Vercel、Dropbox 等平台，支持搜索、安装与移除；OAuth 类写入 `auth: oauth`，Token 类写入用户级 `mcp.json` 的请求头（不进仓库）。会话信息卡的连接器分区始终可见，没有连接器时也能直接进入集成页管理。
+  - EN: A new Integrations page browses and installs Linear, Atlassian, Notion, Asana, GitHub, Figma, Supabase, Neon, Sentry, Cloudflare, Vercel, Dropbox and more by category, with search, install, and remove. OAuth entries write `auth: oauth`; token entries write headers into the user-level `mcp.json` (never the repository). The session info card's connector section is always visible and links to the Integrations page even when nothing is connected.
+
+- **HTML 卡片标注使用结构化面板，表格加宽可持久化**：会话内 HTML 卡片的标注与浏览器页面共用同一张结构化元素卡；表格加宽状态写入本地偏好，重新挂载或切换会话后仍保持，恢复默认即清除。
+  - EN: HTML cards in the session now open the same structured annotation card as browser pages, and table width preferences persist across remounts and session switches, clearing when the table returns to its default width.
 
 - **标注面板显示结构化元素信息**：选中网页元素时显示标签/类名、定位与几何、语义与状态、data-* 属性、页面与捕获信息，并可切换「引用发送截图」；区域与手绘只显示几何与评论。关闭开关后不再附加截图。
   - EN: Element annotations now show structured details — tag and classes, position and geometry, semantics and state, data-* attributes, and page/capture info — plus an Include screenshot toggle. Regions and strokes show geometry and comment only, and turning the toggle off omits the screenshot attachment.

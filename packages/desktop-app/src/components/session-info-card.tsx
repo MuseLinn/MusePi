@@ -313,6 +313,9 @@ interface SessionInfoCardProps {
 	top?: number;
 	onSelectTab?(id: string): void;
 	onOpenSurface?(id: string): void;
+	/** Open the settings pane at a section — the connector section's
+	 *  「管理集成」 entry passes "integrations". */
+	onOpenSettings?(section?: string): void;
 }
 
 export function SessionInfoCard({
@@ -329,6 +332,7 @@ export function SessionInfoCard({
 	top = 54,
 	onSelectTab,
 	onOpenSurface,
+	onOpenSettings,
 }: SessionInfoCardProps): ReactNode {
 	const [usage, setUsage] = useState<UsageView | null>(null);
 	const [usageState, setUsageState] = useState<UsageState>("loading");
@@ -637,6 +641,9 @@ export function SessionInfoCard({
 				</InfoSection>
 			) : null}
 
+			{/* 连接器分区始终渲染：没有配置任何 MCP 服务器时它不是空白，而是
+			 * 「未连接连接器」+ 管理入口 —— 信息卡是会话侧唯一的连接器入口，
+			 * 新用户必须先看到去哪里添加。 */}
 			{connectorServers.length > 0 ? (
 				<section className="gui-session-info-connectors">
 					<ConnectorPanel
@@ -651,8 +658,27 @@ export function SessionInfoCard({
 						onSelectAll={() => setConnectorSelection([])}
 						onUseAll={() => setConnectorSelection(null)}
 					/>
+					<button
+						type="button"
+						className="gui-connector-link gui-session-info-manage-connectors"
+						onClick={() => onOpenSettings?.("integrations")}
+					>
+						{t("settings.integrations.manage")}
+					</button>
 				</section>
-			) : null}
+			) : (
+				<section className="gui-session-info-connectors gui-session-info-connectors--empty flex flex-col gap-1">
+					<div className="gui-session-info-section-label">{t("tools.connectorsPanelTitle")}</div>
+					<p className="gui-session-info-note">{t("settings.integrations.infoCardEmpty")}</p>
+					<button
+						type="button"
+						className="gui-connector-link gui-session-info-manage-connectors self-start"
+						onClick={() => onOpenSettings?.("integrations")}
+					>
+						{t("settings.integrations.manage")}
+					</button>
+				</section>
+			)}
 
 			{/* 「插件」分区是 Cordis 贡献点(chat.session-info.plugins):插件停用或
 			 *  编译失败时渲染下方内置同构列表,卡片不留白。分区上方的状态条把运行

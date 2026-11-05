@@ -125,6 +125,7 @@ lang: zh-CN
 
 ### 伙伴(Agent Companion,BitFun parity,2026-08-06)
 
+- **默认形象:品牌光球(2026-11-05)**:`DEFAULT_PET_ID = "musepi-orb"`,由 `PetOrb` 用 `vendor/thinking-orbs` 的 `ThinkingOrb` 画布渲染(64px 预设拉伸到 `.gui-pet` 盒),31 态经 `ORB_STATE_FOR` 映射到七个动画(idle→listening、working→working、thinking→solving、searching→searching、writing→composing、alerting→waiting),错误态加红色危险光晕,按下/拖拽走同一 `pet-gesture` 弹簧,睡眠沿用 `.pet-window__pet--sleeping` 的变暗。设置与首次启动的列表保留音符机器人和全部 Petdex 精灵图预设,显式保存的选择优先。
 - **预置**:10 个内置 Petdex 预置(`src/lib/pet.ts` 的 `BUILTIN_PETDEX`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
 - **形象选择**:`.gui-pet-trigger` 行显示当前伙伴缩略图 + 名称 + 箭头(展开翻转);预览缩略图用 `zoom: 0.55`。删除按钮只出现在导入卡,hover 显现,`stopPropagation` 防选中。
 - **渲染形态**(PetSprite.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`PETDEX_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。内置球体不使用 Petdex 的悬停/拖拽行和方向镜像：指针速度驱动独立的连续手势层，产生倾斜、拉伸、提起与阻尼落地；该层与会话动作、交互动效和眼动组合。
@@ -910,3 +911,4 @@ Guest／移动端顶栏使用 `HostManager` 统一完成已保存电脑的切换
 - **引用锚点与原文高亮**:引用记录选中文本及其上下文位置,源消息中被引用的文字以强调色高亮;点击引用卡滚动到原文并闪烁一次,锚点失效时退回按消息跳转。
 - **表格与复制**:表格工具栏可加宽/恢复默认宽度,复制与下载仍提供 CSV/TSV/Markdown;会话菜单可复制全部对话为 Markdown 或仅复制最终总结。
 - **结构化标注卡**:元素标注显示标签/类名、定位与几何、语义与状态、data-* 属性、页面与捕获信息，评论区与「引用发送截图」开关在同一张卡内；区域与手绘只保留几何与评论。分区可折叠，关闭开关后发送内容不含截图。
+- **集成目录**:设置中的「集成」按类别（项目工具、代码、设计、云、数据库、质量）浏览外部服务；卡片显示名称、说明、认证方式与安装状态，支持搜索、安装、移除。安装 OAuth 服务写入 `auth: oauth`，Token 服务在当前页输入令牌并写入用户级配置；安装后由连接器分区统一展示与会话选择。

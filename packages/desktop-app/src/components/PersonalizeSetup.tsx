@@ -3,7 +3,16 @@ import { CircleCheck as CircleCheckIconData, Circle as CircleIconData } from "lu
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
-import { BUILTIN_PETDEX, BUILTIN_SVG_ID, loadPetdex, type PetdexPackage, petForId, petId, setPetId } from "../lib/pet";
+import {
+	BUILTIN_ORB_ID,
+	BUILTIN_PETDEX,
+	BUILTIN_SVG_ID,
+	loadPetdex,
+	type PetdexPackage,
+	petForId,
+	petId,
+	setPetId,
+} from "../lib/pet";
 import {
 	PET_ACCESSORIES,
 	PET_DECOR_FLAGS,
@@ -79,6 +88,11 @@ export function PersonalizeSetup({
 
 	const petOptions = [
 		{
+			id: BUILTIN_ORB_ID,
+			displayName: t("settings.brandOrb"),
+			description: t("settings.brandOrbDescription"),
+		},
+		{
 			id: BUILTIN_SVG_ID,
 			displayName: t("settings.builtinPet"),
 			description: t("settings.builtinPetDescription"),
@@ -90,7 +104,10 @@ export function PersonalizeSetup({
 		})),
 		...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: p.description ?? "" })),
 	];
-	const builtinSelected = petForId(selectedPet).kind === "builtin";
+	// Decoration layers only exist on the note-bot; the brand orb is a canvas
+	// and an imported sheet is a baked bitmap.
+	const selectedPetDef = petForId(selectedPet);
+	const builtinSelected = selectedPetDef.kind === "builtin" && selectedPetDef.id === BUILTIN_SVG_ID;
 
 	const pickPetMode = (mode: "input" | "desktop"): void => {
 		onPetModeChange(mode);

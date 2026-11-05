@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ANNOTATION_TEARDOWN_SCRIPT,
+	type AnnotationOverlayLabels,
 	type AnnotationOverlayTheme,
 	buildAnnotationOverlayScript,
 	dispatchAnnotationResult,
@@ -237,6 +238,46 @@ export function widgetHostTheme(): "dark" | "light" {
 	return scheme === "light" ? "light" : "dark";
 }
 
+/**
+ * 统一标注的整套文案 —— 内置浏览器 (`ManagedBrowserPane`) 与会话内 HTML 卡片
+ * 共用这一份,而不是各自拼。
+ *
+ * 缺 `panel` 时 overlay 退回旧的紧凑输入条,只有评论框;结构化元素卡需要它。
+ * 两个宿主各写一份就会出现一边卡片、一边输入条,同一个 overlay 的选区阅读
+ * 方式因此不同。
+ */
+export function annotationOverlayLabels(): AnnotationOverlayLabels {
+	return {
+		select: t("annotation.tool.element"),
+		marquee: t("annotation.tool.region"),
+		draw: t("annotation.tool.draw"),
+		commentPlaceholder: t("annotation.commentPlaceholder"),
+		submit: t("annotation.submit"),
+		panel: {
+			title: t("annotation.panelTitle"),
+			close: t("annotation.panelClose"),
+			sectionGeometry: t("annotation.panelGeometry"),
+			sectionSemantics: t("annotation.panelSemantics"),
+			sectionData: t("annotation.panelData"),
+			sectionPage: t("annotation.panelPage"),
+			selector: t("annotation.panelSelector"),
+			path: t("annotation.panelPath"),
+			bounds: t("annotation.panelBounds"),
+			size: t("annotation.panelSize"),
+			center: t("annotation.panelCenter"),
+			text: t("annotation.panelText"),
+			styles: t("annotation.panelStyles"),
+			page: t("annotation.panelPageTitle"),
+			url: t("annotation.panelUrl"),
+			viewport: t("annotation.panelViewport"),
+			dpr: t("annotation.panelDpr"),
+			screenshot: t("annotation.panelScreenshot"),
+			cancel: t("annotation.panelCancel"),
+			add: t("annotation.panelAdd"),
+		},
+	};
+}
+
 function bootScript(
 	canvasId: string,
 	mountId: string,
@@ -417,13 +458,7 @@ export function HtmlCard({
 		frame.contentWindow.postMessage(
 			{
 				type: "musepi-widget-annotate",
-				script: buildAnnotationOverlayScript(overlayTheme, {
-					select: t("annotation.tool.element"),
-					marquee: t("annotation.tool.region"),
-					draw: t("annotation.tool.draw"),
-					commentPlaceholder: t("annotation.commentPlaceholder"),
-					submit: t("annotation.submit"),
-				}),
+				script: buildAnnotationOverlayScript(overlayTheme, annotationOverlayLabels()),
 			},
 			"*",
 		);
