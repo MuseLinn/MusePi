@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **粘性当轮提问**:消息区向上滚动后,当前轮次的用户提问以单行玻璃胶囊钉在顶部,点击回到该提问并释放底部跟随;提问行可见、滚到顶部、空文本或顾问开启的轮次不显示。
+  - EN: The current turn's user prompt stays pinned at the top of the transcript as a one-line glass pill after scrolling up; clicking it returns to that prompt and releases follow. It hides when the prompt row is visible, at the top, empty, or when an advisor opened the turn.
+
 - **修复 9 处圆角渲染为直角**：`--radius-full` 被 `.gui-chip`、`.sh-pull-indicator`、`.sh-attach-remove`、`.ss-search`、`.ss-search-clear`、`.ss-grabber`、`.ss-item-dot`、`.gui-pr-review-outdated` 引用但从未定义，`var()` 失效让 `border-radius` 回退到初始值 `0`。现在于 tokens.css 定义为 9999px（胶囊与圆点共用，按盒子一半收敛），半径守门脚本同时校验每个引用都有定义，未定义时 CI 直接失败。
   - EN: Nine corners rendered square because `--radius-full` was referenced by `.gui-chip`, `.sh-pull-indicator`, `.sh-attach-remove`, `.ss-search`, `.ss-search-clear`, `.ss-grabber`, `.ss-item-dot`, and `.gui-pr-review-outdated` but never defined, leaving `border-radius` at its initial `0`. The token is now defined as 9999px in tokens.css (one value for capsules and round dots, clamped to half the box), and the radius gate also fails CI on any reference without a definition.
 - **连接器管理回到 MCP 设置，撤销独立集成页**：不设「集成」概念；MCP 连接器在设置 → MCP 服务器管理，插件在扩展与插件市场安装。安装/移除连接器仍会 reconcile live manager，并把刷新后的 MCP 工具集推给运行中会话。

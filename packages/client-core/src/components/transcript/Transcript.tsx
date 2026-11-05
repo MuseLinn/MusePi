@@ -46,6 +46,12 @@ import {
 	timelineTouchScrollIntent,
 	timelineWheelScrollIntent,
 } from "./scroll-anchor";
+import {
+	pickStickyUserEntry,
+	type StickyUserCandidate,
+	StickyUserMessage,
+	visibleEntryRange,
+} from "./sticky-user-message";
 import { ToolCard } from "./ToolCard";
 import {
 	AdvisorBlock,
@@ -1809,6 +1815,22 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const topSpacerHeight = virtualEnabled ? (firstVirtualItem?.start ?? 0) : 0;
 	const bottomSpacerHeight =
 		virtualEnabled && lastVirtualItem ? Math.max(0, virtualizer.getTotalSize() - lastVirtualItem.end) : 0;
+	// Sticky current-turn prompt: the round's user message pinned to the
+	// transcript top once its own row scrolls out while the round still fills
+	// the viewport. Judged from the mounted window (overscan included) against
+	// the scroller's live geometry — the virtualizer re-renders on every scroll
+	// step, so this memo tracks scrolling without its own scroll listener.
+	const stickyUser = useMemo(() => {
+		if (!virtualEnabled || scrollerEl === null) return null;
+		const range = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
+		if (range === null) return null;
+		const candidate = pickStickyUserEntry(entries, range);
+		// Folded pre-compaction history mounts no rows at all, so a prompt
+		// behind the divider is not "above the viewport" in any reachable
+		// sense — pinning it would offer a jump into hidden content.
+		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
+		return candidate;
+	}, [entries, firstCompactionIdx, folding, virtualEnabled, scrollerEl, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from
 	// session.history (daemon tail is 200; pages are 500 entries).
@@ -1870,6 +1892,23 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		pendingJumpRef.current = { entryId: jumpRequest.entryId, nonce: jumpRequest.nonce };
 		virtualizer.scrollToIndex(idx, { align: "center" });
 	}, [jumpRequest, entries, folding, firstCompactionIdx, virtualizer]);
+
+	// Sticky-prompt click: same jump machinery as an external jump request, but
+	// landing the prompt at the top (align start + the flash's top inset) reads
+	// as "returning to the prompt", not "centering a row". Following is released
+	// first — otherwise a streaming round re-pins the bottom on the next commit
+	// and the jump is yanked away.
+	const jumpToStickyUser = useCallback(
+		(candidate: StickyUserCandidate): void => {
+			const idx = entries.indexOf(candidate.entry);
+			if (idx < 0) return;
+			setFollowing(false);
+			scrollIntentRef.current = undefined;
+			pendingJumpRef.current = { entryId: candidate.entry.id, nonce: 0 };
+			virtualizer.scrollToIndex(idx, { align: "start" });
+		},
+		[entries, setFollowing, virtualizer],
+	);
 
 	// Key-based prepend anchoring (see anchorCtlRef prop): capture = first
 	// mounted row intersecting the viewport top + its offset below the top;
@@ -2499,6 +2538,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
 			data-colorblind={colorBlind ? "true" : undefined}
 		>
+			{/* Pinned current-turn prompt. A zero-height sticky slot: it takes no
+			 *  flow space, so virtualization measurements and the scrollbar are
+			 *  untouched. */}
+			<StickyUserMessage candidate={stickyUser} onJump={jumpToStickyUser} />
 			{entries.length === 0 &&
 				stream === null &&
 				!working &&

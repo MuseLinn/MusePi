@@ -3713,6 +3713,77 @@ a.tr-tool-search-title:hover {
 	padding-top: 14px;
 }
 
+/* Sticky current-turn prompt (Kimi TUI parity): the round's user message
+ * pinned to the pane top once its own row scrolls out while the round still
+ * fills the viewport. A ZERO-HEIGHT sticky slot, not a floating overlay: the
+ * scrollport's own top edge is the only honest anchor across both hosts (the
+ * web shell scrolls .tr-root itself, the desktop shell its .gui-transcript
+ * ancestor), and zero flow height keeps the virtualizer's measurements and
+ * the scrollbar exactly as they were. Glass-strong + accent mark follow the
+ * back-to-bottom recipe; no entrance animation, so reduced motion has
+ * nothing to opt out of. */
+.tr-sticky-user-slot {
+	position: sticky;
+	top: 8px;
+	z-index: 4;
+	height: 0;
+	pointer-events: none;
+}
+
+.tr-sticky-user {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: min(100%, 42rem);
+	margin: 0;
+	padding: 5px 12px;
+	border: 1px solid var(--glass-border, var(--border));
+	border-radius: 999px;
+	background: var(--glass-bg-strong, oklch(1 0 0 / 11%));
+	backdrop-filter: blur(12px) saturate(1.4);
+	-webkit-backdrop-filter: blur(12px) saturate(1.4);
+	box-shadow: var(--glass-shadow, 0 6px 20px oklch(0 0 0 / 25%));
+	color: var(--color-text, var(--fg));
+	font-family: var(--font-ui);
+	font-size: 12.5px;
+	line-height: 1.3;
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+/* Hover/focus use colour only — a transform here would animate content under
+ * the pinned edge while the reader is scrolling. */
+.tr-sticky-user:hover,
+.tr-sticky-user:focus-visible {
+	border-color: color-mix(in oklab, var(--accent) 45%, var(--glass-border, var(--border)));
+	background: color-mix(in oklab, var(--accent) 10%, var(--glass-bg-strong, oklch(1 0 0 / 11%)));
+}
+
+.tr-sticky-user:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* The mark says "this is a quoted prompt" without stealing the single line;
+ * the text is the only flexible child so ellipsis lands there. */
+.tr-sticky-user-mark {
+	flex: none;
+	width: 2px;
+	height: 12px;
+	border-radius: 999px;
+	background: var(--accent);
+}
+
+.tr-sticky-user-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 /* Back-to-bottom (M1.10 batch A, L2 float spec): ghost round button,
  * glass-strong base + accent rim, spring-liquid entrance. Sticky LAST
  * child of .tr-root — the sticky constraint pins it to the pane bottom
