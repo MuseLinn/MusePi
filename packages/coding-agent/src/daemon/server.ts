@@ -621,6 +621,7 @@ import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
 import { MarketplaceService } from "./services/marketplace-service";
+import { McpOAuthService } from "./services/mcp-oauth-service";
 import { McpServersService } from "./services/mcp-servers-service";
 import { PluginInstallService } from "./services/plugin-install-service";
 import { HostServices } from "./services/registry";
@@ -986,6 +987,16 @@ export class DaemonServer {
 		this.#services.register(
 			new McpServersService({
 				userConfigPath: () => getMCPConfigPath("user", this.#host.cwd()),
+				reloadConnectors: () => this.#host.reloadMcpConnectors(),
+			}),
+		);
+		// Browser OAuth login for one configured http/sse server (settings → MCP
+		// 「登录」): the grant lands in auth-storage under the URL-keyed id the
+		// manager already resolves, then connectors reload.
+		this.#services.register(
+			new McpOAuthService({
+				cwd: () => this.#host.cwd(),
+				authStorage: () => this.#host.authStorage(),
 				reloadConnectors: () => this.#host.reloadMcpConnectors(),
 			}),
 		);
@@ -2134,6 +2145,17 @@ export class DaemonServer {
 			}
 			case "mcp.servers.remove": {
 				return this.#services.get<McpServersService>("mcpServers").remove(params ?? {});
+			}
+			case "mcp.oauth.start": {
+				// 浏览器授权登录：返回 {flowId, authorizationUrl}，登录在后台完成。
+				// 实现归 McpOAuthService；授权 URL 只回给本连接，不入日志/广播。
+				return this.#services.get<McpOAuthService>("mcpOAuth").startFlow(params ?? {});
+			}
+			case "mcp.oauth.status": {
+				return this.#services.get<McpOAuthService>("mcpOAuth").status(params ?? {});
+			}
+			case "mcp.oauth.cancel": {
+				return this.#services.get<McpOAuthService>("mcpOAuth").cancel(params ?? {});
 			}
 			case "credentials.list": {
 				// M4 P1: 连接器配置的凭据引用清单（只有 meta，无密钥）。

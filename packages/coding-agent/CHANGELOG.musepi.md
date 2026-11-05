@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **MCP 设置支持浏览器 OAuth 登录**:设置 → MCP 服务器列出已配置连接器，OAuth 类通过 `mcp.oauth.start/status/cancel` 在系统浏览器完成授权，凭据写入 auth storage 后自动重连并刷新工具；不提供 token 输入框，Token/stdio 凭据仍由 mcp.json 或子进程管理。
+  - EN: MCP settings now support browser OAuth. The configured connector list shows transport, URL, and auth kind; OAuth entries authorize through `mcp.oauth.start/status/cancel` in the system browser, the credential lands in auth storage, and the connection reconnects with refreshed tools. No token input is offered; token and stdio credentials stay in mcp.json or the child process.
+
 - **粘性当轮提问**:消息区向上滚动后,当前轮次的用户提问以单行玻璃胶囊钉在顶部,点击回到该提问并释放底部跟随;提问行可见、滚到顶部、空文本或顾问开启的轮次不显示。
   - EN: The current turn's user prompt stays pinned at the top of the transcript as a one-line glass pill after scrolling up; clicking it returns to that prompt and releases follow. It hides when the prompt row is visible, at the top, empty, or when an advisor opened the turn.
 

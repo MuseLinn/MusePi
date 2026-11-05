@@ -19,6 +19,7 @@ import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { MarketplaceService } from "./marketplace-service";
+import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
 import { PluginInstallService } from "./plugin-install-service";
 import { HostServices } from "./registry";
@@ -168,6 +169,13 @@ function buildRegistry(): HostServices {
 	services.register(
 		new McpServersService({
 			userConfigPath: () => join(mkdtempSync(join(tmpdir(), "musepi-mcp-")), "mcp.json"),
+		}),
+	);
+	// McpOAuthService：只认领路由（本测试不发起登录），宿主访问全部 stub。
+	services.register(
+		new McpOAuthService({
+			cwd: () => "",
+			authStorage: async () => null,
 		}),
 	);
 	// CredentialService：凭据 store 指向隔离 temp 文件（本测试不触凭据面）。

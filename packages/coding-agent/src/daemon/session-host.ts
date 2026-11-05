@@ -46,6 +46,7 @@ import type { MCPManager } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
+import type { AuthStorage } from "../session/auth-storage";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
@@ -2284,6 +2285,19 @@ export class DaemonSessionHost {
 			try {
 				const discovery = await this.#discoveryFor(cwd, getAgentDir());
 				const settings = discovery.settings;
+				// A login (desktop `mcp.oauth.*`, TUI `/mcp`) writes through the
+				// registry instance that owns it. A manager in another workspace
+				// holds its own AuthStorage cache over the same store, so refresh it
+				// here — otherwise the reconnect below cannot see the new grant until
+				// the daemon restarts.
+				try {
+					await discovery.modelRegistry.authStorage.reload();
+				} catch (error) {
+					logger.warn("MCP auth storage reload failed", {
+						path: cwd,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
 				await manager.reloadServers({
 					onStatus: event => this.#eventBus.emit(MCP_CONNECTION_STATUS_EVENT_CHANNEL, event),
 					enableProjectConfig: settings.get("mcp.enableProjectConfig") ?? true,
@@ -2340,6 +2354,17 @@ export class DaemonSessionHost {
 			this.#registryBootstrap = null;
 		});
 		return this.#registryBootstrap;
+	}
+
+	/**
+	 * Shared auth storage for services that persist credentials without a live
+	 * session (MCP OAuth login is the desktop equivalent of the TUI's
+	 * `/mcp` reauth). Bootstraps the registry on first use; null only when the
+	 * registry could not be built.
+	 */
+	async authStorage(): Promise<AuthStorage | null> {
+		const registry = await this.ensureRegistry();
+		return registry?.authStorage ?? null;
 	}
 
 	/** Global settings for the settings.* RPCs (null before any session). */
