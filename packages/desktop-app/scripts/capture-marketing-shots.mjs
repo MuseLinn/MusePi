@@ -38,6 +38,7 @@ const flag = (name, fallback) => {
 	return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const OUT_DIR = resolve(REPO_ROOT, flag("--out", "web/assets/shots"));
+const DAEMON_PORT = Number(flag("--daemon-port", "8300"));
 const EDGE = flag(
 	"--edge",
 	"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -87,6 +88,10 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport(VIEWPORT);
 await page.evaluateOnNewDocument(STUB);
+// Point the renderer at the isolated daemon used for the capture, not the
+// developer's production daemon on 8300. The stub is installed first; this
+// runs immediately after it and before the app bundle.
+await page.evaluateOnNewDocument(`if (window.electronAPI) window.electronAPI.daemonPort = ${DAEMON_PORT};`);
 
 // Surface renderer errors: a silent exception would just yield a blank shot.
 const consoleErrors = [];
@@ -107,6 +112,7 @@ await page.evaluateOnNewDocument(`
 		localStorage.setItem("musepi-gui-onboarding-done", "1");
 		localStorage.setItem("omp-collab-theme", "dark");
 		localStorage.setItem("omp-collab-locale", "zh-CN");
+		localStorage.setItem("musepi-gui-url", "ws://127.0.0.1:${DAEMON_PORT}");
 	} catch (error) {
 		/* storage unavailable — the dataset writes below still apply */
 	}
@@ -175,7 +181,7 @@ for (const png of written) {
 
 writeFileSync(
 	join(OUT_DIR, "MANIFEST.json"),
-	`${JSON.stringify({ capturedAt: new Date().toISOString(), viewport: VIEWPORT, shots: written.map(f => f.split(/[\\/]/).pop()) }, null, 2)}\n`,
+	`${JSON.stringify({ capturedAt: new Date().toISOString(), viewport: VIEWPORT, shots: written.map(f => f.split(/[\\/]/).pop().replace(/\.png$/, ".webp")) }, null, 2)}\n`,
 );
 
 await browser.close();

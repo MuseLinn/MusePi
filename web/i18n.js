@@ -54,7 +54,7 @@
     "preview.shot.note":
       "Real interface capture — the welcome workspace in the brand dark theme: composer, quick suggestions and session navigation.",
     "preview.editor.aria":
-      "MusePi file workspace with a project tree, file tabs and an editable TypeScript file",
+      "MusePi file workspace with file tabs, path navigation and an editable TypeScript file",
     "preview.editor.note":
       "Real interface capture — browse the project, switch files and edit code in the same workspace.",
     "preview.more": "More real captures",
