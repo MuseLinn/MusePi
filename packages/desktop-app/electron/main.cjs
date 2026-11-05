@@ -270,6 +270,8 @@ let daemonQuitHandled = false;
 		quitting = true;
 		if (daemonQuitHandled) return;
 		daemonQuitHandled = true;
+		// No timers may outlive the quit — a pending pet dissolve is moot.
+		clearPetHideTimer();
 		// Electron does not await async quit handlers: hold the quit open while
 		// the owned daemon tears down (SIGTERM + grace window), then re-quit.
 		event.preventDefault();
@@ -366,6 +368,14 @@ let petVisible = false;
  *  (the first bubble can arrive before the window's renderer subscribed;
  *  without the replay it is silently dropped). */
 let lastPetActivity = null;
+/** Dissolve before hiding: setPetVisible(false) tells the renderer first and
+ *  hides the window only after the exit animation has played. */
+const PET_HIDE_DELAY_MS = 280;
+/** Pending hide from that dissolve — a show inside the delay cancels it. */
+let petHideTimer = null;
+/** Renderer-reported `prefers-reduced-motion`: the dissolve is skipped so
+ *  hiding stays instant for those users. */
+let petReducedMotion = false;
 
 function petPosFile() {
 	return path.join(app.getPath("userData"), "pet-pos.json");
@@ -496,6 +506,7 @@ function createPetWindow() {
 		petWindow = null;
 		petVisible = false;
 		petDragLast = null;
+		clearPetHideTimer();
 		stopPetClickThroughPoll();
 		stopPetTopmostWatchdog();
 		petSyncApprovalHotkeys(); // pet gone → unregister the approval hotkeys
@@ -1354,8 +1365,26 @@ function cancelPetDnd() {
 	setPetVisible(true);
 }
 
+function clearPetHideTimer() {
+	if (petHideTimer !== null) {
+		clearTimeout(petHideTimer);
+		petHideTimer = null;
+	}
+}
+
+/** The actual hide (and the teardown that belongs to it). Deferred behind the
+ *  dissolve by setPetVisible(false). */
+function hidePetWindow() {
+	if (!petWindow || petWindow.isDestroyed()) return;
+	petWindow.hide();
+	stopPetClickThroughPoll();
+	stopPetTopmostWatchdog();
+}
+
 function setPetVisible(visible) {
 	if (visible) {
+		// A show inside the dissolve keeps the window it was about to hide.
+		clearPetHideTimer();
 		// A manual show (settings toggle, context menu) also exits DND.
 		clearPetDnd();
 		const win = createPetWindow();
@@ -1364,14 +1393,27 @@ function setPetVisible(visible) {
 		installPetDisplayListeners();
 		startPetClickThroughPoll();
 		startPetTopmostWatchdog();
+		// Replay the entrance on a live renderer — a freshly created window
+		// still loading plays it on mount instead.
+		if (!win.webContents.isLoading()) win.webContents.send("pet:showing");
 	} else if (petWindow && !petWindow.isDestroyed()) {
-		petWindow.hide();
 		petVisible = false;
-		stopPetClickThroughPoll();
-		stopPetTopmostWatchdog();
 		// A hide mid-drag can drop the pointerup; a stale anchor would
 		// jump the window on the first move of the next drag.
 		petDragLast = null;
+		if (petReducedMotion) {
+			clearPetHideTimer();
+			hidePetWindow();
+		} else if (petHideTimer === null) {
+			// The renderer dissolves the sphere into particles first; the
+			// window must stay on screen for that. A second hide request
+			// neither restarts the animation nor extends the wait.
+			petWindow.webContents.send("pet:animating-out");
+			petHideTimer = setTimeout(() => {
+				petHideTimer = null;
+				hidePetWindow();
+			}, PET_HIDE_DELAY_MS);
+		}
 	}
 	// The bubbles window rides on the pet's visibility.
 	layoutBubblesWindow();
@@ -1860,6 +1902,12 @@ ipcMain.handle("pet-toggle", (_event, visible) => {
 // pointer stream between down and the first move, or after a click.
 ipcMain.handle("pet-drag-arm", () => {
 	petDragArmed = true;
+	return { ok: true };
+});
+// The pet renderer reports `prefers-reduced-motion` so the shell can skip
+// the dissolve delay — those users get the old instant hide.
+ipcMain.handle("pet-reduced-motion", (_event, reduced) => {
+	petReducedMotion = reduced === true;
 	return { ok: true };
 });
 // Drag via window-relative client coords + the renderer's screenX/Y

@@ -141,6 +141,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	/** Agent companion pet window (伙伴): show/hide the floating pet. */
 	setPetVisible: (visible) => ipcRenderer.invoke("pet-toggle", visible),
+	/** Pet window: the shell is showing it — replay the entrance. */
+	onPetShowing: (cb) => {
+		const listener = () => cb();
+		ipcRenderer.on("pet:showing", listener);
+		return () => ipcRenderer.removeListener("pet:showing", listener);
+	},
+	/** Pet window: the shell is about to hide it — dissolve the pet. */
+	onPetAnimatingOut: (cb) => {
+		const listener = () => cb();
+		ipcRenderer.on("pet:animating-out", listener);
+		return () => ipcRenderer.removeListener("pet:animating-out", listener);
+	},
+	/** Pet window: report `prefers-reduced-motion` so the shell skips the
+	 *  dissolve delay and hides instantly. */
+	setPetReducedMotion: (reduced) => ipcRenderer.invoke("pet-reduced-motion", Boolean(reduced)),
 	/** Pet window drag: window-relative client coords + the window's
 	 *  on-screen position (screenX/Y — the renderer is the DIP ground
 	 *  truth the main process calibrates the drag spaces against). */

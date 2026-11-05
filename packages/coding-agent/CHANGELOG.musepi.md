@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **伙伴显隐与启动页改为粒子过渡**：显示伙伴时粒子光球在球体位置汇聚，球体从 0.72 弹入并淡入（420ms，弹簧缓动）；隐藏时球体先碎成粒子散开淡出，主进程再等 280ms 才收起窗口，期间再次显示会取消这次收起。启动页开机时运行同一个粒子光球，就绪后用 300ms 交叉淡入静态品牌球体。开启「减少动态效果」时粒子与缩放全部关闭，显隐保持瞬时；Petdex 精灵图不受影响。
+  - EN: Showing the companion is now a transition: the particle orb converges at the sphere's box while the brand sphere springs in from 0.72 scale and fades up (420ms, spring easing). Hiding dissolves the sphere into scattering particles first and only then hides the window, 280ms later — a show inside that window cancels the pending hide. The startup splash runs the same particle orb while booting and cross-fades to the static brand sphere over 300ms once the shell is ready. With reduced motion the particles and the scale are dropped and showing/hiding stays instant; Petdex sheets are unaffected.
+
 - **默认伙伴改为内置球体品牌形象**：`DEFAULT_PET_ID` 指向内置矢量球体 `musepi-note-bot`——球壳加上眼动追踪、眨眼与情绪表情，耳机配饰，以及按压/拖拽弹簧。设置与首次启动的伙伴列表以它开头，其后保留全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。粒子光球 `ThinkingOrb` 不再是伙伴形象，继续用于智能体头像与顶栏活动指示器。
   - EN: The default companion is now the builtin vector sphere, `musepi-note-bot` — the shell with its eye-tracking, blink and mood faces, the headphones accessory, and the press/drag spring. Settings and first-run list it first, keep every Petdex spritesheet preset selectable, honour an explicitly stored pick, and fall back to the sphere for an unknown id. The particle orb (`ThinkingOrb`) is no longer a companion; it remains the agent avatar and the top-bar activity indicator.
 

@@ -4156,6 +4156,11 @@ body.gui-resizing {
 	opacity: 1;
 }
 
+.gui-motion-off .gui-splash-orb-particles,
+.gui-motion-off .gui-splash-orb-sphere {
+	transition: none;
+}
+
 .gui-motion-off .gui-agent-avatar {
 	animation: none !important;
 }

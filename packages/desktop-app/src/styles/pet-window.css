@@ -184,6 +184,88 @@
 	transform: scaleX(-1);
 }
 
+/* ── Show/hide transition ────────────────────────────────────────────────
+ * The particle orb is a transition, never the pet. Enter: the particles
+ * converge (1.2 → 0.5, fading) while the brand sphere settles (0.72 → 1).
+ * Exit: the sphere breaks apart (1 → 0.55) as the particles scatter out
+ * and fade. The layer is pointer-events: none, so the pet is hit-testable
+ * from the first frame and the reported hitbox never moves. Timings match
+ * PetTransition.tsx and the shell's PET_HIDE_DELAY_MS. */
+.pet-window__transition {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+}
+
+.pet-window[data-pet-transition="enter"] .pet-window__transition {
+	animation: pet-particles-converge 420ms var(--spring, ease) both;
+}
+
+.pet-window[data-pet-transition="enter"] .pet-window__pet-flip > .gui-pet {
+	animation: pet-sphere-enter 420ms var(--spring, ease) both;
+}
+
+.pet-window[data-pet-transition="leave"] .pet-window__transition {
+	animation: pet-particles-scatter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.pet-window[data-pet-transition="leave"] .pet-window__pet-flip > .gui-pet {
+	animation: pet-sphere-leave 280ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes pet-particles-converge {
+	from {
+		opacity: 0.9;
+		transform: scale(1.2);
+	}
+	40% {
+		opacity: 0.7;
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.5);
+	}
+}
+
+@keyframes pet-particles-scatter {
+	from {
+		opacity: 0;
+		transform: scale(0.6);
+	}
+	35% {
+		opacity: 0.9;
+	}
+	to {
+		opacity: 0;
+		transform: scale(1.5);
+	}
+}
+
+@keyframes pet-sphere-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.72);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes pet-sphere-leave {
+	from {
+		opacity: 1;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.55);
+	}
+}
+
 /* One 320px card column with a 12px transparent shadow perimeter. */
 .pet-bubbles {
 	--radius-xl: 20px;
@@ -810,5 +892,15 @@ html.bubbles-root .pet-bubbles {
 	.pet-bubble__reply {
 		animation: none !important;
 		transition: none !important;
+	}
+
+	/* No particles, no scale: the window shows and hides exactly as it did
+	 * before the transition existed. */
+	.pet-window__transition {
+		display: none;
+	}
+
+	.pet-window__pet-flip > .gui-pet {
+		animation: none !important;
 	}
 }

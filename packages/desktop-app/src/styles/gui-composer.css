@@ -1594,6 +1594,7 @@ button.gui-stats-pill {
 }
 
 .gui-splash-orb {
+	position: relative;
 	width: 132px;
 	/* The IP orb mascot (SplashOrb). Two FINITE sequenced animations — a
 	 * one-shot settle (scale+deblur+glow bloom, both-fill holds it) then a
@@ -1605,6 +1606,33 @@ button.gui-stats-pill {
 	animation:
 		gui-splash-orb-in 620ms var(--spring) both,
 		gui-splash-orb-idle 4.8s ease-in-out 700ms 6 both;
+}
+
+/* Boot is the particle orb; `ready` cross-fades it into the static brand
+ * sphere over SPLASH_HANDOFF_MS (StartupSplash.tsx), which is also how long
+ * app.tsx keeps the splash up for the hand-off. The sphere stays in flow —
+ * it alone defines the orb box — so the swap never moves the splash. */
+.gui-splash-orb-particles {
+	position: absolute;
+	inset: 0;
+	opacity: 1;
+	transition:
+		opacity 300ms ease,
+		transform 300ms var(--spring);
+}
+
+.gui-splash-orb-sphere {
+	opacity: 0;
+	transition: opacity 300ms ease;
+}
+
+.gui-splash-orb--ready .gui-splash-orb-particles {
+	opacity: 0;
+	transform: scale(0.72);
+}
+
+.gui-splash-orb--ready .gui-splash-orb-sphere {
+	opacity: 1;
 }
 
 .gui-splash-orb-svg {

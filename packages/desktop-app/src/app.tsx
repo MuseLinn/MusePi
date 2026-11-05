@@ -35,7 +35,13 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
-import { type BootPhase, BootRecoveryActions, StartupSplash, useSlowBoot } from "./components/StartupSplash";
+import {
+	type BootPhase,
+	BootRecoveryActions,
+	StartupSplash,
+	useSlowBoot,
+	useSplashHold,
+} from "./components/StartupSplash";
 import { useSessionInfoCardVisibility } from "./components/session-info-card";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
@@ -683,6 +689,9 @@ function AppInner(): ReactNode {
 	// describe THIS attempt, so a retry starts from a clean stage.
 	const [bootPhase, setBootPhase] = useState<BootPhase>("probe");
 	const bootSlow = useSlowBoot(booting);
+	// The splash outlives `booting` by one orb hand-off (particle orb → brand
+	// sphere), so the shell never cuts in on a half-formed splash.
+	const splashHold = useSplashHold(booting);
 	// Session-open loading overlay (React-Bits-style skeleton): armed by
 	// openSession with a 250ms flicker threshold, cleared when the store
 	// lands (or the open fails). MUST sit above the booting/connect early
@@ -3633,10 +3642,10 @@ function AppInner(): ReactNode {
 	// Splash gates on `booting` ALONE — not `!rpc && booting`: rpc connects
 	// in ~150ms on a warm daemon and would unmount the splash mid-hold,
 	// defeating MIN_SPLASH_MS (2026-08-11).
-	if (booting) {
+	if (booting || splashHold) {
 		return (
 			<div className="gui-shell">
-				<StartupSplash phase={bootPhase} slow={bootSlow} />
+				<StartupSplash phase={bootPhase} slow={bootSlow} ready={!booting} />
 			</div>
 		);
 	}

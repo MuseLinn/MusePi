@@ -1,6 +1,7 @@
 import { BlurText, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { ThinkingOrb } from "../vendor/thinking-orbs";
 import { SplashOrb } from "./SplashOrb";
 
 /** Boot stage the shell is currently in. Owned by app.tsx boot(); the splash
@@ -11,6 +12,11 @@ export type BootPhase = "probe" | "spawn" | "gate" | "connect";
 /** Brand-only hold before the splash admits the start is slow. A warm daemon
  *  connects in ~150ms, so this never fires on the common path. */
 const SLOW_BOOT_MS = 8_000;
+
+/** Orb hand-off after the shell becomes ready: the booting particle orb
+ *  cross-fades into the static brand sphere, and the splash stays mounted
+ *  for exactly that long so the hand-off is seen rather than cut. */
+export const SPLASH_HANDOFF_MS = 300;
 
 /** Same key main.tsx appends uncaught renderer errors to. Read here at
  *  export time so a broken renderer can hand the trace to the shell even
@@ -87,6 +93,24 @@ export function useSlowBoot(enabled: boolean, delayMs: number = SLOW_BOOT_MS): b
 }
 
 /**
+ * Keeps the splash mounted through the orb hand-off: true while booting, then
+ * for one SPLASH_HANDOFF_MS cross-fade after the shell became ready. A boot
+ * that restarts (reconnect) takes the hold back immediately.
+ */
+export function useSplashHold(booting: boolean): boolean {
+	const [hold, setHold] = useState(booting);
+	useEffect(() => {
+		if (booting) {
+			setHold(true);
+			return;
+		}
+		const timer = setTimeout(() => setHold(false), SPLASH_HANDOFF_MS);
+		return () => clearTimeout(timer);
+	}, [booting]);
+	return hold;
+}
+
+/**
  * Recovery controls shared by the splash and the connect-failure page: the
  * same two actions must work before a daemon connection exists, which is
  * why both are shell IPC calls and not daemon RPCs.
@@ -151,12 +175,40 @@ export function BootRecoveryActions(): ReactNode {
 	);
 }
 
-export function StartupSplash({ phase, slow = false }: { phase?: BootPhase; slow?: boolean } = {}): ReactNode {
+/** Settings → 常规 motion switch. The boot orb holds a static frame for
+ *  those users instead of running its particle loop. */
+function motionOff(): boolean {
+	try {
+		return localStorage.getItem("musepi-gui-motion") === "off";
+	} catch {
+		return false;
+	}
+}
+
+export function StartupSplash({
+	phase,
+	slow = false,
+	ready = false,
+}: {
+	phase?: BootPhase;
+	slow?: boolean;
+	ready?: boolean;
+} = {}): ReactNode {
+	const [paused] = useState(motionOff);
 	return (
 		<div className="gui-splash">
 			<div className="gui-splash-inner">
-				<div className="gui-splash-orb">
-					<SplashOrb />
+				{/* Boot is the particle orb; `ready` cross-fades it into the static
+				 *  brand sphere — the same sphere the desktop pet settles into.
+				 *  The sphere stays in flow (it alone defines the orb box), so the
+				 *  splash layout is identical before and after the hand-off. */}
+				<div className={`gui-splash-orb${ready ? " gui-splash-orb--ready" : ""}`}>
+					<div className="gui-splash-orb-particles" aria-hidden="true">
+						<ThinkingOrb state="working" size={64} paused={paused} style={{ width: "100%", height: "100%" }} />
+					</div>
+					<div className="gui-splash-orb-sphere">
+						<SplashOrb />
+					</div>
 				</div>
 				<BlurText text="MusePi" className="gui-splash-wordmark" stepMs={55} />
 				<div className="gui-splash-progress-track" aria-hidden="true">

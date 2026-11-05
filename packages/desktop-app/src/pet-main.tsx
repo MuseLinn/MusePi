@@ -40,6 +40,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { type GazeVec, PetSprite, usePet, usePetDecor } from "./components/PetSprite";
+import { PET_ENTER_MS, PetTransition, type PetTransitionPhase } from "./components/PetTransition";
 import {
 	type PetActivity,
 	type PetdexPackage,
@@ -93,6 +94,12 @@ interface PetBridge {
 	 *  process to align the CHARACTER flush to a screen edge on dock. */
 	setPetRect?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	onPetDock?(cb: (side: "left" | "right" | null) => void): () => void;
+	/** The shell is showing this window — replay the entrance. */
+	onPetShowing?(cb: () => void): () => void;
+	/** The shell is about to hide this window — dissolve the pet first. */
+	onPetAnimatingOut?(cb: () => void): () => void;
+	/** Reduced motion: report it so the shell skips the dissolve delay. */
+	setPetReducedMotion?(reduced: boolean): Promise<unknown>;
 	/** Pet-side control → advance expanded → stacked → count → stacked. */
 	bubblesAdvanceMode?(): Promise<unknown>;
 }
@@ -282,6 +289,54 @@ function PetApp(): ReactNode {
 		if (!bridge?.onPetDock) return;
 		return bridge.onPetDock?.(setDockSide);
 	}, []);
+
+	// Show/hide transition. The particle orb is a transition, never the pet:
+	// the shell signals every show (the window outlives its own hide, so
+	// mounting only covers the first one) and every hide, and holds the
+	// window open for the dissolve. Reduced motion is reported to the shell
+	// — it skips the hold — and the stylesheet drops the particles and the
+	// scale, so both directions stay instant.
+	// Mount is a show: start in the enter phase so the first painted frame is
+	// already the transition, never a full-size sphere that then jumps back.
+	const [transition, setTransition] = useState<PetTransitionPhase>("enter");
+	const [showNonce, setShowNonce] = useState(0);
+	const enterTimerRef = useRef<number | null>(null);
+	useEffect(() => {
+		if (!bridge?.onPetShowing) return;
+		return bridge.onPetShowing(() => setShowNonce(n => n + 1));
+	}, []);
+	useEffect(() => {
+		if (!bridge?.onPetAnimatingOut) return;
+		return bridge.onPetAnimatingOut(() => {
+			if (enterTimerRef.current !== null) {
+				window.clearTimeout(enterTimerRef.current);
+				enterTimerRef.current = null;
+			}
+			setTransition("leave");
+		});
+	}, []);
+	useEffect(() => {
+		if (!bridge?.setPetReducedMotion) return;
+		const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const report = (): void => void bridge.setPetReducedMotion?.(mq.matches);
+		report();
+		mq.addEventListener("change", report);
+		return () => mq.removeEventListener("change", report);
+	}, []);
+	// First paint and every later show replay the converge.
+	useEffect(() => {
+		setTransition("enter");
+		enterTimerRef.current = window.setTimeout(() => {
+			enterTimerRef.current = null;
+			setTransition("idle");
+		}, PET_ENTER_MS);
+		return () => {
+			if (enterTimerRef.current !== null) {
+				window.clearTimeout(enterTimerRef.current);
+				enterTimerRef.current = null;
+			}
+		};
+	}, [showNonce]);
 
 	// Ambient idle choreography scheduler (open-design `pet-overlay` parity).
 	// While the pet rests calm and nothing is hovering/dragging, occasionally
@@ -755,9 +810,15 @@ function PetApp(): ReactNode {
 	// poke expression while the gesture rig carries the drag.
 	const displayInteraction = (pet.kind === "petdex" && dragging) || sleeping ? null : interaction;
 	const mirrored = pet.kind === "petdex" && (flip || dockSide === "left");
+	// The transition belongs to the brand sphere — an imported spritesheet
+	// has no sphere to converge into, so petdex keeps the instant swap.
+	const petTransition = pet.kind === "builtin" ? transition : "idle";
 
 	return (
-		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
+		<div
+			className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}
+			data-pet-transition={petTransition}
+		>
 			{/* The stage shrink-wraps the sprite so the single three-state
 			 * control stays 8px beside the character at every pet scale. */}
 			<div className="pet-window__stage" style={{ "--gui-pet-window-scale": sizeScale } as CSSProperties}>
@@ -829,6 +890,7 @@ function PetApp(): ReactNode {
 							interaction={displayInteraction}
 						/>
 					</div>
+					<PetTransition phase={petTransition} />
 					{sleeping && (
 						// Sleep indicator (CSS-only): floats up from the
 						// sprite's head, aria-hidden — purely decorative.
