@@ -89,7 +89,7 @@ export function buildStub(names, nested) {
 			const innerEntries = inner
 				.map(key =>
 					isSubscription(key)
-						? `${key}: (cb) => { window.__shotSubs.push([${JSON.stringify(name)}.${JSON.stringify(key)}, cb]); return () => {}; }`
+						? `${key}: (cb) => { window.__shotSubs.push([${JSON.stringify(`${name}.${key}`)}, cb]); return () => {}; }`
 						: `${key}: () => undefined`,
 				)
 				.join(", ");
