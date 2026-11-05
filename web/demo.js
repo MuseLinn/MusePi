@@ -363,4 +363,5 @@
   );
   if (initialTitle && chatTitle) chatTitle.textContent = initialTitle.textContent;
   setStatus("demo.status.idle");
+  if (new URLSearchParams(location.search).get("tour") === "1") startTour();
 })();

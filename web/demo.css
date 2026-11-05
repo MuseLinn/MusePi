@@ -104,7 +104,7 @@
   position: absolute;
   border: 1.5px solid var(--accent);
   border-radius: 12px;
-  box-shadow: 0 0 0 9999px rgba(5, 5, 7, 0.62);
+  box-shadow: 0 0 0 9999px rgba(5, 5, 7, 0.72);
   pointer-events: none;
   transition:
     left 220ms var(--spring),
@@ -166,6 +166,11 @@
 .mp-demo-tour-actions button:hover {
   color: var(--text);
   border-color: var(--line-strong);
+}
+
+.mp-demo-tour-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .mp-demo-tour-skip {
@@ -810,6 +815,35 @@
     min-height: 380px;
   }
   .mp-demo-side {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 8px;
+  }
+  .mp-demo-side-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .mp-demo-side-label,
+  .mp-demo-new,
+  .mp-demo-search {
+    display: none;
+  }
+  .mp-demo-session,
+  .mp-demo-file {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 6px 10px;
+  }
+  .mp-demo-session-title {
+    flex: 0 1 auto;
+    max-width: 12em;
+  }
+  .mp-demo-time {
     display: none;
   }
   .mp-demo-main {
