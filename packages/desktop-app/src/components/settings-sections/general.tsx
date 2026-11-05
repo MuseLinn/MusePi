@@ -16,7 +16,7 @@ import {
 	shellPlatform,
 	type UpdateCheckResult,
 } from "../../lib/electron";
-import { activePet } from "../../lib/pet";
+import { activePet, BUILTIN_ORB_ID, BUILTIN_SVG_ID } from "../../lib/pet";
 import {
 	PET_ACCESSORIES,
 	PET_DECOR_FLAGS,
@@ -61,14 +61,25 @@ import { SchemaTabSection } from "./schema";
  *  instead of silently doing nothing. */
 function PetDecorSection(): ReactNode {
 	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
-	// Decoration only exists on the builtin vector companion — the imported
-	// spritesheets are baked bitmaps. Drives both the disabled state and the
-	// explainer copy.
-	const [builtinSelected, setBuiltinSelected] = useState<boolean>(() => activePet().kind === "builtin");
+	// Decoration only exists on the note-bot — the brand orb is a canvas and
+	// the imported spritesheets are baked bitmaps. Drives both the disabled
+	// state and the explainer copy.
+	const [activePetId, setActivePetId] = useState<string>(() => {
+		const pet = activePet();
+		return pet.kind === "builtin" ? pet.id : "";
+	});
+	const builtinSelected = activePetId === BUILTIN_SVG_ID;
+	const decorDescription =
+		activePetId === BUILTIN_SVG_ID
+			? t("settings.petDecorDescription")
+			: activePetId === BUILTIN_ORB_ID
+				? t("settings.petDecorDescriptionOrb")
+				: t("settings.petDecorDescriptionImported");
 	useEffect(() => {
 		const refresh = (): void => {
 			setDecor(petDecor());
-			setBuiltinSelected(activePet().kind === "builtin");
+			const pet = activePet();
+			setActivePetId(pet.kind === "builtin" ? pet.id : "");
 		};
 		window.addEventListener("omp-pet-changed", refresh);
 		window.addEventListener("storage", refresh);
@@ -80,9 +91,7 @@ function PetDecorSection(): ReactNode {
 	return (
 		<div className="gui-settings-section">
 			<div className="gui-settings-section-title">{t("settings.petDecor")}</div>
-			<div className="gui-settings-section-desc">
-				{builtinSelected ? t("settings.petDecorDescription") : t("settings.petDecorDescriptionImported")}
-			</div>
+			<div className="gui-settings-section-desc">{decorDescription}</div>
 			{PET_DECOR_FLAGS.map(flag => (
 				<div className="gui-settings-row" key={flag.key}>
 					<div>
@@ -95,7 +104,7 @@ function PetDecorSection(): ReactNode {
 						aria-checked={decor[flag.key]}
 						className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
 						disabled={!builtinSelected}
-						title={builtinSelected ? undefined : t("settings.petDecorDescriptionImported")}
+						title={builtinSelected ? undefined : decorDescription}
 						onClick={() => {
 							setDecor({ ...decor, [flag.key]: !decor[flag.key] });
 							setPetDecorFlag(flag.key, !decor[flag.key]);
@@ -123,7 +132,7 @@ function PetDecorSection(): ReactNode {
 							aria-checked={decor.accessory === value}
 							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
 							disabled={!builtinSelected}
-							title={builtinSelected ? undefined : t("settings.petDecorDescriptionImported")}
+							title={builtinSelected ? undefined : decorDescription}
 							onClick={() => {
 								setDecor({ ...decor, accessory: value });
 								setPetAccessory(value);

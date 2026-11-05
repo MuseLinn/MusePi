@@ -36,6 +36,8 @@
  */
 
 import { setLocale, t } from "@musepi/client-core";
+import { ArrowUp, ArrowUpRight, Check, MessageSquare, Square, X } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
 import type { PetActivity, PetSessionCard } from "./lib/pet";
 import { useScrollShadow } from "./lib/use-scroll-shadow";
@@ -646,7 +648,7 @@ export function PetBubbles(): ReactNode {
 				onClick={() => sendReply(sessionId)}
 				disabled={!replyText.trim() || sending}
 			>
-				↑
+				<MorphIcon icon={ArrowUp} size={13} />
 			</button>
 		</div>
 	);
@@ -694,7 +696,7 @@ export function PetBubbles(): ReactNode {
 							runAction(() => dismissCard(c));
 						}}
 					>
-						×
+						<MorphIcon icon={X} size={12} />
 					</button>
 					<div className="pet-bubble__body">
 						<div className="pet-bubble__title">{c.title}</div>
@@ -719,7 +721,7 @@ export function PetBubbles(): ReactNode {
 								runAction(() => openCard(c));
 							}}
 						>
-							↗
+							<MorphIcon icon={ArrowUpRight} size={13} />
 						</button>
 						<button
 							type="button"
@@ -734,7 +736,7 @@ export function PetBubbles(): ReactNode {
 								});
 							}}
 						>
-							💬
+							<MorphIcon icon={MessageSquare} size={13} />
 						</button>
 						{c.phase === "working" ? (
 							<button
@@ -747,7 +749,7 @@ export function PetBubbles(): ReactNode {
 									runAction(() => stopCard(c));
 								}}
 							>
-								■
+								<MorphIcon icon={Square} size={11} />
 							</button>
 						) : (
 							<button
@@ -760,7 +762,7 @@ export function PetBubbles(): ReactNode {
 									runAction(() => dismissCard(c));
 								}}
 							>
-								✓
+								<MorphIcon icon={Check} size={13} />
 							</button>
 						)}
 					</div>
@@ -790,7 +792,7 @@ export function PetBubbles(): ReactNode {
 							dismissBubble(b);
 						}}
 					>
-						×
+						<MorphIcon icon={X} size={12} />
 					</button>
 					{bubbleKindLabel(b.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(b.kind)}</span>}
 					<div className="pet-bubble__text">{b.visible}</div>
@@ -808,7 +810,7 @@ export function PetBubbles(): ReactNode {
 								});
 							}}
 						>
-							↗
+							<MorphIcon icon={ArrowUpRight} size={13} />
 						</button>
 						{b.sessionId && (
 							<button
@@ -824,7 +826,7 @@ export function PetBubbles(): ReactNode {
 									});
 								}}
 							>
-								💬
+								<MorphIcon icon={MessageSquare} size={13} />
 							</button>
 						)}
 						<button
@@ -837,7 +839,7 @@ export function PetBubbles(): ReactNode {
 								runAction(() => confirmBubble(b));
 							}}
 						>
-							✓
+							<MorphIcon icon={Check} size={13} />
 						</button>
 						{b.requestId && (
 							<button
@@ -850,7 +852,7 @@ export function PetBubbles(): ReactNode {
 									runAction(() => denyBubble(b));
 								}}
 							>
-								✗
+								<MorphIcon icon={X} size={13} />
 							</button>
 						)}
 					</div>

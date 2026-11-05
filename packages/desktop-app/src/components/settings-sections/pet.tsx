@@ -2,6 +2,7 @@ import { SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	BUILTIN_ORB_ID,
 	BUILTIN_PETDEX,
 	BUILTIN_SVG_ID,
 	DEFAULT_PET_ID,
@@ -25,7 +26,7 @@ import {
 import { type PetDecor, petDecor } from "../../lib/pet-decor";
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
-import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
+import { BuiltinPetSprite, PetdexSprite, PetOrb } from "../PetSprite";
 import { Reveal } from "../Reveal";
 
 /** Agent companion (伙伴, BitFun parity): master switch + display mode
@@ -43,9 +44,9 @@ interface PetGridEntry {
 	rows?: readonly number[];
 	contentH?: number;
 	smooth?: boolean;
-	/** Rendered by the builtin vector note-bot (BuiltinPetSprite), not a
-	 *  spritesheet — `src`/`width`/`height` are unused for this entry. */
-	builtin?: boolean;
+	/** Code-owned renderer instead of a spritesheet — `src`/`width`/`height`
+	 *  are unused for these entries. */
+	renderer?: "orb" | "note";
 	source: "preset" | "user";
 }
 
@@ -82,7 +83,9 @@ export function PetCard({
 				}}
 			>
 				<span className="gui-pet-card__thumb">
-					{entry.builtin ? (
+					{entry.renderer === "orb" ? (
+						<PetOrb mood="rest" size={68} />
+					) : entry.renderer === "note" ? (
 						<BuiltinPetSprite mood="rest" />
 					) : (
 						<PetdexSprite
@@ -561,8 +564,18 @@ export function PetSection(): ReactNode {
 	// Preset names/descriptions are i18n keys (English source strings,
 	// localized via guest-client zh-CN); imported packages keep their own
 	// pet.json text.
-	// The hand-drawn vector note-bot leads the preset grid — it is the
-	// code-owned brand mascot; the AI-generated sheet presets follow.
+	// The brand orb leads the preset grid (it is the default), then the
+	// hand-drawn note-bot, then the AI-generated sheet presets.
+	const brandOrbEntry: PetGridEntry = {
+		id: BUILTIN_ORB_ID,
+		name: t("settings.brandOrb"),
+		description: t("settings.brandOrbDescription"),
+		src: "",
+		width: 0,
+		height: 0,
+		renderer: "orb",
+		source: "preset",
+	};
 	const builtinSvgEntry: PetGridEntry = {
 		id: BUILTIN_SVG_ID,
 		name: t("settings.builtinPet"),
@@ -570,10 +583,11 @@ export function PetSection(): ReactNode {
 		src: "",
 		width: 0,
 		height: 0,
-		builtin: true,
+		renderer: "note",
 		source: "preset",
 	};
 	const presetEntries: PetGridEntry[] = [
+		brandOrbEntry,
 		builtinSvgEntry,
 		...BUILTIN_PETDEX.map(
 			(p): PetGridEntry => ({
@@ -792,7 +806,9 @@ export function PetSection(): ReactNode {
 							onClick={() => setExpanded(v => !v)}
 						>
 							<span className="gui-pet-trigger__thumb">
-								{selectedEntry && !selectedEntry.builtin ? (
+								{selectedEntry?.renderer === "orb" ? (
+									<PetOrb mood="rest" size={52} />
+								) : selectedEntry && selectedEntry.renderer !== "note" ? (
 									<PetdexSprite
 										mood="rest"
 										src={selectedEntry.src}
@@ -807,7 +823,7 @@ export function PetSection(): ReactNode {
 									<BuiltinPetSprite mood="rest" gloss={decor.gloss} accessory={decor.accessory} />
 								)}
 							</span>
-							<span className="gui-pet-trigger__name">{selectedEntry?.name ?? t("settings.builtinPet")}</span>
+							<span className="gui-pet-trigger__name">{selectedEntry?.name ?? t("settings.brandOrb")}</span>
 							<Icon
 								name="arrow-down"
 								className={`gui-pet-trigger__chevron${expanded ? " gui-pet-trigger__chevron--open" : ""}`}

@@ -187,6 +187,14 @@
 /* One 320px card column with a 12px transparent shadow perimeter. */
 .pet-bubbles {
 	--radius-xl: 20px;
+	/* A transparent window clips every pixel outside its rect, so the shared
+	 * 24/60px glass shadow renders as a square frame around the bubble. Keep
+	 * the shadow short and feathered inside the bubble radius instead. */
+	--pet-bubble-shadow:
+		0 4px 12px oklch(0 0 0 / 24%),
+		0 1px 3px oklch(0 0 0 / 18%),
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
 	position: absolute;
 	bottom: 174px;
 	left: 50%;
@@ -214,9 +222,10 @@
 	border: 1px solid var(--glass-border);
 	border-radius: var(--radius-xl);
 	/* Transparent desktop windows cannot reliably sample the OS wallpaper.
-	 * A 90% base keeps text readable; the shared sheen retains liquid glass. */
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 90%, var(--pet-surface));
-	box-shadow: var(--glass-shadow);
+	 * The base stays near-opaque so message text reads over whatever is behind
+	 * the pet; the sheen keeps the glass edge without washing the content out. */
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 95%, var(--pet-surface));
+	box-shadow: var(--pet-bubble-shadow);
 	pointer-events: auto;
 	transition:
 		background 160ms var(--spring-snappy, ease),
@@ -227,7 +236,7 @@
 .pet-bubble:hover,
 .pet-bubble:focus-within {
 	background: var(--glass-sheen),
-		color-mix(in oklab, var(--glass-bg-strong) 94%, var(--color-text) 6%);
+		color-mix(in oklab, var(--glass-bg-strong) 97%, var(--color-text) 3%);
 }
 
 /* Collapsed stack card — same fixed width as the expanded list (the
@@ -366,8 +375,8 @@
 	padding: 3px 9px;
 	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 90%, var(--pet-panel-bg));
-	box-shadow: var(--glass-shadow);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 95%, var(--pet-panel-bg));
+	box-shadow: var(--pet-bubble-shadow);
 	color: color-mix(in oklab, var(--color-text) 72%, transparent);
 	font-size: 11px;
 	font-weight: 600;
@@ -648,12 +657,12 @@
 	place-items: center;
 	border: 1px solid var(--glass-border);
 	border-radius: 999px;
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 90%, var(--pet-surface));
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 95%, var(--pet-surface));
 	color: var(--color-text);
 	font-size: 13px;
 	font-weight: 700;
 	line-height: 1;
-	box-shadow: var(--glass-shadow);
+	box-shadow: var(--pet-bubble-shadow);
 	pointer-events: auto;
 	cursor: pointer;
 	animation: pet-badge-pop 180ms var(--spring-liquid);
