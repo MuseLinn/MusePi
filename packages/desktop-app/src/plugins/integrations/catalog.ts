@@ -8,9 +8,8 @@ import type { IconName } from "../../vendor/oc-icons";
  * read — so the catalog adds no second registry and no credential store of its
  * own.
  *
- * Vendor endpoints and auth kinds mirror openchamber's
- * `packages/ui/src/lib/integrations-catalog/registry.ts` (checked against
- * vendor docs on 2026-10-01); recheck an entry when you touch it. A token-typed
+ * Vendor endpoints and auth kinds were checked against vendor documentation
+ * when the entry was added; recheck an entry when you touch it. A token-typed
  * entry stores its token in that server's `headers`, which makes the token a
  * plain local configuration value: it never enters the repository, the wire, or
  * a log.

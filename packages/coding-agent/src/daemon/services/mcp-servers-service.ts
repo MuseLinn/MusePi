@@ -39,6 +39,9 @@ export interface McpServerSummary {
 export interface McpServersServiceDeps {
 	/** Absolute path of the user-scope config the service owns. */
 	userConfigPath(): string;
+	/** Reconcile live MCP managers after a write. Best-effort: an install
+	 *  still succeeded even if a running server could not be restarted. */
+	reloadConnectors?(): Promise<unknown>;
 }
 
 /** Longest URL/command/argument accepted from a client; well above real use. */
@@ -219,6 +222,7 @@ export class McpServersService implements DaemonService {
 			};
 		}
 		await addMCPServer(this.#configPath(), name, config);
+		await this.#reloadConnectors();
 		return { ok: true, name };
 	}
 
@@ -228,6 +232,16 @@ export class McpServersService implements DaemonService {
 		const nameError = validateServerName(name);
 		if (nameError) throw new Error(nameError);
 		await removeMCPServer(this.#configPath(), name);
+		await this.#reloadConnectors();
 		return { ok: true, name };
+	}
+
+	async #reloadConnectors(): Promise<void> {
+		try {
+			await this.#deps.reloadConnectors?.();
+		} catch {
+			// The config write is the install's authority; a manager that could
+			// not restart will pick the change up on the next daemon start.
+		}
 	}
 }

@@ -457,6 +457,35 @@ export class MCPManager {
 	}
 
 	/**
+	 * Re-read the configured servers and reconcile this manager with them:
+	 * disconnect removed or changed servers, connect new ones, and leave
+	 * unchanged connections untouched. Used after the user-level `mcp.json`
+	 * is edited so live sessions can refresh their MCP tools without a daemon
+	 * restart.
+	 */
+	async reloadServers(options?: MCPDiscoverOptions): Promise<MCPLoadResult> {
+		const loadedConfigs = await loadAllMCPConfigs(this.cwd, {
+			enableProjectConfig: options?.enableProjectConfig,
+			filterExa: options?.filterExa,
+			filterBrowser: options?.filterBrowser,
+		});
+		const { configs, exaApiKeys, sources } = loadedConfigs;
+		const nextNames = new Set(Object.keys(configs));
+		for (const name of [...this.#connections.keys()]) {
+			if (!nextNames.has(name)) await this.disconnectServer(name);
+		}
+		for (const [name, config] of Object.entries(configs)) {
+			const existing = this.#serverConfigs.get(name);
+			if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(config)) {
+				await this.disconnectServer(name);
+			}
+		}
+		const result = await this.connectServers(configs, sources, options?.onStatus);
+		result.exaApiKeys = exaApiKeys;
+		return result;
+	}
+
+	/**
 	 * Connect to specific MCP servers.
 	 * Connections are made in parallel for faster startup.
 	 */

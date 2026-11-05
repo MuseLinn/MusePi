@@ -2270,6 +2270,50 @@ export class DaemonSessionHost {
 		return { servers: this.#connectorServersFromManager(manager) };
 	}
 
+	/**
+	 * Reconcile every cached MCP manager with the current config and push the
+	 * resulting tools into live sessions. Called after the user-level
+	 * `mcp.json` changes (integrations install/remove): connections are
+	 * added, removed, or replaced in place instead of waiting for a daemon
+	 * restart, matching the workspace-scoped managers other clients use.
+	 */
+	async reloadMcpConnectors(): Promise<{ managers: number; sessions: number }> {
+		let managers = 0;
+		let sessions = 0;
+		for (const [cwd, manager] of [...this.#mcpManagers]) {
+			try {
+				const discovery = await this.#discoveryFor(cwd, getAgentDir());
+				const settings = discovery.settings;
+				await manager.reloadServers({
+					onStatus: event => this.#eventBus.emit(MCP_CONNECTION_STATUS_EVENT_CHANNEL, event),
+					enableProjectConfig: settings.get("mcp.enableProjectConfig") ?? true,
+					filterExa: true,
+					filterBrowser: settings.get("browser.enabled") ?? false,
+				});
+				managers += 1;
+			} catch (error) {
+				logger.warn("MCP reload failed", {
+					path: cwd,
+					error: error instanceof Error ? error.message : String(error),
+				});
+				continue;
+			}
+			const tools = manager.getTools();
+			for (const live of this.#sessions.values()) {
+				if (live.cwd !== cwd || live.agentSession.isDisposed) continue;
+				try {
+					await live.agentSession.refreshMCPTools(tools);
+					sessions += 1;
+				} catch (error) {
+					logger.warn("MCP tool refresh failed after reload", {
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			}
+		}
+		return { managers, sessions };
+	}
+
 	/** manager → wire 清单的映射(connectorsSnapshot 两路共用)。 */
 	#connectorServersFromManager(manager: MCPManager): ConnectorServerInfo[] {
 		return manager.getServerNames().map(name => {

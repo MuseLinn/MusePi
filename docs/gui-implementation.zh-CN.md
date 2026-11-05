@@ -1126,6 +1126,6 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 - **标注面板**:`annotation/overlay.ts` 在 shadow DOM 内渲染结构化卡片，分区数据直接取自 `AnnotationElementTarget`（tag/classes、selector/path/bounds/center、role/aria/disabled 等语义、data-*、pageUrl/viewport/DPR）；`AnnotationPayload.includeScreenshot` 缺省为 true，关闭时 `attach.ts` 不附截图且 prompt 标记 `Screenshot: not attached`。未传 panel 文案的宿主自动回退旧紧凑输入条。
 - **插件状态条**:`ExtensionStatusCard` 新增 `inline` 变体，渲染在会话信息卡的插件分区顶部；卡片把同一份注册表条目下发，避免第二个 `useExtensionRegistry` 订阅。插件状态是 profile 级全局状态，与 DSH 的 `ui-plugin-manager` 一致，不做会话级启停。
 - **AI 重命名**:`retitleSessionById` 成功后先用返回标题写 `session.tree` 的目标行与 `sessionMeta.title`，再后台 `refreshSessions` 对账；失败按 `empty/generation-failed/offline/timeout/unsupported` 映射为不同提示，进行中显示状态条并禁用菜单。
-- **连接器安装 RPC**:`mcp.servers.list/add/remove` 读写用户级 `<agentDir>/mcp.json`，复用 `mcp/config-writer.ts` 的锁与原子写；list 只返回名字/传输/URL/命令与 auth 类型，绝不返回 headers。token 只落在用户本机配置，不进仓库。安装后 `connectors.list` 对新建会话立即生效；已 live 的会话仍持有创建时的 MCP manager，需要重启会话/daemon 才看到新服务器。
+- **连接器安装 RPC**:`mcp.servers.list/add/remove` 读写用户级 `<agentDir>/mcp.json`，复用 `mcp/config-writer.ts` 的锁与原子写；list 只返回名字/传输/URL/命令与 auth 类型，绝不返回 headers。token 只落在用户本机配置，不进仓库。安装会就地 reconcile live manager：移除或变更的服务器断开、新服务器连接，该工作目录下所有 live 会话收到刷新后的 MCP 工具集，无需重启 daemon。
 - **集成页插件**:`plugins/integrations/index.ts` 注册 `settings.tab.integrations`，目录数据在 `catalog.ts`；信息卡的连接器分区始终渲染，无服务器时显示空态与「管理集成」，按钮经 `onOpenSettings("integrations")` 直达插件页。
 - **HTML 卡片标注与宽表**:`widgets/html.tsx` 复用 `annotationOverlayLabels()`，会话内 HTML 卡片与浏览器页面走同一套结构化标注 panel；表格加宽按内容 hash 写入 `musepi-gui-wide-tables`，重新挂载后恢复，超过 200 条裁剪。

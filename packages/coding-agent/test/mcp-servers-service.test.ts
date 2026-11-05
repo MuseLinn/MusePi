@@ -142,4 +142,20 @@ describe("McpServersService", () => {
 		const service = new McpServersService({ userConfigPath: () => "mcp.json" });
 		await expect(service.list()).rejects.toThrow(/absolute/);
 	});
+
+	it("reconciles live connectors after add and remove", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "musepi-mcp-reload-"));
+		let reloads = 0;
+		const service = new McpServersService({
+			userConfigPath: () => join(dir, "mcp.json"),
+			reloadConnectors: async () => {
+				reloads += 1;
+			},
+		});
+
+		await service.add({ name: "linear", url: "https://mcp.linear.app/mcp" });
+		await service.remove({ name: "linear" });
+
+		expect(reloads).toBe(2);
+	});
 });

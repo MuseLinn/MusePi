@@ -986,6 +986,7 @@ export class DaemonServer {
 		this.#services.register(
 			new McpServersService({
 				userConfigPath: () => getMCPConfigPath("user", this.#host.cwd()),
+				reloadConnectors: () => this.#host.reloadMcpConnectors(),
 			}),
 		);
 		this.#services.register(
