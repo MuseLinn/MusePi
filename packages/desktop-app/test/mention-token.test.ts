@@ -63,10 +63,8 @@ describe("expandMentionTokens", () => {
 		expect(expandMentionTokens(`看 ${token("图一.png")}`, attachments)).toBe("看 [图片:图一.png]");
 	});
 
-	test("file token → the existing [Attachment] workspace-path reference", () => {
-		expect(expandMentionTokens(`查 ${token("notes-v2.md")}`, attachments)).toBe(
-			"查 [Attachment] attachments/notes-v2.md",
-		);
+	test("file token → a name pointer; the address comes from the upload line", () => {
+		expect(expandMentionTokens(`查 ${token("notes-v2.md")}`, attachments)).toBe("查 [Attachment:notes-v2.md]");
 	});
 
 	test("duplicate chip names: the FIRST match wins", () => {
@@ -89,7 +87,7 @@ describe("expandMentionTokens", () => {
 	test("multiple tokens expand independently in one pass", () => {
 		const text = `${token("图一.png")}\n${token("notes-v2.md")}\n${token("gone.png")}`;
 		expect(expandMentionTokens(text, attachments)).toBe(
-			`[图片:图一.png]\n[Attachment] attachments/notes-v2.md\n${token("gone.png")}`,
+			`[图片:图一.png]\n[Attachment:notes-v2.md]\n${token("gone.png")}`,
 		);
 	});
 
@@ -211,8 +209,8 @@ describe("expandMentionTokens × ordinal tokens", () => {
 		expect(expandMentionTokens("对比 @图片1 和 @图片2", chips)).toBe("对比 [图片 1] 和 [图片 2]");
 	});
 
-	test("file ordinal expands to the workspace-path reference of the Nth file", () => {
-		expect(expandMentionTokens("@文件1", chips)).toBe("[Attachment] attachments/notes.md");
+	test("file ordinal expands to the name pointer of the Nth file", () => {
+		expect(expandMentionTokens("@文件1", chips)).toBe("[Attachment:notes.md]");
 	});
 });
 

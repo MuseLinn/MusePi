@@ -273,6 +273,12 @@ button.tr-display-context-source:hover {
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
 }
 
+.tr-async-result-job {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
 .tr-async-result-row {
 	display: flex;
 	align-items: center;
@@ -280,6 +286,18 @@ button.tr-display-context-source:hover {
 	font-family: var(--font-mono);
 	font-size: 12px;
 	line-height: 1.4;
+}
+
+/* Finished background generation: the row says it completed, the player
+ * makes the result watchable in place. */
+.tr-async-result-video {
+	display: block;
+	width: 100%;
+	max-width: 480px;
+	max-height: 320px;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border);
+	background: var(--bg-inset, rgba(0, 0, 0, 0.2));
 }
 
 .tr-async-result-done {

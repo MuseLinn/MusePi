@@ -1,5 +1,5 @@
 import "./happy-dom-shim"; // MUST be first: component module graphs define HTMLElement subclasses at evaluation time.
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { type MarketplaceCardEntry, setLocale, t } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -18,6 +18,9 @@ import type { RpcClient } from "../src/lib/rpc";
  */
 
 setLocale("zh-CN");
+beforeEach(() => {
+	localStorage.clear();
+});
 afterAll(() => {
 	setLocale("en-US");
 });

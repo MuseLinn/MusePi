@@ -557,13 +557,27 @@ interface LocalImageBridge {
 
 const localImageBridge = (): LocalImageBridge | null => electronBridge();
 
+/**
+ * Filesystem path behind an image src: strips `file://` and undoes the
+ * renderer's `encodeURI` (marked percent-encodes spaces and every non-ASCII
+ * character, so `/tmp/图 1.png` arrives as `/tmp/%E5%9B%BE%201.png` and names
+ * no real file). Remote/data/blob URLs never reach here.
+ */
+function localImagePath(src: string): string {
+	const raw = src.startsWith("file://") ? src.slice("file://".length) : src;
+	try {
+		return decodeURIComponent(raw);
+	} catch {
+		return raw;
+	}
+}
+
 /** `/abs/path.png`, `~/x.png`, `./rel.png`, `../rel.png`, `file://…` — but
  *  never http(s)/data/blob URLs, and never local paths without a known
  *  image extension (`/etc/hosts` stays a plain text path). */
 export function isLocalImageSrc(src: string): boolean {
 	if (/^(https?:|data:|blob:)/i.test(src)) return false;
-	const path = src.startsWith("file://") ? src.slice("file://".length) : src;
-	return /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(path);
+	return /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(localImagePath(src));
 }
 
 /**
@@ -583,7 +597,7 @@ export function resolveLocalImages(
 	for (const img of root.querySelectorAll<HTMLImageElement>("img[src]")) {
 		const src = img.getAttribute("src") ?? "";
 		if (!isLocalImageSrc(src)) continue;
-		let key = src.startsWith("file://") ? src.slice("file://".length) : src;
+		let key = localImagePath(src);
 		if (!key.startsWith("/") && !key.startsWith("~") && !/^\.{1,2}\//.test(key) && base) {
 			key = `${base.replace(/\/$/, "")}/${key}`;
 		}

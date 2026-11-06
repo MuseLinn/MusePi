@@ -9,6 +9,7 @@ import {
 	externalTask,
 	runExternalJsonl,
 } from "../../task/external-cli";
+import { registerExternalExecutableProbe } from "../../task/external-executable-probe";
 import type { ExternalSubagentExecutor } from "../../task/types";
 
 export const name = "musepi-subagent-opencode";
@@ -57,6 +58,7 @@ export function createOpenCodeExecutor(
 
 export function apply(pi: ExtensionAPI): void {
 	pi.setLabel("实验性 OpenCode 子智能体");
+	registerExternalExecutableProbe(pi, "opencode");
 	const executor = pi.config.getAll().then(config => createOpenCodeExecutor(config));
 	pi.registerSubagent({
 		name: "opencode",

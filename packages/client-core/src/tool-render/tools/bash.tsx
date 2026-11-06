@@ -38,7 +38,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	return result?.isError ? <span className="tv-err-text">{text}</span> : <span>{text}</span>;
 }
 
-function Body({ args, result }: ToolRenderProps): ReactNode {
+function Body({ args, result, host }: ToolRenderProps): ReactNode {
 	const command = args.command === undefined ? "…" : str(args.command);
 	const prefix = isRecord(args.env) ? envPrefix(args.env) : "";
 	const cwd = str(args.cwd);
@@ -51,7 +51,15 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const timeoutSeconds = num(args.timeout) ?? num(details?.timeoutSeconds);
 	const requestedTimeoutSeconds = num(details?.requestedTimeoutSeconds);
 	const job = asyncDetailsOf(details);
-	const artifactId = ARTIFACT_NOTICE.exec(resultTextOf(result))?.[1] ?? null;
+	const minimization = isRecord(details?.minimization) ? details.minimization : null;
+	const minimizationFilter = str(minimization?.filter);
+	const inputBytes = num(minimization?.inputBytes);
+	const outputBytes = num(minimization?.outputBytes);
+	const savingsPct =
+		inputBytes !== null && outputBytes !== null && inputBytes > 0
+			? Math.max(0, Math.min(100, ((inputBytes - outputBytes) / inputBytes) * 100))
+			: null;
+	const artifactId = str(minimization?.artifactId) ?? ARTIFACT_NOTICE.exec(resultTextOf(result))?.[1] ?? null;
 
 	const stats: string[] = [];
 	if (wallTimeMs !== null) {
@@ -65,7 +73,11 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 		stats.push(t("tools.requestedTimeoutSClampedWithSecs", { secs: String(requestedTimeoutSeconds) }));
 	}
 	if (job?.jobId) stats.push(t("tools.jobWithId", { id: job.jobId }));
+	if (minimizationFilter && savingsPct !== null) {
+		stats.push(t("tools.minimizedWithPctAndFilter", { pct: savingsPct.toFixed(1), filter: minimizationFilter }));
+	}
 	if (artifactId) stats.push(t("tools.artifactWithId", { id: artifactId }));
+	const openArtifact = artifactId && host?.openArtifact ? () => host.openArtifact?.(artifactId) : null;
 
 	return (
 		<>
@@ -96,7 +108,16 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			/>
 			<ResultImages result={result} />
 			<ResultText result={result} maxLines={12} />
-			{stats.length > 0 && <Row>{stats.join(" · ")}</Row>}
+			{(stats.length > 0 || openArtifact) && (
+				<Row>
+					{stats.join(" · ")}
+					{openArtifact && (
+						<button type="button" className="tv-expand" onClick={openArtifact}>
+							{t("tools.viewRawOutput")}
+						</button>
+					)}
+				</Row>
+			)}
 		</>
 	);
 }

@@ -16,6 +16,7 @@ import type { ToolsKey } from "../i18n/zh-CN/tools.js";
  * renderable names and belong in the list.
  */
 export const TOOL_RENDER_CARD_TOOLS: readonly string[] = [
+	"agnes_video_gen",
 	"apply_patch",
 	"ask",
 	"ast_edit",
@@ -87,6 +88,7 @@ export const TOOL_RENDER_CARD_LABELS: Readonly<Record<string, ToolsKey>> = {
 	ask: "tools.toolAsk",
 	ast_edit: "tools.toolAstEdit",
 	ast_grep: "tools.toolAstGrep",
+	agnes_video_gen: "tools.toolAgnesVideoGen",
 	await: "tools.toolAwait",
 	bash: "tools.toolBash",
 	board: "tools.toolBoard",

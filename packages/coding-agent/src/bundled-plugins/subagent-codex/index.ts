@@ -7,6 +7,7 @@ import {
 	externalModel,
 	externalTask,
 } from "../../task/external-cli";
+import { registerExternalExecutableProbe } from "../../task/external-executable-probe";
 import type { ExternalSubagentExecutor } from "../../task/types";
 import { runCodexAppServer } from "./app-server";
 
@@ -37,6 +38,7 @@ export function createCodexExecutor(
 
 export function apply(pi: ExtensionAPI): void {
 	pi.setLabel("实验性 Codex 子智能体");
+	registerExternalExecutableProbe(pi, "codex");
 	const executor = pi.config.getAll().then(config => createCodexExecutor(config));
 	pi.registerSubagent({
 		name: "codex",

@@ -51,6 +51,7 @@ The nearest package README and local code/test precedent supply local convention
 - Reuse central utilities before adding a helper. Git/jj process execution goes through `packages/coding-agent/src/utils/git.ts` or `jj.ts`.
 - Never edit `packages/catalog/src/models.json` directly; change its generator/resolver and regenerate.
 - Keep secrets and production user data out of source, tests, logs, and generated artifacts. Tests and smoke runs must never write the production session store or share the production daemon directory.
+- For GUI work, hierarchy, restraint, and polish are part of correctness. Avoid unnecessary secondary labels and descriptions; let layout, spacing, typography, and grouping communicate structure. Keep essential guidance and accessible names, remove redundant copy and chrome, and verify the composed interface rather than accepting a functionally complete but cluttered or awkward result.
 - User-facing changes update the owning docs, both locales of paired docs, and `packages/coding-agent/CHANGELOG.musepi.md` under `[Unreleased]` with the inline English translation. Released sections are immutable.
 - Use `bun check`, never `tsc` or `npx tsc`. Package `package.json` scripts are the command source of truth.
 - Commit subjects, when a commit is explicitly requested, are Conventional Commits with a user-visible summary of at most 72 characters and no process jargon.

@@ -256,6 +256,7 @@ export const BUILTIN_MARKETPLACE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec>
 				),
 				marketplacesCacheDir: getMarketplacesCacheDir(),
 				pluginsCacheDir: getPluginsCacheDir(),
+				includeDefaultMarketplaces: true,
 				clearPluginRootsCache: clearPluginRootsAndCaches,
 			});
 
@@ -490,6 +491,7 @@ export const BUILTIN_MARKETPLACE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec>
 					),
 					marketplacesCacheDir: getMarketplacesCacheDir(),
 					pluginsCacheDir: getPluginsCacheDir(),
+					includeDefaultMarketplaces: true,
 					clearPluginRootsCache: clearPluginRootsAndCaches,
 				});
 

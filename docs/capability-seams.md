@@ -27,7 +27,8 @@
 | Cordis 会话管理 | `packages/desktop-app/src/plugins/session-manager/index.ts`（`settings.tab.sessions`） | 同文件头部；接管内置会话设置页，插件缺失或编译失败时宿主回退 `SessionsSection` |
 | Cordis 会话信息分区 | `packages/desktop-app/src/plugins/session-info-plugins/index.ts`（`chat.session-info.plugins`） | 同文件头部；卡片只透传只读读数，插件停用/编译失败时回退内置列表 |
 | 第一方子系统插件与 entry 组件 | `packages/coding-agent/src/bundled-plugins/*/package.json`、`packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts`（`musepi.host` / `musepi.components` / `CordisDynamicPluginRuntime`） | 各包入口与运行时文件头部 |
-| 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`） | 同文件 `ExternalSubagentUpdate` 前六字段声明 |
+| 第三方 Cordis 插件适配 | `packages/coding-agent/src/extensibility/plugins/compat/modern-web-guidance-adapter.ts`（`modern_web_guidance` / 同名虚拟技能） | 同文件头部；安装缓存适配见 `third-party-cordis.ts` |
+| 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`）、`packages/coding-agent/src/task/external-executable-probe.ts`（`probeExecutable`） | 同文件 `ExternalSubagentUpdate` 前六字段声明；探针声明见探针文件头部 |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。
 

@@ -56,8 +56,9 @@
 	 * Concentric rule: childRadius = parentRadius − parentPadding
 	 * (2xl16 −4→ xl12 −4→ lg8 −2→ md6). Literal px radii are banned in
 	 * CSS (scripts/check-radius-tokens.ts); reference these tokens only.
-	 * sm moved 3→4 so the ladder steps evenly; the 29 existing refs shift
-	 * +1px by design. */
+	 * `--radius-full` is the pill/circle alias outside the ladder: the used
+	 * radius clamps to half the box, so one value serves capsules and small
+	 * round dots alike. */
 	--radius-xs: 2px;
 	--radius-sm: 4px;
 	--radius: 6px;
@@ -65,6 +66,7 @@
 	--radius-lg: 8px;
 	--radius-xl: 12px;
 	--radius-2xl: 16px;
+	--radius-full: 9999px;
 
 	/* Shared 4px spacing rhythm and control geometry. Component-specific
 	 * layout can still use other values; shared controls consume these tokens. */

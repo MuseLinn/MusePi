@@ -322,7 +322,16 @@ export const agnesVideoGenTool: CustomTool<typeof videoSchema, AgnesVideoToolDet
 				async ({ jobId: runJobId, signal: runSignal, reportProgress }) => {
 					const result = await pollVideoStatus(apiKey, videoId, baseUrl, runSignal, fetchImpl);
 					const text = formatVideoResult(result);
-					await reportProgress(text, { async: { state: "completed", jobId: runJobId, type: "agnes-video" } });
+					// `reportProgress` details become `job.latestDetails`; the delivery
+					// row reads `videoUrl` from there so the finished video previews
+					// without the model having to resurface the URL.
+					await reportProgress(text, {
+						async: { state: "completed", jobId: runJobId, type: "agnes-video" },
+						status: result.status,
+						videoUrl: result.videoUrl,
+						durationSeconds: result.durationSeconds,
+						size: result.size,
+					});
 					return text;
 				},
 				{ ownerId: ctx.agentId },

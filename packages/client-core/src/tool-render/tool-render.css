@@ -975,6 +975,18 @@
 	background: var(--tv-inset);
 }
 
+/* Generated video: a native player wide enough to read as the result, capped
+ * so a 4K clip does not take the whole card. */
+.tv-video {
+	display: block;
+	width: 100%;
+	max-width: 480px;
+	max-height: 320px;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--tv-border);
+	background: var(--tv-inset);
+}
+
 /* ---- markdown-ish prose (plain text bodies) ---- */
 
 .tv-prose {

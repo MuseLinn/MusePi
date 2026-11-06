@@ -140,24 +140,42 @@ Artifact 类型共享此目录：
 
 ## URL 访问模型
 
-### `blob:` 引用
+### `blob:` 引用与 `blob://` 读取
 
-`blob:sha256:<hash>` 是 session 条目载荷内的持久化引用，不是由 router 处理的内部 URL scheme。解析在 session 加载期间由 `SessionManager` 完成。
+两个字符串共用 `blob` 这个名字：
 
-### `artifact://<id>`
+- `blob:sha256:<hash>` 是 session 条目载荷内的持久化引用，由 `SessionManager` 在会话加载时解析，router 不会看到它。
+- `blob://<hash>` 是由 `BlobProtocolHandler` 处理的内部 URL scheme，指向同一个全局 blob 目录；拼路径前先用 `BLOB_HASH_RE` 校验哈希，返回文本。内联解析上限 8 MiB；`isProbablyBinary` 判定为二进制的 blob 会被拒绝，而不是解码成乱码。
 
-由 `ArtifactProtocolHandler` 通过注册的活动 session artifact 目录处理：
+`attachment.put` 与 `attachment.putFile` 返回的正是这个 URL，所以聊天附件的寻址方式就是内容本身，读取走模型读其它内部 URL 的同一条路径。
+
+### `artifact://<id>` 与 `artifact://<sessionId>/<id>`
+
+由 `ArtifactProtocolHandler` 处理。
+
+旧形态 `artifact://<id>`：
 
 - 要求数字 ID，
-- 在每个已注册 artifacts 目录中搜索文件名前缀 `<id>.`，
+- 先钉住调用方 session 的 artifact 目录，再回退到其它已注册目录，
+- 搜索文件名前缀 `<id>.`，
 - 从匹配的 `.log` 文件返回原始文本（`text/plain`），
-- 缺失时，错误包含现有 artifact 文件中的可用数字 artifact ID。
+- 缺失时，错误包含现有 artifact 文件中的可用数字 ID。
+
+命名空间形态 `artifact://<sessionId>/<id>`：
+
+- host 是 session ID，路径是 `/<数字 id>`，
+- session ID 必须匹配 `[A-Za-z0-9._-]+`；`.`、`..`、以点开头、含路径分隔符的写法在拼路径前就被拒绝，
+- 解析顺序：`<sessionsDir>/<sessionId>/`，再扫其直接子目录一层（子 agent 的产物写在 `<session dir>/<agent id>/`），
+- 未命中时只报告该 session 的可用 ID。
+
+引用跨会话或跨设备时必须用命名空间形态：裸计数器只有相对产生它的那个 session 才有意义。
 
 失败行为：
 
 - 如果没有注册 artifact 目录：抛出 `No session - artifacts unavailable`，
 - 如果注册的目录存在但磁盘上不存在：抛出 `No artifacts directory found`，
-- 如果 ID 不是数字：抛出 `artifact:// ID must be numeric, got: <id>`。
+- 如果 ID 不是数字：抛出 `artifact:// ID must be numeric, got: <id>`，
+- 如果命名空间的 session ID 不安全或不存在：抛出 `Artifact session <id> not found`。
 
 ### `agent://<id>`
 

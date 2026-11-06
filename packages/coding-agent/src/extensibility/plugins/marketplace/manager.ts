@@ -13,10 +13,13 @@ import * as path from "node:path";
 import { isEnoent, logger, pathIsWithin } from "@musepi/pi-utils";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
+import { adaptThirdPartyCordisPlugin } from "../compat/third-party-cordis";
 import { normalizePluginRuntimeConfig } from "../profile/runtime-config";
 import type { PluginRuntimeConfig } from "../runtime/types";
 
 import { cachePlugin } from "./cache";
+import { defaultMarketplaceCatalog, withDefaultMarketplaces } from "./default-marketplaces";
+import { readMarketplacePluginDetail } from "./detail";
 import { classifySource, fetchMarketplace, parseMarketplaceCatalog, promoteCloneToCache } from "./fetcher";
 import {
 	addInstalledPlugin,
@@ -39,6 +42,7 @@ import type {
 	MarketplaceCatalog,
 	MarketplacePluginEntry,
 	MarketplaceRegistryEntry,
+	MarketplacesRegistry,
 } from "./types";
 import { buildPluginId, parsePluginId } from "./types";
 import { isNewerVersion } from "./version";
@@ -75,6 +79,8 @@ export interface MarketplaceManagerOptions {
 	 * 测试可指向隔离路径。坏文件按零豁免处理（fail-safe），不阻塞安装。
 	 */
 	compatibilityExemptionsPath?: string;
+	/** Include the two reviewed built-in catalogs without installing their plugins. */
+	includeDefaultMarketplaces?: boolean;
 }
 
 // ── Manager ──────────────────────────────────────────────────────────────────
@@ -94,11 +100,19 @@ export class MarketplaceManager {
 		this.#opts.clearPluginRootsCache?.(extra);
 	}
 
+	async #readMarketplacesRegistry(): Promise<MarketplacesRegistry> {
+		return withDefaultMarketplaces(await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath), this.#opts);
+	}
+
 	// ── Marketplace lifecycle ─────────────────────────────────────────────────
 
 	async addMarketplace(source: string): Promise<MarketplaceRegistryEntry> {
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const reg = await this.#readMarketplacesRegistry();
 		const existingNames = new Set(reg.marketplaces.map(m => m.name));
+		const duplicateDefault = reg.marketplaces.find(entry => entry.sourceUri === source);
+		if (this.#opts.includeDefaultMarketplaces && duplicateDefault) {
+			throw new Error(`Marketplace "${duplicateDefault.name}" already exists`);
+		}
 
 		const { catalog, clonePath } = await fetchMarketplace(source, this.#opts.marketplacesCacheDir);
 
@@ -143,7 +157,10 @@ export class MarketplaceManager {
 	}
 
 	async removeMarketplace(name: string): Promise<void> {
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		if (this.#opts.includeDefaultMarketplaces && defaultMarketplaceCatalog(name)) {
+			throw new Error(`Marketplace "${name}" not found`);
+		}
+		const reg = await this.#readMarketplacesRegistry();
 		// removeMarketplaceEntry throws if not found — propagate to caller.
 		const updated = removeMarketplaceEntry(reg, name);
 		await writeMarketplacesRegistry(this.#opts.marketplacesRegistryPath, updated);
@@ -157,7 +174,7 @@ export class MarketplaceManager {
 	}
 
 	async updateMarketplace(name: string): Promise<MarketplaceRegistryEntry> {
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const reg = await this.#readMarketplacesRegistry();
 		const existing = getMarketplaceEntry(reg, name);
 		if (!existing) {
 			throw new Error(`Marketplace "${name}" not found`);
@@ -211,14 +228,14 @@ export class MarketplaceManager {
 	}
 
 	async listMarketplaces(): Promise<MarketplaceRegistryEntry[]> {
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const reg = await this.#readMarketplacesRegistry();
 		return reg.marketplaces;
 	}
 
 	// ── Plugin discovery ──────────────────────────────────────────────────────
 
 	async listAvailablePlugins(marketplace?: string): Promise<MarketplacePluginEntry[]> {
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const reg = await this.#readMarketplacesRegistry();
 
 		if (marketplace !== undefined) {
 			const entry = reg.marketplaces.find(m => m.name === marketplace);
@@ -253,19 +270,7 @@ export class MarketplaceManager {
 		const scope = options?.scope ?? "user";
 		const registryPath = this.#registryPath(scope);
 
-		// 1. Find marketplace entry
-		const mktReg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
-		const mktEntry = getMarketplaceEntry(mktReg, marketplace);
-		if (!mktEntry) {
-			throw new Error(`Marketplace "${marketplace}" not found`);
-		}
-
-		// 2. Find plugin in catalog
-		const catalog = await this.#readCatalog(mktEntry);
-		const pluginEntry = catalog.plugins.find(p => p.name === name);
-		if (!pluginEntry) {
-			throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
-		}
+		const { pluginEntry, sourcePath, tempCloneRoot } = await this.#preparePluginSource(name, marketplace);
 
 		// Trust gate for GUI confirmations: the caller approved a specific
 		// catalog version, so refuse to install a different one. Checked
@@ -289,34 +294,6 @@ export class MarketplaceManager {
 		if (existing && existing.length > 0 && !force) {
 			throw new Error(`Plugin "${pluginId}" is already installed. Use force option to reinstall.`);
 		}
-
-		// 4. Resolve source path.
-		// marketplaceClonePath is the marketplace root — the directory containing .claude-plugin/
-		// catalogPath is <marketplacesCacheDir>/<name>/marketplace.json, so the root is two levels up.
-		// For local sources the content was fetched from a local path; the stored catalog is a copy
-		// under marketplacesCacheDir. We need the original source root for resolving relative paths.
-		// Use: path.dirname(catalogPath) is <cacheDir>/<name>/, and that IS the stored copy root,
-		// so `path.resolve(mktEntry.catalogPath, "../..")` = parent of <name>/ inside cacheDir
-		// which is wrong for local sources. Instead, derive from the stored catalog directory:
-		// stored at: <marketplacesCacheDir>/<catalogName>/marketplace.json
-		// The marketplace root for local sources should be the actual local path, but we only have
-		// sourceUri. For local sources, use path.resolve of sourceUri; for others use the cache dir.
-		const marketplaceClonePath = this.#resolveMarketplaceRoot(mktEntry);
-
-		// URL-sourced marketplaces only cache marketplace.json, not the full plugin tree.
-		// Relative string sources ("./plugins/foo") cannot be resolved against the cache dir.
-		if (mktEntry.sourceType === "url" && typeof pluginEntry.source === "string") {
-			throw new Error(
-				`Plugin "${name}" uses a relative source path but marketplace "${marketplace}" was added via URL. ` +
-					`Relative sources require a git or local marketplace. Re-add the marketplace using its git URL.`,
-			);
-		}
-
-		const { dir: sourcePath, tempCloneRoot } = await resolvePluginSource(pluginEntry, {
-			marketplaceClonePath,
-			catalogMetadata: catalog.metadata,
-			tmpDir: os.tmpdir(),
-		});
 
 		// 回退保护②：兼容性预检在缓存/登记**之前**——源已解析、插件代码
 		// 尚未 import。拒绝 = 结构化错误（不带任何盘副作用;tempCloneRoot 由
@@ -343,6 +320,7 @@ export class MarketplaceManager {
 		try {
 			version = await this.#resolvePluginVersion(pluginEntry, sourcePath);
 			cachePath = await cachePlugin(sourcePath, this.#opts.pluginsCacheDir, marketplace, name, version);
+			await adaptThirdPartyCordisPlugin(cachePath);
 			await this.#writeEmbeddedLspConfig(pluginEntry, cachePath);
 			await this.#writeEmbeddedDapConfig(pluginEntry, cachePath);
 		} finally {
@@ -444,6 +422,57 @@ export class MarketplaceManager {
 
 		const targetPath = path.join(cachePath, ".dap.json");
 		await Bun.write(targetPath, `${JSON.stringify({ adapters: dapAdapters }, null, 2)}\n`);
+	}
+
+	async getPluginDetail(name: string, marketplace: string) {
+		const { pluginEntry, sourcePath, tempCloneRoot } = await this.#preparePluginSource(name, marketplace);
+		try {
+			return await readMarketplacePluginDetail(sourcePath, pluginEntry);
+		} finally {
+			if (tempCloneRoot) await fs.rm(tempCloneRoot, { recursive: true, force: true }).catch(() => {});
+		}
+	}
+
+	async #preparePluginSource(name: string, marketplace: string) {
+		const mktReg = await this.#readMarketplacesRegistry();
+		let mktEntry = getMarketplaceEntry(mktReg, marketplace);
+		if (!mktEntry) throw new Error(`Marketplace "${marketplace}" not found`);
+		if (
+			this.#opts.includeDefaultMarketplaces &&
+			defaultMarketplaceCatalog(marketplace) &&
+			mktEntry.sourceType !== "local"
+		) {
+			let rootExists = false;
+			try {
+				rootExists = (await fs.stat(this.#resolveMarketplaceRoot(mktEntry))).isDirectory();
+			} catch (err) {
+				if (!isEnoent(err)) throw err;
+			}
+			if (!rootExists) {
+				await this.updateMarketplace(marketplace);
+				const refreshed = getMarketplaceEntry(await this.#readMarketplacesRegistry(), marketplace);
+				if (!refreshed) throw new Error(`Marketplace "${marketplace}" not found after refresh`);
+				mktEntry = refreshed;
+			}
+		}
+
+		const catalog = await this.#readCatalog(mktEntry);
+		const pluginEntry = catalog.plugins.find(p => p.name === name);
+		if (!pluginEntry) throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
+		const marketplaceClonePath = this.#resolveMarketplaceRoot(mktEntry);
+		if (mktEntry.sourceType === "url" && typeof pluginEntry.source === "string") {
+			throw new Error(
+				`Plugin "${name}" uses a relative source path but marketplace "${marketplace}" was added via URL. ` +
+					`Relative sources require a git or local marketplace. Re-add the marketplace using its git URL.`,
+			);
+		}
+
+		const { dir: sourcePath, tempCloneRoot } = await resolvePluginSource(pluginEntry, {
+			marketplaceClonePath,
+			catalogMetadata: catalog.metadata,
+			tmpDir: os.tmpdir(),
+		});
+		return { pluginEntry, sourcePath, tempCloneRoot };
 	}
 
 	/**
@@ -650,7 +679,7 @@ export class MarketplaceManager {
 	// Refresh marketplace catalogs that haven't been updated in more than 24 h.
 	// Per-marketplace failures are silently swallowed — offline is fine.
 	async refreshStaleMarketplaces(): Promise<void> {
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const reg = await this.#readMarketplacesRegistry();
 		const staleMs = 24 * 60 * 60 * 1000;
 		for (const entry of reg.marketplaces) {
 			if (Date.now() - Date.parse(entry.updatedAt) >= staleMs) {
@@ -667,7 +696,7 @@ export class MarketplaceManager {
 	// Returns one entry per (pluginId, scope) pair where the catalog declares a newer version.
 	// Catalog entries without a version field are skipped.
 	async checkForUpdates(): Promise<Array<{ pluginId: string; scope: "user" | "project"; from: string; to: string }>> {
-		const mktReg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const mktReg = await this.#readMarketplacesRegistry();
 		const updates: Array<{ pluginId: string; scope: "user" | "project"; from: string; to: string }> = [];
 
 		// Keyed by (path, scope) so each scope is checked independently.
@@ -932,6 +961,8 @@ export class MarketplaceManager {
 			return parseMarketplaceCatalog(content, entry.catalogPath);
 		} catch (err) {
 			if (isEnoent(err)) {
+				const embedded = defaultMarketplaceCatalog(entry.name);
+				if (embedded && this.#opts.includeDefaultMarketplaces) return embedded;
 				throw new Error(
 					`Marketplace catalog not found at ${entry.catalogPath}. Try: /marketplace update ${entry.name}`,
 				);

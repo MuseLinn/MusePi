@@ -206,6 +206,7 @@ export const settings = {
 	"settings.commaSeparatedValues": "Comma separated values",
 	"settings.moveEarlier": "Move earlier",
 	"settings.moveLater": "Move later",
+	"settings.removeOption": "Remove",
 	"settings.invalidJson": "Invalid JSON",
 	"settings.optionsComeTuiRuntime": "Options come from the TUI runtime",
 	"settings.remoteToken": "Remote token (optional)",
@@ -1023,7 +1024,6 @@ export const settings = {
 	"settings.localDaemon": "Local daemon",
 	"settings.disconnected": "Disconnected",
 	"settings.selectSession": "Select a session",
-	"settings.jobsEmptyHint": "Open a session to see its running and recent jobs.",
 	"settings.contextEmptyHint": "Open a session to see its context window and session stats.",
 	"settings.newSession": "New session",
 	"settings.view": "View",
@@ -2984,6 +2984,35 @@ export const settings = {
 		"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)",
 	"settings.shell.bash.minimizer": "Shell Minimizer",
 	"settings.shell.bash.minimizerSourceOutline": "Shell Minimizer Source Outline",
+	"settings.shell.bash.minimizerSettingsPath": "Custom Minimizer TOML",
+	"settings.shell.bash.minimizerOnly": "Minimized Commands Only",
+	"settings.shell.bash.minimizerExcept": "Excluded Minimized Commands",
+	"settings.shell.bash.minimizerMaxCapture": "Maximum Capture Bytes",
+	"settings.shell.bash.minimizerLegacy": "Use Legacy Minimizer Filters",
+	"settings.shell.minimizerStats.title": "Shell Minimization Statistics",
+	"settings.shell.minimizerStats.desc":
+		"Measured byte savings from local non-interactive commands; no token estimate.",
+	"settings.shell.minimizerStats.summary": "Saved {saved} across {count} commands",
+	"settings.shell.minimizerStats.percentage": "{pct}% weighted average reduction",
+	"settings.shell.minimizerStats.progressLabel": "Shell minimization rate",
+	"settings.shell.minimizerStats.filterRow": "{filter} · {count} commands · saved {saved}",
+	"settings.shell.minimizerStats.empty": "No shell minimization results recorded yet",
+	"Bash Advanced": "Bash Advanced",
+	"Custom Minimizer TOML": "Custom Minimizer TOML",
+	"Optional TOML file with user-defined minimizer filters and overrides":
+		"Optional TOML file with user-defined minimizer filters and overrides",
+	"Minimized Commands Only": "Minimized Commands Only",
+	"Comma-separated command allowlist; empty enables every built-in filter":
+		"Comma-separated command allowlist; empty enables every built-in filter",
+	"Excluded Minimized Commands": "Excluded Minimized Commands",
+	"Comma-separated commands that always return unminimized output":
+		"Comma-separated commands that always return unminimized output",
+	"Maximum Capture Bytes": "Maximum Capture Bytes",
+	"Outputs larger than this limit bypass the minimizer unchanged":
+		"Outputs larger than this limit bypass the minimizer unchanged",
+	"Use Legacy Minimizer Filters": "Use Legacy Minimizer Filters",
+	"Fall back to the conservative legacy routing and filter behavior":
+		"Fall back to the conservative legacy routing and filter behavior",
 	"settings.appearance.display.shimmer": "Shimmer",
 	"settings.showDividerAbove.info":
 		"Show a divider above an assistant turn whose request lost (missed) the prompt cache",

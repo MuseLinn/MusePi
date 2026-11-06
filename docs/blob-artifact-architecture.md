@@ -140,24 +140,42 @@ If file sink creation fails (I/O error, missing path, etc.), sink falls back to 
 
 ## URL access model
 
-### `blob:` references
+### `blob:` references and `blob://` reads
 
-`blob:sha256:<hash>` is a persistence reference inside session entry payloads, not an internal URL scheme handled by the router. Resolution is done by `SessionManager` during session load.
+Two different strings share the `blob` name:
 
-### `artifact://<id>`
+- `blob:sha256:<hash>` is a persistence reference inside session entry payloads. `SessionManager` resolves it during session load; the router never sees it.
+- `blob://<hash>` is an internal URL scheme handled by `BlobProtocolHandler`. It addresses the same global blob directory, validates the hash against `BLOB_HASH_RE` before joining any path, and returns text. Inline resolution is capped at 8 MiB, and a blob that `isProbablyBinary` reports as binary is rejected instead of decoded into mojibake.
 
-Handled by `ArtifactProtocolHandler` over registered active session artifact directories:
+`attachment.put` and `attachment.putFile` return this very URL, so a chat attachment is addressed by content and read through the same handler as any other internal URL.
+
+### `artifact://<id>` and `artifact://<sessionId>/<id>`
+
+Handled by `ArtifactProtocolHandler`.
+
+Legacy form `artifact://<id>`:
 
 - requires a numeric ID,
-- searches each registered artifacts directory for filename prefix `<id>.`,
+- pins the calling session's artifact directory first, then falls back to the other registered directories,
+- searches for filename prefix `<id>.`,
 - returns raw text (`text/plain`) from the matched `.log` file,
 - when missing, error includes available numeric artifact IDs from existing artifact files.
+
+Namespaced form `artifact://<sessionId>/<id>`:
+
+- the host is a session ID, the path is `/<numeric id>`,
+- the session ID must match `[A-Za-z0-9._-]+`; `.`, `..`, a leading dot, and any path separator are rejected before the path is built,
+- resolution looks in `<sessionsDir>/<sessionId>/`, then one level of child directories (a subagent writes its artifacts under `<session dir>/<agent id>/`),
+- a miss reports only that session's available IDs.
+
+Use the namespaced form whenever a reference crosses sessions or devices: the bare counter only means something relative to the session that produced it.
 
 Failure behavior:
 
 - if no artifact directories are registered: throws `No session - artifacts unavailable`,
 - if registered directories exist but none are present on disk: throws `No artifacts directory found`,
-- if ID is not numeric: throws `artifact:// ID must be numeric, got: <id>`.
+- if ID is not numeric: throws `artifact:// ID must be numeric, got: <id>`,
+- if a namespaced session ID is unsafe or unknown: throws `Artifact session <id> not found`.
 
 ### `agent://<id>`
 

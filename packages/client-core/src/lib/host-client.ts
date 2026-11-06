@@ -86,6 +86,8 @@ export class HostClient implements SessionClient {
 	 *  composer answers with — the two id spaces differ. */
 	#askReqIds = new Map<number, string>();
 	#askSeq = 0;
+	/** Stable identity for send idempotency on this client instance. */
+	#clientId = crypto.randomUUID();
 	#phase: ConnectionPhase = "connecting";
 	#endedReason: string | null = null;
 
@@ -152,6 +154,8 @@ export class HostClient implements SessionClient {
 		await this.#rpc("session.send", {
 			sessionId: this.#sessionId,
 			text,
+			clientId: this.#clientId,
+			clientRequestId: crypto.randomUUID(),
 			images: images && images.length > 0 ? images : undefined,
 			deliverAs: "prompt",
 		});
@@ -419,6 +423,12 @@ export class HostClient implements SessionClient {
 				};
 				break;
 			}
+			case "approval-request-end": {
+				const record = asRecord(payload);
+				if (!record || typeof record.requestId !== "string") return;
+				if (this.#approvalRequest?.requestId === record.requestId) this.#approvalRequest = null;
+				break;
+			}
 			case "ask-request": {
 				const record = asRecord(payload);
 				if (!record || !("requestId" in record) || typeof record.requestId !== "string") return;
@@ -448,6 +458,16 @@ export class HostClient implements SessionClient {
 					// mode "dialog" (multi-question) — Composer has no renderer;
 					// surface as a notice so the host is not blind.
 					this.#pushNotice("info", title);
+				}
+				break;
+			}
+			case "ask-request-end": {
+				const record = asRecord(payload);
+				if (!record || typeof record.requestId !== "string") return;
+				for (const [numId, requestId] of this.#askReqIds) {
+					if (requestId !== record.requestId) continue;
+					this.#askReqIds.delete(numId);
+					if (this.#uiRequest?.reqId === numId) this.#uiRequest = null;
 				}
 				break;
 			}

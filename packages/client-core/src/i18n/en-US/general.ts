@@ -482,6 +482,7 @@ export const general = {
 	"general.runDevServer": "Run dev server",
 	"general.stopDevServer": "Stop dev server",
 	"general.newTab": "New tab",
+	"general.dropFilesToAttach": "Drop to attach files",
 	"general.attachSelectionChat": "Attach selection to chat",
 	"general.citeFileComposer": "Cite file in composer",
 	"general.openInPanelBrowser": "Open in side panel browser",

@@ -13,6 +13,7 @@ import type {
 	TextContent,
 	Tool,
 	ToolChoice,
+	VideoContent,
 } from "../types";
 import { normalizeSystemPrompts } from "../utils";
 import { clearStreamingPartialJson, kStreamingPartialJson } from "../utils/block-symbols";
@@ -173,7 +174,7 @@ function selectToolsForToolChoice(tools: Tool[] | undefined, toolChoice: ToolCho
 }
 
 function toPlainContent(
-	content: string | ReadonlyArray<TextContent | ImageContent>,
+	content: string | ReadonlyArray<TextContent | ImageContent | VideoContent>,
 	supportsImages: boolean,
 ): {
 	content: string;

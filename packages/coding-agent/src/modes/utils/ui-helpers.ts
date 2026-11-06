@@ -107,11 +107,15 @@ export class UiHelpers {
 	/** Extract text content from a user message */
 	getUserMessageText(message: Message): string {
 		if (message.role !== "user") return "";
-		const textBlocks =
-			typeof message.content === "string"
-				? [{ type: "text", text: message.content }]
-				: message.content.filter((content): content is TextBlock => content.type === "text");
-		return textBlocks.map(block => block.text).join("");
+		if (typeof message.content === "string") return message.content;
+		return message.content
+			.map(block => {
+				if (block.type === "text") return block.text;
+				// The terminal cannot render a clip; a marker keeps it visible.
+				if (block.type === "video") return `[video: ${block.mimeType}]`;
+				return "";
+			})
+			.join("");
 	}
 
 	/**

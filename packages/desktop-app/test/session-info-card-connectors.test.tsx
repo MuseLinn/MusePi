@@ -8,8 +8,10 @@ import { SessionInfoCard } from "../src/components/session-info-card";
 /**
  * The connector section is the session-side entry point to MCP settings. It
  * must render even with zero servers — the former "only when servers exist"
- * gate left a new user with no visible way to add one — and its manage button
- * must open the MCP section, not a generic settings open.
+ * gate left a new user with no visible way to add one — and its manage entry
+ * must open the MCP section, not a generic settings open. With servers present
+ * the entry rides the picker header so the card does not repeat itself with a
+ * second "MCP servers" row.
  */
 
 const roots = new Set<Root>();
@@ -80,8 +82,11 @@ describe("SessionInfoCard connectors", () => {
 
 		expect(container.textContent).toContain("linear");
 		expect(container.textContent).not.toContain(t("settings.mcpSettings"));
-		const manage = container.querySelector<HTMLButtonElement>(".gui-session-info-manage-connectors");
-		expect(manage).not.toBeNull();
+		expect(container.querySelector(".gui-session-info-manage-connectors")).toBeNull();
+		const manage = [
+			...container.querySelectorAll<HTMLButtonElement>(".gui-connector-panel-head .gui-connector-link"),
+		].find(button => button.textContent === t("tools.connectorsManage"));
+		expect(manage).not.toBeUndefined();
 
 		await act(async () => manage?.click());
 		expect(opened).toEqual(["mcp"]);

@@ -912,15 +912,28 @@ function renderCustomMessage({
 			<Row kind="custom" gutter="" title={timestamp}>
 				<div className="tr-async-result" role="status">
 					{jobs.map((job, i) => (
-						<div key={i} className="tr-async-result-row">
-							<span className="tr-async-result-done" aria-hidden>
-								✓
-							</span>
-							<span className="tr-async-result-text">{t("general.backgroundJobCompleted")}</span>
-							{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
-							<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
-							{typeof job.durationMs === "number" ? (
-								<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
+						<div key={i} className="tr-async-result-job">
+							<div className="tr-async-result-row">
+								<span className="tr-async-result-done" aria-hidden>
+									✓
+								</span>
+								<span className="tr-async-result-text">{t("general.backgroundJobCompleted")}</span>
+								{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
+								<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
+								{typeof job.durationMs === "number" ? (
+									<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
+								) : null}
+							</div>
+							{job.videoUrl ? (
+								<video
+									className="tr-async-result-video"
+									src={job.videoUrl}
+									controls
+									playsInline
+									preload="metadata"
+								>
+									{t("tools.videoUnavailable")}
+								</video>
 							) : null}
 						</div>
 					))}
@@ -1020,12 +1033,15 @@ function renderCustomMessage({
 	);
 }
 
-/** One row of the `async-result` card: a job id + optional kind/label/duration. */
+/** One row of the `async-result` card: a job id + optional kind/label/duration,
+ *  plus the produced video for `agnes-video` jobs (the completion row is where
+ *  a background generation becomes watchable). */
 interface AsyncResultJobRow {
 	jobId?: string;
 	type?: "bash" | "task" | "agnes-video";
 	label?: string;
 	durationMs?: number;
+	videoUrl?: string;
 }
 
 /** Async-job rows carried by an `async-result` custom message (single job on
@@ -1041,6 +1057,7 @@ function asyncResultJobs(details: unknown): AsyncResultJobRow[] {
 	if ("type" in details && (details.type === "bash" || details.type === "task" || details.type === "agnes-video")) {
 		one.type = details.type;
 	}
+	if ("videoUrl" in details && typeof details.videoUrl === "string") one.videoUrl = details.videoUrl;
 	return [one];
 }
 

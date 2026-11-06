@@ -19,6 +19,7 @@ import type {
 	ToolResultMessage,
 	ToolResultProviderMetadata,
 	TSchema,
+	VideoContent,
 } from "@musepi/pi-ai";
 import type { Dialect } from "@musepi/pi-ai/dialect";
 import type { HarmonyAuditEvent } from "@musepi/pi-ai/utils/harmony-leak";
@@ -616,7 +617,7 @@ export interface BeforeToolCallResult {
  */
 export interface AfterToolCallResult {
 	/** If provided, replaces the tool result content array in full. */
-	content?: (TextContent | ImageContent)[];
+	content?: (TextContent | ImageContent | VideoContent)[];
 	/** If provided, replaces the tool result details payload in full. */
 	details?: unknown;
 	/** If provided, replaces the provider-native result metadata in full. */
@@ -703,8 +704,9 @@ export interface AgentState {
 }
 
 export interface AgentToolResult<T = any, _TInput = unknown> {
-	// Content blocks supporting text and images
-	content: (TextContent | ImageContent)[];
+	// Content blocks supporting text, images and video (providers without a
+	// video channel degrade the block to a text marker).
+	content: (TextContent | ImageContent | VideoContent)[];
 	// Details to be displayed in a UI or logged
 	details?: T;
 	// Marks a non-throwing failure (e.g. an aggregator catching per-entry errors).

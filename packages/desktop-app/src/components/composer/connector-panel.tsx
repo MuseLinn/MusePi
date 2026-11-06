@@ -258,6 +258,7 @@ export function ConnectorPanel({
 	onToggleServers,
 	onSelectAll,
 	onUseAll,
+	onManage,
 }: {
 	snapshot: ConnectorSnapshot | null;
 	loadFailed: boolean;
@@ -267,6 +268,9 @@ export function ConnectorPanel({
 	onSelectAll(): void;
 	/** Return to the unset selection, which means every configured server. */
 	onUseAll(): void;
+	/** Optional settings entry rendered in the panel header, beside the
+	 *  selection actions. Hosts that cannot open settings omit it. */
+	onManage?: () => void;
 }): ReactNode {
 	if (loadFailed && snapshot === null) {
 		return <div className="gui-connector-panel gui-connector-panel--empty">{t("tools.connectorsLoadFailed")}</div>;
@@ -290,6 +294,11 @@ export function ConnectorPanel({
 					<span className="gui-connector-panel-count">{snapshot.servers.length}</span>
 				</span>
 				<span className="gui-connector-panel-links">
+					{onManage && (
+						<button type="button" className="gui-connector-link" onClick={onManage}>
+							{t("tools.connectorsManage")}
+						</button>
+					)}
 					<button
 						type="button"
 						className="gui-connector-link"

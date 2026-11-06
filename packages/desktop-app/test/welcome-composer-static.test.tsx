@@ -33,3 +33,24 @@ it("keeps empty-state placeholder and tip static while focus mode is open", asyn
 	expect(textarea?.placeholder).toBe(placeholder);
 	expect(tip?.textContent).toBe(tipText);
 });
+
+it("lets the welcome textarea claim OS file drags on its own", async () => {
+	// The window-level drop anchor is a fallback, not the only reason this
+	// textarea receives a drop: Chromium needs dragover prevented here too.
+	const container = document.createElement("div");
+	document.body.appendChild(container);
+	const root = createRoot(container);
+	roots.add(root);
+	await act(async () => root.render(<WelcomeComposer onSubmit={() => {}} rpc={rpc} />));
+	const textarea = container.querySelector("textarea");
+	expect(textarea).not.toBeNull();
+
+	const over = new Event("dragover", { bubbles: true, cancelable: true });
+	Object.defineProperty(over, "dataTransfer", {
+		value: { types: ["Files"], files: [], dropEffect: "none" },
+	});
+	await act(async () => {
+		textarea?.dispatchEvent(over);
+	});
+	expect(over.defaultPrevented).toBe(true);
+});

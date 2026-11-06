@@ -3047,26 +3047,124 @@
 	max-width: 160px;
 }
 
-.gui-seg-move {
-	padding: 2px 4px;
-	border: none;
+/* Ordered fallback editor (ui.ordered): numbered priority list + ↑/↓ moves.
+   Stacked on its own row line so long method names never compete with the
+   label column for width. */
+.gui-ordered-editor {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-ordered-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	max-width: 460px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.gui-ordered-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 4px 6px 4px 8px;
 	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-ordered-rank {
+	flex: none;
+	width: 14px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1;
+	color: var(--color-text-faint);
+	text-align: right;
+}
+
+.gui-ordered-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-ordered-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 2px;
+}
+
+.gui-ordered-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 11px;
+	font-size: 12px;
 	font-family: inherit;
+	line-height: 1;
 	cursor: pointer;
 	transition: background 120ms ease-out, color 120ms ease-out;
 }
 
-.gui-seg-move:hover:not(:disabled) {
+.gui-ordered-btn:hover:not(:disabled) {
 	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 	color: var(--color-text);
 }
 
-.gui-seg-move:disabled {
-	opacity: 0.3;
+.gui-ordered-btn--remove:hover:not(:disabled) {
+	color: var(--color-danger);
+}
+
+.gui-ordered-btn:disabled {
+	opacity: 0.25;
 	cursor: default;
+}
+
+.gui-ordered-add {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	max-width: 460px;
+}
+
+/* Choices outside the priority list: click to append at the end. */
+.gui-ordered-add-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius-full);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: border-color 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-ordered-add-btn:hover {
+	border-color: var(--color-accent-bd);
+	color: var(--color-text);
 }
 
 .gui-accent-swatch {
@@ -3721,7 +3819,107 @@ body.gui-resizing {
 }
 
 .gui-pane-col--second {
-	border-left: 1px solid var(--border);
+	/* The split divider draws the separator rule now (it sits between the
+	 * columns), so the column does not draw a second line beside it. */
+	/* Split entrance: the new column slides in behind the divider instead of
+	 * the panel snapping to double width in one frame. The reverse (merge)
+	 * cannot animate a column that is already unmounting, so it relies on the
+	 * shared header height keeping the remaining column's row still. */
+	animation: gui-pane-col-in 180ms var(--spring-snappy) both;
+}
+
+@keyframes gui-pane-col-in {
+	from {
+		opacity: 0;
+		transform: translateX(10px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-motion-off .gui-pane-col--second {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-pane-col--second {
+		animation: none;
+	}
+}
+
+/* Divider between the split columns (VS Code sash / dsh divider parity): a
+ * 7px hit band with a hairline down its centre, so a 1px separator is still
+ * grabbable. It owns the rule the second column used to draw. */
+.gui-pane-split-divider {
+	position: relative;
+	flex: none;
+	align-self: stretch;
+	width: 7px;
+	cursor: col-resize;
+	touch-action: none;
+	outline: none;
+	animation: gui-pane-divider-in 180ms var(--spring-snappy) both;
+}
+
+.gui-pane-split-divider::before,
+.gui-pane-split-divider::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	transform: translateX(-50%);
+}
+
+.gui-pane-split-divider::before {
+	background: var(--border);
+}
+
+.gui-pane-split-divider::after {
+	background: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	opacity: 0;
+	transition: opacity 120ms ease-out;
+}
+
+.gui-pane-split-divider:hover {
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.gui-pane-split-divider:hover::after,
+.gui-pane-split-divider:focus-visible::after,
+.gui-pane-split-divider--active::after {
+	opacity: 1;
+}
+
+/* Keyboard focus needs a ring the hairline alone cannot carry. */
+.gui-pane-split-divider:focus-visible {
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.gui-pane-split-divider--active {
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
+@keyframes gui-pane-divider-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.gui-motion-off .gui-pane-split-divider {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-pane-split-divider {
+		animation: none;
+	}
 }
 
 .gui-pane-col--over {
@@ -3729,27 +3927,43 @@ body.gui-resizing {
 	border-radius: var(--radius-md);
 }
 
-.gui-pane-col-head {
+/* One header row for both layouts (single column and each split column).
+ * dsh TabStrip parity: the chips box is the row's only shrinking part, every
+ * control after it keeps its width, so a narrow pane costs chips, never
+ * controls. The row owns its height, padding and rule, which is why the two
+ * layouts no longer sit at different heights. */
+.gui-pane-head {
 	display: flex;
 	align-items: center;
 	gap: 2px;
 	flex-shrink: 0;
 	min-width: 0;
-	padding: 4px 6px 2px 10px;
+	height: 34px;
+	padding: 4px 6px 4px 10px;
+	border-bottom: 1px solid var(--border);
 }
 
-/* dsh TabStrip parity: the chips box is the strip's only shrinking part;
- * the add control and chrome keep their width at the row's end. */
-.gui-pane-col-strip {
+.gui-pane-head-strip {
 	flex: 1 1 0;
 	min-width: 0;
 }
 
-.gui-pane-col-tools {
+.gui-pane-head-tools {
 	display: flex;
 	align-items: center;
 	gap: 2px;
 	flex-shrink: 0;
+}
+
+/* The header already declares height, padding, rule and bottom gap. The
+ * strip must not re-declare them: when it carried its own 30px height and
+ * 6px margin, the split columns (which subtracted both) rendered the row
+ * shorter than the single column. */
+.gui-pane-head .gui-surface-tabs {
+	height: 26px;
+	padding: 0;
+	border-bottom: none;
+	margin-bottom: 0;
 }
 
 /* Single-column body wrapper: hosts the right-half split drop zone (dsh
@@ -3787,6 +4001,28 @@ body.gui-resizing {
 	background: color-mix(in oklab, var(--color-accent) 5%, transparent);
 	color: var(--color-text-muted);
 	pointer-events: none;
+	animation: gui-pane-split-zone-in 140ms var(--spring-snappy) both;
+}
+
+@keyframes gui-pane-split-zone-in {
+	from {
+		opacity: 0;
+		transform: scale(0.985);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-motion-off .gui-pane-split-zone--active {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-pane-split-zone--active {
+		animation: none;
+	}
 }
 
 .gui-pane-split-zone--over {
@@ -3980,9 +4216,17 @@ body.gui-resizing {
 	}
 }
 
+/* The dragged chip keeps its slot but reads as lifted, so the user sees what
+ * is moving and which row it will land in (dsh drag affordance). The strip
+ * clips vertical overflow, so the lift is drawn inside the chip (raised fill
+ * plus an inset accent ring) rather than with an outer drop shadow. */
 .gui-surface-tab--dragging {
 	z-index: 10;
-	opacity: 0.85;
+	opacity: 0.95;
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 40%, transparent);
+	cursor: grabbing;
 }
 
 .gui-surface-tab-title {

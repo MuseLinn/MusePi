@@ -15,8 +15,8 @@ import * as snapcompact from "@musepi/snapcompact";
 import type { Settings } from "../config/settings";
 import { type BlobBackend, LocalBlobBackend } from "./broker";
 import {
-	contextHasImages,
 	contextHasImageUrls,
+	contextHasMedia,
 	contextHasProviderFiles,
 	decorateContextImages,
 	inlineContextImages,
@@ -232,7 +232,9 @@ export class ImageUrlService {
 	 * the following URL destinations without changing the session context.
 	 */
 	async decorateContext(context: Context, model: Model): Promise<Context> {
-		if (!contextHasImages(context)) return context;
+		// Video-only turns must reach the provider-file step too: a local clip
+		// needs an upload reference exactly like an inline image does.
+		if (!contextHasMedia(context)) return context;
 		const position = Math.min(this.#providerFilePosition, this.#configs.length);
 		let decorated = context;
 		if (position > 0) {

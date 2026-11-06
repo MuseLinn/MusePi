@@ -284,6 +284,7 @@ import { readSdkNewestTimestamp, rekeyEntriesToViewSpace, snapshotFromJsonl } fr
 
 export { snapshotFromJsonl };
 
+import { AsyncJobManager } from "../async/job-manager";
 import type {
 	ExtensionNotificationMessage,
 	ExtensionSetting,
@@ -298,9 +299,16 @@ import {
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 } from "../task/types";
 import { EventBus } from "../utils/event-bus";
-import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
+import {
+	type ApprovalBridge,
+	approvalRequestPayload,
+	askRequestPayload,
+	createApprovalBridge,
+	type PendingApproval,
+} from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal, catchupPlan } from "./journal";
+import { acquireSessionOwnerLock, type SessionOwnerLock, sessionLocksDir } from "./session-owner-lock";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 
 export interface DaemonOptions {
@@ -417,6 +425,8 @@ export function modesOf(session: unknown): {
 }
 export const DEFAULT_SOCKET = path.join(SOCKET_DIR, "daemon.sock");
 export const JOURNAL_DIR = path.join(SOCKET_DIR, "journal");
+/** Process-level ownership files (daemon vs CLI/TUI direct writes). */
+export const SESSION_LOCKS_DIR = sessionLocksDir();
 
 /** Journal file for a session id (the daemon's only journal layout). */
 export function journalFilePath(sessionId: string): string {
@@ -715,29 +725,6 @@ export const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 /** Journal catch-up pages: flush + yield every N records so a huge replay
  *  (long idle gap) interleaves with other traffic instead of flooding. */
 const CATCHUP_PAGE_SIZE = 500;
-/** Wire payload for an `ask-request` push (ask card, TUI ask parity):
- *  multi-question dialogs carry the questions array; single select/input
- *  keep the flat title/options shape. Shared by the live broadcast and the
- *  subscribe-time replay so both surfaces stay in sync. */
-function askRequestPayload(record: PendingAsk):
-	| {
-			requestId: string;
-			title: string;
-			options: string[] | null;
-			multi: boolean;
-			mode: "select" | "input";
-	  }
-	| { requestId: string; title: string; mode: "dialog"; questions: PendingAsk["questions"] } {
-	return record.mode === "dialog"
-		? { requestId: record.requestId, title: record.title, mode: "dialog", questions: record.questions }
-		: {
-				requestId: record.requestId,
-				title: record.title,
-				options: record.options,
-				multi: record.multi,
-				mode: record.mode,
-			};
-}
 /** Idle-recap delay bounds (TUI event-controller parity). */
 const IDLE_RECAP_MIN_SECONDS = 1;
 const IDLE_RECAP_MAX_SECONDS = 3600;
@@ -845,12 +832,9 @@ export interface LiveSession {
 	 *  创建路径由 createSession 显式补写(SDK 的 create 不写 header)。
 	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板模式名。 */
 	modeId?: string;
-	/** Envelope seq for NON-journaled stream kinds only (approval-request,
-	 *  ask-request, agent-progress, agent-lifecycle, title, recap,
-	 *  pause-state) — a per-session display counter, NOT the journal
-	 *  watermark space. kind:"event" envelopes carry the journal record seq
-	 *  (see #adoptAgentSession); clients gate only on that space. */
-	seq: number;
+	/** Journal tail is the only sequence space. Non-journaled stream kinds
+	 *  (approval/ask, agent progress, title, recap, pause) carry seq 0 and
+	 *  apply in arrival order; clients gate catchup only on kind:"event". */
 	journal: AppendJournal | null;
 	view: MaterializedView;
 	subscribers: Map<string, (event: SessionStreamEvent) => void>;
@@ -878,6 +862,15 @@ export interface LiveSession {
 	editorDraft: boolean;
 	/** GUI tool-approval gate (approval-select UI context + pending table). */
 	approvals: ApprovalBridge;
+	/** Send idempotency for this live session: request identity → content
+	 *  fingerprint. The index is rebuilt from persisted user-message fields on
+	 *  the first send after a daemon restart. */
+	clientRequests: Map<string, string>;
+	/** True after the first send rebuilt `clientRequests` from the persisted
+	 *  user messages (daemon restart / resumed history). */
+	clientRequestIndexBuilt: boolean;
+	/** Process-level ownership of this session file (daemon vs CLI/TUI). */
+	ownerLock: SessionOwnerLock | null;
 	/** Per-session freeze gate (TUI `/pause` parity): engaging it parks every
 	 *  agent loop of THIS session (main, subagents, advisor) at its next safe
 	 *  boundary — other sessions keep running. */
@@ -1612,12 +1605,12 @@ export class DaemonSessionHost {
 					try {
 						send({
 							kind: "approval-request",
-							seq: ++live.seq,
+							seq: 0,
 							// `prompt` = the full formatApprovalPrompt body
 							// (Allow tool / Reason / command+args details) so
 							// GUI cards show what is actually being approved —
 							// tool name alone is not enough to decide.
-							payload: { requestId: record.requestId, tool: record.tool, args: null, prompt: record.prompt },
+							payload: approvalRequestPayload(record),
 						});
 					} catch {
 						// subscriber socket died; removed on close
@@ -1630,7 +1623,32 @@ export class DaemonSessionHost {
 				// session.askAnswer.
 				for (const send of live.subscribers.values()) {
 					try {
-						send({ kind: "ask-request", seq: ++live.seq, payload: askRequestPayload(record) });
+						send({ kind: "ask-request", seq: 0, payload: askRequestPayload(record) });
+					} catch {
+						// subscriber socket died; removed on close
+					}
+				}
+			},
+			(requestId, approved, note) => {
+				// Settlement is a broadcast, not a local delete: every device
+				// showing the card must clear it, including the one that did not
+				// answer. The first resolve wins; later resolves never reach here.
+				for (const send of live.subscribers.values()) {
+					try {
+						send({
+							kind: "approval-request-end",
+							seq: 0,
+							payload: { requestId, approved, ...(note ? { note } : {}) },
+						});
+					} catch {
+						// subscriber socket died; removed on close
+					}
+				}
+			},
+			requestId => {
+				for (const send of live.subscribers.values()) {
+					try {
+						send({ kind: "ask-request-end", seq: 0, payload: { requestId } });
 					} catch {
 						// subscriber socket died; removed on close
 					}
@@ -1753,9 +1771,8 @@ export class DaemonSessionHost {
 			// 从不把 modeId 写进 JSONL 头,所以仅读 SDK 头会让空态 chip 选的
 			// design 会话在重启/重激活后丢掉预设(GUI 的 design 风格 chip 不显示)。
 			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? persisted?.header?.modeId ?? undefined,
-			// Non-journaled envelope kinds count from 0 (see LiveSession.seq) —
-			// the journal owns the kind:"event" seq space outright.
-			seq: 0,
+			// Non-journaled envelope kinds carry seq 0; the journal owns the
+			// kind:"event" seq space outright.
 			journal,
 			view: viewFinal,
 			subscribers: new Map(),
@@ -1771,18 +1788,21 @@ export class DaemonSessionHost {
 			recapAbort: null,
 			editorDraft: false,
 			approvals,
+			clientRequests: new Map(),
+			clientRequestIndexBuilt: false,
+			ownerLock: null,
 			pauseGate,
 			publishApproval: record => {
 				for (const send of live.subscribers.values()) {
 					try {
 						send({
 							kind: "approval-request",
-							seq: ++live.seq,
+							seq: 0,
 							// `prompt` = the full formatApprovalPrompt body
 							// (Allow tool / Reason / command+args details) so
 							// GUI cards show what is actually being approved —
 							// tool name alone is not enough to decide.
-							payload: { requestId: record.requestId, tool: record.tool, args: null, prompt: record.prompt },
+							payload: approvalRequestPayload(record),
 						});
 					} catch {
 						// subscriber socket died; removed on close
@@ -1803,7 +1823,7 @@ export class DaemonSessionHost {
 				// Journal = single seq authority: the broadcast seq IS the
 				// journal record seq, so a client watermark always compares in
 				// one numbering space (catchup replays the same records).
-				const seq = live.journal ? live.journal.append(wireEvent) : ++live.seq;
+				const seq = live.journal ? live.journal.append(wireEvent) : 0;
 				live.view.apply(wireEvent);
 				schedulePersist();
 				for (const send of live.subscribers.values()) {
@@ -1815,6 +1835,8 @@ export class DaemonSessionHost {
 				}
 			},
 			dispose: () => {
+				void live.ownerLock?.release();
+				live.ownerLock = null;
 				this.#cancelIdleRecap(live);
 				unsubscribeName();
 				unsubscribeProgress();
@@ -1896,7 +1918,7 @@ export class DaemonSessionHost {
 			const payload = raw as SubagentProgressPayload;
 			const progressId = payload.progress?.id;
 			if (typeof progressId === "string") live.subagentProgress.set(progressId, payload);
-			const seq = ++live.seq;
+			const seq = 0;
 			for (const send of live.subscribers.values()) {
 				try {
 					send({ kind: "agent-progress", seq, payload });
@@ -1915,7 +1937,7 @@ export class DaemonSessionHost {
 			// Terminal lifecycle: drop the retained progress so a later
 			// re-subscribe hydrates only still-running agents.
 			if (payload.status !== "started") live.subagentProgress.delete(payload.id);
-			const seq = ++live.seq;
+			const seq = 0;
 			for (const send of live.subscribers.values()) {
 				try {
 					send({ kind: "agent-lifecycle", seq, payload });
@@ -1932,7 +1954,7 @@ export class DaemonSessionHost {
 		// lightweight `title` envelope to this session's subscribers.
 		const onSessionNameChanged = (): void => {
 			const title = agentSession.sessionManager.getSessionName() ?? null;
-			const seq = ++live.seq;
+			const seq = 0;
 			for (const send of live.subscribers.values()) {
 				try {
 					send({ kind: "title", seq, payload: { title } });
@@ -1989,7 +2011,7 @@ export class DaemonSessionHost {
 			if (!wireEvent) return;
 			// Journal = single seq authority: broadcast seq == journal record
 			// seq (see publishWireEvent).
-			const seq = live.journal ? live.journal.append(wireEvent) : ++live.seq;
+			const seq = live.journal ? live.journal.append(wireEvent) : 0;
 			live.view.apply(wireEvent);
 			schedulePersist();
 			// Compact when the journal crosses a bound: fold the materialized
@@ -2024,7 +2046,7 @@ export class DaemonSessionHost {
 			}
 		});
 		const unsubscribePauseGate = pauseGate.onChange(paused => {
-			const seq = ++live.seq;
+			const seq = 0;
 			const payload = { paused, pausedAt: pauseGate.pausedAt ?? null };
 			// Persist the transition so reactivation (idle-archive or daemon
 			// restart) can rehydrate the gate; absence = not paused.
@@ -2065,6 +2087,39 @@ export class DaemonSessionHost {
 		agentSession.extensionRunner?.onNotification((channel, message) => {
 			this.#onExtensionNotification?.(channel, message);
 		});
+		// Claim process-level ownership only for a LIVE session. Snapshot-only
+		// history reads (session.resume on an idle session) never reach here.
+		try {
+			live.ownerLock = await acquireSessionOwnerLock(sessionId, SESSION_LOCKS_DIR);
+		} catch (error) {
+			live.dispose();
+			throw error;
+		}
+		// Replay completed-but-undelivered job results that survived a daemon
+		// restart. Custom entries stay out of the model context; the transcript
+		// keeps the outcome inspectable instead of losing it with the process.
+		const persistedJobResults = new Set(
+			agentSession.sessionManager
+				.getEntries()
+				.filter(entry => entry.type === "custom_message" && entry.customType === "async-job-result")
+				.map(entry => (entry as { details?: { jobId?: unknown } }).details?.jobId)
+				.filter((jobId): jobId is string => typeof jobId === "string"),
+		);
+		for (const job of AsyncJobManager.undeliveredJobsForSession(sessionId)) {
+			if (persistedJobResults.has(job.id)) {
+				AsyncJobManager.markJobDelivered(job.id);
+				continue;
+			}
+			const body = job.resultText?.trim();
+			agentSession.sessionManager.appendCustomMessageEntry(
+				"async-job-result",
+				`Background ${job.type} job "${job.label}" ${job.status}${body ? `:\n\n${body}` : "."}`,
+				true,
+				{ jobId: job.id, status: job.status, label: job.label },
+				"agent",
+			);
+			AsyncJobManager.markJobDelivered(job.id);
+		}
 		return live;
 	}
 
@@ -2534,7 +2589,7 @@ export class DaemonSessionHost {
 			if (live.recapAbort !== abort || abort.signal.aborted || !this.#idleRecapConditionsHold(live)) return;
 			const text = previewLine(replyText, TRUNCATE_LENGTHS.RECAP);
 			if (!text) return;
-			const seq = ++live.seq;
+			const seq = 0;
 			const payload = { text, at: Date.now() };
 			for (const send of live.subscribers.values()) {
 				try {
@@ -2563,6 +2618,8 @@ export class DaemonSessionHost {
 		const live = this.#sessions.get(sessionId);
 		if (live) {
 			const snap = live.view.snapshot() as Static<typeof sessionSnapshot> & {
+				pendingApprovals?: ReturnType<typeof approvalRequestPayload>[];
+				pendingAsks?: ReturnType<typeof askRequestPayload>[];
 				state: {
 					goalMode?: unknown;
 					planMode?: unknown;
@@ -2604,6 +2661,11 @@ export class DaemonSessionHost {
 			// snapshot: every record ≤ tail is either in the snapshot or
 			// arrives as a live envelope with seq > tail.
 			snap.cursor = live.journal?.tailSeq ?? snap.cursor;
+			// Pending cards ride the snapshot so a client that opens or
+			// reconnects after the request was raised still sees it. The live
+			// broadcast remains the fast path; this is the hydration path.
+			snap.pendingApprovals = [...live.approvals.pending.values()].map(approvalRequestPayload);
+			snap.pendingAsks = [...live.approvals.pendingAsks.values()].map(askRequestPayload);
 			return snap;
 		}
 		// History path: no running session — serve the persisted materialized
@@ -3148,6 +3210,30 @@ export class DaemonSessionHost {
 		return this.#options.cwd;
 	}
 
+	/** Replay recently settled cards to a connection that may have fetched the
+	 *  snapshot before attaching its stream. Bounded TTL in the bridge; a
+	 *  client that never saw the card simply applies an idempotent clear. */
+	replayRecentResolutions(sessionId: string, conn: DaemonConnection): void {
+		const live = this.#sessions.get(sessionId);
+		if (!live) return;
+		const { approvals, asks } = live.approvals.recentResolutions();
+		for (const resolution of approvals) {
+			this.emitEvent(conn, {
+				kind: "approval-request-end",
+				seq: 0,
+				sessionId,
+				payload: {
+					requestId: resolution.requestId,
+					approved: resolution.approved,
+					...(resolution.note ? { note: resolution.note } : {}),
+				},
+			});
+		}
+		for (const requestId of asks) {
+			this.emitEvent(conn, { kind: "ask-request-end", seq: 0, sessionId, payload: { requestId } });
+		}
+	}
+
 	async subscribe(sessionId: string, conn: DaemonConnection): Promise<{ seq: number }> {
 		// Explicit stream attach: history sessions (idle-closed / pre-restart)
 		// reactivate on demand so a client that wants the LIVE stream (send
@@ -3163,14 +3249,26 @@ export class DaemonSessionHost {
 		// subscription contract (one current store, daemon pushes only the
 		// selected session) is replaced by per-session routing on the client.
 		live.subscribers.set(conn.id, event => this.emitEvent(conn, { ...event, sessionId }));
-		// Replay still-unanswered ask questions to THIS connection: the ask
-		// card lives in app-level state (not the per-session journal), so a
-		// question raised while another session was displayed would otherwise
-		// never surface when the user switches here.
-		for (const record of live.approvals.pendingAsks.values()) {
-			this.emitEvent(conn, { kind: "ask-request", seq: ++live.seq, sessionId, payload: askRequestPayload(record) });
+		// Replay still-unanswered approvals and ask questions to THIS
+		// connection: both live in app-level state (not the per-session
+		// journal), so a request raised while another session was displayed
+		// would otherwise never surface when the user switches here — and a
+		// second device attaching after the request would see nothing.
+		for (const record of live.approvals.pending.values()) {
+			this.emitEvent(conn, {
+				kind: "approval-request",
+				seq: 0,
+				sessionId,
+				payload: approvalRequestPayload(record),
+			});
 		}
-		return { seq: live.seq };
+		for (const record of live.approvals.pendingAsks.values()) {
+			this.emitEvent(conn, { kind: "ask-request", seq: 0, sessionId, payload: askRequestPayload(record) });
+		}
+		this.replayRecentResolutions(sessionId, conn);
+		// The subscribe watermark is the journal tail, never the non-journal
+		// display counter: clients gate catchup on this number.
+		return { seq: live.journal?.tailSeq ?? 0 };
 	}
 
 	unsubscribeAll(connectionId: string): void {

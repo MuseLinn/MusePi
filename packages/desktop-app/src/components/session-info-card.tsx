@@ -932,14 +932,8 @@ export function SessionInfoCard({
 						}
 						onSelectAll={() => setConnectorSelection([])}
 						onUseAll={() => setConnectorSelection(null)}
+						onManage={() => onOpenSettings?.("mcp")}
 					/>
-					<button
-						type="button"
-						className="gui-connector-link gui-session-info-manage-connectors"
-						onClick={() => onOpenSettings?.("mcp")}
-					>
-						{t("settings.mcpServers")}
-					</button>
 				</section>
 			) : (
 				<section className="gui-session-info-connectors gui-session-info-connectors--empty flex flex-col gap-1">

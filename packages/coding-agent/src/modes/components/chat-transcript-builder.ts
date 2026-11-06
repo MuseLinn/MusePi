@@ -76,8 +76,13 @@ export interface ChatTranscriptBuilderDeps {
 function userMessageText(message: Extract<AgentMessage, { role: "user" }>): string {
 	if (typeof message.content === "string") return message.content;
 	return message.content
-		.filter((block): block is { type: "text"; text: string } => block.type === "text")
-		.map(block => block.text)
+		.map(block => {
+			if (block.type === "text") return block.text;
+			// Terminals cannot play video; keep the fact visible instead of
+			// dropping the block from the user's own message.
+			if (block.type === "video") return `[video: ${block.mimeType}]`;
+			return "";
+		})
 		.join("");
 }
 

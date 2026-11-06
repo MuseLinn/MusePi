@@ -20,6 +20,7 @@ export async function createMarketplaceManager(runtime: SlashCommandRuntime): Pr
 		projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(runtime.cwd),
 		marketplacesCacheDir: getMarketplacesCacheDir(),
 		pluginsCacheDir: getPluginsCacheDir(),
+		includeDefaultMarketplaces: true,
 		clearPluginRootsCache: clearPluginRootsAndCaches,
 	});
 }

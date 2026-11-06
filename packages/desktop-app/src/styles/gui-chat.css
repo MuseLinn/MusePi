@@ -651,6 +651,73 @@ body.gui-resizing .gui-pane-resize-x::after {
 	touch-action: none;
 }
 
+/* Chat drop anchor ("松开鼠标添加附件" parity): a dashed panel over the
+ * active card while OS files hang over the window. The layer is
+ * pointer-transparent — the window listeners own the gesture, so the overlay
+ * must never become the drop target itself (it would cover the card it
+ * describes, and the browser page host with it). It is not a dialog-like
+ * floater: --z-overlay keeps it above the content but below --z-modal, and a
+ * modal surface suppresses the invitation before it can be painted. */
+.gui-drop-anchor {
+	position: fixed;
+	z-index: var(--z-overlay);
+	display: grid;
+	place-items: center;
+	/* Sits over the transcript, not the composer: the panel centres in the
+	 * reading area the files are about to join. */
+	padding-bottom: 88px;
+	pointer-events: none;
+	/* 130ms = the menu-floater enter tier (docs/gui-design.md §5u). */
+	animation: gui-drop-anchor-in 130ms ease-out;
+}
+
+.gui-drop-anchor-panel {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	max-width: min(420px, calc(100% - 48px));
+	padding: 16px 24px;
+	border: 1px dashed var(--color-accent);
+	border-radius: var(--radius-lg);
+	/* Opaque surface, accent text and overlay shadow from our own tokens. No
+	 * dim scrim: the chat behind the invitation is still the context the user
+	 * is dropping into. */
+	background: var(--color-surface);
+	box-shadow: var(--shadow-overlay);
+	color: var(--color-accent);
+	font-size: var(--ui-font-size-lg);
+	font-weight: 500;
+	line-height: 1.4;
+}
+
+.gui-drop-anchor-icon {
+	flex: none;
+	width: 20px;
+	height: 20px;
+	color: var(--color-accent);
+}
+
+@keyframes gui-drop-anchor-in {
+	from {
+		opacity: 0;
+		transform: scale(0.985);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-motion-off .gui-drop-anchor {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-drop-anchor {
+		animation: none;
+	}
+}
+
 /* While any floating menu/tooltip is open, the page host exposes one
  * transparent hit layer above the guest. A click that lands in the page
  * closes the app-level menu first instead of being swallowed by the OOPIF;
@@ -2605,6 +2672,21 @@ body.gui-resizing .gui-pane-right {
 	flex: 0 0 100%;
 }
 
+/* Array chip / ordered-priority editors are content-sized and wide (five long
+ * method names plus their controls ≈ the whole row). On the shared line they
+ * left the label column a few pixels, wrapping CJK descriptions one character
+ * per line, so they take their own line under the label. */
+.gui-settings-row--wide-control {
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.gui-settings-row--wide-control > .gui-settings-chips,
+.gui-settings-row--wide-control > .gui-ordered-editor {
+	flex: 0 0 100%;
+	min-width: 0;
+}
+
 .gui-settings-row--disabled {
 	opacity: 0.45;
 }
@@ -2622,6 +2704,44 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--color-surface-raised) 45%, transparent);
+}
+
+.gui-minimizer-stats-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.gui-minimizer-stats-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px 24px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+.gui-minimizer-stats-summary strong {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.gui-minimizer-stats-progress {
+	display: block;
+	width: 100%;
+	height: 6px;
+	margin: 12px 0;
+	accent-color: var(--color-accent);
+}
+
+.gui-minimizer-stats-filters {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 6px 16px;
+	font-size: 12px;
+	color: var(--color-text-muted);
 }
 
 .gui-schema-card .gui-settings-group-h {
@@ -5963,40 +6083,6 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Plugins: count in the header, roster behind the disclosure ──────── */
-/* Status strip above the section head: the running-plugin readout, with the
- * per-extension detail in a useFloatingMenu portal (surface/placement live
- * there, so this row only owns its box). */
-.gui-session-info-plugins-group {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	min-width: 0;
-}
-.gui-session-info-plugin-status {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	width: 100%;
-	padding: 4px 6px;
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--color-ok) 8%, transparent);
-	font-size: 11.5px;
-	color: var(--color-text-muted);
-	text-align: left;
-	transition:
-		background 120ms ease,
-		color 120ms ease;
-}
-.gui-session-info-plugin-status:hover {
-	background: color-mix(in oklab, var(--color-ok) 14%, transparent);
-	color: var(--color-text);
-}
-.gui-session-info-plugin-status .gui-session-info-item-label {
-	flex: 1;
-}
-.gui-session-info-plugin-status-icon {
-	color: var(--color-ok);
-}
 .gui-session-info-plugins-head {
 	display: flex;
 	align-items: center;

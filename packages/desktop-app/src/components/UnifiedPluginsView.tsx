@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ExternalExecutableProbeResult, externalAgentBinary } from "../lib/external-agent-config";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
@@ -175,6 +176,18 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 	);
 	const [notice, setNotice] = useState<{ kind: "saved" | "error"; text: string } | null>(null);
 	const resources = item.resources;
+	const supportsExternalAgentProbe = externalAgentBinary(item.name) !== undefined;
+	const probeExecutable = useCallback(
+		async (executable: string): Promise<ExternalExecutableProbeResult> => {
+			if (!rpc) throw new Error("Daemon unavailable");
+			return (await rpc.request("ext.call", {
+				extensionId: item.path,
+				method: "probeExecutable",
+				params: { executable },
+			})) as ExternalExecutableProbeResult;
+		},
+		[rpc, item.path],
+	);
 
 	const handleChange = (key: string, value: unknown): void => {
 		const desc = item.config?.find(f => f.key === key);
@@ -211,7 +224,14 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 				<div className="gui-ext-detail-section">
 					<div className="gui-ext-detail-label">{t("tools.extPluginConfig")}</div>
 					<div className="gui-plugin-config-desc">{t("tools.extPluginConfigDesc")}</div>
-					<ConfigFormRenderer fields={item.config} values={values} onChange={handleChange} disabled={!rpc} />
+					<ConfigFormRenderer
+						fields={item.config}
+						values={values}
+						onChange={handleChange}
+						disabled={!rpc}
+						onProbeExecutable={rpc && supportsExternalAgentProbe ? probeExecutable : undefined}
+						validateEnvironment={supportsExternalAgentProbe}
+					/>
 					{notice && (
 						<div
 							className={`gui-plugin-config-notice${notice.kind === "error" ? " gui-plugin-config-notice--error" : ""}`}

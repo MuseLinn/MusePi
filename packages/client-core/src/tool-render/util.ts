@@ -2,7 +2,7 @@
  * Pure helpers shared by tool renderers. Host-agnostic; no DOM beyond
  * `globalThis` feature probes, no host package imports.
  */
-import type { ToolResultImage, ToolResultLike } from "./types";
+import type { ToolResultImage, ToolResultLike, ToolResultVideo } from "./types";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -160,6 +160,16 @@ export function resultTextOf(result: ToolResultLike | undefined): string {
 		}
 	}
 	return parts.join("\n");
+}
+
+export function resultVideosOf(result: ToolResultLike | undefined): ToolResultVideo[] {
+	if (!result) return [];
+	const videos: ToolResultVideo[] = [];
+	for (const block of result.content) {
+		const video = block as Partial<ToolResultVideo>;
+		if (block.type === "video" && typeof video.mimeType === "string") videos.push(video as ToolResultVideo);
+	}
+	return videos;
 }
 
 export function resultImagesOf(result: ToolResultLike | undefined): ToolResultImage[] {

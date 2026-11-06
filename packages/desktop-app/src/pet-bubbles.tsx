@@ -16,9 +16,9 @@
  *    single click on the pet greets it and raises the main window instead;
  *    everything the panel did now lives on the bubbles themselves
  *  - hovering a bubble reveals its quick actions: ✓ confirm (approval →
- *    批准, other cards → 关闭), ✗ deny on approval bubbles, and 💬 回复 on
- *    session bubbles — the reply button expands an inline input that sends
- *    via petReply (no panel hop)
+ *    批准, finished session cards → 已读), ✗ deny on approval bubbles, and
+ *    💬 回复 on session bubbles — the reply button expands an inline input
+ *    that sends via petReply (no panel hop)
  *
  * Session cards are authoritative: the main window pushes working and unread
  * main sessions. A stacked card with multiple items expands first; an expanded
@@ -54,6 +54,8 @@ interface PetBubblesBridge {
 	petStopSession?(sessionId: string): Promise<unknown>;
 	focusMainWindow?(): Promise<unknown>;
 	petOpenSession?(sessionId: string): Promise<unknown>;
+	/** ✓ on a finished session card → clear its unread state in the main window. */
+	petMarkRead?(sessionId: string): Promise<unknown>;
 	/** Report the content size the window must take (CSS px). The main
 	 *  process sizes the bubbles window to exactly this. */
 	setBubblesContentSize?(size: { width: number; height: number }): Promise<unknown>;
@@ -552,7 +554,7 @@ export function PetBubbles(): ReactNode {
 
 	// ── Session card actions ──────────────────────────────────────────────
 
-	/** × / ✓ closes only this activity card. Read state remains owned by the
+	/** × closes only this activity card. Read state remains owned by the
 	 *  main window; a later activity revision may surface the session again. */
 	const dismissCard = (c: PetSessionCard): void => {
 		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
@@ -561,6 +563,12 @@ export function PetBubbles(): ReactNode {
 			setReplyFor(null);
 			setReplyText("");
 		}
+	};
+
+	/** ✓ acknowledges the session through the main window's shared unread state. */
+	const acknowledgeCard = (c: PetSessionCard): void => {
+		void bridge?.petMarkRead?.(c.sessionId);
+		dismissCard(c);
 	};
 
 	/** ■ stop — abort the run and dismiss only the current activity card. */
@@ -759,7 +767,7 @@ export function PetBubbles(): ReactNode {
 								title={t("settings.petBubbleConfirm")}
 								onClick={e => {
 									e.stopPropagation();
-									runAction(() => dismissCard(c));
+									runAction(() => acknowledgeCard(c));
 								}}
 							>
 								<MorphIcon icon={Check} size={13} />

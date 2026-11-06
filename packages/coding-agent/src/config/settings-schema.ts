@@ -220,7 +220,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
 	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
-	shell: ["Bash", "Eval & Runtimes"],
+	shell: ["Bash", "Bash Advanced", "Eval & Runtimes"],
 	tools: [
 		"Available Tools",
 		"Todos",
@@ -4135,12 +4135,42 @@ export const SETTINGS_SCHEMA = {
 	"shellMinimizer.settingsPath": {
 		type: "string",
 		default: undefined,
+		ui: {
+			tab: "shell",
+			group: "Bash Advanced",
+			label: "Custom Minimizer TOML",
+			description: "Optional TOML file with user-defined minimizer filters and overrides",
+		},
 	},
-	"shellMinimizer.only": { type: "array", default: EMPTY_STRING_ARRAY },
-	"shellMinimizer.except": { type: "array", default: EMPTY_STRING_ARRAY },
+	"shellMinimizer.only": {
+		type: "array",
+		default: EMPTY_STRING_ARRAY,
+		ui: {
+			tab: "shell",
+			group: "Bash Advanced",
+			label: "Minimized Commands Only",
+			description: "Comma-separated command allowlist; empty enables every built-in filter",
+		},
+	},
+	"shellMinimizer.except": {
+		type: "array",
+		default: EMPTY_STRING_ARRAY,
+		ui: {
+			tab: "shell",
+			group: "Bash Advanced",
+			label: "Excluded Minimized Commands",
+			description: "Comma-separated commands that always return unminimized output",
+		},
+	},
 	"shellMinimizer.maxCaptureBytes": {
 		type: "number",
 		default: 4 * 1024 * 1024,
+		ui: {
+			tab: "shell",
+			group: "Bash Advanced",
+			label: "Maximum Capture Bytes",
+			description: "Outputs larger than this limit bypass the minimizer unchanged",
+		},
 	},
 	"shellMinimizer.sourceOutlineLevel": {
 		type: "enum",
@@ -4156,6 +4186,12 @@ export const SETTINGS_SCHEMA = {
 	"shellMinimizer.legacyFilters": {
 		type: "boolean",
 		default: undefined,
+		ui: {
+			tab: "shell",
+			group: "Bash Advanced",
+			label: "Use Legacy Minimizer Filters",
+			description: "Fall back to the conservative legacy routing and filter behavior",
+		},
 	},
 
 	// Eval (per-backend toggles; add more as new backends ship, e.g. eval.ts)

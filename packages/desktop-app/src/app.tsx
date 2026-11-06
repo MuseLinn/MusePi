@@ -1196,6 +1196,9 @@ function AppInner(): ReactNode {
 	const rpcRef = useRef<RpcClient | null>(null);
 	const expectedDisconnectsRef = useRef(new ExpectedDisconnects());
 	const storeRef = useRef<GuiSessionStore | null>(null);
+	/** Settlement frames that arrived before the owning store was mounted
+	 *  (snapshot→subscribe window). Applied when the store is created. */
+	const deferredResolutionsRef = useRef(new Map<string, { approvals: Set<string>; asks: Set<string> }>());
 	// Latest active-session tree label — read by the pet state pusher
 	// (effect closure) without re-subscribing the effect per render.
 	const activeLabelRef = useRef<string | null>(null);
@@ -1500,6 +1503,26 @@ function AppInner(): ReactNode {
 			// Route subscription envelopes to the active session store; provider
 			// auth/prompt envelopes surface through the settings dialog instead.
 			client.onEvent = (event: StreamEvent) => {
+				// A settlement for a session whose store is not mounted yet (the
+				// snapshot was fetched, the card was rendered, the store is being
+				// created while another device answers) is deferred and applied
+				// once that store exists. Otherwise the end frame is dropped by the
+				// cross-session guard and the card stays on screen forever.
+				if (
+					(event.kind === "approval-request-end" || event.kind === "ask-request-end") &&
+					typeof event.sessionId === "string" &&
+					event.sessionId !== storeRef.current?.sessionId
+				) {
+					const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+					if (typeof requestId === "string") {
+						let entry = deferredResolutionsRef.current.get(event.sessionId);
+						if (!entry) {
+							entry = { approvals: new Set(), asks: new Set() };
+							deferredResolutionsRef.current.set(event.sessionId, entry);
+						}
+						(event.kind === "approval-request-end" ? entry.approvals : entry.asks).add(requestId);
+					}
+				}
 				// Ask card FIRST: an ask raised in a background session must be
 				// recorded with its owning session even while another session
 				// is displayed — the 窜台 guard below drops every other
@@ -1510,6 +1533,16 @@ function AppInner(): ReactNode {
 						...(event.payload as AskRequest),
 						sessionId: event.sessionId,
 					});
+					return;
+				}
+				// Another device answered (or the ask was cancelled). Clear the
+				// card here too; a stale card would keep answering a request
+				// the daemon has already dropped.
+				if (event.kind === "ask-request-end") {
+					const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+					if (typeof requestId === "string") {
+						setPendingAsk(current => (current && current.requestId === requestId ? null : current));
+					}
 					return;
 				}
 				// Global events (extensions.changed / modes.changed / STT-TTS
@@ -2023,9 +2056,13 @@ function AppInner(): ReactNode {
 								startedAt: number;
 							}[];
 							agentsProgress?: SubagentProgressPayload[];
+							pendingApprovals?: Array<{ requestId: string; tool: string; prompt?: string }>;
+							pendingAsks?: AskRequest[];
 						};
 					}>("session.resume", { sessionId });
 					initial = res.snapshot;
+					const firstPendingAsk = res.snapshot.pendingAsks?.[0];
+					if (firstPendingAsk) setPendingAsk({ ...firstPendingAsk, sessionId });
 				} catch {
 					// Defensive fallback: explicit stream attach (activates the
 					// session — reserved for paths where resume is unavailable).
@@ -2046,9 +2083,13 @@ function AppInner(): ReactNode {
 								startedAt: number;
 							}[];
 							agentsProgress?: SubagentProgressPayload[];
+							pendingApprovals?: Array<{ requestId: string; tool: string; prompt?: string }>;
+							pendingAsks?: AskRequest[];
 						};
 					}>("session.subscribe", { sessionId });
 					initial = res.initial;
+					const firstPendingAsk = res.initial.pendingAsks?.[0];
+					if (firstPendingAsk) setPendingAsk({ ...firstPendingAsk, sessionId });
 				}
 				// A newer user action (another session opened while this RPC was
 				// in flight) supersedes this result: mounting the stale session's
@@ -2087,6 +2128,11 @@ function AppInner(): ReactNode {
 						)?.tail,
 						activeTools: initial?.activeTools,
 						agentsProgress: initial?.agentsProgress,
+						pendingApprovals: (
+							initial as {
+								pendingApprovals?: Array<{ requestId: string; tool: string; prompt?: string }>;
+							} | null
+						)?.pendingApprovals,
 					},
 					cwd,
 					{
@@ -2148,6 +2194,17 @@ function AppInner(): ReactNode {
 				);
 				storeRef.current = next;
 				setStore(next);
+				// Apply settlements that arrived while this store was being built.
+				const deferredResolutions = deferredResolutionsRef.current.get(sessionId);
+				if (deferredResolutions) {
+					for (const requestId of deferredResolutions.approvals) next.dismissApproval(requestId);
+					if (deferredResolutions.asks.size > 0) {
+						setPendingAsk(current =>
+							current && deferredResolutions.asks.has(current.requestId) ? null : current,
+						);
+					}
+					deferredResolutionsRef.current.delete(sessionId);
+				}
 				// View swap deferred to here: the chat frame renders with the
 				// new session content already mounted (no welcome flash).
 				viewSwapRef.current("chat");
@@ -2440,9 +2497,9 @@ function AppInner(): ReactNode {
 	}, []);
 
 	/** 空态(design 模式页 / 欢迎页)的文件附件:这两处都没有工作区,上传
-	 *  只能发生在会话创建之后 —— 落盘路径前缀到提示词上再发送(会话
-	 *  composer 走同一条通道,channel/清洗/重名规则不漂移)。上传失败返回
-	 *  null:调用方必须放弃这次发送(一条附件没落地的消息只会误导 agent)。 */
+	 *  只能发生在会话创建之后 —— 内容地址(blob://)前缀到提示词上再发送
+	 *  (会话 composer 走同一条通道,channel/清洗/重名规则不漂移)。上传失败
+	 *  返回 null:调用方必须放弃这次发送(一条附件没落地的消息只会误导 agent)。 */
 	const uploadFirstMessageFiles = useCallback(
 		async (text: string, files: File[] | undefined, cwd: string | null): Promise<string | null> => {
 			if (!files || files.length === 0) return text;
@@ -2510,6 +2567,7 @@ function AppInner(): ReactNode {
 			sessionId?: string,
 			deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 			displayContext?: MessageDisplayContext,
+			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 		): Promise<void> => {
 			const client = rpcRef.current;
 			const id = sessionId ?? selectedId;
@@ -2529,12 +2587,20 @@ function AppInner(): ReactNode {
 				// must show it immediately (the awaited RPC blocks until the
 				// whole turn completes, so hook the refresh to the send ack
 				// instead of after the await, or the row appears only later).
+				let clientId = localStorage.getItem("musepi-gui-client-id");
+				if (!clientId) {
+					clientId = crypto.randomUUID();
+					localStorage.setItem("musepi-gui-client-id", clientId);
+				}
 				const p = client.request("session.send", {
 					sessionId: id,
 					text,
+					clientId,
+					clientRequestId: crypto.randomUUID(),
 					...(deliverAs ? { deliverAs } : {}),
 					...(displayContext ? { displayContext } : {}),
 					...(images && images.length > 0 ? { images } : {}),
+					...(videos && videos.length > 0 ? { videos } : {}),
 				});
 				p.then(() => refreshSessions(client)).catch(() => {});
 				await p;
@@ -2603,6 +2669,7 @@ function AppInner(): ReactNode {
 				thinkingLevel?: ThinkingLevel | null;
 				modelId?: string | null;
 				images?: { type: "image"; data: string; mimeType: string }[];
+				videos?: { type: "video"; mimeType: string; url?: string; data?: string }[];
 				displayContext?: MessageDisplayContext;
 				/** Non-image chips from the empty-state composer. They have no
 				 *  workspace at pick time, so we write them into the session we
@@ -2686,6 +2753,7 @@ function AppInner(): ReactNode {
 						op: "guided",
 						objective: (guidedMatch[1] ?? "").trim() || null,
 						...(opts?.images && opts.images.length > 0 ? { images: opts.images } : {}),
+						...(opts?.videos && opts.videos.length > 0 ? { videos: opts.videos } : {}),
 					});
 				} catch (err) {
 					dispatchPetActivity(
@@ -2742,6 +2810,7 @@ function AppInner(): ReactNode {
 						op: "guided",
 						objective: text.trim() || null,
 						...(opts.images && opts.images.length > 0 ? { images: opts.images } : {}),
+						...(opts.videos && opts.videos.length > 0 ? { videos: opts.videos } : {}),
 					});
 				} catch (err) {
 					dispatchPetActivity(
@@ -2757,7 +2826,7 @@ function AppInner(): ReactNode {
 			// same helper, so channel / sanitizing / collision rules can't drift.
 			const prompt = await uploadFirstMessageFiles(text, opts?.files, project ?? null);
 			if (prompt === null) return;
-			await sendPrompt(prompt, opts?.images, id, undefined, opts?.displayContext);
+			await sendPrompt(prompt, opts?.images, id, undefined, opts?.displayContext, opts?.videos);
 		},
 		[createSession, project, sendPrompt],
 	);
@@ -3394,7 +3463,7 @@ function AppInner(): ReactNode {
 			} else if (cmd.type === "approve" && cmd.requestId) {
 				void decideApproval(cmd.requestId, cmd.approved === true);
 			} else if (cmd.type === "mark-read" && typeof cmd.sessionId === "string") {
-				// Pet bubble ×: the user acknowledged that notification —
+				// Pet bubble ✓: the user acknowledged that notification —
 				// clear the session's unread badge and advance its read
 				// cursor so the next poll does not immediately re-mark it
 				// (new activity on the session would, correctly, re-add).
@@ -3902,8 +3971,8 @@ function AppInner(): ReactNode {
 							readOnly: selectedIsAdvisor,
 							onAddProvider: () => openSettings("providers"),
 							onOpenSettings: openSettings,
-							onSend: (text, images, deliverAs, displayContext) =>
-								void sendPrompt(text, images, undefined, deliverAs, displayContext),
+							onSend: (text, images, deliverAs, displayContext, videos) =>
+								void sendPrompt(text, images, undefined, deliverAs, displayContext, videos),
 							onStop: stop,
 							onDecideApproval: decideApproval,
 							onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
@@ -4167,8 +4236,8 @@ function AppInner(): ReactNode {
 												parentSession: activeParentSession,
 												onOpenParentSession: id => void openSession(id),
 												onOpenSession: id => void openSession(id),
-												onSend: (text, images, deliverAs, displayContext) =>
-													void sendPrompt(text, images, undefined, deliverAs, displayContext),
+												onSend: (text, images, deliverAs, displayContext, videos) =>
+													void sendPrompt(text, images, undefined, deliverAs, displayContext, videos),
 												onStop: stop,
 												onDecideApproval: decideApproval,
 												onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),

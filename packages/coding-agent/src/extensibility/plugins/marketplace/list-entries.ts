@@ -32,6 +32,8 @@ export interface MarketplaceListEntry {
 	license?: string;
 	icon?: string;
 	installed: boolean;
+	/** Effective enablement of the active install, when installed. */
+	enabled?: boolean;
 	installedScope: "user" | "project" | null;
 	/** Version of the active (project-over-user) install, when installed. */
 	installedVersion?: string;
@@ -85,6 +87,7 @@ function buildEntry(
 		license: p.license,
 		icon: p.icon,
 		installed: installedScope !== null,
+		...(installedEntry ? { enabled: installedEntry.enabled !== false } : {}),
 		installedScope,
 		installedVersion: installedEntry?.version,
 		updateAvailable:

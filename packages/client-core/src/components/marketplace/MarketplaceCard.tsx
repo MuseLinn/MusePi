@@ -1,5 +1,5 @@
 import { Check, Download, RefreshCw } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
 import {
 	hasDesignSystemContent,
@@ -53,6 +53,9 @@ export function MarketplaceCard({
 	index = 0,
 }: MarketplaceCardProps): ReactNode {
 	const Icon = resolveCardIcon(entry);
+	const [brokenArtwork, setBrokenArtwork] = useState<string | null>(null);
+	const iconValue = entry.icon?.trim();
+	const artworkUri = iconValue && /^(?:https?:\/\/|file:\/\/)/.test(iconValue) ? iconValue : null;
 	const isInstalled = entry.installed === true;
 	const isBusy = entry.busy === true;
 	const hasUpdate = isInstalled && entry.updateAvailable === true;
@@ -101,7 +104,17 @@ export function MarketplaceCard({
 				aria-label={`${entry.name} details`}
 			>
 				<span className="mp-card-icon" aria-hidden="true">
-					<Icon size={18} strokeWidth={1.75} />
+					{artworkUri && brokenArtwork !== artworkUri ? (
+						<img
+							className="mp-card-artwork"
+							src={artworkUri}
+							alt=""
+							loading="lazy"
+							onError={() => setBrokenArtwork(artworkUri)}
+						/>
+					) : (
+						<Icon size={18} strokeWidth={1.75} />
+					)}
 				</span>
 				<span className="mp-card-body">
 					<span className="mp-card-head">

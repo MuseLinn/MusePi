@@ -44,6 +44,9 @@ type AsyncResultJobDetails = {
 	type?: "bash" | "task" | "agnes-video";
 	label?: string;
 	durationMs?: number;
+	/** Generated video for `agnes-video` jobs: the completion row is the only
+	 *  place the finished result can be watched (its tool result is a handle). */
+	videoUrl?: string;
 };
 
 export type AsyncResultDetails = {
@@ -58,6 +61,7 @@ export function buildAsyncResultBatchMessage(entries: AsyncResultEntry[]): Custo
 		type: entry.job?.type,
 		label: entry.job?.label,
 		durationMs: entry.durationMs,
+		videoUrl: typeof entry.job?.latestDetails?.videoUrl === "string" ? entry.job.latestDetails.videoUrl : undefined,
 	}));
 	const details: AsyncResultDetails = {
 		jobs: jobs.map(job => ({
@@ -65,6 +69,7 @@ export function buildAsyncResultBatchMessage(entries: AsyncResultEntry[]): Custo
 			type: job.type,
 			label: job.label,
 			durationMs: job.durationMs,
+			...(job.videoUrl ? { videoUrl: job.videoUrl } : {}),
 		})),
 	};
 	return {

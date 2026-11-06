@@ -59,6 +59,7 @@ import {
 	type ToolCall,
 	type ToolResultMessage,
 	type Usage,
+	type VideoContent,
 } from "../types";
 
 export type { OpenAIPromptCacheOptions } from "../types";
@@ -116,7 +117,12 @@ import type {
 	ResponseStreamEvent,
 } from "./openai-responses-wire";
 import { transformMessages } from "./transform-messages";
-import { joinTextWithImagePlaceholder, NON_VISION_IMAGE_PLACEHOLDER, partitionVisionContent } from "./vision-guard";
+import {
+	joinTextWithImagePlaceholder,
+	NON_VIDEO_PLACEHOLDER,
+	NON_VISION_IMAGE_PLACEHOLDER,
+	partitionVisionContent,
+} from "./vision-guard";
 
 /**
  * Keyless-provider sentinel. Custom providers configured with `auth: none`
@@ -1701,7 +1707,7 @@ function convertResponsesInputImage(image: ImageContent, supportsImageDetailOrig
 }
 
 export function convertResponsesInputContent(
-	content: string | Array<TextContent | ImageContent>,
+	content: string | Array<TextContent | ImageContent | VideoContent>,
 	supportsImages: boolean,
 	supportsImageDetailOriginal: boolean,
 	escapeControlTokens = false,
@@ -1717,7 +1723,7 @@ export function convertResponsesInputContent(
 		];
 	}
 
-	const { textBlocks, imageBlocks, omittedImages } = partitionVisionContent(content, supportsImages);
+	const { textBlocks, imageBlocks, omittedImages, omittedVideos } = partitionVisionContent(content, supportsImages);
 	const normalizedContent: ResponseInputContent[] = [];
 	for (const item of textBlocks) {
 		const raw = item.text.toWellFormed();
@@ -1735,6 +1741,13 @@ export function convertResponsesInputContent(
 		normalizedContent.push({
 			type: "input_text",
 			text: NON_VISION_IMAGE_PLACEHOLDER,
+		} satisfies ResponseInputText);
+	}
+	if (omittedVideos) {
+		// Responses has no video input part: keep the turn honest with a marker.
+		normalizedContent.push({
+			type: "input_text",
+			text: NON_VIDEO_PLACEHOLDER,
 		} satisfies ResponseInputText);
 	}
 	return normalizedContent.length > 0 ? normalizedContent : undefined;

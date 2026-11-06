@@ -8,7 +8,7 @@
  * identity (e.g. Anthropic's resize memo) stay warm.
  */
 
-import type { Context, ImageContent, Message, Model, TextContent } from "@musepi/pi-ai";
+import type { Context, ImageContent, Message, Model, TextContent, VideoContent } from "@musepi/pi-ai";
 
 /** Responses/Chat APIs whose `image_url` accepts arbitrary https URLs. */
 const URL_CAPABLE_OPENAI_APIS: Record<string, true> = {
@@ -48,7 +48,7 @@ function mapContextImages(context: Context, mapBlock: (block: ImageContent) => I
 	const messages = context.messages.map(message => {
 		if (!isImageBearing(message) || !Array.isArray(message.content)) return message;
 		let contentChanged = false;
-		const content = message.content.map((block): TextContent | ImageContent => {
+		const content = message.content.map((block): TextContent | ImageContent | VideoContent => {
 			if (block.type !== "image") return block;
 			const next = mapBlock(block);
 			if (next !== block) contentChanged = true;
@@ -86,6 +86,45 @@ export function decorateContextProviderFiles(
 	});
 }
 
+/**
+ * Attach provider-native file references to image AND video blocks.
+ *
+ * Videos follow the same rule as images: an existing URL mirror wins, and a
+ * reference already owned by this provider is left alone. The map is keyed on
+ * block identity, so untouched blocks keep theirs.
+ */
+export function decorateContextMediaFiles(
+	context: Context,
+	referenceFor: (block: ImageContent | VideoContent) => ImageContent["providerFile"] | undefined,
+): Context {
+	let messagesChanged = false;
+	const messages = context.messages.map(message => {
+		if (!isImageBearing(message) || !Array.isArray(message.content)) return message;
+		let contentChanged = false;
+		const content = message.content.map((block): typeof block => {
+			if (block.type !== "image" && block.type !== "video") return block;
+			const providerFile = referenceFor(block);
+			if (!providerFile || providerFile === block.providerFile) return block;
+			contentChanged = true;
+			return { ...block, providerFile };
+		});
+		if (!contentChanged) return message;
+		messagesChanged = true;
+		return { ...message, content } as Message;
+	});
+	return messagesChanged ? { ...context, messages } : context;
+}
+
+/** True when any user/developer/toolResult message carries an image or video block. */
+export function contextHasMedia(context: Context): boolean {
+	return context.messages.some(
+		message =>
+			isImageBearing(message) &&
+			Array.isArray(message.content) &&
+			message.content.some(block => block.type === "image" || block.type === "video"),
+	);
+}
+
 /** True when any user/developer/toolResult message carries an image block. */
 export function contextHasImages(context: Context): boolean {
 	return context.messages.some(
@@ -113,7 +152,7 @@ export async function inlineContextImages(
 			if (!isImageBearing(message) || !Array.isArray(message.content)) return message;
 			let contentChanged = false;
 			const content = await Promise.all(
-				message.content.map(async (block): Promise<TextContent | ImageContent> => {
+				message.content.map(async (block): Promise<TextContent | ImageContent | VideoContent> => {
 					if (block.type !== "image" || (!block.url && !block.providerFile)) return block;
 					contentChanged = true;
 					const { url: _url, providerFile: _providerFile, ...rest } = block;

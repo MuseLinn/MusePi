@@ -1,5 +1,5 @@
 import "./happy-dom-shim"; // MUST be first: component module graphs define HTMLElement subclasses at evaluation time.
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { type MarketplaceCardEntry, MarketplaceGrid, setLocale, t } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -14,6 +14,9 @@ import { createRoot } from "react-dom/client";
  */
 
 setLocale("zh-CN");
+beforeEach(() => {
+	localStorage.clear();
+});
 afterAll(() => {
 	setLocale("en-US");
 });
@@ -28,6 +31,7 @@ const OUTDATED: MarketplaceCardEntry = {
 	name: "hello-plugin",
 	marketplace: "test-marketplace",
 	version: "2.0.0",
+	category: "ai",
 	installed: true,
 	installedScope: "user",
 	installedVersion: "1.0.0",
@@ -132,6 +136,33 @@ describe("市场网格分段", () => {
 		);
 
 		await unmount();
+	});
+});
+
+describe("市场视图偏好持久化", () => {
+	test("重挂后恢复已安装视图、搜索词和分类筛选", async () => {
+		const { client } = makeRpc([INSTALLABLE, OUTDATED]);
+		const first = await renderGrid([INSTALLABLE, OUTDATED], client);
+		await act(async () => {
+			segmentButton("installed").click();
+		});
+		const input = document.querySelector<HTMLInputElement>(".mp-search")!;
+		const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"))!;
+		const props = (input as unknown as Record<string, { onChange(event: unknown): void }>)[propsKey]!;
+		await act(async () => {
+			props.onChange({ target: { value: "hello" } });
+		});
+		const category = [...document.querySelectorAll<HTMLButtonElement>(".mp-chip")].find(
+			button => button.textContent === "ai",
+		)!;
+		await act(async () => category.click());
+		await first.unmount();
+
+		const second = await renderGrid([INSTALLABLE, OUTDATED], client);
+		expect(segmentButton("installed").getAttribute("aria-selected")).toBe("true");
+		expect(document.querySelector<HTMLInputElement>(".mp-search")?.value).toBe("hello");
+		expect(cardNames()).toEqual(["hello-plugin"]);
+		await second.unmount();
 	});
 });
 

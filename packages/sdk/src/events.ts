@@ -84,6 +84,13 @@ export type SessionStreamEvent =
 			seq: number;
 			payload: { requestId: string; tool: string; args: unknown; scope?: string; prompt?: string };
 	  }
+	// Settlement broadcast: every device clears the card, including the one
+	// that did not answer. The first resolve wins.
+	| {
+			kind: "approval-request-end";
+			seq: number;
+			payload: { requestId: string; approved: boolean; note?: string };
+	  }
 	// ask tool question / custom input pushed to the GUI (TUI ask parity):
 	// the client answers via session.askAnswer. Single select/input keep the
 	// flat shape; multi-question dialogs (ask `questions: [...]`) carry the
@@ -107,6 +114,9 @@ export type SessionStreamEvent =
 						questions: AskDialogQuestionWire[] | null;
 				  };
 	  }
+	// Settlement broadcast for an ask (including a cancel). Same rationale as
+	// approval-request-end: the card is app-level state, not a transcript row.
+	| { kind: "ask-request-end"; seq: number; payload: { requestId: string } }
 	| { kind: "agent-lifecycle"; seq: number; payload: SubagentLifecyclePayload }
 	// Daemon forwards the EventBus wrapper (SubagentProgressPayload), not the
 	// bare AgentProgress — the AgentProgress lives at `payload.progress`.

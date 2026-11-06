@@ -11,6 +11,7 @@ import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
+import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
@@ -89,6 +90,7 @@ import {
 	attachmentFileChips,
 	attachmentImageParts,
 	attachmentsFromWireImages,
+	attachmentVideoSelection,
 	dataUrlToFile,
 	markSketchChip,
 	nextSketchFileName,
@@ -143,6 +145,7 @@ export interface ComposerProps {
 		images?: { type: "image"; data: string; mimeType: string }[],
 		deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 		displayContext?: MessageDisplayContext,
+		videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 	): void;
 	onStop(): void;
 	rpc: RpcClient;
@@ -194,6 +197,8 @@ export interface ComposerProps {
 	activeTask?: { partialResult?: unknown } | null;
 	/** Host for the floating member grid (agent trajectory drill-down). */
 	swarmHost?: import("@musepi/client-core").ToolRenderHost;
+	/** Chat drop-anchor handoff: the anchor stages OS files here. */
+	attachApiRef?: ComposerAttachRef;
 }
 
 function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {
@@ -256,6 +261,7 @@ export function Composer({
 	activeTask,
 	swarmHost,
 	welcome,
+	attachApiRef,
 }: ComposerProps): ReactNode {
 	const pet = usePet();
 	// composer 座位槽(dock / left / right):
@@ -284,6 +290,16 @@ export function Composer({
 	addFilesRef.current = addFiles;
 	const quotesRef = useRef(quotes);
 	quotesRef.current = quotes;
+	// Publish the intake to the chat-level drop anchor. The published object is
+	// stable for the mount and always calls this composer's latest `addFiles`.
+	useEffect(() => {
+		if (!attachApiRef) return;
+		const api = { addFiles: (files: File[]) => addFilesRef.current(files) };
+		attachApiRef.current = api;
+		return () => {
+			if (attachApiRef.current === api) attachApiRef.current = null;
+		};
+	}, [attachApiRef]);
 	useEffect(() => {
 		const onAttach = (e: Event): void => {
 			const detail = (e as CustomEvent<AnnotationAttachDetail>).detail;
@@ -1261,7 +1277,8 @@ export function Composer({
 			// Chip order IS the send order (drag-reorder moves chips in the
 			// state array; these projections follow it).
 			const imageParts = attachmentImageParts(attachments);
-			const fileChips = attachmentFileChips(attachments);
+			const videos = attachmentVideoSelection(attachments);
+			const fileChips = attachmentFileChips(attachments).filter(a => !videos.chipIds.has(a.id));
 			const baseObjective = composeDisplayContextPrompt(quotes, expandMentionTokens(objective, attachments));
 			void (async () => {
 				let refs: string[] = [];
@@ -1285,6 +1302,7 @@ export function Composer({
 						op: "guided",
 						objective: fullObjective || null,
 						...(imageParts.length > 0 ? { images: imageParts } : {}),
+						...(videos.parts.length > 0 ? { videos: videos.parts } : {}),
 					});
 				} catch (err) {
 					showSlashNotice(
@@ -1453,9 +1471,9 @@ export function Composer({
 			}
 			// Attachment mentions (Kimi parity): `@名` tokens become explicit
 			// references — image chips → `[图片:名]` (pixels ride the wire
-			// images channel as always), file chips → the existing
-			// `[Attachment] <workspace path>` line; tokens whose attachment is
-			// gone no longer resolve and stay verbatim.
+			// images channel as always), file chips → `[Attachment:名]`, whose
+			// address is the `blob://` line the upload prepends; tokens whose
+			// attachment is gone no longer resolve and stay verbatim.
 			const expanded = expandMentionTokens(payload, attachments);
 			const finalMsg = composeDisplayContextPrompt(quotes, expanded);
 			// TUI "." / "c" continue-shortcut parity: a bare dot or c (no
@@ -1469,7 +1487,10 @@ export function Composer({
 			// Chip order IS the send order (drag-reorder moves chips in the
 			// state array; these projections follow it).
 			const imageParts = attachmentImageParts(attachments);
-			const fileChips = attachmentFileChips(attachments);
+			// Path-backed video chips ride as native video parts; the rest of the
+			// file chips keep the workspace-upload channel.
+			const videos = attachmentVideoSelection(attachments);
+			const fileChips = attachmentFileChips(attachments).filter(a => !videos.chipIds.has(a.id));
 			// Shared send tail: everything after the wire send (quote cards
 			// clear, queue chip refresh, composer reset) — both the plain
 			// path and the file-upload path run this once.
@@ -1519,7 +1540,7 @@ export function Composer({
 					}
 					const wireText = refs.length > 0 ? `${refs.join("\n")}\n\n${finalMsg}`.trim() : finalMsg;
 					pushHistory(wireText);
-					onSend(wireText, imageParts, delivery, messageDisplayContext(quotes));
+					onSend(wireText, imageParts, delivery, messageDisplayContext(quotes), videos.parts);
 					finishSend();
 				})();
 				return;
@@ -1533,6 +1554,7 @@ export function Composer({
 				// "." / "c" → continue (hidden synthetic resume, TUI parity).
 				isContinueShortcut ? "continue" : delivery,
 				messageDisplayContext(quotes),
+				videos.parts,
 			);
 			finishSend();
 		},
@@ -2280,10 +2302,10 @@ export function Composer({
 							if (action === "file") {
 								// Unified attachment flow (composer file chips): the
 								// paste becomes a markdown FILE CHIP in the attachment
-								// row — send-time uploads it into <cwd>/attachments/
-								// and references it, same as any picked file. A no-cwd
-								// session fails visibly at send (inline notice) instead
-								// of the old silent inline fallback.
+								// row — send time uploads it through `attachment.put`
+								// and references the returned `blob://` address, same
+								// as any picked file. An upload failure surfaces inline
+								// instead of the old silent inline fallback.
 								const file = new File([pendingPaste.text], `paste-${Date.now()}.md`, {
 									type: "text/markdown",
 								});

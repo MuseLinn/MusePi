@@ -53,6 +53,7 @@ describe("external subagent bundled plugins", () => {
 			const enabled = await runtime.loadAll(entries, os.tmpdir());
 			expect(enabled.errors).toEqual([]);
 			expect(enabled.extensions.flatMap(extension => [...extension.subagents.keys()])).toEqual(pluginNames);
+			for (const extension of enabled.extensions) expect(extension.rpcs.has("probeExecutable")).toBe(true);
 			const description = await taskDescription(enabled);
 			for (const name of pluginNames) expect(description).toContain(name);
 

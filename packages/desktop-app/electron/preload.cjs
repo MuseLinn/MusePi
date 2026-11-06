@@ -181,8 +181,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	glowTarget: (event) => ipcRenderer.invoke("glow-target", event),
 	/** Pet panel recent-session click → open the session in the main window. */
 	petOpenSession: (sessionId) => ipcRenderer.invoke("pet-open-session", sessionId),
-	/** Pet bubble × → mark that session read in the main window (it owns
-	 *  the unread badge set — dismissing the notification must clear it). */
+	/** Finished pet card ✓ → mark that session read in the main window.
+	 *  The separate × dismiss action leaves unread state unchanged. */
 	petMarkRead: (sessionId) => ipcRenderer.invoke("pet-mark-read", sessionId),
 	/** Pet badge click → mark every session read (badge + pet bubbles). */
 	petMarkAllRead: () => ipcRenderer.invoke("pet-mark-all-read"),

@@ -55,6 +55,7 @@ import type {
 	Static,
 	TextContent,
 	TSchema,
+	VideoContent,
 } from "@musepi/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@musepi/pi-ai/oauth/types";
 import type {
@@ -1098,7 +1099,7 @@ interface ToolResultEventBase {
 	type: "tool_result";
 	toolCallId: string;
 	input: Record<string, unknown>;
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | ImageContent | VideoContent)[];
 	isError: boolean;
 }
 

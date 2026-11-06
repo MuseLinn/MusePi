@@ -1,4 +1,5 @@
 import { logger } from "@musepi/pi-utils";
+import type { JobLedger } from "./job-ledger";
 
 const DELIVERY_RETRY_BASE_MS = 500;
 const DELIVERY_RETRY_MAX_MS = 30_000;
@@ -192,6 +193,8 @@ export interface AsyncJobReapResult {
 
 export interface AsyncJobRegisterOptions {
 	id?: string;
+	/** Owning session; persisted so a restart can attribute a lost job. */
+	sessionId?: string;
 	/** Registry id of the agent that owns this job; used to scope cancelAll. */
 	ownerId?: string;
 	/** Registry id of the subagent this job runs; see {@link AsyncJob.agentId}. */
@@ -234,6 +237,25 @@ export class AsyncJobManager {
 	/** Reset the process-global instance. Test-only. */
 	static resetForTests(): void {
 		AsyncJobManager.#instance = undefined;
+	}
+
+	/** Durable job ledger installed by the daemon. Null in CLI-only runs. */
+	static #ledger: JobLedger | null = null;
+
+	static setLedger(ledger: JobLedger | null): void {
+		AsyncJobManager.#ledger = ledger;
+	}
+
+	static lostJobsForSession(sessionId: string): ReturnType<JobLedger["listLostForSession"]> {
+		return AsyncJobManager.#ledger?.listLostForSession(sessionId) ?? [];
+	}
+
+	static undeliveredJobsForSession(sessionId: string): ReturnType<JobLedger["listUndelivered"]> {
+		return AsyncJobManager.#ledger?.listUndelivered(sessionId) ?? [];
+	}
+
+	static markJobDelivered(id: string): void {
+		AsyncJobManager.#ledger?.markDelivered(id);
 	}
 
 	readonly #jobs = new Map<string, AsyncJob>();
@@ -357,12 +379,14 @@ export class AsyncJobManager {
 				if (job.status === "cancelled") {
 					job.resultText = text;
 					output.append(text);
+					AsyncJobManager.#ledger?.finish(id, "cancelled", text);
 					this.#scheduleEviction(id);
 					return;
 				}
 				job.status = "completed";
 				job.resultText = text;
 				output.append(text);
+				AsyncJobManager.#ledger?.finish(id, "completed", text);
 				this.#enqueueDelivery(id, text);
 				this.#scheduleEviction(id);
 			} catch (error) {
@@ -370,18 +394,30 @@ export class AsyncJobManager {
 				if (job.status === "cancelled") {
 					job.errorText = errorText;
 					output.append(errorText);
+					AsyncJobManager.#ledger?.finish(id, "cancelled", errorText);
 					this.#scheduleEviction(id);
 					return;
 				}
 				job.status = "failed";
 				job.errorText = errorText;
 				output.append(errorText);
+				AsyncJobManager.#ledger?.finish(id, "failed", errorText);
 				this.#enqueueDelivery(id, errorText);
 				this.#scheduleEviction(id);
 			}
 		})();
 
 		this.#jobs.set(id, job);
+		AsyncJobManager.#ledger?.register({
+			id,
+			...(options?.sessionId ? { sessionId: options.sessionId } : {}),
+			type,
+			label,
+			startTime,
+			...(options?.ownerId ? { ownerId: options.ownerId } : {}),
+			...(options?.agentId ? { agentId: options.agentId } : {}),
+			...(options?.toolCallId ? { toolCallId: options.toolCallId } : {}),
+		});
 		return id;
 	}
 
@@ -397,6 +433,7 @@ export class AsyncJobManager {
 		if (job.status !== "running") return false;
 		job.status = "cancelled";
 		job.abortController.abort();
+		AsyncJobManager.#ledger?.finish(id, "cancelled");
 		this.#scheduleEviction(id);
 		return true;
 	}
@@ -949,6 +986,7 @@ export class AsyncJobManager {
 			this.#inFlightDeliveries.push(delivery);
 			try {
 				await sink(delivery.jobId, delivery.text, this.#jobs.get(delivery.jobId));
+				AsyncJobManager.#ledger?.markDelivered(delivery.jobId);
 			} catch (error) {
 				delivery.attempt += 1;
 				delivery.lastError = error instanceof Error ? error.message : String(error);

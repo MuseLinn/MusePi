@@ -73,6 +73,32 @@ describe("marketplace list-entries", () => {
 		});
 		expect(result[0].installed).toBe(true);
 		expect(result[0].installedScope).toBe("user");
+		expect(result[0].enabled).toBe(true);
+	});
+
+	test("keeps a disabled installed plugin visibly disabled", () => {
+		const reg = registry([{ name: "alpha" }]);
+		const id = buildPluginId("lint", "alpha");
+		const catalogs = new Map([["alpha", [plugin({ name: "lint" })]]]);
+		const result = listMarketplaceEntries({
+			registry: reg,
+			catalogs,
+			userRegistry: installed({
+				[id]: [
+					{
+						scope: "user",
+						installPath: "/tmp/x",
+						version: "0.0.0",
+						installedAt: "2026-01-01T00:00:00Z",
+						lastUpdated: "2026-01-01T00:00:00Z",
+						enabled: false,
+					},
+				],
+			}),
+			projectRegistry: null,
+		});
+		expect(result[0].installed).toBe(true);
+		expect(result[0].enabled).toBe(false);
 	});
 
 	test("project scope wins over user scope", () => {

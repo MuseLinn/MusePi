@@ -117,8 +117,10 @@ export {
 export { useLocale } from "./i18n/use-locale.js";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
+export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";
 export * from "./lib/modal-focus";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
+export { useScrollShadow } from "./lib/scroll-shadow";
 export {
 	type ArchivedSession,
 	archivedSessionIds,

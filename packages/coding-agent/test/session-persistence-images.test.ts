@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@musepi/pi-agent-core";
-import type { ImageContent, TextContent } from "@musepi/pi-ai";
+import type { ImageContent, TextContent, VideoContent } from "@musepi/pi-ai";
 import { BlobStore, isBlobRef } from "@musepi/pi-coding-agent/session/blob-store";
 import type { FileEntry, SessionMessageEntry } from "@musepi/pi-coding-agent/session/session-entries";
 import { resolveBlobRefsInEntries } from "@musepi/pi-coding-agent/session/session-loader";
@@ -166,5 +166,56 @@ describe("session image persistence", () => {
 		const resolved = loaded[loaded.length - 1] as ToolResultEntry;
 		const resolvedImage = resolved.message.content.find((block): block is ImageContent => block.type === "image");
 		expect(resolvedImage?.data).toBe(imageData);
+	});
+	it("externalizes and restores inline videos in content and detail videos", async () => {
+		using tempDir = TempDir.createSync("@session-video-persistence-");
+		const blobStore = new BlobStore(tempDir.path());
+		const inlineVideo = Buffer.alloc(2000, 5).toString("base64");
+		const original = messageEntry({
+			role: "toolResult",
+			toolCallId: "tc-video",
+			toolName: "read",
+			content: [text("clip"), { type: "video", mimeType: "video/mp4", data: inlineVideo }],
+			details: { videos: [payload(inlineVideo)] },
+			isError: false,
+			timestamp: Date.now(),
+		} as unknown as ToolResultMessage);
+
+		const persisted = prepareEntryForPersistence(original, blobStore) as ToolResultEntry;
+		const persistedVideo = persisted.message.content.find((block): block is VideoContent => block.type === "video");
+		const persistedDetails = persisted.message.details as { videos: ImagePayload[] };
+		expect(isBlobRef(persistedVideo?.data ?? "")).toBe(true);
+		expect(isBlobRef(persistedDetails.videos[0]?.data ?? "")).toBe(true);
+
+		const loaded: FileEntry[] = [structuredClone(persisted)];
+		await resolveBlobRefsInEntries(loaded, blobStore);
+		const resolved = loaded[0] as ToolResultEntry;
+		const resolvedVideo = resolved.message.content.find((block): block is VideoContent => block.type === "video");
+		const resolvedDetails = resolved.message.details as { videos: ImagePayload[] };
+		expect(resolvedVideo?.data).toBe(inlineVideo);
+		expect(resolvedDetails.videos[0]?.data).toBe(inlineVideo);
+	});
+
+	it("keeps small and URL-only videos untouched", () => {
+		using tempDir = TempDir.createSync("@session-video-small-");
+		const blobStore = new BlobStore(tempDir.path());
+		const small = Buffer.alloc(16, 6).toString("base64");
+		const original = messageEntry({
+			role: "toolResult",
+			toolCallId: "tc-small",
+			toolName: "read",
+			content: [
+				text("clip"),
+				{ type: "video", mimeType: "video/mp4", data: small },
+				{ type: "video", mimeType: "video/mp4", url: "https://cdn.example/a.mp4" },
+			],
+			isError: false,
+			timestamp: Date.now(),
+		} as unknown as ToolResultMessage);
+		const persisted = prepareEntryForPersistence(original, blobStore) as ToolResultEntry;
+		const videos = persisted.message.content.filter((block): block is VideoContent => block.type === "video");
+		expect(videos[0]?.data).toBe(small);
+		expect(videos[1]?.url).toBe("https://cdn.example/a.mp4");
+		expect(videos[1]?.data).toBeUndefined();
 	});
 });

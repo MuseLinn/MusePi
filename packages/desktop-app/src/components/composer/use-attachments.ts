@@ -1,4 +1,5 @@
 import { arrayMove } from "@dnd-kit/sortable";
+import type { AttachmentPutResult } from "@musepi/pi-wire";
 import type { ClipboardEvent, DragEvent } from "react";
 import { useState } from "react";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../../lib/image-resize";
@@ -10,12 +11,12 @@ import { parseSketchScene, type SketchScene, sceneHasImage } from "../../lib/ske
  *
  * Images carry a base64 data URL that rides along in session.send.images
  * (model-visible content parts). Every other file keeps its raw File handle
- * (`file`, memory only) and is written into the session workspace via
- * fs.write(encoding:"base64") at send time — the daemon-side `fs.write` is
- * the only channel that can carry arbitrary bytes, and the agent reads the
- * file from disk afterwards. The handle is deliberately not serialized:
- * a restored draft chip knows its metadata but the bytes are gone, so a
- * send with such a chip fails with a re-attach hint instead of silently
+ * (`file`, memory only); at send time its bytes go through `attachment.put`
+ * and the prompt references the returned content-addressed
+ * `blob://<hash>` URL together with the original file name, which the agent
+ * resolves through the daemon's blob protocol. The handle is deliberately not
+ * serialized: a restored draft chip knows its metadata but the bytes are gone,
+ * so a send with such a chip fails with a re-attach hint instead of silently
  * sending nothing.
  */
 export interface ComposerAttachment {
@@ -122,9 +123,9 @@ export function attachmentsFromWireImages(
 	return out;
 }
 
-/** Read a File as bare base64 (no data-URL prefix) for the fs.write
- *  upload path — FileReader.readAsDataURL + prefix strip, no manual
- *  byte-loop (btoa would choke on multi-MB binaries). */
+/** Read a File as bare base64 (no data-URL prefix) for the
+ *  `attachment.put` upload path — FileReader.readAsDataURL + prefix strip, no
+ *  manual byte-loop (btoa would choke on multi-MB binaries). */
 export function readFileAsBase64(file: File): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
@@ -134,25 +135,13 @@ export function readFileAsBase64(file: File): Promise<string> {
 	});
 }
 
-/** Sanitize a client-supplied filename into a safe workspace-relative
- *  attachment path: the name may carry directories (some drops include
- *  webkitRelativePath-style separators) or traversal segments. */
-export function attachmentWorkspacePath(name: string): string {
-	const base = name.replace(/\\/g, "/").split("/").pop() ?? "file";
-	const safe = base
-		.replace(/\.\.+/g, "_")
-		.replace(/[^\w.\-()\u4e00-\u9fa5 ]+/g, "_")
-		.trim();
-	return `attachments/${safe.length > 0 ? safe : "file"}`;
-}
-
 /**
  * Dedupe an incoming chip's name against the chips already staged (and the
  * rest of its batch): pasted screenshots all arrive as "image.png", and a
  * name-mention token resolves to the FIRST chip with that name — two
  * same-named chips made every mention point at the first one. Suffixes
- * `-2`/`-3` before the extension, the same convention the workspace upload
- * path uses for same-name collisions.
+ * `-2`/`-3` before the extension, the same convention the upload path uses
+ * for same-name collisions.
  */
 export function uniqueAttachmentName(name: string, taken: ReadonlySet<string>): string {
 	if (!taken.has(name)) return name;
@@ -168,49 +157,60 @@ export function uniqueAttachmentName(name: string, taken: ReadonlySet<string>): 
 	return candidate;
 }
 
-/** Write one batch of non-image files into `cwd` via fs.write(base64) and
- *  return the `[Attachment] <path>` reference lines for the prompt.
+/** Upload one batch of non-image files through `attachment.putFile` (path on
+ *  this machine) or `attachment.put` (inline bytes), and return the
+ *  `[Attachment] blob://<hash> (name)` reference lines for the prompt.
  *
  *  ONE implementation for both composers: the session composer has a cwd at
  *  send time, the empty-state composer only gets one after the session it
- *  creates exists — but the channel, the sanitizing rule and the same-name
- *  suffixing must not drift between them. Throws on the first failure so the
- *  caller can abort the send (a message whose attachments never landed just
- *  confuses the agent). */
+ *  creates exists — but the channel and the reference format must not drift
+ *  between them. Throws on the first failure so the caller can abort the send
+ *  (a message whose attachments never landed just confuses the agent). */
 export async function uploadAttachmentFiles(
 	rpc: RpcClient,
-	cwd: string | null | undefined,
+	_cwd: string | null | undefined,
 	files: readonly { file?: File; name: string }[],
 ): Promise<string[]> {
 	const refs: string[] = [];
-	const usedPaths = new Set<string>();
 	for (const chip of files) {
 		if (!chip.file) throw new Error("attachment expired re-add");
-		if (!cwd) throw new Error("no workspace for attachments");
-		let wsPath = attachmentWorkspacePath(chip.name);
-		// Same-name collisions get -2/-3 suffixes instead of silently
-		// overwriting an earlier attachment.
-		const dot = wsPath.lastIndexOf(".");
-		const sep = wsPath.lastIndexOf("/");
-		const stem = dot > sep ? wsPath.slice(0, dot) : wsPath;
-		const ext = dot > sep ? wsPath.slice(dot) : "";
-		let n = 2;
-		while (usedPaths.has(wsPath)) {
-			wsPath = `${stem}-${n}${ext}`;
-			n++;
+		const mimeType = chip.file.type || "application/octet-stream";
+		// Same-machine fast path: the daemon reads the file itself, so the bytes
+		// never enter the RPC frame (a base64 body is capped at ~12 MiB by the
+		// 16 MiB frame limit). Pasted blobs and unreadable paths fall back to the
+		// inline form.
+		const localPath = localFilePath(chip.file);
+		let res: AttachmentPutResult | { error: string } | null = localPath
+			? await rpc.request<AttachmentPutResult | { error: string }>("attachment.putFile", {
+					path: localPath,
+					name: chip.name,
+					mimeType,
+				})
+			: null;
+		if (localPath && (!res || "error" in res)) {
+			res = null;
 		}
-		usedPaths.add(wsPath);
-		const b64 = await readFileAsBase64(chip.file);
-		const res = await rpc.request<{ ok?: boolean; error?: string }>("fs.write", {
-			cwd,
-			path: wsPath,
-			content: b64,
-			encoding: "base64",
-		});
-		if (res && res.ok === false) throw new Error(res.error ?? "fs.write failed");
-		refs.push(`[Attachment] ${wsPath}`);
+		if (!res) {
+			const content = await readFileAsBase64(chip.file);
+			res = await rpc.request<AttachmentPutResult | { error: string }>("attachment.put", {
+				name: chip.name,
+				mimeType,
+				content,
+			});
+		}
+		if (!res || "error" in res) throw new Error(res?.error ?? "attachment upload failed");
+		refs.push(`[Attachment] ${res.url} (${chip.name})`);
 	}
 	return refs;
+}
+
+/** Filesystem path of a picked or dropped file, when the desktop bridge can
+ *  name one. Clipboard and board blobs have none, and neither does a plain
+ *  browser. */
+function localFilePath(file: File): string {
+	if (typeof window === "undefined") return "";
+	const bridge = (window as unknown as { electronAPI?: { getDroppedFilePath?: (f: File) => string } }).electronAPI;
+	return bridge?.getDroppedFilePath?.(file) ?? "";
 }
 
 /** Board/lightbox PNG → File so a finished sketch reuses the normal
@@ -283,6 +283,30 @@ export function attachmentImageParts(
 		.map(a => ({ type: "image" as const, data: a.dataUrl.split(",")[1] ?? "", mimeType: a.mimeType }));
 }
 
+/**
+ * Video-file chips become native `video` parts instead of workspace refs.
+ * A chip only qualifies when the desktop bridge
+ * can read its filesystem path — a pasted blob has none and stays a file chip,
+ * so the bytes are never silently dropped. `url` is a `file://` URL: the
+ * transcript plays it and providers that take URLs consume it directly.
+ */
+export function attachmentVideoSelection(attachments: readonly ComposerAttachment[]): {
+	chipIds: ReadonlySet<number>;
+	parts: { type: "video"; mimeType: string; url: string }[];
+} {
+	const chipIds = new Set<number>();
+	const parts: { type: "video"; mimeType: string; url: string }[] = [];
+	const bridge = (window as unknown as { electronAPI?: { getDroppedFilePath?: (file: File) => string } }).electronAPI;
+	for (const a of attachments) {
+		if (a.kind !== "file" || !a.file || !a.mimeType.startsWith("video/")) continue;
+		const path = bridge?.getDroppedFilePath?.(a.file) ?? "";
+		if (!path) continue;
+		chipIds.add(a.id);
+		parts.push({ type: "video", mimeType: a.mimeType, url: path.startsWith("file://") ? path : `file://${path}` });
+	}
+	return { chipIds, parts };
+}
+
 /** Non-image chips in chip order — the `uploadAttachmentFiles` input. */
 export function attachmentFileChips<T extends { kind: "image" | "file" }>(attachments: readonly T[]): T[] {
 	return attachments.filter(a => a.kind === "file");
@@ -296,7 +320,7 @@ export function attachmentFiles(attachments: readonly { kind: "image" | "file"; 
 		.filter((f): f is File => f !== undefined);
 }
 
-/** Drag-reorder (Kimi desktop parity): move chip `fromId` to the position of
+/** Drag-reorder: move chip `fromId` to the position of
  *  `toId`, everything else shifting by one. No-op (reference-stable) when
  *  either id is unknown or both are equal — the dnd-kit drag-end already
  *  filters same-target drops, this keeps the state layer honest too. */

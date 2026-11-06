@@ -769,6 +769,23 @@ export interface ImageContent {
 	url?: string;
 }
 
+/**
+ * Video block. `url` carries remote/local media; `data` is the inline base64
+ * fallback. Only providers with a video input channel consume it — the rest
+ * degrade it to a text placeholder so the turn never silently loses it.
+ */
+export interface VideoContent {
+	type: "video";
+	/** e.g., "video/mp4". */
+	mimeType: string;
+	/** Base64-encoded video bytes; absent when `url` carries the media. */
+	data?: string;
+	/** Remote (https) or local (file://) URL when the bytes are not inline. */
+	url?: string;
+	/** Provider-native file reference preferred only by its matching provider. */
+	providerFile?: ProviderFileReference;
+}
+
 export type ComputerAction =
 	| {
 			type: "click";
@@ -851,7 +868,7 @@ export type ProviderPayload = OpenAIResponsesHistoryPayload;
 
 export interface UserMessage {
 	role: "user";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | ImageContent | VideoContent)[];
 	/** True if the message was injected by the system (e.g., auto-continue). */
 	synthetic?: boolean;
 	/** True when injected mid-turn as a steer; consumed by the agent's pre-LLM transform to wrap it for emphasis. Never rendered. */
@@ -862,12 +879,16 @@ export interface UserMessage {
 	providerPayload?: ProviderPayload;
 	/** Presentation-only provenance; never used to alter model content or behavior. */
 	displayContext?: MessageDisplayContext;
+	/** Idempotency identity of the client request that produced this message. */
+	requestIdentity?: string;
+	/** Canonical content fingerprint paired with `requestIdentity`. */
+	requestFingerprint?: string;
 	timestamp: number; // Unix timestamp in milliseconds
 }
 
 export interface DeveloperMessage {
 	role: "developer";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | ImageContent | VideoContent)[];
 	/** Who initiated this message for billing/attribution semantics. */
 	attribution?: MessageAttribution;
 	/** Provider-specific opaque payload used to reconstruct transport-native history. */
@@ -973,7 +994,7 @@ export interface ToolResultMessage<TDetails = unknown> {
 	role: "toolResult";
 	toolCallId: string;
 	toolName: string;
-	content: (TextContent | ImageContent)[]; // Supports text and images
+	content: (TextContent | ImageContent | VideoContent)[]; // Supports text, images and video
 	details?: TDetails;
 	isError: boolean;
 	/** Who initiated this message for billing/attribution semantics. */

@@ -47,6 +47,8 @@ export interface AdoptRunningSpawnOptions<T> {
 	label?: string;
 	toolCallId?: string;
 	ownerId?: string;
+	/** Owning session; persisted so a restart can attribute a lost job. */
+	sessionId?: string;
 	/** The inline run this job adopts. Never started by the job itself. */
 	runPromise: Promise<T>;
 	/** Final delivery text for one settled run. */
@@ -86,6 +88,7 @@ export function adoptRunningSpawn<T>(options: AdoptRunningSpawnOptions<T>): stri
 		{
 			id: options.agentId,
 			agentId: options.agentId,
+			...(options.sessionId ? { sessionId: options.sessionId } : {}),
 			...(options.ownerId ? { ownerId: options.ownerId } : {}),
 			...(options.toolCallId ? { toolCallId: options.toolCallId } : {}),
 		},

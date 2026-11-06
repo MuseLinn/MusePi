@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { Type } from "@musepi/musepi-type/typebox";
 import type { AgentMessage, AgentTool } from "@musepi/pi-agent-core";
-import type { ImageContent, TextContent } from "@musepi/pi-ai";
+import type { ImageContent, TextContent, VideoContent } from "@musepi/pi-ai";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
@@ -1245,7 +1245,9 @@ describe("ExtensionRunner", () => {
 			execute: async () => ({ content: [{ type: "text" as const, text: "success" }] }),
 		};
 
-		const firstText = (result: { content: readonly (TextContent | ImageContent)[] }): string | undefined => {
+		const firstText = (result: {
+			content: readonly (TextContent | ImageContent | VideoContent)[];
+		}): string | undefined => {
 			const block = result.content[0];
 			return block?.type === "text" ? block.text : undefined;
 		};

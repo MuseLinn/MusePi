@@ -77,6 +77,7 @@ import type {
 	ToolResultMessage,
 	UsageReport,
 	UserMessage,
+	VideoContent,
 } from "@musepi/pi-ai";
 import { type Effort, streamSimple } from "@musepi/pi-ai";
 import * as AIError from "@musepi/pi-ai/error";
@@ -233,6 +234,7 @@ import type { InspectImageMode } from "../utils/inspect-image-mode";
 import { resumeCommand } from "../utils/resume-command";
 import { generateSessionTitle } from "../utils/title-generator";
 import { buildNamedToolChoice, isToolChoiceActive } from "../utils/tool-choice";
+import { normalizeModelContextVideos } from "../utils/video-loading";
 import type { VibeModeState } from "../vibe/state";
 import { type AdvisorPrimaryTurnEndListener, CordisAdvisorLifecycle } from "./advisor-lifecycle-plugin";
 import type { AgentSessionEvent, AgentSessionEventListener } from "./agent-session-events";
@@ -5938,6 +5940,10 @@ export class AgentSession {
 		return normalizeModelContextImages(images, { model: this.model });
 	}
 
+	#normalizeVideosForModel(videos: VideoContent[] | undefined): Promise<VideoContent[] | undefined> {
+		return normalizeModelContextVideos(videos, { model: this.model });
+	}
+
 	#buildImageDescriptionNotice(
 		normalizedImages: ImageContent[],
 		signal?: AbortSignal,
@@ -6100,9 +6106,15 @@ export class AgentSession {
 			!options?.synthetic && !hasPendingUserDirective ? this.#todo.createEagerTaskPrelude(expandedText) : undefined;
 		const normalizedImages = await this.#normalizeImagesForModel(options?.images);
 
-		const userContent: (TextContent | ImageContent)[] = [{ type: "text", text: expandedText }];
+		const userContent: (TextContent | ImageContent | VideoContent)[] = [{ type: "text", text: expandedText }];
 		if (normalizedImages?.length) {
 			userContent.push(...normalizedImages);
+		}
+		// A local video is inlined for models that take video input; other
+		// providers keep the block and degrade it to a marker.
+		const normalizedVideos = await this.#normalizeVideosForModel(options?.videos);
+		if (normalizedVideos?.length) {
+			userContent.push(...normalizedVideos);
 		}
 		// Text-only model + image attachment: describe via a vision model and inject the
 		// description as a hidden companion (the image stays in the visible user message).
@@ -6125,6 +6137,8 @@ export class AgentSession {
 					attribution: promptAttribution,
 					timestamp: Date.now(),
 					...(options?.displayContext ? { displayContext: options.displayContext } : {}),
+					...(options?.requestIdentity ? { requestIdentity: options.requestIdentity } : {}),
+					...(options?.requestFingerprint ? { requestFingerprint: options.requestFingerprint } : {}),
 				};
 
 		const preludeMessages: AgentMessage[] = [];
@@ -6742,7 +6756,10 @@ export class AgentSession {
 		const expandedText =
 			options?.expandPromptTemplates === false ? text : expandPromptTemplate(text, [...this.#promptTemplates]);
 		if (!options?.synthetic) {
-			await this.#queueUserMessage(expandedText, images, "followUp", { displayContext: options?.displayContext });
+			await this.#queueUserMessage(expandedText, images, "followUp", {
+				displayContext: options?.displayContext,
+				videos: options?.videos,
+			});
 			return;
 		}
 		// Synthetic branch: agent-initiated hidden developer message. Bypass
@@ -6750,9 +6767,13 @@ export class AgentSession {
 		// enqueues as a user-attributed message) and place the developer message
 		// directly on the follow-up queue.
 		const normalizedImages = await this.#normalizeImagesForModel(images);
-		const content: (TextContent | ImageContent)[] = [{ type: "text", text: expandedText }];
+		const content: (TextContent | ImageContent | VideoContent)[] = [{ type: "text", text: expandedText }];
 		if (normalizedImages?.length) {
 			content.push(...normalizedImages);
+		}
+		const normalizedVideos = await this.#normalizeVideosForModel(options?.videos);
+		if (normalizedVideos?.length) {
+			content.push(...normalizedVideos);
 		}
 		const imageDescriptionNotice = normalizedImages?.length
 			? await this.#buildImageDescriptionNotice(normalizedImages)
@@ -6772,16 +6793,26 @@ export class AgentSession {
 		text: string,
 		images: ImageContent[] | undefined,
 		mode: "steer" | "followUp",
-		options?: { prepend?: boolean; displayContext?: MessageDisplayContext },
+		options?: {
+			prepend?: boolean;
+			displayContext?: MessageDisplayContext;
+			requestIdentity?: string;
+			requestFingerprint?: string;
+			videos?: VideoContent[];
+		},
 	): Promise<void> {
 		// A queued user message (RPC/SDK/collab steer or follow-up, or a typed message
 		// while streaming) is a deliberate resume; re-enable advisor auto-resume that
 		// a user interrupt suppressed.
 		this.#advisors.autoResumeSuppressed = false;
 		const normalizedImages = await this.#normalizeImagesForModel(images);
-		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
+		const content: (TextContent | ImageContent | VideoContent)[] = [{ type: "text", text }];
 		if (normalizedImages?.length) {
 			content.push(...normalizedImages);
+		}
+		const normalizedVideos = await this.#normalizeVideosForModel(options?.videos);
+		if (normalizedVideos?.length) {
+			content.push(...normalizedVideos);
 		}
 		// Text-only model + image attachment: describe via a vision model and enqueue the
 		// description as a hidden companion immediately before the user message.
@@ -6798,6 +6829,8 @@ export class AgentSession {
 				attribution: "user",
 				timestamp: Date.now(),
 				...(displayContext ? { displayContext } : {}),
+				...(options?.requestIdentity ? { requestIdentity: options.requestIdentity } : {}),
+				...(options?.requestFingerprint ? { requestFingerprint: options.requestFingerprint } : {}),
 			});
 		} else if (options?.prepend) {
 			// 立即发出插到队首:steering 默认 one-at-a-time、循环每个注入边界只取队首
@@ -6810,6 +6843,8 @@ export class AgentSession {
 				attribution: "user",
 				timestamp: Date.now(),
 				...(displayContext ? { displayContext } : {}),
+				...(options?.requestIdentity ? { requestIdentity: options.requestIdentity } : {}),
+				...(options?.requestFingerprint ? { requestFingerprint: options.requestFingerprint } : {}),
 			};
 			const head = imageDescriptionNotice ? [imageDescriptionNotice, userMessage] : [userMessage];
 			this.agent.replaceQueues([...head, ...this.agent.peekSteeringQueue()], [...this.agent.peekFollowUpQueue()]);
@@ -6822,6 +6857,8 @@ export class AgentSession {
 				attribution: "user",
 				timestamp: Date.now(),
 				...(displayContext ? { displayContext } : {}),
+				...(options?.requestIdentity ? { requestIdentity: options.requestIdentity } : {}),
+				...(options?.requestFingerprint ? { requestFingerprint: options.requestFingerprint } : {}),
 			});
 		}
 		this.#scheduleIdleQueueDrain();
@@ -7165,21 +7202,30 @@ export class AgentSession {
 	 * Explicit `deliverAs` queues without starting a turn in either state.
 	 */
 	async sendUserMessage(
-		content: string | (TextContent | ImageContent)[],
-		options?: { deliverAs?: "steer" | "followUp" | "continue"; displayContext?: MessageDisplayContext },
+		content: string | (TextContent | ImageContent | VideoContent)[],
+		options?: {
+			deliverAs?: "steer" | "followUp" | "continue";
+			displayContext?: MessageDisplayContext;
+			requestIdentity?: string;
+			requestFingerprint?: string;
+		},
 	): Promise<void> {
-		// Normalize content to text string + optional images
+		// Normalize content to text string + optional images/videos
 		let text: string;
 		let images: ImageContent[] | undefined;
+		let videos: VideoContent[] | undefined;
 
 		if (typeof content === "string") {
 			text = content;
 		} else {
 			const textParts: string[] = [];
 			images = [];
+			videos = [];
 			for (const part of content) {
 				if (part.type === "text") {
 					textParts.push(part.text);
+				} else if (part.type === "video") {
+					videos.push(part);
 				} else {
 					images.push(part);
 				}
@@ -7189,11 +7235,21 @@ export class AgentSession {
 		}
 
 		if (options?.deliverAs === "followUp") {
-			await this.#queueUserMessage(text, images, "followUp", { displayContext: options.displayContext });
+			await this.#queueUserMessage(text, images, "followUp", {
+				displayContext: options.displayContext,
+				requestIdentity: options.requestIdentity,
+				requestFingerprint: options.requestFingerprint,
+				videos,
+			});
 			return;
 		}
 		if (options?.deliverAs === "steer") {
-			await this.#queueUserMessage(text, images, "steer", { displayContext: options.displayContext });
+			await this.#queueUserMessage(text, images, "steer", {
+				displayContext: options.displayContext,
+				requestIdentity: options.requestIdentity,
+				requestFingerprint: options.requestFingerprint,
+				videos,
+			});
 			return;
 		}
 		if (options?.deliverAs === "continue") {
@@ -7204,6 +7260,7 @@ export class AgentSession {
 			await this.prompt(text, {
 				expandPromptTemplates: false,
 				images,
+				videos,
 				synthetic: true,
 				streamingBehavior: "steer",
 			});
@@ -7216,7 +7273,10 @@ export class AgentSession {
 		await this.prompt(text, {
 			expandPromptTemplates: false,
 			images,
+			videos,
 			displayContext: options?.displayContext,
+			requestIdentity: options?.requestIdentity,
+			requestFingerprint: options?.requestFingerprint,
 			streamingBehavior: "steer",
 		});
 	}

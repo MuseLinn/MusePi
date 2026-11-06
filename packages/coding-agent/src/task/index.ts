@@ -1271,6 +1271,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				id: agentId,
 				agentId,
 				queued: true,
+				sessionId: this.session.getSessionId?.() ?? undefined,
 				ownerId: this.session.getAgentId?.() ?? undefined,
 				onProgress: text => {
 					onUpdate?.({ content: [{ type: "text", text }], details: buildDetails() });
@@ -1525,6 +1526,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						// calling agent, so `hub jobs`/cancel and delivery routing
 						// see it like any other spawn.
 						ownerId: this.session.getAgentId?.() ?? undefined,
+						sessionId: this.session.getSessionId?.() ?? undefined,
 						toolCallId,
 						// The spawn keeps its concurrency slot until the adopted run
 						// settles; the acquiring caller skips its own release.

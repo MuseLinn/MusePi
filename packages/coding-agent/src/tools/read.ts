@@ -9,7 +9,7 @@ import type {
 	AgentToolUpdateCallback,
 	ToolTier,
 } from "@musepi/pi-agent-core";
-import type { ImageContent, TextContent } from "@musepi/pi-ai";
+import type { ImageContent, TextContent, VideoContent } from "@musepi/pi-ai";
 import { type ImageMetadata, isProbablyBinary, logger, prompt, readImageMetadata } from "@musepi/pi-utils";
 import {
 	canonicalSnapshotKey,
@@ -551,7 +551,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 		const notice = `Note: interpreted as ${parts.length} paths: ${parts.join(", ")}`;
 		const notes = [notice];
-		const content: Array<TextContent | ImageContent> = [];
+		const content: Array<TextContent | ImageContent | VideoContent> = [];
 		const displayReadTargets: string[] = [];
 		let pendingText = notice;
 		const flushText = () => {

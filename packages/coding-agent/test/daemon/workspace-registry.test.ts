@@ -5,11 +5,13 @@ import { join } from "node:path";
 import {
 	MAX_WORKSPACE_DIRECTORIES,
 	resolveWorkspaceDirectories,
+	sessionHiddenByWorkspace,
 	WorkspaceDirectoryError,
 	WorkspaceRegistry,
 	WorkspaceService,
 	type WorkspaceSessionDirectories,
 } from "../../src/daemon/services/workspace-registry";
+import { normalizeWorkspaceDirectory } from "../../src/session/session-workspace";
 
 function tempRoot(): string {
 	return mkdtempSync(join(tmpdir(), "musepi-workspace-registry-"));
@@ -107,6 +109,52 @@ describe("WorkspaceRegistry", () => {
 
 		expect(await registry.delete(implicit.id)).toBe(true);
 		expect(await registry.list([cwd])).toEqual([]);
+	});
+
+	it("prunes implicit projects once their last session is gone", async () => {
+		const root = tempRoot();
+		const cwd = join(root, "history");
+		const managedRoot = join(root, "managed");
+		mkdirSync(managedRoot);
+		const registry = registryAt(root, () => 1_000);
+		await registry.create({ root: managedRoot, name: "Managed" });
+
+		expect(await registry.list([cwd, managedRoot])).toHaveLength(2);
+		// No session reports that cwd any more: the empty implicit row is stale.
+		const rows = await registry.list([managedRoot]);
+		expect(rows.map(row => row.kind)).toEqual(["managed"]);
+		// Managed rows are never pruned by session cwd bookkeeping.
+		expect(await registry.list([])).toHaveLength(1);
+	});
+
+	it("keeps the removal time after the same folder is registered again", async () => {
+		const root = tempRoot();
+		const dir = join(root, "proj");
+		mkdirSync(dir);
+		const registry = registryAt(root, () => 1_000);
+		const created = await registry.create({ root: dir, name: "Removed" });
+		expect(await registry.delete(created.workspace.id)).toBe(true);
+
+		// Re-registering the path lifts the backfill tombstone but keeps the
+		// removal time: the old workspace's sessions must not come back.
+		await registry.create({ root: dir, name: "Again" });
+		expect(await registry.deletedRoots()).toEqual([]);
+		expect(await registry.deletedRootTimes()).toEqual({ [normalizeWorkspaceDirectory(dir)]: 1_000 });
+	});
+
+	it("hidden-by-workspace rule: removed root hides all, re-registered root hides only old sessions", () => {
+		const root = normalizeWorkspaceDirectory(join(tempRoot(), "proj"));
+		expect(sessionHiddenByWorkspace(root, 100, { roots: new Set([root]), deletedAt: {} })).toBe(true);
+		expect(sessionHiddenByWorkspace(root, 100, { roots: new Set(), deletedAt: {} })).toBe(false);
+
+		const reRegistered = { roots: new Set<string>(), deletedAt: { [root]: 500 } };
+		expect(sessionHiddenByWorkspace(root, 500, reRegistered)).toBe(true);
+		expect(sessionHiddenByWorkspace(root, 501, reRegistered)).toBe(false);
+		expect(sessionHiddenByWorkspace(normalizeWorkspaceDirectory(join(tempRoot(), "other")), 100, reRegistered)).toBe(
+			false,
+		);
+		// No cwd is not evidence of a removed workspace.
+		expect(sessionHiddenByWorkspace(undefined, 100, { roots: new Set([root]), deletedAt: {} })).toBe(false);
 	});
 
 	it("reports duplicate directories structurally instead of adding them twice", async () => {

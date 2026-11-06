@@ -263,7 +263,10 @@ describe("SessionInfoCard 连接器与插件", () => {
 			},
 			calls,
 		);
-		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		const opened: Array<string | undefined> = [];
+		const { host, unmount } = await mount(
+			<SessionInfoCard {...CARD_PROPS} rpc={rpc} onOpenSettings={section => opened.push(section)} />,
+		);
 		const rows = [...host.querySelectorAll(".gui-session-info-connectors .gui-connector-row")];
 		expect(rows).toHaveLength(2);
 		expect(rows.map(row => row.querySelector(".gui-connector-row-name")?.textContent)).toEqual(["fs", "web"]);
@@ -285,6 +288,16 @@ describe("SessionInfoCard 连接器与插件", () => {
 		expect(write?.params).toEqual({ sessionId: "session-1", servers: ["web"] });
 		const after = [...host.querySelectorAll<HTMLInputElement>(".gui-session-info-connectors input[type='checkbox']")];
 		expect(after.map(box => box.checked)).toEqual([false, true]);
+
+		// One connector surface: the settings entry rides the panel header instead
+		// of a second "MCP servers" row under the list.
+		expect(host.querySelector(".gui-session-info-manage-connectors")).toBeNull();
+		const manage = [
+			...host.querySelectorAll<HTMLButtonElement>(".gui-connector-panel-head .gui-connector-link"),
+		].find(button => button.textContent === t("tools.connectorsManage"));
+		expect(manage).not.toBeUndefined();
+		await act(async () => manage!.click());
+		expect(opened).toEqual(["mcp"]);
 		await unmount();
 	});
 
@@ -318,42 +331,27 @@ describe("SessionInfoCard 连接器与插件", () => {
 		await unmount();
 	});
 
-	it("插件状态条位于分区上方，点开列出运行/禁用明细", async () => {
+	it("插件只有一个入口：分区头展开列表，不再有重复的状态条与浮层", async () => {
 		const rpc = makeRpc({
 			"extensions.list": () => ({
 				extensions: [
 					{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "active" },
 					{ id: "beta", kind: "plugin-module", name: "beta", displayName: "", state: "disabled" },
-					{ id: "gamma", kind: "extension-module", name: "gamma", displayName: "", state: "active" },
-					{ id: "theme", kind: "theme-pack", name: "theme", displayName: "", state: "active" },
 				],
 			}),
 		});
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
-		const strip = host.querySelector<HTMLButtonElement>(".gui-session-info-plugin-status")!;
-		expect(strip).not.toBeNull();
-		expect(strip.textContent).toContain(t("settings.extensionsRunning", { count: "2" }));
-		expect(strip.getAttribute("aria-expanded")).toBe("false");
-		// The readout sits above the section's own count + roster.
-		const head = host.querySelector<HTMLElement>(".gui-session-info-plugins-head")!;
-		expect(strip.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-
-		await act(async () => strip.click());
-		expect(strip.getAttribute("aria-expanded")).toBe("true");
-		const menu = document.querySelector<HTMLElement>(".gui-ext-status-menu")!;
-		expect(menu).not.toBeNull();
-		// Portaled out of the card's scrolling box, so the roster cannot be clipped.
-		expect(host.contains(menu)).toBe(false);
-		const rows = [...menu.querySelectorAll(".gui-ext-status-row")].map(node => node.textContent);
-		expect(rows).toHaveLength(3);
-		expect(rows[0]).toContain("Alpha");
-		expect(rows[0]).toContain(t("settings.extensionsStateRunning"));
-		expect(rows[1]).toContain("beta");
-		expect(rows[1]).toContain(t("settings.extensionsStateDisabled"));
+		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
+		const head = host.querySelector<HTMLButtonElement>(".gui-session-info-plugins-head")!;
+		expect(head).not.toBeNull();
+		await act(async () => head.click());
+		// The disclosure renders in place; nothing portals a second roster.
+		expect(document.querySelector(".gui-ext-status-menu")).toBeNull();
+		expect(host.querySelectorAll(".gui-session-info-plugin")).toHaveLength(2);
 		await unmount();
 	});
 
-	it("全部插件停用时状态条消失，分区仍保留禁用读数", async () => {
+	it("全部插件停用时分区仍保留禁用读数", async () => {
 		const rpc = makeRpc({
 			"extensions.list": () => ({
 				extensions: [{ id: "beta", kind: "plugin-module", name: "beta", displayName: "", state: "disabled" }],
@@ -368,16 +366,15 @@ describe("SessionInfoCard 连接器与插件", () => {
 		await unmount();
 	});
 
-	it("没有任何插件时状态条与分区都不渲染", async () => {
+	it("没有任何插件时分区不渲染", async () => {
 		const rpc = makeRpc({ "extensions.list": () => ({ extensions: [] }) });
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
-		expect(host.querySelector(".gui-session-info-plugins-group")).toBeNull();
-		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
 		expect(host.querySelector(".gui-session-info-plugins-head")).toBeNull();
+		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
 		await unmount();
 	});
 
-	it("最后一个插件停用后状态条随 extensions.changed 消失", async () => {
+	it("最后一个插件停用后分区计数随 extensions.changed 更新", async () => {
 		let extensions: Array<Record<string, unknown>> = [
 			{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "active" },
 		];
@@ -391,14 +388,14 @@ describe("SessionInfoCard 连接器与插件", () => {
 			},
 		} as unknown as RpcClient;
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
-		expect(host.querySelector(".gui-session-info-plugin-status")).not.toBeNull();
+		expect(host.querySelector(".gui-session-info-plugins-head")?.textContent).toContain("1/1");
 
 		extensions = [{ id: "alpha", kind: "plugin-module", name: "alpha", displayName: "Alpha", state: "disabled" }];
 		for (const listener of listeners) listener({ payload: { type: "extensions.changed" } });
 		await flush();
 		await flush();
-		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
 		expect(host.querySelector(".gui-session-info-plugins-head")?.textContent).toContain("0/1");
+		expect(host.querySelector(".gui-session-info-plugin-status")).toBeNull();
 		await unmount();
 	});
 });
@@ -762,11 +759,39 @@ describe("ChatView 会话信息卡座位", () => {
 		await view.unmount();
 	});
 
-	it("面板收起但行太窄：回退为浮卡，不挤压会话列", async () => {
+	it("面板收起但行太窄：浮卡等显式开关，不自动遮挡会话", async () => {
 		mockLayout({ rowWidth: 600 });
-		const view = await mount(renderChat({ sessionInfoOpen: true, rightPanelOpen: false }));
-		expect(view.host.querySelector(".gui-session-info--float")).not.toBeNull();
+		let toggles = 0;
+		const view = await mount(
+			renderChat({ sessionInfoOpen: true, rightPanelOpen: false, onToggleSessionInfo: () => toggles++ }),
+		);
+		// The pre-measurement dock unmounts through its exit window once the row
+		// measures narrow. A narrow row's float seat stays closed until the user
+		// asks for it — auto-showing there would cover the transcript the card
+		// summarizes.
+		await act(async () => Bun.sleep(220));
 		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();
+		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
+		const toggle = view.host.querySelector<HTMLButtonElement>(".gui-chat-info-toggle")!;
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+		expect(toggle.getAttribute("title")).toBe(t("general.sessionInfoShow"));
+
+		await act(async () => toggle.click());
+		const float = view.host.querySelector<HTMLElement>(".gui-session-info--float");
+		expect(float).not.toBeNull();
+		expect(float!.closest(".gui-chat-column")).not.toBeNull();
+		expect(toggle.getAttribute("aria-pressed")).toBe("true");
+		// The first click only reveals the suppressed seat; no preference write.
+		expect(toggles).toBe(0);
+
+		// The second click closes it and records the preference through the parent.
+		await act(async () => toggle.click());
+		expect(toggles).toBe(1);
+		expect(view.host.querySelector(".gui-session-info--float")?.classList.contains("gui-session-info--closing")).toBe(
+			true,
+		);
+		await act(async () => Bun.sleep(260));
+		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
 		await view.unmount();
 	});
 
@@ -816,6 +841,11 @@ describe("ChatView 会话信息卡座位", () => {
 		// status-card stack are gone.
 		expect(view.host.querySelectorAll(".gui-connector-panel")).toHaveLength(1);
 		expect(view.host.querySelector(".gui-connector-chip")).toBeNull();
+		// Each concern has exactly one entry: the connector settings link lives in
+		// the picker header, and plugins are the section's own disclosure — no
+		// second status strip, popup menu, or "MCP servers" row.
+		expect(view.host.querySelector(".gui-session-info-manage-connectors")).toBeNull();
+		expect(view.host.querySelector(".gui-session-info-plugin-status")).toBeNull();
 		expect(view.host.querySelector(".gui-ext-status-menu")).toBeNull();
 		expect(view.host.querySelector(".gui-status-cards")).toBeNull();
 		await view.unmount();

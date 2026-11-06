@@ -5,6 +5,7 @@ import type {
 	ProviderPayload,
 	TextContent,
 	ToolResultMessage,
+	VideoContent,
 } from "@musepi/pi-ai";
 import { prompt } from "@musepi/pi-utils";
 import type { AgentMessage } from "../types";
@@ -79,7 +80,7 @@ declare module "../types" {
 }
 export type ConvertToLlm = (messages: AgentMessage[]) => Message[];
 
-function getPrunedToolResultContent(message: ToolResultMessage): (TextContent | ImageContent)[] {
+function getPrunedToolResultContent(message: ToolResultMessage): (TextContent | ImageContent | VideoContent)[] {
 	if (message.prunedAt === undefined) {
 		return message.content;
 	}

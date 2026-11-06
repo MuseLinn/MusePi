@@ -209,6 +209,7 @@ async function makeMarketplaceManager(): Promise<MarketplaceManager> {
 		projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(getProjectDir()),
 		marketplacesCacheDir: getMarketplacesCacheDir(),
 		pluginsCacheDir: getPluginsCacheDir(),
+		includeDefaultMarketplaces: true,
 	});
 }
 

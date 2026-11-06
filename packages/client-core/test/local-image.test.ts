@@ -27,6 +27,12 @@ describe("isLocalImageSrc", () => {
 		expect(isLocalImageSrc("folder/pic.jpeg")).toBe(true);
 	});
 
+	it("accepts percent-encoded local paths (the renderer encodes spaces and non-ASCII)", () => {
+		expect(isLocalImageSrc("/tmp/a%20b.png")).toBe(true);
+		expect(isLocalImageSrc("/tmp/%E5%9B%BE%201.png")).toBe(true);
+		expect(isLocalImageSrc("notes%20file.md")).toBe(false);
+	});
+
 	it("rejects remote/data/blob URLs and non-images", () => {
 		expect(isLocalImageSrc("https://x.com/a.png")).toBe(false);
 		expect(isLocalImageSrc("http://x.com/a.png")).toBe(false);
@@ -68,6 +74,22 @@ describe("resolveLocalImages", () => {
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(calls).toEqual(["/Users/me/a.png"]);
+	});
+
+	it("decodes percent-encoded local paths before reading them", async () => {
+		const spaced = stubImg("/tmp/a%20b.png");
+		const cjk = stubImg("/tmp/%E5%9B%BE%201.png");
+		const calls: string[] = [];
+		const bridge = {
+			readFileDataUrl: async (p: string) => {
+				calls.push(p);
+				return { dataUrl: "data:image/png;base64,x" };
+			},
+		};
+		resolveLocalImages({ querySelectorAll: () => [spaced, cjk] } as never, bridge, new Map());
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(calls).toEqual(["/tmp/a b.png", "/tmp/图 1.png"]);
 	});
 
 	it("hits the cache without re-invoking the bridge", async () => {

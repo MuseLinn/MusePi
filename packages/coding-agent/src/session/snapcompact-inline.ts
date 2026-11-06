@@ -15,7 +15,15 @@
  */
 
 import { Tokenizer } from "@musepi/pi-agent-core";
-import type { Context, ImageContent, Model, TextContent, ToolResultMessage, UserMessage } from "@musepi/pi-ai";
+import type {
+	Context,
+	ImageContent,
+	Model,
+	TextContent,
+	ToolResultMessage,
+	UserMessage,
+	VideoContent,
+} from "@musepi/pi-ai";
 import * as snapcompact from "@musepi/snapcompact";
 import type { SnapcompactFrameSink } from "../blob-broker/service";
 import contextFramesNote from "../prompts/system/snapcompact-context-frames-note.md" with { type: "text" };
@@ -69,7 +77,7 @@ function countContextImages(context: Context): number {
 	return count;
 }
 
-function isTextContent(block: TextContent | ImageContent): block is TextContent {
+function isTextContent(block: TextContent | ImageContent | VideoContent): block is TextContent {
 	return block.type === "text";
 }
 
@@ -521,7 +529,7 @@ export class SnapcompactInlineTransformer {
 			}
 			const frames = cached.frames;
 			const original = messages[userIndex] as UserMessage;
-			const originalContent: (TextContent | ImageContent)[] =
+			const originalContent: (TextContent | ImageContent | VideoContent)[] =
 				typeof original.content === "string" ? [{ type: "text", text: original.content }] : original.content;
 			messages[userIndex] = {
 				...original,

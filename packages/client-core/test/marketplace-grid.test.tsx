@@ -74,6 +74,19 @@ async function unmount(root: ReturnType<typeof createRoot>, div: HTMLDivElement)
 }
 
 describe("MarketplaceGrid data flow", () => {
+	it("falls back to the resolved vector icon when artwork fails to load", async () => {
+		const { root, div } = await mount({ entries: [makeEntry({ icon: "file:///broken-icon.png" })] });
+		try {
+			const image = div.querySelector("img");
+			expect(image).not.toBeNull();
+			await act(async () => image!.dispatchEvent(new Event("error", { bubbles: true })));
+			expect(div.querySelector("img")).toBeNull();
+			expect(div.querySelector("svg.lucide-git-branch")).not.toBeNull();
+		} finally {
+			await unmount(root, div);
+		}
+	});
+
 	it("renders skeleton loading state while the first fetch is in flight", () => {
 		// The static render shows the toolbar + skeleton grid (client wired,
 		// fetch pending). Effects don't run server-side, so only the initial

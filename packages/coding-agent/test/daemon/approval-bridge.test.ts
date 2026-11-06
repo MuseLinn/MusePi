@@ -107,4 +107,79 @@ describe("approval bridge", () => {
 		bridge.resolve([...bridge.pending.keys()][0]!, true);
 		await pending;
 	});
+
+	test("approval timeout settles as a denial and clears pending", async () => {
+		const resolved: Array<{ requestId: string; approved: boolean; note?: string }> = [];
+		const bridge = createApprovalBridge(
+			noop,
+			noop,
+			(requestId, approved, note) => resolved.push({ requestId, approved, ...(note ? { note } : {}) }),
+			noop,
+			{ timeoutMs: 10 },
+		);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const requestId = [...bridge.pending.keys()][0]!;
+		await expect(pending).rejects.toThrow(/timed out/i);
+		expect(bridge.pending.size).toBe(0);
+		expect(resolved).toEqual([{ requestId, approved: false, note: "approval timed out" }]);
+	});
+
+	test("ask timeout settles as a cancel and clears pending", async () => {
+		const resolved: string[] = [];
+		const bridge = createApprovalBridge(noop, noop, noop, requestId => resolved.push(requestId), {
+			timeoutMs: 10,
+		});
+		const pending = bridge.uiContext.input("Type");
+		const requestId = [...bridge.pendingAsks.keys()][0]!;
+		expect(await pending).toBeUndefined();
+		expect(bridge.pendingAsks.size).toBe(0);
+		expect(resolved).toEqual([requestId]);
+	});
+
+	test("recentResolutions retains settled cards for snapshot-to-subscribe replay", async () => {
+		const bridge = createApprovalBridge(noop, noop);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const requestId = [...bridge.pending.keys()][0]!;
+		expect(bridge.resolve(requestId, true, "ok")).toBe(true);
+		await pending;
+
+		const ask = bridge.uiContext.input("Type");
+		const askId = [...bridge.pendingAsks.keys()][0]!;
+		expect(bridge.resolveAsk(askId, "answer")).toBe(true);
+		await ask;
+
+		const recent = bridge.recentResolutions();
+		expect(recent.approvals).toContainEqual({
+			requestId,
+			approved: true,
+			note: "ok",
+			at: expect.any(Number),
+		});
+		expect(recent.asks).toContain(askId);
+	});
+
+	test("resolution callbacks fire once, with the winning decision", async () => {
+		const resolved: Array<{ requestId: string; approved: boolean; note?: string }> = [];
+		const asksResolved: string[] = [];
+		const bridge = createApprovalBridge(
+			noop,
+			noop,
+			(requestId, approved, note) => resolved.push({ requestId, approved, ...(note ? { note } : {}) }),
+			requestId => asksResolved.push(requestId),
+		);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const requestId = [...bridge.pending.keys()][0]!;
+		expect(bridge.resolve(requestId, true, "checked")).toBe(true);
+		expect(resolved).toEqual([{ requestId, approved: true, note: "checked" }]);
+		// A losing second resolve must not emit a second settlement.
+		expect(bridge.resolve(requestId, false)).toBe(false);
+		expect(resolved).toHaveLength(1);
+		await pending;
+
+		const ask = bridge.uiContext.input("Type");
+		const askId = [...bridge.pendingAsks.keys()][0]!;
+		expect(bridge.resolveAsk(askId, "answer")).toBe(true);
+		expect(asksResolved).toEqual([askId]);
+		await ask;
+	});
 });

@@ -1,6 +1,12 @@
 import { Segmented, type TranslationKey, t, tLoose } from "@musepi/client-core";
 import type { ConfigFieldDesc } from "@musepi/pi-wire";
-import type { ReactNode } from "react";
+import { type ReactNode, useId, useState } from "react";
+import {
+	type ExternalEnvironmentIssue,
+	type ExternalExecutableProbeResult,
+	externalEnvironmentIssue,
+} from "../lib/external-agent-config";
+import { ExecutablePathInput } from "./ExecutablePathInput";
 import { GuiSelect } from "./GuiSelect";
 import { NumberStepper } from "./settings-sections/shared";
 
@@ -20,11 +26,15 @@ export function ConfigFormRenderer({
 	values,
 	onChange,
 	disabled = false,
+	onProbeExecutable,
+	validateEnvironment = false,
 }: {
 	fields: ConfigFieldDesc[];
 	values: Record<string, unknown>;
 	onChange(key: string, value: unknown): void;
 	disabled?: boolean;
+	onProbeExecutable?: (value: string) => Promise<ExternalExecutableProbeResult>;
+	validateEnvironment?: boolean;
 }): ReactNode {
 	return (
 		<div className="gui-plugin-config">
@@ -35,6 +45,8 @@ export function ConfigFormRenderer({
 					value={values[desc.key]}
 					onChange={onChange}
 					disabled={disabled}
+					onProbeExecutable={onProbeExecutable}
+					validateEnvironment={validateEnvironment}
 				/>
 			))}
 		</div>
@@ -47,17 +59,41 @@ function restartLabel(restart: ConfigFieldDesc["restart"]): string {
 	return t(key);
 }
 
+function environmentError(issue: ExternalEnvironmentIssue): string {
+	if (issue === "invalid-json") return t("tools.extConfigEnvInvalidJson");
+	if (issue === "not-object") return t("tools.extConfigEnvNotObject");
+	return t("tools.extConfigEnvValues");
+}
+
 function ConfigFieldRow({
 	desc,
 	value,
 	onChange,
 	disabled,
+	onProbeExecutable,
+	validateEnvironment,
 }: {
 	desc: ConfigFieldDesc;
 	value: unknown;
 	onChange(key: string, value: unknown): void;
 	disabled: boolean;
+	onProbeExecutable?: (value: string) => Promise<ExternalExecutableProbeResult>;
+	validateEnvironment: boolean;
 }): ReactNode {
+	const inputId = useId();
+	const [environmentValidation, setEnvironmentValidation] = useState<
+		{ issue: ExternalEnvironmentIssue } | { valid: true } | null
+	>(null);
+	const stringValue = typeof value === "string" ? value : String(desc.default ?? "");
+	const environmentInvalid = environmentValidation !== null && "issue" in environmentValidation;
+	const environmentFeedbackId = `${inputId}-environment-feedback`;
+
+	const validateEnvironmentValue = (): void => {
+		if (!validateEnvironment || desc.key !== "env") return;
+		const issue = externalEnvironmentIssue(stringValue);
+		setEnvironmentValidation(issue ? { issue } : stringValue.trim() ? { valid: true } : null);
+	};
+
 	const control = (() => {
 		switch (desc.type) {
 			case "boolean":
@@ -117,17 +153,62 @@ function ConfigFieldRow({
 					/>
 				);
 			}
-			case "string":
 			case "path":
+				if (onProbeExecutable) {
+					return (
+						<ExecutablePathInput
+							id={inputId}
+							name={desc.key}
+							value={stringValue}
+							disabled={disabled}
+							onChange={next => onChange(desc.key, next)}
+							onProbe={onProbeExecutable}
+						/>
+					);
+				}
 				return (
 					<input
+						id={inputId}
+						name={desc.key}
 						type="text"
 						className="gui-plugin-config-input"
-						value={typeof value === "string" ? value : String(desc.default ?? "")}
+						value={stringValue}
 						aria-label={desc.key}
 						disabled={disabled}
-						onChange={e => onChange(desc.key, e.target.value)}
+						onChange={event => onChange(desc.key, event.target.value)}
 					/>
+				);
+			case "string":
+				return (
+					<div className="gui-plugin-config-control">
+						<input
+							id={inputId}
+							name={desc.key}
+							type="text"
+							className="gui-plugin-config-input"
+							value={stringValue}
+							aria-label={desc.key}
+							aria-describedby={environmentValidation ? environmentFeedbackId : undefined}
+							aria-invalid={environmentInvalid || undefined}
+							disabled={disabled}
+							onChange={event => {
+								setEnvironmentValidation(null);
+								onChange(desc.key, event.target.value);
+							}}
+							onBlur={validateEnvironmentValue}
+						/>
+						{environmentValidation && (
+							<div
+								id={environmentFeedbackId}
+								className={`gui-plugin-config-feedback${environmentInvalid ? "--error" : "--success"}`}
+								role={environmentInvalid ? "alert" : "status"}
+							>
+								{environmentInvalid
+									? environmentError(environmentValidation.issue)
+									: t("tools.extConfigEnvValid")}
+							</div>
+						)}
+					</div>
 				);
 		}
 	})();
@@ -136,7 +217,9 @@ function ConfigFieldRow({
 		<div className={`gui-settings-row${disabled ? " gui-settings-row--disabled" : ""}`}>
 			<div className="gui-plugin-config-field">
 				{/* label 声明(i18n 键或原文)优先,缺省回退设置键;经 tLoose 解析。 */}
-				<div className="gui-settings-row-label">{tLoose(desc.label ?? desc.key)}</div>
+				<label className="gui-settings-row-label" htmlFor={inputId}>
+					{tLoose(desc.label ?? desc.key)}
+				</label>
 				{desc.description && <div className="gui-settings-row-desc">{tLoose(desc.description)}</div>}
 				{desc.restart && desc.restart !== "none" && (
 					<div className="gui-plugin-config-restart">

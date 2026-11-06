@@ -3,9 +3,11 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ExtensionRuntime } from "../../extensibility/extensions/loader";
+import { BlobStore } from "../../session/blob-store";
 import { ViewStore } from "../view-store";
 import { ApprovalService } from "./approval-service";
 import { ArchiveService } from "./archive-service";
+import { AttachmentService } from "./attachment-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { BundleService } from "./bundle-service";
@@ -89,6 +91,12 @@ function buildRegistry(): HostServices {
 		new FileService({
 			fallbackCwd: () => undefined,
 			ensureFileIndex: () => ({ search: () => [] }) as never,
+		}),
+	);
+	// AttachmentService：只认领路由（本测试不存取附件），blob 目录用隔离 temp。
+	services.register(
+		new AttachmentService({
+			store: new BlobStore(join(mkdtempSync(join(tmpdir(), "musepi-blobs-")), "blobs")),
 		}),
 	);
 	services.register(new EditorService());

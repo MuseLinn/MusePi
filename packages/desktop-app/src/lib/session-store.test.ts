@@ -89,6 +89,23 @@ describe("GuiSessionStore frame coalescing", () => {
 		expect(store.getSnapshot().approvals.length).toBe(1);
 	});
 
+	test("snapshot seeds pending approvals; approval-request-end clears them", () => {
+		const store = new GuiSessionStore(
+			"s3b",
+			{
+				...emptySnapshot(),
+				pendingApprovals: [{ requestId: "r2", tool: "edit", prompt: "Allow tool: edit" }],
+			},
+			"/work",
+		);
+		expect(store.getSnapshot().approvals).toEqual([{ requestId: "r2", tool: "edit", prompt: "Allow tool: edit" }]);
+		store.apply({
+			kind: "approval-request-end",
+			payload: { requestId: "r2", approved: true },
+		} as never);
+		expect(store.getSnapshot().approvals).toEqual([]);
+	});
+
 	test("user message_start flips working on immediately (bubble == indicator frame)", async () => {
 		// DSH/craft/proma parity: the working indicator must start the moment
 		// the user's own message is visible (optimistic emit), not when

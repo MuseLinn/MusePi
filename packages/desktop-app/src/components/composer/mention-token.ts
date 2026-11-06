@@ -36,8 +36,6 @@
  * rules above. Hand-typed `@名字` name tokens keep working unchanged.
  */
 
-import { attachmentWorkspacePath } from "./use-attachments";
-
 /** Build one token from an attachment name. */
 export function makeMentionToken(name: string): string {
 	return `@${name}`;
@@ -144,9 +142,10 @@ export function resolveMentionChip<T extends MentionExpandableAttachment>(
  *    the wire images (chip order IS the send order), the exact pointer the
  *    model needs next to the prose that mentions it;
  *  - image, name token → `[图片:文件名]` (legacy form);
- *  - file → `[Attachment] <workspace path>` — the same reference line the
- *    fs.write upload path already produces, so the agent resolves the chip
- *    through the existing mechanism (listed once more inline; harmless).
+ *  - file → `[Attachment:文件名]` — a name pointer only. The address is the
+ *    `[Attachment] blob://<hash> (name)` line the send path prepends after
+ *    `attachment.put`, so the inline reference never names a filesystem path
+ *    that may not exist (nothing is written into the workspace).
  *  A token whose attachment is gone stays VERBATIM: it no longer resolves,
  *  so stripping would silently rewrite the user's message — and since the
  *  unresolved token is never painted either, it reads as the plain text
@@ -154,7 +153,7 @@ export function resolveMentionChip<T extends MentionExpandableAttachment>(
 function expandOne(token: string, name: string, attachments: readonly MentionExpandableAttachment[]): string {
 	const hit = resolveMentionChip(name, attachments);
 	if (!hit) return token;
-	if (hit.chip.kind === "file") return `[Attachment] ${attachmentWorkspacePath(hit.chip.name)}`;
+	if (hit.chip.kind === "file") return `[Attachment:${hit.chip.name}]`;
 	return hit.via === "ordinal" ? `[图片 ${hit.ordinal}]` : `[图片:${hit.chip.name}]`;
 }
 

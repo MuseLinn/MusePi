@@ -7,6 +7,7 @@ import { ExponentialYield } from "@musepi/pi-agent-core/utils/yield";
 import { type MinimizerOptions, Shell, type ShellRunResult } from "@musepi/pi-natives";
 import { isCmdShell, isExecutable, type ShellConfig } from "@musepi/pi-utils/procmgr";
 import { Settings, type ShellMinimizerSettings } from "../config/settings";
+import { recordShellMinimization } from "../session/shell-minimizer-stats";
 import { OutputSink } from "../session/streaming-output";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../tools/output-meta";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
@@ -42,6 +43,13 @@ export interface BashExecutorOptions {
 	) => Promise<string | undefined>;
 }
 
+export interface BashMinimization {
+	filter: string;
+	inputBytes: number;
+	outputBytes: number;
+	artifactId?: string;
+}
+
 export interface BashResult {
 	output: string;
 	exitCode: number | undefined;
@@ -55,6 +63,7 @@ export interface BashResult {
 	outputBytes: number;
 	artifactId?: string;
 	workingDir?: string;
+	minimization?: BashMinimization;
 }
 
 /** POSIX-safe variable name — gates which direnv unsets we inject into the
@@ -586,7 +595,18 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		// artifact, and splice an `artifact://<id>` footer into the visible text so
 		// the agent can retrieve the raw bytes losslessly.
 		const minimized = winner.result.minimized;
+		let minimization: BashMinimization | undefined;
 		if (minimized && minimized.text !== minimized.originalText) {
+			minimization = {
+				filter: minimized.filter,
+				inputBytes: minimized.inputBytes,
+				outputBytes: minimized.outputBytes,
+			};
+			await recordShellMinimization({
+				filter: minimized.filter,
+				inputBytes: minimized.inputBytes,
+				outputBytes: minimized.outputBytes,
+			});
 			sink.replace(minimized.text);
 			if (options?.onMinimizedSave) {
 				const artifactId = await options.onMinimizedSave(minimized.originalText, {
@@ -595,6 +615,7 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 					outputBytes: minimized.outputBytes,
 				});
 				if (artifactId) {
+					minimization.artifactId = artifactId;
 					const sep = minimized.text.endsWith("\n") ? "" : "\n";
 					sink.push(`${sep}[raw output: artifact://${artifactId}]\n`);
 				}
@@ -606,6 +627,7 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 			exitCode: winner.result.exitCode,
 			cancelled: false,
 			workingDir: winner.result.workingDir,
+			minimization,
 			...(await sink.dump()),
 		};
 	} catch (err) {

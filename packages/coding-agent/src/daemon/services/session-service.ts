@@ -1,4 +1,5 @@
 import type { DaemonService } from "./types";
+import { type DeletedWorkspaces, sessionHiddenByWorkspace } from "./workspace-registry";
 
 /**
  * SessionService — 会话树契约面（P2 首个 cordis 化 L2 服务，ADR 0001）。
@@ -30,6 +31,8 @@ export interface SessionTreeRow {
 	parentId: string | null;
 	createdAt: number | string;
 	updatedAt: number | string;
+	/** 会话工作目录（已删工作区的列表过滤口径，与 session.list 一致）。 */
+	cwd?: string;
 	title?: string;
 	/** 子代理 transcript 行（task/vibe 子会话）——GUI 渲染为父行下的层级子行。 */
 	subagent?: boolean;
@@ -66,6 +69,9 @@ export interface SessionServiceDeps {
 	cronSessionIds(): Set<string>;
 	/** 标题兜底（ViewStoreService.firstUserMessage——autoTitle 会话）。 */
 	firstUserMessage(sessionId: string): string;
+	/** 已删工作区证据：树的列表投影与 session.list 同一口径（已删工作区的
+	 *  会话不出现在任何列表）。 */
+	deletedWorkspaces?(): Promise<DeletedWorkspaces>;
 }
 
 export class SessionService implements DaemonService {
@@ -84,7 +90,17 @@ export class SessionService implements DaemonService {
 	/** RPC session.tree：跨会话树（roots 无 parent；label 60 字截断；
 	 *  cron 节点带 source 标注；updatedAt 供侧栏按最近活动排序）。 */
 	async tree(): Promise<unknown[]> {
-		const rows = await this.#deps.knownSessions();
+		const deleted = await this.#deps.deletedWorkspaces?.();
+		const rows = deleted
+			? (await this.#deps.knownSessions()).filter(
+					r =>
+						!sessionHiddenByWorkspace(
+							r.cwd,
+							typeof r.createdAt === "number" ? r.createdAt : Date.parse(r.createdAt),
+							deleted,
+						),
+				)
+			: await this.#deps.knownSessions();
 		const cronIds = this.#deps.cronSessionIds();
 		const nodes = new Map<
 			string,

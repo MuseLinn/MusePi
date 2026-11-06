@@ -142,18 +142,86 @@ try {
 	await page.reload({ waitUntil: "domcontentloaded" });
 	await waitFor(() => page.$(".gui-header"), "GUI header after onboarding setup");
 	await sleep(800);
-	if (!(await page.$(".gui-session-row"))) {
-		await daemonRequest(daemonPort, "session.create", {
-			cwd: fixture,
-			autoTitle: false,
-			modelPattern: "fake/fake-plugin-settings",
-		});
-		await waitFor(() => page.$(".gui-session-row"), "created session row");
-		await page.evaluate(() => document.querySelector(".gui-session-row")?.click());
-		await waitFor(() => page.$(".gui-transcript"), "selected session");
-	}
 	const registry = () => daemonRequest(daemonPort, "extensions.list", {});
 	const computer = async () => (await registry()).extensions.find(item => item.id === "computer");
+	const openPluginRows = async () => {
+		let registryReady = false;
+		for (let attempt = 0; attempt < 4 && !registryReady; attempt++) {
+			await page.reload({ waitUntil: "domcontentloaded" });
+			await waitFor(() => page.$(".gui-header"), "GUI header before plugin registry");
+			await page.evaluate(() => window.dispatchEvent(new CustomEvent("musepi-gui-open-settings-section", { detail: "skills" })));
+			await sleep(800);
+			const configurable = (await registry()).extensions.find(item => item.config?.length);
+			if (configurable) {
+				const field = configurable.config[0];
+				await daemonRequest(daemonPort, "extensions.setConfig", {
+					id: configurable.id,
+					key: field.key,
+					value:
+						field.type === "string" || field.type === "path"
+							? `__registry_refresh_${attempt}__`
+							: configurable.configValues?.[field.key] ?? field.default,
+				});
+			}
+			registryReady = await waitFor(
+				() =>
+					page.evaluate(() =>
+						[...document.querySelectorAll(".gui-ext-tab-count")].some(element => Number(element.textContent) > 0),
+					),
+				"extension registry counters",
+				8_000,
+			).catch(() => false);
+		}
+		if (!registryReady) throw new Error("Extension registry remained empty after four renderer reloads");
+		if (!(await page.$(".gui-plugin-card"))) {
+			await page.evaluate(() => {
+				const tab = [...document.querySelectorAll('button[role="tab"]')].find(button =>
+					/^(?:插件|Plugins)\s*\d+$/.test(button.textContent?.trim() ?? ""),
+				);
+				tab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			});
+		}
+		await waitFor(() => page.$(".gui-plugin-card"), "plugin rows");
+	};
+	if (process.env.CURATED_ICONS_ONLY) {
+		await page.evaluate(() => {
+			const button = [...document.querySelectorAll("button")].find(item => item.textContent?.trim() === "能力中心");
+			button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+		await waitFor(
+			() =>
+				page.evaluate(() => {
+					const tab = [...document.querySelectorAll('button[role="tab"]')].find(button =>
+						/插件市场|Marketplace/.test(button.textContent ?? ""),
+					);
+					return tab ?? null;
+				}),
+			"marketplace tab",
+		);
+		await page.evaluate(() => {
+			const tab = [...document.querySelectorAll('button[role="tab"]')].find(button => /插件市场|Marketplace/.test(button.textContent ?? ""));
+			tab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+		await waitFor(() => page.$(".mp-card"), "curated marketplace cards");
+		await waitFor(
+			() =>
+				page.evaluate(() => {
+					const images = [...document.querySelectorAll(".mp-card-artwork")];
+					return images.length === 2 && images.every(image => image.complete && image.naturalWidth > 0);
+				}),
+			"curated marketplace artwork decoded",
+			35_000,
+		);
+		const sources = await page.evaluate(() =>
+			[...document.querySelectorAll(".mp-card-artwork")].map(image => image.src).sort(),
+		);
+		assert("Curated marketplace cards render both upstream logos", sources.every(source => /app-icon.png|logo.png/.test(source)), sources);
+		await page.screenshot({ path: path.join(repoRoot, ".tmp", "curated-marketplace-icons.png") });
+		assert("Curated marketplace artwork produced no renderer runtime errors", report.runtimeErrors.length === 0, report.runtimeErrors);
+		console.log(JSON.stringify(report, null, 2));
+	}
+	if (!process.env.CURATED_ICONS_ONLY) {
+	if (!process.env.SUBAGENT_ONLY) {
 	const initial = await computer();
 	assert(
 		"computer plugin starts active with declarative configuration",
@@ -165,11 +233,10 @@ try {
 		!(await registry()).components.some(item => item.extensionId === initial.id && item.slot?.startsWith("settings.")),
 	);
 
-	await page.evaluate(() => window.dispatchEvent(new CustomEvent("musepi-open-capability", { detail: { tab: "plugins" } })));
-	await waitFor(() => page.$(".gui-ext-provider--btn"), "plugin rows");
+	await openPluginRows();
 	const openComputer = () =>
 		page.evaluate(() => {
-			const row = [...document.querySelectorAll(".gui-ext-provider--btn")].find(item => item.textContent?.includes("电脑控制"));
+			const row = [...document.querySelectorAll(".gui-plugin-card")].find(item => item.textContent?.includes("电脑控制"));
 			row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 		});
 	await openComputer();
@@ -219,6 +286,83 @@ try {
 			(await page.$eval('.gui-plugin-dialog input[aria-label="computer.maxWidth"]', input => input.value)) === "3841",
 	);
 
+	}
+
+	await page.evaluate(() => document.querySelector(".gui-plugin-dialog .gui-dialog-head button.gui-tool-btn")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	await waitFor(async () => !(await page.$(".gui-plugin-dialog")), "close computer details before external subagent");
+	const subagent = (await registry()).extensions.find(item => item.name === "subagent-codex");
+	assert("Codex subagent exposes executable and environment configuration", subagent?.state === "active" && subagent.config?.some(field => field.key === "executable") && subagent.config?.some(field => field.key === "env"));
+	await openPluginRows();
+	await page.evaluate(() => {
+		const row = [...document.querySelectorAll(".gui-plugin-card")].find(item => item.textContent?.includes("Codex"));
+		row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+	});
+	await waitFor(() => page.$('.gui-plugin-dialog input[name="executable"]'), "Codex executable configuration");
+	await waitFor(
+		() =>
+			page.evaluate(() => {
+				const text = document.querySelector(".gui-plugin-config-feedback")?.textContent?.trim();
+				return text && !/检测中|Checking|extension not active/.test(text) ? text : null;
+			}),
+		"automatic executable probe feedback",
+	);
+	assert("opening external subagent details runs an executable probe", true);
+	await page.click('.gui-plugin-dialog input[name="executable"]');
+	await page.keyboard.down("Control");
+	await page.keyboard.press("a");
+	await page.keyboard.up("Control");
+	await page.keyboard.type(process.execPath);
+	await page.evaluate(() => document.querySelector('.gui-plugin-dialog input[name="executable"]')?.blur());
+	await waitFor(
+		() =>
+			page.evaluate(
+				version => document.querySelector(".gui-plugin-config-feedback")?.textContent?.includes(version),
+				Bun.version,
+			),
+		"manual executable version",
+	);
+	assert(
+		"manual executable probe shows version and resolved path",
+		(await page.$eval(".gui-plugin-config-feedback", element => element.textContent)).includes(process.execPath),
+	);
+	await page.click('.gui-plugin-dialog input[name="env"]');
+	await page.keyboard.type('{"TOKEN":1}');
+	await page.evaluate(() => document.querySelector('.gui-plugin-dialog input[name="env"]')?.blur());
+	await waitFor(
+		() =>
+			page.evaluate(() =>
+				/值必须是字符串|Values must be strings/.test(
+					document.querySelector('[id$="environment-feedback"]')?.textContent ?? "",
+				),
+			),
+		"environment JSON error",
+	);
+	assert("environment JSON reports non-string values on blur", true);
+	await page.click('.gui-plugin-dialog input[name="env"]');
+	await page.keyboard.down("Control");
+	await page.keyboard.press("a");
+	await page.keyboard.up("Control");
+	await page.keyboard.type('{"TOKEN":"ok"}');
+	assert(
+		"correcting environment JSON clears the old error immediately",
+		!(await page.$('[id$="environment-feedback"]')),
+	);
+	await page.evaluate(() => document.querySelector('.gui-plugin-dialog input[name="env"]')?.blur());
+	await waitFor(
+		() =>
+			page.evaluate(() =>
+				/JSON 有效|Valid JSON/.test(document.querySelector('[id$="environment-feedback"]')?.textContent ?? ""),
+			),
+		"valid environment JSON",
+	);
+	assert("valid environment JSON has positive feedback", true);
+	assert(
+		"configuration controls do not overflow the dialog",
+		await page.$eval(".gui-plugin-dialog", dialog => dialog.scrollWidth <= dialog.clientWidth + 1),
+	);
+	await page.screenshot({ path: path.join(repoRoot, ".tmp", "plugin-subagent-config.png") });
+
+	if (!process.env.SUBAGENT_ONLY) {
 	const voiceSchema = await daemonRequest(daemonPort, "settings.schema", {
 		tabs: ["voice", "providers", "interaction"],
 	});
@@ -280,6 +424,8 @@ try {
 		"voice page enable action restores TTS while STT stays disabled",
 		(await page.$$(".gui-settings-section--disabled")).length === 1 && !(await page.$('input[name="stt-model"]')),
 	);
+	}
+	}
 	assert("plugin settings lifecycle produced no renderer runtime errors", report.runtimeErrors.length === 0, report.runtimeErrors);
 	console.log(JSON.stringify(report, null, 2));
 } catch (error) {

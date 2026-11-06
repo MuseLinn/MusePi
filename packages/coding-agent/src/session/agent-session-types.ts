@@ -18,6 +18,7 @@ import type {
 	ServiceTierByFamily,
 	SimpleStreamOptions,
 	ToolChoice,
+	VideoContent,
 } from "@musepi/pi-ai";
 import type { postmortem } from "@musepi/pi-utils";
 import type { MessageDisplayContext } from "@musepi/pi-wire";
@@ -335,8 +336,16 @@ export interface PromptOptions {
 	expandPromptTemplates?: boolean;
 	/** Image attachments. */
 	images?: ImageContent[];
+	/** Video attachments (a URL or inline clip); providers without a video
+	 *  channel degrade them to a marker. */
+	videos?: VideoContent[];
 	/** Presentation-only context persisted with the user message. */
 	displayContext?: MessageDisplayContext;
+	/** Idempotency identity persisted with the user message (daemon send
+	 *  path). Not sent to the model. */
+	requestIdentity?: string;
+	/** Content fingerprint paired with `requestIdentity`. */
+	requestFingerprint?: string;
 	/** Queue behavior while streaming. */
 	streamingBehavior?: "steer" | "followUp";
 	/** Optional tool choice override for the next LLM call. */
@@ -355,6 +364,8 @@ export interface PromptOptions {
 export interface FollowUpOptions {
 	/** Enqueue as a hidden developer message instead of a user follow-up. */
 	synthetic?: boolean;
+	/** Video attachments for the queued message (same contract as PromptOptions). */
+	videos?: VideoContent[];
 	/** Presentation-only context persisted with the user message. */
 	displayContext?: MessageDisplayContext;
 	/** Whether to expand file-based prompt templates (default: true). */

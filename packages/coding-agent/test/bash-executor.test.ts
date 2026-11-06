@@ -10,6 +10,7 @@ import {
 	isPersistentShellCdCommand,
 } from "@musepi/pi-coding-agent/exec/bash-executor";
 import * as direnvModule from "@musepi/pi-coding-agent/exec/direnv";
+import * as shellMinimizerStats from "@musepi/pi-coding-agent/session/shell-minimizer-stats";
 import { DEFAULT_MAX_BYTES } from "@musepi/pi-coding-agent/session/streaming-output";
 import * as shellSnapshot from "@musepi/pi-coding-agent/utils/shell-snapshot";
 import type { Shell, ShellRunResult } from "@musepi/pi-natives";
@@ -110,6 +111,37 @@ describe("executeBash", () => {
 			legacyFilters: undefined,
 		};
 		expect(buildMinimizerOptions(group)).toBeUndefined();
+	});
+
+	it("returns native minimization metadata with the raw artifact id", async () => {
+		const settings = await Settings.init({ inMemory: true, cwd: tempDir });
+		const settingsPath = path.join(tempDir, "minimizer.toml");
+		fs.writeFileSync(
+			settingsPath,
+			'schema_version = 1\n[filters.printf]\nmatch_command = "^printf$"\nhead_lines = 2\n',
+		);
+		settings.set("shellMinimizer.enabled", true);
+		settings.set("shellMinimizer.settingsPath", settingsPath);
+		settings.set("shellMinimizer.only", ["printf"]);
+		const record = vi.spyOn(shellMinimizerStats, "recordShellMinimization").mockResolvedValue(undefined);
+		let originalText = "";
+
+		const result = await executeBash("printf 'hello\\n%.0s' {1..200}", {
+			onMinimizedSave: async original => {
+				originalText = original;
+				return "42";
+			},
+		});
+
+		expect(originalText).toHaveLength(1200);
+		expect(result.output).toBe("hello\nhello\n[…198ln elided…]\n[raw output: artifact://42]\n");
+		expect(result.minimization).toEqual({
+			filter: "pipeline",
+			inputBytes: 1200,
+			outputBytes: 33,
+			artifactId: "42",
+		});
+		expect(record).toHaveBeenCalledWith({ filter: "pipeline", inputBytes: 1200, outputBytes: 33 });
 	});
 
 	it.each([

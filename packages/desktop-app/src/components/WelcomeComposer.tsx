@@ -12,6 +12,7 @@ import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { currentLine, lastTokenIndex, tokenQuery } from "../lib/completion-trigger";
+import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
@@ -79,6 +80,7 @@ import { TemplateRail } from "./composer/template-rail";
 import {
 	attachmentFiles,
 	attachmentImageParts,
+	attachmentVideoSelection,
 	dataUrlToFile,
 	markSketchChip,
 	nextSketchFileName,
@@ -183,6 +185,7 @@ export function WelcomeComposer({
 	onModeChange,
 	designSubmit,
 	placeholder,
+	attachApiRef,
 }: {
 	/** First prompt; the model/thinking choices made in the composer are
 	 *  carried along so the new session starts with them. planMode/goalMode
@@ -203,6 +206,8 @@ export function WelcomeComposer({
 			 *  have to be hidden, which is exactly the empty/session asymmetry
 			 *  we are removing. */
 			files?: File[];
+			/** Path-backed video chips: native `video` parts for the first send. */
+			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[];
 			planMode?: boolean;
 			goalMode?: boolean;
 			/** Guided goal (TUI /guided-goal parity): the host creates the
@@ -249,6 +254,8 @@ export function WelcomeComposer({
 	designSubmit?(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** placeholder 覆盖(模式页按选中的类型 chip 变化)。 */
 	placeholder?: string;
+	/** Chat drop-anchor handoff: the anchor stages OS files here. */
+	attachApiRef?: ComposerAttachRef;
 }): ReactNode {
 	const pet = usePet();
 	const [text, setText] = useState("");
@@ -1239,6 +1246,16 @@ export function WelcomeComposer({
 	// stays in display context until send.
 	const addFilesForAnnotationRef = useRef(addFiles);
 	addFilesForAnnotationRef.current = addFiles;
+	// Publish the intake to the chat-level drop anchor (session composer
+	// parity): a drop over the welcome card stages these same chips.
+	useEffect(() => {
+		if (!attachApiRef) return;
+		const api = { addFiles: (files: File[]) => addFilesForAnnotationRef.current(files) };
+		attachApiRef.current = api;
+		return () => {
+			if (attachApiRef.current === api) attachApiRef.current = null;
+		};
+	}, [attachApiRef]);
 	useEffect(() => {
 		const onAttach = (e: Event): void => {
 			const detail = (e as CustomEvent<AnnotationAttachDetail>).detail;
@@ -1348,6 +1365,7 @@ export function WelcomeComposer({
 		const applyGoal = goalArmed && trimmed.length > 0;
 		setGoalArmed(false);
 		setPlanArmed(false);
+		const videos = attachmentVideoSelection(attachments);
 		void onSubmit(payload, {
 			thinkingLevel: thinking,
 			// modelId is the provider/id composite after a pick (setModelId above);
@@ -1361,7 +1379,8 @@ export function WelcomeComposer({
 			// Non-image chips (the attach menu's file entry). The host owns the
 			// workspace decision: it writes these into the session it creates,
 			// or asks for a project when there is none.
-			files: attachmentFiles(attachments),
+			files: attachmentFiles(attachments.filter(a => !videos.chipIds.has(a.id))),
+			videos: videos.parts,
 			planMode: planArmed,
 			goalMode: applyGoal,
 		});
@@ -2238,6 +2257,14 @@ export function WelcomeComposer({
 												e.preventDefault();
 												requestLongPaste(pastedText);
 											}
+										}}
+										onDragOver={e => {
+											// Chromium only fires drop on an element whose
+											// dragover was prevented. Keep this textarea
+											// independent of the window-level anchor; both
+											// converge on addFiles, and the anchor skips
+											// drops already marked defaultPrevented.
+											if (e.dataTransfer.types.includes("Files")) e.preventDefault();
 										}}
 										onDrop={e => {
 											const files = [...e.dataTransfer.files];

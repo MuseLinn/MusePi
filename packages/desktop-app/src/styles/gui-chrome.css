@@ -2610,3 +2610,54 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+.gui-dialog.gui-dialog--artifact-preview {
+	width: min(1040px, 94vw);
+	height: auto;
+	min-height: min(58vh, 620px);
+	max-height: min(88vh, 880px);
+	overflow: hidden;
+}
+
+.gui-artifact-preview-body {
+	--artifact-fade: 22px;
+	--fade-top: 0px;
+	--fade-bottom: 0px;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 16px 12px 16px 16px;
+	padding-right: 4px;
+	overflow: auto;
+	overscroll-behavior: contain;
+	mask-image: linear-gradient(
+		to bottom,
+		transparent var(--fade-top),
+		#000 calc(var(--fade-top) + 1px),
+		#000 calc(100% - var(--fade-bottom) - 1px),
+		transparent 100%
+	);
+}
+
+.gui-artifact-preview-body[data-scrolled-top="true"] {
+	--fade-top: var(--artifact-fade);
+}
+
+.gui-artifact-preview-body[data-scrolled-bottom="true"] {
+	--fade-bottom: var(--artifact-fade);
+}
+
+.gui-artifact-preview-notice {
+	margin: 0 0 12px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-warning);
+}
+
+.gui-artifact-preview-text {
+	margin: 0;
+	font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--color-text);
+	white-space: pre;
+	user-select: text;
+}

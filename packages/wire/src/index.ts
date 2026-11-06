@@ -28,6 +28,21 @@ export interface ImageContent {
 	mimeType: string;
 }
 
+/**
+ * Video block. Unlike images, video bytes rarely ride the transcript: `url`
+ * (remote or file) carries the media and `data` is only used for small inline
+ * clips. Providers that cannot accept video degrade it to a text note.
+ */
+export interface VideoContent {
+	type: "video";
+	/** Base64-encoded video bytes; absent when `url` carries the media. */
+	data?: string;
+	/** e.g. "video/mp4". */
+	mimeType: string;
+	/** Remote (https) or local (file://) URL when the bytes are not inline. */
+	url?: string;
+}
+
 export interface ThinkingContent {
 	type: "thinking";
 	thinking: string;
@@ -139,11 +154,19 @@ export type MessageDisplayContext = DisplayContext | DisplayContext[];
 
 export interface UserMessage {
 	role: "user";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | ImageContent | VideoContent)[];
 	/** True if the message was injected by the system (e.g. auto-continue). */
 	synthetic?: boolean;
 	/** Presentation-only provenance for annotation and quote cards. */
 	displayContext?: MessageDisplayContext;
+	/** Idempotency identity of the client request that produced this message.
+	 *  Persisted with the message so a daemon restart can still answer a
+	 *  retried send without appending a duplicate. */
+	requestIdentity?: string;
+	/** Canonical content fingerprint paired with `requestIdentity`. Same
+	 *  identity + same fingerprint is a retry; different fingerprint is a
+	 *  conflict. */
+	requestFingerprint?: string;
 	/** Unix timestamp in milliseconds. */
 	timestamp: number;
 	/** 会话内条目树父节点 id(/tree 语义;live 事件暂缺,live 消息树需发射端打标)。 */
@@ -152,7 +175,7 @@ export interface UserMessage {
 
 export interface DeveloperMessage {
 	role: "developer";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | ImageContent | VideoContent)[];
 	timestamp: number;
 	/** 会话内条目树父节点 id(/tree 语义)。 */
 	parentId?: string | null;
@@ -179,7 +202,7 @@ export interface ToolResultMessage {
 	role: "toolResult";
 	toolCallId: string;
 	toolName: string;
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | ImageContent | VideoContent)[];
 	details?: unknown;
 	isError: boolean;
 	timestamp: number;
@@ -432,6 +455,48 @@ export type AgentEvent =
 			path?: string[];
 			pathEntries?: SessionEntry[];
 	  };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Attachments (attachment.put / attachment.get / attachment.stat)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Reference to bytes the daemon holds in its blob store, addressed by content.
+ * `hash` is the identity; `mimeType` and `name` are display metadata supplied
+ * once by the uploading client and echoed back unchanged.
+ */
+export interface BlobFileRef {
+	scheme: "blob";
+	/** SHA-256 hex of the stored bytes. */
+	hash: string;
+	size: number;
+	mimeType: string;
+	/** Original file name, for prompt lines and chips. */
+	name: string;
+}
+
+/** `attachment.put` success payload. */
+export interface AttachmentPutResult {
+	ref: BlobFileRef;
+	/** `blob://<hash>` — the reference prompt lines carry. */
+	url: string;
+}
+
+/** `attachment.get` payload: one base64 page of a stored blob. */
+export interface AttachmentGetResult {
+	/** Base64 bytes of the page, starting at `offset`. */
+	content: string;
+	/** Full blob size, not the page size. */
+	size: number;
+	offset: number;
+}
+
+/** `attachment.stat` payload. A probe never fails: an unknown or malformed
+ *  hash is simply `exists: false`. */
+export interface AttachmentStatResult {
+	exists: boolean;
+	size: number;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Daemon global events (events.subscribe — NOT session events)

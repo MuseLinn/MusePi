@@ -1130,6 +1130,7 @@ export class SelectorController {
 			projectInstalledRegistryPath: (await resolveActiveProjectRegistryPath(getProjectDir())) ?? undefined,
 			marketplacesCacheDir: getMarketplacesCacheDir(),
 			pluginsCacheDir: getPluginsCacheDir(),
+			includeDefaultMarketplaces: true,
 			clearPluginRootsCache: clearPluginRootsAndCaches,
 		});
 

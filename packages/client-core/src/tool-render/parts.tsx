@@ -10,7 +10,7 @@ import { t } from "../i18n/index.js";
 import { diffWords } from "./diff-words.js";
 import { diffLayoutPref } from "./parts-shared";
 import type { ToolRenderHost, ToolResultImage, ToolResultLike } from "./types";
-import { getHljs, homePath, replaceTabs, resultImagesOf, resultTextOf, stripAnsi } from "./util";
+import { getHljs, homePath, replaceTabs, resultImagesOf, resultTextOf, resultVideosOf, stripAnsi } from "./util";
 
 export type Tone = "accent" | "ok" | "err" | "warn";
 
@@ -220,6 +220,38 @@ export function ResultImages({ result }: { result: ToolResultLike | undefined })
 						decoding="async"
 					/>
 				</button>
+			))}
+		</div>
+	);
+}
+
+/**
+ * Native video player for a result's generated video. The source is a
+ * remote/streamable URL (generated videos never ride the transcript as
+ * base64), so it bypasses the local-image bridge; a `file://` source still
+ * plays because the desktop host serves local media.
+ */
+export function ResultVideo({ src, title }: { src?: string | null; title?: string }): ReactNode {
+	if (!src) return null;
+	return (
+		<video className="tv-video" src={src} controls playsInline preload="metadata" title={title}>
+			{t("tools.videoUnavailable")}
+		</video>
+	);
+}
+
+/** Every video block in a result, each in the shared player. */
+export function ResultVideos({ result }: { result: ToolResultLike | undefined }): ReactNode {
+	const videos = resultVideosOf(result);
+	if (videos.length === 0) return null;
+	return (
+		<div className="tv-videos">
+			{videos.map((video, i) => (
+				<ResultVideo
+					key={i}
+					src={video.url ?? (video.data ? `data:${video.mimeType};base64,${video.data}` : null)}
+					title={t("tools.videoResultWithCount", { count: String(i + 1) })}
+				/>
 			))}
 		</div>
 	);

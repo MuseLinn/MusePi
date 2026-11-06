@@ -1,10 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import {
-	attachmentWorkspacePath,
-	markSketchChip,
-	nextSketchFileName,
-	uploadAttachmentFiles,
-} from "../src/components/composer/use-attachments";
+import { markSketchChip, nextSketchFileName, uploadAttachmentFiles } from "../src/components/composer/use-attachments";
 
 /**
  * `readFileAsBase64` goes through FileReader, which bun's test runtime does
@@ -43,22 +38,37 @@ afterAll(() => {
 	g.FileReader = savedFileReader;
 });
 
-/** Minimal RpcClient stand-in: records fs.write calls and can fail on cue. */
-function fakeRpc(opts: { failOn?: string; ok?: boolean; error?: string } = {}) {
-	const writes: { cwd: string; path: string; content: string; encoding: string }[] = [];
-	const files = new Map<string, string>();
+/** Minimal RpcClient stand-in: records upload calls and can fail on cue. */
+function fakeRpc(opts: { failOn?: string; error?: string; failPath?: boolean } = {}) {
+	const puts: { name: string; mimeType: string; content: string }[] = [];
+	const filePuts: { path: string; name: string; mimeType: string }[] = [];
 	return {
-		writes,
-		files,
+		puts,
+		filePuts,
 		client: {
 			request: async (method: string, params: Record<string, unknown>) => {
-				if (method !== "fs.write") throw new Error(`unexpected method ${method}`);
-				const p = params as { cwd: string; path: string; content: string; encoding: string };
-				writes.push(p);
-				if (opts.failOn === p.path || opts.ok === false)
-					return { ok: false, error: opts.error ?? "fs.write failed" };
-				files.set(p.path, p.content);
-				return { ok: true };
+				if (method === "attachment.putFile") {
+					const p = params as { path: string; name: string; mimeType: string };
+					filePuts.push(p);
+					if (opts.failPath) return { error: "file not found" };
+					if (opts.failOn === p.name) return { error: opts.error ?? "attachment.putFile failed" };
+					const bytes = Buffer.from(`path:${p.path}`);
+					const hash = new Bun.SHA256().update(bytes).digest("hex");
+					return {
+						ref: { scheme: "blob", hash, size: bytes.length, mimeType: p.mimeType, name: p.name },
+						url: `blob://${hash}`,
+					};
+				}
+				if (method !== "attachment.put") throw new Error(`unexpected method ${method}`);
+				const p = params as { name: string; mimeType: string; content: string };
+				puts.push(p);
+				if (opts.failOn === p.name) return { error: opts.error ?? "attachment.put failed" };
+				const bytes = Buffer.from(p.content, "base64");
+				const hash = new Bun.SHA256().update(bytes).digest("hex");
+				return {
+					ref: { scheme: "blob", hash, size: bytes.length, mimeType: p.mimeType, name: p.name },
+					url: `blob://${hash}`,
+				};
 			},
 		} as never,
 	};
@@ -67,54 +77,93 @@ function fakeRpc(opts: { failOn?: string; ok?: boolean; error?: string } = {}) {
 const file = (name: string, body = "hello") => new File([body], name, { type: "application/octet-stream" });
 
 describe("uploadAttachmentFiles — one channel for both composers", () => {
-	test("writes each chip as base64 and returns [Attachment] refs", async () => {
-		const { client, writes, files } = fakeRpc();
+	test("uploads each chip as base64 and returns blob:// refs with the original name", async () => {
+		const { client, puts } = fakeRpc();
 		const refs = await uploadAttachmentFiles(client, "/ws", [
 			{ file: file("report.pdf"), name: "report.pdf" },
 			{ file: file("notes.txt", "hi"), name: "notes.txt" },
 		]);
-		expect(refs).toEqual(["[Attachment] attachments/report.pdf", "[Attachment] attachments/notes.txt"]);
-		expect(writes).toHaveLength(2);
-		expect(writes.every(w => w.encoding === "base64" && w.cwd === "/ws")).toBe(true);
+		const helloHash = new Bun.SHA256().update(Buffer.from("hello")).digest("hex");
+		const hiHash = new Bun.SHA256().update(Buffer.from("hi")).digest("hex");
+		expect(refs).toEqual([
+			`[Attachment] blob://${helloHash} (report.pdf)`,
+			`[Attachment] blob://${hiHash} (notes.txt)`,
+		]);
+		expect(puts).toHaveLength(2);
 		// Base64, not the raw text — the daemon decodes it.
-		expect(files.get("attachments/notes.txt")).toBe(Buffer.from("hi").toString("base64"));
+		expect(Buffer.from(puts[1]!.content, "base64").toString()).toBe("hi");
 	});
 
-	test("same-name chips get -2 suffixes instead of overwriting", async () => {
-		// Regression: the suffixing used to live inline in Composer.tsx only.
-		// Extracting it must not drop it — two files called "a.log" in one
-		// send would otherwise collide and the second would silently win.
-		const { client, writes } = fakeRpc();
+	test("same-machine files go by path and never enter the RPC frame", async () => {
+		const g = globalThis as unknown as { window?: unknown };
+		const previous = g.window;
+		g.window = { electronAPI: { getDroppedFilePath: () => "/tmp/big.pdf" } };
+		try {
+			const { client, puts, filePuts } = fakeRpc();
+			const refs = await uploadAttachmentFiles(client, "/ws", [{ file: file("big.pdf"), name: "big.pdf" }]);
+
+			expect(filePuts).toEqual([{ path: "/tmp/big.pdf", name: "big.pdf", mimeType: "application/octet-stream" }]);
+			expect(puts).toHaveLength(0);
+			expect(refs[0]!.startsWith("[Attachment] blob://")).toBe(true);
+		} finally {
+			g.window = previous;
+		}
+	});
+
+	test("falls back to inline bytes when the daemon cannot read the path", async () => {
+		const g = globalThis as unknown as { window?: unknown };
+		const previous = g.window;
+		g.window = { electronAPI: { getDroppedFilePath: () => "/missing/file.bin" } };
+		try {
+			const { client, puts, filePuts } = fakeRpc({ failPath: true });
+			const refs = await uploadAttachmentFiles(client, "/ws", [
+				{ file: file("file.bin", "bytes"), name: "file.bin" },
+			]);
+
+			expect(filePuts).toHaveLength(1);
+			expect(puts).toHaveLength(1);
+			expect(Buffer.from(puts[0]!.content, "base64").toString()).toBe("bytes");
+			expect(refs).toHaveLength(1);
+		} finally {
+			g.window = previous;
+		}
+	});
+
+	test("same-name chips keep their own bytes instead of overwriting each other", async () => {
+		// Content addressing makes the hash the identity: two files called
+		// "a.log" produce two blobs, so the second can no longer displace the
+		// first on disk.
+		const { client, puts } = fakeRpc();
 		const refs = await uploadAttachmentFiles(client, "/ws", [
 			{ file: file("a.log", "first"), name: "a.log" },
 			{ file: file("a.log", "second"), name: "a.log" },
-			{ file: file("a.log", "third"), name: "a.log" },
 		]);
-		expect(refs).toEqual([
-			"[Attachment] attachments/a.log",
-			"[Attachment] attachments/a-2.log",
-			"[Attachment] attachments/a-3.log",
-		]);
-		expect(writes.map(w => w.path)).toEqual(["attachments/a.log", "attachments/a-2.log", "attachments/a-3.log"]);
+		expect(refs).toHaveLength(2);
+		expect(refs[0]).not.toBe(refs[1]);
+		expect(refs[1]!.endsWith("(a.log)")).toBe(true);
+		expect(Buffer.from(puts[1]!.content, "base64").toString()).toBe("second");
 	});
 
-	test("sanitizes traversal out of the client-supplied name", async () => {
-		const { client, writes } = fakeRpc();
+	test("identical bytes share one blob hash", async () => {
+		const { client } = fakeRpc();
 		const refs = await uploadAttachmentFiles(client, "/ws", [
-			{ file: file("x"), name: "../../etc/passwd" },
-			{ file: file("y"), name: "dir\\sub\\ok.txt" },
+			{ file: file("a.txt", "same"), name: "a.txt" },
+			{ file: file("b.txt", "same"), name: "b.txt" },
 		]);
-		expect(refs[0]).toBe("[Attachment] attachments/passwd");
-		expect(refs[1]).toBe("[Attachment] attachments/ok.txt");
-		// Nothing escapes the workspace prefix.
-		expect(writes.every(w => w.path.startsWith("attachments/") && !w.path.includes(".."))).toBe(true);
+		expect(refs[0]!.split(" ")[1]).toBe(refs[1]!.split(" ")[1]);
 	});
 
 	test("throws on the first failure so the caller can abort the send", async () => {
-		const { client } = fakeRpc({ ok: false, error: "disk full" });
-		await expect(uploadAttachmentFiles(client, "/ws", [{ file: file("a.bin"), name: "a.bin" }])).rejects.toThrow(
-			"disk full",
-		);
+		const { client, puts } = fakeRpc({ failOn: "b.bin", error: "attachment too large" });
+		await expect(
+			uploadAttachmentFiles(client, "/ws", [
+				{ file: file("a.bin"), name: "a.bin" },
+				{ file: file("b.bin"), name: "b.bin" },
+			]),
+		).rejects.toThrow("attachment too large");
+		// The failure is surfaced, not swallowed: nothing is returned for the
+		// chips that did land, and no further chip is uploaded.
+		expect(puts).toHaveLength(2);
 	});
 
 	test("refuses a chip whose handle is gone (restored draft)", async () => {
@@ -124,36 +173,20 @@ describe("uploadAttachmentFiles — one channel for both composers", () => {
 		);
 	});
 
-	test("refuses to upload without a workspace", async () => {
-		// The empty-state composer hits this when the host could not resolve a
-		// project for the session it created — better a clear refusal than a
-		// prompt referencing a file that was never written.
+	test("needs no workspace — the blob store is content-addressed", async () => {
+		// The empty-state composer reaches the daemon before any project is
+		// resolved; an attachment upload must not depend on one.
 		const { client } = fakeRpc();
-		await expect(uploadAttachmentFiles(client, null, [{ file: file("a.bin"), name: "a.bin" }])).rejects.toThrow(
-			"no workspace for attachments",
-		);
-		await expect(uploadAttachmentFiles(client, undefined, [{ file: file("a.bin"), name: "a.bin" }])).rejects.toThrow(
-			"no workspace for attachments",
-		);
+		for (const cwd of [null, undefined]) {
+			const refs = await uploadAttachmentFiles(client, cwd, [{ file: file("a.bin"), name: "a.bin" }]);
+			expect(refs).toHaveLength(1);
+		}
 	});
 
-	test("an empty batch is a no-op, not a workspace demand", async () => {
-		const { client, writes } = fakeRpc();
+	test("an empty batch is a no-op", async () => {
+		const { client, puts } = fakeRpc();
 		expect(await uploadAttachmentFiles(client, null, [])).toEqual([]);
-		expect(writes).toHaveLength(0);
-	});
-});
-
-describe("attachmentWorkspacePath — unchanged contract after extraction", () => {
-	test("prefixes and sanitizes", () => {
-		expect(attachmentWorkspacePath("a b.png")).toBe("attachments/a b.png");
-		expect(attachmentWorkspacePath("C:\\x\\y.png")).toBe("attachments/y.png");
-		expect(attachmentWorkspacePath("../../evil")).toBe("attachments/evil");
-		expect(attachmentWorkspacePath("")).toBe("attachments/file");
-	});
-
-	test("keeps CJK names (they are common in this user base)", () => {
-		expect(attachmentWorkspacePath("设计稿.png")).toBe("attachments/设计稿.png");
+		expect(puts).toHaveLength(0);
 	});
 });
 

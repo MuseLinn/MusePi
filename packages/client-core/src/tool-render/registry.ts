@@ -5,6 +5,7 @@
 import { tLoose } from "../i18n/index.js";
 import { TOOL_RENDER_CARD_LABELS } from "./card-tools";
 import { genericRenderer } from "./generic";
+import { agnesVideoGenRenderer } from "./tools/agnes-video-gen";
 import { askRenderer } from "./tools/ask";
 import { astEditRenderer } from "./tools/ast-edit";
 import { astGrepRenderer } from "./tools/ast-grep";
@@ -45,6 +46,7 @@ import { yieldRenderer } from "./tools/yield";
 import type { ToolRenderer } from "./types";
 
 const RENDERERS: Record<string, ToolRenderer> = {
+	agnes_video_gen: agnesVideoGenRenderer,
 	ask: askRenderer,
 	ast_edit: astEditRenderer,
 	ast_grep: astGrepRenderer,

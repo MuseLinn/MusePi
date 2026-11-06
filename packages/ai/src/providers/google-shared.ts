@@ -21,6 +21,7 @@ import type {
 	ThinkingContent,
 	Tool,
 	ToolCall,
+	VideoContent,
 } from "../types";
 import { shouldSendServiceTier } from "../types";
 import { normalizeSystemPrompts } from "../utils";
@@ -39,7 +40,7 @@ import type {
 	ThinkingLevel,
 } from "./google-types";
 import { transformMessages } from "./transform-messages";
-import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
+import { NON_VIDEO_PLACEHOLDER, NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
 export type {
 	Content,
@@ -175,6 +176,17 @@ function convertGoogleImagePart(image: ImageContent): Part {
 		: { inlineData: { mimeType: image.mimeType, data: image.data } };
 }
 
+/** Gemini accepts video through the same file/inline parts as images; the
+ *  model catalog's `input` decides whether the model takes it. */
+function convertGoogleVideoPart(video: VideoContent): Part {
+	if (video.providerFile?.provider === "google" && video.providerFile.uri) {
+		return { fileData: { fileUri: video.providerFile.uri, mimeType: video.mimeType } };
+	}
+	return video.url
+		? { fileData: { fileUri: video.url, mimeType: video.mimeType } }
+		: { inlineData: { mimeType: video.mimeType, data: video.data ?? "" } };
+}
+
 /**
  * Convert internal messages to Gemini Content[] format.
  */
@@ -218,6 +230,9 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 						const text = item.text.toWellFormed();
 						if (text.trim().length === 0) continue;
 						parts.push({ text });
+					} else if (item.type === "video") {
+						if (model.input.includes("video")) parts.push(convertGoogleVideoPart(item));
+						else parts.push({ text: NON_VIDEO_PLACEHOLDER });
 					} else if (supportsImages) {
 						parts.push(convertGoogleImagePart(item));
 					} else {
@@ -300,6 +315,9 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 			const textResult = textContent.map(c => c.text).join("\n");
 			const imageContent = supportsImages ? msg.content.filter((c): c is ImageContent => c.type === "image") : [];
 			const omittedImages = !supportsImages && msg.content.some((c): c is ImageContent => c.type === "image");
+			// Function responses carry text and (Gemini 3+) images only; keep a
+			// tool-produced video visible as a marker rather than dropping it.
+			const omittedVideo = msg.content.some((c): c is VideoContent => c.type === "video");
 
 			const hasText = textResult.length > 0;
 			const hasImages = imageContent.length > 0;
@@ -310,13 +328,11 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 			const modelSupportsMultimodalFunctionResponse = supportsMultimodalFunctionResponse(model.id);
 
 			// Use "output" key for success, "error" key for errors as per SDK documentation
-			const responseValue = omittedImages
-				? [hasText ? textResult.toWellFormed() : "", NON_VISION_IMAGE_PLACEHOLDER].filter(Boolean).join("\n")
-				: hasText
-					? textResult.toWellFormed()
-					: hasImages
-						? "(see attached image)"
-						: "";
+			const notes = [omittedImages ? NON_VISION_IMAGE_PLACEHOLDER : "", omittedVideo ? NON_VIDEO_PLACEHOLDER : ""]
+				.filter(Boolean)
+				.join("\n");
+			const baseValue = hasText ? textResult.toWellFormed() : hasImages ? "(see attached image)" : "";
+			const responseValue = [baseValue, notes].filter(Boolean).join("\n");
 
 			const imageParts: Part[] = imageContent.map(imageBlock => convertGoogleImagePart(imageBlock));
 

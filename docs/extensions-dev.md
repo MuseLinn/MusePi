@@ -131,6 +131,7 @@ export default function myExtension(pi: ExtensionAPI) {
   - `desktop-shell` 是宿主组合入口。包开关还维护 `shell.enabled` 与 `web.port` 连接副作用;`task-card-style` 已接入真实会话注册。
   - `annotate: true` 仍只给 bundled skills 的既有扫描行打内置标记,不生成重复条目。内置 hooks 仍全部由文件或插件扫描发现。
   - `musepi-subagent-codex`、`musepi-subagent-claude-code`、`musepi-subagent-kimi-code`、`musepi-subagent-codebuddy` 与 `musepi-subagent-opencode` 是实验性一次性子智能体包。Codex 使用官方 app-server JSON-RPC,其余产品使用各自流式 JSONL CLI;包只持有可执行文件、原生模型、产品权限与环境配置,不在加载时启动进程。外部 Agent 拒绝显式 model/effort override、plan mode、结构化输出 schema 和隔离 worktree;进程终止、输出上限、错误和产物仍由共享 task 执行器处理。
+  - 五个包共用 `task/external-executable-probe.ts` 注册 `probeExecutable` RPC。配置页打开、路径失焦或手动重检时按当前工作目录解析 PATH 或显式路径，并以 5 秒超时执行一次 `--version`，显示解析路径和版本；找不到、非零退出与超时均显示失败。检测只证明 CLI 可执行，不验证原生模型、凭据或后续任务可用性。`env` 在失焦时校验 JSON 对象与字符串值，输入修正时清除旧错误。
 - **第三方生态发现**:Pi、OMP、Codex 与 Claude 的扩展、技能、Commands 和 MCP 继续由各自独立 provider 适配,不使用 MusePi 已退休的第一方 ID。`kimi-code` provider 读取 `$KIMI_CODE_HOME`(默认 `~/.kimi-code`)与项目 `.kimi-code/`,支持用户和项目 Skills、MCP,以及 `plugins/installed.json` 中启用插件的 Skills、Commands 和 MCP;插件 MCP 使用官方 `plugin-<pluginId>:<serverName>` 命名。当前不接入 Kimi 的 hooks、agents、systemPrompt 或 sessionStart。
 - **插件安装**(`~/.musepi/plugins/`):provider = user,可启停。
 - 测试/示例扩展(如 `harmony-leak` 夹具)是测试资产,不算产品扩展。
@@ -561,6 +562,19 @@ musepi 的覆盖面**更广**,不必为了"对齐 DSH"补 P3 —— 补了反而
 优先级是刻意排的:claude-plugins(70) < claude(80),所以用户自己在 `.claude/` 里的覆盖优先于 marketplace 装来的插件(`discovery/agent-plugins.ts:39-40`)。
 
 **与 DSH 的实质差异只有钩子的执行模型**:DSH 桥的是 Claude Code 的 shell 命令钩子(带 `hookSpecificOutput.hookEventName` 事件门控、`${CLAUDE_PLUGIN_ROOT}` 替换、exit 2 阻断),而 musepi 的 hooks 是 JS/TS 模块(`HookFactory`),命令钩子另走 `.claude/hooks/{pre,post}/` 的目录约定。若要补 command 型钩子,应作为 hooks 引擎的一种新来源接进现有 `HookEvent` 联合,而不是新建一套与 DSH 对齐的独立桥。
+
+## 17a. 第三方 Cordis 插件适配
+
+生产插件管理器默认合并 `superpowers-dev`（`obra/superpowers`）与 `googlechrome`（`GoogleChrome/modern-web-guidance`）目录，让 Superpowers 和 Modern Web Guidance 无需先添加 marketplace 即可见。内置目录只提供元数据，不自动下载、安装或启用插件；用户显式安装后才获取包。同名用户目录优先，其余自定义目录保留。两个条目使用与目录版本一致的远程品牌图标，未安装时也可显示。
+
+`MarketplaceManager` 在安装缓存复制完成后调用 `compat/third-party-cordis.ts`：只修改安装器拥有的缓存 `package.json` 和适配入口，不编辑上游源目录。版本刷新、按 scope 升级、runtime link、启停状态与 Cordis mount/dispose 继续由原管理器负责。适配器还读取 `.codex-plugin/plugin.json` 的 `interface.logo`，仅将缓存内已存在的资源写为 `musepi.icon` 的 `file://` URI；路径逃逸与缺失资源继续使用默认回退。
+
+- `superpowers` 的 `musepi` 声明指向其现有 `.pi/extensions/superpowers.ts`，保留 `pi` 声明与 bootstrap/context 行为；不会生成替代实现。
+- `modern-web-guidance` 在缓存的 `cordis/index.ts` 注册同名虚拟技能和 `modern_web_guidance` 工具。工具接受 `operation: "search" | "retrieve" | "list"`、可选 `query` 与 `skillVersion`；search/retrieve 必须有 query。包内存在 `modern-web.mjs` 时直接调用，否则使用 `npx -y modern-web-guidance@<缓存 package.json 的版本>`（Windows 为 `npx.cmd`），不使用 `@latest`。60 秒超时，输出上限 256 KiB，非零退出显式失败；调用方取消、超时或输出超限都会终止子进程。适配入口无外部运行时依赖，可从任意缓存路径加载。
+
+`marketplace.detail` 与安装共用源码准备和持久化克隆。首次读取详情时按需获取源码，后续读取复用磁盘缓存，不安装或启用插件；返回显示名、完整介绍、图标、能力与按名称排序的技能 frontmatter。`marketplace.list` 额外返回活动安装的 `enabled`，详情页据此通过 `plugins.setEnabled` 启停。
+
+适配按插件名显式选择，目前仅覆盖上述两个已审查包；其他 Agent 插件格式不会自动推断或转换成 Cordis 插件。
 
 ## 17. 模块身份契约：共享实例 vs 重新求值(2026-10-18)
 

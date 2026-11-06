@@ -60,6 +60,8 @@ import { deriveWindowStats } from "@musepi/pi-wire";
 import { messageKey } from "@musepi/sdk";
 import { YAML } from "bun";
 import { type FSWatcher, watch } from "chokidar";
+import { JobLedger } from "../async/job-ledger";
+import { AsyncJobManager } from "../async/job-manager";
 import { reset as resetCapabilities } from "../capability";
 import {
 	ChannelCommandHandler,
@@ -609,6 +611,12 @@ import { commentOnGithub, normalizeGithubReviewers, reviewOnGithub } from "./git
 import { readGithubPrReviewComments } from "./github-pr-review";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
+import {
+	type AttachmentGetParams,
+	type AttachmentPutFileParams,
+	type AttachmentPutParams,
+	AttachmentService,
+} from "./services/attachment-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { BundleService } from "./services/bundle-service";
@@ -631,7 +639,12 @@ import { SessionService } from "./services/session-service";
 import { TerminalService, type TerminalServiceDeps } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
-import { resolveWorkspaceDirectories, WorkspaceRegistry, WorkspaceService } from "./services/workspace-registry";
+import {
+	resolveWorkspaceDirectories,
+	sessionHiddenByWorkspace,
+	WorkspaceRegistry,
+	WorkspaceService,
+} from "./services/workspace-registry";
 import type { DaemonConnection, DaemonOptions, LiveSession, RpcRequest } from "./session-host";
 import {
 	assistantReplyText,
@@ -641,6 +654,7 @@ import {
 	estimateSnapcompactSavings,
 	extractEntryText,
 	isLiveSessionBusy,
+	JOURNAL_DIR,
 	MAX_REQUEST_BYTES,
 	modesOf,
 	PAIR_PORT,
@@ -870,6 +884,7 @@ export class DaemonServer {
 				ensureFileIndex: () => host.ensureFileIndex(),
 			}),
 		);
+		this.#services.register(new AttachmentService());
 		this.#services.register(new EditorService());
 		// ArchiveService 无宿主依赖：归档落 agent dir 下，随会话隔离走。
 		this.#services.register(new ArchiveService());
@@ -1013,6 +1028,7 @@ export class DaemonServer {
 				resolveLive: sessionId => this.#host.get(sessionId),
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
 				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
+				deletedWorkspaces: () => this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces(),
 			}),
 		);
 		this.#services.register(
@@ -1537,7 +1553,7 @@ export class DaemonServer {
 			// it + apply it so the broadcast seq, the journal record and the
 			// view cursor stay in one numbering space (the projection no-ops
 			// on the unknown type; replay is equally inert).
-			const seq = live.journal ? live.journal.append(event) : ++live.seq;
+			const seq = live.journal ? live.journal.append(event) : 0;
 			live.view.apply(event);
 			for (const send of live.subscribers.values()) {
 				try {
@@ -2025,6 +2041,11 @@ export class DaemonServer {
 			}
 			case "session.list": {
 				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
+				// Sessions of a removed workspace stay on disk and remain resumable
+				// by id, but leave the list. Registering the same folder again does
+				// not bring the old workspace's history back — only sessions created
+				// after the removal show (sessionHiddenByWorkspace).
+				const deletedWorkspaces = await this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces();
 				// 子代理计数(侧栏会话行展开):注册表 transcript 路径落在会话
 				// 产物目录(`<sessionFile 去 .jsonl>/`)下的非 advisor ref。
 				// 每条请求一次注册表快照,逐行前缀过滤。
@@ -2033,7 +2054,13 @@ export class DaemonServer {
 					.list()
 					.filter(ref => ref.kind !== "advisor" && typeof ref.sessionFile === "string")
 					.map(ref => ref.sessionFile as string);
-				return (await this.#host.knownSessions()).map(r => {
+				const rows =
+					deletedWorkspaces.roots.size === 0 && Object.keys(deletedWorkspaces.deletedAt).length === 0
+						? await this.#host.knownSessions()
+						: (await this.#host.knownSessions()).filter(
+								r => !sessionHiddenByWorkspace(r.cwd, r.createdAt, deletedWorkspaces),
+							);
+				return rows.map(r => {
 					const live = this.#host.get(r.sessionId);
 					const sessionFile = live?.agentSession.sessionFile ?? r.sessionFile ?? null;
 					const root = sessionFile?.endsWith(".jsonl")
@@ -2555,6 +2582,9 @@ export class DaemonServer {
 			case "marketplace.list": {
 				// 实现归 MarketplaceService（marketplace/skills 面语义不变）。
 				return this.#services.get<MarketplaceService>("marketplace").list();
+			}
+			case "marketplace.detail": {
+				return this.#services.get<MarketplaceService>("marketplace").detail(params ?? {});
 			}
 			case "marketplace.install": {
 				return this.#services.get<MarketplaceService>("marketplace").install(params ?? {});
@@ -4473,6 +4503,10 @@ export class DaemonServer {
 				// tailSnapshot 在委托边界外应用（展示层约束，与 snapshot case 同）。
 				const p = (params ?? {}) as { sessionId: string; cursor?: number };
 				const r = await this.#services.get<SessionService>("session-tree").resume(p, conn);
+				// The snapshot excludes already-settled cards, but this client
+				// may still hold one from an earlier render. Replay the recent
+				// settlements so the snapshot→attach window cannot strand it.
+				this.#host.replayRecentResolutions?.(p.sessionId, conn);
 				return { ...r, snapshot: tailSnapshot(r.snapshot) };
 			}
 			case "session.catchup": {
@@ -4513,6 +4547,14 @@ export class DaemonServer {
 					deliverAs?: "prompt" | "steer" | "followUp" | "continue";
 					displayContext?: MessageDisplayContext;
 					images?: { type: "image"; data: string; mimeType: string }[];
+					/** Video attachments by reference (`url`) or inline (`data`). */
+					videos?: { type: "video"; mimeType: string; url?: string; data?: string }[];
+					/** Stable per-device id + per-send id. Together they are the
+					 *  idempotency identity; the same identity with the same
+					 *  content is acknowledged without appending a second user
+					 *  message. Optional for older clients. */
+					clientId?: string;
+					clientRequestId?: string;
 				};
 				// Reactivate history sessions on send so continuing an old
 				// conversation works (the GUI opens them snapshot-only via
@@ -4524,23 +4566,86 @@ export class DaemonServer {
 				// reactivated session has no in-flight events, so there is no
 				// catch-up gap to fill here.
 				await this.#host.subscribe(p.sessionId, conn);
+				// Send idempotency: cancellation/retry on the same device must
+				// not append a second user message. The identity and fingerprint
+				// are persisted on the user message itself, so the map can be
+				// rebuilt after a daemon restart instead of trusting memory.
+				// Same identity with different content is a conflict rather than
+				// a silent overwrite.
+				const clientRequestId =
+					typeof p.clientRequestId === "string" && p.clientRequestId.trim() ? p.clientRequestId.trim() : null;
+				let requestIdentity: string | undefined;
+				let requestFingerprint: string | undefined;
+				if (clientRequestId) {
+					const clientId = typeof p.clientId === "string" && p.clientId.trim() ? p.clientId.trim() : conn.id;
+					requestIdentity = `msg:${clientId}:${clientRequestId}`;
+					requestFingerprint = createHash("sha256")
+						.update(
+							JSON.stringify({
+								text: p.text,
+								deliverAs: p.deliverAs ?? "prompt",
+								displayContext: p.displayContext ?? null,
+								images: (p.images ?? []).map(image => [image.mimeType, image.data]),
+							}),
+						)
+						.digest("hex");
+					if (!live.clientRequestIndexBuilt) {
+						for (const entry of live.agentSession.sessionManager.getEntries()) {
+							if (entry.type !== "message") continue;
+							const message = entry.message as {
+								role?: string;
+								requestIdentity?: unknown;
+								requestFingerprint?: unknown;
+							};
+							if (message.role !== "user" || typeof message.requestIdentity !== "string") continue;
+							if (typeof message.requestFingerprint === "string") {
+								live.clientRequests.set(message.requestIdentity, message.requestFingerprint);
+							}
+						}
+						live.clientRequestIndexBuilt = true;
+					}
+					const previous = live.clientRequests.get(requestIdentity);
+					if (previous !== undefined) {
+						if (previous !== requestFingerprint) {
+							throw new Error(
+								"Request conflict: client_request_id was already used for different content in this session",
+							);
+						}
+						return { accepted: true, duplicate: true };
+					}
+					live.clientRequests.set(requestIdentity, requestFingerprint);
+				}
 				// "prompt" (default) = plain sendUserMessage; steer/followUp
 				// map to the AgentSession delivery semantics.
 				const options =
-					(p.deliverAs && p.deliverAs !== "prompt") || p.displayContext
+					(p.deliverAs && p.deliverAs !== "prompt") || p.displayContext || requestIdentity
 						? {
 								...(p.deliverAs && p.deliverAs !== "prompt" ? { deliverAs: p.deliverAs } : {}),
 								...(p.displayContext ? { displayContext: p.displayContext } : {}),
+								...(requestIdentity && requestFingerprint ? { requestIdentity, requestFingerprint } : {}),
 							}
 						: undefined;
 				const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
+				// Video attachments arrive as content parts too, but by reference:
+				// a clip is never base64 in the request (provider APIs accept a
+				// URL/file part or degrade it to a text marker).
+				const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : undefined;
 				// Image attachments ride along as content parts, whether
-				// pasted or dragged; sendUserMessage accepts text+images.}
+				// pasted or dragged; sendUserMessage accepts text+images+video.
 				const content =
-					images && images.length > 0
+					(images && images.length > 0) || (videos && videos.length > 0)
 						? [
 								...(p.text ? [{ type: "text" as const, text: p.text }] : []),
-								...images.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType })),
+								...(images ?? []).map(img => ({
+									type: "image" as const,
+									data: img.data,
+									mimeType: img.mimeType,
+								})),
+								...(videos ?? []).map(video => ({
+									type: "video" as const,
+									mimeType: String(video.mimeType),
+									...(video.url ? { url: String(video.url) } : { data: String(video.data) }),
+								})),
 							]
 						: p.text;
 				// TUI "." / "c" continue parity: the shortcut's payload is the
@@ -4576,6 +4681,21 @@ export class DaemonServer {
 						sessionId: p.sessionId,
 						error: err instanceof Error ? err.message : String(err),
 					});
+					// A send that never persisted is not a duplicate. Drop the
+					// reservation only when the session truly has no user entry
+					// carrying this identity; a turn that failed after the append
+					// must keep it so a retry cannot create a second bubble.
+					if (requestIdentity) {
+						const persisted = live.agentSession.sessionManager
+							.getEntries()
+							.some(
+								entry =>
+									entry.type === "message" &&
+									entry.message.role === "user" &&
+									entry.message.requestIdentity === requestIdentity,
+							);
+						if (!persisted) live.clientRequests.delete(requestIdentity);
+					}
 				});
 				return { accepted: true };
 			}
@@ -6705,10 +6825,18 @@ export class DaemonServer {
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const snapshot = live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 });
+				const lost = AsyncJobManager.lostJobsForSession(p.sessionId).map(job => ({
+					id: job.id,
+					type: job.type,
+					status: "lost" as const,
+					label: job.label,
+					startTime: job.startTime,
+					...(job.toolCallId ? { toolCallId: job.toolCallId } : {}),
+				}));
 				if (!snapshot) {
 					return {
 						running: [],
-						recent: [],
+						recent: lost,
 						// Must match AsyncJobDeliveryState — the GUI reads
 						// delivery.pendingJobIds.length, and a missing field here
 						// crashes (ErrorBoundary) the jobs pane for sessions
@@ -6724,7 +6852,13 @@ export class DaemonServer {
 					items.map(item =>
 						manager?.getJob(item.id)?.kind === "question" ? { ...item, type: "question" as const } : item,
 					);
-				return { ...snapshot, running: project(snapshot.running), recent: project(snapshot.recent) };
+				const recent = project(snapshot.recent);
+				const seen = new Set(recent.map(job => job.id));
+				return {
+					...snapshot,
+					running: project(snapshot.running),
+					recent: [...recent, ...lost.filter(job => !seen.has(job.id))],
+				};
 			}
 			case "session.jobsCancel": {
 				// 取消一个后台任务(TUI /jobs parity)。
@@ -7044,9 +7178,10 @@ export class DaemonServer {
 					op: "show" | "pause" | "resume" | "drop" | "budget" | "guided";
 					objective?: string | null;
 					budget?: string | null;
-					// Guided kickoff image attachments (same wire shape as
+					// Guided kickoff media attachments (same wire shape as
 					// session.send): they ride on the synthetic interview kickoff.
 					images?: { type: "image"; data: string; mimeType: string }[];
+					videos?: { type: "video"; mimeType: string; url?: string; data?: string }[];
 				};
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
@@ -7123,20 +7258,25 @@ export class DaemonServer {
 						const kickoff = prompt.render(guidedGoalInterviewPrompt, {
 							initial: p.objective?.trim() || undefined,
 						});
-						// Image attachments (welcome/session composer chips) ride
-						// on the kickoff — TUI input.images parity.
+						// Media attachments (composer chips) ride on the kickoff —
+						// TUI input.images parity, plus video parts.
 						const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
+						const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : undefined;
 						try {
 							if (g.isStreaming) {
-								await g.followUp(kickoff, images, { synthetic: true });
+								await g.followUp(kickoff, images, { synthetic: true, videos });
 							} else {
-								await g.prompt(kickoff, images ? { synthetic: true, images } : { synthetic: true });
+								await g.prompt(kickoff, {
+									synthetic: true,
+									...(images ? { images } : {}),
+									...(videos ? { videos } : {}),
+								});
 							}
 						} catch (error) {
 							// AgentBusyError during the race between the streaming
 							// check and prompt(): queue instead of failing.
 							if (!(error instanceof AgentBusyError)) throw error;
-							await g.followUp(kickoff, images, { synthetic: true });
+							await g.followUp(kickoff, images, { synthetic: true, videos });
 						}
 						return { ok: true };
 					}
@@ -7725,6 +7865,10 @@ export class DaemonServer {
 					...(p.apiKey && p.apiKey.length > 0 ? { apiKey: p.apiKey } : {}),
 				});
 				return { models };
+			}
+			case "settings.shellMinimizerStats": {
+				const { readShellMinimizerStats } = await import("../session/shell-minimizer-stats");
+				return readShellMinimizerStats();
 			}
 			case "settings.get": {
 				// Global settings snapshot (session-less): the GUI reads
@@ -8692,6 +8836,20 @@ export class DaemonServer {
 					.get<FileService>("files")
 					.deleteEntry((params ?? {}) as { cwd?: string; path?: string });
 			}
+			case "attachment.put": {
+				return this.#services.get<AttachmentService>("attachments").put((params ?? {}) as AttachmentPutParams);
+			}
+			case "attachment.putFile": {
+				return this.#services
+					.get<AttachmentService>("attachments")
+					.putFile((params ?? {}) as AttachmentPutFileParams);
+			}
+			case "attachment.get": {
+				return this.#services.get<AttachmentService>("attachments").get((params ?? {}) as AttachmentGetParams);
+			}
+			case "attachment.stat": {
+				return this.#services.get<AttachmentService>("attachments").stat((params ?? {}) as { hash?: string });
+			}
 			case "workspace.tree": {
 				return this.#services.get<FileService>("files").tree(params ?? {});
 			}
@@ -8731,6 +8889,16 @@ export class DaemonServer {
 			}
 			case "archive.status": {
 				return this.#services.get<ArchiveService>("archive").status((params ?? {}) as { id?: string });
+			}
+			case "session.artifactRead": {
+				const p = (params ?? {}) as { sessionId?: string; id?: string };
+				if (!p.id || !/^\d+$/.test(p.id)) throw new Error("Artifact id must be numeric");
+				const live = this.#host.get(p.sessionId ?? "");
+				if (!live) throw new Error(`Unknown session: ${p.sessionId ?? ""}`);
+				const artifactPath = await live.agentSession.sessionManager.getArtifactPath(p.id);
+				if (!artifactPath) throw new Error(`Artifact ${p.id} not found`);
+				const { readSessionArtifactPreview } = await import("../session/artifact-preview");
+				return readSessionArtifactPreview(artifactPath);
 			}
 			case "artifact.list": {
 				// Artifacts-panel discovery: scan the workspace for
@@ -8978,6 +9146,17 @@ export async function startDaemon(
 	}
 
 	const host = new DaemonSessionHost(options);
+	// Durable job facts: live state stays in AsyncJobManager, but startup must
+	// be able to say "this job's outcome is unknown" instead of forgetting it.
+	const jobLedger = new JobLedger(path.join(JOURNAL_DIR, "async-jobs.db"));
+	AsyncJobManager.setLedger(jobLedger);
+	const lostJobs = jobLedger.recoverRunning();
+	if (lostJobs.length > 0) {
+		logger.warn("Async jobs lost across daemon restart", {
+			count: lostJobs.length,
+			jobIds: lostJobs.slice(0, 10).map(job => job.id),
+		});
+	}
 	const server = new DaemonServer(host);
 
 	// P2：服务挂载全部落定后才开监听——半装配的 daemon 不接受任何连接。
@@ -9134,6 +9313,8 @@ export async function startDaemon(
 			for (const socket of sockets) socket.destroy();
 			await server.disposeHostContext();
 			host.dispose();
+			AsyncJobManager.setLedger(null);
+			jobLedger.close();
 			await new Promise<void>(resolve => netServer.close(() => resolve()));
 			try {
 				await fs.promises.unlink(socketPath);

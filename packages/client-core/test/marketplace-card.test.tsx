@@ -71,6 +71,15 @@ describe("MarketplaceCard", () => {
 		expect(html).toContain("github-mcp");
 	});
 
+	it("renders artwork URIs as lazy decorative images", () => {
+		const html = renderToStaticMarkup(
+			<MarketplaceCard entry={makeEntry({ icon: "https://example.com/superpowers.png" })} />,
+		);
+		expect(html).toContain('src="https://example.com/superpowers.png"');
+		expect(html).toContain('loading="lazy"');
+		expect(html).toContain('alt=""');
+	});
+
 	it("renders the version stamp with the v-prefix", () => {
 		const html = renderToStaticMarkup(<MarketplaceCard entry={makeEntry()} />);
 		expect(html).toContain("v1.2.3");

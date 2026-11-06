@@ -1,6 +1,7 @@
-import type { Context, ImageContent, Model } from "@musepi/pi-ai";
+import type { Context, ImageContent, Model, VideoContent } from "@musepi/pi-ai";
 import { logger } from "@musepi/pi-utils";
-import { contextHasImages, decorateContextProviderFiles } from "./context-images";
+import { fileUrlPath } from "../utils/video-loading";
+import { contextHasMedia, decorateContextMediaFiles } from "./context-images";
 import {
 	hashProviderFileContent,
 	hashProviderFileCredential,
@@ -52,6 +53,48 @@ function decodeImage(block: ImageContent): Uint8Array | undefined {
 	}
 }
 
+function videoBlocks(context: Context): VideoContent[] {
+	const blocks: VideoContent[] = [];
+	for (const message of context.messages) {
+		if (
+			(message.role !== "user" && message.role !== "developer" && message.role !== "toolResult") ||
+			!Array.isArray(message.content)
+		) {
+			continue;
+		}
+		for (const block of message.content) {
+			if (block.type === "video") blocks.push(block);
+		}
+	}
+	return blocks;
+}
+
+/** Video bytes for an upload: inline data, or a local `file://` clip. */
+async function decodeVideo(block: VideoContent): Promise<Uint8Array | undefined> {
+	if (block.data !== undefined) {
+		if (block.data.length === 0) return undefined;
+		try {
+			return new Uint8Array(Buffer.from(block.data, "base64"));
+		} catch {
+			return undefined;
+		}
+	}
+	const path = fileUrlPath(block.url);
+	if (!path) return undefined;
+	try {
+		const file = Bun.file(path);
+		if (!file.size) return undefined;
+		return new Uint8Array(await file.arrayBuffer());
+	} catch {
+		return undefined;
+	}
+}
+
+/** A video block whose bytes this process can upload. */
+function uploadableVideo(block: VideoContent): boolean {
+	return block.data !== undefined || fileUrlPath(block.url) !== null;
+}
+
 /**
  * Account-scoped provider-file orchestration for outbound contexts.
  *
@@ -76,9 +119,14 @@ export class ProviderFileManager {
 	}
 
 	async decorateContext(context: Context, model: Model): Promise<Context> {
-		if (!model.input.includes("image") || !contextHasImages(context)) return context;
-		const images = imageBlocks(context);
-		if (!images.some(block => !block.url && block.data.length > 0)) return context;
+		const acceptsImages = model.input.includes("image");
+		const acceptsVideo = model.input.includes("video");
+		if (!acceptsImages && !acceptsVideo) return context;
+		if (!contextHasMedia(context)) return context;
+		const images = acceptsImages ? imageBlocks(context) : [];
+		const videos = acceptsVideo ? videoBlocks(context) : [];
+		const inlineImage = (block: ImageContent): boolean => !block.url && block.data.length > 0;
+		if (!images.some(inlineImage) && !videos.some(uploadableVideo)) return context;
 
 		let credential: string | undefined;
 		try {
@@ -102,15 +150,20 @@ export class ProviderFileManager {
 			return context;
 		}
 		if (!client) return context;
-		const candidates = images.filter(
-			block => !block.url && block.data.length > 0 && block.providerFile?.provider !== client.provider,
-		);
+		type MediaBlock = ImageContent | VideoContent;
+		const candidates: MediaBlock[] = [
+			...images.filter(block => inlineImage(block) && block.providerFile?.provider !== client.provider),
+			// Videos upload from inline bytes or a local `file://` clip; the
+			// provider then receives a native file reference instead of a path
+			// only this machine can read.
+			...videos.filter(block => uploadableVideo(block) && block.providerFile?.provider !== client.provider),
+		];
 		if (candidates.length === 0) return context;
 
-		const referenceByBlock = new Map<ImageContent, ImageContent["providerFile"]>();
-		const groups = new Map<string, { bytes: Uint8Array; blocks: ImageContent[] }>();
+		const referenceByBlock = new Map<MediaBlock, ImageContent["providerFile"]>();
+		const groups = new Map<string, { bytes: Uint8Array; blocks: MediaBlock[] }>();
 		for (const block of candidates) {
-			const bytes = decodeImage(block);
+			const bytes = block.type === "image" ? decodeImage(block) : await decodeVideo(block);
 			if (!bytes) continue;
 			const hash = hashProviderFileContent(bytes);
 			const group = groups.get(hash);
@@ -134,12 +187,15 @@ export class ProviderFileManager {
 		);
 		return referenceByBlock.size === 0
 			? context
-			: decorateContextProviderFiles(context, block => referenceByBlock.get(block));
+			: decorateContextMediaFiles(context, block => referenceByBlock.get(block));
 	}
 
 	/** Remove cached handles carried by a provider-rejected request. */
 	async invalidateContext(context: Context, model: Model): Promise<void> {
-		const blocks = imageBlocks(context).filter(block => block.providerFile !== undefined && block.data.length > 0);
+		const blocks: (ImageContent | VideoContent)[] = [
+			...imageBlocks(context).filter(block => block.providerFile !== undefined && block.data.length > 0),
+			...videoBlocks(context).filter(block => block.providerFile !== undefined && block.data !== undefined),
+		];
 		if (blocks.length === 0) return;
 		let credential: string | undefined;
 		try {
@@ -149,7 +205,7 @@ export class ProviderFileManager {
 		}
 		if (!credential) return;
 		for (const block of blocks) {
-			const bytes = decodeImage(block);
+			const bytes = block.type === "image" ? decodeImage(block) : await decodeVideo(block);
 			if (!bytes || !block.providerFile) continue;
 			this.#cache.delete(block.providerFile.provider, credential, hashProviderFileContent(bytes));
 		}

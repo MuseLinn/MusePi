@@ -4,7 +4,7 @@ import { BlobStore, isBlobRef, resolveImageData, resolveImageDataUrl } from "./b
 import { buildSessionContext } from "./session-context";
 import type { FileEntry, RawFileEntry, SessionEntry, SessionHeader } from "./session-entries";
 import { migrateToCurrentVersion } from "./session-migrations";
-import { isImageBlock, isImageDataPayload } from "./session-persistence";
+import { isMediaBlock, isMediaDataPayload } from "./session-persistence";
 import { FileSessionStorage, type SessionStorage } from "./session-storage";
 import {
 	parseTitleSlotFromContent,
@@ -313,13 +313,13 @@ function hasImageUrl(value: unknown): value is { image_url: string } {
 	return typeof value === "object" && value !== null && "image_url" in value && typeof value.image_url === "string";
 }
 
-function shouldResolveImagePayload(value: unknown, key: string | undefined): value is { data: string } {
-	if (!isImageDataPayload(value) || !isBlobRef(value.data)) return false;
-	return (key === "content" && isImageBlock(value)) || key === "images";
+function shouldResolveMediaPayload(value: unknown, key: string | undefined): value is { data: string } {
+	if (!isMediaDataPayload(value) || !isBlobRef(value.data)) return false;
+	return (key === "content" && isMediaBlock(value)) || key === "images" || key === "videos";
 }
 
 async function resolvePersistedBlobRefs(value: unknown, blobStore: BlobStore, key?: string): Promise<void> {
-	if (shouldResolveImagePayload(value, key)) {
+	if (shouldResolveMediaPayload(value, key)) {
 		value.data = await resolveImageData(blobStore, value.data);
 		return;
 	}

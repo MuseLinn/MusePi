@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ImageContent, TextContent } from "@musepi/pi-ai";
+import type { ImageContent, TextContent, VideoContent } from "@musepi/pi-ai";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
@@ -59,7 +59,7 @@ function stubUrlText(body: string, contentType: string) {
 	});
 }
 
-function textOutput(result: { content: Array<TextContent | ImageContent> }): string {
+function textOutput(result: { content: Array<TextContent | ImageContent | VideoContent> }): string {
 	return result.content
 		.filter((content): content is TextContent => content.type === "text")
 		.map(content => content.text)

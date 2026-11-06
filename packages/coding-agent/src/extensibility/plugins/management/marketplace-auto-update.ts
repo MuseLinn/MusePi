@@ -32,6 +32,7 @@ async function runMarketplaceAutoUpdate(options: MarketplaceAutoUpdateOptions): 
 			projectInstalledRegistryPath: (await options.resolveActiveProjectRegistryPath(getProjectDir())) ?? undefined,
 			marketplacesCacheDir: getMarketplacesCacheDir(),
 			pluginsCacheDir: getPluginsCacheDir(),
+			includeDefaultMarketplaces: true,
 			clearPluginRootsCache: options.clearPluginRootsCache,
 		});
 		await mgr.refreshStaleMarketplaces();

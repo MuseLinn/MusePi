@@ -39,6 +39,7 @@ const panelTabs: UsePanelTabsResult = {
 	reorder: () => {},
 	moveToColumn: () => {},
 	setSplit: () => {},
+	setSplitRatio: () => {},
 	setDirty: () => {},
 };
 const snap = {

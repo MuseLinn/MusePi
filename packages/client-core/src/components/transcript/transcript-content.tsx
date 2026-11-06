@@ -12,6 +12,7 @@ import type {
 	SessionEntry,
 	TextContent,
 	ToolResultMessage,
+	VideoContent,
 } from "@musepi/pi-wire";
 import { ChevronRight, Undo2 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
@@ -27,6 +28,7 @@ import {
 	textWithoutDisplayContext,
 } from "../../messages/display-context";
 import type { ToolRenderHost } from "../../tool-render";
+import { ResultVideo } from "../../tool-render/parts";
 import { type BrowserOperationAction, browserActionLabel } from "../../tool-render/tools/browser-activity";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
@@ -356,7 +358,7 @@ export function MsgContent({
 	content,
 	onPreviewImage,
 }: {
-	content: string | readonly (TextContent | ImageContent)[];
+	content: string | readonly (TextContent | ImageContent | VideoContent)[];
 	/** Open the full-size image preview lightbox at this message image
 	 *  (all of the message's images form the gallery). */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
@@ -415,6 +417,14 @@ export function MsgContent({
 						// Anonymous content blocks have no stable id — index is identity.
 						return (
 							<ImageCardStack key={`img${i}`} items={images} onOpen={idx => onPreviewImage?.(images, idx)} />
+						);
+					case "video":
+						return (
+							<ResultVideo
+								key={`vid${i}`}
+								src={block.url ?? (block.data ? `data:${block.mimeType};base64,${block.data}` : null)}
+								title={t("settings.attachment")}
+							/>
 						);
 					default:
 						return null;
@@ -557,7 +567,7 @@ export function UserMsgContent({
 	onJumpToMessage,
 	onPreviewImage,
 }: {
-	content: string | readonly (TextContent | ImageContent)[];
+	content: string | readonly (TextContent | ImageContent | VideoContent)[];
 	plain: boolean;
 	collapse: boolean;
 	displayContext?: MessageDisplayContext;
@@ -605,6 +615,14 @@ export function UserMsgContent({
 						// Anonymous content blocks have no stable id — index is identity.
 						return (
 							<ImageCardStack key={`img${i}`} items={images} onOpen={idx => onPreviewImage?.(images, idx)} />
+						);
+					case "video":
+						return (
+							<ResultVideo
+								key={`vid${i}`}
+								src={block.url ?? (block.data ? `data:${block.mimeType};base64,${block.data}` : null)}
+								title={t("settings.attachment")}
+							/>
 						);
 					default:
 						return null;

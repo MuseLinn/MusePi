@@ -6,6 +6,7 @@ import type {
 	TextContent,
 	ToolResultMessage,
 	UserMessage,
+	VideoContent,
 } from "@musepi/pi-ai";
 import { providerImageBudget } from "@musepi/snapcompact";
 
@@ -26,11 +27,11 @@ function countImages(context: Context): number {
 }
 
 function clampContent(
-	content: readonly (TextContent | ImageContent)[],
+	content: readonly (TextContent | ImageContent | VideoContent)[],
 	state: { remainingDrops: number },
-): (TextContent | ImageContent)[] | undefined {
+): (TextContent | ImageContent | VideoContent)[] | undefined {
 	let changed = false;
-	const clamped: (TextContent | ImageContent)[] = [];
+	const clamped: (TextContent | ImageContent | VideoContent)[] = [];
 	for (const part of content) {
 		if (part.type === "image" && state.remainingDrops > 0) {
 			state.remainingDrops--;

@@ -470,6 +470,7 @@ export const general = {
 	"general.runDevServer": "运行开发服务器",
 	"general.stopDevServer": "停止开发服务器",
 	"general.newTab": "新标签页",
+	"general.dropFilesToAttach": "松开鼠标添加附件",
 	"general.attachSelectionChat": "附加到对话",
 	"general.citeFileComposer": "引用文件到输入框",
 	"general.openInPanelBrowser": "在侧边面板浏览器打开",

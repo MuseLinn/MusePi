@@ -25,7 +25,7 @@ import type { DaemonService } from "./types";
  * MarketplaceService — marketplace/skills 控制面（L2 宿主服务，P1 第十二刀抽取）。
  *
  * 能力缝声明（M2-2.4）：
- * - 输入：RPC `marketplace.list` / `marketplace.install` / `marketplace.remove`
+ * - 输入：RPC `marketplace.list` / `marketplace.detail` / `marketplace.install` / `marketplace.remove`
  *   （GUI 商店面板：目录浏览/安装/移除）、`marketplace.updates` /
  *   `marketplace.upgrade`（已装版本对 catalog 的升级清单与升级执行）、
  *   `marketplace.sources.list` / `marketplace.sources.add` /
@@ -156,6 +156,7 @@ export class MarketplaceService implements DaemonService {
 	readonly key = "marketplace";
 	readonly routes = {
 		"marketplace.list": "list",
+		"marketplace.detail": "detail",
 		"marketplace.install": "install",
 		"marketplace.remove": "remove",
 		"marketplace.updates": "updates",
@@ -247,6 +248,7 @@ export class MarketplaceService implements DaemonService {
 			projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(this.#deps.cwd()),
 			marketplacesCacheDir: getMarketplacesCacheDir(),
 			pluginsCacheDir: getPluginsCacheDir(),
+			includeDefaultMarketplaces: true,
 			clearPluginRootsCache: clearPluginRootsAndCaches,
 		});
 	}
@@ -340,6 +342,20 @@ export class MarketplaceService implements DaemonService {
 			this.#marketplaceCache = { at: Date.now(), entries };
 		}
 		return { entries: this.#marketplaceCache.entries };
+	}
+
+	/** RPC marketplace.detail：读取完整插件介绍与技能，复用持久化源码缓存。 */
+	async detail(params: unknown) {
+		const p = (params ?? {}) as { name?: unknown; marketplace?: unknown };
+		if (typeof p.name !== "string" || typeof p.marketplace !== "string") {
+			throw new Error("marketplace.detail: name and marketplace are required strings");
+		}
+		const { entries } = await this.list();
+		const entry = entries.find(item => item.name === p.name && item.marketplace === p.marketplace);
+		if (!entry) throw new Error(`Plugin "${p.name}@${p.marketplace}" not found`);
+		const manager = await this.#buildMarketplaceManager();
+		const detail = await manager.getPluginDetail(p.name, p.marketplace);
+		return { ...entry, ...detail };
 	}
 
 	/** RPC marketplace.install：安装一个 marketplace 插件（GUI 商店 → Install）。

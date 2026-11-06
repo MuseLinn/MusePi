@@ -1579,6 +1579,22 @@ export const settings: TranslationMap = {
 	"settings.shell.bash.direnvAutoLoad": "direnv Auto-Load",
 	"settings.shell.bash.direnvLoadTimeout": "direnv Load Timeout (ms)",
 	"settings.shell.bash.interceptor": "Bash Interceptor",
+	"Bash Advanced": "Bash Advanced",
+	"Custom Minimizer TOML": "Custom Minimizer TOML",
+	"Optional TOML file with user-defined minimizer filters and overrides":
+		"Optional TOML file with user-defined minimizer filters and overrides",
+	"Minimized Commands Only": "Minimized Commands Only",
+	"Comma-separated command allowlist; empty enables every built-in filter":
+		"Comma-separated command allowlist; empty enables every built-in filter",
+	"Excluded Minimized Commands": "Excluded Minimized Commands",
+	"Comma-separated commands that always return unminimized output":
+		"Comma-separated commands that always return unminimized output",
+	"Maximum Capture Bytes": "Maximum Capture Bytes",
+	"Outputs larger than this limit bypass the minimizer unchanged":
+		"Outputs larger than this limit bypass the minimizer unchanged",
+	"Use Legacy Minimizer Filters": "Use Legacy Minimizer Filters",
+	"Fall back to the conservative legacy routing and filter behavior":
+		"Fall back to the conservative legacy routing and filter behavior",
 	"settings.shell.bash.minimizer": "Shell Minimizer",
 	"settings.shell.bash.minimizerSourceOutline": "Shell Minimizer Source Outline",
 	"settings.shell.evalRuntimes.javascriptEvalBackend": "JavaScript Eval Backend",

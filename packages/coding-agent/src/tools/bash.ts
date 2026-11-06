@@ -11,7 +11,7 @@ import type { Component } from "@musepi/pi-tui";
 import { ImageProtocol, TERMINAL } from "@musepi/pi-tui";
 import { getProjectDir, isEnoent, logger, prompt } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
-import { applyDirenvPreflight, type BashResult, executeBash } from "../exec/bash-executor";
+import { applyDirenvPreflight, type BashMinimization, type BashResult, executeBash } from "../exec/bash-executor";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { InternalUrlRouter } from "../internal-urls";
 import { truncateToVisualLines } from "../modes/components/visual-truncate";
@@ -342,6 +342,7 @@ export interface BashToolDetails {
 	/** True when the command was killed by its timeout deadline (not a failure). */
 	timedOut?: boolean;
 	terminalId?: string;
+	minimization?: BashMinimization;
 	async?: {
 		state: "running" | "completed" | "failed";
 		jobId: string;
@@ -710,6 +711,9 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		if (options.wallTimeMs !== undefined) {
 			details.wallTimeMs = options.wallTimeMs;
 		}
+		if ("minimization" in result && result.minimization) {
+			details.minimization = result.minimization;
+		}
 		if (failedExit) {
 			details.exitCode = exitCode;
 		}
@@ -866,6 +870,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 				}
 			},
 			{
+				sessionId: this.session.getSessionId?.() ?? undefined,
 				ownerId: this.session.getAgentId?.() ?? undefined,
 				onProgress: async text => {
 					latestText = text;

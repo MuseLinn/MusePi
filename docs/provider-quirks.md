@@ -13,6 +13,27 @@ Related references:
 - [Providers](./providers.html) — availability, credentials, login flows
 
 
+## Media content (images and video)
+
+`packages/ai` content blocks carry `image` and `video`; `packages/wire` persists the same pair
+(user and tool-result messages; custom messages stay text/image). Video is reference-first:
+`url` carries a remote or local clip and `data` is the inline fallback, because base64 video in
+a transcript is not viable.
+
+Provider coverage is explicit, never silent. Gemini (`convertGoogleVideoPart`) sends a
+`fileData`/`inlineData` part when the model descriptor lists `video` in `input`; every transport
+without a video channel — Anthropic, Bedrock, Cursor, Ollama, Chat Completions, Responses — replaces
+the block with `NON_VIDEO_PLACEHOLDER` (`providers/vision-guard.ts`) so the turn keeps the fact
+that a video existed.
+
+A local `file://` clip is inlined at the session boundary up to 20 MiB
+(`src/utils/video-loading.ts`). A larger one keeps its path until the request is built, where
+`ProviderFileManager.decorateContext` uploads it through the provider's Files API (Gemini today) and
+attaches `providerFile` to the request copy; Google then sends `fileData` for that URI. Uploads are
+content-hash cached in `ProviderFileCache`, and the session message itself never carries the
+reference. Adding a new provider: decide its video branch when adding it to `RENDERERS`
+consumers, and run `packages/ai/test/video-content.test.ts`.
+
 ## OpenAI Chat Completions
 The OpenAI Chat Completions provider implements HTTP POST JSON body streaming over Server-Sent Events (SSE) for the standard OpenAI `/chat/completions` wire contract (`ChatCompletionCreateParamsStreaming` request schema and `ChatCompletionChunk` event payloads). It serves as the primary workhorse transport for OpenAI models as well as dozens of OpenAI-compatible gateways and third-party providers including Groq, Cerebras, Mistral, DeepSeek, Fireworks, Zhipu (Z.AI), Qwen (DashScope), Kimi (Moonshot), Synthetic, GitLab Duo, OpenRouter, Vercel AI Gateway, CoreWeave, HuggingFace, Nvidia NIM, Novita, GMI Cloud, Baseten, NanoGPT, and Sakana/Fugu. The transport is implemented across `packages/ai/src/providers/openai-completions.ts` (main streaming runner `streamOpenAICompletions`), `packages/ai/src/providers/openai-chat-wire.ts` (vendored wire types), `packages/ai/src/providers/openai-shared.ts` (shared request/policy/usage helpers), `packages/ai/src/providers/openai-reasoning-fallback.ts` (400 reasoning-effort recovery), `packages/ai/src/utils/openai-http.ts` (HTTP SSE client `postOpenAIStream`), and `packages/ai/src/utils/empty-completion-retry.ts` (`withEmptyCompletionRetry` wrapper).
 

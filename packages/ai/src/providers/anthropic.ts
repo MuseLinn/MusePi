@@ -45,6 +45,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 	Usage,
+	VideoContent,
 } from "../types";
 import { isRecord, normalizeSystemPrompts, normalizeToolCallId, resolveCacheRetention } from "../utils";
 import { createAbortSourceTracker } from "../utils/abort";
@@ -99,7 +100,7 @@ import {
 } from "./github-copilot-headers";
 import { applyOpenCodeSessionHeader, getOpenAIPromptCacheKey, getOpenCodeSessionAffinity } from "./openai-shared";
 import { transformMessages } from "./transform-messages";
-import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
+import { NON_VIDEO_PLACEHOLDER, NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
 export type AnthropicHeaderOptions = {
 	apiKey: string;
@@ -906,10 +907,10 @@ async function resizeAnthropicManyImageBlock(block: ImageContent): Promise<Image
 }
 
 async function resizeAnthropicManyImageContent(
-	content: (TextContent | ImageContent)[],
+	content: (TextContent | ImageContent | VideoContent)[],
 	state: { resized: number },
 	limit: ResizeLimiter,
-): Promise<(TextContent | ImageContent)[]> {
+): Promise<(TextContent | ImageContent | VideoContent)[]> {
 	let changed = false;
 	const next = await Promise.all(
 		content.map(async block => {
@@ -991,7 +992,7 @@ type AnthropicToolResultContent =
  * Convert content blocks to Anthropic API format
  */
 function convertContentBlocks(
-	content: (TextContent | ImageContent)[],
+	content: (TextContent | ImageContent | VideoContent)[],
 	supportsImages = true,
 ): AnthropicToolResultContent {
 	const blocks: Array<{ type: "text"; text: string } | { type: "image"; source: AnthropicImageSource }> = [];
@@ -1004,6 +1005,13 @@ function convertContentBlocks(
 			if (text.trim().length === 0) continue;
 			sawText = true;
 			blocks.push({ type: "text", text });
+			continue;
+		}
+
+		// Anthropic has no video input part; keep the turn honest with a marker
+		// instead of dropping the block.
+		if (block.type === "video") {
+			blocks.push({ type: "text", text: NON_VIDEO_PLACEHOLDER });
 			continue;
 		}
 

@@ -1,17 +1,20 @@
 import { isDashscopeCompatibleModeUrl, modelMatchesHost } from "@musepi/pi-catalog/hosts";
 import { isDeepseekModelIdOrName, isQwenModelId } from "@musepi/pi-catalog/identity";
 
-import type { ImageContent, Model, TextContent } from "../types";
+import type { ImageContent, Model, TextContent, VideoContent } from "../types";
 
 export const NON_VISION_IMAGE_PLACEHOLDER = "[image omitted: model does not support vision]";
+export const NON_VIDEO_PLACEHOLDER = "[video omitted: provider has no video input]";
 
 export function partitionVisionContent(
-	content: ReadonlyArray<TextContent | ImageContent>,
+	content: ReadonlyArray<TextContent | ImageContent | VideoContent>,
 	supportsImages: boolean,
 ): {
 	textBlocks: TextContent[];
 	imageBlocks: ImageContent[];
 	omittedImages: boolean;
+	/** A video block was present; the caller appends NON_VIDEO_PLACEHOLDER. */
+	omittedVideos: boolean;
 } {
 	const textBlocks = content.filter((block): block is TextContent => block.type === "text");
 	const imageBlocks = content.filter((block): block is ImageContent => block.type === "image");
@@ -19,10 +22,11 @@ export function partitionVisionContent(
 		textBlocks,
 		imageBlocks: supportsImages ? imageBlocks : [],
 		omittedImages: !supportsImages && imageBlocks.length > 0,
+		omittedVideos: content.some(block => block.type === "video"),
 	};
 }
 
-export function joinTextWithImagePlaceholder(text: string, omittedImages: boolean): string {
+export function joinTextWithImagePlaceholder(text: string, omittedImages: boolean, omittedVideos = false): string {
 	const parts: string[] = [];
 	if (text.length > 0) {
 		parts.push(text);
@@ -30,7 +34,27 @@ export function joinTextWithImagePlaceholder(text: string, omittedImages: boolea
 	if (omittedImages) {
 		parts.push(NON_VISION_IMAGE_PLACEHOLDER);
 	}
+	if (omittedVideos) {
+		parts.push(NON_VIDEO_PLACEHOLDER);
+	}
 	return parts.join("\n");
+}
+
+/**
+ * Replace video blocks with a text marker for a provider whose wire has no
+ * video input channel. Returns the input unchanged (same reference) when there
+ * is nothing to degrade, so callers can keep cheap identity checks.
+ */
+export function replaceVideoWithPlaceholder(
+	content: string | ReadonlyArray<TextContent | ImageContent | VideoContent>,
+): string | ReadonlyArray<TextContent | ImageContent> {
+	if (typeof content === "string") return content;
+	if (!content.some(block => block.type === "video")) {
+		return content as ReadonlyArray<TextContent | ImageContent>;
+	}
+	return content.map(block =>
+		block.type === "video" ? { type: "text" as const, text: NON_VIDEO_PLACEHOLDER } : block,
+	);
 }
 
 /**

@@ -44,12 +44,11 @@ import {
  * runtime into the browser bundle — the client-core is a guest over a
  * WebSocket and shouldn't carry the host's plugin discovery layer.
  *
- * `icon` may name a vector icon (`"lucide:wrench"` or `"wrench"`); other
- * identifier-like values (`"tabler:test-pipe"`) map through the same
- * keyword table. Emoji, arbitrary glyphs and artwork URIs are not rendered
- * by the GUI: the card uses a consistent lucide icon and falls back to
- * category/tag heuristics, so one catalog entry cannot break the visual
- * language.
+ * `icon` may name a vector icon (`"lucide:wrench"` or `"wrench"`) or an
+ * http(s)/file artwork URI. Other identifier-like values
+ * (`"tabler:test-pipe"`) map through the same keyword table. Emoji and
+ * arbitrary glyphs use the consistent lucide fallback so one catalog entry
+ * cannot break the visual language.
  */
 export interface MarketplaceCardEntry {
 	name: string;
@@ -65,6 +64,8 @@ export interface MarketplaceCardEntry {
 	icon?: string;
 	/** True when the plugin is already installed locally. */
 	installed?: boolean;
+	/** Effective enablement of the active install. */
+	enabled?: boolean;
 	/** Scope of the active install; project shadows user. */
 	installedScope?: "user" | "project" | null;
 	/** Version of the active install (project scope shadowing user). */
@@ -227,8 +228,8 @@ export function hasDesignSystemContent(entry: Pick<MarketplaceCardEntry, "catego
  * Resolve the best vector icon for an entry: recognized explicit name →
  * category → keyword scan → neutral package. An explicit value that reads
  * as an icon identifier (for example `tabler:test-pipe`) also gets a
- * keyword pass before the category fallback; emoji, glyphs and artwork
- * URIs never render inside the card.
+ * keyword pass before the category fallback. This is also the fallback for
+ * emoji, arbitrary glyphs, and artwork that fails to load.
  */
 export function resolveCardIcon(entry: Pick<MarketplaceCardEntry, "icon" | "name" | "category" | "tags">): LucideIcon {
 	if (entry.icon) {

@@ -73,6 +73,43 @@ interface WorkspaceRegistryFile {
 	version: number;
 	projects: WorkspaceProject[];
 	deletedRoots: string[];
+	/** root → removal time. Kept after the same folder is registered again so
+	 *  sessions from the removed workspace stay hidden (workspace identity is
+	 *  the registration, not the path). */
+	deletedRootTimes: Record<string, number>;
+}
+
+/** Removed-workspace evidence used to hide sessions from lists. */
+export interface DeletedWorkspaces {
+	/** Roots whose project row is currently absent. */
+	readonly roots: ReadonlySet<string>;
+	/** Roots removed at some point, with the removal time. */
+	readonly deletedAt: Readonly<Record<string, number>>;
+}
+
+/**
+ * Whether a session belongs to a removed workspace.
+ *
+ * A root that is currently removed hides every session in it. A root that was
+ * removed and later registered again hides only the sessions that existed at
+ * that removal, so folding a folder back never resurrects the old workspace's
+ * history, while sessions created afterwards stay visible.
+ */
+export function sessionHiddenByWorkspace(
+	cwd: string | undefined,
+	createdAt: number,
+	deleted: DeletedWorkspaces,
+): boolean {
+	if (!cwd) return false;
+	let root: string;
+	try {
+		root = normalizeWorkspaceDirectory(cwd);
+	} catch {
+		return false;
+	}
+	if (deleted.roots.has(root)) return true;
+	const removedAt = deleted.deletedAt[root];
+	return removedAt !== undefined && createdAt <= removedAt;
 }
 
 async function requireDirectory(directory: string): Promise<void> {
@@ -174,7 +211,7 @@ export function implicitWorkspaceId(root: string): string {
 }
 
 function emptyRegistry(): WorkspaceRegistryFile {
-	return { version: REGISTRY_VERSION, projects: [], deletedRoots: [] };
+	return { version: REGISTRY_VERSION, projects: [], deletedRoots: [], deletedRootTimes: {} };
 }
 
 function sanitizeProject(value: unknown): WorkspaceProject | undefined {
@@ -235,7 +272,15 @@ function parseRegistry(parsed: unknown): WorkspaceRegistryFile {
 				),
 			]
 		: [];
-	return { version: REGISTRY_VERSION, projects, deletedRoots };
+	const deletedRootTimes: Record<string, number> = {};
+	const rawTimes = o.deletedRootTimes;
+	if (rawTimes && typeof rawTimes === "object" && !Array.isArray(rawTimes)) {
+		for (const [root, at] of Object.entries(rawTimes)) {
+			if (typeof at !== "number" || !Number.isFinite(at) || !path.isAbsolute(root)) continue;
+			deletedRootTimes[normalizeWorkspaceDirectory(root)] = at;
+		}
+	}
+	return { version: REGISTRY_VERSION, projects, deletedRoots, deletedRootTimes };
 }
 
 export interface WorkspaceRegistryOptions {
@@ -262,6 +307,22 @@ export class WorkspaceRegistry {
 
 	get filePath(): string {
 		return this.#filePath();
+	}
+
+	/**
+	 * Roots the user removed. Their sessions stay on disk but are not listed;
+	 * re-creating the workspace lifts the tombstone.
+	 */
+	async deletedRoots(): Promise<readonly string[]> {
+		const file = await this.#read();
+		return [...file.deletedRoots];
+	}
+
+	/** Roots removed at some point plus their removal times (see
+	 *  {@link sessionHiddenByWorkspace}). */
+	async deletedRootTimes(): Promise<Readonly<Record<string, number>>> {
+		const file = await this.#read();
+		return { ...file.deletedRootTimes };
 	}
 
 	/**
@@ -296,7 +357,21 @@ export class WorkspaceRegistry {
 				knownRoots.add(root);
 				changed = true;
 			}
-			const projects = dedupeProjects(file.projects);
+			// Implicit rows exist only because a session lived in that directory.
+			// Once the last one is gone the row would linger forever as an empty
+			// project (user: 出现旧的空工作区). Managed rows stay — they were
+			// registered on purpose.
+			const liveRoots = new Set<string>();
+			for (const cwd of backfillCwds) {
+				try {
+					liveRoots.add(normalizeWorkspaceDirectory(cwd));
+				} catch {
+					// Invalid cwd: no session can live there, so it cannot keep a row.
+				}
+			}
+			const retained = file.projects.filter(project => project.kind !== "implicit" || liveRoots.has(project.root));
+			if (retained.length !== file.projects.length) changed = true;
+			const projects = dedupeProjects(retained);
 			if (projects.length !== initialLength) changed = true;
 			if (changed) {
 				file.projects = projects;
@@ -393,6 +468,7 @@ export class WorkspaceRegistry {
 			if (!existing) return false;
 			file.projects = file.projects.filter(project => project.id !== id);
 			if (!file.deletedRoots.includes(existing.root)) file.deletedRoots.push(existing.root);
+			file.deletedRootTimes[existing.root] = this.#now();
 			await this.#write(file);
 			return true;
 		});
@@ -529,6 +605,15 @@ export class WorkspaceService implements DaemonService {
 	async listWorkspaces(): Promise<{ workspaces: WorkspaceProject[] }> {
 		const cwds = await this.#deps.knownSessionCwds();
 		return { workspaces: await this.#deps.registry.list(cwds) };
+	}
+
+	/** Removed-workspace evidence for the session-list filter. */
+	async deletedWorkspaces(): Promise<DeletedWorkspaces> {
+		const [roots, deletedAt] = await Promise.all([
+			this.#deps.registry.deletedRoots(),
+			this.#deps.registry.deletedRootTimes(),
+		]);
+		return { roots: new Set(roots), deletedAt };
 	}
 
 	/** RPC workspace.create：显式注册（同 root 幂等合并）。 */

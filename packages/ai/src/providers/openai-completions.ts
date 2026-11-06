@@ -114,6 +114,7 @@ import { transformMessages } from "./transform-messages";
 import {
 	isOpenAICompletionsVisionSupported,
 	joinTextWithImagePlaceholder,
+	NON_VIDEO_PLACEHOLDER,
 	NON_VISION_IMAGE_PLACEHOLDER,
 } from "./vision-guard";
 
@@ -1963,6 +1964,10 @@ export function convertMessages(
 							type: "text",
 							text,
 						} satisfies ChatCompletionContentPartText);
+					} else if (item.type === "video") {
+						// Chat Completions has no standard video part; keep the turn
+						// honest instead of sending bytes the endpoint would reject.
+						content.push({ type: "text", text: NON_VIDEO_PLACEHOLDER } satisfies ChatCompletionContentPartText);
 					} else if (supportsImages) {
 						content.push({
 							type: "image_url",

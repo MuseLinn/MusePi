@@ -4,9 +4,12 @@ import { checkRadiusTokens } from "./check-radius-tokens";
 /**
  * The radius ladder gate (design spec 2026-09-17). The interesting cases are
  * the allowlist boundaries: pill/circle shapes stay legal, generated
- * tailwind output stays out of scope, and the ladder tokens must exist —
+ * tailwind output stays out of scope, and every referenced token must exist —
  * `--radius-md` was referenced 13 times before anyone noticed it was never
- * defined, which is exactly the failure mode this gate exists for.
+ * defined, and `--radius-full` slipped through the same way because the gate
+ * only checked the six ladder steps. An undefined custom property makes the
+ * declaration invalid at computed-value time, so the corner silently renders
+ * square.
  */
 
 const CLEAN = [
@@ -58,6 +61,31 @@ describe("checkRadiusTokens", () => {
 		expect(result.missingTokens).toEqual([]);
 	});
 
+	test("flags a token that is referenced but never defined", () => {
+		const result = checkRadiusTokens(
+			[["a.css", ".chip {\n\tborder-radius: var(--radius-full);\n}\n"]],
+			":root {\n\t--radius-lg: 8px;\n}",
+		);
+		expect(result.ok).toBe(false);
+		expect(result.undefinedRefs).toEqual([{ file: "a.css", line: 2, token: "--radius-full" }]);
+	});
+
+	test("accepts a reference the token source defines", () => {
+		const result = checkRadiusTokens(
+			[["a.css", ".chip {\n\tborder-radius: var(--radius-full);\n}\n"]],
+			":root {\n\t--radius-full: 9999px;\n}",
+		);
+		expect(result.undefinedRefs).toEqual([]);
+	});
+
+	test("collects every reference in a multi-value declaration", () => {
+		const result = checkRadiusTokens(
+			[["a.css", ".x {\n\tborder-radius: var(--radius-xl) var(--radius-nope) 0 0;\n}\n"]],
+			":root {\n\t--radius-xl: 12px;\n}",
+		);
+		expect(result.undefinedRefs).toEqual([{ file: "a.css", line: 2, token: "--radius-nope" }]);
+	});
+
 	test("the real tree passes (guards against regression by a new literal)", async () => {
 		// Hermetic-ish: read-only walk of the two packages, same scope as main().
 		const fs = await import("node:fs");
@@ -73,5 +101,6 @@ describe("checkRadiusTokens", () => {
 		for (const root of ["packages/desktop-app/src", "packages/client-core/src"]) walk(root);
 		const result = checkRadiusTokens(files);
 		expect(result.violations).toEqual([]);
+		expect(result.undefinedRefs).toEqual([]);
 	});
 });

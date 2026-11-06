@@ -9,6 +9,7 @@
  * of the fixture JSONL — exactly the frames a real `omp /collab` host emits.
  */
 
+import { readFileSync } from "node:fs";
 import {
 	COLLAB_PROTO,
 	formatCollabLink,
@@ -383,6 +384,51 @@ function handleRpcRequest(reqId: number, method: string, params: unknown, fromPe
 			case "workspace.tree":
 				rpcOk(reqId, { rootPath: "/mock", truncated: false, entries: mockTreeEntries }, fromPeer);
 				break;
+			case "attachment.put": {
+				const bytes = Buffer.from(String(p.content ?? ""), "base64");
+				const hash = new Bun.SHA256().update(bytes).digest("hex");
+				rpcOk(
+					reqId,
+					{
+						ref: {
+							scheme: "blob",
+							hash,
+							size: bytes.length,
+							mimeType: String(p.mimeType ?? "application/octet-stream"),
+							name: String(p.name ?? "attachment"),
+						},
+						url: `blob://${hash}`,
+					},
+					fromPeer,
+				);
+				break;
+			}
+			case "attachment.putFile": {
+				const filePath = String(p.path ?? "");
+				let bytes: Buffer;
+				try {
+					bytes = readFileSync(filePath);
+				} catch {
+					rpcErr(reqId, "file not found", fromPeer);
+					break;
+				}
+				const hash = new Bun.SHA256().update(bytes).digest("hex");
+				rpcOk(
+					reqId,
+					{
+						ref: {
+							scheme: "blob",
+							hash,
+							size: bytes.length,
+							mimeType: String(p.mimeType ?? "application/octet-stream"),
+							name: String(p.name ?? filePath.split(/[\\/]/).pop() ?? "attachment"),
+						},
+						url: `blob://${hash}`,
+					},
+					fromPeer,
+				);
+				break;
+			}
 			case "fs.read": {
 				const path = String(p.path ?? "");
 				const size = mockFileSizes.get(path);

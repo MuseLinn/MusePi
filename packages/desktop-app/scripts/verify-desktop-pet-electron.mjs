@@ -899,6 +899,21 @@ try {
 		await bubblesPage.click(".pet-bubbles__clear");
 		await bubblesPage.waitForFunction(() => !document.querySelector(".pet-bubbles"), { timeout: 3000 });
 
+		await mainPage.evaluate(`//!world=main
+			window.electronAPI.petActivity({
+				sessions: [{ ...window.__petPriorityDone, activityKey: "acknowledge-1" }]
+			});
+		`);
+		await bubblesPage.waitForFunction(() => Boolean(document.querySelector(".pet-bubble--done")), { timeout: 3000 });
+		await bubblesPage.click(".pet-bubble--done .pet-bubble__action--primary");
+		await bubblesPage.waitForFunction(() => !document.querySelector(".pet-bubbles"), { timeout: 3000 });
+		const acknowledgeCommands = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.commands`);
+		check(
+			"real acknowledge marks the session read through the main window",
+			acknowledgeCommands.some(command => command.type === "mark-read" && command.sessionId === "phase2-session"),
+			acknowledgeCommands,
+		);
+
 		await bubblesPage.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 		await mainPage.evaluate(`//!world=main
 			window.electronAPI.petActivity({

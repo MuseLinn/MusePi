@@ -22,10 +22,13 @@ import {
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
 import type { ChatQuoteAnchor, OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
+import { PanelRightClose, PanelRightOpen } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
+import type { ComposerAttachApi } from "../lib/composer-attach";
 import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import {
 	publishComposerInsets,
@@ -82,6 +85,7 @@ import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
 import { PunkAvatar } from "./avatar-presets";
 import { BtwFloatingCard } from "./BtwFloatingCard";
+import { ChatDropAnchor } from "./ChatDropAnchor";
 import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer } from "./Composer";
 import type { CreationMessage } from "./CreationModeRow";
@@ -92,6 +96,7 @@ import { Reveal } from "./Reveal";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from "./SessionArtifactPreviewDialog";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { SESSION_INFO_DOCK_MIN_ROW_PX, SessionInfoCard } from "./session-info-card";
 import { TerminalPanel } from "./TerminalPanel";
@@ -321,6 +326,42 @@ function openChatViewBrowserPanel(panelTabs: UsePanelTabsResult, sessionId: stri
 	});
 }
 
+/** Exit window shared by both session-info seats (matches the card's 180ms
+ *  entrance and the right panel's 220ms width fold). */
+const SESSION_INFO_SEAT_EXIT_MS = 180;
+
+/**
+ * Keep a node mounted for one exit animation. `open` mounts on the next
+ * render; closing flips `closing` and unmounts after the exit window, so CSS
+ * can play the reverse animation instead of the node disappearing between
+ * frames. Motion-off collapses the window to 0ms — no invisible delay.
+ */
+function useExitPresence(open: boolean, exitMs: number): { mounted: boolean; closing: boolean } {
+	const [mounted, setMounted] = useState(open);
+	const [closing, setClosing] = useState(false);
+	useEffect(() => {
+		if (open) {
+			setMounted(true);
+			setClosing(false);
+			return;
+		}
+		if (!mounted) return;
+		const reduced =
+			document.documentElement.classList.contains("gui-motion-off") ||
+			window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+		setClosing(true);
+		const timer = window.setTimeout(
+			() => {
+				setMounted(false);
+				setClosing(false);
+			},
+			reduced ? 0 : exitMs,
+		);
+		return () => window.clearTimeout(timer);
+	}, [open, exitMs, mounted]);
+	return { mounted, closing };
+}
+
 export function ChatView({
 	store,
 	rpc,
@@ -376,8 +417,8 @@ export function ChatView({
 	/** 顾问 transcript 只读态（session.tree 行的 advisor 标记传入）：
 	 *  转录照常浏览，输入区替换为只读说明条，禁止发送。 */
 	readOnly?: boolean;
-	/** 当前会话的父会话(fork 来源 / 子代理宿主)——非空时 transcript 左上
-	 * 角渲染「父级」返回按钮。 */
+	/** 当前会话的父会话(fork 来源 / 子代理宿主)——非空时会话卡顶部行左缘
+	 * 渲染「父级」返回按钮。 */
 	parentSession?: { id: string; label: string | null } | null;
 	/** 切换主视图到父会话。 */
 	onOpenParentSession?(id: string): void;
@@ -388,6 +429,7 @@ export function ChatView({
 		images?: { type: "image"; data: string; mimeType: string }[],
 		deliverAs?: "prompt" | "steer" | "followUp",
 		displayContext?: MessageDisplayContext,
+		videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 	): void;
 	onStop(): void;
 	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
@@ -421,6 +463,7 @@ export function ChatView({
 			thinkingLevel?: ThinkingLevel | null;
 			modelId?: string | null;
 			images?: { type: "image"; data: string; mimeType: string }[];
+			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[];
 			/** Armed welcome mode chips: applied to the session the first
 			 *  prompt creates (goal: the prompt text becomes the objective). */
 			planMode?: boolean;
@@ -1218,6 +1261,7 @@ export function ChatView({
 			images?: { type: "image"; data: string; mimeType: string }[],
 			deliverAs?: "prompt" | "steer" | "followUp",
 			displayContext?: MessageDisplayContext,
+			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 		): void => {
 			setJumpBack(null);
 			// Sending from a branch point commits it: drop the explicit leaf so
@@ -1226,13 +1270,15 @@ export function ChatView({
 			// the send just produced.
 			setCurrentLeafKey(null);
 			setPinnedPathIds(null);
-			onSend(text, images, deliverAs, displayContext);
+			onSend(text, images, deliverAs, displayContext, videos);
 		},
 		[onSend],
 	);
 	// 保存为图片 → the export dialog (options + live preview) owns the
 	// rasterization; the transcript row's save button just opens it.
 	const [saveImageText, setSaveImageText] = useState<string | null>(null);
+	const [artifactPreview, setArtifactPreview] = useState<SessionArtifactPreviewRequest | null>(null);
+	useEffect(() => setArtifactPreview(null), [store]);
 
 	/**
 	 * Move the session leaf to `messageId` (TUI navigateTree parity). The old
@@ -2214,6 +2260,9 @@ export function ChatView({
 		// Tool cards with a "fix this in settings" action (web search
 		// provider failures) jump straight to the matching section.
 		openSettings: onOpenSettings ? (section?: string) => onOpenSettings(section) : undefined,
+		openArtifact: snap?.sessionId
+			? (id: string) => setArtifactPreview({ sessionId: snap.sessionId!, id })
+			: undefined,
 		// `knowledge` show: put a project plan in front of the user. The panel
 		// switches to the project-knowledge surface and opens that plan; without
 		// this the tool would claim to have shown something the user never saw.
@@ -2352,6 +2401,19 @@ export function ChatView({
 	// The ROW is measured, never the chat column: docking shrinks the column,
 	// and measuring that would oscillate between the two seats.
 	const chatRowRef = useRef<HTMLDivElement | null>(null);
+	// The chat card itself: the drop anchor covers this, not the row (the row
+	// also carries the right panel, which is not a composer surface).
+	const chatColumnRef = useRef<HTMLDivElement | null>(null);
+	// Composer file intake, published by whichever composer scene is mounted.
+	const attachApiRef = useRef<ComposerAttachApi | null>(null);
+	const welcomeCardRef = useRef<HTMLDivElement | null>(null);
+	const resolveDropTarget = useCallback(
+		(): HTMLElement | null => (showChat ? chatColumnRef.current : welcomeCardRef.current),
+		[showChat],
+	);
+	const stageDroppedFiles = useCallback((files: File[]): void => {
+		void attachApiRef.current?.addFiles(files);
+	}, []);
 	const [chatRowWidth, setChatRowWidth] = useState<number | null>(null);
 	useEffect(() => {
 		if (!showChat) return;
@@ -2495,6 +2557,28 @@ export function ChatView({
 	// first measurement it docks, so a wide window never flashes a float card
 	// in the corner it is about to leave.
 	const sessionInfoDock = !rightPanelOpen && (chatRowWidth === null || chatRowWidth >= SESSION_INFO_DOCK_MIN_ROW_PX);
+	// The dock is a flex sibling of the chat column, so its width IS the chat
+	// column's push/pull: the seat stays in the row and folds to 0 (CSS
+	// transition), and the card only stays mounted through its exit window.
+	// Mounting the card conditionally instead re-laid the row out in one frame
+	// — the transcript jumped 288px wider the instant the tile closed.
+	const sessionInfoDockOpen = sessionInfoOpen && !focusMode && sessionInfoDock;
+	// A narrow row cannot dock, so the fallback seat floats OVER the transcript.
+	// Auto-showing it there covers the conversation the card is meant to
+	// summarize, so that seat waits for an explicit toggle; the panel-open
+	// reveal is already explicit.
+	const sessionInfoAutoFloat = !rightPanelOpen && !sessionInfoDock;
+	const [sessionInfoFloatRequested, setSessionInfoFloatRequested] = useState(false);
+	const sessionInfoSessionId = store?.sessionId ?? null;
+	useEffect(() => {
+		// Another session's preference decides its own seat; a narrow-row reveal
+		// does not carry over.
+		setSessionInfoFloatRequested(false);
+	}, [sessionInfoSessionId]);
+	const sessionInfoFloatOpen =
+		sessionInfoOpen && !focusMode && !sessionInfoDock && (!sessionInfoAutoFloat || sessionInfoFloatRequested);
+	const sessionInfoDockPresence = useExitPresence(sessionInfoDockOpen, SESSION_INFO_SEAT_EXIT_MS);
+	const sessionInfoFloatPresence = useExitPresence(sessionInfoFloatOpen, SESSION_INFO_SEAT_EXIT_MS);
 	// A draft session's connector pick was stored under the cwd while the
 	// welcome composer owned it; that composer unmounts the moment the first
 	// message creates a session, so the write-back is driven here instead.
@@ -2551,6 +2635,9 @@ export function ChatView({
 		>
 			{/* Selection→ask popover (session-scoped throwaway turns). */}
 			<AskPopover rpc={rpc} sessionId={store?.sessionId ?? null} />
+			{/* OS file drops: one anchor for the active scene's card, staging the
+			 * files on whichever composer is mounted (session or welcome). */}
+			<ChatDropAnchor resolveTarget={resolveDropTarget} onFiles={stageDroppedFiles} />
 			{/* Window drag strip: the 8px margin above the floating surface
 			 * plus the header's blank areas stay draggable; every button inside
 			 * is no-drag. */}
@@ -2587,6 +2674,9 @@ export function ChatView({
 							 * directly on the glass, so it read as "not a rounded
 							 * container" (user report 2026-09-16). */}
 							<div
+								ref={el => {
+									welcomeCardRef.current = el;
+								}}
 								className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
 								style={{ margin: "var(--gui-card-gutter)" }}
 							>
@@ -2608,6 +2698,7 @@ export function ChatView({
 									onModeChange={onModeChange}
 									designSubmit={onDesignSubmit}
 									onAddProvider={onAddProvider}
+									attachApiRef={attachApiRef}
 								/>
 							</div>
 						</div>
@@ -2621,11 +2712,103 @@ export function ChatView({
 								{/* Session column: transcript + composer + dock — the
 								 * right panel sits BESIDE this column (same level), so
 								 * opening it pushes the composer left (main | ContextPanel). */}
-								<div className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-surface)]">
+								<div
+									ref={el => {
+										chatColumnRef.current = el;
+									}}
+									className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-surface)]"
+								>
 									{/* Maximize anchor (docs §3.3.2): the floated panel and
 									 * its backdrop measure THIS column — the old target
 									 * (.gui-chat-surface) also contains the panel and the
 									 * rail, so maximizing swallowed the rail. */}
+									{/* Chat-card header row: the Chat|Canvas switch on the left,
+									 * the session-info toggle on the right. A real row rather
+									 * than an absolute overlay — an overlay sat on top of the
+									 * first transcript row (message corner, hover quote pill)
+									 * and stole its pointer. In focus mode the row keeps its
+									 * flow slot (visibility, like the body) so the composer
+									 * morph starts from the measured layout. */}
+									<div className={focusMode ? "gui-chat-head gui-chat-head--focused-hidden" : "gui-chat-head"}>
+										<div className="gui-chat-head-left">
+											{parentSession && store && (
+												<button
+													type="button"
+													className="gui-parent-back"
+													title={parentSession.label ?? t("general.backParent")}
+													onClick={() => onOpenParentSession?.(parentSession.id)}
+												>
+													<Icon name="arrow-go-back" className="h-3 w-3 flex-shrink-0" />
+													<span className="gui-parent-back-label">
+														{t("general.backParent")}
+														{parentSession.label ? ` · ${parentSession.label}` : ""}
+													</span>
+												</button>
+											)}
+											{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
+											<div className="gui-surface-mode" role="tablist">
+												<button
+													type="button"
+													role="tab"
+													aria-selected={viewMode === "chat"}
+													className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
+													onClick={() => setViewMode("chat")}
+												>
+													<Icon name="chat-history" className="h-3 w-3" />
+													{t("transcript.surfaceChat")}
+												</button>
+												<button
+													type="button"
+													role="tab"
+													aria-selected={viewMode === "canvas"}
+													className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
+													onClick={() => setViewMode("canvas")}
+												>
+													<Icon name="apps-2-ai" className="h-3 w-3" />
+													{t("transcript.surfaceCanvas")}
+												</button>
+											</div>
+										</div>
+										{onToggleSessionInfo && (
+											<button
+												type="button"
+												className="gui-chat-info-toggle"
+												aria-pressed={sessionInfoDock ? sessionInfoOpen : sessionInfoFloatOpen}
+												title={
+													sessionInfoFloatOpen || sessionInfoDockOpen
+														? t("general.sessionInfoHide")
+														: t("general.sessionInfoShow")
+												}
+												aria-label={
+													sessionInfoFloatOpen || sessionInfoDockOpen
+														? t("general.sessionInfoHide")
+														: t("general.sessionInfoShow")
+												}
+												onClick={() => {
+													if (!sessionInfoAutoFloat) {
+														onToggleSessionInfo();
+														return;
+													}
+													// Narrow row: the first click opens the float the auto
+													// rule suppressed; the next one closes it and records
+													// the preference.
+													if (sessionInfoFloatOpen) setSessionInfoFloatRequested(false);
+													else setSessionInfoFloatRequested(true);
+													if (sessionInfoOpen === sessionInfoFloatOpen) onToggleSessionInfo();
+												}}
+											>
+												<MorphIcon
+													icon={
+														sessionInfoFloatOpen || sessionInfoDockOpen ? PanelRightClose : PanelRightOpen
+													}
+													size={14}
+													spring="snappy"
+													reducedMotion="user"
+													aria-hidden
+												/>
+											</button>
+										)}
+									</div>
 									{/* Focus mode hides the whole transcript column (not just the
 									 * scroll container): the wrapper also carries flex:1, so
 									 * leaving it mounted would split the surface in half and
@@ -2674,73 +2857,6 @@ export function ChatView({
 										 * content fade via mask-image, applied only while the
 										 * transcript overflows (top/bottom data attrs). */}
 										<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
-											{/* Chat header tool cluster: the Chat|Canvas switch plus the
-											 * session-info toggle (the collapsed right panel's
-											 * stand-in card). One absolutely positioned row so the
-											 * toggle cannot drift with the pill's translated width. */}
-											<div className="gui-chat-head-tools">
-												{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
-												<div className="gui-surface-mode" role="tablist">
-													<button
-														type="button"
-														role="tab"
-														aria-selected={viewMode === "chat"}
-														className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
-														onClick={() => setViewMode("chat")}
-													>
-														<Icon name="chat-history" className="h-3 w-3" />
-														{t("transcript.surfaceChat")}
-													</button>
-													<button
-														type="button"
-														role="tab"
-														aria-selected={viewMode === "canvas"}
-														className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
-														onClick={() => setViewMode("canvas")}
-													>
-														<Icon name="apps-2-ai" className="h-3 w-3" />
-														{t("transcript.surfaceCanvas")}
-													</button>
-												</div>
-												{onToggleSessionInfo && (
-													<button
-														type="button"
-														className="gui-chat-info-toggle"
-														aria-pressed={sessionInfoOpen}
-														title={
-															sessionInfoOpen
-																? t("general.sessionInfoHide")
-																: t("general.sessionInfoShow")
-														}
-														aria-label={
-															sessionInfoOpen
-																? t("general.sessionInfoHide")
-																: t("general.sessionInfoShow")
-														}
-														onClick={() => onToggleSessionInfo()}
-													>
-														<Icon name="information" className="h-3.5 w-3.5" />
-													</button>
-												)}
-											</div>
-											{/* Parent-session back chip: when the
-											 * open session is a subagent child, pin a liquid-glass
-											 * "back to parent" chip at the transcript's top-left so
-											 * the hierarchy is always one click away. */}
-											{parentSession && store && !focusMode && (
-												<button
-													type="button"
-													className="gui-parent-back"
-													title={parentSession.label ?? t("general.backParent")}
-													onClick={() => onOpenParentSession?.(parentSession.id)}
-												>
-													<Icon name="arrow-go-back" className="h-3 w-3 flex-shrink-0" />
-													<span className="gui-parent-back-label">
-														{t("general.backParent")}
-														{parentSession.label ? ` · ${parentSession.label}` : ""}
-													</span>
-												</button>
-											)}
 											{/* History-session cold-open skeleton (React-Bits style):
 											 * the daemon reactivates the session on demand — cover
 											 * the (stale) previous transcript while the RPC runs. */}
@@ -3279,6 +3395,7 @@ export function ChatView({
 												onSetThinking={setThinking}
 												onModelChange={onComposerModelChange}
 												onAddProvider={onAddProvider}
+												attachApiRef={attachApiRef}
 												thinkingCeiling={thinkingCeiling}
 												thinkingEfforts={thinkingEfforts}
 												presetModelId={presetModelId}
@@ -3304,18 +3421,32 @@ export function ChatView({
 									{/* Floating session info card — the manual reveal while the
 									 * right panel is open, or a narrow row's fallback for the dock.
 									 * INSIDE this column (never over the rail or the open panel)
-									 * and below the surface-mode row; z-index 3 keeps it under
-									 * the header tools, menus and tooltips. */}
-									{sessionInfoOpen && !focusMode && !sessionInfoDock && (
-										<SessionInfoCard {...sessionInfoCardProps} mode="float" />
+									 * and below the header row; z-index 3 keeps it under menus
+									 * and tooltips. Mounted through its exit window so closing
+									 * fades instead of blinking out. */}
+									{sessionInfoFloatPresence.mounted && (
+										<SessionInfoCard
+											{...sessionInfoCardProps}
+											mode="float"
+											closing={sessionInfoFloatPresence.closing}
+										/>
 									)}
 								</div>
 								{/* Docked session info column — the collapsed right panel's
 								 * stand-in. Its own flex column between the chat column and
 								 * the panel host, same card gutter as the panel, so it reads
-								 * as a third workspace card instead of an overlay. */}
-								{sessionInfoOpen && !focusMode && sessionInfoDock && (
-									<SessionInfoCard {...sessionInfoCardProps} mode="dock" />
+								 * as a third workspace card instead of an overlay. The
+								 * wrapper stays in the row (width 0 while closed) so opening
+								 * and closing push/pull the chat column on one spring. */}
+								{!focusMode && (
+									<div
+										className={`gui-session-info-seat${sessionInfoDockOpen ? "" : " gui-session-info-seat--closed"}`}
+										inert={sessionInfoDockOpen ? undefined : true}
+									>
+										{sessionInfoDockPresence.mounted && (
+											<SessionInfoCard {...sessionInfoCardProps} mode="dock" />
+										)}
+									</div>
 								)}
 								{/* Right panel stays mounted so the width collapse animates;
 								 * `open` folds it to a 0px sliver instead of unmounting. */}
@@ -3470,6 +3601,7 @@ export function ChatView({
 				text={saveImageText ?? ""}
 				onClose={() => setSaveImageText(null)}
 			/>
+			<SessionArtifactPreviewDialog rpc={rpc} request={artifactPreview} onClose={() => setArtifactPreview(null)} />
 		</main>
 	);
 }

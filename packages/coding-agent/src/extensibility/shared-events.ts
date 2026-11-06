@@ -14,7 +14,7 @@
  */
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { CompactionPreparation, CompactionResult } from "@musepi/pi-agent-core/compaction";
-import type { AssistantRetryRecovery, ImageContent, TextContent, ToolResultMessage } from "@musepi/pi-ai";
+import type { AssistantRetryRecovery, ImageContent, TextContent, ToolResultMessage, VideoContent } from "@musepi/pi-ai";
 import type { Rule } from "../capability/rule";
 import type { Goal, GoalModeState } from "../goals/state";
 import type { CacheWarmingAction } from "../session/cache-warmer";
@@ -337,8 +337,8 @@ export interface ToolCallEventResult {
  * Allows handlers to modify tool results.
  */
 export interface ToolResultEventResult {
-	/** Replacement content array (text and images) */
-	content?: (TextContent | ImageContent)[];
+	/** Replacement content array (text, images and video) */
+	content?: (TextContent | ImageContent | VideoContent)[];
 	/** Replacement details */
 	details?: unknown;
 	/** Override isError flag */

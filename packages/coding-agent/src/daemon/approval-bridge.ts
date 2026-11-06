@@ -50,6 +50,47 @@ export interface PendingAsk {
 	resolve(choice: PendingAskAnswer): void;
 }
 
+/** Wire payload for an `approval-request` push. Shared by the live broadcast,
+ *  the subscribe-time replay and the resume snapshot so all three surfaces
+ *  carry the same shape. */
+export function approvalRequestPayload(record: PendingApproval): {
+	requestId: string;
+	tool: string;
+	args: unknown;
+	prompt?: string;
+} {
+	return { requestId: record.requestId, tool: record.tool, args: null, prompt: record.prompt };
+}
+
+/** Wire payload for an `ask-request` push. Multi-question dialogs carry the
+ *  questions array; single select/input keep the flat title/options shape. */
+export function askRequestPayload(record: PendingAsk):
+	| {
+			requestId: string;
+			title: string;
+			options: string[] | null;
+			multi: boolean;
+			mode: "select" | "input";
+	  }
+	| { requestId: string; title: string; mode: "dialog"; questions: PendingAsk["questions"] } {
+	return record.mode === "dialog"
+		? { requestId: record.requestId, title: record.title, mode: "dialog", questions: record.questions }
+		: {
+				requestId: record.requestId,
+				title: record.title,
+				options: record.options,
+				multi: record.multi,
+				mode: record.mode,
+			};
+}
+
+export interface RecentApprovalResolution {
+	requestId: string;
+	approved: boolean;
+	note?: string;
+	at: number;
+}
+
 export interface ApprovalBridge {
 	/** UI context injected into the session (approval + ask). */
 	uiContext: ExtensionUIContext;
@@ -66,22 +107,88 @@ export interface ApprovalBridge {
 	 *  select/input modes take a label/text (string, null cancels); dialog
 	 *  mode takes the full ExtensionAskDialogResult shape. */
 	resolveAsk(requestId: string, answer: string | ExtensionAskDialogResult | null): boolean;
+	/** Recently settled requests (bounded TTL). A client that fetched a
+	 *  snapshot before attaching its stream replays these to clear cards that
+	 *  were resolved in the snapshot→subscribe window. */
+	recentResolutions(): { approvals: RecentApprovalResolution[]; asks: string[] };
 }
 
 let counter = 0;
 
+/** Default human-decision budget. A tool call parked on an approval must not
+ *  wait forever when every client disconnects or the user walks away. */
+export const DEFAULT_APPROVAL_TIMEOUT_MS = 10 * 60_000;
+
+export interface ApprovalBridgeOptions {
+	/** 0 disables the timeout (tests and deliberate always-wait setups). */
+	timeoutMs?: number;
+}
+
 export function createApprovalBridge(
 	onRequest: (record: PendingApproval) => void,
 	onAsk: (record: PendingAsk) => void,
+	/** Called after an approval is settled. A second resolve on the same
+	 *  request never reaches it (the record is already gone). */
+	onResolved?: (requestId: string, approved: boolean, note?: string) => void,
+	/** Called after an ask is settled, including a cancel (`answer: null`). */
+	onAskResolved?: (requestId: string) => void,
+	options: ApprovalBridgeOptions = {},
 ): ApprovalBridge {
 	const pending = new Map<string, PendingApproval>();
 	const pendingAsks = new Map<string, PendingAsk>();
 	const listeners = new Set<() => void>();
+	const timeoutMs = options.timeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+	const timers = new Map<string, ReturnType<typeof setTimeout>>();
+	const recentApprovals = new Map<string, RecentApprovalResolution>();
+	const recentAsks = new Map<string, number>();
+	const RECENT_TTL_MS = 60_000;
+	const RECENT_MAX = 64;
+	const pruneRecent = (): void => {
+		const cutoff = Date.now() - RECENT_TTL_MS;
+		for (const [requestId, record] of recentApprovals) {
+			if (record.at < cutoff) recentApprovals.delete(requestId);
+		}
+		for (const [requestId, at] of recentAsks) {
+			if (at < cutoff) recentAsks.delete(requestId);
+		}
+		while (recentApprovals.size > RECENT_MAX) {
+			const oldest = recentApprovals.keys().next().value;
+			if (oldest === undefined) break;
+			recentApprovals.delete(oldest);
+		}
+		while (recentAsks.size > RECENT_MAX) {
+			const oldest = recentAsks.keys().next().value;
+			if (oldest === undefined) break;
+			recentAsks.delete(oldest);
+		}
+	};
+	const rememberApproval = (requestId: string, approved: boolean, note?: string): void => {
+		recentApprovals.set(requestId, { requestId, approved, ...(note ? { note } : {}), at: Date.now() });
+		pruneRecent();
+	};
+	const rememberAsk = (requestId: string): void => {
+		recentAsks.set(requestId, Date.now());
+		pruneRecent();
+	};
 	const notifyApprovals = (): void => {
 		for (const listener of listeners) listener();
 	};
 
 	const makeAskId = (): string => `daemon-ask-${Date.now()}-${++counter}`;
+	const clearTimer = (requestId: string): void => {
+		const timer = timers.get(requestId);
+		if (timer !== undefined) clearTimeout(timer);
+		timers.delete(requestId);
+	};
+	const armTimeout = (requestId: string, onTimeout: () => void): void => {
+		if (timeoutMs <= 0) return;
+		const timer = setTimeout(() => {
+			timers.delete(requestId);
+			onTimeout();
+		}, timeoutMs);
+		timer.unref?.();
+		timers.set(requestId, timer);
+	};
 
 	const uiContext: ExtensionUIContext = {
 		// The approval gate awaits this exact select; any OTHER select (ask
@@ -106,6 +213,12 @@ export function createApprovalBridge(
 					},
 				};
 				pendingAsks.set(requestId, record);
+				armTimeout(requestId, () => {
+					if (!pendingAsks.has(requestId)) return;
+					record.resolve(undefined);
+					onAskResolved?.(requestId);
+					rememberAsk(requestId);
+				});
 				onAsk(record);
 				return await promise;
 			}
@@ -126,6 +239,12 @@ export function createApprovalBridge(
 				},
 			};
 			pending.set(requestId, record);
+			armTimeout(requestId, () => {
+				if (!pending.has(requestId)) return;
+				record.resolve(false, "approval timed out");
+				onResolved?.(requestId, false, "approval timed out");
+				rememberApproval(requestId, false, "approval timed out");
+			});
 			onRequest(record);
 			notifyApprovals();
 			const answer = await promise;
@@ -158,6 +277,12 @@ export function createApprovalBridge(
 				},
 			};
 			pendingAsks.set(requestId, record);
+			armTimeout(requestId, () => {
+				if (!pendingAsks.has(requestId)) return;
+				record.resolve(undefined);
+				onAskResolved?.(requestId);
+				rememberAsk(requestId);
+			});
 			onAsk(record);
 			return await promise;
 		},
@@ -193,6 +318,12 @@ export function createApprovalBridge(
 				},
 			};
 			pendingAsks.set(requestId, record);
+			armTimeout(requestId, () => {
+				if (!pendingAsks.has(requestId)) return;
+				record.resolve(undefined);
+				onAskResolved?.(requestId);
+				rememberAsk(requestId);
+			});
 			onAsk(record);
 			return await promise;
 		},
@@ -218,7 +349,10 @@ export function createApprovalBridge(
 			if (!record) return false;
 			// The record's own resolve() deletes from pending before settling
 			// the select promise (double-resolve guard lives there).
+			clearTimer(requestId);
 			record.resolve(approved, note);
+			onResolved?.(requestId, approved, note);
+			rememberApproval(requestId, approved, note);
 			return true;
 		},
 		subscribe(listener) {
@@ -238,8 +372,18 @@ export function createApprovalBridge(
 					: typeof answer === "string" && answer.length > 0
 						? answer
 						: undefined;
+			clearTimer(requestId);
 			record.resolve(choice);
+			onAskResolved?.(requestId);
+			rememberAsk(requestId);
 			return true;
+		},
+		recentResolutions() {
+			pruneRecent();
+			return {
+				approvals: [...recentApprovals.values()],
+				asks: [...recentAsks.keys()],
+			};
 		},
 	};
 }

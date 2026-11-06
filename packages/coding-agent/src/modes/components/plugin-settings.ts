@@ -642,6 +642,7 @@ export class PluginSettingsComponent extends Container {
 			projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(this.#cwd),
 			marketplacesCacheDir: getMarketplacesCacheDir(),
 			pluginsCacheDir: getPluginsCacheDir(),
+			includeDefaultMarketplaces: true,
 			clearPluginRootsCache: clearPluginRootsAndCaches,
 		});
 	}

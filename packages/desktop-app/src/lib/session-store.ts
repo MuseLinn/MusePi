@@ -293,6 +293,10 @@ export class GuiSessionStore {
 			 *  composer dock / swarm card until the next live frame. */
 			activeTools?: ActiveTool[];
 			agentsProgress?: SubagentProgressPayload[];
+			/** Pending approval cards from the daemon snapshot. The live
+			 *  `approval-request` envelope is the fast path; this is the
+			 *  hydration path for a client that opens or reconnects later. */
+			pendingApprovals?: ApprovalRequest[];
 		},
 		cwd: string,
 		hooks: SessionGapHooks = {},
@@ -328,6 +332,16 @@ export class GuiSessionStore {
 		}
 		for (const wrapper of snapshot.agentsProgress ?? []) {
 			this.#upsertSubagentProgress(wrapper);
+		}
+		// Pending approvals ride the snapshot so a second device that opens
+		// after the request was raised still renders the card. Seeded without
+		// dispatching notifications: this is a state hydration, not a new ask.
+		for (const approval of snapshot.pendingApprovals ?? []) {
+			this.#approvals.set(approval.requestId, {
+				requestId: approval.requestId,
+				tool: approval.tool,
+				prompt: approval.prompt,
+			});
 		}
 		this.#watermark = typeof snapshot.cursor === "number" && Number.isInteger(snapshot.cursor) ? snapshot.cursor : 0;
 		this.#snapshot = this.#buildSnapshot();
@@ -716,7 +730,12 @@ export class GuiSessionStore {
 		// "replays" = silent message loss) or arm catchup/resync storms. The
 		// store has no consumer for their payloads; drop them outright.
 		if (event.kind === "global-event") return;
-		if (event.kind === "approval-request" || event.kind === "recap") {
+		if (
+			event.kind === "approval-request" ||
+			event.kind === "approval-request-end" ||
+			event.kind === "ask-request-end" ||
+			event.kind === "recap"
+		) {
 			if (this.#applyNow(event)) this.#commit();
 			return;
 		}
@@ -973,6 +992,14 @@ export class GuiSessionStore {
 				this.#notifyCtx({ lastMessage: typeof p.tool === "string" ? p.tool : undefined }),
 			);
 			dispatchPetActivity("question", typeof p.tool === "string" ? p.tool : "", p.requestId);
+			return true;
+		}
+		// Settlement broadcast: another device (or this one) answered. Clear
+		// the card even when this client did not send the request — otherwise
+		// the approval stays on screen after the agent has already moved on.
+		if (event.kind === "approval-request-end") {
+			const p = event.payload as { requestId?: unknown };
+			if (typeof p?.requestId === "string") this.#approvals.delete(p.requestId);
 			return true;
 		}
 		// Non-AgentEvent envelopes: subagent visuals + terminal state.

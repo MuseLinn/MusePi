@@ -2,6 +2,7 @@ import { PackageOpen, RefreshCw, SearchX } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { loadMarketplaceViewPreferences, saveMarketplaceViewPreferences } from "../../lib/marketplace-preferences";
 import { useScrollShadow } from "../../lib/scroll-shadow";
 import { MarketplaceCard } from "./MarketplaceCard";
 import type { MarketplaceCardAction, MarketplaceCardEntry, MarketplaceSource } from "./types";
@@ -83,14 +84,19 @@ export function MarketplaceGrid({
 	const [entries, setEntries] = useState<readonly MarketplaceCardEntry[]>(initialEntries ?? []);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [fetching, setFetching] = useState(false);
-	const [segment, setSegment] = useState<MarketplaceSegment>("catalog");
-	const [filter, setFilter] = useState("");
-	const [category, setCategory] = useState<string | null>(null);
+	const [initialPreferences] = useState(loadMarketplaceViewPreferences);
+	const [segment, setSegment] = useState<MarketplaceSegment>(initialPreferences.segment);
+	const [filter, setFilter] = useState(initialPreferences.filter);
+	const [category, setCategory] = useState<string | null>(initialPreferences.category);
 	const [sources, setSources] = useState<readonly MarketplaceSource[] | null>(null);
 	const [sourcesError, setSourcesError] = useState<string | null>(null);
 	const [sourceInput, setSourceInput] = useState("");
 	const [sourceBusy, setSourceBusy] = useState(false);
 	const [upgradingAll, setUpgradingAll] = useState(false);
+
+	useEffect(() => {
+		saveMarketplaceViewPreferences({ segment, filter, category });
+	}, [segment, filter, category]);
 
 	// Controlled mode: when the host supplies entries without a client
 	// (storybook / tests / pre-fetched data), mirror prop changes into state

@@ -1,6 +1,6 @@
-/* Marketplace visual language: vector icon tiles, status glyphs and the
- * empty-state mark. Card geometry and motion stay in marketplace.css;
- * every value here routes through design tokens. */
+/* Marketplace visual language: vector icons and branded artwork tiles,
+ * status glyphs and the empty-state mark. Card geometry and motion stay in
+ * marketplace.css; every value here routes through design tokens. */
 
 .mp-card-icon {
 	display: grid;
@@ -14,6 +14,14 @@
 	transition:
 		background 150ms ease-out,
 		color 150ms ease-out;
+}
+
+.mp-card-artwork {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border-radius: inherit;
+	object-fit: contain;
 }
 
 .mp-card:hover .mp-card-icon {

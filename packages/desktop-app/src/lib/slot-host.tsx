@@ -358,7 +358,7 @@ export interface StatusBarSegmentItem {
 
 /** One normalized capability entry in extensions.list (10 kinds, TUI
  *  /extensions parity). Type home here so consumers (ExtensionsCenter,
- *  ExtensionStatusCard, settings-sections) share one shape. */
+ *  settings-sections) share one shape. */
 export interface ExtensionItem {
 	id: string;
 	kind: string;

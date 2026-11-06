@@ -8,7 +8,7 @@ import type {
 	AgentToolUpdateCallback,
 	ToolLoadMode,
 } from "@musepi/pi-agent-core";
-import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema } from "@musepi/pi-ai";
+import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema, VideoContent } from "@musepi/pi-ai";
 import { sanitizeText, untilAborted } from "@musepi/pi-utils";
 import type { Settings } from "../../config/settings";
 import type { Theme } from "../../modes/theme/theme";
@@ -398,7 +398,8 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 			});
 
 			if (resultResult) {
-				const modifiedContent: (TextContent | ImageContent)[] = resultResult.content ?? result.content;
+				const modifiedContent: (TextContent | ImageContent | VideoContent)[] =
+					resultResult.content ?? result.content;
 				const modifiedDetails = (resultResult.details ?? result.details) as TDetails;
 
 				// Effective error state. Three cases, not two:

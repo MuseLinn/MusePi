@@ -105,12 +105,36 @@ function RecordInput({
 	);
 }
 
+interface SchemaChoice {
+	value: string;
+	label: string;
+	description?: string;
+}
+
+function selectedValues(value: unknown): string[] {
+	return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
+/** Declared choices translated for the app locale; stored values outside the
+ *  declared set keep a fallback entry so nothing is silently dropped. */
+function resolveChoices(item: SchemaItem, current: readonly string[]): SchemaChoice[] {
+	const declared = (
+		Array.isArray(item.ui?.options) ? item.ui.options : ([] as readonly SchemaChoice[])
+	) as readonly SchemaChoice[];
+	const choices: SchemaChoice[] = declared.map(opt => ({
+		value: opt.value,
+		label: t(opt.label as TranslationKey),
+		description: opt.description ? t(opt.description as TranslationKey) : undefined,
+	}));
+	for (const v of current) {
+		if (!choices.some(o => o.value === v)) choices.push({ value: v, label: v });
+	}
+	return choices;
+}
+
 /**
  * Declared-membership array editor (TUI MultiSelectSubmenu parity): one
- * pressed chip per choice, click flips membership. Stored values outside
- * the declared set keep a fallback chip so nothing is silently dropped.
- * `ui.ordered` (TUI ordered-multiselect parity): selected chips lead in
- * stored order — position is priority — and carry ←/→ move buttons.
+ * pressed chip per choice, click flips membership.
  *
  * Large option sets (the image URL backend list ships ~50 entries)
  * collapse to "selected chips + add dropdown": rendering every choice as
@@ -127,30 +151,15 @@ function ArrayChipsEditor({
 	value: unknown;
 	commit(key: string, value: unknown): void;
 }): ReactNode {
-	const ordered = item.ui?.ordered === true;
-	const current = Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
-	const declared = (
-		Array.isArray(item.ui?.options)
-			? item.ui.options
-			: ([] as readonly { value: string; label: string; description?: string }[])
-	) as readonly { value: string; label: string; description?: string }[];
-	const opts = declared.map(opt => ({
-		value: opt.value,
-		label: t(opt.label as TranslationKey),
-		description: opt.description ? t(opt.description as TranslationKey) : undefined,
-	}));
-	for (const v of current) {
-		if (!opts.some(o => o.value === v)) opts.push({ value: v, label: v, description: undefined });
-	}
-	const displayOpts = ordered ? sortOrderedOptions(opts, current) : opts;
-	const compact = displayOpts.length > 8;
-	const shown = compact ? displayOpts.filter(o => current.includes(o.value)) : displayOpts;
-	const addable = displayOpts.filter(o => !current.includes(o.value));
+	const current = selectedValues(value);
+	const opts = resolveChoices(item, current);
+	const compact = opts.length > 8;
+	const shown = compact ? opts.filter(o => current.includes(o.value)) : opts;
+	const addable = opts.filter(o => !current.includes(o.value));
 	return (
 		<span className="gui-settings-chips">
 			{shown.map(opt => {
 				const on = current.includes(opt.value);
-				const pos = current.indexOf(opt.value);
 				return (
 					<span key={opt.value} className="gui-seg-item">
 						<button
@@ -164,30 +173,6 @@ function ArrayChipsEditor({
 						>
 							{opt.label}
 						</button>
-						{ordered && on && (
-							<>
-								<button
-									type="button"
-									className="gui-seg-move"
-									aria-label={t("settings.moveEarlier")}
-									title={t("settings.moveEarlier")}
-									disabled={pos === 0}
-									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, -1))}
-								>
-									←
-								</button>
-								<button
-									type="button"
-									className="gui-seg-move"
-									aria-label={t("settings.moveLater")}
-									title={t("settings.moveLater")}
-									disabled={pos === current.length - 1}
-									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, 1))}
-								>
-									→
-								</button>
-							</>
-						)}
 					</span>
 				);
 			})}
@@ -202,6 +187,113 @@ function ArrayChipsEditor({
 					options={[{ value: "", label: t("settings.add") }, ...addable]}
 				/>
 			)}
+		</span>
+	);
+}
+
+/**
+ * Ordered fallback editor (`ui.ordered`, TUI ordered-multiselect parity):
+ * stored position IS the priority, so it renders as a numbered list — rows
+ * read top-to-bottom, ↑/↓ move one step, ✕ removes. Inline chips cannot hold
+ * this: five long method names with per-chip arrows claim the whole row and
+ * squeeze the label column to one character per line.
+ */
+function OrderedListEditor({
+	item,
+	value,
+	commit,
+}: {
+	item: SchemaItem;
+	value: unknown;
+	commit(key: string, value: unknown): void;
+}): ReactNode {
+	const current = selectedValues(value);
+	const ranked = sortOrderedOptions(resolveChoices(item, current), current);
+	const active = ranked.filter(o => current.includes(o.value));
+	const inactive = ranked.filter(o => !current.includes(o.value));
+	const addViaSelect = ranked.length > 8;
+	return (
+		<span className="gui-ordered-editor">
+			{active.length > 0 && (
+				<ol className="gui-ordered-list">
+					{active.map((opt, index) => (
+						<li key={opt.value} className="gui-ordered-item">
+							<span className="gui-ordered-rank" aria-hidden="true">
+								{index + 1}
+							</span>
+							<span className="gui-ordered-name" title={opt.description}>
+								{opt.label}
+							</span>
+							<span className="gui-ordered-actions">
+								<button
+									type="button"
+									className="gui-ordered-btn"
+									aria-label={t("settings.moveEarlier")}
+									title={t("settings.moveEarlier")}
+									disabled={index === 0}
+									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, -1))}
+								>
+									↑
+								</button>
+								<button
+									type="button"
+									className="gui-ordered-btn"
+									aria-label={t("settings.moveLater")}
+									title={t("settings.moveLater")}
+									disabled={index === active.length - 1}
+									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, 1))}
+								>
+									↓
+								</button>
+								<button
+									type="button"
+									className="gui-ordered-btn gui-ordered-btn--remove"
+									aria-label={t("settings.removeOption")}
+									title={t("settings.removeOption")}
+									onClick={() =>
+										commit(
+											item.key,
+											current.filter(v => v !== opt.value),
+										)
+									}
+								>
+									✕
+								</button>
+							</span>
+						</li>
+					))}
+				</ol>
+			)}
+			{inactive.length > 0 &&
+				(addViaSelect ? (
+					<GuiSelect
+						className="gui-settings-chips-add"
+						value=""
+						ariaLabel={t("settings.add")}
+						onChange={v => {
+							if (v !== "") commit(item.key, [...current, v]);
+						}}
+						options={[
+							{ value: "", label: t("settings.add") },
+							...inactive.map(o => ({ value: o.value, label: o.label })),
+						]}
+					/>
+				) : (
+					<span className="gui-ordered-add">
+						{inactive.map(opt => (
+							<button
+								key={opt.value}
+								type="button"
+								className="gui-ordered-add-btn"
+								title={opt.description}
+								onClick={() => commit(item.key, [...current, opt.value])}
+							>
+								<span aria-hidden="true">+</span>
+								{opt.label}
+							</button>
+						))}
+					</span>
+				))}
 		</span>
 	);
 }
@@ -292,9 +384,19 @@ export function SchemaSettings({
 								// IS the control — hide the standard one.
 								const extra = renderExtra?.(item.key, value, commit);
 								const hasExtra = extra !== undefined && extra !== null;
+								// Chip/priority editors are content-sized and can be wider
+								// than half the row; give them their own line so the
+								// label column keeps a readable width.
+								const wideControl =
+									!hasExtra &&
+									item.type === "array" &&
+									Array.isArray(item.ui?.options) &&
+									item.ui.options.length > 0;
 								return (
 									<Reveal key={item.key} open={rowShown}>
-										<div className={`gui-settings-row${tui ? " gui-settings-row--tui" : ""}`}>
+										<div
+											className={`gui-settings-row${tui ? " gui-settings-row--tui" : ""}${wideControl ? " gui-settings-row--wide-control" : ""}`}
+										>
 											<div className="min-w-0 flex-1">
 												<div className="gui-settings-row-label">
 													{t(label as TranslationKey)}
@@ -371,7 +473,11 @@ export function SchemaSettings({
 												) : item.type === "array" &&
 													Array.isArray(item.ui?.options) &&
 													item.ui.options.length > 0 ? (
-													<ArrayChipsEditor item={item} value={value} commit={commit} />
+													item.ui.ordered === true ? (
+														<OrderedListEditor item={item} value={value} commit={commit} />
+													) : (
+														<ArrayChipsEditor item={item} value={value} commit={commit} />
+													)
 												) : item.type === "array" ? (
 													<input
 														type="text"

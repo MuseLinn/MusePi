@@ -44,6 +44,7 @@ import {
 import { ModelsConfigFile } from "./config/models-config";
 import { serviceTierSettingToTier } from "./config/service-tier";
 import { getDefault, type SettingPath, Settings, type SettingValue, settings } from "./config/settings";
+import { readSessionOwner, sessionLocksDir } from "./daemon/session-owner-lock";
 import { initializeWithSettings } from "./discovery";
 import {
 	clearPluginRootsAndCaches,
@@ -1545,6 +1546,22 @@ export async function runRootCommand(
 			scopedModels = await resolveScopedModels(parsedArgs, modelRegistry, settingsInstance);
 		}
 		sessionManager = await SessionManager.open(selected.path);
+	}
+
+	// Process-level ownership: a live daemon (or another CLI/TUI) is the only
+	// writer for this session. Refuse to open a second writer; `--fork` is the
+	// explicit way to continue in a copy.
+	if (sessionManager) {
+		const owner = await readSessionOwner(sessionManager.getSessionId(), sessionLocksDir());
+		if (owner && owner.pid !== process.pid) {
+			await sessionManager.close();
+			process.stderr.write(
+				`${chalk.red("Error: session is in use by another MusePi process")} ` +
+					`(pid ${owner.pid} on ${owner.hostname}).\n`,
+			);
+			process.stderr.write(`${chalk.dim("Close it there, or continue in a copy with --fork.")}\n`);
+			process.exit(1);
+		}
 	}
 
 	if (sessionManager && (parsedArgs.continue || parsedArgs.resume || parsedArgs.fork || foreignSource)) {

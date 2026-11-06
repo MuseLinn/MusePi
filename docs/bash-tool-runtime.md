@@ -204,6 +204,8 @@ Runtime truncation is byte-threshold based in `OutputSink` (50KB tail window by 
 
 Non-PTY execution also passes shell-minimizer settings into the native `Shell` session. When the minimizer rewrites verbose output, the executor replaces the sink's visible text with the minimized text and, when possible, saves the raw original capture as a separate `bash-original` artifact referenced by a `[raw output: artifact://<id>]` footer.
 
+The command itself is not rewritten. `BashResult.minimization` and `details.minimization` preserve the filter and measured input/output bytes, plus the raw artifact id when persistence succeeds. The savings journal records only timestamp/filter/byte counts; its aggregate is available through `settings.shellMinimizerStats`. `session.artifactRead {sessionId,id}` resolves numeric ids only within that session and returns at most 8 MiB with `truncated` and `totalBytes`, never the backing path. Desktop raw-output previews use this RPC; PTY and client-terminal behavior is unchanged.
+
 ## Live tool updates and async jobs
 
 For non-PTY foreground execution, `BashTool` uses a separate `TailBuffer` for partial updates and emits `onUpdate` snapshots while command is running.

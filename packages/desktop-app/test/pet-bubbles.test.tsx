@@ -226,6 +226,14 @@ describe("desktop pet bubble state transitions", () => {
 		expect(bridge.approvals).toEqual([]);
 	});
 
+	test("confirming a finished card marks its session read in the main window", () => {
+		const bridge = mountBubbles();
+		bridge.push({ sessions: [firstCard] });
+		act(() => document.querySelector<HTMLElement>(".pet-bubble--session .pet-bubble__action--primary")!.click());
+		expect(bridge.reads).toEqual(["main-session"]);
+		expect(document.querySelector(".pet-bubbles")).toBeNull();
+	});
+
 	test("dismissing one card remembers only its current activity and keeps it unread", () => {
 		const bridge = mountBubbles();
 		const firstTurn = { ...firstCard, activityKey: "turn-1" };

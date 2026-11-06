@@ -1,7 +1,7 @@
 /** Fallback renderer for tools without a dedicated view. */
 import type { ReactNode } from "react";
 import { t } from "../i18n/index.js";
-import { DiffBlock, Output, ResultImages, ResultText } from "./parts";
+import { DiffBlock, Output, ResultImages, ResultText, ResultVideos } from "./parts";
 import type { ToolRenderer, ToolRenderProps } from "./types";
 import { argsDigest, resultImagesOf, resultTextOf } from "./util";
 
@@ -56,6 +56,7 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 				<>
 					{list}
 					<ResultImages result={result} />
+					<ResultVideos result={result} />
 				</>
 			);
 		}
@@ -67,6 +68,7 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 			<>
 				<figure className="tr-tool-image">
 					<ResultImages result={result} />
+					<ResultVideos result={result} />
 					{prompt && <figcaption className="tr-tool-image-caption">{prompt}</figcaption>}
 				</figure>
 				{images.length === 0 && <ResultText result={result} maxLines={10} />}
@@ -86,6 +88,7 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 				<Output text={argText} lang="json" variant="code" maxLines={12} title={t("tools.args")} />
 			)}
 			<ResultImages result={result} />
+			<ResultVideos result={result} />
 			<ResultText result={result} maxLines={10} />
 		</>
 	);

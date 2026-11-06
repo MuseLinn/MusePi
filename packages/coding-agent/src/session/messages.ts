@@ -22,6 +22,7 @@ import type {
 	MessageAttribution,
 	TextContent,
 	UserMessage,
+	VideoContent,
 } from "@musepi/pi-ai";
 import * as AIError from "@musepi/pi-ai/error";
 import { isRecord, logger, prompt } from "@musepi/pi-utils";
@@ -710,7 +711,7 @@ function renderSteeringEnvelope(message: string): string {
 	return prompt.render(userInterjectionTemplate, { message });
 }
 
-function getArrayContentText(content: (TextContent | ImageContent)[]): string {
+function getArrayContentText(content: (TextContent | ImageContent | VideoContent)[]): string {
 	let firstText: string | undefined;
 	let textParts: string[] | undefined;
 	for (const part of content) {
@@ -727,7 +728,7 @@ function getArrayContentText(content: (TextContent | ImageContent)[]): string {
 	return textParts === undefined ? (firstText ?? "") : textParts.join("\n");
 }
 
-function getArrayContentImages(content: (TextContent | ImageContent)[]): ImageContent[] {
+function getArrayContentImages(content: (TextContent | ImageContent | VideoContent)[]): ImageContent[] {
 	let images: ImageContent[] | undefined;
 	for (const part of content) {
 		if (part.type !== "image") continue;
@@ -754,7 +755,9 @@ function wrapSteeringUserMessage(message: SteeringUserMessage): UserMessage {
 
 	const text = getArrayContentText(message.content);
 	if (text.length === 0) return message.role === "user" ? message : userMessage;
-	const content: (TextContent | ImageContent)[] = [{ type: "text", text: renderSteeringEnvelope(text) }];
+	const content: (TextContent | ImageContent | VideoContent)[] = [
+		{ type: "text", text: renderSteeringEnvelope(text) },
+	];
 	content.push(...getArrayContentImages(message.content));
 	return { ...userMessage, content };
 }
@@ -782,13 +785,13 @@ export function wrapSteeringForModel(messages: AgentMessage[]): AgentMessage[] {
 
 /** Result of filtering image blocks out of a `(TextContent | ImageContent)[]` array. */
 interface StripContentResult {
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | ImageContent | VideoContent)[];
 	removed: number;
 }
 
-function stripImagesFromArrayContent(content: (TextContent | ImageContent)[]): StripContentResult {
+function stripImagesFromArrayContent(content: (TextContent | ImageContent | VideoContent)[]): StripContentResult {
 	let removed = 0;
-	const kept: (TextContent | ImageContent)[] = [];
+	const kept: (TextContent | ImageContent | VideoContent)[] = [];
 	for (const part of content) {
 		if (part.type === "image") {
 			removed++;
@@ -901,7 +904,7 @@ export function replaceLlmImagesWithText(messages: Message[], placeholder: strin
 		if (msg.role !== "user" && msg.role !== "developer" && msg.role !== "toolResult") continue;
 		const content = msg.content;
 		if (!Array.isArray(content) || !content.some(part => part.type === "image")) continue;
-		const replaced: (TextContent | ImageContent)[] = [];
+		const replaced: (TextContent | ImageContent | VideoContent)[] = [];
 		for (const part of content) {
 			if (part.type !== "image") {
 				replaced.push(part);
