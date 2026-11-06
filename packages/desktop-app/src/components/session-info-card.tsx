@@ -39,7 +39,14 @@ import type { PanelTab } from "../lib/panel-tabs";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
-import { SESSION_INFO_SLOT, SlotComponentHost, useExtensionRegistry } from "../lib/slot-host";
+import {
+	SESSION_INFO_SLOT,
+	SESSION_INFO_SLOT_PREFIX,
+	SlotComponentHost,
+	SlotComponentMount,
+	useExtensionRegistry,
+	useSlotComponentsByPrefix,
+} from "../lib/slot-host";
 import { readHiddenSurfaces, SURFACE_HIDDEN_KEY, SURFACES, surfaceVisible } from "../lib/surfaces/registry";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon, type IconName } from "../vendor/oc-icons";
@@ -470,6 +477,10 @@ export function SessionInfoCard({
 			),
 		[extensionRegistry],
 	);
+	const extraSections = useSlotComponentsByPrefix(rpc, SESSION_INFO_SLOT_PREFIX).filter(
+		item => item.slot !== SESSION_INFO_SLOT,
+	);
+
 	const sessionInfo = useMemo<SessionInfoSlotData>(() => {
 		const rows: SessionInfoPluginRow[] = pluginEntries.map(entry => ({
 			id: entry.id,
@@ -961,6 +972,21 @@ export function SessionInfoCard({
 					fallback={<SessionInfoPluginsFallback sessionInfo={sessionInfo} />}
 				/>
 			) : null}
+
+			{/* Any other `chat.session-info.<id>` contribution lands here as its own
+			 *  partition, so a plugin can add a card section without a host change.
+			 *  `plugins` is excluded: it has a dedicated seat above with its
+			 *  built-in fallback. */}
+			{extraSections.map(item => (
+				<SlotComponentMount
+					key={`${item.slot}:${item.extensionId}`}
+					item={item}
+					rpc={rpc}
+					sessionId={sessionId}
+					cwd={cwd ?? undefined}
+					sessionInfo={sessionInfo}
+				/>
+			))}
 
 			<section className="gui-session-info-tabs">
 				<div className="gui-session-info-section-label">{t("general.sessionInfoOpenTabs")}</div>
