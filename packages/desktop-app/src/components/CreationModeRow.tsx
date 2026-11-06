@@ -17,6 +17,7 @@ import {
 } from "../lib/creation";
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
+import { Icon, type IconName } from "../vendor/oc-icons";
 import { AssetPolicyRow } from "./composer/asset-policy-row";
 
 /**
@@ -49,6 +50,18 @@ import { AssetPolicyRow } from "./composer/asset-policy-row";
  * creation.metadata.get(cwd → .musepi/project.json 镜像),仅在本会话
  * 尚无草稿时消费一次。
  */
+
+/** One recognizable glyph per shape: the rail is scanned, not read. */
+const CHIP_ICONS: Record<CreationChip, IconName> = {
+	prototype: "window",
+	"live-artifact": "sparkling",
+	deck: "file-text",
+	image: "file-image",
+	video: "file-video",
+	audio: "volume-up",
+	template: "layout-column",
+	other: "more",
+};
 
 /** 模式页输入框的发送载荷(WelcomeComposer 的 onSubmit 形状)。 */
 export interface CreationMessage {
@@ -274,7 +287,8 @@ export function CreationModeRow({
 								className={`gui-creation-chip${on ? " gui-creation-chip--on" : ""}`}
 								onClick={() => pickChip(item)}
 							>
-								{t(CREATION_CHIP_LABEL_KEYS[item])}
+								<Icon name={CHIP_ICONS[item]} className="gui-creation-chip-icon" />
+								<span>{t(CREATION_CHIP_LABEL_KEYS[item])}</span>
 							</button>
 						);
 					})}

@@ -879,9 +879,37 @@ export function WelcomeComposer({
 			window.removeEventListener("storage", refresh);
 		};
 	}, []);
-	// Focus-within state drives the hero beam (fades in while the composer
-	// has focus, fades out on blur — no static border box).
+	// The focus beam is an entrance accent, not a permanent light source: it
+	// runs for three seconds after the composer gains focus, then stops so the
+	// heavy conic repaint ends. Focus (distraction-free) mode never shows it —
+	// the input should be the only thing on screen.
 	const [beamOn, setBeamOn] = useState(false);
+	const beamTimerRef = useRef<number | null>(null);
+	const stopBeam = useCallback((): void => {
+		if (beamTimerRef.current !== null) {
+			window.clearTimeout(beamTimerRef.current);
+			beamTimerRef.current = null;
+		}
+		setBeamOn(false);
+	}, []);
+	const startBeam = useCallback((): void => {
+		if (focused) return;
+		if (beamTimerRef.current !== null) window.clearTimeout(beamTimerRef.current);
+		setBeamOn(true);
+		beamTimerRef.current = window.setTimeout(() => {
+			beamTimerRef.current = null;
+			setBeamOn(false);
+		}, 3000);
+	}, [focused]);
+	useEffect(() => {
+		if (focused) stopBeam();
+	}, [focused, stopBeam]);
+	useEffect(
+		() => () => {
+			if (beamTimerRef.current !== null) window.clearTimeout(beamTimerRef.current);
+		},
+		[],
+	);
 	// Portaled workspace-picker popup (model/thinking selector parity): the
 	// frosted glass samples real content behind it, and the exit animates.
 	// Single-layer: className carries the visual (gui-proj-menu), the hook
@@ -1326,7 +1354,7 @@ export function WelcomeComposer({
 			requestAnimationFrame(() => autosize(taRef.current));
 			sfxFor("first");
 			// Same beam drop as the plain submit path — see the note there.
-			setBeamOn(false);
+			stopBeam();
 			void railRef.current
 				.submit(payload, {
 					thinkingLevel: thinking,
@@ -1359,7 +1387,7 @@ export function WelcomeComposer({
 		// compete with the morph (the reported transition stutter). The
 		// leaving-scene freeze in gui-chat.css covers the overlap window;
 		// this makes the beam's display window end at send, not at unmount.
-		setBeamOn(false);
+		stopBeam();
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
 		const applyGoal = goalArmed && trimmed.length > 0;
@@ -1803,8 +1831,8 @@ export function WelcomeComposer({
 						ref={formRef}
 						className="gui-welcome-form relative w-full"
 						onSubmit={submit}
-						onFocus={() => setBeamOn(true)}
-						onBlur={() => setBeamOn(false)}
+						onFocus={startBeam}
+						onBlur={stopBeam}
 					>
 						<ComposerFrame
 							className="gui-welcome-input"

@@ -30,6 +30,9 @@
 	display: none;
 }
 .gui-creation-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	flex: none;
 	padding: 5px 12px;
 	border-radius: 999px;
@@ -42,6 +45,15 @@
 		color 130ms ease,
 		background-color 130ms ease,
 		box-shadow 130ms ease;
+}
+.gui-creation-chip-icon {
+	width: 13px;
+	height: 13px;
+	flex-shrink: 0;
+	opacity: 0.75;
+}
+.gui-creation-chip--on .gui-creation-chip-icon {
+	opacity: 1;
 }
 .gui-creation-chip:hover {
 	color: var(--color-text);

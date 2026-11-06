@@ -4245,6 +4245,40 @@
 	gap: 8px;
 }
 
+/* Kind filter for the design-output gallery: one quiet row, only when the
+ * scan holds more than one kind. */
+.gui-art-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.gui-art-filter {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 9px;
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+	cursor: pointer;
+	transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.gui-art-filter:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+.gui-art-filter--on {
+	background: var(--color-accent-soft);
+	border-color: var(--color-accent-bd);
+	color: var(--color-text);
+}
+.gui-art-filter-count {
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
 .gui-art-cards {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));

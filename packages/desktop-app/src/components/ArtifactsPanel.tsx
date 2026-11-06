@@ -1,7 +1,7 @@
 import { Markdown, type TranslationKey, t } from "@musepi/client-core";
 import { ArrowLeft, FileWarning, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 
@@ -77,6 +77,9 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [selected, setSelected] = useState<ArtifactRow | null>(null);
+	/** Kind filter for the gallery; null = all. Only offered when the scan
+	 *  actually holds more than one kind — a single-kind list needs no chrome. */
+	const [kindFilter, setKindFilter] = useState<string | null>(null);
 	const [content, setContent] = useState<{ text: string; truncated: boolean } | null>(null);
 	const [contentError, setContentError] = useState<string | null>(null);
 	/** Live-iframe preview width (设计板 frame: 桌面/平板/移动). */
@@ -124,6 +127,20 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 		},
 		[rpc, cwd],
 	);
+
+	const kinds = useMemo(() => {
+		const counts = new Map<string, number>();
+		for (const a of scan?.artifacts ?? []) {
+			if (a.errors) continue;
+			const kind = a.kind || "—";
+			counts.set(kind, (counts.get(kind) ?? 0) + 1);
+		}
+		return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+	}, [scan]);
+	const visibleArtifacts = useMemo(() => {
+		const all = scan?.artifacts ?? [];
+		return kindFilter === null ? all : all.filter(a => (a.kind || "—") === kindFilter);
+	}, [scan, kindFilter]);
 
 	if (!cwd) {
 		return (
@@ -253,47 +270,77 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 			) : (
 				<>
 					{scan.truncated && <div className="gui-art-note">{t("tools.artifactsScanTruncated")}</div>}
-					<div className="gui-art-cards">
-						{scan.artifacts.map(a => (
+					{kinds.length > 1 && (
+						<div className="gui-art-filters" role="tablist" aria-label={t("tools.artifacts")}>
 							<button
 								type="button"
-								key={a.dir}
-								className={`gui-art-card${a.errors ? " gui-art-card--invalid" : ""}`}
-								onClick={() => {
-									if (a.errors) return;
-									void openArtifact(a);
-								}}
+								role="tab"
+								aria-selected={kindFilter === null}
+								className={`gui-art-filter${kindFilter === null ? " gui-art-filter--on" : ""}`}
+								onClick={() => setKindFilter(null)}
 							>
-								<div className="gui-art-card-top">
-									<span className="gui-art-card-name" title={a.dir}>
-										{a.title}
-									</span>
-									{a.errors ? (
-										<span className="gui-art-badge gui-art-badge--danger">
-											<FileWarning size={11} />
-											{t("tools.artifactManifestInvalid")}
-										</span>
-									) : (
-										<span className="gui-art-badge">{kindLabel(a.kind)}</span>
-									)}
-								</div>
-								{a.description && <p className="gui-art-card-desc">{a.description}</p>}
-								<div className="gui-art-card-meta">
-									<span title={a.dir}>{a.dirName}</span>
-									{!a.errors && a.renderer && (
-										<span className="gui-art-badge gui-art-badge--muted">{a.renderer}</span>
-									)}
-								</div>
-								{a.errors && (
-									<ul className="gui-art-card-errors">
-										{a.errors.map(e => (
-											<li key={e}>{e}</li>
-										))}
-									</ul>
-								)}
+								{t("tools.all")}
 							</button>
-						))}
-					</div>
+							{kinds.map(([kind, count]) => (
+								<button
+									key={kind}
+									type="button"
+									role="tab"
+									aria-selected={kindFilter === kind}
+									className={`gui-art-filter${kindFilter === kind ? " gui-art-filter--on" : ""}`}
+									onClick={() => setKindFilter(kind)}
+								>
+									{kindLabel(kind)}
+									<span className="gui-art-filter-count">{count}</span>
+								</button>
+							))}
+						</div>
+					)}
+					{visibleArtifacts.length === 0 ? (
+						<p className="gui-art-note">{t("tools.artifactsFilterEmpty")}</p>
+					) : (
+						<div className="gui-art-cards">
+							{visibleArtifacts.map(a => (
+								<button
+									type="button"
+									key={a.dir}
+									className={`gui-art-card${a.errors ? " gui-art-card--invalid" : ""}`}
+									onClick={() => {
+										if (a.errors) return;
+										void openArtifact(a);
+									}}
+								>
+									<div className="gui-art-card-top">
+										<span className="gui-art-card-name" title={a.dir}>
+											{a.title}
+										</span>
+										{a.errors ? (
+											<span className="gui-art-badge gui-art-badge--danger">
+												<FileWarning size={11} />
+												{t("tools.artifactManifestInvalid")}
+											</span>
+										) : (
+											<span className="gui-art-badge">{kindLabel(a.kind)}</span>
+										)}
+									</div>
+									{a.description && <p className="gui-art-card-desc">{a.description}</p>}
+									<div className="gui-art-card-meta">
+										<span title={a.dir}>{a.dirName}</span>
+										{!a.errors && a.renderer && (
+											<span className="gui-art-badge gui-art-badge--muted">{a.renderer}</span>
+										)}
+									</div>
+									{a.errors && (
+										<ul className="gui-art-card-errors">
+											{a.errors.map(e => (
+												<li key={e}>{e}</li>
+											))}
+										</ul>
+									)}
+								</button>
+							))}
+						</div>
+					)}
 				</>
 			)}
 		</div>

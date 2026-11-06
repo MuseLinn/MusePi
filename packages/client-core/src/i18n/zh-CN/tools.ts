@@ -969,6 +969,7 @@ export const tools = {
 	"tools.artifactCodeViewHint": "该渲染器暂不支持实时预览——正在显示源码",
 	"tools.artifactTruncated": "文件较大——仅显示前 512 KB",
 	"tools.artifactsScanTruncated": "扫描在第 4 层截断——更深的产物目录未访问",
+	"tools.artifactsFilterEmpty": "该类型暂无产物",
 	"tools.artifactsViewportDesktop": "桌面",
 	"tools.artifactsViewportTablet": "平板",
 	"tools.artifactsViewportMobile": "移动",

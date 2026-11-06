@@ -1007,6 +1007,7 @@ export const tools = {
 	"tools.artifactCodeViewHint": "This renderer has no live preview — showing the source",
 	"tools.artifactTruncated": "Large file — showing the first 512 KB",
 	"tools.artifactsScanTruncated": "Scan stopped at depth 4 — deeper artifact directories were not visited",
+	"tools.artifactsFilterEmpty": "No artifacts of this kind",
 	"tools.artifactsViewportDesktop": "Desktop",
 	"tools.artifactsViewportTablet": "Tablet",
 	"tools.artifactsViewportMobile": "Mobile",
