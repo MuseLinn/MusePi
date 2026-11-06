@@ -52,11 +52,16 @@ export function StartFromPicker({
 	rpc,
 	value,
 	onChange,
+	tab,
 }: {
 	rpc: RpcClient;
 	/** The chosen shape, or `null` for a blank start. */
 	value: string | null;
 	onChange(value: string | null): void;
+	/** Bundled-template shelf for the active creation shape. `null` when the
+	 *  shape has no shelf (template management, catch-all) — the picker then
+	 *  renders nothing instead of offering unrelated prototypes. */
+	tab: "prototype" | "live-artifact" | "deck" | "media" | null;
 }): ReactNode {
 	const [templates, setTemplates] = useState<readonly BundledTemplateSummary[]>([]);
 
@@ -82,6 +87,8 @@ export function StartFromPicker({
 
 	const pick = useCallback((id: string | null) => onChange(id), [onChange]);
 	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot);
+	const shelf = tab === null ? [] : templates.filter(tpl => tpl.tab === tab);
+	if (shelf.length === 0) return null;
 
 	return (
 		<div className="gui-creation-startfrom">
@@ -100,7 +107,7 @@ export function StartFromPicker({
 					</span>
 					<span className="gui-creation-startcard-name">{t("creation.creationStartBlank")}</span>
 				</button>
-				{templates.map(tpl => (
+				{shelf.map(tpl => (
 					<TemplateCard
 						key={tpl.id}
 						rpc={rpc}

@@ -140,6 +140,25 @@ export const CREATION_CHIP_LABEL_KEYS: Record<CreationChip, TranslationKey> = {
 	other: "creation.creationTabOther",
 };
 
+/** chip → bundled-template tab. Media chips share the `media` shelf; the
+ *  template management view and the catch-all have no start-from shelf. */
+export function templateTabForChip(chip: CreationChip): "prototype" | "live-artifact" | "deck" | "media" | null {
+	switch (chip) {
+		case "prototype":
+			return "prototype";
+		case "live-artifact":
+			return "live-artifact";
+		case "deck":
+			return "deck";
+		case "image":
+		case "video":
+		case "audio":
+			return "media";
+		default:
+			return null;
+	}
+}
+
 /** chip → 输入框 placeholder 键（§2.4:placeholder 随选中类型变化）。 */
 export const CREATION_PLACEHOLDER_KEYS: Record<CreationChip, TranslationKey> = {
 	prototype: "creation.creationPlaceholderPrototype",

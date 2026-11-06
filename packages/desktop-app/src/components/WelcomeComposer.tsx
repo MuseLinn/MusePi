@@ -15,6 +15,7 @@ import { currentLine, lastTokenIndex, tokenQuery } from "../lib/completion-trigg
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
+import { templateTabForChip } from "../lib/creation";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import { type ModeLabelEntry, resolveModeDescription, resolveModeLabel } from "../lib/mode-label";
@@ -1822,9 +1823,14 @@ export function WelcomeComposer({
 					 *  layer squeezed between two chip rows. Hidden unless the
 					 *  design mode is armed; choosing nothing is a decision too, and
 					 *  that is the blank option inside this radio group. */}
-					{designActive && rpc ? (
+					{designActive && rpc && railState ? (
 						<div className="w-full px-0.5 pb-2">
-							<StartFromPicker rpc={rpc} value={startFrom} onChange={setStartFrom} />
+							<StartFromPicker
+								rpc={rpc}
+								value={startFrom}
+								onChange={setStartFrom}
+								tab={templateTabForChip(railState.chip)}
+							/>
 						</div>
 					) : null}
 					<form

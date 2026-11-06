@@ -92,6 +92,8 @@ export interface CreationRailHandle {
  *  chip 选中时 composer 下方展开模板 rail(输入框常驻,opendesign 铁律),
  * busy 期间禁按发送。 */
 export interface CreationRailState {
+	/** Active creation shape; the start-from shelf is scoped to it. */
+	chip: CreationChip;
 	placeholder: string;
 	template: boolean;
 	busy: boolean;
@@ -188,10 +190,10 @@ export function CreationModeRow({
 	useEffect(() => {
 		onStateChangeRef.current(
 			active
-				? { placeholder, template, busy, startFrom: draft.startFrom }
-				: { placeholder: "", template: false, busy: false, startFrom: draft.startFrom },
+				? { chip, placeholder, template, busy, startFrom: draft.startFrom }
+				: { chip, placeholder: "", template: false, busy: false, startFrom: draft.startFrom },
 		);
-	}, [active, placeholder, template, busy, draft.startFrom]);
+	}, [active, chip, placeholder, template, busy, draft.startFrom]);
 
 	// 挂载时:一次性镜像回填(重启后恢复上次的类型选择)。只在展开时消费:
 	// 普通欢迎页(work 模式)不应产生 creation RPC(模板列表由 TemplateRail

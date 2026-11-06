@@ -47,10 +47,11 @@ const modeChanges: (string | null)[] = [];
 
 /** 欢迎页 composer + 模式页唯一依赖的 daemon 通道:模板列表 + 镜像回填 +
  *  欢迎页自身的就绪态/模型目录/git 分支等。 */
-function makeRpc(templates: unknown[] = []): RpcClient {
+function makeRpc(templates: unknown[] = [], bundled: unknown[] = []): RpcClient {
 	return {
 		request: (method: string): Promise<unknown> => {
 			if (method === "creation.templates.list") return Promise.resolve({ templates });
+			if (method === "creation.templates.bundled") return Promise.resolve({ templates: bundled });
 			if (method === "creation.metadata.get") return Promise.resolve({ metadata: null });
 			if (method === "git.branches") return Promise.resolve({ current: null, branches: [] });
 			if (method === "models.listAvailable" || method === "models.list") return Promise.resolve([]);
@@ -331,6 +332,45 @@ describe("M3.7a 模式页骨架契约", () => {
 		// 词表侧:creation 域不再持有这两个字段的键。
 		expect("creation project name" in creationZh).toBe(false);
 		expect("creation workspace" in creationZh).toBe(false);
+		await unmountRoot(root);
+	});
+	test("start-from shelf follows the active shape", async () => {
+		const bundled = [
+			{
+				id: "proto-tpl",
+				tab: "prototype",
+				title: { en: "Proto shelf", zh: "原型起点" },
+				description: { en: "proto", zh: "原型" },
+			},
+			{
+				id: "media-tpl",
+				tab: "media",
+				title: { en: "Media shelf", zh: "媒体起点" },
+				description: { en: "media", zh: "媒体" },
+			},
+		];
+		const root = await renderWelcome(makeRpc([], bundled));
+		await settle();
+		// The draft is module-cached across tests; pin the shape this test is about.
+		await act(async () => {
+			chipButton(t("creation.creationTabPrototype")).click();
+		});
+		await settle();
+		const shelfNames = (): string[] =>
+			[...document.body.querySelectorAll(".gui-creation-startcard-name")].map(el => el.textContent ?? "");
+		expect(shelfNames()).toContain("原型起点");
+		expect(shelfNames()).not.toContain("媒体起点");
+
+		await act(async () => {
+			chipButton(t("creation.creationMediaImage")).click();
+		});
+		await settle();
+		expect(shelfNames()).toContain("媒体起点");
+		expect(shelfNames()).not.toContain("原型起点");
+		await act(async () => {
+			chipButton(t("creation.creationTabPrototype")).click();
+		});
+		await settle();
 		await unmountRoot(root);
 	});
 });

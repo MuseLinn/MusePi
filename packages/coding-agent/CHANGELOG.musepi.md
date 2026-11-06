@@ -9,8 +9,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **空态聚焦光带改为入场强调**：欢迎页输入框的聚焦光带只扫 3 秒后停止，不再在打字时常驻重绘；专注模式不显示光带。
   - EN: The welcome composer's focus beam is now an entrance accent: it sweeps for three seconds and stops instead of repainting while you type, and focus mode never shows it.
 
-- **设计模式与产物画廊更易浏览**：创作类型 chip 各带一个图形，chip 排可以扫视区分；产物画廊在存在多种产物类型时提供类型筛选（含数量），单一类型时不加多余控件。
-  - EN: Creation type chips carry one glyph each so the rail is scannable, and the design-output gallery offers kind filters with counts when a scan holds more than one kind, with no extra chrome for a single-kind list.
+- **设计模式与产物画廊更易浏览**：创作类型 chip 各带一个图形，chip 排可以扫视区分；起点模板按当前类型筛选，选图片/音视频时不再出现原型模板；产物画廊在存在多种产物类型时提供类型筛选（含数量），单一类型时不加多余控件。
+  - EN: Creation type chips carry one glyph each so the rail is scannable; the start-from shelf follows the active shape instead of offering prototypes for media, and the design-output gallery offers kind filters with counts when a scan holds more than one kind, with no extra chrome for a single-kind list.
 
 - **会话信息卡在各颜色主题下都清晰可读**：卡片内的次级文字改为从卡片主文字色派生两档，不再直接取主题的 `--fg-faint`（部分深色预设低到 oklch 0.42，叠在提亮的玻璃上几乎看不见）；短标签在窄列里改为单行省略，不再把中文逐字折成竖排；图标按钮与折叠标题补上原生 button 背景/边框重置，深色预设下不再出现浅色实心方块。
   - EN: The session info card stays readable across colour presets. Secondary text is derived from the card's own primary text instead of the theme's `--fg-faint` — as low as oklch 0.42 in some dark presets and nearly invisible on the lifted glass. Short labels now ellipsise on one line instead of stacking CJK glyphs vertically, and icon/disclosure buttons reset their native buttonface fill so they stop painting as pale solid blocks.
