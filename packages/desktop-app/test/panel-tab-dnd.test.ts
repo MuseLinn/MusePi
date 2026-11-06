@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ClientRect } from "@dnd-kit/core";
-import { type PanelDropQuery, type PanelDropZone, resolvePanelDrop } from "../src/lib/panel-tab-dnd";
+import { type PanelDropQuery, type PanelDropZone, panelDropPointer, resolvePanelDrop } from "../src/lib/panel-tab-dnd";
 
 // Drop resolution for the panel strips: containment is the authority (a chip
 // beats the column that contains it), a same-column zone release reorders via
@@ -151,5 +151,17 @@ describe("resolvePanelDrop", () => {
 		expect(near).toBeNull();
 		const far = resolvePanelDrop(query({ pointer: { x: 50, y: 40 }, gapFallbackPx: 20 }));
 		expect(far).toEqual({ id: "a", kind: "tab" });
+	});
+});
+
+describe("panelDropPointer", () => {
+	it("keeps the sensor coordinates when they exist", () => {
+		expect(panelDropPointer({ x: 120, y: 30 }, rect(0, 0, 100, 26))).toEqual({ x: 120, y: 30 });
+	});
+
+	it("uses the dragged chip's centre when the sensor reports no pointer", () => {
+		// A null pointer used to short-circuit collision detection entirely,
+		// ending the drag with `over: null` so reorder and split both no-op'd.
+		expect(panelDropPointer(null, rect(104, 40, 100, 26))).toEqual({ x: 154, y: 53 });
 	});
 });

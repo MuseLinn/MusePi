@@ -3978,29 +3978,35 @@ body.gui-resizing {
 	min-width: 0;
 }
 
-/* Drag-to-split target: armed only while a tab drags (the DndContext arms
- * it via `disabled`, so it never swallows pointer events at rest). */
+/* Drag-to-split target. The box stays laid out — and therefore measurable —
+ * at rest; only visibility flips when a drag arms it. A display:none → flex
+ * flip at drag start gave dnd-kit a zero rect for this zone and invalidated
+ * the chip rects measured in the same pass, so every drop ended over nothing.
+ * Border and background are declared here too, so arming cannot resize it. */
 .gui-pane-split-zone {
-	display: none;
-}
-
-.gui-pane-split-zone--active {
 	position: absolute;
 	top: 8px;
 	right: 8px;
 	bottom: 8px;
-	z-index: 5;
-	display: flex;
 	width: 45%;
+	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	border: 1.5px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
+	border: 1.5px dashed transparent;
 	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+	background: transparent;
 	color: var(--color-text-muted);
+	visibility: hidden;
 	pointer-events: none;
+}
+
+.gui-pane-split-zone--active {
+	visibility: visible;
+	z-index: 5;
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 5%, transparent);
 	animation: gui-pane-split-zone-in 140ms var(--spring-snappy) both;
 }
 

@@ -79,7 +79,7 @@ import {
 	panelMaximizeColumn,
 	subscribePanelMaximize,
 } from "../lib/panel-maximize";
-import { type PanelDropZone, resolvePanelDrop } from "../lib/panel-tab-dnd";
+import { type PanelDropZone, panelDropPointer, resolvePanelDrop } from "../lib/panel-tab-dnd";
 import {
 	closePanelTabs,
 	nudgePanelSplitRatio,
@@ -902,30 +902,36 @@ export function ContextPanel({
 	// between chips reorders), and just-off-strip drops still land on the
 	// nearest chip. Keeps one stable verdict per pointer position, so the
 	// strips no longer animate every frame while a chip hovers a boundary.
-	const panelDropCollision: CollisionDetection = args => {
-		const pointer = args.pointerCoordinates;
-		if (!pointer) return [];
-		const rects = new Map<string, ClientRect>();
-		for (const container of args.droppableContainers) {
-			const rect = args.droppableRects.get(container.id);
-			if (rect) rects.set(String(container.id), rect);
-		}
-		const tabs = panelTabs.tabs.map(tab => ({ id: tab.id, column: tab.column }));
-		const zones: PanelDropZone[] = panelTabs.split
-			? [
-					{ id: "panel-col-0", column: 0 },
-					{ id: "panel-col-1", column: 1 },
-				]
-			: [{ id: "panel-split-zone", column: 0, kind: "split" }];
-		const hit = resolvePanelDrop({
-			activeId: String(args.active.id),
-			pointer,
-			rects,
-			tabs,
-			zones,
-		});
-		return hit ? [{ id: hit.id }] : [];
-	};
+	const panelDropCollision: CollisionDetection = useCallback(
+		args => {
+			// PointerSensor normally supplies coordinates; the first collision
+			// pass and keyboard activation do not. A null pointer used to return
+			// no collisions at all, so the drop ended with `over: null` and the
+			// tab snapped back. Fall back to the dragged chip's centre.
+			const pointer = panelDropPointer(args.pointerCoordinates, args.collisionRect);
+			const rects = new Map<string, ClientRect>();
+			for (const container of args.droppableContainers) {
+				const rect = args.droppableRects.get(container.id);
+				if (rect) rects.set(String(container.id), rect);
+			}
+			const tabs = panelTabs.tabs.map(tab => ({ id: tab.id, column: tab.column }));
+			const zones: PanelDropZone[] = panelTabs.split
+				? [
+						{ id: "panel-col-0", column: 0 },
+						{ id: "panel-col-1", column: 1 },
+					]
+				: [{ id: "panel-split-zone", column: 0, kind: "split" }];
+			const hit = resolvePanelDrop({
+				activeId: String(args.active.id),
+				pointer,
+				rects,
+				tabs,
+				zones,
+			});
+			return hit ? [{ id: hit.id }] : [];
+		},
+		[panelTabs.tabs, panelTabs.split],
+	);
 
 	// 「+」surface picker (dsh strip add-control parity): every primary
 	// surface is launchable from the strip itself, into the clicked column.
@@ -1434,11 +1440,17 @@ export function ContextPanel({
 					/>,
 					document.getElementById("transcript.root") ?? document.body,
 				)}
-			{stripDragId !== null &&
-				createPortal(
-					<div className="gui-drag-shield gui-panel-drag-shield" aria-hidden />,
-					document.getElementById("transcript.root") ?? document.body,
-				)}
+			{/* Always mounted. Inserting a full-screen fixed layer in the very
+			 * render that onDragStart produced rebuilt the DOM while dnd-kit was
+			 * measuring droppables; pointer-events alone now arms the gesture. */}
+			{createPortal(
+				<div
+					className="gui-drag-shield gui-panel-drag-shield"
+					data-active={stripDragId !== null ? "" : undefined}
+					aria-hidden
+				/>,
+				document.getElementById("transcript.root") ?? document.body,
+			)}
 			<aside ref={panelRef} className={panelClass} style={maximized ? undefined : { width }}>
 				{/* Left-edge drag handle for width: pointer capture on the 4px
 				 * strip plus the gesture shield (the page guest swallows captured
@@ -1809,11 +1821,12 @@ function PanelSplitDivider({ ratio, onChange }: { ratio: number; onChange(next: 
 
 /** Right-half split target (dsh dock-zone parity): while a tab drags in the
  * single-column layout, the body's right half becomes a drop zone that
- * splits the panel and seats the tab in column 1. Always mounted so the
- * rect cache stays warm; disabled (excluded from collisions, invisible)
- * until a drag arms it. */
+ * splits the panel and seats the tab in column 1. The droppable stays
+ * registered at rest: toggling `disabled` from `onDragStart` rebuilt dnd-kit's
+ * droppable set in the very frame it measures rects, leaving every chip with
+ * a stale/zero rect and `over: null`. Only visibility is toggled now. */
 function PanelSplitZone({ active }: { active: boolean }): ReactNode {
-	const { setNodeRef, isOver } = useDroppable({ id: "panel-split-zone", disabled: !active });
+	const { setNodeRef, isOver } = useDroppable({ id: "panel-split-zone" });
 	return (
 		<div
 			ref={setNodeRef}

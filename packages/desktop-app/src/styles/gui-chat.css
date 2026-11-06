@@ -730,9 +730,13 @@ body.gui-resizing .gui-pane-resize-x::after {
 }
 
 /* Panel-tab drag: keep pointermove over the page guest inside the renderer so
- * reorder and the right-half split drop zone both receive the full gesture. */
+ * reorder and the right-half split drop zone both receive the full gesture.
+ * The layer stays mounted; only hit-testing flips with the gesture. */
 .gui-panel-drag-shield {
 	cursor: grabbing;
+}
+.gui-panel-drag-shield:not([data-active]) {
+	pointer-events: none;
 }
 
 /* Notes pane height drag handle (bottom edge of the note editor). */
@@ -5721,7 +5725,25 @@ body.gui-resizing .gui-pane-right {
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: var(--glass-shadow);
 	color: var(--color-text);
+	/* The glass lifts this card away from the theme surface. Several dark
+	 * presets put --fg-faint at oklch 0.42–0.48, which loses contrast on the
+	 * brighter card. Derive both secondary levels from the card's own primary
+	 * text so every preset keeps the same three-step hierarchy and stays
+	 * readable; --color-bg keeps the mix inside the theme's own ramp. */
+	--color-text-muted: color-mix(in oklab, var(--color-text) 78%, var(--color-bg));
+	--color-text-faint: color-mix(in oklab, var(--color-text) 64%, var(--color-bg));
 	animation: gui-session-info-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Native button chrome (buttonface fill, outset border, default padding)
+ * survived on the icon-only and disclosure controls: on dark presets they
+ * painted as pale solid blocks. :where() keeps this at zero specificity, so
+ * rules below that deliberately set a fill or a colour still win. */
+:where(.gui-session-info) :where(button) {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
 }
 
 /* Float seat: right edge of the session column, over the transcript but INSIDE
@@ -5878,6 +5900,7 @@ body.gui-resizing .gui-pane-right {
 }
 .gui-session-info-row-label {
 	flex-shrink: 0;
+	white-space: nowrap;
 	color: var(--color-text-faint);
 }
 .gui-session-info-model-value {
@@ -5887,15 +5910,26 @@ body.gui-resizing .gui-pane-right {
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }
+/* A squeezed column used to wrap CJK labels one character per line. Keep
+ * every short readout on one line and ellipsise instead — a truncated label
+ * still reads, a vertical stack of glyphs does not. */
 .gui-session-info-section-label {
+	min-width: 0;
 	padding-bottom: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: 10.5px;
 	font-weight: 650;
 	letter-spacing: 0.02em;
 	color: var(--color-text-faint);
 }
 .gui-session-info-note {
+	min-width: 0;
 	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: 11.5px;
 	color: var(--color-text-faint);
 }
@@ -5967,8 +6001,11 @@ body.gui-resizing .gui-pane-right {
 	font-size: 11px;
 	color: var(--color-danger);
 }
-.gui-session-info-retry,
-.gui-session-info-more {
+/* Only the inline retry action is a text chip. The header "more" trigger is
+ * the 20px icon button defined above — folding it into this rule gave it a
+ * filled rectangle background and 8px horizontal padding, so the header
+ * showed a solid block instead of a quiet icon in every theme. */
+.gui-session-info-retry {
 	align-self: flex-start;
 	padding: 2px 8px;
 	border-radius: var(--radius-md);
@@ -5979,8 +6016,7 @@ body.gui-resizing .gui-pane-right {
 		background 120ms ease,
 		color 120ms ease;
 }
-.gui-session-info-retry:hover,
-.gui-session-info-more:hover {
+.gui-session-info-retry:hover {
 	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 	color: var(--color-text);
 }
@@ -6102,6 +6138,7 @@ body.gui-resizing .gui-pane-right {
 }
 .gui-session-info-count {
 	flex: none;
+	white-space: nowrap;
 	font-size: 10.5px;
 	font-variant-numeric: tabular-nums;
 	color: var(--color-text-faint);

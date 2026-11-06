@@ -53,6 +53,22 @@ export interface PanelDropResult {
 
 const DEFAULT_GAP_FALLBACK_PX = 48;
 
+/** A collision pass always needs a pointer. dnd-kit reports null on the first
+ *  pass and for keyboard activation; returning no collisions there ends the
+ *  drag with `over: null`, so the tab snaps back. The dragged chip's centre is
+ *  the closest stable substitute. */
+export function panelDropPointer(
+	pointerCoordinates: { readonly x: number; readonly y: number } | null,
+	collisionRect: ClientRect,
+): { x: number; y: number } {
+	return (
+		pointerCoordinates ?? {
+			x: collisionRect.left + collisionRect.width / 2,
+			y: collisionRect.top + collisionRect.height / 2,
+		}
+	);
+}
+
 function contains(rect: ClientRect, x: number, y: number): boolean {
 	return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
