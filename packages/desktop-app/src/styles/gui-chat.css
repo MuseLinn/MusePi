@@ -5731,6 +5731,17 @@ body.gui-resizing .gui-pane-right {
 .gui-session-info-note[data-state="error"] {
 	color: var(--color-danger);
 }
+/* Inline follow-up action on a status line (view the removed content). */
+.gui-session-info-link {
+	flex-shrink: 0;
+	color: var(--color-accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+.gui-session-info-link:hover {
+	color: var(--color-accent-hover);
+}
 .gui-session-info-model {
 	display: flex;
 	align-items: center;

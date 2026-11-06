@@ -6757,6 +6757,8 @@ export const settings = {
 	"sessionInfo.maintenanceClearHint": "Make the model forget the conversation; the transcript is kept",
 	"sessionInfo.maintenanceBusy": "Available after the current response finishes",
 	"sessionInfo.maintenanceNothingToDo": "Nothing left to remove from context",
+	"sessionInfo.reloadTranscript": "Reload conversation",
+	"sessionInfo.viewRemovedContent": "View removed content",
 	"sessionInfo.confirmClearContext":
 		"Make the model forget the conversation so far? The transcript stays, but the next turn starts from an empty context.",
 	"sessionInfo.unavailable": "Not available",

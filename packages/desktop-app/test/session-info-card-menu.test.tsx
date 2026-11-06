@@ -31,7 +31,7 @@ function fakeRpc(
 			calls.push({ method, params });
 			if (method === "session.contextUsage") return { model: "provider/model" };
 			if (method === "git.numstat") return { files: [] };
-			if (method === "session.shake") return { ...shakeResult, imagesDropped: 0 };
+			if (method === "session.shake") return { ...shakeResult, imagesDropped: 0, artifactId: "artifact-1" };
 			if (method === "session.fresh") return { closedProviderSessions: 2 };
 			if (method === "session.resetContext") return { droppedCount: 9 };
 			return {};
@@ -53,6 +53,7 @@ async function mount(
 		working?: boolean;
 		onSessionRewritten?: () => void;
 		shakeResult?: { toolResultsDropped: number; blocksDropped: number; tokensFreed: number };
+		onOpenArtifact?: (id: string) => void;
 	} = {},
 ): Promise<HTMLElement> {
 	const host = document.createElement("div");
@@ -70,6 +71,7 @@ async function mount(
 				tabs={[]}
 				working={options.working ?? false}
 				onSessionRewritten={options.onSessionRewritten}
+				onOpenArtifact={options.onOpenArtifact}
 			/>,
 		);
 	});
@@ -117,6 +119,7 @@ describe("SessionInfoCard 溢出菜单", () => {
 		);
 		expect(labels).toEqual([
 			t("general.copyWorkspacePath"),
+			t("sessionInfo.reloadTranscript"),
 			t("sessionInfo.maintenanceShake"),
 			t("sessionInfo.maintenanceFresh"),
 			t("sessionInfo.maintenanceClear"),
@@ -137,12 +140,17 @@ describe("SessionInfoCard 溢出菜单", () => {
 			expect(menuItem(t(key)).disabled).toBe(true);
 		}
 		expect(menuItem(t("general.copyWorkspacePath")).disabled).toBe(false);
+		expect(menuItem(t("sessionInfo.reloadTranscript")).disabled).toBe(true);
 	});
 
 	it("移除工具输出调用 session.shake,结果落进状态行并重读 transcript", async () => {
 		const calls: RpcCall[] = [];
 		let rewritten = 0;
-		const host = await mount(calls, { onSessionRewritten: () => (rewritten += 1) });
+		let opened: string | null = null;
+		const host = await mount(calls, {
+			onSessionRewritten: () => (rewritten += 1),
+			onOpenArtifact: id => (opened = id),
+		});
 		openMenu(host);
 		act(() => menuItem(t("sessionInfo.maintenanceShake")).click());
 		await flush();
@@ -154,6 +162,16 @@ describe("SessionInfoCard 溢出菜单", () => {
 		);
 		// Persisted entries changed in place; the transcript must re-read them.
 		expect(rewritten).toBe(1);
+		// The recovery snapshot stays one click away.
+		const link = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button =>
+			button.textContent?.includes(t("sessionInfo.viewRemovedContent")),
+		);
+		expect(link).toBeDefined();
+		await act(async () => {
+			link!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+		});
+		await flush();
+		expect(opened).toBe("artifact-1");
 	});
 
 	it("没有可移除内容时不重读 transcript", async () => {

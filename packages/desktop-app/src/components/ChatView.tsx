@@ -2535,6 +2535,12 @@ export function ChatView({
 		onSessionRewritten: (): void => {
 			void verifyTranscript();
 		},
+		// Shake keeps its recovery snapshot as a session artifact; the status
+		// line links to the same read-only preview tool cards use.
+		onOpenArtifact: (id: string): void => {
+			const sessionId = store?.sessionId;
+			if (sessionId) setArtifactPreview({ sessionId, id });
+		},
 	};
 
 	return (

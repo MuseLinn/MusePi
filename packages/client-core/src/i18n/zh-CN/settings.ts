@@ -6473,6 +6473,8 @@ export const settings = {
 	"sessionInfo.maintenanceClearHint": "让模型忘记之前的对话，聊天记录仍然保留",
 	"sessionInfo.maintenanceBusy": "本轮回复结束后可用",
 	"sessionInfo.maintenanceNothingToDo": "没有可移除的内容",
+	"sessionInfo.reloadTranscript": "重新加载对话",
+	"sessionInfo.viewRemovedContent": "查看被移除内容",
 	"sessionInfo.confirmClearContext": "让模型忘记目前这段对话？聊天记录会保留，但下一轮从空上下文开始。",
 	"sessionInfo.unavailable": "暂无数据",
 	"sessionInfo.workingDirectories": "工作目录",

@@ -338,6 +338,9 @@ interface SessionInfoCardProps {
 	/** The daemon rewrote persisted entries in place (context shake), so the
 	 *  rendered transcript is now stale and needs a fresh snapshot. */
 	onSessionRewritten?(): void;
+	/** Open a session artifact (the shake recovery snapshot) in the host's
+	 *  read-only preview. Absent ⇒ the removed-content link stays hidden. */
+	onOpenArtifact?(id: string): void;
 }
 
 export function SessionInfoCard({
@@ -357,6 +360,7 @@ export function SessionInfoCard({
 	onOpenSurface,
 	onOpenSettings,
 	onSessionRewritten,
+	onOpenArtifact,
 }: SessionInfoCardProps): ReactNode {
 	const [usage, setUsage] = useState<UsageView | null>(null);
 	const [usageState, setUsageState] = useState<UsageState>("loading");
@@ -546,7 +550,12 @@ export function SessionInfoCard({
 	// lands in the status line under the header.
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [maintenanceBusy, setMaintenanceBusy] = useState<MaintenanceOp | null>(null);
-	const [actionStatus, setActionStatus] = useState<{ text: string; error: boolean } | null>(null);
+	const [actionStatus, setActionStatus] = useState<{
+		text: string;
+		error: boolean;
+		/** Shake recovery snapshot, when this action produced one. */
+		artifact?: string;
+	} | null>(null);
 	const { anchorRef: menuAnchorRef, renderMenu } = useFloatingMenu(menuOpen, setMenuOpen, { align: "right" });
 	const { confirm } = useConfirm();
 
@@ -572,6 +581,7 @@ export function SessionInfoCard({
 					blocksDropped: number;
 					imagesDropped?: number;
 					tokensFreed: number;
+					artifactId?: string;
 				}>("session.shake", { sessionId, mode: "elide" });
 				const dropped = result.toolResultsDropped + result.blocksDropped + (result.imagesDropped ?? 0);
 				setActionStatus({
@@ -583,6 +593,7 @@ export function SessionInfoCard({
 									tokens: result.tokensFreed,
 								}),
 					error: false,
+					artifact: result.artifactId,
 				});
 				// The daemon rewrote persisted entries in place and ships no
 				// entry event for it: re-read the transcript or the cards keep
@@ -677,6 +688,19 @@ export function SessionInfoCard({
 						<Icon name="clipboard" className="h-3.5 w-3.5" />
 						<span className="min-w-0 flex-1 truncate">{t("general.copyWorkspacePath")}</span>
 					</button>
+					<button
+						type="button"
+						className="gui-context-item"
+						role="menuitem"
+						disabled={maintenanceBlocked || !onSessionRewritten}
+						onClick={() => {
+							setMenuOpen(false);
+							onSessionRewritten?.();
+						}}
+					>
+						<Icon name="restart" className="h-3.5 w-3.5" />
+						<span className="min-w-0 flex-1 truncate">{t("sessionInfo.reloadTranscript")}</span>
+					</button>
 					<div className="gui-context-divider" role="separator" />
 					{maintenanceItem(
 						"shake",
@@ -715,7 +739,16 @@ export function SessionInfoCard({
 					data-state={actionStatus.error ? "error" : undefined}
 					role={actionStatus.error ? "alert" : "status"}
 				>
-					{actionStatus.text}
+					<span>{actionStatus.text}</span>
+					{actionStatus.artifact && onOpenArtifact ? (
+						<button
+							type="button"
+							className="gui-session-info-link"
+							onClick={() => onOpenArtifact(actionStatus.artifact!)}
+						>
+							{t("sessionInfo.viewRemovedContent")}
+						</button>
+					) : null}
 				</p>
 			) : null}
 
