@@ -12,6 +12,7 @@ import { checkPythonKernelAvailability } from "../eval/py/kernel";
 import { checkRubyKernelAvailability } from "../eval/rb/kernel";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import type { ToolPathWithSource } from "../extensibility/custom-tools";
+import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import type { GoalModeState, GoalRuntime } from "../goals";
 import { GoalTool } from "../goals/tools/goal-tool";
@@ -166,6 +167,12 @@ export interface ToolSession {
 	additionalDirectories?: string[];
 	/** Whether UI is available */
 	hasUI: boolean;
+	/**
+	 * Host-injected UI context (TUI / RPC / daemon approval bridge). Subagents
+	 * forward it so their approval and ask prompts land in the parent's UI.
+	 * Read lazily: hosts attach it after session construction.
+	 */
+	uiContext?: ExtensionUIContext;
 	/** Whether this session has begun disposal. */
 	isDisposed?: () => boolean;
 	/**

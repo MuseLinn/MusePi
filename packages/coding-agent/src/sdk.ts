@@ -658,6 +658,13 @@ export interface CreateAgentSessionOptions {
 	/** Whether UI is available (enables interactive tools like ask). Default: false */
 	hasUI?: boolean;
 	/**
+	 * Register UI-only tools (`ask`) even though {@link hasUI} stays false during
+	 * construction. Subagents use this so a parent UI context injected right after
+	 * `createAgentSession` resolves can answer the tool, while MCP discovery and
+	 * LSP startup keep their headless paths.
+	 */
+	toolSessionHasUI?: boolean;
+	/**
 	 * Defer `confirm` reserve-policy fallback until AgentSession prompt-time UI is configured.
 	 * ACP uses this while capabilities are negotiated without enabling UI-only tools.
 	 */
@@ -2076,7 +2083,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			isToolActive: name => activeToolNames.has(name),
 			setActiveToolNames,
 			toolRegistry,
-			hasUI: options.hasUI ?? false,
+			hasUI: options.hasUI === true || options.toolSessionHasUI === true,
+			get uiContext() {
+				return toolContextStore.getUIContext();
+			},
 			getApiKey: options.getApiKey,
 			pauseGate: options.pauseGate,
 			get additionalDirectories() {

@@ -11,6 +11,7 @@
  */
 export const LEGACY_ROUTES: readonly string[] = [
 	"agents.chat",
+	"agents.detach",
 	"agents.kill",
 	"agents.list",
 	"agents.revive",

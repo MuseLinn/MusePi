@@ -539,11 +539,28 @@ export class SessionMaintenance {
 	 *
 	 * No-op (zero counts) when nothing is eligible.
 	 */
-	async shake(mode: ShakeMode, opts: { config?: ShakeConfig; signal?: AbortSignal } = {}): Promise<ShakeResult> {
+	async shake(
+		mode: ShakeMode,
+		opts: {
+			config?: ShakeConfig;
+			signal?: AbortSignal;
+			/** Fail closed when the recovery artifact cannot be written: no
+			 *  artifact, no elision. Automatic callers set this so a fallback
+			 *  pass can never destroy content it cannot restore. */
+			requireArtifact?: boolean;
+			/** Return zero counts instead of rewriting once the caller's turn is
+			 *  gone (generation guard for background/automatic passes). */
+			isCurrent?: () => boolean;
+			/** Restrict the pass to tool-result regions. */
+			toolResultsOnly?: boolean;
+		} = {},
+	): Promise<ShakeResult> {
+		const notCurrent = (): boolean => opts.isCurrent !== undefined && !opts.isCurrent();
 		if (mode === "images") {
 			const { removed } = await this.#host.dropImages();
 			return { mode, toolResultsDropped: 0, blocksDropped: 0, imagesDropped: removed, tokensFreed: 0 };
 		}
+		if (notCurrent()) return { mode, toolResultsDropped: 0, blocksDropped: 0, tokensFreed: 0 };
 
 		const branchEntries = this.#host.sessionManager.getBranch();
 		const latestCompaction = getLatestCompactionEntry(branchEntries);
@@ -555,12 +572,28 @@ export class SessionMaintenance {
 			// the active model cannot replay still hides its prefix from the prompt.
 			keepBoundaryId: latestCompaction?.firstKeptEntryId,
 		});
-		const regions = collectShakeRegions(branchEntries, this.#tokenizer, config);
+		const allRegions = collectShakeRegions(branchEntries, this.#tokenizer, config);
+		const regions = opts.toolResultsOnly ? allRegions.filter(region => region.kind === "toolResult") : allRegions;
 		if (regions.length === 0) {
 			return { mode, toolResultsDropped: 0, blocksDropped: 0, tokensFreed: 0 };
 		}
 
+		// A tool-results-only pass is an opportunistic recovery, not a user
+		// action: skip it unless it actually buys enough context back.
+		const predictedSavings = regions.reduce(
+			(total, region, index) =>
+				total + region.tokens - this.#tokenizer.countTokens(this.#shakeElidePlaceholder(region, index, undefined)),
+			0,
+		);
+		if (opts.toolResultsOnly && predictedSavings < config.minSavings) {
+			return { mode, toolResultsDropped: 0, blocksDropped: 0, tokensFreed: 0 };
+		}
+
 		const artifactId = await this.#saveShakeArtifact(regions);
+		if (opts.requireArtifact && !artifactId) {
+			throw new Error("shake could not save a recovery artifact");
+		}
+		if (notCurrent()) return { mode, toolResultsDropped: 0, blocksDropped: 0, tokensFreed: 0 };
 		const replacements = regions.map((region, index) => this.#shakeElidePlaceholder(region, index, artifactId));
 
 		const hasRemoteReplacementHistory = getOpenAiRemoteCompactionPayload(latestCompaction) !== undefined;
@@ -597,10 +630,26 @@ export class SessionMaintenance {
 			return { region, replacement };
 		});
 
+		// Snapshot every entry the pass mutates (plus the usage anchor) so a
+		// failed rewrite leaves memory exactly as it was instead of half-elided
+		// history that no longer matches the file on disk.
+		const entrySnapshots = new Map<SessionEntry, SessionEntry>();
+		for (const { region } of items) {
+			if (!entrySnapshots.has(region.entry)) entrySnapshots.set(region.entry, structuredClone(region.entry));
+		}
+		const anchorEntry = anchorIndex >= 0 ? branchEntries[anchorIndex] : undefined;
+		if (anchorEntry && !entrySnapshots.has(anchorEntry)) {
+			entrySnapshots.set(anchorEntry, structuredClone(anchorEntry));
+		}
 		applyShakeRegions(items);
-		this.#host.recordAnchoredHistoryRewrite(anchoredTokensRemoved);
-
-		await this.#host.sessionManager.rewriteEntries();
+		try {
+			this.#host.recordAnchoredHistoryRewrite(anchoredTokensRemoved);
+			await this.#host.sessionManager.rewriteEntries();
+		} catch (error) {
+			for (const [entry, snapshot] of entrySnapshots) Object.assign(entry, snapshot);
+			this.#host.agent.replaceMessages(this.#host.buildDisplaySessionContext().messages);
+			throw error;
+		}
 		const sessionContext = this.#host.buildDisplaySessionContext();
 		this.#host.agent.replaceMessages(sessionContext.messages);
 		this.#host.resetAdvisorRuntimes("shake");

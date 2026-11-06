@@ -5293,7 +5293,16 @@ export class AgentSession {
 	}
 
 	/** Reduce stored context with the selected shake strategy. */
-	shake(mode: ShakeMode, opts: { config?: ShakeConfig; signal?: AbortSignal } = {}): Promise<ShakeResult> {
+	shake(
+		mode: ShakeMode,
+		opts: {
+			config?: ShakeConfig;
+			signal?: AbortSignal;
+			requireArtifact?: boolean;
+			isCurrent?: () => boolean;
+			toolResultsOnly?: boolean;
+		} = {},
+	): Promise<ShakeResult> {
 		return this.#maintenance.shake(mode, opts);
 	}
 

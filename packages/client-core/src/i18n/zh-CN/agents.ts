@@ -25,6 +25,10 @@ export const agents = {
 	"agents.new": "新",
 	// 子会话行的内嵌预览动作：在右侧面板就地停靠子代理完整会话。
 	"agents.previewSubagentPanel": "在面板中预览",
+	// 子代理面板标签页：surface 名 + 会话已结束的空态。
+	"agents.subagentTab": "子代理会话",
+	"agents.subagentUnavailable": "该子代理会话已结束",
+	"agents.subagentUnavailableHint": "可在主对话中打开该子代理会话，继续查看其记录。",
 	"context {count}": "上下文 {count}",
 	"transcript unavailable: {reason}": "无法获取记录：{reason}",
 	"no transcript available": "暂无可用记录",

@@ -5705,6 +5705,32 @@ body.gui-resizing .gui-pane-right {
 	font-size: 12.5px;
 	font-weight: 650;
 }
+/* Header overflow menu (workspace path + session maintenance): a quiet icon
+ * button, so the title keeps the row and the trigger never reads as a CTA. */
+.gui-session-info-more {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: var(--radius-md);
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+.gui-session-info-more:hover,
+.gui-session-info-more[aria-expanded="true"] {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+.gui-session-info-note--busy {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+.gui-session-info-note[data-state="error"] {
+	color: var(--color-danger);
+}
 .gui-session-info-model {
 	display: flex;
 	align-items: center;
@@ -6049,6 +6075,19 @@ body.gui-resizing .gui-pane-right {
 }
 .gui-session-info-agent--ended {
 	color: var(--color-text-faint);
+}
+/* A subagent parked on an approval: warning tint instead of the live row's
+ * muted grey, and a pill where the progress track would sit. */
+.gui-session-info-agent--blocked {
+	color: var(--color-warning, var(--color-accent));
+}
+.gui-session-info-agent-state {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	color: var(--color-warning, var(--color-accent));
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 14%, transparent);
 }
 .gui-session-info-elapsed {
 	flex: none;

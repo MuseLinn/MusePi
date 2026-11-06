@@ -5489,6 +5489,31 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"task.approvalMode": {
+		type: "enum",
+		values: ["inherit", "yolo"] as const,
+		default: "inherit",
+		ui: {
+			tab: "tasks",
+			group: "Subagents",
+			label: "Subagent Approval",
+			description:
+				"Approval behavior for spawned subagents. 'Inherit' reuses the parent session's tools.approvalMode and routes prompts to the parent's UI (the subagent shows as awaiting approval). 'Yolo' keeps the previous headless behavior and auto-approves every tier. When the parent has no UI to answer prompts, 'inherit' falls back to 'yolo'.",
+			options: [
+				{
+					value: "inherit",
+					label: "Inherit",
+					description: "Match the parent session's approval mode and surface prompts in its UI",
+				},
+				{
+					value: "yolo",
+					label: "Yolo",
+					description: "Auto-approve every tier; subagents never block on a UI prompt",
+				},
+			],
+		},
+	},
+
 	"task.maxRuntimeMs": {
 		type: "number",
 		default: 0,

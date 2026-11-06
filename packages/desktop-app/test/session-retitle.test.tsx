@@ -241,18 +241,28 @@ describe("AI rename row feedback", () => {
 		}
 	});
 
-	test("the pane and the menu item show the run while it is in flight, then recover", async () => {
+	test("the row, the pane and the menu item show the run while it is in flight, then recover", async () => {
 		let release!: (value: { ok: boolean; title: string }) => void;
 		const gate = new Promise<{ ok: boolean; title: string }>(resolve => {
 			release = resolve;
 		});
-		const cleanup = await mount(<SessionSidebar {...baseProps()} onRetitleSession={async () => gate} />);
+		const cleanup = await mount(
+			<SessionSidebar
+				{...baseProps({ nodes: [node("s1", "Some task"), node("s2", "Other task")] })}
+				onRetitleSession={async () => gate}
+			/>,
+		);
 		try {
 			await openMenu("Some task");
 			await act(async () => {
 				menuItem("AI 重命名")!.click();
 			});
 			await flush();
+			const row = rowEl("Some task");
+			expect(row.querySelector("[data-ai-retitling]")).not.toBeNull();
+			expect(row.getAttribute("aria-busy")).toBe("true");
+			// Only the row being renamed is busy.
+			expect(rowEl("Other task").querySelector("[data-ai-retitling]")).toBeNull();
 			expect(document.querySelector("#app [role=status]")?.textContent).toContain("Some task");
 			await openMenu("Some task");
 			expect(menuItem("AI 重命名中…")?.disabled).toBe(true);
@@ -262,6 +272,7 @@ describe("AI rename row feedback", () => {
 				await gate;
 			});
 			await flush();
+			expect(rowEl("Some task").querySelector("[data-ai-retitling]")).toBeNull();
 			expect(document.querySelector("#app [role=status]")).toBeNull();
 			await openMenu("Some task");
 			expect(menuItem("AI 重命名")?.disabled).toBe(false);
@@ -281,6 +292,27 @@ describe("AI rename row feedback", () => {
 			});
 			await flush();
 			expect(document.querySelector("#app [role=status]")).toBeNull();
+			expect(rowEl("Some task").querySelector("[data-ai-retitling]")).toBeNull();
+			await openMenu("Some task");
+			expect(menuItem("AI 重命名")?.disabled).toBe(false);
+			expect(getToasts()[0]?.message).toContain("AI 重命名失败");
+		} finally {
+			cleanup();
+		}
+	});
+
+	test("a host callback that throws synchronously still releases the row", async () => {
+		const throwSync = (() => {
+			throw new Error("sync boom");
+		}) as unknown as (sessionId: string) => Promise<{ ok: boolean; reason?: "failed" }>;
+		const cleanup = await mount(<SessionSidebar {...baseProps()} onRetitleSession={throwSync} />);
+		try {
+			await openMenu("Some task");
+			await act(async () => {
+				menuItem("AI 重命名")!.click();
+			});
+			await flush();
+			expect(rowEl("Some task").querySelector("[data-ai-retitling]")).toBeNull();
 			await openMenu("Some task");
 			expect(menuItem("AI 重命名")?.disabled).toBe(false);
 			expect(getToasts()[0]?.message).toContain("AI 重命名失败");

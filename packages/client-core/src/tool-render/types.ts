@@ -26,7 +26,16 @@ export interface ToolResultImage {
 	mimeType: string;
 }
 
-export type ToolResultBlock = ToolResultText | ToolResultImage | { type: string };
+/** A video result: usually a URL (generated clips), base64 only for tiny ones. */
+export interface ToolResultVideo {
+	type: "video";
+	/** e.g. "video/mp4". */
+	mimeType: string;
+	data?: string;
+	url?: string;
+}
+
+export type ToolResultBlock = ToolResultText | ToolResultImage | ToolResultVideo | { type: string };
 
 export interface ToolResultLike {
 	content: readonly ToolResultBlock[];
@@ -44,6 +53,11 @@ export interface ToolRenderHost {
 	hasAgent?(id: string): boolean;
 	/** Open the sub-session/transcript view for an agent id. */
 	openAgent?(id: string): void;
+	/** Move a running foreground subagent to the background without
+	 *  restarting it; its result arrives later through the host's background
+	 *  task channel. Hosts without the capability omit it and the task card
+	 *  hides the "to background" action. */
+	detachAgent?(id: string): void;
 	/** Submit a message to the conversation as if the user typed it
 	 *  (kimi sendPrompt parity — inline widgets hand results back to the
 	 *  agent). Absent in board-only hosts. */
@@ -66,6 +80,8 @@ export interface ToolRenderHost {
 	 *  without a settings surface omit it and contextual "fix this in
 	 *  settings" actions hide themselves. */
 	openSettings?(section?: string): void;
+	/** Open a session artifact in a read-only host preview. */
+	openArtifact?(id: string): void;
 	/**
 	 * Put a project plan in front of the user (the `knowledge` tool's `show`).
 	 *

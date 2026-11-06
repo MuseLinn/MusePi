@@ -54,6 +54,11 @@ export class ToolContextStore {
 		this.#hasUI = hasUI;
 	}
 
+	/** The host-injected UI context, if any. Subagents forward it to their own tool session. */
+	getUIContext(): ExtensionUIContext | undefined {
+		return this.#uiContext;
+	}
+
 	setToolNames(names: string[]): void {
 		this.#toolNames = names;
 	}

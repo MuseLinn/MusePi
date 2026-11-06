@@ -30,7 +30,7 @@ const mounted: { host: HTMLDivElement; root: Root }[] = [];
 beforeEach(() => {
 	// One hidden surface guarantees `hiddenItems.length > 0`, so the "…" trigger
 	// always renders regardless of how many surfaces fit the rail height.
-	localStorage.setItem(SURFACE_HIDDEN_KEY, JSON.stringify(["widget"]));
+	localStorage.setItem(SURFACE_HIDDEN_KEY, JSON.stringify(["agents"]));
 });
 
 afterEach(() => {
@@ -124,7 +124,7 @@ describe("right-rail overflow menu", () => {
 		const items = rootHost.querySelectorAll("[role='menuitem']");
 		expect(items.length).toBeGreaterThan(0);
 		expect(rootHost.textContent).toContain("显示已隐藏的表面");
-		expect(rootHost.textContent).toContain("组件预览");
+		expect(rootHost.textContent).toContain("子代理");
 	});
 
 	test("closing the menu removes it from the root", () => {

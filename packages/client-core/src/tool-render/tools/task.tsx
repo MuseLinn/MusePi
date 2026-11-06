@@ -565,7 +565,9 @@ function SwarmAgentProgressRow({
 						phase={phase === "ok" ? "ok" : phase === "err" ? "err" : "run"}
 						fraction={agentProgressFraction(p)}
 						status={footStatus}
-					/>
+					>
+						{isLiveStatus(p) && <DetachAction id={id} host={host} />}
+					</SwarmFoot>
 				</div>
 			</div>
 		</div>
@@ -661,6 +663,34 @@ function AgentResult({
 	);
 }
 
+/** "To background" action on a live agent row: stops this turn from waiting on
+ *  the spawn while it keeps running. The host capability decides visibility;
+ *  the local flag prevents a second request, since the run is already adopted. */
+function DetachAction({ id, host }: { id: string; host?: ToolRenderHost }): ReactNode {
+	const [requested, setRequested] = useState(false);
+	if (!host?.detachAgent) return null;
+	if (requested) return <Badge>{t("tools.detachRequested")}</Badge>;
+	return (
+		<button
+			type="button"
+			className="tv-badge tv-agent-link"
+			title={t("tools.detachToBackgroundHint")}
+			onClick={() => {
+				setRequested(true);
+				host.detachAgent?.(id);
+			}}
+		>
+			{t("tools.detachToBackground")}
+		</button>
+	);
+}
+
+/** A progress row is detachable only while the agent still runs. */
+function isLiveStatus(p: Record<string, unknown>): boolean {
+	const status = str(p.status) ?? "running";
+	return status !== "completed" && status !== "failed" && status !== "aborted";
+}
+
 /** Live (still-running) snapshot for one agent: compact status row (one
  *  line per subagent) — the native task card body. */
 function AgentProgressRow({
@@ -704,6 +734,7 @@ function AgentProgressRow({
 			<Badge tone={tone}>{status}</Badge> {description && <span>{truncate(normalizeWs(description), 96)}</span>}{" "}
 			{intent && <span className="tv-muted">{truncate(normalizeWs(intent), 64)}</span>}{" "}
 			{bits.length > 0 && <span className="tv-faint">{bits.join(" · ")}</span>}
+			{isLiveStatus(p) && <DetachAction id={id} host={host} />}
 			{intent && (
 				<button
 					type="button"

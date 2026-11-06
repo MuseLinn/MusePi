@@ -34,15 +34,16 @@ import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { openExternalUrl } from "../lib/electron";
+import { copyToClipboard, openExternalUrl } from "../lib/electron";
 import type { PanelTab } from "../lib/panel-tabs";
+import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
 import { SESSION_INFO_SLOT, SlotComponentHost, useExtensionRegistry } from "../lib/slot-host";
 import { readHiddenSurfaces, SURFACE_HIDDEN_KEY, SURFACES, surfaceVisible } from "../lib/surfaces/registry";
+import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
-import { ExtensionStatusCard } from "./ExtensionStatusCard";
 import { Reveal } from "./Reveal";
 
 /** One preference per session; the `musepi-gui-` prefix is the GUI's key rule. */
@@ -101,6 +102,8 @@ interface ChangesView {
 
 type UsageState = "loading" | "ready" | "error";
 type ChangesState = "loading" | "ready" | "none" | "error";
+/** Session-hygiene actions the header menu runs against the daemon. */
+type MaintenanceOp = "shake" | "fresh" | "clear";
 
 function sessionInfoStorageKey(sessionId: string): string {
 	return `${SESSION_INFO_STORAGE_PREFIX}${sessionId}`;
@@ -188,6 +191,9 @@ function hasChangesOf(changes: ChangesView | null): changes is ChangesView {
 /** A subagent still producing progress (vs. a finished one). */
 const isLiveAgent = (p: SubagentProgressPayload): boolean =>
 	p.progress.status === "pending" || p.progress.status === "running";
+
+/** Live but parked on a user decision — it cannot move until the human answers. */
+const isAwaitingApproval = (p: SubagentProgressPayload): boolean => p.progress.awaitingApproval === true;
 
 /** Latest todo-tool snapshot from the transcript (result details carry
  *  `{ phases: [{ name, tasks: [{ content, status }] }] }`). Returns null
@@ -329,6 +335,9 @@ interface SessionInfoCardProps {
 	/** Open the settings pane at a section — the connector section's
 	 *  manage entry passes "mcp". */
 	onOpenSettings?(section?: string): void;
+	/** The daemon rewrote persisted entries in place (context shake), so the
+	 *  rendered transcript is now stale and needs a fresh snapshot. */
+	onSessionRewritten?(): void;
 }
 
 export function SessionInfoCard({
@@ -347,6 +356,7 @@ export function SessionInfoCard({
 	onSelectTab,
 	onOpenSurface,
 	onOpenSettings,
+	onSessionRewritten,
 }: SessionInfoCardProps): ReactNode {
 	const [usage, setUsage] = useState<UsageView | null>(null);
 	const [usageState, setUsageState] = useState<UsageState>("loading");
@@ -466,8 +476,15 @@ export function SessionInfoCard({
 	}, [pluginEntries]);
 
 	// ── Subagents: live/ended split + per-agent elapsed timers ─────────────
+	// A blocked agent leads the card: it is the one row that needs the human.
+	// `sort` is stable, so rows within a state keep their wire order.
 	const liveAgents = useMemo(
-		() => (progress ? [...progress.entries()].filter(([, entry]) => isLiveAgent(entry)) : []),
+		() =>
+			progress
+				? [...progress.entries()]
+						.filter(([, entry]) => isLiveAgent(entry))
+						.sort(([, a], [, b]) => Number(isAwaitingApproval(b)) - Number(isAwaitingApproval(a)))
+				: [],
 		[progress],
 	);
 	const endedAgents = useMemo(
@@ -505,8 +522,11 @@ export function SessionInfoCard({
 	const surfaces = useMemo(() => {
 		const hidden = new Set(hiddenSurfaces);
 		return SURFACES.filter(
+			// Tertiary surfaces are tab hosts (an agent's session), not launchers.
 			surface =>
-				!hidden.has(surface.id) && surfaceVisible(surface, { rpc, sessionId, cwd: cwd ?? undefined, openSurfaces }),
+				surface.group !== "tertiary" &&
+				!hidden.has(surface.id) &&
+				surfaceVisible(surface, { rpc, sessionId, cwd: cwd ?? undefined, openSurfaces }),
 		);
 	}, [rpc, sessionId, cwd, openSurfaces, hiddenSurfaces]);
 
@@ -517,6 +537,100 @@ export function SessionInfoCard({
 	const sessionTitle = title?.trim() || t("general.sessionInfoUntitled");
 	const model = usage?.model ?? null;
 	const retry = useCallback((): void => setReloadToken(token => token + 1), []);
+
+	// ── Header overflow menu: copy workspace path + session maintenance ─────
+	// Low-frequency actions live with the session's metadata instead of the
+	// context panel: shaking context / resetting the provider stream / clearing
+	// the session are hygiene verbs, not context-usage readouts. The clear verb
+	// asks first (destructive); busy state blocks a second run, and the outcome
+	// lands in the status line under the header.
+	const [menuOpen, setMenuOpen] = useState(false);
+	const [maintenanceBusy, setMaintenanceBusy] = useState<MaintenanceOp | null>(null);
+	const [actionStatus, setActionStatus] = useState<{ text: string; error: boolean } | null>(null);
+	const { anchorRef: menuAnchorRef, renderMenu } = useFloatingMenu(menuOpen, setMenuOpen, { align: "right" });
+	const { confirm } = useConfirm();
+
+	const copyWorkspacePath = async (): Promise<void> => {
+		if (!cwd) return;
+		const copied = await copyToClipboard(cwd);
+		setActionStatus({
+			text: copied ? t("general.workspacePathCopied") : t("general.copyFailed"),
+			error: !copied,
+		});
+	};
+
+	const runMaintenance = async (op: MaintenanceOp): Promise<void> => {
+		if (!rpc || !sessionId || maintenanceBusy) return;
+		if (op === "clear" && !(await confirm(t("sessionInfo.confirmClearContext"), undefined, { destructive: true })))
+			return;
+		setMaintenanceBusy(op);
+		setActionStatus(null);
+		try {
+			if (op === "shake") {
+				const result = await rpc.request<{
+					toolResultsDropped: number;
+					blocksDropped: number;
+					imagesDropped?: number;
+					tokensFreed: number;
+				}>("session.shake", { sessionId, mode: "elide" });
+				const dropped = result.toolResultsDropped + result.blocksDropped + (result.imagesDropped ?? 0);
+				setActionStatus({
+					text:
+						dropped === 0
+							? t("sessionInfo.maintenanceNothingToDo")
+							: t("tools.shakeResultBlocksTokensWithDroppedWithTokens", {
+									dropped: result.toolResultsDropped,
+									tokens: result.tokensFreed,
+								}),
+					error: false,
+				});
+				// The daemon rewrote persisted entries in place and ships no
+				// entry event for it: re-read the transcript or the cards keep
+				// showing the pre-shake tool output.
+				if (dropped > 0) onSessionRewritten?.();
+			} else if (op === "fresh") {
+				const result = await rpc.request<{ closedProviderSessions: number }>("session.fresh", { sessionId });
+				setActionStatus({
+					text: t("tools.freshResultSessionsWithClosed", { closed: result.closedProviderSessions }),
+					error: false,
+				});
+			} else {
+				const result = await rpc.request<{ droppedCount: number }>("session.resetContext", { sessionId });
+				setActionStatus({
+					text: t("tools.clearResultMessagesWithDropped", { dropped: result.droppedCount }),
+					error: false,
+				});
+			}
+		} catch (err) {
+			setActionStatus({ text: errorText(err), error: true });
+		} finally {
+			setMaintenanceBusy(null);
+		}
+	};
+
+	// `fresh`/`clear` behave as no-ops while a turn streams (the daemon refuses
+	// mid-turn and reports zero), so the menu blocks them up front instead of
+	// showing a success that changed nothing. `shake` rewrites persisted history
+	// and has no undo, so holding it to idle too keeps one rule for the group.
+	const maintenanceBlocked = maintenanceBusy !== null || working;
+	const maintenanceItem = (op: MaintenanceOp, icon: IconName, label: string, hint: string): ReactNode => (
+		<button
+			type="button"
+			className={`gui-context-item${op === "clear" ? " gui-context-item--danger" : ""}`}
+			role="menuitem"
+			disabled={maintenanceBlocked}
+			/* The consequence stays in the tooltip: a permanent second line under
+			 * every row turns a four-item menu into a paragraph. */
+			title={working ? t("sessionInfo.maintenanceBusy") : hint}
+			onClick={() => {
+				setMenuOpen(false);
+				void runMaintenance(op);
+			}}
+		>
+			<Icon name={icon} className="h-3.5 w-3.5" />
+			<span className="min-w-0 flex-1 truncate">{label}</span>
+		</button>
+	);
 
 	const floating = mode === "float";
 	return (
@@ -535,7 +649,75 @@ export function SessionInfoCard({
 				<span className="gui-session-info-title" title={sessionTitle}>
 					{sessionTitle}
 				</span>
+				<button
+					ref={menuAnchorRef}
+					type="button"
+					className="gui-session-info-more"
+					title={t("tools.more")}
+					aria-label={t("tools.more")}
+					aria-haspopup="menu"
+					aria-expanded={menuOpen}
+					onClick={() => setMenuOpen(value => !value)}
+				>
+					<Icon name="more" className="h-3.5 w-3.5" />
+				</button>
 			</header>
+			{renderMenu(
+				<div className="gui-context-menu" role="menu" aria-label={t("tools.more")}>
+					<button
+						type="button"
+						className="gui-context-item"
+						role="menuitem"
+						disabled={!cwd}
+						onClick={() => {
+							setMenuOpen(false);
+							void copyWorkspacePath();
+						}}
+					>
+						<Icon name="clipboard" className="h-3.5 w-3.5" />
+						<span className="min-w-0 flex-1 truncate">{t("general.copyWorkspacePath")}</span>
+					</button>
+					<div className="gui-context-divider" role="separator" />
+					{maintenanceItem(
+						"shake",
+						"scissors",
+						t("sessionInfo.maintenanceShake"),
+						t("sessionInfo.maintenanceShakeHint"),
+					)}
+					{maintenanceItem(
+						"fresh",
+						"restart",
+						t("sessionInfo.maintenanceFresh"),
+						t("sessionInfo.maintenanceFreshHint"),
+					)}
+					{maintenanceItem(
+						"clear",
+						"delete-bin",
+						t("sessionInfo.maintenanceClear"),
+						t("sessionInfo.maintenanceClearHint"),
+					)}
+				</div>,
+			)}
+			{maintenanceBusy !== null ? (
+				<p className="gui-session-info-note gui-session-info-note--busy" role="status">
+					<Icon name="loader-4" className="h-3 w-3 animate-spin" />
+					<span>
+						{maintenanceBusy === "shake"
+							? t("sessionInfo.maintenanceShake")
+							: maintenanceBusy === "fresh"
+								? t("sessionInfo.maintenanceFresh")
+								: t("sessionInfo.maintenanceClear")}
+					</span>
+				</p>
+			) : actionStatus ? (
+				<p
+					className="gui-session-info-note"
+					data-state={actionStatus.error ? "error" : undefined}
+					role={actionStatus.error ? "alert" : "status"}
+				>
+					{actionStatus.text}
+				</p>
+			) : null}
 
 			<div className="gui-session-info-model" data-state={usageState} title={model ?? undefined}>
 				<Icon name="ai-agent" className="gui-session-info-row-icon" />
@@ -580,7 +762,7 @@ export function SessionInfoCard({
 					onClick={() => void openExternalUrl(pr.url)}
 				>
 					<Icon name="git-pull-request" className="gui-session-info-row-icon" />
-					<span className="gui-session-info-item-label">{`PR #${pr.number}`}</span>
+					<span className="gui-session-info-item-label">{t("general.prNumber", { number: pr.number })}</span>
 					<span className="gui-session-info-count">
 						{pr.isDraft
 							? t("general.prDraft")
@@ -607,22 +789,32 @@ export function SessionInfoCard({
 							// Same fraction the TUI task card and the guest swarm card use,
 							// so a row reads the same progress everywhere.
 							const pct = Math.round(agentProgressFraction(entry.progress) * 100);
+							const blocked = isAwaitingApproval(entry);
 							return (
 								<button
 									key={id}
 									type="button"
-									className="gui-session-info-agent"
+									className={`gui-session-info-agent${blocked ? " gui-session-info-agent--blocked" : ""}`}
 									title={entry.task}
 									onClick={() => onOpenSurface?.("trajectory")}
 								>
-									<Icon name="loader-4" className="gui-session-info-row-icon gui-session-info-spin" />
+									<Icon
+										name={blocked ? "alert" : "loader-4"}
+										className={`gui-session-info-row-icon${blocked ? "" : " gui-session-info-spin"}`}
+									/>
 									<span className="gui-session-info-item-label">
 										{entry.agent}
 										{entry.task ? ` · ${entry.task}` : ""}
 									</span>
-									<span className="gui-session-info-bar" aria-hidden="true">
-										<span className="tv-swarm-bar-fill" style={{ width: `${pct}%` }} />
-									</span>
+									{blocked ? (
+										// A parked agent has no progress to plot; the state text
+										// takes the track's place instead of freezing it.
+										<span className="gui-session-info-agent-state">{t("sessionInfo.awaitingApproval")}</span>
+									) : (
+										<span className="gui-session-info-bar" aria-hidden="true">
+											<span className="tv-swarm-bar-fill" style={{ width: `${pct}%` }} />
+										</span>
+									)}
 									<span className="gui-session-info-elapsed">{elapsed(id)}</span>
 									{entry.progress.cost > 0 ? (
 										<span className="gui-session-info-elapsed">{fmtCost(entry.progress.cost)}</span>
@@ -731,18 +923,16 @@ export function SessionInfoCard({
 			)}
 
 			{/* 「插件」分区是 Cordis 贡献点(chat.session-info.plugins):插件停用或
-			 *  编译失败时渲染下方内置同构列表,卡片不留白。分区上方的状态条把运行
-			 *  读数提到一眼可见的位置,点开仍是逐个扩展的运行/禁用明细。 */}
+			 *  编译失败时渲染内置同构列表,卡片不留白。分区只有一个入口:头部
+			 *  给出运行/总数,展开后是逐个扩展的运行/禁用明细 —— 不再另设一条
+			 *  打开浮层的状态条（同一份读数的第二个副本）。 */}
 			{pluginEntries.length > 0 ? (
-				<section className="gui-session-info-plugins-group">
-					<ExtensionStatusCard rpc={rpc} variant="inline" extensions={pluginEntries} />
-					<SlotComponentHost
-						rpc={rpc}
-						slot={SESSION_INFO_SLOT}
-						sessionInfo={sessionInfo}
-						fallback={<SessionInfoPluginsFallback sessionInfo={sessionInfo} />}
-					/>
-				</section>
+				<SlotComponentHost
+					rpc={rpc}
+					slot={SESSION_INFO_SLOT}
+					sessionInfo={sessionInfo}
+					fallback={<SessionInfoPluginsFallback sessionInfo={sessionInfo} />}
+				/>
 			) : null}
 
 			<section className="gui-session-info-tabs">

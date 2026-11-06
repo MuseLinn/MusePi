@@ -467,6 +467,36 @@ describe("SessionInfoCard 子代理与待办", () => {
 		await unmount();
 	});
 
+	it("等待审批的子代理排在最前，换告警图标并显示文案", async () => {
+		const blockedFixer = progressPayload("b", "fixer", "修复缺陷", "running", 3);
+		blockedFixer.progress.awaitingApproval = true;
+		const blockedPlanner = progressPayload("c", "planner", "补计划", "running", 1);
+		blockedPlanner.progress.awaitingApproval = true;
+		const progress = new Map<string, SubagentProgressPayload>([
+			["a", progressPayload("a", "explorer", "审查文件", "running", 2)],
+			["b", blockedFixer],
+			["c", blockedPlanner],
+		]);
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={makeRpc()} progress={progress} />);
+		const rows = [...host.querySelectorAll<HTMLElement>(".gui-session-info-agents > .gui-session-info-agent")];
+		// Both blocked rows lead in wire order; the still-running row follows.
+		expect(rows.map(row => row.querySelector(".gui-session-info-item-label")?.textContent)).toEqual([
+			"fixer · 修复缺陷",
+			"planner · 补计划",
+			"explorer · 审查文件",
+		]);
+		expect(rows[0]!.classList.contains("gui-session-info-agent--blocked")).toBe(true);
+		expect(rows[0]!.textContent).toContain(t("sessionInfo.awaitingApproval"));
+		expect(rows[0]!.querySelector("use")?.getAttribute("href")).toBe("#oc-alert");
+		// A parked agent has nothing to plot: the state text takes the track's place.
+		expect(rows[0]!.querySelector(".gui-session-info-bar")).toBeNull();
+		// The running row keeps the spinning loader and its bar.
+		expect(rows[2]!.classList.contains("gui-session-info-agent--blocked")).toBe(false);
+		expect(rows[2]!.querySelector("use")?.getAttribute("href")).toBe("#oc-loader-4");
+		expect(rows[2]!.querySelector(".gui-session-info-bar")).not.toBeNull();
+		await unmount();
+	});
+
 	it("已结束子代理显示耗时与成本", async () => {
 		const progress = new Map<string, SubagentProgressPayload>([
 			["c", progressPayload("c", "worker", "整理数据", "completed", 3, 0.42, 62_000)],

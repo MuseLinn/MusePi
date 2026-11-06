@@ -118,16 +118,19 @@ export function RightRail({
 
 	const fileWorkspaceAvailable = selectPanelTabComponent(extTabs, FILE_WORKSPACE_SURFACE) !== undefined;
 	// 注册表顺序 → 渲染项（过滤隐藏与 has-content 不可见；未知/扩展追加在尾）
+	// tertiary surfaces are tab hosts opened by their owner (e.g. one agent's
+	// session tab), never rail entries.
 	const items = useMemo(() => {
 		const ordered: Array<{ id: string; s: import("../lib/surfaces/registry").SurfaceDescriptor }> = [];
 		for (const id of order) {
 			const s = surfaceById(id);
-			if (!s || (id === FILE_WORKSPACE_SURFACE && !fileWorkspaceAvailable)) continue;
+			if (!s || s.group === "tertiary" || (id === FILE_WORKSPACE_SURFACE && !fileWorkspaceAvailable)) continue;
 			if (hiddenSet.has(id)) continue;
 			if (!surfaceVisible(s, ctx)) continue;
 			ordered.push({ id, s });
 		}
 		for (const s of SURFACES) {
+			if (s.group === "tertiary") continue;
 			if (s.id === FILE_WORKSPACE_SURFACE && !fileWorkspaceAvailable) continue;
 			if (!order.includes(s.id) && !hiddenSet.has(s.id) && surfaceVisible(s, ctx)) {
 				ordered.push({ id: s.id, s });

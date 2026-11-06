@@ -259,6 +259,48 @@ describe("AgentSession shake", () => {
 			expect(result.blocksDropped).toBe(0);
 			expect(result.tokensFreed).toBe(0);
 		});
+
+		it("skips the pass when the caller is no longer current", async () => {
+			seedHeavyToolResult("X".repeat(4000));
+			appendRecentProtectedTail();
+
+			const result = await session.shake("elide", { isCurrent: () => false });
+
+			expect(result.toolResultsDropped).toBe(0);
+			expect(branchToolResults()[0]?.prunedAt).toBeUndefined();
+		});
+
+		it("fails closed without mutating history when requireArtifact cannot save", async () => {
+			seedHeavyToolResult("X".repeat(4000));
+			appendRecentProtectedTail();
+			vi.spyOn(sessionManager, "saveArtifact").mockRejectedValue(new Error("disk full"));
+
+			await expect(session.shake("elide", { requireArtifact: true })).rejects.toThrow(/recovery artifact/);
+			expect(branchToolResults()[0]?.prunedAt).toBeUndefined();
+		});
+
+		it("restricts a toolResultsOnly pass to tool results", async () => {
+			seedHeavyToolResult("X".repeat(4000));
+			appendRecentProtectedTail();
+
+			const result = await session.shake("elide", { toolResultsOnly: true });
+
+			expect(result.toolResultsDropped).toBe(1);
+			expect(result.blocksDropped).toBe(0);
+		});
+
+		it("rolls the in-memory entries back when the rewrite fails", async () => {
+			seedHeavyToolResult("X".repeat(4000));
+			appendRecentProtectedTail();
+			vi.spyOn(sessionManager, "rewriteEntries").mockRejectedValue(new Error("write failed"));
+
+			await expect(session.shake("elide")).rejects.toThrow(/write failed/);
+
+			const [tr] = branchToolResults();
+			expect(tr?.prunedAt).toBeUndefined();
+			const text = tr?.content.map(block => (block.type === "text" ? block.text : "")).join("") ?? "";
+			expect(text).toContain("XXXXXXXX");
+		});
 	});
 
 	describe("images", () => {

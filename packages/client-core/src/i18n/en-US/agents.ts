@@ -27,6 +27,10 @@ export const agents = {
 	"agents.new": "New",
 	// Sub-session row action: dock the subagent's full conversation over the panel.
 	"agents.previewSubagentPanel": "Preview in panel",
+	// Subagent panel tab: surface name + the ended-session empty state.
+	"agents.subagentTab": "Subagent session",
+	"agents.subagentUnavailable": "This subagent session has ended",
+	"agents.subagentUnavailableHint": "Open it in the main chat to keep browsing its transcript.",
 	"context {count}": "context {count}",
 	"transcript unavailable: {reason}": "transcript unavailable: {reason}",
 	"no transcript available": "no transcript available",

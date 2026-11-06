@@ -89,6 +89,10 @@ export interface PanelTabState {
 	split: boolean;
 	/** Per-column displayed tab — column 1 stays null while unsplit. */
 	columnActive: [string | null, string | null];
+	/** Column 0's share of the split track (0–1). Optional because layouts
+	 *  persisted before the divider existed omit it; read it through
+	 *  {@link panelSplitRatio}, never raw. */
+	splitRatio?: number;
 }
 
 export const EMPTY_PANEL_TAB_STATE: PanelTabState = {
@@ -96,7 +100,61 @@ export const EMPTY_PANEL_TAB_STATE: PanelTabState = {
 	activeId: null,
 	split: false,
 	columnActive: [null, null],
+	splitRatio: 0.5,
 };
+
+/** Even initial split — the divider starts centred. */
+export const DEFAULT_PANEL_SPLIT_RATIO = 0.5;
+/** Structural floor: neither column may take less than this share even before
+ *  the pixel minimum applies. */
+export const PANEL_SPLIT_MIN_RATIO = 0.15;
+/** Structural ceiling — the mirror of {@link PANEL_SPLIT_MIN_RATIO}. */
+export const PANEL_SPLIT_MAX_RATIO = 1 - PANEL_SPLIT_MIN_RATIO;
+/** Smallest usable column the divider may leave. It degrades to half the
+ *  track when the panel is narrower than two of these. */
+export const PANEL_SPLIT_MIN_COLUMN_PX = 160;
+/** Width of the sash between the columns (`.gui-pane-split-divider`). */
+export const PANEL_SPLIT_DIVIDER_PX = 7;
+
+export function clampPanelSplitRatio(ratio: number): number {
+	if (!Number.isFinite(ratio)) return DEFAULT_PANEL_SPLIT_RATIO;
+	return Math.min(1 - PANEL_SPLIT_MIN_RATIO, Math.max(PANEL_SPLIT_MIN_RATIO, ratio));
+}
+
+/** Stored column-0 share with its default, clamped — the only read path. */
+export function panelSplitRatio(state: Pick<PanelTabState, "splitRatio">): number {
+	return clampPanelSplitRatio(state.splitRatio ?? DEFAULT_PANEL_SPLIT_RATIO);
+}
+
+/** Smallest share one column may keep in a track of `available` px. */
+export function panelSplitMinRatio(available: number): number {
+	if (!(available > 0)) return PANEL_SPLIT_MIN_RATIO;
+	return Math.min(0.5, Math.max(PANEL_SPLIT_MIN_RATIO, PANEL_SPLIT_MIN_COLUMN_PX / available));
+}
+
+/**
+ * Column 0's share after the pointer moved a divider whose two-column track
+ * spans `left … left + available` (available excludes the sash itself). The
+ * pixel minimum degrades to half the track, so a panel too narrow for two
+ * 160px columns still lets the user reach both sides.
+ */
+export function panelSplitRatioAt(pointerX: number, track: { left: number; available: number }): number {
+	if (!(track.available > 0)) return DEFAULT_PANEL_SPLIT_RATIO;
+	const min = panelSplitMinRatio(track.available);
+	const raw = (pointerX - track.left - PANEL_SPLIT_DIVIDER_PX / 2) / track.available;
+	return Math.min(1 - min, Math.max(min, raw));
+}
+
+/** Keyboard step: move the share by `delta` inside the same track limits. */
+export function nudgePanelSplitRatio(ratio: number, delta: number, available: number): number {
+	const min = panelSplitMinRatio(available);
+	return Math.min(1 - min, Math.max(min, ratio + delta));
+}
+
+export function setPanelSplitRatio(state: PanelTabState, ratio: number): PanelTabState {
+	const next = clampPanelSplitRatio(ratio);
+	return state.splitRatio === next ? state : { ...state, splitRatio: next };
+}
 
 /** Column slices honour the flat-array grouping invariant. */
 export function tabsInColumn(tabs: readonly PanelTab[], column: PanelColumn): PanelTab[] {
@@ -515,6 +573,9 @@ interface SerializedPanelTab {
 interface SerializedPanelTabsV2 {
 	v: 2;
 	split: boolean;
+	/** Column 0's share of the split track. Optional: layouts written before
+	 *  the divider existed omit it and restore to the even split. */
+	splitRatio?: number;
 	tabs: SerializedPanelTab[];
 	activeId: string | null;
 	columnActive: [string | null, string | null];
@@ -531,6 +592,7 @@ export function serializePanelTabs(state: PanelTabState): SerializedPanelTabsV2 
 	return {
 		v: PANEL_TABS_SCHEMA_VERSION,
 		split: state.split,
+		splitRatio: panelSplitRatio(state),
 		tabs: state.tabs.map(({ surface, target, label, readOnly, touchedAt, dedupeKey, preview, column }) => ({
 			surface,
 			target,
@@ -546,9 +608,13 @@ export function serializePanelTabs(state: PanelTabState): SerializedPanelTabsV2 
 	};
 }
 
+/** Surfaces that no longer exist: a persisted layout must not resurrect a tab
+ *  with no body. Adding an id here retires it without a schema bump. */
+const RETIRED_PANEL_SURFACES: ReadonlySet<string> = new Set(["widget", "jobs"]);
+
 function isRestorablePanelSurface(surface: string): boolean {
 	// The managed browser host restores its own guests and recreates their projections.
-	return surface !== "browser" && surface !== "settings.browser";
+	return surface !== "browser" && surface !== "settings.browser" && !RETIRED_PANEL_SURFACES.has(surface);
 }
 
 function validSerializedTab(t: unknown): t is SerializedPanelTab {
@@ -638,5 +704,6 @@ export function restorePanelTabs(raw: unknown): PanelTabState {
 		activeId: resolveActivePanelTabId(grouped, activeId),
 		split: r.split === true,
 		columnActive,
+		splitRatio: panelSplitRatio(r),
 	};
 }

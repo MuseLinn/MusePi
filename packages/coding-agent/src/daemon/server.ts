@@ -5952,6 +5952,19 @@ export class DaemonServer {
 				await AgentLifecycleManager.global().release(id, ref, { tombstone: true });
 				return { ok: true };
 			}
+			case "agents.detach": {
+				// Move a foreground subagent run to the background without
+				// restarting it: the task tool adopts the running promise into a
+				// `task` job, so the current turn stops waiting and the result
+				// arrives through the normal async delivery channel.
+				const { requestAgentDetach } = await import("../task/detach-registry");
+				const id =
+					typeof (params as { agentId?: unknown })?.agentId === "string"
+						? (params as { agentId: string }).agentId
+						: "";
+				if (!id) throw new Error("agents.detach: missing agentId");
+				return await requestAgentDetach(id);
+			}
 			case "agents.revive": {
 				// Desktop parity with the TUI Agent Hub's r key: bring a
 				// parked subagent back to a live session (idempotent when

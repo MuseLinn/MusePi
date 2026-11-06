@@ -4,6 +4,7 @@
  * hides, and sizes the panel accordingly. Pure module data + persistence,
  * no React.
  */
+import type { AgentSnapshot } from "@musepi/pi-wire";
 import type { PanelTabDescriptor } from "../panel-tabs";
 import type { RpcClient } from "../rpc";
 
@@ -12,14 +13,13 @@ export type SurfaceId =
 	| "context"
 	| "files"
 	| "artifacts"
-	| "widget"
 	| "trajectory"
-	| "jobs"
 	| "git"
 	| "pr"
 	| "diff"
 	| "notes"
 	| "browser"
+	| "agent"
 	| (string & {}); // 扩展槽注入（panel.tab.* / rail.*）
 
 export interface SurfaceProps {
@@ -67,6 +67,24 @@ export function compactionTabDescriptor(entryId: string, label: string): PanelTa
 	};
 }
 
+/**
+ * One subagent session tab. Identity is the AGENT id, not the address: a
+ * roster row and the sub-session registry row for the same agent must land on
+ * one tab, even though only the registry row knows the child session id.
+ */
+export function agentTabDescriptor(
+	agent: Pick<AgentSnapshot, "id" | "displayName">,
+	childSessionId?: string | null,
+): PanelTabDescriptor {
+	return {
+		surface: "agent",
+		target: childSessionId ?? agent.id,
+		dedupeKey: agent.id,
+		label: agent.displayName,
+		readOnly: false,
+	};
+}
+
 /* ── 内置 surface ─────────────────────────────────────────────── */
 export const SURFACES: SurfaceDescriptor[] = [
 	// Session views (formerly the panel header tabs) — VSCode Activity-Bar
@@ -109,15 +127,6 @@ export const SURFACES: SurfaceDescriptor[] = [
 		availability: "always",
 		defaultWidthFraction: 0.5,
 	},
-	{
-		id: "jobs",
-		label: "jobs",
-		description: "surface description jobs",
-		icon: "task",
-		group: "primary",
-		availability: "always",
-		defaultWidthFraction: 0.5,
-	},
 	// Workbench tool panes.
 	// Git is a single rail entry (Phase 3 merge): the panel opens with a
 	// view-local sub-tab bar switching workspace changes / commit history /
@@ -153,7 +162,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 	/* Agents hub (TUI Agent Hub parity): the session's roster; a swarm-card
 	 * member row / roster row drills the trajectory detail into THIS view.
 	 * Appended after the panes so the ⌘1..8 rail-order jump only shifts at
-	 * the tail (widget preview folds into the rail overflow anyway). */
+	 * the tail. */
 	{
 		id: "agents",
 		label: "agents",
@@ -163,15 +172,16 @@ export const SURFACES: SurfaceDescriptor[] = [
 		availability: "always",
 		defaultWidthFraction: 0.5,
 	},
-	// Niche: widget preview folds into the overflow menu.
+	// Subagent session detail (agents-hub drill-down): one tab per agent, so
+	// its live transcript + chat sit beside the roster instead of only in the
+	// in-pane drawer. Tertiary: it never occupies the rail.
 	{
-		id: "widget",
-		label: "widget preview",
-		description: "surface description widget",
-		icon: "sparkling",
-		group: "secondary",
+		id: "agent",
+		label: "agents.subagentTab",
+		icon: "ai-agent",
+		group: "tertiary",
 		availability: "always",
-		defaultWidthFraction: 0.45,
+		defaultWidthFraction: 0.5,
 	},
 ];
 
@@ -280,9 +290,14 @@ export function readSurfaceOrder(cwd?: string): string[] {
 	} catch {
 		/* ignore */
 	}
-	// 兜底 = 注册表顺序，并落掉已不存在的 id
-	const fallback = SURFACES.map(s => s.id);
-	const validNew = order.filter(id => byId.has(id));
+	// 兜底 = 注册表顺序，并落掉已不存在的 id。Tertiary surfaces are tab hosts
+	// opened by their owner (an agent's session), never rail entries — so they
+	// are neither restored into the rail nor addressed by ⌘-digit shortcuts.
+	const fallback = SURFACES.filter(s => s.group !== "tertiary").map(s => s.id);
+	const validNew = order.filter(id => {
+		const surface = byId.get(id);
+		return surface !== undefined && surface.group !== "tertiary";
+	});
 	const missing = fallback.filter(id => !(validNew as string[]).includes(id));
 	return [...validNew, ...missing];
 }

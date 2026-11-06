@@ -164,6 +164,11 @@ export const tools = {
 	"tools.swarmWorking": "Working",
 	"tools.swarmDoneSummary": "Done {completed} · failed {failed}",
 	"tools.swarmMembers": "Swarm members",
+	"tools.detachToBackground": "To background",
+	"tools.detachToBackgroundHint":
+		"Keep the subagent running without blocking this turn; its result arrives as a background task",
+	"tools.detachRequested": "In background",
+	"tools.detachFailed": "Could not move the subagent to the background",
 	// ── 连接器（composer chip，M4 P1）──
 	"tools.connectorsChip": "Connectors",
 	"tools.connectorsChipTitle": "Choose which connectors this session may use",

@@ -12,16 +12,18 @@ import type { Rule } from "@musepi/pi-coding-agent/capability/rule";
 import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { ToolPathWithSource } from "@musepi/pi-coding-agent/extensibility/custom-tools";
-import type { LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { ExtensionUIContext, LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import type { MCPManager } from "@musepi/pi-coding-agent/mcp/manager";
 import type { CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
 import * as sdkModule from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
-import { runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import { createSubagentSettings, runSubprocess } from "@musepi/pi-coding-agent/task/executor";
 import type { AgentDefinition } from "@musepi/pi-coding-agent/task/types";
 import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
-function createMockSession(onPrompt: (params: { emit: (event: AgentSessionEvent) => void }) => void): AgentSession {
+function createMockSession(
+	onPrompt: (params: { emit: (event: AgentSessionEvent) => void }) => void | Promise<void>,
+): AgentSession {
 	const listeners: Array<(event: AgentSessionEvent) => void> = [];
 	const emit = (event: AgentSessionEvent) => {
 		for (const listener of listeners) listener(event);
@@ -43,7 +45,7 @@ function createMockSession(onPrompt: (params: { emit: (event: AgentSessionEvent)
 			};
 		},
 		prompt: async (_text: string, _options?: PromptOptions) => {
-			onPrompt({ emit });
+			await onPrompt({ emit });
 		},
 		waitForIdle: async () => {},
 		getLastAssistantMessage: () => undefined,
@@ -73,11 +75,14 @@ function yieldEmittingSession(): AgentSession {
 	});
 }
 
-function createSessionResult(session: AgentSession): CreateAgentSessionResult {
+function createSessionResult(
+	session: AgentSession,
+	setToolUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void = () => {},
+): CreateAgentSessionResult {
 	return {
 		session,
 		extensionsResult: { extensions: [], errors: [], runtime: {} as unknown } as unknown as LoadExtensionsResult,
-		setToolUIContext: () => {},
+		setToolUIContext,
 		eventBus: new EventBus(),
 	};
 }
@@ -412,5 +417,159 @@ describe("runSubprocess parent-discovery pass-through (issue #2190)", () => {
 
 		expect(result.exitCode).toBe(0);
 		expect(initSpy).toHaveBeenCalledWith(expect.objectContaining({ modelRole: "reviewer" }));
+	});
+});
+
+function createFakeUIContext(overrides: Partial<ExtensionUIContext> = {}): ExtensionUIContext {
+	return {
+		select: async () => undefined,
+		confirm: async () => false,
+		input: async () => undefined,
+		notify: () => {},
+		...overrides,
+	} as unknown as ExtensionUIContext;
+}
+
+describe("subagent approval inheritance", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("inherits the parent's approval mode only when the parent has a UI", () => {
+		const parent = Settings.isolated({ "tools.approvalMode": "always-ask" });
+
+		// No UI to answer prompts: the child would fail closed on the first
+		// prompt, so inherit falls back to the historical yolo behavior.
+		expect(createSubagentSettings(parent).get("tools.approvalMode")).toBe("yolo");
+		expect(createSubagentSettings(parent, undefined, undefined, true).get("tools.approvalMode")).toBe("always-ask");
+	});
+
+	it("keeps yolo when task.approvalMode opts out", () => {
+		const parent = Settings.isolated({
+			"tools.approvalMode": "always-ask",
+			"task.approvalMode": "yolo",
+		});
+
+		expect(createSubagentSettings(parent, undefined, undefined, true).get("tools.approvalMode")).toBe("yolo");
+	});
+
+	it("lets per-spawn overrides win over the inherited mode", () => {
+		const parent = Settings.isolated({ "tools.approvalMode": "always-ask" });
+
+		expect(
+			createSubagentSettings(parent, { "tools.approvalMode": "write" }, undefined, true).get("tools.approvalMode"),
+		).toBe("write");
+	});
+
+	it("forwards the inherited mode and injects the parent UI after session creation", async () => {
+		const session = yieldEmittingSession();
+		const setToolUIContext = vi.fn();
+		const spy = vi
+			.spyOn(sdkModule, "createAgentSession")
+			.mockResolvedValue(createSessionResult(session, setToolUIContext));
+		const parentUIContext = createFakeUIContext();
+
+		const result = await runSubprocess({
+			...baseOptions,
+			id: "subagent-approval-inherit",
+			settings: Settings.isolated({ "tools.approvalMode": "always-ask" }),
+			parentUIContext,
+		});
+
+		expect(result.exitCode).toBe(0);
+		const forwarded = spy.mock.calls[0]?.[0];
+		expect(forwarded?.settings?.get("tools.approvalMode")).toBe("always-ask");
+		// Construction stays headless so MCP/LSP startup paths are unchanged.
+		expect(forwarded?.hasUI).toBe(false);
+		expect(forwarded?.toolSessionHasUI).toBe(true);
+		expect(setToolUIContext).toHaveBeenCalledTimes(1);
+		const [injected, hasUI] = setToolUIContext.mock.calls[0] ?? [];
+		expect(hasUI).toBe(true);
+		expect(Object.getPrototypeOf(injected)).toBe(parentUIContext);
+	});
+
+	it("gives the extension runner the parent UI so the approval gate is reachable", async () => {
+		const session = yieldEmittingSession();
+		const initialize = vi.fn();
+		Object.assign(session as unknown as Record<string, unknown>, {
+			extensionRunner: { initialize, onError: () => {}, emit: async () => {} },
+		});
+		const setToolUIContext = vi.fn();
+		vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue(createSessionResult(session, setToolUIContext));
+
+		const result = await runSubprocess({
+			...baseOptions,
+			id: "subagent-approval-runner",
+			settings: Settings.isolated({ "tools.approvalMode": "always-ask" }),
+			parentUIContext: createFakeUIContext(),
+		});
+
+		expect(result.exitCode).toBe(0);
+		const [injected] = setToolUIContext.mock.calls[0] ?? [];
+		// 4th positional arg of ExtensionRunner.initialize is the UI context.
+		expect(initialize.mock.calls[0]?.[3]).toBe(injected);
+	});
+
+	it("falls back to yolo without a parent UI context", async () => {
+		const session = yieldEmittingSession();
+		const spy = vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue(createSessionResult(session));
+
+		const result = await runSubprocess({
+			...baseOptions,
+			id: "subagent-approval-headless",
+			settings: Settings.isolated({ "tools.approvalMode": "always-ask" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(spy.mock.calls[0]?.[0]?.settings?.get("tools.approvalMode")).toBe("yolo");
+	});
+
+	it("marks the run as awaiting approval while a forwarded dialog is pending", async () => {
+		const flags: Array<boolean | undefined> = [];
+		let releaseConfirm: ((approved: boolean) => void) | undefined;
+		const parentUIContext = createFakeUIContext({
+			confirm: () => {
+				setTimeout(() => releaseConfirm?.(true), 0);
+				return new Promise<boolean>(resolve => {
+					releaseConfirm = resolve;
+				});
+			},
+		});
+		let injected: ExtensionUIContext | undefined;
+		let flagsWhenConfirmSettled = 0;
+		const session = createMockSession(async ({ emit }) => {
+			await injected?.confirm("Approve", "Run bash?");
+			flagsWhenConfirmSettled = flags.length;
+			emit({
+				type: "tool_execution_end",
+				toolCallId: "tool-approval",
+				toolName: "yield",
+				result: {
+					content: [{ type: "text", text: "Result submitted." }],
+					details: { status: "success", data: { ok: true } },
+				},
+				isError: false,
+			});
+		});
+		vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue(
+			createSessionResult(session, uiContext => {
+				injected = uiContext;
+			}),
+		);
+
+		const result = await runSubprocess({
+			...baseOptions,
+			id: "subagent-awaiting-approval",
+			parentUIContext,
+			onProgress: progress => flags.push(progress.awaitingApproval),
+		});
+
+		expect(result.exitCode).toBe(0);
+		const pendingIndex = flags.indexOf(true);
+		expect(pendingIndex).toBeGreaterThanOrEqual(0);
+		// The clear must be emitted when the dialog settles, before the run
+		// finalizes and emits its trailing snapshot.
+		expect(flags.slice(pendingIndex + 1, flagsWhenConfirmSettled)).toContain(false);
+		expect(flags[flags.length - 1]).toBe(false);
 	});
 });

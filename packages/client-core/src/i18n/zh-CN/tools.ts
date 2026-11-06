@@ -162,6 +162,10 @@ export const tools = {
 	"tools.swarmWorking": "正在工作",
 	"tools.swarmDoneSummary": "完成 {completed} · 失败 {failed}",
 	"tools.swarmMembers": "Swarm 成员",
+	"tools.detachToBackground": "转后台",
+	"tools.detachToBackgroundHint": "子代理继续运行，本轮不再等待；结果以后台任务返回",
+	"tools.detachRequested": "已转后台",
+	"tools.detachFailed": "无法把该子代理转到后台",
 	// ── 连接器（composer chip，M4 P1）──
 	"tools.connectorsChip": "连接器",
 	"tools.connectorsChipTitle": "选择本会话可用的连接器",

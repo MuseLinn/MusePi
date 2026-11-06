@@ -1,4 +1,5 @@
 import {
+	type ClientRect,
 	type CollisionDetection,
 	DndContext,
 	type DragEndEvent,
@@ -10,7 +11,6 @@ import {
 } from "@dnd-kit/core";
 import {
 	AgentsPanel,
-	latestWidgetFromEntries,
 	relTime,
 	replaceTabs,
 	Segmented,
@@ -18,8 +18,8 @@ import {
 	type ToolRenderHost,
 	type TranslationKey,
 	t,
-	WidgetCard,
 } from "@musepi/client-core";
+import { fmtCost } from "@musepi/client-core/src/lib/format";
 import type { AgentSnapshot, PdfQuoteAnchor } from "@musepi/pi-wire";
 import {
 	Columns2 as Columns2IconData,
@@ -28,8 +28,18 @@ import {
 	PanelLeft as PanelLeftIconData,
 } from "lucide";
 import { MorphIcon } from "morphicons/react";
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+	Fragment,
+	type KeyboardEvent as ReactKeyboardEvent,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
 import { browserPanelDescriptor, browserTarget, reconcileBrowserPanelTabs } from "../lib/browser-panel-tabs";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
@@ -61,7 +71,6 @@ import {
 	setTabMuted as setBrowserTabMuted,
 	subscribeHost as subscribeBrowserHost,
 } from "../lib/managed-browser-host";
-import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import {
 	clearPanelMaximizedGeometry,
 	exitPanelMaximized,
@@ -70,9 +79,19 @@ import {
 	panelMaximizeColumn,
 	subscribePanelMaximize,
 } from "../lib/panel-maximize";
-import { closePanelTabs, type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
+import { type PanelDropZone, resolvePanelDrop } from "../lib/panel-tab-dnd";
+import {
+	closePanelTabs,
+	nudgePanelSplitRatio,
+	PANEL_SPLIT_DIVIDER_PX,
+	type PanelColumn,
+	type PanelTab,
+	panelSplitRatio,
+	panelSplitRatioAt,
+	panelTabId,
+	tabsInColumn,
+} from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
-import { pathBaseName } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
@@ -84,7 +103,7 @@ import {
 	selectPanelTabComponent,
 } from "../lib/slot-host";
 import { surfaceGlyph } from "../lib/surface-glyphs";
-import { panelWidth, SURFACES, surfaceById, writePanelWidth } from "../lib/surfaces/registry";
+import { agentTabDescriptor, panelWidth, SURFACES, surfaceById, writePanelWidth } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -95,7 +114,7 @@ import { FadeScroll } from "./FadeScroll";
 import { GitPanel } from "./git-panel";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
-import { SubagentPanel } from "./SubagentPanel";
+import { SubagentPanel, SubagentSessionView } from "./SubagentPanel";
 import { SurfaceTabStripSortable } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
 
@@ -145,37 +164,6 @@ function BrowserPanelTabIcon({ favicon }: { favicon: string | null }): ReactNode
 	return <Icon name={surfaceById("browser")?.icon as IconName} className="h-3.5 w-3.5" />;
 }
 
-/** Shape of the mode fields the daemon injects into `snap.state`. */
-type SessionModes = {
-	goalMode?: { enabled?: boolean; objective?: string };
-	planMode?: boolean;
-	/** Session preset id (`work` | `chat` | `creator` | `design` | …). */
-	modeId?: string | null;
-};
-
-/**
- * Name the session's current mode for the right-pane header.
- *
- * Previously any session that was neither goal- nor plan-mode fell through
- * to a literal "默认模式", which told the user nothing — picking 设计模式 in
- * the empty-state chips still read 默认模式. Precedence is goal > plan >
- * preset id; the preset id goes through the shared naming chain
- * (lib/mode-label.ts): `mode {id}` i18n first (builtin presets), then the
- * modes.list catalog (user-created presets — their real label lives only
- * there), finally 默认模式 instead of a raw id.
- */
-function sessionModeLabel(modes: SessionModes | null | undefined, catalog?: readonly ModeLabelEntry[] | null): string {
-	// No snapshot = daemon default = work (same convention as the shared
-	// naming chain — never surface "默认模式" for a stock session).
-	if (!modes) return resolveModeLabel(null, catalog);
-	if (modes.goalMode?.enabled === true) {
-		const objective = modes.goalMode.objective?.trim();
-		return objective ? `${t("general.goalMode")}: ${objective}` : t("general.goalMode");
-	}
-	if (modes.planMode === true) return t("general.planMode");
-	return resolveModeLabel(modes.modeId, catalog);
-}
-
 /**
  * Right pane — ZCode-style session tools: 上下文 / 文件 tabs plus a tool
  * rail (git graph, PRs, diff, notes, browser). The file tree and context
@@ -207,7 +195,6 @@ export function ContextPanel({
 	onSwitchTo,
 	onForkAt,
 	onJumpToEntry,
-	modeCatalog,
 	planShowRequest,
 	overviewEntries,
 	overviewLoading,
@@ -289,10 +276,9 @@ export function ContextPanel({
 	 *  TrajectoryView 树行按 kind 分派的切换操作对应。 */
 	onSwitchTo?(id: string): void;
 	onForkAt?(id: string): void;
-	/** modes.list catalog (builtin + user-created presets) — the last link
-	 *  of the shared mode naming chain: user-created session presets carry
-	 *  no `mode {id}` i18n key, so their real label can only come from here. */
-	modeCatalog?: readonly ModeLabelEntry[] | null;
+	/** modes.list catalog. Carried by the panel-shell payload; the panel itself
+	 *  renders no mode row (the chat header owns the session's mode). */
+	modeCatalog?: readonly unknown[] | null;
 	/** `knowledge` show request (the agent opened a plan for the user): the
 	 *  project-knowledge surface consumes it to open that plan once its list
 	 *  has loaded. Nonce-bumped by ChatView so a repeat re-opens. */
@@ -316,11 +302,6 @@ export function ContextPanel({
 		editorLocationRef.current = null;
 		setEditorHistoryAvailability({ back: false, forward: false });
 	}, [cwd]);
-	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
-	// modeId rides on the snapshot too (daemon: `snap.state.modeId = live.modeId`),
-	// so the panel can name the session preset instead of flattening every
-	// non-goal/non-plan session into "默认模式".
-	const modes = snap?.state as SessionModes | null;
 	// Session stats: message count + wall-clock run time. P1-12: the count
 	// and the first timestamp only move when the entry LIST shape changes —
 	// a streaming content upsert replaces a message object in place — so
@@ -335,6 +316,34 @@ export function ContextPanel({
 	}, [snap?.structureRev]);
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
+
+	// Cumulative token usage over every settled assistant message: input /
+	// output / cache-read / cache-write buckets, their spend, and the cache hit
+	// rate. The final usage of a round lands on
+	// the same message through a content upsert — no structureRev bump — so the
+	// memo also keys on `working`: the write→idle flip is that round's settle
+	// signal.
+	const usageTotals = useMemo(() => {
+		const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: 0 };
+		for (const entry of snap?.entries ?? []) {
+			if (entry.type !== "message") continue;
+			const message = entry.message;
+			if (message.role !== "assistant") continue;
+			const usage = message.usage;
+			if (!usage) continue;
+			totals.input += usage.input;
+			totals.output += usage.output;
+			totals.cacheRead += usage.cacheRead;
+			totals.cacheWrite += usage.cacheWrite;
+			totals.totalTokens += usage.totalTokens;
+			totals.cost += usage.cost?.total ?? 0;
+		}
+		return totals;
+	}, [snap?.structureRev, snap?.working]);
+	const cacheHitRate =
+		usageTotals.cacheRead + usageTotals.input > 0
+			? (usageTotals.cacheRead / (usageTotals.cacheRead + usageTotals.input)) * 100
+			: null;
 
 	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header
@@ -370,66 +379,27 @@ export function ContextPanel({
 			clearInterval(t);
 		};
 	}, [rpc, snap?.sessionId, snap?.working]);
-	// Docked detail snapshots: the selection is owned by ChatView (the
+	// Docked detail snapshot: the selection is owned by ChatView (the
 	// swarm-card member row in the transcript opens it too), so the layer
-	// resolves against the live snapshot here. The sub-session rows below
-	// the roster (session.agents registry scan) can also dock an agent that
-	// has already left the live roster — that selection is local: an
-	// embedded snapshot synthesized from the registry row (openchamber
-	// mini-chat parity: the sub conversation previews in place instead of
-	// only opening as the main surface).
-	const [embedded, setEmbedded] = useState<{ agent: AgentSnapshot; sessionId: string } | null>(null);
-	const embeddedAgent = embedded?.agent ?? null;
-	const agent =
-		embeddedAgent ?? (agentId !== null ? ((snap?.agents ?? []).find(a => a.id === agentId) ?? null) : null);
+	// resolves against the live snapshot here. The agents-hub rows and the
+	// sub-session rows open the agent TAB instead (agentTabDescriptor) —
+	// the drawer is the transcript-driven secondary entry.
+	const agent = agentId !== null ? ((snap?.agents ?? []).find(a => a.id === agentId) ?? null) : null;
 	const dockAgentId = agent?.id ?? null;
 	const agentProgress = dockAgentId !== null ? (snap?.progress.get(dockAgentId)?.progress ?? null) : null;
-	const dockOpen = agentId !== null || embedded !== null;
-	// Session-hygiene actions (会话维护): shake / fresh / reset-context —
-	// each daemon RPC returns counts rendered into a shared status line.
-	// The clear action asks for confirmation first (destructive).
-	const { confirm } = useConfirm();
-	const { prompt } = usePrompt();
-	const [maintenanceBusy, setMaintenanceBusy] = useState<"shake" | "fresh" | "clear" | null>(null);
+	const dockOpen = agentId !== null;
+	// The roster highlights whichever agent session is focused, so a tab the
+	// user opened (or restored) reads as the selection the drawer used to own.
+	const activeAgentTabKey = (() => {
+		const active = panelTabs.tabs.find(tab => tab.id === panelTabs.activeId);
+		return active?.surface === "agent" ? (active.dedupeKey ?? null) : null;
+	})();
 	// Surface-tab context menu (right-click): close / close others / close all.
 	const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-	const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
-	const runMaintenance = async (op: "shake" | "fresh" | "clear"): Promise<void> => {
-		if (!rpc || !snap?.sessionId || maintenanceBusy) return;
-		if (op === "clear" && !(await confirm(t("tools.confirmClearContext"), undefined, { destructive: true }))) return;
-		setMaintenanceBusy(op);
-		setMaintenanceStatus(null);
-		try {
-			if (op === "shake") {
-				const r = await rpc.request<{
-					toolResultsDropped: number;
-					blocksDropped: number;
-					imagesDropped: number;
-					tokensFreed: number;
-				}>("session.shake", { sessionId: snap.sessionId, mode: "elide" });
-				setMaintenanceStatus(
-					t("tools.shakeResultBlocksTokensWithDroppedWithTokens", {
-						dropped: r.toolResultsDropped,
-						tokens: r.tokensFreed,
-					}),
-				);
-			} else if (op === "fresh") {
-				const r = await rpc.request<{ closedProviderSessions: number }>("session.fresh", {
-					sessionId: snap.sessionId,
-				});
-				setMaintenanceStatus(t("tools.freshResultSessionsWithClosed", { closed: r.closedProviderSessions }));
-			} else {
-				const r = await rpc.request<{ droppedCount: number }>("session.resetContext", {
-					sessionId: snap.sessionId,
-				});
-				setMaintenanceStatus(t("tools.clearResultMessagesWithDropped", { dropped: r.droppedCount }));
-			}
-		} catch (err) {
-			setMaintenanceStatus(err instanceof Error ? err.message : String(err));
-		} finally {
-			setMaintenanceBusy(null);
-		}
-	};
+	// Promise-based dialogs shared by the tab strip's tab menu and the file
+	// close guard (rename prompt / discard-unsaved confirm).
+	const { prompt } = usePrompt();
+	const { confirm } = useConfirm();
 	// Relay external reveal requests into the FilePane preview. One-shot per
 	// nonce: the request object stays non-null forever (it is only ever
 	// re-issued with a higher nonce), so an effect that re-runs for any other
@@ -896,6 +866,10 @@ export function ContextPanel({
 		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
 	);
 	const tabsCol = (col: PanelColumn): PanelTab[] => tabsInColumn(panelTabs.tabs, col);
+	// Column 0's share of the split track. The divider drags it and it is
+	// persisted with the rest of the panel layout, so a session reopens with
+	// the columns where the user left them.
+	const splitRatio = panelSplitRatio(panelTabs);
 	const tabForColumn = (col: PanelColumn): PanelTab | null => {
 		const colTabs = tabsCol(col);
 		const active = panelTabs.columnActive[col];
@@ -912,31 +886,45 @@ export function ContextPanel({
 		const overTab = panelTabs.tabs.find(tb => tb.id === over);
 		const activeTab = panelTabs.tabs.find(tb => tb.id === active);
 		if (!overTab || !activeTab) return;
-		if (overTab.column === activeTab.column) panelTabs.reorder(active, over);
-		else panelTabs.moveToColumn(active, overTab.column);
+		if (overTab.column === activeTab.column) {
+			panelTabs.reorder(active, over);
+			return;
+		}
+		// Cross-column chip drop: move first, then reorder inside the now-shared
+		// column so the tab lands where the pointer released instead of at the
+		// column's end. Both updaters are functional, so they compose in order.
+		panelTabs.moveToColumn(active, overTab.column);
+		panelTabs.reorder(active, over);
 	};
 
-	// dsh dockkit parity (ui-dockkit pointerWithin discipline): containment,
-	// not distance. closestCenter oscillates when a dragged chip sits between
-	// a small tab rect and the big column zone — the "over" flips back and
-	// forth across columns and both strips animate every frame (user
-	// 2026-09-29: 跨列拖拽鬼畜闪烁). Here only droppables whose rect CONTAINS
-	// the pointer are candidates, the smallest rect wins (a tab beats the
-	// column zone that contains it), and once the pointer crosses into the
-	// other column that column owns every candidate — one stable verdict per
-	// pointer position, zero flip-flop.
-	const panelSplitCollision: CollisionDetection = ({ droppableRects, droppableContainers, pointerCoordinates }) => {
-		if (!pointerCoordinates) return [];
-		const hits: Array<{ id: (typeof droppableContainers)[number]["id"]; value: number }> = [];
-		for (const container of droppableContainers) {
-			const rect = droppableRects.get(container.id);
-			if (!rect) continue;
-			const { x, y } = pointerCoordinates;
-			if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-				hits.push({ id: container.id, value: rect.width * rect.height });
-			}
+	// Drop resolution (lib/panel-tab-dnd.ts): containment picks the target, a
+	// same-column zone falls back to that column's nearest chip (releasing
+	// between chips reorders), and just-off-strip drops still land on the
+	// nearest chip. Keeps one stable verdict per pointer position, so the
+	// strips no longer animate every frame while a chip hovers a boundary.
+	const panelDropCollision: CollisionDetection = args => {
+		const pointer = args.pointerCoordinates;
+		if (!pointer) return [];
+		const rects = new Map<string, ClientRect>();
+		for (const container of args.droppableContainers) {
+			const rect = args.droppableRects.get(container.id);
+			if (rect) rects.set(String(container.id), rect);
 		}
-		return hits.sort((a, b) => a.value - b.value);
+		const tabs = panelTabs.tabs.map(tab => ({ id: tab.id, column: tab.column }));
+		const zones: PanelDropZone[] = panelTabs.split
+			? [
+					{ id: "panel-col-0", column: 0 },
+					{ id: "panel-col-1", column: 1 },
+				]
+			: [{ id: "panel-split-zone", column: 0, kind: "split" }];
+		const hit = resolvePanelDrop({
+			activeId: String(args.active.id),
+			pointer,
+			rects,
+			tabs,
+			zones,
+		});
+		return hit ? [{ id: hit.id }] : [];
 	};
 
 	// 「+」surface picker (dsh strip add-control parity): every primary
@@ -1023,6 +1011,50 @@ export function ContextPanel({
 				onSwitchTo={onSwitchTo}
 				onForkAt={onForkAt}
 			/>
+		) : bodyView === "agent" ? (
+			/* Subagent session tab: the drawer's live transcript + chat promoted
+			 * to a first-class panel tab. Resolved by tab identity (the agent
+			 * id), so a roster row and a sub-session row focus ONE tab. The body
+			 * is a plain flex column — Transcript owns its scroll. A tab can
+			 * outlive its agent (session ended / daemon restarted), so the miss
+			 * path is a real state: point at the child session instead. */
+			(() => {
+				const agentKey = bodyTab?.dedupeKey ?? null;
+				const tabAgent = agentKey !== null ? ((snap?.agents ?? []).find(a => a.id === agentKey) ?? null) : null;
+				// The tab address is a child session id only when it differs from
+				// the agent id (a roster row has no session id to offer).
+				const tabTarget = bodyTab?.target ?? null;
+				const childSessionId = tabTarget !== null && tabTarget !== agentKey ? tabTarget : null;
+				if (tabAgent !== null) {
+					return (
+						<div className="flex min-h-0 flex-1 flex-col">
+							<SubagentSessionView
+								agent={tabAgent}
+								progress={snap?.progress.get(tabAgent.id)?.progress ?? null}
+								rpc={rpc}
+								host={agentHost}
+								sessionId={childSessionId}
+								onOpenSession={onOpenSession}
+								pollEnabled={open}
+							/>
+						</div>
+					);
+				}
+				return (
+					<div className="gui-pane-tab-empty">
+						<span className="gui-pane-tab-empty-icon">
+							<Icon name="ai-agent" />
+						</span>
+						<p className="gui-pane-tab-empty-title">{t("agents.subagentUnavailable")}</p>
+						<p className="gui-pane-tab-empty-hint">{t("agents.subagentUnavailableHint")}</p>
+						{tabTarget !== null && onOpenSession ? (
+							<button type="button" className="gui-btn" onClick={() => onOpenSession(tabTarget)}>
+								{t("general.openSubagentSession")}
+							</button>
+						) : null}
+					</div>
+				);
+			})()
 		) : (
 			<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 				{bodyView === "notes" ? (
@@ -1050,29 +1082,16 @@ export function ContextPanel({
 					 * sidecars discovered by the daemon, each card opening
 					 * the entry-file viewer (iframe/markdown/source). */
 					<ArtifactsPanel rpc={rpc} cwd={cwd} />
-				) : bodyView === "widget" ? (
-					<WidgetSidebarTab entries={snap?.entries ?? []} />
-				) : bodyView === "jobs" ? (
-					snap?.sessionId ? (
-						<JobsPane rpc={rpc} sessionId={snap.sessionId} visible={open} />
-					) : (
-						<div className="gui-pane-tab-empty">
-							<span className="gui-pane-tab-empty-icon">
-								<Icon name="inbox-archive" />
-							</span>
-							<p className="gui-pane-tab-empty-title">{t("settings.selectSession")}</p>
-							<p className="gui-pane-tab-empty-hint">{t("settings.jobsEmptyHint")}</p>
-						</div>
-					)
 				) : bodyView === "agents" ? (
 					/* Agents hub (TUI Agent Hub parity): the session's live
-					 * roster; a row opens the docked trajectory detail that
-					 * slides in over this view (layer at the aside level).
-					 * Below it the sub-session list (session.agents registry
-					 * rows): a row opens a child session as the main chat
-					 * surface, and its panel action docks the sub
-					 * conversation in place (openchamber mini-chat parity) —
-					 * live transcript + chat without leaving this session. */
+					 * roster; a row opens that agent's session TAB beside this
+					 * view (agentTabDescriptor — the drawer stays the
+					 * transcript-driven secondary entry). Below it the
+					 * sub-session list (session.agents registry rows): a row
+					 * opens a child session as the main chat surface, and its
+					 * panel action opens the same agent tab with the child
+					 * session id as its address (openchamber mini-chat parity)
+					 * — live transcript + chat without leaving this session. */
 					<>
 						{(snap?.agents ?? []).length === 0 ? (
 							<div className="gui-pane-tab-empty">
@@ -1086,10 +1105,10 @@ export function ContextPanel({
 								agents={snap?.agents ?? []}
 								progress={snap?.progress ?? new Map()}
 								lifecycle={snap?.lifecycle ?? new Map()}
-								selectedId={agentId}
+								selectedId={activeAgentTabKey ?? agentId}
 								onSelect={id => {
-									setEmbedded(null);
-									onAgentSelect(id);
+									const picked = (snap?.agents ?? []).find(candidate => candidate.id === id);
+									if (picked) panelTabs.open(agentTabDescriptor(picked));
 								}}
 							/>
 						)}
@@ -1097,11 +1116,13 @@ export function ContextPanel({
 							rpc={rpc}
 							sessionId={snap?.sessionId ?? ""}
 							onOpenSession={onOpenSession}
-							onDockAgent={(agent, childSessionId) => {
-								onAgentSelect(null);
-								setEmbedded({ agent, sessionId: childSessionId });
+							onDockAgent={(candidate, childSessionId) => {
+								panelTabs.open(agentTabDescriptor(candidate, childSessionId));
 							}}
 						/>
+						{snap?.sessionId ? (
+							<BackgroundJobsSection rpc={rpc} sessionId={snap.sessionId} visible={open} />
+						) : null}
 					</>
 				) : typeof bodyView === "string" && bodyView.startsWith("ext:") ? (
 					(() => {
@@ -1118,52 +1139,27 @@ export function ContextPanel({
 							</FadeScroll>
 						) : null;
 					})()
+				) : !snap?.sessionId ? (
+					/* No session: every readout here is session-scoped, so the
+					 * tab points at the session list instead of painting zeros. */
+					<div className="gui-pane-tab-empty">
+						<span className="gui-pane-tab-empty-icon">
+							<Icon name="donut-chart" />
+						</span>
+						<p className="gui-pane-tab-empty-title">{t("settings.selectSession")}</p>
+						<p className="gui-pane-tab-empty-hint">{t("settings.contextEmptyHint")}</p>
+					</div>
 				) : (
 					<div className="px-1 py-2">
-						<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.session2")}</div>
-						<div className="flex flex-col gap-1 px-2 text-[13px]">
-							<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-								<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
-								<span className="truncate" title={cwd || undefined}>
-									{cwd ? pathBaseName(cwd) : t("transcript.noFolder")}
-								</span>
-							</div>
-							{snap?.state?.model?.id && (
-								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-									<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
-									<span className="truncate">{snap.state.model.id}</span>
-								</div>
-							)}
-							{modes && (
-								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-									<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
-									<span className="truncate">{sessionModeLabel(modes, modeCatalog)}</span>
-								</div>
-							)}
-						</div>
-						{/* Session stats (openchamber context-drawer parity): message
-						 * count and run time at a glance. */}
-						<div className="gui-group-label px-2 pb-1 pt-3">{t("general.stats")}</div>
-						<div className="grid grid-cols-2 gap-1.5 px-2">
-							<div className="gui-ctx-stat">
-								<div className="gui-ctx-stat-v">{messageCount}</div>
-								<div className="gui-ctx-stat-l">{t("general.messages")}</div>
-							</div>
-							<div className="gui-ctx-stat">
-								<div className="gui-ctx-stat-v">{runMinutes}</div>
-								<div className="gui-ctx-stat-l">{t("general.minutes")}</div>
-							</div>
-						</div>
 						{/* Context-window usage: live tokens/capacity bar (product
 						 * parity with the header ring — same RPC). */}
 						{ctxUsage && (
 							<>
-								<div className="gui-group-label px-2 pb-1 pt-3">{t("settings.contextWindow2")}</div>
+								<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.contextWindow2")}</div>
 								<div className="px-2">
 									<div className="gui-ctx-usage-row">
 										<span className="text-[12px] tabular-nums opacity-80">
 											{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
-											{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
 										</span>
 										<span className="text-[12px] tabular-nums opacity-70">
 											{Math.round(ctxUsage.percent)}%
@@ -1178,65 +1174,60 @@ export function ContextPanel({
 								</div>
 							</>
 						)}
-						{/* Reusable context quick actions: copy the workspace path. */}
-						<div className="mt-2 flex flex-col gap-0.5 px-2">
-							<button
-								type="button"
-								className="gui-pane-action"
-								onClick={() => {
-									if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
-								}}
-							>
-								<Icon name="clipboard" className="h-3.5 w-3.5" />
-								<span>{t("general.copyWorkspacePath")}</span>
-							</button>
+						{/* Cumulative token usage: per-bucket totals over the
+						 * session's assistant messages, plus how much of the
+						 * input was served from cache. */}
+						{usageTotals.totalTokens > 0 && (
+							<>
+								<div className="gui-group-label px-2 pb-1 pt-3">{t("sessionInfo.tokens")}</div>
+								<div className="grid grid-cols-2 gap-1.5 px-2">
+									<div className="gui-ctx-stat">
+										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.input)}</div>
+										<div className="gui-ctx-stat-l">{t("sessionInfo.input")}</div>
+									</div>
+									<div className="gui-ctx-stat">
+										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.output)}</div>
+										<div className="gui-ctx-stat-l">{t("sessionInfo.output")}</div>
+									</div>
+									<div className="gui-ctx-stat">
+										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheRead)}</div>
+										<div className="gui-ctx-stat-l">{t("sessionInfo.cacheRead")}</div>
+									</div>
+									<div className="gui-ctx-stat">
+										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheWrite)}</div>
+										<div className="gui-ctx-stat-l">{t("sessionInfo.cacheWrite")}</div>
+									</div>
+								</div>
+								<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
+									<span className="text-[var(--color-text-muted)]">{t("sessionInfo.total")}</span>
+									<span className="tabular-nums">{fmtTokens(usageTotals.totalTokens)}</span>
+								</div>
+								{cacheHitRate !== null && (
+									<div className="flex items-baseline justify-between gap-2 px-2 pt-1 text-[12px]">
+										<span className="text-[var(--color-text-muted)]">{t("sessionInfo.cacheHitRate")}</span>
+										<span className="tabular-nums">{cacheHitRate.toFixed(1)}%</span>
+									</div>
+								)}
+							</>
+						)}
+						{/* Session stats + spend: message count, run time and
+						 * what the session has cost so far. */}
+						<div className="gui-group-label px-2 pb-1 pt-3">{t("general.stats")}</div>
+						<div className="grid grid-cols-2 gap-1.5 px-2">
+							<div className="gui-ctx-stat">
+								<div className="gui-ctx-stat-v">{messageCount}</div>
+								<div className="gui-ctx-stat-l">{t("general.messages")}</div>
+							</div>
+							<div className="gui-ctx-stat">
+								<div className="gui-ctx-stat-v">{runMinutes}</div>
+								<div className="gui-ctx-stat-l">{t("general.minutes")}</div>
+							</div>
 						</div>
-						{/* Session hygiene (会话维护): shake context / reset
-						 * provider stream / clear session context — each RPC
-						 * reports counts into the status line below. */}
-						<div className="gui-group-label px-2 pb-1 pt-3">{t("tools.sessionMaintenance")}</div>
-						<div className="flex flex-col gap-0.5 px-2">
-							<button
-								type="button"
-								className="gui-pane-action"
-								disabled={!snap?.sessionId || maintenanceBusy !== null}
-								onClick={() => void runMaintenance("shake")}
-							>
-								<Icon
-									name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
-									className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
-								/>
-								<span>{t("tools.shakeContext")}</span>
-							</button>
-							<button
-								type="button"
-								className="gui-pane-action"
-								disabled={!snap?.sessionId || maintenanceBusy !== null}
-								onClick={() => void runMaintenance("fresh")}
-							>
-								<Icon
-									name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
-									className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
-								/>
-								<span>{t("tools.freshProvider")}</span>
-							</button>
-							<button
-								type="button"
-								className="gui-pane-action"
-								disabled={!snap?.sessionId || maintenanceBusy !== null}
-								onClick={() => void runMaintenance("clear")}
-							>
-								<Icon
-									name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
-									className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
-								/>
-								<span>{t("tools.clearSessionContext")}</span>
-							</button>
-						</div>
-						{maintenanceStatus && (
-							<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-								{maintenanceStatus}
-							</p>
+						{usageTotals.cost > 0 && (
+							<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
+								<span className="text-[var(--color-text-muted)]">{t("sessionInfo.spend")}</span>
+								<span className="tabular-nums">{fmtCost(usageTotals.cost)}</span>
+							</div>
 						)}
 					</div>
 				)}
@@ -1457,7 +1448,7 @@ export function ContextPanel({
 					{panelTabs.split ? (
 						<DndContext
 							sensors={splitSensors}
-							collisionDetection={panelSplitCollision}
+							collisionDetection={panelDropCollision}
 							onDragStart={e => setStripDragId(String(e.active.id))}
 							onDragEnd={e => {
 								setStripDragId(null);
@@ -1470,95 +1461,106 @@ export function ContextPanel({
 									const colTabs = tabsCol(col);
 									const colTab = tabForColumn(col);
 									return (
-										<PanelColumnZone key={col} column={col}>
-											{/* dsh TabStrip parity: chips, the add
-											 * control and the chrome share ONE row —
-											 * no separate control line, the strip
-											 * never wraps. Surface-wide chrome
-											 * (merge / maximize) rides the second
-											 * column's end, the layout's corner. */}
-											<div className="gui-pane-col-head">
-												<div className="gui-pane-col-strip">
-													<SurfaceTabStripSortable
-														tabs={colTabs.map(t => ({
-															...surfaceTabVisual(t),
-															id: t.id,
-															title: t.label,
-															dirty: t.dirty,
-															preview: t.preview,
-														}))}
-														activeId={colTab?.id ?? null}
-														closeLabel={t("general.closeTab")}
-														onActivate={activateTab}
-														onClose={closeTabWithGuard}
-														onPin={pinTab}
-														onReorder={panelTabs.reorder}
-														onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
-													/>
-												</div>
-												<div className="gui-pane-col-tools">
-													<button
-														type="button"
-														title={t("general.newTab")}
-														aria-label={t("general.newTab")}
-														className="gui-pane-tool"
-														onClick={e => setAddMenu({ column: col, x: e.clientX, y: e.clientY })}
-													>
-														<Icon name="add" className="h-3.5 w-3.5" />
-													</button>
-													{col === 1 && (
+										<Fragment key={col}>
+											{col === 1 && (
+												<PanelSplitDivider ratio={splitRatio} onChange={panelTabs.setSplitRatio} />
+											)}
+											<PanelColumnZone column={col} share={col === 0 ? splitRatio : 1 - splitRatio}>
+												{/* dsh TabStrip parity: chips, the add
+												 * control and the chrome share ONE row —
+												 * no separate control line, the strip
+												 * never wraps. Surface-wide chrome
+												 * (merge / maximize) rides the second
+												 * column's end, the layout's corner. */}
+												<PanelHead
+													strip={
+														<SurfaceTabStripSortable
+															tabs={colTabs.map(t => ({
+																...surfaceTabVisual(t),
+																id: t.id,
+																title: t.label,
+																dirty: t.dirty,
+																preview: t.preview,
+															}))}
+															activeId={colTab?.id ?? null}
+															closeLabel={t("general.closeTab")}
+															onActivate={activateTab}
+															onClose={closeTabWithGuard}
+															onPin={pinTab}
+															onReorder={panelTabs.reorder}
+															onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
+														/>
+													}
+													tools={
 														<>
 															<button
 																type="button"
-																title={t("settings.mergePanel")}
-																aria-label={t("settings.mergePanel")}
+																title={t("general.newTab")}
+																aria-label={t("general.newTab")}
 																className="gui-pane-tool"
-																onClick={() => panelTabs.setSplit(false)}
+																onClick={e => setAddMenu({ column: col, x: e.clientX, y: e.clientY })}
 															>
-																<MorphIcon
-																	icon={panelTabs.split ? PanelLeftIconData : Columns2IconData}
-																	size={14}
-																	spring="snappy"
-																	reducedMotion="user"
-																	className="h-3.5 w-3.5"
-																/>
+																<Icon name="add" className="h-3.5 w-3.5" />
 															</button>
-															<button
-																type="button"
-																title={
-																	maximized ? t("settings.restorePanel") : t("settings.maximizePanel")
-																}
-																aria-label={
-																	maximized ? t("settings.restorePanel") : t("settings.maximizePanel")
-																}
-																aria-pressed={maximized}
-																data-panel-maximize
-																className="gui-pane-tool"
-																onPointerDown={event => event.stopPropagation()}
-															>
-																<MorphIcon
-																	icon={maximized ? Minimize2IconData : Maximize2IconData}
-																	size={14}
-																	spring="snappy"
-																	reducedMotion="user"
-																	className="h-3.5 w-3.5"
-																/>
-															</button>
+															{col === 1 && (
+																<>
+																	<button
+																		type="button"
+																		title={t("settings.mergePanel")}
+																		aria-label={t("settings.mergePanel")}
+																		className="gui-pane-tool"
+																		onClick={() => panelTabs.setSplit(false)}
+																	>
+																		<MorphIcon
+																			icon={panelTabs.split ? PanelLeftIconData : Columns2IconData}
+																			size={14}
+																			spring="snappy"
+																			reducedMotion="user"
+																			className="h-3.5 w-3.5"
+																		/>
+																	</button>
+																	<button
+																		type="button"
+																		title={
+																			maximized
+																				? t("settings.restorePanel")
+																				: t("settings.maximizePanel")
+																		}
+																		aria-label={
+																			maximized
+																				? t("settings.restorePanel")
+																				: t("settings.maximizePanel")
+																		}
+																		aria-pressed={maximized}
+																		data-panel-maximize
+																		className="gui-pane-tool"
+																		onPointerDown={event => event.stopPropagation()}
+																	>
+																		<MorphIcon
+																			icon={maximized ? Minimize2IconData : Maximize2IconData}
+																			size={14}
+																			spring="snappy"
+																			reducedMotion="user"
+																			className="h-3.5 w-3.5"
+																		/>
+																	</button>
+																</>
+															)}
 														</>
-													)}
-												</div>
-											</div>
-											{colTab === null ? (
-												<div className="gui-pane-tab-empty">
-													<span className="gui-pane-tab-empty-icon">
-														<Icon name="layout-column" />
-													</span>
-													<p className="gui-pane-tab-empty-title">{t("settings.dropTabsHere")}</p>
-												</div>
-											) : (
-												renderPanelBody(colTab.surface, colTab)
-											)}
-										</PanelColumnZone>
+													}
+												/>
+												{colTab === null ? (
+													<div className="gui-pane-tab-empty">
+														<span className="gui-pane-tab-empty-icon">
+															<Icon name="layout-column" />
+														</span>
+														<p className="gui-pane-tab-empty-title">{t("settings.dropTabsHere")}</p>
+													</div>
+												) : (
+													renderPanelBody(colTab.surface, colTab)
+												)}
+											</PanelColumnZone>
+										</Fragment>
 									);
 								})}
 							</div>
@@ -1566,7 +1568,7 @@ export function ContextPanel({
 					) : (
 						<DndContext
 							sensors={splitSensors}
-							collisionDetection={panelSplitCollision}
+							collisionDetection={panelDropCollision}
 							onDragStart={e => setStripDragId(String(e.active.id))}
 							onDragEnd={onStripDragEnd}
 							onDragCancel={() => setStripDragId(null)}
@@ -1576,9 +1578,9 @@ export function ContextPanel({
 							 * shares ONE DndContext with the body's split drop zone: a tab
 							 * dragged onto the right half splits the panel (dsh dock-zone
 							 * parity) instead of needing the toggle first. */}
-							<div className="flex flex-shrink-0 items-start gap-1 px-2 pt-1.5">
-								<div className="min-w-0 flex-1">
-									{panelTabs.tabs.length > 0 && (
+							<PanelHead
+								strip={
+									panelTabs.tabs.length > 0 ? (
 										<SurfaceTabStripSortable
 											tabs={panelTabs.tabs.map(t => ({
 												...surfaceTabVisual(t),
@@ -1595,57 +1597,59 @@ export function ContextPanel({
 											onReorder={panelTabs.reorder}
 											onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
 										/>
-									)}
-								</div>
-								<div className="flex items-center gap-0.5 pt-0.5">
-									{/* `+` opens the surface picker (dsh add-control
-									 *  parity): every primary surface is launchable
-									 *  from the strip. The old browser-only direct
-									 *  button read as dead UI on every other surface
-									 *  (user 2026-09-22). */}
-									<button
-										type="button"
-										title={t("general.newTab")}
-										aria-label={t("general.newTab")}
-										className="gui-pane-tool"
-										onClick={e => setAddMenu({ column: 0, x: e.clientX, y: e.clientY })}
-									>
-										<Icon name="add" className="h-3.5 w-3.5" />
-									</button>
-									<button
-										type="button"
-										title={t("settings.splitPanel")}
-										aria-label={t("settings.splitPanel")}
-										className="gui-pane-tool"
-										onClick={() => panelTabs.setSplit(true)}
-									>
-										<MorphIcon
-											icon={panelTabs.split ? PanelLeftIconData : Columns2IconData}
-											size={14}
-											spring="snappy"
-											reducedMotion="user"
-											className="h-3.5 w-3.5"
-										/>
-									</button>
-									<button
-										type="button"
-										title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
-										aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
-										aria-pressed={maximized}
-										data-panel-maximize
-										className="gui-pane-tool"
-										onPointerDown={event => event.stopPropagation()}
-									>
-										<MorphIcon
-											icon={maximized ? Minimize2IconData : Maximize2IconData}
-											size={14}
-											spring="snappy"
-											reducedMotion="user"
-											className="h-3.5 w-3.5"
-										/>
-									</button>
-								</div>
-							</div>
+									) : null
+								}
+								tools={
+									<>
+										{/* `+` opens the surface picker (dsh add-control
+										 *  parity): every primary surface is launchable
+										 *  from the strip. The old browser-only direct
+										 *  button read as dead UI on every other surface
+										 *  (user 2026-09-22). */}
+										<button
+											type="button"
+											title={t("general.newTab")}
+											aria-label={t("general.newTab")}
+											className="gui-pane-tool"
+											onClick={e => setAddMenu({ column: 0, x: e.clientX, y: e.clientY })}
+										>
+											<Icon name="add" className="h-3.5 w-3.5" />
+										</button>
+										<button
+											type="button"
+											title={t("settings.splitPanel")}
+											aria-label={t("settings.splitPanel")}
+											className="gui-pane-tool"
+											onClick={() => panelTabs.setSplit(true)}
+										>
+											<MorphIcon
+												icon={panelTabs.split ? PanelLeftIconData : Columns2IconData}
+												size={14}
+												spring="snappy"
+												reducedMotion="user"
+												className="h-3.5 w-3.5"
+											/>
+										</button>
+										<button
+											type="button"
+											title={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
+											aria-label={maximized ? t("settings.restorePanel") : t("settings.maximizePanel")}
+											aria-pressed={maximized}
+											data-panel-maximize
+											className="gui-pane-tool"
+											onPointerDown={event => event.stopPropagation()}
+										>
+											<MorphIcon
+												icon={maximized ? Minimize2IconData : Maximize2IconData}
+												size={14}
+												spring="snappy"
+												reducedMotion="user"
+												className="h-3.5 w-3.5"
+											/>
+										</button>
+									</>
+								}
+							/>
 							<div className="gui-pane-body-wrap">
 								{panelTabs.tabs.length === 0 ? (
 									/* Zero tabs → empty-state navigation page (Kimi "从这里开始"
@@ -1667,12 +1671,12 @@ export function ContextPanel({
 						</DndContext>
 					)}
 				</div>
-				{/* Subagent trajectory detail (agents-view drill-down): an in-pane
-				 * layer, always mounted so the slide plays both ways — the dock
-				 * wrapper's --open class drives it (MessageTree parity). It never
-				 * leaves the pane's stacking context, and while it is open the view
-				 * is the agents surface, so the managed-browser page host has no
-				 * slot to project onto. */}
+				{/* Subagent trajectory detail (transcript-driven drill-down): an
+				 * in-pane layer, always mounted so the slide plays both ways —
+				 * the dock wrapper's --open class drives it (MessageTree
+				 * parity). It never leaves the pane's stacking context, and
+				 * while it is open the view is the agents surface, so the
+				 * managed-browser page host has no slot to project onto. */}
 				<div className={`gui-agent-dock${dockOpen ? " gui-agent-dock--open" : ""}`}>
 					<SubagentPanel
 						agent={agent}
@@ -1680,12 +1684,8 @@ export function ContextPanel({
 						rpc={rpc}
 						progress={agentProgress}
 						host={agentHost}
-						sessionId={embedded?.sessionId ?? null}
 						onOpenSession={onOpenSession}
-						onClose={() => {
-							setEmbedded(null);
-							onAgentSelect(null);
-						}}
+						onClose={() => onAgentSelect(null)}
 					/>
 				</div>
 			</aside>
@@ -1693,17 +1693,117 @@ export function ContextPanel({
 	);
 }
 
+/** One header row shared by the single column and both split columns: the
+ *  chips box is the only shrinking part, the add control and window chrome
+ *  keep their width. Sharing the row is what keeps the strip at one height
+ *  while the panel switches shape. */
+function PanelHead({ strip, tools }: { strip: ReactNode; tools: ReactNode }): ReactNode {
+	return (
+		<div className="gui-pane-head">
+			<div className="gui-pane-head-strip">{strip}</div>
+			<div className="gui-pane-head-tools">{tools}</div>
+		</div>
+	);
+}
+
 /** Split-column drop zone (dsh two-column parity): the whole column is
- * a droppable so a dragged tab can land on empty space, not just on tabs. */
-function PanelColumnZone({ column, children }: { column: PanelColumn; children: ReactNode }): ReactNode {
+ * a droppable so a dragged tab can land on empty space, not just on tabs.
+ * `share` is the column's flex-grow share of the split track. */
+function PanelColumnZone({
+	column,
+	share,
+	children,
+}: {
+	column: PanelColumn;
+	share?: number;
+	children: ReactNode;
+}): ReactNode {
 	const { setNodeRef, isOver } = useDroppable({ id: `panel-col-${column}` });
 	return (
 		<div
 			ref={setNodeRef}
+			style={share === undefined ? undefined : { flexGrow: share }}
 			className={`gui-pane-col${column === 1 ? " gui-pane-col--second" : ""}${isOver ? " gui-pane-col--over" : ""}`}
 		>
 			{children}
 		</div>
+	);
+}
+
+/** Divider between the two split columns (VS Code sash / dsh divider parity):
+ *  drag to rebalance, double-click to centre, arrow keys for keyboard users.
+ *  The drag runs on the shared pointer-drag primitive and mounts the same
+ *  gesture shield as the pane-width handle, so moves that cross the browser
+ *  guest keep driving the divider instead of stalling. */
+function PanelSplitDivider({ ratio, onChange }: { ratio: number; onChange(next: number): void }): ReactNode {
+	const [dragging, setDragging] = useState(false);
+	const nodeRef = useRef<HTMLDivElement | null>(null);
+	const trackRef = useRef<{ left: number; available: number } | null>(null);
+
+	// The track is measured once per gesture from the divider's own parent:
+	// the columns cannot resize it mid-drag, and reading it on every move
+	// would thrash layout.
+	const measureTrack = (element: HTMLElement | null): void => {
+		const host = element?.parentElement?.getBoundingClientRect();
+		trackRef.current = host ? { left: host.left, available: host.width - PANEL_SPLIT_DIVIDER_PX } : null;
+	};
+	const endDrag = (): void => {
+		document.body.classList.remove("gui-resizing");
+		setDragging(false);
+	};
+	const drag = usePointerDrag({
+		onDragStart: ({ element }) => {
+			measureTrack(element);
+			// Freezes text selection and the pane's width transition, exactly as
+			// the outer width handle does.
+			document.body.classList.add("gui-resizing");
+			setDragging(true);
+		},
+		onDragMove: ({ x }) => {
+			const track = trackRef.current;
+			if (track) onChange(panelSplitRatioAt(x, track));
+		},
+		onDragEnd: endDrag,
+		onTap: endDrag,
+	});
+
+	const nudge = (delta: number): void => {
+		measureTrack(nodeRef.current);
+		const available = trackRef.current?.available ?? 0;
+		onChange(nudgePanelSplitRatio(ratio, delta, available));
+	};
+	const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+		if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+		event.preventDefault();
+		const step = event.shiftKey ? 0.1 : 0.02;
+		nudge(event.key === "ArrowLeft" ? -step : step);
+	};
+
+	return (
+		<>
+			<div
+				ref={nodeRef}
+				role="separator"
+				aria-orientation="vertical"
+				aria-label={t("settings.resizePanelColumns")}
+				tabIndex={0}
+				className={`gui-pane-split-divider${dragging ? " gui-pane-split-divider--active" : ""}`}
+				{...drag}
+				onKeyDown={onKeyDown}
+				onDoubleClick={() => onChange(0.5)}
+			/>
+			{dragging &&
+				createPortal(
+					<div
+						className="gui-drag-shield gui-panel-drag-shield"
+						onPointerMove={drag.onPointerMove}
+						onPointerUp={drag.onPointerUp}
+						onPointerCancel={drag.onPointerCancel}
+						aria-hidden
+					/>,
+					document.getElementById("transcript.root") ?? document.body,
+				)}
+		</>
 	);
 }
 
@@ -1728,26 +1828,6 @@ function PanelSplitZone({ active }: { active: boolean }): ReactNode {
 					<p className="gui-pane-split-zone-label">{t("settings.dropSplitPanel")}</p>
 				</>
 			)}
-		</div>
-	);
-}
-
-/** Persistent widget preview tab (常驻标签页): mirrors the latest widget
- *  the conversation rendered. The last successful widget tool result wins;
- *  the card stays until a newer widget replaces it. */
-function WidgetSidebarTab({ entries }: { entries: readonly unknown[] }): ReactNode {
-	const payload = latestWidgetFromEntries(entries);
-	if (!payload) {
-		return (
-			<div className="gui-widget-tab-empty">
-				<Icon name="layout-column" className="h-5 w-5" />
-				<p>{t("settings.widgetPreviewEmpty")}</p>
-			</div>
-		);
-	}
-	return (
-		<div className="gui-widget-tab">
-			<WidgetCard payload={payload} />
 		</div>
 	);
 }
@@ -1788,10 +1868,9 @@ function fmtJobTime(ts: number | string): string {
  *  Backed by the daemon's session.agents registry scan, so rows persist
  *  after an agent goes idle. Two open paths per row: the main area opens
  *  the child session as the main chat surface (same target as the
- *  sidebar's nested session rows); the panel action docks the sub
- *  conversation in place — live transcript + chat + lifecycle actions
- *  without leaving this session (openchamber mini-chat parity, embedded
- *  in the pane instead of a separate OS window). Polls every 5s. */
+ *  sidebar's nested session rows); the panel action opens the agent's
+ *  session TAB — live transcript + chat + lifecycle actions without
+ *  leaving this session (openchamber mini-chat parity). Polls every 5s. */
 function SubSessionsSection({
 	rpc,
 	sessionId,
@@ -1801,7 +1880,7 @@ function SubSessionsSection({
 	rpc: RpcClient;
 	sessionId: string;
 	onOpenSession?(id: string): void;
-	/** Dock the row's agent conversation over this pane (embedded preview). */
+	/** Open/focus this row's agent session tab (child session id as address). */
 	onDockAgent?(agent: AgentSnapshot, childSessionId: string): void;
 }): ReactNode {
 	const [rows, setRows] = useState<
@@ -1905,6 +1984,41 @@ function SubSessionsSection({
 					))}
 				</div>
 			)}
+		</div>
+	);
+}
+
+/** Background jobs block (agents hub, below the sub-sessions list): the
+ *  session's running and recent async jobs, folded by default. JobsPane polls
+ *  `session.jobs` once a second, so the pane mounts only while the block is
+ *  open — a folded block must not spend a poll. */
+function BackgroundJobsSection({
+	rpc,
+	sessionId,
+	visible,
+}: {
+	rpc: RpcClient;
+	sessionId: string;
+	/** Right panel expanded: a folded panel keeps bodies mounted but idle. */
+	visible: boolean;
+}): ReactNode {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="px-1 pb-2 pt-1">
+			<button
+				type="button"
+				className="gui-pane-action"
+				aria-expanded={open}
+				onClick={() => setOpen(value => !value)}
+			>
+				<Icon name="task" className="h-3.5 w-3.5 flex-shrink-0" />
+				<span className="min-w-0 flex-1 truncate text-left">{t("tools.jobs")}</span>
+				<Icon
+					name="arrow-down-s"
+					className={`h-3.5 w-3.5 flex-shrink-0 transition-transform${open ? "" : " -rotate-90"}`}
+				/>
+			</button>
+			{open ? <JobsPane rpc={rpc} sessionId={sessionId} visible={visible} /> : null}
 		</div>
 	);
 }

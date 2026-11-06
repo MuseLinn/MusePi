@@ -23,6 +23,7 @@ import {
 	restorePanelTabs,
 	serializePanelTabs,
 	setPanelSplit,
+	setPanelSplitRatio,
 	setPanelTabDirty,
 	type UpsertPanelTabOptions,
 	upsertPanelTab,
@@ -41,6 +42,8 @@ export interface UsePanelTabsResult extends PanelTabState {
 	moveToColumn(id: string, column: PanelColumn): void;
 	/** Toggle the two-column split; disabling merges column 1 into column 0. */
 	setSplit(split: boolean): void;
+	/** Move the divider: column 0's share of the split track (clamped). */
+	setSplitRatio(ratio: number): void;
 }
 
 /** Pre-rename local-preview spelling inside a persisted layout. It is rewritten
@@ -108,6 +111,19 @@ export function usePanelTabs(storageKey: string): UsePanelTabsResult {
 		[],
 	);
 	const setSplit = useCallback((split: boolean): void => setState(s => setPanelSplit(s, split)), []);
+	const setSplitRatio = useCallback((ratio: number): void => setState(s => setPanelSplitRatio(s, ratio)), []);
 
-	return { ...state, open, close, closeMany, duplicate, activate, reorder, setDirty, moveToColumn, setSplit };
+	return {
+		...state,
+		open,
+		close,
+		closeMany,
+		duplicate,
+		activate,
+		reorder,
+		setDirty,
+		moveToColumn,
+		setSplit,
+		setSplitRatio,
+	};
 }

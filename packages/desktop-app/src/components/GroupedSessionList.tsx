@@ -38,6 +38,7 @@ function GroupedSessionListInner({
 	statuses,
 	manualTags,
 	searchQuery,
+	retitlingId,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
@@ -46,6 +47,9 @@ function GroupedSessionListInner({
 	unread?: ReadonlySet<string>;
 	pausedIds?: ReadonlySet<string>;
 	workingIds?: ReadonlySet<string>;
+	/** Session id whose title an AI rename is generating — forwarded so that
+	 *  row shows its spinner. */
+	retitlingId?: string | null;
 	/** Lifecycle status per session id — tints member rows' left square. */
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
@@ -102,6 +106,7 @@ function GroupedSessionListInner({
 						statuses={statuses}
 						manualTags={manualTags}
 						searchQuery={searchQuery}
+						retitlingId={retitlingId}
 					/>
 				</div>
 			))}

@@ -1219,11 +1219,11 @@ export const settings = {
 	"settings.restorePanel": "Restore panel",
 	"settings.splitPanel": "Split panel",
 	"settings.mergePanel": "Merge panel",
+	"settings.resizePanelColumns": "Resize panel columns",
 	"settings.dropTabsHere": "Drag tabs here",
 	"settings.dropSplitPanel": "Drop here to split",
 	"settings.browserShownOtherColumn": "The browser page is shown in the other column",
 	"settings.clickFocusBrowserTab": "Click to switch to this tab",
-	"settings.widgetPreviewEmpty": "No widget preview yet — visual widgets rendered in chat will stay here",
 	"settings.pagePreview": "Page preview",
 	"settings.filePreview": "File preview",
 	"settings.htmlBuildPreviewNotice":
@@ -4780,6 +4780,14 @@ export const settings = {
 	"Strong penalty": "Strong penalty",
 	"Style of separators between segments": "Style of separators between segments",
 	"Subagent Model": "Subagent Model",
+	"Subagent Approval": "Subagent Approval",
+	"Approval behavior for spawned subagents. 'Inherit' reuses the parent session's tools.approvalMode and routes prompts to the parent's UI (the subagent shows as awaiting approval). 'Yolo' keeps the previous headless behavior and auto-approves every tier. When the parent has no UI to answer prompts, 'inherit' falls back to 'yolo'.":
+		"Approval behavior for spawned subagents. 'Inherit' reuses the parent session's tools.approvalMode and routes prompts to the parent's UI (the subagent shows as awaiting approval). 'Yolo' keeps the previous headless behavior and auto-approves every tier. When the parent has no UI to answer prompts, 'inherit' falls back to 'yolo'.",
+	Inherit: "Inherit",
+	"Match the parent session's approval mode and surface prompts in its UI":
+		"Match the parent session's approval mode and surface prompts in its UI",
+	"Auto-approve every tier; subagents never block on a UI prompt":
+		"Auto-approve every tier; subagents never block on a UI prompt",
 	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`":
 		"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
 	"Suggests a todo list on the first message (reminder, not forced)":
@@ -6738,6 +6746,19 @@ export const settings = {
 	"sessionInfo.emptyHint": "Open a session to see its metadata and token usage here.",
 	"sessionInfo.error": "Failed to load session info",
 	"sessionInfo.retry": "Retry",
+	"sessionInfo.awaitingApproval": "Awaiting approval",
+	"sessionInfo.maintenanceShake": "Drop tool output",
+	"sessionInfo.maintenanceShakeHint":
+		"Replace large tool results with placeholders to free context; there is no undo from the UI",
+	"sessionInfo.maintenanceFresh": "Rebuild model connection",
+	"sessionInfo.maintenanceFreshHint":
+		"Close and recreate provider sessions without touching the transcript; use it when a stream is stuck",
+	"sessionInfo.maintenanceClear": "Clear model context",
+	"sessionInfo.maintenanceClearHint": "Make the model forget the conversation; the transcript is kept",
+	"sessionInfo.maintenanceBusy": "Available after the current response finishes",
+	"sessionInfo.maintenanceNothingToDo": "Nothing left to remove from context",
+	"sessionInfo.confirmClearContext":
+		"Make the model forget the conversation so far? The transcript stays, but the next turn starts from an empty context.",
 	"sessionInfo.unavailable": "Not available",
 	"sessionInfo.workingDirectories": "Working directories",
 	"sessionInfo.additionalDirectories": "Additional directories ({count})",

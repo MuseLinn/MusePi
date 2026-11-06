@@ -399,6 +399,7 @@ const SessionRow = memo(function SessionRow({
 	unread,
 	paused,
 	working,
+	retitling,
 	status,
 	untitled,
 	indent,
@@ -424,6 +425,9 @@ const SessionRow = memo(function SessionRow({
 	unread: boolean;
 	paused: boolean;
 	working: boolean;
+	/** An AI rename (`session.retitle`) is generating this row's title — the
+	 *  row shows a spinner until the request settles. */
+	retitling: boolean;
 	status?: SessionStatus;
 	untitled: boolean;
 	indent: number;
@@ -511,6 +515,7 @@ const SessionRow = memo(function SessionRow({
 				}
 				onMouseLeave={clearSessionHover}
 				{...(untitled ? { "data-untitled": "1" } : {})}
+				aria-busy={retitling || undefined}
 				draggable
 				onDragStart={e => {
 					e.dataTransfer.setData("text/plain", id);
@@ -551,6 +556,17 @@ const SessionRow = memo(function SessionRow({
 				<span className="gui-session-title">
 					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
 				</span>
+				{retitling && (
+					<span
+						className="gui-tree-working"
+						data-ai-retitling="1"
+						role="img"
+						aria-label={t("general.aiRenaming")}
+						title={t("general.aiRenaming")}
+					>
+						<Icon name="loader-4" className="gui-tree-working-spin" />
+					</span>
+				)}
 				{paused && (
 					<span className="gui-tree-pause" role="img" aria-label={t("tools.paused")} title={t("tools.paused")}>
 						<Icon name="pause" className="h-3 w-3" />
@@ -631,12 +647,16 @@ function SessionListComponent({
 	manualTags,
 	searchQuery = "",
 	sort = "statusTime",
+	retitlingId = null,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
 	onSelect(id: string): void;
 	/** Right-click a session row (ZCode task menu). */
 	onContextMenu?(sessionId: string, x: number, y: number): void;
+	/** Session id whose title an AI rename (`session.retitle`) is generating —
+	 *  that row shows a spinner until the request settles. */
+	retitlingId?: string | null;
 	/** Session ids with the 未读 marker. */
 	unread?: ReadonlySet<string>;
 	/** Paused session ids — render a pause chip so frozen sessions are
@@ -761,6 +781,7 @@ function SessionListComponent({
 						unread={unread?.has(node.entry.id) ?? false}
 						paused={pausedIds?.has(node.entry.id) ?? false}
 						working={workingIds?.has(node.entry.id) ?? false}
+						retitling={retitlingId === node.entry.id}
 						status={status}
 						untitled={!advisorUntitled && !rawLabel.trim()}
 						indent={indent}

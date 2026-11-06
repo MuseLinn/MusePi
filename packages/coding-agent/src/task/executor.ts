@@ -30,6 +30,7 @@ import type { ToolPathWithSource } from "../extensibility/custom-tools";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { runExtensionCompact, runExtensionSetModel } from "../extensibility/extensions/compact-handler";
 import { getSessionSlashCommands } from "../extensibility/extensions/get-commands-handler";
+import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import { buildSkillPromptMessage, type Skill } from "../extensibility/skills";
 import type { HindsightSessionState } from "../hindsight/state";
 import type { LocalProtocolOptions } from "../internal-urls";
@@ -346,6 +347,13 @@ export interface ExecutorOptions {
 	/** Parent session's freeze gate — the spawned subagent parks with the
 	 *  session when the GUI pauses it. Absent ⇒ process-global gate. */
 	pauseGate?: PauseGate;
+	/**
+	 * Parent session's UI context (TUI, RPC, or daemon approval bridge). The
+	 * child's approval and ask prompts are forwarded through it so subagents
+	 * inherit the parent's approval surface instead of silently running yolo.
+	 * Absent ⇒ the child falls back to yolo.
+	 */
+	parentUIContext?: ExtensionUIContext;
 	worktree?: string;
 	agent: AgentDefinition;
 	task: string;
@@ -895,6 +903,8 @@ export function createSubagentSettings(
 	baseSettings: Settings,
 	overrides?: Partial<Record<SettingPath, unknown>>,
 	inheritedServiceTier?: ServiceTierByFamily | null,
+	/** True when the parent session has a UI context the child can prompt through. */
+	parentHasUI = false,
 ): Settings {
 	const snapshot: Partial<Record<SettingPath, unknown>> = {};
 	for (const key of Object.keys(SETTINGS_SCHEMA) as SettingPath[]) {
@@ -916,6 +926,13 @@ export function createSubagentSettings(
 	snapshot["tier.openai"] = subagentTiers.openai ?? "none";
 	snapshot["tier.anthropic"] = subagentTiers.anthropic ?? "none";
 	snapshot["tier.google"] = subagentTiers.google ?? "none";
+	// Approval inheritance: the subagent prompts through the parent's UI context
+	// (injected after session creation) when one exists. Without a UI the child
+	// would fail closed on the first prompt, so `inherit` falls back to yolo.
+	// `task.approvalMode: yolo` keeps the historical headless behavior.
+	const inheritedApprovalMode = (baseSettings.get("tools.approvalMode") ?? "yolo") as "always-ask" | "write" | "yolo";
+	const subagentApprovalMode =
+		baseSettings.get("task.approvalMode") === "yolo" || !parentHasUI ? "yolo" : inheritedApprovalMode;
 	return Settings.isolated(
 		{
 			...snapshot,
@@ -925,10 +942,7 @@ export function createSubagentSettings(
 			// owner job outlives the run, so worktree capture/cleanup stays
 			// race-free (previously both were force-disabled here).
 
-			// Subagents run headless — there is no UI to confirm prompts against, so
-			// the parent task approval is the authorization boundary. Use yolo mode
-			// to preserve unattended subagent execution. User `tools.approval` policies still apply.
-			"tools.approvalMode": "yolo",
+			"tools.approvalMode": subagentApprovalMode,
 			// Subagents run unadvised by default; runSubprocess opts a spawn back in
 			// per agent (frontmatter `advisor` / `task.agentAdvisor`) via overrides.
 			"advisor.enabled": false,
@@ -969,6 +983,8 @@ interface RunMonitorArgs {
 	softRequestBudgetNotice: boolean;
 	/** Wall-clock cap in ms; 0 disables the timer. */
 	maxRuntimeMs: number;
+	/** Parent session's UI context; wrapped so pending prompts mark the run as awaiting approval. */
+	parentUIContext?: ExtensionUIContext;
 }
 
 /**
@@ -1026,8 +1042,42 @@ interface SubagentRunMonitor {
 	/** Final raw output: end-of-run assistant text when available, else accumulated chunks. */
 	rawOutput(): string;
 	scheduleProgress(flush?: boolean): void;
+	/** Parent UI context wrapped for approval tracking; absent when the parent has none. */
+	toolUIContext(): ExtensionUIContext | undefined;
 	/** Stop processing events and clear listeners/timers. Call once the run settled. */
 	finish(): void;
+}
+
+/**
+ * Wrap the parent session's UI context so every dialog the subagent forwards
+ * counts as pending until it settles. The base object stays the prototype, so
+ * dialogs this wrapper does not intercept (notify, setStatus, …) remain
+ * reachable unchanged.
+ */
+export function wrapUIContextForApprovalTracking(
+	base: ExtensionUIContext,
+	onPendingChange: (pending: number) => void,
+): ExtensionUIContext {
+	let pending = 0;
+	const track = <T>(invoke: () => Promise<T>): Promise<T> => {
+		pending += 1;
+		onPendingChange(pending);
+		return Promise.resolve()
+			.then(invoke)
+			.finally(() => {
+				pending = Math.max(0, pending - 1);
+				onPendingChange(pending);
+			});
+	};
+	const wrapped = Object.create(base) as ExtensionUIContext;
+	wrapped.select = (title, options, dialogOptions) => track(() => base.select(title, options, dialogOptions));
+	wrapped.confirm = (title, message, dialogOptions) => track(() => base.confirm(title, message, dialogOptions));
+	wrapped.input = (title, placeholder, dialogOptions) => track(() => base.input(title, placeholder, dialogOptions));
+	const askDialog = base.askDialog;
+	if (askDialog) {
+		wrapped.askDialog = (questions, dialogOptions) => track(() => askDialog.call(base, questions, dialogOptions));
+	}
+	return wrapped;
 }
 
 /**
@@ -1074,6 +1124,18 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 		modelOverride: args.modelOverride,
 		modelRole: args.modelRole,
 	};
+
+	// A subagent's prompts run through the parent's UI context. Mark the run as
+	// awaiting approval while any forwarded dialog is still open so the parent's
+	// task card can show the blocked state.
+	const wrappedUIContext = args.parentUIContext
+		? wrapUIContextForApprovalTracking(args.parentUIContext, pending => {
+				const awaiting = pending > 0;
+				if (progress.awaitingApproval === awaiting) return;
+				progress.awaitingApproval = awaiting;
+				scheduleProgress(true);
+			})
+		: undefined;
 
 	const outputChunks: string[] = [];
 	const finalOutputChunks: string[] = [];
@@ -1871,6 +1933,7 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 		lastAssistantSalvageText: () => lastAssistantSalvageText,
 		rawOutput: () => (finalOutputChunks.length > 0 ? finalOutputChunks.join("") : outputChunks.join("")),
 		scheduleProgress,
+		toolUIContext: () => wrappedUIContext,
 		finish: () => {
 			resolved = true;
 			listenerController.abort();
@@ -2759,6 +2822,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				: undefined),
 		},
 		options.parentServiceTier,
+		options.parentUIContext !== undefined,
 	);
 	const maxRecursionDepth = settings.get("task.maxRecursionDepth") ?? 2;
 	const maxRuntimeMs = Math.max(
@@ -2838,8 +2902,12 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		softRequestBudget,
 		softRequestBudgetNotice,
 		maxRuntimeMs,
+		parentUIContext: options.parentUIContext,
 	});
 	const progress = monitor.progress;
+	// Approval/ask dialogs from this run (and nested spawns) are answered through
+	// the parent's UI surface, wrapped so the task card shows the blocked state.
+	const injectedUIContext = monitor.toolUIContext();
 	let unsubscribe: (() => void) | null = null;
 	let reviveSession: AgentReviver | null = null;
 	const installIrcWakeTurnMonitor = (target: AgentSession): void => {
@@ -3151,6 +3219,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				},
 				sessionManager: sessionManagerForRun,
 				hasUI: false,
+				// Register UI-only tools (ask) up front; the parent UI context that
+				// answers them is attached right after session creation.
+				toolSessionHasUI: options.parentUIContext !== undefined,
 				prewalk,
 				spawns: spawnsEnv,
 				taskDepth: childDepth,
@@ -3183,8 +3254,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 			const sessionPromise = createAgentSession(buildSubagentSessionOptions(sessionManager, null));
 			let session: AgentSession;
+			let setSessionToolUIContext: ((uiContext: ExtensionUIContext, hasUI: boolean) => void) | undefined;
 			try {
-				({ session } = await awaitAbortable(sessionPromise));
+				({ session, setToolUIContext: setSessionToolUIContext } = await awaitAbortable(sessionPromise));
 			} catch (err) {
 				// Abort raced session startup. The session may still resolve later
 				// holding live LSP/MCP child processes — dispose it when it does so
@@ -3193,6 +3265,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				throw err;
 			}
 			sessionCreatedAt = performance.now();
+			// Keep the child's `hasUI: false` construction (MCP/LSP startup paths
+			// stay headless) and attach the parent UI only after the session exists.
+			if (injectedUIContext) setSessionToolUIContext?.(injectedUIContext, true);
 
 			monitor.setActiveSession(session);
 			// Run-state notifications precede deferrable wire-level `agent_end`,
@@ -3210,9 +3285,12 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					if (options.parentArtifactManager) {
 						reopened.adoptArtifactManager(options.parentArtifactManager);
 					}
-					const { session: revived } = await createAgentSession(
+					const { session: revived, setToolUIContext: setRevivedToolUIContext } = await createAgentSession(
 						buildSubagentSessionOptions(reopened, expectedAgentRef),
 					);
+					// A revived session is a fresh construction: re-attach the parent
+					// UI so an inherited approval mode keeps working after a park.
+					if (injectedUIContext) setRevivedToolUIContext(injectedUIContext, true);
 					AgentRegistry.global().syncSessionStatus(id, revived);
 					installIrcWakeTurnMonitor(revived);
 					return revived;
@@ -3326,6 +3404,10 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						getSystemPrompt: () => session.systemPrompt,
 						compact: instructionsOrOptions => runExtensionCompact(session, instructionsOrOptions),
 					},
+					// Subagent approval gate reads the runner's UI context, not just
+					// the tool context store; both must see the parent surface.
+					undefined,
+					injectedUIContext,
 				);
 				extensionRunner.onError(err => {
 					logger.error("Extension error", { path: err.extensionPath, error: err.error });

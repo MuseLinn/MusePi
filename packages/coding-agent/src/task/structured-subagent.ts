@@ -114,6 +114,9 @@ export interface StructuredSubagentRequest {
 	/** `0` disables executor wall-clock timeout. Undefined inherits settings. */
 	maxRuntimeMs?: number;
 	signal?: AbortSignal;
+	/** Fires once the child's registry id is reserved, before any dispatch, so
+	 *  frontends can publish capabilities keyed by that id (detach handles). */
+	onIdReserved?: (id: string) => void;
 	onProgress?: (progress: AgentProgress) => void;
 }
 
@@ -482,6 +485,7 @@ function buildExecutorOptions(
 		parentAgentId: session.getAgentId?.() ?? MAIN_AGENT_ID,
 		parentServiceTier: session.getServiceTierByFamily ? (session.getServiceTierByFamily() ?? null) : undefined,
 		parentPromptCacheKey: resolveParentPromptCacheKey(session),
+		parentUIContext: session.uiContext,
 	};
 }
 
@@ -593,6 +597,7 @@ export async function runStructuredSubagent(request: StructuredSubagentRequest):
 			...request.identity,
 			label: request.identity?.label ?? (request.invocationKind === "eval" ? "EvalAgent" : undefined),
 		});
+		request.onIdReserved?.(id);
 		const baseOptions = buildExecutorOptions(request, policy, lease, id);
 		baseOptions.onCleanupDeferred = completion => {
 			deferredCleanup = completion;

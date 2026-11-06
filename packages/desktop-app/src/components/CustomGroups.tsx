@@ -55,6 +55,7 @@ export function CustomGroups({
 	statuses,
 	manualTags,
 	searchQuery,
+	retitlingId,
 }: {
 	groups: CustomGroup[];
 	/** Session tree for rendering each group's members. */
@@ -90,6 +91,9 @@ export function CustomGroups({
 	manualTags?: ReadonlyMap<string, SessionStatus>;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
+	/** Session id whose title an AI rename is generating — forwarded so that
+	 *  row shows its spinner. */
+	retitlingId?: string | null;
 }): ReactNode {
 	const dropSession = (index: number) => (e: DragEvent<HTMLDivElement>) => {
 		e.preventDefault();
@@ -143,6 +147,7 @@ export function CustomGroups({
 					statuses={statuses}
 					manualTags={manualTags}
 					searchQuery={searchQuery}
+					retitlingId={retitlingId}
 				/>
 			))}
 		</div>
@@ -173,6 +178,7 @@ function GroupBlock({
 	statuses,
 	manualTags,
 	searchQuery,
+	retitlingId,
 }: {
 	group: CustomGroup;
 	index: number;
@@ -206,6 +212,9 @@ function GroupBlock({
 	manualTags?: ReadonlyMap<string, SessionStatus>;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
+	/** Session id whose title an AI rename is generating — forwarded so that
+	 *  row shows its spinner. */
+	retitlingId?: string | null;
 }): ReactNode {
 	// Issue #15: collapse state keys on the group's identity, not its (possibly
 	// duplicated) display name — two `demo` groups used to share one open/closed
@@ -374,6 +383,7 @@ function GroupBlock({
 							manualTags={manualTags}
 							searchQuery={searchQuery}
 							sort="none"
+							retitlingId={retitlingId}
 						/>
 					</div>
 				)}

@@ -1,6 +1,7 @@
 import "./happy-dom-shim";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { getLocaleSnapshot, setLocale, type TranslationKey, t } from "@musepi/client-core";
+import type { AgentSnapshot } from "@musepi/pi-wire";
 import { act, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { compileComponentModule } from "../../coding-agent/src/daemon/extension-artifact-compiler";
@@ -20,7 +21,7 @@ import {
 import { EMPTY_PANEL_TAB_STATE, serializePanelTabs, upsertPanelTab } from "../src/lib/panel-tabs";
 import type { RpcClient } from "../src/lib/rpc";
 import { type GuiSessionState, GuiSessionStore } from "../src/lib/session-store";
-import { SURFACES } from "../src/lib/surfaces/registry";
+import { agentTabDescriptor, SURFACES } from "../src/lib/surfaces/registry";
 import { type UsePanelTabsResult, usePanelTabs } from "../src/lib/use-panel-tabs";
 
 const originalLocale = getLocaleSnapshot();
@@ -92,6 +93,12 @@ interface PanelOptions {
 	sessionId?: string;
 	browserOpenRequest?: { url: string; nonce: number } | null;
 	onExpandPanel?: () => void;
+	agents?: readonly AgentSnapshot[];
+	progress?: GuiSessionState["progress"];
+	rpc?: RpcClient;
+	onOpenSession?: (id: string) => void;
+	/** Pre-seed the panel with one agent tab (agent already gone from snap). */
+	seedAgentTab?: { id: string; displayName: string; childSessionId?: string };
 }
 
 function mountPanel(options?: PanelOptions) {
@@ -99,6 +106,11 @@ function mountPanel(options?: PanelOptions) {
 	const storageKey = `test-context-browser-${Date.now()}-${storageSequence++}`;
 	storageKeys.push(storageKey);
 	if (options?.seedNotes) seed(storageKey, options.split);
+	if (options?.seedAgentTab) {
+		const descriptor = agentTabDescriptor(options.seedAgentTab, options.seedAgentTab.childSessionId);
+		const state = { ...upsertPanelTab(EMPTY_PANEL_TAB_STATE, descriptor), split: options.split ?? false };
+		localStorage.setItem(storageKey, JSON.stringify(serializePanelTabs(state)));
+	}
 	const latest = { current: null as UsePanelTabsResult | null };
 	const host = document.createElement("div");
 	document.body.appendChild(host);
@@ -113,8 +125,13 @@ function mountPanel(options?: PanelOptions) {
 		latest.current = current.current;
 		return (
 			<ContextPanel
-				snap={{ ...snap, sessionId: currentOptions?.sessionId ?? snap.sessionId }}
-				rpc={rpc}
+				snap={{
+					...snap,
+					sessionId: currentOptions?.sessionId ?? snap.sessionId,
+					agents: currentOptions?.agents ?? snap.agents,
+					progress: currentOptions?.progress ?? snap.progress,
+				}}
+				rpc={currentOptions?.rpc ?? rpc}
 				open={currentOptions?.open ?? true}
 				browserOpenRequest={currentOptions?.browserOpenRequest}
 				onViewChange={() => {}}
@@ -122,6 +139,7 @@ function mountPanel(options?: PanelOptions) {
 				onExpandPanel={currentOptions?.onExpandPanel}
 				agentId={null}
 				onAgentSelect={() => {}}
+				onOpenSession={currentOptions?.onOpenSession}
 				extTabs={extTabs}
 			/>
 		);
@@ -555,5 +573,86 @@ describe("ContextPanel browser projection regressions", () => {
 		click(panelTabByText("managed-a").querySelector(".gui-surface-tab-close")!);
 		expect(latest.current?.activeId).toBe("notes::");
 		expect(getHostState().activeId).toBe("managed-b");
+	});
+});
+
+describe("ContextPanel 子代理会话标签页", () => {
+	const scout: AgentSnapshot = {
+		id: "a1",
+		displayName: "scout",
+		kind: "sub",
+		status: "running",
+		hasSessionFile: true,
+		createdAt: 1,
+		lastActivity: 2,
+	};
+
+	interface AgentCall {
+		method: string;
+		params?: unknown;
+	}
+
+	function agentRpc(calls: AgentCall[]): RpcClient {
+		return {
+			request: async (method: string, params?: unknown): Promise<unknown> => {
+				calls.push({ method, params });
+				if (method === "agents.transcript") return { text: "", newSize: 0 };
+				if (method === "session.agents") return { agents: [] };
+				return null;
+			},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+	}
+
+	function panel(): HTMLElement {
+		return document.querySelector<HTMLElement>(".gui-pane-right")!;
+	}
+
+	async function flush(): Promise<void> {
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+	}
+
+	it("点击 roster 行打开 agent surface 的标签页，dedupeKey 为 agent id", () => {
+		const { latest } = mountPanel({ agents: [scout] });
+		act(() => latest.current?.open({ surface: "agents", label: t("agents") }));
+		const row = panel().querySelector<HTMLButtonElement>(".ag-row");
+		expect(row).not.toBeNull();
+
+		click(row!);
+		const opened = latest.current?.tabs.find(tab => tab.surface === "agent");
+		expect(opened).toMatchObject({ id: "agent::a1", target: "a1", dedupeKey: "a1", label: "scout" });
+		expect(latest.current?.activeId).toBe("agent::a1");
+	});
+
+	it("agent 标签页渲染子代理名并拉取 transcript", async () => {
+		const calls: AgentCall[] = [];
+		const { latest } = mountPanel({ agents: [scout], rpc: agentRpc(calls) });
+		act(() => latest.current?.open(agentTabDescriptor(scout)));
+		await flush();
+
+		expect(panel().textContent).toContain("scout");
+		expect(panel().querySelector(".ag-drawer-body")).not.toBeNull();
+		expect(panel().querySelector(".ag-chat-input")).not.toBeNull();
+		const fetchCall = calls.find(call => call.method === "agents.transcript");
+		expect(fetchCall?.params).toMatchObject({ agentId: "a1", fromByte: 0 });
+	});
+
+	it("agent 不在快照时渲染空态，并可用标签页的 target 打开子会话", () => {
+		const opened: string[] = [];
+		mountPanel({
+			seedAgentTab: { id: "gone", displayName: "gone-agent", childSessionId: "child-9" },
+			onOpenSession: id => opened.push(id),
+		});
+		expect(panel().querySelector(".gui-pane-tab-empty-title")?.textContent).toBe(t("agents.subagentUnavailable"));
+		const openButton = [...panel().querySelectorAll<HTMLButtonElement>("button")].find(
+			button => button.textContent === t("general.openSubagentSession"),
+		);
+		expect(openButton).toBeDefined();
+
+		click(openButton!);
+		expect(opened).toEqual(["child-9"]);
 	});
 });

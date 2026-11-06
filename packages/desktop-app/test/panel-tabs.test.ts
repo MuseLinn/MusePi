@@ -39,6 +39,7 @@ const state = (tabs: PanelTab[], activeId: string | null = null): PanelTabState 
 	activeId,
 	split: false,
 	columnActive: [activeId, null],
+	splitRatio: 0.5,
 });
 const ids = (s: PanelTabState): string[] => s.tabs.map(t => t.id);
 
@@ -212,7 +213,7 @@ describe("closePanelTab / closePanelTabs", () => {
 
 	it("clears activeId when the last tab closes", () => {
 		const s = closePanelTab(state([base.tabs[0]!], "files::/a.md"), "files::/a.md");
-		expect(s).toEqual({ tabs: [], activeId: null, split: false, columnActive: [null, null] });
+		expect(s).toEqual({ tabs: [], activeId: null, split: false, columnActive: [null, null], splitRatio: 0.5 });
 	});
 
 	it("is reference-stable for an unknown id", () => {
@@ -244,6 +245,39 @@ describe("serializePanelTabs / restorePanelTabs", () => {
 			activeId: null,
 		};
 		expect(restorePanelTabs(raw).tabs.length).toBe(1);
+	});
+
+	it("drops retired surfaces instead of restoring a bodyless tab", () => {
+		const raw = {
+			v: 2,
+			split: false,
+			tabs: [
+				{ surface: "jobs", target: null, label: "Jobs", readOnly: false, touchedAt: 1, dedupeKey: null, column: 0 },
+				{
+					surface: "widget",
+					target: null,
+					label: "Widget",
+					readOnly: false,
+					touchedAt: 2,
+					dedupeKey: null,
+					column: 0,
+				},
+				{
+					surface: "files",
+					target: "/a.md",
+					label: "a",
+					readOnly: false,
+					touchedAt: 3,
+					dedupeKey: null,
+					column: 0,
+				},
+			],
+			activeId: "jobs::",
+			columnActive: ["jobs::", null],
+		};
+		const restored = restorePanelTabs(raw);
+		expect(restored.tabs.map(tab => tab.id)).toEqual(["files::/a.md"]);
+		expect(restored.activeId).toBe("files::/a.md");
 	});
 
 	it("repairs a dangling activeId by falling back to the newest tab", () => {

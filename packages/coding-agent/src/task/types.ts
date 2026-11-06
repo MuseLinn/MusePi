@@ -533,6 +533,9 @@ export interface AgentProgress {
 	/** Cumulative billing cost in USD, accumulated incrementally from message_end events. */
 	cost: number;
 	durationMs: number;
+	/** True while the subagent is parked on a user decision (approval or ask)
+	 *  forwarded to the parent session's UI. Cleared when the prompt settles. */
+	awaitingApproval?: boolean;
 	modelOverride?: string | string[];
 	/** Explicit pre-expansion model role alias selected for this run. */
 	modelRole?: string;

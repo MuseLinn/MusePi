@@ -45,13 +45,20 @@ import "../tools/review";
 import type { AsyncJobManager } from "../async";
 import { hasResolvableTranscript } from "../internal-urls/registry-helpers";
 import { AgentRegistry } from "../registry/agent-registry";
+import { setAgentDetachHandle } from "./detach-registry";
+import { adoptRunningSpawn, createAdoptedResult, isAdoptedResult } from "./detach-spawn";
 import { type DiscoveryResult, discoverAgents } from "./discovery";
 import { generateTaskName } from "./name-generator";
 import { AgentOutputManager } from "./output-manager";
 import { mapWithConcurrencyLimitAllSettled, Semaphore } from "./parallel";
 import { renderResult, renderCall as renderTaskCall } from "./render";
 import { repairTaskParams } from "./repair-args";
-import { resolveEffectiveSubagentPolicy, runStructuredSubagent, StructuredSubagentError } from "./structured-subagent";
+import {
+	resolveEffectiveSubagentPolicy,
+	runStructuredSubagent,
+	StructuredSubagentError,
+	type StructuredSubagentResult,
+} from "./structured-subagent";
 
 function renderSubagentUserPrompt(assignment: string): string {
 	return prompt.render(subagentUserPromptTemplate, {
@@ -318,6 +325,17 @@ interface SyncSpawnRef {
 	item: TaskItem;
 	index: number;
 	preAllocatedId?: string;
+}
+
+/**
+ * One held spawn-semaphore slot. A detaching run keeps executing after the
+ * current turn stops waiting, so it must keep its slot too: ownership moves to
+ * the adopted job body (`transferred`), and the acquiring caller skips its own
+ * release. `release` is idempotent either way.
+ */
+interface SpawnPermit {
+	transferred: boolean;
+	release(): void;
 }
 
 /** Merged view of a sync spawn set's payloads: joined text plus flattened results/usage/paths. */
@@ -646,6 +664,19 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 
 	#releaseSpawnSemaphore(): void {
 		this.#getSpawnSemaphore().release();
+	}
+
+	/** A held spawn slot whose release can move to an adopted background job. */
+	#createSpawnPermit(): SpawnPermit {
+		let released = false;
+		return {
+			transferred: false,
+			release: () => {
+				if (released) return;
+				released = true;
+				this.#releaseSpawnSemaphore();
+			},
+		};
 	}
 
 	/**
@@ -1040,6 +1071,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		// post-return job updates carry final statuses, not the last snapshot.
 		for (let position = 0; position < syncSpawns.length; position++) {
 			const spawn = syncSpawns[position];
+			const payload = payloads[position];
 			const result = merged.results.find(r => r.id === spawn.agentId);
 			if (result) {
 				spawn.progress.status = result.aborted
@@ -1048,8 +1080,12 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						? "completed"
 						: "failed";
 				spawn.progress.durationMs = result.durationMs;
+			} else if (payload && isAdoptedResult(payload)) {
+				// The agent kept running in a background job; leave the row live
+				// instead of stamping it failed for having no inline result.
+				spawn.progress.status = "running";
 			} else {
-				spawn.progress.status = payloads[position] ? "failed" : "aborted";
+				spawn.progress.status = payload ? "failed" : "aborted";
 			}
 		}
 
@@ -1263,6 +1299,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 			const invokedAt = Date.now();
 			await semaphore.acquire(signal);
 			const acquiredAt = Date.now();
+			const permit = this.#createSpawnPermit();
 			try {
 				return await this.#executeSync(
 					toolCallId,
@@ -1273,9 +1310,10 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 					spawn.index,
 					false,
 					{ invokedAt, acquiredAt },
+					permit,
 				);
 			} finally {
-				this.#releaseSpawnSemaphore();
+				if (!permit.transferred) permit.release();
 			}
 		}
 
@@ -1345,10 +1383,9 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 			spawns.length,
 			async (spawn, _position, workerSignal) => {
 				const invokedAt = Date.now();
-				let semaphoreHeld = false;
+				const permit = this.#createSpawnPermit();
 				try {
 					await semaphore.acquire(workerSignal);
-					semaphoreHeld = true;
 				} catch (error) {
 					if (workerSignal.aborted) return undefined;
 					throw error;
@@ -1370,9 +1407,10 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						spawn.index,
 						false,
 						{ invokedAt, acquiredAt },
+						permit,
 					);
 				} finally {
-					if (semaphoreHeld) this.#releaseSpawnSemaphore();
+					if (!permit.transferred) permit.release();
 				}
 			},
 			signal,
@@ -1409,11 +1447,30 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		spawnIndex = 0,
 		detached = false,
 		launchTiming?: { invokedAt: number; acquiredAt: number },
+		permit?: SpawnPermit,
 	): Promise<AgentToolResult<TaskToolDetails>> {
-		return this.#runSpawn(toolCallId, params, signal, onUpdate, preAllocatedId, spawnIndex, detached, launchTiming);
+		return this.#runSpawn(
+			toolCallId,
+			params,
+			signal,
+			onUpdate,
+			preAllocatedId,
+			spawnIndex,
+			detached,
+			launchTiming,
+			permit,
+		);
 	}
 
-	/** Spawn a fresh subagent and run it to completion. */
+	/**
+	 * Spawn a fresh subagent and run it to completion.
+	 *
+	 * A foreground run publishes a detach handle as soon as its registry id is
+	 * known. Detaching adopts the SAME run promise into a background job, so the
+	 * agent keeps executing while this call returns a placeholder immediately.
+	 * Background runs (`detached`) publish no handle: the job manager already
+	 * owns their delivery.
+	 */
 	async #runSpawn(
 		toolCallId: string,
 		params: TaskParams,
@@ -1423,13 +1480,70 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		spawnIndex = 0,
 		detached = false,
 		launchTiming?: { invokedAt: number; acquiredAt: number },
+		permit?: SpawnPermit,
 	): Promise<AgentToolResult<TaskToolDetails>> {
 		const startTime = Date.now();
 		const assignment = (params.task ?? "").trim();
 		const context = this.#isBatchEnabled() ? params.context?.trim() || undefined : undefined;
 		let latestProgress: AgentProgress | undefined;
+		let finished = false;
+		let runPromise: Promise<StructuredSubagentResult> | undefined;
+		let unregisterDetach: (() => void) | undefined;
+		// A turn abort stops a foreground run. Once the run is adopted by a
+		// background job the turn no longer owns it, so the forwarded listener is
+		// removed on detach: stopping the conversation leaves the job running,
+		// matching a natively background spawn. The child's own session abort
+		// (agents.kill) and the executor's runtime caps stay in effect.
+		const runAbort = new AbortController();
+		const forwardAbort = (): void => runAbort.abort(signal?.reason);
+		if (signal) {
+			if (signal.aborted) forwardAbort();
+			else signal.addEventListener("abort", forwardAbort, { once: true });
+		}
+		const adopted = Promise.withResolvers<AgentToolResult<TaskToolDetails>>();
+		const formatExecution = (execution: StructuredSubagentResult): string =>
+			this.#buildResultPayload(
+				execution.result,
+				execution.policy.discovery.projectAgentsDir,
+				Date.now() - startTime,
+				execution.mergeSummary,
+			).content.find(part => part.type === "text")?.text ?? "(no output)";
+		const registerDetachHandle = (agentId: string): void => {
+			if (detached || unregisterDetach || !runPromise) return;
+			unregisterDetach = setAgentDetachHandle(agentId, async () => {
+				if (finished) return { ok: false, error: `agent ${agentId} has already finished` };
+				const manager = this.session.asyncJobManager;
+				if (!manager) return { ok: false, error: "background jobs are disabled (async.enabled)" };
+				let jobId: string;
+				try {
+					jobId = adoptRunningSpawn({
+						manager,
+						agentId,
+						runPromise: runPromise!,
+						format: formatExecution,
+						// Same owner scope as a natively background task job: the
+						// calling agent, so `hub jobs`/cancel and delivery routing
+						// see it like any other spawn.
+						ownerId: this.session.getAgentId?.() ?? undefined,
+						toolCallId,
+						// The spawn keeps its concurrency slot until the adopted run
+						// settles; the acquiring caller skips its own release.
+						onSettled: () => permit?.release(),
+						// `hub jobs cancel` (and any manager cancel) now stops the
+						// agent, not just its delivery — the job owns the run.
+						onCancel: reason => runAbort.abort(reason),
+					});
+				} catch (error) {
+					return { ok: false, error: error instanceof Error ? error.message : String(error) };
+				}
+				if (permit) permit.transferred = true;
+				signal?.removeEventListener("abort", forwardAbort);
+				adopted.resolve(createAdoptedResult(agentId, jobId, Date.now() - startTime));
+				return { ok: true, jobId };
+			});
+		};
 		try {
-			const execution = await runStructuredSubagent({
+			runPromise = runStructuredSubagent({
 				session: this.session,
 				invocationKind: "task",
 				assignment,
@@ -1444,14 +1558,18 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				detached,
 				invokedAt: launchTiming?.invokedAt,
 				acquiredAt: launchTiming?.acquiredAt,
+				// The reserved id is known before dispatch; publishing there makes
+				// the detach action available from the first moment the run exists.
+				onIdReserved: registerDetachHandle,
 				...("isolated" in params ? { isolation: { requested: params.isolated } } : {}),
 				blockedAgent: this.#blockedAgent,
 				enableLsp: (this.session.enableLsp ?? true) && this.session.settings.get("task.enableLsp"),
 				enableIrc: isIrcEnabled(this.session.settings, this.session.taskDepth ?? 0),
 				maxRuntimeMs: this.session.settings.get("task.maxRuntimeMs"),
-				signal,
+				signal: runAbort.signal,
 				onProgress: progress => {
 					latestProgress = { ...progress, recentTools: progress.recentTools.slice() };
+					registerDetachHandle(progress.id);
 					onUpdate?.({
 						content: [{ type: "text", text: `Running agent ${progress.id}...` }],
 						details: {
@@ -1463,23 +1581,37 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 					});
 				},
 			});
-			return this.#buildResultPayload(
-				execution.result,
-				execution.policy.discovery.projectAgentsDir,
-				Date.now() - startTime,
-				execution.mergeSummary,
-			);
-		} catch (error) {
-			const message = error instanceof StructuredSubagentError ? error.message : String(error);
-			return {
-				content: [{ type: "text", text: `Task execution failed: ${message}` }],
-				details: {
-					projectAgentsDir: null,
-					results: [],
-					totalDurationMs: Date.now() - startTime,
-					...(latestProgress ? { progress: [latestProgress] } : {}),
+			if (preAllocatedId) registerDetachHandle(preAllocatedId);
+			// A rejected run still becomes a tool payload; attaching the handler
+			// here also keeps the promise observed after a detach hands it away.
+			const settled = runPromise.then(
+				execution => {
+					finished = true;
+					return this.#buildResultPayload(
+						execution.result,
+						execution.policy.discovery.projectAgentsDir,
+						Date.now() - startTime,
+						execution.mergeSummary,
+					);
 				},
-			};
+				error => {
+					finished = true;
+					const message = error instanceof StructuredSubagentError ? error.message : String(error);
+					return {
+						content: [{ type: "text", text: `Task execution failed: ${message}` }],
+						details: {
+							projectAgentsDir: null,
+							results: [],
+							totalDurationMs: Date.now() - startTime,
+							...(latestProgress ? { progress: [latestProgress] } : {}),
+						},
+					} satisfies AgentToolResult<TaskToolDetails>;
+				},
+			);
+			return await Promise.race([settled, adopted.promise]);
+		} finally {
+			signal?.removeEventListener("abort", forwardAbort);
+			unregisterDetach?.();
 		}
 	}
 

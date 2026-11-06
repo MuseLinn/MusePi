@@ -2185,6 +2185,29 @@ export function ChatView({
 			setActiveView("agents");
 			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 		},
+		// Task card "转后台": the daemon adopts the running foreground spawn into
+		// a background job, so the turn stops waiting but the agent keeps going.
+		// A refusal (agent finished, background jobs disabled) surfaces as an
+		// error toast — a silent no-op would read as a dead button.
+		detachAgent: (id: string) => {
+			void rpc
+				.request<{ ok: boolean; jobId?: string; error?: string }>("agents.detach", { agentId: id })
+				.then(res => {
+					if (res?.ok === true) return;
+					pushActionToast({
+						kind: "error",
+						message: t("tools.detachFailed"),
+						details: res?.error,
+					});
+				})
+				.catch((err: unknown) => {
+					pushActionToast({
+						kind: "error",
+						message: t("tools.detachFailed"),
+						details: err instanceof Error ? err.message : String(err),
+					});
+				});
+		},
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
 		sendPrompt: (text: string) => sendAndCloseJump(text),
@@ -2506,6 +2529,11 @@ export function ChatView({
 		},
 		onOpenSettings: (section?: string): void => {
 			onOpenSettings?.(section);
+		},
+		// Context shake rewrites persisted entries without an entry event; the
+		// card asks for the same snapshot reload the no-reply check uses.
+		onSessionRewritten: (): void => {
+			void verifyTranscript();
 		},
 	};
 

@@ -635,6 +635,9 @@ export interface AgentProgress {
 	contextWindow?: number;
 	cost: number;
 	durationMs: number;
+	/** True while the subagent is parked on a user decision (approval or ask)
+	 *  forwarded to the parent session's UI. Cleared when the prompt settles. */
+	awaitingApproval?: boolean;
 	resolvedModel?: string;
 }
 

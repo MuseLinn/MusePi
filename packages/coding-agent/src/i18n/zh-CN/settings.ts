@@ -3267,6 +3267,13 @@ export const settings = {
 	"Strong penalty": "重度惩罚",
 	"Style of separators between segments": "段落间分隔符样式",
 	"Subagent Model": "子智能体模型",
+	"Subagent Approval": "子代理审批",
+	"Approval behavior for spawned subagents. 'Inherit' reuses the parent session's tools.approvalMode and routes prompts to the parent's UI (the subagent shows as awaiting approval). 'Yolo' keeps the previous headless behavior and auto-approves every tier. When the parent has no UI to answer prompts, 'inherit' falls back to 'yolo'.":
+		"派生子代理的审批行为。'Inherit' 复用父会话的 tools.approvalMode，并把审批提示送到父会话 UI（子代理显示为等待审批）。'Yolo' 保持之前的无头行为，自动批准所有层级。父会话没有可回答提示的 UI 时，'inherit' 回退为 'yolo'。",
+	Inherit: "继承",
+	"Match the parent session's approval mode and surface prompts in its UI":
+		"跟随父会话的审批模式，并在其 UI 中显示审批提示",
+	"Auto-approve every tier; subagents never block on a UI prompt": "自动批准所有层级；子代理不会因 UI 提示而阻塞",
 	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`":
 		"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
 	"Suggests a todo list on the first message (reminder, not forced)": "在首条消息时建议 todo 列表（提醒，非强制）",

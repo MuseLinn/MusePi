@@ -1431,7 +1431,9 @@ export class CommandController {
 		}
 		this.ctx.rebuildChatFromMessages();
 		this.ctx.statusLine.invalidate();
-		this.ctx.ui.requestRender();
+		// The elided content also lives in the terminal scrollback; a plain
+		// re-render would leave the pre-shake tool output above the rebuild.
+		this.ctx.ui.requestRender(true, { clearScrollback: true });
 		this.ctx.showStatus(formatShakeSummary(result));
 	}
 

@@ -781,6 +781,7 @@ export function SessionSidebar({
 				statuses={statuses}
 				manualTags={manualTags}
 				searchQuery={sessionQuery}
+				retitlingId={retitlingId}
 			/>
 		</div>
 	);
@@ -1333,9 +1334,10 @@ export function SessionSidebar({
 							</button>
 						)}
 					</div>
-					{/* AI rename runs a model pass (seconds, up to the RPC cap): the
-					 *  row cannot show its own spinner, so the pane pins the running
-					 *  session's name here — visible even when the list is scrolled. */}
+					{/* AI rename runs a model pass (seconds, up to the RPC cap). The
+					 *  target row shows its own spinner; this strip stays as the
+					 *  announced status (aria-live) and keeps the run visible when
+					 *  that row is scrolled out of view or inside a closed group. */}
 					{retitlingId !== null && (
 						<div
 							className="gui-group-label flex items-center gap-1.5 px-3 pb-1 pt-1 text-[var(--color-accent)]"
@@ -1492,6 +1494,7 @@ export function SessionSidebar({
 													statuses={statuses}
 													manualTags={manualTags}
 													searchQuery={sessionQuery}
+													retitlingId={retitlingId}
 												/>
 											</div>
 										)}
@@ -1507,6 +1510,7 @@ export function SessionSidebar({
 											statuses={statuses}
 											manualTags={manualTags}
 											searchQuery={sessionQuery}
+											retitlingId={retitlingId}
 										/>
 									</>
 								) : (
@@ -1551,6 +1555,7 @@ export function SessionSidebar({
 															statuses={statuses}
 															manualTags={manualTags}
 															searchQuery={sessionQuery}
+															retitlingId={retitlingId}
 														/>
 													</div>
 												)}
@@ -1693,6 +1698,7 @@ export function SessionSidebar({
 																		statuses={statuses}
 																		manualTags={manualTags}
 																		searchQuery={sessionQuery}
+																		retitlingId={retitlingId}
 																	/>
 																)}
 															</ProjectCollapse>
@@ -1719,6 +1725,7 @@ export function SessionSidebar({
 															statuses={statuses}
 															manualTags={manualTags}
 															searchQuery={sessionQuery}
+															retitlingId={retitlingId}
 														/>
 													</div>
 												)}
@@ -1743,6 +1750,7 @@ export function SessionSidebar({
 											statuses={statuses}
 											manualTags={manualTags}
 											searchQuery={sessionQuery}
+											retitlingId={retitlingId}
 										/>
 									</div>
 								)}
@@ -1812,6 +1820,7 @@ export function SessionSidebar({
 									statuses={statuses}
 									manualTags={manualTags}
 									searchQuery={sessionQuery}
+									retitlingId={retitlingId}
 								/>
 								{cronNodes.length > 0 && cronSection}
 								<GroupedSessionList
@@ -1825,6 +1834,7 @@ export function SessionSidebar({
 									statuses={statuses}
 									manualTags={manualTags}
 									searchQuery={sessionQuery}
+									retitlingId={retitlingId}
 								/>
 							</>
 						)}
@@ -1903,9 +1913,10 @@ export function SessionSidebar({
 								},
 								// AI rename (daemon session.retitle: title from the first
 								// user message, same pipeline as auto-title). Gated on the
-								// prop so hosts without it keep the old menu shape. The
-								// run reports its own outcome, so a rejected prop can never
-								// leave the busy state stuck.
+								// prop so hosts without it keep the old menu shape. The row
+								// carries the busy state until the call settles, so cleanup
+								// lives in `finally` — a host callback that throws
+								// synchronously must not wedge `retitlingId`.
 								...(onRetitleSession
 									? [
 											{
@@ -1917,16 +1928,23 @@ export function SessionSidebar({
 													const id = sessionCtx.id;
 													const run = onRetitleSession;
 													setRetitlingId(id);
-													void run(id)
-														.catch((): SessionRetitleResult => ({ ok: false, reason: "failed" }))
-														.then(r => {
-															setRetitlingId(cur => (cur === id ? null : cur));
-															if (!r.ok)
+													void (async () => {
+														try {
+															const result = await run(id);
+															if (!result.ok)
 																pushActionToast({
 																	kind: "error",
-																	message: retitleFailureMessage(r.reason),
+																	message: retitleFailureMessage(result.reason),
 																});
-														});
+														} catch {
+															pushActionToast({
+																kind: "error",
+																message: retitleFailureMessage("failed"),
+															});
+														} finally {
+															setRetitlingId(current => (current === id ? null : current));
+														}
+													})();
 												},
 											},
 										]
